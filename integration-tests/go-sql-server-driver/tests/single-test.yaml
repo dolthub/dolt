@@ -1,0 +1,78 @@
+tests:
+  - name: dolt_assume_cluster_role
+    multi_repos:
+      - name: server1
+        repos:
+          - name: repo1
+            with_remotes:
+              - name: standby
+                url: http://localhost:3852/repo1
+          - name: repo2
+            with_remotes:
+              - name: standby
+                url: http://localhost:3852/repo2
+        with_files:
+          - name: server.yaml
+            contents: |
+              log_level: trace
+              listener:
+                host: 0.0.0.0
+                port: 3309
+              cluster:
+                standby_remotes:
+                - name: standby
+                  remote_url_template: http://localhost:3852/{database}
+                bootstrap_role: standby
+                bootstrap_epoch: 10
+                remotesapi:
+                  port: 3851
+        server:
+          args: [ "--config", "server.yaml" ]
+          port: 3309
+    connections:
+      - on: server1
+        queries:
+          - exec: "use repo1"
+          - query: "call dolt_assume_cluster_role('standby', '9')"
+            error_match: "error assuming role"
+          - query: "call dolt_assume_cluster_role('primary', '10')"
+            error_match: "error assuming role"
+          - query: "call dolt_assume_cluster_role('backup', '11')"
+            error_match: "error assuming role"
+          - query: "call dolt_assume_cluster_role('standby', '10')"
+            result:
+              columns: [ "status" ]
+              rows: [ [ "0" ] ]
+          - query: "select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch"
+            result:
+              columns: [ "@@GLOBAL.dolt_cluster_role","@@GLOBAL.dolt_cluster_role_epoch" ]
+              rows: [ [ "standby","10" ] ]
+          - query: "call dolt_assume_cluster_role('standby', '12')"
+            result:
+              columns: [ "status" ]
+              rows: [ [ "0" ] ]
+          - query: "select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch"
+            result:
+              columns: [ "@@GLOBAL.dolt_cluster_role","@@GLOBAL.dolt_cluster_role_epoch" ]
+              rows: [ [ "standby","12" ] ]
+          - query: "call dolt_assume_cluster_role('primary', '13')"
+            result:
+              columns: [ "status" ]
+              rows: [ [ "0" ] ]
+          # Connection should be broken now.
+          - query: "select 2 from dual"
+            error_match: "this connection can no longer be used"
+      - on: server1
+        queries:
+          - query: "select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch"
+            result:
+              columns: [ "@@GLOBAL.dolt_cluster_role","@@GLOBAL.dolt_cluster_role_epoch" ]
+              rows: [ [ "primary","13" ] ]
+        restart_server: { }
+      # Assert that it comes back up with newly assumed role.
+      - on: server1
+        queries:
+          - query: "select @@GLOBAL.dolt_cluster_role, @@GLOBAL.dolt_cluster_role_epoch"
+            result:
+              columns: [ "@@GLOBAL.dolt_cluster_role","@@GLOBAL.dolt_cluster_role_epoch" ]
+              rows: [ [ "primary","13" ] ]

@@ -14,30 +14,28 @@
 
 package main
 
-import (
-	"testing"
-)
+import "testing"
 
-func TestConfig(t *testing.T) {
-	RunTestsFile(t, "tests/sql-server-config.yaml")
-}
-
-func TestJWTAuth(t *testing.T) {
-	RunTestsFile(t, "tests/sql-server-jwt-auth.yaml")
-}
+// func TestConfig(t *testing.T) {
+// 	RunTestsFile(t, "tests/sql-server-config.yaml")
+// }
+//
+// func TestJWTAuth(t *testing.T) {
+// 	RunTestsFile(t, "tests/sql-server-jwt-auth.yaml")
+// }
 
 func TestCluster(t *testing.T) {
-	RunTestsFile(t, "tests/sql-server-cluster.yaml")
+	RunTestsFile(t, "tests/single-test.yaml")
 }
 
-func TestClusterTLS(t *testing.T) {
-	RunTestsFile(t, "tests/sql-server-cluster-tls.yaml")
-}
-
-func TestOriginal(t *testing.T) {
-	RunTestsFile(t, "tests/sql-server-orig.yaml")
-}
-
-func TestTLS(t *testing.T) {
-	RunTestsFile(t, "tests/sql-server-tls.yaml")
-}
+// func TestClusterTLS(t *testing.T) {
+// 	RunTestsFile(t, "tests/sql-server-cluster-tls.yaml")
+// }
+//
+// func TestOriginal(t *testing.T) {
+// 	RunTestsFile(t, "tests/sql-server-orig.yaml")
+// }
+//
+// func TestTLS(t *testing.T) {
+// 	RunTestsFile(t, "tests/sql-server-tls.yaml")
+// }
