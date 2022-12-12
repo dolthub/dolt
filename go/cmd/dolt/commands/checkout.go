@@ -125,7 +125,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		if err != nil {
 			HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usagePrt)
 		}
-		verr := actions.ResetHard(ctx, dEnv, "HEAD", roots, &headRef, ws)
+		verr := actions.ResetHard(ctx, dEnv, "HEAD", roots, headRef, ws)
 		return handleResetError(verr, usagePrt)
 	}
 

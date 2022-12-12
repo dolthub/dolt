@@ -144,7 +144,7 @@ func ResetHard(
 	dEnv *env.DoltEnv,
 	cSpecStr string,
 	roots doltdb.Roots,
-	headRef *ref.DoltRef,
+	headRef ref.DoltRef,
 	ws *doltdb.WorkingSet,
 ) error {
 	dbData := dEnv.DbData()
@@ -160,7 +160,7 @@ func ResetHard(
 	}
 
 	if newHead != nil {
-		err = dEnv.DoltDB.SetHeadToCommit(ctx, *headRef, newHead)
+		err = dEnv.DoltDB.SetHeadToCommit(ctx, headRef, newHead)
 		if err != nil {
 			return err
 		}

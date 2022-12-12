@@ -112,7 +112,7 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 
-		err = actions.ResetHard(ctx, dEnv, arg, roots, &headRef, ws)
+		err = actions.ResetHard(ctx, dEnv, arg, roots, headRef, ws)
 	} else {
 		// Check whether the input argument is a ref.
 		if apr.NArg() == 1 {

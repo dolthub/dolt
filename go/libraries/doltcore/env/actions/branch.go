@@ -356,7 +356,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 
 	if shouldResetWorkingSet {
 		// reset the source branch's working set to the branch head, leaving the source branch unchanged
-		err = ResetHard(ctx, dEnv, "", roots, &branchHeadRef, currentWs)
+		err = ResetHard(ctx, dEnv, "", roots, branchHeadRef, currentWs)
 		if err != nil {
 			return err
 		}
