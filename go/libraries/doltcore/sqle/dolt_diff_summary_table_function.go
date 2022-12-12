@@ -17,6 +17,7 @@ package sqle
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"io"
 	"math"
 	"strings"
@@ -191,6 +192,14 @@ func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression
 
 	for _, expr := range expression {
 		if !expr.Resolved() {
+			return nil, ErrInvalidNonLiteralArgument.New(ds.Name(), expr.String())
+		}
+		// prepared statements resolve functions beforehand, so above check fails
+		if _, ok := expr.(sql.FunctionExpression); ok {
+			return nil, ErrInvalidNonLiteralArgument.New(ds.Name(), expr.String())
+		}
+		// same for d functions
+		if _, ok := expr.(*dfunctions.HashOf); ok {
 			return nil, ErrInvalidNonLiteralArgument.New(ds.Name(), expr.String())
 		}
 	}

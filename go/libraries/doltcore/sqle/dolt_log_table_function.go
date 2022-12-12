@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -250,6 +251,14 @@ func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
 func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
 	for _, expr := range expression {
 		if !expr.Resolved() {
+			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
+		}
+		// prepared statements resolve functions beforehand, so above check fails
+		if _, ok := expr.(sql.FunctionExpression); ok {
+			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
+		}
+		// same for d functions
+		if _, ok := expr.(*dfunctions.HashOf); ok {
 			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
 		}
 	}
