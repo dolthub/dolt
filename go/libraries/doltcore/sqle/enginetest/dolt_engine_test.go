@@ -185,17 +185,15 @@ func TestSingleScriptPrepared(t *testing.T) {
 	script := queries.ScriptTest{
 		Name: "invalid arguments",
 		SetUpScript: []string{
-			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
-			"set @Commit1 = dolt_commit('-am', 'creating table t');",
-
-			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
-			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+			"insert into t values (1, 2, 3), (4, 5, 6);",
+			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "SELECT * from dolt_diff(hashof('main'), @Commit2, 't');",
-				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+				Query:          "SELECT * FROM DOLT_COMMIT_DIFF_t where to_commit=@Commit1;",
+				ExpectedErrStr: "error querying table dolt_commit_diff_t: dolt_commit_diff_* tables must be filtered to a single 'from_commit'",
 			},
 		},
 	}
