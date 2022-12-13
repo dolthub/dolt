@@ -32,6 +32,8 @@ type HashOf struct {
 	expression.UnaryExpression
 }
 
+var _ sql.FunctionExpression = (*HashOf)(nil)
+
 // NewHashOf creates a new HashOf expression.
 func NewHashOf(e sql.Expression) sql.Expression {
 	return &HashOf{expression.UnaryExpression{Child: e}}
@@ -102,6 +104,16 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 // String implements the Stringer interface.
 func (t *HashOf) String() string {
 	return fmt.Sprintf("HASHOF(%s)", t.Child.String())
+}
+
+// FunctionName implements the FunctionExpression interface
+func (t *HashOf) FunctionName() string {
+	return HashOfFuncName
+}
+
+// Description implements the FunctionExpression interface
+func (t *HashOf) Description() string {
+	return "returns the commit hash of a branch or other commit spec"
 }
 
 // IsNullable implements the Expression interface.
