@@ -193,6 +193,10 @@ func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression
 		if !expr.Resolved() {
 			return nil, ErrInvalidNonLiteralArgument.New(ds.Name(), expr.String())
 		}
+		// prepared statements resolve functions beforehand, so above check fails
+		if _, ok := expr.(sql.FunctionExpression); ok {
+			return nil, ErrInvalidNonLiteralArgument.New(ds.Name(), expr.String())
+		}
 	}
 
 	if strings.Contains(expression[0].String(), "..") {
