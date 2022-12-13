@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/vitess/go/mysql"
@@ -110,19 +111,27 @@ func TestSingleScript(t *testing.T) {
 	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "invalid arguments",
+			Name: "trigger before update, with indexed update",
 			SetUpScript: []string{
-				"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
-				"call dolt_add('.')",
-				"set @Commit1 = dolt_commit('-am', 'creating table t');",
-
-				"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
-				"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+				"create table a (x int primary key, y int, unique key (y))",
+				"create table b (z int primary key)",
+				"insert into a values (1,3), (10,20)",
+				"create trigger insert_b before update on a for each row insert into b values (old.x * 10)",
+				"update a set x = x + 1 where y = 20",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:       "SELECT * from dolt_diff(hashof('main'), @Commit2, 't');",
-					ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+					Query: "select x, y from a order by 1",
+					Expected: []sql.Row{
+						{1, 3},
+						{11, 20},
+					},
+				},
+				{
+					Query: "select z from b",
+					Expected: []sql.Row{
+						{100},
+					},
 				},
 			},
 		},
@@ -181,32 +190,49 @@ func TestSingleQueryPrepared(t *testing.T) {
 
 func TestSingleScriptPrepared(t *testing.T) {
 	t.Skip()
-
-	script := queries.ScriptTest{
-		Name: "invalid arguments",
-		SetUpScript: []string{
-			"create table t (pk int primary key, c1 int, c2 int);",
+	s := []setup.SetupScript{
+		{
+			"create table test (pk int primary key, c1 int)",
 			"call dolt_add('.')",
-			"insert into t values (1, 2, 3), (4, 5, 6);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"insert into test values (0,0), (1,1);",
+			"set @Commit1 = dolt_commit('-am', 'creating table');",
+			"call dolt_branch('-c', 'main', 'newb')",
+			"alter table test add column c2 int;",
+			"set @Commit2 = dolt_commit('-am', 'alter table');",
 		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:          "SELECT * FROM DOLT_COMMIT_DIFF_t where to_commit=@Commit1;",
-				ExpectedErrStr: "error querying table dolt_commit_diff_t: dolt_commit_diff_* tables must be filtered to a single 'from_commit'",
-			},
+	}
+	tt := queries.QueryTest{
+		Query: "select * from test as of 'HEAD~2' where pk=?",
+		Bindings: map[string]sql.Expression{
+			"v1": expression.NewLiteral(0, sql.Int8),
 		},
+		Expected: []sql.Row{{0, 0}},
 	}
 
 	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData, s)
+
 	e, err := harness.NewEngine(t)
 	defer e.Close()
 	require.NoError(t, err)
+	ctx := harness.NewContext()
 
-	e.Analyzer.Debug = true
-	e.Analyzer.Verbose = true
+	//e.Analyzer.Debug = true
+	//e.Analyzer.Verbose = true
 
-	enginetest.TestScriptWithEnginePrepared(t, e, harness, script)
+	// full impl
+	pre1, sch1, rows1 := enginetest.MustQueryWithPreBindings(ctx, e, tt.Query, tt.Bindings)
+	fmt.Println(pre1, sch1, rows1)
+
+	// inline bindings
+	sch2, rows2 := enginetest.MustQueryWithBindings(ctx, e, tt.Query, tt.Bindings)
+	fmt.Println(sch2, rows2)
+
+	// no bindings
+	//sch3, rows3 := enginetest.MustQuery(ctx, e, rawQuery)
+	//fmt.Println(sch3, rows3)
+
+	enginetest.TestQueryWithContext(t, ctx, e, harness, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings)
 }
 
 func TestVersionedQueries(t *testing.T) {
