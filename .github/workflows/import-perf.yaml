@@ -142,6 +142,8 @@ jobs:
         version: ${{ steps.version.outputs.ref }}
         format: '__DOLT__'
         dataFile: ${{ steps.html.outputs.html }}
+        template: 'SysbenchTemplate'
+        category: 'Import'
 
     - name: Read CSV
       if: ${{ github.event.client_payload.issue_id }} != ""

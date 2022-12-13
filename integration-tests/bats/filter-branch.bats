@@ -83,6 +83,72 @@ teardown() {
     [[ "$output" =~ "4,4" ]] || false
 }
 
+@test "filter-branch: filter tags" {
+    dolt sql <<SQL
+create table t (pk int primary key);
+insert into t values (1),(2);
+call dcommit('-Am', 'msg');
+insert into t values (3);
+call dcommit('-Am', 'three');
+call dtag('myTag');
+insert into t values (4);
+call dcommit('-Am', 'four');
+SQL
+    run dolt sql -q "select * from t as of 'myTag'" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+
+    dolt filter-branch --all "delete from t where pk >= 3"
+
+    run dolt sql -q "select * from t as of 'myTag'" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ ! "$output" =~ "3" ]] || false
+}
+
+@test "filter-branch: filter branches only" {
+    dolt sql <<SQL
+create table t (pk int primary key);
+insert into t values (1),(2);
+call dcommit('-Am', 'msg');
+insert into t values (3);
+call dcommit('-Am', 'three');
+call dtag('myTag');
+insert into t values (4);
+call dcommit('-Am', 'four');
+SQL
+    run dolt sql -q "select * from t" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "4" ]] || false
+
+    run dolt sql -q "select * from t as of 'myTag'" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+
+    dolt filter-branch --branches "delete from t where pk >= 3"
+
+    run dolt sql -q "select * from t" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ ! "$output" =~ "3" ]] || false
+    [[ ! "$output" =~ "4" ]] || false
+
+    run dolt sql -q "select * from t as of 'myTag'" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+}
+
 @test "filter-branch: with missing table" {
     dolt sql -q "DROP TABLE test;"
     dolt add -A && dolt commit -m "dropped test"

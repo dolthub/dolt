@@ -43,7 +43,8 @@ import (
 )
 
 const (
-	dbName = "filterDB"
+	dbName       = "filterDB"
+	branchesFlag = "branches"
 )
 
 var filterBranchDocs = cli.CommandDocumentationContent{
@@ -52,7 +53,9 @@ var filterBranchDocs = cli.CommandDocumentationContent{
 
 If a {{.LessThan}}commit-spec{{.GreaterThan}} is provided, the traversal will stop when the commit is reached and rewriting will begin at that commit, or will error if the commit is not found.
 
-If the {{.EmphasisLeft}}--all{{.EmphasisRight}} flag is supplied, the traversal starts with the HEAD commits of all branches.
+If the {{.EmphasisLeft}}--branches{{.EmphasisRight}} flag is supplied, filter-branch traverses and rewrites commits for all branches.
+
+If the {{.EmphasisLeft}}--all{{.EmphasisRight}} flag is supplied, filter-branch traverses and rewrites commits for all branches and tags.
 `,
 
 	Synopsis: []string{
@@ -81,8 +84,9 @@ func (cmd FilterBranchCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd FilterBranchCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(allFlag, "a", "filter all branches")
 	ap.SupportsFlag(verboseFlag, "v", "logs more information")
+	ap.SupportsFlag(branchesFlag, "b", "filter all branches")
+	ap.SupportsFlag(allFlag, "a", "filter all branches and tags")
 	return ap
 }
 
@@ -153,9 +157,12 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	if apr.Contains(allFlag) {
+	switch {
+	case apr.Contains(branchesFlag):
 		err = rebase.AllBranches(ctx, dEnv, replay, nerf)
-	} else {
+	case apr.Contains(allFlag):
+		err = rebase.AllBranchesAndTags(ctx, dEnv, replay, nerf)
+	default:
 		err = rebase.CurrentBranch(ctx, dEnv, replay, nerf)
 	}
 	if err != nil {
