@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -255,10 +254,6 @@ func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.
 		}
 		// prepared statements resolve functions beforehand, so above check fails
 		if _, ok := expr.(sql.FunctionExpression); ok {
-			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
-		}
-		// same for d functions
-		if _, ok := expr.(*dfunctions.HashOf); ok {
 			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
 		}
 	}

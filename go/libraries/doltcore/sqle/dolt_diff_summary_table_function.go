@@ -26,7 +26,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
@@ -196,10 +195,6 @@ func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression
 		}
 		// prepared statements resolve functions beforehand, so above check fails
 		if _, ok := expr.(sql.FunctionExpression); ok {
-			return nil, ErrInvalidNonLiteralArgument.New(ds.Name(), expr.String())
-		}
-		// same for d functions
-		if _, ok := expr.(*dfunctions.HashOf); ok {
 			return nil, ErrInvalidNonLiteralArgument.New(ds.Name(), expr.String())
 		}
 	}

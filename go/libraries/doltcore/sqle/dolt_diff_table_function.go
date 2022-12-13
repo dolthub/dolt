@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -108,10 +107,6 @@ func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql
 		}
 		// prepared statements resolve functions beforehand, so above check fails
 		if _, ok := expr.(sql.FunctionExpression); ok {
-			return nil, ErrInvalidNonLiteralArgument.New(dtf.Name(), expr.String())
-		}
-		// same for d functions
-		if _, ok := expr.(*dfunctions.HashOf); ok {
 			return nil, ErrInvalidNonLiteralArgument.New(dtf.Name(), expr.String())
 		}
 	}
