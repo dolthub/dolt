@@ -82,7 +82,15 @@ type Puller struct {
 
 // NewPuller creates a new Puller instance to do the syncing.  If a nil puller is returned without error that means
 // that there is nothing to pull and the sinkDB is already up to date.
-func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcCS, sinkCS chunks.ChunkStore, walkAddrs WalkAddrs, rootChunkHash hash.Hash, statsCh chan Stats) (*Puller, error) {
+func NewPuller(
+		ctx context.Context,
+		tempDir string,
+		chunksPerTF int,
+		srcCS, sinkCS chunks.ChunkStore,
+		walkAddrs WalkAddrs,
+		rootChunkHash hash.Hash,
+		statsCh chan Stats,
+) (*Puller, error) {
 	// Sanity Check
 	exists, err := srcCS.Has(ctx, rootChunkHash)
 

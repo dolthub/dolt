@@ -23,7 +23,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -168,25 +167,37 @@ type pullBehavior bool
 const pullBehavior_fastForward pullBehavior = false
 const pullBehavior_forcePull pullBehavior = true
 
-func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, whitelist []string, currentBranchRef ref.DoltRef, behavior pullBehavior) error {
+func pullBranches(
+		ctx *sql.Context,
+		rrd ReadReplicaDatabase,
+		whitelist []string,
+		currentBranchRef ref.DoltRef,
+		behavior pullBehavior,
+) error {
 	fetchCtx := ctx.Context
 	ret, err := rrd.limiter.Run(ctx, "-all", func() (any, error) {
-		localBranches := make(map[string]struct{})
+		localBranchesToPull := make(map[string]struct{})
+		localBranchHashes, err := rrd.ddb.GetBranchesWithHashes(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		localBranchHashesByRef := make(map[string]hash.Hash)
+		for _, b := range localBranchHashes {
+			localBranchHashesByRef[b.Ref.GetPath()] = b.Hash
+		}
+
 		if len(whitelist) > 0 {
 			for _, b := range whitelist {
-				localBranches[b] = struct{}{}
+				localBranchesToPull[b] = struct{}{}
 			}
 		} else {
-			localBr, err := rrd.ddb.GetRefsOfType(ctx, map[ref.RefType]struct{}{ref.BranchRefType: {}})
-			if err != nil {
-				return nil, err
-			}
-			for _, b := range localBr {
-				localBranches[b.GetPath()] = struct{}{}
+			for _, b := range localBranchHashes {
+				localBranchesToPull[b.Ref.GetPath()] = struct{}{}
 			}
 		}
 
-		err := rrd.srcDB.Rebase(fetchCtx)
+		err = rrd.srcDB.Rebase(fetchCtx)
 		if err != nil {
 			return nil, err
 		}
@@ -205,44 +216,40 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, whitelist []string,
 			return nil, nil
 		}
 
-		newCtx, cancelFunc := context.WithCancel(ctx)
-		wg, progChan, statsCh := runProgFuncs(newCtx)
-		defer func() {
-			stopProgFuncs(cancelFunc, wg, progChan, statsCh)
-			if err == nil {
-				cli.Println()
-			}
-		}()
+		err = rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, srcRoot, nil, nil)
 
-		err = rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, srcRoot, progChan, statsCh)
-
-		brs, err := rrd.srcDB.GetBranchesWithHashes(ctx)
+		remoteBranchesAndHashes, err := rrd.srcDB.GetBranchesWithHashes(ctx)
 		if err != nil {
 			return nil, err
 		}
 
 		branchHashes := make(map[string]hash.Hash)
 
-		for _, br := range brs {
+		for _, br := range remoteBranchesAndHashes {
 			branchHashes[br.Ref.GetPath()] = br.Hash
 
-			cm, err := rrd.srcDB.ReadCommit(ctx, br.Hash)
-			if err != nil {
-				return nil, err
-			}
-			{
-				_, branchExists := localBranches[br.Ref.GetPath()]
-				switch {
-				case err != nil:
-				case branchExists:
-					if behavior == pullBehavior_forcePull {
-						err = rrd.ddb.SetHead(ctx, br.Ref, br.Hash)
-					} else {
-						err = rrd.ddb.FastForward(ctx, br.Ref, cm)
+			_, branchExists := localBranchesToPull[br.Ref.GetPath()]
+			switch {
+			case err != nil:
+			case branchExists:
+				if behavior == pullBehavior_forcePull {
+					err = rrd.ddb.SetHead(ctx, br.Ref, br.Hash)
+					if err != nil {
+						return nil, err
 					}
-				default:
-					err = rrd.ddb.NewBranchAtCommit(ctx, br.Ref, cm)
+				} else if localBranchHashesByRef[br.Ref.GetPath()] != br.Hash {
+					err = rrd.ddb.FastForwardToHash(ctx, br.Ref, br.Hash)
+					if err != nil {
+						return nil, err
+					}
 				}
+			default:
+				cm, err := rrd.srcDB.ReadCommit(ctx, br.Hash)
+				if err != nil {
+					return nil, err
+				}
+
+				err = rrd.ddb.NewBranchAtCommit(ctx, br.Ref, cm)
 				if err != nil {
 					return nil, err
 				}
@@ -354,32 +361,31 @@ func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan 
 	wg.Wait()
 }
 
-func getReplicationBranches(ctx *sql.Context, rrd ReadReplicaDatabase) (allBranches []string, deletedBranches []ref.DoltRef, err error) {
-	remRefs, err := rrd.srcDB.GetBranches(ctx)
+func getReplicationBranches(ctx *sql.Context, rrd ReadReplicaDatabase) (
+		allBranches []doltdb.BranchWithHash,
+		deletedBranches []doltdb.BranchWithHash,
+		err error,
+) {
+	remoteBranches, err := rrd.srcDB.GetBranchesWithHashes(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	localRefs, err := rrd.Database.ddb.GetBranches(ctx)
+	localBranches, err := rrd.Database.ddb.GetBranchesWithHashes(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	deletedBranches = branchesToDelete(remRefs, localRefs)
-	allBranches = make([]string, len(remRefs))
-	for i := range remRefs {
-		allBranches[i] = remRefs[i].GetPath()
-	}
-
+	deletedBranches = branchesToDelete(remoteBranches, localBranches)
 	return allBranches, deletedBranches, nil
 }
 
-func branchesToDelete(remRefs, localRefs []ref.DoltRef) []ref.DoltRef {
-	toDelete := make([]ref.DoltRef, 0, len(localRefs))
+func branchesToDelete(remRefs, localRefs []doltdb.BranchWithHash) []doltdb.BranchWithHash {
+	toDelete := make([]doltdb.BranchWithHash, 0, len(localRefs))
 	var i, j int
 	for i < len(remRefs) && j < len(localRefs) {
-		rem := remRefs[i].GetPath()
-		local := localRefs[j].GetPath()
+		rem := remRefs[i].Ref.GetPath()
+		local := localRefs[j].Ref.GetPath()
 		if rem == local {
 			i++
 			j++

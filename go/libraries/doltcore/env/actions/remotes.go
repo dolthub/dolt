@@ -344,6 +344,9 @@ func FetchRemoteBranch(
 		return nil, fmt.Errorf("unable to find '%s' on '%s'; %w", srcRef.GetPath(), rem.Name, err)
 	}
 
+	if progStarter != nil {
+
+	}
 	newCtx, cancelFunc := context.WithCancel(ctx)
 	wg, progChan, statsCh := progStarter(newCtx)
 	err = FetchCommit(ctx, tempTablesDir, srcDB, destDB, srcDBCommit, progChan, statsCh)

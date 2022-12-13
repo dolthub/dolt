@@ -439,18 +439,22 @@ func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltR
 
 // FastForward fast-forwards the branch given to the commit given.
 func (ddb *DoltDB) FastForward(ctx context.Context, branch ref.DoltRef, commit *Commit) error {
-	ds, err := ddb.db.GetDataset(ctx, branch.String())
-
-	if err != nil {
-		return err
-	}
-
 	addr, err := commit.HashOf()
 	if err != nil {
 		return err
 	}
 
-	_, err = ddb.db.FastForward(ctx, ds, addr)
+	return ddb.FastForwardToHash(ctx, branch, addr)
+}
+
+// FastForwardToHash fast-forwards the branch given to the commit hash given.
+func (ddb *DoltDB) FastForwardToHash(ctx context.Context, branch ref.DoltRef, hash hash.Hash) error {
+	ds, err := ddb.db.GetDataset(ctx, branch.String())
+	if err != nil {
+		return err
+	}
+
+	_, err = ddb.db.FastForward(ctx, ds, hash)
 
 	return err
 }
@@ -1238,11 +1242,25 @@ func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
 // PullChunks initiates a pull into this database from the source database
 // given, pulling all chunks reachable from the given targetHash. Pull progress
 // is communicated over the provided channel.
-func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB, targetHash hash.Hash, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
+func (ddb *DoltDB) PullChunks(
+		ctx context.Context,
+		tempDir string,
+		srcDB *DoltDB,
+		targetHash hash.Hash,
+		progChan chan pull.PullProgress,
+		statsCh chan pull.Stats,
+) error {
 	return pullHash(ctx, ddb.db, srcDB.db, targetHash, tempDir, progChan, statsCh)
 }
 
-func pullHash(ctx context.Context, destDB, srcDB datas.Database, targetHash hash.Hash, tempDir string, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
+func pullHash(
+		ctx context.Context,
+		destDB, srcDB datas.Database,
+		targetHash hash.Hash,
+		tempDir string,
+		progChan chan pull.PullProgress,
+		statsCh chan pull.Stats,
+) error {
 	srcCS := datas.ChunkStoreFromDatabase(srcDB)
 	destCS := datas.ChunkStoreFromDatabase(destDB)
 	waf := types.WalkAddrsForNBF(srcDB.Format())
