@@ -17,18 +17,22 @@ package sqlserver
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/mysql"
-	"github.com/dolthub/vitess/go/vt/proto/query"
 	"io"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/vitess/go/mysql"
+	"github.com/dolthub/vitess/go/vt/proto/query"
 )
 
 // TODO: Move these into a struct to track?
@@ -54,7 +58,7 @@ func NewReplicaConfiguration(sourceServerUuid string, connectionParams *mysql.Co
 // TODO: Turn this into a struct with an API that can be called
 //	"replicationController" or something similar to match "clusterController"?
 
-func replicaBinlogEventHandler(basicCtx context.Context, replicaConfiguration *replicaConfiguration, mrEnv *env.MultiRepoEnv, engine *engine.SqlEngine) error {
+func replicaBinlogEventHandler(basicCtx context.Context, replicaConfiguration *replicaConfiguration, engine *engine.SqlEngine) error {
 	// TODO: hardcoded replica configuration for now...
 	replicaConfiguration = NewReplicaConfiguration(
 		"748445ca-7d3b-11ec-b443-af8075c99077",
@@ -115,7 +119,7 @@ func replicaBinlogEventHandler(basicCtx context.Context, replicaConfiguration *r
 			return err
 		}
 
-		err = processBinlogEvent(sqlCtx, mrEnv, engine, event)
+		err = processBinlogEvent(sqlCtx, engine, event)
 		if err != nil {
 			return err
 		}
@@ -124,7 +128,7 @@ func replicaBinlogEventHandler(basicCtx context.Context, replicaConfiguration *r
 	return nil
 }
 
-func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engine.SqlEngine, event mysql.BinlogEvent) error {
+func processBinlogEvent(ctx *sql.Context, engine *engine.SqlEngine, event mysql.BinlogEvent) error {
 	var err error
 
 	switch {
@@ -231,7 +235,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 			}
 			fmt.Printf("     - Identify: %v \n", sql.FormatRow(deletedRow))
 
-			writeSession, tableWriter, err := getTableWriter(ctx, tableMap.Name, tableMap.Database, mrEnv)
+			writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database)
 			if err != nil {
 				return err
 			}
@@ -241,7 +245,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 				return err
 			}
 
-			err = closeWriteSession(ctx, tableMap.Database, writeSession, mrEnv)
+			err = closeWriteSession(ctx, engine, tableMap.Database, writeSession)
 			if err != nil {
 				return err
 			}
@@ -273,7 +277,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 			}
 			fmt.Printf("     - Data: %v \n", sql.FormatRow(newRow))
 
-			writeSession, tableWriter, err := getTableWriter(ctx, tableMap.Name, tableMap.Database, mrEnv)
+			writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database)
 			if err != nil {
 				return err
 			}
@@ -283,7 +287,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 				return err
 			}
 
-			err = closeWriteSession(ctx, tableMap.Database, writeSession, mrEnv)
+			err = closeWriteSession(ctx, engine, tableMap.Database, writeSession)
 			if err != nil {
 				return err
 			}
@@ -321,7 +325,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 			}
 			fmt.Printf("     - Identify: %v Data: %v \n", sql.FormatRow(identifyRow), sql.FormatRow(updatedRow))
 
-			writeSession, tableWriter, err := getTableWriter(ctx, tableMap.Name, tableMap.Database, mrEnv)
+			writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database)
 			if err != nil {
 				return err
 			}
@@ -331,7 +335,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 				return err
 			}
 
-			err = closeWriteSession(ctx, tableMap.Database, writeSession, mrEnv)
+			err = closeWriteSession(ctx, engine, tableMap.Database, writeSession)
 			if err != nil {
 				return err
 			}
@@ -362,17 +366,30 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 }
 
 // closeWriteSession flushes and closes the specified |writeSession| and returns an error if anything failed.
-func closeWriteSession(ctx *sql.Context, database string, writeSession writer.WriteSession, mrEnv *env.MultiRepoEnv) error {
+func closeWriteSession(ctx *sql.Context, engine *engine.SqlEngine, databaseName string, writeSession writer.WriteSession) error {
 	newWorkingSet, err := writeSession.Flush(ctx)
 	if err != nil {
 		return err
 	}
 
-	doltEnv := mrEnv.GetEnv(database)
-	if doltEnv == nil {
-		return fmt.Errorf("couldn't find a dolt environment named %q", database)
+	database, err := engine.GetUnderlyingEngine().Analyzer.Catalog.Database(ctx, databaseName)
+	if err != nil {
+		return err
 	}
-	return doltEnv.UpdateWorkingSet(ctx, newWorkingSet)
+	if privDatabase, ok := database.(mysql_db.PrivilegedDatabase); ok {
+		database = privDatabase.Unwrap()
+	}
+	sqlDatabase, ok := database.(sqle.Database)
+	if !ok {
+		return fmt.Errorf("unexpected database type: %T", database)
+	}
+
+	hash, err := newWorkingSet.HashOf()
+	if err != nil {
+		return err
+	}
+
+	return sqlDatabase.DbData().Ddb.UpdateWorkingSet(ctx, newWorkingSet.Ref(), newWorkingSet, hash, newWorkingSet.Meta())
 }
 
 // getTableSchema returns a sql.Schema for the specified table in the specified database.
@@ -393,14 +410,22 @@ func getTableSchema(ctx *sql.Context, engine *engine.SqlEngine, tableName, datab
 }
 
 // getTableWriter returns a WriteSession and a TableWriter for writing to the specified |table| in the specified |database|.
-func getTableWriter(ctx *sql.Context, table, database string, mrEnv *env.MultiRepoEnv) (writer.WriteSession, writer.TableWriter, error) {
-	// TODO: This won't detect new databases created during replication!
-	doltEnv := mrEnv.GetEnv(database)
-	if doltEnv == nil {
-		return nil, nil, fmt.Errorf("couldn't find a dolt environment named %q", database)
+func getTableWriter(ctx *sql.Context, engine *engine.SqlEngine, tableName, databaseName string) (writer.WriteSession, writer.TableWriter, error) {
+	database, err := engine.GetUnderlyingEngine().Analyzer.Catalog.Database(ctx, databaseName)
+	if err != nil {
+		return nil, nil, err
+	}
+	if privDatabase, ok := database.(mysql_db.PrivilegedDatabase); ok {
+		database = privDatabase.Unwrap()
+	}
+	sqlDatabase, ok := database.(sqle.Database)
+	if !ok {
+		return nil, nil, fmt.Errorf("unexpected database type: %T", database)
 	}
 
-	ws, err := doltEnv.WorkingSet(ctx)
+	binFormat := sqlDatabase.DbData().Ddb.Format()
+
+	ws, err := env.WorkingSet(ctx, sqlDatabase.GetDoltDB(), sqlDatabase.DbData().Rsr)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -411,10 +436,11 @@ func getTableWriter(ctx *sql.Context, table, database string, mrEnv *env.MultiRe
 		return nil, nil, err
 	}
 
-	// TODO: plug in correct editor.Options
-	writeSession := writer.NewWriteSession(doltEnv.DoltDB.Format(), ws, tracker, editor.Options{})
+	writeSession := writer.NewWriteSession(binFormat, ws, tracker, editor.Options{})
 
-	tableWriter, err := writeSession.GetTableWriter(ctx, table, database, nil, false)
+	ds := dsess.DSessFromSess(ctx.Session)
+	setter := ds.SetRoot
+	tableWriter, err := writeSession.GetTableWriter(ctx, tableName, databaseName, setter, false)
 	if err != nil {
 		return nil, nil, err
 	}

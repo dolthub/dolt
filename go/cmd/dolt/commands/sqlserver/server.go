@@ -168,7 +168,7 @@ func Serve(
 	if true {
 		go func() {
 			// TODO: fill in the nil replicaConfiguration object...
-			err := replicaBinlogEventHandler(ctx, nil, mrEnv, sqlEngine)
+			err := replicaBinlogEventHandler(ctx, nil, sqlEngine)
 			if err != nil {
 				panic(err)
 			}
