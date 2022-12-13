@@ -42,11 +42,10 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	if _, err = os.Stat(*scriptDir); err != nil {
-		log.Fatalf("-scriptDir not found: '%s'\n", *scriptDir)
-	}
-
 	conf = conf.WithScriptDir(*scriptDir)
+	if err := os.Chdir(*scriptDir); err != nil {
+		log.Fatalf("failed to 'cd %s'", *scriptDir)
+	}
 
 	tmpdir, err := os.MkdirTemp("", "repo-store-")
 	if err != nil {
@@ -63,7 +62,7 @@ func main() {
 			var err error
 			switch {
 			case r.ExternalServer != nil:
-				panic("unsupported")
+				err = test.RunExternalServerTests(r.Name, r.ExternalServer, conf)
 			case r.Server != nil:
 				err = test.RunSqlServerTests(r, u, conf)
 			default:
