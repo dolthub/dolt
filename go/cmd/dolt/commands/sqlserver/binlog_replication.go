@@ -218,47 +218,20 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 		if err != nil {
 			return err
 		}
-		database, err := engine.GetUnderlyingEngine().Analyzer.Catalog.Database(ctx, tableMap.Database)
+		schema, err := getTableSchema(ctx, engine, tableMap.Name, tableMap.Database)
 		if err != nil {
 			return err
-		}
-		table, ok, err := database.GetTableInsensitive(ctx, tableMap.Name)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return fmt.Errorf("unable to find table %q", tableMap.Name)
 		}
 
-		fmt.Printf(" - Deleted Rows (table: %s)\n", table.Name())
+		fmt.Printf(" - Deleted Rows (table: %s)\n", tableMap.Name)
 		for _, row := range rows.Rows {
-			schema := table.Schema()
 			deletedRow, err := parseRow(tableMap, schema, rows.IdentifyColumns, row.Identify)
 			if err != nil {
 				return err
 			}
 			fmt.Printf("     - Identify: %v \n", sql.FormatRow(deletedRow))
 
-			doltEnv := mrEnv.GetEnv(tableMap.Database)
-			if doltEnv == nil {
-				return fmt.Errorf("couldn't find a dolt environment named %q", tableMap.Database)
-			}
-
-			ws, err := doltEnv.WorkingSet(ctx)
-			if err != nil {
-				return err
-			}
-
-			// TODO: Does this work correctly?
-			tracker, err := globalstate.NewAutoIncrementTracker(ctx, ws)
-			if err != nil {
-				return err
-			}
-
-			// TODO: plug in correct editor.Options
-			writeSession := writer.NewWriteSession(doltEnv.DoltDB.Format(), ws, tracker, editor.Options{})
-
-			tableWriter, err := writeSession.GetTableWriter(ctx, tableMap.Name, tableMap.Database, nil, false)
+			writeSession, tableWriter, err := getTableWriter(ctx, tableMap.Name, tableMap.Database, mrEnv)
 			if err != nil {
 				return err
 			}
@@ -268,12 +241,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 				return err
 			}
 
-			newWorkingSet, err := writeSession.Flush(ctx)
-			if err != nil {
-				return err
-			}
-
-			err = doltEnv.UpdateWorkingSet(ctx, newWorkingSet)
+			err = closeWriteSession(ctx, tableMap.Database, writeSession, mrEnv)
 			if err != nil {
 				return err
 			}
@@ -284,7 +252,6 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 		// For more details, see: https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
 		fmt.Printf("Received: WriteRows event\n")
 		tableId := event.TableID(format)
-
 		tableMap, ok := tableMapsById[tableId]
 		if !ok {
 			return fmt.Errorf("unable to find replication metadata for table ID: %d", tableId)
@@ -293,50 +260,20 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 		if err != nil {
 			return err
 		}
-
-		database, err := engine.GetUnderlyingEngine().Analyzer.Catalog.Database(ctx, tableMap.Database)
+		schema, err := getTableSchema(ctx, engine, tableMap.Name, tableMap.Database)
 		if err != nil {
 			return err
-		}
-
-		table, ok, err := database.GetTableInsensitive(ctx, tableMap.Name)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return fmt.Errorf("unable to find table %q", tableMap.Name)
 		}
 
 		fmt.Printf(" - New Rows (table: %s)\n", tableMap.Name)
 		for _, row := range rows.Rows {
-			schema := table.Schema()
-
 			newRow, err := parseRow(tableMap, schema, rows.DataColumns, row.Data)
 			if err != nil {
 				return err
 			}
 			fmt.Printf("     - Data: %v \n", sql.FormatRow(newRow))
 
-			doltEnv := mrEnv.GetEnv(tableMap.Database)
-			if doltEnv == nil {
-				return fmt.Errorf("couldn't find a dolt environment named %q", tableMap.Database)
-			}
-
-			ws, err := doltEnv.WorkingSet(ctx)
-			if err != nil {
-				return err
-			}
-
-			// TODO: Does this work correctly?
-			tracker, err := globalstate.NewAutoIncrementTracker(ctx, ws)
-			if err != nil {
-				return err
-			}
-
-			// TODO: plug in correct editor.Options
-			writeSession := writer.NewWriteSession(doltEnv.DoltDB.Format(), ws, tracker, editor.Options{})
-
-			tableWriter, err := writeSession.GetTableWriter(ctx, tableMap.Name, tableMap.Database, nil, false)
+			writeSession, tableWriter, err := getTableWriter(ctx, tableMap.Name, tableMap.Database, mrEnv)
 			if err != nil {
 				return err
 			}
@@ -346,12 +283,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 				return err
 			}
 
-			newWorkingSet, err := writeSession.Flush(ctx)
-			if err != nil {
-				return err
-			}
-
-			err = doltEnv.UpdateWorkingSet(ctx, newWorkingSet)
+			err = closeWriteSession(ctx, tableMap.Database, writeSession, mrEnv)
 			if err != nil {
 				return err
 			}
@@ -370,24 +302,15 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 		if err != nil {
 			return err
 		}
-		database, err := engine.GetUnderlyingEngine().Analyzer.Catalog.Database(ctx, tableMap.Database)
+		schema, err := getTableSchema(ctx, engine, tableMap.Name, tableMap.Database)
 		if err != nil {
 			return err
-		}
-		table, ok, err := database.GetTableInsensitive(ctx, tableMap.Name)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return fmt.Errorf("unable to find table %q", tableMap.Name)
 		}
 
-		fmt.Printf(" - Updated Rows (table: %s)\n", table.Name())
+		// TODO: do we need to process rows.Flags for anything?
+
+		fmt.Printf(" - Updated Rows (table: %s)\n", tableMap.Name)
 		for _, row := range rows.Rows {
-			schema := table.Schema()
-
-			// TODO: do we need to process rows.Flags for anything?
-
 			identifyRow, err := parseRow(tableMap, schema, rows.IdentifyColumns, row.Identify)
 			if err != nil {
 				return err
@@ -398,26 +321,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 			}
 			fmt.Printf("     - Identify: %v Data: %v \n", sql.FormatRow(identifyRow), sql.FormatRow(updatedRow))
 
-			doltEnv := mrEnv.GetEnv(tableMap.Database)
-			if doltEnv == nil {
-				return fmt.Errorf("couldn't find a dolt environment named %q", tableMap.Database)
-			}
-
-			ws, err := doltEnv.WorkingSet(ctx)
-			if err != nil {
-				return err
-			}
-
-			// TODO: Does this work correctly?
-			tracker, err := globalstate.NewAutoIncrementTracker(ctx, ws)
-			if err != nil {
-				return err
-			}
-
-			// TODO: plug in correct editor.Options
-			writeSession := writer.NewWriteSession(doltEnv.DoltDB.Format(), ws, tracker, editor.Options{})
-
-			tableWriter, err := writeSession.GetTableWriter(ctx, tableMap.Name, tableMap.Database, nil, false)
+			writeSession, tableWriter, err := getTableWriter(ctx, tableMap.Name, tableMap.Database, mrEnv)
 			if err != nil {
 				return err
 			}
@@ -427,12 +331,7 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 				return err
 			}
 
-			newWorkingSet, err := writeSession.Flush(ctx)
-			if err != nil {
-				return err
-			}
-
-			err = doltEnv.UpdateWorkingSet(ctx, newWorkingSet)
+			err = closeWriteSession(ctx, tableMap.Database, writeSession, mrEnv)
 			if err != nil {
 				return err
 			}
@@ -460,6 +359,67 @@ func processBinlogEvent(ctx *sql.Context, mrEnv *env.MultiRepoEnv, engine *engin
 	}
 
 	return nil
+}
+
+// closeWriteSession flushes and closes the specified |writeSession| and returns an error if anything failed.
+func closeWriteSession(ctx *sql.Context, database string, writeSession writer.WriteSession, mrEnv *env.MultiRepoEnv) error {
+	newWorkingSet, err := writeSession.Flush(ctx)
+	if err != nil {
+		return err
+	}
+
+	doltEnv := mrEnv.GetEnv(database)
+	if doltEnv == nil {
+		return fmt.Errorf("couldn't find a dolt environment named %q", database)
+	}
+	return doltEnv.UpdateWorkingSet(ctx, newWorkingSet)
+}
+
+// getTableSchema returns a sql.Schema for the specified table in the specified database.
+func getTableSchema(ctx *sql.Context, engine *engine.SqlEngine, tableName, databaseName string) (sql.Schema, error) {
+	database, err := engine.GetUnderlyingEngine().Analyzer.Catalog.Database(ctx, databaseName)
+	if err != nil {
+		return nil, err
+	}
+	table, ok, err := database.GetTableInsensitive(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("unable to find table %q", tableName)
+	}
+
+	return table.Schema(), nil
+}
+
+// getTableWriter returns a WriteSession and a TableWriter for writing to the specified |table| in the specified |database|.
+func getTableWriter(ctx *sql.Context, table, database string, mrEnv *env.MultiRepoEnv) (writer.WriteSession, writer.TableWriter, error) {
+	// TODO: This won't detect new databases created during replication!
+	doltEnv := mrEnv.GetEnv(database)
+	if doltEnv == nil {
+		return nil, nil, fmt.Errorf("couldn't find a dolt environment named %q", database)
+	}
+
+	ws, err := doltEnv.WorkingSet(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// TODO: Does this work correctly?
+	tracker, err := globalstate.NewAutoIncrementTracker(ctx, ws)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// TODO: plug in correct editor.Options
+	writeSession := writer.NewWriteSession(doltEnv.DoltDB.Format(), ws, tracker, editor.Options{})
+
+	tableWriter, err := writeSession.GetTableWriter(ctx, table, database, nil, false)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return writeSession, tableWriter, nil
 }
 
 // parseRow parses the binary row data from a MySQL binlog event and converts it into a go-mysql-server Row.
