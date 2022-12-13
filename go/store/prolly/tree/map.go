@@ -155,36 +155,34 @@ func VisitMapLevelOrder[K, V ~[]byte, O Ordering[K]](
 	ctx context.Context,
 	m StaticMap[K, V, O],
 	cb func(h hash.Hash) (int64, error),
-) (int64, int64, error) {
+) error {
 	// get cursor to leaves
 	cur, err := NewCursorAtStart(ctx, m.NodeStore, m.Root)
 	if err != nil {
-		return 0, 0, err
+		return err
 	}
 	first := cur.CurrentKey()
 
 	// start by iterating level 1 nodes,
 	// then recurse upwards until we're at the root
 	for cur.parent != nil {
-		fmt.Println("DUSTIN: current level:", cur.nd.level)
-		assertTrue(cur.nd.level > 0, "must not be leaf")
 		cur = cur.parent
 		for cur.Valid() {
 			_, err = cb(cur.CurrentRef())
 			if err != nil {
-				return 0, 0, err
+				return err
 			}
 			if err = cur.Advance(ctx); err != nil {
-				return 0, 0, err
+				return err
 			}
 		}
 
 		// return cursor to the start of the map
 		if err = Seek(ctx, cur, K(first), m.Order); err != nil {
-			return 0, 0, err
+			return err
 		}
 	}
-	return 0, 0, err
+	return err
 }
 
 func (t StaticMap[K, V, O]) Count() (int, error) {
