@@ -31,7 +31,7 @@ import (
 	"time"
 )
 
-// TODO: Move these into a struct to track
+// TODO: Move these into a struct to track?
 var format mysql.BinlogFormat
 var tableMapsById = make(map[uint64]*mysql.TableMap)
 
@@ -70,39 +70,33 @@ func replicaBinlogEventHandler(basicCtx context.Context, replicaConfiguration *r
 	if err != nil {
 		return err
 	}
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0}) // TODO: Do we still need this?
+	// TODO: Move this into test code and out of main library code
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
-	// Step 1: Connect to the MySQL Replication Source
-	//         NOTE: Our fork of Vitess currently only supports mysql_native_password auth. The latest code in the main
-	//               Vitess repo supports the current MySQL default auth plugin, caching_sha2_password.
-	//               https://dev.mysql.com/blog-archive/upgrading-to-mysql-8-0-default-authentication-plugin-considerations/
-	//               To work around this limitation, add the following to your /etc/my.cnf:
-	//                   [mysqld]
-	//                   default-authentication-plugin=mysql_native_password
+	// Connect to the MySQL Replication Source
+	// NOTE: Our fork of Vitess currently only supports mysql_native_password auth. The latest code in the main
+	//       Vitess repo supports the current MySQL default auth plugin, caching_sha2_password.
+	//       https://dev.mysql.com/blog-archive/upgrading-to-mysql-8-0-default-authentication-plugin-considerations/
+	//       To work around this limitation, add the following to your /etc/my.cnf:
+	//           [mysqld]
+	//           default-authentication-plugin=mysql_native_password
+	//       or start mysqld with:
+	//           --default-authentication-plugin=mysql_native_password
 	conn, err := mysql.Connect(basicCtx, replicaConfiguration.connectionParams)
 	if err != nil {
 		return err
 	}
 
-	// Step 2: Request binlog events to start
-	// SID is the source server's UUID; found in @@server_uuid
-	//         NOTE: Using GTIDs requires setting the source's GTID_MODE to ON:
-	//               Select @@GTID_MODE;
-	//               Set GLOBAL GTID_MODE=off_permissive;
-	//               Set GLOBAL GTID_MODE=on_permissive;
-	//               set GLOBAL enforce_gtid_consistency="on";
-	//               Set GLOBAL GTID_MODE=on;
-	// ALSO REQUIRES: set GLOBAL binlog_checksum="NONE";
+	// Request binlog events to start
 	err = startReplicationEventStream(replicaConfiguration, conn)
 	if err != nil {
 		return err
 	}
 
 	// Process binlog events
-	// TODO: add a channel to signal termination of replication process
 	for {
 		// TODO: How do we configure network timeouts?
-		readBinlogEvent, err := conn.ReadBinlogEvent()
+		event, err := conn.ReadBinlogEvent()
 		if err != nil {
 			if sqlError, isSqlError := err.(*mysql.SQLError); isSqlError {
 				if sqlError.Message == io.EOF.Error() {
@@ -121,7 +115,7 @@ func replicaBinlogEventHandler(basicCtx context.Context, replicaConfiguration *r
 			return err
 		}
 
-		err = processBinlogEvent(sqlCtx, mrEnv, engine, readBinlogEvent)
+		err = processBinlogEvent(sqlCtx, mrEnv, engine, event)
 		if err != nil {
 			return err
 		}
