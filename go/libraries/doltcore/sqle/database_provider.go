@@ -337,7 +337,7 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 	} else {
 		dbs := sess.GetDbStates()
 		var formats = make(map[*types.NomsBinFormat]int)
-		for dbName, _ := range dbs {
+		for dbName := range dbs {
 			if ddb, ok := sess.GetDoltDB(ctx, dbName); ok {
 				formats[ddb.ValueReadWriter().Format()] += 1
 			}
@@ -346,7 +346,7 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 			return fmt.Errorf("multiple formats in the same server is not supported")
 		}
 		if len(formats) == 1 {
-			for f, _ := range formats {
+			for f := range formats {
 				newDbStorageFormat = f
 			}
 		}
@@ -890,7 +890,7 @@ func (p DoltDatabaseProvider) GetRevisionForRevisionDatabase(ctx *sql.Context, d
 // IsRevisionDatabase returns true if the specified dbName represents a database that is tied to a specific
 // branch or commit from a database (e.g. "dolt/branch1").
 func (p DoltDatabaseProvider) IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error) {
-	dbName, revision, err := p.GetRevisionForRevisionDatabase(ctx, dbName)
+	_, revision, err := p.GetRevisionForRevisionDatabase(ctx, dbName)
 	if err != nil {
 		return false, err
 	}

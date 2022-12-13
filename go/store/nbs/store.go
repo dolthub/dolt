@@ -704,8 +704,8 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 	eg, ctx := errgroup.WithContext(ctx)
 
 	tables, remaining, err := func() (tables chunkReader, remaining bool, err error) {
-		nbs.mu.RLock()
-		defer nbs.mu.RUnlock()
+		// nbs.mu.RLock()
+		// defer nbs.mu.RUnlock()
 		tables = nbs.tables
 		remaining = true
 		if nbs.mt != nil {
@@ -1422,14 +1422,17 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 }
 
 func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest chunks.ChunkStore) error {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
 		return chunks.ErrUnsupportedOperation
 	}
 
 	precheck := func() error {
-		nbs.mu.RLock()
-		defer nbs.mu.RUnlock()
+		// nbs.mu.RLock()
+		// defer nbs.mu.RUnlock()
 
 		if nbs.upstream.root != last {
 			return errLastRootMismatch
@@ -1458,10 +1461,6 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 		}
 	}
 
-	// Prevent all writes during GC
-	// nbs.mu.Lock()
-	// defer nbs.mu.Unlock()
-
 	specs, err := nbs.copyMarkedChunks(ctx, keepChunks, destNBS)
 	if err != nil {
 		return err
@@ -1481,8 +1480,8 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 		}
 
 		currentContents := func() manifestContents {
-			nbs.mu.RLock()
-			defer nbs.mu.RUnlock()
+			// nbs.mu.RLock()
+			// defer nbs.mu.RUnlock()
 			return nbs.upstream
 		}()
 
@@ -1564,9 +1563,6 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 			err = unlockErr
 		}
 	}()
-
-	nbs.mu.Lock()
-	defer nbs.mu.Unlock()
 
 	newLock := generateLockHash(nbs.upstream.root, specs, []tableSpec{})
 	newContents := manifestContents{
