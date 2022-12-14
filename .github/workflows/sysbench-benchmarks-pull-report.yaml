@@ -64,7 +64,7 @@ jobs:
           client-payload: |
             {
               "version": "${{ steps.comment-branch.outputs.head_sha }}",
-              "run_file": "ci.yaml",
+              "run_file": "systab.yaml",
               "report": "systab.sql",
               "commit_to_branch": "${{ steps.comment-branch.outputs.head_sha }}",
               "actor": "${{ github.actor }}",

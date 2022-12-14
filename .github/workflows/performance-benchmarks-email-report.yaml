@@ -65,7 +65,7 @@ jobs:
             {
               "email_recipient": "${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}",
               "version": "${{ github.sha }}",
-              "run_file": "ci.yaml",
+              "run_file": "systab.yaml",
               "report": "systab.sql",
               "commit_to_branch": "main",
               "actor": "${{ github.actor }}"
