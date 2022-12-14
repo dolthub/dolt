@@ -155,6 +155,13 @@ func (suite *BlockStoreSuite) TestChunkStorePut() {
 	if suite.putCountFn != nil {
 		suite.Equal(2, suite.putCountFn())
 	}
+
+	// Put chunk with dangling ref should error
+	nc := chunks.NewChunk([]byte("bcd"))
+	err = suite.store.Put(context.Background(), nc, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+		return hash.NewHashSet(c.Hash()), nil
+	})
+	suite.Error(err)
 }
 
 func (suite *BlockStoreSuite) TestChunkStorePutMany() {

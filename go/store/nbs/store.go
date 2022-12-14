@@ -1612,6 +1612,9 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 		}
 	}()
 
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
 	newLock := generateLockHash(nbs.upstream.root, specs, []tableSpec{})
 	newContents := manifestContents{
 		nbfVers: nbs.upstream.nbfVers,
@@ -1621,7 +1624,7 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 		specs:   specs,
 	}
 
-	// nothing has changed.  Bail early
+	// nothing has changed. Bail early
 	if newContents.gcGen == nbs.upstream.gcGen {
 		return nil
 	}

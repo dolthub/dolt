@@ -50,6 +50,13 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 
 	// Reading it via the API should work.
 	assertInputInStore(input, h, store, suite.Assert())
+
+	// Put chunk with dangling ref should error
+	nc := NewChunk([]byte("bcd"))
+	err = store.Put(context.Background(), nc, func(ctx context.Context, c Chunk) (hash.HashSet, error) {
+		return hash.NewHashSet(c.Hash()), nil
+	})
+	suite.Error(err)
 }
 
 func (suite *ChunkStoreTestSuite) TestChunkStoreRoot() {
