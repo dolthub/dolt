@@ -1454,6 +1454,11 @@ func TestPreparedInsert(t *testing.T) {
 	enginetest.TestPreparedInsert(t, newDoltHarness(t))
 }
 
+func TestPreparedStatements(t *testing.T) {
+	skipPreparedTests(t)
+	enginetest.TestPreparedStatements(t, newDoltHarness(t))
+}
+
 func TestCharsetCollationEngine(t *testing.T) {
 	skipOldFormat(t)
 	enginetest.TestCharsetCollationEngine(t, newDoltHarness(t))
