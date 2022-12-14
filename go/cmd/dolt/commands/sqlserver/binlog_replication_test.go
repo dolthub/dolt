@@ -18,15 +18,18 @@ import (
 	"context"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/go-mysql-server/server"
-	"github.com/gocraft/dbr/v2"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 )
 
 func TestStartReplicaServer(t *testing.T) {
+	// Start a Dolt SQL server...
 	serverController := NewServerController()
 	go func() {
 		ctx := context.Background()
@@ -43,12 +46,56 @@ func TestStartReplicaServer(t *testing.T) {
 	}()
 	err := serverController.WaitForStart()
 	if err != nil {
+		// UnixSocketInUseError is okay to see, but anything else is a test failure
 		require.Equal(t, server.UnixSocketInUseError, err)
 	}
 
-	conn, err := dbr.Open("mysql", "username:password@tcp(localhost:15200)/", nil)
-	require.NoError(t, err)
-	require.NotNil(t, conn)
+	// Enable replication
+	go func() {
+		// TODO: Add starting GTID to config
+		replicaConfiguration := NewReplicaConfiguration(
+			"9b724fbe-7a7a-11ed-a935-00414aad8698",
+			&mysql.ConnParams{
+				Host:  "localhost",
+				Port:  54321,
+				Uname: "root",
+				Pass:  "",
+			})
+		err := replicaBinlogEventHandler(createTestSqlContext(), replicaConfiguration)
+		if err != nil {
+			panic(err)
+		}
+	}()
 
+	// TODO: Why doesn't the very first call to create a db get replicated?
+
+	//conn, err := dbr.Open("mysql", "username:password@tcp(localhost:15200)/", nil)
+	//require.NoError(t, err)
+	//require.NotNil(t, conn)
 	time.Sleep(60 * time.Second)
+
+	// TODO: Disable replication
+}
+
+func createTestSqlContext() *sql.Context {
+	server := sqlserver.GetRunningServer()
+	if server == nil {
+		panic("unable to access running SQL server")
+	}
+
+	// TODO: Hack up a fake connection so we can get a sql.Context to work with...
+	//       This seems to work... but is super hacky and will cause problems when
+	//       a real connection comes in with connection ID 123456
+	conn := mysql.Conn{
+		ConnectionID: 123456,
+	}
+
+	ctx, err := server.SessionManager().NewContext(&conn)
+	if err != nil {
+		panic(err)
+	}
+	// TODO: Is this still needed?
+	ctx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+
+	return ctx
 }

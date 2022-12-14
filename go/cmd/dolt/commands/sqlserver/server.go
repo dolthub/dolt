@@ -163,18 +163,6 @@ func Serve(
 	}
 	defer sqlEngine.Close()
 
-	// TODO: For now, this is hacked in to start the replication event stream, but eventually we need to pull
-	//       this out and honor the `start replica`/`stop replica` commands.
-	if true {
-		go func() {
-			// TODO: fill in the nil replicaConfiguration object...
-			err := replicaBinlogEventHandler(ctx, nil, sqlEngine)
-			if err != nil {
-				panic(err)
-			}
-		}()
-	}
-
 	// Add superuser if specified user exists; add root superuser if no user specified and no existing privileges
 	userSpecified := config.ServerUser != ""
 	privsExist := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.UserTable().Data().Count() != 0

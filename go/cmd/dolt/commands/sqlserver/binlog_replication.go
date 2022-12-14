@@ -15,20 +15,20 @@
 package sqlserver
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/vitess/go/mysql"
@@ -58,24 +58,12 @@ func NewReplicaConfiguration(sourceServerUuid string, connectionParams *mysql.Co
 // TODO: Turn this into a struct with an API that can be called
 //	"replicationController" or something similar to match "clusterController"?
 
-func replicaBinlogEventHandler(basicCtx context.Context, replicaConfiguration *replicaConfiguration, engine *engine.SqlEngine) error {
-	// TODO: hardcoded replica configuration for now...
-	replicaConfiguration = NewReplicaConfiguration(
-		"748445ca-7d3b-11ec-b443-af8075c99077",
-		&mysql.ConnParams{
-			Host:  "localhost",
-			Port:  3306,
-			Uname: "root",
-			Pass:  "",
-		})
-
-	// TODO: Should probably pass a sql.Context into this method to clean this up...?
-	sqlCtx, err := engine.NewContext(basicCtx)
-	if err != nil {
-		return err
+func replicaBinlogEventHandler(ctx *sql.Context, replicaConfiguration *replicaConfiguration) error {
+	server := sqlserver.GetRunningServer()
+	if server == nil {
+		return fmt.Errorf("unable to access a running SQL server")
 	}
-	// TODO: Move this into test code and out of main library code
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	engine := server.Engine
 
 	// Connect to the MySQL Replication Source
 	// NOTE: Our fork of Vitess currently only supports mysql_native_password auth. The latest code in the main
@@ -86,7 +74,7 @@ func replicaBinlogEventHandler(basicCtx context.Context, replicaConfiguration *r
 	//           default-authentication-plugin=mysql_native_password
 	//       or start mysqld with:
 	//           --default-authentication-plugin=mysql_native_password
-	conn, err := mysql.Connect(basicCtx, replicaConfiguration.connectionParams)
+	conn, err := mysql.Connect(ctx, replicaConfiguration.connectionParams)
 	if err != nil {
 		return err
 	}
@@ -119,7 +107,7 @@ func replicaBinlogEventHandler(basicCtx context.Context, replicaConfiguration *r
 			return err
 		}
 
-		err = processBinlogEvent(sqlCtx, engine, event)
+		err = processBinlogEvent(ctx, engine, event)
 		if err != nil {
 			return err
 		}
@@ -128,7 +116,7 @@ func replicaBinlogEventHandler(basicCtx context.Context, replicaConfiguration *r
 	return nil
 }
 
-func processBinlogEvent(ctx *sql.Context, engine *engine.SqlEngine, event mysql.BinlogEvent) error {
+func processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.BinlogEvent) error {
 	var err error
 
 	switch {
@@ -366,13 +354,13 @@ func processBinlogEvent(ctx *sql.Context, engine *engine.SqlEngine, event mysql.
 }
 
 // closeWriteSession flushes and closes the specified |writeSession| and returns an error if anything failed.
-func closeWriteSession(ctx *sql.Context, engine *engine.SqlEngine, databaseName string, writeSession writer.WriteSession) error {
+func closeWriteSession(ctx *sql.Context, engine *gms.Engine, databaseName string, writeSession writer.WriteSession) error {
 	newWorkingSet, err := writeSession.Flush(ctx)
 	if err != nil {
 		return err
 	}
 
-	database, err := engine.GetUnderlyingEngine().Analyzer.Catalog.Database(ctx, databaseName)
+	database, err := engine.Analyzer.Catalog.Database(ctx, databaseName)
 	if err != nil {
 		return err
 	}
@@ -393,8 +381,8 @@ func closeWriteSession(ctx *sql.Context, engine *engine.SqlEngine, databaseName 
 }
 
 // getTableSchema returns a sql.Schema for the specified table in the specified database.
-func getTableSchema(ctx *sql.Context, engine *engine.SqlEngine, tableName, databaseName string) (sql.Schema, error) {
-	database, err := engine.GetUnderlyingEngine().Analyzer.Catalog.Database(ctx, databaseName)
+func getTableSchema(ctx *sql.Context, engine *gms.Engine, tableName, databaseName string) (sql.Schema, error) {
+	database, err := engine.Analyzer.Catalog.Database(ctx, databaseName)
 	if err != nil {
 		return nil, err
 	}
@@ -410,8 +398,8 @@ func getTableSchema(ctx *sql.Context, engine *engine.SqlEngine, tableName, datab
 }
 
 // getTableWriter returns a WriteSession and a TableWriter for writing to the specified |table| in the specified |database|.
-func getTableWriter(ctx *sql.Context, engine *engine.SqlEngine, tableName, databaseName string) (writer.WriteSession, writer.TableWriter, error) {
-	database, err := engine.GetUnderlyingEngine().Analyzer.Catalog.Database(ctx, databaseName)
+func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseName string) (writer.WriteSession, writer.TableWriter, error) {
+	database, err := engine.Analyzer.Catalog.Database(ctx, databaseName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -524,7 +512,7 @@ func formatTableMapAsString(tableId uint64, tableMap *mysql.TableMap) string {
 	return sb.String()
 }
 
-func executeQueryWithEngine(ctx *sql.Context, engine *engine.SqlEngine, query string) {
+func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) {
 	_, iter, err := engine.Query(ctx, query)
 	if err != nil {
 		fmt.Printf("!!! ERROR executing query: %v \n", err.Error())
