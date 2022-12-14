@@ -99,6 +99,9 @@ type NomsBlockStore struct {
 	tables   tableSet
 	upstream manifestContents
 
+	cond         *sync.Cond
+	gcInProgress bool
+
 	mtSize   uint64
 	putCount uint64
 
@@ -530,6 +533,7 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 		mtSize:   memTableSize,
 		stats:    NewStats(),
 	}
+	nbs.cond = sync.NewCond(&nbs.mu)
 
 	t1 := time.Now()
 	defer nbs.stats.OpenLatency.SampleTimeSince(t1)
@@ -591,6 +595,13 @@ func (nbs *NomsBlockStore) errorIfDangling(ctx context.Context, addrs hash.HashS
 }
 
 func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
+	// Block writes until any ongoing GC is complete
+	nbs.cond.L.Lock()
+	for nbs.gcInProgress {
+		nbs.cond.Wait()
+	}
+	nbs.cond.L.Unlock()
+
 	t1 := time.Now()
 	a := addr(c.Hash())
 
@@ -716,8 +727,8 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 	eg, ctx := errgroup.WithContext(ctx)
 
 	tables, remaining, err := func() (tables chunkReader, remaining bool, err error) {
-		// nbs.mu.RLock()
-		// defer nbs.mu.RUnlock()
+		nbs.mu.RLock()
+		defer nbs.mu.RUnlock()
 		tables = nbs.tables
 		remaining = true
 		if nbs.mt != nil {
@@ -890,6 +901,13 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 }
 
 func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
+	// Block writes until any ongoing GC is complete
+	nbs.cond.L.Lock()
+	for nbs.gcInProgress {
+		nbs.cond.Wait()
+	}
+	nbs.cond.L.Unlock()
+
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	exists, contents, _, err := nbs.mm.Fetch(ctx, nbs.stats)
@@ -927,6 +945,13 @@ func (nbs *NomsBlockStore) Root(ctx context.Context) (hash.Hash, error) {
 }
 
 func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) (success bool, err error) {
+	// Block writes until any ongoing GC is complete
+	nbs.cond.L.Lock()
+	for nbs.gcInProgress {
+		nbs.cond.Wait()
+	}
+	nbs.cond.L.Unlock()
+
 	t1 := time.Now()
 	defer nbs.stats.CommitLatency.SampleTimeSince(t1)
 
@@ -1435,9 +1460,15 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 	return nbs.p.PruneTableFiles(ctx, contents, t)
 }
 
-func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest chunks.ChunkStore) error {
+func (nbs *NomsBlockStore) setGCInProgress(inProgress bool) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	nbs.gcInProgress = inProgress
+}
+
+func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest chunks.ChunkStore) error {
+	nbs.setGCInProgress(true)
+	defer nbs.setGCInProgress(false)
 
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
@@ -1445,8 +1476,8 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 	}
 
 	precheck := func() error {
-		// nbs.mu.RLock()
-		// defer nbs.mu.RUnlock()
+		nbs.mu.RLock()
+		defer nbs.mu.RUnlock()
 
 		if nbs.upstream.root != last {
 			return errLastRootMismatch
@@ -1494,8 +1525,8 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 		}
 
 		currentContents := func() manifestContents {
-			// nbs.mu.RLock()
-			// defer nbs.mu.RUnlock()
+			nbs.mu.RLock()
+			defer nbs.mu.RUnlock()
 			return nbs.upstream
 		}()
 
