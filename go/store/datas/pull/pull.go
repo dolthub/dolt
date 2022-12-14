@@ -197,7 +197,7 @@ func putChunks(ctx context.Context, wah WalkAddrs, sinkCS chunks.ChunkStore, has
 
 		getAddrs := func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
 			return nil, nil
-			// fails TestSync in noms/noms_sync_test.go
+			// fails a lot of datas/pull unit tests
 			// valRefs := make(hash.HashSet)
 			// err := wah(c, func(addr hash.Hash, isLeaf bool) error {
 			// 	valRefs.Insert(addr)
