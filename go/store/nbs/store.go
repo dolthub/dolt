@@ -594,13 +594,17 @@ func (nbs *NomsBlockStore) errorIfDangling(ctx context.Context, addrs hash.HashS
 	return nil
 }
 
-func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
-	// Block writes until any ongoing GC is complete
+// Wait for GC to complete to continue with writes
+func (nbs *NomsBlockStore) waitForGC() {
 	nbs.cond.L.Lock()
+	defer nbs.cond.L.Unlock()
 	for nbs.gcInProgress {
 		nbs.cond.Wait()
 	}
-	nbs.cond.L.Unlock()
+}
+
+func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
+	nbs.waitForGC()
 
 	t1 := time.Now()
 	a := addr(c.Hash())
@@ -901,12 +905,7 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 }
 
 func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
-	// Block writes until any ongoing GC is complete
-	nbs.cond.L.Lock()
-	for nbs.gcInProgress {
-		nbs.cond.Wait()
-	}
-	nbs.cond.L.Unlock()
+	nbs.waitForGC()
 
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
@@ -945,12 +944,7 @@ func (nbs *NomsBlockStore) Root(ctx context.Context) (hash.Hash, error) {
 }
 
 func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) (success bool, err error) {
-	// Block writes until any ongoing GC is complete
-	nbs.cond.L.Lock()
-	for nbs.gcInProgress {
-		nbs.cond.Wait()
-	}
-	nbs.cond.L.Unlock()
+	nbs.waitForGC()
 
 	t1 := time.Now()
 	defer nbs.stats.CommitLatency.SampleTimeSince(t1)
@@ -1461,9 +1455,10 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 }
 
 func (nbs *NomsBlockStore) setGCInProgress(inProgress bool) {
-	nbs.mu.Lock()
-	defer nbs.mu.Unlock()
+	nbs.cond.L.Lock()
+	defer nbs.cond.L.Unlock()
 	nbs.gcInProgress = inProgress
+	nbs.cond.Broadcast()
 }
 
 func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest chunks.ChunkStore) error {

@@ -56,7 +56,8 @@ type ChunkStore interface {
 	// Put caches c in the ChunkSource. Upon return, c must be visible to
 	// subsequent Get and Has calls, but must not be persistent until a call
 	// to Flush(). Put may be called concurrently with other calls to Put(),
-	// Get(), GetMany(), Has() and HasMany().
+	// Get(), GetMany(), Has() and HasMany(). Will return an error if the
+	// addrs returned by `getAddrs` are absent from the chunk store.
 	Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb) error
 
 	// Returns the NomsVersion with which this ChunkSource is compatible.
