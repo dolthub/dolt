@@ -1111,6 +1111,9 @@ func (nbs *NomsBlockStore) Close() (err error) {
 	if cerr := nbs.tables.close(); cerr != nil {
 		err = cerr
 	}
+	if cerr := nbs.mm.Close(); cerr != nil {
+		err = cerr
+	}
 	return
 }
 
