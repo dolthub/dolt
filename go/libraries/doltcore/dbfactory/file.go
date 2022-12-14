@@ -65,6 +65,13 @@ func CloseAllLocalDatabases() (err error) {
 	return
 }
 
+func DeleteFromSingletonCache(path string) error {
+	singletonLock.Lock()
+	defer singletonLock.Unlock()
+	delete(singletons, path)
+	return nil
+}
+
 // PrepareDB creates the directory for the DB if it doesn't exist, and returns an error if a file or symlink is at the
 // path given
 func (fact FileFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, u *url.URL, params map[string]interface{}) error {
@@ -113,8 +120,14 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
+	var newGenSt *nbs.NomsBlockStore
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	newGenSt, err := nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q)
+	if nbs.ChunkJournalFeatureFlag {
+		newGenSt, err = nbs.NewLocalJournalingStore(ctx, nbf.VersionString(), path, q)
+	} else {
+		newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q)
+	}
 
 	if err != nil {
 		return nil, nil, nil, err

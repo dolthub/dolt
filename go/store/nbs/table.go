@@ -260,13 +260,10 @@ type chunkSource interface {
 	hash() addr
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
-	reader(context.Context) (io.Reader, error)
+	reader(context.Context) (io.Reader, uint64, error)
 
 	// getRecordRanges sets getRecord.found to true, and returns a Range for each present getRecord query.
 	getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error)
-
-	// size returns the total size of the chunkSource: chunks, index, and footer
-	size() (uint64, error)
 
 	// index returns the tableIndex of this chunkSource.
 	index() (tableIndex, error)
@@ -277,6 +274,9 @@ type chunkSource interface {
 	// retained in two objects with independent life-cycle, it should be
 	// |Clone|d first.
 	clone() (chunkSource, error)
+
+	// currentSize returns the current total physical size of the chunkSource.
+	currentSize() uint64
 }
 
 type chunkSources []chunkSource

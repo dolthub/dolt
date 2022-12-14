@@ -198,11 +198,11 @@ teardown() {
     dolt sql-client --use-db testdb -u dolt -P $PORT -q "insert into a values (1), (2)"
 
     [ -d "testdb" ]
-    cd testdb
-    run dolt log
+    dolt sql-client --use-db testdb -u dolt -P $PORT -q "select * from dolt_log"
+    run dolt sql-client --use-db testdb -u dolt -P $PORT -q "select * from dolt_log"
     [ "$status" -eq 0 ]
-    regex='Dolt System Account <doltuser@dolthub.com>'
-    [[ "$output" =~ "$regex" ]] || false
+    [[ "$output" =~ "Dolt System Account" ]] || false
+    [[ "$output" =~ "doltuser@dolthub.com" ]] || false
 }
 
 @test "config: SQL COMMIT uses default values when user.name or user.email is unset." {

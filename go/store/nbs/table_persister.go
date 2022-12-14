@@ -60,6 +60,13 @@ type tablePersister interface {
 	io.Closer
 }
 
+type tableFilePersister interface {
+	tablePersister
+
+	// Path returns the file system path.
+	Path() string
+}
+
 type chunkSourcesByDescendingDataSize struct {
 	sws []sourceWithSize
 	err error
