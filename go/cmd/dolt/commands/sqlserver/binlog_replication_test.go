@@ -32,8 +32,7 @@ func TestStartReplicaServer(t *testing.T) {
 	// Start a Dolt SQL server...
 	serverController := NewServerController()
 	go func() {
-		ctx := context.Background()
-		dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
+		dEnv := env.Load(context.Background(), env.GetCurrentUserHomeDir, createTestRepoDir(t), doltdb.LocalDirDoltDB, "test")
 
 		startServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"-H", "localhost",
@@ -61,23 +60,36 @@ func TestStartReplicaServer(t *testing.T) {
 				Uname: "root",
 				Pass:  "",
 			})
-		err := replicaBinlogEventHandler(createTestSqlContext(), replicaConfiguration)
-		if err != nil {
-			panic(err)
-		}
+		err := replicaBinlogEventHandler(createTestSqlContext(t), replicaConfiguration)
+		require.NoError(t, err)
 	}()
 
 	// TODO: Why doesn't the very first call to create a db get replicated?
 
-	//conn, err := dbr.Open("mysql", "username:password@tcp(localhost:15200)/", nil)
-	//require.NoError(t, err)
-	//require.NotNil(t, conn)
 	time.Sleep(60 * time.Second)
 
 	// TODO: Disable replication
 }
 
-func createTestSqlContext() *sql.Context {
+func createTestRepoDir(t *testing.T) filesys.Filesys {
+	tmpDir, err := filesys.LocalFilesysWithWorkingDir("/tmp/")
+	require.NoError(t, err)
+
+	exists, _ := tmpDir.Exists("doltReplicaTest")
+	if exists {
+		err = tmpDir.Delete("doltReplicaTest", true)
+		require.NoError(t, err)
+	}
+	err = tmpDir.MkDirs("doltReplicaTest")
+	require.NoError(t, err)
+
+	doltRepoDir, err := tmpDir.WithWorkingDir("doltReplicaTest")
+	require.NoError(t, err)
+
+	return doltRepoDir
+}
+
+func createTestSqlContext(t *testing.T) *sql.Context {
 	server := sqlserver.GetRunningServer()
 	if server == nil {
 		panic("unable to access running SQL server")
@@ -91,9 +103,8 @@ func createTestSqlContext() *sql.Context {
 	}
 
 	ctx, err := server.SessionManager().NewContext(&conn)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
+
 	// TODO: Is this still needed?
 	ctx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
