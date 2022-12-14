@@ -41,10 +41,6 @@ import (
 )
 
 func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, nomsDir string, q MemoryQuotaProvider) {
-	if chunkJournalFeatureFlag {
-		t.Skip()
-	}
-
 	ctx := context.Background()
 	nomsDir = filepath.Join(tempfiles.MovableTempFileProvider.GetTempDir(), "noms_"+uuid.New().String()[:8])
 	err := os.MkdirAll(nomsDir, os.ModePerm)

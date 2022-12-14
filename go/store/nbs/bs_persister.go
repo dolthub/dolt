@@ -29,6 +29,8 @@ type blobstorePersister struct {
 	q         MemoryQuotaProvider
 }
 
+var _ tablePersister = &blobstorePersister{}
+
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
 func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {

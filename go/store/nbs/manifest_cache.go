@@ -114,3 +114,17 @@ func (mc *manifestCache) Put(db string, contents manifestContents, t time.Time) 
 
 	return nil
 }
+
+// Delete removes a key from the cache.
+func (mc *manifestCache) Delete(db string) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+
+	if entry, ok := mc.entry(db); ok {
+		mc.totalSize -= entry.contents.size()
+		mc.lru.Remove(entry.lruEntry)
+		delete(mc.cache, db)
+	}
+
+	return
+}
