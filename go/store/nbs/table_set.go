@@ -231,11 +231,7 @@ func (ts tableSet) uncompressedLen() (uint64, error) {
 func (ts tableSet) physicalLen() (uint64, error) {
 	f := func(css chunkSourceSet) (data uint64, err error) {
 		for _, haver := range css {
-			sz, err := haver.size()
-			if err != nil {
-				return 0, err
-			}
-			data += sz
+			data += haver.currentSize()
 		}
 		return
 	}
