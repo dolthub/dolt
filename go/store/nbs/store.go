@@ -476,21 +476,33 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 		return nil, err
 	}
 	p := newFSTablePersister(dir, globalFDCache, q)
+	c := conjoinStrategy(inlineConjoiner{maxTables})
 
-	if chunkJournalFeatureFlag {
-		j, err := newChunkJournal(ctx, dir, m)
-		if err != nil {
-			return nil, err
-		}
-		m, p = j, j
+	return newNomsBlockStore(ctx, nbfVerStr, makeManifestManager(m), p, q, c, memTableSize)
+}
+
+func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+	cacheOnce.Do(makeGlobalCaches)
+	if err := checkDir(dir); err != nil {
+		return nil, err
 	}
-	mm := makeManifestManager(m)
 
-	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{maxTables}, memTableSize)
+	m, err := getFileManifest(ctx, dir)
 	if err != nil {
 		return nil, err
 	}
-	return nbs, nil
+	p := newFSTablePersister(dir, globalFDCache, q)
+
+	journal, err := newChunkJournal(ctx, nbfVers, dir, m, p.(*fsTablePersister))
+	if err != nil {
+		return nil, err
+	}
+
+	mm := makeManifestManager(journal)
+	c := journalConjoiner{child: inlineConjoiner{defaultMaxTables}}
+
+	// |journal| serves as the manifest and tablePersister
+	return newNomsBlockStore(ctx, nbfVers, mm, journal, q, c, defaultMemTableSize)
 }
 
 func checkDir(dir string) error {
@@ -1111,6 +1123,9 @@ func (nbs *NomsBlockStore) Close() (err error) {
 	if cerr := nbs.tables.close(); cerr != nil {
 		err = cerr
 	}
+	if cerr := nbs.mm.Close(); cerr != nil {
+		err = cerr
+	}
 	return
 }
 
@@ -1205,15 +1220,10 @@ func newTableFile(cs chunkSource, info tableSpec) tableFile {
 	return tableFile{
 		info: info,
 		open: func(ctx context.Context) (io.ReadCloser, uint64, error) {
-			s, err := cs.size()
+			r, s, err := cs.reader(ctx)
 			if err != nil {
 				return nil, 0, err
 			}
-			r, err := cs.reader(ctx)
-			if err != nil {
-				return nil, 0, err
-			}
-
 			return io.NopCloser(r), s, nil
 		},
 	}
@@ -1247,11 +1257,7 @@ func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
 		if !ok {
 			return uint64(0), errors.New("manifest referenced table file for which there is no chunkSource.")
 		}
-		sz, err := cs.size()
-		if err != nil {
-			return uint64(0), fmt.Errorf("error getting table file index for chunkSource. %w", err)
-		}
-		size += sz
+		size += cs.currentSize()
 	}
 	return size, nil
 }
@@ -1269,7 +1275,11 @@ func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[addr]chunkSource, error) {
 }
 
 func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
-	_, ok := nbs.p.(*fsTablePersister)
+	var ok bool
+	switch nbs.p.(type) {
+	case *fsTablePersister, *chunkJournal:
+		ok = true
+	}
 	return TableFileStoreOps{
 		CanRead:  true,
 		CanWrite: ok,
@@ -1279,17 +1289,21 @@ func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
 }
 
 func (nbs *NomsBlockStore) Path() (string, bool) {
-	fsPersister, ok := nbs.p.(*fsTablePersister)
-	if !ok {
-		return "", false
+	if tfp, ok := nbs.p.(tableFilePersister); ok {
+		return tfp.Path(), true
 	}
-	return fsPersister.dir, true
+	return "", false
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
 func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
-	fsPersister, ok := nbs.p.(*fsTablePersister)
-	if !ok {
+	var fsPersister *fsTablePersister
+	switch t := nbs.p.(type) {
+	case *fsTablePersister:
+		fsPersister = t
+	case *chunkJournal:
+		fsPersister = t.persister
+	default:
 		return errors.New("Not implemented")
 	}
 
@@ -1478,6 +1492,12 @@ func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-ch
 		return nil, err
 	}
 
+	tfp, ok := dest.p.(tableFilePersister)
+	if !ok {
+		return nil, fmt.Errorf("NBS does not support copying garbage collection")
+	}
+	path := tfp.Path()
+
 LOOP:
 	for {
 		select {
@@ -1506,13 +1526,10 @@ LOOP:
 			return nil, ctx.Err()
 		}
 	}
-
-	nomsDir := dest.p.(*fsTablePersister).dir
-
-	return gcc.copyTablesToDir(ctx, nomsDir)
+	return gcc.copyTablesToDir(ctx, path)
 }
 
-// todo: what's the optimal table size to copy to?
+// todo: what's the optimal table currentSize to copy to?
 func (nbs *NomsBlockStore) gcTableSize() (uint64, error) {
 	total, err := nbs.tables.physicalLen()
 

@@ -139,11 +139,9 @@ jobs:
       with:
         region: us-west-2
         toAddresses: '["${{ github.event.client_payload.email_recipient }}"]'
-        version: ${{ steps.version.outputs.ref }}
-        format: '__DOLT__'
-        dataFile: ${{ steps.html.outputs.html }}
+        subject: 'Import Performance Benchmarks: ${{ github.event.client_payload.version }}'
+        bodyPath: ${{ steps.html.outputs.html }}
         template: 'SysbenchTemplate'
-        category: 'Import'
 
     - name: Read CSV
       if: ${{ github.event.client_payload.issue_id }} != ""

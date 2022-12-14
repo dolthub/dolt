@@ -70,16 +70,16 @@ func (ecs emptyChunkSource) index() (tableIndex, error) {
 	return onHeapTableIndex{}, nil
 }
 
-func (ecs emptyChunkSource) reader(context.Context) (io.Reader, error) {
-	return &bytes.Buffer{}, nil
+func (ecs emptyChunkSource) reader(context.Context) (io.Reader, uint64, error) {
+	return &bytes.Buffer{}, 0, nil
 }
 
 func (ecs emptyChunkSource) getRecordRanges(lookups []getRecord) (map[hash.Hash]Range, error) {
 	return map[hash.Hash]Range{}, nil
 }
 
-func (ecs emptyChunkSource) size() (uint64, error) {
-	return 0, nil
+func (ecs emptyChunkSource) currentSize() uint64 {
+	return 0
 }
 
 func (ecs emptyChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error) {
