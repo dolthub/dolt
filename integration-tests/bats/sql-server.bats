@@ -1798,6 +1798,29 @@ s.close()
     [[ ! "$output" =~ "mydb" ]] || false
 }
 
+@test "sql-server: create database, drop it, and then create it again" {
+    skiponwindows "Missing dependencies"
+
+    mkdir mydbs
+    cd mydbs
+
+    start_sql_server >> server_log.txt 2>&1
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE mydb1;"
+    [ -d mydb1 ]
+
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "DROP DATABASE mydb1;"
+    [ $status -eq 0 ]
+    [ ! -d mydb1 ]
+
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE mydb1;"
+    [ $status -eq 0 ]
+    [ -d mydb1 ]
+
+    run dolt sql-client -P $PORT -u dolt --use-db '' -q "SHOW DATABASES;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "mydb1" ]] || false
+}
+
 @test "sql-server: dropping database with '-' in it" {
     skiponwindows "Missing dependencies"
 

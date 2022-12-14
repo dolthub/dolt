@@ -215,6 +215,10 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 	return err
 }
 
+func (ddb *DoltDB) Close() error {
+	return ddb.db.Close()
+}
+
 func getCommitValForRefStr(ctx context.Context, db datas.Database, vrw types.ValueReadWriter, ref string) (*datas.Commit, error) {
 	if err := datas.ValidateDatasetId(ref); err != nil {
 		return nil, fmt.Errorf("invalid ref format: %s", ref)
