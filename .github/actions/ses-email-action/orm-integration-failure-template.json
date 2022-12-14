@@ -1,8 +1,0 @@
-{
-  "Template": {
-    "TemplateName": "OrmIntegrationFailureTemplate",
-    "SubjectPart": "ORM Integrations Test failed for ref: {{version}}",
-    "HtmlPart": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>ORM Integration Test Failed</title>\n</head><body>ORM Integrations Test failed for ref: {{version}}\n <a href={{workflowURL}}>{{workflowURL}}</a></body></html>",
-    "TextPart": "ORM Integrations Test failed for ref {{version}}\r\n"
-  }
-}
