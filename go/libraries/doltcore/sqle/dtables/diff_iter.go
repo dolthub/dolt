@@ -246,13 +246,13 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, ddb *doltdb.DoltDB, t
 	// dp.from may be nil
 	f, fSch, err := tableData(ctx, dp.from, ddb)
 	if err != nil {
-		return prollyDiffIter{}, nil
+		return prollyDiffIter{}, err
 	}
 	from := durable.ProllyMapFromIndex(f)
 
 	t, tSch, err := tableData(ctx, dp.to, ddb)
 	if err != nil {
-		return prollyDiffIter{}, nil
+		return prollyDiffIter{}, err
 	}
 	to := durable.ProllyMapFromIndex(t)
 

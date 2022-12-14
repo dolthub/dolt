@@ -113,33 +113,6 @@ func walkOpaqueNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) erro
 	})
 }
 
-type nodeArena []Node
-
-const nodeArenaSize = 10000
-
-func (a *nodeArena) Get() Node {
-	if len(*a) == 0 {
-		*a = make([]Node, nodeArenaSize)
-	}
-	n := (*a)[len(*a)-1]
-	*a = (*a)[:len(*a)-1]
-	return n
-}
-
-func (a *nodeArena) NodeFromBytes(msg []byte) (Node, error) {
-	keys, values, level, count, err := message.UnpackFields(msg)
-	if err != nil {
-		return Node{}, err
-	}
-	n := a.Get()
-	n.keys = keys
-	n.values = values
-	n.count = count
-	n.level = level
-	n.msg = msg
-	return n, nil
-}
-
 func NodeFromBytes(msg []byte) (Node, error) {
 	keys, values, level, count, err := message.UnpackFields(msg)
 	return Node{
