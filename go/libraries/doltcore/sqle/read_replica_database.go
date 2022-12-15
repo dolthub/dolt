@@ -171,12 +171,12 @@ const pullBehavior_fastForward pullBehavior = false
 const pullBehavior_forcePull pullBehavior = true
 
 func pullBranches(
-		ctx *sql.Context,
-		rrd ReadReplicaDatabase,
-		remoteBranches []doltdb.BranchWithHash,
-		localBranches []doltdb.BranchWithHash,
-		currentBranchRef ref.DoltRef,
-		behavior pullBehavior,
+	ctx *sql.Context,
+	rrd ReadReplicaDatabase,
+	remoteBranches []doltdb.BranchWithHash,
+	localBranches []doltdb.BranchWithHash,
+	currentBranchRef ref.DoltRef,
+	behavior pullBehavior,
 ) error {
 	fetchCtx := ctx.Context
 	ret, err := rrd.limiter.Run(ctx, "-all", func() (any, error) {
@@ -302,10 +302,10 @@ func pullBranches(
 }
 
 func getReplicationBranches(ctx *sql.Context, rrd ReadReplicaDatabase) (
-		remoteBranches []doltdb.BranchWithHash,
-		localBranches []doltdb.BranchWithHash,
-		deletedBranches []doltdb.BranchWithHash,
-		err error,
+	remoteBranches []doltdb.BranchWithHash,
+	localBranches []doltdb.BranchWithHash,
+	deletedBranches []doltdb.BranchWithHash,
+	err error,
 ) {
 	remoteBranches, err = rrd.srcDB.GetBranchesWithHashes(ctx)
 	if err != nil {
