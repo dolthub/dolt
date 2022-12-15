@@ -318,8 +318,7 @@ func TestPanicOnBadVersion(t *testing.T) {
 	})
 }
 
-func TestPanicIfDangling(t *testing.T) {
-	assert := assert.New(t)
+func TestErrorIfDangling(t *testing.T) {
 	vs := newTestValueStore()
 
 	r, err := NewRef(Bool(true), vs.Format())
@@ -329,12 +328,10 @@ func TestPanicIfDangling(t *testing.T) {
 	_, err = vs.WriteValue(context.Background(), l)
 	require.NoError(t, err)
 
-	assert.Panics(func() {
-		rt, err := vs.Root(context.Background())
-		require.NoError(t, err)
-		_, err = vs.Commit(context.Background(), rt, rt)
-		require.NoError(t, err)
-	})
+	rt, err := vs.Root(context.Background())
+	require.NoError(t, err)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	require.Error(t, err)
 }
 
 func TestSkipEnforceCompleteness(t *testing.T) {

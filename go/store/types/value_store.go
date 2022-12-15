@@ -88,16 +88,18 @@ type ValueStore struct {
 	versOnce sync.Once
 }
 
-func PanicIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.ChunkStore) {
+func ErrorIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.ChunkStore) error {
 	absent, err := cs.HasMany(ctx, unresolved)
-
-	// TODO: fix panics
-	d.PanicIfError(err)
+	if err != nil {
+		return err
+	}
 
 	if len(absent) != 0 {
 		s := absent.String()
-		d.Panic("Found dangling references to %s", s)
+		return fmt.Errorf("Found dangling references to %s", s)
 	}
+
+	return nil
 }
 
 func (lvs *ValueStore) getAddrs(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
@@ -616,7 +618,10 @@ func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
 			}
 		}
 
-		PanicIfDangling(ctx, lvs.unresolvedRefs, lvs.cs)
+		err = ErrorIfDangling(ctx, lvs.unresolvedRefs, lvs.cs)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
