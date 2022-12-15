@@ -583,9 +583,14 @@ func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
 		}
 	}
 	for _, c := range lvs.bufferedChunks {
+		getAddrs := func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+			return nil, nil
+		}
+		if lvs.enforceCompleteness {
+			getAddrs = lvs.getAddrs
+		}
 		// Can't use put() because it's wrong to delete from a lvs.bufferedChunks while iterating it.
-		err := lvs.cs.Put(ctx, c, lvs.getAddrs)
-
+		err := lvs.cs.Put(ctx, c, getAddrs)
 		if err != nil {
 			return err
 		}
