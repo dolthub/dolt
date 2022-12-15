@@ -94,7 +94,8 @@ func (suite *RemoteDatabaseSuite) TestWriteRefToNonexistentValue() {
 	suite.NoError(err)
 	r, err := types.NewRef(types.Bool(true), suite.db.Format())
 	suite.NoError(err)
-	suite.Panics(func() { CommitValue(context.Background(), suite.db, ds, r) })
+	_, err = CommitValue(context.Background(), suite.db, ds, r)
+	suite.Error(err)
 }
 
 func (suite *DatabaseSuite) TestTolerateUngettableRefs() {
@@ -127,9 +128,8 @@ func (suite *DatabaseSuite) TestCompletenessCheck() {
 	suite.NoError(err)
 	s, err = se.Set(context.Background()) // danging ref
 	suite.NoError(err)
-	suite.Panics(func() {
-		ds1, err = CommitValue(context.Background(), suite.db, ds1, s)
-	})
+	_, err = CommitValue(context.Background(), suite.db, ds1, s)
+	suite.Error(err)
 }
 
 func (suite *DatabaseSuite) TestRebase() {
