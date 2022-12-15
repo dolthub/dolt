@@ -95,6 +95,15 @@ func TestMapDiff(t *testing.T) {
 					testUpdateDiffs(t, prollyMap.(Map), tuples, s/2)
 				}
 			})
+
+			// one-sided diffs
+			var empty Map
+			t.Run("empty from map", func(t *testing.T) {
+				testOneSidedDiff(t, s, empty, prollyMap.(Map), tree.AddedDiff)
+			})
+			t.Run("empty to map", func(t *testing.T) {
+				testOneSidedDiff(t, s, prollyMap.(Map), empty, tree.RemovedDiff)
+			})
 		})
 	}
 }
@@ -216,6 +225,17 @@ func testUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdates int
 	})
 	require.Error(t, io.EOF, err)
 	assert.Equal(t, numUpdates, cnt)
+}
+
+func testOneSidedDiff(t *testing.T, sz int, from, to Map, typ tree.DiffType) {
+	var seen int
+	err := DiffMaps(context.Background(), from, to, func(ctx context.Context, diff tree.Diff) error {
+		assert.Equal(t, diff.Type, typ)
+		seen++
+		return nil
+	})
+	assert.Error(t, err, io.EOF)
+	assert.Equal(t, sz, seen)
 }
 
 func makeMapWithDeletes(t *testing.T, m Map, deletes ...[2]val.Tuple) Map {
