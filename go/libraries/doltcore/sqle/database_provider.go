@@ -943,6 +943,11 @@ func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDa
 	}
 
 	// create workingSets/heads/branch and update the working set
+	err = db.RebaseSourceDb(ctx)
+	if err != nil {
+		return err
+	}
+
 	err = pullBranches(ctx, db, []doltdb.BranchWithHash{{
 		Ref:  branchRef,
 		Hash: cmHash,

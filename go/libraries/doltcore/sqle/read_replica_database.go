@@ -174,6 +174,10 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 	return nil
 }
 
+func (rrd ReadReplicaDatabase) RebaseSourceDb(ctx *sql.Context) error {
+	return rrd.srcDB.Rebase(ctx)
+}
+
 type pullBehavior bool
 
 const pullBehavior_fastForward pullBehavior = false
@@ -201,13 +205,7 @@ func pullBranches(
 	}
 
 	_, err := rrd.limiter.Run(ctx, "-all", func() (any, error) {
-		// TODO: get rid of this, needed because called by database_provider
-		err := rrd.srcDB.Rebase(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		// TODO: this doesn't work because of working set differences in our experimental setup?
+		// TODO: track two noms root hashes, compare them, and only pull if they're different
 		srcRoot, err := rrd.srcDB.NomsRoot(ctx)
 		if err != nil {
 			return nil, err
