@@ -307,7 +307,9 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 			return hash.Hash{}, nil, errors.New("data corrupted")
 		}
 
-		err = store.Put(ctx, ch)
+		err = store.Put(ctx, ch, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+			return nil, nil // TODO (taylor): Is there a way to get referenced addr out of the chunk here?
+		})
 
 		if err != nil {
 			return hash.Hash{}, nil, err

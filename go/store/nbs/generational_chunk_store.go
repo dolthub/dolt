@@ -154,8 +154,8 @@ func (gcs *GenerationalNBS) HasMany(ctx context.Context, hashes hash.HashSet) (a
 // subsequent Get and Has calls, but must not be persistent until a call
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
-func (gcs *GenerationalNBS) Put(ctx context.Context, c chunks.Chunk) error {
-	return gcs.newGen.Put(ctx, c)
+func (gcs *GenerationalNBS) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
+	return gcs.newGen.Put(ctx, c, getAddrs)
 }
 
 // Returns the NomsVersion with which this ChunkSource is compatible.
@@ -232,7 +232,9 @@ func (gcs *GenerationalNBS) copyToOldGen(ctx context.Context, hashes hash.HashSe
 	var putErr error
 	err = gcs.newGen.GetMany(ctx, notInOldGen, func(ctx context.Context, chunk *chunks.Chunk) {
 		if putErr == nil {
-			putErr = gcs.oldGen.Put(ctx, *chunk)
+			putErr = gcs.oldGen.Put(ctx, *chunk, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+				return nil, nil
+			})
 		}
 	})
 

@@ -100,9 +100,9 @@ func (csMW *CSMetricWrapper) HasMany(ctx context.Context, hashes hash.HashSet) (
 // subsequent Get and Has calls, but must not be persistent until a call
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
-func (csMW *CSMetricWrapper) Put(ctx context.Context, c Chunk) error {
+func (csMW *CSMetricWrapper) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb) error {
 	atomic.AddInt32(&csMW.TotalChunkPuts, 1)
-	return csMW.cs.Put(ctx, c)
+	return csMW.cs.Put(ctx, c, getAddrs)
 }
 
 // Returns the NomsVersion with which this ChunkSource is compatible.
