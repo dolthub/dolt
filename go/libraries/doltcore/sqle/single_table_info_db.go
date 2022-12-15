@@ -162,12 +162,12 @@ func (db *SingleTableInfoDatabase) UpdateForeignKey(ctx *sql.Context, fkName str
 	return fmt.Errorf("cannot create foreign keys on a single table information database")
 }
 
-// GetForeignKeyUpdater implements sql.ForeignKeyTable.
-func (db *SingleTableInfoDatabase) GetForeignKeyUpdater(ctx *sql.Context) sql.ForeignKeyUpdater {
+// GetForeignKeyEditor implements sql.ForeignKeyTable.
+func (db *SingleTableInfoDatabase) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
 	return nil
 }
 
-// WithIndexLookup implements sql.IndexedTable.
+// IndexedAccess implements sql.IndexedTable.
 func (db *SingleTableInfoDatabase) IndexedAccess(sql.Index) sql.IndexedTable {
 	return db
 }
