@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -28,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -125,6 +123,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
+
 	switch {
 	case headsArg != "" && allHeads == SysVarTrue:
 		return fmt.Errorf("%w; cannot set both 'dolt_replicate_heads' and 'dolt_replicate_all_heads'", ErrInvalidReplicateHeadsSetting)
@@ -149,11 +148,13 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		if err != nil {
 			return err
 		}
+
 		remoteBranches, localBranches, toDelete, err := getReplicationBranches(ctx, rrd)
 		err = pullBranches(ctx, rrd, remoteBranches, localBranches, currentBranchRef, behavior)
 		if err != nil {
 			return err
 		}
+
 		err = deleteBranches(ctx, rrd, toDelete)
 		if err != nil {
 			return err
@@ -178,7 +179,7 @@ func pullBranches(
 		behavior pullBehavior,
 ) error {
 	fetchCtx := ctx.Context
-	_, err := rrd.limiter.Run(ctx, "-all", func() (any, error) {
+	ret, err := rrd.limiter.Run(ctx, "-all", func() (any, error) {
 		localBranchesByRef := make(map[string]hash.Hash)
 		remoteBranchesByRef := make(map[string]hash.Hash)
 
@@ -256,34 +257,34 @@ func pullBranches(
 	}
 
 	// update the current working set
-	// branchHashes := ret.(map[string]hash.Hash)
-	// {
-	// 	if h, ok := branchHashes[currentBranchRef.GetPath()]; ok {
-	// 		cm, err := rrd.srcDB.ReadCommit(ctx, h)
-	// 		wsRef, err := ref.WorkingSetRefForHead(currentBranchRef)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	//
-	// 		ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	//
-	// 		commitRoot, err := cm.GetRootValue(ctx)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	//
-	// 		ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-	// 		h, err := ws.HashOf()
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	//
-	// 		return rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
-	// 	}
-	// }
+	branchHashes := ret.(map[string]hash.Hash)
+	{
+		if h, ok := branchHashes[currentBranchRef.GetPath()]; ok {
+			cm, err := rrd.srcDB.ReadCommit(ctx, h)
+			wsRef, err := ref.WorkingSetRefForHead(currentBranchRef)
+			if err != nil {
+				return err
+			}
+
+			ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
+			if err != nil {
+				return err
+			}
+
+			commitRoot, err := cm.GetRootValue(ctx)
+			if err != nil {
+				return err
+			}
+
+			ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
+			h, err := ws.HashOf()
+			if err != nil {
+				return err
+			}
+
+			return rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
+		}
+	}
 
 	_, err = rrd.limiter.Run(ctx, "___tags", func() (any, error) {
 		tmpDir, err := rrd.rsw.TempTableFilesDir()
@@ -298,61 +299,6 @@ func pullBranches(
 	}
 
 	return nil
-}
-
-func pullerProgFunc(ctx context.Context, statsCh <-chan pull.Stats) {
-	for {
-		if ctx.Err() != nil {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-statsCh:
-		default:
-		}
-	}
-}
-
-func progFunc(ctx context.Context, progChan <-chan pull.PullProgress) {
-	for {
-		if ctx.Err() != nil {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-progChan:
-		default:
-		}
-	}
-}
-
-func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.Stats) {
-	statsCh := make(chan pull.Stats)
-	progChan := make(chan pull.PullProgress)
-	wg := &sync.WaitGroup{}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		progFunc(ctx, progChan)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		pullerProgFunc(ctx, statsCh)
-	}()
-
-	return wg, progChan, statsCh
-}
-
-func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, statsCh chan pull.Stats) {
-	cancel()
-	close(progChan)
-	close(statsCh)
-	wg.Wait()
 }
 
 func getReplicationBranches(ctx *sql.Context, rrd ReadReplicaDatabase) (
@@ -408,15 +354,6 @@ func deleteBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []doltdb
 		}
 	}
 	return nil
-}
-
-func parseBranches(arg string) []string {
-	heads := strings.Split(arg, ",")
-	branches := make([]string, 0, len(heads))
-	for _, head := range heads {
-		branches = append(branches, head)
-	}
-	return branches
 }
 
 type res struct {
