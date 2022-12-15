@@ -190,21 +190,7 @@ func putChunks(ctx context.Context, wah WalkAddrs, sinkCS chunks.ChunkStore, has
 	for _, h := range hashes {
 		c := neededChunks[h]
 
-		getAddrs := func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-			return nil, nil
-			// fails a lot of datas/pull unit tests
-			// valRefs := make(hash.HashSet)
-			// err := wah(c, func(addr hash.Hash, isLeaf bool) error {
-			// 	valRefs.Insert(addr)
-			// 	return nil
-			// })
-			// if err != nil {
-			// 	return nil, err
-			// }
-			// return valRefs, nil
-		}
-
-		err := sinkCS.Put(ctx, *c, getAddrs)
+		err := sinkCS.Put(ctx, *c)
 		if err != nil {
 			return hash.HashSlice{}, err
 		}
