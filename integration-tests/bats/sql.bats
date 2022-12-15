@@ -2091,14 +2091,14 @@ SQL
 
 @test "sql: batch delimiter" {
     dolt sql <<SQL
-DELIMITER // ;
+DELIMITER //
 CREATE TABLE test (
   pk BIGINT PRIMARY KEY,
   v1 BIGINT,
   v2 BIGINT
 )//
 INSERT INTO test VALUES (1, 1, 1) //
-DELIMITER $ //
+DELIMITER $
 INSERT INTO test VALUES (2, 2, 2)$ $
 CREATE PROCEDURE p1(x BIGINT)
 BEGIN
@@ -2107,9 +2107,9 @@ BEGIN
   END IF;
   SELECT pk+x, v1+x, v2+x FROM test ORDER BY 1;
 END$
-DELIMITER ;   $
+DELIMITER ;
 INSERT INTO test VALUES (3, 3, 3);
-DELIMITER ********** ;
+DELIMITER **********
 INSERT INTO test VALUES (4, 4, 4)**********
 DELIMITER &
 INSERT INTO test VALUES (5, 5, 5)&
@@ -2138,7 +2138,7 @@ SQL
     [[ "${#lines[@]}" = "7" ]] || false
 
     dolt sql <<SQL
-DELIMITER // ;
+DELIMITER //
 CREATE TABLE test2(
   pk BIGINT PRIMARY KEY,
   v1 VARCHAR(20)
@@ -2254,7 +2254,7 @@ SQL
 
 @test "sql: stored procedures creation check" {
     dolt sql -q "
-DELIMITER // ;
+DELIMITER //
 CREATE PROCEDURE p1(s VARCHAR(200), N DOUBLE, m DOUBLE)
 BEGIN
   SET s = '';
