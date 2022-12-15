@@ -1199,9 +1199,9 @@ func TestSetTypeAfterMutations(t *testing.T) {
 func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
-	if vs.Format() == Format_LD_1 {
-		t.Skip("Test fails at NewSet for LD_1")
-	}
+	// if vs.Format() == Format_LD_1 {
+	// 	t.Skip("Test fails at NewSet for LD_1")
+	// }
 
 	smallTestChunks()
 	defer normalProductionChunks()
