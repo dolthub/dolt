@@ -60,7 +60,7 @@ type StaticErrorEditor struct {
 	err error
 }
 
-var _ sql.ForeignKeyUpdater = (*StaticErrorEditor)(nil)
+var _ sql.ForeignKeyEditor = (*StaticErrorEditor)(nil)
 
 func NewStaticErrorEditor(err error) *StaticErrorEditor {
 	return &StaticErrorEditor{err}

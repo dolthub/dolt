@@ -1006,8 +1006,8 @@ func (t DoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, fk sql.Fore
 	return fmt.Errorf("no foreign key operations on a read-only table")
 }
 
-// GetForeignKeyUpdater implements sql.ForeignKeyTable
-func (t DoltTable) GetForeignKeyUpdater(ctx *sql.Context) sql.ForeignKeyUpdater {
+// GetForeignKeyEditor implements sql.ForeignKeyTable
+func (t DoltTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
 	return nil
 }
 
@@ -2398,8 +2398,8 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-// GetForeignKeyUpdater implements sql.ForeignKeyTable
-func (t *AlterableDoltTable) GetForeignKeyUpdater(ctx *sql.Context) sql.ForeignKeyUpdater {
+// GetForeignKeyEditor implements sql.ForeignKeyTable
+func (t *AlterableDoltTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
 		return sqlutil.NewStaticErrorEditor(err)
