@@ -157,12 +157,12 @@ func (cbs *checkingChunkStore) expect(rs ...Ref) {
 	}
 }
 
-func (cbs *checkingChunkStore) Put(ctx context.Context, c chunks.Chunk) error {
+func (cbs *checkingChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
 	if cbs.a.NotZero(len(cbs.expectedOrder), "Unexpected Put of %s", c.Hash()) {
 		cbs.a.Equal(cbs.expectedOrder[0], c.Hash())
 		cbs.expectedOrder = cbs.expectedOrder[1:]
 	}
-	return cbs.ChunkStore.Put(context.Background(), c)
+	return cbs.ChunkStore.Put(context.Background(), c, getAddrs)
 }
 
 func (cbs *checkingChunkStore) Flush() {
