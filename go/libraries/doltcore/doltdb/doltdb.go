@@ -1243,23 +1243,23 @@ func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
 // given, pulling all chunks reachable from the given targetHash. Pull progress
 // is communicated over the provided channel.
 func (ddb *DoltDB) PullChunks(
-		ctx context.Context,
-		tempDir string,
-		srcDB *DoltDB,
-		targetHash hash.Hash,
-		progChan chan pull.PullProgress,
-		statsCh chan pull.Stats,
+	ctx context.Context,
+	tempDir string,
+	srcDB *DoltDB,
+	targetHash hash.Hash,
+	progChan chan pull.PullProgress,
+	statsCh chan pull.Stats,
 ) error {
 	return pullHash(ctx, ddb.db, srcDB.db, targetHash, tempDir, progChan, statsCh)
 }
 
 func pullHash(
-		ctx context.Context,
-		destDB, srcDB datas.Database,
-		targetHash hash.Hash,
-		tempDir string,
-		progChan chan pull.PullProgress,
-		statsCh chan pull.Stats,
+	ctx context.Context,
+	destDB, srcDB datas.Database,
+	targetHash hash.Hash,
+	tempDir string,
+	progChan chan pull.PullProgress,
+	statsCh chan pull.Stats,
 ) error {
 	srcCS := datas.ChunkStoreFromDatabase(srcDB)
 	destCS := datas.ChunkStoreFromDatabase(destDB)

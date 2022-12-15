@@ -182,12 +182,12 @@ const pullBehavior_forcePull pullBehavior = true
 // pullBranches pulls the remote branches named. If a corresponding local branch exists, it will be fast-forwarded. If
 // it doesn't exist, it will be created.
 func pullBranches(
-		ctx *sql.Context,
-		rrd ReadReplicaDatabase,
-		remoteBranches []doltdb.BranchWithHash,
-		localBranches []doltdb.BranchWithHash,
-		currentBranchRef ref.DoltRef,
-		behavior pullBehavior,
+	ctx *sql.Context,
+	rrd ReadReplicaDatabase,
+	remoteBranches []doltdb.BranchWithHash,
+	localBranches []doltdb.BranchWithHash,
+	currentBranchRef ref.DoltRef,
+	behavior pullBehavior,
 ) error {
 	localHashesByRef := make(map[string]hash.Hash)
 	remoteHashesByRef := make(map[string]hash.Hash)
@@ -301,10 +301,10 @@ func pullBranches(
 }
 
 func getReplicationBranches(ctx *sql.Context, rrd ReadReplicaDatabase) (
-		remoteBranches []doltdb.BranchWithHash,
-		localBranches []doltdb.BranchWithHash,
-		deletedBranches []doltdb.BranchWithHash,
-		err error,
+	remoteBranches []doltdb.BranchWithHash,
+	localBranches []doltdb.BranchWithHash,
+	deletedBranches []doltdb.BranchWithHash,
+	err error,
 ) {
 	remoteBranches, err = rrd.srcDB.GetBranchesWithHashes(ctx)
 	if err != nil {
