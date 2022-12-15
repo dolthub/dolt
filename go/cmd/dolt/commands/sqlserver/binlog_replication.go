@@ -118,6 +118,7 @@ func replicaBinlogEventHandler(ctx *sql.Context, replicaConfiguration *replicaCo
 
 func processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.BinlogEvent) error {
 	var err error
+	createDoltCommit := false
 
 	switch {
 	case event.IsRand():
@@ -130,8 +131,10 @@ func processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.Binlog
 		// An XID event is generated for a COMMIT of a transaction that modifies one or more tables of an
 		// XA-capable storage engine. For more details, see: https://mariadb.com/kb/en/xid_event/
 		fmt.Printf("Received: XID event\n")
-		// TODO: parse XID transaction number and perform a commit?
+		// TODO: parse XID transaction number and record it durably
 		//       gtid, b, err := event.GTID(format)
+		executeQueryWithEngine(ctx, engine, "commit;")
+		createDoltCommit = true
 
 	case event.IsQuery():
 		// A Query event represents a statement executed on the source server that should be executed on the
@@ -146,6 +149,7 @@ func processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.Binlog
 		fmt.Printf(" - %s \n", query.String())
 		ctx.SetCurrentDatabase(query.Database)
 		executeQueryWithEngine(ctx, engine, query.SQL)
+		createDoltCommit = true
 
 	case event.IsRotate():
 		// When a binary log file exceeds the configured size limit, a ROTATE_EVENT is written at the end of the file,
@@ -201,6 +205,7 @@ func processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.Binlog
 		// A ROWS_EVENT is written for row based replication if data is inserted, deleted or updated.
 		// For more details, see: https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
 		fmt.Printf("Received: DeleteRows event")
+		createDoltCommit = true
 		tableId := event.TableID(format)
 		tableMap, ok := tableMapsById[tableId]
 		if !ok {
@@ -243,6 +248,7 @@ func processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.Binlog
 		// A ROWS_EVENT is written for row based replication if data is inserted, deleted or updated.
 		// For more details, see: https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
 		fmt.Printf("Received: WriteRows event\n")
+		createDoltCommit = true
 		tableId := event.TableID(format)
 		tableMap, ok := tableMapsById[tableId]
 		if !ok {
@@ -285,6 +291,7 @@ func processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.Binlog
 		// A ROWS_EVENT is written for row based replication if data is inserted, deleted or updated.
 		// For more details, see: https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
 		fmt.Printf("Received: UpdateRows event\n")
+		createDoltCommit = true
 		tableId := event.TableID(format)
 		tableMap, ok := tableMapsById[tableId]
 		if !ok {
@@ -348,6 +355,11 @@ func processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.Binlog
 		} else {
 			return fmt.Errorf("received unknown event: %v", event)
 		}
+	}
+
+	// For now, create a Dolt commit from every data update. Eventually, we'll want to make this configurable.
+	if createDoltCommit {
+		executeQueryWithEngine(ctx, engine, "call dolt_commit('-Am', 'automatic Dolt replication commit');")
 	}
 
 	return nil
@@ -513,6 +525,11 @@ func formatTableMapAsString(tableId uint64, tableMap *mysql.TableMap) string {
 }
 
 func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) {
+	if ctx.GetCurrentDatabase() == "" {
+		fmt.Printf("!!!No current database selected, aborting query...\n")
+		return
+	}
+
 	_, iter, err := engine.Query(ctx, query)
 	if err != nil {
 		fmt.Printf("!!! ERROR executing query: %v \n", err.Error())
@@ -526,6 +543,6 @@ func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) 
 			}
 			return
 		}
-		fmt.Printf(" row: %s \n", sql.FormatRow(row))
+		fmt.Printf("   row: %s \n", sql.FormatRow(row))
 	}
 }
