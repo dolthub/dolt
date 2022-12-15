@@ -186,29 +186,7 @@ func (ms *MemoryStoreView) Version() string {
 	return ms.version
 }
 
-func (ms *MemoryStoreView) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
-	absent, err := ms.HasMany(ctx, addrs)
-	if err != nil {
-		return err
-	}
-	if len(absent) != 0 {
-		s := absent.String()
-		return fmt.Errorf("Found dangling references to %s", s)
-	}
-	return nil
-}
-
-func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb) error {
-	addrs, err := getAddrs(ctx, c)
-	if err != nil {
-		return err
-	}
-
-	err = ms.errorIfDangling(ctx, addrs)
-	if err != nil {
-		return err
-	}
-
+func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 

@@ -468,10 +468,6 @@ func (t *testProtocol) NewDatabase(sp Spec) (datas.Database, error) {
 	return datas.NewDatabase(cs), nil
 }
 
-func getAddrsCb(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-	return nil, nil
-}
-
 func TestExternalProtocol(t *testing.T) {
 	assert := assert.New(t)
 	tp := testProtocol{}
@@ -485,7 +481,7 @@ func TestExternalProtocol(t *testing.T) {
 	cs := sp.NewChunkStore(context.Background())
 	assert.Equal("foo", tp.name)
 	c := chunks.NewChunk([]byte("hi!"))
-	err = cs.Put(context.Background(), c, getAddrsCb)
+	err = cs.Put(context.Background(), c)
 	assert.NoError(err)
 	ok, err := cs.Has(context.Background(), c.Hash())
 	assert.NoError(err)
