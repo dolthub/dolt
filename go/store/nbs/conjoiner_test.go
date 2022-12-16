@@ -97,6 +97,15 @@ func TestConjoin(t *testing.T) {
 			}
 		})
 	})
+	t.Run("local fs blobstore persister", func(t *testing.T) {
+		testConjoin(t, func(*testing.T) tablePersister {
+			return &blobstorePersister{
+				bs:        blobstore.NewLocalBlobstore(t.TempDir()),
+				blockSize: 4096,
+				q:         &UnlimitedQuotaProvider{},
+			}
+		})
+	})
 }
 
 func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {

@@ -17,6 +17,7 @@ package blobstore
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"sync"
 
@@ -109,18 +110,26 @@ func (bs *InMemoryBlobstore) Exists(ctx context.Context, key string) (bool, erro
 func (bs *InMemoryBlobstore) Contatenate(ctx context.Context, key string, sources []string) (string, error) {
 	bs.mutex.Lock()
 	defer bs.mutex.Unlock()
-	var sz int
-	for _, k := range sources {
-		sz += len(bs.blobs[k])
+	// recursively compose sources (mirrors GCS impl)
+	for len(sources) > composeBatch {
+		// compose subsets of |sources| in batches,
+		// store tmp composite objects in |next|
+		var next []string
+		for len(sources) > 0 {
+			tmp := uuid.New().String()
+			batch := min(composeBatch, len(sources))
+			_, err := bs.composeObjects(ctx, tmp, sources[:batch])
+			if err != nil {
+				return "", err
+			}
+			next = append(next, tmp)
+			sources = sources[batch:]
+		}
+		sources = next
 	}
-	b := make([]byte, 0, sz)
-	for _, k := range sources {
-		b = append(b, bs.blobs[k]...)
-	}
-	return bs.put(ctx, key, bytes.NewReader(b))
+	return bs.composeObjects(ctx, key, sources)
 }
 
-// Put sets the blob and the version for a key
 func (bs *InMemoryBlobstore) put(ctx context.Context, key string, reader io.Reader) (string, error) {
 	ver := uuid.New().String()
 	data, err := io.ReadAll(reader)
@@ -133,4 +142,20 @@ func (bs *InMemoryBlobstore) put(ctx context.Context, key string, reader io.Read
 	bs.versions[key] = ver
 
 	return ver, nil
+}
+
+func (bs *InMemoryBlobstore) composeObjects(ctx context.Context, composite string, sources []string) (gen string, err error) {
+	if len(sources) > composeBatch {
+		return "", fmt.Errorf("too many objects to compose (%d > %d)", len(sources), composeBatch)
+	}
+
+	var sz int
+	for _, k := range sources {
+		sz += len(bs.blobs[k])
+	}
+	b := make([]byte, 0, sz)
+	for _, k := range sources {
+		b = append(b, bs.blobs[k]...)
+	}
+	return bs.put(ctx, composite, bytes.NewReader(b))
 }

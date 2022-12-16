@@ -16,9 +16,12 @@ package blobstore
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"path"
 	"strconv"
+
+	"github.com/google/uuid"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/googleapi"
@@ -26,6 +29,8 @@ import (
 
 const (
 	precondFailCode = 412
+
+	composeBatch = 32
 )
 
 // GCSBlobstore provides a GCS implementation of the Blobstore interface
@@ -89,7 +94,7 @@ func (bs *GCSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.R
 		return nil, "", err
 	}
 
-	return reader, strconv.FormatInt(generation, 16), nil
+	return reader, fmtGeneration(generation), nil
 }
 
 func writeObj(writer *storage.Writer, reader io.Reader) (string, error) {
@@ -110,7 +115,7 @@ func writeObj(writer *storage.Writer, reader io.Reader) (string, error) {
 
 	generation := writer.Attrs().Generation
 
-	return strconv.FormatInt(generation, 16), nil
+	return fmtGeneration(generation), nil
 }
 
 // Put sets the blob and the version for a key
@@ -159,5 +164,59 @@ func (bs *GCSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key st
 }
 
 func (bs *GCSBlobstore) Contatenate(ctx context.Context, key string, sources []string) (string, error) {
-	panic("unimplemented")
+	// GCS compose has a batch size limit,
+	// recursively compose sources
+	for len(sources) > composeBatch {
+		// compose subsets of |sources| in batches,
+		// store tmp composite objects in |next|
+		var next []string
+		for len(sources) > 0 {
+			tmp := uuid.New().String()
+			batch := min(composeBatch, len(sources))
+			_, err := bs.composeObjects(ctx, tmp, sources[:batch])
+			if err != nil {
+				return "", err
+			}
+			next = append(next, tmp)
+			sources = sources[batch:]
+		}
+		sources = next
+	}
+	return bs.composeObjects(ctx, key, sources)
+}
+
+func (bs *GCSBlobstore) composeObjects(ctx context.Context, composite string, sources []string) (gen string, err error) {
+	if len(sources) > composeBatch {
+		return "", fmt.Errorf("too many objects to compose (%d > %d)", len(sources), composeBatch)
+	}
+
+	var a *storage.ObjectAttrs
+	objects := make([]*storage.ObjectHandle, len(sources))
+	for i := range objects {
+		oh := bs.bucket.Object(path.Join(bs.prefix, sources[i]))
+		if a, err = oh.Attrs(ctx); err != nil {
+			return "", err
+		}
+		objects[i] = oh.Generation(a.Generation)
+	}
+
+	// compose |objects| into |c|
+	c := bs.bucket.Object(path.Join(bs.prefix, composite))
+	if a, err = c.ComposerFrom(objects...).Run(ctx); err != nil {
+		return "", err
+	}
+	return fmtGeneration(a.Generation), nil
+}
+
+func fmtGeneration(g int64) string {
+	return strconv.FormatInt(g, 16)
+}
+
+func min(l, r int) (m int) {
+	if l < r {
+		m = l
+	} else {
+		m = r
+	}
+	return
 }
