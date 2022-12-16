@@ -725,8 +725,8 @@ func (ddb *DoltDB) GetBranchesWithHashes(ctx context.Context) ([]RefWithHash, er
 }
 
 var allRefsFilter = map[ref.RefType]struct{}{
-	ref.BranchRefType: {},
-	ref.TagRefType: {},
+	ref.BranchRefType:    {},
+	ref.TagRefType:       {},
 	ref.WorkspaceRefType: {},
 }
 
