@@ -528,17 +528,17 @@ type TestTableFileStore struct {
 	mu         sync.Mutex
 }
 
-var _ nbs.TableFileStore = &TestTableFileStore{}
+var _ chunks.TableFileStore = &TestTableFileStore{}
 
-func (ttfs *TestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, []nbs.TableFile, error) {
+func (ttfs *TestTableFileStore) Sources(ctx context.Context) (hash.Hash, []chunks.TableFile, []chunks.TableFile, error) {
 	ttfs.mu.Lock()
 	defer ttfs.mu.Unlock()
-	var tblFiles []nbs.TableFile
+	var tblFiles []chunks.TableFile
 	for _, tblFile := range ttfs.tableFiles {
 		tblFiles = append(tblFiles, tblFile)
 	}
 
-	return ttfs.root, tblFiles, []nbs.TableFile{}, nil
+	return ttfs.root, tblFiles, []chunks.TableFile{}, nil
 }
 
 func (ttfs *TestTableFileStore) Size(ctx context.Context) (uint64, error) {
@@ -582,7 +582,7 @@ type FlakeyTestTableFileStore struct {
 	GoodNow bool
 }
 
-func (f *FlakeyTestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, []nbs.TableFile, error) {
+func (f *FlakeyTestTableFileStore) Sources(ctx context.Context) (hash.Hash, []chunks.TableFile, []chunks.TableFile, error) {
 	if !f.GoodNow {
 		f.GoodNow = true
 		r, files, appendixFiles, _ := f.TestTableFileStore.Sources(ctx)
@@ -594,8 +594,8 @@ func (f *FlakeyTestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nb
 	return f.TestTableFileStore.Sources(ctx)
 }
 
-func (ttfs *TestTableFileStore) SupportedOperations() nbs.TableFileStoreOps {
-	return nbs.TableFileStoreOps{
+func (ttfs *TestTableFileStore) SupportedOperations() chunks.TableFileStoreOps {
+	return chunks.TableFileStoreOps{
 		CanRead:  true,
 		CanWrite: true,
 	}
