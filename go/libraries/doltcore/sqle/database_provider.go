@@ -948,7 +948,7 @@ func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDa
 		return err
 	}
 
-	err = pullBranches(ctx, db, []doltdb.BranchWithHash{{
+	err = pullBranches(ctx, db, []doltdb.RefWithHash{{
 		Ref:  branchRef,
 		Hash: cmHash,
 	}}, nil, currentBranchRef, pullBehavior_fastForward)

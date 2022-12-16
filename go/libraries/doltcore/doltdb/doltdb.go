@@ -709,15 +709,15 @@ func (ddb *DoltDB) HasBranch(ctx context.Context, branchName string) (bool, erro
 	return false, nil
 }
 
-type BranchWithHash struct {
+type RefWithHash struct {
 	Ref  ref.DoltRef
 	Hash hash.Hash
 }
 
-func (ddb *DoltDB) GetBranchesWithHashes(ctx context.Context) ([]BranchWithHash, error) {
-	var refs []BranchWithHash
+func (ddb *DoltDB) GetBranchesWithHashes(ctx context.Context) ([]RefWithHash, error) {
+	var refs []RefWithHash
 	err := ddb.VisitRefsOfType(ctx, branchRefFilter, func(r ref.DoltRef, addr hash.Hash) error {
-		refs = append(refs, BranchWithHash{r, addr})
+		refs = append(refs, RefWithHash{r, addr})
 		return nil
 	})
 	return refs, err
@@ -1309,13 +1309,13 @@ func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, datasetId string) err
 	return nil
 }
 
-func (ddb *DoltDB) GetBranchesByRootHash(ctx context.Context, rootHash hash.Hash) ([]BranchWithHash, error) {
+func (ddb *DoltDB) GetBranchesByRootHash(ctx context.Context, rootHash hash.Hash) ([]RefWithHash, error) {
 	dss, err := ddb.db.GetDatasetsByRootHash(ctx, rootHash)
 	if err != nil {
 		return nil, err
 	}
 
-	var refs []BranchWithHash
+	var refs []RefWithHash
 
 	err = dss.IterAll(ctx, func(key string, addr hash.Hash) error {
 		keyStr := key
@@ -1328,7 +1328,7 @@ func (ddb *DoltDB) GetBranchesByRootHash(ctx context.Context, rootHash hash.Hash
 			}
 
 			if _, ok := branchRefFilter[dref.GetType()]; ok {
-				refs = append(refs, BranchWithHash{dref, addr})
+				refs = append(refs, RefWithHash{dref, addr})
 			}
 		}
 

@@ -158,7 +158,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		}
 
 		// Reduce the remote branch list to only the ones configured to replicate
-		prunedBranches := make([]doltdb.BranchWithHash, len(branchesToPull))
+		prunedBranches := make([]doltdb.RefWithHash, len(branchesToPull))
 		pruneI := 0
 		for _, remoteBranch := range remoteBranches {
 			if branchesToPull[remoteBranch.Ref.GetPath()] {
@@ -232,8 +232,8 @@ const pullBehavior_forcePull pullBehavior = true
 func pullBranches(
 	ctx *sql.Context,
 	rrd ReadReplicaDatabase,
-	remoteBranches []doltdb.BranchWithHash,
-	localBranches []doltdb.BranchWithHash,
+	remoteBranches []doltdb.RefWithHash,
+	localBranches []doltdb.RefWithHash,
 	currentBranchRef ref.DoltRef,
 	behavior pullBehavior,
 ) error {
@@ -333,9 +333,9 @@ func pullBranches(
 }
 
 func getReplicationBranches(ctx *sql.Context, rrd ReadReplicaDatabase) (
-	remoteBranches []doltdb.BranchWithHash,
-	localBranches []doltdb.BranchWithHash,
-	deletedBranches []doltdb.BranchWithHash,
+	remoteBranches []doltdb.RefWithHash,
+	localBranches []doltdb.RefWithHash,
+	deletedBranches []doltdb.RefWithHash,
 	err error,
 ) {
 	remoteBranches, err = rrd.srcDB.GetBranchesWithHashes(ctx)
@@ -352,8 +352,8 @@ func getReplicationBranches(ctx *sql.Context, rrd ReadReplicaDatabase) (
 	return remoteBranches, localBranches, deletedBranches, nil
 }
 
-func branchesToDelete(remRefs, localRefs []doltdb.BranchWithHash) []doltdb.BranchWithHash {
-	toDelete := make([]doltdb.BranchWithHash, 0, len(localRefs))
+func branchesToDelete(remRefs, localRefs []doltdb.RefWithHash) []doltdb.RefWithHash {
+	toDelete := make([]doltdb.RefWithHash, 0, len(localRefs))
 	var i, j int
 	for i < len(remRefs) && j < len(localRefs) {
 		rem := remRefs[i].Ref.GetPath()
@@ -375,7 +375,7 @@ func branchesToDelete(remRefs, localRefs []doltdb.BranchWithHash) []doltdb.Branc
 	return toDelete
 }
 
-func deleteBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []doltdb.BranchWithHash) error {
+func deleteBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []doltdb.RefWithHash) error {
 	for _, b := range branches {
 		err := rrd.ddb.DeleteBranch(ctx, b.Ref)
 		if errors.Is(err, doltdb.ErrBranchNotFound) {
