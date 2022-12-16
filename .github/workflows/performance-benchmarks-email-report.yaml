@@ -39,11 +39,11 @@ jobs:
     needs: set-version-actor
     name: Trigger Benchmark Latency and Benchmark Import K8s Workflows
     steps:
-      - uses: peter-evans/repository-dispatch@v2.0.0
-        with:
-          token: ${{ secrets.REPO_ACCESS_TOKEN }}
-          event-type: benchmark-latency
-          client-payload: '{"from_server": "mysql", "from_version": "8.0.28", "to_server": "dolt", "to_version": "${{ needs.set-version-actor.outputs.version }}", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"}'
+      #- uses: peter-evans/repository-dispatch@v2.0.0
+        #with:
+          #token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          #event-type: benchmark-latency
+          #client-payload: '{"from_server": "mysql", "from_version": "8.0.28", "to_server": "dolt", "to_version": "${{ needs.set-version-actor.outputs.version }}", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"}'
       - uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
@@ -63,7 +63,7 @@ jobs:
           event-type: benchmark-systab
           client-payload: |
             {
-              "email_recipient": "${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}",
+              "email_recipient":  "${{ needs.set-version-actor.outputs.actor_email }}"
               "version": "${{ github.sha }}",
               "run_file": "systab.yaml",
               "report": "systab.sql",
