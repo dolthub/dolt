@@ -120,16 +120,28 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	currentBranchRef, err := dSess.CWBHeadRef(ctx, rrd.name)
-	if err != nil {
+	if err != nil && !SkipReplicationWarnings() {
 		return err
+	} else if err != nil {
+		ctx.GetLogger().Warn(err.Error())
+		return nil
 	}
 
 	err = rrd.srcDB.Rebase(ctx)
-	if err != nil {
+	if err != nil && !SkipReplicationWarnings() {
 		return err
+	} else if err != nil {
+		ctx.GetLogger().Warn(err.Error())
+		return nil
 	}
 
 	remoteBranches, localBranches, toDelete, err := getReplicationBranches(ctx, rrd)
+	if err != nil && !SkipReplicationWarnings() {
+		return err
+	} else if err != nil {
+		ctx.GetLogger().Warn(err.Error())
+		return nil
+	}
 
 	switch {
 	case headsArg != "" && allHeads == SysVarTrue:
@@ -146,25 +158,58 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		}
 
 		// Reduce the remote branch list to only the ones configured to replicate
-		for i, remoteBranch := range remoteBranches {
-			if !branchesToPull[remoteBranch.Ref.GetPath()] {
-				remoteBranches = append(remoteBranches[:i], remoteBranches[i+1:]...)
+		prunedBranches := make([]doltdb.BranchWithHash, len(branchesToPull))
+		pruneI := 0
+		for _, remoteBranch := range remoteBranches {
+			if branchesToPull[remoteBranch.Ref.GetPath()] {
+				prunedBranches[pruneI] = remoteBranch
+				pruneI++
+			}
+			delete(branchesToPull, remoteBranch.Ref.GetPath())
+		}
+
+		if len(branchesToPull) > 0 {
+			// just use the first not-found branch as the error string
+			var branch string
+			for b := range branchesToPull {
+				branch = b
+				break
+			}
+
+			err := fmt.Errorf("unable to find %q on %q; branch not found", branch, rrd.remote.Name)
+			if err != nil && !SkipReplicationWarnings() {
+				return err
+			} else if err != nil {
+				ctx.GetLogger().Warn(err.Error())
+				return nil
 			}
 		}
 
+		remoteBranches = prunedBranches
 		err = pullBranches(ctx, rrd, remoteBranches, localBranches, currentBranchRef, behavior)
-		if err != nil {
+
+		if err != nil && !SkipReplicationWarnings() {
 			return err
+		} else if err != nil {
+			ctx.GetLogger().Warn(err.Error())
+			return nil
 		}
+
 	case allHeads == int8(1):
 		err = pullBranches(ctx, rrd, remoteBranches, localBranches, currentBranchRef, behavior)
-		if err != nil {
+		if err != nil && !SkipReplicationWarnings() {
 			return err
+		} else if err != nil {
+			ctx.GetLogger().Warn(err.Error())
+			return nil
 		}
 
 		err = deleteBranches(ctx, rrd, toDelete)
-		if err != nil {
+		if err != nil && !SkipReplicationWarnings() {
 			return err
+		} else if err != nil {
+			ctx.GetLogger().Warn(err.Error())
+			return nil
 		}
 	default:
 		return fmt.Errorf("%w: dolt_replicate_heads not set", ErrInvalidReplicateHeadsSetting)
