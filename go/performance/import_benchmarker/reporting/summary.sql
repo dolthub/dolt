@@ -34,5 +34,5 @@ from (
         ) as cli_mult
     from import_perf_results as o
     where o.server = 'mysql'
-    order by 1,2;
+    order by 1,2
 ) stats;
