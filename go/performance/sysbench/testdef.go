@@ -370,7 +370,7 @@ func (r *Results) SqlDump() string {
 	b.WriteString(`CREATE TABLE IF NOT EXISTS sysbench_results (
   test_name varchar(64),
   detail varchar(64),
-  servervarchar(64),
+  server varchar(64),
   time double,
   iters int,
   avg double,

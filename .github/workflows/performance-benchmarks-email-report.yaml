@@ -50,7 +50,7 @@ jobs:
           event-type: benchmark-import
           client-payload: |
             {
-              "email_recipient": "${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}",
+              "email_recipient":  "${{ needs.set-version-actor.outputs.actor_email }}",
               "version": "${{ github.sha }}",
               "run_file": "ci.yaml",
               "report": "three_way_compare.sql",
@@ -63,7 +63,7 @@ jobs:
           event-type: benchmark-systab
           client-payload: |
             {
-              "email_recipient": "${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}",
+              "email_recipient":  "${{ needs.set-version-actor.outputs.actor_email }}",
               "version": "${{ github.sha }}",
               "run_file": "systab.yaml",
               "report": "systab.sql",
