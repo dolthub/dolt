@@ -1,4 +1,4 @@
-select avg(mean_mult) as avg
+select round(avg(mean_mult),2) as avg
 from (
   select
     round(first_value(avg) over w, 2) as mean,
