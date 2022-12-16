@@ -339,7 +339,7 @@ teardown() {
     run dolt sql -q "show tables"
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "unable to find 'unknown' on 'remote1'; branch not found" ]] || false
+    [[ "$output" =~ "branch not found" ]] || false
 }
 
 @test "replication: pull with no head configuration fails" {
