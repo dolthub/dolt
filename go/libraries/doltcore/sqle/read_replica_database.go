@@ -21,8 +21,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -30,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type ReadReplicaDatabase struct {
@@ -38,6 +37,8 @@ type ReadReplicaDatabase struct {
 	srcDB   *doltdb.DoltDB
 	tmpDir  string
 	limiter *limiter
+	remoteNomsRootHash hash.Hash
+	nomsRootHashMu *sync.Mutex
 }
 
 var _ SqlDatabase = ReadReplicaDatabase{}
@@ -84,6 +85,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		tmpDir:   tmpDir,
 		srcDB:    srcDB,
 		limiter:  newLimiter(),
+		nomsRootHashMu: &sync.Mutex{},
 	}, nil
 }
 
@@ -125,9 +127,34 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		return err
 	}
 
-	err = rrd.srcDB.Rebase(ctx)
+	// check to see if there have been changes to the remote since the last time we pulled, and return early if not
+	changesToPull := false
+	err = func() error {
+		rrd.nomsRootHashMu.Lock()
+		defer rrd.nomsRootHashMu.Unlock()
+		err := rrd.srcDB.Rebase(ctx)
+		if err != nil {
+			return err
+		}
+
+		srcRootHash, err := rrd.srcDB.NomsRoot(ctx)
+		if err != nil {
+			return err
+		}
+
+		if srcRootHash != rrd.remoteNomsRootHash {
+			changesToPull = true
+			rrd.remoteNomsRootHash = srcRootHash
+		}
+
+		return nil
+	}()
 	if err != nil {
 		return err
+	}
+
+	if !changesToPull {
+		return nil
 	}
 
 	remoteBranches, localBranches, toDelete, err := getReplicationBranches(ctx, rrd)
@@ -205,19 +232,9 @@ func pullBranches(
 	}
 
 	_, err := rrd.limiter.Run(ctx, "-all", func() (any, error) {
-		// TODO: track two noms root hashes, compare them, and only pull if they're different
 		srcRoot, err := rrd.srcDB.NomsRoot(ctx)
 		if err != nil {
 			return nil, err
-		}
-
-		destRoot, err := rrd.ddb.NomsRoot(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		if srcRoot == destRoot {
-			return nil, nil
 		}
 
 		err = rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, srcRoot, nil, nil)
