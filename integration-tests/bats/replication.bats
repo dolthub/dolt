@@ -382,10 +382,11 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_skip_replication_errors 1
     dolt config --local --add sqlserver.global.dolt_replicate_heads unknown
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+
     run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "replication failed: unable to find 'unknown' on 'remote1'; branch not found" ]] || false
+    [[ "$output" =~ "branch not found" ]] || false
 
     run dolt checkout new_feature
     [ "$status" -eq 1 ]
