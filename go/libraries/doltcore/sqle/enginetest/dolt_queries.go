@@ -1160,7 +1160,8 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "explain select pk, c from dolt_history_t1 where pk = 3",
 				Expected: []sql.Row{
-					{"Filter(dolt_history_t1.pk = 3)"},
+					{"Filter"},
+					{" ├─ (dolt_history_t1.pk = 3)"},
 					{" └─ IndexedTableAccess(dolt_history_t1)"},
 					{"     ├─ index: [dolt_history_t1.pk]"},
 					{"     ├─ filters: [{[3, 3]}]"},
@@ -1172,7 +1173,8 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"Project"},
 					{" ├─ columns: [dolt_history_t1.pk, dolt_history_t1.c]"},
-					{" └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
+					{" └─ Filter"},
+					{"     ├─ ((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
 					{"     └─ IndexedTableAccess(dolt_history_t1)"},
 					{"         ├─ index: [dolt_history_t1.pk]"},
 					{"         ├─ filters: [{[3, 3]}]"},
@@ -1229,7 +1231,8 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "explain select pk, c from dolt_history_t1 where c = 4",
 				Expected: []sql.Row{
-					{"Filter(dolt_history_t1.c = 4)"},
+					{"Filter"},
+					{" ├─ (dolt_history_t1.c = 4)"},
 					{" └─ IndexedTableAccess(dolt_history_t1)"},
 					{"     ├─ index: [dolt_history_t1.c]"},
 					{"     ├─ filters: [{[4, 4]}]"},
@@ -1241,7 +1244,8 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"Project"},
 					{" ├─ columns: [dolt_history_t1.pk, dolt_history_t1.c]"},
-					{" └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = 'someguy'))"},
+					{" └─ Filter"},
+					{"     ├─ ((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = 'someguy'))"},
 					{"     └─ IndexedTableAccess(dolt_history_t1)"},
 					{"         ├─ index: [dolt_history_t1.c]"},
 					{"         ├─ filters: [{[10, 10]}]"},
@@ -3205,29 +3209,9 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "explain select * from t where v1 = 'A'",
-				Expected: []sql.Row{
-					{"Filter(t.v1 = 'A')"},
-					{" └─ IndexedTableAccess(t)"},
-					{"     ├─ index: [t.v1,t.v2]"},
-					{"     ├─ filters: [{[A, A], [NULL, ∞)}]"},
-					{"     └─ columns: [i v1 v2]"},
-				},
-			},
-			{
 				Query: "select * from t where v1 = 'ABC'",
 				Expected: []sql.Row{
 					{2, "abc", "abc"},
-				},
-			},
-			{
-				Query: "explain select * from t where v1 = 'ABC'",
-				Expected: []sql.Row{
-					{"Filter(t.v1 = 'ABC')"},
-					{" └─ IndexedTableAccess(t)"},
-					{"     ├─ index: [t.v1,t.v2]"},
-					{"     ├─ filters: [{[ABC, ABC], [NULL, ∞)}]"},
-					{"     └─ columns: [i v1 v2]"},
 				},
 			},
 			{
@@ -3235,30 +3219,10 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "explain select * from t where v1 = 'ABCD'",
-				Expected: []sql.Row{
-					{"Filter(t.v1 = 'ABCD')"},
-					{" └─ IndexedTableAccess(t)"},
-					{"     ├─ index: [t.v1,t.v2]"},
-					{"     ├─ filters: [{[ABCD, ABCD], [NULL, ∞)}]"},
-					{"     └─ columns: [i v1 v2]"},
-				},
-			},
-			{
 				Query: "select * from t where v1 > 'A' and v1 < 'ABCDE'",
 				Expected: []sql.Row{
 					{1, "ab", "ab"},
 					{2, "abc", "abc"},
-				},
-			},
-			{
-				Query: "explain select * from t where v1 > 'A' and v1 < 'ABCDE'",
-				Expected: []sql.Row{
-					{"Filter((t.v1 > 'A') AND (t.v1 < 'ABCDE'))"},
-					{" └─ IndexedTableAccess(t)"},
-					{"     ├─ index: [t.v1,t.v2]"},
-					{"     ├─ filters: [{(A, ABCDE), [NULL, ∞)}]"},
-					{"     └─ columns: [i v1 v2]"},
 				},
 			},
 			{
@@ -3269,30 +3233,9 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "explain select * from t where v1 > 'A' and v2 < 'ABCDE'",
-				Expected: []sql.Row{
-					{"Filter((t.v1 > 'A') AND (t.v2 < 'ABCDE'))"},
-					{" └─ IndexedTableAccess(t)"},
-					{"     ├─ index: [t.v1,t.v2]"},
-					{"     ├─ filters: [{(A, ∞), (NULL, ABCDE)}]"},
-					{"     └─ columns: [i v1 v2]"},
-				},
-			},
-			{
 				Query: "update t set v1 = concat(v1, 'Z') where v1 >= 'A'",
 				Expected: []sql.Row{
 					{sql.OkResult{RowsAffected: 4, InsertID: 0, Info: plan.UpdateInfo{Matched: 4, Updated: 4}}},
-				},
-			},
-			{
-				Query: "explain update t set v1 = concat(v1, 'Z') where v1 >= 'A'",
-				Expected: []sql.Row{
-					{"Update"},
-					{" └─ UpdateSource(SET t.v1 = concat(t.v1, 'Z'))"},
-					{"     └─ Filter(t.v1 >= 'A')"},
-					{"         └─ IndexedTableAccess(t)"},
-					{"             ├─ index: [t.v1,t.v2]"},
-					{"             └─ filters: [{[A, ∞), [NULL, ∞)}]"},
 				},
 			},
 			{
@@ -3308,16 +3251,6 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 				Query: "delete from t where v1 >= 'A'",
 				Expected: []sql.Row{
 					{sql.OkResult{RowsAffected: 4}},
-				},
-			},
-			{
-				Query: "explain delete from t where v1 >= 'A'",
-				Expected: []sql.Row{
-					{"Delete"},
-					{" └─ Filter(t.v1 >= 'A')"},
-					{"     └─ IndexedTableAccess(t)"},
-					{"         ├─ index: [t.v1,t.v2]"},
-					{"         └─ filters: [{[A, ∞), [NULL, ∞)}]"},
 				},
 			},
 			{
