@@ -1,4 +1,4 @@
-select avg(sql_mult) as avg
+select round(avg(sql_mult),2) as avg
 from (
     select
         o.test_name as test_name,
