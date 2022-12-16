@@ -91,7 +91,7 @@ func TestReplicationBranches(t *testing.T) {
 		for i := range tt.local {
 			localRefs[i] = ref.NewBranchRef(tt.local[i])
 		}
-		diff := branchesToDelete(remoteRefs, localRefs)
+		diff := refsToDelete(remoteRefs, localRefs)
 		diffNames := make([]string, len(diff))
 		for i := range diff {
 			diffNames[i] = diff[i].GetPath()
