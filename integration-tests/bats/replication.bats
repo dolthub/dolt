@@ -321,9 +321,10 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_heads main,unknown
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
     run dolt sql -q "show tables"
+   
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "replication failed: unable to find 'unknown' on 'remote1'; branch not found" ]] || false
+    [[ "$output" =~ 'replication failed: unable to find "unknown" on "remote1"; branch not found' ]] || false
 }
 
 @test "replication: pull multiple heads, one invalid branch name" {
