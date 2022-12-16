@@ -135,7 +135,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		return nil
 	}
 
-	remoteBranches, localBranches, toDelete, err := getReplicationBranches(ctx, rrd)
+	remoteBranches, localBranches, toDelete, err := getReplicationRefs(ctx, rrd)
 	if err != nil && !SkipReplicationWarnings() {
 		return err
 	} else if err != nil {
@@ -332,7 +332,7 @@ func pullBranches(
 	return nil
 }
 
-func getReplicationBranches(ctx *sql.Context, rrd ReadReplicaDatabase) (
+func getReplicationRefs(ctx *sql.Context, rrd ReadReplicaDatabase) (
 	remoteBranches []doltdb.RefWithHash,
 	localBranches []doltdb.RefWithHash,
 	deletedBranches []doltdb.RefWithHash,

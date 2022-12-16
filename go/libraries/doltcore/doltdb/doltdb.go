@@ -714,9 +714,26 @@ type RefWithHash struct {
 	Hash hash.Hash
 }
 
+// GetBranchesWithHashes returns all the branches in the database with their hashes
 func (ddb *DoltDB) GetBranchesWithHashes(ctx context.Context) ([]RefWithHash, error) {
 	var refs []RefWithHash
 	err := ddb.VisitRefsOfType(ctx, branchRefFilter, func(r ref.DoltRef, addr hash.Hash) error {
+		refs = append(refs, RefWithHash{r, addr})
+		return nil
+	})
+	return refs, err
+}
+
+var allRefsFilter = map[ref.RefType]struct{}{
+	ref.BranchRefType: {},
+	ref.TagRefType: {},
+	ref.WorkspaceRefType: {},
+}
+
+// GetRefsWithHashes returns the list of all commit refs in the database: tags, branches, and workspaces.
+func (ddb *DoltDB) GetRefsWithHashes(ctx context.Context) ([]RefWithHash, error) {
+	var refs []RefWithHash
+	err := ddb.VisitRefsOfType(ctx, allRefsFilter, func(r ref.DoltRef, addr hash.Hash) error {
 		refs = append(refs, RefWithHash{r, addr})
 		return nil
 	})
