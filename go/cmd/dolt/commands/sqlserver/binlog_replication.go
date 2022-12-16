@@ -44,6 +44,7 @@ var tableMapsById = make(map[uint64]*mysql.TableMap)
 type replicaConfiguration struct {
 	sourceServerUuid string
 	connectionParams *mysql.ConnParams
+	startingGtid     int64
 }
 
 // NewReplicaConfiguration creates a new replica configuration for the server with a UUID of |sourceServerUuid|
@@ -53,6 +54,7 @@ func NewReplicaConfiguration(sourceServerUuid string, connectionParams *mysql.Co
 	return &replicaConfiguration{
 		sourceServerUuid: sourceServerUuid,
 		connectionParams: connectionParams,
+		startingGtid:     1,
 	}
 }
 
@@ -529,7 +531,7 @@ func startReplicationEventStream(replicaConfiguration *replicaConfiguration, con
 	}
 	gtid := mysql.Mysql56GTID{
 		Server:   sid,
-		Sequence: 1,
+		Sequence: replicaConfiguration.startingGtid,
 	}
 	startPosition := mysql.Position{GTIDSet: gtid.GTIDSet()}
 	// TODO: unhardcode 1 as the replica's server id
