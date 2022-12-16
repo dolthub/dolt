@@ -42,6 +42,13 @@ var tableMapsById = make(map[uint64]*mysql.TableMap)
 
 var stopReplicationChan = make(chan struct{})
 
+// Row Flags – https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
+const endOfStatementRowFlag = 0x0001
+const noForeignKeyChecksRowFlag = 0x0002
+const noUniqueKeyChecksRowFlag = 0x0004
+const rowsAreCompleteRowFlag = 0x0008
+const noCheckConstraintsRowFlag = 0x0010
+
 // TODO: Look at configuration interfaces for other replication options and naming patterns
 type replicaConfiguration struct {
 	sourceServerUuid string
@@ -204,6 +211,9 @@ func processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.Binlog
 		// Used for row-based binary logging beginning (binlog_format=ROW or MIXED). This event precedes each row
 		// operation event and maps a table definition to a number, where the table definition consists of database
 		// and table names. For more details, see: https://mariadb.com/kb/en/table_map_event/
+		// TODO: Handle special Table ID value 0xFFFFFF:
+		//		Table id refers to a table defined by TABLE_MAP_EVENT. The special value 0xFFFFFF should have
+		//	 	"end of statement flag" (0x0001) set and indicates that table maps can be freed.
 		fmt.Printf("Received: TableMap event\n")
 		tableId := event.TableID(format)
 		tableMap, err := event.TableMap(format)
