@@ -40,6 +40,8 @@ type InMemoryBlobstore struct {
 	versions map[string]string
 }
 
+var _ Blobstore = &InMemoryBlobstore{}
+
 // NewInMemoryBlobstore creates an instance of an InMemoryBlobstore
 func NewInMemoryBlobstore() *InMemoryBlobstore {
 	return &InMemoryBlobstore{blobs: make(map[string][]byte), versions: make(map[string]string)}
@@ -125,4 +127,8 @@ func (bs *InMemoryBlobstore) Exists(ctx context.Context, key string) (bool, erro
 	_, ok := bs.blobs[key]
 
 	return ok, nil
+}
+
+func (bs *InMemoryBlobstore) Compose(ctx context.Context, key string, sources []string) error {
+	panic("unimplemented")
 }

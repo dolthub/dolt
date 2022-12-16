@@ -69,6 +69,8 @@ type LocalBlobstore struct {
 	RootDir string
 }
 
+var _ Blobstore = &LocalBlobstore{}
+
 // NewLocalBlobstore returns a new LocalBlobstore instance
 func NewLocalBlobstore(dir string) *LocalBlobstore {
 	return &LocalBlobstore{dir}
@@ -231,4 +233,8 @@ func (bs *LocalBlobstore) Exists(ctx context.Context, key string) (bool, error) 
 	}
 
 	return err == nil, err
+}
+
+func (bs *LocalBlobstore) Compose(ctx context.Context, key string, sources []string) error {
+	panic("unimplemented")
 }

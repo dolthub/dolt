@@ -35,6 +35,8 @@ type GCSBlobstore struct {
 	prefix     string
 }
 
+var _ Blobstore = &GCSBlobstore{}
+
 // NewGCSBlobstore creates a new instance of a GCSBlobstare
 func NewGCSBlobstore(gcs *storage.Client, bucketName, prefix string) *GCSBlobstore {
 	for len(prefix) > 0 && prefix[0] == '/' {
@@ -154,4 +156,8 @@ func (bs *GCSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key st
 	}
 
 	return ver, err
+}
+
+func (bs *GCSBlobstore) Compose(ctx context.Context, key string, sources []string) error {
+	panic("unimplemented")
 }
