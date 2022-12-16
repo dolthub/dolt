@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/vitess/go/mysql"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 )
 
@@ -222,7 +223,7 @@ func processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.Binlog
 
 		fmt.Printf(" - Deleted Rows (table: %s)\n", tableMap.Name)
 		for _, row := range rows.Rows {
-			deletedRow, err := parseRow(tableMap, schema, rows.IdentifyColumns, row.Identify)
+			deletedRow, err := parseRow(tableMap, schema, rows.IdentifyColumns, row.NullIdentifyColumns, row.Identify)
 			if err != nil {
 				return err
 			}
@@ -265,7 +266,7 @@ func processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.Binlog
 
 		fmt.Printf(" - New Rows (table: %s)\n", tableMap.Name)
 		for _, row := range rows.Rows {
-			newRow, err := parseRow(tableMap, schema, rows.DataColumns, row.Data)
+			newRow, err := parseRow(tableMap, schema, rows.DataColumns, row.NullColumns, row.Data)
 			if err != nil {
 				return err
 			}
@@ -306,15 +307,15 @@ func processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.Binlog
 			return err
 		}
 
-		// TODO: do we need to process rows.Flags for anything?
+		// TODO: process rows.Flags
 
 		fmt.Printf(" - Updated Rows (table: %s)\n", tableMap.Name)
 		for _, row := range rows.Rows {
-			identifyRow, err := parseRow(tableMap, schema, rows.IdentifyColumns, row.Identify)
+			identifyRow, err := parseRow(tableMap, schema, rows.IdentifyColumns, row.NullIdentifyColumns, row.Identify)
 			if err != nil {
 				return err
 			}
-			updatedRow, err := parseRow(tableMap, schema, rows.DataColumns, row.Data)
+			updatedRow, err := parseRow(tableMap, schema, rows.DataColumns, row.NullColumns, row.Data)
 			if err != nil {
 				return err
 			}
@@ -448,46 +449,58 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 	return writeSession, tableWriter, nil
 }
 
-// parseRow parses the binary row data from a MySQL binlog event and converts it into a go-mysql-server Row.
-func parseRow(tableMap *mysql.TableMap, schema sql.Schema, bitmap mysql.Bitmap, data []byte) (sql.Row, error) {
+// parseRow parses the binary row data from a MySQL binlog event and converts it into a go-mysql-server Row using the
+// |schema| information provided. |columnsPresentBitmap| indicates which column values are present in |data| and
+// |nullValuesBitmap| indicates which columns have null values and are NOT present in |data|.
+func parseRow(tableMap *mysql.TableMap, schema sql.Schema, columnsPresentBitmap, nullValuesBitmap mysql.Bitmap, data []byte) (sql.Row, error) {
 	var parsedRow sql.Row
 	pos := 0
 
 	for i, typ := range tableMap.Types {
 		column := schema[i]
 
-		if bitmap.Bit(i) == false {
+		if columnsPresentBitmap.Bit(i) == false {
 			parsedRow = append(parsedRow, nil)
 			continue
 		}
 
-		// TODO: Plug in correct type (just needs to show signed/unsigned; why doesn't typ show that?)
-		// TODO: Handle null cols
-		value, length, err := mysql.CellValue(data, pos, typ, tableMap.Metadata[i], query.Type_INT8)
-		if err != nil {
-			fmt.Printf(" - !!! ERROR: %v \n", err)
-			continue
-		}
-		pos += length
-
-		// TODO: Seems like there should be a better way to convert the sqltypes.Value to the type
-		//       GMS needs. Converting to a string and then converting again seems inefficient.
-		var convertedValue interface{}
-		switch {
-		case sql.IsEnum(column.Type), sql.IsSet(column.Type):
-			atoi, err := strconv.Atoi(value.ToString())
+		var value sqltypes.Value
+		var err error
+		if nullValuesBitmap.Bit(i) {
+			value, err = sqltypes.NewValue(query.Type_NULL_TYPE, nil)
 			if err != nil {
 				return nil, err
 			}
-			convertedValue, err = column.Type.Convert(atoi)
-		default:
-			// TODO: Why does (10, "b") appear in table t1?
-			//       It is inserted, but then the table is dropped, and recreated with new rows inserted,
-			//       but the old (10, "b") row still appears in it.
-			convertedValue, err = column.Type.Convert(value.ToString())
+		} else {
+			// TODO: Plug in correct type (just needs to show signed/unsigned; why doesn't typ show that?)
+			var length int
+			value, length, err = mysql.CellValue(data, pos, typ, tableMap.Metadata[i], query.Type_INT8)
+			if err != nil {
+				return nil, err
+			}
+			pos += length
 		}
-		if err != nil {
-			return nil, fmt.Errorf("unable to convert value %q: %v", value, err.Error())
+
+		// TODO: Seems like there should be a better way to convert the sqltypes.Value to the type
+		//       GMS needs. Converting to a string and then converting again seems inefficient.
+		// TODO: Extract function
+		var convertedValue interface{}
+		if value.IsNull() {
+			convertedValue = nil
+		} else {
+			switch {
+			case sql.IsEnum(column.Type), sql.IsSet(column.Type):
+				atoi, err := strconv.Atoi(value.ToString())
+				if err != nil {
+					return nil, err
+				}
+				convertedValue, err = column.Type.Convert(atoi)
+			default:
+				convertedValue, err = column.Type.Convert(value.ToString())
+			}
+			if err != nil {
+				return nil, fmt.Errorf("unable to convert value %q: %v", value, err.Error())
+			}
 		}
 		parsedRow = append(parsedRow, convertedValue)
 	}
