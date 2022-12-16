@@ -132,7 +132,6 @@ jobs:
         cat "$out"
         echo "::set-output name=html::$(echo $out)"
 
-
     - name: Configure AWS Credentials
       if: ${{ github.event.client_payload.email_recipient }} != ""
       uses: aws-actions/configure-aws-credentials@v1-node16
