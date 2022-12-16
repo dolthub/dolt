@@ -481,31 +481,43 @@ func parseRow(tableMap *mysql.TableMap, schema sql.Schema, columnsPresentBitmap,
 			pos += length
 		}
 
-		// TODO: Seems like there should be a better way to convert the sqltypes.Value to the type
-		//       GMS needs. Converting to a string and then converting again seems inefficient.
-		// TODO: Extract function
-		var convertedValue interface{}
-		if value.IsNull() {
-			convertedValue = nil
-		} else {
-			switch {
-			case sql.IsEnum(column.Type), sql.IsSet(column.Type):
-				atoi, err := strconv.Atoi(value.ToString())
-				if err != nil {
-					return nil, err
-				}
-				convertedValue, err = column.Type.Convert(atoi)
-			default:
-				convertedValue, err = column.Type.Convert(value.ToString())
-			}
-			if err != nil {
-				return nil, fmt.Errorf("unable to convert value %q: %v", value, err.Error())
-			}
+		convertedValue, err := convertSqlTypesValue(value, column)
+		if err != nil {
+			return nil, err
 		}
 		parsedRow = append(parsedRow, convertedValue)
 	}
 
 	return parsedRow, nil
+}
+
+// convertSqlTypesValues converts a sqltypes.Value instance (vitess) into a sql.Type value (go-mysql-server).
+//
+// TODO: This is currently a pretty hacky way to convert values and needs to be cleaned up so that it's more
+//
+//	efficient and handles all types.
+func convertSqlTypesValue(value sqltypes.Value, column *sql.Column) (interface{}, error) {
+	if value.IsNull() {
+		return nil, nil
+	}
+
+	var convertedValue interface{}
+	var err error
+	switch {
+	case sql.IsEnum(column.Type), sql.IsSet(column.Type):
+		atoi, err := strconv.Atoi(value.ToString())
+		if err != nil {
+			return nil, err
+		}
+		convertedValue, err = column.Type.Convert(atoi)
+	default:
+		convertedValue, err = column.Type.Convert(value.ToString())
+	}
+	if err != nil {
+		return nil, fmt.Errorf("unable to convert value %q: %v", value, err.Error())
+	}
+
+	return convertedValue, nil
 }
 
 // startReplicationEventStream sends a request over |conn|, the connection to the MySQL source server, to begin
