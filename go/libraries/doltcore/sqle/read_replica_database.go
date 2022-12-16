@@ -37,8 +37,6 @@ type ReadReplicaDatabase struct {
 	srcDB   *doltdb.DoltDB
 	tmpDir  string
 	limiter *limiter
-	remoteNomsRootHash hash.Hash
-	nomsRootHashMu *sync.Mutex
 }
 
 var _ SqlDatabase = ReadReplicaDatabase{}
@@ -85,7 +83,6 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		tmpDir:   tmpDir,
 		srcDB:    srcDB,
 		limiter:  newLimiter(),
-		nomsRootHashMu: &sync.Mutex{},
 	}, nil
 }
 
@@ -127,34 +124,9 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		return err
 	}
 
-	// check to see if there have been changes to the remote since the last time we pulled, and return early if not
-	changesToPull := false
-	err = func() error {
-		rrd.nomsRootHashMu.Lock()
-		defer rrd.nomsRootHashMu.Unlock()
-		err := rrd.srcDB.Rebase(ctx)
-		if err != nil {
-			return err
-		}
-
-		srcRootHash, err := rrd.srcDB.NomsRoot(ctx)
-		if err != nil {
-			return err
-		}
-
-		if srcRootHash != rrd.remoteNomsRootHash {
-			changesToPull = true
-			rrd.remoteNomsRootHash = srcRootHash
-		}
-
-		return nil
-	}()
+	err = rrd.srcDB.Rebase(ctx)
 	if err != nil {
 		return err
-	}
-
-	if !changesToPull {
-		return nil
 	}
 
 	remoteBranches, localBranches, toDelete, err := getReplicationBranches(ctx, rrd)
