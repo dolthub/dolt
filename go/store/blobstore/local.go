@@ -235,6 +235,6 @@ func (bs *LocalBlobstore) Exists(ctx context.Context, key string) (bool, error) 
 	return err == nil, err
 }
 
-func (bs *LocalBlobstore) Compose(ctx context.Context, key string, sources []string) error {
+func (bs *LocalBlobstore) Contatenate(ctx context.Context, key string, sources []string) (string, error) {
 	panic("unimplemented")
 }

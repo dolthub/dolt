@@ -80,18 +80,7 @@ func (bs *InMemoryBlobstore) Get(ctx context.Context, key string, br BlobRange) 
 func (bs *InMemoryBlobstore) Put(ctx context.Context, key string, reader io.Reader) (string, error) {
 	bs.mutex.Lock()
 	defer bs.mutex.Unlock()
-
-	ver := uuid.New().String()
-	data, err := io.ReadAll(reader)
-
-	if err != nil {
-		return "", err
-	}
-
-	bs.blobs[key] = data
-	bs.versions[key] = ver
-
-	return ver, nil
+	return bs.put(ctx, key, reader)
 }
 
 // CheckAndPut will check the current version of a blob against an expectedVersion, and if the
@@ -106,18 +95,7 @@ func (bs *InMemoryBlobstore) CheckAndPut(ctx context.Context, expectedVersion, k
 	if !check {
 		return "", CheckAndPutError{key, expectedVersion, ver}
 	}
-
-	newVer := uuid.New().String()
-	data, err := io.ReadAll(reader)
-
-	if err != nil {
-		return "", err
-	}
-
-	bs.blobs[key] = data
-	bs.versions[key] = newVer
-
-	return newVer, nil
+	return bs.put(ctx, key, reader)
 }
 
 // Exists returns true if a blob exists for the given key, and false if it does not.
@@ -125,10 +103,34 @@ func (bs *InMemoryBlobstore) CheckAndPut(ctx context.Context, expectedVersion, k
 // implementations of this interface can)
 func (bs *InMemoryBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	_, ok := bs.blobs[key]
-
 	return ok, nil
 }
 
-func (bs *InMemoryBlobstore) Compose(ctx context.Context, key string, sources []string) error {
-	panic("unimplemented")
+func (bs *InMemoryBlobstore) Contatenate(ctx context.Context, key string, sources []string) (string, error) {
+	bs.mutex.Lock()
+	defer bs.mutex.Unlock()
+	var sz int
+	for _, k := range sources {
+		sz += len(bs.blobs[k])
+	}
+	b := make([]byte, 0, sz)
+	for _, k := range sources {
+		b = append(b, bs.blobs[k]...)
+	}
+	return bs.put(ctx, key, bytes.NewReader(b))
+}
+
+// Put sets the blob and the version for a key
+func (bs *InMemoryBlobstore) put(ctx context.Context, key string, reader io.Reader) (string, error) {
+	ver := uuid.New().String()
+	data, err := io.ReadAll(reader)
+
+	if err != nil {
+		return "", err
+	}
+
+	bs.blobs[key] = data
+	bs.versions[key] = ver
+
+	return ver, nil
 }

@@ -69,7 +69,6 @@ type tableFilePersister interface {
 
 type chunkSourcesByDescendingDataSize struct {
 	sws []sourceWithSize
-	err error
 }
 
 func (csbds chunkSourcesByDescendingDataSize) Len() int { return len(csbds.sws) }
@@ -103,34 +102,46 @@ func (cp compactionPlan) suffixes() []byte {
 	return cp.mergedIndex[suffixesStart : suffixesStart+uint64(cp.chunkCount)*addrSuffixSize]
 }
 
-func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err error) {
-	var totalUncompressedData uint64
+// planRangeCopyConjoin computes a conjoin plan for tablePersisters that can conjoin
+// chunkSources using range copies (copy only chunk records, not chunk indexes).
+func planRangeCopyConjoin(sources chunkSources, stats *Stats) (compactionPlan, error) {
+	var sized []sourceWithSize
 	for _, src := range sources {
-		var uncmp uint64
-		uncmp, err = src.uncompressedLen()
-
-		if err != nil {
-			return compactionPlan{}, err
-		}
-
-		totalUncompressedData += uncmp
 		index, err := src.index()
-
 		if err != nil {
 			return compactionPlan{}, err
 		}
-
-		plan.chunkCount += index.chunkCount()
-
 		// Calculate the amount of chunk data in |src|
-		chunkDataLen := calcChunkDataLen(index)
-		plan.sources.sws = append(plan.sources.sws, sourceWithSize{src, chunkDataLen})
-		plan.totalCompressedData += chunkDataLen
+		sized = append(sized, sourceWithSize{src, calcChunkRangeSize(index)})
 	}
+	return planConjoin(sized, stats)
+}
+
+// calcChunkRangeSize computes the size of the chunk records for a table file.
+func calcChunkRangeSize(index tableIndex) uint64 {
+	return index.tableFileSize() - indexSize(index.chunkCount()) - footerSize
+}
+
+func planConjoin(sources []sourceWithSize, stats *Stats) (plan compactionPlan, err error) {
+	// place largest chunk sources at the beginning of the conjoin
+	plan.sources = chunkSourcesByDescendingDataSize{sws: sources}
 	sort.Sort(plan.sources)
 
-	if plan.sources.err != nil {
-		return compactionPlan{}, plan.sources.err
+	var totalUncompressedData uint64
+	for _, s := range sources {
+		var uncmp uint64
+		if uncmp, err = s.source.uncompressedLen(); err != nil {
+			return compactionPlan{}, err
+		}
+		totalUncompressedData += uncmp
+
+		index, err := s.source.index()
+		if err != nil {
+			return compactionPlan{}, err
+		}
+		// Calculate the amount of chunk data in |src|
+		plan.totalCompressedData += s.dataLen
+		plan.chunkCount += index.chunkCount()
 	}
 
 	lengthsPos := lengthsOffset(plan.chunkCount)
@@ -230,8 +241,4 @@ func nameFromSuffixes(suffixes []byte) (name addr) {
 	h = sha.Sum(h) // Appends hash to h
 	copy(name[:], h)
 	return
-}
-
-func calcChunkDataLen(index tableIndex) uint64 {
-	return index.tableFileSize() - indexSize(index.chunkCount()) - footerSize
 }

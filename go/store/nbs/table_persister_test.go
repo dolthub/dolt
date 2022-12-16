@@ -56,7 +56,7 @@ func TestPlanCompaction(t *testing.T) {
 		sources = append(sources, src)
 	}
 
-	plan, err := planConjoin(sources, &Stats{})
+	plan, err := planRangeCopyConjoin(sources, &Stats{})
 	require.NoError(t, err)
 
 	var totalChunks uint32

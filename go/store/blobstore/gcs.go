@@ -158,6 +158,6 @@ func (bs *GCSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key st
 	return ver, err
 }
 
-func (bs *GCSBlobstore) Compose(ctx context.Context, key string, sources []string) error {
+func (bs *GCSBlobstore) Contatenate(ctx context.Context, key string, sources []string) (string, error) {
 	panic("unimplemented")
 }
