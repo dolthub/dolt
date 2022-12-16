@@ -345,9 +345,21 @@ func FetchRemoteBranch(
 	}
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
-	wg, progChan, statsCh := progStarter(newCtx)
+
+	var wg *sync.WaitGroup
+	var progChan chan pull.PullProgress
+	var statsCh chan pull.Stats
+
+	if progStarter != nil {
+		wg, progChan, statsCh = progStarter(newCtx)
+	}
+
 	err = FetchCommit(ctx, tempTablesDir, srcDB, destDB, srcDBCommit, progChan, statsCh)
-	progStopper(cancelFunc, wg, progChan, statsCh)
+
+	if progStopper != nil {
+		progStopper(cancelFunc, wg, progChan, statsCh)
+	}
+
 	if err == pull.ErrDBUpToDate {
 		err = nil
 	}
