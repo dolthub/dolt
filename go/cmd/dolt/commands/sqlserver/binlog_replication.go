@@ -40,6 +40,8 @@ import (
 var format mysql.BinlogFormat
 var tableMapsById = make(map[uint64]*mysql.TableMap)
 
+var stopReplicationChan = make(chan struct{})
+
 // TODO: Look at configuration interfaces for other replication options and naming patterns
 type replicaConfiguration struct {
 	sourceServerUuid string
@@ -56,6 +58,11 @@ func NewReplicaConfiguration(sourceServerUuid string, connectionParams *mysql.Co
 		connectionParams: connectionParams,
 		startingGtid:     1,
 	}
+}
+
+// StopReplication stops any current replication process.
+func StopReplication() {
+	stopReplicationChan <- struct{}{}
 }
 
 // TODO: Turn this into a struct with an API that can be called
@@ -90,29 +97,33 @@ func replicaBinlogEventHandler(ctx *sql.Context, replicaConfiguration *replicaCo
 
 	// Process binlog events
 	for {
-		// TODO: How do we configure network timeouts?
-		event, err := conn.ReadBinlogEvent()
-		if err != nil {
-			if sqlError, isSqlError := err.(*mysql.SQLError); isSqlError {
-				if sqlError.Message == io.EOF.Error() {
-					fmt.Printf("No more binlog messages; retrying in 1s...\n")
-					// TODO: Use a channel for receiving signal to stop polling for events
-					time.Sleep(1 * time.Second)
-					continue
-				} else if strings.Contains(sqlError.Message, "can not handle replication events with the checksum") {
-					// For now, just ignore any errors about checksums
-					fmt.Printf("!!! received checksum error message !!!\n")
-					continue
+		select {
+		case <-stopReplicationChan:
+			return nil
+		default:
+			// TODO: How do we configure network timeouts?
+			event, err := conn.ReadBinlogEvent()
+			if err != nil {
+				if sqlError, isSqlError := err.(*mysql.SQLError); isSqlError {
+					if sqlError.Message == io.EOF.Error() {
+						fmt.Printf("No more binlog messages; retrying in 1s...\n")
+						time.Sleep(1 * time.Second)
+						continue
+					} else if strings.Contains(sqlError.Message, "can not handle replication events with the checksum") {
+						// For now, just ignore any errors about checksums
+						fmt.Printf("!!! received checksum error message !!!\n")
+						continue
+					}
 				}
+
+				// otherwise, return the error if it's something we don't expect
+				return err
 			}
 
-			// otherwise, return the error if it's something we don't expect
-			return err
-		}
-
-		err = processBinlogEvent(ctx, engine, event)
-		if err != nil {
-			return err
+			err = processBinlogEvent(ctx, engine, event)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
