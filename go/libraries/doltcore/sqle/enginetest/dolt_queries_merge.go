@@ -3028,3 +3028,167 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 		},
 	},
 }
+
+var BrokenMergeTestScripts = []queries.ScriptTest{
+	{
+		Name: "dropping columns",
+		SetUpScript: pmd(`
+ancestor:
+	CREATE table t (pk int primary key, col1 int, col2 int);
+	insert into t values (1, 10, 100), (2, 20, 200);
+
+right:
+	alter table t drop column col1;
+	insert into t values (3, 300), (4, 400);
+	
+left:
+	insert into t values (5, 50, 500), (6, 60, 600);
+`),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select pk, col2 from t;",
+				Expected: []sql.Row{{1, 100}, {2, 200}, {3, 300}, {4, 400}, {5, 500}, {6, 600}},
+				Skip:     true, // outputs 5,50 and 6,50
+			},
+		},
+	},
+	{
+		Name: "adding different columns to both sides",
+		SetUpScript: pmd(`
+ancestor:
+	create table t (pk int primary key);
+	insert into t values (1), (2);
+
+right:
+	alter table t add column col2 int;
+	insert into t values (3, 300), (4, 400);
+
+left:
+	alter table t add column col1 int;
+	insert into t values (5, 50), (6, 60);
+`),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query: "select pk, col1, col2 from t;",
+				Expected: []sql.Row{
+					{1, nil, nil},
+					{2, nil, nil},
+					{3, nil, 300},
+					{4, nil, 400},
+					{5, 50, nil},
+					{6, 60, nil},
+				},
+				Skip: true,
+			},
+		},
+	},
+	{
+		Name: "re-ordering columns",
+		SetUpScript: pmd(`
+ancestor:
+	create table t (pk int primary key, col1 int, col2 int);
+	insert into t values (1, 10, 100), (2, 20, 200);
+
+right:
+	alter table t drop column col1;
+	alter table t add column col1 int;
+	insert into t values (3, 300, 30), (4, 400, 40);
+
+left:
+	insert into t values (5, 50, 500), (6, 60, 600);
+`),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query: "select pk, col1, col2 form t;",
+				Expected: []sql.Row{
+					{1, nil, 100},
+					{2, nil, 200},
+					{3, 30, 300},
+					{4, 40, 400},
+					{5, 50, 500},
+					{6, 60, 600},
+				},
+				Skip: true,
+			},
+		},
+	},
+	{
+		Name: "changing the type of a column",
+		SetUpScript: pmd(`
+ancestor:
+	create table t (pk int primary key, col1 int);
+	insert into t values (1, 10), (2, 20);
+
+right:
+	alter table t modify column col1 varchar(100);
+	insert into t values (3, 'thirty'), (4, 'forty');
+
+left:
+	insert into t values (5, 50), (6, 60);
+`),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query: "select pk, col1 from t;",
+				Expected: []sql.Row{
+					{1, "10"},
+					{2, "20"},
+					{3, "thirty"},
+					{4, "forty"},
+					{5, "50"},
+					{6, "60"},
+				},
+				Skip: true,
+			},
+		},
+	},
+	{
+		Name: "adding a not-null constraint with default to a column",
+		SetUpScript: pmd(`
+ancestor:
+	create table t (pk int primary key, col1 int);
+	insert into t values (1, null), (2, null);
+
+right:
+	update t set col1 = 9999 where col1 is null;
+	alter table t modify column col1 int not null default 9999;
+	insert into t values (3, 30), (4, 40);
+
+left:
+	insert into t values (5, null), (6, null);
+`),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query: "select pk, col1 from t;",
+				Expected: []sql.Row{
+					{1, 9999},
+					{2, 9999},
+					{3, 30},
+					{4, 40},
+					{5, 9999},
+					{6, 9999},
+				},
+				Skip: true,
+			},
+		},
+	},
+}

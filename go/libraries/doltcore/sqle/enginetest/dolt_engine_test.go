@@ -1691,6 +1691,18 @@ func TestDoltStorageFormatPrepared(t *testing.T) {
 	enginetest.TestPreparedQuery(t, newDoltHarness(t), "SELECT dolt_storage_format()", []sql.Row{{expectedFormatString}}, nil)
 }
 
+func TestBrokenMergeTests(t *testing.T) {
+	for _, script := range BrokenMergeTestScripts {
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+}
+
+func TestBrokenMergeScriptsPrepared(t *testing.T) {
+	for _, script := range BrokenMergeTestScripts {
+		enginetest.TestScriptPrepared(t, newDoltHarness(t), script)
+	}
+}
+
 var newFormatSkippedScripts = []string{
 	// Different query plans
 	"Partial indexes are used and return the expected result",
