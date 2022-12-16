@@ -102,7 +102,11 @@ jobs:
         cat "$out"
         echo "::set-output name=report_path::$out"
 
-    - name: Format HTML
+        summaryq="$(pwd)/${{ env.BENCH_DIR }}/reporting/${{ github.event.client_payload.summary }}"
+        avg=$(dolt sql -r csv < "$summaryq" | tail -1)
+        echo "::set-output name=avg::$avg"
+
+    - name: Format Results
       id: html
       if: ${{ github.event.client_payload.email_recipient }} != ""
       run: |
@@ -120,11 +124,14 @@ jobs:
           fi
           echo "  <tr><td>${line//,/</td><td>}</td></tr>" >> "$out"
         done < "$in"
-        echo "</table>" >> "$out"
+        echo "</table>\n" >> "$out"
+
+        avg="${{ steps.report.outputs.avg }}"
+        echo "<table><tr><th>Average</th></tr><tr><td>$avg</tr></td></table>\n" >> "$out"
 
         cat "$out"
-
         echo "::set-output name=html::$(echo $out)"
+
 
     - name: Configure AWS Credentials
       if: ${{ github.event.client_payload.email_recipient }} != ""
