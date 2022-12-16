@@ -125,10 +125,10 @@ jobs:
           fi
           echo "  <tr><td>${line//,/</td><td>}</td></tr>" >> "$out"
         done < "$in"
-        echo "</table>\n" >> "$out"
+        echo "</table>" >> "$out"
 
         avg="${{ steps.report.outputs.avg }}"
-        echo "<table><tr><th>Average</th></tr><tr><td>$avg</tr></td></table>\n" >> "$out"
+        echo "<table><tr><th>Average</th></tr><tr><td>$avg</tr></td></table>" >> "$out"
 
         cat "$out"
         echo "::set-output name=html::$(echo $out)"
