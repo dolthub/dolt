@@ -342,6 +342,25 @@ func (t *DoltTable) Name() string {
 func (t *DoltTable) String() string {
 	return t.tableName
 }
+func (t *DoltTable) DebugString() string {
+	p := sql.NewTreePrinter()
+
+	children := []string{fmt.Sprintf("name: %s", t.tableName)}
+
+	cols := t.sch.GetAllCols()
+	if len(t.projectedCols) > 0 {
+		var projections []string
+		for _, tag := range t.projectedCols {
+			projections = append(projections, fmt.Sprintf("%d", cols.TagToIdx[tag]))
+		}
+		children = append(children, fmt.Sprintf("projections: %s", projections))
+
+	}
+
+	_ = p.WriteNode("Table")
+	p.WriteChildren(children...)
+	return p.String()
+}
 
 // NumRows returns the unfiltered count of rows contained in the table
 func (t *DoltTable) numRows(ctx *sql.Context) (uint64, error) {
