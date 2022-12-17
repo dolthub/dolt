@@ -54,6 +54,7 @@ jobs:
               "version": "${{ github.sha }}",
               "run_file": "ci.yaml",
               "report": "three_way_compare.sql",
+              "summary": "summary.sql",
               "commit_to_branch": "main",
               "actor": "${{ github.actor }}"
             }
@@ -67,6 +68,7 @@ jobs:
               "version": "${{ github.sha }}",
               "run_file": "systab.yaml",
               "report": "systab.sql",
+              "summary": "systab_summary.sql",
               "commit_to_branch": "main",
               "actor": "${{ github.actor }}"
             }

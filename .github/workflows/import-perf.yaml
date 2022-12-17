@@ -66,6 +66,8 @@ jobs:
         gw=$GITHUB_WORKSPACE
         in="${{ steps.bench.outputs.result_path }}"
         query="$(pwd)/${{ env.BENCH_DIR }}/reporting/${{ github.event.client_payload.report }}"
+        summaryq="$(pwd)/${{ env.BENCH_DIR }}/reporting/${{ github.event.client_payload.summary }}"
+
         out="$gw/results.csv"
         dolt_dir="$gw/import-perf"
 
@@ -101,6 +103,9 @@ jobs:
         cat "$out"
         echo "::set-output name=report_path::$out"
 
+        avg=$(dolt sql -r csv < "$summaryq" | tail -1)
+        echo "::set-output name=avg::$avg"
+
     - name: Format HTML
       id: html
       if: ${{ github.event.client_payload.email_recipient }} != ""
@@ -121,8 +126,10 @@ jobs:
         done < "$in"
         echo "</table>" >> "$out"
 
-        cat "$out"
+        avg="${{ steps.report.outputs.avg }}"
+        echo "<table><tr><th>Average</th></tr><tr><td>$avg</tr></td></table>" >> "$out"
 
+        cat "$out"
         echo "::set-output name=html::$(echo $out)"
 
     - name: Configure AWS Credentials

@@ -66,6 +66,7 @@ jobs:
               "version": "${{ steps.comment-branch.outputs.head_sha }}",
               "run_file": "systab.yaml",
               "report": "systab.sql",
+              "summary": "systab_summary.sql",
               "commit_to_branch": "${{ steps.comment-branch.outputs.head_sha }}",
               "actor": "${{ github.actor }}",
               "issue_id": "${{ steps.get_pull_number.outputs.pull_number }}"
