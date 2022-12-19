@@ -76,20 +76,9 @@ func appendGCSTest(tests []BlobstoreTest) []BlobstoreTest {
 	return tests
 }
 
-func appendLocalTest(tests []BlobstoreTest) []BlobstoreTest {
-	dir, err := os.MkdirTemp("", uuid.New().String())
-
-	if err != nil {
-		panic("Could not create temp dir")
-	}
-
-	return append(tests, BlobstoreTest{"local", NewLocalBlobstore(dir), 10, 20})
-}
-
 func newBlobStoreTests() []BlobstoreTest {
 	var tests []BlobstoreTest
 	tests = append(tests, BlobstoreTest{"inmem", NewInMemoryBlobstore(), 10, 20})
-	tests = appendLocalTest(tests)
 	tests = appendGCSTest(tests)
 
 	return tests
