@@ -538,7 +538,7 @@ DELIM
     run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'"
     [ "$status" -eq "0" ]
     [[ "$output" =~ "| pk          | NO          | NULL           |" ]] || false
-    [[ "$output" =~ "| v1          | YES         | GREATEST(pk,2) |" ]] || false
+    [[ "$output" =~ "| v1          | YES         | greatest(pk,2) |" ]] || false
 }
 
 @test "default-values: Additional test with function defaults" {
