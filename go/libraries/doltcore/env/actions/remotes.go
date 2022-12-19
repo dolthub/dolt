@@ -377,8 +377,6 @@ func FetchRemoteBranch(
 	return srcDBCommit, nil
 }
 
-
-
 // FetchRefSpecs is the common SQL and CLI entrypoint for fetching branches, tags, and heads from a remote.
 // This function takes dbData which is a env.DbData object for handling repoState read and write, and srcDB is
 // a remote *doltdb.DoltDB object that is used to fetch remote branches from.
