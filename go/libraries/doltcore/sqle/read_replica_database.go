@@ -299,7 +299,7 @@ func pullBranches(
 						return nil, err
 					}
 				default:
-					ctx.GetLogger().Warn("skipping replication for unhandled remote ref %s", remoteRef.Ref.String())
+					ctx.GetLogger().Warnf("skipping replication for unhandled remote ref %s", remoteRef.Ref.String())
 				}
 			}
 		}

@@ -344,21 +344,27 @@ func FetchRemoteBranch(
 		return nil, fmt.Errorf("unable to find '%s' on '%s'; %w", srcRef.GetPath(), rem.Name, err)
 	}
 
-	newCtx, cancelFunc := context.WithCancel(ctx)
+	// The code is structured this way (different paths for progress chan v. not) so that the linter can understand there
+	// isn't a context leak happening on one path
+	if progStarter != nil && progStopper != nil {
+		newCtx, cancelFunc := context.WithCancel(ctx)
+		wg, progChan, statsCh := progStarter(newCtx)
+		defer progStopper(cancelFunc, wg, progChan, statsCh)
 
-	var wg *sync.WaitGroup
-	var progChan chan pull.PullProgress
-	var statsCh chan pull.Stats
+		err = FetchCommit(ctx, tempTablesDir, srcDB, destDB, srcDBCommit, progChan, statsCh)
 
-	if progStarter != nil {
-		wg, progChan, statsCh = progStarter(newCtx)
+		if err == pull.ErrDBUpToDate {
+			err = nil
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		return srcDBCommit, nil
 	}
 
-	err = FetchCommit(ctx, tempTablesDir, srcDB, destDB, srcDBCommit, progChan, statsCh)
-
-	if progStopper != nil {
-		progStopper(cancelFunc, wg, progChan, statsCh)
-	}
+	err = FetchCommit(ctx, tempTablesDir, srcDB, destDB, srcDBCommit, nil, nil)
 
 	if err == pull.ErrDBUpToDate {
 		err = nil
@@ -370,6 +376,8 @@ func FetchRemoteBranch(
 
 	return srcDBCommit, nil
 }
+
+
 
 // FetchRefSpecs is the common SQL and CLI entrypoint for fetching branches, tags, and heads from a remote.
 // This function takes dbData which is a env.DbData object for handling repoState read and write, and srcDB is
