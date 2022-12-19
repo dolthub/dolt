@@ -66,7 +66,7 @@ type Puller struct {
 
 	srcChunkStore nbs.NBSCompressedChunkStore
 	sinkDBCS      chunks.ChunkStore
-	rootChunkHash hash.Hash
+	hashes        hash.HashSet
 	downloaded    hash.HashSet
 
 	wr            *nbs.CmpChunkTableWriter
@@ -82,25 +82,23 @@ type Puller struct {
 
 // NewPuller creates a new Puller instance to do the syncing.  If a nil puller is returned without error that means
 // that there is nothing to pull and the sinkDB is already up to date.
-func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcCS, sinkCS chunks.ChunkStore, walkAddrs WalkAddrs, rootChunkHash hash.Hash, statsCh chan Stats) (*Puller, error) {
+func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcCS, sinkCS chunks.ChunkStore, walkAddrs WalkAddrs, hashes []hash.Hash, statsCh chan Stats) (*Puller, error) {
 	// Sanity Check
-	exists, err := srcCS.Has(ctx, rootChunkHash)
-
+	hs := hash.NewHashSet(hashes...)
+	missing, err := srcCS.HasMany(ctx, hs)
 	if err != nil {
 		return nil, err
 	}
-
-	if !exists {
+	if missing.Size() != 0 {
 		return nil, errors.New("not found")
 	}
 
-	exists, err = sinkCS.Has(ctx, rootChunkHash)
-
+	hs = hash.NewHashSet(hashes...)
+	missing, err = sinkCS.HasMany(ctx, hs)
 	if err != nil {
 		return nil, err
 	}
-
-	if exists {
+	if missing.Size() == 0 {
 		return nil, ErrDBUpToDate
 	}
 
@@ -133,7 +131,7 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcCS, sink
 		waf:           walkAddrs,
 		srcChunkStore: srcChunkStore,
 		sinkDBCS:      sinkCS,
-		rootChunkHash: rootChunkHash,
+		hashes:        hash.NewHashSet(hashes...),
 		downloaded:    hash.HashSet{},
 		tablefileSema: semaphore.NewWeighted(outstandingTableFiles),
 		tempDir:       tempDir,
@@ -380,7 +378,7 @@ func (p *Puller) Pull(ctx context.Context) error {
 
 	leaves := make(hash.HashSet)
 	absent := make(hash.HashSet)
-	absent.Insert(p.rootChunkHash)
+	absent.InsertAll(p.hashes)
 
 	eg, ctx := errgroup.WithContext(ctx)
 

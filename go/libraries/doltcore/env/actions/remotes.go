@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var ErrCantFF = errors.New("can't fast forward merge")
@@ -66,7 +67,7 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 		return err
 	}
 
-	err = destDB.PullChunks(ctx, tempTableDir, srcDB, h, progChan, statsCh)
+	err = destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{h}, progChan, statsCh)
 
 	if err != nil {
 		return err
@@ -132,7 +133,7 @@ func PushTag(ctx context.Context, tempTableDir string, destRef ref.TagRef, srcDB
 		return err
 	}
 
-	err = destDB.PullChunks(ctx, tempTableDir, srcDB, addr, progChan, statsCh)
+	err = destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{addr}, progChan, statsCh)
 
 	if err != nil {
 		return err
@@ -239,7 +240,7 @@ func FetchCommit(ctx context.Context, tempTablesDir string, srcDB, destDB *doltd
 		return err
 	}
 
-	return destDB.PullChunks(ctx, tempTablesDir, srcDB, h, progChan, statsCh)
+	return destDB.PullChunks(ctx, tempTablesDir, srcDB, []hash.Hash{h}, progChan, statsCh)
 }
 
 // FetchTag takes a fetches a commit tag and all underlying data from a remote source database to the local destination database.
@@ -249,7 +250,7 @@ func FetchTag(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.Do
 		return err
 	}
 
-	return destDB.PullChunks(ctx, tempTableDir, srcDB, addr, progChan, statsCh)
+	return destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{addr}, progChan, statsCh)
 }
 
 // Clone pulls all data from a remote source database to a local destination database.
@@ -461,7 +462,7 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 		}
 	}()
 
-	err = destDb.PullChunks(ctx, tempTableDir, srcDb, srcRoot, progChan, statsCh)
+	err = destDb.PullChunks(ctx, tempTableDir, srcDb, []hash.Hash{srcRoot}, progChan, statsCh)
 	if err != nil {
 		return err
 	}

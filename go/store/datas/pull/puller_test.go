@@ -331,7 +331,7 @@ func testPuller(t *testing.T, makeDB datasFactory) {
 			require.NoError(t, err)
 			waf, err := types.WalkAddrsForChunkStore(datas.ChunkStoreFromDatabase(db))
 			require.NoError(t, err)
-			plr, err := NewPuller(ctx, tmpDir, 128, datas.ChunkStoreFromDatabase(db), datas.ChunkStoreFromDatabase(sinkdb), waf, rootAddr, statsCh)
+			plr, err := NewPuller(ctx, tmpDir, 128, datas.ChunkStoreFromDatabase(db), datas.ChunkStoreFromDatabase(sinkdb), waf, []hash.Hash{rootAddr}, statsCh)
 			require.NoError(t, err)
 
 			err = plr.Pull(ctx)
