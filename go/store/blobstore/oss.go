@@ -118,7 +118,7 @@ func (ob *OSSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key st
 	return ob.getVersion(meta), nil
 }
 
-func (ob *OSSBlobstore) Contatenate(ctx context.Context, key string, sources []string) (string, error) {
+func (ob *OSSBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
 	return "", fmt.Errorf("Conjoin is not implemented for OSSBlobstore")
 }
 

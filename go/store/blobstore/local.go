@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/dolthub/fslock"
 	"github.com/google/uuid"
@@ -146,6 +147,7 @@ func (bs *LocalBlobstore) Put(ctx context.Context, key string, reader io.Reader)
 		return "", err
 	}
 
+	time.Sleep(time.Millisecond * 10) // mtime resolution
 	path := filepath.Join(bs.RootDir, key) + bsExt
 	if err = file.Rename(tempFile, path); err != nil {
 		return "", err
@@ -212,7 +214,7 @@ func (bs *LocalBlobstore) Exists(ctx context.Context, key string) (bool, error) 
 	return err == nil, err
 }
 
-func (bs *LocalBlobstore) Contatenate(ctx context.Context, key string, sources []string) (ver string, err error) {
+func (bs *LocalBlobstore) Concatenate(ctx context.Context, key string, sources []string) (ver string, err error) {
 	readers := make([]io.Reader, len(sources))
 	for i := range readers {
 		path := filepath.Join(bs.RootDir, sources[i]) + bsExt

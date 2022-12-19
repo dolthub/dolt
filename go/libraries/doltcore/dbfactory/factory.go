@@ -45,7 +45,7 @@ const (
 	// HTTPScheme
 	HTTPScheme = "http"
 
-	// InMemBlobstore Scheme
+	// LocalFS Blobstore Scheme
 	LocalBSScheme = "localbs"
 
 	OSSScheme = "oss"

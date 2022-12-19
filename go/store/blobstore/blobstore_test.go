@@ -418,7 +418,7 @@ func testConcatenate(t *testing.T, bs Blobstore, cnt int) {
 	}
 
 	composite := uuid.New().String()
-	_, err := bs.Contatenate(ctx, composite, keys)
+	_, err := bs.Concatenate(ctx, composite, keys)
 	assert.NoError(t, err)
 
 	var off int64

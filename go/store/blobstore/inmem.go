@@ -21,6 +21,8 @@ import (
 	"io"
 	"sync"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/google/uuid"
 )
 
@@ -107,7 +109,7 @@ func (bs *InMemoryBlobstore) Exists(ctx context.Context, key string) (bool, erro
 	return ok, nil
 }
 
-func (bs *InMemoryBlobstore) Contatenate(ctx context.Context, key string, sources []string) (string, error) {
+func (bs *InMemoryBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
 	bs.mutex.Lock()
 	defer bs.mutex.Unlock()
 	// recursively compose sources (mirrors GCS impl)
@@ -115,15 +117,24 @@ func (bs *InMemoryBlobstore) Contatenate(ctx context.Context, key string, source
 		// compose subsets of |sources| in batches,
 		// store tmp composite objects in |next|
 		var next []string
+		var batches [][]string
 		for len(sources) > 0 {
-			tmp := uuid.New().String()
-			batch := min(composeBatch, len(sources))
-			_, err := bs.composeObjects(ctx, tmp, sources[:batch])
-			if err != nil {
-				return "", err
-			}
-			next = append(next, tmp)
-			sources = sources[batch:]
+			k := min(composeBatch, len(sources))
+			batches = append(batches, sources[:k])
+			next = append(next, uuid.New().String())
+			sources = sources[k:]
+		}
+		// execute compose calls concurrently (mirrors GCS impl)
+		eg, ectx := errgroup.WithContext(ctx)
+		for i := 0; i < len(batches); i++ {
+			idx := i
+			eg.Go(func() (err error) {
+				_, err = bs.composeObjects(ectx, next[idx], batches[idx])
+				return
+			})
+		}
+		if err := eg.Wait(); err != nil {
+			return "", err
 		}
 		sources = next
 	}

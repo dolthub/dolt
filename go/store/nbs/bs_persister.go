@@ -76,7 +76,7 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 	conjoinees = append(conjoinees, idxKey) // mergedIndex goes last
 
 	name := nameFromSuffixes(plan.suffixes())
-	if _, err = bsp.bs.Contatenate(ctx, name.String(), conjoinees); err != nil {
+	if _, err = bsp.bs.Concatenate(ctx, name.String(), conjoinees); err != nil {
 		return nil, err
 	}
 	return newBSChunkSource(ctx, bsp.bs, name, plan.chunkCount, bsp.q, stats)

@@ -34,8 +34,8 @@ type Blobstore interface {
 	// CheckAndPut updates the blob keyed by |key| using a check-and-set on |expectedVersion|.
 	CheckAndPut(ctx context.Context, expectedVersion, key string, reader io.Reader) (version string, err error)
 
-	// Contatenate creates a new blob named |key| by concatenating |sources|.
-	Contatenate(ctx context.Context, key string, sources []string) (version string, err error)
+	// Concatenate creates a new blob named |key| by concatenating |sources|.
+	Concatenate(ctx context.Context, key string, sources []string) (version string, err error)
 }
 
 // GetBytes is a utility method calls bs.Get and handles reading the data from the returned

@@ -21,9 +21,9 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/google/uuid"
-
 	"cloud.google.com/go/storage"
+	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/googleapi"
 )
 
@@ -163,22 +163,31 @@ func (bs *GCSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key st
 	return ver, err
 }
 
-func (bs *GCSBlobstore) Contatenate(ctx context.Context, key string, sources []string) (string, error) {
+func (bs *GCSBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
 	// GCS compose has a batch size limit,
 	// recursively compose sources
 	for len(sources) > composeBatch {
 		// compose subsets of |sources| in batches,
 		// store tmp composite objects in |next|
 		var next []string
+		var batches [][]string
 		for len(sources) > 0 {
-			tmp := uuid.New().String()
-			batch := min(composeBatch, len(sources))
-			_, err := bs.composeObjects(ctx, tmp, sources[:batch])
-			if err != nil {
-				return "", err
-			}
-			next = append(next, tmp)
-			sources = sources[batch:]
+			k := min(composeBatch, len(sources))
+			batches = append(batches, sources[:k])
+			next = append(next, uuid.New().String())
+			sources = sources[k:]
+		}
+		// execute compose calls concurrently
+		eg, ectx := errgroup.WithContext(ctx)
+		for i := 0; i < len(batches); i++ {
+			idx := i
+			eg.Go(func() (err error) {
+				_, err = bs.composeObjects(ectx, next[idx], batches[idx])
+				return
+			})
+		}
+		if err := eg.Wait(); err != nil {
+			return "", err
 		}
 		sources = next
 	}
@@ -190,17 +199,26 @@ func (bs *GCSBlobstore) composeObjects(ctx context.Context, composite string, so
 		return "", fmt.Errorf("too many objects to compose (%d > %d)", len(sources), composeBatch)
 	}
 
-	var a *storage.ObjectAttrs
 	objects := make([]*storage.ObjectHandle, len(sources))
+	eg, ectx := errgroup.WithContext(ctx)
 	for i := range objects {
-		oh := bs.bucket.Object(path.Join(bs.prefix, sources[i]))
-		if a, err = oh.Attrs(ctx); err != nil {
-			return "", err
-		}
-		objects[i] = oh.Generation(a.Generation)
+		idx := i
+		eg.Go(func() (err error) {
+			var a *storage.ObjectAttrs
+			oh := bs.bucket.Object(path.Join(bs.prefix, sources[idx]))
+			if a, err = oh.Attrs(ectx); err != nil {
+				return err
+			}
+			objects[idx] = oh.Generation(a.Generation)
+			return
+		})
+	}
+	if err = eg.Wait(); err != nil {
+		return "", err
 	}
 
 	// compose |objects| into |c|
+	var a *storage.ObjectAttrs
 	c := bs.bucket.Object(path.Join(bs.prefix, composite))
 	if a, err = c.ComposerFrom(objects...).Run(ctx); err != nil {
 		return "", err
