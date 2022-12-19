@@ -38,7 +38,7 @@ func newByteSliceReadCloser(data []byte) *byteSliceReadCloser {
 
 // InMemoryBlobstore provides an in memory implementation of the Blobstore interface
 type InMemoryBlobstore struct {
-	mutex    sync.Mutex
+	mutex    sync.RWMutex
 	blobs    map[string][]byte
 	versions map[string]string
 }
@@ -110,8 +110,6 @@ func (bs *InMemoryBlobstore) Exists(ctx context.Context, key string) (bool, erro
 }
 
 func (bs *InMemoryBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
-	bs.mutex.Lock()
-	defer bs.mutex.Unlock()
 	// recursively compose sources (mirrors GCS impl)
 	for len(sources) > composeBatch {
 		// compose subsets of |sources| in batches,
@@ -125,12 +123,16 @@ func (bs *InMemoryBlobstore) Concatenate(ctx context.Context, key string, source
 			sources = sources[k:]
 		}
 		// execute compose calls concurrently (mirrors GCS impl)
-		eg, ectx := errgroup.WithContext(ctx)
+		eg, _ := errgroup.WithContext(ctx)
 		for i := 0; i < len(batches); i++ {
 			idx := i
-			eg.Go(func() (err error) {
-				_, err = bs.composeObjects(ectx, next[idx], batches[idx])
-				return
+			eg.Go(func() error {
+				blob, err := bs.composeObjects(batches[idx])
+				if err != nil {
+					return err
+				}
+				_, err = bs.Put(ctx, next[idx], bytes.NewReader(blob))
+				return err
 			})
 		}
 		if err := eg.Wait(); err != nil {
@@ -138,7 +140,12 @@ func (bs *InMemoryBlobstore) Concatenate(ctx context.Context, key string, source
 		}
 		sources = next
 	}
-	return bs.composeObjects(ctx, key, sources)
+
+	blob, err := bs.composeObjects(sources)
+	if err != nil {
+		return "", err
+	}
+	return bs.Put(ctx, key, bytes.NewReader(blob))
 }
 
 func (bs *InMemoryBlobstore) put(ctx context.Context, key string, reader io.Reader) (string, error) {
@@ -155,18 +162,19 @@ func (bs *InMemoryBlobstore) put(ctx context.Context, key string, reader io.Read
 	return ver, nil
 }
 
-func (bs *InMemoryBlobstore) composeObjects(ctx context.Context, composite string, sources []string) (gen string, err error) {
+func (bs *InMemoryBlobstore) composeObjects(sources []string) (blob []byte, err error) {
+	bs.mutex.RLock()
+	defer bs.mutex.RUnlock()
 	if len(sources) > composeBatch {
-		return "", fmt.Errorf("too many objects to compose (%d > %d)", len(sources), composeBatch)
+		return nil, fmt.Errorf("too many objects to compose (%d > %d)", len(sources), composeBatch)
 	}
-
 	var sz int
 	for _, k := range sources {
 		sz += len(bs.blobs[k])
 	}
-	b := make([]byte, 0, sz)
+	blob = make([]byte, 0, sz)
 	for _, k := range sources {
-		b = append(b, bs.blobs[k]...)
+		blob = append(blob, bs.blobs[k]...)
 	}
-	return bs.put(ctx, composite, bytes.NewReader(b))
+	return
 }
