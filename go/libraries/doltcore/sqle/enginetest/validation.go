@@ -230,7 +230,7 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			return err
 		}
 		if !ok {
-			return fmt.Errorf("index key %v not found in index %s", k, def.Name())
+			return fmt.Errorf("index key %v not found in index %s", builder.Desc.Format(k), def.Name())
 		}
 	}
 }
