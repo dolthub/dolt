@@ -291,7 +291,14 @@ SQL
     [[ "$output" =~ "$NUM_COMMITS" ]] || false
 }
 
+skip_if_chunk_journal() {
+    if test -f "./.dolt/noms/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"; then
+        skip "chunk journal doesn't generate enough garbage"
+    fi
+}
+
 @test "garbage_collection: shallow gc" {
+    skip_if_chunk_journal
     create_many_commits
 
     # leave data in the working set
@@ -314,6 +321,7 @@ SQL
 }
 
 @test "garbage_collection: online shallow gc" {
+    skip_if_chunk_journal
     create_many_commits
 
     # leave data in the working set
