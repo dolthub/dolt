@@ -220,20 +220,22 @@ teardown() {
 
 @test "replication: push on call dolt_merge, fast-forward merge" {
     cd repo1
-    dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
-    dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_branch
-    dolt sql -q "create table t1 (a int primary key)"
-    dolt sql -q "call dolt_add('.')"
-    dolt sql -q "call dolt_commit('-am', 'commit')"
-    dolt sql -q "call dolt_checkout('-b', 'new_branch')"
-    dolt sql -q "create table t2 (b int primary key)"
-    dolt sql -q "call dolt_add('.')"
-    dolt sql -q "call dolt_commit('-am', 'commit')"
-    dolt sql -q "call dolt_checkout('main')"
-    dolt sql -q "call dolt_merge('new_branch')"
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+    dolt sql <<SQL 
+create table t1 (a int primary key);
+call dolt_add('.');
+call dolt_commit('-am', 'commit');
+call dolt_checkout('-b', 'new_branch');
+create table t2 (b int primary key);
+call dolt_add('.');
+call dolt_commit('-am', 'commit');
+call dolt_checkout('main');
+call dolt_merge('new_branch');
+SQL
 
     cd ..
-    dolt clone file://./bac1 repo2
+    dolt clone file://./rem1 repo2
     cd repo2
     run dolt ls
     [ "$status" -eq 0 ]
