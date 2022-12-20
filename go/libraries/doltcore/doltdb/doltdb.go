@@ -1267,7 +1267,7 @@ func (ddb *DoltDB) PullChunks(
 	ctx context.Context,
 	tempDir string,
 	srcDB *DoltDB,
-	targetHashes [] hash.Hash,
+	targetHashes []hash.Hash,
 	progChan chan pull.PullProgress,
 	statsCh chan pull.Stats,
 ) error {
@@ -1277,7 +1277,7 @@ func (ddb *DoltDB) PullChunks(
 func pullHash(
 	ctx context.Context,
 	destDB, srcDB datas.Database,
-	targetHashes [] hash.Hash,
+	targetHashes []hash.Hash,
 	tempDir string,
 	progChan chan pull.PullProgress,
 	statsCh chan pull.Stats,

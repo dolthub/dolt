@@ -88,7 +88,7 @@ func NewPuller(
 	chunksPerTF int,
 	srcCS, sinkCS chunks.ChunkStore,
 	walkAddrs WalkAddrs,
-	hashes [] hash.Hash,
+	hashes []hash.Hash,
 	statsCh chan Stats,
 ) (*Puller, error) {
 	// Sanity Check
