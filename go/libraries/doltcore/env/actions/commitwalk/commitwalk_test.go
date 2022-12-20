@@ -273,7 +273,7 @@ func mustForkDB(t *testing.T, fromDB *doltdb.DoltDB, bn string, cm *doltdb.Commi
 		for range p2 {
 		}
 	}()
-	err = forkEnv.DoltDB.PullChunks(context.Background(), "", fromDB, h, p1, p2)
+	err = forkEnv.DoltDB.PullChunks(context.Background(), "", fromDB, []hash.Hash{h}, p1, p2)
 	if err == pull.ErrDBUpToDate {
 		err = nil
 	}

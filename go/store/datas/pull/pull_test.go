@@ -234,7 +234,7 @@ func (suite *PullSuite) TestPullEverything() {
 
 	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, sourceAddr, pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, []hash.Hash{sourceAddr}, pt.Ch)
 	suite.NoError(err)
 	if metrics {
 		suite.True(expectedReads-suite.sinkCS.(metricsChunkStore).Reads() <= suite.commitReads)
@@ -289,7 +289,7 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 
 	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, sourceAddr, pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, []hash.Hash{sourceAddr}, pt.Ch)
 	suite.NoError(err)
 
 	if metrics {
@@ -352,7 +352,7 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 
 	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, sourceAddr, pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, []hash.Hash{sourceAddr}, pt.Ch)
 	suite.NoError(err)
 
 	if metrics {
@@ -416,7 +416,7 @@ func (suite *PullSuite) TestPullUpdates() {
 
 	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, sourceAddr, pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, []hash.Hash{sourceAddr}, pt.Ch)
 	suite.NoError(err)
 
 	if metrics {

@@ -1242,17 +1242,17 @@ func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
 // PullChunks initiates a pull into this database from the source database
 // given, pulling all chunks reachable from the given targetHash. Pull progress
 // is communicated over the provided channel.
-func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB, targetHash hash.Hash, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
-	return pullHash(ctx, ddb.db, srcDB.db, targetHash, tempDir, progChan, statsCh)
+func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB, targetHashes []hash.Hash, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
+	return pullHash(ctx, ddb.db, srcDB.db, targetHashes, tempDir, progChan, statsCh)
 }
 
-func pullHash(ctx context.Context, destDB, srcDB datas.Database, targetHash hash.Hash, tempDir string, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
+func pullHash(ctx context.Context, destDB, srcDB datas.Database, targetHashes []hash.Hash, tempDir string, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
 	srcCS := datas.ChunkStoreFromDatabase(srcDB)
 	destCS := datas.ChunkStoreFromDatabase(destDB)
 	waf := types.WalkAddrsForNBF(srcDB.Format())
 
 	if datas.CanUsePuller(srcDB) && datas.CanUsePuller(destDB) {
-		puller, err := pull.NewPuller(ctx, tempDir, defaultChunksPerTF, srcCS, destCS, waf, targetHash, statsCh)
+		puller, err := pull.NewPuller(ctx, tempDir, defaultChunksPerTF, srcCS, destCS, waf, targetHashes, statsCh)
 		if err == pull.ErrDBUpToDate {
 			return nil
 		} else if err != nil {
@@ -1261,7 +1261,7 @@ func pullHash(ctx context.Context, destDB, srcDB datas.Database, targetHash hash
 
 		return puller.Pull(ctx)
 	} else {
-		return pull.Pull(ctx, srcCS, destCS, waf, targetHash, progChan)
+		return pull.Pull(ctx, srcCS, destCS, waf, targetHashes, progChan)
 	}
 }
 

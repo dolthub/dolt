@@ -58,29 +58,27 @@ func makeProgTrack(progressCh chan PullProgress) func(moreDone, moreKnown, moreA
 }
 
 // Pull objects that descend from sourceHash from srcDB to sinkDB.
-func Pull(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, walkAddrs WalkAddrs, sourceHash hash.Hash, progressCh chan PullProgress) error {
-	return pull(ctx, srcCS, sinkCS, walkAddrs, sourceHash, progressCh, defaultBatchSize)
+func Pull(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, walkAddrs WalkAddrs, hashes []hash.Hash, progressCh chan PullProgress) error {
+	return pull(ctx, srcCS, sinkCS, walkAddrs, hashes, progressCh, defaultBatchSize)
 }
 
-func pull(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, walkAddrs WalkAddrs, sourceHash hash.Hash, progressCh chan PullProgress, batchSize int) error {
+func pull(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, walkAddrs WalkAddrs, hashes []hash.Hash, progressCh chan PullProgress, batchSize int) error {
 	// Sanity Check
-	exists, err := srcCS.Has(ctx, sourceHash)
-
+	hs := hash.NewHashSet(hashes...)
+	missing, err := srcCS.HasMany(ctx, hs)
 	if err != nil {
 		return err
 	}
-
-	if !exists {
+	if missing.Size() != 0 {
 		return errors.New("not found")
 	}
 
-	exists, err = sinkCS.Has(ctx, sourceHash)
-
+	hs = hash.NewHashSet(hashes...)
+	missing, err = sinkCS.HasMany(ctx, hs)
 	if err != nil {
 		return err
 	}
-
-	if exists {
+	if missing.Size() == 0 {
 		return nil // already up to date
 	}
 
@@ -92,7 +90,8 @@ func pull(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, walkAddrs WalkAd
 	updateProgress := makeProgTrack(progressCh)
 
 	// TODO: This batches based on limiting the _number_ of chunks processed at the same time. We really want to batch based on the _amount_ of chunk data being processed simultaneously. We also want to consider the chunks in a particular order, however, and the current GetMany() interface doesn't provide any ordering guarantees. Once BUG 3750 is fixed, we should be able to revisit this and do a better job.
-	absent := hash.HashSlice{sourceHash}
+	absent := make([]hash.Hash, len(hashes))
+	copy(absent, hashes)
 	for absentCount := len(absent); absentCount != 0; absentCount = len(absent) {
 		updateProgress(0, uint64(absentCount), 0)
 
@@ -160,9 +159,9 @@ func persistChunks(ctx context.Context, cs chunks.ChunkStore) error {
 // PullWithoutBatching effectively removes the batching of chunk retrieval done on each level of the tree.  This means
 // all chunks from one level of the tree will be retrieved from the underlying chunk store in one call, which pushes the
 // optimization problem down to the chunk store which can make smarter decisions.
-func PullWithoutBatching(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, walkAddrs WalkAddrs, sourceHash hash.Hash, progressCh chan PullProgress) error {
+func PullWithoutBatching(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, walkAddrs WalkAddrs, hashes []hash.Hash, progressCh chan PullProgress) error {
 	// by increasing the batch size to MaxInt32 we effectively remove batching here.
-	return pull(ctx, srcCS, sinkCS, walkAddrs, sourceHash, progressCh, math.MaxInt32)
+	return pull(ctx, srcCS, sinkCS, walkAddrs, hashes, progressCh, math.MaxInt32)
 }
 
 // concurrently pull all chunks from this batch that the sink is missing out of the source
