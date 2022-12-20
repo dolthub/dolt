@@ -1692,12 +1692,14 @@ func TestDoltStorageFormatPrepared(t *testing.T) {
 }
 
 func TestThreeWayMergeWithSchemaChangeScripts(t *testing.T) {
+	skipOldFormat(t)
 	for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
 		enginetest.TestScript(t, newDoltHarness(t), convertMergeScriptTest(script))
 	}
 }
 
 func TestThreeWayMergeWithSchemaChangeScriptsPrepared(t *testing.T) {
+	skipOldFormat(t)
 	for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
 		enginetest.TestScriptPrepared(t, newDoltHarness(t), convertMergeScriptTest(script))
 	}
