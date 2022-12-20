@@ -155,7 +155,7 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
 			// todo: can we pass nil for either of the channels?
-			srcDBCommit, err := actions.FetchRemoteBranch(ctx, tmpDir, pullSpec.Remote, srcDB, dbData.Ddb, branchRef, runProgFuncs, stopProgFuncs)
+			srcDBCommit, err := actions.FetchRemoteBranch(ctx, tmpDir, pullSpec.Remote, srcDB, dbData.Ddb, branchRef, nil, nil)
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, err
 			}

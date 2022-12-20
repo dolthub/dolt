@@ -937,6 +937,11 @@ func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDa
 		return err
 	}
 
+	cmHash, err := cm.HashOf()
+	if err != nil {
+		return err
+	}
+
 	// create refs/heads/branch dataset
 	if !branchExists {
 		err = db.ddb.NewBranchAtCommit(ctx, branchRef, cm)
@@ -952,7 +957,15 @@ func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDa
 	}
 
 	// create workingSets/heads/branch and update the working set
-	err = pullBranches(ctx, db, []string{branch}, currentBranchRef, pullBehavior_fastForward)
+	err = db.RebaseSourceDb(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = pullBranches(ctx, db, []doltdb.RefWithHash{{
+		Ref:  branchRef,
+		Hash: cmHash,
+	}}, nil, currentBranchRef, pullBehavior_fastForward)
 	if err != nil {
 		return err
 	}
