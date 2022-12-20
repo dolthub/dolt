@@ -21,13 +21,6 @@ import (
 	"runtime"
 	"strings"
 
-	gms "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/analyzer"
-	"github.com/dolthub/go-mysql-server/sql/information_schema"
-	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -38,6 +31,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+
+	gms "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/information_schema"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 )
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
@@ -50,19 +51,20 @@ type SqlEngine struct {
 }
 
 type SqlEngineConfig struct {
-	InitialDb          string
-	IsReadOnly         bool
-	IsServerLocked     bool
-	DoltCfgDirPath     string
-	PrivFilePath       string
-	BranchCtrlFilePath string
-	ServerUser         string
-	ServerPass         string
-	ServerHost         string
-	Autocommit         bool
-	Bulk               bool
-	JwksConfig         []JwksConfig
-	ClusterController  *cluster.Controller
+	InitialDb               string
+	IsReadOnly              bool
+	IsServerLocked          bool
+	DoltCfgDirPath          string
+	PrivFilePath            string
+	BranchCtrlFilePath      string
+	ServerUser              string
+	ServerPass              string
+	ServerHost              string
+	Autocommit              bool
+	Bulk                    bool
+	JwksConfig              []JwksConfig
+	ClusterController       *cluster.Controller
+	BinlogReplicaController plan.BinlogReplicaController
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -72,7 +74,6 @@ func NewSqlEngine(
 	format PrintResultFormat,
 	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
-
 	if ok, _ := mrEnv.IsLocked(); ok {
 		config.IsServerLocked = true
 	}
@@ -141,6 +142,8 @@ func NewSqlEngine(
 	engine.Analyzer.Catalog.MySQLDb.SetPlugins(map[string]mysql_db.PlaintextAuthPlugin{
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
 	})
+
+	engine.BinlogReplicaController = config.BinlogReplicaController
 
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {

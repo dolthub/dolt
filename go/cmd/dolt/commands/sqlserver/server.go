@@ -140,17 +140,18 @@ func Serve(
 
 	// Create SQL Engine with users
 	config := &engine.SqlEngineConfig{
-		InitialDb:          "",
-		IsReadOnly:         serverConfig.ReadOnly(),
-		PrivFilePath:       serverConfig.PrivilegeFilePath(),
-		BranchCtrlFilePath: serverConfig.BranchControlFilePath(),
-		DoltCfgDirPath:     serverConfig.CfgDir(),
-		ServerUser:         serverConfig.User(),
-		ServerPass:         serverConfig.Password(),
-		ServerHost:         serverConfig.Host(),
-		Autocommit:         serverConfig.AutoCommit(),
-		JwksConfig:         serverConfig.JwksConfig(),
-		ClusterController:  clusterController,
+		InitialDb:               "",
+		IsReadOnly:              serverConfig.ReadOnly(),
+		PrivFilePath:            serverConfig.PrivilegeFilePath(),
+		BranchCtrlFilePath:      serverConfig.BranchControlFilePath(),
+		DoltCfgDirPath:          serverConfig.CfgDir(),
+		ServerUser:              serverConfig.User(),
+		ServerPass:              serverConfig.Password(),
+		ServerHost:              serverConfig.Host(),
+		Autocommit:              serverConfig.AutoCommit(),
+		JwksConfig:              serverConfig.JwksConfig(),
+		ClusterController:       clusterController,
+		BinlogReplicaController: &DoltBinlogReplicaController{}, // TODO: persist this instance
 	}
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,

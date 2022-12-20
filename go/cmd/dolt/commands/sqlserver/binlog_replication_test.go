@@ -53,7 +53,6 @@ func TestStartReplicaServer(t *testing.T) {
 	go func() {
 		// TODO: Add starting GTID to config
 		replicaConfiguration := NewReplicaConfiguration(
-			"9b724fbe-7a7a-11ed-a935-00414aad8698",
 			&mysql.ConnParams{
 				Host:  "localhost",
 				Port:  54321,

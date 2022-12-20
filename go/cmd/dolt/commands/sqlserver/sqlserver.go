@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -29,11 +28,9 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/mysql"
 )
 
 const (
@@ -181,79 +178,7 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 		controller.StopServer()
 		cancelF()
 	}()
-
-	var retCode int
-	go func() {
-		retCode = startServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
-	}()
-	if retCode != 0 {
-		fmt.Println("Unable to start up Dolt SQL server")
-		return retCode
-	}
-
-	if os.Getenv("DOLT_REPLICATION_PRIMARY_HOST") != "" {
-		primaryHost := os.Getenv("DOLT_REPLICATION_PRIMARY_HOST")
-		primaryPort := os.Getenv("DOLT_REPLICATION_PRIMARY_PORT")
-		primaryUser := os.Getenv("DOLT_REPLICATION_PRIMARY_USER")
-		primaryPass := os.Getenv("DOLT_REPLICATION_PRIMARY_PASS")
-		primaryUuid := os.Getenv("DOLT_REPLICATION_PRIMARY_UUID")
-		// TODO: add configuration for gtidStart
-		//gtidStart := os.Getenv("DOLT_REPLICATION_GTID_START")
-
-		primaryPortAsInt, err := strconv.Atoi(primaryPort)
-		if err != nil {
-			panic(err)
-		}
-
-		err = controller.WaitForStart()
-		if err != nil && !strings.HasPrefix(err.Error(), "bind address at given unix socket path") {
-			panic(err)
-		}
-
-		go func() {
-			err = controller.WaitForStart()
-			if err != nil && !strings.HasPrefix(err.Error(), "bind address at given unix socket path") {
-				panic(err)
-			}
-
-			replicaConfiguration := NewReplicaConfiguration(
-				primaryUuid,
-				&mysql.ConnParams{
-					Host:  primaryHost,
-					Port:  primaryPortAsInt,
-					Uname: primaryUser,
-					Pass:  primaryPass,
-				})
-			err := replicaBinlogEventHandler(createFakeSqlContext(), replicaConfiguration)
-			if err != nil {
-				panic(err)
-			}
-		}()
-	}
-
-	controller.WaitForClose()
-
-	return 0
-}
-func createFakeSqlContext() *sql.Context {
-	server := sqlserver.GetRunningServer()
-	if server == nil {
-		panic("unable to access running SQL server")
-	}
-
-	// TODO: Hack up a fake connection so we can get a sql.Context to work with...
-	//       This seems to work... but is super hacky and will cause problems when
-	//       a real connection comes in with connection ID 123456
-	conn := mysql.Conn{
-		ConnectionID: 123456,
-	}
-
-	ctx, err := server.SessionManager().NewContext(&conn)
-	if err != nil {
-		panic(err)
-	}
-	ctx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
-	return ctx
+	return startServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
 }
 
 func validateSqlServerArgs(apr *argparser.ArgParseResults) error {

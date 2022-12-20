@@ -15,6 +15,7 @@
 package sqlserver
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strconv"
@@ -28,13 +29,73 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 )
+
+var replicationConfig *replicaConfiguration
+
+type DoltBinlogReplicaController struct {
+}
+
+var _ plan.BinlogReplicaController = (*DoltBinlogReplicaController)(nil)
+
+func (d DoltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
+	// Create a new context to use, because otherwise the engine will cancel the original
+	// context after the 'start replica' statement has finished executing.
+	ctx = ctx.WithContext(context.Background())
+	go func() {
+		err := replicaBinlogEventHandler(ctx, replicationConfig)
+		if err != nil {
+			panic(err)
+		}
+	}()
+	return nil
+}
+
+func (d DoltBinlogReplicaController) StopReplica(_ *sql.Context) error {
+	StopReplication()
+	return nil
+}
+
+func (d DoltBinlogReplicaController) SetReplicationOptions(_ *sql.Context, options []plan.ReplicationOption) error {
+	config := replicaConfiguration{}
+	config.connectionParams = &mysql.ConnParams{}
+
+	// TODO: hardcoding GTID starting sequence for now
+	config.startingGtid = 1
+
+	for _, option := range options {
+		switch strings.ToUpper(option.Name) {
+		case "SOURCE_HOST":
+			config.connectionParams.Host = option.Value
+		case "SOURCE_USER":
+			config.connectionParams.Uname = option.Value
+		case "SOURCE_PASSWORD":
+			config.connectionParams.Pass = option.Value
+		case "SOURCE_PORT":
+			intValue, err := strconv.Atoi(option.Value)
+			if err != nil {
+				return fmt.Errorf("Unable to parse SOURCE_PORT value (%q) as an integer: %s", option.Value, err.Error())
+			}
+			config.connectionParams.Port = intValue
+
+		default:
+			return fmt.Errorf("Unknown replication option: %s", option.Name)
+		}
+	}
+
+	// TODO: Protect with a mutex
+	replicationConfig = &config
+
+	return nil
+}
 
 // TODO: Move these into a struct to track?
 var format mysql.BinlogFormat
@@ -51,17 +112,13 @@ const noCheckConstraintsRowFlag = 0x0010
 
 // TODO: Look at configuration interfaces for other replication options and naming patterns
 type replicaConfiguration struct {
-	sourceServerUuid string
 	connectionParams *mysql.ConnParams
 	startingGtid     int64
 }
 
-// NewReplicaConfiguration creates a new replica configuration for the server with a UUID of |sourceServerUuid|
-// (found from the @@server_uuid variable on the source server) and |connectionParams| indicating how to connect
-// to the source server.
-func NewReplicaConfiguration(sourceServerUuid string, connectionParams *mysql.ConnParams) *replicaConfiguration {
+// NewReplicaConfiguration creates a new replica configuration for the server identified by |connectionParams|.
+func NewReplicaConfiguration(connectionParams *mysql.ConnParams) *replicaConfiguration {
 	return &replicaConfiguration{
-		sourceServerUuid: sourceServerUuid,
 		connectionParams: connectionParams,
 		startingGtid:     1,
 	}
@@ -73,8 +130,8 @@ func StopReplication() {
 }
 
 // TODO: Turn this into a struct with an API that can be called
+//
 //	"replicationController" or something similar to match "clusterController"?
-
 func replicaBinlogEventHandler(ctx *sql.Context, replicaConfiguration *replicaConfiguration) error {
 	server := sqlserver.GetRunningServer()
 	if server == nil {
@@ -546,16 +603,12 @@ func convertSqlTypesValue(value sqltypes.Value, column *sql.Column) (interface{}
 // startReplicationEventStream sends a request over |conn|, the connection to the MySQL source server, to begin
 // sending binlog events.
 func startReplicationEventStream(replicaConfiguration *replicaConfiguration, conn *mysql.Conn) error {
-	sid, err := mysql.ParseSID(replicaConfiguration.sourceServerUuid)
-	if err != nil {
-		return err
-	}
 	gtid := mysql.Mysql56GTID{
-		Server:   sid,
 		Sequence: replicaConfiguration.startingGtid,
 	}
 	startPosition := mysql.Position{GTIDSet: gtid.GTIDSet()}
-	// TODO: unhardcode 1 as the replica's server id
+
+	// TODO: unhardcode 1 as the replica's server_id
 	return conn.SendBinlogDumpCommand(1, startPosition)
 }
 
