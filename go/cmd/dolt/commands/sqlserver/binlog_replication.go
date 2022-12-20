@@ -41,6 +41,12 @@ import (
 
 var replicationConfig *replicaConfiguration
 
+// sourceServerUuid stores the server's UUID after it has been received from a binlog GTID event.
+// TODO: This needs to be encapsulated in a struct
+var sourceServerUuid interface{}
+
+// DoltBinlogReplicaController implements the BinlogReplicaController interface for a Dolt database in order to
+// provide support for a Dolt server to be a replica of a MySQL primary.
 type DoltBinlogReplicaController struct {
 }
 
@@ -60,7 +66,7 @@ func (d DoltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 }
 
 func (d DoltBinlogReplicaController) StopReplica(_ *sql.Context) error {
-	StopReplication()
+	stopReplicationChan <- struct{}{}
 	return nil
 }
 
@@ -97,6 +103,28 @@ func (d DoltBinlogReplicaController) SetReplicationOptions(_ *sql.Context, optio
 	return nil
 }
 
+func (d DoltBinlogReplicaController) GetReplicaStatus(_ *sql.Context) (*plan.ReplicaStatus, error) {
+	if replicationConfig == nil {
+		return nil, nil
+	}
+
+	status := plan.ReplicaStatus{}
+	status.AutoPosition = true
+
+	if replicationConfig.connectionParams != nil {
+		status.SourceUser = replicationConfig.connectionParams.Uname
+		status.SourcePort = uint(replicationConfig.connectionParams.Port)
+		status.SourceHost = replicationConfig.connectionParams.Host
+	}
+
+	if sourceServerUuid != nil {
+		status.SourceServerUuid = fmt.Sprintf("%s", sourceServerUuid)
+	}
+	status.SourceServerId = "???"
+
+	return &status, nil
+}
+
 // TODO: Move these into a struct to track?
 var format mysql.BinlogFormat
 var tableMapsById = make(map[uint64]*mysql.TableMap)
@@ -122,11 +150,6 @@ func NewReplicaConfiguration(connectionParams *mysql.ConnParams) *replicaConfigu
 		connectionParams: connectionParams,
 		startingGtid:     1,
 	}
-}
-
-// StopReplication stops any current replication process.
-func StopReplication() {
-	stopReplicationChan <- struct{}{}
 }
 
 // TODO: Turn this into a struct with an API that can be called
@@ -241,7 +264,11 @@ func processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.Binlog
 		// Logged in every binlog to record the current replication state. Consists of the last GTID seen for each
 		// replication domain. For more details, see: https://mariadb.com/kb/en/gtid_list_event/
 		fmt.Printf("Received: PreviousGTIDs event\n")
-		// TODO: Is there an action we should take here?
+		position, err := event.PreviousGTIDs(format)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("  - previous GTIDs: %s \n", position.GTIDSet.String())
 
 	case event.IsFormatDescription():
 		// This is a descriptor event that is written to the beginning of a binary log file, at position 4 (after
@@ -263,19 +290,24 @@ func processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.Binlog
 		if err != nil {
 			return err
 		}
+		sourceServerUuid = gtid.SourceServer()
 
 	case event.IsTableMap():
 		// Used for row-based binary logging beginning (binlog_format=ROW or MIXED). This event precedes each row
 		// operation event and maps a table definition to a number, where the table definition consists of database
 		// and table names. For more details, see: https://mariadb.com/kb/en/table_map_event/
-		// TODO: Handle special Table ID value 0xFFFFFF:
-		//		Table id refers to a table defined by TABLE_MAP_EVENT. The special value 0xFFFFFF should have
-		//	 	"end of statement flag" (0x0001) set and indicates that table maps can be freed.
 		fmt.Printf("Received: TableMap event\n")
 		tableId := event.TableID(format)
 		tableMap, err := event.TableMap(format)
 		if err != nil {
 			return err
+		}
+
+		// TODO: Handle special Table ID value 0xFFFFFF:
+		//		Table id refers to a table defined by TABLE_MAP_EVENT. The special value 0xFFFFFF should have
+		//	 	"end of statement flag" (0x0001) set and indicates that table maps can be freed.
+		if tableId == 0xFFFFFF {
+			fmt.Printf("  - received signal to clear cached table maps \n")
 		}
 		tableMapsById[tableId] = tableMap
 		fmt.Printf(" - tableMap: %v \n", formatTableMapAsString(tableId, tableMap))
