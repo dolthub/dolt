@@ -48,14 +48,25 @@ func DifferFromRoots[K ~[]byte, O Ordering[K]](
 	from, to Node,
 	order O,
 ) (Differ[K, O], error) {
-	fc, err := NewCursorAtStart(ctx, fromNs, from)
-	if err != nil {
-		return Differ[K, O]{}, err
+	var fc, tc *Cursor
+	var err error
+
+	if !from.empty() {
+		fc, err = NewCursorAtStart(ctx, fromNs, from)
+		if err != nil {
+			return Differ[K, O]{}, err
+		}
+	} else {
+		fc = &Cursor{}
 	}
 
-	tc, err := NewCursorAtStart(ctx, toNs, to)
-	if err != nil {
-		return Differ[K, O]{}, err
+	if !to.empty() {
+		tc, err = NewCursorAtStart(ctx, toNs, to)
+		if err != nil {
+			return Differ[K, O]{}, err
+		}
+	} else {
+		tc = &Cursor{}
 	}
 
 	fs, err := NewCursorPastEnd(ctx, fromNs, from)

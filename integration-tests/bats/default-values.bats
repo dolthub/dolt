@@ -537,8 +537,8 @@ DELIM
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 SMALLINT DEFAULT (GREATEST(pk, 2)))"
     run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'"
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "| pk          | NO          | NULL            |" ]] || false
-    [[ "$output" =~ "| v1          | YES         | GREATEST(pk, 2) |" ]] || false
+    [[ "$output" =~ "| pk          | NO          | NULL           |" ]] || false
+    [[ "$output" =~ "| v1          | YES         | greatest(pk,2) |" ]] || false
 }
 
 @test "default-values: Additional test with function defaults" {
@@ -550,9 +550,9 @@ DELIM
     run dolt sql -q "SELECT column_name, column_default FROM information_schema.columns WHERE table_name = 'test_table'"
     [ "$status" -eq "0" ]
     [[ "$output" =~ "| pk          | NULL            |" ]] || false
-    [[ "$output" =~ "| col2        | LENGTH('hello') |" ]] || false
-    [[ "$output" =~ "| col3        | ROUND(-1.58, 0) |" ]] || false
-    [[ "$output" =~ "| col4        | RAND()          |" ]] || false
+    [[ "$output" =~ "| col2        | length('hello') |" ]] || false
+    [[ "$output" =~ "| col3        | round(-1.58,0)  |" ]] || false
+    [[ "$output" =~ "| col4        | rand()          |" ]] || false
 }
 
 @test "default-values: Outputting the string version of a more complex default value works" {
@@ -564,6 +564,6 @@ DELIM
     [ "$status" -eq "0" ]
     [[ "$output" =~ "COLUMN_NAME,COLUMN_DEFAULT" ]] || false
     [[ "$output" =~ "pk," ]] || false
-    [[ "$output" =~ "col2,(RAND() + RAND())" ]] || false
+    [[ "$output" =~ "col2,(rand() + rand())" ]] || false
     [[ "$output" =~ "col3,CASE pk WHEN 1 THEN false ELSE true END" ]] || false
 }

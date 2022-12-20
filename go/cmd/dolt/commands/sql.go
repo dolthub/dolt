@@ -21,7 +21,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"syscall"
 
@@ -110,8 +109,6 @@ const (
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
 )
-
-var delimiterRegex = regexp.MustCompile(`(?i)^\s*DELIMITER\s+(\S+)\s*(\s+\S+\s*)?$`)
 
 func init() {
 	dsqle.AddDoltSystemVariables()
@@ -809,47 +806,39 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 		if len(query) == 0 || query == "\n" {
 			continue
 		}
-		shouldProcessQuery := true
-		if matches := delimiterRegex.FindStringSubmatch(query); len(matches) == 3 {
-			// If we don't match from anything, then we just pass to the SQL engine and let it complain.
-			scanner.Delimiter = matches[1]
-			shouldProcessQuery = false
+		sqlStatement, err := sqlparser.Parse(query)
+		if err == sqlparser.ErrEmpty {
+			continue
+		} else if err != nil {
+			handleError(scanner.statementStartLine, query, err)
+			// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
+			if !continueOnErr {
+				return err
+			}
 		}
-		if shouldProcessQuery {
-			sqlStatement, err := sqlparser.Parse(query)
-			if err == sqlparser.ErrEmpty {
-				continue
-			} else if err != nil {
-				handleError(scanner.statementStartLine, query, err)
-				// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
-				if !continueOnErr {
-					return err
+
+		sqlSch, rowIter, err := processParsedQuery(ctx, query, se, sqlStatement)
+		if err != nil {
+			handleError(scanner.statementStartLine, query, err)
+			// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
+			if !continueOnErr {
+				return err
+			}
+		}
+
+		if rowIter != nil {
+			switch sqlStatement.(type) {
+			case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete,
+				*sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
+				// For any statement that prints out result, print a newline to put the regular output on its own line
+				if fileReadProg != nil {
+					fileReadProg.printNewLineIfNeeded()
 				}
 			}
-
-			sqlSch, rowIter, err := processParsedQuery(ctx, query, se, sqlStatement)
+			err = engine.PrettyPrintResults(ctx, se.GetResultFormat(), sqlSch, rowIter)
 			if err != nil {
 				handleError(scanner.statementStartLine, query, err)
-				// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
-				if !continueOnErr {
-					return err
-				}
-			}
-
-			if rowIter != nil {
-				switch sqlStatement.(type) {
-				case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete,
-					*sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
-					// For any statement that prints out result, print a newline to put the regular output on its own line
-					if fileReadProg != nil {
-						fileReadProg.printNewLineIfNeeded()
-					}
-				}
-				err = engine.PrettyPrintResults(ctx, se.GetResultFormat(), sqlSch, rowIter)
-				if err != nil {
-					handleError(scanner.statementStartLine, query, err)
-					return err
-				}
+				return err
 			}
 		}
 		query = ""
@@ -881,22 +870,14 @@ func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, conti
 		if len(query) == 0 || query == "\n" {
 			continue
 		}
-		shouldProcessQuery := true
-		if matches := delimiterRegex.FindStringSubmatch(query); len(matches) == 3 {
-			// If we don't match from anything, then we just pass to the SQL engine and let it complain.
-			scanner.Delimiter = matches[1]
-			shouldProcessQuery = false
-		}
-		if shouldProcessQuery {
-			if err := processBatchQuery(ctx, query, se); err != nil {
-				// TODO: this line number will not be accurate for errors that occur when flushing a batch of inserts (as opposed
-				//  to processing the query)
-				verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
-				cli.PrintErrln(verr.Verbose())
-				// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
-				if !continueOnErr {
-					return err
-				}
+		if err := processBatchQuery(ctx, query, se); err != nil {
+			// TODO: this line number will not be accurate for errors that occur when flushing a batch of inserts (as opposed
+			//  to processing the query)
+			verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
+			cli.PrintErrln(verr.Verbose())
+			// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
+			if !continueOnErr {
+				return err
 			}
 		}
 		query = ""
@@ -1002,29 +983,17 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 		query = strings.TrimSuffix(query, shell.LineTerminator())
 		resultFormat := se.GetResultFormat()
 
-		// TODO: it would be better to build this into the statement parser rahter than special case it here
+		// TODO: it would be better to build this into the statement parser rather than special case it here
 		for _, terminator := range verticalOutputLineTerminators {
-			if strings.HasSuffix(query, "\\G") {
+			if strings.HasSuffix(query, terminator) {
 				resultFormat = engine.FormatVertical
 			}
 			query = strings.TrimSuffix(query, terminator)
 		}
 
-		//TODO: Handle comments and enforce the current line terminator
-		if matches := delimiterRegex.FindStringSubmatch(query); len(matches) == 3 {
-			// If we don't match from anything, then we just pass to the SQL engine and let it complain.
-			shell.SetLineTerminator(matches[1])
-			return
-		}
-
 		var nextPrompt string
 		var sqlSch sql.Schema
 		var rowIter sql.RowIter
-
-		// The SQL parser does not understand any other terminator besides semicolon, so we remove it.
-		if shell.LineTerminator() != ";" && strings.HasSuffix(query, shell.LineTerminator()) {
-			query = query[:len(query)-len(shell.LineTerminator())]
-		}
 
 		cont := func() bool {
 			subCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)

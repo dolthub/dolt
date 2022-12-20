@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/profile"
 	"github.com/dolthub/dolt/go/store/util/status"
@@ -107,7 +108,7 @@ func runSync(ctx context.Context, args []string) int {
 	f := func() error {
 		defer profile.MaybeStartProfile().Stop()
 		addr := sourceRef.TargetHash()
-		err := pull.Pull(ctx, srcCS, sinkCS, waf, addr, progressCh)
+		err := pull.Pull(ctx, srcCS, sinkCS, waf, []hash.Hash{addr}, progressCh)
 
 		if err != nil {
 			return err

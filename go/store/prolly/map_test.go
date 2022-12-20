@@ -238,6 +238,37 @@ func TestMutateMapWithTupleIter(t *testing.T) {
 	}
 }
 
+func TestVisitMapLevelOrder(t *testing.T) {
+	scales := []int{
+		20,
+		200,
+		2000,
+		20_000,
+	}
+	for _, s := range scales {
+		t.Run("scale "+strconv.Itoa(s), func(t *testing.T) {
+			ctx := context.Background()
+			tm, _ := makeProllyMap(t, s)
+			set1 := hash.NewHashSet()
+			err := tm.(Map).WalkAddresses(ctx, func(ctx context.Context, addr hash.Hash) error {
+				set1.Insert(addr)
+				return nil
+			})
+			require.NoError(t, err)
+			set2 := hash.NewHashSet()
+			err = VisitMapLevelOrder(ctx, tm.(Map), func(h hash.Hash) (int64, error) {
+				set2.Insert(h)
+				return 0, nil
+			})
+			require.NoError(t, err)
+			assert.Equal(t, set1.Size(), set2.Size())
+			for h := range set1 {
+				assert.True(t, set2.Has(h))
+			}
+		})
+	}
+}
+
 func TestNewEmptyNode(t *testing.T) {
 	s := message.NewProllyMapSerializer(val.TupleDesc{}, sharedPool)
 	msg := s.Serialize(nil, nil, nil, 0)

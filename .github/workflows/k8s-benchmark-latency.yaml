@@ -10,7 +10,7 @@ jobs:
     name: Benchmark Performance
     strategy:
       matrix:
-        dolt_fmt: [ "__LD_1__", "__DOLT__" ]
+        dolt_fmt: [ "__DOLT__" ]
     steps:
       - name: Checkout
         uses: actions/checkout@v3

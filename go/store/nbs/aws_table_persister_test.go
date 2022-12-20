@@ -268,7 +268,7 @@ func TestAWSTablePersisterDividePlan(t *testing.T) {
 	tooBig := bytesToChunkSource(t, bigUns...)
 
 	sources := chunkSources{justRight, tooBig, tooSmall}
-	plan, err := planConjoin(sources, &Stats{})
+	plan, err := planRangeCopyConjoin(sources, &Stats{})
 	require.NoError(t, err)
 	copies, manuals, _, err := dividePlan(context.Background(), plan, minPartSize, maxPartSize)
 	require.NoError(t, err)
@@ -286,15 +286,15 @@ func TestAWSTablePersisterDividePlan(t *testing.T) {
 	assert.Contains(perTableDataSize, tooBig.hash().String())
 	ti, err := justRight.index()
 	require.NoError(t, err)
-	assert.EqualValues(calcChunkDataLen(ti), perTableDataSize[justRight.hash().String()])
+	assert.EqualValues(calcChunkRangeSize(ti), perTableDataSize[justRight.hash().String()])
 	ti, err = tooBig.index()
 	require.NoError(t, err)
-	assert.EqualValues(calcChunkDataLen(ti), perTableDataSize[tooBig.hash().String()])
+	assert.EqualValues(calcChunkRangeSize(ti), perTableDataSize[tooBig.hash().String()])
 
 	assert.Len(manuals, 1)
 	ti, err = tooSmall.index()
 	require.NoError(t, err)
-	assert.EqualValues(calcChunkDataLen(ti), manuals[0].dstEnd-manuals[0].dstStart)
+	assert.EqualValues(calcChunkRangeSize(ti), manuals[0].dstEnd-manuals[0].dstStart)
 }
 
 func TestAWSTablePersisterCalcPartSizes(t *testing.T) {
@@ -348,7 +348,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 		smallChunks = append(smallChunks, small)
 		ti, err := src.index()
 		require.NoError(t, err)
-		smallChunkTotal += calcChunkDataLen(ti)
+		smallChunkTotal += calcChunkRangeSize(ti)
 	}
 
 	t.Run("Small", func(t *testing.T) {

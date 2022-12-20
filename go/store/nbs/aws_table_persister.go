@@ -63,6 +63,8 @@ type awsTablePersister struct {
 	q      MemoryQuotaProvider
 }
 
+var _ tablePersister = awsTablePersister{}
+
 type awsLimits struct {
 	partTarget, partMin, partMax uint64
 	itemMax                      int
@@ -301,8 +303,7 @@ func (s partsByPartNum) Swap(i, j int) {
 }
 
 func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
-	plan, err := planConjoin(sources, stats)
-
+	plan, err := planRangeCopyConjoin(sources, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -512,8 +513,7 @@ func dividePlan(ctx context.Context, plan compactionPlan, minPartSize, maxPartSi
 	var offset int64
 	for ; i < len(plan.sources.sws); i++ {
 		sws := plan.sources.sws[i]
-		rdr, err := sws.source.reader(ctx)
-
+		rdr, _, err := sws.source.reader(ctx)
 		if err != nil {
 			return nil, nil, nil, err
 		}

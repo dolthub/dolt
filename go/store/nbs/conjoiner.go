@@ -187,13 +187,13 @@ func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, 
 }
 
 func conjoinTables(ctx context.Context, conjoinees []tableSpec, p tablePersister, stats *Stats) (conjoined tableSpec, err error) {
-	eg, ctx := errgroup.WithContext(ctx)
+	eg, ectx := errgroup.WithContext(ctx)
 	toConjoin := make(chunkSources, len(conjoinees))
 
 	for idx := range conjoinees {
 		i, spec := idx, conjoinees[idx]
 		eg.Go(func() (err error) {
-			toConjoin[i], err = p.Open(ctx, spec.name, spec.chunkCount, stats)
+			toConjoin[i], err = p.Open(ectx, spec.name, spec.chunkCount, stats)
 			return
 		})
 	}

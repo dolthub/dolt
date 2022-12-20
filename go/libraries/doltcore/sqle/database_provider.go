@@ -594,15 +594,29 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
+	ddb := db.(Database).ddb
+	err = ddb.Close()
+	if err != nil {
+		return err
+	}
+
 	// get location of database that's being dropped
 	dbLoc := p.dbLocations[dbKey]
 	if dbLoc == nil {
 		return sql.ErrDatabaseNotFound.New(db.Name())
 	}
+
 	dropDbLoc, err := dbLoc.Abs("")
 	if err != nil {
 		return err
 	}
+
+	// If this database is re-created, we don't want to return any cached results.
+	err = dbfactory.DeleteFromSingletonCache("file://" + dropDbLoc + "/.dolt/noms")
+	if err != nil {
+		return err
+	}
+
 	rootDbLoc, err := p.fs.Abs("")
 	if err != nil {
 		return err
@@ -952,6 +966,11 @@ func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDa
 		return err
 	}
 
+	cmHash, err := cm.HashOf()
+	if err != nil {
+		return err
+	}
+
 	// create refs/heads/branch dataset
 	if !branchExists {
 		err = db.ddb.NewBranchAtCommit(ctx, branchRef, cm)
@@ -967,7 +986,15 @@ func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDa
 	}
 
 	// create workingSets/heads/branch and update the working set
-	err = pullBranches(ctx, db, []string{branch}, currentBranchRef, pullBehavior_fastForward)
+	err = db.RebaseSourceDb(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = pullBranches(ctx, db, []doltdb.RefWithHash{{
+		Ref:  branchRef,
+		Hash: cmHash,
+	}}, nil, currentBranchRef, pullBehavior_fastForward)
 	if err != nil {
 		return err
 	}

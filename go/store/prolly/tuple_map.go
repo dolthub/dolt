@@ -205,6 +205,12 @@ func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) 
 	}, stats, nil
 }
 
+// VisitMapLevelOrder visits each internal node of the tree in level order and calls the provided callback `cb` on each hash
+// encountered. This function is used primarily for building appendix table files for databases to help optimize reads.
+func VisitMapLevelOrder(ctx context.Context, m Map, cb func(h hash.Hash) (int64, error)) error {
+	return tree.VisitMapLevelOrder(ctx, m.tuples, cb)
+}
+
 // NodeStore returns the map's NodeStore
 func (m Map) NodeStore() tree.NodeStore {
 	return m.tuples.NodeStore

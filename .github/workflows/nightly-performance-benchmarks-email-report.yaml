@@ -29,6 +29,7 @@ jobs:
               "email_recipient": "${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}",
               "version": "${{ github.sha }}",
               "run_file": "ci.yaml",
+              "summary": "summary.sql",
               "report": "three_way_compare.sql",
               "commit_to_branch": "nightly",
               "actor": "${{ github.actor }}"
@@ -37,3 +38,17 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: test-orm-integrations
+      - uses: peter-evans/repository-dispatch@v2.0.0
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: benchmark-systab
+          client-payload: |
+            {
+              "email_recipient": "${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}",
+              "version": "${{ github.sha }}",
+              "run_file": "systab.yaml",
+              "report": "systab.sql",
+              "summary": "systab_summary.sql",
+              "commit_to_branch": "nightly",
+              "actor": "${{ github.actor }}"
+            }

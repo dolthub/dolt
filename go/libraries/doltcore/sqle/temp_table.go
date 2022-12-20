@@ -348,7 +348,7 @@ func (t *TempTable) DropForeignKey(ctx *sql.Context, fkName string) error {
 	return sql.ErrTemporaryTablesForeignKeySupport.New()
 }
 
-func (t *TempTable) GetForeignKeyUpdater(ctx *sql.Context) sql.ForeignKeyUpdater {
+func (t *TempTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
 	return nil
 }
 

@@ -23,9 +23,14 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-22.04, windows-latest]
         dolt_fmt: [ "__DOLT__", "__LD_1__" ]
+        journal_store: [ "" ]
         include:
           - os: "ubuntu-22.04"
             dolt_fmt: "__DOLT_DEV__"
+            journal_store: ""
+          - os: "ubuntu-22.04"
+            dolt_fmt: "__DOLT__"
+            journal_store: "true"
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v3
@@ -64,6 +69,7 @@ jobs:
       env:
         MATRIX_OS: ${{ matrix.os }}
         DOLT_DEFAULT_BIN_FORMAT: ${{ matrix.dolt_fmt }}
+        DOLT_ENABLE_CHUNK_JOURNAL: ${{ matrix.journal_store }}
   noracetest:
     name: Go tests - no race
     defaults:
