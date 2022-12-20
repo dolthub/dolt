@@ -19,6 +19,8 @@ import (
 	"io"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 )
@@ -57,7 +59,27 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 // ConjoinAll (Not currently implemented) conjoins all chunks in |sources| into a single,
 // new chunkSource.
 func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
-	return emptyChunkSource{}, nil
+	plan, err := planConcatenateConjoin(sources, stats)
+	if err != nil {
+		return nil, err
+	}
+
+	conjoinees := make([]string, 0, len(sources)+1)
+	for _, src := range sources {
+		conjoinees = append(conjoinees, src.hash().String())
+	}
+
+	idxKey := uuid.New().String()
+	if _, err = blobstore.PutBytes(ctx, bsp.bs, idxKey, plan.mergedIndex); err != nil {
+		return nil, err
+	}
+	conjoinees = append(conjoinees, idxKey) // mergedIndex goes last
+
+	name := nameFromSuffixes(plan.suffixes())
+	if _, err = bsp.bs.Concatenate(ctx, name.String(), conjoinees); err != nil {
+		return nil, err
+	}
+	return newBSChunkSource(ctx, bsp.bs, name, plan.chunkCount, bsp.q, stats)
 }
 
 // Open a table named |name|, containing |chunkCount| chunks.
@@ -67,6 +89,14 @@ func (bsp *blobstorePersister) Open(ctx context.Context, name addr, chunkCount u
 
 func (bsp *blobstorePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
 	return bsp.bs.Exists(ctx, name.String())
+}
+
+func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents manifestContents, t time.Time) error {
+	return chunks.ErrUnsupportedOperation
+}
+
+func (bsp *blobstorePersister) Close() error {
+	return nil
 }
 
 type bsTableReaderAt struct {
@@ -103,7 +133,6 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 }
 
 func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
-
 	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
 		rc, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
 		if err != nil {
@@ -130,10 +159,16 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 	return &chunkSourceAdapter{tr, name}, nil
 }
 
-func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents manifestContents, t time.Time) error {
-	return chunks.ErrUnsupportedOperation
-}
-
-func (bsp *blobstorePersister) Close() error {
-	return nil
+// planConcatenateConjoin computes a conjoin plan for tablePersisters that conjoin
+// by concatenating existing chunk sources (leaving behind old chunk indexes, footers).
+func planConcatenateConjoin(sources chunkSources, stats *Stats) (compactionPlan, error) {
+	var sized []sourceWithSize
+	for _, src := range sources {
+		index, err := src.index()
+		if err != nil {
+			return compactionPlan{}, err
+		}
+		sized = append(sized, sourceWithSize{src, index.tableFileSize()})
+	}
+	return planConjoin(sized, stats)
 }

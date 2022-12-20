@@ -303,8 +303,7 @@ func (s partsByPartNum) Swap(i, j int) {
 }
 
 func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
-	plan, err := planConjoin(sources, stats)
-
+	plan, err := planRangeCopyConjoin(sources, stats)
 	if err != nil {
 		return nil, err
 	}

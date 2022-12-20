@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -71,14 +72,51 @@ func makeTestSrcs(t *testing.T, tableSizes []uint32, p tablePersister) (srcs chu
 	return
 }
 
+// Makes a tableSet with len(tableSizes) upstream tables containing tableSizes[N] unique chunks
+func makeTestTableSpecs(t *testing.T, tableSizes []uint32, p tablePersister) (specs []tableSpec) {
+	for _, src := range makeTestSrcs(t, tableSizes, p) {
+		specs = append(specs, tableSpec{src.hash(), mustUint32(src.count())})
+		err := src.close()
+		require.NoError(t, err)
+	}
+	return
+}
+
 func TestConjoin(t *testing.T) {
-	// Makes a tableSet with len(tableSizes) upstream tables containing tableSizes[N] unique chunks
-	makeTestTableSpecs := func(tableSizes []uint32, p tablePersister) (specs []tableSpec) {
-		for _, src := range makeTestSrcs(t, tableSizes, p) {
-			specs = append(specs, tableSpec{src.hash(), mustUint32(src.count())})
-			err := src.close()
-			require.NoError(t, err)
-		}
+	t.Run("fake table persister", func(t *testing.T) {
+		testConjoin(t, func(*testing.T) tablePersister {
+			return newFakeTablePersister(&UnlimitedQuotaProvider{})
+		})
+	})
+	t.Run("in-memory blobstore persister", func(t *testing.T) {
+		testConjoin(t, func(*testing.T) tablePersister {
+			return &blobstorePersister{
+				bs:        blobstore.NewInMemoryBlobstore(),
+				blockSize: 4096,
+				q:         &UnlimitedQuotaProvider{},
+			}
+		})
+	})
+	t.Run("local fs blobstore persister", func(t *testing.T) {
+		testConjoin(t, func(*testing.T) tablePersister {
+			return &blobstorePersister{
+				bs:        blobstore.NewLocalBlobstore(t.TempDir()),
+				blockSize: 4096,
+				q:         &UnlimitedQuotaProvider{},
+			}
+		})
+	})
+}
+
+func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
+	stats := &Stats{}
+	setup := func(lock addr, root hash.Hash, sizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
+		p = factory(t)
+		fm = &fakeManifest{}
+		fm.set(constants.NomsVersion, lock, root, makeTestTableSpecs(t, sizes, p), nil)
+		var err error
+		_, upstream, err = fm.ParseIfExists(context.Background(), nil, nil)
+		require.NoError(t, err)
 		return
 	}
 
@@ -95,7 +133,7 @@ func TestConjoin(t *testing.T) {
 	assertContainAll := func(t *testing.T, p tablePersister, expect, actual []tableSpec) {
 		open := func(specs []tableSpec) (sources chunkSources) {
 			for _, sp := range specs {
-				cs, err := p.Open(context.Background(), sp.name, sp.chunkCount, nil)
+				cs, err := p.Open(context.Background(), sp.name, sp.chunkCount, stats)
 				if err != nil {
 					require.NoError(t, err)
 				}
@@ -124,18 +162,6 @@ func TestConjoin(t *testing.T) {
 		}
 	}
 
-	setup := func(lock addr, root hash.Hash, sizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
-		p = newFakeTablePersister(&UnlimitedQuotaProvider{})
-		fm = &fakeManifest{}
-		fm.set(constants.NomsVersion, lock, root, makeTestTableSpecs(sizes, p), nil)
-
-		var err error
-		_, upstream, err = fm.ParseIfExists(context.Background(), nil, nil)
-		require.NoError(t, err)
-
-		return
-	}
-
 	// Compact some tables, interloper slips in a new table
 	makeExtra := func(p tablePersister) tableSpec {
 		mt := newMemTable(testMemTableSize)
@@ -159,7 +185,6 @@ func TestConjoin(t *testing.T) {
 		{"log, all", []uint32{2, 3, 4, 8, 16, 32, 64}, []uint32{129}},
 	}
 
-	stats := &Stats{}
 	startLock, startRoot := computeAddr([]byte("lock")), hash.Of([]byte("root"))
 	t.Run("Success", func(t *testing.T) {
 		// Compact some tables, no one interrupts
@@ -221,7 +246,7 @@ func TestConjoin(t *testing.T) {
 	setupAppendix := func(lock addr, root hash.Hash, specSizes, appendixSizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
 		p = newFakeTablePersister(&UnlimitedQuotaProvider{})
 		fm = &fakeManifest{}
-		fm.set(constants.NomsVersion, lock, root, makeTestTableSpecs(specSizes, p), makeTestTableSpecs(appendixSizes, p))
+		fm.set(constants.NomsVersion, lock, root, makeTestTableSpecs(t, specSizes, p), makeTestTableSpecs(t, appendixSizes, p))
 
 		var err error
 		_, upstream, err = fm.ParseIfExists(context.Background(), nil, nil)

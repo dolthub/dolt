@@ -19,12 +19,17 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"hash/maphash"
 	"log"
 	"math/rand"
 	"os"
 	"reflect"
 	"runtime"
+	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"cloud.google.com/go/storage"
 	"github.com/google/uuid"
@@ -376,4 +381,65 @@ func TestPanicOnNegativeRangeLength(t *testing.T) {
 	}()
 
 	NewBlobRange(0, -1)
+}
+
+func TestConcatenate(t *testing.T) {
+	tests := newBlobStoreTests()
+	for _, test := range tests {
+		t.Run(test.bsType, func(t *testing.T) {
+			testConcatenate(t, test.bs, 1)
+			testConcatenate(t, test.bs, 4)
+			testConcatenate(t, test.bs, 16)
+			testConcatenate(t, test.bs, 32)
+			testConcatenate(t, test.bs, 64)
+		})
+	}
+}
+
+func testConcatenate(t *testing.T, bs Blobstore, cnt int) {
+	ctx := context.Background()
+	type blob struct {
+		key  string
+		data []byte
+	}
+	blobs := make([]blob, cnt)
+	keys := make([]string, cnt)
+
+	for i := range blobs {
+		b := make([]byte, 64)
+		rand.Read(b)
+		keys[i] = blobName(b)
+		_, err := bs.Put(ctx, keys[i], bytes.NewReader(b))
+		require.NoError(t, err)
+		blobs[i] = blob{
+			key:  keys[i],
+			data: b,
+		}
+	}
+
+	composite := uuid.New().String()
+	_, err := bs.Concatenate(ctx, composite, keys)
+	assert.NoError(t, err)
+
+	var off int64
+	for i := range blobs {
+		length := int64(len(blobs[i].data))
+		rdr, _, err := bs.Get(ctx, composite, BlobRange{
+			offset: off,
+			length: length,
+		})
+		assert.NoError(t, err)
+
+		act := make([]byte, length)
+		n, err := rdr.Read(act)
+		assert.NoError(t, err)
+		assert.Equal(t, int(length), n)
+		assert.Equal(t, blobs[i].data, act)
+		off += length
+	}
+}
+
+func blobName(b []byte) string {
+	h := maphash.Bytes(maphash.MakeSeed(), b)
+	return strconv.Itoa(int(h))
 }
