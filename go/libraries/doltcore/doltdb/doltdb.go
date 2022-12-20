@@ -215,6 +215,10 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 	return err
 }
 
+func (ddb *DoltDB) Close() error {
+	return ddb.db.Close()
+}
+
 func getCommitValForRefStr(ctx context.Context, db datas.Database, vrw types.ValueReadWriter, ref string) (*datas.Commit, error) {
 	if err := datas.ValidateDatasetId(ref); err != nil {
 		return nil, fmt.Errorf("invalid ref format: %s", ref)
@@ -1263,17 +1267,17 @@ func (ddb *DoltDB) PullChunks(
 	ctx context.Context,
 	tempDir string,
 	srcDB *DoltDB,
-	targetHash hash.Hash,
+	targetHashes [] hash.Hash,
 	progChan chan pull.PullProgress,
 	statsCh chan pull.Stats,
 ) error {
-	return pullHash(ctx, ddb.db, srcDB.db, targetHash, tempDir, progChan, statsCh)
+	return pullHash(ctx, ddb.db, srcDB.db, targetHashes, tempDir, progChan, statsCh)
 }
 
 func pullHash(
 	ctx context.Context,
 	destDB, srcDB datas.Database,
-	targetHash hash.Hash,
+	targetHashes [] hash.Hash,
 	tempDir string,
 	progChan chan pull.PullProgress,
 	statsCh chan pull.Stats,
@@ -1283,7 +1287,7 @@ func pullHash(
 	waf := types.WalkAddrsForNBF(srcDB.Format())
 
 	if datas.CanUsePuller(srcDB) && datas.CanUsePuller(destDB) {
-		puller, err := pull.NewPuller(ctx, tempDir, defaultChunksPerTF, srcCS, destCS, waf, targetHash, statsCh)
+		puller, err := pull.NewPuller(ctx, tempDir, defaultChunksPerTF, srcCS, destCS, waf, targetHashes, statsCh)
 		if err == pull.ErrDBUpToDate {
 			return nil
 		} else if err != nil {
@@ -1292,7 +1296,7 @@ func pullHash(
 
 		return puller.Pull(ctx)
 	} else {
-		return pull.Pull(ctx, srcCS, destCS, waf, targetHash, progChan)
+		return pull.Pull(ctx, srcCS, destCS, waf, targetHashes, progChan)
 	}
 }
 

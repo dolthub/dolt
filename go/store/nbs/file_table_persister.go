@@ -50,6 +50,9 @@ type fsTablePersister struct {
 	q   MemoryQuotaProvider
 }
 
+var _ tablePersister = &fsTablePersister{}
+var _ tableFilePersister = &fsTablePersister{}
+
 func (ftp *fsTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	return newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, ftp.fc)
 }
@@ -69,6 +72,10 @@ func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 	}
 
 	return ftp.persistTable(ctx, name, data, chunkCount, stats)
+}
+
+func (ftp *fsTablePersister) Path() string {
+	return ftp.dir
 }
 
 func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data []byte, chunkCount uint32, stats *Stats) (cs chunkSource, err error) {
@@ -150,7 +157,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 
 		for _, sws := range plan.sources.sws {
 			var r io.Reader
-			r, ferr = sws.source.reader(ctx)
+			r, _, ferr = sws.source.reader(ctx)
 
 			if ferr != nil {
 				return "", ferr

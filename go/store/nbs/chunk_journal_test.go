@@ -26,27 +26,32 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 )
+
+func makeTestChunkJournal(t *testing.T) *chunkJournal {
+	cacheOnce.Do(makeGlobalCaches)
+	ctx := context.Background()
+	dir, err := os.MkdirTemp("", "")
+	require.NoError(t, err)
+	m, err := getFileManifest(ctx, dir)
+	require.NoError(t, err)
+	q := NewUnlimitedMemQuotaProvider()
+	p := newFSTablePersister(dir, globalFDCache, q)
+	nbf := types.Format_Default.VersionString()
+	j, err := newChunkJournal(ctx, nbf, dir, m, p.(*fsTablePersister))
+	require.NoError(t, err)
+	return j
+}
 
 func TestChunkJournalBlockStoreSuite(t *testing.T) {
 	cacheOnce.Do(makeGlobalCaches)
 	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
-		m, err := getFileManifest(ctx, dir)
-		if err != nil {
-			return nil, err
-		}
-		j, err := newChunkJournal(ctx, dir, m)
-		if err != nil {
-			return nil, err
-		}
-		nbf := constants.FormatDefaultString
-		mm := makeManifestManager(j)
 		q := NewUnlimitedMemQuotaProvider()
-		c := inlineConjoiner{defaultMaxTables}
-		return newNomsBlockStore(ctx, nbf, mm, j, q, c, testMemTableSize)
+		nbf := types.Format_Default.VersionString()
+		return NewLocalJournalingStore(ctx, nbf, dir, q)
 	}
 	suite.Run(t, &BlockStoreSuite{
 		factory:        fn,
@@ -56,13 +61,7 @@ func TestChunkJournalBlockStoreSuite(t *testing.T) {
 
 func TestChunkJournalPersist(t *testing.T) {
 	ctx := context.Background()
-	dir, err := os.MkdirTemp("", "")
-	require.NoError(t, err)
-	m, err := getFileManifest(ctx, dir)
-	require.NoError(t, err)
-	j, err := newChunkJournal(ctx, dir, m)
-	require.NoError(t, err)
-
+	j := makeTestChunkJournal(t)
 	const iters = 64
 	stats := &Stats{}
 	haver := emptyChunkSource{}
@@ -83,6 +82,46 @@ func TestChunkJournalPersist(t *testing.T) {
 		cs, err := j.Open(ctx, source.hash(), 16, stats)
 		assert.NotNil(t, cs)
 		assert.NoError(t, err)
+	}
+}
+
+func TestReadRecordRanges(t *testing.T) {
+	ctx := context.Background()
+	j := makeTestChunkJournal(t)
+
+	var buf []byte
+	mt, data := randomMemTable(256)
+	gets := make([]getRecord, 0, len(data))
+	for h := range data {
+		gets = append(gets, getRecord{a: &h, prefix: h.Prefix()})
+	}
+
+	jcs, err := j.Persist(ctx, mt, emptyChunkSource{}, &Stats{})
+	require.NoError(t, err)
+
+	rdr, sz, err := jcs.(journalChunkSource).journal.snapshot()
+	require.NoError(t, err)
+
+	buf = make([]byte, sz)
+	n, err := rdr.Read(buf)
+	require.NoError(t, err)
+	assert.Equal(t, int(sz), n)
+
+	ranges, err := jcs.getRecordRanges(gets)
+	require.NoError(t, err)
+
+	for h, rng := range ranges {
+		b, err := jcs.get(ctx, addr(h), &Stats{})
+		assert.NoError(t, err)
+		ch1 := chunks.NewChunkWithHash(h, b)
+		assert.Equal(t, data[addr(h)], ch1)
+
+		start, stop := rng.Offset, uint32(rng.Offset)+rng.Length
+		cc2, err := NewCompressedChunk(h, buf[start:stop])
+		assert.NoError(t, err)
+		ch2, err := cc2.ToChunk()
+		assert.NoError(t, err)
+		assert.Equal(t, data[addr(h)], ch2)
 	}
 }
 

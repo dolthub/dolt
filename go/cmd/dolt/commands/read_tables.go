@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -189,7 +190,7 @@ func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB
 	cli.Println("Retrieving", tblName)
 	runProgFunc := buildProgStarter(language)
 	wg, progChan, pullerEventCh := runProgFunc(newCtx)
-	err = dEnv.DoltDB.PullChunks(ctx, tmpDir, srcDB, tblHash, progChan, pullerEventCh)
+	err = dEnv.DoltDB.PullChunks(ctx, tmpDir, srcDB, []hash.Hash{tblHash}, progChan, pullerEventCh)
 	stopProgFuncs(cancelFunc, wg, progChan, pullerEventCh)
 	if err != nil {
 		return nil, errhand.BuildDError("Failed reading chunks for remote table '%s' at '%s'", tblName, commitStr).AddCause(err).Build()

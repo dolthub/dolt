@@ -342,6 +342,25 @@ func (t *DoltTable) Name() string {
 func (t *DoltTable) String() string {
 	return t.tableName
 }
+func (t *DoltTable) DebugString() string {
+	p := sql.NewTreePrinter()
+
+	children := []string{fmt.Sprintf("name: %s", t.tableName)}
+
+	cols := t.sch.GetAllCols()
+	if len(t.projectedCols) > 0 {
+		var projections []string
+		for _, tag := range t.projectedCols {
+			projections = append(projections, fmt.Sprintf("%d", cols.TagToIdx[tag]))
+		}
+		children = append(children, fmt.Sprintf("projections: %s", projections))
+
+	}
+
+	_ = p.WriteNode("Table")
+	p.WriteChildren(children...)
+	return p.String()
+}
 
 // NumRows returns the unfiltered count of rows contained in the table
 func (t *DoltTable) numRows(ctx *sql.Context) (uint64, error) {
@@ -1006,8 +1025,8 @@ func (t DoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, fk sql.Fore
 	return fmt.Errorf("no foreign key operations on a read-only table")
 }
 
-// GetForeignKeyUpdater implements sql.ForeignKeyTable
-func (t DoltTable) GetForeignKeyUpdater(ctx *sql.Context) sql.ForeignKeyUpdater {
+// GetForeignKeyEditor implements sql.ForeignKeyTable
+func (t DoltTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
 	return nil
 }
 
@@ -2398,8 +2417,8 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-// GetForeignKeyUpdater implements sql.ForeignKeyTable
-func (t *AlterableDoltTable) GetForeignKeyUpdater(ctx *sql.Context) sql.ForeignKeyUpdater {
+// GetForeignKeyEditor implements sql.ForeignKeyTable
+func (t *AlterableDoltTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
 		return sqlutil.NewStaticErrorEditor(err)

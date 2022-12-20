@@ -252,6 +252,10 @@ func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.
 		if !expr.Resolved() {
 			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
 		}
+		// prepared statements resolve functions beforehand, so above check fails
+		if _, ok := expr.(sql.FunctionExpression); ok {
+			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
+		}
 	}
 
 	if err := ltf.addOptions(expression); err != nil {

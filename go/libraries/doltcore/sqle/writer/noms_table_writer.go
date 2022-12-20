@@ -27,13 +27,9 @@ import (
 )
 
 type TableWriter interface {
-	sql.RowReplacer
-	sql.RowUpdater
-	sql.RowInserter
-	sql.RowDeleter
-	sql.ForeignKeyUpdater
-	sql.AutoIncrementSetter
-	GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error)
+	sql.TableEditor
+	sql.ForeignKeyEditor
+	sql.AutoIncrementEditor
 }
 
 // SessionRootSetter sets the root value for the session.
