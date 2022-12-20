@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -237,30 +238,27 @@ func pullBranches(
 	currentBranchRef ref.DoltRef,
 	behavior pullBehavior,
 ) error {
-	localHashesByRef := make(map[string]doltdb.RefWithHash)
-	remoteHashesByRef := make(map[string]doltdb.RefWithHash)
+	localRefsByPath := make(map[string]doltdb.RefWithHash)
+	remoteRefsByPath := make(map[string]doltdb.RefWithHash)
+	remoteHashes := make([]hash.Hash, len(remoteRefs))
 
-	for _, b := range remoteRefs {
-		remoteHashesByRef[b.Ref.GetPath()] = b
+	for i, b := range remoteRefs {
+		remoteRefsByPath[b.Ref.GetPath()] = b
+		remoteHashes[i] = b.Hash
 	}
 
 	for _, b := range localRefs {
-		localHashesByRef[b.Ref.GetPath()] = b
+		localRefsByPath[b.Ref.GetPath()] = b
 	}
 
 	_, err := rrd.limiter.Run(ctx, "-all", func() (any, error) {
-		srcRoot, err := rrd.srcDB.NomsRoot(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		err = rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, srcRoot, nil, nil)
+		err := rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, remoteHashes, nil, nil)
 
 		for _, remoteRef := range remoteRefs {
-			localRef, refExists := localHashesByRef[remoteRef.Ref.GetPath()]
+			localRef, localRefExists := localRefsByPath[remoteRef.Ref.GetPath()]
 			switch {
 			case err != nil:
-			case refExists:
+			case localRefExists:
 				// TODO: this should work for workspaces too but doesn't, only branches
 				if localRef.Ref.GetType() == ref.BranchRefType {
 					if behavior == pullBehavior_forcePull {
@@ -268,7 +266,7 @@ func pullBranches(
 						if err != nil {
 							return nil, err
 						}
-					} else if localHashesByRef[remoteRef.Ref.GetPath()].Hash != remoteRef.Hash {
+					} else if localRefsByPath[remoteRef.Ref.GetPath()].Hash != remoteRef.Hash {
 						err = rrd.ddb.FastForwardToHash(ctx, remoteRef.Ref, remoteRef.Hash)
 						if err != nil {
 							return nil, err
@@ -310,7 +308,7 @@ func pullBranches(
 	}
 
 	// update the current working set if necessary
-	if remoteRef, ok := remoteHashesByRef[currentBranchRef.GetPath()]; ok {
+	if remoteRef, ok := remoteRefsByPath[currentBranchRef.GetPath()]; ok {
 		cm, err := rrd.srcDB.ReadCommit(ctx, remoteRef.Hash)
 		wsRef, err := ref.WorkingSetRefForHead(currentBranchRef)
 		if err != nil {
