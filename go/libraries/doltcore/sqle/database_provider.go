@@ -306,11 +306,8 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 }
 
 func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name string, collation sql.CollationID) error {
-	ctx.GetLogger().Tracef("CreateCollatedDatabase: about to lock")
 	p.mu.Lock()
 	defer p.mu.Unlock()
-
-	ctx.GetLogger().Tracef("CreateCollatedDatabase: lock obtained")
 
 	exists, isDir := p.fs.Exists(name)
 	if exists && isDir {
@@ -333,13 +330,9 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 	sess := dsess.DSessFromSess(ctx.Session)
 	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
 
-	ctx.GetLogger().Tracef("CreateCollatedDatabase: env acquired")
-
 	// if currentDB is empty, it will create the database with the default format which is the old format
 	newDbStorageFormat := types.Format_Default
 	if curDB := sess.GetCurrentDatabase(); curDB != "" {
-		ctx.GetLogger().Tracef("CreateCollatedDatabase: current db set")
-
 		if sess.HasDB(ctx, curDB) {
 			if ddb, ok := sess.GetDoltDB(ctx, curDB); ok {
 				newDbStorageFormat = ddb.ValueReadWriter().Format()
@@ -347,14 +340,10 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 		}
 	}
 
-	ctx.GetLogger().Tracef("CreateCollatedDatabase: about to init repo")
-
 	err = newEnv.InitRepo(ctx, newDbStorageFormat, sess.Username(), sess.Email(), p.defaultBranch)
 	if err != nil {
 		return err
 	}
-
-	ctx.GetLogger().Tracef("CreateCollatedDatabase: repo init done")
 
 	// Set the collation
 	if collation != sql.Collation_Default {
@@ -398,8 +387,6 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 	if err != nil {
 		return err
 	}
-
-	ctx.GetLogger().Tracef("done creating database %s", name)
 
 	// If we have an initialization hook, invoke it.  By default, this will
 	// be ConfigureReplicationDatabaseHook, which will setup replication
