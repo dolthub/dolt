@@ -262,14 +262,14 @@ func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q driver.Query) {
 		args[i] = q.Args[i]
 	}
 	if q.Query != "" {
-		ctx, c := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, c := context.WithTimeout(context.Background(), 20*time.Second)
 		defer c()
 		rows, err := conn.QueryContext(ctx, q.Query, args...)
 		if err == nil {
 			defer rows.Close()
 		}
 		if q.ErrorMatch != "" {
-			require.NoError(t, err, "error running query %s: %v", q.Exec, err)
+			require.Error(t, err)
 			require.Regexp(t, q.ErrorMatch, err.Error())
 			return
 		}
@@ -285,7 +285,7 @@ func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q driver.Query) {
 			require.Contains(t, *q.Result.Rows.Or, rowstrings)
 		}
 	} else if q.Exec != "" {
-		ctx, c := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, c := context.WithTimeout(context.Background(), 20*time.Second)
 		defer c()
 		_, err := conn.ExecContext(ctx, q.Exec, args...)
 		if q.ErrorMatch == "" {
