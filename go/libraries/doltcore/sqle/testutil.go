@@ -18,12 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"io"
 	"strings"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"

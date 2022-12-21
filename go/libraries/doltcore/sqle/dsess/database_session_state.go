@@ -54,7 +54,7 @@ type DatabaseSessionState struct {
 	dirty        bool
 	readReplica  *env.Remote
 	tmpFileDir   string
-	
+
 	sessionCache *SessionCache
 
 	// Same as InitialDbState.Err, this signifies that this
