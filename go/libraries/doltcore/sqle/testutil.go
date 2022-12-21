@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"io"
 	"strings"
 
@@ -56,6 +57,9 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 	}
 
 	engine, ctx, err := NewTestEngine(dEnv, context.Background(), db, root)
+	if err != nil {
+		return nil, err
+	}
 	dsess.DSessFromSess(ctx.Session).EnableBatchedMode()
 	err = ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, false)
 	if err != nil {
@@ -136,7 +140,7 @@ func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvid
 // NewTestEngine creates a new default engine, and a *sql.Context and initializes indexes and schema fragments.
 func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro, err := NewDoltDatabaseProviderWithDatabase(b, dEnv.FS, db, dEnv.FS)
+	pro, err := NewDoltDatabaseProviderWithDatabases(b, dEnv.FS, []sql.Database{information_schema.NewUpdatableInformationSchemaDatabase(), db}, []filesys.Filesys{dEnv.FS, dEnv.FS})
 	if err != nil {
 		return nil, nil, err
 	}
