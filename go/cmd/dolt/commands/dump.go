@@ -91,8 +91,8 @@ func (cmd DumpCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(filenameFlag, "fn", "file_name", "Define file name for dump file. Defaults to `doltdump.sql`.")
 	ap.SupportsString(directoryFlag, "d", "directory_name", "Define directory name to dump the files in. Defaults to `doltdump/`.")
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
-	ap.SupportsFlag(batchFlag, "", "Returns batch insert statements wherever possible.")
-	ap.SupportsFlag(noBatchFlag, "", "Turns off batching insert statements wherever possible.")
+	ap.SupportsFlag(batchFlag, "", "Return batch insert statements wherever possible, enabled by default.")
+	ap.SupportsFlag(noBatchFlag, "", "Always emit one row per statement, rather than batching multiple rows into each statement.")
 	ap.SupportsFlag(noAutocommitFlag, "na", "Turns off autocommit for each dumped table. Used to speed up loading of outputted sql file")
 	return ap
 }
@@ -173,24 +173,24 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 
 		for _, tbl := range tblNames {
-			tblOpts := newTableArgs(tbl, dumpOpts.dest, !apr.Contains(noBatchFlag), true, apr.Contains(noAutocommitFlag))
+			tblOpts := newTableArgs(tbl, dumpOpts.dest, !apr.Contains(noBatchFlag), apr.Contains(noAutocommitFlag))
 			err = dumpTable(ctx, dEnv, tblOpts, fPath)
 			if err != nil {
 				return HandleVErrAndExitCode(err, usage)
 			}
 		}
 	case csvFileExt:
-		err = dumpTables(ctx, root, dEnv, force, tblNames, csvFileExt, name, false, false)
+		err = dumpTables(ctx, root, dEnv, force, tblNames, csvFileExt, name, false)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 	case jsonFileExt:
-		err = dumpTables(ctx, root, dEnv, force, tblNames, jsonFileExt, name, false, false)
+		err = dumpTables(ctx, root, dEnv, force, tblNames, jsonFileExt, name, false)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 	case parquetFileExt:
-		err = dumpTables(ctx, root, dEnv, force, tblNames, parquetFileExt, name, false, false)
+		err = dumpTables(ctx, root, dEnv, force, tblNames, parquetFileExt, name, false)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -212,16 +212,11 @@ type tableOptions struct {
 	tableName     string
 	dest          mvdata.DataLocation
 	batched       bool
-	batchedOff    bool
 	autocommitOff bool
 }
 
 func (m tableOptions) IsBatched() bool {
 	return m.batched
-}
-
-func (m tableOptions) isBatchedOff() bool {
-	return m.batchedOff
 }
 
 func (m tableOptions) IsAutocommitOff() bool {
@@ -410,19 +405,18 @@ func getDumpOptions(fileName string, rf string) *dumpOptions {
 
 // newTableArgs returns tableOptions of table name and src table location and dest file location
 // corresponding to the input parameters
-func newTableArgs(tblName string, destination mvdata.DataLocation, batched bool, batchedOff bool, autocommitOff bool) *tableOptions {
+func newTableArgs(tblName string, destination mvdata.DataLocation, batched bool, autocommitOff bool) *tableOptions {
 	return &tableOptions{
 		tableName:     tblName,
 		dest:          destination,
 		batched:       batched,
-		batchedOff:    batchedOff,
 		autocommitOff: autocommitOff,
 	}
 }
 
 // dumpTables returns nil if all tables is dumped successfully, and it returns err if there is one.
 // It handles only csv and json file types(rf).
-func dumpTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, force bool, tblNames []string, rf string, dirName string, batched bool, batchedOff bool) errhand.VerboseError {
+func dumpTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, force bool, tblNames []string, rf string, dirName string, batched bool) errhand.VerboseError {
 	var fName string
 	if dirName == emptyStr {
 		dirName = fmt.Sprintf("doltdump/")
@@ -441,7 +435,7 @@ func dumpTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, 
 			return err
 		}
 
-		tblOpts := newTableArgs(tbl, dumpOpts.dest, batched, batchedOff, false)
+		tblOpts := newTableArgs(tbl, dumpOpts.dest, batched, false)
 
 		err = dumpTable(ctx, dEnv, tblOpts, fPath)
 		if err != nil {
