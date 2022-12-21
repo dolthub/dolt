@@ -44,7 +44,7 @@ const (
 type DoltDatabaseProvider struct {
 	// dbLocations maps a database name to its file system root
 	dbLocations        map[string]filesys.Filesys
-	databases          map[string]sql.Database
+	databases          map[string]SqlDatabase
 	functions          map[string]sql.Function
 	externalProcedures sql.ExternalStoredProcedureRegistry
 	InitDatabaseHook   InitDatabaseHook
@@ -74,21 +74,21 @@ func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys) (DoltData
 
 // NewDoltDatabaseProviderWithDatabase returns a new provider, initialized with one database at the
 // specified location, and any error that occurred along the way.
-func NewDoltDatabaseProviderWithDatabase(defaultBranch string, fs filesys.Filesys, database sql.Database, dbLocation filesys.Filesys) (DoltDatabaseProvider, error) {
-	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, []sql.Database{database}, []filesys.Filesys{dbLocation})
+func NewDoltDatabaseProviderWithDatabase(defaultBranch string, fs filesys.Filesys, database SqlDatabase, dbLocation filesys.Filesys) (DoltDatabaseProvider, error) {
+	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, []SqlDatabase{database}, []filesys.Filesys{dbLocation})
 }
 
 // NewDoltDatabaseProviderWithDatabases returns a new provider, initialized with the specified databases,
 // at the specified locations. For every database specified, there must be a corresponding filesystem
 // specified that represents where the database is located. If the number of specified databases is not the
 // same as the number of specified locations, an error is returned.
-func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Filesys, databases []sql.Database, locations []filesys.Filesys) (DoltDatabaseProvider, error) {
+func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Filesys, databases []SqlDatabase, locations []filesys.Filesys) (DoltDatabaseProvider, error) {
 	if len(databases) != len(locations) {
 		return DoltDatabaseProvider{}, fmt.Errorf("unable to create DoltDatabaseProvider: "+
 			"incorrect number of databases (%d) and database locations (%d) specified", len(databases), len(locations))
 	}
 
-	dbs := make(map[string]sql.Database, len(databases))
+	dbs := make(map[string]SqlDatabase, len(databases))
 	for _, db := range databases {
 		dbs[strings.ToLower(db.Name())] = db
 	}
@@ -190,6 +190,7 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 	if err != nil {
 		return nil, err
 	}
+
 	if !ok {
 		db, err = p.databaseForClone(ctx, name)
 		if err != nil {
@@ -268,8 +269,9 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 
 	all = make([]sql.Database, 0, len(p.databases))
 	var foundDatabase bool
+	currDb := strings.ToLower(ctx.GetCurrentDatabase())
 	for _, db := range p.databases {
-		if db.Name() == ctx.GetCurrentDatabase() {
+		if strings.ToLower(db.Name()) == currDb {
 			foundDatabase = true
 		}
 		all = append(all, db)
@@ -277,8 +279,8 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 	p.mu.RUnlock()
 
 	// If the current database is not one of the primary databases, it must be a transitory revision database
-	if !foundDatabase && ctx.GetCurrentDatabase() != "" {
-		revDb, _, ok, err := p.databaseForRevision(ctx, ctx.GetCurrentDatabase())
+	if !foundDatabase && currDb != "" {
+		revDb, _, ok, err := p.databaseForRevision(ctx, currDb)
 		if err != nil {
 			// We can't return an error from this interface function, so just log a message
 			ctx.GetLogger().Warnf("unable to load %q as a database revision: %s", ctx.GetCurrentDatabase(), err.Error())
@@ -304,8 +306,11 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 }
 
 func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name string, collation sql.CollationID) error {
+	ctx.GetLogger().Tracef("CreateCollatedDatabase: about to lock")
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	ctx.GetLogger().Tracef("CreateCollatedDatabase: lock obtained")
 
 	exists, isDir := p.fs.Exists(name)
 	if exists && isDir {
@@ -328,33 +333,28 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 	sess := dsess.DSessFromSess(ctx.Session)
 	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
 
+	ctx.GetLogger().Tracef("CreateCollatedDatabase: env acquired")
+
 	// if currentDB is empty, it will create the database with the default format which is the old format
 	newDbStorageFormat := types.Format_Default
 	if curDB := sess.GetCurrentDatabase(); curDB != "" {
-		if ddb, ok := sess.GetDoltDB(ctx, curDB); ok {
-			newDbStorageFormat = ddb.ValueReadWriter().Format()
-		}
-	} else {
-		dbs := sess.GetDbStates()
-		var formats = make(map[*types.NomsBinFormat]int)
-		for dbName, _ := range dbs {
-			if ddb, ok := sess.GetDoltDB(ctx, dbName); ok {
-				formats[ddb.ValueReadWriter().Format()] += 1
-			}
-		}
-		if len(formats) > 1 {
-			return fmt.Errorf("multiple formats in the same server is not supported")
-		}
-		if len(formats) == 1 {
-			for f, _ := range formats {
-				newDbStorageFormat = f
+		ctx.GetLogger().Tracef("CreateCollatedDatabase: current db set")
+
+		if sess.HasDB(ctx, curDB) {
+			if ddb, ok := sess.GetDoltDB(ctx, curDB); ok {
+				newDbStorageFormat = ddb.ValueReadWriter().Format()
 			}
 		}
 	}
+
+	ctx.GetLogger().Tracef("CreateCollatedDatabase: about to init repo")
+
 	err = newEnv.InitRepo(ctx, newDbStorageFormat, sess.Username(), sess.Email(), p.defaultBranch)
 	if err != nil {
 		return err
 	}
+
+	ctx.GetLogger().Tracef("CreateCollatedDatabase: repo init done")
 
 	// Set the collation
 	if collation != sql.Collation_Default {
@@ -399,6 +399,8 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 		return err
 	}
 
+	ctx.GetLogger().Tracef("done creating database %s", name)
+
 	// If we have an initialization hook, invoke it.  By default, this will
 	// be ConfigureReplicationDatabaseHook, which will setup replication
 	// for the new database if a remote url template is set.
@@ -411,7 +413,7 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 	p.databases[formattedName] = db
 	p.dbLocations[formattedName] = newEnv.FS
 
-	dbstate, err := GetInitialDBState(ctx, db)
+	dbstate, err := GetInitialDBState(ctx, db, "")
 	if err != nil {
 		return err
 	}
@@ -559,7 +561,7 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 
 	p.databases[formatDbMapKeyName(db.Name())] = db
 
-	dbstate, err := GetInitialDBState(ctx, db)
+	dbstate, err := GetInitialDBState(ctx, db, "")
 	if err != nil {
 		return nil, err
 	}
@@ -647,9 +649,9 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 
 	// We not only have to delete this database, but any derivative ones that we've stored as a result of USE or
 	// connection strings
-	derivativeNamePrefix := dbKey + dbRevisionDelimiter
+	derivativeNamePrefix := strings.ToLower(dbKey + dbRevisionDelimiter)
 	for dbName := range p.databases {
-		if strings.HasPrefix(dbName, derivativeNamePrefix) {
+		if strings.HasPrefix(strings.ToLower(dbName), derivativeNamePrefix) {
 			delete(p.databases, dbName)
 		}
 	}
@@ -658,8 +660,6 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	return nil
 }
 
-// TODO: databaseForRevision should call checkout on the given branch/commit, returning a non-mutable session
-// only if a non-branch revspec was indicated.
 func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string) (sql.Database, dsess.InitialDbState, bool, error) {
 	if !strings.Contains(revDB, dbRevisionDelimiter) {
 		return nil, dsess.InitialDbState{}, false, nil
@@ -680,13 +680,12 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		return nil, dsess.InitialDbState{}, false, nil
 	}
 
-	var err error
-	revSpec, err = p.resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
+	resolvedRevSpec, err := p.resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
 	if err != nil {
 		return nil, dsess.InitialDbState{}, false, err
 	}
 
-	isBranch, err := isBranch(ctx, srcDb, revSpec, p.remoteDialer)
+	caseSensitiveBranchName, isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec, p.remoteDialer)
 	if err != nil {
 		return nil, dsess.InitialDbState{}, false, err
 	}
@@ -695,21 +694,24 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		// fetch the upstream head if this is a replicated db
 		if replicaDb, ok := srcDb.(ReadReplicaDatabase); ok {
 			// TODO move this out of analysis phase, should only happen at read time
-			err := switchAndFetchReplicaHead(ctx, revSpec, replicaDb)
+			err := switchAndFetchReplicaHead(ctx, resolvedRevSpec, replicaDb)
 			if err != nil {
 				return nil, dsess.InitialDbState{}, false, err
 			}
 		}
 
-		db, init, err := dbRevisionForBranch(ctx, srcDb, revSpec)
-		if err != nil {
+		db, init, err := dbRevisionForBranch(ctx, srcDb, caseSensitiveBranchName)
+		// preserve original user case in the case of not found
+		if sql.ErrDatabaseNotFound.Is(err) {
+			return nil, dsess.InitialDbState{}, false, sql.ErrDatabaseNotFound.New(revDB)
+		} else if err != nil {
 			return nil, dsess.InitialDbState{}, false, err
 		}
 
 		return db, init, true, nil
 	}
 
-	isTag, err := isTag(ctx, srcDb, revSpec, p.remoteDialer)
+	isTag, err := isTag(ctx, srcDb, resolvedRevSpec, p.remoteDialer)
 	if err != nil {
 		return nil, dsess.InitialDbState{}, false, err
 	}
@@ -726,14 +728,14 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 			return nil, dsess.InitialDbState{}, false, nil
 		}
 
-		db, init, err := dbRevisionForTag(ctx, srcDb.(Database), revSpec)
+		db, init, err := dbRevisionForTag(ctx, srcDb.(Database), resolvedRevSpec)
 		if err != nil {
 			return nil, dsess.InitialDbState{}, false, err
 		}
 		return db, init, true, nil
 	}
 
-	if doltdb.IsValidCommitHash(revSpec) {
+	if doltdb.IsValidCommitHash(resolvedRevSpec) {
 		// TODO: this should be an interface, not a struct
 		replicaDb, ok := srcDb.(ReadReplicaDatabase)
 		if ok {
@@ -835,6 +837,33 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx *sql.Context, revDB string) (d
 		return dsess.InitialDbState{}, err
 	} else if !ok {
 		return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(revDB)
+	}
+
+	return init, nil
+}
+
+func (p DoltDatabaseProvider) stateForDatabase(ctx *sql.Context, dbName string, branch string) (dsess.InitialDbState, bool, error) {
+	p.mu.RLock()
+	db, ok := p.databases[formatDbMapKeyName(dbName)]
+	p.mu.RUnlock()
+	if !ok {
+		return dsess.InitialDbState{}, false, nil
+	}
+
+	dbState, err := db.InitialDBState(ctx, branch)
+	if err != nil {
+		return dsess.InitialDbState{}, false, err
+	}
+
+	return dbState, true, nil
+}
+
+func (p DoltDatabaseProvider) DbState(ctx *sql.Context, dbName string, defaultBranch string) (dsess.InitialDbState, error) {
+	init, ok, err := p.stateForDatabase(ctx, dbName, defaultBranch)
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	} else if !ok {
+		return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
 	return init, nil
@@ -974,33 +1003,33 @@ func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDa
 }
 
 // isBranch returns whether a branch with the given name is in scope for the database given
-func isBranch(ctx context.Context, db SqlDatabase, branchName string, dialer dbfactory.GRPCDialProvider) (bool, error) {
+func isBranch(ctx context.Context, db SqlDatabase, branchName string, dialer dbfactory.GRPCDialProvider) (string, bool, error) {
 	var ddbs []*doltdb.DoltDB
 
 	if rdb, ok := db.(ReadReplicaDatabase); ok {
 		remoteDB, err := rdb.remote.GetRemoteDB(ctx, rdb.ddb.Format(), dialer)
 		if err != nil {
-			return false, err
+			return "", false, err
 		}
 		ddbs = append(ddbs, rdb.ddb, remoteDB)
 	} else if ddb, ok := db.(Database); ok {
 		ddbs = append(ddbs, ddb.ddb)
 	} else {
-		return false, fmt.Errorf("unrecognized type of database %T", db)
+		return "", false, fmt.Errorf("unrecognized type of database %T", db)
 	}
 
 	for _, ddb := range ddbs {
-		branchExists, err := ddb.HasBranch(ctx, branchName)
+		branchName, branchExists, err := ddb.HasBranch(ctx, branchName)
 		if err != nil {
-			return false, err
+			return "", false, err
 		}
 
 		if branchExists {
-			return true, nil
+			return branchName, true, nil
 		}
 	}
 
-	return false, nil
+	return "", false, nil
 }
 
 // isTag returns whether a tag with the given name is in scope for the database given

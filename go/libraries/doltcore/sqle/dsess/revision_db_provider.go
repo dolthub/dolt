@@ -55,11 +55,17 @@ type RevisionDatabase interface {
 	Revision() string
 }
 
-type DoltDatabaseProvider interface {
-	sql.DatabaseProvider
-	RevisionDatabaseProvider
+// RemoteReadReplicaDatabase is a database that pulls from a connected remote when a transaction begins.
+type RemoteReadReplicaDatabase interface {
+	// ValidReplicaState returns whether this read replica is in a valid state to pull from the remote
+	ValidReplicaState(ctx *sql.Context) bool
+	// PullFromRemote performs a pull from the remote and returns any error encountered
+	PullFromRemote(ctx *sql.Context) error
+}
 
-	CreateDatabase(ctx *sql.Context, path string) error
+type DoltDatabaseProvider interface {
+	sql.MutableDatabaseProvider
+	RevisionDatabaseProvider
 
 	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases.
 	FileSystem() filesys.Filesys
@@ -77,6 +83,10 @@ type DoltDatabaseProvider interface {
 	// (otherwise all branches are cloned), remoteName is the name for the remote created in the new database, and
 	// remoteUrl is a URL (e.g. "file:///dbs/db1") or an <org>/<database> path indicating a database hosted on DoltHub.
 	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error
+	// DbState returns the InitialDbState for the specified database and given branch. An empty branch name should use
+	// the default branch for the repository.
+	// TODO: make this use an ok bool instead of relying on sql.DatabaseNotFound errors
+	DbState(ctx *sql.Context, dbName string, defaultBranch string) (InitialDbState, error)
 }
 
 func EmptyDatabaseProvider() DoltDatabaseProvider {
@@ -85,6 +95,14 @@ func EmptyDatabaseProvider() DoltDatabaseProvider {
 
 type emptyRevisionDatabaseProvider struct {
 	sql.DatabaseProvider
+}
+
+func (e emptyRevisionDatabaseProvider) DbState(ctx *sql.Context, dbName string, defaultBranch string) (InitialDbState, error) {
+	return InitialDbState{}, sql.ErrDatabaseNotFound.New(dbName)
+}
+
+func (e emptyRevisionDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
+	return nil
 }
 
 func (e emptyRevisionDatabaseProvider) GetRevisionForRevisionDatabase(_ *sql.Context, _ string) (string, string, error) {

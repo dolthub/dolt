@@ -15,10 +15,18 @@
 package clusterdb
 
 import (
+	"context"
 	"errors"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 type database struct {
@@ -26,6 +34,7 @@ type database struct {
 }
 
 var _ sql.Database = database{}
+var _ sqle.SqlDatabase = database{}
 
 const StatusTableName = "dolt_cluster_status"
 
@@ -68,4 +77,70 @@ var _ sql.ReadOnlyDatabase = database{}
 
 func (database) IsReadOnly() bool {
 	return true
+}
+
+func (db database) InitialDBState(ctx context.Context, branch string) (dsess.InitialDbState, error) {
+	// TODO: almost none of this state is actually used, but is necessary because the current session setup requires a
+	//  repo state writer
+	return dsess.InitialDbState{
+		Db: db,
+		DbData: env.DbData{
+			Rsw: noopRepoStateWriter{},
+		},
+		ReadOnly: true,
+	}, nil
+}
+
+func (db database) GetRoot(context *sql.Context) (*doltdb.RootValue, error) {
+	return nil, errors.New("unimplemented")
+}
+
+func (db database) DbData() env.DbData {
+	panic("unimplemented")
+}
+
+func (db database) Flush(context *sql.Context) error {
+	return errors.New("unimplemented")
+}
+
+func (db database) EditOptions() editor.Options {
+	return editor.Options{}
+}
+
+type noopRepoStateWriter struct{}
+
+func (n noopRepoStateWriter) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.MarshalableRef) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) AddRemote(r env.Remote) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) AddBackup(r env.Remote) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) RemoveRemote(ctx context.Context, name string) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) RemoveBackup(ctx context.Context, name string) error {
+	return nil
+}
+
+func (n noopRepoStateWriter) TempTableFilesDir() (string, error) {
+	return "", nil
+}
+
+func (n noopRepoStateWriter) UpdateBranch(name string, new env.BranchConfig) error {
+	return nil
 }

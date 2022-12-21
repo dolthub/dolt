@@ -129,7 +129,7 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 		return noConflictsOrViolations, threeWayMerge, fmt.Errorf("%w: %s", env.ErrFailedToReadDb, err.Error())
 	}
 
-	hasBranch, err := srcDB.HasBranch(ctx, pullSpec.Branch.GetPath())
+	_, hasBranch, err := srcDB.HasBranch(ctx, pullSpec.Branch.GetPath())
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, err
 	}

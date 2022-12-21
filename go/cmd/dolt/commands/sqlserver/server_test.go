@@ -463,7 +463,7 @@ func TestReadReplica(t *testing.T) {
 
 		q := sess.SelectBySql(fmt.Sprintf("select dolt_checkout('%s')", newBranch))
 		_, err = q.LoadContext(context.Background(), &res)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.ElementsMatch(t, res, []int{0})
 	})
 }
