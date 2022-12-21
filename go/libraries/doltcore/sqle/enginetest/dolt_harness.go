@@ -378,13 +378,9 @@ func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
 }
 
 func (d *DoltHarness) newTable(db sql.Database, name string, schema sql.PrimaryKeySchema) (sql.Table, error) {
-	var err error
-	// TODO: why is this necessary?
-	if ro, ok := db.(sqle.ReadOnlyDatabase); ok {
-		err = ro.CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema, sql.Collation_Default)
-	} else {
-		err = db.(sqle.Database).CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema, sql.Collation_Default)
-	}
+	tc := db.(sql.TableCreator)
+
+	err := tc.CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema, sql.Collation_Default)
 	if err != nil {
 		return nil, err
 	}
@@ -431,26 +427,16 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, tableName string, 
 	require.True(d.t, ok)
 
 	ctx := enginetest.NewContext(d)
+
 	_, iter, err := e.Query(ctx,
-		"CALL DOLT_ADD('.')")
+		"SELECT COMMIT('-Am', 'test commit');")
 	require.NoError(d.t, err)
 	_, err = sql.RowIterToRows(ctx, nil, iter)
 	require.NoError(d.t, err)
 
-	_, iter, err = e.Query(ctx,
-		"SELECT COMMIT('-am', 'test commit');")
-	require.NoError(d.t, err)
-	_, err = sql.RowIterToRows(ctx, nil, iter)
-	require.NoError(d.t, err)
-
-	headHash, err := ctx.GetSessionVariable(ctx, dsess.HeadKey(db.Name()))
-	require.NoError(d.t, err)
-
+	// Create a new branch at this commit with the given identifier
 	ctx = enginetest.NewContext(d)
-	// TODO: there's a bug in test setup with transactions, where the HEAD session var gets overwritten on transaction
-	//  start, so we quote it here instead
-	// query := "insert into dolt_branches (name, hash) values ('" + asOfString + "', @@" + dsess.HeadKey(ddb.Name()) + ")"
-	query := "CALL dolt_branch('" + asOfString + "', '" + headHash.(string) + "')"
+	query := "CALL dolt_branch('" + asOfString + "')"
 
 	_, iter, err = e.Query(ctx,
 		query)
