@@ -469,7 +469,7 @@ SQL
 
 @test "types: Double with precision and scale correctly gets interpreted as a decimal" {
     skip "Double with precision and scale parsing is incorrect"
-    
+
     dolt sql -q "CREATE TABLE t(pk double(5, 1))"
 
     run dolt sql -q "INSERT INTO t values (33333.1)"
@@ -1326,4 +1326,32 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, '2156');"
     [ "$status" -eq "1" ]
+}
+
+@test "types: DATETIME range inclusive of start to match mysql" {
+   skip "datetime currently not inclusive of range start"
+
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk INT NOT NULL,
+  ca DATETIME NOT NULL,
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt sql -q "INSERT INTO test VALUES (1, '0001-01-01 00:00:00');"
+    [ "$status" -eq "0" ]
+}
+
+@test "types: TIMESTAMP range inclusive of start to match mysql" {
+    skip "timestamp currently not inclusive of range start"
+
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk INT NOT NULL,
+  ca TIMESTAMP NOT NULL,
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt sql -q "INSERT INTO test VALUES (1, '1970-01-01 00:00:00');"
+    [ "$status" -eq "0" ]
 }
