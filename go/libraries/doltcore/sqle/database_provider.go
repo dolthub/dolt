@@ -1033,7 +1033,7 @@ func isTag(ctx context.Context, db SqlDatabase, tagName string, dialer dbfactory
 	return false, nil
 }
 
-func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string) (ReadOnlyDatabase, dsess.InitialDbState, error) {
+func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string) (SqlDatabase, dsess.InitialDbState, error) {
 	branch := ref.NewBranchRef(revSpec)
 	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, branch)
 	if err != nil {
@@ -1058,7 +1058,7 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 		RepoStateReader: srcDb.DbData().Rsr,
 	}
 
-	var db ReadOnlyDatabase
+	var db SqlDatabase
 
 	switch v := srcDb.(type) {
 	case Database:
@@ -1072,7 +1072,7 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			revision: revSpec,
 		}}
 	case ReadReplicaDatabase:
-		db = ReadOnlyDatabase{Database: ReadReplicaDatabase{Database: Database{
+		db = ReadReplicaDatabase{Database: Database{
 			name:     dbName,
 			ddb:      v.ddb,
 			rsw:      static,
@@ -1085,7 +1085,7 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			srcDB:   v.srcDB,
 			tmpDir:  v.tmpDir,
 			limiter: newLimiter(),
-		}}
+		}
 	}
 
 	remotes, err := static.GetRemotes()
