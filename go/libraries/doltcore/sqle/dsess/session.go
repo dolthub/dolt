@@ -1086,6 +1086,11 @@ func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, 
 	if err != nil {
 		return nil, err
 	}
+
+	// TODO: what's the expected result if WorkingSet is nil?
+	if dbState.WorkingSet == nil {
+	}
+
 	return dbState.WorkingSet.Ref().ToHeadRef()
 }
 
