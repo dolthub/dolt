@@ -1033,21 +1033,21 @@ func isTag(ctx context.Context, db SqlDatabase, tagName string, dialer dbfactory
 	return false, nil
 }
 
-func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string) (SqlDatabase, dsess.InitialDbState, error) {
+func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string) (ReadOnlyDatabase, dsess.InitialDbState, error) {
 	branch := ref.NewBranchRef(revSpec)
 	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, branch)
 	if err != nil {
-		return Database{}, dsess.InitialDbState{}, err
+		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
 	}
 
 	wsRef, err := ref.WorkingSetRefForHead(branch)
 	if err != nil {
-		return Database{}, dsess.InitialDbState{}, err
+		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
 	}
 
 	ws, err := srcDb.DbData().Ddb.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
-		return Database{}, dsess.InitialDbState{}, err
+		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
 	}
 
 	dbName := srcDb.Name() + dbRevisionDelimiter + revSpec
@@ -1058,11 +1058,11 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 		RepoStateReader: srcDb.DbData().Rsr,
 	}
 
-	var db SqlDatabase
+	var db ReadOnlyDatabase
 
 	switch v := srcDb.(type) {
 	case Database:
-		db = Database{
+		db = ReadOnlyDatabase{Database: Database{
 			name:     dbName,
 			ddb:      v.ddb,
 			rsw:      static,
@@ -1070,38 +1070,37 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			gs:       v.gs,
 			editOpts: v.editOpts,
 			revision: revSpec,
-		}
+		}}
 	case ReadReplicaDatabase:
-		db = ReadReplicaDatabase{
-			Database: Database{
-				name:     dbName,
-				ddb:      v.ddb,
-				rsw:      static,
-				rsr:      static,
-				gs:       v.gs,
-				editOpts: v.editOpts,
-				revision: revSpec,
-			},
+		db = ReadOnlyDatabase{Database: ReadReplicaDatabase{Database: Database{
+			name:     dbName,
+			ddb:      v.ddb,
+			rsw:      static,
+			rsr:      static,
+			gs:       v.gs,
+			editOpts: v.editOpts,
+			revision: revSpec,
+		},
 			remote:  v.remote,
 			srcDB:   v.srcDB,
 			tmpDir:  v.tmpDir,
 			limiter: newLimiter(),
-		}
+		}}
 	}
 
 	remotes, err := static.GetRemotes()
 	if err != nil {
-		return nil, dsess.InitialDbState{}, err
+		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
 	}
 
 	branches, err := static.GetBranches()
 	if err != nil {
-		return nil, dsess.InitialDbState{}, err
+		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
 	}
 
 	backups, err := static.GetBackups()
 	if err != nil {
-		return nil, dsess.InitialDbState{}, err
+		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
 	}
 
 	init := dsess.InitialDbState{

@@ -72,7 +72,8 @@ func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
 		switch v := sqlDb.(type) {
 		case ReadReplicaDatabase, Database:
 			dsqlDBs = append(dsqlDBs, v)
-		case ReadOnlyDatabase, *UserSpaceDatabase:
+		//case ReadOnlyDatabase, *UserSpaceDatabase:
+		case *UserSpaceDatabase:
 		default:
 			// esoteric analyzer errors occur if we silently drop databases, usually caused by pointer receivers
 			panic("cannot cast to SqlDatabase")
@@ -110,13 +111,25 @@ var _ sql.VersionedDatabase = Database{}
 var _ sql.ViewDatabase = Database{}
 
 type ReadOnlyDatabase struct {
-	Database
+	Database sql.Database
 }
 
 var _ sql.ReadOnlyDatabase = ReadOnlyDatabase{}
 
 func (r ReadOnlyDatabase) IsReadOnly() bool {
 	return true
+}
+
+func (r ReadOnlyDatabase) Name() string {
+	return r.Database.Name()
+}
+
+func (r ReadOnlyDatabase) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
+	return r.Database.GetTableInsensitive(ctx, tblName)
+}
+
+func (r ReadOnlyDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
+	return r.GetTableNames(ctx)
 }
 
 func (db Database) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
