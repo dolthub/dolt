@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -63,6 +64,7 @@ type journalChunkSource struct {
 	journal      snapshotReader
 	lookups      map[addr]jrecordLookup
 	compressedSz uint64
+	lock         *sync.RWMutex
 }
 
 var _ chunkSource = journalChunkSource{}
@@ -180,8 +182,7 @@ func (j *chunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkRea
 		if err != nil {
 			return nil, err
 		}
-		j.source.lookups[*record.a] = lookup
-		j.source.compressedSz += uint64(cc.CompressedSize())
+		j.source.addLookup(lookup, cc)
 	}
 	return j.source, nil
 }
@@ -326,12 +327,23 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, ke
 	return
 }
 
+func (s journalChunkSource) addLookup(lookup jrecordLookup, cc CompressedChunk) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.lookups[addr(cc.H)] = lookup
+	s.compressedSz += uint64(cc.CompressedSize())
+}
+
 func (s journalChunkSource) has(h addr) (bool, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	_, ok := s.lookups[h]
 	return ok, nil
 }
 
 func (s journalChunkSource) hasMany(addrs []hasRecord) (missing bool, err error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	for i := range addrs {
 		a := addrs[i].a
 		if _, ok := s.lookups[*a]; ok {
@@ -344,6 +356,8 @@ func (s journalChunkSource) hasMany(addrs []hasRecord) (missing bool, err error)
 }
 
 func (s journalChunkSource) getCompressed(_ context.Context, h addr, _ *Stats) (CompressedChunk, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	l, ok := s.lookups[h]
 	if !ok {
 		return CompressedChunk{}, nil
@@ -363,6 +377,8 @@ func (s journalChunkSource) getCompressed(_ context.Context, h addr, _ *Stats) (
 }
 
 func (s journalChunkSource) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	cc, err := s.getCompressed(ctx, h, stats)
 	if err != nil {
 		return nil, err
@@ -377,6 +393,8 @@ func (s journalChunkSource) get(ctx context.Context, h addr, stats *Stats) ([]by
 }
 
 func (s journalChunkSource) getMany(ctx context.Context, _ *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	var remaining bool
 	// todo: read planning
 	for i := range reqs {
@@ -394,6 +412,8 @@ func (s journalChunkSource) getMany(ctx context.Context, _ *errgroup.Group, reqs
 }
 
 func (s journalChunkSource) getManyCompressed(ctx context.Context, _ *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	var remaining bool
 	// todo: read planning
 	for i := range reqs {
@@ -410,26 +430,36 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, _ *errgroup.G
 }
 
 func (s journalChunkSource) count() (uint32, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	cnt := uint32(len(s.lookups))
 	return cnt, nil
 }
 
 func (s journalChunkSource) uncompressedLen() (uint64, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	// todo(andy)
 	return s.compressedSz, nil
 }
 
 func (s journalChunkSource) hash() addr {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	return s.address
 }
 
 // reader implements chunkSource.
 func (s journalChunkSource) reader(context.Context) (io.Reader, uint64, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	rdr, sz, err := s.journal.snapshot()
 	return rdr, uint64(sz), err
 }
 
 func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	ranges := make(map[hash.Hash]Range, len(requests))
 	for _, req := range requests {
 		if req.found {
@@ -448,6 +478,8 @@ func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash
 // size implements chunkSource.
 // size returns the total size of the chunkSource: chunks, index, and footer
 func (s journalChunkSource) currentSize() uint64 {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	return uint64(s.journal.currentSize())
 }
 
@@ -457,6 +489,8 @@ func (s journalChunkSource) index() (tableIndex, error) {
 }
 
 func (s journalChunkSource) clone() (chunkSource, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	return s, nil
 }
 

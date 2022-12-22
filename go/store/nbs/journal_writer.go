@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -140,6 +141,7 @@ type journalWriter struct {
 	file *os.File
 	off  int64
 	path string
+	lock sync.RWMutex
 }
 
 var _ io.WriteCloser = &journalWriter{}
@@ -150,6 +152,8 @@ func (wr *journalWriter) filepath() string {
 }
 
 func (wr *journalWriter) ReadAt(p []byte, off int64) (n int, err error) {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
 	var bp []byte
 	if off < wr.off {
 		// fill some or all of |p| from |wr.file|
@@ -173,6 +177,8 @@ func (wr *journalWriter) ReadAt(p []byte, off int64) (n int, err error) {
 }
 
 func (wr *journalWriter) snapshot() (io.Reader, int64, error) {
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
 	if err := wr.flush(); err != nil {
 		return nil, 0, err
 	}
@@ -186,10 +192,14 @@ func (wr *journalWriter) snapshot() (io.Reader, int64, error) {
 }
 
 func (wr *journalWriter) currentSize() int64 {
-	return wr.off
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
+	return wr.offset()
 }
 
 func (wr *journalWriter) Write(p []byte) (n int, err error) {
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
 	if len(p) > len(wr.buf) {
 		// write directly to |wr.file|
 		if err = wr.flush(); err != nil {
@@ -208,11 +218,14 @@ func (wr *journalWriter) Write(p []byte) (n int, err error) {
 }
 
 func (wr *journalWriter) processJournal(ctx context.Context) (last hash.Hash, cs journalChunkSource, err error) {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
 	// maybeInitJournal chunk journal from |wr.file|
 	src := journalChunkSource{
 		journal: wr,
 		address: journalAddr,
 		lookups: make(map[addr]jrecordLookup),
+		lock:    new(sync.RWMutex),
 	}
 	wr.off, err = processRecords(ctx, wr.file, func(o int64, r jrecord) error {
 		switch r.kind {
@@ -235,6 +248,8 @@ func (wr *journalWriter) processJournal(ctx context.Context) (last hash.Hash, cs
 }
 
 func (wr *journalWriter) writeChunk(cc CompressedChunk) (jrecordLookup, error) {
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
 	rec := jrecordLookup{
 		offset: wr.offset(),
 		length: chunkRecordSize(cc),
@@ -248,6 +263,8 @@ func (wr *journalWriter) writeChunk(cc CompressedChunk) (jrecordLookup, error) {
 }
 
 func (wr *journalWriter) writeRootHash(root hash.Hash) error {
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
 	buf, err := wr.getBytes(rootHashRecordSize)
 	if err != nil {
 		return err
