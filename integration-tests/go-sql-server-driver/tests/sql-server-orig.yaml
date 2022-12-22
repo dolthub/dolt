@@ -275,8 +275,7 @@ tests:
   connections:
   - on: repo1
     queries:
-    - exec: "call dolt_branch('feature-branch')"
-    - exec: "use `repo1/feature-branch`"
+    - exec: "call dolt_checkout('-b', 'feature-branch')"
     - exec: |
         CREATE TABLE test (
             pk int,
@@ -289,7 +288,7 @@ tests:
       result:
         columns: ["Tables_in_repo1"]
         rows: []
-    - exec: "use `repo1/feature-branch`"
+    - exec: "call dolt_checkout(`feature-branch`)"
       result:
         columns: ["Tables_in_repo1/feature-branch"]
         rows: [["test"]]
