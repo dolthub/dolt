@@ -1033,9 +1033,15 @@ func isTag(ctx context.Context, db SqlDatabase, tagName string, dialer dbfactory
 	return false, nil
 }
 
-func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string) (SqlDatabase, dsess.InitialDbState, error) {
+func dbRevisionForBranch(ctx *sql.Context, srcDb SqlDatabase, revSpec string) (SqlDatabase, dsess.InitialDbState, error) {
 	branch := ref.NewBranchRef(revSpec)
 	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, branch)
+	if err != nil {
+		return Database{}, dsess.InitialDbState{}, err
+	}
+
+	dSess := dsess.DSessFromSess(ctx.Session)
+	currRef, err := dSess.CWBHeadRef(ctx, srcDb.Name())
 	if err != nil {
 		return Database{}, dsess.InitialDbState{}, err
 	}
@@ -1062,7 +1068,7 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 
 	switch v := srcDb.(type) {
 	case Database:
-		db = ReadOnlyDatabase{Database: Database{
+		innerDb := Database{
 			name:     dbName,
 			ddb:      v.ddb,
 			rsw:      static,
@@ -1070,7 +1076,12 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			gs:       v.gs,
 			editOpts: v.editOpts,
 			revision: revSpec,
-		}}
+		}
+		if branch != currRef {
+			db = ReadOnlyDatabase{Database: innerDb}
+		} else {
+			db = innerDb
+		}
 	case ReadReplicaDatabase:
 		db = ReadReplicaDatabase{Database: Database{
 			name:     dbName,
