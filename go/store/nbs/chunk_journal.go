@@ -240,6 +240,17 @@ func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 		}
 	}
 
+	if j.contents.lock != next.lock {
+		// |next| has a different table file set, flush to |j.backing|
+		mc, err := j.backing.Update(ctx, lastLock, next, stats, nil)
+		if err != nil {
+			return manifestContents{}, err
+		} else if mc.lock != next.lock {
+			// we expect to have exclusive access to |j.backing| here
+			return manifestContents{}, errOptimisticLockFailedTables
+		}
+	}
+
 	if err := j.journal.writeRootHash(next.root); err != nil {
 		return manifestContents{}, err
 	}
