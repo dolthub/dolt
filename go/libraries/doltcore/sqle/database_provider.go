@@ -1037,17 +1037,17 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 	branch := ref.NewBranchRef(revSpec)
 	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, branch)
 	if err != nil {
-		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
+		return Database{}, dsess.InitialDbState{}, err
 	}
 
 	wsRef, err := ref.WorkingSetRefForHead(branch)
 	if err != nil {
-		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
+		return Database{}, dsess.InitialDbState{}, err
 	}
 
 	ws, err := srcDb.DbData().Ddb.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
-		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
+		return Database{}, dsess.InitialDbState{}, err
 	}
 
 	dbName := srcDb.Name() + dbRevisionDelimiter + revSpec
@@ -1090,17 +1090,17 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 
 	remotes, err := static.GetRemotes()
 	if err != nil {
-		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
+		return nil, dsess.InitialDbState{}, err
 	}
 
 	branches, err := static.GetBranches()
 	if err != nil {
-		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
+		return nil, dsess.InitialDbState{}, err
 	}
 
 	backups, err := static.GetBackups()
 	if err != nil {
-		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
+		return nil, dsess.InitialDbState{}, err
 	}
 
 	init := dsess.InitialDbState{
