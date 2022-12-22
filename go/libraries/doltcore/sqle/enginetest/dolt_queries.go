@@ -1721,6 +1721,49 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Block ddl to database from other branch",
+		SetUpScript: []string{
+			"create table t (i int)",
+			"insert into t values (0)",
+			"call dolt_add('.')",
+			"call dolt_commit('-m', 'a commit');",
+			"call dolt_branch('other');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "insert into `mydb/other`.t values (1)",
+				ExpectedErrStr: "Database mydb/other is read-only.",
+			},
+			{
+				Query:          "update `mydb/other`.t set i = 100",
+				ExpectedErrStr: "Database mydb/other is read-only.",
+			},
+			{
+				Query:          "create table `mydb/other`.t1 (i int)",
+				ExpectedErrStr: "Database mydb/other is read-only.",
+			},
+			{
+				Query: "insert into t values (1)",
+				Expected: []sql.Row{
+					{sql.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query: "select * from `mydb/other`.t order by 1",
+				Expected: []sql.Row{
+					{0},
+				},
+			},
+			{
+				Query: "select * from t order by 1",
+				Expected: []sql.Row{
+					{0},
+					{1},
+				},
+			},
+		},
+	},
 }
 
 var DoltReset = []queries.ScriptTest{
