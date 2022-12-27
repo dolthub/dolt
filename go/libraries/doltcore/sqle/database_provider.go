@@ -250,6 +250,11 @@ func (p DoltDatabaseProvider) UseDatabase(ctx *sql.Context, name string) (db sql
 		}
 
 		if isBranch {
+			// TODO: make readable again
+			//if rodb, ok := db.(ReadOnlyDatabase); ok {
+			//	db = rodb.Database
+			//}
+			// TODO: don't switch working set right?
 			wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(revSpec))
 			if err != nil {
 				return nil, err
