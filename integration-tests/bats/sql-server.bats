@@ -1468,7 +1468,6 @@ databases:
 }
 
 @test "sql-server: sql-server lock for new databases" {
-    skip "hangs"
     cd repo1
     start_sql_server
     dolt sql-client -P $PORT -u dolt --use-db '' -q "create database newdb"

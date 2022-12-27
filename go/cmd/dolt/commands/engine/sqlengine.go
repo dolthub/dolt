@@ -270,8 +270,8 @@ func (se *SqlEngine) Dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query strin
 
 	if action == sqlparser.DropStr {
 		// Should not be allowed to delete repo name and information schema
-		if dbddl.DBName == information_schema.InformationSchemaDatabaseName {
-			return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", information_schema.InformationSchemaDatabaseName)
+		if dbddl.DBName == sql.InformationSchemaDatabaseName {
+			return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", sql.InformationSchemaDatabaseName)
 		}
 	}
 

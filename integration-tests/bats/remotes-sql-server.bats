@@ -111,8 +111,6 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_heads main
     start_sql_server repo2 && sleep 1
 
-    skip "todo"
-    dolt sql-client --use-db repo2 -P $PORT -u dolt -q "show tables" -r csv
     run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "show tables" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "Tables_in_repo2" ]] || false
@@ -261,10 +259,8 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_heads main
     start_sql_server repo2
 
-    dolt sql-client --use-db repo2 -P $PORT -u dolt -q "show tables"
     run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "show tables"
     [ $status -eq 0 ]
-    skip "todo"
     [[ $output =~ "Tables_in_repo2" ]] || false
     [[ $output =~ "test" ]] || false
 }
