@@ -177,7 +177,7 @@ Dolt needs a place to store your databases. I'm going to put my databases in `~/
 % cd dolt
 ```
 
-Any databases you create will be stored in this directory. So, for this example, a directory named `getting_started` will be created here once you run `create database getting_started`. Navigating to `~/dolt/getting_started` will allow you to access this database using the Dolt command line.
+Any databases you create will be stored in this directory. So, for this example, a directory named `getting_started` will be created here later in this walkthrough, after you run `create database getting_started;` in a SQL shell (see section [Create a schema](#create-a-schema)). Navigating to `~/dolt/getting_started` will then allow you to access this database using the Dolt command line.
 
 ## Start a MySQL-compatible database server
 
