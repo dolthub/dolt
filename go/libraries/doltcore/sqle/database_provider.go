@@ -205,6 +205,80 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 	return wrapForStandby(db, standby), nil
 }
 
+// UseDatabase implements the sql.DatabaseProvider interface
+func (p DoltDatabaseProvider) UseDatabase(ctx *sql.Context, name string) (db sql.Database, err error) {
+	var ok bool
+	p.mu.RLock()
+	db, ok = p.databases[formatDbMapKeyName(name)]
+	standby := *p.isStandby
+	p.mu.RUnlock()
+	if ok {
+		return wrapForStandby(db, standby), nil
+	}
+
+
+	db, _, ok, err = p.databaseForRevision(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: if using a revision that is a branch
+	if strings.Contains(name, dbRevisionDelimiter) {
+		parts := strings.SplitN(name, dbRevisionDelimiter, 2)
+		dbName, revSpec := parts[0], parts[1]
+
+		p.mu.RLock()
+		candidate, ok := p.databases[formatDbMapKeyName(dbName)]
+		p.mu.RUnlock()
+
+		if !ok {
+			return nil, nil
+		}
+
+		srcDb, ok := candidate.(SqlDatabase)
+		if !ok {
+			return nil, nil
+		}
+
+		revSpec, err := p.resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
+		if err != nil {
+			return nil, err
+		}
+
+		isBranch, err := isBranch(ctx, srcDb, revSpec, p.remoteDialer)
+		if err != nil {
+			return nil, err
+		}
+
+		if isBranch {
+			wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(revSpec))
+			if err != nil {
+				return nil, err
+			}
+
+			dSess := dsess.DSessFromSess(ctx.Session)
+			err = dSess.SwitchWorkingSet(ctx, dbName, wsRef)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if !ok {
+		db, err = p.databaseForClone(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+
+		if db == nil {
+			return nil, sql.ErrDatabaseNotFound.New(name)
+		}
+	}
+
+	// Don't track revision databases, just instantiate them on demand
+	return wrapForStandby(db, standby), nil
+}
+
 func wrapForStandby(db sql.Database, standby bool) sql.Database {
 	if !standby {
 		return db
@@ -1050,6 +1124,9 @@ func dbRevisionForBranch(ctx *sql.Context, srcDb SqlDatabase, revSpec string) (S
 	if err != nil {
 		return Database{}, dsess.InitialDbState{}, err
 	}
+
+	// TODO: temporarily add a "checkout" here to see what happens
+	//dSess.SwitchWorkingSet(ctx, srcDb.Name(), wsRef)
 
 	ws, err := srcDb.DbData().Ddb.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
