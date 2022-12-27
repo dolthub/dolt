@@ -1182,7 +1182,7 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 	init := dsess.InitialDbState{
 		Db:         db,
 		HeadCommit: cm,
-		ReadOnly: true,
+		ReadOnly:   true,
 		DbData: env.DbData{
 			Ddb: srcDb.DbData().Ddb,
 			Rsw: srcDb.DbData().Rsw,
