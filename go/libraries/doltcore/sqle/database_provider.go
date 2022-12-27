@@ -1180,21 +1180,21 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 	}}
 
 	// TODO: resolve working set?
-	wsRef, err := ref.WorkingSetRefForHead(srcDb.DbData().Rsr.CWBHeadRef())
-	if err != nil {
-		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
-	}
-
-	ws, err := srcDb.DbData().Ddb.ResolveWorkingSet(ctx, wsRef)
-	if err != nil {
-		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
-	}
+	//wsRef, err := ref.WorkingSetRefForHead(srcDb.DbData().Rsr.CWBHeadRef())
+	//if err != nil {
+	//	return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
+	//}
+	//
+	//ws, err := srcDb.DbData().Ddb.ResolveWorkingSet(ctx, wsRef)
+	//if err != nil {
+	//	return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
+	//}
 
 	init := dsess.InitialDbState{
 		Db:         db,
 		HeadCommit: cm,
-		WorkingSet: ws,
-		ReadOnly:   true,
+		//WorkingSet: ws,
+		ReadOnly: true,
 		DbData: env.DbData{
 			Ddb: srcDb.DbData().Ddb,
 			Rsw: srcDb.DbData().Rsw,
