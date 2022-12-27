@@ -187,8 +187,15 @@ EOF
 }
 
 @test "dolt merge other into $DEFAULT_BRANCH" {
-    # throws a conflict
-    dolt merge other
+    run dolt version
+    if [[ $output =~ "__DOLT__" ]]; then
+        run dolt merge other
+        [ $status -ne 0 ]
+        [[ $output =~ "table abc can't be automatically merged" ]] || false
+    else
+        # throws a conflict
+        dolt merge other
+    fi
 }
 
 @test "dolt table import" {

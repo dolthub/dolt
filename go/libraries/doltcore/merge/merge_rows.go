@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -127,6 +129,13 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	if schConflicts.Count() != 0 {
 		// error on schema conflicts for now
 		return nil, nil, fmt.Errorf("%w.\n%s", ErrSchemaConflict, schConflicts.AsError().Error())
+	}
+
+	if types.IsFormat_DOLT(tm.vrw.Format()) {
+		err = rm.maybeAbortDueToUnmergeableIndexes(tm.name, tm.leftSch, tm.rightSch, mergeSch)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	mergeTbl, err := tm.leftTbl.UpdateSchema(ctx, mergeSch)
@@ -351,6 +360,80 @@ func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm TableMerger, opt
 
 	// no short-circuit
 	return nil, nil, nil
+}
+
+func (rm *RootMerger) maybeAbortDueToUnmergeableIndexes(tableName string, leftSchema, rightSchema, targetSchema schema.Schema) error {
+	leftOk, err := validateTupleFields(leftSchema, targetSchema)
+	if err != nil {
+		return err
+	}
+
+	rightOk, err := validateTupleFields(rightSchema, targetSchema)
+	if err != nil {
+		return err
+	}
+
+	if !leftOk || !rightOk {
+		return fmt.Errorf("table %s can't be automatically merged.\nTo merge this table, make the schema on the source and target branch equal.", tableName)
+	}
+
+	return nil
+}
+
+func validateTupleFields(existingSch schema.Schema, targetSch schema.Schema) (bool, error) {
+	existingVD := existingSch.GetValueDescriptor()
+	targetVD := targetSch.GetValueDescriptor()
+
+	_, valMapping, err := schema.MapSchemaBasedOnTagAndName(existingSch, targetSch)
+	if err != nil {
+		return false, err
+	}
+
+	for i, j := range valMapping {
+
+		// If the field positions have changed between existing and target, bail.
+		if i != j {
+			return false, nil
+		}
+
+		// If the field types have changed between existing and target, bail.
+		if existingVD.Types[i].Enc != targetVD.Types[j].Enc {
+			return false, nil
+		}
+
+		// If a not null constraint was added, bail.
+		if existingVD.Types[j].Nullable && !targetVD.Types[j].Nullable {
+			return false, nil
+		}
+
+		// If the collation was changed, bail.
+		// Different collations will affect the ordering of any secondary indexes using this column.
+		existingStr, ok1 := existingSch.GetNonPKCols().GetByIndex(i).TypeInfo.ToSqlType().(sql.StringType)
+		targetStr, ok2 := targetSch.GetNonPKCols().GetByIndex(i).TypeInfo.ToSqlType().(sql.StringType)
+
+		if ok1 && ok2 && !existingStr.Collation().Equals(targetStr.Collation()) {
+			return false, nil
+		}
+	}
+
+	_, valMapping, err = schema.MapSchemaBasedOnTagAndName(targetSch, existingSch)
+	if err != nil {
+		return false, err
+	}
+
+	for i, j := range valMapping {
+		if i == j {
+			continue
+		}
+
+		// If we haven't bailed so far, then these fields were added at the end.
+		// If they are not-null bail.
+		if !targetVD.Types[i].Nullable {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
 
 func setConflicts(ctx context.Context, cons durable.ConflictIndex, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
