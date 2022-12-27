@@ -617,6 +617,38 @@ func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 	return nil
 }
 
+func (nbs *NomsBlockStore) PutMany(ctx context.Context, chunkMap map[hash.Hash]chunks.Chunk, getAddrs chunks.GetManyAddrsCb) error {
+	t1 := time.Now()
+
+	// Pull in datas/pull/pull_test.go for the chunk journal tests fails with dangling reference errors
+	addrs, err := getAddrs(ctx, chunkMap)
+	if err != nil {
+		return err
+	}
+
+	err = nbs.errorIfDangling(ctx, addrs)
+	if err != nil {
+		return err
+	}
+
+	// need this implementation for the chunk journal tests in datas/pull
+	for _, c := range chunkMap {
+		a := addr(c.Hash())
+
+		success, err := nbs.addChunk(ctx, a, c.Data())
+		if err != nil {
+			return err
+		} else if !success {
+			return errors.New("failed to add chunk")
+		}
+		atomic.AddUint64(&nbs.putCount, 1)
+
+		nbs.stats.PutLatency.SampleTimeSince(t1)
+	}
+
+	return nil
+}
+
 func (nbs *NomsBlockStore) addChunk(ctx context.Context, h addr, data []byte) (bool, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()

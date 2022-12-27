@@ -55,6 +55,10 @@ func (nb nullBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunk
 	return nil
 }
 
+func (nb nullBlockStore) PutMany(ctx context.Context, chunkMap map[hash.Hash]chunks.Chunk, getAddrs chunks.GetManyAddrsCb) error {
+	return nil
+}
+
 func (nb nullBlockStore) Version() string {
 	panic("not impl")
 }

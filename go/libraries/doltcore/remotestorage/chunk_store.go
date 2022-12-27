@@ -823,6 +823,10 @@ func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 	return nil
 }
 
+func (dcs *DoltChunkStore) PutMany(ctx context.Context, chunkMap map[hash.Hash]chunks.Chunk, getAddrs chunks.GetManyAddrsCb) error {
+	return nil
+}
+
 // Returns the NomsVersion with which this ChunkSource is compatible.
 func (dcs *DoltChunkStore) Version() string {
 	return dcs.metadata.NbfVersion

@@ -235,7 +235,7 @@ func (suite *PullSuite) TestPullEverything() {
 	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
 	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, []hash.Hash{sourceAddr}, pt.Ch)
-	suite.NoError(err)
+	suite.Require().NoError(err)
 	if metrics {
 		suite.True(expectedReads-suite.sinkCS.(metricsChunkStore).Reads() <= suite.commitReads)
 	}
@@ -290,7 +290,7 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
 	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, []hash.Hash{sourceAddr}, pt.Ch)
-	suite.NoError(err)
+	suite.Require().NoError(err)
 
 	if metrics {
 		suite.True(expectedReads-suite.sinkCS.(metricsChunkStore).Reads() <= suite.commitReads)
@@ -353,7 +353,7 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
 	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, []hash.Hash{sourceAddr}, pt.Ch)
-	suite.NoError(err)
+	suite.Require().NoError(err)
 
 	if metrics {
 		suite.True(preReads-suite.sinkCS.(metricsChunkStore).Reads() <= suite.commitReads)
@@ -417,7 +417,7 @@ func (suite *PullSuite) TestPullUpdates() {
 	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
 	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, []hash.Hash{sourceAddr}, pt.Ch)
-	suite.NoError(err)
+	suite.Require().NoError(err)
 
 	if metrics {
 		suite.True(expectedReads-suite.sinkCS.(metricsChunkStore).Reads() <= suite.commitReads)
@@ -690,6 +690,7 @@ func mustGetCommittedValue(vr types.ValueReader, c types.Value) types.Value {
 	d.PanicIfFalse(v != nil)
 	return v
 }
+
 func mustGetValue(v types.Value, found bool, err error) types.Value {
 	d.PanicIfError(err)
 	d.PanicIfFalse(found)

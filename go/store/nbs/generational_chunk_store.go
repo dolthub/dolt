@@ -158,6 +158,10 @@ func (gcs *GenerationalNBS) Put(ctx context.Context, c chunks.Chunk, getAddrs ch
 	return gcs.newGen.Put(ctx, c, getAddrs)
 }
 
+func (gcs *GenerationalNBS) PutMany(ctx context.Context, chunkMap map[hash.Hash]chunks.Chunk, getAddrs chunks.GetManyAddrsCb) error {
+	return gcs.newGen.PutMany(ctx, chunkMap, getAddrs)
+}
+
 // Returns the NomsVersion with which this ChunkSource is compatible.
 func (gcs *GenerationalNBS) Version() string {
 	return gcs.newGen.Version()

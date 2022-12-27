@@ -63,6 +63,10 @@ func (fb fileBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunk
 	return err
 }
 
+func (fb fileBlockStore) PutMany(ctx context.Context, chunkMap map[hash.Hash]chunks.Chunk, getAddrs chunks.GetManyAddrsCb) error {
+	return nil
+}
+
 func (fb fileBlockStore) Version() string {
 	panic("not impl")
 }
