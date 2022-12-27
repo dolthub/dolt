@@ -216,7 +216,6 @@ func (p DoltDatabaseProvider) UseDatabase(ctx *sql.Context, name string) (db sql
 		return wrapForStandby(db, standby), nil
 	}
 
-
 	db, _, ok, err = p.databaseForRevision(ctx, name)
 	if err != nil {
 		return nil, err
