@@ -1753,7 +1753,6 @@ SQL
 }
 
 @test "sql: describe with information_schema correctly works" {
-    skip "describe does not work with information_schema tables"
     run dolt sql -r csv -q "describe information_schema.columns"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 23 ]
