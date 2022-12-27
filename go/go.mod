@@ -140,3 +140,5 @@ replace (
 )
 
 go 1.19
+
+replace github.com/dolthub/go-mysql-server => ../../go-mysql-server/
