@@ -787,6 +787,10 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 				Expected: []sql.Row{},
 			},
 			{
+				Query:    "select active_branch();",
+				ExpectedErrStr: "working set not found",
+			},
+			{
 				Query:    "select database();",
 				Expected: []sql.Row{{"mydb/" + commithash}},
 			},
