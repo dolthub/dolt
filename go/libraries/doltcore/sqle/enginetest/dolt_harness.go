@@ -179,7 +179,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 	if d.engine == nil {
 		d.branchControl = branch_control.CreateDefaultController()
 
-		pro := d.NewDatabaseProvider(information_schema.NewInformationSchemaDatabase())
+		pro := d.NewDatabaseProvider(information_schema.NewUpdatableInformationSchemaDatabase())
 		doltProvider, ok := pro.(sqle.DoltDatabaseProvider)
 		require.True(t, ok)
 

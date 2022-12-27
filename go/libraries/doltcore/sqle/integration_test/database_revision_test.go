@@ -73,6 +73,7 @@ func TestDbRevision(t *testing.T) {
 					query: "show databases",
 					rows: []sql.Row{
 						{"dolt"},
+						{"information_schema"},
 					},
 				},
 				{

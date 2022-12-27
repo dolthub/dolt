@@ -55,8 +55,6 @@ type DatabaseSessionState struct {
 	readReplica  *env.Remote
 	tmpFileDir   string
 
-	TblStats map[string]sql.TableStatistics
-
 	sessionCache *SessionCache
 
 	// Same as InitialDbState.Err, this signifies that this

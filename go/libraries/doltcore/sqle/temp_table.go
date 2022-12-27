@@ -170,6 +170,14 @@ func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoo
 	}
 }
 
+func (t *TempTable) RowCount(ctx *sql.Context) (uint64, error) {
+	rows, err := t.table.GetRowData(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return rows.Count()
+}
+
 func (t *TempTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return index.DoltIndexesFromTable(ctx, t.dbName, t.tableName, t.table)
 }
@@ -221,16 +229,6 @@ func (t *TempTable) DataLength(ctx *sql.Context) (uint64, error) {
 		return 0, err
 	}
 	return idx.Count()
-}
-
-// AnalyzeTable implements the sql.StatisticsTable interface.
-func (t *TempTable) AnalyzeTable(ctx *sql.Context) error {
-	return nil
-}
-
-// Statistics implements the sql.StatisticsTable interface.
-func (t *TempTable) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
-	return nil, nil
 }
 
 func (t *TempTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
