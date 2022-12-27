@@ -220,20 +220,22 @@ teardown() {
 
 @test "replication: push on call dolt_merge, fast-forward merge" {
     cd repo1
-    dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
-    dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_branch
-    dolt sql -q "create table t1 (a int primary key)"
-    dolt sql -q "call dolt_add('.')"
-    dolt sql -q "call dolt_commit('-am', 'commit')"
-    dolt sql -q "call dolt_checkout('-b', 'new_branch')"
-    dolt sql -q "create table t2 (b int primary key)"
-    dolt sql -q "call dolt_add('.')"
-    dolt sql -q "call dolt_commit('-am', 'commit')"
-    dolt sql -q "call dolt_checkout('main')"
-    dolt sql -q "call dolt_merge('new_branch')"
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+    dolt sql <<SQL 
+create table t1 (a int primary key);
+call dolt_add('.');
+call dolt_commit('-am', 'commit');
+call dolt_checkout('-b', 'new_branch');
+create table t2 (b int primary key);
+call dolt_add('.');
+call dolt_commit('-am', 'commit');
+call dolt_checkout('main');
+call dolt_merge('new_branch');
+SQL
 
     cd ..
-    dolt clone file://./bac1 repo2
+    dolt clone file://./rem1 repo2
     cd repo2
     run dolt ls
     [ "$status" -eq 0 ]
@@ -321,9 +323,10 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_heads main,unknown
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
     run dolt sql -q "show tables"
+   
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "replication failed: unable to find 'unknown' on 'remote1'; branch not found" ]] || false
+    [[ "$output" =~ 'replication failed: unable to find "unknown" on "remote1"; branch not found' ]] || false
 }
 
 @test "replication: pull multiple heads, one invalid branch name" {
@@ -338,7 +341,7 @@ teardown() {
     run dolt sql -q "show tables"
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "unable to find 'unknown' on 'remote1'; branch not found" ]] || false
+    [[ "$output" =~ "branch not found" ]] || false
 }
 
 @test "replication: pull with no head configuration fails" {
@@ -381,10 +384,11 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_skip_replication_errors 1
     dolt config --local --add sqlserver.global.dolt_replicate_heads unknown
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+
     run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "replication failed: unable to find 'unknown' on 'remote1'; branch not found" ]] || false
+    [[ "$output" =~ "branch not found" ]] || false
 
     run dolt checkout new_feature
     [ "$status" -eq 1 ]

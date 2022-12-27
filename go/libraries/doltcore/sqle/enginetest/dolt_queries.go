@@ -78,6 +78,14 @@ var ViewsWithAsOfScriptTest = queries.ScriptTest{
 			Query:          "select * from v1 as of 'HEAD~5'",
 			ExpectedErrStr: "table not found: t1",
 		},
+		{
+			Query:    "select * from v1 as of HEAD",
+			Expected: []sql.Row{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
+		},
+		{
+			Query:          "select * from v1 as of HEAD.ASDF",
+			ExpectedErrStr: "branch not found: HEAD.ASDF",
+		},
 	},
 }
 
@@ -134,6 +142,18 @@ var ShowCreateTableAsOfScriptTest = queries.ScriptTest{
 				},
 			},
 		},
+		{
+			Query: "show create table a as of HEAD;",
+			Expected: []sql.Row{
+				{"a", "CREATE TABLE `a` (\n" +
+					"  `pk` int NOT NULL,\n" +
+					"  `c2` varchar(20),\n" +
+					"  PRIMARY KEY (`pk`),\n" +
+					"  UNIQUE KEY `c2` (`c2`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+				},
+			},
+		},
 	},
 }
 
@@ -171,6 +191,13 @@ var DescribeTableAsOfScriptTest = queries.ScriptTest{
 		},
 		{
 			Query: "describe a as of @Commit3;",
+			Expected: []sql.Row{
+				{"pk", "int", "NO", "PRI", "NULL", ""},
+				{"c2", "varchar(20)", "YES", "", "NULL", ""},
+			},
+		},
+		{
+			Query: "describe a as of HEAD;",
 			Expected: []sql.Row{
 				{"pk", "int", "NO", "PRI", "NULL", ""},
 				{"c2", "varchar(20)", "YES", "", "NULL", ""},

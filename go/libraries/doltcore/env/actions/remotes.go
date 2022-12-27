@@ -345,10 +345,28 @@ func FetchRemoteBranch(
 		return nil, fmt.Errorf("unable to find '%s' on '%s'; %w", srcRef.GetPath(), rem.Name, err)
 	}
 
-	newCtx, cancelFunc := context.WithCancel(ctx)
-	wg, progChan, statsCh := progStarter(newCtx)
-	err = FetchCommit(ctx, tempTablesDir, srcDB, destDB, srcDBCommit, progChan, statsCh)
-	progStopper(cancelFunc, wg, progChan, statsCh)
+	// The code is structured this way (different paths for progress chan v. not) so that the linter can understand there
+	// isn't a context leak happening on one path
+	if progStarter != nil && progStopper != nil {
+		newCtx, cancelFunc := context.WithCancel(ctx)
+		wg, progChan, statsCh := progStarter(newCtx)
+		defer progStopper(cancelFunc, wg, progChan, statsCh)
+
+		err = FetchCommit(ctx, tempTablesDir, srcDB, destDB, srcDBCommit, progChan, statsCh)
+
+		if err == pull.ErrDBUpToDate {
+			err = nil
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		return srcDBCommit, nil
+	}
+
+	err = FetchCommit(ctx, tempTablesDir, srcDB, destDB, srcDBCommit, nil, nil)
+
 	if err == pull.ErrDBUpToDate {
 		err = nil
 	}

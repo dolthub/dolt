@@ -56,6 +56,7 @@ var _ tablePersister = &chunkJournal{}
 var _ tableFilePersister = &chunkJournal{}
 
 var _ manifest = &chunkJournal{}
+var _ manifestGCGenUpdater = &chunkJournal{}
 var _ io.Closer = &chunkJournal{}
 
 type journalChunkSource struct {
@@ -229,7 +230,7 @@ func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 	}
 
 	if j.contents.gcGen != next.gcGen {
-		return manifestContents{}, errors.New("chunkJournal cannot update GC generation")
+		return manifestContents{}, errors.New("use UpdateGCGen to update GC generation")
 	} else if j.contents.lock != lastLock {
 		return j.contents, nil // |next| is stale
 	}
@@ -246,6 +247,23 @@ func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 	j.contents = next
 
 	return j.contents, nil
+}
+
+// UpdateGCGen implements manifestGCGenUpdater.
+func (j *chunkJournal) UpdateGCGen(ctx context.Context, lastLock addr, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+	updater, ok := j.backing.(manifestGCGenUpdater)
+	if !ok {
+		err := fmt.Errorf("backing manifest (%s) does not support garbage collection", j.backing.Name())
+		return manifestContents{}, err
+	}
+
+	latest, err := updater.UpdateGCGen(ctx, lastLock, next, stats, writeHook)
+	if err != nil {
+		return manifestContents{}, err
+	} else if latest.root == next.root {
+		j.contents = next // success
+	}
+	return latest, nil
 }
 
 // ParseIfExists implements manifest.

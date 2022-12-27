@@ -361,7 +361,7 @@ func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDataba
 	d.multiRepoEnv = mrEnv
 	locations := make([]filesys.Filesys, len(dbs))
 	for i, db := range dbs {
-		if db.Name() != information_schema.InformationSchemaDatabaseName {
+		if strings.ToLower(db.Name()) != sql.InformationSchemaDatabaseName {
 			d.multiRepoEnv.AddEnv(db.Name(), d.createdEnvs[db.Name()])
 			locations[i] = d.createdEnvs[db.Name()].FS
 		}
