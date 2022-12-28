@@ -294,11 +294,11 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
-	
+
 	// There are both valid and invalid ways that a working set for the session state can be nil (e.g. connected to a
 	// commit hash revision DB, or the DB contents cannot be loaded). Either way this transaction is defunct.
 	// TODO: with multi-db transactions, such DBs should be ignored
@@ -1073,6 +1073,7 @@ func (d *DoltSession) HasDB(ctx *sql.Context, dbName string) bool {
 // AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
 // TODO: the session has a database provider, we shouldn't need to add databases to it explicitly, this should be
+//
 //	internal only
 func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	db := dbState.Db
@@ -1085,8 +1086,8 @@ func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
-	// TODO: this no longer gets called at session creation time, so the error handling below never occurs when a 
-	//  database is deleted out from under a running server 
+	// TODO: this no longer gets called at session creation time, so the error handling below never occurs when a
+	//  database is deleted out from under a running server
 	sessionState.dbData = dbState.DbData
 	tmpDir, err := dbState.DbData.Rsw.TempTableFilesDir()
 	if err != nil {
@@ -1513,4 +1514,3 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
 	return nil
 }
-
