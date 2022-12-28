@@ -59,6 +59,9 @@ func (d DoltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 	go func() {
 		err := replicaBinlogEventHandler(ctx, replicationConfig)
 		if err != nil {
+			// TODO: Need better error handling here... we shouldn't be crashing the server obviously
+			//       Instead, we should log the errors and expose them through the replica status API
+			//       Do we need another log just for replication? (not the binlog relay log... just a debugging log)
 			panic(err)
 		}
 	}()
@@ -584,9 +587,8 @@ func parseRow(tableMap *mysql.TableMap, schema sql.Schema, columnsPresentBitmap,
 				return nil, err
 			}
 		} else {
-			// TODO: Plug in correct type (just needs to show signed/unsigned; why doesn't typ show that?)
 			var length int
-			value, length, err = mysql.CellValue(data, pos, typ, tableMap.Metadata[i], query.Type_INT8)
+			value, length, err = mysql.CellValue(data, pos, typ, tableMap.Metadata[i], getSignedType(column))
 			if err != nil {
 				return nil, err
 			}
@@ -601,6 +603,22 @@ func parseRow(tableMap *mysql.TableMap, schema sql.Schema, columnsPresentBitmap,
 	}
 
 	return parsedRow, nil
+}
+
+// getSignedType returns a Vitess query.Type that can be used with the Vitess mysql.CellValue function to correctly
+// parse the value of a signed or unsigned integer value. The mysql.TableMap structure provides information about the
+// type, but it doesn't indicate if an integer type is signed or unsigned, so we have to look at the column type in the
+// replica's schema and then choose any signed/unsigned query.Type to pass into mysql.CellValue to instruct it whether
+// to treat a value as signed or unsigned – the actual type does not matter, only the signed/unsigned property.
+func getSignedType(column *sql.Column) query.Type {
+	switch column.Type.Type() {
+	case query.Type_UINT8, query.Type_UINT16, query.Type_UINT24, query.Type_UINT32, query.Type_UINT64:
+		// For any unsigned numeric value, we just need to return any unsigned numeric type to signal to Vitess to treat
+		// the value as unsigned. The actual type returned doesn't matter – only the signed/unsigned property is used.
+		return query.Type_UINT64
+	default:
+		return query.Type_INT64
+	}
 }
 
 // convertSqlTypesValues converts a sqltypes.Value instance (vitess) into a sql.Type value (go-mysql-server).
