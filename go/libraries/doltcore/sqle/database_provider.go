@@ -213,6 +213,21 @@ func (p DoltDatabaseProvider) UseDatabase(ctx *sql.Context, name string) (db sql
 	standby := *p.isStandby
 	p.mu.RUnlock()
 	if ok {
+		// no revision, assume main?
+		revSpec, err := p.resolveAncestorSpec(ctx, "main", db.(SqlDatabase).DbData().Ddb)
+		if err != nil {
+			return nil, err
+		}
+		wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(revSpec))
+		if err != nil {
+			return nil, err
+		}
+
+		dSess := dsess.DSessFromSess(ctx.Session)
+		err = dSess.SwitchWorkingSet(ctx, name, wsRef)
+		if err != nil {
+			return nil, err
+		}
 		return wrapForStandby(db, standby), nil
 	}
 
@@ -221,7 +236,18 @@ func (p DoltDatabaseProvider) UseDatabase(ctx *sql.Context, name string) (db sql
 		return nil, err
 	}
 
-	// TODO: if using a revision that is a branch
+	if !ok {
+		db, err = p.databaseForClone(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+
+		if db == nil {
+			return nil, sql.ErrDatabaseNotFound.New(name)
+		}
+	}
+
+	// if using a branch, checkout that branch (switch working sets)
 	if strings.Contains(name, dbRevisionDelimiter) {
 		parts := strings.SplitN(name, dbRevisionDelimiter, 2)
 		dbName, revSpec := parts[0], parts[1]
@@ -265,17 +291,6 @@ func (p DoltDatabaseProvider) UseDatabase(ctx *sql.Context, name string) (db sql
 			if err != nil {
 				return nil, err
 			}
-		}
-	}
-
-	if !ok {
-		db, err = p.databaseForClone(ctx, name)
-		if err != nil {
-			return nil, err
-		}
-
-		if db == nil {
-			return nil, sql.ErrDatabaseNotFound.New(name)
 		}
 	}
 

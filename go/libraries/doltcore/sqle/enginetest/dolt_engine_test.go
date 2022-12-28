@@ -181,7 +181,7 @@ func TestSingleScript(t *testing.T) {
 				},
 				{
 					Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
-					Expected: []sql.Row{{"working_set_table"}},
+					Expected: []sql.Row{},
 				},
 				{
 					Query:    "call dolt_checkout('branch1');",
