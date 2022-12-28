@@ -38,15 +38,13 @@ import (
 
 func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *env.DoltEnv, *doltdb.RootValue, dsqle.Database, []*indexTuple) {
 	dEnv := dtestutils.CreateTestEnv()
-	root, err := dEnv.WorkingRoot(context.Background())
-	require.NoError(t, err)
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 	db, err := dsqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := dsqle.NewTestEngine(dEnv, context.Background(), db, root)
+	engine, sqlCtx, err := dsqle.NewTestEngine(dEnv, context.Background(), db)
 	require.NoError(t, err)
 
 	_, iter, err := engine.Query(sqlCtx, fmt.Sprintf(`CREATE TABLE %s (

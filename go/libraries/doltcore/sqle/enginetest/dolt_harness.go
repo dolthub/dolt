@@ -418,7 +418,7 @@ func (d *DoltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema
 // Dolt doesn't version tables per se, just the entire database. So ignore the name and schema and just create a new
 // branch with the given name.
 func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, tableName string, asOf interface{}) error {
-	e := enginetest.NewEngineWithDbs(d.t, d)
+	e :=  enginetest.NewEngineWithProvider(d.t, d, d.NewDatabaseProvider())
 
 	asOfString, ok := asOf.(string)
 	require.True(d.t, ok)
