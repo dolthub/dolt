@@ -300,8 +300,10 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		rrd, ok := sessionState.db.(RemoteReadReplicaDatabase)
 		if ok && rrd.ValidReplicaState(ctx) {
 			err := rrd.PullFromRemote(ctx)
-			if err != nil {
-				return nil, err
+			if err != nil && !IgnoreReplicationErrors() {
+				return nil, fmt.Errorf("replication error: %w", err)
+			} else if err != nil {
+				WarnReplicationError(ctx, err)
 			}
 		}
 	}
@@ -310,13 +312,12 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		return DisabledTransaction{}, nil
 	}
 
-	if _, v, ok := sql.SystemVariables.GetGlobal("dolt_read_replica_remote"); ok && v != "" {
+	if _, v, ok := sql.SystemVariables.GetGlobal(ReadReplicaRemote); ok && v != "" {
 		err = sessionState.dbData.Ddb.Rebase(ctx)
 		if err != nil && !IgnoreReplicationErrors() {
 			return nil, err
 		} else if err != nil {
-			ctx.GetLogger().Warn("HELLO")
-			ctx.GetLogger().Warn(fmt.Errorf("dolt_replication_remote value is misconfigured: %w", err))
+			WarnReplicationError(ctx, err)
 		}
 	}
 
