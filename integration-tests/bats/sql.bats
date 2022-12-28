@@ -892,14 +892,14 @@ SQL
     dolt add .
     dolt commit -m "Updated a table, dropped a table" --date "2020-03-01T13:00:00Z"
     new_commit=`dolt log | head -n1 | cut -d' ' -f2`
-    
+
     run dolt sql -r csv -q "select pk,c1 from one_pk order by c1"
     [ $status -eq 0 ]
     [[ "$output" =~ "0,1" ]] || false
     [[ "$output" =~ "1,11" ]] || false
     [[ "$output" =~ "2,21" ]] || false
     [[ "$output" =~ "3,31" ]] || false
-    
+
     run dolt sql -r csv -q "select pk,c1 from one_pk as of 'main' order by c1"
     [ $status -eq 0 ]
     [[ "$output" =~ "0,0" ]] || false
@@ -913,7 +913,7 @@ SQL
     [[ "$output" =~ "1,10" ]] || false
     [[ "$output" =~ "2,20" ]] || false
     [[ "$output" =~ "3,30" ]] || false
-    
+
     run dolt sql -r csv -q "select count(*) from two_pk as of 'main'"
     [ $status -eq 0 ]
     [[ "$output" =~ "4" ]] || false
@@ -935,7 +935,7 @@ SQL
     [[ "$output" =~ "1,10" ]] || false
     [[ "$output" =~ "2,20" ]] || false
     [[ "$output" =~ "3,30" ]] || false
-    
+
     dolt checkout main
     run dolt sql -r csv -q "select pk,c1 from one_pk as of 'new_branch' order by c1"
     [ $status -eq 0 ]
@@ -1269,7 +1269,7 @@ CREATE TABLE table_a(x int primary key);
 CREATE TABLE table_b(x int primary key);
 SQL
     dolt add .; dolt commit -m 'commit tables'
-    
+
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
@@ -1278,14 +1278,14 @@ SQL
     run dolt sql -q "show tables AS OF 'HEAD~'" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
-    [[ ! "$output" =~ table_a ]] || false    
+    [[ ! "$output" =~ table_a ]] || false
 }
 
 @test "sql: USE branch" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
     dolt checkout main
-    
+
     dolt sql  <<SQL
 USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE table_a(x int primary key);
@@ -1293,7 +1293,7 @@ CREATE TABLE table_b(x int primary key);
 CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'two new tables');
 SQL
-    
+
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
@@ -1310,7 +1310,7 @@ SQL
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
     dolt checkout main
-    
+
     dolt sql  <<SQL
 CREATE DATABASE test1;
 USE test1;
@@ -1321,7 +1321,7 @@ SELECT DOLT_COMMIT('-a', '-m', 'created table_a');
 SQL
 
     cd test1
-    
+
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -1339,7 +1339,7 @@ SQL
 
     [ "$status" -eq 0 ]
     [[ "$output" =~ "table_a" ]] || false
-    
+
     dolt sql -q "create database test2"
     [ -d "test2" ]
 
@@ -1384,7 +1384,7 @@ SELECT DOLT_COMMIT('-a', '-m', 'created table_a');
 SQL
 
     cd test1
-    
+
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -1395,7 +1395,7 @@ SQL
     [[ "$output" =~ "created table_a" ]] || false
 
     cd ../
-    
+
     run dolt sql -q "show databases"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test1" ]] || false
@@ -1409,7 +1409,7 @@ SQL
 
 @test "sql: drop database with branches in use" {
     skiponwindows "Dropping databases can fail on windows due to file in use errors, need to fix"
-    
+
     mkdir new && cd new
 
     # this works fine, no attempt to use a dropped database
@@ -1453,7 +1453,7 @@ SQL
     # a skip, not sure why. It's not part of the actual test
     cd ../
     skip "This results in a panic right now"
-    
+
     run dolt sql -q "show databases" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -1476,7 +1476,7 @@ CREATE TABLE test (x int primary key);
 CALL DOLT_ADD('.');
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
 SQL
-    
+
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
@@ -1509,7 +1509,7 @@ SQL
 
     [ "$status" -eq 0 ]
     [[ "$output" =~ 'refs/heads/feature-branch' ]] || false
-    
+
     # switching to a branch that doesn't exist should be an error
     run dolt sql -q "set @@dolt_repo_$$_head_ref = 'does-not-exist';"
     [ "$status" -eq 1 ]
@@ -1520,7 +1520,7 @@ SQL
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
     dolt checkout main
-    
+
     dolt sql  <<SQL
 USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE a1(x int primary key);
@@ -1538,7 +1538,7 @@ SQL
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
     dolt checkout main
-    
+
     dolt sql  <<SQL
 USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE a1(x int primary key);
@@ -1558,7 +1558,7 @@ SQL
 @test "sql: commit hash qualified DB name in select" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
-    
+
     dolt sql  <<SQL
 CREATE TABLE a1(x int primary key);
 CALL DOLT_ADD('.');
@@ -1590,7 +1590,7 @@ SQL
 @test "sql: commit hash qualified DB name in delete" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
-    
+
     dolt sql  <<SQL
 CREATE TABLE a1(x int primary key);
 CALL DOLT_ADD('.');
@@ -1614,13 +1614,13 @@ SQL
 SQL
 
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'read-only' ]] || false    
+    [[ "$output" =~ 'read-only' ]] || false
 }
 
 @test "sql: commit hash qualified DB name in update" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
-    
+
     dolt sql  <<SQL
 CREATE TABLE a1(x int primary key);
 CALL DOLT_ADD('.');
@@ -1644,13 +1644,13 @@ SQL
 SQL
 
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'read-only' ]] || false    
+    [[ "$output" =~ 'read-only' ]] || false
 }
 
 @test "sql: tag qualified DB name in select" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
-    
+
     dolt sql  <<SQL
 USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE a1(x int primary key);
@@ -1664,7 +1664,7 @@ SQL
 
     run dolt sql -q "select * from \`dolt_repo_$$/v1\`.a1 order by x;" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]  
+    [ "${#lines[@]}" -eq 4 ]
 }
 
 @test "sql: USE tag doesn't create duplicate commit DB name" {
@@ -1687,7 +1687,7 @@ SQL
 @test "sql: tag qualified DB name in delete" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
-    
+
     dolt sql  <<SQL
 CREATE TABLE a1(x int primary key);
 CALL DOLT_ADD('.');
@@ -1711,13 +1711,13 @@ SQL
 SQL
 
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'read-only' ]] || false    
+    [[ "$output" =~ 'read-only' ]] || false
 }
 
 @test "sql: tag qualified DB name in update" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
-    
+
     dolt sql  <<SQL
 CREATE TABLE a1(x int primary key);
 CALL DOLT_ADD('.');
@@ -1741,7 +1741,7 @@ SQL
 SQL
 
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'read-only' ]] || false    
+    [[ "$output" =~ 'read-only' ]] || false
 }
 
 @test "sql: describe" {
@@ -1753,7 +1753,6 @@ SQL
 }
 
 @test "sql: describe with information_schema correctly works" {
-    skip "describe does not work with information_schema tables"
     run dolt sql -r csv -q "describe information_schema.columns"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 23 ]
@@ -1891,7 +1890,7 @@ SQL
 }
 
 @test "sql: alter table modify column type no data change" {
-    
+
     # there was a bug on NULLs where it would register a change
     dolt sql <<SQL
 CREATE TABLE t1(pk BIGINT PRIMARY KEY, v1 VARCHAR(64), INDEX(v1));
@@ -1970,7 +1969,7 @@ SQL
 }
 
 @test "sql: date_format function" {
-    skip "date_format() not supported" 
+    skip "date_format() not supported"
     dolt sql -q "select date_format(date_created, '%Y-%m-%d') from has_datetimes"
 }
 
@@ -2196,7 +2195,7 @@ SQL
 
 @test "sql: at commit" {
   skip "zachmu broke this, needs to fix"
-    
+
   dolt add .
   dolt commit -m "seed initial values"
   dolt checkout -b one
@@ -2385,7 +2384,7 @@ SQL
 
 @test "sql: found_row works with update properly in batch mode" {
     skip "the auto commit semantics of batch mode make this fail"
-    
+
     run dolt sql <<SQL
 CREATE TABLE tbl(pk int primary key, v1 int);
 INSERT INTO tbl VALUES (1,1), (2,1);
@@ -2598,7 +2597,7 @@ SQL
     create table test (a int primary key, b int);
     insert into test values (1,1), (2,2);
 SQL
-    
+
     run dolt sql --file script.sql
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Processed 100.0% of the file" ]] || false
@@ -2606,7 +2605,7 @@ SQL
     run dolt sql -q "select * from test" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1,1" ]] || false
-    
+
     run dolt sql --batch --file script.sql
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Processed 100.0% of the file" ]] || false
@@ -2662,5 +2661,11 @@ SQL
     run dolt sql -q "SHOW CREATE PROCEDURE repo2.dolt_branch;"
     [ "$status" -eq 0 ]
     run dolt sql -q "USE repo1; SHOW CREATE PROCEDURE dolt_branch;"
+    [ "$status" -eq 0 ]
+}
+
+@test "sql: can insert datetime with golang time struct zero value 0001-01-01 00:00:00" {
+    dolt sql -q 'CREATE TABLE dts (created_at datetime NOT NULL);'
+    run dolt sql -q 'INSERT INTO dts (`created_at`) VALUES ("0001-01-01 00:00:00");'
     [ "$status" -eq 0 ]
 }

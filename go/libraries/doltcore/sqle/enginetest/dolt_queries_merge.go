@@ -15,6 +15,8 @@
 package enginetest
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -3049,6 +3051,8 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 	},
 }
 
+var errTmplNoAutomaticMerge = "table %s can't be automatically merged.\nTo merge this table, make the schema on the source and target branch equal."
+
 var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
 		Name: "dropping columns",
@@ -3065,13 +3069,66 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:          "call dolt_merge('right');",
+				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
+			},
+			// desired behavior
+			{
+				Query:    "select pk, col2 from t;",
+				Expected: []sql.Row{{1, 100}, {2, 200}, {3, 300}, {4, 400}, {5, 500}, {6, 600}},
+				Skip:     true,
+			},
+		},
+	},
+	{
+		Name: "adding nullable columns to one side",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key, col1 int);",
+			"insert into t values (1, 1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 int;",
+			"alter table t add column col3 int;",
+			"insert into t values (2, 2, 2, 2);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (3, 3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
 				Query:    "call dolt_merge('right');",
 				Expected: []sql.Row{{0, 0}},
 			},
 			{
-				Query:    "select pk, col2 from t;",
-				Expected: []sql.Row{{1, 100}, {2, 200}, {3, 300}, {4, 400}, {5, 500}, {6, 600}},
-				Skip:     true, // outputs 5,50 and 6,50
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1, nil, nil}, {2, 2, 2, 2}, {3, 3, nil, nil}},
+			},
+		},
+	},
+	{
+		Name: "adding a non-null column to one side",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key, col1 int);",
+			"insert into t values (1, 1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 int not null default 0",
+			"alter table t add column col3 int;",
+			"update t set col2 = 1 where pk = 1;",
+			"insert into t values (2, 2, 2, null);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (3, 3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('right');",
+				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1, 1, nil}, {2, 2, 2, nil}, {3, 3, 0, nil}},
+				Skip:     true,
 			},
 		},
 	},
@@ -3091,8 +3148,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0}},
+				Query:          "call dolt_merge('right');",
+				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
 			},
 			{
 				Query: "select pk, col1, col2 from t;",
@@ -3124,9 +3181,10 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0}},
+				Query:          "call dolt_merge('right');",
+				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
 			},
+			// desired behavior
 			{
 				Query: "select pk, col1, col2 form t;",
 				Expected: []sql.Row{
@@ -3156,8 +3214,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0}},
+				Query:          "call dolt_merge('right');",
+				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
 			},
 			{
 				Query: "select pk, col1 from t;",
@@ -3189,9 +3247,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0}},
-				Skip:     true,
+				Query:          "call dolt_merge('right');",
+				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
 			},
 			{
 				Query: "select pk, col1 from t order by col1;",
@@ -3223,8 +3280,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0}},
+				Query:          "call dolt_merge('right');",
+				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
 			},
 			{
 				Query: "select pk, col1 from t;",
@@ -3255,10 +3312,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// this merge should probably error. It's not clear how this merge should fix PK 3.
 				Query:          "call dolt_merge('right');",
-				ExpectedErrStr: "some merge error",
-				Skip:           true,
+				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
 			},
 		},
 	},
@@ -3445,9 +3500,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			// TODO: Fails secondary index validation. Changing the ordinal ordering of secondary indexes definitely breaks merge
 			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0}},
-				Skip:     true,
+				Query:          "call dolt_merge('right');",
+				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
 			},
 		},
 	},

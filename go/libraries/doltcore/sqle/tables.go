@@ -27,7 +27,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -77,37 +76,6 @@ type projected interface {
 	Project() []string
 }
 
-// DoltTableStatistics holds the statistics for dolt tables
-type DoltTableStatistics struct {
-	rowCount     uint64
-	createdAt    time.Time
-	histogramMap sql.HistogramMap
-}
-
-var _ sql.TableStatistics = &DoltTableStatistics{}
-
-func (ds *DoltTableStatistics) CreatedAt() time.Time {
-	return ds.createdAt
-}
-
-func (ds *DoltTableStatistics) RowCount() uint64 {
-	return ds.rowCount
-}
-
-func (ds *DoltTableStatistics) Histogram(colName string) (*sql.Histogram, error) {
-	if res, ok := ds.histogramMap[colName]; ok {
-		return res, nil
-	}
-	return &sql.Histogram{}, fmt.Errorf("column %s not found", colName)
-}
-
-func (ds *DoltTableStatistics) HistogramMap() sql.HistogramMap {
-	if len(ds.histogramMap) == 0 {
-		return nil
-	}
-	return ds.histogramMap
-}
-
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
 	tableName    string
@@ -122,8 +90,6 @@ type DoltTable struct {
 	projectedSchema sql.Schema
 
 	opts editor.Options
-
-	doltStats *DoltTableStatistics
 }
 
 func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, opts editor.Options) (*DoltTable, error) {
@@ -470,74 +436,9 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 	return numBytesPerRow * numRows, nil
 }
 
-// AnalyzeTable implements the sql.StatisticsTable interface.
-// This method will save the stats into the Database state found in the Session.
-func (t *DoltTable) AnalyzeTable(ctx *sql.Context) error {
-	table, err := t.DoltTable(ctx)
-	if err != nil {
-		return err
-	}
-
-	m, err := table.GetRowData(ctx)
-	if err != nil {
-		return err
-	}
-
-	mc, err := m.Count()
-	if err != nil {
-		return err
-	}
-	t.doltStats = &DoltTableStatistics{
-		rowCount:  mc,
-		createdAt: time.Now(),
-	}
-
-	histMap, err := sql.NewHistogramMapFromTable(ctx, t)
-	if err != nil {
-		return err
-	}
-	t.doltStats.histogramMap = histMap
-
-	dSess := ctx.Session.(*dsess.DoltSession)
-	dbState, ok, err := dSess.LookupDbState(ctx, ctx.GetCurrentDatabase())
-	if !ok || err != nil {
-		return err
-	}
-	if dbState.TblStats == nil {
-		dbState.TblStats = make(map[string]sql.TableStatistics)
-	}
-	dbState.TblStats[t.tableName] = t.doltStats
-	return nil
-}
-
-// Statistics implements the sql.StatisticsTable interface.
-func (t *DoltTable) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
-	if t.doltStats != nil {
-		return t.doltStats, nil
-	}
-
-	// Load stats from the session
-	dSess, ok := ctx.Session.(*dsess.DoltSession)
-	if !ok {
-		return nil, nil
-	}
-	dbState, ok, err := dSess.LookupDbState(ctx, ctx.GetCurrentDatabase())
-	if !ok || err != nil {
-		return nil, nil
-	}
-	stats, ok := dbState.TblStats[t.tableName]
-	if !ok {
-		numRows, err := t.numRows(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return &DoltTableStatistics{
-			rowCount: numRows,
-		}, nil
-	}
-	t.doltStats = stats.(*DoltTableStatistics)
-
-	return t.doltStats, nil
+// RowCount implements the sql.StatisticsTable interface.
+func (t *DoltTable) RowCount(ctx *sql.Context) (uint64, error) {
+	return t.numRows(ctx)
 }
 
 func (t *DoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
