@@ -1087,7 +1087,7 @@ func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, 
 	}
 
 	if dbState.WorkingSet == nil {
-		return nil, doltdb.ErrNoBranchSelected
+		return nil, nil
 	}
 
 	return dbState.WorkingSet.Ref().ToHeadRef()
