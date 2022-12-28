@@ -1666,8 +1666,7 @@ s.close()
 
 @test "sql-server: create a database when no current database is set" {
     mkdir new_format && cd new_format
-    run dolt init --new-format
-    [ $status -eq 0 ]
+    dolt init
 
     PORT=$( definePORT )
     dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --socket "dolt.$PORT.sock" &
@@ -1680,10 +1679,7 @@ s.close()
     [ -d mydb1 ]
 
     cd mydb1
-    run dolt version
-    [ "$status" -eq 0 ]
-    [[ ! $output =~ "OLD ( __LD_1__ )" ]] || false
-    [[ "$output" =~ "NEW ( __DOLT__ )" ]] || false
+    dolt version
 }
 
 @test "sql-server: deleting database directory when a running server is using it does not panic" {
