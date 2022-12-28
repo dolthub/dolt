@@ -39,6 +39,7 @@ var ErrTableNotFound = errors.New("table not found")
 var ErrTableExists = errors.New("table already exists")
 var ErrAlreadyOnBranch = errors.New("Already on branch")
 var ErrAlreadyOnWorkspace = errors.New("Already on workspace")
+var ErrNoBranchSelected = errors.New("no branch selected")
 
 var ErrNomsIO = errors.New("error reading from or writing to noms")
 

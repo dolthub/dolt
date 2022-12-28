@@ -788,7 +788,7 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 			},
 			{
 				Query:          "select active_branch();",
-				ExpectedErrStr: "working set not found",
+				ExpectedErrStr: "no branch selected",
 			},
 			{
 				Query:    "select database();",
