@@ -578,6 +578,24 @@ func (nbs *NomsBlockStore) WithoutConjoiner() *NomsBlockStore {
 	}
 }
 
+func (nbs *NomsBlockStore) errorIfDanglingWithChunkMap(ctx context.Context, addrs hash.HashSet, chunkMap map[hash.Hash]chunks.Chunk) error {
+	absent, err := nbs.HasMany(ctx, addrs)
+	if err != nil {
+		return err
+	}
+	abs := hash.NewHashSet()
+	for h := range absent {
+		if _, ok := chunkMap[h]; !ok {
+			abs.Insert(h)
+		}
+	}
+	if len(abs) != 0 {
+		s := abs.String()
+		return fmt.Errorf("Found dangling references to %s", s)
+	}
+	return nil
+}
+
 func (nbs *NomsBlockStore) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
 	absent, err := nbs.HasMany(ctx, addrs)
 	if err != nil {
@@ -594,15 +612,15 @@ func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 	t1 := time.Now()
 	a := addr(c.Hash())
 
-	addrs, err := getAddrs(ctx, c)
-	if err != nil {
-		return err
-	}
+	// addrs, err := getAddrs(ctx, c)
+	// if err != nil {
+	// 	return err
+	// }
 
-	err = nbs.errorIfDangling(ctx, addrs)
-	if err != nil {
-		return err
-	}
+	// err = nbs.errorIfDangling(ctx, addrs)
+	// if err != nil {
+	// 	return err
+	// }
 
 	success, err := nbs.addChunk(ctx, a, c.Data())
 	if err != nil {
@@ -626,12 +644,11 @@ func (nbs *NomsBlockStore) PutMany(ctx context.Context, chunkMap map[hash.Hash]c
 		return err
 	}
 
-	err = nbs.errorIfDangling(ctx, addrs)
+	err = nbs.errorIfDanglingWithChunkMap(ctx, addrs, chunkMap)
 	if err != nil {
 		return err
 	}
 
-	// need this implementation for the chunk journal tests in datas/pull
 	for _, c := range chunkMap {
 		a := addr(c.Hash())
 

@@ -52,17 +52,11 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 	assertInputInStore(input, h, store, suite.Assert())
 
 	// Put chunk with dangling ref should error
-	cm := map[hash.Hash]Chunk{}
 	data := []byte("bcd")
 	r := hash.Of(data)
 	nc := NewChunk(data)
-	cm[r] = nc
-	err = store.PutMany(context.Background(), cm, func(ctx context.Context, chunkMap map[hash.Hash]Chunk) (hash.HashSet, error) {
-		hs := hash.NewHashSet()
-		for _, c := range chunkMap {
-			hs.Insert(c.Hash())
-		}
-		return hs, nil
+	err = store.Put(context.Background(), nc, func(ctx context.Context, c Chunk) (hash.HashSet, error) {
+		return hash.NewHashSet(r), nil
 	})
 	suite.Error(err)
 }
