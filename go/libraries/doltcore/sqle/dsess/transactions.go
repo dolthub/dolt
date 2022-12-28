@@ -279,7 +279,7 @@ func (tx *DoltTransaction) mergeRoots(
 // rollback attempts a transaction rollback
 func (tx *DoltTransaction) rollback(ctx *sql.Context) error {
 	sess := DSessFromSess(ctx.Session)
-	rollbackErr := sess.RollbackTransaction(ctx, tx.sourceDbName, tx)
+	rollbackErr := sess.Rollback(ctx, tx)
 	if rollbackErr != nil {
 		return rollbackErr
 	}

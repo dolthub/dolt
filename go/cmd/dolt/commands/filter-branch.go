@@ -255,12 +255,13 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 		return nil, err
 	}
 
-	roots, err := eng.GetRoots(sqlCtx)
+	sess := dsess.DSessFromSess(sqlCtx.Session)
+	ws, err := sess.WorkingSet(sqlCtx, dbName)
 	if err != nil {
 		return nil, err
 	}
 
-	return roots[dbName], nil
+	return ws.WorkingRoot(), nil
 }
 
 // rebaseSqlEngine packages up the context necessary to run sql queries against single root

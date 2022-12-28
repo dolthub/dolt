@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/shopspring/decimal"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsql "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -124,66 +123,30 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 	}
 
 	var err error
-	h.engine, err = sqlNewEngine(dEnv)
+	var pro dsess.DoltDatabaseProvider
+	h.engine, pro, err = sqlNewEngine(dEnv)
 
 	if err != nil {
 		return err
 	}
 
-	ctx := dsql.NewTestSQLCtx(context.Background())
+	ctx := dsql.NewTestSQLCtxWithProvider(context.Background(), pro)
 	h.sess = ctx.Session.(*dsess.DoltSession)
 
 	dbs := h.engine.Analyzer.Catalog.AllDatabases(ctx)
-	dsqlDBs := make([]dsql.Database, len(dbs))
-	for i, db := range dbs {
-		dsqlDB := db.(dsql.Database)
-		dsqlDBs[i] = dsqlDB
-
-		sess := dsess.DSessFromSess(ctx.Session)
-		err := sess.AddDB(ctx, getDbState(db, dEnv))
-		if err != nil {
-			return err
+	var dbName string
+	for _, db := range dbs {
+		dsqlDB, ok := db.(dsql.Database)
+		if !ok {
+			continue
 		}
-
-		root, verr := commands.GetWorkingWithVErr(dEnv)
-		if verr != nil {
-			return verr
-		}
-
-		err = dsqlDB.SetRoot(ctx, root)
-		if err != nil {
-			return err
-		}
+		dbName = dsqlDB.Name()
+		break
 	}
 
-	if len(dbs) == 1 {
-		h.sess.SetCurrentDatabase(dbs[0].Name())
-	}
+	h.sess.SetCurrentDatabase(dbName)
 
 	return nil
-}
-
-func getDbState(db sql.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
-	ctx := context.Background()
-
-	head := dEnv.RepoStateReader().CWBHeadSpec()
-	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
-	if err != nil {
-		panic(err)
-	}
-
-	ws, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		panic(err)
-	}
-
-	return dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     dEnv.DbData(),
-		Remotes:    dEnv.RepoState.Remotes,
-	}
 }
 
 func drainIterator(ctx *sql.Context, iter sql.RowIter) error {
@@ -305,30 +268,30 @@ func schemaToSchemaString(sch sql.Schema) (string, error) {
 	return b.String(), nil
 }
 
-func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, error) {
+func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, dsess.DoltDatabaseProvider, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 	db, err := dsql.NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	b := env.GetDefaultInitBranch(dEnv.Config)
 	pro, err := dsql.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 	engine := sqle.NewDefault(pro)
 
-	return engine, nil
+	return engine, pro, nil
 }

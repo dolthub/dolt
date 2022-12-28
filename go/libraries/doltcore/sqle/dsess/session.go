@@ -71,6 +71,7 @@ type DoltSession struct {
 
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
+var _ sql.TransactionSession = (*DoltSession)(nil)
 var _ branch_control.Context = (*DoltSession)(nil)
 
 // DefaultSession creates a DoltSession with default values
@@ -95,7 +96,7 @@ func NewDoltSession(
 	pro DoltDatabaseProvider,
 	conf config.ReadWriteConfig,
 	branchController *branch_control.Controller,
-	dbs ...InitialDbState) (*DoltSession, error) {
+) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")
 	globals := config.NewPrefixConfig(conf, env.SqlServerGlobalsPrefix)
@@ -110,13 +111,6 @@ func NewDoltSession(
 		globalsConf:      globals,
 		branchController: branchController,
 		mu:               &sync.Mutex{},
-	}
-
-	for _, db := range dbs {
-		err := sess.AddDB(ctx, db)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return sess, nil
@@ -141,40 +135,59 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 
 // LookupDbState returns the session state for the database named
 func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
+	dbName = strings.ToLower(dbName)
 	dbState, ok := d.dbStates[dbName]
 	if ok {
 		return dbState, ok, nil
 	}
 
-	init, err := d.provider.RevisionDbState(ctx, dbName)
-	if err != nil {
+	// TODO: this needs to include the transaction's snapshot of the DB at tx start time
+	var init InitialDbState
+	var err error
+
+	_, val, ok := sql.SystemVariables.GetGlobal(DefaultBranchKey(dbName))
+	initialBranch := ""
+	if ok {
+		initialBranch = val.(string)
+	}
+
+	// First attempt to find a bare database (no revision spec)
+	init, err = d.provider.DbState(ctx, dbName, initialBranch)
+	if err != nil && !sql.ErrDatabaseNotFound.Is(err) {
 		return nil, false, err
 	}
 
-	// TODO: this could potentially add a |sess.dbStates| entry
-	// 	for every commit in the history, leaking memory.
-	// 	We need a size-limited data structure for read-only
-	// 	revision databases reading from Commits.
+	// If that doesn't work, attempt to parse the database name as a revision spec
+	if err != nil {
+		init, err = d.provider.RevisionDbState(ctx, dbName)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+
+	// If we got this far, we have a valid inital database state, so add it to the session for future reuse
 	if err = d.AddDB(ctx, init); err != nil {
 		return nil, ok, err
 	}
+
 	dbState, ok = d.dbStates[dbName]
 	if !ok {
 		return nil, false, sql.ErrDatabaseNotFound.New(dbName)
 	}
+
 	return dbState, true, nil
 }
 
 func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
 	s, ok, err := d.lookupDbState(ctx, dbName)
+	if err != nil {
+		return nil, false, err
+	}
 	if ok && s.Err != nil {
 		return nil, false, s.Err
 	}
-	return s, ok, err
-}
 
-func (d *DoltSession) GetDbStates() map[string]*DatabaseSessionState {
-	return d.dbStates
+	return s, ok, nil
 }
 
 // Flush flushes all changes sitting in edit sessions to the session root for the database named. This normally
@@ -237,24 +250,85 @@ func (d *DoltSession) ValidateSession(ctx *sql.Context, dbName string) error {
 }
 
 // StartTransaction refreshes the state of this session and starts a new transaction.
-func (d *DoltSession) StartTransaction(ctx *sql.Context, dbName string, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
+func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
 	if TransactionsDisabled(ctx) {
 		return DisabledTransaction{}, nil
 	}
 
-	sessionState, _, err := d.LookupDbState(ctx, dbName)
+	// TODO: rather than a single database, we need to take a snapshot of all available databases that we use for the
+	//  duration of the transaction
+
+	dbName := ctx.GetTransactionDatabase()
+	// TODO: remove this hack when we have true multi-db transaction support
+	if isNoOpTransactionDatabase(dbName) {
+		return DisabledTransaction{}, nil
+	}
+
+	// Since StartTransaction occurs before even any analysis, it's possible that this session has no state for the
+	// database with the transaction being performed, so we load it here.
+	if !d.HasDB(ctx, dbName) {
+		db, err := d.provider.Database(ctx, dbName)
+		if err != nil {
+			return nil, err
+		}
+
+		sdb, ok := db.(SessionDatabase)
+		if !ok {
+			return nil, fmt.Errorf("database %s does not support sessions", dbName)
+		}
+
+		// TODO: this needs a real branch name
+		init, err := sdb.InitialDBState(ctx, "")
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO: make this take a DB, not a DBState
+		err = d.AddDB(ctx, init)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	sessionState, ok, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
+	}
+
+	if !ok {
+		return nil, sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	// There are both valid and invalid ways that a working set for the session state can be nil (e.g. connected to a
+	// commit hash revision DB, or the DB contents cannot be loaded). Either way this transaction is defunct.
+	// TODO: with multi-db transactions, such DBs should be ignored
+	if sessionState.WorkingSet == nil {
+		return DisabledTransaction{}, nil
+	}
+
+	// TODO: this needs to happen for every DB in the database, not just the one named in the transaction
+	if sessionState != nil && sessionState.db != nil {
+		rrd, ok := sessionState.db.(RemoteReadReplicaDatabase)
+		if ok && rrd.ValidReplicaState(ctx) {
+			err := rrd.PullFromRemote(ctx)
+			if err != nil && !IgnoreReplicationErrors() {
+				return nil, fmt.Errorf("replication error: %w", err)
+			} else if err != nil {
+				WarnReplicationError(ctx, err)
+			}
+		}
 	}
 
 	if sessionState.readOnly {
 		return DisabledTransaction{}, nil
 	}
 
-	if _, v, ok := sql.SystemVariables.GetGlobal("dolt_read_replica_remote"); ok && v != "" {
+	if _, v, ok := sql.SystemVariables.GetGlobal(ReadReplicaRemote); ok && v != "" {
 		err = sessionState.dbData.Ddb.Rebase(ctx)
-		if err != nil {
+		if err != nil && !IgnoreReplicationErrors() {
 			return nil, err
+		} else if err != nil {
+			WarnReplicationError(ctx, err)
 		}
 	}
 
@@ -281,6 +355,12 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, dbName string, tCharact
 	return NewDoltTransaction(dbName, ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic), nil
 }
 
+// isNoOpTransactionDatabase returns whether the database name given is a non-Dolt database that shouldn't have
+// transaction logic performed on it
+func isNoOpTransactionDatabase(dbName string) bool {
+	return len(dbName) == 0 || dbName == "information_schema" || dbName == "mysql"
+}
+
 func (d *DoltSession) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
 	dbData, _ := d.GetDbData(nil, dbName)
 
@@ -305,7 +385,12 @@ func (d *DoltSession) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSe
 
 // CommitTransaction commits the in-progress transaction for the database named. Depending on session settings, this
 // may write only a new working set, or may additionally create a new dolt commit for the current HEAD.
-func (d *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
+func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
+	dbName := ctx.GetTransactionDatabase()
+	if isNoOpTransactionDatabase(dbName) {
+		return nil
+	}
+
 	if d.BatchMode() == Batched {
 		err := d.Flush(ctx, dbName)
 		if err != nil {
@@ -506,8 +591,10 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 	return pendingCommit, nil
 }
 
-// RollbackTransaction rolls the given transaction back
-func (d *DoltSession) RollbackTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
+// Rollback rolls the given transaction back
+func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
+	dbName := ctx.GetTransactionDatabase()
+
 	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
@@ -540,7 +627,9 @@ func (d *DoltSession) RollbackTransaction(ctx *sql.Context, dbName string, tx sq
 
 // CreateSavepoint creates a new savepoint for this transaction with the name given. A previously created savepoint
 // with the same name will be overwritten.
-func (d *DoltSession) CreateSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
+func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, savepointName string) error {
+	dbName := ctx.GetTransactionDatabase()
+
 	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
@@ -561,7 +650,9 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, savepointName, dbName st
 
 // RollbackToSavepoint sets this session's root to the one saved in the savepoint name. It's an error if no savepoint
 // with that name exists.
-func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
+func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, savepointName string) error {
+	dbName := ctx.GetTransactionDatabase()
+
 	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
@@ -586,7 +677,9 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, dbNam
 
 // ReleaseSavepoint removes the savepoint name from the transaction. It's an error if no savepoint with that name
 // exists.
-func (d *DoltSession) ReleaseSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
+func (d *DoltSession) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, savepointName string) error {
+	dbName := ctx.GetTransactionDatabase()
+
 	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
@@ -973,21 +1066,28 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 
 // HasDB returns true if |sess| is tracking state for this database.
 func (d *DoltSession) HasDB(ctx *sql.Context, dbName string) bool {
-	_, ok, err := d.lookupDbState(ctx, dbName)
-	return ok && err == nil
+	_, ok := d.dbStates[strings.ToLower(dbName)]
+	return ok
 }
 
 // AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
+// TODO: the session has a database provider, we shouldn't need to add databases to it explicitly, this should be
+//
+//	internal only
 func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	db := dbState.Db
 	DefineSystemVariablesForDB(db.Name())
 
 	sessionState := NewEmptyDatabaseSessionState()
-	d.dbStates[db.Name()] = sessionState
+	d.dbStates[strings.ToLower(db.Name())] = sessionState
 	sessionState.dbName = db.Name()
+	sessionState.db = db
+
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
+	// TODO: this no longer gets called at session creation time, so the error handling below never occurs when a
+	//  database is deleted out from under a running server
 	sessionState.dbData = dbState.DbData
 	tmpDir, err := dbState.DbData.Rsw.TempTableFilesDir()
 	if err != nil {

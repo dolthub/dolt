@@ -15,6 +15,8 @@
 package dsess
 
 import (
+	"context"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -42,8 +44,16 @@ type InitialDbState struct {
 	Err error
 }
 
+// SessionDatabase is a database that can be managed by a dsess.Session. It has methods to return its initial state in
+// order for the session to manage it.
+type SessionDatabase interface {
+	sql.Database
+	InitialDBState(ctx context.Context, branch string) (InitialDbState, error)
+}
+
 type DatabaseSessionState struct {
 	dbName       string
+	db           sql.Database
 	headCommit   *doltdb.Commit
 	headRoot     *doltdb.RootValue
 	WorkingSet   *doltdb.WorkingSet

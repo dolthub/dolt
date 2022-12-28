@@ -309,53 +309,57 @@ func TestDoltMultiSessionBehavior(t *testing.T) {
 
 func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 	for _, test := range tests {
-		sc, serverConfig := startServer(t, true, "", "")
-		sc.WaitForStart()
-
-		conn1, sess1 := newConnection(t, serverConfig)
-		conn2, sess2 := newConnection(t, serverConfig)
-
 		t.Run(test.Name, func(t *testing.T) {
-			for _, setupStatement := range test.SetUpScript {
-				_, err := sess1.Exec(setupStatement)
-				require.NoError(t, err)
-			}
+			sc, serverConfig := startServer(t, true, "", "")
+			err := sc.WaitForStart()
+			require.NoError(t, err)
 
-			for _, assertion := range test.Assertions {
-				t.Run(assertion.Query, func(t *testing.T) {
-					var activeSession *dbr.Session
-					if strings.Contains(strings.ToLower(assertion.Query), "/* client a */") {
-						activeSession = sess1
-					} else if strings.Contains(strings.ToLower(assertion.Query), "/* client b */") {
-						activeSession = sess2
-					} else {
-						require.Fail(t, "unsupported client specification: "+assertion.Query)
-					}
+			conn1, sess1 := newConnection(t, serverConfig)
+			conn2, sess2 := newConnection(t, serverConfig)
 
-					rows, err := activeSession.Query(assertion.Query)
+			t.Run(test.Name, func(t *testing.T) {
+				for _, setupStatement := range test.SetUpScript {
+					_, err := sess1.Exec(setupStatement)
+					require.NoError(t, err)
+				}
 
-					if len(assertion.ExpectedErrStr) > 0 {
-						require.EqualError(t, err, assertion.ExpectedErrStr)
-					} else if assertion.ExpectedErr != nil {
-						require.True(t, assertion.ExpectedErr.Is(err))
-					} else if assertion.Expected != nil {
-						require.NoError(t, err)
-						assertResultsEqual(t, assertion.Expected, rows)
-					} else {
-						require.Fail(t, "unsupported ScriptTestAssertion property: %v", assertion)
-					}
-					if rows != nil {
-						require.NoError(t, rows.Close())
-					}
-				})
-			}
+				for _, assertion := range test.Assertions {
+					t.Run(assertion.Query, func(t *testing.T) {
+						var activeSession *dbr.Session
+						if strings.Contains(strings.ToLower(assertion.Query), "/* client a */") {
+							activeSession = sess1
+						} else if strings.Contains(strings.ToLower(assertion.Query), "/* client b */") {
+							activeSession = sess2
+						} else {
+							require.Fail(t, "unsupported client specification: "+assertion.Query)
+						}
+
+						rows, err := activeSession.Query(assertion.Query)
+
+						if len(assertion.ExpectedErrStr) > 0 {
+							require.EqualError(t, err, assertion.ExpectedErrStr)
+						} else if assertion.ExpectedErr != nil {
+							require.True(t, assertion.ExpectedErr.Is(err))
+						} else if assertion.Expected != nil {
+							require.NoError(t, err)
+							assertResultsEqual(t, assertion.Expected, rows)
+						} else {
+							require.Fail(t, "unsupported ScriptTestAssertion property: %v", assertion)
+						}
+						if rows != nil {
+							require.NoError(t, rows.Close())
+						}
+					})
+				}
+			})
+
+			require.NoError(t, conn1.Close())
+			require.NoError(t, conn2.Close())
+
+			sc.StopServer()
+			err = sc.WaitForClose()
+			require.NoError(t, err)
 		})
-
-		require.NoError(t, conn1.Close())
-		require.NoError(t, conn2.Close())
-
-		sc.StopServer()
-		sc.WaitForClose()
 	}
 }
 
