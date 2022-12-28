@@ -320,9 +320,16 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 
 	ctx := enginetest.NewContext(d)
 	databases := pro.AllDatabases(ctx)
+
+	// It's important that we return the databases in the same order as the names argument
 	var dbs []sql.Database
-	for _, db := range databases {
-		dbs = append(dbs, db)
+	for _, name := range names {
+		for _, db := range databases {
+			if db.Name() == name {
+				dbs = append(dbs, db)
+				break
+			}
+		}
 	}
 
 	return dbs
@@ -411,16 +418,6 @@ func (d *DoltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema
 // Dolt doesn't version tables per se, just the entire database. So ignore the name and schema and just create a new
 // branch with the given name.
 func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, tableName string, asOf interface{}) error {
-	switch db.(type) {
-	case sqle.ReadOnlyDatabase:
-		// TODO: insert query to dolt_branches table (below)
-		// can't be performed against ReadOnlyDatabase
-		d.t.Skip("can't create SnaphotTables for ReadOnlyDatabases")
-	case sqle.Database:
-	default:
-		panic("not a Dolt SQL Database")
-	}
-
 	e := enginetest.NewEngineWithDbs(d.t, d)
 
 	asOfString, ok := asOf.(string)
@@ -429,7 +426,7 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, tableName string, 
 	ctx := enginetest.NewContext(d)
 
 	_, iter, err := e.Query(ctx,
-		"SELECT COMMIT('-Am', 'test commit');")
+		"CALL DOLT_COMMIT('-Am', 'test commit');")
 	require.NoError(d.t, err)
 	_, err = sql.RowIterToRows(ctx, nil, iter)
 	require.NoError(d.t, err)

@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -291,7 +292,12 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 		}
 	}
 
-	return
+	// Because we store databases in a map, sort to get a consistent ordering
+	sort.Slice(all, func(i, j int) bool {
+		return strings.ToLower(all[i].Name()) < strings.ToLower(all[j].Name())
+	})
+
+	return all
 }
 
 func (p DoltDatabaseProvider) GetRemoteDB(ctx *sql.Context, srcDB *doltdb.DoltDB, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
