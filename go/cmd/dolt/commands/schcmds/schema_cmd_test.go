@@ -1,4 +1,4 @@
-// Copyright 2022 Dolthub, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,30 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package schcmds
 
-import "testing"
+import (
+	"context"
+	"testing"
 
-func TestConfig(t *testing.T) {
-	RunTestsFile(t, "tests/sql-server-config.yaml")
-}
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
-func TestJWTAuth(t *testing.T) {
-	RunTestsFile(t, "tests/sql-server-jwt-auth.yaml")
-}
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+)
 
-func TestCluster(t *testing.T) {
-	RunTestsFile(t, "tests/sql-server-cluster.yaml")
-}
+// Smoke test: dolt schema export runs successfully
+func TestSchemaExport(t *testing.T) {
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
 
-func TestClusterTLS(t *testing.T) {
-	RunTestsFile(t, "tests/sql-server-cluster-tls.yaml")
-}
+	args := []string{}
+	commandStr := "dolt schema export"
 
-func TestOriginal(t *testing.T) {
-	RunTestsFile(t, "tests/sql-server-orig.yaml")
-}
-
-func TestTLS(t *testing.T) {
-	RunTestsFile(t, "tests/sql-server-tls.yaml")
+	result := ExportCmd{}.Exec(context.TODO(), commandStr, args, dEnv)
+	assert.Equal(t, 0, result)
 }

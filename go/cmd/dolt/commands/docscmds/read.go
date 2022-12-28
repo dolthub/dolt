@@ -119,53 +119,44 @@ func readDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName, fileName strin
 		return err
 	}
 
-	root, err := writeDocToTable(ctx, eng, docName, string(update))
+	err = writeDocToTable(ctx, eng, docName, string(update))
 	if err != nil {
 		return err
 	}
 
-	return dEnv.UpdateWorkingRoot(ctx, root)
+	return nil
 }
 
 const (
 	writeDocTemplate = `REPLACE INTO dolt_docs VALUES ("%s", "%s")`
 )
 
-func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, content string) (*doltdb.RootValue, error) {
+func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, content string) error {
 	var (
-		sctx  *sql.Context
-		err   error
-		roots map[string]*doltdb.RootValue
+		sctx *sql.Context
+		err  error
 	)
 
 	sctx, err = eng.NewContext(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
+
+	err = sctx.Session.SetSessionVariable(sctx, sql.AutoCommitSessionVar, 1)
+	if err != nil {
+		return err
+	}
+
 	sctx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	if err = execQuery(sctx, eng, doltdb.DocsMaybeCreateTableStmt); err != nil {
-		return nil, err
+		return err
 	}
 
 	content = strings.ReplaceAll(content, `"`, `\"`)
 	update := fmt.Sprintf(writeDocTemplate, docName, content)
 
-	if err = execQuery(sctx, eng, update); err != nil {
-		return nil, err
-	}
-
-	if roots, err = eng.GetRoots(sctx); err != nil {
-		return nil, err
-	}
-	if len(roots) != 1 {
-		return nil, fmt.Errorf("cannot access docs in multi-database mode")
-	}
-
-	for _, rv := range roots {
-		return rv, nil
-	}
-	panic("unreachable")
+	return execQuery(sctx, eng, update)
 }
 
 func execQuery(sctx *sql.Context, eng *engine.SqlEngine, q string) (err error) {

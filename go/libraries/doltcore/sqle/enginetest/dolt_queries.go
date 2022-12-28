@@ -235,10 +235,9 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				// The database name should be the resolved commit, not the revision spec we started with.
-				// We can't easily match the exact commit in these tests, so match against a commit hash pattern.
+				// The database name should be the revision spec we started with, not its resolved hash
 				Query:    "select database() regexp '^mydb/[0-9a-v]{32}$', database() = 'mydb/tag1~';",
-				Expected: []sql.Row{{true, false}},
+				Expected: []sql.Row{{false, true}},
 			},
 			{
 				Query:    "select * from t01;",
