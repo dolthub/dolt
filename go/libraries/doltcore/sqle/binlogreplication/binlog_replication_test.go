@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // TODO: Move this to a more appropriate package namespace
-package sqlserver
+package binlogreplication
 
 import (
 	"fmt"

@@ -19,6 +19,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"net"
 	"net/http"
 	"runtime"
@@ -151,7 +152,7 @@ func Serve(
 		Autocommit:              serverConfig.AutoCommit(),
 		JwksConfig:              serverConfig.JwksConfig(),
 		ClusterController:       clusterController,
-		BinlogReplicaController: &DoltBinlogReplicaController{}, // TODO: persist this instance
+		BinlogReplicaController: &binlogreplication.DoltBinlogReplicaController,
 	}
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,

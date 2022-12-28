@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqlserver
+package binlogreplication
 
 import (
 	"context"
@@ -45,14 +45,16 @@ var replicationConfig *replicaConfiguration
 // TODO: This needs to be encapsulated in a struct
 var sourceServerUuid interface{}
 
-// DoltBinlogReplicaController implements the BinlogReplicaController interface for a Dolt database in order to
+var DoltBinlogReplicaController doltBinlogReplicaController
+
+// doltBinlogReplicaController implements the BinlogReplicaController interface for a Dolt database in order to
 // provide support for a Dolt server to be a replica of a MySQL primary.
-type DoltBinlogReplicaController struct {
+type doltBinlogReplicaController struct {
 }
 
-var _ plan.BinlogReplicaController = (*DoltBinlogReplicaController)(nil)
+var _ plan.BinlogReplicaController = (*doltBinlogReplicaController)(nil)
 
-func (d DoltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
+func (d doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 	// Create a new context to use, because otherwise the engine will cancel the original
 	// context after the 'start replica' statement has finished executing.
 	ctx = ctx.WithContext(context.Background())
@@ -68,12 +70,12 @@ func (d DoltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 	return nil
 }
 
-func (d DoltBinlogReplicaController) StopReplica(_ *sql.Context) error {
+func (d doltBinlogReplicaController) StopReplica(_ *sql.Context) error {
 	stopReplicationChan <- struct{}{}
 	return nil
 }
 
-func (d DoltBinlogReplicaController) SetReplicationOptions(_ *sql.Context, options []plan.ReplicationOption) error {
+func (d doltBinlogReplicaController) SetReplicationOptions(_ *sql.Context, options []plan.ReplicationOption) error {
 	config := replicaConfiguration{}
 	config.connectionParams = &mysql.ConnParams{}
 
@@ -106,7 +108,7 @@ func (d DoltBinlogReplicaController) SetReplicationOptions(_ *sql.Context, optio
 	return nil
 }
 
-func (d DoltBinlogReplicaController) GetReplicaStatus(_ *sql.Context) (*plan.ReplicaStatus, error) {
+func (d doltBinlogReplicaController) GetReplicaStatus(_ *sql.Context) (*plan.ReplicaStatus, error) {
 	if replicationConfig == nil {
 		return nil, nil
 	}
