@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"database/sql"
+
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -261,7 +262,9 @@ func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q driver.Query) {
 		args[i] = q.Args[i]
 	}
 	if q.Query != "" {
-		rows, err := conn.QueryContext(context.Background(), q.Query, args...)
+		ctx, c := context.WithTimeout(context.Background(), 20*time.Second)
+		defer c()
+		rows, err := conn.QueryContext(ctx, q.Query, args...)
 		if err == nil {
 			defer rows.Close()
 		}
@@ -282,9 +285,11 @@ func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q driver.Query) {
 			require.Contains(t, *q.Result.Rows.Or, rowstrings)
 		}
 	} else if q.Exec != "" {
-		_, err := conn.ExecContext(context.Background(), q.Exec, args...)
+		ctx, c := context.WithTimeout(context.Background(), 20*time.Second)
+		defer c()
+		_, err := conn.ExecContext(ctx, q.Exec, args...)
 		if q.ErrorMatch == "" {
-			require.NoError(t, err)
+			require.NoError(t, err, "error running query %s: %v", q.Exec, err)
 		} else {
 			require.Error(t, err)
 			require.Regexp(t, q.ErrorMatch, err.Error())

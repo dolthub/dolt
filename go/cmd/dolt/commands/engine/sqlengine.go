@@ -24,15 +24,12 @@ import (
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
-	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -42,12 +39,15 @@ import (
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
 type SqlEngine struct {
-	dbs            map[string]dsqle.SqlDatabase
-	contextFactory func(ctx context.Context) (*sql.Context, error)
-	dsessFactory   func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error)
+	provider       sql.DatabaseProvider
+	contextFactory contextFactory
+	dsessFactory   sessionFactory
 	engine         *gms.Engine
 	resultFormat   PrintResultFormat
 }
+
+type sessionFactory func(ctx *sql.Context, mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (*dsess.DoltSession, error)
+type contextFactory func(ctx context.Context) (*sql.Context, error)
 
 type SqlEngineConfig struct {
 	InitialDb          string
@@ -97,13 +97,11 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	infoDB := information_schema.NewInformationSchemaDatabase()
-	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
-	locations = append(locations, nil)
+	all := append(dbs)
 
 	clusterDB := config.ClusterController.ClusterDatabase()
 	if clusterDB != nil {
-		all = append(all, clusterDB)
+		all = append(all, clusterDB.(dsqle.SqlDatabase))
 		locations = append(locations, nil)
 	}
 
@@ -154,20 +152,7 @@ func NewSqlEngine(
 		}
 	}
 
-	nameToDB := make(map[string]dsqle.SqlDatabase)
-	var dbStates []dsess.InitialDbState
-	for _, db := range dbs {
-		nameToDB[db.Name()] = db
-
-		dbState, err := dsqle.GetInitialDBState(ctx, db)
-		if err != nil {
-			return nil, err
-		}
-
-		dbStates = append(dbStates, dbState)
-	}
-
-	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, mrEnv.Config(), bcController, dbStates...)
+	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, mrEnv.Config(), bcController)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +169,7 @@ func NewSqlEngine(
 	}
 
 	return &SqlEngine{
-		dbs:            nameToDB,
+		provider:       pro,
 		contextFactory: newSqlContext(sess, config.InitialDb),
 		dsessFactory:   newDoltSession(pro, mrEnv.Config(), config.Autocommit, bcController),
 		engine:         engine,
@@ -193,53 +178,37 @@ func NewSqlEngine(
 }
 
 // NewRebasedSqlEngine returns a smalled rebased engine primarily used in filterbranch.
+// TODO: migrate to provider
 func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsqle.SqlDatabase) *SqlEngine {
 	return &SqlEngine{
-		dbs:    dbs,
 		engine: engine,
 	}
 }
 
-// IterDBs iterates over the set of databases the engine wraps.
-func (se *SqlEngine) IterDBs(cb func(name string, db dsqle.SqlDatabase) (stop bool, err error)) error {
-	for name, db := range se.dbs {
-		stop, err := cb(name, db)
-
-		if err != nil {
-			return err
-		}
-
-		if stop {
-			break
-		}
+// Databases() returns a list of all databases in the engine
+func (se *SqlEngine) Databases(ctx *sql.Context) []dsqle.SqlDatabase {
+	databases := se.provider.AllDatabases(ctx)
+	dbs := make([]dsqle.SqlDatabase, len(databases))
+	for i := range databases {
+		dbs[i] = databases[i].(dsqle.SqlDatabase)
 	}
 
 	return nil
 }
 
-// GetRoots returns the underlying roots values the engine read/writes to.
-func (se *SqlEngine) GetRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue, error) {
-	newRoots := make(map[string]*doltdb.RootValue)
-	for name, db := range se.dbs {
-		var err error
-		newRoots[name], err = db.GetRoot(sqlCtx)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return newRoots, nil
-}
-
 // NewContext converts a context.Context to a sql.Context.
+// TODO: investigate uses of this
 func (se *SqlEngine) NewContext(ctx context.Context) (*sql.Context, error) {
 	return se.contextFactory(ctx)
 }
 
 func (se *SqlEngine) NewDoltSession(ctx context.Context, mysqlSess *sql.BaseSession) (*dsess.DoltSession, error) {
-	tempCtx := sql.NewContext(ctx, sql.WithSession(mysqlSess))
-	return se.dsessFactory(ctx, mysqlSess, se.engine.Analyzer.Catalog.AllDatabases(tempCtx))
+	// TODO: this seems wasteful, we are creating a context for very little work here
+	sqlCtx, err := se.NewContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return se.dsessFactory(sqlCtx, mysqlSess, se.provider)
 }
 
 // GetResultFormat returns the printing format of the engine. The format isn't used by the engine internally, only
@@ -302,14 +271,6 @@ func (se *SqlEngine) Close() error {
 	return nil
 }
 
-func dsqleDBsAsSqlDBs(dbs []dsqle.SqlDatabase) []sql.Database {
-	sqlDbs := make([]sql.Database, 0, len(dbs))
-	for _, db := range dbs {
-		sqlDbs = append(sqlDbs, db)
-	}
-	return sqlDbs
-}
-
 func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.Context) (*sql.Context, error) {
 	return func(ctx context.Context) (*sql.Context, error) {
 		sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
@@ -326,16 +287,16 @@ func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.C
 	}
 }
 
-func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig,
-	autocommit bool, bc *branch_control.Controller) func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
-	return func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
-		ddbs := dsqle.DbsAsDSQLDBs(dbs)
-		states, err := getDbStates(ctx, ddbs)
-		if err != nil {
-			return nil, err
-		}
+// TODO: this should not require autocommit, that should be handled by the session default
+func newDoltSession(
+	pro dsqle.DoltDatabaseProvider,
+	config config.ReadWriteConfig,
+	autocommit bool,
+	bc *branch_control.Controller,
+) sessionFactory {
+	return func(ctx *sql.Context, mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
 
-		dsess, err := dsess.NewDoltSession(sql.NewEmptyContext(), mysqlSess, pro, config, bc, states...)
+		dsess, err := dsess.NewDoltSession(sql.NewEmptyContext(), mysqlSess, pro, config, bc)
 		if err != nil {
 			return nil, err
 		}
@@ -348,61 +309,6 @@ func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfi
 
 		return dsess, nil
 	}
-}
-
-func getDbStates(ctx context.Context, dbs []dsqle.SqlDatabase) ([]dsess.InitialDbState, error) {
-	dbStates := make([]dsess.InitialDbState, len(dbs))
-	for i, db := range dbs {
-		var init dsess.InitialDbState
-		var err error
-
-		_, val, ok := sql.SystemVariables.GetGlobal(dsess.DefaultBranchKey(db.Name()))
-		if ok && val != "" {
-			init, err = getInitialDBStateWithDefaultBranch(ctx, db, val.(string))
-		} else {
-			init, err = dsqle.GetInitialDBState(ctx, db)
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		dbStates[i] = init
-	}
-
-	return dbStates, nil
-}
-
-func getInitialDBStateWithDefaultBranch(ctx context.Context, db dsqle.SqlDatabase, branch string) (dsess.InitialDbState, error) {
-	init, err := dsqle.GetInitialDBState(ctx, db)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	ddb := init.DbData.Ddb
-	r := ref.NewBranchRef(branch)
-
-	head, err := ddb.ResolveCommitRef(ctx, r)
-	if err != nil {
-		init.Err = fmt.Errorf("failed to connect to database default branch: '%s/%s'; %w", db.Name(), branch, err)
-	} else {
-		init.Err = nil
-	}
-	init.HeadCommit = head
-
-	if init.Err == nil {
-		workingSetRef, err := ref.WorkingSetRefForHead(r)
-		if err != nil {
-			return dsess.InitialDbState{}, err
-		}
-
-		ws, err := init.DbData.Ddb.ResolveWorkingSet(ctx, workingSetRef)
-		if err != nil {
-			return dsess.InitialDbState{}, err
-		}
-		init.WorkingSet = ws
-	}
-
-	return init, nil
 }
 
 // NewSqlEngineForEnv returns a SqlEngine configured for the environment provided, with a single root user

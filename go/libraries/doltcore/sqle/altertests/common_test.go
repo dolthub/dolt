@@ -122,7 +122,7 @@ func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 	db, err := sqle.NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := sqle.NewTestEngine(dEnv, ctx, db, root)
+	engine, sqlCtx, err := sqle.NewTestEngine(dEnv, ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 	db, err := sqle.NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := sqle.NewTestEngine(dEnv, ctx, db, root)
+	engine, sqlCtx, err := sqle.NewTestEngine(dEnv, ctx, db)
 	if err != nil {
 		return nil, err
 	}

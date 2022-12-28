@@ -67,7 +67,7 @@ func TestSingleQuery(t *testing.T) {
 	t.Skip()
 
 	harness := newDoltHarness(t)
-	//harness.Setup(setup.MydbData, setup.MytableData)
+	harness.Setup(setup.MydbData, setup.MytableData)
 	engine, err := harness.NewEngine(t)
 	if err != nil {
 		panic(err)
@@ -1286,7 +1286,7 @@ func TestDiffSystemTablePrepared(t *testing.T) {
 	}
 }
 
-func TestTestReadOnlyDatabases(t *testing.T) {
+func TestReadOnlyDatabases(t *testing.T) {
 	enginetest.TestReadOnlyDatabases(t, newDoltHarness(t))
 }
 

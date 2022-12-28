@@ -48,7 +48,7 @@ var _ sql.TemporaryTableCreator = ReadReplicaDatabase{}
 var _ sql.TableRenamer = ReadReplicaDatabase{}
 var _ sql.TriggerDatabase = &ReadReplicaDatabase{}
 var _ sql.StoredProcedureDatabase = ReadReplicaDatabase{}
-var _ sql.TransactionDatabase = ReadReplicaDatabase{}
+var _ dsess.RemoteReadReplicaDatabase = ReadReplicaDatabase{}
 
 var ErrFailedToLoadReplicaDB = errors.New("failed to load replica database")
 var ErrInvalidReplicateHeadsSetting = errors.New("invalid replicate heads setting")
@@ -87,20 +87,16 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 	}, nil
 }
 
-func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
-	if rrd.srcDB != nil {
-		err := rrd.PullFromRemote(ctx)
-		if err != nil {
-			err = fmt.Errorf("replication failed: %w", err)
-			if !SkipReplicationWarnings() {
-				return nil, err
-			}
-			ctx.GetLogger().Warn(err.Error())
-		}
-	} else {
-		ctx.GetLogger().Warn("replication failed; dolt_replication_remote value is misconfigured")
-	}
-	return rrd.Database.StartTransaction(ctx, tCharacteristic)
+func (rrd ReadReplicaDatabase) ValidReplicaState(ctx *sql.Context) bool {
+	// srcDB will be nil in the case the remote was specified incorrectly and startup errors are suppressed
+	return rrd.srcDB != nil
+}
+
+// InitialDBState implements dsess.SessionDatabase
+// This seems like a pointless override from the embedded Database implementation, but it's necessary to pass the
+// correct pointer type to the session initializer.
+func (rrd ReadReplicaDatabase) InitialDBState(ctx context.Context, branch string) (dsess.InitialDbState, error) {
+	return GetInitialDBState(ctx, rrd, branch)
 }
 
 func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
@@ -121,31 +117,31 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	currentBranchRef, err := dSess.CWBHeadRef(ctx, rrd.name)
-	if err != nil && !SkipReplicationWarnings() {
+	if err != nil && !dsess.IgnoreReplicationErrors() {
 		return err
 	} else if err != nil {
-		ctx.GetLogger().Warn(err.Error())
+		dsess.WarnReplicationError(ctx, err)
 		return nil
 	}
 
 	err = rrd.srcDB.Rebase(ctx)
-	if err != nil && !SkipReplicationWarnings() {
+	if err != nil && !dsess.IgnoreReplicationErrors() {
 		return err
 	} else if err != nil {
-		ctx.GetLogger().Warn(err.Error())
+		dsess.WarnReplicationError(ctx, err)
 		return nil
 	}
 
 	remoteRefs, localRefs, toDelete, err := getReplicationRefs(ctx, rrd)
-	if err != nil && !SkipReplicationWarnings() {
+	if err != nil && !dsess.IgnoreReplicationErrors() {
 		return err
 	} else if err != nil {
-		ctx.GetLogger().Warn(err.Error())
+		dsess.WarnReplicationError(ctx, err)
 		return nil
 	}
 
 	switch {
-	case headsArg != "" && allHeads == SysVarTrue:
+	case headsArg != "" && allHeads == dsess.SysVarTrue:
 		return fmt.Errorf("%w; cannot set both 'dolt_replicate_heads' and 'dolt_replicate_all_heads'", ErrInvalidReplicateHeadsSetting)
 	case headsArg != "":
 		heads, ok := headsArg.(string)
@@ -178,10 +174,10 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 			}
 
 			err := fmt.Errorf("unable to find %q on %q; branch not found", branch, rrd.remote.Name)
-			if err != nil && !SkipReplicationWarnings() {
+			if err != nil && !dsess.IgnoreReplicationErrors() {
 				return err
 			} else if err != nil {
-				ctx.GetLogger().Warn(err.Error())
+				dsess.WarnReplicationError(ctx, err)
 				return nil
 			}
 		}
@@ -189,27 +185,27 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		remoteRefs = prunedRefs
 		err = pullBranches(ctx, rrd, remoteRefs, localRefs, currentBranchRef, behavior)
 
-		if err != nil && !SkipReplicationWarnings() {
+		if err != nil && !dsess.IgnoreReplicationErrors() {
 			return err
 		} else if err != nil {
-			ctx.GetLogger().Warn(err.Error())
+			dsess.WarnReplicationError(ctx, err)
 			return nil
 		}
 
 	case allHeads == int8(1):
 		err = pullBranches(ctx, rrd, remoteRefs, localRefs, currentBranchRef, behavior)
-		if err != nil && !SkipReplicationWarnings() {
+		if err != nil && !dsess.IgnoreReplicationErrors() {
 			return err
 		} else if err != nil {
-			ctx.GetLogger().Warn(err.Error())
+			dsess.WarnReplicationError(ctx, err)
 			return nil
 		}
 
 		err = deleteBranches(ctx, rrd, toDelete)
-		if err != nil && !SkipReplicationWarnings() {
+		if err != nil && !dsess.IgnoreReplicationErrors() {
 			return err
 		} else if err != nil {
-			ctx.GetLogger().Warn(err.Error())
+			dsess.WarnReplicationError(ctx, err)
 			return nil
 		}
 	default:

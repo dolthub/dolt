@@ -45,7 +45,7 @@ func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -76,7 +76,7 @@ func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
 
 	if err != nil {
 		return nil, err

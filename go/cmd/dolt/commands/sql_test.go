@@ -208,7 +208,7 @@ func TestShowTables(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv, err := sqle.CreateEnvWithSeedData()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"

@@ -326,7 +326,7 @@ SQL
    
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ 'replication failed: unable to find "unknown" on "remote1"; branch not found' ]] || false
+    [[ "$output" =~ 'unable to find "unknown" on "remote1"; branch not found' ]] || false
 }
 
 @test "replication: pull multiple heads, one invalid branch name" {
@@ -601,7 +601,6 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "panic" ]]
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
-    [[ "$output" =~ "dolt_replication_remote value is misconfigured" ]] || false
 }
 
 @test "replication: use database syntax fetches missing branch" {

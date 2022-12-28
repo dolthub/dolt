@@ -697,20 +697,22 @@ func (ddb *DoltDB) GetBranches(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, branchRefFilter)
 }
 
-// HasBranch returns whether the DB has a branch with the name given
-func (ddb *DoltDB) HasBranch(ctx context.Context, branchName string) (bool, error) {
+// HasBranch returns whether the DB has a branch with the name given, case-insensitive. Returns the case-sensitive
+// matching branch if found, as well as a bool indicating if there was a case-insensitive match, and any error.
+func (ddb *DoltDB) HasBranch(ctx context.Context, branchName string) (string, bool, error) {
+	branchName = strings.ToLower(branchName)
 	branches, err := ddb.GetRefsOfType(ctx, branchRefFilter)
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
 
 	for _, b := range branches {
-		if b.GetPath() == branchName {
-			return true, nil
+		if strings.ToLower(b.GetPath()) == branchName {
+			return b.GetPath(), true, nil
 		}
 	}
 
-	return false, nil
+	return "", false, nil
 }
 
 type RefWithHash struct {
