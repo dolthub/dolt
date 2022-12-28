@@ -76,7 +76,7 @@ func GetCommitHooks(ctx context.Context, bThreads *sql.BackgroundThreads, dEnv *
 	if hook, err := getPushOnWriteHook(ctx, bThreads, dEnv, logger); err != nil {
 		path, _ := dEnv.FS.Abs(".")
 		err = fmt.Errorf("failure loading hook for database at %s; %w", path, err)
-		if dsess.SkipReplicationWarnings() {
+		if dsess.IgnoreReplicationErrors() {
 			postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(err.Error()+"\n")))
 		} else {
 			return nil, err
@@ -107,7 +107,7 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 	rrd, err := NewReadReplicaDatabase(ctx, db, remoteName, dEnv)
 	if err != nil {
 		err = fmt.Errorf("%w from remote '%s'; %s", ErrFailedToLoadReplicaDB, remoteName, err.Error())
-		if !dsess.SkipReplicationWarnings() {
+		if !dsess.IgnoreReplicationErrors() {
 			return ReadReplicaDatabase{}, err
 		}
 		cli.Println(err)

@@ -312,7 +312,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 
 	if _, v, ok := sql.SystemVariables.GetGlobal("dolt_read_replica_remote"); ok && v != "" {
 		err = sessionState.dbData.Ddb.Rebase(ctx)
-		if err != nil && !SkipReplicationWarnings() {
+		if err != nil && !IgnoreReplicationErrors() {
 			return nil, err
 		} else if err != nil {
 			ctx.GetLogger().Warn("HELLO")
@@ -1500,17 +1500,4 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
 	return nil
 }
-
-func SkipReplicationWarnings() bool {
-	_, skip, ok := sql.SystemVariables.GetGlobal(SkipReplicationErrors)
-	if !ok {
-		panic("dolt system variables not loaded")
-	}
-	return skip == SysVarTrue
-}
-
-const (
-	SysVarFalse = int8(0)
-	SysVarTrue  = int8(1)
-)
 
