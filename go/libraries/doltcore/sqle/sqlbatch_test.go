@@ -204,7 +204,7 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	ctx := context.Background()
 	dEnv, err := CreateTestDatabase()
 	require.NoError(t, err)
-	
+
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
