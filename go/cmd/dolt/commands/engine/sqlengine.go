@@ -35,9 +35,9 @@ import (
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 )
 
@@ -64,7 +64,7 @@ type SqlEngineConfig struct {
 	Bulk                    bool
 	JwksConfig              []JwksConfig
 	ClusterController       *cluster.Controller
-	BinlogReplicaController plan.BinlogReplicaController
+	BinlogReplicaController binlogreplication.BinlogReplicaController
 }
 
 // NewSqlEngine returns a SqlEngine

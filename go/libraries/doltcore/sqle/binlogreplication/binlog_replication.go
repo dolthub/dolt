@@ -32,8 +32,8 @@ import (
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/proto/query"
@@ -52,7 +52,7 @@ var DoltBinlogReplicaController doltBinlogReplicaController
 type doltBinlogReplicaController struct {
 }
 
-var _ plan.BinlogReplicaController = (*doltBinlogReplicaController)(nil)
+var _ binlogreplication.BinlogReplicaController = (*doltBinlogReplicaController)(nil)
 
 func (d doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 	// Create a new context to use, because otherwise the engine will cancel the original
@@ -75,11 +75,11 @@ func (d doltBinlogReplicaController) StopReplica(_ *sql.Context) error {
 	return nil
 }
 
-func (d doltBinlogReplicaController) SetReplicationOptions(_ *sql.Context, options []plan.ReplicationOption) error {
+func (d doltBinlogReplicaController) SetReplicationOptions(_ *sql.Context, options []binlogreplication.ReplicationOption) error {
 	config := replicaConfiguration{}
 	config.connectionParams = &mysql.ConnParams{}
 
-	// TODO: hardcoding GTID starting sequence for now
+	// TODO: hardcoding GTID starting id for now
 	config.startingGtid = 1
 
 	for _, option := range options {
@@ -108,12 +108,12 @@ func (d doltBinlogReplicaController) SetReplicationOptions(_ *sql.Context, optio
 	return nil
 }
 
-func (d doltBinlogReplicaController) GetReplicaStatus(_ *sql.Context) (*plan.ReplicaStatus, error) {
+func (d doltBinlogReplicaController) GetReplicaStatus(_ *sql.Context) (*binlogreplication.ReplicaStatus, error) {
 	if replicationConfig == nil {
 		return nil, nil
 	}
 
-	status := plan.ReplicaStatus{}
+	status := binlogreplication.ReplicaStatus{}
 	status.AutoPosition = true
 
 	if replicationConfig.connectionParams != nil {
