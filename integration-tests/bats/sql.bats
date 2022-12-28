@@ -2665,7 +2665,6 @@ SQL
 }
 
 @test "sql: can insert datetime with golang time struct zero value 0001-01-01 00:00:00" {
-    skip "currently panics: panic: cannot write NULL to non-NULL field"
     dolt sql -q 'CREATE TABLE dts (created_at datetime NOT NULL);'
     run dolt sql -q 'INSERT INTO dts (`created_at`) VALUES ("0001-01-01 00:00:00");'
     [ "$status" -eq 0 ]

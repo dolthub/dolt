@@ -31,7 +31,7 @@ teardown() {
 
     run grep INSERT doltdump.sql
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
+    [ "${#lines[@]}" -eq 3 ]
 
     run grep CREATE doltdump.sql
     [ "$status" -eq 0 ]
@@ -87,7 +87,7 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "dump: SQL type (batched) - compare tables in database with tables imported file " {
+@test "dump: SQL type (no-batch) - compare tables in database with tables imported file " {
     dolt branch new_branch
 
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
@@ -101,12 +101,12 @@ teardown() {
     dolt add .
     dolt commit -m "create tables"
 
-    run dolt dump --batch
+    run dolt dump --no-batch
     [ "$status" -eq 0 ]
     [ -f doltdump.sql ]
 
     run cat doltdump.sql
-    [[ "$output" =~ "VALUES (1,'UPS'), (2,'TV'), (3,'Table')" ]] || false
+    [[ "$output" =~ "VALUES (1,'UPS');" ]] || false
 
     dolt checkout new_branch
     dolt sql < doltdump.sql
@@ -116,6 +116,30 @@ teardown() {
     run dolt diff --summary main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
+}
+
+@test "dump: SQL type (batch is no-op) - compare tables in database with tables imported file " {
+  dolt branch new_branch
+
+    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
+    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
+
+    dolt add .
+    dolt commit -m "create tables"
+
+    run dolt dump
+    [ "$status" -eq 0 ]
+    [ -f doltdump.sql ]
+
+    run cat doltdump.sql
+    [[ "$output" =~ "VALUES (1,'UPS'), (2,'TV'), (3,'Table')" ]] || false
+
+    run dolt dump -f --batch
+    [ "$status" -eq 0 ]
+    [ -f doltdump.sql ]
+
+    run cat doltdump.sql
+    [[ "$output" =~ "VALUES (1,'UPS'), (2,'TV'), (3,'Table')" ]] || false
 }
 
 @test "dump: SQL type - with Indexes" {
@@ -177,7 +201,7 @@ teardown() {
     dolt add .
     dolt commit -m "create tables"
 
-    run dolt dump
+    run dolt dump --no-batch
     [ "$status" -eq 0 ]
     [ -f doltdump.sql ]
 
@@ -312,7 +336,7 @@ teardown() {
 
     run grep INSERT dumpfile.sql
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
+    [ "${#lines[@]}" -eq 3 ]
 
     run grep CREATE dumpfile.sql
     [ "$status" -eq 0 ]
