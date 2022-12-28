@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/sql"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
@@ -312,8 +313,10 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 
 	if _, v, ok := sql.SystemVariables.GetGlobal("dolt_read_replica_remote"); ok && v != "" {
 		err = sessionState.dbData.Ddb.Rebase(ctx)
-		if err != nil {
+		if err != nil && !SkipReplicationWarnings() {
 			return nil, err
+		} else if err != nil {
+			ctx.GetLogger().Warn(err.Error())
 		}
 	}
 
@@ -1497,3 +1500,12 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
 	return nil
 }
+
+func SkipReplicationWarnings() bool {
+	_, skip, ok := sql.SystemVariables.GetGlobal(SkipReplicationErrors)
+	if !ok {
+		panic("dolt system variables not loaded")
+	}
+	return skip == sqle.SysVarTrue
+}
+

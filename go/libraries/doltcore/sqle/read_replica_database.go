@@ -117,7 +117,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	currentBranchRef, err := dSess.CWBHeadRef(ctx, rrd.name)
-	if err != nil && !SkipReplicationWarnings() {
+	if err != nil && !dsess.SkipReplicationWarnings() {
 		return err
 	} else if err != nil {
 		ctx.GetLogger().Warn(err.Error())
@@ -125,7 +125,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 	}
 
 	err = rrd.srcDB.Rebase(ctx)
-	if err != nil && !SkipReplicationWarnings() {
+	if err != nil && !dsess.SkipReplicationWarnings() {
 		return err
 	} else if err != nil {
 		ctx.GetLogger().Warn(err.Error())
@@ -133,7 +133,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 	}
 
 	remoteRefs, localRefs, toDelete, err := getReplicationRefs(ctx, rrd)
-	if err != nil && !SkipReplicationWarnings() {
+	if err != nil && !dsess.SkipReplicationWarnings() {
 		return err
 	} else if err != nil {
 		ctx.GetLogger().Warn(err.Error())
@@ -174,7 +174,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 			}
 
 			err := fmt.Errorf("unable to find %q on %q; branch not found", branch, rrd.remote.Name)
-			if err != nil && !SkipReplicationWarnings() {
+			if err != nil && !dsess.SkipReplicationWarnings() {
 				return err
 			} else if err != nil {
 				ctx.GetLogger().Warn(err.Error())
@@ -185,7 +185,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		remoteRefs = prunedRefs
 		err = pullBranches(ctx, rrd, remoteRefs, localRefs, currentBranchRef, behavior)
 
-		if err != nil && !SkipReplicationWarnings() {
+		if err != nil && !dsess.SkipReplicationWarnings() {
 			return err
 		} else if err != nil {
 			ctx.GetLogger().Warn(err.Error())
@@ -194,7 +194,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 
 	case allHeads == int8(1):
 		err = pullBranches(ctx, rrd, remoteRefs, localRefs, currentBranchRef, behavior)
-		if err != nil && !SkipReplicationWarnings() {
+		if err != nil && !dsess.SkipReplicationWarnings() {
 			return err
 		} else if err != nil {
 			ctx.GetLogger().Warn(err.Error())
@@ -202,7 +202,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		}
 
 		err = deleteBranches(ctx, rrd, toDelete)
-		if err != nil && !SkipReplicationWarnings() {
+		if err != nil && !dsess.SkipReplicationWarnings() {
 			return err
 		} else if err != nil {
 			ctx.GetLogger().Warn(err.Error())

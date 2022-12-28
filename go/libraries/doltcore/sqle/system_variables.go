@@ -162,14 +162,6 @@ func AddDoltSystemVariables() {
 	})
 }
 
-func SkipReplicationWarnings() bool {
-	_, skip, ok := sql.SystemVariables.GetGlobal(dsess.SkipReplicationErrors)
-	if !ok {
-		panic("dolt system variables not loaded")
-	}
-	return skip == SysVarTrue
-}
-
 func ReadReplicaForcePull() bool {
 	_, forcePull, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaForcePull)
 	if !ok {
