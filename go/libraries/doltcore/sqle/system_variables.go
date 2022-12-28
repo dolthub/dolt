@@ -20,11 +20,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-const (
-	SysVarFalse = int8(0)
-	SysVarTrue  = int8(1)
-)
-
 func init() {
 	AddDoltSystemVariables()
 }
@@ -167,5 +162,5 @@ func ReadReplicaForcePull() bool {
 	if !ok {
 		panic("dolt system variables not loaded")
 	}
-	return forcePull == SysVarTrue
+	return forcePull == dsess.SysVarTrue
 }

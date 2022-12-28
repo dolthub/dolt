@@ -61,7 +61,7 @@ func getPushOnWriteHook(ctx context.Context, bThreads *sql.BackgroundThreads, dE
 	if err != nil {
 		return nil, err
 	}
-	if _, val, ok = sql.SystemVariables.GetGlobal(dsess.AsyncReplication); ok && val == SysVarTrue {
+	if _, val, ok = sql.SystemVariables.GetGlobal(dsess.AsyncReplication); ok && val == dsess.SysVarTrue {
 		return doltdb.NewAsyncPushOnWriteHook(bThreads, ddb, tmpDir, logger)
 	}
 

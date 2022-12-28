@@ -23,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/sql"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
@@ -316,7 +315,8 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		if err != nil && !SkipReplicationWarnings() {
 			return nil, err
 		} else if err != nil {
-			ctx.GetLogger().Warn(err.Error())
+			ctx.GetLogger().Warn("HELLO")
+			ctx.GetLogger().Warn(fmt.Errorf("dolt_replication_remote value is misconfigured: %w", err))
 		}
 	}
 
@@ -1506,6 +1506,11 @@ func SkipReplicationWarnings() bool {
 	if !ok {
 		panic("dolt system variables not loaded")
 	}
-	return skip == sqle.SysVarTrue
+	return skip == SysVarTrue
 }
+
+const (
+	SysVarFalse = int8(0)
+	SysVarTrue  = int8(1)
+)
 

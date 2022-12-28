@@ -141,7 +141,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 	}
 
 	switch {
-	case headsArg != "" && allHeads == SysVarTrue:
+	case headsArg != "" && allHeads == dsess.SysVarTrue:
 		return fmt.Errorf("%w; cannot set both 'dolt_replicate_heads' and 'dolt_replicate_all_heads'", ErrInvalidReplicateHeadsSetting)
 	case headsArg != "":
 		heads, ok := headsArg.(string)
