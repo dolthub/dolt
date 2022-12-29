@@ -167,6 +167,16 @@ func (suite *ChunkJournalSuite) SetupTest() {
 }
 
 func (suite *PullSuite) TearDownTest() {
+	ctx := context.Background()
+	sourceRoot, err := suite.sinkCS.Root(ctx)
+	suite.NoError(err)
+	err = types.ValidateValueReadWriter(ctx, sourceRoot, suite.sourceVRW)
+	suite.NoError(err)
+	sinkRoot, err := suite.sinkCS.Root(ctx)
+	suite.NoError(err)
+	err = types.ValidateValueReadWriter(ctx, sinkRoot, suite.sinkVRW)
+	suite.NoError(err)
+
 	suite.sinkCS.Close()
 	suite.sourceCS.Close()
 }

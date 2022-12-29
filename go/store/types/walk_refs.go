@@ -22,8 +22,44 @@
 package types
 
 import (
+	"context"
+	"errors"
+
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 )
+
+func ValidateValueReadWriter(ctx context.Context, root hash.Hash, vrw ValueReadWriter) (err error) {
+	absent := hash.NewHashSet()
+	curr := hash.NewHashSet(root)
+	for curr.Size() > 0 {
+		next := hash.NewHashSet()
+		for h := range curr {
+			if h.IsEmpty() {
+				continue
+			}
+			var v Value
+			if v, err = vrw.ReadValue(ctx, h); err != nil {
+				return
+			} else if v == nil {
+				absent.Insert(h)
+				continue
+			}
+			err = v.walkRefs(vrw.Format(), func(ref Ref) (_ error) {
+				next.Insert(ref.TargetHash())
+				return
+			})
+			if err != nil {
+				return
+			}
+		}
+		curr = next
+	}
+	if absent.Size() > 0 {
+		err = errors.New("dangling refs: " + absent.String())
+	}
+	return
+}
 
 // walkRefs calls cb() on each Ref that can be decoded from |c|. The results
 // are precisely equal to DecodeValue(c).walkRefs(cb), but this should be much
