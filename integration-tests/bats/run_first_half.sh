@@ -1,0 +1,63 @@
+#!/bin/bash
+
+set -e
+
+bats \
+    1pk5col-ints.bats \
+    1pk5col-strings.bats \
+    1pksupportedtypes.bats \
+    2pk5cols-ints.bats \
+    arg-parsing.bats \
+    auto_increment.bats \
+    backup.bats \
+    blame-system-view.bats \
+    blame.bats \
+    branch-control.bats \
+    branch.bats \
+    case-sensitivity.bats \
+    checkout.bats \
+    cherry-pick.bats \
+    column_tags.bats \
+    commit.bats \
+    commit_tags.bats \
+    common.bash.bats \
+    config-home.bats \
+    config.bats \
+    conflict-cat.bats \
+    conflict-detection-2.bats \
+    conflict-detection.bats \
+    constraint-violations.bats \
+    cp-and-mv.bats \
+    create-views.bats \
+    creds.bats \
+    db-revision-specifiers.bats \
+    default-values.bats \
+    deleted-branches.bats \
+    diff.bats \
+    docs.bats \
+    doltpy.bats \
+    drop-create.bats \
+    dump-docs.bats \
+    dump.bats \
+    empty-repo.bats \
+    export-tables.bats \
+    feature-version.bats \
+    filter-branch.bats \
+    foreign-keys-invert-pk.bats \
+    foreign-keys.bats \
+    garbage_collection.bats \
+    import-create-tables.bats \
+    import-mysqldump.bats \
+    import-replace-tables.bats \
+    import-update-tables.bats \
+    index-on-writes-2.bats \
+    index-on-writes.bats \
+    index.bats \
+    init.bats \
+    json-diff.bats \
+    json-new-fmt.bats \
+    json.bats \
+    keyless-foreign-keys.bats \
+    keyless.bats \
+    large-update.bats \
+    log.bats
