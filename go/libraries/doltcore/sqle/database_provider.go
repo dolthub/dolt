@@ -272,7 +272,7 @@ func (p DoltDatabaseProvider) UseDatabase(ctx *sql.Context, name string) (db sql
 			return nil, err
 		}
 
-		isBranch, err := isBranch(ctx, srcDb, revSpec, p.remoteDialer)
+		_, isBranch, err := isBranch(ctx, srcDb, revSpec, p.remoteDialer)
 		if err != nil {
 			return nil, err
 		}
