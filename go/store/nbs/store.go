@@ -612,15 +612,15 @@ func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 	t1 := time.Now()
 	a := addr(c.Hash())
 
-	// addrs, err := getAddrs(ctx, c)
-	// if err != nil {
-	// 	return err
-	// }
+	addrs, err := getAddrs(ctx, c)
+	if err != nil {
+		return err
+	}
 
-	// err = nbs.errorIfDangling(ctx, addrs)
-	// if err != nil {
-	// 	return err
-	// }
+	err = nbs.errorIfDangling(ctx, addrs)
+	if err != nil {
+		return err
+	}
 
 	success, err := nbs.addChunk(ctx, a, c.Data())
 	if err != nil {
@@ -638,12 +638,12 @@ func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 func (nbs *NomsBlockStore) PutMany(ctx context.Context, chunkMap map[hash.Hash]chunks.Chunk, getAddrs chunks.GetManyAddrsCb) error {
 	t1 := time.Now()
 
-	// Pull in datas/pull/pull_test.go for the chunk journal tests fails with dangling reference errors
 	addrs, err := getAddrs(ctx, chunkMap)
 	if err != nil {
 		return err
 	}
 
+	// Fails datas/pull TestChunkJournalPulls
 	err = nbs.errorIfDanglingWithChunkMap(ctx, addrs, chunkMap)
 	if err != nil {
 		return err

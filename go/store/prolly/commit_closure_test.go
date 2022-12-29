@@ -137,7 +137,7 @@ func TestCommitClosure(t *testing.T) {
 		assert.NoError(t, err)
 		ccrc, err := ccr.Count()
 		require.NoError(t, err)
-		assert.Equal(t, 4, ccrc) // This is 3 now?
+		assert.Equal(t, 3, ccrc) // TODO(taylor): why did this change from 4?
 
 		var numadds, numdels int
 		err = DiffCommitClosures(ctx, ccl, ccr, func(ctx context.Context, d tree.Diff) error {
@@ -150,7 +150,7 @@ func TestCommitClosure(t *testing.T) {
 		})
 		assert.Error(t, err)
 		assert.True(t, errors.Is(err, io.EOF))
-		assert.Equal(t, 2, numadds) // This is 1 now?
+		assert.Equal(t, 1, numadds) // TODO(taylor): why did this change from 2?
 		assert.Equal(t, 0, numdels)
 	})
 

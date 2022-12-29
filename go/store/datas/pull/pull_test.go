@@ -338,7 +338,7 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 	var err error
 	sinkL, err = sinkL.Edit().Append(types.String("oy!")).List(context.Background())
 	suite.NoError(err)
-	suite.commitToSink(sinkL, []hash.Hash{sinkAddr})
+	sinkAddr = suite.commitToSink(sinkL, []hash.Hash{sinkAddr})
 	srcL, err = srcL.Edit().Set(1, buildListOfHeight(5, suite.sourceVRW)).List(context.Background())
 	suite.NoError(err)
 	sourceAddr = suite.commitToSource(srcL, []hash.Hash{sourceAddr})

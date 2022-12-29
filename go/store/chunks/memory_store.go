@@ -243,6 +243,7 @@ func (ms *MemoryStoreView) PutMany(ctx context.Context, chunkMap map[hash.Hash]C
 		return err
 	}
 
+	// Fails in datas/pull TestLocalToLocalPulls/TestRemoteToLocalPulls/TestLocalToRemotePulls/TestRemoteToRemotePulls
 	err = ms.errorIfDanglingWithChunkMap(ctx, addrs, chunkMap)
 	if err != nil {
 		return err
