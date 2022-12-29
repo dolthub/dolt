@@ -90,6 +90,23 @@ teardown() {
     [[ "$output" =~ "Successfully initialized dolt data repository." ]] || false
 }
 
+@test "config: set a local config variable with --set" {
+    dolt config --global --set user.name "tester"
+    dolt config --global --set user.email "tester@liquidata.co"
+    dolt init
+    run dolt config --local --set testlocal testlocal
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Config successfully updated" ]] || false
+    [ -f .dolt/config.json ]
+    run dolt config --list
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "testlocal = testlocal" ]] || false
+    run dolt config --get testlocal
+    [ "$status" -eq 0 ]
+    [ "$output" = "testlocal" ]
+}
+
 @test "config: set a local config variable" {
     dolt config --global --add user.name "bats tester"
     dolt config --global --add user.email "bats-tester@liquidata.co"
