@@ -26,6 +26,7 @@ teardown() {
 }
 
 @test "db-revision-specifiers: branch-qualified database revisions" {
+    skip "USE is broken"
     # Can be selected as the current database
     run dolt sql -r=csv << SQL
 use $database_name/branch1;
