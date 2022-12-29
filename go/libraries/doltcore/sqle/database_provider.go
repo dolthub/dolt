@@ -1200,6 +1200,7 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		editOpts: srcDb.editOpts,
 		revision: revSpec,
 	}}
+
 	init := dsess.InitialDbState{
 		Db:         db,
 		HeadCommit: cm,

@@ -1118,7 +1118,6 @@ func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.Err != nil {
 		sessionState.Err = dbState.Err
-
 	} else if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
 		tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx)
@@ -1186,6 +1185,11 @@ func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, 
 	if err != nil {
 		return nil, err
 	}
+
+	if dbState.WorkingSet == nil {
+		return nil, nil
+	}
+
 	return dbState.WorkingSet.Ref().ToHeadRef()
 }
 

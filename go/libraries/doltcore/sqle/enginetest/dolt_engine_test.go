@@ -787,6 +787,12 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 				Expected: []sql.Row{},
 			},
 			{
+				Query: "select active_branch();",
+				Expected: []sql.Row{
+					{nil},
+				},
+			},
+			{
 				Query:    "select database();",
 				Expected: []sql.Row{{"mydb/" + commithash}},
 			},
