@@ -1073,9 +1073,6 @@ func dbRevisionForBranch(ctx *sql.Context, srcDb SqlDatabase, revSpec string) (S
 		return Database{}, dsess.InitialDbState{}, err
 	}
 
-	// TODO: temporarily add a "checkout" here to see what happens
-	//dSess.SwitchWorkingSet(ctx, srcDb.Name(), wsRef)
-
 	ws, err := srcDb.DbData().Ddb.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
 		return Database{}, dsess.InitialDbState{}, err
