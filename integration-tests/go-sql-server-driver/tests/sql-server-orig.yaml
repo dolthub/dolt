@@ -269,6 +269,7 @@ tests:
           - [["1", '{"a": 1}']]
           - [["1", '{"a":1}']]
 - name: select a branch with the USE syntax
+  skip: temporarily skip this test in favor of call
   repos:
   - name: repo1
     server: {}
@@ -293,6 +294,31 @@ tests:
       result:
         columns: ["Tables_in_repo1/feature-branch"]
         rows: [["test"]]
+- name: select a branch with the CALL syntax
+  repos:
+    - name: repo1
+      server: {}
+  connections:
+    - on: repo1
+      queries:
+        - exec: "call dolt_branch('feature-branch')"
+        - exec: "call dolt_checkout('feature-branch')"
+        - exec: |
+            CREATE TABLE test (
+                pk int,
+                c1 int,
+                PRIMARY KEY (pk)
+            )
+    - on: repo1
+      queries:
+        - query: "show tables"
+          result:
+            columns: ["Tables_in_repo1"]
+            rows: []
+        - exec: "use `repo1/feature-branch`"
+          result:
+            columns: ["Tables_in_repo1/feature-branch"]
+            rows: [["test"]]
 - name: auto increment for a table should reset between drops
   repos:
   - name: repo1
