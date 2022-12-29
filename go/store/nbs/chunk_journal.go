@@ -241,6 +241,23 @@ func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 		}
 	}
 
+	// if |next| has a different table file set, flush to |j.backing|
+	if j.contents.lock != next.lock || j.contents.gcGen != next.gcGen {
+		// todo: why is this necessary?
+		_, mc, err := j.backing.ParseIfExists(ctx, stats, nil)
+		if err != nil {
+			return manifestContents{}, err
+		}
+		lastLock = mc.lock
+
+		mc, err = j.backing.Update(ctx, lastLock, next, stats, nil)
+		if err != nil {
+			return manifestContents{}, err
+		} else if mc.lock != next.lock {
+			return manifestContents{}, errOptimisticLockFailedTables
+		}
+	}
+
 	if err := j.journal.writeRootHash(next.root); err != nil {
 		return manifestContents{}, err
 	}
