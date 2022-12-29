@@ -20,6 +20,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -39,43 +40,66 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/query"
 )
 
-var replicationConfig *replicaConfiguration
-
-// sourceServerUuid stores the server's UUID after it has been received from a binlog GTID event.
-// TODO: This needs to be encapsulated in a struct
-var sourceServerUuid interface{}
-
-var DoltBinlogReplicaController doltBinlogReplicaController
+var DoltBinlogReplicaController = newDoltBinlogReplicaController()
 
 // doltBinlogReplicaController implements the BinlogReplicaController interface for a Dolt database in order to
 // provide support for a Dolt server to be a replica of a MySQL primary.
 type doltBinlogReplicaController struct {
+	status            binlogreplication.ReplicaStatus
+	replicationConfig *replicaConfiguration
+	mu                *sync.Mutex
+}
+
+func newDoltBinlogReplicaController() *doltBinlogReplicaController {
+	controller := doltBinlogReplicaController{
+		mu: &sync.Mutex{},
+	}
+	controller.status.AutoPosition = true
+	controller.status.ReplicaIoRunning = binlogreplication.ReplicaIoNotRunning
+	controller.status.ReplicaSqlRunning = binlogreplication.ReplicaSqlNotRunning
+
+	/*
+		TODO: Update the other parts of the code that set this status
+			MYSQL_REPLICA_NOT_RUN.  The replication I/O (receiver) thread is not running. For this state, Replica_IO_Running is No.
+
+			MYSQL_REPLICA_RUN_NOT_CONNECT.  The replication I/O (receiver) thread is running, but is not connected to a replication source. For this state, Replica_IO_Running is Connecting.
+
+			MYSQL_REPLICA_RUN_CONNECT.  The replication I/O (receiver) thread is running, and is connected to a replication source. For this state, Replica_IO_Running is Yes.
+	*/
+
+	controller.status.SourceRetryCount = 86400
+	// TODO: The ConnectRetry default *should* be 60s to match MySQL's behavior, but for easy testing, we're
+	//       starting with a very quick retry
+	controller.status.ConnectRetry = 5
+
+	return &controller
 }
 
 var _ binlogreplication.BinlogReplicaController = (*doltBinlogReplicaController)(nil)
 
-func (d doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
+func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 	// Create a new context to use, because otherwise the engine will cancel the original
 	// context after the 'start replica' statement has finished executing.
 	ctx = ctx.WithContext(context.Background())
 	go func() {
-		err := replicaBinlogEventHandler(ctx, replicationConfig)
+		err := d.replicaBinlogEventHandler(ctx)
 		if err != nil {
 			// TODO: Need better error handling here... we shouldn't be crashing the server obviously
 			//       Instead, we should log the errors and expose them through the replica status API
 			//       Do we need another log just for replication? (not the binlog relay log... just a debugging log)
-			panic(err)
+			//       For now though... this panic is convienent since it fails the tests hard for any unexpected error.
+			panic(fmt.Sprintf("unexected error of type %T: '%v'", err, err.Error()))
 		}
 	}()
 	return nil
 }
 
-func (d doltBinlogReplicaController) StopReplica(_ *sql.Context) error {
+func (d *doltBinlogReplicaController) StopReplica(_ *sql.Context) error {
 	stopReplicationChan <- struct{}{}
 	return nil
 }
 
-func (d doltBinlogReplicaController) SetReplicationOptions(_ *sql.Context, options []binlogreplication.ReplicationOption) error {
+func (d *doltBinlogReplicaController) SetReplicationOptions(_ *sql.Context, options []binlogreplication.ReplicationOption) error {
 	config := replicaConfiguration{}
 	config.connectionParams = &mysql.ConnParams{}
 
@@ -102,32 +126,28 @@ func (d doltBinlogReplicaController) SetReplicationOptions(_ *sql.Context, optio
 		}
 	}
 
-	// TODO: Protect with a mutex
-	replicationConfig = &config
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.replicationConfig = &config
+	d.status.SourceUser = config.connectionParams.Uname
+	d.status.SourcePort = uint(config.connectionParams.Port)
+	d.status.SourceHost = config.connectionParams.Host
 
 	return nil
 }
 
-func (d doltBinlogReplicaController) GetReplicaStatus(_ *sql.Context) (*binlogreplication.ReplicaStatus, error) {
-	if replicationConfig == nil {
+func (d *doltBinlogReplicaController) GetReplicaStatus(_ *sql.Context) (*binlogreplication.ReplicaStatus, error) {
+	if d.replicationConfig == nil {
+		// TODO: is this correct?
 		return nil, nil
 	}
 
-	status := binlogreplication.ReplicaStatus{}
-	status.AutoPosition = true
+	d.mu.Lock()
+	defer d.mu.Unlock()
 
-	if replicationConfig.connectionParams != nil {
-		status.SourceUser = replicationConfig.connectionParams.Uname
-		status.SourcePort = uint(replicationConfig.connectionParams.Port)
-		status.SourceHost = replicationConfig.connectionParams.Host
-	}
-
-	if sourceServerUuid != nil {
-		status.SourceServerUuid = fmt.Sprintf("%s", sourceServerUuid)
-	}
-	status.SourceServerId = "???"
-
-	return &status, nil
+	var copy = d.status
+	return &copy, nil
 }
 
 // TODO: Move these into a struct to track?
@@ -157,32 +177,64 @@ func NewReplicaConfiguration(connectionParams *mysql.ConnParams) *replicaConfigu
 	}
 }
 
-// TODO: Turn this into a struct with an API that can be called
-//
-//	"replicationController" or something similar to match "clusterController"?
-func replicaBinlogEventHandler(ctx *sql.Context, replicaConfiguration *replicaConfiguration) error {
+func (d *doltBinlogReplicaController) connectAndStartReplicationEventStream(ctx *sql.Context) (*mysql.Conn, error) {
+	// TODO: Set Replica_IO_State:
+	//       https://dev.mysql.com/doc/refman/8.0/en/replica-io-thread-states.html
+
+	// TODO: increment counters
+	// TODO: set states
+
+	d.mu.Lock()
+	d.status.ReplicaIoRunning = binlogreplication.ReplicaIoConnecting
+	maxConnectionAttempts := d.status.SourceRetryCount
+	connectRetryDelay := d.status.ConnectRetry
+	d.mu.Unlock()
+
+	var conn *mysql.Conn
+	var err error
+	for connectionAttempts := uint(0); ; connectionAttempts++ {
+		// Connect to the MySQL Replication Source
+		// NOTE: Our fork of Vitess currently only supports mysql_native_password auth. The latest code in the main
+		//       Vitess repo supports the current MySQL default auth plugin, caching_sha2_password.
+		//       https://dev.mysql.com/blog-archive/upgrading-to-mysql-8-0-default-authentication-plugin-considerations/
+		//       To work around this limitation, add the following to your /etc/my.cnf:
+		//           [mysqld]
+		//           default-authentication-plugin=mysql_native_password
+		//       or start mysqld with:
+		//           --default-authentication-plugin=mysql_native_password
+		conn, err = mysql.Connect(ctx, d.replicationConfig.connectionParams)
+		if err != nil && connectionAttempts >= maxConnectionAttempts {
+			return nil, err
+		} else if err != nil {
+			time.Sleep(time.Duration(connectRetryDelay) * time.Second)
+		} else {
+			break
+		}
+	}
+
+	// Request binlog events to start
+	// TODO: When we restart replication... we need to restart from the last executed GTID, right?
+	// TODO: This also needs retry logic, right?
+	err = startReplicationEventStream(d.replicationConfig, conn)
+	if err != nil {
+		return nil, err
+	}
+
+	d.mu.Lock()
+	d.status.ReplicaIoRunning = binlogreplication.ReplicaIoRunning
+	d.mu.Unlock()
+
+	return conn, nil
+}
+
+func (d *doltBinlogReplicaController) replicaBinlogEventHandler(ctx *sql.Context) error {
 	server := sqlserver.GetRunningServer()
 	if server == nil {
 		return fmt.Errorf("unable to access a running SQL server")
 	}
 	engine := server.Engine
 
-	// Connect to the MySQL Replication Source
-	// NOTE: Our fork of Vitess currently only supports mysql_native_password auth. The latest code in the main
-	//       Vitess repo supports the current MySQL default auth plugin, caching_sha2_password.
-	//       https://dev.mysql.com/blog-archive/upgrading-to-mysql-8-0-default-authentication-plugin-considerations/
-	//       To work around this limitation, add the following to your /etc/my.cnf:
-	//           [mysqld]
-	//           default-authentication-plugin=mysql_native_password
-	//       or start mysqld with:
-	//           --default-authentication-plugin=mysql_native_password
-	conn, err := mysql.Connect(ctx, replicaConfiguration.connectionParams)
-	if err != nil {
-		return err
-	}
-
-	// Request binlog events to start
-	err = startReplicationEventStream(replicaConfiguration, conn)
+	conn, err := d.connectAndStartReplicationEventStream(ctx)
 	if err != nil {
 		return err
 	}
@@ -193,13 +245,19 @@ func replicaBinlogEventHandler(ctx *sql.Context, replicaConfiguration *replicaCo
 		case <-stopReplicationChan:
 			return nil
 		default:
-			// TODO: How do we configure network timeouts?
+			// TODO: What are the default network timeouts in vitess?
 			event, err := conn.ReadBinlogEvent()
 			if err != nil {
 				if sqlError, isSqlError := err.(*mysql.SQLError); isSqlError {
 					if sqlError.Message == io.EOF.Error() {
 						fmt.Printf("No more binlog messages; retrying in 1s...\n")
 						time.Sleep(1 * time.Second)
+						continue
+					} else if strings.HasPrefix(sqlError.Message, io.ErrUnexpectedEOF.Error()) {
+						conn, err = d.connectAndStartReplicationEventStream(ctx)
+						if err != nil {
+							return err
+						}
 						continue
 					} else if strings.Contains(sqlError.Message, "can not handle replication events with the checksum") {
 						// For now, just ignore any errors about checksums
@@ -212,17 +270,15 @@ func replicaBinlogEventHandler(ctx *sql.Context, replicaConfiguration *replicaCo
 				return err
 			}
 
-			err = processBinlogEvent(ctx, engine, event)
+			err = d.processBinlogEvent(ctx, engine, event)
 			if err != nil {
 				return err
 			}
 		}
 	}
-
-	return nil
 }
 
-func processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.BinlogEvent) error {
+func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.BinlogEvent) error {
 	var err error
 	createDoltCommit := false
 
@@ -295,7 +351,9 @@ func processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.Binlog
 		if err != nil {
 			return err
 		}
-		sourceServerUuid = gtid.SourceServer()
+		d.mu.Lock()
+		d.status.SourceServerUuid = fmt.Sprintf("%v", gtid.SourceServer())
+		d.mu.Unlock()
 
 	case event.IsTableMap():
 		// Used for row-based binary logging beginning (binlog_format=ROW or MIXED). This event precedes each row

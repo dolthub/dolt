@@ -152,7 +152,7 @@ func Serve(
 		Autocommit:              serverConfig.AutoCommit(),
 		JwksConfig:              serverConfig.JwksConfig(),
 		ClusterController:       clusterController,
-		BinlogReplicaController: &binlogreplication.DoltBinlogReplicaController,
+		BinlogReplicaController: binlogreplication.DoltBinlogReplicaController,
 	}
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,

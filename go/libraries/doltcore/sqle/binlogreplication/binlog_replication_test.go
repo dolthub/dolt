@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO: Move this to a more appropriate package namespace
 package binlogreplication
 
 import (
@@ -45,6 +44,12 @@ func teardown(t *testing.T) {
 	if doltProcess != nil {
 		doltProcess.Kill()
 	}
+	if toxiClient != nil {
+		proxies, _ := toxiClient.Proxies()
+		for _, value := range proxies {
+			value.Delete()
+		}
+	}
 	// TODO: clean up temp files
 	//defer os.RemoveAll(dir)
 }
@@ -68,21 +73,15 @@ func comparePrimaryAndReplicaTable(t *testing.T, table string) {
 }
 
 func TestBinlogReplicationForAllTypes(t *testing.T) {
-	createServersAndStartReplication(t)
+	createServers(t)
+	startReplication(t, mySqlPort)
 	defer teardown(t)
 
-	// Test inserts on the primary
-	_, err := primaryDatabase.Query("create table alltypes(pk int primary key auto_increment, n_bit bit, n_bit_64 bit(64), n_tinyint tinyint, n_utinyint tinyint unsigned, n_bool bool, n_smallint smallint, n_usmallint smallint unsigned, n_float float, n_double double, n_ufloat float unsigned, n_udouble double unsigned, d_date date);")
-	require.NoError(t, err)
-	// Insert minimum values
+	// Test inserts on the primary – min, max, and null values
+	primaryDatabase.MustExec("create table alltypes(pk int primary key auto_increment, n_bit bit, n_bit_64 bit(64), n_tinyint tinyint, n_utinyint tinyint unsigned, n_bool bool, n_smallint smallint, n_usmallint smallint unsigned, n_float float, n_double double, n_ufloat float unsigned, n_udouble double unsigned, d_date date);")
 	primaryDatabase.MustExec("insert into alltypes value (DEFAULT, 0, 1, -128, 0, 0, 0 ,0, -0.1234, -0.12345678, 0.0, 0.0, DATE('1981-02-16'));")
-	// Insert maximum values
 	primaryDatabase.MustExec("insert into alltypes value (DEFAULT, 0, 1, 127, 255, 0, 0 ,0, 0.0, 0.0, 0.1234, 0.12345678, DATE('1981-02-16'));")
-	// Insert null values
 	primaryDatabase.MustExec("insert into alltypes value (DEFAULT, null, null, null, null, null, null, null, null, null, null, null, null);")
-
-	// TODO: This causes the dolt server replication process to crash!
-	//       What's the best way to debug this?
 
 	// Verify on replica
 	time.Sleep(1 * time.Second) // TODO: Could get rid of this manually maintained lag by using toxiproxy
@@ -90,43 +89,36 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test min values
-	myMap := make(map[string]interface{})
-	require.True(t, rows.Next())
-	err = rows.MapScan(myMap)
-	require.NoError(t, err)
-	require.Equal(t, "1", string(myMap["pk"].([]byte)))
+	row := readNextRow(t, rows)
+	require.Equal(t, "1", string(row["pk"].([]byte)))
 	// MapScan doesn't honor the correct type – it converts everything to a []byte string :-/
 	// https://github.com/jmoiron/sqlx/issues/225
-	require.EqualValues(t, "\x00", string(myMap["n_bit"].([]byte)))
-	require.EqualValues(t, "\x00\x00\x00\x00\x00\x00\x00\x01", string(myMap["n_bit_64"].([]byte)))
-	require.EqualValues(t, "-0.1234", string(myMap["n_float"].([]byte)))
-	require.EqualValues(t, "-0.12345678", string(myMap["n_double"].([]byte)))
-	require.EqualValues(t, "0", string(myMap["n_ufloat"].([]byte)))
-	require.EqualValues(t, "0", string(myMap["n_udouble"].([]byte)))
-	require.EqualValues(t, "0", string(myMap["n_usmallint"].([]byte)))
-	require.EqualValues(t, "1981-02-16", string(myMap["d_date"].([]byte)))
+	require.EqualValues(t, []byte{0}, row["n_bit"])
+	require.EqualValues(t, []byte{0, 0, 0, 0, 0, 0, 0, 1}, row["n_bit_64"])
+	require.EqualValues(t, "-0.1234", string(row["n_float"].([]byte)))
+	require.EqualValues(t, "-0.12345678", string(row["n_double"].([]byte)))
+	require.EqualValues(t, "0", string(row["n_ufloat"].([]byte)))
+	require.EqualValues(t, "0", string(row["n_udouble"].([]byte)))
+	require.EqualValues(t, "0", string(row["n_usmallint"].([]byte)))
+	require.EqualValues(t, "1981-02-16", string(row["d_date"].([]byte)))
 
 	// Test max values
-	require.True(t, rows.Next())
-	err = rows.MapScan(myMap)
-	require.NoError(t, err)
-	require.Equal(t, "2", string(myMap["pk"].([]byte)))
-	require.Equal(t, "127", string(myMap["n_tinyint"].([]byte)))
-	require.EqualValues(t, "0", string(myMap["n_float"].([]byte)))
-	require.EqualValues(t, "0", string(myMap["n_double"].([]byte)))
-	require.EqualValues(t, "0.1234", string(myMap["n_ufloat"].([]byte)))
-	require.EqualValues(t, "0.12345678", string(myMap["n_udouble"].([]byte)))
-	require.EqualValues(t, "255", string(myMap["n_utinyint"].([]byte)))
+	row = readNextRow(t, rows)
+	require.Equal(t, "2", string(row["pk"].([]byte)))
+	require.Equal(t, "127", string(row["n_tinyint"].([]byte)))
+	require.EqualValues(t, "0", string(row["n_float"].([]byte)))
+	require.EqualValues(t, "0", string(row["n_double"].([]byte)))
+	require.EqualValues(t, "0.1234", string(row["n_ufloat"].([]byte)))
+	require.EqualValues(t, "0.12345678", string(row["n_udouble"].([]byte)))
+	require.EqualValues(t, "255", string(row["n_utinyint"].([]byte)))
 
 	// Test null values
-	require.True(t, rows.Next())
-	err = rows.MapScan(myMap)
-	require.NoError(t, err)
-	require.Equal(t, "3", string(myMap["pk"].([]byte)))
-	require.Equal(t, nil, myMap["n_bit"])
-	require.Equal(t, nil, myMap["n_tinyint"])
-	require.EqualValues(t, nil, myMap["n_usmallint"])
-	require.Equal(t, nil, myMap["d_date"])
+	row = readNextRow(t, rows)
+	require.Equal(t, "3", toString(row["pk"]))
+	require.Equal(t, nil, row["n_bit"])
+	require.Equal(t, nil, row["n_tinyint"])
+	require.EqualValues(t, nil, row["n_usmallint"])
+	require.Equal(t, nil, row["d_date"])
 
 	require.False(t, rows.Next())
 
@@ -134,15 +126,53 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	//       Then the commands to execute them and verify them on the replica could be done automatically?
 	//       Or maybe we could dump the mysql db and load it into a dolt db to diff the two databases?
 
-	// TODO: Test updates on the primary
-	// TODO: Verify on the replica
+	// Test updates
+	primaryDatabase.MustExec("update alltypes set n_bit=0x01, n_float=123.4, n_tinyint=42 where pk=2;")
+	primaryDatabase.MustExec("update alltypes set n_bit=NULL, n_float=NULL, n_tinyint=NULL where pk=1;")
 
-	// TODO: Test deletes on the primary
+	time.Sleep(1 * time.Second)
+	rows, err = replicaDatabase.Queryx("select * from alltypes order by pk;")
+	require.NoError(t, err)
+
+	row = readNextRow(t, rows)
+	require.Equal(t, "1", toString(row["pk"]))
+	require.Nil(t, row["n_bit"])
+	require.Nil(t, row["n_float"])
+	require.Nil(t, row["n_tinyint"])
+
+	row = readNextRow(t, rows)
+	require.Equal(t, "2", toString(row["pk"]))
+	require.EqualValues(t, []byte{1}, row["n_bit"])
+	require.EqualValues(t, "123.4", string(row["n_float"].([]byte)))
+	require.EqualValues(t, "42", string(row["n_tinyint"].([]byte)))
+
+	// Test deletes
+	// TODO: Run deletes on primary
 	// TODO: Verify on the replica
 }
 
+func toString(value interface{}) string {
+	if value == nil {
+		// TODO: is this right?
+		return "NULL"
+	} else if bytes, ok := value.([]byte); ok {
+		return string(bytes)
+	} else {
+		panic(fmt.Sprintf("value is not of type []byte, is: %T", value))
+	}
+}
+
+func readNextRow(t *testing.T, rows *sqlx.Rows) map[string]interface{} {
+	row := make(map[string]interface{})
+	require.True(t, rows.Next())
+	err := rows.MapScan(row)
+	require.NoError(t, err)
+	return row
+}
+
 func TestBinlogReplicationSanityCheck(t *testing.T) {
-	createServersAndStartReplication(t)
+	createServers(t)
+	startReplication(t, mySqlPort)
 	defer teardown(t)
 
 	// Make changes on the primary
@@ -155,7 +185,7 @@ func TestBinlogReplicationSanityCheck(t *testing.T) {
 	assertCreateTableStatement(t, replicaDatabase, "t", expectedStatement)
 }
 
-func createServersAndStartReplication(t *testing.T) {
+func createServers(t *testing.T) {
 	dir, err := os.MkdirTemp("", "TestBinlogReplicationForAllTypes-"+time.Now().Format("12345"))
 	require.NoError(t, err)
 	fmt.Printf("temp dir: %v \n", dir)
@@ -167,14 +197,14 @@ func createServersAndStartReplication(t *testing.T) {
 	doltPort, doltProcess, err = startDoltSqlServer(dir)
 	require.NoError(t, err)
 	fmt.Printf("Dolt server started on port %v \n", doltPort)
+}
 
-	// Configure and start replication
-	_, err = replicaDatabase.Query(
+func startReplication(t *testing.T, port int) {
+	replicaDatabase.MustExec(
 		fmt.Sprintf("change replication source to SOURCE_HOST='localhost', SOURCE_USER='root', "+
-			"SOURCE_PASSWORD='', SOURCE_PORT=%v;", mySqlPort))
-	require.NoError(t, err)
-	_, err = replicaDatabase.Query("start replica;")
-	require.NoError(t, err)
+			"SOURCE_PASSWORD='', SOURCE_PORT=%v;", port))
+
+	replicaDatabase.MustExec("start replica;")
 }
 
 func assertCreateTableStatement(t *testing.T, database *sqlx.DB, table string, expectedStatement string) {
@@ -197,18 +227,18 @@ func sanitizeCreateTableString(statement string) string {
 	return regex.ReplaceAllString(statement, " ")
 }
 
-func findFreePort() (int, error) {
+func findFreePort() int {
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
-		return -1, fmt.Errorf("unable to find available TCP port: %v", err.Error())
+		panic(fmt.Sprintf("unable to find available TCP port: %v", err.Error()))
 	}
 	mySqlPort := listener.Addr().(*net.TCPAddr).Port
 	err = listener.Close()
 	if err != nil {
-		return -1, fmt.Errorf("unable to find available TCP port: %v", err.Error())
+		panic(fmt.Sprintf("unable to find available TCP port: %v", err.Error()))
 	}
 
-	return mySqlPort, nil
+	return mySqlPort
 }
 
 func startMySqlServer(dir string) (int, *os.Process, error) {
@@ -223,10 +253,7 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 		return -1, nil, err
 	}
 
-	mySqlPort, err := findFreePort()
-	if err != nil {
-		return -1, nil, err
-	}
+	mySqlPort = findFreePort()
 
 	// Create a fresh MySQL server for the primary
 	cmd := exec.Command("mysqld", "--initialize-insecure", "--user=root", "--datadir="+dataDir)
@@ -283,10 +310,7 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 		return -1, nil, err
 	}
 
-	doltPort, err := findFreePort()
-	if err != nil {
-		return -1, nil, err
-	}
+	doltPort = findFreePort()
 
 	// TODO: make sure we are using the local dev build binary!
 	// TODO: That means we have to run the build before we can execute these tests?
@@ -294,6 +318,7 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 	// TODO: How do the cluster replication tests deal with this? Do they just use the go API directly to launch the command?
 	cmd := exec.Command("/Users/jason/go/bin/dolt", "sql-server",
 		"-uroot",
+		"--loglevel=DEBUG",
 		fmt.Sprintf("--port=%v", doltPort),
 		fmt.Sprintf("--socket=dolt.%v.sock", doltPort))
 
