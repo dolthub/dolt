@@ -58,18 +58,9 @@ func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 	controller.status.ReplicaIoRunning = binlogreplication.ReplicaIoNotRunning
 	controller.status.ReplicaSqlRunning = binlogreplication.ReplicaSqlNotRunning
 
-	/*
-		TODO: Update the other parts of the code that set this status
-			MYSQL_REPLICA_NOT_RUN.  The replication I/O (receiver) thread is not running. For this state, Replica_IO_Running is No.
-
-			MYSQL_REPLICA_RUN_NOT_CONNECT.  The replication I/O (receiver) thread is running, but is not connected to a replication source. For this state, Replica_IO_Running is Connecting.
-
-			MYSQL_REPLICA_RUN_CONNECT.  The replication I/O (receiver) thread is running, and is connected to a replication source. For this state, Replica_IO_Running is Yes.
-	*/
-
 	controller.status.SourceRetryCount = 86400
-	// TODO: The ConnectRetry default *should* be 60s to match MySQL's behavior, but for easy testing, we're
-	//       starting with a very quick retry
+	// TODO: The ConnectRetry default *should* be 60s to match MySQL's behavior, but for easier testing,
+	//        we're starting with a very quick retry
 	controller.status.ConnectRetry = 5
 
 	return &controller
@@ -178,14 +169,9 @@ func NewReplicaConfiguration(connectionParams *mysql.ConnParams) *replicaConfigu
 }
 
 func (d *doltBinlogReplicaController) connectAndStartReplicationEventStream(ctx *sql.Context) (*mysql.Conn, error) {
-	// TODO: Set Replica_IO_State:
-	//       https://dev.mysql.com/doc/refman/8.0/en/replica-io-thread-states.html
-
-	// TODO: increment counters
-	// TODO: set states
-
 	d.mu.Lock()
 	d.status.ReplicaIoRunning = binlogreplication.ReplicaIoConnecting
+	d.status.ReplicaSqlRunning = binlogreplication.ReplicaSqlRunning
 	maxConnectionAttempts := d.status.SourceRetryCount
 	connectRetryDelay := d.status.ConnectRetry
 	d.mu.Unlock()
@@ -254,6 +240,15 @@ func (d *doltBinlogReplicaController) replicaBinlogEventHandler(ctx *sql.Context
 						time.Sleep(1 * time.Second)
 						continue
 					} else if strings.HasPrefix(sqlError.Message, io.ErrUnexpectedEOF.Error()) {
+						// TODO: Do we have these errors defined in GMS anywhere yet?
+						//       https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html
+						const ER_NET_READ_ERROR = 1158
+						d.mu.Lock()
+						d.status.LastIoError = io.ErrUnexpectedEOF.Error()
+						d.status.LastIoErrNumber = ER_NET_READ_ERROR
+						currentTime := time.Now()
+						d.status.LastIoErrorTimestamp = &currentTime
+						d.mu.Unlock()
 						conn, err = d.connectAndStartReplicationEventStream(ctx)
 						if err != nil {
 							return err

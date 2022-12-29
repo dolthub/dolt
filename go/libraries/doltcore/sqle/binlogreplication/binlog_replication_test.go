@@ -54,26 +54,26 @@ func teardown(t *testing.T) {
 	//defer os.RemoveAll(dir)
 }
 
-func comparePrimaryAndReplicaTable(t *testing.T, table string) {
-	// TODO: Finish this experiment
-	dumpFile, err := os.Create("/tmp/mysql.dump")
-	require.NoError(t, err)
-	defer dumpFile.Close()
+// TestBinlogReplicationSanityCheck performs the simplest possible binlog replication test. It starts up
+// a MySQL primary and a Dolt replica, and asserts that a CREATE TABLE statement properly replicates to the
+// Dolt replica.
+func TestBinlogReplicationSanityCheck(t *testing.T) {
+	startSqlServers(t)
+	startReplication(t, mySqlPort)
+	defer teardown(t)
 
-	cmd := exec.Command("mysqldump", "--protocol=TCP", "--user=root", fmt.Sprintf("--port=%v", mySqlPort), "db01", table)
-	cmd.Stdout = dumpFile
-	err = cmd.Run()
-	require.NoError(t, err)
-
-	// TODO: Now we need to load our dump into a new dolt database
-	//       - we could read each line of the file and execute it against our Dolt database (with a new db)
-	//         TODO: If all databases are made read only, then will this still work?
-	//               We could shut down the database and then import with `dolt sql < mysql.dump`
-	fmt.Printf("Created dump file at: /tmp/mysql.dump \n")
+	// Make changes on the primary and verify on the replica
+	primaryDatabase.MustExec("create table t (pk int primary key)")
+	time.Sleep(1 * time.Second)
+	expectedStatement := "CREATE TABLE t ( pk int NOT NULL, PRIMARY KEY (pk)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"
+	assertCreateTableStatement(t, replicaDatabase, "t", expectedStatement)
 }
 
+// TestBinlogReplicationForAllTypes tests that operations (inserts, updates, and deletes) on all SQL
+// data types can be successfully replicated.
+// TODO: This doesn't cover all types; look into generating this data (types, min/max values, etc)
 func TestBinlogReplicationForAllTypes(t *testing.T) {
-	createServers(t)
+	startSqlServers(t)
 	startReplication(t, mySqlPort)
 	defer teardown(t)
 
@@ -122,10 +122,6 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 
 	require.False(t, rows.Next())
 
-	// TODO: It might be easier to have data files for the various queries we want to run
-	//       Then the commands to execute them and verify them on the replica could be done automatically?
-	//       Or maybe we could dump the mysql db and load it into a dolt db to diff the two databases?
-
 	// Test updates
 	primaryDatabase.MustExec("update alltypes set n_bit=0x01, n_float=123.4, n_tinyint=42 where pk=2;")
 	primaryDatabase.MustExec("update alltypes set n_bit=NULL, n_float=NULL, n_tinyint=NULL where pk=1;")
@@ -170,23 +166,8 @@ func readNextRow(t *testing.T, rows *sqlx.Rows) map[string]interface{} {
 	return row
 }
 
-func TestBinlogReplicationSanityCheck(t *testing.T) {
-	createServers(t)
-	startReplication(t, mySqlPort)
-	defer teardown(t)
-
-	// Make changes on the primary
-	_, err := primaryDatabase.Query("create table t (pk int primary key)")
-	require.NoError(t, err)
-
-	// Verify on replica
-	time.Sleep(1 * time.Second)
-	expectedStatement := "CREATE TABLE t ( pk int NOT NULL, PRIMARY KEY (pk)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"
-	assertCreateTableStatement(t, replicaDatabase, "t", expectedStatement)
-}
-
-func createServers(t *testing.T) {
-	dir, err := os.MkdirTemp("", "TestBinlogReplicationForAllTypes-"+time.Now().Format("12345"))
+func startSqlServers(t *testing.T) {
+	dir, err := os.MkdirTemp("", t.Name()+"-"+time.Now().Format("12345"))
 	require.NoError(t, err)
 	fmt.Printf("temp dir: %v \n", dir)
 
@@ -227,6 +208,8 @@ func sanitizeCreateTableString(statement string) string {
 	return regex.ReplaceAllString(statement, " ")
 }
 
+// findFreePort returns an available port that can be used for a server. If any errors are
+// encountered, this function will panic and fail the current test.
 func findFreePort() int {
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -241,10 +224,17 @@ func findFreePort() int {
 	return mySqlPort
 }
 
+// startMySqlServer configures a starts a fresh MySQL server instance and returns the port it is running on,
+// and the os.Process handle. If unable to start up the MySQL server, an error is returned.
 func startMySqlServer(dir string) (int, *os.Process, error) {
+	originalCwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+
 	dir = dir + string(os.PathSeparator) + "mysql" + string(os.PathSeparator)
 	dataDir := dir + "mysql_data"
-	err := os.MkdirAll(dir, 0700)
+	err = os.MkdirAll(dir, 0700)
 	if err != nil {
 		return -1, nil, err
 	}
@@ -295,30 +285,36 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 	dsn = fmt.Sprintf("root@tcp(127.0.0.1:%v)/db01", mySqlPort)
 	primaryDatabase = sqlx.MustOpen("mysql", dsn)
 
+	os.Chdir(originalCwd)
+
 	return mySqlPort, cmd.Process, nil
 }
 
 func startDoltSqlServer(dir string) (int, *os.Process, error) {
-	// TODO: use path/filepath module? https://gobyexample.com/file-paths
-	dir = dir + string(os.PathSeparator) + "dolt" + string(os.PathSeparator)
+	dir = filepath.Join(dir, "dolt")
 	err := os.MkdirAll(dir, 0700)
-	if err != nil {
-		return -1, nil, err
-	}
-	err = os.Chdir(dir)
 	if err != nil {
 		return -1, nil, err
 	}
 
 	doltPort = findFreePort()
 
-	// TODO: make sure we are using the local dev build binary!
-	// TODO: That means we have to run the build before we can execute these tests?
-	//       This is also annoying for local development.
-	// TODO: How do the cluster replication tests deal with this? Do they just use the go API directly to launch the command?
-	cmd := exec.Command("/Users/jason/go/bin/dolt", "sql-server",
+	// take the CWD and move up four directories to find the go directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	goDirPath := filepath.Join(cwd, "..", "..", "..", "..")
+	err = os.Chdir(goDirPath)
+	if err != nil {
+		panic(err)
+	}
+
+	cmd := exec.Command("go", "run", "./cmd/dolt",
+		"sql-server",
 		"-uroot",
 		"--loglevel=DEBUG",
+		fmt.Sprintf("--data-dir=%s", dir),
 		fmt.Sprintf("--port=%v", doltPort),
 		fmt.Sprintf("--socket=dolt.%v.sock", doltPort))
 
@@ -343,22 +339,17 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 		return -1, nil, err
 	}
 
-	// Create the initial database on the Dolt server
-	_, err = replicaDatabase.Query("create database db01;")
-	if err != nil {
-		return -1, nil, err
-	}
-	_, err = replicaDatabase.Query("use db01;")
-	if err != nil {
-		return -1, nil, err
-	}
-
+	// Create the initial database on the Dolt server and reconnect to it
+	replicaDatabase.MustExec("create database db01;")
 	dsn = fmt.Sprintf("root@tcp(127.0.0.1:%v)/db01", doltPort)
 	replicaDatabase = sqlx.MustOpen("mysql", dsn)
 
 	return doltPort, cmd.Process, nil
 }
 
+// waitForSqlServerToStart polls the specified database to wait for it to become available, pausing
+// between retry attempts, and returning an error if it is not able to verify that the database is
+// available.
 func waitForSqlServerToStart(database *sqlx.DB) error {
 	for counter := 0; counter < 10; counter++ {
 		if database.Ping() == nil {
@@ -368,4 +359,24 @@ func waitForSqlServerToStart(database *sqlx.DB) error {
 	}
 
 	return database.Ping()
+}
+
+// comparePrimaryAndReplicaTable asserts that the specified |table| is identical in the MySQL primary
+// and in the Dolt replica.
+// TODO: Finish this experiment; try dumping the mysql db and loading it into a dolt branch to diff.
+func comparePrimaryAndReplicaTable(t *testing.T, table string) {
+	dumpFile, err := os.Create("/tmp/mysql.dump")
+	require.NoError(t, err)
+	defer dumpFile.Close()
+
+	cmd := exec.Command("mysqldump", "--protocol=TCP", "--user=root", fmt.Sprintf("--port=%v", mySqlPort), "db01", table)
+	cmd.Stdout = dumpFile
+	err = cmd.Run()
+	require.NoError(t, err)
+
+	// TODO: Now we need to load our dump into a new dolt database
+	//       - we could read each line of the file and execute it against our Dolt database (with a new db)
+	//         TODO: If all databases are made read only, then will this still work?
+	//               We could shut down the database and then import with `dolt sql < mysql.dump`
+	fmt.Printf("Created dump file at: /tmp/mysql.dump \n")
 }
