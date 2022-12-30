@@ -24,6 +24,8 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/go-mysql-server/sql/parse"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -1061,8 +1063,8 @@ func (db Database) Flush(ctx *sql.Context) error {
 	return db.SetRoot(ctx, ws.WorkingRoot())
 }
 
-// GetView implements sql.ViewDatabase
-func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, error) {
+// GetViewDefinition implements sql.ViewDatabase
+func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (string, bool, error) {
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return "", false, err
@@ -1092,7 +1094,7 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 	}
 
 	if dbState.SessionCache().ViewsCached(key) {
-		view, ok := dbState.SessionCache().GetCachedView(key, viewName)
+		view, ok := dbState.SessionCache().GetCachedViewDefinition(key, viewName)
 		return view, ok, nil
 	}
 
@@ -1101,32 +1103,101 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 		return "", false, err
 	}
 	if !ok {
-		dbState.SessionCache().CacheViews(key, nil, nil)
+		dbState.SessionCache().CacheViews(key, nil)
 		return "", false, nil
 	}
 
-	fragments, err := getSchemaFragmentsOfType(ctx, tbl.(*WritableDoltTable), viewFragment)
+	views, viewDef, found, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, tbl.(*WritableDoltTable), viewName)
 	if err != nil {
 		return "", false, err
 	}
 
-	found := false
-	viewDef := ""
-	viewNames := make([]string, len(fragments))
-	viewDefs := make([]string, len(fragments))
-	for i, fragment := range fragments {
-		if strings.ToLower(fragment.name) == strings.ToLower(viewName) {
-			found = true
-			viewDef = fragments[i].fragment
-		}
+	dbState.SessionCache().CacheViews(key, views)
 
-		viewNames[i] = fragments[i].name
-		viewDefs[i] = fragments[i].fragment
+	return viewDef.TextDefinition, found, nil
+}
+
+func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableDoltTable, viewName string) ([]sql.ViewDefinition, sql.ViewDefinition, bool, error) {
+	fragments, err := getSchemaFragmentsOfType(ctx, tbl, viewFragment)
+	if err != nil {
+		return nil, sql.ViewDefinition{}, false, err
 	}
 
-	dbState.SessionCache().CacheViews(key, viewNames, viewDefs)
+	var found = false
+	var viewDef sql.ViewDefinition
+	var views = make([]sql.ViewDefinition, len(fragments))
+	for i, fragment := range fragments {
+		cv, err := parse.Parse(ctx, fragments[i].fragment)
+		if err != nil {
+			return nil, sql.ViewDefinition{}, false, err
+		}
+		createView, ok := cv.(*plan.CreateView)
+		if !ok {
+			return nil, sql.ViewDefinition{}, false, errors.NewKind("SOMETHING WRONG").New()
+		}
 
-	return viewDef, found, nil
+		views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: createView.Definition.TextDefinition, CreateViewStatement: fragments[i].fragment}
+		if strings.ToLower(fragment.name) == strings.ToLower(viewName) {
+			found = true
+			viewDef = views[i]
+		}
+	}
+
+	return views, viewDef, found, nil
+}
+
+// GetCreateViewStmt implements sql.ViewDatabase
+func (db Database) GetCreateViewStmt(ctx *sql.Context, viewName string) (string, bool, error) {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return "", false, err
+	}
+
+	lwrViewName := strings.ToLower(viewName)
+	switch {
+	case strings.HasPrefix(lwrViewName, doltdb.DoltBlameViewPrefix):
+		tableName := lwrViewName[len(doltdb.DoltBlameViewPrefix):]
+
+		viewSelectStmt, err := dtables.NewBlameView(ctx, tableName, root)
+		if err != nil {
+			return "", false, err
+		}
+		return fmt.Sprintf("CREATE VIEW %s_view AS %s", lwrViewName, viewSelectStmt), true, nil
+	}
+
+	key, err := doltdb.NewDataCacheKey(root)
+	if err != nil {
+		return "", false, err
+	}
+
+	ds := dsess.DSessFromSess(ctx.Session)
+	dbState, _, err := ds.LookupDbState(ctx, db.name)
+	if err != nil {
+		return "", false, err
+	}
+
+	if dbState.SessionCache().ViewsCached(key) {
+		view, ok := dbState.SessionCache().GetCachedCreateViewStmt(key, viewName)
+		return view, ok, nil
+	}
+
+	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	if err != nil {
+		return "", false, err
+	}
+	if !ok {
+		dbState.SessionCache().CacheViews(key, nil)
+		return "", false, nil
+	}
+
+	views, viewDef, found, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, tbl.(*WritableDoltTable), viewName)
+	if err != nil {
+		return "", false, err
+	}
+
+	dbState.SessionCache().CacheViews(key, views)
+
+	return viewDef.CreateViewStatement, found, nil
 }
 
 // AllViews implements sql.ViewDatabase
@@ -1139,18 +1210,7 @@ func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 		return nil, nil
 	}
 
-	frags, err := getSchemaFragmentsOfType(ctx, tbl.(*WritableDoltTable), viewFragment)
-	if err != nil {
-		return nil, err
-	}
-
-	var views []sql.ViewDefinition
-	for _, frag := range frags {
-		views = append(views, sql.ViewDefinition{
-			Name:           frag.name,
-			TextDefinition: frag.fragment,
-		})
-	}
+	views, _, _, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, tbl.(*WritableDoltTable), "")
 	if err != nil {
 		return nil, err
 	}
@@ -1161,9 +1221,9 @@ func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 // CreateView implements sql.ViewCreator. Persists the view in the dolt database, so
 // it can exist in a sql session later. Returns sql.ErrExistingView if a view
 // with that name already exists.
-func (db Database) CreateView(ctx *sql.Context, name string, definition string) error {
+func (db Database) CreateView(ctx *sql.Context, name string, selectStatement, createViewStmt string) error {
 	err := sql.ErrExistingView.New(db.name, name)
-	return db.addFragToSchemasTable(ctx, "view", name, definition, time.Unix(0, 0).UTC(), err)
+	return db.addFragToSchemasTable(ctx, "view", name, createViewStmt, time.Unix(0, 0).UTC(), err)
 }
 
 // DropView implements sql.ViewDropper. Removes a view from persistence in the

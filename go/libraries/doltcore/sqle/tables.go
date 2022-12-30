@@ -291,10 +291,10 @@ func (t *DoltTable) HasIndex(ctx *sql.Context, idx sql.Index) (bool, error) {
 }
 
 // GetAutoIncrementValue gets the last AUTO_INCREMENT value
-func (t *DoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
+func (t *DoltTable) GetAutoIncrementValue(ctx *sql.Context) (uint64, error) {
 	table, err := t.DoltTable(ctx)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	return table.GetAutoIncrementValue(ctx)
 }
@@ -746,12 +746,12 @@ func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrem
 }
 
 // PeekNextAutoIncrementValue implements sql.AutoIncrementTable
-func (t *WritableDoltTable) PeekNextAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
+func (t *WritableDoltTable) PeekNextAutoIncrementValue(ctx *sql.Context) (uint64, error) {
 	if !t.autoIncCol.AutoIncrement {
-		return nil, sql.ErrNoAutoIncrementCol
+		return 0, sql.ErrNoAutoIncrementCol
 	}
 
-	return t.getTableAutoIncrementValue(ctx)
+	return t.DoltTable.GetAutoIncrementValue(ctx)
 }
 
 // GetNextAutoIncrementValue implements sql.AutoIncrementTable
@@ -766,10 +766,6 @@ func (t *WritableDoltTable) GetNextAutoIncrementValue(ctx *sql.Context, potentia
 	}
 
 	return ed.GetNextAutoIncrementValue(ctx, potentialVal)
-}
-
-func (t *WritableDoltTable) getTableAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
-	return t.DoltTable.GetAutoIncrementValue(ctx)
 }
 
 func (t *DoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
