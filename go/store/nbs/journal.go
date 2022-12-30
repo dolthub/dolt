@@ -341,6 +341,19 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, ke
 	return
 }
 
+type jrecordLookup struct {
+	offset int64
+	length uint32
+}
+
+func rangeFromLookup(l jrecordLookup) Range {
+	return Range{
+		Offset: uint64(l.offset) + chunkRecordHeaderSize,
+		// jrecords are currently double check-summed
+		Length: uint32(l.length) - (chunkRecordHeaderSize + checksumSize),
+	}
+}
+
 type lookupMap struct {
 	data map[addr]jrecordLookup
 	lock *sync.RWMutex
