@@ -140,7 +140,7 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 	assert.True(upstream.root.IsEmpty())
 	assert.Empty(upstream.specs)
 
-	fm2 := fileManifest{fm.dir} // Open existent, but empty manifest
+	fm2 := fileManifest{dir: fm.dir, mode: asyncFlush} // Open existent, but empty manifest
 	exists, upstream, err := fm2.ParseIfExists(context.Background(), stats, nil)
 	require.NoError(t, err)
 	assert.True(exists)
