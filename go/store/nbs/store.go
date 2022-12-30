@@ -471,7 +471,7 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 		return nil, err
 	}
 
-	m, err := getFileManifest(ctx, dir)
+	m, err := getFileManifest(ctx, dir, asyncFlush)
 	if err != nil {
 		return nil, err
 	}
@@ -487,7 +487,7 @@ func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQ
 		return nil, err
 	}
 
-	m, err := getFileManifest(ctx, dir)
+	m, err := getFileManifest(ctx, dir, syncFlush)
 	if err != nil {
 		return nil, err
 	}
