@@ -85,7 +85,7 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 		return nil
 	}
 
-	_, err = updateWithChecker(ctx, dir, check, contents.lock, contents, nil)
+	_, err = updateWithChecker(ctx, dir, syncFlush, check, contents.lock, contents, nil)
 
 	if err != nil {
 		return false, err
@@ -95,29 +95,43 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 }
 
 // parse the manifest in its given format
-func getFileManifest(ctx context.Context, dir string) (manifest, error) {
-	f, err := openIfExists(filepath.Join(dir, manifestFileName))
+func getFileManifest(ctx context.Context, dir string, mode updateMode) (m manifest, err error) {
+	var f *os.File
+	f, err = openIfExists(filepath.Join(dir, manifestFileName))
 	if err != nil {
 		return nil, err
-	}
-	if f == nil {
-		return fileManifest{dir}, nil
+	} else if f == nil {
+		return fileManifest{dir: dir}, nil
 	}
 	defer func() {
-		err = f.Close()
+		// keep first error
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
 	}()
 
-	fm := fileManifest{dir}
-	ok, _, err := fm.ParseIfExists(ctx, &Stats{}, nil)
-	if ok && err == nil {
-		return fm, nil
-	}
+	m = fileManifest{dir: dir, mode: mode}
 
-	return nil, ErrUnreadableManifest
+	var ok bool
+	ok, _, err = m.ParseIfExists(ctx, &Stats{}, nil)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, ErrUnreadableManifest
+	}
+	return
 }
 
+type updateMode byte
+
+const (
+	asyncFlush updateMode = 0
+	syncFlush  updateMode = 1
+)
+
 type fileManifest struct {
-	dir string
+	dir  string
+	mode updateMode
 }
 
 func newLock(dir string) *fslock.Lock {
@@ -188,7 +202,7 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 		return nil
 	}
 
-	return updateWithChecker(ctx, fm.dir, checker, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, fm.dir, fm.mode, checker, lastLock, newContents, writeHook)
 }
 
 func (fm fileManifest) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
@@ -206,7 +220,7 @@ func (fm fileManifest) UpdateGCGen(ctx context.Context, lastLock addr, newConten
 		return nil
 	}
 
-	return updateWithChecker(ctx, fm.dir, checker, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, fm.dir, fm.mode, checker, lastLock, newContents, writeHook)
 }
 
 // parseV5Manifest parses the v5 manifest from the Reader given. Assumes the first field (the manifest version and
@@ -398,7 +412,7 @@ func parseIfExists(_ context.Context, dir string, readHook func() error) (exists
 	return exists, contents, nil
 }
 
-func updateWithChecker(_ context.Context, dir string, validate manifestChecker, lastLock addr, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
+func updateWithChecker(_ context.Context, dir string, mode updateMode, validate manifestChecker, lastLock addr, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
 	var tempManifestPath string
 
 	// Write a temporary manifest file, to be renamed over manifestFileName upon success.
@@ -406,7 +420,6 @@ func updateWithChecker(_ context.Context, dir string, validate manifestChecker, 
 	tempManifestPath, err = func() (name string, ferr error) {
 		var temp *os.File
 		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(dir, "nbs_manifest_")
-
 		if ferr != nil {
 			return "", ferr
 		}
@@ -420,9 +433,14 @@ func updateWithChecker(_ context.Context, dir string, validate manifestChecker, 
 		}()
 
 		ferr = writeManifest(temp, newContents)
-
 		if ferr != nil {
 			return "", ferr
+		}
+
+		if mode == syncFlush {
+			if ferr = temp.Sync(); ferr != nil {
+				return "", ferr
+			}
 		}
 
 		return temp.Name(), nil
@@ -512,6 +530,17 @@ func updateWithChecker(_ context.Context, dir string, validate manifestChecker, 
 	err = file.Rename(tempManifestPath, manifestPath)
 	if err != nil {
 		return manifestContents{}, err
+	}
+
+	if mode == syncFlush {
+		// fsync the directory
+		var d *os.File
+		if d, err = os.Open(dir); err != nil {
+			return manifestContents{}, err
+		}
+		if err = d.Sync(); err != nil {
+			return manifestContents{}, err
+		}
 	}
 
 	return newContents, nil

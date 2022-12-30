@@ -47,7 +47,7 @@ func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, no
 	require.NoError(t, err)
 
 	// create a v5 manifest
-	_, err = fileManifest{nomsDir}.Update(ctx, addr{}, manifestContents{}, &Stats{}, nil)
+	_, err = fileManifest{dir: nomsDir, mode: asyncFlush}.Update(ctx, addr{}, manifestContents{}, &Stats{}, nil)
 	require.NoError(t, err)
 
 	q = NewUnlimitedMemQuotaProvider()
