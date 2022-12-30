@@ -27,7 +27,7 @@ import (
 
 var _ chunks.ChunkStore = (*GenerationalNBS)(nil)
 var _ chunks.GenerationalCS = (*GenerationalNBS)(nil)
-var _ chunks.TableFileStore = (*GenerationalNBS)(nil)
+var _ TableFileStore = (*GenerationalNBS)(nil)
 
 type GenerationalNBS struct {
 	oldGen *NomsBlockStore
@@ -244,7 +244,7 @@ func (gcs *GenerationalNBS) copyToOldGen(ctx context.Context, hashes hash.HashSe
 }
 
 type prefixedTableFile struct {
-	chunks.TableFile
+	TableFile
 	prefix string
 }
 
@@ -254,7 +254,7 @@ func (p prefixedTableFile) FileID() string {
 
 // Sources retrieves the current root hash, a list of all the table files (which may include appendix table files),
 // and a second list containing only appendix table files for both the old gen and new gen stores.
-func (gcs *GenerationalNBS) Sources(ctx context.Context) (hash.Hash, []chunks.TableFile, []chunks.TableFile, error) {
+func (gcs *GenerationalNBS) Sources(ctx context.Context) (hash.Hash, []TableFile, []TableFile, error) {
 	root, tFiles, appFiles, err := gcs.newGen.Sources(ctx)
 	if err != nil {
 		return hash.Hash{}, nil, nil, err
@@ -321,7 +321,7 @@ func (gcs *GenerationalNBS) SetRootChunk(ctx context.Context, root, previous has
 }
 
 // SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
-func (gcs *GenerationalNBS) SupportedOperations() chunks.TableFileStoreOps {
+func (gcs *GenerationalNBS) SupportedOperations() TableFileStoreOps {
 	return gcs.newGen.SupportedOperations()
 }
 
