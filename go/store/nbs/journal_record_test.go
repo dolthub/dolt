@@ -58,13 +58,13 @@ func TestRoundTripRecords(t *testing.T) {
 func TestProcessRecords(t *testing.T) {
 	const cnt = 1024
 	ctx := context.Background()
-	records := make([]jrecord, cnt)
+	records := make([]journalRec, cnt)
 	buffers := make([][]byte, cnt)
 	journal := make([]byte, cnt*1024)
 
 	var off uint32
 	for i := range records {
-		var r jrecord
+		var r journalRec
 		var b []byte
 		if i%8 == 0 {
 			r, b = makeRootHashRecord()
@@ -77,7 +77,7 @@ func TestProcessRecords(t *testing.T) {
 	}
 
 	var i, sum int
-	check := func(o int64, r jrecord) (_ error) {
+	check := func(o int64, r journalRec) (_ error) {
 		require.True(t, i < cnt)
 		assert.Equal(t, records[i], r)
 		assert.Equal(t, sum, int(o))
@@ -113,21 +113,22 @@ func randomMemTable(cnt int) (*memTable, map[addr]chunks.Chunk) {
 	return mt, chnx
 }
 
-func makeChunkRecord() (jrecord, []byte) {
+func makeChunkRecord() (journalRec, []byte) {
 	ch := chunks.NewChunk(randBuf(100))
 	cc := ChunkToCompressedChunk(ch)
 	payload := cc.FullCompressedChunk
+	sz, _ := chunkRecordSize(cc)
 
-	b := make([]byte, recMinSz+len(payload))
+	b := make([]byte, sz)
 	writeUint(b, uint32(len(b)))
-	b[recLenSz] = byte(chunkKind)
+	b[recLenSz] = byte(chunkRecKind)
 	copy(b[recLenSz+recKindSz:], cc.H[:])
-	copy(b[recLenSz+recKindSz+addrSize:], payload)
-	c := crc(b[:len(b)-checksumSize])
-	writeUint(b[len(b)-checksumSize:], c)
-	r := jrecord{
+	copy(b[recLenSz+recKindSz+recAddrSz:], payload)
+	c := crc(b[:len(b)-recChecksumSz])
+	writeUint(b[len(b)-recChecksumSz:], c)
+	r := journalRec{
 		length:   uint32(len(b)),
-		kind:     chunkKind,
+		kind:     chunkRecKind,
 		address:  addr(cc.H),
 		payload:  payload,
 		checksum: c,
@@ -135,17 +136,17 @@ func makeChunkRecord() (jrecord, []byte) {
 	return r, b
 }
 
-func makeRootHashRecord() (jrecord, []byte) {
+func makeRootHashRecord() (journalRec, []byte) {
 	a := addr(hash.Of(randBuf(8)))
-	b := make([]byte, recMinSz)
+	b := make([]byte, rootHashRecordSize)
 	writeUint(b, uint32(len(b)))
-	b[recLenSz] = byte(rootHashKind)
+	b[recLenSz] = byte(rootHashRecKind)
 	copy(b[recLenSz+recKindSz:], a[:])
-	c := crc(b[:len(b)-checksumSize])
-	writeUint(b[len(b)-checksumSize:], c)
-	r := jrecord{
+	c := crc(b[:len(b)-recChecksumSz])
+	writeUint(b[len(b)-recChecksumSz:], c)
+	r := journalRec{
 		length:   uint32(len(b)),
-		kind:     rootHashKind,
+		kind:     rootHashRecKind,
 		payload:  b[len(b):],
 		address:  a,
 		checksum: c,
@@ -155,15 +156,15 @@ func makeRootHashRecord() (jrecord, []byte) {
 
 func writeCorruptRecord(buf []byte) (n uint32) {
 	// fill with random data
-	rand.Read(buf[:recMinSz])
+	rand.Read(buf[:rootHashRecordSize])
 	// write a valid size, kind
-	writeUint(buf, recMinSz)
-	buf[recLenSz] = byte(rootHashKind)
-	return recMinSz
+	writeUint(buf, rootHashRecordSize)
+	buf[recLenSz] = byte(rootHashRecKind)
+	return rootHashRecordSize
 }
 
-func mustCompressedChunk(rec jrecord) CompressedChunk {
-	d.PanicIfFalse(rec.kind == chunkKind)
+func mustCompressedChunk(rec journalRec) CompressedChunk {
+	d.PanicIfFalse(rec.kind == chunkRecKind)
 	cc, err := NewCompressedChunk(hash.Hash(rec.address), rec.payload)
 	d.PanicIfError(err)
 	return cc

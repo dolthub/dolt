@@ -113,7 +113,7 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 	if o, err := f.Seek(0, io.SeekStart); err != nil {
 		return nil, err
 	} else if o != 0 {
-		return nil, fmt.Errorf("expected file offset 0, got %d", o)
+		return nil, fmt.Errorf("expected file journalOffset 0, got %d", o)
 	}
 
 	return &journalWriter{
@@ -218,13 +218,17 @@ func (wr *journalWriter) ProcessJournal(ctx context.Context) (last hash.Hash, cs
 		address: journalAddr,
 		lookups: newLookupMap(),
 	}
-	wr.off, err = processRecords(ctx, wr.file, func(o int64, r jrecord) error {
+	wr.off, err = processRecords(ctx, wr.file, func(o int64, r journalRec) error {
 		switch r.kind {
-		case chunkKind:
-			src.lookups.put(r.address, jrecordLookup{offset: o, length: r.length})
+		case chunkRecKind:
+			src.lookups.put(r.address, recLookup{
+				journalOff: o,
+				recordLen:  r.length,
+				payloadOff: r.payloadOffset(),
+			})
 			src.compressedSz += uint64(r.length)
 			// todo(andy): uncompressed size
-		case rootHashKind:
+		case rootHashRecKind:
 			last = hash.Hash(r.address)
 		default:
 			return fmt.Errorf("unknown journal record kind (%d)", r.kind)
@@ -238,16 +242,18 @@ func (wr *journalWriter) ProcessJournal(ctx context.Context) (last hash.Hash, cs
 	return
 }
 
-func (wr *journalWriter) WriteChunk(cc CompressedChunk) (jrecordLookup, error) {
+func (wr *journalWriter) WriteChunk(cc CompressedChunk) (recLookup, error) {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
-	rec := jrecordLookup{
-		offset: wr.offset(),
-		length: chunkRecordSize(cc),
+	l, o := chunkRecordSize(cc)
+	rec := recLookup{
+		journalOff: wr.offset(),
+		recordLen:  l,
+		payloadOff: o,
 	}
-	buf, err := wr.getBytes(int(rec.length))
+	buf, err := wr.getBytes(int(rec.recordLen))
 	if err != nil {
-		return jrecordLookup{}, err
+		return recLookup{}, err
 	}
 	_ = writeChunkRecord(buf, cc)
 	return rec, nil

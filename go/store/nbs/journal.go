@@ -341,39 +341,40 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, ke
 	return
 }
 
-type jrecordLookup struct {
-	offset int64
-	length uint32
+type recLookup struct {
+	journalOff int64
+	recordLen  uint32
+	payloadOff uint32
 }
 
-func rangeFromLookup(l jrecordLookup) Range {
+func rangeFromLookup(l recLookup) Range {
 	return Range{
-		Offset: uint64(l.offset) + chunkRecordHeaderSize,
+		Offset: uint64(l.journalOff) + uint64(l.payloadOff),
 		// jrecords are currently double check-summed
-		Length: uint32(l.length) - (chunkRecordHeaderSize + checksumSize),
+		Length: l.recordLen - (l.payloadOff + recChecksumSz),
 	}
 }
 
 type lookupMap struct {
-	data map[addr]jrecordLookup
+	data map[addr]recLookup
 	lock *sync.RWMutex
 }
 
 func newLookupMap() lookupMap {
 	return lookupMap{
-		data: make(map[addr]jrecordLookup),
+		data: make(map[addr]recLookup),
 		lock: new(sync.RWMutex),
 	}
 }
 
-func (m lookupMap) get(a addr) (l jrecordLookup, ok bool) {
+func (m lookupMap) get(a addr) (l recLookup, ok bool) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 	l, ok = m.data[a]
 	return
 }
 
-func (m lookupMap) put(a addr, l jrecordLookup) {
+func (m lookupMap) put(a addr, l recLookup) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.data[a] = l
@@ -418,8 +419,8 @@ func (s journalChunkSource) getCompressed(_ context.Context, h addr, _ *Stats) (
 		return CompressedChunk{}, nil
 	}
 
-	buf := make([]byte, l.length)
-	if _, err := s.journal.ReadAt(buf, l.offset); err != nil {
+	buf := make([]byte, l.recordLen)
+	if _, err := s.journal.ReadAt(buf, l.journalOff); err != nil {
 		return CompressedChunk{}, nil
 	}
 
