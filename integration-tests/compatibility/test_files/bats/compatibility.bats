@@ -61,7 +61,7 @@ teardown() {
 
 @test "dolt sql 'select * from abc' on branch init" {
     dolt checkout init
-    run dolt sql -q 'select * from abc;'
+    dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
 
 
