@@ -199,7 +199,7 @@ var systemTableDeleteTests = []DeleteTest{
 	{
 		Name: "delete dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
-			"INSERT INTO dolt_query_catalog VALUES ('abc123', 1, 'example', 'select 2+2 from dual', 'description')"),
+			"INSERT INTO dolt_query_catalog VALUES ('abc123', 1, 'example', 'create view example as select 2+2 from dual', 'description')"),
 		DeleteQuery:    "delete from dolt_query_catalog",
 		SelectQuery:    "select * from dolt_query_catalog",
 		ExpectedRows:   ToSqlRows(dtables.DoltQueryCatalogSchema),
@@ -208,7 +208,7 @@ var systemTableDeleteTests = []DeleteTest{
 	{
 		Name: "delete dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemasTableSchema(),
-			"INSERT INTO dolt_schemas (type, name, fragment, id) VALUES ('view', 'name', 'select 2+2 from dual', 1)"),
+			"INSERT INTO dolt_schemas (type, name, fragment, id) VALUES ('view', 'name', 'create view name as select 2+2 from dual', 1)"),
 		DeleteQuery:    "delete from dolt_schemas",
 		SelectQuery:    "select * from dolt_schemas",
 		ExpectedRows:   ToSqlRows(dtables.DoltQueryCatalogSchema),

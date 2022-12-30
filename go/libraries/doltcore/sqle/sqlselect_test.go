@@ -1309,9 +1309,9 @@ var systemTableSelectTests = []SelectTest{
 	{
 		Name: "select from dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemasTableSchema(),
-			`INSERT INTO dolt_schemas VALUES ('view', 'name', 'select 2+2 from dual', 1, NULL)`),
+			`INSERT INTO dolt_schemas VALUES ('view', 'name', 'create view name as select 2+2 from dual', 1, NULL)`),
 		Query:          "select * from dolt_schemas",
-		ExpectedRows:   []sql.Row{{"view", "name", "select 2+2 from dual", int64(1), nil}},
+		ExpectedRows:   []sql.Row{{"view", "name", "create view name as select 2+2 from dual", int64(1), nil}},
 		ExpectedSchema: CompressSchema(SchemasTableSchema()),
 	},
 }

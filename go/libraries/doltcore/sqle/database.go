@@ -1133,7 +1133,7 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 		}
 		createView, ok := cv.(*plan.CreateView)
 		if !ok {
-			return nil, sql.ViewDefinition{}, false, errors.NewKind("SOMETHING WRONG").New()
+			return nil, sql.ViewDefinition{}, false, errors.NewKind("incorrect create view statement").New()
 		}
 
 		views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: createView.Definition.TextDefinition, CreateViewStatement: fragments[i].fragment}
