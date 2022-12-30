@@ -242,19 +242,31 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, ddb *doltdb.DoltDB, t
 		name: dp.toName,
 		ts:   (*time.Time)(dp.toDate),
 	}
+	var from, to prolly.Map
 
-	// dp.from may be nil
-	f, fSch, err := tableData(ctx, dp.from, ddb)
-	if err != nil {
-		return prollyDiffIter{}, nil
+	var fsch schema.Schema = schema.EmptySchema
+	if dp.from != nil {
+		idx, err := dp.from.GetRowData(ctx)
+		if err != nil {
+			return prollyDiffIter{}, err
+		}
+		from = durable.ProllyMapFromIndex(idx)
+		if fsch, err = dp.from.GetSchema(ctx); err != nil {
+			return prollyDiffIter{}, err
+		}
 	}
-	from := durable.ProllyMapFromIndex(f)
 
-	t, tSch, err := tableData(ctx, dp.to, ddb)
-	if err != nil {
-		return prollyDiffIter{}, nil
+	var tsch schema.Schema = schema.EmptySchema
+	if dp.to != nil {
+		idx, err := dp.to.GetRowData(ctx)
+		if err != nil {
+			return prollyDiffIter{}, err
+		}
+		to = durable.ProllyMapFromIndex(idx)
+		if tsch, err = dp.to.GetSchema(ctx); err != nil {
+			return prollyDiffIter{}, err
+		}
 	}
-	to := durable.ProllyMapFromIndex(t)
 
 	var nodeStore tree.NodeStore
 	if dp.to != nil {
@@ -263,25 +275,25 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, ddb *doltdb.DoltDB, t
 		nodeStore = dp.from.NodeStore()
 	}
 
-	fromConverter, err := NewProllyRowConverter(fSch, targetFromSchema, ctx.Warn, nodeStore)
+	fromConverter, err := NewProllyRowConverter(fsch, targetFromSchema, ctx.Warn, nodeStore)
 	if err != nil {
 		return prollyDiffIter{}, err
 	}
 
-	toConverter, err := NewProllyRowConverter(tSch, targetToSchema, ctx.Warn, nodeStore)
+	toConverter, err := NewProllyRowConverter(tsch, targetToSchema, ctx.Warn, nodeStore)
 	if err != nil {
 		return prollyDiffIter{}, err
 	}
 
-	fromVD := fSch.GetValueDescriptor()
-	toVD := tSch.GetValueDescriptor()
+	fromVD := fsch.GetValueDescriptor()
+	toVD := tsch.GetValueDescriptor()
 	keyless := schema.IsKeyless(targetFromSchema) && schema.IsKeyless(targetToSchema)
 	child, cancel := context.WithCancel(ctx)
 	iter := prollyDiffIter{
 		from:          from,
 		to:            to,
-		fromSch:       fSch,
-		toSch:         tSch,
+		fromSch:       fsch,
+		toSch:         tsch,
 		targetFromSch: targetFromSchema,
 		targetToSch:   targetToSchema,
 		fromConverter: fromConverter,

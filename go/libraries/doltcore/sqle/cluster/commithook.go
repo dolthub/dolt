@@ -220,7 +220,7 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 	}
 
 	lgr.Tracef("cluster/commithook: pushing chunks for root hash %v to destDB", toPush.String())
-	err := destDB.PullChunks(ctx, h.tempDir, h.srcDB, toPush, nil, nil)
+	err := destDB.PullChunks(ctx, h.tempDir, h.srcDB, []hash.Hash{toPush}, nil, nil)
 	if err == nil {
 		lgr.Tracef("cluster/commithook: successfully pushed chunks, setting root")
 		datasDB := doltdb.HackDatasDatabaseFromDoltDB(destDB)

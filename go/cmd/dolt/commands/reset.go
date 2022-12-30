@@ -106,7 +106,13 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			arg = apr.Arg(0)
 		}
 
-		err = actions.ResetHard(ctx, dEnv, arg, roots)
+		headRef := dEnv.RepoStateReader().CWBHeadRef()
+		ws, err := dEnv.WorkingSet(ctx)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+
+		err = actions.ResetHard(ctx, dEnv, arg, roots, headRef, ws)
 	} else {
 		// Check whether the input argument is a ref.
 		if apr.NArg() == 1 {

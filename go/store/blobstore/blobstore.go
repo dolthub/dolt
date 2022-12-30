@@ -22,10 +22,20 @@ import (
 
 // Blobstore is an interface for storing and retrieving blobs of data by key
 type Blobstore interface {
-	Exists(ctx context.Context, key string) (bool, error)
-	Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, string, error)
-	Put(ctx context.Context, key string, reader io.Reader) (string, error)
-	CheckAndPut(ctx context.Context, expectedVersion, key string, reader io.Reader) (string, error)
+	// Exists returns true if a blob keyed by |key| exists.
+	Exists(ctx context.Context, key string) (ok bool, err error)
+
+	// Get returns a byte range of from the blob keyed by |key|, and the latest store version.
+	Get(ctx context.Context, key string, br BlobRange) (rc io.ReadCloser, version string, err error)
+
+	// Put creates a new blob from |reader| keyed by |key|, it returns the latest store version.
+	Put(ctx context.Context, key string, reader io.Reader) (version string, err error)
+
+	// CheckAndPut updates the blob keyed by |key| using a check-and-set on |expectedVersion|.
+	CheckAndPut(ctx context.Context, expectedVersion, key string, reader io.Reader) (version string, err error)
+
+	// Concatenate creates a new blob named |key| by concatenating |sources|.
+	Concatenate(ctx context.Context, key string, sources []string) (version string, err error)
 }
 
 // GetBytes is a utility method calls bs.Get and handles reading the data from the returned

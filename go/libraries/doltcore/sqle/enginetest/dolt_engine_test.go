@@ -46,7 +46,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 84
+const SkipPreparedsCount = 83
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -67,7 +67,7 @@ func TestSingleQuery(t *testing.T) {
 	t.Skip()
 
 	harness := newDoltHarness(t)
-	//harness.Setup(setup.MydbData, setup.MytableData)
+	harness.Setup(setup.MydbData, setup.MytableData)
 	engine, err := harness.NewEngine(t)
 	if err != nil {
 		panic(err)
@@ -272,7 +272,7 @@ func TestDoltDiffQueryPlans(t *testing.T) {
 	defer e.Close()
 
 	for _, tt := range DoltDiffPlanTests {
-		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan)
+		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan, false)
 	}
 }
 
@@ -690,8 +690,8 @@ func TestRollbackTriggers(t *testing.T) {
 func TestStoredProcedures(t *testing.T) {
 	tests := make([]queries.ScriptTest, 0, len(queries.ProcedureLogicTests))
 	for _, test := range queries.ProcedureLogicTests {
-		//TODO: fix REPLACE always returning a successful deletion
-		if test.Name != "Parameters resolve inside of REPLACE" {
+		//TODO: this passes locally but SOMETIMES fails tests on GitHub, no clue why
+		if test.Name != "ITERATE and LEAVE loops" {
 			tests = append(tests, test)
 		}
 	}
@@ -785,6 +785,12 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 			{
 				Query:    "use mydb/" + commithash,
 				Expected: []sql.Row{},
+			},
+			{
+				Query: "select active_branch();",
+				Expected: []sql.Row{
+					{nil},
+				},
 			},
 			{
 				Query:    "select database();",
@@ -984,7 +990,7 @@ func TestDoltReset(t *testing.T) {
 }
 
 func TestDoltGC(t *testing.T) {
-	// TODO: This does not work because `db.chunkStore().(nbs.TableFileStore)`
+	// TODO: This does not work because `db.chunkStore().(chunks.TableFileStore)`
 	// returns not ok in PruneTableFiles
 	t.Skip()
 	for _, script := range DoltGC {
@@ -1286,7 +1292,7 @@ func TestDiffSystemTablePrepared(t *testing.T) {
 	}
 }
 
-func TestTestReadOnlyDatabases(t *testing.T) {
+func TestReadOnlyDatabases(t *testing.T) {
 	enginetest.TestReadOnlyDatabases(t, newDoltHarness(t))
 }
 
@@ -1452,6 +1458,11 @@ func TestPrepared(t *testing.T) {
 func TestPreparedInsert(t *testing.T) {
 	skipPreparedTests(t)
 	enginetest.TestPreparedInsert(t, newDoltHarness(t))
+}
+
+func TestPreparedStatements(t *testing.T) {
+	skipPreparedTests(t)
+	enginetest.TestPreparedStatements(t, newDoltHarness(t))
 }
 
 func TestCharsetCollationEngine(t *testing.T) {
@@ -1689,6 +1700,20 @@ func TestDoltStorageFormatPrepared(t *testing.T) {
 		expectedFormatString = fmt.Sprintf("OLD ( %s )", types.Format_Default.VersionString())
 	}
 	enginetest.TestPreparedQuery(t, newDoltHarness(t), "SELECT dolt_storage_format()", []sql.Row{{expectedFormatString}}, nil)
+}
+
+func TestThreeWayMergeWithSchemaChangeScripts(t *testing.T) {
+	skipOldFormat(t)
+	for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
+		enginetest.TestScript(t, newDoltHarness(t), convertMergeScriptTest(script))
+	}
+}
+
+func TestThreeWayMergeWithSchemaChangeScriptsPrepared(t *testing.T) {
+	skipOldFormat(t)
+	for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
+		enginetest.TestScriptPrepared(t, newDoltHarness(t), convertMergeScriptTest(script))
+	}
 }
 
 var newFormatSkippedScripts = []string{

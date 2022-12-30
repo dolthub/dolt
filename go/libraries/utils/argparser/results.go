@@ -28,8 +28,10 @@ type ArgParseResults struct {
 	parser  *ArgParser
 }
 
+// Equals res and other are only considered equal if the order and contents of their arguments
+// are the same.
 func (res *ArgParseResults) Equals(other *ArgParseResults) bool {
-	if len(res.Args) != len(other.Args) || len(res.options) != len(res.options) {
+	if len(res.Args) != len(other.Args) || len(res.options) != len(other.options) {
 		return false
 	}
 

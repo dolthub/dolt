@@ -61,7 +61,7 @@ func getPushOnWriteHook(ctx context.Context, bThreads *sql.BackgroundThreads, dE
 	if err != nil {
 		return nil, err
 	}
-	if _, val, ok = sql.SystemVariables.GetGlobal(dsess.AsyncReplication); ok && val == SysVarTrue {
+	if _, val, ok = sql.SystemVariables.GetGlobal(dsess.AsyncReplication); ok && val == dsess.SysVarTrue {
 		return doltdb.NewAsyncPushOnWriteHook(bThreads, ddb, tmpDir, logger)
 	}
 
@@ -76,7 +76,7 @@ func GetCommitHooks(ctx context.Context, bThreads *sql.BackgroundThreads, dEnv *
 	if hook, err := getPushOnWriteHook(ctx, bThreads, dEnv, logger); err != nil {
 		path, _ := dEnv.FS.Abs(".")
 		err = fmt.Errorf("failure loading hook for database at %s; %w", path, err)
-		if SkipReplicationWarnings() {
+		if dsess.IgnoreReplicationErrors() {
 			postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(err.Error()+"\n")))
 		} else {
 			return nil, err
@@ -107,7 +107,7 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 	rrd, err := NewReadReplicaDatabase(ctx, db, remoteName, dEnv)
 	if err != nil {
 		err = fmt.Errorf("%w from remote '%s'; %s", ErrFailedToLoadReplicaDB, remoteName, err.Error())
-		if !SkipReplicationWarnings() {
+		if !dsess.IgnoreReplicationErrors() {
 			return ReadReplicaDatabase{}, err
 		}
 		cli.Println(err)

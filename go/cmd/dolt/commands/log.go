@@ -569,7 +569,7 @@ func logCompact(pager *outputpager.Pager, opts *logOpts, commits []logNode) {
 		}
 
 		formattedDesc := strings.Replace(comm.commitMeta.Description, "\n", " ", -1) + "\n"
-		pager.Writer.Write([]byte(fmt.Sprintf(formattedDesc)))
+		pager.Writer.Write([]byte(fmt.Sprintf("%s", formattedDesc)))
 	}
 }
 
@@ -607,7 +607,7 @@ func logDefault(pager *outputpager.Pager, opts *logOpts, commits []logNode) {
 		pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))
 
 		formattedDesc := "\n\n\t" + strings.Replace(comm.commitMeta.Description, "\n", "\n\t", -1) + "\n\n"
-		pager.Writer.Write([]byte(fmt.Sprintf(formattedDesc)))
+		pager.Writer.Write([]byte(fmt.Sprintf("%s", formattedDesc)))
 	}
 }
 

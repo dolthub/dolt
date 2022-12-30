@@ -11,14 +11,19 @@ const CcAddresses = JSON.parse(core.getInput('ccAddresses'));
 const ToAddresses = JSON.parse(core.getInput('toAddresses'));
 const ReplyToAddresses = JSON.parse(core.getInput('replyToAddresses'));
 const workflowURL = core.getInput('workflowURL');
+const subject = core.getInput('subject');
+const bodyPath = core.getInput('bodyPath');
 
 const data = dataFilePath ? fs.readFileSync(dataFilePath, { encoding: 'utf-8' }) : "";
+const body = bodyPath ? fs.readFileSync(bodyPath, { encoding: 'utf-8' }) : "";
 
 const templated = {
     version,
     format,
     results: data,
     workflowURL,
+    subject,
+    body,
 };
 
 // Set the region
@@ -35,6 +40,8 @@ const params = {
     TemplateData: JSON.stringify(templated),
     ReplyToAddresses,
 };
+
+console.log(params)
 
 // Create the promise and SES service object
 // const sendPromise = new aws.SES({apiVersion: '2010-12-01'}).sendEmail(params).promise();

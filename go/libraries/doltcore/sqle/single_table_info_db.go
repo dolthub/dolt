@@ -15,6 +15,7 @@
 package sqle
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
@@ -85,6 +87,10 @@ func (db *SingleTableInfoDatabase) Schema() sql.Schema {
 // Collation implements sql.Table.
 func (db *SingleTableInfoDatabase) Collation() sql.CollationID {
 	return sql.CollationID(db.sch.GetCollation())
+}
+
+func (db *SingleTableInfoDatabase) InitialDBState(ctx context.Context, branch string) (dsess.InitialDbState, error) {
+	return getInitialDBStateForUserSpaceDb(ctx, db)
 }
 
 // Partitions implements sql.Table.
@@ -162,12 +168,12 @@ func (db *SingleTableInfoDatabase) UpdateForeignKey(ctx *sql.Context, fkName str
 	return fmt.Errorf("cannot create foreign keys on a single table information database")
 }
 
-// GetForeignKeyUpdater implements sql.ForeignKeyTable.
-func (db *SingleTableInfoDatabase) GetForeignKeyUpdater(ctx *sql.Context) sql.ForeignKeyUpdater {
+// GetForeignKeyEditor implements sql.ForeignKeyTable.
+func (db *SingleTableInfoDatabase) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
 	return nil
 }
 
-// WithIndexLookup implements sql.IndexedTable.
+// IndexedAccess implements sql.IndexedTable.
 func (db *SingleTableInfoDatabase) IndexedAccess(sql.Index) sql.IndexedTable {
 	return db
 }
@@ -206,14 +212,8 @@ func (db *SingleTableInfoDatabase) DataLength(ctx *sql.Context) (uint64, error) 
 	return 0, nil
 }
 
-// AnalyzeTable implements the sql.StatisticsTable interface.
-func (db *SingleTableInfoDatabase) AnalyzeTable(ctx *sql.Context) error {
-	return nil
-}
-
-// Statistics implements the sql.StatisticsTable interface.
-func (db *SingleTableInfoDatabase) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
-	return nil, nil
+func (db *SingleTableInfoDatabase) RowCount(ctx *sql.Context) (uint64, error) {
+	return 0, nil
 }
 
 func (db *SingleTableInfoDatabase) PrimaryKeySchema() sql.PrimaryKeySchema {
@@ -231,16 +231,8 @@ func (db *SingleTableInfoDatabase) DbData() env.DbData {
 	panic("SingleTableInfoDatabase doesn't have DbData")
 }
 
-func (db *SingleTableInfoDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
-	panic("SingleTableInfoDatabase cannot start transaction")
-}
-
 func (db *SingleTableInfoDatabase) Flush(context *sql.Context) error {
 	panic("SingleTableInfoDatabase cannot Flush")
-}
-
-func (db *SingleTableInfoDatabase) EditOptions() editor.Options {
-	return editor.Options{}
 }
 
 // fmtIndex is used for CREATE TABLE statements only.
@@ -309,7 +301,6 @@ func (idx fmtIndex) IsGenerated() bool {
 	return idx.generated
 }
 
-// NewLookup implements sql.Index
 func (idx fmtIndex) IndexedAccess(index sql.IndexLookup) (sql.IndexedTable, error) {
 	panic("unimplemented")
 }
@@ -317,4 +308,8 @@ func (idx fmtIndex) IndexedAccess(index sql.IndexLookup) (sql.IndexedTable, erro
 // ColumnExpressionTypes implements sql.Index
 func (idx fmtIndex) ColumnExpressionTypes() []sql.ColumnExpressionType {
 	panic("unimplemented")
+}
+
+func (db *SingleTableInfoDatabase) EditOptions() editor.Options {
+	return editor.Options{}
 }

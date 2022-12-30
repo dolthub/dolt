@@ -285,3 +285,299 @@ SQL
   [[ "$commitmeta" =~ "$shaparent1" ]] || false
   [[ "$commitmeta" =~ "$shaparent2" ]] || false
 }
+
+
+@test "checkout: dolt_checkout brings in changes from main to feature branch that has no working set" {
+  # original setup
+  dolt sql -q "create table users (id int primary key, name varchar(32));"
+  dolt add .
+  dolt commit -m "original users table"
+
+  # create feature branch
+  dolt branch -c main feature
+
+  # make changes on main and verify
+  dolt sql -q 'insert into users (id, name) values (1, "main-change");'
+  run dolt sql -q "select name from users"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "main-change" ]] || false
+
+  # checkout feature branch and bring over main changes
+  dolt checkout feature
+
+  # verify working set changes are brought in from main
+  run dolt sql << SQL
+call dolt_checkout('feature');
+select name from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "main-change" ]] || false
+
+  # verify working set changes are not on main
+  run dolt sql << SQL
+call dolt_checkout('main');
+select count(*) from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "0" ]] || false
+
+  # revert working set changes on feature branch
+  dolt reset --hard HEAD
+  run dolt sql -q "select count(*) from users"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "0" ]] || false
+
+  # switch to main and verify working set changes are not present
+  dolt checkout main
+  run dolt sql -q "select count(*) from users"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "0" ]] || false
+}
+
+@test "checkout: dolt_checkout switches from clean main to feature branch that has changes" {
+  # original setup
+  dolt sql -q "create table users (id int primary key, name varchar(32));"
+  dolt add .
+  dolt commit -m "original users table"
+
+  # create feature branch
+  dolt branch -c main feature
+
+  # make changes on feature (through SQL)
+  dolt sql << SQL
+call dolt_checkout('feature');
+insert into users (id, name) values (1, "feature-change");
+SQL
+
+  # verify feature branch changes are present
+  run dolt sql << SQL
+call dolt_checkout('feature');
+select name from users;
+SQL
+  echo "output = $output"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "feature-change" ]] || false
+
+  # checkout feature branch
+  dolt checkout feature
+
+  # verify feature's working set changes are gone
+  run dolt sql << SQL
+call dolt_checkout('feature');
+select count(*) from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "0" ]] || false
+
+  # verify working set changes are not on main
+  run dolt sql << SQL
+call dolt_checkout('main');
+select count(*) from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "0" ]] || false
+}
+
+@test "checkout: dolt_checkout brings in changes from main to feature branch that has identical changes" {
+  # original setup
+  dolt sql -q "create table users (id int primary key, name varchar(32));"
+  dolt add .
+  dolt commit -m "original users table"
+
+  # create feature branch
+  dolt branch -c main feature
+
+  # make changes on main and verify
+  dolt sql -q 'insert into users (id, name) values (1, "main-change");'
+  run dolt sql -q "select name from users"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "main-change" ]] || false
+
+  # make identical changes on feature (through SQL)
+  dolt sql << SQL
+call dolt_checkout('feature');
+insert into users (id, name) values (1, "main-change");
+SQL
+
+  # verify feature branch changes are present
+  run dolt sql << SQL
+call dolt_checkout('feature');
+select name from users;
+SQL
+  echo "output = $output"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "main-change" ]] || false
+
+  # checkout feature branch
+  dolt checkout feature
+
+  # verify working set changes are still the same on feature branch
+  run dolt sql << SQL
+call dolt_checkout('feature');
+select name from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "main-change" ]] || false
+
+  # verify working set changes are not on main
+  run dolt sql << SQL
+call dolt_checkout('main');
+select count(*) from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "0" ]] || false
+
+  # revert working set changes on feature branch
+  dolt reset --hard HEAD
+
+  # verify working set changes are not on feature branch
+  run dolt sql << SQL
+call dolt_checkout('feature');
+select count(*) from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "0" ]] || false
+
+  # switch to main and verify working set changes are not present
+  dolt checkout main
+  run dolt sql << SQL
+call dolt_checkout('main');
+select count(*) from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "0" ]] || false
+}
+
+@test "checkout: dolt_checkout needs -f to bring in changes from main to feature branch that has different changes" {
+  # original setup
+  dolt sql -q "create table users (id int primary key, name varchar(32));"
+  dolt add .
+  dolt commit -m "original users table"
+
+  # create feature branch from main
+  dolt branch feature
+
+  # make changes on main and verify
+  dolt sql -q 'insert into users (id, name) values (1, "main-change");'
+  run dolt sql -q "select name from users"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "main-change" ]] || false
+
+  # make different changes on feature (through SQL)
+  dolt sql << SQL
+call dolt_checkout('feature');
+insert into users (id, name) values (2, "feature-change");
+SQL
+
+  # verify feature branch changes are present
+  run dolt sql << SQL
+call dolt_checkout('feature');
+select name from users;
+SQL
+  echo "output = $output"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "feature-change" ]] || false
+
+  # checkout feature branch: should fail due to working set changes
+  run dolt checkout feature
+  echo "output = $output"
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "checkout would overwrite uncommitted changes on target branch" ]] || false
+
+  # force checkout feature branch
+  dolt checkout -f feature
+
+  # verify working set changes on feature are from main
+  run dolt sql << SQL
+call dolt_checkout('feature');
+select name from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "main-change" ]] || false
+
+  # verify working set changes are not on main
+  run dolt sql << SQL
+call dolt_checkout('main');
+select count(*) from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "0" ]] || false
+}
+
+@test "checkout: dolt_checkout brings changes from main to multiple feature branches and back to main" {
+  # original setup
+  dolt sql -q "create table users (id int primary key, name varchar(32));"
+  dolt add .
+  dolt commit -m "original users table"
+
+
+  # make changes on main and verify
+  dolt sql -q 'insert into users (id, name) values (0, "main-change");'
+  run dolt sql << SQL
+call dolt_checkout('main');
+select name from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "main-change" ]] || false
+
+
+  # create feature1 branch and bring changes to the new feature branch
+  dolt checkout -b feature1
+
+  # verify the changes are brought to feature1
+  run dolt sql << SQL
+call dolt_checkout('feature1');
+select name from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "main-change" ]] || false
+
+
+  # make changes on feature1 and verify
+  dolt sql -q 'insert into users (id, name) values (1, "feature1-change");'
+  run dolt sql << SQL
+call dolt_checkout('feature1');
+select name from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "main-change" ]] || false
+  [[ "$output" =~ "feature1-change" ]] || false
+
+  # create feature2 branch and bring changes to next feature branch
+  dolt checkout -b feature2
+
+  # verify the changes are brought to feature1
+  run dolt sql << SQL
+call dolt_checkout('feature2');
+select name from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "main-change" ]] || false
+  [[ "$output" =~ "feature1-change" ]] || false
+
+  # make changes on feature2 and verify
+  dolt sql -q 'insert into users (id, name) values (2, "feature2-change");'
+  run dolt sql << SQL
+call dolt_checkout('feature2');
+select name from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "main-change" ]] || false
+  [[ "$output" =~ "feature1-change" ]] || false
+  [[ "$output" =~ "feature2-change" ]] || false
+
+
+  # bring changes back to main
+  dolt checkout main
+
+  # verify the changes are brought to main
+  run dolt sql << SQL
+call dolt_checkout('main');
+select name from users
+SQL
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "main-change" ]] || false
+  [[ "$output" =~ "feature1-change" ]] || false
+  [[ "$output" =~ "feature2-change" ]] || false
+
+}

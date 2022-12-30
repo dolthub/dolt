@@ -36,6 +36,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
+	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/d"
@@ -44,11 +45,21 @@ import (
 
 const testMemTableSize = 1 << 8
 
-func TestBlockStoreSuite(t *testing.T) {
+func TestLocalStoreSuite(t *testing.T) {
 	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
 		nbf := constants.FormatDefaultString
 		qp := NewUnlimitedMemQuotaProvider()
 		return NewLocalStore(ctx, nbf, dir, testMemTableSize, qp)
+	}
+	suite.Run(t, &BlockStoreSuite{factory: fn})
+}
+
+func TestBlobstoreSuite(t *testing.T) {
+	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
+		nbf := constants.FormatDefaultString
+		qp := NewUnlimitedMemQuotaProvider()
+		bs := blobstore.NewLocalBlobstore(dir)
+		return NewBSStore(ctx, nbf, bs, testMemTableSize, qp)
 	}
 	suite.Run(t, &BlockStoreSuite{factory: fn})
 }
@@ -292,7 +303,7 @@ func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 	root, err := suite.store.Root(context.Background())
 	suite.NoError(err)
 
-	interloper, err := NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
+	interloper, err := suite.factory(context.Background(), suite.dir)
 	suite.NoError(err)
 	err = interloper.Put(context.Background(), c1)
 	suite.NoError(err)
@@ -341,7 +352,7 @@ func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
 	input1 := []byte("abc")
 	c1 := chunks.NewChunk(input1)
 
-	interloper, err := NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
+	interloper, err := suite.factory(context.Background(), suite.dir)
 	suite.NoError(err)
 	err = interloper.Put(context.Background(), c1)
 	suite.NoError(err)
@@ -380,7 +391,7 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 	root, err := suite.store.Root(context.Background())
 	suite.NoError(err)
 
-	interloper, err := NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
+	interloper, err := suite.factory(context.Background(), suite.dir)
 	suite.NoError(err)
 	err = interloper.Put(context.Background(), c1)
 	suite.NoError(err)
@@ -436,6 +447,24 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 }
 
 func TestBlockStoreConjoinOnCommit(t *testing.T) {
+	t.Run("fake table persister", func(t *testing.T) {
+		testBlockStoreConjoinOnCommit(t, func(t *testing.T) tablePersister {
+			q := NewUnlimitedMemQuotaProvider()
+			return newFakeTablePersister(q)
+		})
+	})
+	t.Run("in memory blobstore persister", func(t *testing.T) {
+		testBlockStoreConjoinOnCommit(t, func(t *testing.T) tablePersister {
+			return &blobstorePersister{
+				bs:        blobstore.NewInMemoryBlobstore(),
+				blockSize: 4096,
+				q:         &UnlimitedQuotaProvider{},
+			}
+		})
+	})
+}
+
+func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tablePersister) {
 	assertContainAll := func(t *testing.T, store chunks.ChunkStore, sources ...chunkSource) {
 		ctx := context.Background()
 		for _, src := range sources {
@@ -461,7 +490,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		defer func() {
 			require.EqualValues(t, 0, q.Usage())
 		}()
-		p := newFakeTablePersister(q)
+		p := factory(t)
 
 		c := &fakeConjoiner{}
 
@@ -483,9 +512,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	})
 
 	t.Run("ConjoinSuccess", func(t *testing.T) {
-		fm := &fakeManifest{}
 		q := NewUnlimitedMemQuotaProvider()
-		p := newFakeTablePersister(q)
+		fm := &fakeManifest{}
+		p := factory(t)
 
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7}, p)
 		upstream, err := toSpecs(srcs)
@@ -521,7 +550,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	t.Run("ConjoinRetry", func(t *testing.T) {
 		fm := &fakeManifest{}
 		q := NewUnlimitedMemQuotaProvider()
-		p := newFakeTablePersister(q)
+		p := factory(t)
 
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7, 13}, p)
 		upstream, err := toSpecs(srcs)
@@ -581,8 +610,12 @@ func (fc *fakeConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees, keeper
 }
 
 func assertInputInStore(input []byte, h hash.Hash, s chunks.ChunkStore, assert *assert.Assertions) {
-	c, err := s.Get(context.Background(), h)
+	ctx := context.Background()
+	c, err := s.Get(ctx, h)
 	assert.NoError(err)
+	if c.IsEmpty() {
+		c, err = s.Get(ctx, h)
+	}
 	assert.False(c.IsEmpty(), "Shouldn't get empty chunk for %s", h.String())
 	assert.Zero(bytes.Compare(input, c.Data()), "%s != %s", string(input), string(c.Data()))
 }

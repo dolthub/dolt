@@ -645,9 +645,10 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 	return nil
 }
 
-func (tr tableReader) reader(ctx context.Context) (io.Reader, error) {
+func (tr tableReader) reader(ctx context.Context) (io.Reader, uint64, error) {
 	i, _ := tr.index()
-	return io.LimitReader(&readerAdapter{tr.r, 0, ctx}, int64(i.tableFileSize())), nil
+	sz := i.tableFileSize()
+	return io.LimitReader(&readerAdapter{tr.r, 0, ctx}, int64(sz)), sz, nil
 }
 
 func (tr tableReader) getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error) {
@@ -666,12 +667,8 @@ func (tr tableReader) getRecordRanges(requests []getRecord) (map[hash.Hash]Range
 	return ranges, nil
 }
 
-func (tr tableReader) size() (uint64, error) {
-	i, err := tr.index()
-	if err != nil {
-		return 0, err
-	}
-	return i.tableFileSize(), nil
+func (tr tableReader) currentSize() uint64 {
+	return tr.idx.tableFileSize()
 }
 
 func (tr tableReader) close() error {

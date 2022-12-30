@@ -43,7 +43,8 @@ import (
 )
 
 const (
-	dbName = "filterDB"
+	dbName       = "filterDB"
+	branchesFlag = "branches"
 )
 
 var filterBranchDocs = cli.CommandDocumentationContent{
@@ -52,7 +53,9 @@ var filterBranchDocs = cli.CommandDocumentationContent{
 
 If a {{.LessThan}}commit-spec{{.GreaterThan}} is provided, the traversal will stop when the commit is reached and rewriting will begin at that commit, or will error if the commit is not found.
 
-If the {{.EmphasisLeft}}--all{{.EmphasisRight}} flag is supplied, the traversal starts with the HEAD commits of all branches.
+If the {{.EmphasisLeft}}--branches{{.EmphasisRight}} flag is supplied, filter-branch traverses and rewrites commits for all branches.
+
+If the {{.EmphasisLeft}}--all{{.EmphasisRight}} flag is supplied, filter-branch traverses and rewrites commits for all branches and tags.
 `,
 
 	Synopsis: []string{
@@ -81,7 +84,9 @@ func (cmd FilterBranchCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd FilterBranchCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(allFlag, "a", "filter all branches")
+	ap.SupportsFlag(verboseFlag, "v", "logs more information")
+	ap.SupportsFlag(branchesFlag, "b", "filter all branches")
+	ap.SupportsFlag(allFlag, "a", "filter all branches and tags")
 	return ap
 }
 
@@ -107,9 +112,44 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	}
 
 	query := apr.Arg(0)
+	verbose := apr.Contains(verboseFlag)
 	notFound := make(missingTbls)
+
 	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (*doltdb.RootValue, error) {
-		return processFilterQuery(ctx, dEnv, commit, query, notFound)
+		var cmHash, before hash.Hash
+		if verbose {
+			var err error
+			cmHash, err = commit.HashOf()
+			if err != nil {
+				return nil, err
+			}
+			cli.Printf("processing commit %s\n", cmHash.String())
+			root, err := commit.GetRootValue(ctx)
+			if err != nil {
+				return nil, err
+			}
+			before, err = root.HashOf()
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		root, err := processFilterQuery(ctx, dEnv, commit, query, notFound)
+		if err != nil {
+			return nil, err
+		}
+
+		if verbose {
+			after, err := root.HashOf()
+			if err != nil {
+				return nil, err
+			}
+			if before != after {
+				cli.Printf("updated commit %s (root: %s -> %s)\n",
+					cmHash.String(), before.String(), after.String())
+			}
+		}
+		return root, nil
 	}
 
 	nerf, err := getNerf(ctx, dEnv, apr)
@@ -117,9 +157,12 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	if apr.Contains(allFlag) {
+	switch {
+	case apr.Contains(branchesFlag):
 		err = rebase.AllBranches(ctx, dEnv, replay, nerf)
-	} else {
+	case apr.Contains(allFlag):
+		err = rebase.AllBranchesAndTags(ctx, dEnv, replay, nerf)
+	default:
 		err = rebase.CurrentBranch(ctx, dEnv, replay, nerf)
 	}
 	if err != nil {
@@ -212,12 +255,13 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 		return nil, err
 	}
 
-	roots, err := eng.GetRoots(sqlCtx)
+	sess := dsess.DSessFromSess(sqlCtx.Session)
+	ws, err := sess.WorkingSet(sqlCtx, dbName)
 	if err != nil {
 		return nil, err
 	}
 
-	return roots[dbName], nil
+	return ws.WorkingRoot(), nil
 }
 
 // rebaseSqlEngine packages up the context necessary to run sql queries against single root

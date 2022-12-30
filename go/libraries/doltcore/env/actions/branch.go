@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -31,6 +30,7 @@ import (
 var ErrAlreadyExists = errors.New("already exists")
 var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
 var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into its parent; use `-f` to force")
+var ErrWorkingSetsOnBothBranches = errors.New("checkout would overwrite uncommitted changes on target branch")
 
 func RenameBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliConfig, oldBranch, newBranch string, force bool) error {
 	oldRef := ref.NewBranchRef(oldBranch)
@@ -306,6 +306,7 @@ func checkoutBranchNoDocs(ctx context.Context, roots doltdb.Roots, branchRoot *d
 
 func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
 	branchRef := ref.NewBranchRef(brName)
+	branchHeadRef := dEnv.RepoStateReader().CWBHeadRef()
 
 	db := dEnv.DoltDB
 	hasRef, err := db.HasRef(ctx, branchRef)
@@ -325,15 +326,43 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		return err
 	}
 
+	currentWs, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		// working set does not exist, skip check
+		return nil
+	}
+
+	if !force {
+		err = checkWorkingSetCompatibility(ctx, dEnv, branchRef, currentWs)
+		if err != nil {
+			return err
+		}
+	}
+
+	shouldResetWorkingSet := true
 	roots, err := dEnv.Roots(ctx)
 	// roots will be empty/nil if the working set is not set (working set is not set if the current branch was deleted)
 	if errors.Is(err, doltdb.ErrBranchNotFound) || errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-		roots, err = dEnv.RecoveryRoots(ctx)
+		roots, _ = dEnv.RecoveryRoots(ctx)
+		shouldResetWorkingSet = false
 	} else if err != nil {
 		return err
 	}
 
-	return checkoutBranchNoDocs(ctx, roots, branchRoot, dEnv.RepoStateWriter(), branchRef, force)
+	err = checkoutBranchNoDocs(ctx, roots, branchRoot, dEnv.RepoStateWriter(), branchRef, force)
+	if err != nil {
+		return err
+	}
+
+	if shouldResetWorkingSet {
+		// reset the source branch's working set to the branch head, leaving the source branch unchanged
+		err = ResetHard(ctx, dEnv, "", roots, branchHeadRef, currentWs)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // BranchRoot returns the root value at the branch with the name given
@@ -460,6 +489,55 @@ func overwriteRoot(ctx context.Context, head *doltdb.RootValue, tblHashes map[st
 	}
 
 	return head, nil
+}
+
+// checkWorkingSetCompatibility checks that the current working set is "compatible" with the dest working set.
+// This means that if both working sets are present (ie there are changes on both source and dest branches),
+// we check if the changes are identical before allowing a clobbering checkout.
+// Working set errors are ignored by this function, because they are properly handled elsewhere.
+func checkWorkingSetCompatibility(ctx context.Context, dEnv *env.DoltEnv, branchRef ref.BranchRef, currentWs *doltdb.WorkingSet) error {
+	db := dEnv.DoltDB
+	destWsRef, err := ref.WorkingSetRefForHead(branchRef)
+	if err != nil {
+		// dest working set does not exist, skip check
+		return nil
+	}
+	destWs, err := db.ResolveWorkingSet(ctx, destWsRef)
+	if err != nil {
+		// dest working set does not resolve, skip check
+		return nil
+	}
+
+	sourceHasChanges, sourceHash, err := detectWorkingSetChanges(currentWs)
+	if err != nil {
+		// error detecting source changes, skip check
+		return nil
+	}
+	destHasChanges, destHash, err := detectWorkingSetChanges(destWs)
+	if err != nil {
+		// error detecting dest changes, skip check
+		return nil
+	}
+	areHashesEqual := sourceHash.Equal(destHash)
+
+	if sourceHasChanges && destHasChanges && !areHashesEqual {
+		return ErrWorkingSetsOnBothBranches
+	}
+	return nil
+}
+
+// detectWorkingSetChanges returns a boolean indicating whether the working set has changes, and a hash of the changes
+func detectWorkingSetChanges(ws *doltdb.WorkingSet) (hasChanges bool, wrHash hash.Hash, err error) {
+	wrHash, err = ws.WorkingRoot().HashOf()
+	if err != nil {
+		return false, hash.Hash{}, err
+	}
+	srHash, err := ws.StagedRoot().HashOf()
+	if err != nil {
+		return false, hash.Hash{}, err
+	}
+	hasChanges = !wrHash.Equal(srHash)
+	return hasChanges, wrHash, nil
 }
 
 func IsBranch(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {

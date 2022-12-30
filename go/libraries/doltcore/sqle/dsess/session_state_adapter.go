@@ -82,12 +82,23 @@ func NewSessionStateAdapter(session *DoltSession, dbName string, remotes map[str
 	return SessionStateAdapter{session: session, dbName: dbName, remotes: remotes, branches: branches, backups: backups}
 }
 
-func (s SessionStateAdapter) GetRoots(_ context.Context) (doltdb.Roots, error) {
-	return s.session.GetDbStates()[s.dbName].GetRoots(), nil
+func (s SessionStateAdapter) GetRoots(ctx context.Context) (doltdb.Roots, error) {
+	sqlCtx := sql.NewContext(ctx)
+	state, _, err := s.session.LookupDbState(sqlCtx, s.dbName)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	return state.GetRoots(), nil
 }
 
 func (s SessionStateAdapter) CWBHeadRef() ref.DoltRef {
-	workingSet := s.session.GetDbStates()[s.dbName].WorkingSet
+	workingSet, err := s.session.WorkingSet(sql.NewContext(context.Background()), s.dbName)
+	if err != nil {
+		// TODO: fix this interface
+		panic(err)
+	}
+
 	headRef, err := workingSet.Ref().ToHeadRef()
 	// TODO: fix this interface
 	if err != nil {
@@ -106,16 +117,30 @@ func (s SessionStateAdapter) CWBHeadSpec() *doltdb.CommitSpec {
 	return spec
 }
 
-func (s SessionStateAdapter) IsMergeActive(_ context.Context) (bool, error) {
-	return s.session.GetDbStates()[s.dbName].WorkingSet.MergeActive(), nil
+func (s SessionStateAdapter) IsMergeActive(ctx context.Context) (bool, error) {
+	workingSet, err := s.session.WorkingSet(sql.NewContext(context.Background()), s.dbName)
+	if err != nil {
+		return false, err
+	}
+
+	return workingSet.MergeActive(), nil
 }
 
-func (s SessionStateAdapter) GetMergeCommit(_ context.Context) (*doltdb.Commit, error) {
-	return s.session.GetDbStates()[s.dbName].WorkingSet.MergeState().Commit(), nil
+func (s SessionStateAdapter) GetMergeCommit(ctx context.Context) (*doltdb.Commit, error) {
+	workingSet, err := s.session.WorkingSet(sql.NewContext(context.Background()), s.dbName)
+	if err != nil {
+		return nil, err
+	}
+	return workingSet.MergeState().Commit(), nil
 }
 
-func (s SessionStateAdapter) GetPreMergeWorking(_ context.Context) (*doltdb.RootValue, error) {
-	return s.session.GetDbStates()[s.dbName].WorkingSet.MergeState().PreMergeWorkingRoot(), nil
+func (s SessionStateAdapter) GetPreMergeWorking(ctx context.Context) (*doltdb.RootValue, error) {
+	workingSet, err := s.session.WorkingSet(sql.NewContext(context.Background()), s.dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	return workingSet.MergeState().PreMergeWorkingRoot(), nil
 }
 
 func (s SessionStateAdapter) GetRemotes() (map[string]env.Remote, error) {
@@ -188,5 +213,10 @@ func (s SessionStateAdapter) RemoveBackup(_ context.Context, _ string) error {
 }
 
 func (s SessionStateAdapter) TempTableFilesDir() (string, error) {
-	return s.session.GetDbStates()[s.dbName].tmpFileDir, nil
+	state, _, err := s.session.LookupDbState(sql.NewContext(context.Background()), s.dbName)
+	if err != nil {
+		return "", err
+	}
+
+	return state.tmpFileDir, nil
 }

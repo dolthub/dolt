@@ -46,16 +46,18 @@ var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables c
 
 type SqlDatabase interface {
 	sql.Database
+	dsess.SessionDatabase
+
+	// TODO: get rid of this, it's managed by the session, not the DB
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
 	DbData() env.DbData
-	Name() string
-
-	StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error)
 	Flush(*sql.Context) error
 	EditOptions() editor.Options
 }
 
-func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
+// AllDbs returns all the databases in the given provider.
+func AllDbs(ctx *sql.Context, pro sql.DatabaseProvider) []SqlDatabase {
+	dbs := pro.AllDatabases(ctx)
 	dsqlDBs := make([]SqlDatabase, 0, len(dbs))
 	for _, db := range dbs {
 		var sqlDb SqlDatabase
@@ -104,7 +106,6 @@ var _ sql.TableDropper = Database{}
 var _ sql.TableRenamer = Database{}
 var _ sql.TemporaryTableCreator = Database{}
 var _ sql.TemporaryTableDatabase = Database{}
-var _ sql.TransactionDatabase = Database{}
 var _ sql.TriggerDatabase = Database{}
 var _ sql.VersionedDatabase = Database{}
 var _ sql.ViewDatabase = Database{}
@@ -117,49 +118,6 @@ var _ sql.ReadOnlyDatabase = ReadOnlyDatabase{}
 
 func (r ReadOnlyDatabase) IsReadOnly() bool {
 	return true
-}
-
-func (db Database) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
-	dsession := dsess.DSessFromSess(ctx.Session)
-
-	if !dsession.HasDB(ctx, db.Name()) {
-		init, err := GetInitialDBState(ctx, db)
-		if err != nil {
-			return nil, err
-		}
-
-		err = dsession.AddDB(ctx, init)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return dsession.StartTransaction(ctx, db.Name(), tCharacteristic)
-}
-
-func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
-	dsession := dsess.DSessFromSess(ctx.Session)
-	return dsession.CommitTransaction(ctx, db.name, tx)
-}
-
-func (db Database) Rollback(ctx *sql.Context, tx sql.Transaction) error {
-	dsession := dsess.DSessFromSess(ctx.Session)
-	return dsession.RollbackTransaction(ctx, db.name, tx)
-}
-
-func (db Database) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
-	dsession := dsess.DSessFromSess(ctx.Session)
-	return dsession.CreateSavepoint(ctx, name, db.name, tx)
-}
-
-func (db Database) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
-	dsession := dsess.DSessFromSess(ctx.Session)
-	return dsession.RollbackToSavepoint(ctx, name, db.name, tx)
-}
-
-func (db Database) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
-	dsession := dsess.DSessFromSess(ctx.Session)
-	return dsession.ReleaseSavepoint(ctx, name, db.name, tx)
 }
 
 // Revision implements dsess.RevisionDatabase
@@ -189,7 +147,7 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts e
 }
 
 // GetInitialDBState returns the InitialDbState for |db|.
-func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
+func GetInitialDBState(ctx context.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
 	switch db := db.(type) {
 	case *UserSpaceDatabase, *SingleTableInfoDatabase:
 		return getInitialDBStateForUserSpaceDb(ctx, db)
@@ -198,9 +156,16 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 	rsr := db.DbData().Rsr
 	ddb := db.DbData().Ddb
 
+	var r ref.DoltRef
+	if len(branch) > 0 {
+		r = ref.NewBranchRef(branch)
+	} else {
+		r = rsr.CWBHeadRef()
+	}
+
 	var retainedErr error
 
-	headCommit, err := ddb.Resolve(ctx, rsr.CWBHeadSpec(), rsr.CWBHeadRef())
+	headCommit, err := ddb.ResolveCommitRef(ctx, r)
 	if err == doltdb.ErrBranchNotFound {
 		retainedErr = err
 		err = nil
@@ -211,7 +176,12 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 
 	var ws *doltdb.WorkingSet
 	if retainedErr == nil {
-		ws, err = env.WorkingSet(ctx, ddb, rsr)
+		workingSetRef, err := ref.WorkingSetRefForHead(r)
+		if err != nil {
+			return dsess.InitialDbState{}, err
+		}
+
+		ws, err = db.DbData().Ddb.ResolveWorkingSet(ctx, workingSetRef)
 		if err != nil {
 			return dsess.InitialDbState{}, err
 		}
@@ -242,6 +212,10 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 		Backups:    backups,
 		Err:        retainedErr,
 	}, nil
+}
+
+func (db Database) InitialDBState(ctx context.Context, branch string) (dsess.InitialDbState, error) {
+	return GetInitialDBState(ctx, db, branch)
 }
 
 // Name returns the name of this database, set at creation time.
@@ -1398,6 +1372,7 @@ func getInitialDBStateForUserSpaceDb(ctx context.Context, db SqlDatabase) (dsess
 		DbData: env.DbData{
 			Rsw: noopRepoStateWriter{},
 		},
+		ReadOnly: true,
 	}, nil
 }
 

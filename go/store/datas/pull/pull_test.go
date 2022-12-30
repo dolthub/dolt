@@ -26,6 +26,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"reflect"
 	"sync"
 	"testing"
@@ -61,15 +62,26 @@ func TestRemoteToRemotePulls(t *testing.T) {
 	suite.Run(t, &RemoteToRemoteSuite{})
 }
 
+func TestChunkJournalPulls(t *testing.T) {
+	suite.Run(t, &ChunkJournalSuite{})
+}
+
 type PullSuite struct {
 	suite.Suite
-	sinkCS      *chunks.TestStoreView
-	sourceCS    *chunks.TestStoreView
+	sinkCS      chunks.ChunkStore
+	sourceCS    chunks.ChunkStore
 	sinkVRW     types.ValueReadWriter
 	sourceVRW   types.ValueReadWriter
 	sinkDB      datas.Database
 	sourceDB    datas.Database
 	commitReads int // The number of reads triggered by commit differs across chunk store impls
+}
+
+type metricsChunkStore interface {
+	chunks.ChunkStore
+	Reads() int
+	Hases() int
+	Writes() int
 }
 
 func makeTestStoreViews() (ts1, ts2 *chunks.TestStoreView) {
@@ -121,6 +133,32 @@ type RemoteToRemoteSuite struct {
 
 func (suite *RemoteToRemoteSuite) SetupTest() {
 	suite.sinkCS, suite.sourceCS = makeTestStoreViews()
+	sinkVRW, sourceVRW := types.NewValueStore(suite.sinkCS), types.NewValueStore(suite.sourceCS)
+	suite.sinkVRW, suite.sourceVRW = sinkVRW, sourceVRW
+	suite.sourceDB = datas.NewTypesDatabase(sourceVRW, tree.NewNodeStore(suite.sourceCS))
+	suite.sinkDB = datas.NewTypesDatabase(sinkVRW, tree.NewNodeStore(suite.sinkCS))
+	suite.commitReads = 1
+}
+
+type ChunkJournalSuite struct {
+	PullSuite
+}
+
+func (suite *ChunkJournalSuite) SetupTest() {
+	ctx := context.Background()
+	q := nbs.NewUnlimitedMemQuotaProvider()
+	nbf := types.Format_Default.VersionString()
+
+	path, err := os.MkdirTemp("", "remote")
+	suite.NoError(err)
+	sink, err := nbs.NewLocalJournalingStore(ctx, nbf, path, q)
+	suite.NoError(err)
+	path, err = os.MkdirTemp("", "local")
+	suite.NoError(err)
+	src, err := nbs.NewLocalJournalingStore(ctx, nbf, path, q)
+	suite.NoError(err)
+
+	suite.sinkCS, suite.sourceCS = sink, src
 	sinkVRW, sourceVRW := types.NewValueStore(suite.sinkCS), types.NewValueStore(suite.sourceCS)
 	suite.sinkVRW, suite.sourceVRW = sinkVRW, sourceVRW
 	suite.sourceDB = datas.NewTypesDatabase(sourceVRW, tree.NewNodeStore(suite.sourceCS))
@@ -184,7 +222,11 @@ func (pt *progressTracker) Validate(suite *PullSuite) {
 //
 // Sink: Nada
 func (suite *PullSuite) TestPullEverything() {
-	expectedReads := suite.sinkCS.Reads()
+	var expectedReads int
+	mcs, metrics := suite.sinkCS.(metricsChunkStore)
+	if metrics {
+		expectedReads = mcs.Reads()
+	}
 
 	l := buildListOfHeight(2, suite.sourceVRW)
 	sourceAddr := suite.commitToSource(l, nil)
@@ -192,12 +234,14 @@ func (suite *PullSuite) TestPullEverything() {
 
 	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, sourceAddr, pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, []hash.Hash{sourceAddr}, pt.Ch)
 	suite.NoError(err)
-	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
+	if metrics {
+		suite.True(expectedReads-suite.sinkCS.(metricsChunkStore).Reads() <= suite.commitReads)
+	}
 	pt.Validate(suite)
 
-	v := mustValue(suite.sinkVRW.ReadValue(context.Background(), sourceAddr)).(types.Struct)
+	v := mustValue(suite.sinkVRW.ReadValue(context.Background(), sourceAddr))
 	suite.NotNil(v)
 	suite.True(l.Equals(mustGetCommittedValue(suite.sinkVRW, v)))
 }
@@ -228,7 +272,11 @@ func (suite *PullSuite) TestPullEverything() {
 func (suite *PullSuite) TestPullMultiGeneration() {
 	sinkL := buildListOfHeight(2, suite.sinkVRW)
 	suite.commitToSink(sinkL, nil)
-	expectedReads := suite.sinkCS.Reads()
+	var expectedReads int
+	mcs, metrics := suite.sinkCS.(metricsChunkStore)
+	if metrics {
+		expectedReads = mcs.Reads()
+	}
 
 	srcL := buildListOfHeight(2, suite.sourceVRW)
 	sourceAddr := suite.commitToSource(srcL, nil)
@@ -241,10 +289,12 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 
 	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, sourceAddr, pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, []hash.Hash{sourceAddr}, pt.Ch)
 	suite.NoError(err)
 
-	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
+	if metrics {
+		suite.True(expectedReads-suite.sinkCS.(metricsChunkStore).Reads() <= suite.commitReads)
+	}
 	pt.Validate(suite)
 
 	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceAddr)
@@ -292,16 +342,22 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 	srcL, err = srcL.Edit().Set(1, buildListOfHeight(5, suite.sourceVRW)).List(context.Background())
 	suite.NoError(err)
 	sourceAddr = suite.commitToSource(srcL, []hash.Hash{sourceAddr})
-	preReads := suite.sinkCS.Reads()
+	var preReads int
+	mcs, metrics := suite.sinkCS.(metricsChunkStore)
+	if metrics {
+		preReads = mcs.Reads()
+	}
 
 	pt := startProgressTracker()
 
 	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, sourceAddr, pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, []hash.Hash{sourceAddr}, pt.Ch)
 	suite.NoError(err)
 
-	suite.True(preReads-suite.sinkCS.Reads() <= suite.commitReads)
+	if metrics {
+		suite.True(preReads-suite.sinkCS.(metricsChunkStore).Reads() <= suite.commitReads)
+	}
 	pt.Validate(suite)
 
 	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceAddr)
@@ -334,7 +390,12 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 func (suite *PullSuite) TestPullUpdates() {
 	sinkL := buildListOfHeight(4, suite.sinkVRW)
 	suite.commitToSink(sinkL, nil)
-	expectedReads := suite.sinkCS.Reads()
+
+	var expectedReads int
+	mcs, metrics := suite.sinkCS.(metricsChunkStore)
+	if metrics {
+		expectedReads = mcs.Reads()
+	}
 
 	srcL := buildListOfHeight(4, suite.sourceVRW)
 	sourceAddr := suite.commitToSource(srcL, nil)
@@ -355,10 +416,12 @@ func (suite *PullSuite) TestPullUpdates() {
 
 	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, sourceAddr, pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, []hash.Hash{sourceAddr}, pt.Ch)
 	suite.NoError(err)
 
-	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
+	if metrics {
+		suite.True(expectedReads-suite.sinkCS.(metricsChunkStore).Reads() <= suite.commitReads)
+	}
 	pt.Validate(suite)
 
 	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceAddr)
@@ -465,17 +528,17 @@ type TestTableFileStore struct {
 	mu         sync.Mutex
 }
 
-var _ nbs.TableFileStore = &TestTableFileStore{}
+var _ chunks.TableFileStore = &TestTableFileStore{}
 
-func (ttfs *TestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, []nbs.TableFile, error) {
+func (ttfs *TestTableFileStore) Sources(ctx context.Context) (hash.Hash, []chunks.TableFile, []chunks.TableFile, error) {
 	ttfs.mu.Lock()
 	defer ttfs.mu.Unlock()
-	var tblFiles []nbs.TableFile
+	var tblFiles []chunks.TableFile
 	for _, tblFile := range ttfs.tableFiles {
 		tblFiles = append(tblFiles, tblFile)
 	}
 
-	return ttfs.root, tblFiles, []nbs.TableFile{}, nil
+	return ttfs.root, tblFiles, []chunks.TableFile{}, nil
 }
 
 func (ttfs *TestTableFileStore) Size(ctx context.Context) (uint64, error) {
@@ -519,7 +582,7 @@ type FlakeyTestTableFileStore struct {
 	GoodNow bool
 }
 
-func (f *FlakeyTestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, []nbs.TableFile, error) {
+func (f *FlakeyTestTableFileStore) Sources(ctx context.Context) (hash.Hash, []chunks.TableFile, []chunks.TableFile, error) {
 	if !f.GoodNow {
 		f.GoodNow = true
 		r, files, appendixFiles, _ := f.TestTableFileStore.Sources(ctx)
@@ -531,8 +594,8 @@ func (f *FlakeyTestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nb
 	return f.TestTableFileStore.Sources(ctx)
 }
 
-func (ttfs *TestTableFileStore) SupportedOperations() nbs.TableFileStoreOps {
-	return nbs.TableFileStoreOps{
+func (ttfs *TestTableFileStore) SupportedOperations() chunks.TableFileStoreOps {
+	return chunks.TableFileStoreOps{
 		CanRead:  true,
 		CanWrite: true,
 	}

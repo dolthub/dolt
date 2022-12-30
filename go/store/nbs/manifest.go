@@ -427,6 +427,11 @@ func (mm manifestManager) UpdateGCGen(ctx context.Context, lastLock addr, newCon
 	return
 }
 
+func (mm manifestManager) Close() error {
+	mm.cache.Delete(mm.Name())
+	return nil
+}
+
 func (mm manifestManager) Name() string {
 	return mm.m.Name()
 }

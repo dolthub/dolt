@@ -20282,9 +20282,11 @@ func TestExplain(t *testing.T) {
 
 	expectedExplain := "Project\n" +
 		" ├─ columns: [d.Type, d.Symbol, d.Country, d.TradingDate, d.Open, d.High, d.Low, d.Close, d.Volume, d.OpenInt, t.Symbol, t.Name, t.Sector, t.IPOYear]\n" +
-		" └─ LookupJoin(d.Symbol = t.Symbol)\n" +
+		" └─ LookupJoin\n" +
+		"     ├─ (d.Symbol = t.Symbol)\n" +
 		"     ├─ TableAlias(t)\n" +
-		"     │   └─ Table(symbols)\n" +
+		"     │   └─ Table\n" +
+		"     │       ├─ name: symbols\n" +
 		"     │       └─ columns: [symbol name sector ipoyear]\n" +
 		"     └─ TableAlias(d)\n" +
 		"         └─ IndexedTableAccess(daily_summary)\n" +

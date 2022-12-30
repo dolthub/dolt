@@ -36,14 +36,6 @@ func PrepareCreateTableStmt(ctx context.Context, sqlDb SqlDatabase) (*sql.Contex
 
 	sess := dsess.DefaultSession(pro)
 	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
-	dbState, err := GetInitialDBState(ctx, sqlDb)
-	if err != nil {
-		// TODO
-		return nil, nil, nil
-	}
-
-	sess.AddDB(sqlCtx, dbState)
-
 	sqlCtx.SetCurrentDatabase(sqlDb.Name())
 	return sqlCtx, engine, sess
 }

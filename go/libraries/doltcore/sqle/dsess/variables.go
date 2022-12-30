@@ -167,3 +167,23 @@ func GetBooleanSystemVar(ctx *sql.Context, varName string) (bool, error) {
 
 	return i8 == 1, nil
 }
+
+// IgnoreReplicationErrors returns true if the dolt_skip_replication_errors system variable is set to true, which means
+// that errors that occur during replication should be logged and ignored.
+func IgnoreReplicationErrors() bool {
+	_, skip, ok := sql.SystemVariables.GetGlobal(SkipReplicationErrors)
+	if !ok {
+		panic("dolt system variables not loaded")
+	}
+	return skip == SysVarTrue
+}
+
+// WarnReplicationError logs a warning for the replication error given
+func WarnReplicationError(ctx *sql.Context, err error) {
+	ctx.GetLogger().Warn(fmt.Errorf("replication failure: %w", err))
+}
+
+const (
+	SysVarFalse = int8(0)
+	SysVarTrue  = int8(1)
+)

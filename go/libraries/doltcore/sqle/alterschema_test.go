@@ -441,7 +441,7 @@ func TestDropPks(t *testing.T) {
 			require.NoError(t, err)
 
 			root, _ := dEnv.WorkingRoot(ctx)
-			engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db, root)
+			engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
 			require.NoError(t, err)
 
 			for _, query := range tt.setup {

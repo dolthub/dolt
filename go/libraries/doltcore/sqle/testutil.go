@@ -55,7 +55,10 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 		return nil, err
 	}
 
-	engine, ctx, err := NewTestEngine(dEnv, context.Background(), db, root)
+	engine, ctx, err := NewTestEngine(dEnv, context.Background(), db)
+	if err != nil {
+		return nil, err
+	}
 	dsess.DSessFromSess(ctx.Session).EnableBatchedMode()
 	err = ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, false)
 	if err != nil {
@@ -102,7 +105,7 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 		}
 	}
 
-	err = db.CommitTransaction(ctx, ctx.GetTransaction())
+	err = dsess.DSessFromSess(ctx.Session).CommitTransaction(ctx, ctx.GetTransaction())
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +137,7 @@ func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvid
 }
 
 // NewTestEngine creates a new default engine, and a *sql.Context and initializes indexes and schema fragments.
-func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
+func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db SqlDatabase) (*sqle.Engine, *sql.Context, error) {
 	b := env.GetDefaultInitBranch(dEnv.Config)
 	pro, err := NewDoltDatabaseProviderWithDatabase(b, dEnv.FS, db, dEnv.FS)
 	if err != nil {
@@ -155,11 +158,6 @@ func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db Database, root *do
 	}
 
 	sqlCtx.SetCurrentDatabase(db.Name())
-	err = db.SetRoot(sqlCtx, root)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	return engine, sqlCtx, nil
 }
 
@@ -205,7 +203,7 @@ func ExecuteSelect(dEnv *env.DoltEnv, root *doltdb.RootValue, query string) ([]s
 		return nil, err
 	}
 
-	engine, ctx, err := NewTestEngine(dEnv, context.Background(), db, root)
+	engine, ctx, err := NewTestEngine(dEnv, context.Background(), db)
 	if err != nil {
 		return nil, err
 	}

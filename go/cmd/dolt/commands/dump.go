@@ -42,6 +42,7 @@ const (
 	directoryFlag    = "directory"
 	filenameFlag     = "file-name"
 	batchFlag        = "batch"
+	noBatchFlag      = "no-batch"
 	noAutocommitFlag = "no-autocommit"
 
 	sqlFileExt     = "sql"
@@ -62,13 +63,13 @@ csv,json or parquet file.
 `,
 
 	Synopsis: []string{
-		"[-f] [-r {{.LessThan}}result-format{{.GreaterThan}}] [-fn {{.LessThan}}file_name{{.GreaterThan}}]  [-d {{.LessThan}}directory{{.GreaterThan}}] [--batch] [--no-autocommit] ",
+		"[-f] [-r {{.LessThan}}result-format{{.GreaterThan}}] [-fn {{.LessThan}}file_name{{.GreaterThan}}]  [-d {{.LessThan}}directory{{.GreaterThan}}] [--batch] [--no-batch] [--no-autocommit] ",
 	},
 }
 
 type DumpCmd struct{}
 
-// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd DumpCmd) Name() string {
 	return "dump"
 }
@@ -90,7 +91,8 @@ func (cmd DumpCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(filenameFlag, "fn", "file_name", "Define file name for dump file. Defaults to `doltdump.sql`.")
 	ap.SupportsString(directoryFlag, "d", "directory_name", "Define directory name to dump the files in. Defaults to `doltdump/`.")
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
-	ap.SupportsFlag(batchFlag, "", "Returns batch insert statements wherever possible.")
+	ap.SupportsFlag(batchFlag, "", "Return batch insert statements wherever possible, enabled by default.")
+	ap.SupportsFlag(noBatchFlag, "", "Always emit one row per statement, rather than batching multiple rows into each statement.")
 	ap.SupportsFlag(noAutocommitFlag, "na", "Turns off autocommit for each dumped table. Used to speed up loading of outputted sql file")
 	return ap
 }
@@ -171,7 +173,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 
 		for _, tbl := range tblNames {
-			tblOpts := newTableArgs(tbl, dumpOpts.dest, apr.Contains(batchFlag), apr.Contains(noAutocommitFlag))
+			tblOpts := newTableArgs(tbl, dumpOpts.dest, !apr.Contains(noBatchFlag), apr.Contains(noAutocommitFlag))
 			err = dumpTable(ctx, dEnv, tblOpts, fPath)
 			if err != nil {
 				return HandleVErrAndExitCode(err, usage)

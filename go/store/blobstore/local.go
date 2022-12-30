@@ -15,12 +15,12 @@
 package blobstore
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/dolthub/fslock"
 	"github.com/google/uuid"
@@ -30,9 +30,8 @@ import (
 )
 
 const (
-	lfsVerSize = 16
-	bsExt      = ".bs"
-	lockExt    = ".lock"
+	bsExt   = ".bs"
+	lockExt = ".lock"
 )
 
 type localBlobRangeReadCloser struct {
@@ -69,6 +68,8 @@ type LocalBlobstore struct {
 	RootDir string
 }
 
+var _ Blobstore = &LocalBlobstore{}
+
 // NewLocalBlobstore returns a new LocalBlobstore instance
 func NewLocalBlobstore(dir string) *LocalBlobstore {
 	return &LocalBlobstore{dir}
@@ -84,32 +85,24 @@ func (bs *LocalBlobstore) Get(ctx context.Context, key string, br BlobRange) (io
 		if os.IsNotExist(err) {
 			return nil, "", NotFound{key}
 		}
-
 		return nil, "", err
 	}
 
-	var ver uuid.UUID
-	n, err := f.Read(ver[:lfsVerSize])
-
-	if n != lfsVerSize {
-		f.Close()
-		return nil, "", errors.New("failed to read version")
-	} else if err != nil {
-		f.Close()
-		return nil, "", err
-	}
-
-	rc, err := readCloserForFileRange(f, lfsVerSize, br)
-
+	info, err := f.Stat()
 	if err != nil {
-		f.Close()
 		return nil, "", err
 	}
+	ver := info.ModTime().String()
 
-	return rc, ver.String(), nil
+	rc, err := readCloserForFileRange(f, br)
+	if err != nil {
+		_ = f.Close()
+		return nil, "", err
+	}
+	return rc, ver, nil
 }
 
-func readCloserForFileRange(f *os.File, pos int, br BlobRange) (io.ReadCloser, error) {
+func readCloserForFileRange(f *os.File, br BlobRange) (io.ReadCloser, error) {
 	seekType := 1
 	if br.offset < 0 {
 		info, err := f.Stat()
@@ -133,50 +126,38 @@ func readCloserForFileRange(f *os.File, pos int, br BlobRange) (io.ReadCloser, e
 	return f, nil
 }
 
-func writeAll(f *os.File, readers ...io.Reader) error {
-	for _, reader := range readers {
-		_, err := io.Copy(f, reader)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // Put sets the blob and the version for a key
 func (bs *LocalBlobstore) Put(ctx context.Context, key string, reader io.Reader) (string, error) {
-	ver := uuid.New()
-
 	// written as temp file and renamed so the file corresponding to this key
 	// never exists in a partially written state
 	tempFile, err := func() (string, error) {
-		temp, err := tempfiles.MovableTempFileProvider.NewFile("", ver.String())
-
+		temp, err := tempfiles.MovableTempFileProvider.NewFile("", uuid.New().String())
 		if err != nil {
 			return "", err
 		}
-
 		defer temp.Close()
 
-		verBytes := [lfsVerSize]byte(ver)
-		verReader := bytes.NewReader(verBytes[:lfsVerSize])
-		return temp.Name(), writeAll(temp, verReader, reader)
+		if _, err = io.Copy(temp, reader); err != nil {
+			return "", err
+		}
+		return temp.Name(), nil
 	}()
 
 	if err != nil {
 		return "", err
 	}
 
+	time.Sleep(time.Millisecond * 10) // mtime resolution
 	path := filepath.Join(bs.RootDir, key) + bsExt
-	err = file.Rename(tempFile, path)
-
-	if err != nil {
+	if err = file.Rename(tempFile, path); err != nil {
 		return "", err
 	}
 
-	return ver.String(), nil
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	return info.ModTime().String(), nil
 }
 
 func fLock(lockFilePath string) (*fslock.Lock, error) {
@@ -231,4 +212,23 @@ func (bs *LocalBlobstore) Exists(ctx context.Context, key string) (bool, error) 
 	}
 
 	return err == nil, err
+}
+
+func (bs *LocalBlobstore) Concatenate(ctx context.Context, key string, sources []string) (ver string, err error) {
+	readers := make([]io.Reader, len(sources))
+	for i := range readers {
+		path := filepath.Join(bs.RootDir, sources[i]) + bsExt
+		if readers[i], err = os.Open(path); err != nil {
+			return "", err
+		}
+	}
+
+	ver, err = bs.Put(ctx, key, io.MultiReader(readers...))
+
+	for i := range readers {
+		if cerr := readers[i].(io.Closer).Close(); err != nil {
+			err = cerr
+		}
+	}
+	return
 }

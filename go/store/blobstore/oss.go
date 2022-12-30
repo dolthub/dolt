@@ -37,6 +37,8 @@ type OSSBlobstore struct {
 	prefix        string
 }
 
+var _ Blobstore = &OSSBlobstore{}
+
 // NewOSSBlobstore creates a new instance of a OSSBlobstore
 func NewOSSBlobstore(ossClient *oss.Client, bucketName, prefix string) (*OSSBlobstore, error) {
 	prefix = normalizePrefix(prefix)
@@ -114,6 +116,10 @@ func (ob *OSSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key st
 		return "", err
 	}
 	return ob.getVersion(meta), nil
+}
+
+func (ob *OSSBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
+	return "", fmt.Errorf("Conjoin is not implemented for OSSBlobstore")
 }
 
 func (ob *OSSBlobstore) absKey(key string) string {
