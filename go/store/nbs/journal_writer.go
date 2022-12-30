@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -129,10 +130,10 @@ type snapshotReader interface {
 	io.ReaderAt
 	// Snapshot returns an io.Reader that provides a consistent view
 	// of the current state of the snapshotReader.
-	snapshot() (io.Reader, int64, error)
+	Snapshot() (io.Reader, int64, error)
 
 	// currentSize returns the current size.
-	currentSize() int64
+	CurrentSize() int64
 }
 
 type journalWriter struct {
@@ -140,16 +141,15 @@ type journalWriter struct {
 	file *os.File
 	off  int64
 	path string
+	lock sync.RWMutex
 }
 
 var _ io.WriteCloser = &journalWriter{}
 var _ snapshotReader = &journalWriter{}
 
-func (wr *journalWriter) filepath() string {
-	return wr.path
-}
-
 func (wr *journalWriter) ReadAt(p []byte, off int64) (n int, err error) {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
 	var bp []byte
 	if off < wr.off {
 		// fill some or all of |p| from |wr.file|
@@ -172,7 +172,9 @@ func (wr *journalWriter) ReadAt(p []byte, off int64) (n int, err error) {
 	return
 }
 
-func (wr *journalWriter) snapshot() (io.Reader, int64, error) {
+func (wr *journalWriter) Snapshot() (io.Reader, int64, error) {
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
 	if err := wr.flush(); err != nil {
 		return nil, 0, err
 	}
@@ -185,11 +187,15 @@ func (wr *journalWriter) snapshot() (io.Reader, int64, error) {
 	return io.LimitReader(f, wr.off), wr.off, nil
 }
 
-func (wr *journalWriter) currentSize() int64 {
+func (wr *journalWriter) CurrentSize() int64 {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
 	return wr.off
 }
 
 func (wr *journalWriter) Write(p []byte) (n int, err error) {
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
 	if len(p) > len(wr.buf) {
 		// write directly to |wr.file|
 		if err = wr.flush(); err != nil {
@@ -207,17 +213,18 @@ func (wr *journalWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
-func (wr *journalWriter) processJournal(ctx context.Context) (last hash.Hash, cs journalChunkSource, err error) {
-	// maybeInitJournal chunk journal from |wr.file|
+func (wr *journalWriter) ProcessJournal(ctx context.Context) (last hash.Hash, cs journalChunkSource, err error) {
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
 	src := journalChunkSource{
 		journal: wr,
 		address: journalAddr,
-		lookups: make(map[addr]jrecordLookup),
+		lookups: newLookupMap(),
 	}
 	wr.off, err = processRecords(ctx, wr.file, func(o int64, r jrecord) error {
 		switch r.kind {
 		case chunkKind:
-			src.lookups[r.address] = jrecordLookup{offset: o, length: r.length}
+			src.lookups.put(r.address, jrecordLookup{offset: o, length: r.length})
 			src.compressedSz += uint64(r.length)
 			// todo(andy): uncompressed size
 		case rootHashKind:
@@ -234,7 +241,9 @@ func (wr *journalWriter) processJournal(ctx context.Context) (last hash.Hash, cs
 	return
 }
 
-func (wr *journalWriter) writeChunk(cc CompressedChunk) (jrecordLookup, error) {
+func (wr *journalWriter) WriteChunk(cc CompressedChunk) (jrecordLookup, error) {
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
 	rec := jrecordLookup{
 		offset: wr.offset(),
 		length: chunkRecordSize(cc),
@@ -247,7 +256,9 @@ func (wr *journalWriter) writeChunk(cc CompressedChunk) (jrecordLookup, error) {
 	return rec, nil
 }
 
-func (wr *journalWriter) writeRootHash(root hash.Hash) error {
+func (wr *journalWriter) WriteRootHash(root hash.Hash) error {
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
 	buf, err := wr.getBytes(rootHashRecordSize)
 	if err != nil {
 		return err
@@ -258,6 +269,21 @@ func (wr *journalWriter) writeRootHash(root hash.Hash) error {
 		return err
 	}
 	return wr.file.Sync()
+}
+
+func (wr *journalWriter) Close() (err error) {
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
+	if err = wr.flush(); err != nil {
+		return err
+	}
+	if cerr := wr.file.Sync(); cerr != nil {
+		err = cerr
+	}
+	if cerr := wr.file.Close(); cerr != nil {
+		err = cerr
+	}
+	return
 }
 
 func (wr *journalWriter) offset() int64 {
@@ -286,19 +312,6 @@ func (wr *journalWriter) flush() (err error) {
 	}
 	wr.off += int64(len(wr.buf))
 	wr.buf = wr.buf[:0]
-	return
-}
-
-func (wr *journalWriter) Close() (err error) {
-	if err = wr.flush(); err != nil {
-		return err
-	}
-	if cerr := wr.file.Sync(); cerr != nil {
-		err = cerr
-	}
-	if cerr := wr.file.Close(); cerr != nil {
-		err = cerr
-	}
 	return
 }
 

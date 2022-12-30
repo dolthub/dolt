@@ -1529,7 +1529,7 @@ LOOP:
 	return gcc.copyTablesToDir(ctx, path)
 }
 
-// todo: what's the optimal table currentSize to copy to?
+// todo: what's the optimal table size to copy to?
 func (nbs *NomsBlockStore) gcTableSize() (uint64, error) {
 	total, err := nbs.tables.physicalLen()
 

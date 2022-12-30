@@ -198,7 +198,7 @@ func TestJournalWriterWriteChunk(t *testing.T) {
 	lookups := make(map[addr]jrecordLookup)
 
 	for a, cc := range data {
-		l, err := j.writeChunk(cc)
+		l, err := j.WriteChunk(cc)
 		require.NoError(t, err)
 		lookups[a] = l
 		validateLookup(t, j, l, cc)
@@ -219,7 +219,7 @@ func TestJournalWriterBootstrap(t *testing.T) {
 	data := randomCompressedChunks()
 	lookups := make(map[addr]jrecordLookup)
 	for a, cc := range data {
-		l, err := j.writeChunk(cc)
+		l, err := j.WriteChunk(cc)
 		require.NoError(t, err)
 		lookups[a] = l
 	}
@@ -227,7 +227,7 @@ func TestJournalWriterBootstrap(t *testing.T) {
 
 	j, _, err = openJournalWriter(ctx, path)
 	require.NoError(t, err)
-	_, source, err := j.processJournal(ctx)
+	_, source, err := j.ProcessJournal(ctx)
 	require.NoError(t, err)
 
 	for a, l := range lookups {
@@ -258,7 +258,7 @@ func TestJournalWriterSyncClose(t *testing.T) {
 	j, err := createJournalWriter(ctx, newTestFilePath(t))
 	require.NotNil(t, j)
 	require.NoError(t, err)
-	_, _, err = j.processJournal(ctx)
+	_, _, err = j.ProcessJournal(ctx)
 	require.NoError(t, err)
 
 	// close triggers flush

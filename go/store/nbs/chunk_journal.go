@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -54,19 +55,9 @@ type chunkJournal struct {
 
 var _ tablePersister = &chunkJournal{}
 var _ tableFilePersister = &chunkJournal{}
-
 var _ manifest = &chunkJournal{}
 var _ manifestGCGenUpdater = &chunkJournal{}
 var _ io.Closer = &chunkJournal{}
-
-type journalChunkSource struct {
-	address      addr
-	journal      snapshotReader
-	lookups      map[addr]jrecordLookup
-	compressedSz uint64
-}
-
-var _ chunkSource = journalChunkSource{}
 
 func newChunkJournal(ctx context.Context, nbfVers, dir string, m manifest, p *fsTablePersister) (*chunkJournal, error) {
 	path, err := filepath.Abs(filepath.Join(dir, chunkJournalName))
@@ -103,7 +94,7 @@ func (j *chunkJournal) openJournal(ctx context.Context) (err error) {
 			return err
 		}
 
-		_, j.source, err = j.journal.processJournal(ctx)
+		_, j.source, err = j.journal.ProcessJournal(ctx)
 		if err != nil {
 			return err
 		}
@@ -115,7 +106,7 @@ func (j *chunkJournal) openJournal(ctx context.Context) (err error) {
 		}
 		if ok {
 			// write the current root hash to the journal file
-			if err = j.journal.writeRootHash(contents.root); err != nil {
+			if err = j.journal.WriteRootHash(contents.root); err != nil {
 				return
 			}
 			j.contents = contents
@@ -132,7 +123,7 @@ func (j *chunkJournal) openJournal(ctx context.Context) (err error) {
 
 	// parse existing journal file
 	var root hash.Hash
-	root, j.source, err = j.journal.processJournal(ctx)
+	root, j.source, err = j.journal.ProcessJournal(ctx)
 	if err != nil {
 		return err
 	}
@@ -177,11 +168,11 @@ func (j *chunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkRea
 		}
 		c := chunks.NewChunkWithHash(hash.Hash(*record.a), mt.chunks[*record.a])
 		cc := ChunkToCompressedChunk(c)
-		lookup, err := j.journal.writeChunk(cc)
+		lookup, err := j.journal.WriteChunk(cc)
 		if err != nil {
 			return nil, err
 		}
-		j.source.lookups[*record.a] = lookup
+		j.source.lookups.put(*record.a, lookup)
 		j.source.compressedSz += uint64(cc.CompressedSize())
 	}
 	return j.source, nil
@@ -258,7 +249,7 @@ func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 		}
 	}
 
-	if err := j.journal.writeRootHash(next.root); err != nil {
+	if err := j.journal.WriteRootHash(next.root); err != nil {
 		return manifestContents{}, err
 	}
 	j.contents = next
@@ -350,15 +341,56 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, ke
 	return
 }
 
+type lookupMap struct {
+	data map[addr]jrecordLookup
+	lock *sync.RWMutex
+}
+
+func newLookupMap() lookupMap {
+	return lookupMap{
+		data: make(map[addr]jrecordLookup),
+		lock: new(sync.RWMutex),
+	}
+}
+
+func (m lookupMap) get(a addr) (l jrecordLookup, ok bool) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	l, ok = m.data[a]
+	return
+}
+
+func (m lookupMap) put(a addr, l jrecordLookup) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.data[a] = l
+	return
+}
+
+func (m lookupMap) count() int {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return len(m.data)
+}
+
+type journalChunkSource struct {
+	address      addr
+	journal      snapshotReader
+	lookups      lookupMap
+	compressedSz uint64
+}
+
+var _ chunkSource = journalChunkSource{}
+
 func (s journalChunkSource) has(h addr) (bool, error) {
-	_, ok := s.lookups[h]
+	_, ok := s.lookups.get(h)
 	return ok, nil
 }
 
 func (s journalChunkSource) hasMany(addrs []hasRecord) (missing bool, err error) {
 	for i := range addrs {
 		a := addrs[i].a
-		if _, ok := s.lookups[*a]; ok {
+		if _, ok := s.lookups.get(*a); ok {
 			addrs[i].has = true
 		} else {
 			missing = true
@@ -368,7 +400,7 @@ func (s journalChunkSource) hasMany(addrs []hasRecord) (missing bool, err error)
 }
 
 func (s journalChunkSource) getCompressed(_ context.Context, h addr, _ *Stats) (CompressedChunk, error) {
-	l, ok := s.lookups[h]
+	l, ok := s.lookups.get(h)
 	if !ok {
 		return CompressedChunk{}, nil
 	}
@@ -434,8 +466,7 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, _ *errgroup.G
 }
 
 func (s journalChunkSource) count() (uint32, error) {
-	cnt := uint32(len(s.lookups))
-	return cnt, nil
+	return uint32(s.lookups.count()), nil
 }
 
 func (s journalChunkSource) uncompressedLen() (uint64, error) {
@@ -449,7 +480,7 @@ func (s journalChunkSource) hash() addr {
 
 // reader implements chunkSource.
 func (s journalChunkSource) reader(context.Context) (io.Reader, uint64, error) {
-	rdr, sz, err := s.journal.snapshot()
+	rdr, sz, err := s.journal.Snapshot()
 	return rdr, uint64(sz), err
 }
 
@@ -459,7 +490,7 @@ func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash
 		if req.found {
 			continue
 		}
-		l, ok := s.lookups[*req.a]
+		l, ok := s.lookups.get(*req.a)
 		if !ok {
 			continue
 		}
@@ -472,7 +503,7 @@ func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash
 // size implements chunkSource.
 // size returns the total size of the chunkSource: chunks, index, and footer
 func (s journalChunkSource) currentSize() uint64 {
-	return uint64(s.journal.currentSize())
+	return uint64(s.journal.CurrentSize())
 }
 
 // index implements chunkSource.
