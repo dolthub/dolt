@@ -115,7 +115,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 		return fmt.Errorf("%w: %s", env.ErrFailedToReadDb, err.Error())
 	}
 
-	hasBranch, err := srcDB.HasBranch(ctx, pullSpec.Branch.GetPath())
+	_, hasBranch, err := srcDB.HasBranch(ctx, pullSpec.Branch.GetPath())
 	if err != nil {
 		return err
 	}

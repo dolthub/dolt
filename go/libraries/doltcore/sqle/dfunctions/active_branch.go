@@ -60,7 +60,7 @@ func (ab *ActiveBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, er
 		}
 	}
 
-	return nil, fmt.Errorf("active branch not found")
+	return nil, nil
 }
 
 // String implements the Stringer interface.

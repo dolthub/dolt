@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/stretchr/testify/require"
 
@@ -35,25 +34,20 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 type DoltHarness struct {
 	t              *testing.T
+	provider       dsess.DoltDatabaseProvider
 	multiRepoEnv   *env.MultiRepoEnv
-	createdEnvs    map[string]*env.DoltEnv
 	session        *dsess.DoltSession
 	branchControl  *branch_control.Controller
-	databases      []sqle.Database
-	hashes         []string
 	parallelism    int
 	skippedQueries []string
 	setupData      []setup.SetupScript
 	resetData      []setup.SetupScript
-	initDbs        map[string]struct{}
-	autoInc        bool
 	engine         *gms.Engine
 }
 
@@ -68,26 +62,9 @@ var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
 var _ enginetest.ValidatingHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
-	dEnv := dtestutils.CreateTestEnv()
-	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
-	require.NoError(t, err)
-	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro, err := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem())
-	require.NoError(t, err)
-	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
-
-	localConfig := dEnv.Config.WriteableConfig()
-	branchControl := branch_control.CreateDefaultController()
-	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro,
-		localConfig, branchControl)
-	require.NoError(t, err)
 	dh := &DoltHarness{
 		t:              t,
-		session:        session,
 		skippedQueries: defaultSkippedQueries,
-		multiRepoEnv:   mrEnv,
-		createdEnvs:    make(map[string]*env.DoltEnv),
-		branchControl:  branchControl,
 	}
 
 	return dh
@@ -103,6 +80,7 @@ var defaultSkippedQueries = []string{
 // Setup sets the setup scripts for this DoltHarness's engine
 func (d *DoltHarness) Setup(setupData ...[]setup.SetupScript) {
 	d.engine = nil
+	d.provider = nil
 	d.setupData = nil
 	for i := range setupData {
 		d.setupData = append(d.setupData, setupData[i]...)
@@ -159,8 +137,7 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 	return resetCmds
 }
 
-// commitScripts returns a set of queries that will commit the workingsets
-// of the given database names
+// commitScripts returns a set of queries that will commit the working sets of the given database names
 func commitScripts(dbs []string) []setup.SetupScript {
 	var commitCmds setup.SetupScript
 	for i := range dbs {
@@ -179,27 +156,32 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 	if d.engine == nil {
 		d.branchControl = branch_control.CreateDefaultController()
 
-		pro := d.NewDatabaseProvider(information_schema.NewUpdatableInformationSchemaDatabase())
+		pro := d.newProvider()
 		doltProvider, ok := pro.(sqle.DoltDatabaseProvider)
 		require.True(t, ok)
+		d.provider = doltProvider
 
 		var err error
-		d.session, err = dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), doltProvider,
-			d.multiRepoEnv.Config(), d.branchControl)
+		d.session, err = dsess.NewDoltSession(
+			sql.NewEmptyContext(),
+			enginetest.NewBaseSession(),
+			doltProvider,
+			d.multiRepoEnv.Config(),
+			d.branchControl,
+		)
 		require.NoError(t, err)
 
-		e, err := enginetest.NewEngineWithProviderSetup(t, d, pro, d.setupData)
+		e, err := enginetest.NewEngineWithProviderSetup(t, d, d.setupData)
 		if err != nil {
 			return nil, err
 		}
 		d.engine = e
 
-		var res []sql.Row
 		ctx := enginetest.NewContext(d)
-		_, res = enginetest.MustQuery(ctx, e, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
+		databases := pro.AllDatabases(ctx)
 		var dbs []string
-		for i := range res {
-			dbs = append(dbs, res[i][0].(string))
+		for _, db := range databases {
+			dbs = append(dbs, db.Name())
 		}
 
 		e, err = enginetest.RunEngineScripts(ctx, e, commitScripts(dbs), d.SupportsNativeIndexCreation())
@@ -210,11 +192,10 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 		return e, nil
 	}
 
-	// grants are files that can only be manually reset
+	// Reset the mysql DB table to a clean state for this new engine
 	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 
-	//todo(max): easier if tests specify their databases ahead of time
 	ctx := enginetest.NewContext(d)
 	e, err := enginetest.RunEngineScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
 
@@ -278,11 +259,6 @@ func (d *DoltHarness) NewSession() *sql.Context {
 }
 
 func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession {
-	states := make([]dsess.InitialDbState, len(d.databases))
-	for i, db := range d.databases {
-		env := d.multiRepoEnv.GetEnv(db.Name())
-		states[i] = getDbState(d.t, db, env)
-	}
 	localConfig := d.multiRepoEnv.Config()
 	pro := d.session.Provider()
 
@@ -292,7 +268,6 @@ func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession
 		pro.(dsess.DoltDatabaseProvider),
 		localConfig,
 		d.branchControl,
-		states...,
 	)
 	require.NoError(d.t, err)
 	return dSession
@@ -310,96 +285,109 @@ func (d *DoltHarness) SupportsKeylessTables() bool {
 	return true
 }
 
-func (d *DoltHarness) NewDatabase(name string) sql.Database {
-	return d.NewDatabases(name)[0]
-}
-
 func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
-	d.databases = nil
-	for _, name := range names {
-		dEnv := dtestutils.CreateTestEnvWithName(name)
+	d.engine = nil
+	d.provider = nil
 
-		store := dEnv.DoltDB.ValueReadWriter().(*types.ValueStore)
-		store.SetValidateContentAddresses(true)
+	d.branchControl = branch_control.CreateDefaultController()
 
-		tmpDir, err := dEnv.TempTableFilesDir()
-		require.NoError(d.t, err)
-		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-		db, err := sqle.NewDatabase(context.Background(), name, dEnv.DbData(), opts)
-		require.NoError(d.t, err)
+	pro := d.newProvider()
+	doltProvider, ok := pro.(sqle.DoltDatabaseProvider)
+	require.True(d.t, ok)
+	d.provider = doltProvider
 
-		d.databases = append(d.databases, db)
-
-		d.multiRepoEnv.AddOrReplaceEnv(name, dEnv)
-		d.createdEnvs[db.Name()] = dEnv
-	}
-
-	// TODO(zachmu): it should be safe to reuse a session with a new database, but it isn't in all cases. Particularly, if you
-	//  have a database that only ever receives read queries, and then you re-use its session for a new database with
-	//  the same name, the first write query will panic on dangling references in the noms layer. Not sure why this is
-	//  happening, but it only happens as a result of this test setup.
-	_ = d.NewSession()
-
-	return dsqleDBsAsSqlDBs(d.databases)
-}
-
-func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyDatabase) {
-	for _, db := range d.NewDatabases(names...) {
-		dbs = append(dbs, sqle.ReadOnlyDatabase{Database: db.(sqle.Database)})
-	}
-	return
-}
-
-func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDatabaseProvider {
-	// When NewDatabaseProvider is called, we create a new MultiRepoEnv in order to ensure
-	// that only the specified sql.Databases are available for tests to use. Because
-	// NewDatabases must be called before NewDatabaseProvider, we grab the DoltEnvs
-	// previously created by NewDatabases and re-add them to the new MultiRepoEnv.
-	dEnv := dtestutils.CreateTestEnv()
-	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	var err error
+	d.session, err = dsess.NewDoltSession(
+		sql.NewEmptyContext(),
+		enginetest.NewBaseSession(),
+		doltProvider,
+		d.multiRepoEnv.Config(),
+		d.branchControl,
+	)
 	require.NoError(d.t, err)
-	d.multiRepoEnv = mrEnv
-	locations := make([]filesys.Filesys, len(dbs))
-	for i, db := range dbs {
-		if strings.ToLower(db.Name()) != sql.InformationSchemaDatabaseName {
-			d.multiRepoEnv.AddEnv(db.Name(), d.createdEnvs[db.Name()])
-			locations[i] = d.createdEnvs[db.Name()].FS
+
+	// TODO: the engine tests should do this for us
+	d.session.SetCurrentDatabase("mydb")
+
+	e := enginetest.NewEngineWithProvider(d.t, d, d.provider)
+	require.NoError(d.t, err)
+	d.engine = e
+
+	for _, name := range names {
+		err := d.provider.CreateDatabase(enginetest.NewContext(d), name)
+		require.NoError(d.t, err)
+	}
+
+	ctx := enginetest.NewContext(d)
+	databases := pro.AllDatabases(ctx)
+
+	// It's important that we return the databases in the same order as the names argument
+	var dbs []sql.Database
+	for _, name := range names {
+		for _, db := range databases {
+			if db.Name() == name {
+				dbs = append(dbs, db)
+				break
+			}
 		}
 	}
 
+	return dbs
+}
+
+func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (*gms.Engine, error) {
+	ddp, ok := provider.(sqle.DoltDatabaseProvider)
+	if !ok {
+		return nil, fmt.Errorf("expected a DoltDatabaseProvider")
+	}
+
+	allDatabases := ddp.AllDatabases(d.NewContext())
+	dbs := make([]sqle.SqlDatabase, len(allDatabases))
+	locations := make([]filesys.Filesys, len(allDatabases))
+
+	for i, db := range allDatabases {
+		dbs[i] = sqle.ReadOnlyDatabase{Database: db.(sqle.Database)}
+		loc, err := ddp.FileSystemForDatabase(db.Name())
+		if err != nil {
+			return nil, err
+		}
+
+		locations[i] = loc
+	}
+
+	readOnlyProvider, err := sqle.NewDoltDatabaseProviderWithDatabases("main", ddp.FileSystem(), dbs, locations)
+	if err != nil {
+		return nil, err
+	}
+
+	return enginetest.NewEngineWithProvider(nil, d, readOnlyProvider), nil
+}
+
+func (d *DoltHarness) NewDatabaseProvider() sql.MutableDatabaseProvider {
+	return d.provider
+}
+
+func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
+	dEnv := dtestutils.CreateTestEnv()
+
+	store := dEnv.DoltDB.ValueReadWriter().(*types.ValueStore)
+	store.SetValidateContentAddresses(true)
+
+	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	require.NoError(d.t, err)
+	d.multiRepoEnv = mrEnv
+
 	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())
-	pro, err := sqle.NewDoltDatabaseProviderWithDatabases(b, d.multiRepoEnv.FileSystem(), dbs, locations)
+	pro, err := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem())
 	require.NoError(d.t, err)
 
 	return pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 }
 
-func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
-	ctx := context.Background()
+func (d *DoltHarness) newTable(db sql.Database, name string, schema sql.PrimaryKeySchema) (sql.Table, error) {
+	tc := db.(sql.TableCreator)
 
-	head := dEnv.RepoStateReader().CWBHeadSpec()
-	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
-	require.NoError(t, err)
-
-	ws, err := dEnv.WorkingSet(ctx)
-	require.NoError(t, err)
-
-	return dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     dEnv.DbData(),
-		Remotes:    dEnv.RepoState.Remotes,
-	}
-}
-
-func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.PrimaryKeySchema) (sql.Table, error) {
-	var err error
-	if ro, ok := db.(sqle.ReadOnlyDatabase); ok {
-		err = ro.CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema, sql.Collation_Default)
-	} else {
-		err = db.(sqle.Database).CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema, sql.Collation_Default)
-	}
+	err := tc.CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema, sql.Collation_Default)
 	if err != nil {
 		return nil, err
 	}
@@ -410,10 +398,11 @@ func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.PrimaryK
 	return table, nil
 }
 
+// NewTableAsOf implements enginetest.VersionedHarness
 // Dolt doesn't version tables per se, just the entire database. So ignore the name and schema and just create a new
 // branch with the given name.
 func (d *DoltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema sql.PrimaryKeySchema, asOf interface{}) sql.Table {
-	table, err := d.NewTable(db, name, schema)
+	table, err := d.newTable(db, name, schema)
 	if err != nil {
 		require.True(d.t, sql.ErrTableAlreadyExists.Is(err))
 	}
@@ -425,41 +414,26 @@ func (d *DoltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema
 	return table
 }
 
+// SnapshotTable implements enginetest.VersionedHarness
 // Dolt doesn't version tables per se, just the entire database. So ignore the name and schema and just create a new
 // branch with the given name.
-func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf interface{}) error {
-	switch db.(type) {
-	case sqle.ReadOnlyDatabase:
-		// TODO: insert query to dolt_branches table (below)
-		// can't be performed against ReadOnlyDatabase
-		d.t.Skip("can't create SnaphotTables for ReadOnlyDatabases")
-	case sqle.Database:
-	default:
-		panic("not a Dolt SQL Database")
-	}
-
-	e := enginetest.NewEngineWithDbs(d.t, d, []sql.Database{db})
+func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, tableName string, asOf interface{}) error {
+	e := enginetest.NewEngineWithProvider(d.t, d, d.NewDatabaseProvider())
 
 	asOfString, ok := asOf.(string)
 	require.True(d.t, ok)
 
 	ctx := enginetest.NewContext(d)
+
 	_, iter, err := e.Query(ctx,
-		"CALL DOLT_ADD('.')")
-	_, iter, err = e.Query(ctx,
-		"SELECT COMMIT('-am', 'test commit');")
+		"CALL DOLT_COMMIT('-Am', 'test commit');")
 	require.NoError(d.t, err)
 	_, err = sql.RowIterToRows(ctx, nil, iter)
 	require.NoError(d.t, err)
 
-	headHash, err := ctx.GetSessionVariable(ctx, dsess.HeadKey(db.Name()))
-	require.NoError(d.t, err)
-
+	// Create a new branch at this commit with the given identifier
 	ctx = enginetest.NewContext(d)
-	// TODO: there's a bug in test setup with transactions, where the HEAD session var gets overwritten on transaction
-	//  start, so we quote it here instead
-	// query := "insert into dolt_branches (name, hash) values ('" + asOfString + "', @@" + dsess.HeadKey(ddb.Name()) + ")"
-	query := "CALL dolt_branch('" + asOfString + "', '" + headHash.(string) + "')"
+	query := "CALL dolt_branch('" + asOfString + "')"
 
 	_, iter, err = e.Query(ctx,
 		query)
@@ -477,12 +451,4 @@ func (d *DoltHarness) ValidateEngine(ctx *sql.Context, e *gms.Engine) (err error
 		}
 	}
 	return
-}
-
-func dsqleDBsAsSqlDBs(dbs []sqle.Database) []sql.Database {
-	sqlDbs := make([]sql.Database, 0, len(dbs))
-	for _, db := range dbs {
-		sqlDbs = append(sqlDbs, db)
-	}
-	return sqlDbs
 }

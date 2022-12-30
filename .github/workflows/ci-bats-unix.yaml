@@ -23,15 +23,22 @@ jobs:
       matrix:
         os: [ ubuntu-22.04, macos-latest ]
         dolt_fmt: [ "__DOLT__", "__LD_1__" ]
+        journal: [ "" ]
+        include:
+          - os: "ubuntu-22.04"
+            dolt_fmt: "__DOLT__"
+            journal: "true"
         exclude:
           - os: "macos-latest"
             dolt_fmt: "__LD_1__"
+            journal: ""
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:
       - name: Conditionally Set ENV VARS for AWS tests
         env:
           DOLT_FMT: ${{ matrix.dolt_fmt }}
+          DOLT_ENABLE_CHUNK_JOURNAL: ${{ matrix.journal }}
         run: |
           if [[ $use_credentials == true ]]; then
             echo "AWS_SDK_LOAD_CONFIG=1" >> $GITHUB_ENV

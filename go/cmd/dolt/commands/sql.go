@@ -1278,28 +1278,14 @@ func (f *fileReadProgress) printNewLineIfNeeded() {
 }
 
 func flushBatchedEdits(ctx *sql.Context, se *engine.SqlEngine) error {
-	err := se.IterDBs(func(_ string, db dsqle.SqlDatabase) (bool, error) {
-		_, rowIter, err := se.Query(ctx, "COMMIT;")
-		if err != nil {
-			return false, err
+	for i := range se.Databases(ctx) {
+		if err := se.Databases(ctx)[i].Flush(ctx); err != nil {
+			return err
 		}
-
-		err = rowIter.Close(ctx)
-		if err != nil {
-			return false, err
-		}
-
-		err = db.Flush(ctx)
-		if err != nil {
-			return false, err
-		}
-
-		return false, nil
-	})
+	}
 
 	batchEditStats.unflushedEdits = 0
-
-	return err
+	return nil
 }
 
 // Processes a single query in batch mode. The Root of the sqlEngine may or may not be changed.

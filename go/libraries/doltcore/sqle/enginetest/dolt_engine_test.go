@@ -67,7 +67,7 @@ func TestSingleQuery(t *testing.T) {
 	t.Skip()
 
 	harness := newDoltHarness(t)
-	//harness.Setup(setup.MydbData, setup.MytableData)
+	harness.Setup(setup.MydbData, setup.MytableData)
 	engine, err := harness.NewEngine(t)
 	if err != nil {
 		panic(err)
@@ -795,6 +795,12 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 				Expected: []sql.Row{},
 			},
 			{
+				Query: "select active_branch();",
+				Expected: []sql.Row{
+					{nil},
+				},
+			},
+			{
 				Query:    "select database();",
 				Expected: []sql.Row{{"mydb/" + commithash}},
 			},
@@ -1294,7 +1300,7 @@ func TestDiffSystemTablePrepared(t *testing.T) {
 	}
 }
 
-func TestTestReadOnlyDatabases(t *testing.T) {
+func TestReadOnlyDatabases(t *testing.T) {
 	enginetest.TestReadOnlyDatabases(t, newDoltHarness(t))
 }
 

@@ -31,6 +31,7 @@ const (
 	globalParamName   = "global"
 	localParamName    = "local"
 	addOperationStr   = "add"
+	setOperationStr   = "set"
 	listOperationStr  = "list"
 	getOperationStr   = "get"
 	unsetOperationStr = "unset"
@@ -62,9 +63,9 @@ Valid configuration variables:
 
 	- user.name - sets email used in the author and committer field of commit objects.
 
-	- remotes.default_host - sets default host for authenticating eith doltremoteapi.
+	- remotes.default_host - sets default host for authenticating with doltremoteapi.
 
-	- remotes.default_port - sets default port for authenticating eith doltremoteapi.
+	- remotes.default_port - sets default port for authenticating with doltremoteapi.
 
 	- push.autoSetupRemote - if set to "true" assume --set-upstream on default push when no upstream tracking exists for the current branch.
 `,
@@ -72,6 +73,7 @@ Valid configuration variables:
 	Synopsis: []string{
 		`[--global|--local] --list`,
 		`[--global|--local] --add {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}value{{.GreaterThan}}`,
+		`[--global|--local] --set {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}value{{.GreaterThan}}`,
 		`[--global|--local] --get {{.LessThan}}name{{.GreaterThan}}`,
 		`[--global|--local] --unset {{.LessThan}}name{{.GreaterThan}}...`,
 	},
@@ -79,7 +81,7 @@ Valid configuration variables:
 
 type ConfigCmd struct{}
 
-// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd ConfigCmd) Name() string {
 	return "config"
 }
@@ -105,6 +107,7 @@ func (cmd ConfigCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(globalParamName, "", "Use global config.")
 	ap.SupportsFlag(localParamName, "", "Use repository local config.")
 	ap.SupportsFlag(addOperationStr, "", "Set the value of one or more config parameters")
+	ap.SupportsFlag(setOperationStr, "", "Set the value of one or more config parameters")
 	ap.SupportsFlag(listOperationStr, "", "List the values of all config parameters.")
 	ap.SupportsFlag(getOperationStr, "", "Get the value of one or more config parameters.")
 	ap.SupportsFlag(unsetOperationStr, "", "Unset the value of one or more config parameters.")
@@ -119,7 +122,7 @@ func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string,
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	cfgTypes := apr.FlagsEqualTo([]string{globalParamName, localParamName}, true)
-	ops := apr.FlagsEqualTo([]string{addOperationStr, listOperationStr, getOperationStr, unsetOperationStr}, true)
+	ops := apr.FlagsEqualTo([]string{addOperationStr, setOperationStr, listOperationStr, getOperationStr, unsetOperationStr}, true)
 
 	if cfgTypes.Size() > 1 {
 		cli.PrintErrln(color.RedString("Specifying both -local and -global is not valid. Exactly one may be set"))
@@ -129,7 +132,7 @@ func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string,
 		case 1:
 			return processConfigCommand(dEnv, cfgTypes, ops.AsSlice()[0], apr.Args, usage)
 		default:
-			cli.PrintErrln(color.RedString("Exactly one of the -add, -get, -unset, -list flags must be set."))
+			cli.PrintErrln(color.RedString("Exactly one of the -add, -set, -get, -unset, -list flags must be set."))
 			usage()
 		}
 	}
@@ -143,7 +146,7 @@ func processConfigCommand(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, opName str
 		return getOperation(dEnv, setCfgTypes, args, func(k string, v *string) {
 			cli.Println(*v)
 		})
-	case addOperationStr:
+	case addOperationStr, setOperationStr:
 		return addOperation(dEnv, setCfgTypes, args, usage)
 	case unsetOperationStr:
 		return unsetOperation(dEnv, setCfgTypes, args, usage)
