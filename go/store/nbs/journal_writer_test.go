@@ -248,7 +248,8 @@ func validateLookup(t *testing.T, j *journalWriter, l recLookup, cc CompressedCh
 	n, err := j.ReadAt(b, l.journalOff)
 	require.NoError(t, err)
 	assert.Equal(t, int(l.recordLen), n)
-	rec := readJournalRecord(b)
+	rec, err := readJournalRecord(b)
+	require.NoError(t, err)
 	assert.Equal(t, hash.Hash(rec.address), cc.Hash())
 	assert.Equal(t, rec.payload, cc.FullCompressedChunk)
 }

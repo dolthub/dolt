@@ -18,11 +18,10 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/d"
-
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // journalRec is a record in a chunk journal
@@ -59,6 +58,7 @@ const (
 )
 
 const (
+	recTagSz      = 1
 	recLenSz      = 4
 	recKindSz     = 1
 	recAddrSz     = 20
@@ -66,30 +66,48 @@ const (
 
 	// todo(andy): less arbitrary
 	recMaxSz = 128 * 1024
-
-	rootHashRecordSize = recLenSz + recKindSz + addrSize + checksumSize
 )
 
-func chunkRecordSize(c CompressedChunk) (recordLen, payloadOff uint32) {
-	recordLen += recLenSz
-	recordLen += recKindSz
-	recordLen += recAddrSz
-	payloadOff = recordLen
-	recordLen += uint32(len(c.FullCompressedChunk))
-	recordLen += recChecksumSz
+func chunkRecordSize(c CompressedChunk) (recordSz, payloadOff uint32) {
+	recordSz += recLenSz
+	recordSz += recTagSz + recKindSz
+	recordSz += recTagSz + recAddrSz
+	recordSz += recTagSz // payload tag
+	payloadOff = recordSz
+	recordSz += uint32(len(c.FullCompressedChunk))
+	recordSz += recChecksumSz
+	return
+}
+
+func rootHashRecordSize() (recordSz int) {
+	recordSz += recLenSz
+	recordSz += recTagSz + recKindSz
+	recordSz += recTagSz + recAddrSz
+	recordSz += recChecksumSz
 	return
 }
 
 func writeChunkRecord(buf []byte, c CompressedChunk) (n uint32) {
+	// length
 	l, _ := chunkRecordSize(c)
 	writeUint(buf[:recLenSz], l)
 	n += recLenSz
+	// kind
+	buf[n] = byte(kindTag)
+	n += recTagSz
 	buf[n] = byte(chunkRecKind)
 	n += recKindSz
+	// address
+	buf[n] = byte(addrTag)
+	n += recTagSz
 	copy(buf[n:], c.H[:])
 	n += recAddrSz
+	// payload
+	buf[n] = byte(payloadTag)
+	n += recTagSz
 	copy(buf[n:], c.FullCompressedChunk)
 	n += uint32(len(c.FullCompressedChunk))
+	// checksum
 	writeUint(buf[n:], crc(buf[:n]))
 	n += recChecksumSz
 	d.PanicIfFalse(l == n)
@@ -97,50 +115,61 @@ func writeChunkRecord(buf []byte, c CompressedChunk) (n uint32) {
 }
 
 func writeRootHashRecord(buf []byte, root addr) (n uint32) {
-	writeUint(buf[:recLenSz], rootHashRecordSize)
+	// length
+	l := rootHashRecordSize()
+	writeUint(buf[:recLenSz], uint32(l))
 	n += recLenSz
+	// kind
+	buf[n] = byte(kindTag)
+	n += recTagSz
 	buf[n] = byte(rootHashRecKind)
 	n += recKindSz
+	// address
+	buf[n] = byte(addrTag)
+	n += recTagSz
 	copy(buf[n:], root[:])
 	n += recAddrSz
+	// empty payload
+	// checksum
 	writeUint(buf[n:], crc(buf[:n]))
 	n += recChecksumSz
 	return
 }
 
-func readJournalRecord(buf []byte) (rec journalRec) {
+func readJournalRecord(buf []byte) (rec journalRec, err error) {
 	rec.length = readUint(buf)
 	buf = buf[recLenSz:]
-	rec.kind = recKind(buf[0])
-	buf = buf[recKindSz:]
-	copy(rec.address[:], buf)
-	buf = buf[recAddrSz:]
-	rec.payload = buf[:len(buf)-recChecksumSz]
-	rec.checksum = readUint(buf[len(buf)-recChecksumSz:])
+	for len(buf) > recChecksumSz {
+		tag := recTag(buf[0])
+		buf = buf[recTagSz:]
+		switch tag {
+		case kindTag:
+			rec.kind = recKind(buf[0])
+			buf = buf[recKindSz:]
+		case addrTag:
+			copy(rec.address[:], buf)
+			buf = buf[recAddrSz:]
+		case payloadTag:
+			sz := len(buf) - recChecksumSz
+			rec.payload = buf[:sz]
+			buf = buf[sz:]
+		case unknownTag:
+			fallthrough
+		default:
+			err = fmt.Errorf("unknown record field tag: %d", tag)
+			return
+		}
+	}
+	rec.checksum = readUint(buf[:recChecksumSz])
 	return
 }
 
-func safeReadJournalRecord(buf []byte) (journalRec, bool) {
-	o := len(buf) - recChecksumSz
-	if crc(buf[:o]) != readUint(buf[o:]) {
-		return journalRec{}, false
+func validateJournalRecord(buf []byte) (ok bool) {
+	if len(buf) > (recLenSz + recChecksumSz) {
+		off := len(buf) - recChecksumSz
+		ok = crc(buf[:off]) == readUint(buf[off:])
 	}
-
-	rec := readJournalRecord(buf)
-	switch rec.kind {
-	case rootHashRecKind:
-		return rec, true
-
-	case chunkRecKind:
-		_, err := NewCompressedChunk(hash.Hash(rec.address), rec.payload)
-		if err != nil {
-			return journalRec{}, false
-		}
-		return rec, true
-
-	default:
-		return journalRec{}, false
-	}
+	return
 }
 
 func processRecords(ctx context.Context, r io.ReadSeeker, cb func(o int64, r journalRec) error) (int64, error) {
@@ -158,17 +187,20 @@ func processRecords(ctx context.Context, r io.ReadSeeker, cb func(o int64, r jou
 		}
 
 		l := readUint(buf)
-		if l < (recLenSz+recChecksumSz) || l > recMaxSz {
+		if l > recMaxSz {
 			break
 		} else if buf, err = rdr.Peek(int(l)); err != nil {
 			break
 		}
 
-		rec, ok := safeReadJournalRecord(buf)
-		if !ok {
+		if !validateJournalRecord(buf) {
 			break // stop if we can't validate |rec|
 		}
 
+		var rec journalRec
+		if rec, err = readJournalRecord(buf); err != nil {
+			break // failed to read valid record
+		}
 		if err = cb(off, rec); err != nil {
 			break
 		}

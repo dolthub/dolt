@@ -262,7 +262,7 @@ func (wr *journalWriter) WriteChunk(cc CompressedChunk) (recLookup, error) {
 func (wr *journalWriter) WriteRootHash(root hash.Hash) error {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
-	buf, err := wr.getBytes(rootHashRecordSize)
+	buf, err := wr.getBytes(rootHashRecordSize())
 	if err != nil {
 		return err
 	}

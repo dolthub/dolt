@@ -424,8 +424,10 @@ func (s journalChunkSource) getCompressed(_ context.Context, h addr, _ *Stats) (
 		return CompressedChunk{}, nil
 	}
 
-	rec := readJournalRecord(buf)
-	if h != rec.address {
+	rec, err := readJournalRecord(buf)
+	if err != nil {
+		return CompressedChunk{}, err
+	} else if h != rec.address {
 		return CompressedChunk{}, fmt.Errorf("chunk record hash does not match lookup hash (%s != %s)",
 			h.String(), rec.address.String())
 	}
