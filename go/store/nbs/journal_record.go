@@ -24,8 +24,23 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 )
 
-// journalRec is a record in a chunk journal
-// containing a chunk and its metadata.
+// journalRec is a record in a chunk journal. It's serialization format uses
+// uint8 tag prefixes to identify fields and allow for format evolution.
+//
+// There are two kinds of journalRecs: chunk records and root hash records.
+// Chunk records store chunks from persisted memTables. Root hash records
+// store root hash updates to the manifest state.
+// Future records kinds may include other updates to manifest state such as
+// updates to GC generation or the table set lock hash.
+//
+// +-----------------+-------+---------+-----+-------------------+
+// | length (uint32) | tag 0 | field 0 | ... | checksum (uint32) |
+// +-----------------+-------+---------+-----+-------------------+
+//
+// Currently, the payload field is always written as the penultimate field,
+// followed only by the fixed-width record checksum. This allows the payload
+// to be extracted from the journalRec using only the record length and payload
+// offset. See recLookup for more detail.
 type journalRec struct {
 	length   uint32
 	kind     recKind

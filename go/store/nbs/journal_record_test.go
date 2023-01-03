@@ -57,6 +57,15 @@ func TestRoundTripRecords(t *testing.T) {
 	})
 }
 
+func TestUnknownTag(t *testing.T) {
+	// test behavior encountering unknown tag
+	buf := makeUnknownTagRecord()
+	ok := validateJournalRecord(buf)
+	assert.True(t, ok)
+	_, err := readJournalRecord(buf)
+	assert.Error(t, err)
+}
+
 func TestProcessRecords(t *testing.T) {
 	const cnt = 1024
 	ctx := context.Background()
@@ -182,6 +191,17 @@ func makeRootHashRecord() (journalRec, []byte) {
 		checksum: c,
 	}
 	return r, buf
+}
+
+func makeUnknownTagRecord() (buf []byte) {
+	const fakeTag recTag = 111
+	_, buf = makeRootHashRecord()
+	// overwrite recKind
+	buf[recLenSz] = byte(fakeTag)
+	// redo checksum
+	c := crc(buf[:len(buf)-recChecksumSz])
+	writeUint(buf[len(buf)-recChecksumSz:], c)
+	return
 }
 
 func writeCorruptRecord(buf []byte) (n uint32) {
