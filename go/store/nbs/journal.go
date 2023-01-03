@@ -31,12 +31,23 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-var ChunkJournalFeatureFlag = false
+var chunkJournalFeatureFlag = false
 
 func init() {
 	if os.Getenv("DOLT_ENABLE_CHUNK_JOURNAL") != "" {
-		ChunkJournalFeatureFlag = true
+		chunkJournalFeatureFlag = true
 	}
+}
+
+func UseJournalStore(path string) bool {
+	if chunkJournalFeatureFlag {
+		return true
+	}
+	ok, err := journalFileExists(filepath.Join(path, chunkJournalAddr))
+	if err != nil {
+		panic(err)
+	}
+	return ok
 }
 
 const (
