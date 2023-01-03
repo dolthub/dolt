@@ -312,11 +312,11 @@ func TestServerSetDefaultBranch(t *testing.T) {
 			expectedRes: []testBranch{{defaultBranch}},
 		},
 		{
-			query:       sess.Select("dolt_checkout('-b', 'new')"),
+			query:       sess.SelectBySql("call dolt_checkout('-b', 'new')"),
 			expectedRes: []testBranch{{""}},
 		},
 		{
-			query:       sess.Select("dolt_checkout('main')"),
+			query:       sess.SelectBySql("call dolt_checkout('main')"),
 			expectedRes: []testBranch{{""}},
 		},
 	}
@@ -461,7 +461,7 @@ func TestReadReplica(t *testing.T) {
 
 		var res []int
 
-		q := sess.SelectBySql(fmt.Sprintf("select dolt_checkout('%s')", newBranch))
+		q := sess.SelectBySql(fmt.Sprintf("call dolt_checkout('%s')", newBranch))
 		_, err = q.LoadContext(context.Background(), &res)
 		require.NoError(t, err)
 		assert.ElementsMatch(t, res, []int{0})

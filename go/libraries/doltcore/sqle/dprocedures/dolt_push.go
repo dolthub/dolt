@@ -15,16 +15,81 @@
 package dprocedures
 
 import (
+	"fmt"
+	"strconv"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 // doltPush is the stored procedure version of the function `dolt_push`.
 func doltPush(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	res, err := dfunctions.DoDoltPush(ctx, args)
+	res, err := doDoltPush(ctx, args)
 	if err != nil {
 		return nil, err
 	}
 	return rowToIter(int64(res)), nil
+}
+
+func doDoltPush(ctx *sql.Context, args []string) (int, error) {
+	dbName := ctx.GetCurrentDatabase()
+
+	if len(dbName) == 0 {
+		return cmdFailure, fmt.Errorf("empty database name")
+	}
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return cmdFailure, err
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbData, ok := sess.GetDbData(ctx, dbName)
+
+	if !ok {
+		return cmdFailure, fmt.Errorf("could not load database %s", dbName)
+	}
+
+	apr, err := cli.CreatePushArgParser().Parse(args)
+	if err != nil {
+		return cmdFailure, err
+	}
+
+	autoSetUpRemote := loadConfig(ctx).GetStringOrDefault(env.PushAutoSetupRemote, "false")
+	pushAutoSetUpRemote, err := strconv.ParseBool(autoSetUpRemote)
+	if err != nil {
+		return cmdFailure, err
+	}
+
+	opts, err := env.NewPushOpts(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag), pushAutoSetUpRemote)
+	if err != nil {
+		return cmdFailure, err
+	}
+	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb, opts.Remote, true)
+	if err != nil {
+		return 1, actions.HandleInitRemoteStorageClientErr(opts.Remote.Name, opts.Remote.Url, err)
+	}
+
+	tmpDir, err := dbData.Rsw.TempTableFilesDir()
+	if err != nil {
+		return cmdFailure, err
+	}
+	err = actions.DoPush(ctx, dbData.Rsr, dbData.Rsw, dbData.Ddb, remoteDB, tmpDir, opts, runProgFuncs, stopProgFuncs)
+	if err != nil {
+		switch err {
+		case doltdb.ErrUpToDate:
+			return cmdSuccess, nil
+		case datas.ErrMergeNeeded:
+			return cmdFailure, fmt.Errorf("%w; the tip of your current branch is behind its remote counterpart", err)
+		default:
+			return cmdFailure, err
+		}
+	}
+	// TODO : set upstream should be persisted outside of session
+	return cmdSuccess, nil
 }

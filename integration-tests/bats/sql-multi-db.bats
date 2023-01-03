@@ -111,8 +111,7 @@ seed_repos_with_tables_with_use_statements() {
     cd ..
     run dolt sql --data-dir ./subremotes -b -q "
         USE repo2;
-        select dolt_fetch() as f;" -r csv
+        call dolt_fetch();" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "f" ]] || false
-    [[ "${lines[2]}" =~ "1" ]] || false
+    [[ "${lines[1]}" =~ "Rows inserted: 0 Rows updated: 0 Rows deleted: 0" ]] || false
 }

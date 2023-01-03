@@ -241,19 +241,19 @@ SQL
 create table t1 (a int primary key, b int);
 call dolt_add('.');
 insert into t1 values (1,1);
-select dolt_commit('-am', 'table with one row');
-select dolt_branch('onerow');
+call dolt_commit('-am', 'table with one row');
+call dolt_branch('onerow');
 insert into t1 values (2,2);
-select dolt_commit('-am', 'table with two rows');
-select dolt_branch('tworows');
+call dolt_commit('-am', 'table with two rows');
+call dolt_branch('tworows');
 create view v1 as select * from t1;
 call dolt_add('.');
-select dolt_commit('-am', 'view with select *');
-select dolt_branch('view');
+call dolt_commit('-am', 'view with select *');
+call dolt_branch('view');
 insert into t1 values (3,3);
 call dolt_add('.');
-select dolt_commit('-am', 'table with three rows');
-select dolt_branch('threerows');
+call dolt_commit('-am', 'table with three rows');
+call dolt_branch('threerows');
 drop view v1;
 create view v1 as select a+10, b+10 from t1;
 SQL

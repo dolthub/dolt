@@ -233,11 +233,11 @@ teardown() {
     dolt config --global --unset user.name
     dolt config --global --unset user.email
 
-    dolt sql -q "SELECT COMMIT('-a', '-m', 'updated stuff')"
+    dolt sql -q "CALL DOLT_COMMIT('-a', '-m', 'updated stuff')"
 
     dolt config --global --add user.name "bats tester"
     dolt sql -q "INSERT INTO test VALUES (1);"
-    dolt sql -q "SELECT COMMIT('-a', '-m', 'updated stuff')"
+    dolt sql -q "CALL DOLT_COMMIT('-a', '-m', 'updated stuff')"
 }
 
 @test "config: DOLT_COMMIT uses default values when user.name or user.email is unset." {
@@ -254,7 +254,7 @@ teardown() {
     dolt config --global --unset user.name
     dolt config --global --unset user.email
 
-    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'created table test')"
+    run dolt sql -q "call dolt_commit('-a', '-m', 'created table test')"
     [ "$status" -eq 0 ]
 
     run dolt log -n 1
@@ -267,7 +267,7 @@ teardown() {
     
     dolt config --global --add user.name "bats tester"
 
-    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'created table test2')"
+    run dolt sql -q "call dolt_commit('-a', '-m', 'created table test2')"
     [ "$status" -eq 0 ]
 
     run dolt log -n 1

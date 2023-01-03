@@ -22,7 +22,7 @@ teardown() {
 @test "sql-reset: DOLT_RESET --hard works on unstaged and staged table changes" {
     dolt sql -q "INSERT INTO test VALUES (1)"
 
-    run dolt sql -q "SELECT DOLT_RESET('--hard')"
+    run dolt sql -q "call dolt_reset('--hard')"
     [ $status -eq 0 ]
 
     run dolt status
@@ -34,7 +34,7 @@ teardown() {
 
     dolt add .
 
-    run dolt sql -q "SELECT DOLT_RESET('--hard')"
+    run dolt sql -q "call dolt_reset('--hard')"
     [ $status -eq 0 ]
 
     run dolt status
@@ -45,7 +45,7 @@ teardown() {
     dolt sql -q "INSERT INTO test VALUES (1)"
 
     # Reset to head results in clean main.
-    run dolt sql -q "SELECT DOLT_RESET('--hard', 'head');"
+    run dolt sql -q "call dolt_reset('--hard', 'head');"
     [ "$status" -eq 0 ]
 
     run dolt status
@@ -130,7 +130,7 @@ teardown() {
     dolt docs upload LICENSE.md LICENSE.md
     dolt add .
 
-    run dolt sql -q "SELECT DOLT_RESET('--hard')"
+    run dolt sql -q "call dolt_reset('--hard')"
     [ $status -eq 0 ]
 
     dolt status
@@ -171,7 +171,7 @@ teardown() {
     dolt sql -q "INSERT INTO test VALUES (1)"
 
     # Table should still be unstaged
-    run dolt sql -q "SELECT DOLT_RESET('--soft')"
+    run dolt sql -q "call dolt_reset('--soft')"
     [ $status -eq 0 ]
 
     run dolt status
@@ -181,7 +181,7 @@ teardown() {
 
     dolt add .
 
-    run dolt sql -q "SELECT DOLT_RESET('--soft')"
+    run dolt sql -q "call dolt_reset('--soft')"
     [ $status -eq 0 ]
 
     run dolt status
@@ -218,7 +218,7 @@ teardown() {
     dolt docs upload LICENSE.md LICENSE.md
     dolt add .
 
-    run dolt sql -q "SELECT DOLT_RESET('--soft')"
+    run dolt sql -q "call dolt_reset('--soft')"
     [ $status -eq 0 ]
 
     run dolt status
@@ -243,7 +243,7 @@ teardown() {
     dolt sql -q "INSERT INTO test VALUES (1)"
 
     # Table should still be unstaged
-    run dolt sql -q "SELECT DOLT_RESET('test')"
+    run dolt sql -q "call dolt_reset('test')"
 
     run dolt status
     [ "$status" -eq 0 ]
@@ -253,7 +253,7 @@ teardown() {
     dolt sql -q "CREATE TABLE test2 (pk int primary key);"
 
     dolt add .
-    run dolt sql -q "SELECT DOLT_RESET('test', 'test2')"
+    run dolt sql -q "call dolt_reset('test', 'test2')"
 
     run dolt status
     [ "$status" -eq 0 ]
@@ -288,7 +288,7 @@ teardown() {
 @test "sql-reset: DOLT_RESET --soft and --hard on the same table" {
     # Make a change to the table and do a soft reset
     dolt sql -q "INSERT INTO test VALUES (1)"
-    run dolt sql -q "SELECT DOLT_RESET('test')"
+    run dolt sql -q "call dolt_reset('test')"
     [ "$status" -eq 0 ]
 
     run dolt status
@@ -299,7 +299,7 @@ teardown() {
     # Add and unstage the table with a soft reset. Make sure the same data exists.
     dolt add .
 
-    run dolt sql -q "SELECT DOLT_RESET('test')"
+    run dolt sql -q "call dolt_reset('test')"
     [ "$status" -eq 0 ]
 
     run dolt status
@@ -312,7 +312,7 @@ teardown() {
     [[ "$output" =~ 1  ]] || false
 
     # Do a hard reset and validate the insert was wiped properly
-    run dolt sql -q "SELECT DOLT_RESET('--hard')"
+    run dolt sql -q "call dolt_reset('--hard')"
 
     run dolt status
     [ "$status" -eq 0 ]
@@ -369,7 +369,7 @@ CREATE TABLE test2 (
     pk int primary key
 );
 SQL
-    dolt sql -q "SELECT DOLT_RESET('--hard');"
+    dolt sql -q "call dolt_reset('--hard');"
 
     run dolt status
     [ "$status" -eq 0 ]
@@ -377,7 +377,7 @@ SQL
     [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test2) ]] || false
 
     dolt add .
-    dolt sql -q "SELECT DOLT_RESET('--hard');"
+    dolt sql -q "call dolt_reset('--hard');"
     run dolt status
 
     [ "$status" -eq 0 ]
@@ -410,7 +410,7 @@ SQL
 @test "sql-reset: No rows in dolt_diff table after DOLT_RESET('--hard') on committed table." {
     run dolt sql << SQL
 INSERT INTO test VALUES (1);
-SELECT DOLT_RESET('--hard');
+call dolt_reset('--hard');
 SELECT count(*)=0 FROM dolt_diff_test;
 SQL
     [ $status -eq 0 ]
@@ -432,7 +432,7 @@ SQL
 @test "sql-reset: No rows in dolt_status table after DOLT_RESET('--hard') on committed table." {
       run dolt sql << SQL
 INSERT INTO test VALUES (1);
-SELECT DOLT_RESET('--hard');
+call dolt_reset('--hard');
 SELECT count(*)=0 FROM dolt_status;
 SQL
     [ $status -eq 0 ]
@@ -454,7 +454,7 @@ SQL
     head_hash=$(get_head_commit)
     run dolt sql << SQL
 INSERT INTO test VALUES (1);
-SELECT DOLT_RESET('--hard');
+call dolt_reset('--hard');
 SELECT $head_variable;
 SQL
 
@@ -480,7 +480,7 @@ SQL
 INSERT INTO test VALUES (1);
 SQL
 
-    dolt sql -q "SELECT DOLT_RESET('test');"
+    dolt sql -q "call dolt_reset('test');"
     run dolt sql -q "SELECT * FROM dolt_status;"
 
     [ $status -eq 0 ]
@@ -506,8 +506,8 @@ SQL
 
     run dolt sql << SQL
 INSERT INTO test VALUES (1);
-SELECT DOLT_ADD('.');
-SELECT DOLT_RESET('test');
+call dolt_add('.');
+call dolt_reset('test');
 SELECT $working_hash_var
 SQL
 
@@ -516,7 +516,7 @@ SQL
     # These should not match as @@_working should become a new staged hash different from the original working.
     [[ ! "$output" =~ $working_hash ]] || false
 
-    run dolt sql -q "SELECT DOLT_RESET('--hard');"
+    run dolt sql -q "call dolt_reset('--hard');"
     [ $status -eq 0 ]
 
     run dolt sql -q "SELECT $working_hash_var"
@@ -533,8 +533,8 @@ SQL
 
     run dolt sql << SQL
 INSERT INTO test VALUES (1);
-SELECT DOLT_ADD('.');
-SELECT DOLT_RESET('test');
+call dolt_add('.');
+call dolt_reset('test');
 SELECT $working_hash_var
 SQL
 

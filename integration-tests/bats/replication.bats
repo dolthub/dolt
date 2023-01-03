@@ -50,7 +50,7 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
     dolt sql -q "create table t1 (a int primary key)"
     dolt sql -q "call dolt_add('.')"
-    dolt sql -q "select dolt_commit('-am', 'cm')"
+    dolt sql -q "call dolt_commit('-am', 'cm')"
 
     cd ..
     dolt clone file://./bac1 repo2
@@ -473,7 +473,7 @@ SQL
     dolt checkout -b new_feature
     dolt sql -q "create table t1 (a int primary key)"
     dolt sql -q "call dolt_add('.')"
-    dolt sql -q "select dolt_commit('-am', 'cm')"
+    dolt sql -q "call dolt_commit('-am', 'cm')"
 
     cd ..
     dolt clone file://./rem1 repo2
@@ -501,10 +501,9 @@ SQL
 
     dolt add .
 
-    run dolt sql -q "select dolt_commit('-am', 'cm')"
+    run dolt sql -q "call dolt_commit('-am', 'cm')"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
-    [[ "$output" =~ "dolt_commit('-am', 'cm')" ]] || false
 }
 
 @test "replication: bad source doesn't error during non-transactional commands" {
@@ -652,7 +651,7 @@ SQL
     dolt config --local --add sqlserver.global.dolt_async_replication 1
     dolt sql -q "create table t1 (a int primary key)"
     dolt sql -q "call dolt_add('.')"
-    dolt sql -q "select dolt_commit('-am', 'cm')"
+    dolt sql -q "call dolt_commit('-am', 'cm')"
     sleep 5
 
     cd ..

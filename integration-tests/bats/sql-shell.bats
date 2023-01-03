@@ -813,7 +813,7 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "active_branch()" ]] || false
     [[ "$output" =~ "main" ]] || false
-    run dolt sql <<< "select dolt_checkout('-b', 'tmp_br') as co; select active_branch()"
+    run dolt sql <<< "call dolt_checkout('-b', 'tmp_br'); select active_branch()"
     [ $status -eq 0 ]
     [[ "$output" =~ "active_branch()" ]] || false
     [[ "$output" =~ "tmp_br" ]] || false
