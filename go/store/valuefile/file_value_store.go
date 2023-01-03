@@ -202,10 +202,6 @@ func (f *FileValueStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunk
 	return nil
 }
 
-func (f *FileValueStore) PutMany(ctx context.Context, chunkMap map[hash.Hash]chunks.Chunk, getAddrs chunks.GetManyAddrsCb) error {
-	return nil
-}
-
 // Version returns the nbf version string
 func (f *FileValueStore) Version() string {
 	return f.nbf.VersionString()

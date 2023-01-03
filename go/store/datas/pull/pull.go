@@ -187,11 +187,8 @@ type WalkAddrs func(chunks.Chunk, func(hash.Hash, bool) error) error
 // put the chunks that were downloaded into the sink IN ORDER and at the same time gather up an ordered, uniquified list
 // of all the children of the chunks and add them to the list of the next level tree chunks.
 func putChunks(ctx context.Context, wah WalkAddrs, sinkCS chunks.ChunkStore, hashes hash.HashSlice, neededChunks map[hash.Hash]*chunks.Chunk, nextLevel hash.HashSet, uniqueOrdered hash.HashSlice) (hash.HashSlice, error) {
-	chunkMap := map[hash.Hash]chunks.Chunk{}
-
 	for _, h := range hashes {
 		c := neededChunks[h]
-		chunkMap[h] = *c
 
 		err := wah(*c, func(h hash.Hash, _ bool) error {
 			if !nextLevel.Has(h) {
@@ -204,25 +201,23 @@ func putChunks(ctx context.Context, wah WalkAddrs, sinkCS chunks.ChunkStore, has
 		if err != nil {
 			return hash.HashSlice{}, err
 		}
-	}
 
-	getAddrs := func(ctx context.Context, chunkMap map[hash.Hash]chunks.Chunk) (hash.HashSet, error) {
-		valRefs := make(hash.HashSet)
-		for _, c := range chunkMap {
-			err := wah(c, func(addr hash.Hash, isLeaf bool) error {
+		getAddrs := func(ctx context.Context, ch chunks.Chunk) (hash.HashSet, error) {
+			valRefs := make(hash.HashSet)
+			err := wah(ch, func(addr hash.Hash, isLeaf bool) error {
 				valRefs.Insert(addr)
 				return nil
 			})
 			if err != nil {
 				return nil, err
 			}
+			return valRefs, nil
 		}
-		return valRefs, nil
-	}
 
-	err := sinkCS.PutMany(ctx, chunkMap, getAddrs)
-	if err != nil {
-		return hash.HashSlice{}, err
+		err = sinkCS.Put(ctx, *c, getAddrs)
+		if err != nil {
+			return hash.HashSlice{}, err
+		}
 	}
 
 	return uniqueOrdered, nil

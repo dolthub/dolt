@@ -105,10 +105,6 @@ func (csMW *CSMetricWrapper) Put(ctx context.Context, c Chunk, getAddrs GetAddrs
 	return csMW.cs.Put(ctx, c, getAddrs)
 }
 
-func (csMW *CSMetricWrapper) PutMany(ctx context.Context, chunkMap map[hash.Hash]Chunk, getAddrs GetManyAddrsCb) error {
-	return nil
-}
-
 // Returns the NomsVersion with which this ChunkSource is compatible.
 func (csMW *CSMetricWrapper) Version() string {
 	return csMW.cs.Version()

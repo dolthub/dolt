@@ -578,24 +578,6 @@ func (nbs *NomsBlockStore) WithoutConjoiner() *NomsBlockStore {
 	}
 }
 
-func (nbs *NomsBlockStore) errorIfDanglingWithChunkMap(ctx context.Context, addrs hash.HashSet, chunkMap map[hash.Hash]chunks.Chunk) error {
-	absent, err := nbs.HasMany(ctx, addrs)
-	if err != nil {
-		return err
-	}
-	abs := hash.NewHashSet()
-	for h := range absent {
-		if _, ok := chunkMap[h]; !ok {
-			abs.Insert(h)
-		}
-	}
-	if len(abs) != 0 {
-		s := abs.String()
-		return fmt.Errorf("Found dangling references to %s", s)
-	}
-	return nil
-}
-
 func (nbs *NomsBlockStore) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
 	absent, err := nbs.HasMany(ctx, addrs)
 	if err != nil {
@@ -631,37 +613,6 @@ func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 	atomic.AddUint64(&nbs.putCount, 1)
 
 	nbs.stats.PutLatency.SampleTimeSince(t1)
-
-	return nil
-}
-
-func (nbs *NomsBlockStore) PutMany(ctx context.Context, chunkMap map[hash.Hash]chunks.Chunk, getAddrs chunks.GetManyAddrsCb) error {
-	t1 := time.Now()
-
-	addrs, err := getAddrs(ctx, chunkMap)
-	if err != nil {
-		return err
-	}
-
-	// Fails datas/pull TestChunkJournalPulls
-	err = nbs.errorIfDanglingWithChunkMap(ctx, addrs, chunkMap)
-	if err != nil {
-		return err
-	}
-
-	for _, c := range chunkMap {
-		a := addr(c.Hash())
-
-		success, err := nbs.addChunk(ctx, a, c.Data())
-		if err != nil {
-			return err
-		} else if !success {
-			return errors.New("failed to add chunk")
-		}
-		atomic.AddUint64(&nbs.putCount, 1)
-
-		nbs.stats.PutLatency.SampleTimeSince(t1)
-	}
 
 	return nil
 }

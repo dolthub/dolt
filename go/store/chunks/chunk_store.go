@@ -32,7 +32,6 @@ import (
 var ErrNothingToCollect = errors.New("no changes since last gc")
 
 type GetAddrsCb func(ctx context.Context, c Chunk) (hash.HashSet, error)
-type GetManyAddrsCb func(ctx context.Context, chunkMap map[hash.Hash]Chunk) (hash.HashSet, error)
 
 // ChunkStore is the core storage abstraction in noms. We can put data
 // anyplace we have a ChunkStore implementation for.
@@ -60,10 +59,6 @@ type ChunkStore interface {
 	// Get(), GetMany(), Has() and HasMany(). Will return an error if the
 	// addrs returned by `getAddrs` are absent from the chunk store.
 	Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb) error
-
-	// PutMany caches all or no chunks in chunkMap in the ChunkSource. Chunks
-	// are only added if they pass the sanity check.
-	PutMany(ctx context.Context, chunkMap map[hash.Hash]Chunk, getAddrs GetManyAddrsCb) error
 
 	// Returns the NomsVersion with which this ChunkSource is compatible.
 	Version() string

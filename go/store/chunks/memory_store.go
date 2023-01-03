@@ -186,24 +186,6 @@ func (ms *MemoryStoreView) Version() string {
 	return ms.version
 }
 
-func (ms *MemoryStoreView) errorIfDanglingWithChunkMap(ctx context.Context, addrs hash.HashSet, chunkMap map[hash.Hash]Chunk) error {
-	absent, err := ms.HasMany(ctx, addrs)
-	if err != nil {
-		return err
-	}
-	abs := hash.NewHashSet()
-	for h := range absent {
-		if _, ok := chunkMap[h]; !ok {
-			abs.Insert(h)
-		}
-	}
-	if len(abs) != 0 {
-		s := abs.String()
-		return fmt.Errorf("Found dangling references to %s", s)
-	}
-	return nil
-}
-
 func (ms *MemoryStoreView) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
 	absent, err := ms.HasMany(ctx, addrs)
 	if err != nil {
@@ -234,29 +216,6 @@ func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb
 	}
 	ms.pending[c.Hash()] = c
 
-	return nil
-}
-
-func (ms *MemoryStoreView) PutMany(ctx context.Context, chunkMap map[hash.Hash]Chunk, getAddrs GetManyAddrsCb) error {
-	addrs, err := getAddrs(ctx, chunkMap)
-	if err != nil {
-		return err
-	}
-
-	// Fails in datas/pull TestLocalToLocalPulls/TestRemoteToLocalPulls/TestLocalToRemotePulls/TestRemoteToRemotePulls
-	err = ms.errorIfDanglingWithChunkMap(ctx, addrs, chunkMap)
-	if err != nil {
-		return err
-	}
-
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
-	if ms.pending == nil {
-		ms.pending = map[hash.Hash]Chunk{}
-	}
-	for h, c := range chunkMap {
-		ms.pending[h] = c
-	}
 	return nil
 }
 
