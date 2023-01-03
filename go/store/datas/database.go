@@ -28,6 +28,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -166,7 +167,7 @@ type GarbageCollector interface {
 // Databases support this yet.
 func CanUsePuller(db Database) bool {
 	cs := db.chunkStore()
-	if tfs, ok := cs.(chunks.TableFileStore); ok {
+	if tfs, ok := cs.(nbs.TableFileStore); ok {
 		ops := tfs.SupportedOperations()
 		return ops.CanRead && ops.CanWrite
 	}
