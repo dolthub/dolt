@@ -246,7 +246,7 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 	})
 }
 
-//TODO: the config should be available via the context, it's unnecessary to do an env.Load here and this should be removed
+// TODO: the config should be available via the context, it's unnecessary to do an env.Load here and this should be removed
 func loadConfig(ctx *sql.Context) *env.DoltCliConfig {
 	// When executing branch actions from SQL, we don't have access to a DoltEnv like we do from
 	// within the CLI. We can fake it here enough to get a DoltCliConfig, but we can't rely on the

@@ -176,7 +176,7 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 	return conflicts, fastForward, nil
 }
 
-//TODO: remove this as it does not do anything useful
+// TODO: remove this as it does not do anything useful
 func pullerProgFunc(ctx context.Context, statsCh <-chan pull.Stats) {
 	for {
 		if ctx.Err() != nil {
@@ -191,7 +191,7 @@ func pullerProgFunc(ctx context.Context, statsCh <-chan pull.Stats) {
 	}
 }
 
-//TODO: remove this as it does not do anything useful
+// TODO: remove this as it does not do anything useful
 func progFunc(ctx context.Context, progChan <-chan pull.PullProgress) {
 	for {
 		if ctx.Err() != nil {
@@ -206,7 +206,7 @@ func progFunc(ctx context.Context, progChan <-chan pull.PullProgress) {
 	}
 }
 
-//TODO: remove this as it does not do anything useful
+// TODO: remove this as it does not do anything useful
 func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.Stats) {
 	statsCh := make(chan pull.Stats)
 	progChan := make(chan pull.PullProgress)
@@ -227,7 +227,7 @@ func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress,
 	return wg, progChan, statsCh
 }
 
-//TODO: remove this as it does not do anything useful
+// TODO: remove this as it does not do anything useful
 func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, statsCh chan pull.Stats) {
 	cancel()
 	close(progChan)
