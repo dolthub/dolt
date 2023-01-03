@@ -21,8 +21,8 @@ teardown() {
 }
 
 @test "sql-add: DOLT_ADD all flag works" {
-    run dolt sql -q "SELECT DOLT_ADD('-A')"
-    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+    run dolt sql -q "call dolt_add('-A')"
+    run dolt sql -q "call dolt_commit('-m', 'Commit1')"
 
     # Check that everything was added
     run dolt diff
@@ -69,8 +69,8 @@ teardown() {
 }
 
 @test "sql-add: DOLT_ADD all w/ . works" {
-    run dolt sql -q "SELECT DOLT_ADD('.')"
-    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+    run dolt sql -q "call dolt_add('.')"
+    run dolt sql -q "call dolt_commit('-m', 'Commit1')"
 
     # Check that everything was added
     run dolt diff
@@ -101,8 +101,8 @@ teardown() {
 }
 
 @test "sql-add: DOLT_ADD all w/ . combined with DOLT_COMMIT -a works" {
-    run dolt sql -q "SELECT DOLT_ADD('.')"
-    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+    run dolt sql -q "call dolt_add('.')"
+    run dolt sql -q "call dolt_commit('-a', '-m', 'Commit1')"
 
     # Check that everything was added
     run dolt diff
@@ -131,8 +131,8 @@ teardown() {
 }
 
 @test "sql-add: DOLT_ADD can take in one table" {
-    dolt sql -q "SELECT DOLT_ADD('test')"
-    dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+    dolt sql -q "call dolt_add('test')"
+    dolt sql -q "call dolt_commit('-m', 'Commit1')"
 
     # Check that just test was added and not test2.
     run dolt status
@@ -165,8 +165,8 @@ teardown() {
 }
 
 @test "sql-add: DOLT_ADD can take in multiple tables" {
-    run dolt sql -q "SELECT DOLT_ADD('test', 'test2')"
-    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+    run dolt sql -q "call dolt_add('test', 'test2')"
+    run dolt sql -q "call dolt_commit('-m', 'Commit1')"
 
     # Check that both test and test2 are added.
     run dolt diff
@@ -203,7 +203,7 @@ teardown() {
      run ls
      [[ "$output" =~ "README.md" ]] || false
 
-     run dolt sql -q "SELECT DOLT_ADD('README.md')"
+     run dolt sql -q "call dolt_add('README.md')"
      [ "$status" -eq 0 ]
 
      # Check that the README was added as a new doc.

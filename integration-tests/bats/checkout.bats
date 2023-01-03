@@ -65,7 +65,7 @@ SQL
     dolt branch feature
 
     dolt sql  <<SQL
-select dolt_checkout('feature');
+call dolt_checkout('feature');
 insert into test values (2), (3), (4);
 commit;
 SQL
@@ -90,8 +90,8 @@ SQL
 
     # Reset our test setup
     dolt sql  <<SQL
-select dolt_checkout('feature');
-select dolt_reset('--hard');
+call dolt_checkout('feature');
+call dolt_reset('--hard');
 insert into test values (2), (3), (4);
 commit;
 SQL

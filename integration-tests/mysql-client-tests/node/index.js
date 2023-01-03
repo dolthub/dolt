@@ -46,14 +46,14 @@ async function main() {
 			"select * from test",
 			"insert into test (pk, `value`) values (0,0)",
 			"select * from test",
-			"select dolt_add('-A');",
-			"select dolt_commit('-m', 'my commit')",
+			"call dolt_add('-A');",
+			"call dolt_commit('-m', 'my commit')",
 			"select COUNT(*) FROM dolt_log",
-			"select dolt_checkout('-b', 'mybranch')",
+			"call dolt_checkout('-b', 'mybranch')",
 			"insert into test (pk, `value`) values (1,1)",
-			"select dolt_commit('-a', '-m', 'my commit2')",
-			"select dolt_checkout('main')",
-			"select dolt_merge('mybranch')",
+			"call dolt_commit('-a', '-m', 'my commit2')",
+			"call dolt_checkout('main')",
+			"call dolt_merge('mybranch')",
 			"select COUNT(*) FROM dolt_log",
     ];
 
@@ -93,10 +93,10 @@ async function main() {
 	    changedRows: 0
 	},
 	[ { pk: 0, value: 0 } ],
-	[ { "dolt_add('-A')": 0 } ],
+	[ { status: 0 } ],
 	[],
 	[ { "COUNT(*)": 2 } ],
-	[ { "dolt_checkout('-b', 'mybranch')": 0 } ],
+	[ { status: 0 } ],
 	{
 		fieldCount: 0,
 		affectedRows: 1,
@@ -108,8 +108,8 @@ async function main() {
 		changedRows: 0
 	},
 	[],
-	[ { "dolt_checkout('main')": 0 } ],
-	[ { "dolt_merge('mybranch')": 0 } ],
+	[ { status: 0 } ],
+	[ { fast_forward: 1, conflicts: 0 } ],
 	[ { "COUNT(*)": 3 } ],
     ];
 

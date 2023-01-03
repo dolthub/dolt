@@ -85,7 +85,7 @@ teardown() {
     [ "${lines[1]}" = "commit C" ]
 
     # dolt_merge_base() resolves commit hashes
-    run dolt sql -q "SELECT dolt_merge_base('main', hashof('one')) = dolt_merge_base(hashof('main'),'one') FROM dual;" -r csv
+    run dolt sql -q "select dolt_merge_base('main', hashof('one')) = dolt_merge_base(hashof('main'),'one') FROM dual;" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "true" ]
 }

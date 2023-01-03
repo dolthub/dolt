@@ -763,7 +763,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
+			"CALL DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -814,7 +814,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
+			"CALL DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -865,7 +865,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
+			"CALL DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -916,7 +916,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
+			"CALL DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1007,7 +1007,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
+			"CALL DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1096,7 +1096,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
+			"CALL DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1350,14 +1350,14 @@ var DoltSqlFuncTransactionTests = []queries.TransactionTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (1, 1);",
 			"UPDATE test SET val=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
-			"SELECT DOLT_CHECKOUT('main');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"CALL DOLT_CHECKOUT('main');",
 			"UPDATE test SET val=1001 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
+			"CALL DOLT_COMMIT('-a', '-m', 'update a value');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1369,8 +1369,8 @@ var DoltSqlFuncTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ SELECT DOLT_MERGE('feature-branch')",
-				Expected: []sql.Row{{1}},
+				Query:    "/* client a */ CALL DOLT_MERGE('feature-branch')",
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",
@@ -1401,8 +1401,8 @@ var DoltSqlFuncTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ SELECT DOLT_MERGE('--abort')",
-				Expected: []sql.Row{{0}},
+				Query:    "/* client a */ CALL DOLT_MERGE('--abort')",
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -1417,7 +1417,7 @@ var DoltSqlFuncTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{{}},
 			},
 			{
-				Query:          "/* client a */ SELECT DOLT_MERGE('feature-branch')",
+				Query:          "/* client a */ CALL DOLT_MERGE('feature-branch')",
 				ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
 			},
 			{ // client rolled back on merge with conflicts

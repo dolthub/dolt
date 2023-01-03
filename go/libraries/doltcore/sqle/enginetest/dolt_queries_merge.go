@@ -23,7 +23,7 @@ import (
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
@@ -56,13 +56,13 @@ var MergeScripts = []queries.ScriptTest{
 			"call DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
 			"CALL DOLT_ADD('.');",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
-			"SELECT DOLT_CHECKOUT('main');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"CALL DOLT_CHECKOUT('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -79,7 +79,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "SELECT DOLT_CHECKOUT('-b', 'new-branch')",
+				Query:    "CALL DOLT_CHECKOUT('-b', 'new-branch')",
 				Expected: []sql.Row{{0}},
 			},
 			{
@@ -95,12 +95,12 @@ var MergeScripts = []queries.ScriptTest{
 			"call DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff', '--date', '2022-08-06T12:00:01');",
-			"SELECT DOLT_CHECKOUT('main');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a ff', '--date', '2022-08-06T12:00:01');",
+			"CALL DOLT_CHECKOUT('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -125,7 +125,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
 			},
 			{
-				Query:    "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
+				Query:    "CALL DOLT_CHECKOUT('-b', 'other-branch')",
 				Expected: []sql.Row{{0}},
 			},
 		},
@@ -137,14 +137,14 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
-			"SELECT DOLT_CHECKOUT('main');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
+			"CALL DOLT_CHECKOUT('main');",
 			"INSERT INTO test VALUES (5),(6),(7);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:03');",
+			"CALL DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:03');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -176,14 +176,14 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
-			"SELECT DOLT_CHECKOUT('main');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
+			"CALL DOLT_CHECKOUT('main');",
 			"INSERT INTO test VALUES (5),(6),(7);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:03');",
+			"CALL DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:03');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -208,7 +208,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
-				Query:       "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
+				Query:       "CALL DOLT_CHECKOUT('-b', 'other-branch')",
 				ExpectedErr: dsess.ErrWorkingSetChanges,
 			},
 		},
@@ -220,14 +220,14 @@ var MergeScripts = []queries.ScriptTest{
 			"call DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (1, 1);",
 			"UPDATE test SET val=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
-			"SELECT DOLT_CHECKOUT('main');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
+			"CALL DOLT_CHECKOUT('main');",
 			"UPDATE test SET val=1001 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'update a value', '--date', '2022-08-06T12:00:03');",
+			"CALL DOLT_COMMIT('-a', '-m', 'update a value', '--date', '2022-08-06T12:00:03');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -251,7 +251,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"update a value"}},
 			},
 			{
-				Query:       "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
+				Query:       "CALL DOLT_CHECKOUT('-b', 'other-branch')",
 				ExpectedErr: dsess.ErrWorkingSetChanges,
 			},
 			{
@@ -279,12 +279,12 @@ var MergeScripts = []queries.ScriptTest{
 			"call DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
-			"SELECT DOLT_CHECKOUT('main');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"CALL DOLT_CHECKOUT('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -312,12 +312,12 @@ var MergeScripts = []queries.ScriptTest{
 			"call DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
-			"SELECT DOLT_CHECKOUT('main');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"CALL DOLT_CHECKOUT('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -325,7 +325,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1, 0}},
 			},
 			{
-				Query:       "SELECT DOLT_CHECKOUT('-b', 'other')",
+				Query:       "CALL DOLT_CHECKOUT('-b', 'other')",
 				ExpectedErr: dsess.ErrWorkingSetChanges,
 			},
 			{
@@ -340,12 +340,12 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
-			"SELECT DOLT_CHECKOUT('main');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"CALL DOLT_CHECKOUT('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -362,7 +362,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "SELECT DOLT_CHECKOUT('-b', 'new-branch')",
+				Query:    "CALL DOLT_CHECKOUT('-b', 'new-branch')",
 				Expected: []sql.Row{{0}},
 			},
 			{
@@ -377,12 +377,12 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
-			"SELECT DOLT_CHECKOUT('main');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"CALL DOLT_CHECKOUT('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -407,7 +407,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
 			},
 			{
-				Query:    "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
+				Query:    "CALL DOLT_CHECKOUT('-b', 'other-branch')",
 				Expected: []sql.Row{{0}},
 			},
 		},
@@ -418,14 +418,14 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:01');",
-			"SELECT DOLT_CHECKOUT('main');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:01');",
+			"CALL DOLT_CHECKOUT('main');",
 			"INSERT INTO test VALUES (5),(6),(7);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:02');",
+			"CALL DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:02');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -456,14 +456,14 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:01');",
-			"SELECT DOLT_CHECKOUT('main');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:01');",
+			"CALL DOLT_CHECKOUT('main');",
 			"INSERT INTO test VALUES (5),(6),(7);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:02');",
+			"CALL DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:02');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -483,7 +483,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
-				Query:    "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
+				Query:    "CALL DOLT_CHECKOUT('-b', 'other-branch')",
 				Expected: []sql.Row{{0}},
 			},
 		},
@@ -494,14 +494,14 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (1, 1);",
 			"UPDATE test SET val=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
-			"SELECT DOLT_CHECKOUT('main');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"CALL DOLT_CHECKOUT('main');",
 			"UPDATE test SET val=1001 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
+			"CALL DOLT_COMMIT('-a', '-m', 'update a value');",
 			"set dolt_allow_commit_conflicts = on",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -514,8 +514,8 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
-				Query:    "SELECT DOLT_MERGE('--abort')",
-				Expected: []sql.Row{{0}},
+				Query:    "CALL DOLT_MERGE('--abort')",
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
@@ -538,7 +538,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{}},
 			},
 			{
-				Query:          "SELECT DOLT_MERGE('feature-branch')",
+				Query:          "CALL DOLT_MERGE('feature-branch')",
 				ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
 			},
 			{
@@ -554,14 +554,14 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (1, 1);",
 			"UPDATE test SET val=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
-			"SELECT DOLT_CHECKOUT('main');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"CALL DOLT_CHECKOUT('main');",
 			"UPDATE test SET val=1001 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
+			"CALL DOLT_COMMIT('-a', '-m', 'update a value');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -577,8 +577,8 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
-				Query:    "SELECT DOLT_MERGE('--abort')",
-				Expected: []sql.Row{{0}},
+				Query:    "CALL DOLT_MERGE('--abort')",
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
@@ -597,7 +597,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, 1001}},
 			},
 			{
-				Query:    "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
+				Query:    "CALL DOLT_CHECKOUT('-b', 'other-branch')",
 				Expected: []sql.Row{{0}},
 			},
 		},
@@ -609,18 +609,18 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
 			"SET autocommit = 0",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (1, 1);",
 			"UPDATE test SET val=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
-			"SELECT DOLT_CHECKOUT('main');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"CALL DOLT_CHECKOUT('main');",
 			"UPDATE test SET val=1001 WHERE pk=0;",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:       "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-				ExpectedErr: dfunctions.ErrUncommittedChanges,
+				ExpectedErr: dprocedures.ErrUncommittedChanges,
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
@@ -2738,7 +2738,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 		SetUpScript: verifyConstraintsSetupScript,
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT CONSTRAINTS_VERIFY('child1')",
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('child1')",
 				Expected: []sql.Row{{0}},
 			},
 			{
@@ -2746,7 +2746,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "SELECT CONSTRAINTS_VERIFY('--all', 'child1');",
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--all', 'child1');",
 				Expected: []sql.Row{{0}},
 			},
 			{
@@ -2786,7 +2786,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "SELECT CONSTRAINTS_VERIFY();",
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS();",
 				Expected: []sql.Row{{1}},
 			},
 			{
@@ -2822,7 +2822,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "SELECT CONSTRAINTS_VERIFY('child3');",
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('child3');",
 				Expected: []sql.Row{{1}},
 			},
 			{
@@ -2858,7 +2858,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "SELECT CONSTRAINTS_VERIFY('child3', 'child4');",
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('child3', 'child4');",
 				Expected: []sql.Row{{1}},
 			},
 			{
@@ -2876,7 +2876,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "SELECT CONSTRAINTS_VERIFY('child3', 'child4');",
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('child3', 'child4');",
 				Expected: []sql.Row{{1}},
 			},
 			{
@@ -2894,7 +2894,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "SELECT CONSTRAINTS_VERIFY('--all');",
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--all');",
 				Expected: []sql.Row{{1}},
 			},
 			{
@@ -2930,7 +2930,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "SELECT CONSTRAINTS_VERIFY('--all', 'child3');",
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--all', 'child3');",
 				Expected: []sql.Row{{1}},
 			},
 			{
@@ -2966,7 +2966,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "SELECT CONSTRAINTS_VERIFY('--all', 'child3', 'child4');",
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--all', 'child3', 'child4');",
 				Expected: []sql.Row{{1}},
 			},
 			{
@@ -2998,7 +2998,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 		SetUpScript: verifyConstraintsSetupScript,
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT CONSTRAINTS_VERIFY('--output-only', 'child3', 'child4');",
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--output-only', 'child3', 'child4');",
 				Expected: []sql.Row{{1}},
 			},
 			{
@@ -3026,7 +3026,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 		SetUpScript: verifyConstraintsSetupScript,
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT CONSTRAINTS_VERIFY('--all', '--output-only', 'child3', 'child4');",
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--all', '--output-only', 'child3', 'child4');",
 				Expected: []sql.Row{{1}},
 			},
 			{
