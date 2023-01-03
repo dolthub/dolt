@@ -31,7 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-var ChunkJournalFeatureFlag = false
+var ChunkJournalFeatureFlag = true
 
 func init() {
 	if os.Getenv("DOLT_ENABLE_CHUNK_JOURNAL") != "" {
