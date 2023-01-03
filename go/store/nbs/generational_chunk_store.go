@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -150,12 +151,36 @@ func (gcs *GenerationalNBS) HasMany(ctx context.Context, hashes hash.HashSet) (a
 	return gcs.newGen.HasMany(ctx, notInOldGen)
 }
 
+func (gcs *GenerationalNBS) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
+	absent, err := gcs.HasMany(ctx, addrs)
+	if err != nil {
+		return err
+	}
+	if len(absent) != 0 {
+		s := absent.String()
+		return fmt.Errorf("Found dangling references to %s", s)
+	}
+	return nil
+}
+
 // Put caches c in the ChunkSource. Upon return, c must be visible to
 // subsequent Get and Has calls, but must not be persistent until a call
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
 func (gcs *GenerationalNBS) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
-	return gcs.newGen.Put(ctx, c, getAddrs)
+	addrs, err := getAddrs(ctx, c)
+	if err != nil {
+		return err
+	}
+
+	err = gcs.errorIfDangling(ctx, addrs)
+	if err != nil {
+		return err
+	}
+
+	return gcs.newGen.Put(ctx, c, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+		return nil, nil
+	})
 }
 
 func (gcs *GenerationalNBS) PutMany(ctx context.Context, chunkMap map[hash.Hash]chunks.Chunk, getAddrs chunks.GetManyAddrsCb) error {

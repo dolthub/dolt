@@ -148,7 +148,6 @@ func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 	assertTrue(c.Size() > 0, "cannot write empty chunk to ChunkStore")
 
 	getAddrs := func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-		// This makes a lot of unit tests/garbage_collection bats fail
 		valRefs := make(hash.HashSet)
 		err := WalkAddresses(ctx, nd, ns, func(ctx context.Context, addr hash.Hash) error {
 			valRefs.Insert(addr)
@@ -158,7 +157,6 @@ func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 			return nil, err
 		}
 		return valRefs, nil
-		// return nil, nil
 	}
 
 	if err := ns.store.Put(ctx, c, getAddrs); err != nil {
