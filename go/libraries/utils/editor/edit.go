@@ -47,18 +47,18 @@ func OpenCommitEditor(ed string, initialContents string) (string, error) {
 	cmd.Stderr = os.Stderr
 	err = cmd.Start()
 	if err != nil {
-		return "", err
+		return "Failed to open editor", err
 	}
 	fmt.Printf("Waiting for command to finish.\n")
 	err = cmd.Wait()
 	if err != nil {
-		return "", err
+		return "Error returned by editor", err
 	}
 
 	data, err := os.ReadFile(filename)
 
 	if err != nil {
-		return "", err
+		return "Failed to read file", err
 	}
 
 	return string(data), nil
