@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression/function"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -201,17 +201,17 @@ func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 
 func mustParseGeometryType(t *testing.T, s string) (v interface{}) {
 	// Determine type, and get data
-	geomType, data, _, err := function.ParseWKTHeader(s)
+	geomType, data, _, err := spatial.ParseWKTHeader(s)
 	require.NoError(t, err)
 
 	srid, order := uint32(0), false
 	switch geomType {
 	case "point":
-		v, err = function.WKTToPoint(data, srid, order)
+		v, err = spatial.WKTToPoint(data, srid, order)
 	case "linestring":
-		v, err = function.WKTToLine(data, srid, order)
+		v, err = spatial.WKTToLine(data, srid, order)
 	case "polygon":
-		v, err = function.WKTToPoly(data, srid, order)
+		v, err = spatial.WKTToPoly(data, srid, order)
 	default:
 		panic("unknown geometry type")
 	}
