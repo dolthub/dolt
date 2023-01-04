@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -40,11 +39,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 var (
@@ -1300,7 +1297,7 @@ func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[addr]chunkSource, error) {
 func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
 	var ok bool
 	switch nbs.p.(type) {
-	case *fsTablePersister, *chunkJournal:
+	case *fsTablePersister, *chunkJournal, *blobstorePersister:
 		ok = true
 	}
 	return TableFileStoreOps{
@@ -1320,55 +1317,17 @@ func (nbs *NomsBlockStore) Path() (string, bool) {
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
 func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
-	var fsPersister *fsTablePersister
-	switch t := nbs.p.(type) {
-	case *fsTablePersister:
-		fsPersister = t
-	case *chunkJournal:
-		fsPersister = t.persister
-	default:
+	tfp, ok := nbs.p.(tableFilePersister)
+	if !ok {
 		return errors.New("Not implemented")
 	}
 
-	tn, err := func() (n string, err error) {
-		var r io.ReadCloser
-		r, _, err = getRd()
-		if err != nil {
-			return "", err
-		}
-		defer func() {
-			cerr := r.Close()
-			if err == nil {
-				err = cerr
-			}
-		}()
-
-		var temp *os.File
-		temp, err = tempfiles.MovableTempFileProvider.NewFile(fsPersister.dir, tempTablePrefix)
-		if err != nil {
-			return "", err
-		}
-
-		defer func() {
-			cerr := temp.Close()
-			if err == nil {
-				err = cerr
-			}
-		}()
-
-		_, err = io.Copy(temp, r)
-		if err != nil {
-			return "", err
-		}
-
-		return temp.Name(), nil
-	}()
+	r, _, err := getRd()
 	if err != nil {
 		return err
 	}
 
-	path := filepath.Join(fsPersister.dir, fileId)
-	return file.Rename(tn, path)
+	return tfp.CopyTableFile(ctx, r, fileId)
 }
 
 // AddTableFilesToManifest adds table files to the manifest

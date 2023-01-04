@@ -104,3 +104,7 @@ func (bsm blobstoreManifest) Update(ctx context.Context, lastLock addr, newConte
 
 	return contents, nil
 }
+
+func (bsm blobstoreManifest) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+	return bsm.Update(ctx, lastLock, newContents, stats, writeHook)
+}

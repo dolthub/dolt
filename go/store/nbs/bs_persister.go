@@ -36,6 +36,7 @@ type blobstorePersister struct {
 }
 
 var _ tablePersister = &blobstorePersister{}
+var _ tableFilePersister = &blobstorePersister{}
 
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
@@ -161,6 +162,28 @@ func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents man
 
 func (bsp *blobstorePersister) Close() error {
 	return nil
+}
+
+func (bsp *blobstorePersister) Path() string {
+	return ""
+}
+
+func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string) error {
+	var err error
+
+	defer func() {
+		cerr := r.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
+
+	_, err = bsp.bs.Put(ctx, fileId, r)
+	if err != nil {
+		return err
+	}
+
+	return err
 }
 
 type bsTableReaderAt struct {
