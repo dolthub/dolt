@@ -28,6 +28,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -533,15 +534,22 @@ func updateWithChecker(_ context.Context, dir string, mode updateMode, validate 
 	}
 
 	if mode == syncFlush {
-		// fsync the directory
-		var d *os.File
-		if d, err = os.Open(dir); err != nil {
-			return manifestContents{}, err
-		}
-		if err = d.Sync(); err != nil {
+		if err = syncDirectoryHandle(dir); err != nil {
 			return manifestContents{}, err
 		}
 	}
 
 	return newContents, nil
+}
+
+func syncDirectoryHandle(dir string) (err error) {
+	if runtime.GOOS == "windows" {
+		// directory sync not supported on Windows
+		return
+	}
+	var d *os.File
+	if d, err = os.Open(dir); err != nil {
+		return err
+	}
+	return d.Sync()
 }
