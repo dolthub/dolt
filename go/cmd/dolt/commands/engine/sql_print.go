@@ -179,7 +179,7 @@ func writeResultSet(ctx *sql.Context, rowIter sql.RowIter, wr table.SqlRowWriter
 func secondsSince(start time.Time) float64 {
 	runTime := time.Since(start)
 	seconds := runTime / time.Second
-	milliRemainder := (runTime - seconds) / time.Millisecond
+	milliRemainder := (runTime - seconds*time.Second) / time.Millisecond
 	timeDisplay := float64(seconds) + float64(milliRemainder)*.001
 	return timeDisplay
 }
