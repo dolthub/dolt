@@ -247,8 +247,7 @@ func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 	}
 
 	// if |next| has a different table file set, flush to |j.backing|
-	if j.contents.lock != next.lock || j.contents.gcGen != next.gcGen {
-		// todo: why is this necessary?
+	if !equalSpecs(j.contents.specs, next.specs) {
 		_, mc, err := j.backing.ParseIfExists(ctx, stats, nil)
 		if err != nil {
 			return manifestContents{}, err
@@ -561,6 +560,22 @@ func (s journalChunkSource) clone() (chunkSource, error) {
 
 func (s journalChunkSource) close() error {
 	return nil
+}
+
+func equalSpecs(left, right []tableSpec) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	l := make(map[addr]struct{}, len(left))
+	for _, s := range left {
+		l[s.name] = struct{}{}
+	}
+	for _, s := range right {
+		if _, ok := l[s.name]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func emptyAddr(a addr) bool {
