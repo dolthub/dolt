@@ -29,12 +29,12 @@ func TestSecondsSince(t *testing.T) {
 	})
 	t.Run("1 second and 1 millisecond passes", func(t *testing.T) {
 		start := time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)
-		stop := time.Date(2022, 1, 1, 0, 0, 1, int(1 * time.Millisecond), time.UTC)
+		stop := time.Date(2022, 1, 1, 0, 0, 1, int(1*time.Millisecond), time.UTC)
 		require.Equal(t, 1.001, secondsSince(start, stop))
 	})
 	t.Run("1 second and 0.5 millisecond passes", func(t *testing.T) {
 		start := time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)
-		stop := time.Date(2022, 1, 1, 0, 0, 1, int(1 * time.Millisecond / 2), time.UTC)
+		stop := time.Date(2022, 1, 1, 0, 0, 1, int(1*time.Millisecond/2), time.UTC)
 		require.Equal(t, 1.000, secondsSince(start, stop))
 	})
 }
