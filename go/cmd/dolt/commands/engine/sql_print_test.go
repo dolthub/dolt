@@ -15,10 +15,11 @@
 package engine
 
 import (
-	"github.com/stretchr/testify/require"
 	"math"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestSecondsSince(t *testing.T) {
