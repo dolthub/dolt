@@ -15,7 +15,6 @@
 package engine
 
 import (
-	"math"
 	"testing"
 	"time"
 
@@ -23,9 +22,19 @@ import (
 )
 
 func TestSecondsSince(t *testing.T) {
-	start := time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)
-	delta := secondsSince(start) * 1000
-	expectedDelta := float64(time.Since(start) / time.Millisecond)
-	diff := math.Abs(expectedDelta - delta)
-	require.LessOrEqual(t, diff, float64(1/time.Millisecond))
+	t.Run("1 second passes", func(t *testing.T) {
+		start := time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)
+		stop := time.Date(2022, 1, 1, 0, 0, 1, 0, time.UTC)
+		require.Equal(t, 1.0, secondsSince(start, stop))
+	})
+	t.Run("1 second and 1 millisecond passes", func(t *testing.T) {
+		start := time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)
+		stop := time.Date(2022, 1, 1, 0, 0, 1, int(1 * time.Millisecond), time.UTC)
+		require.Equal(t, 1.001, secondsSince(start, stop))
+	})
+	t.Run("1 second and 0.5 millisecond passes", func(t *testing.T) {
+		start := time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)
+		stop := time.Date(2022, 1, 1, 0, 0, 1, int(1 * time.Millisecond / 2), time.UTC)
+		require.Equal(t, 1.000, secondsSince(start, stop))
+	})
 }
