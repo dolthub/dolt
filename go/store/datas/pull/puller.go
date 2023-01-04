@@ -60,6 +60,8 @@ type CmpChnkAndRefs struct {
 	refs    map[hash.Hash]bool
 }
 
+type WalkAddrs func(chunks.Chunk, func(hash.Hash, bool) error) error
+
 // Puller is used to sync data between to Databases
 type Puller struct {
 	waf WalkAddrs
