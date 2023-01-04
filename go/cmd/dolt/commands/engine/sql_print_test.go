@@ -22,11 +22,9 @@ import (
 )
 
 func TestSecondsSince(t *testing.T) {
-	start := time.Now()
-	time.Sleep(3 * time.Second)
-	stop := time.Now()
-	delta := secondsSince(start)
-	expectedDelta := float64(stop.Sub(start) / time.Second)
+	start := time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)
+	delta := secondsSince(start) * 1000
+	expectedDelta := float64(time.Since(start) / time.Millisecond)
 	diff := math.Abs(expectedDelta - delta)
-	require.Less(t, diff, 0.05)
+	require.LessOrEqual(t, diff, float64(1/time.Millisecond))
 }
