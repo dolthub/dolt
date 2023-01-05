@@ -17,6 +17,7 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"time"
 
@@ -236,6 +237,10 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	if chunkCount != index.chunkCount() {
+		return nil, errors.New("unexpected chunk count")
 	}
 
 	tr, err := newTableReader(index, &bsTableReaderAt{name.String(), bs}, s3BlockSize)
