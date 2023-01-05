@@ -997,14 +997,3 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "2 tables changed, 3 rows added(+), 1 rows modified(*), 1 rows deleted(-)" ]] || false
 }
-
-@test "merge: failed to open editor" {
-  dolt config --add core.editor "vi --broken"
-  dolt checkout -b merge_branch
-  dolt SQL -q "INSERT INTO test1 values (0,1,2)"
-  dolt add test1
-
-  run dolt commit
-  [ $status -eq 1 ]
-  [[ "$output" =~ "Failed to open editor" ]] || false
-}

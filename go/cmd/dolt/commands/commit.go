@@ -18,12 +18,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	goisatty "github.com/mattn/go-isatty"
 	"io"
 	"os"
 	"strings"
-
-	"github.com/fatih/color"
-	goisatty "github.com/mattn/go-isatty"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -37,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/fatih/color"
 )
 
 var commitDocs = cli.CommandDocumentationContent{
@@ -286,13 +285,7 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggeste
 		return suggestedMsg, nil
 	}
 
-	isTerminal := false
-	cli.ExecuteWithStdioRestored(func() {
-		if goisatty.IsTerminal(os.Stdout.Fd()) {
-			isTerminal = true
-		}
-	})
-	if !isTerminal {
+	if !checkIsTerminal() {
 		return suggestedMsg, nil
 	}
 
@@ -322,10 +315,20 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggeste
 	})
 
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Failed to open commit editor")
 	}
 
 	return finalMsg, nil
+}
+
+func checkIsTerminal() bool {
+	isTerminal := false
+	cli.ExecuteWithStdioRestored(func() {
+		if goisatty.IsTerminal(os.Stdout.Fd()) || os.Getenv("dolt_test_forceOpenEditor") == "1" {
+			isTerminal = true
+		}
+	})
+	return isTerminal
 }
 
 func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg string) (string, error) {
