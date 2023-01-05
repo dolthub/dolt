@@ -132,8 +132,6 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/datas/database_test.go", NomsPath: "go/datas/database_test.go", HadCopyrightNotice: true},
 	{Path: "store/datas/dataset.go", NomsPath: "go/datas/dataset.go", HadCopyrightNotice: true},
 	{Path: "store/datas/dataset_test.go", NomsPath: "go/datas/dataset_test.go", HadCopyrightNotice: true},
-	{Path: "store/datas/pull/pull.go", NomsPath: "go/datas/pull.go", HadCopyrightNotice: true},
-	{Path: "store/datas/pull/pull_test.go", NomsPath: "go/datas/pull_test.go", HadCopyrightNotice: true},
 	{Path: "store/diff/apply_patch.go", NomsPath: "go/diff/apply_patch.go", HadCopyrightNotice: true},
 	{Path: "store/diff/apply_patch_test.go", NomsPath: "go/diff/apply_patch_test.go", HadCopyrightNotice: true},
 	{Path: "store/diff/diff.go", NomsPath: "go/diff/diff.go", HadCopyrightNotice: true},
@@ -385,7 +383,7 @@ func CheckGo() bool {
 		}
 		return nil
 	})
-	for path, _ := range nomsLookup {
+	for path := range nomsLookup {
 		fmt.Printf("ERROR: Missing noms file from CopiedNomsFiles: %v\n", path)
 		fmt.Printf("  Please update with new location or remove the reference in ./utils/copyrightshdrs/")
 		failed = true
