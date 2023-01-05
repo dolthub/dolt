@@ -207,7 +207,7 @@ func (s *nomsSyncTestSuite) TestRewind() {
 	db := datas.NewDatabase(cs)
 	dest, err := db.GetDataset(context.Background(), "foo")
 	s.NoError(err)
-	s.True(types.Float(42).Equals(mustHeadValue(dest))) // false
+	s.True(types.Float(42).Equals(mustHeadValue(dest))) // false, head val is 43
 	db.Close()
 }
 

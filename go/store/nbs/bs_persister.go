@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
-	"github.com/dolthub/dolt/go/store/chunks"
 )
 
 const (
@@ -158,7 +157,7 @@ func (bsp *blobstorePersister) Exists(ctx context.Context, name addr, chunkCount
 }
 
 func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents manifestContents, t time.Time) error {
-	return chunks.ErrUnsupportedOperation
+	return nil
 }
 
 func (bsp *blobstorePersister) Close() error {

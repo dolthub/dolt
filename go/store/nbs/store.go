@@ -1310,7 +1310,12 @@ func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
 
 func (nbs *NomsBlockStore) Path() (string, bool) {
 	if tfp, ok := nbs.p.(tableFilePersister); ok {
-		return tfp.Path(), true
+		switch p := tfp.(type) {
+		case *fsTablePersister, *chunkJournal:
+			return p.Path(), true
+		default:
+			return "", false
+		}
 	}
 	return "", false
 }
@@ -1478,7 +1483,6 @@ func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-ch
 	if !ok {
 		return nil, fmt.Errorf("NBS does not support copying garbage collection")
 	}
-	path := tfp.Path()
 
 LOOP:
 	for {
@@ -1508,7 +1512,7 @@ LOOP:
 			return nil, ctx.Err()
 		}
 	}
-	return gcc.copyTablesToDir(ctx, path)
+	return gcc.copyTablesToDir(ctx, tfp)
 }
 
 // todo: what's the optimal table size to copy to?

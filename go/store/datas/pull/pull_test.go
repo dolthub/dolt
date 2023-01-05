@@ -44,6 +44,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// TODO(taylor): Remove this file
+
 const datasetID = "ds1"
 
 func TestLocalToLocalPulls(t *testing.T) {

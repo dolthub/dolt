@@ -419,9 +419,12 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 			}
 		}
 
-		return lvs.cs.Put(ctx, c, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+		// Using lvs.getAddrs here makes a few store/types tests fail
+		getAddrs := func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
 			return hash.NewHashSet(), nil
-		}) // Using lvs.getAddrs here makes a few store/types tests fail
+		}
+
+		return lvs.cs.Put(ctx, c, getAddrs)
 	}
 
 	d.PanicIfTrue(height == 0)

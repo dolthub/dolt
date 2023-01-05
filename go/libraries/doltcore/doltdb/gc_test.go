@@ -125,7 +125,7 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 		}
 	}
 
-	err := dEnv.DoltDB.GC(ctx) // Fails with blob not found error during swapTables -> nbs.tables.rebase -> open missing tables in parallel
+	err := dEnv.DoltDB.GC(ctx)
 	require.NoError(t, err)
 	test.postGCFunc(ctx, t, dEnv.DoltDB, res)
 
