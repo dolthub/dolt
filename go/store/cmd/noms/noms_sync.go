@@ -23,11 +23,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/google/uuid"
 	flag "github.com/juju/gnuflag"
 
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
@@ -77,25 +81,25 @@ func runSync(ctx context.Context, args []string) int {
 	defer sinkDB.Close()
 
 	start := time.Now()
-	progressCh := make(chan pull.PullProgress)
-	lastProgressCh := make(chan pull.PullProgress)
+	statsCh := make(chan pull.Stats)
+	lastStatsCh := make(chan pull.Stats)
 
 	go func() {
-		var last pull.PullProgress
+		var last pull.Stats
 
-		for info := range progressCh {
+		for info := range statsCh {
 			last = info
-			if info.KnownCount == 1 {
+			if info.BufferedSendBytes == 1 {
 				// It's better to print "up to date" than "0% (0/1); 100% (1/1)".
 				continue
 			}
 
 			if status.WillPrint() {
-				pct := 100.0 * float64(info.DoneCount) / float64(info.KnownCount)
-				status.Printf("Syncing - %.2f%% (%s/s)", pct, bytesPerSec(info.ApproxWrittenBytes, start))
+				pct := 100.0 * float64(info.FinishedSendBytes) / float64(info.BufferedSendBytes)
+				status.Printf("Syncing - %.2f%% (%s/s)", pct, humanize.SIWithDigits(info.SendBytesPerSec, 2, "B"))
 			}
 		}
-		lastProgressCh <- last
+		lastStatsCh <- last
 	}()
 
 	sourceRef, err := types.NewRef(sourceObj, sourceVRW.Format())
@@ -105,11 +109,28 @@ func runSync(ctx context.Context, args []string) int {
 	srcCS := datas.ChunkStoreFromDatabase(sourceStore)
 	sinkCS := datas.ChunkStoreFromDatabase(sinkDB)
 	waf := types.WalkAddrsForNBF(sourceVRW.Format())
+
 	f := func() error {
 		defer profile.MaybeStartProfile().Stop()
 		addr := sourceRef.TargetHash()
-		err := pull.Pull(ctx, srcCS, sinkCS, waf, []hash.Hash{addr}, progressCh)
+		if !datas.CanUsePuller(sourceStore) || !datas.CanUsePuller(sinkDB) {
+			return errors.New("Puller not supported")
+		}
 
+		tmpDir := filepath.Join(os.TempDir(), uuid.New().String())
+		err = os.MkdirAll(tmpDir, os.ModePerm)
+		if err != nil {
+			return err
+		}
+
+		puller, err := pull.NewPuller(ctx, tmpDir, 256*1024, srcCS, sinkCS, waf, []hash.Hash{addr}, statsCh)
+		if err == pull.ErrDBUpToDate {
+			return nil
+		} else if err != nil {
+			return err
+		}
+
+		err = puller.Pull(ctx)
 		if err != nil {
 			return err
 		}
@@ -122,20 +143,18 @@ func runSync(ctx context.Context, args []string) int {
 		} else if err == nil {
 			sinkDataset = tempDS
 		}
-
 		return err
 	}
 
 	err = f()
-
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	close(progressCh)
-	if last := <-lastProgressCh; last.DoneCount > 0 {
+	close(statsCh)
+	if last := <-lastStatsCh; last.FinishedSendBytes > 0 {
 		status.Printf("Done - Synced %s in %s (%s/s)",
-			humanize.Bytes(last.ApproxWrittenBytes), since(start), bytesPerSec(last.ApproxWrittenBytes, start))
+			humanize.Bytes(last.FetchedSourceBytes), since(start), last.FetchedSourceBytesPerSec)
 		status.Done()
 	} else if !sinkExists {
 		fmt.Printf("All chunks already exist at destination! Created new dataset %s.\n", args[1])
