@@ -159,39 +159,20 @@ func (c *SessionCache) ViewsCached(key doltdb.DataCacheKey) bool {
 }
 
 // GetCachedViewDefinition returns the cached view named, and whether the cache was present
-func (c *SessionCache) GetCachedViewDefinition(key doltdb.DataCacheKey, viewName string) (string, bool) {
+func (c *SessionCache) GetCachedViewDefinition(key doltdb.DataCacheKey, viewName string) (sql.ViewDefinition, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	viewName = strings.ToLower(viewName)
 	if c.views == nil {
-		return "", false
+		return sql.ViewDefinition{}, false
 	}
 
 	viewsForKey, ok := c.views[key]
 	if !ok {
-		return "", false
+		return sql.ViewDefinition{}, false
 	}
 
 	table, ok := viewsForKey[viewName]
-	return table.TextDefinition, ok
-}
-
-// GetCachedCreateViewStmt returns the cached view named, and whether the cache was present
-func (c *SessionCache) GetCachedCreateViewStmt(key doltdb.DataCacheKey, viewName string) (string, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	viewName = strings.ToLower(viewName)
-	if c.views == nil {
-		return "", false
-	}
-
-	viewsForKey, ok := c.views[key]
-	if !ok {
-		return "", false
-	}
-
-	table, ok := viewsForKey[viewName]
-	return table.CreateViewStatement, ok
+	return table, ok
 }

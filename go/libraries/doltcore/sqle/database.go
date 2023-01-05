@@ -1064,10 +1064,10 @@ func (db Database) Flush(ctx *sql.Context) error {
 }
 
 // GetViewDefinition implements sql.ViewDatabase
-func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (string, bool, error) {
+func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.ViewDefinition, bool, error) {
 	root, err := db.GetRoot(ctx)
 	if err != nil {
-		return "", false, err
+		return sql.ViewDefinition{}, false, err
 	}
 
 	lwrViewName := strings.ToLower(viewName)
@@ -1075,22 +1075,22 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (string,
 	case strings.HasPrefix(lwrViewName, doltdb.DoltBlameViewPrefix):
 		tableName := lwrViewName[len(doltdb.DoltBlameViewPrefix):]
 
-		view, err := dtables.NewBlameView(ctx, tableName, root)
+		blameViewTextDef, err := dtables.NewBlameView(ctx, tableName, root)
 		if err != nil {
-			return "", false, err
+			return sql.ViewDefinition{}, false, err
 		}
-		return view, true, nil
+		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", viewName, blameViewTextDef)}, true, nil
 	}
 
 	key, err := doltdb.NewDataCacheKey(root)
 	if err != nil {
-		return "", false, err
+		return sql.ViewDefinition{}, false, err
 	}
 
 	ds := dsess.DSessFromSess(ctx.Session)
 	dbState, _, err := ds.LookupDbState(ctx, db.name)
 	if err != nil {
-		return "", false, err
+		return sql.ViewDefinition{}, false, err
 	}
 
 	if dbState.SessionCache().ViewsCached(key) {
@@ -1100,21 +1100,21 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (string,
 
 	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
-		return "", false, err
+		return sql.ViewDefinition{}, false, err
 	}
 	if !ok {
 		dbState.SessionCache().CacheViews(key, nil)
-		return "", false, nil
+		return sql.ViewDefinition{}, false, nil
 	}
 
 	views, viewDef, found, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, tbl.(*WritableDoltTable), viewName)
 	if err != nil {
-		return "", false, err
+		return sql.ViewDefinition{}, false, err
 	}
 
 	dbState.SessionCache().CacheViews(key, views)
 
-	return viewDef.TextDefinition, found, nil
+	return viewDef, found, nil
 }
 
 func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableDoltTable, viewName string) ([]sql.ViewDefinition, sql.ViewDefinition, bool, error) {
@@ -1131,12 +1131,14 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 		if err != nil {
 			return nil, sql.ViewDefinition{}, false, err
 		}
+
 		createView, ok := cv.(*plan.CreateView)
-		if !ok {
-			return nil, sql.ViewDefinition{}, false, errors.NewKind("incorrect create view statement").New()
+		if ok {
+			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: createView.Definition.TextDefinition, CreateViewStatement: fragments[i].fragment}
+		} else {
+			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: fragments[i].fragment, CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", fragments[i].name, fragments[i].fragment)}
 		}
 
-		views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: createView.Definition.TextDefinition, CreateViewStatement: fragments[i].fragment}
 		if strings.ToLower(fragment.name) == strings.ToLower(viewName) {
 			found = true
 			viewDef = views[i]
@@ -1144,60 +1146,6 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 	}
 
 	return views, viewDef, found, nil
-}
-
-// GetCreateViewStmt implements sql.ViewDatabase
-func (db Database) GetCreateViewStmt(ctx *sql.Context, viewName string) (string, bool, error) {
-	root, err := db.GetRoot(ctx)
-	if err != nil {
-		return "", false, err
-	}
-
-	lwrViewName := strings.ToLower(viewName)
-	switch {
-	case strings.HasPrefix(lwrViewName, doltdb.DoltBlameViewPrefix):
-		tableName := lwrViewName[len(doltdb.DoltBlameViewPrefix):]
-
-		viewSelectStmt, err := dtables.NewBlameView(ctx, tableName, root)
-		if err != nil {
-			return "", false, err
-		}
-		return fmt.Sprintf("CREATE VIEW %s_view AS %s", lwrViewName, viewSelectStmt), true, nil
-	}
-
-	key, err := doltdb.NewDataCacheKey(root)
-	if err != nil {
-		return "", false, err
-	}
-
-	ds := dsess.DSessFromSess(ctx.Session)
-	dbState, _, err := ds.LookupDbState(ctx, db.name)
-	if err != nil {
-		return "", false, err
-	}
-
-	if dbState.SessionCache().ViewsCached(key) {
-		view, ok := dbState.SessionCache().GetCachedCreateViewStmt(key, viewName)
-		return view, ok, nil
-	}
-
-	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
-	if err != nil {
-		return "", false, err
-	}
-	if !ok {
-		dbState.SessionCache().CacheViews(key, nil)
-		return "", false, nil
-	}
-
-	views, viewDef, found, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, tbl.(*WritableDoltTable), viewName)
-	if err != nil {
-		return "", false, err
-	}
-
-	dbState.SessionCache().CacheViews(key, views)
-
-	return viewDef.CreateViewStatement, found, nil
 }
 
 // AllViews implements sql.ViewDatabase
