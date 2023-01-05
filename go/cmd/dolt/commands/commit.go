@@ -18,10 +18,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	goisatty "github.com/mattn/go-isatty"
 	"io"
 	"os"
 	"strings"
+
+	"github.com/fatih/color"
+	goisatty "github.com/mattn/go-isatty"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -35,7 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/fatih/color"
 )
 
 var commitDocs = cli.CommandDocumentationContent{
