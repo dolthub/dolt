@@ -748,7 +748,7 @@ var BranchControlTests = []BranchControlTest{
 			"USE dba;",
 			"CALL DOLT_BRANCH('other');",
 			"USE dbb;",
-			"CALL DOLT_BRANCH('other');",
+			"CALL DOLT_BRANCH('other');", // Fails here with Blob not found error
 		},
 		Assertions: []BranchControlTestAssertion{
 			{
