@@ -325,7 +325,7 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggeste
 func checkIsTerminal() bool {
 	isTerminal := false
 	cli.ExecuteWithStdioRestored(func() {
-		if goisatty.IsTerminal(os.Stdout.Fd()) || os.Getenv("dolt_test_forceOpenEditor") == "1" {
+		if goisatty.IsTerminal(os.Stdout.Fd()) || os.Getenv("DOLT_TEST_FORCE_OPEN_EDITOR") == "1" {
 			isTerminal = true
 		}
 	})
