@@ -36,6 +36,8 @@ var mySqlPort, doltPort int
 var primaryDatabase, replicaDatabase *sqlx.DB
 var mySqlProcess, doltProcess *os.Process
 var doltLogFile *os.File
+var testDir string
+var originalWorkingDir string
 
 func teardown(t *testing.T) {
 	if mySqlProcess != nil {
@@ -51,7 +53,7 @@ func teardown(t *testing.T) {
 		}
 	}
 	// TODO: clean up temp files
-	//defer os.RemoveAll(dir)
+	//defer os.RemoveAll(testDir)
 }
 
 // TestBinlogReplicationSanityCheck performs the simplest possible binlog replication test. It starts up
@@ -167,17 +169,21 @@ func readNextRow(t *testing.T, rows *sqlx.Rows) map[string]interface{} {
 }
 
 func startSqlServers(t *testing.T) {
-	dir, err := os.MkdirTemp("", t.Name()+"-"+time.Now().Format("12345"))
+	var err error
+	testDir, err = os.MkdirTemp("", t.Name()+"-"+time.Now().Format("12345"))
 	require.NoError(t, err)
-	fmt.Printf("temp dir: %v \n", dir)
+	fmt.Printf("temp dir: %v \n", testDir)
 
 	// Start up primary and replica databases
-	mySqlPort, mySqlProcess, err = startMySqlServer(dir)
+	mySqlPort, mySqlProcess, err = startMySqlServer(testDir)
 	require.NoError(t, err)
-	fmt.Printf("MySQL server started on port %v \n", mySqlPort)
-	doltPort, doltProcess, err = startDoltSqlServer(dir)
+	doltPort, doltProcess, err = startDoltSqlServer(testDir)
 	require.NoError(t, err)
-	fmt.Printf("Dolt server started on port %v \n", doltPort)
+}
+
+func stopDoltSqlServer(t *testing.T) {
+	err := doltProcess.Kill()
+	require.NoError(t, err)
 }
 
 func startReplication(t *testing.T, port int) {
@@ -287,6 +293,8 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 
 	os.Chdir(originalCwd)
 
+	fmt.Printf("MySQL server started on port %v \n", mySqlPort)
+
 	return mySqlPort, cmd.Process, nil
 }
 
@@ -300,11 +308,14 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 	doltPort = findFreePort()
 
 	// take the CWD and move up four directories to find the go directory
-	cwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
+	if originalWorkingDir == "" {
+		var err error
+		originalWorkingDir, err = os.Getwd()
+		if err != nil {
+			panic(err)
+		}
 	}
-	goDirPath := filepath.Join(cwd, "..", "..", "..", "..")
+	goDirPath := filepath.Join(originalWorkingDir, "..", "..", "..", "..")
 	err = os.Chdir(goDirPath)
 	if err != nil {
 		panic(err)
@@ -340,9 +351,11 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 	}
 
 	// Create the initial database on the Dolt server and reconnect to it
-	replicaDatabase.MustExec("create database db01;")
+	replicaDatabase.MustExec("CREATE DATABASE IF NOT EXISTS db01;")
 	dsn = fmt.Sprintf("root@tcp(127.0.0.1:%v)/db01", doltPort)
 	replicaDatabase = sqlx.MustOpen("mysql", dsn)
+
+	fmt.Printf("Dolt server started on port %v \n", doltPort)
 
 	return doltPort, cmd.Process, nil
 }
