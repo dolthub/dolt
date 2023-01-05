@@ -316,7 +316,7 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggeste
 	})
 
 	if err != nil {
-		return "", fmt.Errorf("Failed to open commit editor")
+		return "", fmt.Errorf("Failed to open commit editor: %v", err)
 	}
 
 	return finalMsg, nil
