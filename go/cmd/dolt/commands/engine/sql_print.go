@@ -139,7 +139,7 @@ func printResultSetSummary(numRows int, start time.Time) error {
 		noun = "row"
 	}
 
-	secondsSinceStart := secondsSince(start)
+	secondsSinceStart := secondsSince(start, time.Now())
 	err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("%d %s in set (%.2f sec)", numRows, noun, secondsSinceStart))
 	if err != nil {
 		return err
@@ -176,10 +176,10 @@ func writeResultSet(ctx *sql.Context, rowIter sql.RowIter, wr table.SqlRowWriter
 }
 
 // secondsSince returns the number of full and partial seconds since the time given
-func secondsSince(start time.Time) float64 {
-	runTime := time.Since(start)
+func secondsSince(start time.Time, end time.Time) float64 {
+	runTime := end.Sub(start)
 	seconds := runTime / time.Second
-	milliRemainder := (runTime - seconds) / time.Millisecond
+	milliRemainder := (runTime - seconds*time.Second) / time.Millisecond
 	timeDisplay := float64(seconds) + float64(milliRemainder)*.001
 	return timeDisplay
 }
@@ -191,7 +191,7 @@ func (n nullWriter) WriteSqlRow(ctx context.Context, r sql.Row) error { return n
 func (n nullWriter) Close(ctx context.Context) error                  { return nil }
 
 func printEmptySetResult(start time.Time) {
-	seconds := secondsSince(start)
+	seconds := secondsSince(start, time.Now())
 	cli.Printf("Empty set (%.2f sec)\n", seconds)
 }
 
@@ -207,7 +207,7 @@ func printOKResult(ctx *sql.Context, iter sql.RowIter, start time.Time) error {
 			rowNoun = "rows"
 		}
 
-		seconds := secondsSince(start)
+		seconds := secondsSince(start, time.Now())
 		cli.Printf("Query OK, %d %s affected (%.2f sec)\n", okResult.RowsAffected, rowNoun, seconds)
 
 		if okResult.Info != nil {

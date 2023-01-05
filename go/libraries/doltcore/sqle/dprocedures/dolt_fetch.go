@@ -15,16 +15,63 @@
 package dprocedures
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 // doltFetch is the stored procedure version of the function `dolt_fetch`.
 func doltFetch(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	res, err := dfunctions.DoDoltFetch(ctx, args)
+	res, err := doDoltFetch(ctx, args)
 	if err != nil {
 		return nil, err
 	}
 	return rowToIter(int64(res)), nil
+}
+
+func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
+	dbName := ctx.GetCurrentDatabase()
+
+	if len(dbName) == 0 {
+		return cmdFailure, fmt.Errorf("empty database name")
+	}
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return cmdFailure, err
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbData, ok := sess.GetDbData(ctx, dbName)
+	if !ok {
+		return cmdFailure, fmt.Errorf("Could not load database %s", dbName)
+	}
+
+	apr, err := cli.CreateFetchArgParser().Parse(args)
+	if err != nil {
+		return cmdFailure, err
+	}
+
+	remote, refSpecs, err := env.NewFetchOpts(apr.Args, dbData.Rsr)
+	if err != nil {
+		return cmdFailure, err
+	}
+
+	updateMode := ref.UpdateMode{Force: apr.Contains(cli.ForceFlag)}
+
+	srcDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb, remote, false)
+	if err != nil {
+		return 1, err
+	}
+
+	err = actions.FetchRefSpecs(ctx, dbData, srcDB, refSpecs, remote, updateMode, runProgFuncs, stopProgFuncs)
+	if err != nil {
+		return cmdFailure, fmt.Errorf("fetch failed: %w", err)
+	}
+	return cmdSuccess, nil
 }

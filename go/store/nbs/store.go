@@ -105,7 +105,7 @@ type NomsBlockStore struct {
 	stats *Stats
 }
 
-var _ chunks.TableFileStore = &NomsBlockStore{}
+var _ TableFileStore = &NomsBlockStore{}
 var _ chunks.ChunkStoreGarbageCollector = &NomsBlockStore{}
 
 type Range struct {
@@ -471,7 +471,7 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 		return nil, err
 	}
 
-	m, err := getFileManifest(ctx, dir)
+	m, err := getFileManifest(ctx, dir, asyncFlush)
 	if err != nil {
 		return nil, err
 	}
@@ -487,7 +487,7 @@ func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQ
 		return nil, err
 	}
 
-	m, err := getFileManifest(ctx, dir)
+	m, err := getFileManifest(ctx, dir, syncFlush)
 	if err != nil {
 		return nil, err
 	}
@@ -1164,7 +1164,7 @@ func (tf tableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
 
 // Sources retrieves the current root hash, a list of all table files (which may include appendix tablefiles),
 // and a second list of only the appendix table files
-func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []chunks.TableFile, []chunks.TableFile, error) {
+func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile, []TableFile, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
@@ -1200,8 +1200,8 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []chunks.Tab
 	return contents.GetRoot(), allTableFiles, appendixTableFiles, nil
 }
 
-func getTableFiles(css map[addr]chunkSource, contents manifestContents, numSpecs int, specFunc func(mc manifestContents, idx int) tableSpec) ([]chunks.TableFile, error) {
-	tableFiles := make([]chunks.TableFile, 0)
+func getTableFiles(css map[addr]chunkSource, contents manifestContents, numSpecs int, specFunc func(mc manifestContents, idx int) tableSpec) ([]TableFile, error) {
+	tableFiles := make([]TableFile, 0)
 	if numSpecs == 0 {
 		return tableFiles, nil
 	}
@@ -1274,13 +1274,13 @@ func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[addr]chunkSource, error) {
 
 }
 
-func (nbs *NomsBlockStore) SupportedOperations() chunks.TableFileStoreOps {
+func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
 	var ok bool
 	switch nbs.p.(type) {
 	case *fsTablePersister, *chunkJournal:
 		ok = true
 	}
-	return chunks.TableFileStoreOps{
+	return TableFileStoreOps{
 		CanRead:  true,
 		CanWrite: ok,
 		CanPrune: ok,
@@ -1529,7 +1529,7 @@ LOOP:
 	return gcc.copyTablesToDir(ctx, path)
 }
 
-// todo: what's the optimal table currentSize to copy to?
+// todo: what's the optimal table size to copy to?
 func (nbs *NomsBlockStore) gcTableSize() (uint64, error) {
 	total, err := nbs.tables.physicalLen()
 

@@ -195,10 +195,10 @@ func TestJournalWriterWriteChunk(t *testing.T) {
 	require.NoError(t, err)
 
 	data := randomCompressedChunks()
-	lookups := make(map[addr]jrecordLookup)
+	lookups := make(map[addr]recLookup)
 
 	for a, cc := range data {
-		l, err := j.writeChunk(cc)
+		l, err := j.WriteChunk(cc)
 		require.NoError(t, err)
 		lookups[a] = l
 		validateLookup(t, j, l, cc)
@@ -217,9 +217,9 @@ func TestJournalWriterBootstrap(t *testing.T) {
 	require.NoError(t, err)
 
 	data := randomCompressedChunks()
-	lookups := make(map[addr]jrecordLookup)
+	lookups := make(map[addr]recLookup)
 	for a, cc := range data {
-		l, err := j.writeChunk(cc)
+		l, err := j.WriteChunk(cc)
 		require.NoError(t, err)
 		lookups[a] = l
 	}
@@ -227,7 +227,7 @@ func TestJournalWriterBootstrap(t *testing.T) {
 
 	j, _, err = openJournalWriter(ctx, path)
 	require.NoError(t, err)
-	_, source, err := j.processJournal(ctx)
+	_, source, err := j.ProcessJournal(ctx)
 	require.NoError(t, err)
 
 	for a, l := range lookups {
@@ -243,12 +243,13 @@ func TestJournalWriterBootstrap(t *testing.T) {
 	require.NoError(t, j.Close())
 }
 
-func validateLookup(t *testing.T, j *journalWriter, l jrecordLookup, cc CompressedChunk) {
-	b := make([]byte, l.length)
-	n, err := j.ReadAt(b, l.offset)
+func validateLookup(t *testing.T, j *journalWriter, l recLookup, cc CompressedChunk) {
+	b := make([]byte, l.recordLen)
+	n, err := j.ReadAt(b, l.journalOff)
 	require.NoError(t, err)
-	assert.Equal(t, int(l.length), n)
-	rec := readJournalRecord(b)
+	assert.Equal(t, int(l.recordLen), n)
+	rec, err := readJournalRecord(b)
+	require.NoError(t, err)
 	assert.Equal(t, hash.Hash(rec.address), cc.Hash())
 	assert.Equal(t, rec.payload, cc.FullCompressedChunk)
 }
@@ -258,7 +259,7 @@ func TestJournalWriterSyncClose(t *testing.T) {
 	j, err := createJournalWriter(ctx, newTestFilePath(t))
 	require.NotNil(t, j)
 	require.NoError(t, err)
-	_, _, err = j.processJournal(ctx)
+	_, _, err = j.ProcessJournal(ctx)
 	require.NoError(t, err)
 
 	// close triggers flush

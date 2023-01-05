@@ -39,7 +39,7 @@ teardown() {
 
 @test "sql-fetch: dolt_fetch default" {
     cd repo2
-    dolt sql -q "select dolt_fetch()"
+    dolt sql -q "call dolt_fetch()"
 
     run dolt diff main origin/main
     [ "$status" -eq 0 ]
@@ -81,7 +81,7 @@ teardown() {
 
 @test "sql-fetch: dolt_fetch origin" {
     cd repo2
-    dolt sql -q "select dolt_fetch('origin')"
+    dolt sql -q "call dolt_fetch('origin')"
 
     run dolt diff main origin/main
     [ "$status" -eq 0 ]
@@ -109,7 +109,7 @@ teardown() {
 
 @test "sql-fetch: dolt_fetch main" {
     cd repo2
-    dolt sql -q "select dolt_fetch('origin', 'main')"
+    dolt sql -q "call dolt_fetch('origin', 'main')"
 
     run dolt diff main origin/main
     [ "$status" -eq 0 ]
@@ -137,7 +137,7 @@ teardown() {
 
 @test "sql-fetch: dolt_fetch custom remote" {
     cd repo2
-    dolt sql -q "select dolt_fetch('test-remote')"
+    dolt sql -q "call dolt_fetch('test-remote')"
 
    run dolt diff main test-remote/main
     [ "$status" -eq 0 ]
@@ -165,7 +165,7 @@ teardown() {
 
 @test "sql-fetch: dolt_fetch specific ref" {
     cd repo2
-    dolt sql -q "select dolt_fetch('test-remote', 'refs/heads/main:refs/remotes/test-remote/main')"
+    dolt sql -q "call dolt_fetch('test-remote', 'refs/heads/main:refs/remotes/test-remote/main')"
 
     run dolt diff main test-remote/main
     [ "$status" -eq 0 ]
@@ -196,7 +196,7 @@ teardown() {
     dolt push origin feature
 
     cd ../repo2
-    dolt sql -q "select dolt_fetch('origin', 'feature')"
+    dolt sql -q "call dolt_fetch('origin', 'feature')"
 
     run dolt diff main origin/feature
     [ "$status" -eq 0 ]
@@ -231,7 +231,7 @@ teardown() {
     dolt push origin v1
 
     cd ../repo2
-    dolt sql -q "select dolt_fetch('origin', 'main')"
+    dolt sql -q "call dolt_fetch('origin', 'main')"
 
     run dolt diff main v1
     [ "$status" -eq 0 ]
@@ -268,7 +268,7 @@ teardown() {
     dolt push origin v1
 
     cd ../repo2
-    dolt sql -q "select dolt_fetch('origin', 'refs/tags/v1:refs/tags/v1')"
+    dolt sql -q "call dolt_fetch('origin', 'refs/tags/v1:refs/tags/v1')"
 
     run dolt diff main origin/v1
     [ "$status" -eq 0 ]
@@ -301,7 +301,7 @@ teardown() {
 
 @test "sql-fetch: dolt_fetch rename ref" {
     cd repo2
-    dolt sql -q "select dolt_fetch('test-remote', 'refs/heads/main:refs/remotes/test-remote/other')"
+    dolt sql -q "call dolt_fetch('test-remote', 'refs/heads/main:refs/remotes/test-remote/other')"
 
     run dolt diff main test-remote/other
     [ "$status" -eq 0 ]
@@ -330,7 +330,7 @@ teardown() {
 @test "sql-fetch: dolt_fetch override local branch" {
     skip "todo more flexible refspec support"
     cd repo2
-    dolt sql -q "select dolt_fetch('origin', 'main:refs/heads/main')"
+    dolt sql -q "call dolt_fetch('origin', 'main:refs/heads/main')"
 
     dolt diff main origin/main
     [ "$status" -eq 0 ]
@@ -366,11 +366,11 @@ teardown() {
     dolt push --force origin main
 
     cd ../repo1
-    run dolt sql -q "select dolt_fetch('origin', 'main')"
+    run dolt sql -q "call dolt_fetch('origin', 'main')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fetch failed: can't fast forward merge" ]] || false
 
-    dolt sql -q "select dolt_fetch('--force', 'origin', 'main')"
+    dolt sql -q "call dolt_fetch('--force', 'origin', 'main')"
     
     dolt diff main origin/main
     run dolt diff main origin/main
@@ -411,7 +411,7 @@ teardown() {
 @test "sql-fetch: dolt_fetch unknown remote fails" {
     cd repo2
     dolt remote remove origin
-    run dolt sql -q "select dolt_fetch('unknown')"
+    run dolt sql -q "call dolt_fetch('unknown')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unknown remote" ]] || false
 }
@@ -427,7 +427,7 @@ teardown() {
 @test "sql-fetch: dolt_fetch unknown remote with fetchspec fails" {
     cd repo2
     dolt remote remove origin
-    run dolt sql -q "select dolt_fetch('unknown', 'main')"
+    run dolt sql -q "call dolt_fetch('unknown', 'main')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unknown remote" ]] || false
 }
@@ -442,7 +442,7 @@ teardown() {
 
 @test "sql-fetch: dolt_fetch unknown ref fails" {
     cd repo2
-    run dolt sql -q "select dolt_fetch('origin', 'unknown')"
+    run dolt sql -q "call dolt_fetch('origin', 'unknown')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid ref spec: 'unknown'" ]] || false
 }
@@ -457,7 +457,7 @@ teardown() {
 @test "sql-fetch: dolt_fetch empty remote fails" {
     cd repo2
     dolt remote remove origin
-    run dolt sql -q "select dolt_fetch('')"
+    run dolt sql -q "call dolt_fetch('')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unknown remote" ]] || false
 }
@@ -472,7 +472,7 @@ teardown() {
 
 @test "sql-fetch: dolt_fetch empty ref fails" {
     cd repo2
-    run dolt sql -q "select dolt_fetch('origin', '')"
+    run dolt sql -q "call dolt_fetch('origin', '')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid fetch spec: ''" ]] || false
 }
