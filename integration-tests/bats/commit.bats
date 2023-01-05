@@ -44,7 +44,7 @@ teardown() {
 
 @test "commit: failed to open commit editor." {
     export EDITOR="foo"
-    export dolt_test_forceOpenEditor="1"
+    export DOLT_TEST_FORCE_OPEN_EDITOR="1"
     dolt sql -q "CREATE table t (pk int primary key);"
     dolt sql -q "INSERT INTO t VALUES (1);"
     dolt add t
