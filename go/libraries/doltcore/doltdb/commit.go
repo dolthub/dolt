@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/dolthub/dolt/go/store/prolly"
 
 	"github.com/dolthub/dolt/go/store/datas"
