@@ -190,18 +190,8 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				return HandleVErrAndExitCode(err, usage)
 			}
 		}
-	case csvFileExt:
-		err = dumpNonSqlTables(ctx, root, dEnv, force, tblNames, csvFileExt, outputFileOrDirName, false)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-	case jsonFileExt:
-		err = dumpNonSqlTables(ctx, root, dEnv, force, tblNames, jsonFileExt, outputFileOrDirName, false)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-	case parquetFileExt:
-		err = dumpNonSqlTables(ctx, root, dEnv, force, tblNames, parquetFileExt, outputFileOrDirName, false)
+	case csvFileExt, jsonFileExt, parquetFileExt:
+		err = dumpNonSqlTables(ctx, root, dEnv, force, tblNames, resFormat, outputFileOrDirName, false)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
