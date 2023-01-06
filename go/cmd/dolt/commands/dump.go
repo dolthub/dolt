@@ -178,7 +178,16 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return HandleVErrAndExitCode(err, usage)
 		}
 
-		err2 := addBulkLoadingParadigms(dEnv, fPath)
+		dbName, err2 := getActiveDatabaseName(ctx, dEnv)
+		if err2 != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err2), usage)
+		}
+		err2 = addCreateDatabaseHeader(dEnv, fPath, dbName)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err2), usage)
+		}
+
+		err2 = addBulkLoadingParadigms(dEnv, fPath)
 		if err2 != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err2), usage)
 		}
@@ -477,4 +486,37 @@ func addBulkLoadingParadigms(dEnv *env.DoltEnv, fPath string) error {
 	}
 
 	return writer.Close()
+}
+
+// addCreateDatabaseHeader adds a CREATE DATABASE header to prevent `no database selected` errors on dump file ingestion.
+func addCreateDatabaseHeader(dEnv *env.DoltEnv, fPath, dbName string) error {
+	writer, err := dEnv.FS.OpenForWriteAppend(fPath, os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	_, err = writer.Write([]byte("CREATE DATABASE IF NOT EXISTS " + dbName + "; USE " + dbName + "; \n"))
+	if err != nil {
+		return err
+	}
+
+	return writer.Close()
+}
+
+// TODO: find a more elegant way to get database name, possibly implement a method in DoltEnv
+// getActiveDatabaseName returns the name of the current active database
+func getActiveDatabaseName(ctx context.Context, dEnv *env.DoltEnv) (string, error) {
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	if err != nil {
+		return "", err
+	}
+
+	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
+	var dbName string
+	mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
+		dbName = name
+		return true, nil
+	})
+
+	return dbName, nil
 }

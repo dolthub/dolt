@@ -35,7 +35,11 @@ teardown() {
 
     run grep CREATE doltdump.sql
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    [ "${#lines[@]}" -eq 4 ]
+
+    run grep "DATABASE IF NOT EXISTS" doltdump.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
 
     run grep FOREIGN_KEY_CHECKS=0 doltdump.sql
     [ "$status" -eq 0 ]
@@ -314,7 +318,7 @@ teardown() {
 
     run grep CREATE doltdump.sql
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
+    [ "${#lines[@]}" -eq 3 ]
 
     run grep INSERT doltdump.sql
     [ "$status" -eq 1 ]
@@ -340,7 +344,7 @@ teardown() {
 
     run grep CREATE dumpfile.sql
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    [ "${#lines[@]}" -eq 4 ]
 }
 
 @test "dump: SQL type - with directory name given" {
