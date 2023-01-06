@@ -26,7 +26,7 @@ import (
 
 var _ sql.Table = (*LogTable)(nil)
 
-//var _ sql.StatisticsTable = (*LogTable)(nil)
+var _ sql.StatisticsTable = (*LogTable)(nil)
 
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
