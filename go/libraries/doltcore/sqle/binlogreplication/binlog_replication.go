@@ -171,11 +171,12 @@ func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlo
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
-
 	var copy = d.status
+
 	copy.SourceUser = replicaSourceInfo.User
 	copy.SourceHost = replicaSourceInfo.Host
 	copy.SourcePort = uint(replicaSourceInfo.Port)
+	copy.SourceServerUuid = replicaSourceInfo.Uuid
 
 	return &copy, nil
 }
@@ -382,16 +383,16 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		if err != nil {
 			return err
 		}
-		d.mu.Lock()
-		_, err = d.loadReplicationConfiguration(ctx)
+
+		replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
 		if err != nil {
 			return err
 		}
-		// TODO: persist this to ReplicaSourceInfo instead
-		//replicaSourceInfo.ServerUuid = fmt.Sprintf("%v", gtid.SourceServer())
-		d.status.SourceServerUuid = fmt.Sprintf("%v", gtid.SourceServer())
-		d.mu.Unlock()
-		//d.persistReplicationConfiguration(ctx, replicaSourceInfo)
+		replicaSourceInfo.Uuid = fmt.Sprintf("%v", gtid.SourceServer())
+		err = d.persistReplicationConfiguration(ctx, replicaSourceInfo)
+		if err != nil {
+			return err
+		}
 
 		// TODO: Our server restart test is failing, because it is getting duplicate primary key errors –
 		//       it isn't restarting the replication stream from teh right GTID sequence! We need to persist
