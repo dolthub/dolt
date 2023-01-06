@@ -45,10 +45,14 @@ var DoltBinlogReplicaController = newDoltBinlogReplicaController()
 // doltBinlogReplicaController implements the BinlogReplicaController interface for a Dolt database in order to
 // provide support for a Dolt server to be a replica of a MySQL primary.
 type doltBinlogReplicaController struct {
-	status            binlogreplication.ReplicaStatus
-	replicationConfig *replicaConfiguration
-	mu                *sync.Mutex
+	status binlogreplication.ReplicaStatus
+	mu     *sync.Mutex
 }
+
+// TODO: Move these into the doltBinlogReplicaController struct
+var format mysql.BinlogFormat
+var tableMapsById = make(map[uint64]*mysql.TableMap)
+var stopReplicationChan = make(chan struct{})
 
 func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 	controller := doltBinlogReplicaController{
@@ -69,6 +73,13 @@ func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 var _ binlogreplication.BinlogReplicaController = (*doltBinlogReplicaController)(nil)
 
 func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
+	// TODO: If the database is already configured for Dolt replication/clustering, then error out
+	if false {
+		return fmt.Errorf("dolt replication already enabled; unable to use binlog replication with other replication modes. Disable Dolt replication first before starting binlog replication")
+	}
+
+	// TODO: If we aren't running in a sql-server context, return an error
+
 	// Create a new context to use, because otherwise the engine will cancel the original
 	// context after the 'start replica' statement has finished executing.
 	ctx = ctx.WithContext(context.Background())
@@ -79,7 +90,7 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 			//       Instead, we should log the errors and expose them through the replica status API
 			//       Do we need another log just for replication? (not the binlog relay log... just a debugging log)
 			//       For now though... this panic is convienent since it fails the tests hard for any unexpected error.
-			panic(fmt.Sprintf("unexected error of type %T: '%v'", err, err.Error()))
+			panic(fmt.Sprintf("unexpected error of type %T: '%v'", err, err.Error()))
 		}
 	}()
 	return nil
@@ -90,62 +101,84 @@ func (d *doltBinlogReplicaController) StopReplica(_ *sql.Context) error {
 	return nil
 }
 
-func (d *doltBinlogReplicaController) SetReplicationOptions(_ *sql.Context, options []binlogreplication.ReplicationOption) error {
-	config := replicaConfiguration{}
-	config.connectionParams = &mysql.ConnParams{}
+func (d *doltBinlogReplicaController) loadReplicationConfiguration(ctx *sql.Context) (*mysql_db.ReplicaSourceInfo, error) {
+	server := sqlserver.GetRunningServer()
+	if server == nil {
+		return nil, fmt.Errorf("no SQL server running; " +
+			"replication commands may only be used when running from dolt sql-server, and not from dolt sql")
+	}
+	engine := server.Engine
+	return engine.Analyzer.Catalog.MySQLDb.GetReplicaSourceInfo(), nil
+}
 
-	// TODO: hardcoding GTID starting id for now
-	config.startingGtid = 1
+func (d *doltBinlogReplicaController) persistReplicationConfiguration(ctx *sql.Context, replicaSourceInfo *mysql_db.ReplicaSourceInfo) error {
+	server := sqlserver.GetRunningServer()
+	if server == nil {
+		return fmt.Errorf("no SQL server running; " +
+			"replication commands may only be used when running from dolt sql-server, and not from dolt sql")
+	}
+	engine := server.Engine
+
+	replicaSourceInfoTableData := engine.Analyzer.Catalog.MySQLDb.ReplicaSourceInfoTable().Data()
+	err := replicaSourceInfoTableData.Put(ctx, replicaSourceInfo)
+	if err != nil {
+		return err
+	}
+	return engine.Analyzer.Catalog.MySQLDb.Persist(ctx)
+}
+
+func (d *doltBinlogReplicaController) SetReplicationOptions(ctx *sql.Context, options []binlogreplication.ReplicationOption) error {
+	replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
+	if err != nil {
+		return err
+	}
 
 	for _, option := range options {
 		switch strings.ToUpper(option.Name) {
 		case "SOURCE_HOST":
-			config.connectionParams.Host = option.Value
+			replicaSourceInfo.Host = option.Value
 		case "SOURCE_USER":
-			config.connectionParams.Uname = option.Value
+			replicaSourceInfo.User = option.Value
 		case "SOURCE_PASSWORD":
-			config.connectionParams.Pass = option.Value
+			replicaSourceInfo.Password = option.Value
 		case "SOURCE_PORT":
 			intValue, err := strconv.Atoi(option.Value)
 			if err != nil {
 				return fmt.Errorf("Unable to parse SOURCE_PORT value (%q) as an integer: %s", option.Value, err.Error())
 			}
-			config.connectionParams.Port = intValue
+			replicaSourceInfo.Port = uint16(intValue)
 
 		default:
 			return fmt.Errorf("Unknown replication option: %s", option.Name)
 		}
 	}
 
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.replicationConfig = &config
-	d.status.SourceUser = config.connectionParams.Uname
-	d.status.SourcePort = uint(config.connectionParams.Port)
-	d.status.SourceHost = config.connectionParams.Host
+	// Persist the updated replica source configuration to disk
+	err = d.persistReplicationConfiguration(ctx, replicaSourceInfo)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func (d *doltBinlogReplicaController) GetReplicaStatus(_ *sql.Context) (*binlogreplication.ReplicaStatus, error) {
-	if d.replicationConfig == nil {
-		// TODO: is this correct?
-		return nil, nil
+func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlogreplication.ReplicaStatus, error) {
+	// TODO: If there is NO ReplicaSourceInfo, then we should return a nil reference, but we can't distinguish that yet
+	replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	var copy = d.status
+	copy.SourceUser = replicaSourceInfo.User
+	copy.SourceHost = replicaSourceInfo.Host
+	copy.SourcePort = uint(replicaSourceInfo.Port)
+
 	return &copy, nil
 }
-
-// TODO: Move these into a struct to track?
-var format mysql.BinlogFormat
-var tableMapsById = make(map[uint64]*mysql.TableMap)
-
-var stopReplicationChan = make(chan struct{})
 
 // Row Flags – https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
 const endOfStatementRowFlag = 0x0001
@@ -154,20 +187,18 @@ const noUniqueKeyChecksRowFlag = 0x0004
 const rowsAreCompleteRowFlag = 0x0008
 const noCheckConstraintsRowFlag = 0x0010
 
-// TODO: Look at configuration interfaces for other replication options and naming patterns
-type replicaConfiguration struct {
-	connectionParams *mysql.ConnParams
-	startingGtid     int64
-}
-
-// NewReplicaConfiguration creates a new replica configuration for the server identified by |connectionParams|.
-func NewReplicaConfiguration(connectionParams *mysql.ConnParams) *replicaConfiguration {
-	return &replicaConfiguration{
-		connectionParams: connectionParams,
-		startingGtid:     1,
-	}
-}
-
+// connectAndStartReplicationEventStream connects to the configured MySQL replication source, including pausing
+// and retrying if errors are encountered.
+//
+// NOTE: Our fork of Vitess currently only supports mysql_native_password auth. The latest code in the main
+//
+//	Vitess repo supports the current MySQL default auth plugin, caching_sha2_password.
+//	https://dev.mysql.com/blog-archive/upgrading-to-mysql-8-0-default-authentication-plugin-considerations/
+//	To work around this limitation, add the following to your /etc/my.cnf:
+//	    [mysqld]
+//	    default-authentication-plugin=mysql_native_password
+//	or start mysqld with:
+//	    --default-authentication-plugin=mysql_native_password
 func (d *doltBinlogReplicaController) connectAndStartReplicationEventStream(ctx *sql.Context) (*mysql.Conn, error) {
 	d.mu.Lock()
 	d.status.ReplicaIoRunning = binlogreplication.ReplicaIoConnecting
@@ -179,16 +210,18 @@ func (d *doltBinlogReplicaController) connectAndStartReplicationEventStream(ctx 
 	var conn *mysql.Conn
 	var err error
 	for connectionAttempts := uint(0); ; connectionAttempts++ {
-		// Connect to the MySQL Replication Source
-		// NOTE: Our fork of Vitess currently only supports mysql_native_password auth. The latest code in the main
-		//       Vitess repo supports the current MySQL default auth plugin, caching_sha2_password.
-		//       https://dev.mysql.com/blog-archive/upgrading-to-mysql-8-0-default-authentication-plugin-considerations/
-		//       To work around this limitation, add the following to your /etc/my.cnf:
-		//           [mysqld]
-		//           default-authentication-plugin=mysql_native_password
-		//       or start mysqld with:
-		//           --default-authentication-plugin=mysql_native_password
-		conn, err = mysql.Connect(ctx, d.replicationConfig.connectionParams)
+		replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
+
+		// TODO: Validate that all required settings are present
+		connParams := mysql.ConnParams{
+			Host:  replicaSourceInfo.Host,
+			Port:  int(replicaSourceInfo.Port),
+			Uname: replicaSourceInfo.User,
+			Pass:  replicaSourceInfo.Password,
+			// ConnectTimeoutMs: 0, // TODO: Set a non-zero timeout
+		}
+
+		conn, err = mysql.Connect(ctx, &connParams)
 		if err != nil && connectionAttempts >= maxConnectionAttempts {
 			return nil, err
 		} else if err != nil {
@@ -201,7 +234,7 @@ func (d *doltBinlogReplicaController) connectAndStartReplicationEventStream(ctx 
 	// Request binlog events to start
 	// TODO: When we restart replication... we need to restart from the last executed GTID, right?
 	// TODO: This also needs retry logic, right?
-	err = startReplicationEventStream(d.replicationConfig, conn)
+	err = startReplicationEventStream(conn)
 	if err != nil {
 		return nil, err
 	}
@@ -325,6 +358,8 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 			return err
 		}
 		fmt.Printf("  - previous GTIDs: %s \n", position.GTIDSet.String())
+		// TODO: record the last GTID seen
+		//position.GTIDSet.
 
 	case event.IsFormatDescription():
 		// This is a descriptor event that is written to the beginning of a binary log file, at position 4 (after
@@ -341,14 +376,26 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		fmt.Printf("Received: GTID event\n")
 		// TODO: Does this mean we should perform a commit?
 		// TODO: Read MariaDB KB docs on GTID: https://mariadb.com/kb/en/gtid/
+		// TODO: Handle flags in event
 		gtid, isBegin, err := event.GTID(format)
 		fmt.Printf(" - %v (isBegin: %t) \n", gtid, isBegin)
 		if err != nil {
 			return err
 		}
 		d.mu.Lock()
+		_, err = d.loadReplicationConfiguration(ctx)
+		if err != nil {
+			return err
+		}
+		// TODO: persist this to ReplicaSourceInfo instead
+		//replicaSourceInfo.ServerUuid = fmt.Sprintf("%v", gtid.SourceServer())
 		d.status.SourceServerUuid = fmt.Sprintf("%v", gtid.SourceServer())
 		d.mu.Unlock()
+		//d.persistReplicationConfiguration(ctx, replicaSourceInfo)
+
+		// TODO: Our server restart test is failing, because it is getting duplicate primary key errors –
+		//       it isn't restarting the replication stream from teh right GTID sequence! We need to persist
+		//       what GTIDs we have processed and then restart replication from the correct event with auto-positioning.
 
 	case event.IsTableMap():
 		// Used for row-based binary logging beginning (binlog_format=ROW or MIXED). This event precedes each row
@@ -707,9 +754,10 @@ func convertSqlTypesValue(value sqltypes.Value, column *sql.Column) (interface{}
 
 // startReplicationEventStream sends a request over |conn|, the connection to the MySQL source server, to begin
 // sending binlog events.
-func startReplicationEventStream(replicaConfiguration *replicaConfiguration, conn *mysql.Conn) error {
+func startReplicationEventStream(conn *mysql.Conn) error {
+	// TODO: unhardcode GTID starting ID 1
 	gtid := mysql.Mysql56GTID{
-		Sequence: replicaConfiguration.startingGtid,
+		Sequence: 1,
 	}
 	startPosition := mysql.Position{GTIDSet: gtid.GTIDSet()}
 
