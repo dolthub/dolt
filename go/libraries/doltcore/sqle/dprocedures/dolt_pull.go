@@ -168,7 +168,7 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, err
 	}
-	err = actions.FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, nil, nil)
+	err = actions.FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		return conflicts, fastForward, err
 	}
