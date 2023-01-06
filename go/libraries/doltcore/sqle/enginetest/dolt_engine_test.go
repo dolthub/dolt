@@ -433,20 +433,20 @@ func TestDoltUserPrivileges(t *testing.T) {
 	}
 }
 
-func TestMergeJoins(t *testing.T) {
+func TestJoinOps(t *testing.T) {
 	if types.IsFormat_LD(types.Format_Default) {
 		t.Skip("LD keyless indexes are not sorted")
 	}
 
-	enginetest.TestMergeJoins(t, newDoltHarness(t))
+	enginetest.TestJoinOps(t, newDoltHarness(t))
 }
 
-func TestMergeJoinsPrepared(t *testing.T) {
+func TestJoinOpsPrepared(t *testing.T) {
 	if types.IsFormat_LD(types.Format_Default) {
 		t.Skip("LD keyless indexes are not sorted")
 	}
 
-	enginetest.TestMergeJoins(t, newDoltHarness(t))
+	enginetest.TestJoinOpsPrepared(t, newDoltHarness(t))
 }
 
 func TestJoinQueries(t *testing.T) {
