@@ -52,7 +52,7 @@ func (dt *LogTable) RowCount(ctx *sql.Context) (uint64, error) {
 		return 1000, nil
 	}
 	cnt, err := cc.Count()
-	return uint64(cnt), err
+	return uint64(cnt + 1), err
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
