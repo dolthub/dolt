@@ -401,7 +401,7 @@ func validateArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseError)
 			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", filenameFlag, rf).SetPrintUsage().Build()
 		}
 		if snOk {
-			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", schemaOnlyFlag, rf).SetPrintUsage().Build()
+			return emptyStr, errhand.BuildDError("%s dump is not supported for %s exports", schemaOnlyFlag, rf).SetPrintUsage().Build()
 		}
 		return dn, nil
 	default:

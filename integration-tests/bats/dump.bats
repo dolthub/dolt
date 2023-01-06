@@ -658,7 +658,7 @@ teardown() {
     dolt sql -q "INSERT INTO new_table VALUES (1), (2);"
     run dolt dump --schema-only -r csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Cannot export table schemas to non-sql output file" ]] || false
+    [[ "$output" =~ "schema-only dump is not supported for csv exports" ]] || false
     [ ! -f doltdump_schema_only.csv ]
 }
 
