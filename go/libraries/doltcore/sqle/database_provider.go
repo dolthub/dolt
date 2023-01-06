@@ -1000,11 +1000,7 @@ func isBranch(ctx context.Context, db SqlDatabase, branchName string, dialer dbf
 	var ddbs []*doltdb.DoltDB
 
 	if rdb, ok := db.(ReadReplicaDatabase); ok {
-		remoteDB, err := rdb.remote.GetRemoteDB(ctx, rdb.ddb.Format(), dialer)
-		if err != nil {
-			return "", false, err
-		}
-		ddbs = append(ddbs, rdb.ddb, remoteDB)
+		ddbs = append(ddbs, rdb.ddb, rdb.srcDB)
 	} else if ddb, ok := db.(Database); ok {
 		ddbs = append(ddbs, ddb.ddb)
 	} else {
@@ -1030,11 +1026,7 @@ func isTag(ctx context.Context, db SqlDatabase, tagName string, dialer dbfactory
 	var ddbs []*doltdb.DoltDB
 
 	if rdb, ok := db.(ReadReplicaDatabase); ok {
-		remoteDB, err := rdb.remote.GetRemoteDB(ctx, rdb.ddb.Format(), dialer)
-		if err != nil {
-			return false, err
-		}
-		ddbs = append(ddbs, rdb.ddb, remoteDB)
+		ddbs = append(ddbs, rdb.ddb, rdb.srcDB)
 	} else if ddb, ok := db.(Database); ok {
 		ddbs = append(ddbs, ddb.ddb)
 	} else {
