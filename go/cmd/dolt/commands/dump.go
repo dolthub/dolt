@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -215,9 +215,9 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 type dumpOptions struct {
-	format string
+	format     string
 	schemaOnly bool
-	dest   mvdata.DataLocation
+	dest       mvdata.DataLocation
 }
 
 type tableOptions struct {
@@ -414,9 +414,9 @@ func getDumpOptions(fileName string, rf string, schemaOnly bool) *dumpOptions {
 	fileLoc := getDumpDestination(fileName)
 
 	return &dumpOptions{
-		format: rf,
+		format:     rf,
 		schemaOnly: schemaOnly,
-		dest:   fileLoc,
+		dest:       fileLoc,
 	}
 }
 
