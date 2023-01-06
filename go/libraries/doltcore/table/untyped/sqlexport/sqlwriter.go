@@ -142,6 +142,10 @@ func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
 	return nil
 }
 
+func (w *SqlExportWriter) WriteDropCreateOnly(ctx context.Context) error {
+	return w.maybeWriteDropCreate(ctx)
+}
+
 func (w *SqlExportWriter) maybeWriteAutocommitoff() error {
 	if w.writtenAutocommitOff || !w.autocommitOff {
 		return nil
