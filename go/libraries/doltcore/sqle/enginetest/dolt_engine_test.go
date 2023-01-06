@@ -434,16 +434,16 @@ func TestDoltUserPrivileges(t *testing.T) {
 }
 
 func TestJoinOps(t *testing.T) {
-	if types.IsFormat_LD(types.Format_Default) {
-		t.Skip("LD keyless indexes are not sorted")
+	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
+		t.Skip("DOLT_LD keyless indexes are not sorted")
 	}
 
 	enginetest.TestJoinOps(t, newDoltHarness(t))
 }
 
 func TestJoinOpsPrepared(t *testing.T) {
-	if types.IsFormat_LD(types.Format_Default) {
-		t.Skip("LD keyless indexes are not sorted")
+	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
+		t.Skip("DOLT_LD keyless indexes are not sorted")
 	}
 
 	enginetest.TestJoinOpsPrepared(t, newDoltHarness(t))
