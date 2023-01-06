@@ -1296,10 +1296,8 @@ func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[addr]chunkSource, error) {
 
 func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
 	var ok bool
-	switch nbs.p.(type) {
-	case *fsTablePersister, *chunkJournal, *blobstorePersister:
-		ok = true
-	}
+	_, ok = nbs.p.(tableFilePersister)
+
 	return TableFileStoreOps{
 		CanRead:  true,
 		CanWrite: ok,

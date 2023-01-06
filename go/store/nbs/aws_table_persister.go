@@ -64,6 +64,7 @@ type awsTablePersister struct {
 }
 
 var _ tablePersister = awsTablePersister{}
+var _ tableFilePersister = awsTablePersister{}
 
 type awsLimits struct {
 	partTarget, partMin, partMax uint64
@@ -106,6 +107,33 @@ func (s3p awsTablePersister) Exists(ctx context.Context, name addr, chunkCount u
 		s3p.q,
 		stats,
 	)
+}
+
+func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string) error {
+	var err error
+
+	defer func() {
+		cerr := r.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
+
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return err
+	}
+
+	addr, err := parseAddr(fileId)
+	if err != nil {
+		return err
+	}
+
+	return s3p.ddb.Write(ctx, addr, data)
+}
+
+func (s3p awsTablePersister) Path() string {
+	return s3p.bucket
 }
 
 type s3UploadedPart struct {
