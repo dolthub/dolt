@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -44,6 +45,7 @@ const (
 	batchFlag        = "batch"
 	noBatchFlag      = "no-batch"
 	noAutocommitFlag = "no-autocommit"
+	schemaOnlyFlag   = "schema-only"
 
 	sqlFileExt     = "sql"
 	csvFileExt     = "csv"
@@ -92,8 +94,9 @@ func (cmd DumpCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(directoryFlag, "d", "directory_name", "Define directory name to dump the files in. Defaults to `doltdump/`.")
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(batchFlag, "", "Return batch insert statements wherever possible, enabled by default.")
-	ap.SupportsFlag(noBatchFlag, "", "Always emit one row per statement, rather than batching multiple rows into each statement.")
-	ap.SupportsFlag(noAutocommitFlag, "na", "Turns off autocommit for each dumped table. Used to speed up loading of outputted sql file")
+	ap.SupportsFlag(noBatchFlag, "", "Emit one row per statement, instead of batching multiple rows into each statement.")
+	ap.SupportsFlag(noAutocommitFlag, "na", "Turn off autocommit for each dumped table. Useful for speeding up loading of output SQL file.")
+	ap.SupportsFlag(schemaOnlyFlag, "", "Dump a table's schema, without including any data, to the output SQL file.")
 	return ap
 }
 
@@ -127,16 +130,17 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	force := apr.Contains(forceParam)
+	schemaOnly := apr.Contains(schemaOnlyFlag)
 	resFormat, _ := apr.GetValue(FormatFlag)
 	resFormat = strings.TrimPrefix(resFormat, ".")
 
-	name, vErr := validateArgs(apr)
+	outputFileOrDirName, vErr := validateArgs(apr)
 	if vErr != nil {
 		return HandleVErrAndExitCode(vErr, usage)
 	}
 
 	// Look for schemas and procedures table, and add to tblNames only for sql dumps
-	if resFormat == emptyFileExt || resFormat == sqlFileExt {
+	if !schemaOnly && (resFormat == emptyFileExt || resFormat == sqlFileExt) {
 		sysTblNames, err := doltdb.GetSystemTableNames(ctx, root)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -153,16 +157,23 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	switch resFormat {
 	case emptyFileExt, sqlFileExt:
-		if name == emptyStr {
-			name = fmt.Sprintf("doltdump.sql")
+		var defaultName string
+		if schemaOnly {
+			defaultName = fmt.Sprintf("doltdump_schema_only.sql")
 		} else {
-			if !strings.HasSuffix(name, ".sql") {
-				name = fmt.Sprintf("%s.sql", name)
+			defaultName = fmt.Sprintf("doltdump.sql")
+		}
+
+		if outputFileOrDirName == emptyStr {
+			outputFileOrDirName = defaultName
+		} else {
+			if !strings.HasSuffix(outputFileOrDirName, ".sql") {
+				outputFileOrDirName = fmt.Sprintf("%s.sql", outputFileOrDirName)
 			}
 		}
 
-		dumpOpts := getDumpOptions(name, resFormat)
-		fPath, err := checkAndCreateOpenDestFile(ctx, root, dEnv, force, dumpOpts, name)
+		dumpOpts := getDumpOptions(outputFileOrDirName, resFormat, schemaOnly)
+		fPath, err := checkAndCreateOpenDestFile(ctx, root, dEnv, force, dumpOpts, outputFileOrDirName)
 		if err != nil {
 			return HandleVErrAndExitCode(err, usage)
 		}
@@ -173,24 +184,14 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 
 		for _, tbl := range tblNames {
-			tblOpts := newTableArgs(tbl, dumpOpts.dest, !apr.Contains(noBatchFlag), apr.Contains(noAutocommitFlag))
+			tblOpts := newTableArgs(tbl, dumpOpts.dest, !apr.Contains(noBatchFlag), apr.Contains(noAutocommitFlag), schemaOnly)
 			err = dumpTable(ctx, dEnv, tblOpts, fPath)
 			if err != nil {
 				return HandleVErrAndExitCode(err, usage)
 			}
 		}
-	case csvFileExt:
-		err = dumpTables(ctx, root, dEnv, force, tblNames, csvFileExt, name, false)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-	case jsonFileExt:
-		err = dumpTables(ctx, root, dEnv, force, tblNames, jsonFileExt, name, false)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-	case parquetFileExt:
-		err = dumpTables(ctx, root, dEnv, force, tblNames, parquetFileExt, name, false)
+	case csvFileExt, jsonFileExt, parquetFileExt:
+		err = dumpNonSqlTables(ctx, root, dEnv, force, tblNames, resFormat, outputFileOrDirName, false)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -204,12 +205,14 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 type dumpOptions struct {
-	format string
-	dest   mvdata.DataLocation
+	format     string
+	schemaOnly bool
+	dest       mvdata.DataLocation
 }
 
 type tableOptions struct {
 	tableName     string
+	schemaOnly    bool
 	dest          mvdata.DataLocation
 	batched       bool
 	autocommitOff bool
@@ -257,8 +260,17 @@ func dumpTable(ctx context.Context, dEnv *env.DoltEnv, tblOpts *tableOptions, fi
 		return errhand.BuildDError("Error creating writer for %s.", tblOpts.SrcName()).AddCause(err).Build()
 	}
 
-	pipeline := mvdata.NewDataMoverPipeline(ctx, rd, wr)
-	err = pipeline.Execute()
+	if tblOpts.schemaOnly {
+		// table schema can be exported to only sql file.
+		if sqlExpWr, ok := wr.(*sqlexport.SqlExportWriter); ok {
+			err = sqlExpWr.WriteDropCreateOnly(ctx)
+		} else {
+			err = errhand.BuildDError("Cannot export table schemas to non-sql output file").Build()
+		}
+	} else {
+		pipeline := mvdata.NewDataMoverPipeline(ctx, rd, wr)
+		err = pipeline.Execute()
+	}
 
 	if err != nil {
 		return errhand.BuildDError("Error with dumping %s.", tblOpts.SrcName()).AddCause(err).Build()
@@ -363,6 +375,7 @@ func validateArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseError)
 	rf = strings.TrimPrefix(rf, ".")
 	fn, fnOk := apr.GetValue(filenameFlag)
 	dn, dnOk := apr.GetValue(directoryFlag)
+	snOk := apr.Contains(schemaOnlyFlag)
 
 	if fnOk && dnOk {
 		return emptyStr, errhand.BuildDError("cannot pass both directory and file names").SetPrintUsage().Build()
@@ -373,19 +386,12 @@ func validateArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseError)
 			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", directoryFlag, sqlFileExt).SetPrintUsage().Build()
 		}
 		return fn, nil
-	case csvFileExt:
+	case csvFileExt, jsonFileExt, parquetFileExt:
 		if fnOk {
-			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", filenameFlag, csvFileExt).SetPrintUsage().Build()
+			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", filenameFlag, rf).SetPrintUsage().Build()
 		}
-		return dn, nil
-	case jsonFileExt:
-		if fnOk {
-			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", filenameFlag, jsonFileExt).SetPrintUsage().Build()
-		}
-		return dn, nil
-	case parquetFileExt:
-		if fnOk {
-			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", filenameFlag, parquetFileExt).SetPrintUsage().Build()
+		if snOk {
+			return emptyStr, errhand.BuildDError("%s dump is not supported for %s exports", schemaOnlyFlag, rf).SetPrintUsage().Build()
 		}
 		return dn, nil
 	default:
@@ -394,29 +400,34 @@ func validateArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseError)
 }
 
 // getDumpArgs returns dumpOptions of result format and dest file location corresponding to the input parameters
-func getDumpOptions(fileName string, rf string) *dumpOptions {
+func getDumpOptions(fileName string, rf string, schemaOnly bool) *dumpOptions {
 	fileLoc := getDumpDestination(fileName)
 
 	return &dumpOptions{
-		format: rf,
-		dest:   fileLoc,
+		format:     rf,
+		schemaOnly: schemaOnly,
+		dest:       fileLoc,
 	}
 }
 
 // newTableArgs returns tableOptions of table name and src table location and dest file location
 // corresponding to the input parameters
-func newTableArgs(tblName string, destination mvdata.DataLocation, batched bool, autocommitOff bool) *tableOptions {
+func newTableArgs(tblName string, destination mvdata.DataLocation, batched, autocommitOff, schemaOnly bool) *tableOptions {
+	if schemaOnly {
+		batched = false
+	}
 	return &tableOptions{
 		tableName:     tblName,
+		schemaOnly:    schemaOnly,
 		dest:          destination,
 		batched:       batched,
 		autocommitOff: autocommitOff,
 	}
 }
 
-// dumpTables returns nil if all tables is dumped successfully, and it returns err if there is one.
+// dumpNonSqlTables returns nil if all tables is dumped successfully, and it returns err if there is one.
 // It handles only csv and json file types(rf).
-func dumpTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, force bool, tblNames []string, rf string, dirName string, batched bool) errhand.VerboseError {
+func dumpNonSqlTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, force bool, tblNames []string, rf string, dirName string, batched bool) errhand.VerboseError {
 	var fName string
 	if dirName == emptyStr {
 		dirName = fmt.Sprintf("doltdump/")
@@ -428,14 +439,14 @@ func dumpTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, 
 
 	for _, tbl := range tblNames {
 		fName = fmt.Sprintf("%s%s.%s", dirName, tbl, rf)
-		dumpOpts := getDumpOptions(fName, rf)
+		dumpOpts := getDumpOptions(fName, rf, false)
 
 		fPath, err := checkAndCreateOpenDestFile(ctx, root, dEnv, force, dumpOpts, fName)
 		if err != nil {
 			return err
 		}
 
-		tblOpts := newTableArgs(tbl, dumpOpts.dest, batched, false)
+		tblOpts := newTableArgs(tbl, dumpOpts.dest, batched, false, false)
 
 		err = dumpTable(ctx, dEnv, tblOpts, fPath)
 		if err != nil {
