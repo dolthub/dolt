@@ -109,7 +109,7 @@ func (s3p awsTablePersister) Exists(ctx context.Context, name addr, chunkCount u
 	)
 }
 
-func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string) error {
+func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, chunkCount uint32) error {
 	var err error
 
 	defer func() {
@@ -124,12 +124,16 @@ func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser,
 		return err
 	}
 
-	addr, err := parseAddr(fileId)
+	name, err := parseAddr(fileId)
 	if err != nil {
 		return err
 	}
 
-	return s3p.ddb.Write(ctx, addr, data)
+	if s3p.limits.tableFitsInDynamo(name, len(data), chunkCount) {
+		return s3p.ddb.Write(ctx, name, data)
+	}
+
+	return s3p.multipartUpload(ctx, data, fileId)
 }
 
 func (s3p awsTablePersister) Path() string {

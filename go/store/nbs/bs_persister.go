@@ -168,7 +168,7 @@ func (bsp *blobstorePersister) Path() string {
 	return ""
 }
 
-func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string) error {
+func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, chunkCount uint32) error {
 	var err error
 
 	defer func() {

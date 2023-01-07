@@ -1330,7 +1330,7 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 		return err
 	}
 
-	return tfp.CopyTableFile(ctx, r, fileId)
+	return tfp.CopyTableFile(ctx, r, fileId, uint32(numChunks))
 }
 
 // AddTableFilesToManifest adds table files to the manifest

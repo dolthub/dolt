@@ -78,7 +78,7 @@ func (ftp *fsTablePersister) Path() string {
 	return ftp.dir
 }
 
-func (ftp *fsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string) error {
+func (ftp *fsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, chunkCount uint32) error {
 	tn, err := func() (n string, err error) {
 		defer func() {
 			cerr := r.Close()

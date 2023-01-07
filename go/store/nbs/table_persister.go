@@ -64,7 +64,7 @@ type tableFilePersister interface {
 	tablePersister
 
 	// CopyTableFile copies the table file with the given fileId from the reader to the TableFileStore.
-	CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string) error
+	CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, chunkCount uint32) error
 
 	// Path returns the file system path.
 	Path() string
