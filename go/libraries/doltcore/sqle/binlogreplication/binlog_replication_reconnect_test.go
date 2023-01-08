@@ -167,10 +167,12 @@ func configureToxiProxy(t *testing.T) {
 	fmt.Printf("Toxiproxy proxy with limit_data toxic (1KB) started on port %d \n", proxyPort)
 }
 
-func convertByteArraysToStrings(m map[string]interface{}) {
+func convertByteArraysToStrings(m map[string]interface{}) map[string]interface{} {
 	for key, value := range m {
 		if bytes, ok := value.([]byte); ok {
 			m[key] = string(bytes)
 		}
 	}
+
+	return m
 }

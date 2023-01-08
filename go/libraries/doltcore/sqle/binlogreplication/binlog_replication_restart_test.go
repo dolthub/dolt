@@ -51,8 +51,6 @@ func TestBinlogReplicationServerRestart(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check replication status on the replica and assert configuration is still present
-	// TODO: This currently fails, because there is no replica configuration/status persisted, so when the
-	//       Dolt sql-server starts up again, `show replica status` returns zero rows.
 	status := showReplicaStatus(t)
 	convertByteArraysToStrings(status)
 	require.Equal(t, "5", status["Connect_Retry"])
@@ -66,11 +64,14 @@ func TestBinlogReplicationServerRestart(t *testing.T) {
 
 	// Assert that all changes have replicated from the primary
 	wg.Wait()
-	primaryRows, err := primaryDatabase.Queryx("SELECT COUNT(*) AS count FROM t;")
+	time.Sleep(1 * time.Second)
+	countMaxQuery := "SELECT COUNT(pk) AS count, MAX(pk) as max FROM t;"
+	primaryRows, err := primaryDatabase.Queryx(countMaxQuery)
 	require.NoError(t, err)
-	replicaRows, err := replicaDatabase.Queryx("SELECT COUNT(*) AS count FROM t;")
+	replicaRows, err := replicaDatabase.Queryx(countMaxQuery)
 	require.NoError(t, err)
-	primaryRow := readNextRow(t, primaryRows)
-	replicaRow := readNextRow(t, replicaRows)
+	primaryRow := convertByteArraysToStrings(readNextRow(t, primaryRows))
+	replicaRow := convertByteArraysToStrings(readNextRow(t, replicaRows))
 	require.Equal(t, primaryRow["count"], replicaRow["count"])
+	require.Equal(t, primaryRow["max"], replicaRow["max"])
 }

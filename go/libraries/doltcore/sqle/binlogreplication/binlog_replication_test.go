@@ -275,6 +275,8 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 		fmt.Sprintf("--pid-file="+dir+"pid-%v.pid", mySqlPort))
 	err = cmd.Start()
 	if err != nil {
+		// TODO: We should capture the process output here (without blocking for process completion)
+		//       to help debug any mysql startup errors.
 		return -1, nil, fmt.Errorf("unable to start process %q: %v", cmd.String(), err.Error())
 	}
 
