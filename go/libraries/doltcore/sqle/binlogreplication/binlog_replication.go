@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -41,6 +43,13 @@ import (
 )
 
 var DoltBinlogReplicaController = newDoltBinlogReplicaController()
+
+var logger *logrus.Logger
+
+func initializeLogger() {
+	logger = logrus.StandardLogger()
+	logger.SetLevel(logrus.TraceLevel)
+}
 
 // doltBinlogReplicaController implements the BinlogReplicaController interface for a Dolt database in order to
 // provide support for a Dolt server to be a replica of a MySQL primary.
@@ -67,6 +76,8 @@ func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 	//        we're starting with a very quick retry
 	controller.status.ConnectRetry = 5
 
+	initializeLogger()
+
 	return &controller
 }
 
@@ -77,6 +88,8 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 	if false {
 		return fmt.Errorf("dolt replication already enabled; unable to use binlog replication with other replication modes. Disable Dolt replication first before starting binlog replication")
 	}
+
+	logger.Info("starting binlog replication...")
 
 	// TODO: If we aren't running in a sql-server context, return an error
 
@@ -89,7 +102,7 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 			// TODO: Need better error handling here... we shouldn't be crashing the server obviously
 			//       Instead, we should log the errors and expose them through the replica status API
 			//       Do we need another log just for replication? (not the binlog relay log... just a debugging log)
-			//       For now though... this panic is convienent since it fails the tests hard for any unexpected error.
+			//       For now though... this panic is convenient since it fails the tests hard for any unexpected error.
 			panic(fmt.Sprintf("unexpected error of type %T: '%v'", err, err.Error()))
 		}
 	}()
@@ -233,8 +246,7 @@ func (d *doltBinlogReplicaController) connectAndStartReplicationEventStream(ctx 
 	}
 
 	// Request binlog events to start
-	// TODO: When we restart replication... we need to restart from the last executed GTID, right?
-	// TODO: This also needs retry logic, right?
+	// TODO: This also needs retry logic
 	err = startReplicationEventStream(conn)
 	if err != nil {
 		return nil, err
@@ -270,7 +282,7 @@ func (d *doltBinlogReplicaController) replicaBinlogEventHandler(ctx *sql.Context
 			if err != nil {
 				if sqlError, isSqlError := err.(*mysql.SQLError); isSqlError {
 					if sqlError.Message == io.EOF.Error() {
-						fmt.Printf("No more binlog messages; retrying in 1s...\n")
+						logger.Trace("No more binlog messages; retrying in 1s...")
 						time.Sleep(1 * time.Second)
 						continue
 					} else if strings.HasPrefix(sqlError.Message, io.ErrUnexpectedEOF.Error()) {
@@ -290,18 +302,22 @@ func (d *doltBinlogReplicaController) replicaBinlogEventHandler(ctx *sql.Context
 						continue
 					} else if strings.Contains(sqlError.Message, "can not handle replication events with the checksum") {
 						// For now, just ignore any errors about checksums
-						fmt.Printf("!!! received checksum error message !!!\n")
+						logger.Debug("received binlog checksum error message")
 						continue
 					}
 				}
 
-				// otherwise, return the error if it's something we don't expect
-				return err
+				// otherwise, log the error if it's something we don't expect and continue
+				logger.Errorf("unexpected error of type %T: '%v'", err, err.Error())
+				continue
 			}
 
 			err = d.processBinlogEvent(ctx, engine, event)
 			if err != nil {
-				return err
+				logger.Errorf("unexpected error of type %T: '%v'", err, err.Error())
+				err = nil
+				// TODO: We don't currently return an error from this function yet, because the
+				//       calling function currently panics and crashes the process.
 			}
 		}
 	}
@@ -316,12 +332,12 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// A RAND_EVENT contains two seed values that set the rand_seed1 and rand_seed2 system variables that are
 		// used to compute the random number. For more details, see: https://mariadb.com/kb/en/rand_event/
 		// Note: it is written only before a QUERY_EVENT and is NOT used with row-based logging.
-		fmt.Printf("Received: Rand event\n")
+		logger.Debug("Received binlog event: Rand")
 
 	case event.IsXID():
 		// An XID event is generated for a COMMIT of a transaction that modifies one or more tables of an
 		// XA-capable storage engine. For more details, see: https://mariadb.com/kb/en/xid_event/
-		fmt.Printf("Received: XID event\n")
+		logger.Debug("Received binlog event: XID")
 		// TODO: parse XID transaction number and record it durably
 		//       gtid, b, err := event.GTID(format)
 		executeQueryWithEngine(ctx, engine, "commit;")
@@ -332,12 +348,12 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// replica. Used for all statements with statement-based replication, DDL statements with row-based replication
 		// as well as COMMITs for non-transactional engines such as MyISAM.
 		// For more details, see: https://mariadb.com/kb/en/query_event/
-		fmt.Printf("Received: Query event\n")
+		logger.Debug("Received binlog event: Query")
 		query, err := event.Query(format)
 		if err != nil {
 			return err
 		}
-		fmt.Printf(" - %s \n", query.String())
+		logger.Debug(" - Query: %s", query.String())
 		ctx.SetCurrentDatabase(query.Database)
 		executeQueryWithEngine(ctx, engine, query.SQL)
 		createDoltCommit = true
@@ -347,25 +363,24 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// pointing to the next file in the sequence. ROTATE_EVENT is generated locally and written to the binary log
 		// on the source server and it's also written when a FLUSH LOGS statement occurs on the source server.
 		// For more details, see: https://mariadb.com/kb/en/rotate_event/
-		fmt.Printf("Received: Rotate event\n")
-		// TODO: What action do we take at rotate?
+		logger.Debug("Received binlog event: Rotate")
 
 	case event.IsPreviousGTIDs():
 		// Logged in every binlog to record the current replication state. Consists of the last GTID seen for each
 		// replication domain. For more details, see: https://mariadb.com/kb/en/gtid_list_event/
-		fmt.Printf("Received: PreviousGTIDs event\n")
+		logger.Debug("Received binlog event: PreviousGTIDs")
 		position, err := event.PreviousGTIDs(format)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("  - previous GTIDs: %s \n", position.GTIDSet.String())
-		// TODO: record the last GTID seen
+		logger.Debugf("  - previous GTIDs: %s ", position.GTIDSet.String())
+		// TODO: record the last GTIDs seen
 		//position.GTIDSet.
 
 	case event.IsFormatDescription():
 		// This is a descriptor event that is written to the beginning of a binary log file, at position 4 (after
 		// the 4 magic number bytes). For more details, see: https://mariadb.com/kb/en/format_description_event/
-		fmt.Printf("Received: FormatDescription event\n")
+		logger.Debug("Received binlog event: FormatDescription")
 		format, err = event.Format()
 		if err != nil {
 			return err
@@ -374,12 +389,12 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 	case event.IsGTID():
 		// For global transaction ID, used to start a new transaction event group, instead of the old BEGIN query event,
 		// and also to mark stand-alone (ddl). For more details, see: https://mariadb.com/kb/en/gtid_event/
-		fmt.Printf("Received: GTID event\n")
+		logger.Debug("Received binlog event: GTID")
 		// TODO: Does this mean we should perform a commit?
 		// TODO: Read MariaDB KB docs on GTID: https://mariadb.com/kb/en/gtid/
 		// TODO: Handle flags in event
 		gtid, isBegin, err := event.GTID(format)
-		fmt.Printf(" - %v (isBegin: %t) \n", gtid, isBegin)
+		logger.Debugf(" - %v (isBegin: %t)", gtid, isBegin)
 		if err != nil {
 			return err
 		}
@@ -402,7 +417,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// Used for row-based binary logging beginning (binlog_format=ROW or MIXED). This event precedes each row
 		// operation event and maps a table definition to a number, where the table definition consists of database
 		// and table names. For more details, see: https://mariadb.com/kb/en/table_map_event/
-		fmt.Printf("Received: TableMap event\n")
+		logger.Debug("Received binlog event: TableMap")
 		tableId := event.TableID(format)
 		tableMap, err := event.TableMap(format)
 		if err != nil {
@@ -413,17 +428,17 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		//		Table id refers to a table defined by TABLE_MAP_EVENT. The special value 0xFFFFFF should have
 		//	 	"end of statement flag" (0x0001) set and indicates that table maps can be freed.
 		if tableId == 0xFFFFFF {
-			fmt.Printf("  - received signal to clear cached table maps \n")
+			logger.Debug("  - received signal to clear cached table maps")
 		}
 		tableMapsById[tableId] = tableMap
-		fmt.Printf(" - tableMap: %v \n", formatTableMapAsString(tableId, tableMap))
+		logger.Debugf(" - tableMap: %v ", formatTableMapAsString(tableId, tableMap))
 		// TODO: Will these be resent before each row event, like the documentation seems to indicate? If so, that
 		//       seems to remove the requirement to make this metadata durable between server restarts.
 
 	case event.IsDeleteRows():
 		// A ROWS_EVENT is written for row based replication if data is inserted, deleted or updated.
 		// For more details, see: https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
-		fmt.Printf("Received: DeleteRows event")
+		logger.Debug("Received binlog event: DeleteRows")
 		createDoltCommit = true
 		tableId := event.TableID(format)
 		tableMap, ok := tableMapsById[tableId]
@@ -439,13 +454,13 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 			return err
 		}
 
-		fmt.Printf(" - Deleted Rows (table: %s)\n", tableMap.Name)
+		logger.Debugf(" - Deleted Rows (table: %s)", tableMap.Name)
 		for _, row := range rows.Rows {
 			deletedRow, err := parseRow(tableMap, schema, rows.IdentifyColumns, row.NullIdentifyColumns, row.Identify)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("     - Identify: %v \n", sql.FormatRow(deletedRow))
+			logger.Debugf("     - Identify: %v ", sql.FormatRow(deletedRow))
 
 			writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database)
 			if err != nil {
@@ -466,7 +481,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 	case event.IsWriteRows():
 		// A ROWS_EVENT is written for row based replication if data is inserted, deleted or updated.
 		// For more details, see: https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
-		fmt.Printf("Received: WriteRows event\n")
+		logger.Debug("Received binlog event: WriteRows")
 		createDoltCommit = true
 		tableId := event.TableID(format)
 		tableMap, ok := tableMapsById[tableId]
@@ -482,13 +497,13 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 			return err
 		}
 
-		fmt.Printf(" - New Rows (table: %s)\n", tableMap.Name)
+		logger.Debugf(" - New Rows (table: %s)", tableMap.Name)
 		for _, row := range rows.Rows {
 			newRow, err := parseRow(tableMap, schema, rows.DataColumns, row.NullColumns, row.Data)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("     - Data: %v \n", sql.FormatRow(newRow))
+			logger.Debugf("     - Data: %v ", sql.FormatRow(newRow))
 
 			writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database)
 			if err != nil {
@@ -509,7 +524,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 	case event.IsUpdateRows():
 		// A ROWS_EVENT is written for row based replication if data is inserted, deleted or updated.
 		// For more details, see: https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
-		fmt.Printf("Received: UpdateRows event\n")
+		logger.Debug("Received binlog event: UpdateRows")
 		createDoltCommit = true
 		tableId := event.TableID(format)
 		tableMap, ok := tableMapsById[tableId]
@@ -527,7 +542,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 
 		// TODO: process rows.Flags
 
-		fmt.Printf(" - Updated Rows (table: %s)\n", tableMap.Name)
+		logger.Debugf(" - Updated Rows (table: %s)", tableMap.Name)
 		for _, row := range rows.Rows {
 			identifyRow, err := parseRow(tableMap, schema, rows.IdentifyColumns, row.NullIdentifyColumns, row.Identify)
 			if err != nil {
@@ -537,7 +552,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 			if err != nil {
 				return err
 			}
-			fmt.Printf("     - Identify: %v Data: %v \n", sql.FormatRow(identifyRow), sql.FormatRow(updatedRow))
+			logger.Debugf("     - Identify: %v Data: %v ", sql.FormatRow(identifyRow), sql.FormatRow(updatedRow))
 
 			writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database)
 			if err != nil {
@@ -570,7 +585,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 			// network by a primary to a replica to let it know that the primary is still alive, and is only sent
 			// when the primary has no binlog events to send to replica servers.
 			// For more details, see: https://mariadb.com/kb/en/heartbeat_log_event/
-			fmt.Printf("Received: Heartbeat event\n")
+			logger.Debug("Received binlog event: Heartbeat")
 		} else {
 			return fmt.Errorf("received unknown event: %v", event)
 		}
@@ -725,11 +740,9 @@ func getSignedType(column *sql.Column) query.Type {
 }
 
 // convertSqlTypesValues converts a sqltypes.Value instance (vitess) into a sql.Type value (go-mysql-server).
-//
-// TODO: This is currently a pretty hacky way to convert values and needs to be cleaned up so that it's more
-//
-//	efficient and handles all types.
 func convertSqlTypesValue(value sqltypes.Value, column *sql.Column) (interface{}, error) {
+	// TODO: This is currently a pretty hacky way to convert values and needs to be cleaned up so that it's more
+	//	     efficient and handles all types.
 	if value.IsNull() {
 		return nil, nil
 	}
@@ -756,7 +769,7 @@ func convertSqlTypesValue(value sqltypes.Value, column *sql.Column) (interface{}
 // startReplicationEventStream sends a request over |conn|, the connection to the MySQL source server, to begin
 // sending binlog events.
 func startReplicationEventStream(conn *mysql.Conn) error {
-	// TODO: unhardcode GTID starting ID 1
+	// TODO: unhardcode GTID starting ID 1 and use the last executed GTID if available
 	gtid := mysql.Mysql56GTID{
 		Sequence: 1,
 	}
@@ -781,23 +794,23 @@ func formatTableMapAsString(tableId uint64, tableMap *mysql.TableMap) string {
 
 func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) {
 	if ctx.GetCurrentDatabase() == "" {
-		fmt.Printf("!!!No current database selected, aborting query...\n")
+		logger.Debug("No current database selected, aborting query")
 		return
 	}
 
 	_, iter, err := engine.Query(ctx, query)
 	if err != nil {
-		fmt.Printf("!!! ERROR executing query: %v \n", err.Error())
+		logger.Errorf("ERROR executing query: %v ", err.Error())
 		return
 	}
 	for {
 		row, err := iter.Next(ctx)
 		if err != nil {
 			if err != io.EOF {
-				fmt.Printf("!!! ERROR reading query results: %v \n", err.Error())
+				logger.Errorf("ERROR reading query results: %v ", err.Error())
 			}
 			return
 		}
-		fmt.Printf("   row: %s \n", sql.FormatRow(row))
+		logger.Debugf("   row: %s ", sql.FormatRow(row))
 	}
 }
