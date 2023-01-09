@@ -16,6 +16,8 @@ package sqle
 
 import (
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/parse"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"io"
 	"time"
 
@@ -184,6 +186,17 @@ func migrateOldSchemasTableToNew(
 		sqlRow, err := sqlutil.DoltRowToSqlRow(dRow, schemasTable.sch)
 		if err != nil {
 			return err
+		}
+		// dolt_schemas table schema is 'type, name, fragment, id, extra'
+		if sqlRow[0].(string) == "view" {
+			fragment := sqlRow[2].(string)
+			query, qerr := parse.Parse(ctx, fragment)
+			if qerr != nil {
+				return qerr
+			}
+			if _, ok := query.(*plan.CreateView); !ok {
+				sqlRow[2] = fmt.Sprintf("CREATE VIEW %s AS %s", sqlRow[1].(string), fragment)
+			}
 		}
 		// append the new id to row, if missing
 		if !schemasTable.sqlSchema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) {
