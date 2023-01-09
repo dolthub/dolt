@@ -209,9 +209,9 @@ EOF
 @test "dolt_schemas" {
     run dolt sql -q "select * from dolt_schemas"
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "| type | name  | fragment             |" ]] || false
-    [[ "${lines[2]}" =~ "+------+-------+----------------------+" ]] || false
-    [[ "${lines[3]}" =~ "| view | view1 | SELECT 2+2 FROM dual |" ]] || false
+    [[ "${lines[1]}" =~ "| type | name  | fragment                                  |" ]] || false
+    [[ "${lines[2]}" =~ "+------+-------+-------------------------------------------+" ]] || false
+    [[ "${lines[3]}" =~ "| view | view1 | CREATE VIEW view1 AS SELECT 2+2 FROM dual |" ]] || false
     run dolt sql -q 'select * from view1'
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "2+2" ]] || false

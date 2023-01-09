@@ -291,10 +291,11 @@ func SqlRowAsCreateFragStmt(r sql.Row) (string, error) {
 		return "", err
 	}
 	defStr := sqlparser.String(defStmt)
-	if typeStr == "TRIGGER" { // triggers need the create trigger <trig_name> to be cut off
+	// triggers and views need 'CREATE VIEW <view_name>' and 'CREATE TRIGGER <trig_name>' to be cut off
+	if typeStr == "TRIGGER" {
 		defStr = defStr[len("CREATE TRIGGER ")+len(nameStr)+1:]
-	} else { // views need the prefixed with "AS"
-		defStr = "AS " + defStr
+	} else {
+		defStr = defStr[len("CREATE VIEW ")+len(nameStr)+1:]
 	}
 	b.WriteString(defStr)
 
