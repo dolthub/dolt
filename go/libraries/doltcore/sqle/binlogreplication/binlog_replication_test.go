@@ -353,11 +353,6 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 		return -1, nil, err
 	}
 
-	// Create the initial database on the Dolt server and reconnect to it
-	replicaDatabase.MustExec("CREATE DATABASE IF NOT EXISTS db01;")
-	dsn = fmt.Sprintf("root@tcp(127.0.0.1:%v)/db01", doltPort)
-	replicaDatabase = sqlx.MustOpen("mysql", dsn)
-
 	fmt.Printf("Dolt server started on port %v \n", doltPort)
 
 	return doltPort, cmd.Process, nil

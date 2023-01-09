@@ -51,7 +51,7 @@ func TestBinlogReplicationReconnection(t *testing.T) {
 
 	// Assert that all records get written to the table
 	time.Sleep(5 * time.Second)
-	rows, err := replicaDatabase.Queryx("select min(pk) as min, max(pk) as max, count(pk) as count from reconnect_test;")
+	rows, err := replicaDatabase.Queryx("select min(pk) as min, max(pk) as max, count(pk) as count from db01.reconnect_test;")
 	require.NoError(t, err)
 
 	row := readNextRow(t, rows)
