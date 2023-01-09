@@ -136,7 +136,7 @@ func (ti *pointType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *pointType) Promote() TypeInfo {
-	return &pointType{ti.sqlPointType.promote().(types2.PointType)}
+	return &pointType{ti.sqlPointType.Promote().(types2.PointType)}
 }
 
 // String implements TypeInfo interface.

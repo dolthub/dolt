@@ -42,7 +42,7 @@ func NewLogTable(_ *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Ta
 
 // DataLength implements sql.StatisticsTable
 func (dt *LogTable) DataLength(ctx *sql.Context) (uint64, error) {
-	return uint64(4*sql.Text.MaxByteLength()*4 + 16), nil
+	return uint64(4*types.Text.MaxByteLength()*4 + 16), nil
 }
 
 // RowCount implements sql.StatisticsTable
