@@ -117,7 +117,7 @@ func (rs *RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasCh
 
 	logger = logger.WithFields(logrus.Fields{
 		"num_requested": len(hashToIndex),
-		"num_absent": len(indices),
+		"num_absent":    len(indices),
 	})
 
 	return resp, nil
@@ -191,8 +191,8 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 			return nil, err
 		}
 		logger.WithFields(logrus.Fields{
-			"url": preurl,
-			"ranges": ranges,
+			"url":        preurl,
+			"ranges":     ranges,
 			"sealed_url": url.String(),
 		}).Trace("generated sealed url")
 
@@ -202,8 +202,8 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 
 	logger = logger.WithFields(logrus.Fields{
 		"num_requested": numHashes,
-		"num_urls": len(locations),
-		"num_ranges": numRanges,
+		"num_urls":      len(locations),
+		"num_ranges":    numRanges,
 	})
 
 	return &remotesapi.GetDownloadLocsResponse{Locs: locs}, nil
@@ -217,10 +217,10 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 	numRanges := 0
 	defer func() {
 		ologger.WithFields(logrus.Fields{
-			"num_messages": numMessages,
+			"num_messages":  numMessages,
 			"num_requested": numHashes,
-			"num_urls": numUrls,
-			"num_ranges": numRanges,
+			"num_urls":      numUrls,
+			"num_ranges":    numRanges,
 		}).Info("finished")
 	}()
 	logger := ologger
@@ -287,8 +287,8 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 				return err
 			}
 			logger.WithFields(logrus.Fields{
-				"url": preurl,
-				"ranges": ranges,
+				"url":        preurl,
+				"ranges":     ranges,
 				"sealed_url": url.String(),
 			}).Trace("generated sealed url")
 
@@ -376,7 +376,7 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 
 		logger.WithFields(logrus.Fields{
 			"table_file_hash": h.String(),
-			"url": url.String(),
+			"url":             url.String(),
 		}).Trace("sending upload location for table file")
 	}
 
@@ -543,7 +543,7 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 	}
 
 	logger = logger.WithFields(logrus.Fields{
-		"num_table_files": len(tableFileInfo),
+		"num_table_files":          len(tableFileInfo),
 		"num_appendix_table_files": len(appendixTableFileInfo),
 	})
 
