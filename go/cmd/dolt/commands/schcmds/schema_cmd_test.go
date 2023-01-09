@@ -20,8 +20,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
+	
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+
+	_ "github.com/dolthub/go-mysql-server/sql/variables"
 )
 
 // Smoke test: dolt schema export runs successfully

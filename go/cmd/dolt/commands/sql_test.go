@@ -29,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	
+	_ "github.com/dolthub/go-mysql-server/sql/variables"
 )
 
 //var UUIDS = []uuid.UUID{

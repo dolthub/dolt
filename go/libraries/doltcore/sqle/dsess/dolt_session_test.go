@@ -22,6 +22,8 @@ import (
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	
+	_ "github.com/dolthub/go-mysql-server/sql/variables"
 )
 
 func TestDoltSessionInit(t *testing.T) {
