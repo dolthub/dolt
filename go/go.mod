@@ -58,7 +58,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.1.3
 	github.com/cespare/xxhash v1.1.0
 	github.com/creasty/defaults v1.6.0
-	github.com/dolthub/go-mysql-server v0.14.1-0.20230106225759-dc24b2e2e3e0
+	github.com/dolthub/go-mysql-server v0.14.1-0.20230109233004-891928f34130
 	github.com/google/flatbuffers v2.0.6+incompatible
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/mitchellh/go-ps v1.0.0
@@ -138,7 +138,5 @@ replace (
 	github.com/google/flatbuffers => github.com/dolthub/flatbuffers v1.13.0-dh.1
 	github.com/oliveagle/jsonpath => github.com/dolthub/jsonpath v0.0.0-20210609232853-d49537a30474
 )
-
-replace github.com/dolthub/go-mysql-server => ../../go-mysql-server
 
 go 1.19
