@@ -24,8 +24,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/sysvars"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -147,7 +146,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 	var init InitialDbState
 	var err error
 
-	_, val, ok := variables.SystemVariables.GetGlobal(DefaultBranchKey(dbName))
+	_, val, ok := sql.SystemVariables.GetGlobal(DefaultBranchKey(dbName))
 	initialBranch := ""
 	if ok {
 		initialBranch = val.(string)
@@ -325,7 +324,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		return DisabledTransaction{}, nil
 	}
 
-	if _, v, ok := variables.SystemVariables.GetGlobal(ReadReplicaRemote); ok && v != "" {
+	if _, v, ok := sql.SystemVariables.GetGlobal(ReadReplicaRemote); ok && v != "" {
 		err = sessionState.dbData.Ddb.Rebase(ctx)
 		if err != nil && !IgnoreReplicationErrors() {
 			return nil, err
@@ -1039,7 +1038,7 @@ func (d *DoltSession) setHeadRefSessionVar(ctx *sql.Context, db, value string) e
 }
 
 func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string, value interface{}) error {
-	convertedVal, err := types2.Int64.Convert(value)
+	convertedVal, err := sqltypes.Int64.Convert(value)
 	if err != nil {
 		return err
 	}
@@ -1375,7 +1374,7 @@ func (d *DoltSession) GetController() *branch_control.Controller {
 
 // validatePersistedSysVar checks whether a system variable exists and is dynamic
 func validatePersistableSysVar(name string) (sql.SystemVariable, interface{}, error) {
-	sysVar, val, ok := variables.SystemVariables.GetGlobal(name)
+	sysVar, val, ok := sql.SystemVariables.GetGlobal(name)
 	if !ok {
 		return sql.SystemVariable{}, nil, sql.ErrUnknownSystemVariable.New(name)
 	}
@@ -1482,7 +1481,7 @@ func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, 
 			return true
 		}
 		// getPersistedVal already checked for errors
-		sysVar, _, _ = variables.SystemVariables.GetGlobal(k)
+		sysVar, _, _ = sql.SystemVariables.GetGlobal(k)
 		sysVar.Default = def
 		allVars[i] = sysVar
 		i++
@@ -1517,6 +1516,6 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	for _, k := range missingKeys {
 		cli.Printf("warning: persisted system variable %s was not loaded since its definition does not exist.\n", k)
 	}
-	variables.SystemVariables.AddSystemVariables(persistedGlobalVars)
+	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
 	return nil
 }

@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/sysvars"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/buffer"
@@ -34,8 +33,8 @@ func TestCommitHooksNoErrors(t *testing.T) {
 	require.NoError(t, err)
 
 	AddDoltSystemVariables()
-	variables.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
-	variables.SystemVariables.SetGlobal(dsess.ReplicateToRemote, "unknown")
+	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
+	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemote, "unknown")
 	bThreads := sql.NewBackgroundThreads()
 	hooks, err := GetCommitHooks(context.Background(), bThreads, dEnv, &buffer.Buffer{})
 	assert.NoError(t, err)

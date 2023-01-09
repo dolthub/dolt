@@ -19,7 +19,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/sysvars"
 	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
@@ -56,8 +55,8 @@ const URLTemplateDatabasePlaceholder = "{database}"
 
 // DefineSystemVariablesForDB defines per database dolt-session variables in the engine as necessary
 func DefineSystemVariablesForDB(name string) {
-	if _, _, ok := variables.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
-		variables.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+	if _, _, ok := sql.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
+		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 			{
 				Name:              HeadRefKey(name),
 				Scope:             sql.SystemVariableScope_Session,
@@ -173,7 +172,7 @@ func GetBooleanSystemVar(ctx *sql.Context, varName string) (bool, error) {
 // IgnoreReplicationErrors returns true if the dolt_skip_replication_errors system variable is set to true, which means
 // that errors that occur during replication should be logged and ignored.
 func IgnoreReplicationErrors() bool {
-	_, skip, ok := variables.SystemVariables.GetGlobal(SkipReplicationErrors)
+	_, skip, ok := sql.SystemVariables.GetGlobal(SkipReplicationErrors)
 	if !ok {
 		panic("dolt system variables not loaded")
 	}

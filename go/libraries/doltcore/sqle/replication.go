@@ -20,7 +20,6 @@ import (
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/sysvars"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -31,7 +30,7 @@ import (
 )
 
 func getPushOnWriteHook(ctx context.Context, bThreads *sql.BackgroundThreads, dEnv *env.DoltEnv, logger io.Writer) (doltdb.CommitHook, error) {
-	_, val, ok := variables.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
+	_, val, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
 	if !ok {
 		return nil, sql.ErrUnknownSystemVariable.New(dsess.ReplicateToRemote)
 	} else if val == "" {
@@ -62,7 +61,7 @@ func getPushOnWriteHook(ctx context.Context, bThreads *sql.BackgroundThreads, dE
 	if err != nil {
 		return nil, err
 	}
-	if _, val, ok = variables.SystemVariables.GetGlobal(dsess.AsyncReplication); ok && val == dsess.SysVarTrue {
+	if _, val, ok = sql.SystemVariables.GetGlobal(dsess.AsyncReplication); ok && val == dsess.SysVarTrue {
 		return doltdb.NewAsyncPushOnWriteHook(bThreads, ddb, tmpDir, logger)
 	}
 
@@ -131,7 +130,7 @@ func ApplyReplicationConfig(ctx context.Context, bThreads *sql.BackgroundThreads
 		}
 		dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
 
-		if _, remote, ok := variables.SystemVariables.GetGlobal(dsess.ReadReplicaRemote); ok && remote != "" {
+		if _, remote, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote); ok && remote != "" {
 			remoteName, ok := remote.(string)
 			if !ok {
 				return nil, sql.ErrInvalidSystemVariableValue.New(remote)

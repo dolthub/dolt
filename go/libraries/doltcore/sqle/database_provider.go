@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/sysvars"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -227,7 +226,7 @@ func wrapForStandby(db sql.Database, standby bool) sql.Database {
 // TODO: distinct error for not found v. others
 func (p DoltDatabaseProvider) attemptCloneReplica(ctx *sql.Context, dbName string) error {
 	// TODO: these need some reworking, they don't make total sense together
-	_, readReplicaRemoteName, _ := variables.SystemVariables.GetGlobal(dsess.ReadReplicaRemote)
+	_, readReplicaRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote)
 	if readReplicaRemoteName == "" {
 		// not a read replica DB
 		return nil
@@ -236,7 +235,7 @@ func (p DoltDatabaseProvider) attemptCloneReplica(ctx *sql.Context, dbName strin
 	remoteName := readReplicaRemoteName.(string)
 
 	// TODO: error handling when not set
-	_, remoteUrlTemplate, _ := variables.SystemVariables.GetGlobal(dsess.ReplicationRemoteURLTemplate)
+	_, remoteUrlTemplate, _ := sql.SystemVariables.GetGlobal(dsess.ReplicationRemoteURLTemplate)
 	if remoteUrlTemplate == "" {
 		return nil
 	}
@@ -420,7 +419,7 @@ type InitDatabaseHook func(ctx *sql.Context, pro DoltDatabaseProvider, name stri
 // configureReplication sets up replication for a newly created database as necessary
 // TODO: consider the replication heads / all heads setting
 func ConfigureReplicationDatabaseHook(ctx *sql.Context, p DoltDatabaseProvider, name string, newEnv *env.DoltEnv) error {
-	_, replicationRemoteName, _ := variables.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
+	_, replicationRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
 	if replicationRemoteName == "" {
 		return nil
 	}
@@ -430,7 +429,7 @@ func ConfigureReplicationDatabaseHook(ctx *sql.Context, p DoltDatabaseProvider, 
 		return nil
 	}
 
-	_, remoteUrlTemplate, _ := variables.SystemVariables.GetGlobal(dsess.ReplicationRemoteURLTemplate)
+	_, remoteUrlTemplate, _ := sql.SystemVariables.GetGlobal(dsess.ReplicationRemoteURLTemplate)
 	if remoteUrlTemplate == "" {
 		return nil
 	}
@@ -777,12 +776,12 @@ func (p DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (
 
 // TODO: figure out the right contract: which variables must be set? What happens if they aren't all set?
 func readReplicationActive(ctx *sql.Context) bool {
-	_, readReplicaRemoteName, _ := variables.SystemVariables.GetGlobal(dsess.ReadReplicaRemote)
+	_, readReplicaRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote)
 	if readReplicaRemoteName == "" {
 		return false
 	}
 
-	_, remoteUrlTemplate, _ := variables.SystemVariables.GetGlobal(dsess.ReplicationRemoteURLTemplate)
+	_, remoteUrlTemplate, _ := sql.SystemVariables.GetGlobal(dsess.ReplicationRemoteURLTemplate)
 	if remoteUrlTemplate == "" {
 		return false
 	}

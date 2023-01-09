@@ -16,18 +16,20 @@ package sqle
 
 import (
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/sysvars"
 	"github.com/dolthub/go-mysql-server/sql/types"
-
+	
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+
+	_ "github.com/dolthub/go-mysql-server/sql/variables"
 )
 
+// TODO: get rid of me, use an integration point to define new sysvars
 func init() {
 	AddDoltSystemVariables()
 }
 
 func AddDoltSystemVariables() {
-	variables.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 		{
 			Name:              dsess.ReplicateToRemote,
 			Scope:             sql.SystemVariableScope_Global,
@@ -160,7 +162,7 @@ func AddDoltSystemVariables() {
 }
 
 func ReadReplicaForcePull() bool {
-	_, forcePull, ok := variables.SystemVariables.GetGlobal(dsess.ReadReplicaForcePull)
+	_, forcePull, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaForcePull)
 	if !ok {
 		panic("dolt system variables not loaded")
 	}

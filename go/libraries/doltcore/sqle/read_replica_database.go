@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/sysvars"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -101,12 +100,12 @@ func (rrd ReadReplicaDatabase) InitialDBState(ctx context.Context, branch string
 }
 
 func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
-	_, headsArg, ok := variables.SystemVariables.GetGlobal(dsess.ReplicateHeads)
+	_, headsArg, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateHeads)
 	if !ok {
 		return sql.ErrUnknownSystemVariable.New(dsess.ReplicateHeads)
 	}
 
-	_, allHeads, ok := variables.SystemVariables.GetGlobal(dsess.ReplicateAllHeads)
+	_, allHeads, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateAllHeads)
 	if !ok {
 		return sql.ErrUnknownSystemVariable.New(dsess.ReplicateAllHeads)
 	}

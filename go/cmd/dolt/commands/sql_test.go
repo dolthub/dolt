@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dolthub/go-mysql-server/sql/sysvars"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -564,8 +564,8 @@ func TestCommitHooksNoErrors(t *testing.T) {
 	require.NoError(t, err)
 
 	sqle.AddDoltSystemVariables()
-	variables.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
-	variables.SystemVariables.SetGlobal(dsess.ReplicateToRemote, "unknown")
+	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
+	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemote, "unknown")
 	hooks, err := engine.GetCommitHooks(context.Background(), dEnv)
 	assert.NoError(t, err)
 	if len(hooks) < 1 {
