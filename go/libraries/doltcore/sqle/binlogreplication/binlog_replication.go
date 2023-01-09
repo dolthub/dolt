@@ -348,12 +348,15 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// replica. Used for all statements with statement-based replication, DDL statements with row-based replication
 		// as well as COMMITs for non-transactional engines such as MyISAM.
 		// For more details, see: https://mariadb.com/kb/en/query_event/
-		logger.Debug("Received binlog event: Query")
 		query, err := event.Query(format)
 		if err != nil {
 			return err
 		}
-		logger.Debugf(" - Query: %s", query)
+		logger.WithFields(logrus.Fields{
+			"database": query.Database,
+			"charset":  query.Charset,
+			"query":    query.SQL,
+		}).Debug("Received binlog event: Query")
 		ctx.SetCurrentDatabase(query.Database)
 		executeQueryWithEngine(ctx, engine, query.SQL)
 		createDoltCommit = strings.ToLower(query.SQL) != "begin"
@@ -368,38 +371,41 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 	case event.IsFormatDescription():
 		// This is a descriptor event that is written to the beginning of a binary log file, at position 4 (after
 		// the 4 magic number bytes). For more details, see: https://mariadb.com/kb/en/format_description_event/
-		logger.Debug("Received binlog event: FormatDescription")
 		format, err = event.Format()
 		if err != nil {
 			return err
 		}
+		logger.WithFields(logrus.Fields{
+			"format": format,
+		}).Debug("Received binlog event: FormatDescription")
 
 	case event.IsPreviousGTIDs():
 		// Logged in every binlog to record the current replication state. Consists of the last GTID seen for each
 		// replication domain. For more details, see: https://mariadb.com/kb/en/gtid_list_event/
-		logger.Debug("Received binlog event: PreviousGTIDs")
 		position, err := event.PreviousGTIDs(format)
 		if err != nil {
 			return err
 		}
-		logger.Debugf("  - previous GTIDs: %s ", position.GTIDSet.String())
+		logger.WithFields(logrus.Fields{
+			"previousGtids": position.GTIDSet.String(),
+		}).Debug("Received binlog event: PreviousGTIDs")
 		// TODO: record the last GTIDs seen
-		//       insert into gtid_executed for now if that's easy/quick, but that can't last long //position.GTIDSet.
+		//       insert into gtid_executed for now if that's easy/quick, but that can't last long
 
 	case event.IsGTID():
 		// For global transaction ID, used to start a new transaction event group, instead of the old BEGIN query event,
 		// and also to mark stand-alone (ddl). For more details, see: https://mariadb.com/kb/en/gtid_event/
-		logger.Debug("Received binlog event: GTID")
-		// TODO: Does this mean we should perform a commit?
-		// TODO: Read MariaDB KB docs on GTID: https://mariadb.com/kb/en/gtid/
-		// TODO: Warnings for unsupported flags in event
-		// Seems like we don't have access to other fields for GTID?
-		// Does isBegin mean not FL_STANDALONE?
+		// TODO: Warnings for unsupported flags in event?
+		//       Seems like we don't have access to other fields for GTID?
+		//       Does isBegin mean not FL_STANDALONE?
 		gtid, isBegin, err := event.GTID(format)
 		if err != nil {
 			return err
 		}
-		logger.Debugf(" - %v (isBegin: %t)", gtid, isBegin)
+		logger.WithFields(logrus.Fields{
+			"gtid":    gtid,
+			"isBegin": isBegin,
+		}).Debug("Received binlog event: GTID")
 		currentGtid = gtid.String()
 
 		replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
