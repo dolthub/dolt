@@ -207,7 +207,7 @@ EOF
 }
 
 @test "dolt_schemas" {
-    run dolt sql -q "select * from dolt_schemas"
+    dolt sql -q "select * from dolt_schemas"
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "| type | name  | fragment                                  |" ]] || false
     [[ "${lines[2]}" =~ "+------+-------+-------------------------------------------+" ]] || false
