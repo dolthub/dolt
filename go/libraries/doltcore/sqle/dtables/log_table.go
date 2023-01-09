@@ -26,6 +26,8 @@ import (
 
 var _ sql.Table = (*LogTable)(nil)
 
+var _ sql.StatisticsTable = (*LogTable)(nil)
+
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
 	ddb  *doltdb.DoltDB
@@ -35,6 +37,22 @@ type LogTable struct {
 // NewLogTable creates a LogTable
 func NewLogTable(_ *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	return &LogTable{ddb: ddb, head: head}
+}
+
+// DataLength implements sql.StatisticsTable
+func (dt *LogTable) DataLength(ctx *sql.Context) (uint64, error) {
+	return uint64(4*sql.Text.MaxByteLength()*4 + 16), nil
+}
+
+// RowCount implements sql.StatisticsTable
+func (dt *LogTable) RowCount(ctx *sql.Context) (uint64, error) {
+	cc, err := dt.head.GetCommitClosure(ctx)
+	if err != nil {
+		// TODO: remove this when we deprecate LD
+		return 1000, nil
+	}
+	cnt, err := cc.Count()
+	return uint64(cnt + 1), err
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant

@@ -116,7 +116,7 @@ func LoadData(branchControlFilePath string, doltConfigDirPath string) (*Controll
 	}
 	// The Deserialize functions acquire write locks, so we don't acquire them here
 	if err = controller.Access.Deserialize(access); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to deserialize config at '%s': %w", branchControlFilePath, err)
 	}
 	if err = controller.Namespace.Deserialize(namespace); err != nil {
 		return nil, err
