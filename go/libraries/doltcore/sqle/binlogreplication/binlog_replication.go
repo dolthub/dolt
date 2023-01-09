@@ -353,7 +353,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		if err != nil {
 			return err
 		}
-		logger.Debug(" - Query: %s", query.String())
+		logger.Debugf(" - Query: %s", query)
 		ctx.SetCurrentDatabase(query.Database)
 		executeQueryWithEngine(ctx, engine, query.SQL)
 		createDoltCommit = true
@@ -365,6 +365,15 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// For more details, see: https://mariadb.com/kb/en/rotate_event/
 		logger.Debug("Received binlog event: Rotate")
 
+	case event.IsFormatDescription():
+		// This is a descriptor event that is written to the beginning of a binary log file, at position 4 (after
+		// the 4 magic number bytes). For more details, see: https://mariadb.com/kb/en/format_description_event/
+		logger.Debug("Received binlog event: FormatDescription")
+		format, err = event.Format()
+		if err != nil {
+			return err
+		}
+
 	case event.IsPreviousGTIDs():
 		// Logged in every binlog to record the current replication state. Consists of the last GTID seen for each
 		// replication domain. For more details, see: https://mariadb.com/kb/en/gtid_list_event/
@@ -375,16 +384,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		}
 		logger.Debugf("  - previous GTIDs: %s ", position.GTIDSet.String())
 		// TODO: record the last GTIDs seen
-		//position.GTIDSet.
-
-	case event.IsFormatDescription():
-		// This is a descriptor event that is written to the beginning of a binary log file, at position 4 (after
-		// the 4 magic number bytes). For more details, see: https://mariadb.com/kb/en/format_description_event/
-		logger.Debug("Received binlog event: FormatDescription")
-		format, err = event.Format()
-		if err != nil {
-			return err
-		}
+		//       insert into gtid_executed for now if that's easy/quick, but that can't last long //position.GTIDSet.
 
 	case event.IsGTID():
 		// For global transaction ID, used to start a new transaction event group, instead of the old BEGIN query event,
@@ -392,7 +392,9 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		logger.Debug("Received binlog event: GTID")
 		// TODO: Does this mean we should perform a commit?
 		// TODO: Read MariaDB KB docs on GTID: https://mariadb.com/kb/en/gtid/
-		// TODO: Handle flags in event
+		// TODO: Warnings for unsupported flags in event
+		// Seems like we don't have access to other fields for GTID?
+		// Does isBegin mean not FL_STANDALONE?
 		gtid, isBegin, err := event.GTID(format)
 		logger.Debugf(" - %v (isBegin: %t)", gtid, isBegin)
 		if err != nil {
