@@ -16,9 +16,9 @@ package dbfactory
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"net/url"
 
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -38,6 +38,7 @@ func (fact MemFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, u
 	var db datas.Database
 	storage := &chunks.MemoryStorage{}
 	cs := storage.NewViewWithFormat(nbf.VersionString())
+	cs = chunks.NewValidatingChunkStore(cs)
 	vrw := types.NewValueStore(cs)
 	ns := tree.NewNodeStore(cs)
 	db = datas.NewTypesDatabase(vrw, ns)
