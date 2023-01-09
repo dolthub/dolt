@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"gopkg.in/src-d/go-errors.v1"
@@ -346,7 +347,7 @@ func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, int
 		return nil, nil, nil, "", nil
 	}
 
-	if !sql.IsText(dtf.tableNameExpr.Type()) {
+	if !types2.IsText(dtf.tableNameExpr.Type()) {
 		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.tableNameExpr.String())
 	}
 
@@ -361,7 +362,7 @@ func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, int
 	}
 
 	if dtf.dotCommitExpr != nil {
-		if !sql.IsText(dtf.dotCommitExpr.Type()) {
+		if !types2.IsText(dtf.dotCommitExpr.Type()) {
 			return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.dotCommitExpr.String())
 		}
 
@@ -373,10 +374,10 @@ func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, int
 		return nil, nil, dotCommitVal, tableName, nil
 	}
 
-	if !sql.IsText(dtf.fromCommitExpr.Type()) {
+	if !types2.IsText(dtf.fromCommitExpr.Type()) {
 		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.fromCommitExpr.String())
 	}
-	if !sql.IsText(dtf.toCommitExpr.Type()) {
+	if !types2.IsText(dtf.toCommitExpr.Type()) {
 		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.toCommitExpr.String())
 	}
 

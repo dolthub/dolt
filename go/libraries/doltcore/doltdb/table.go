@@ -23,6 +23,7 @@ import (
 	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -354,7 +355,7 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 	}
 
 	typeType, err := typeinfo.FromSqlType(
-		sql.MustCreateEnumType([]string{"foreign key", "unique index", "check constraint"}, sql.Collation_Default))
+		types2.MustCreateEnumType([]string{"foreign key", "unique index", "check constraint"}, sql.Collation_Default))
 	if err != nil {
 		return nil, err
 	}

@@ -24,7 +24,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -70,7 +70,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 		var t int64
 		t, ok = td.GetSqlTime(i, tup)
 		if ok {
-			v = sql.Timespan(t)
+			v = types.Timespan(t)
 		}
 	case val.DatetimeEnc:
 		v, ok = td.GetDatetime(i, tup)
@@ -86,7 +86,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 		var buf []byte
 		buf, ok = td.GetJSON(i, tup)
 		if ok {
-			var doc sql.JSONDocument
+			var doc types.JSONDocument
 			err = json.Unmarshal(buf, &doc.Val)
 			v = doc
 		}
@@ -164,7 +164,7 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 	case val.DateEnc:
 		tb.PutDate(i, v.(time.Time))
 	case val.TimeEnc:
-		tb.PutSqlTime(i, int64(v.(sql.Timespan)))
+		tb.PutSqlTime(i, int64(v.(types.Timespan)))
 	case val.DatetimeEnc:
 		tb.PutDatetime(i, v.(time.Time))
 	case val.EnumEnc:
@@ -273,23 +273,23 @@ func convUint(v interface{}) uint {
 }
 
 func deserializeGeometry(buf []byte) (v interface{}) {
-	srid, _, typ, _ := sql.DeserializeEWKBHeader(buf)
-	buf = buf[sql.EWKBHeaderSize:]
+	srid, _, typ, _ := types.DeserializeEWKBHeader(buf)
+	buf = buf[types.EWKBHeaderSize:]
 	switch typ {
-	case sql.WKBPointID:
-		v, _, _ = sql.DeserializePoint(buf, false, srid)
-	case sql.WKBLineID:
-		v, _, _ = sql.DeserializeLine(buf, false, srid)
-	case sql.WKBPolyID:
-		v, _, _ = sql.DeserializePoly(buf, false, srid)
-	case sql.WKBMultiPointID:
-		v, _, _ = sql.DeserializeMPoint(buf, false, srid)
-	case sql.WKBMultiLineID:
-		v, _, _ = sql.DeserializeMLine(buf, false, srid)
-	case sql.WKBMultiPolyID:
-		v, _, _ = sql.DeserializeMPoly(buf, false, srid)
-	case sql.WKBGeomCollID:
-		v, _, _ = sql.DeserializeGeomColl(buf, false, srid)
+	case types.WKBPointID:
+		v, _, _ = types.DeserializePoint(buf, false, srid)
+	case types.WKBLineID:
+		v, _, _ = types.DeserializeLine(buf, false, srid)
+	case types.WKBPolyID:
+		v, _, _ = types.DeserializePoly(buf, false, srid)
+	case types.WKBMultiPointID:
+		v, _, _ = types.DeserializeMPoint(buf, false, srid)
+	case types.WKBMultiLineID:
+		v, _, _ = types.DeserializeMLine(buf, false, srid)
+	case types.WKBMultiPolyID:
+		v, _, _ = types.DeserializeMPoly(buf, false, srid)
+	case types.WKBGeomCollID:
+		v, _, _ = types.DeserializeGeomColl(buf, false, srid)
 	default:
 		panic(fmt.Sprintf("unknown geometry type %d", typ))
 	}
@@ -298,7 +298,7 @@ func deserializeGeometry(buf []byte) (v interface{}) {
 
 func serializeGeometry(v interface{}) []byte {
 	switch t := v.(type) {
-	case sql.GeometryValue:
+	case types.GeometryValue:
 		return t.Serialize()
 	default:
 		panic(fmt.Sprintf("unknown geometry %v", v))
@@ -316,9 +316,9 @@ func serializeBytesToAddr(ctx context.Context, ns tree.NodeStore, r io.Reader, d
 }
 
 func convJson(v interface{}) (buf []byte, err error) {
-	v, err = sql.JSON.Convert(v)
+	v, err = types.JSON.Convert(v)
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(v.(sql.JSONDocument).Val)
+	return json.Marshal(v.(types.JSONDocument).Val)
 }

@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
@@ -408,7 +409,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "create table working_set_table(pk int primary key);",
-				Expected: []sql.Row{{sql.NewOkResult(0)}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				// Create a table in the working set to verify the main db
@@ -489,7 +490,7 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table t add index ```i```(c1);",
-				Expected: []sql.Row{{sql.OkResult{}}},
+				Expected: []sql.Row{{types.OkResult{}}},
 			},
 			{
 				Query: "show create table t;",
@@ -628,28 +629,28 @@ var DoltScripts = []queries.ScriptTest{
 				Query:    "select * from test as of 'HEAD~' where pk=?;",
 				Expected: []sql.Row{{0, 0}},
 				Bindings: map[string]sql.Expression{
-					"v1": expression.NewLiteral(0, sql.Int8),
+					"v1": expression.NewLiteral(0, types.Int8),
 				},
 			},
 			{
 				Query:    "select * from test as of hashof('HEAD') where pk=?;",
 				Expected: []sql.Row{{1, 1, nil}},
 				Bindings: map[string]sql.Expression{
-					"v1": expression.NewLiteral(1, sql.Int8),
+					"v1": expression.NewLiteral(1, types.Int8),
 				},
 			},
 			{
 				Query:    "select * from test as of @Commit1 where pk=?;",
 				Expected: []sql.Row{{0, 0}},
 				Bindings: map[string]sql.Expression{
-					"v1": expression.NewLiteral(0, sql.Int8),
+					"v1": expression.NewLiteral(0, types.Int8),
 				},
 			},
 			{
 				Query:    "select * from test as of @Commit2 where pk=?;",
 				Expected: []sql.Row{{0, 0, nil}},
 				Bindings: map[string]sql.Expression{
-					"v1": expression.NewLiteral(0, sql.Int8),
+					"v1": expression.NewLiteral(0, types.Int8),
 				},
 			},
 		},
@@ -720,7 +721,7 @@ var DoltScripts = []queries.ScriptTest{
 			{
 				Query: "INSERT INTO `users_token` (`id`, `user_id`, `created`, `expires`, `key`, `write_enabled`, `description`) " +
 					"VALUES ('acc2e157db2845a79221cc654b1dcecc', '1056443cc03446c592fa4c06bb06a1a6', '2022-08-30 18:27:21.948487', NULL, '0123456789abcdef0123456789abcdef01234567', 1, '');",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 0x1, InsertID: 0x0}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0x1, InsertID: 0x0}}},
 			},
 		},
 	},
@@ -807,7 +808,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT SELECT ON mydb.test TO tester@localhost;",
-				Expected: []sql.Row{{sql.NewOkResult(0)}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				// After granting access to mydb.test, dolt_diff should work
@@ -870,7 +871,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "REVOKE SELECT ON mydb.test from tester@localhost;",
-				Expected: []sql.Row{{sql.NewOkResult(0)}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				// After revoking access, dolt_diff should fail
@@ -891,7 +892,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT SELECT ON mydb.* to tester@localhost;",
-				Expected: []sql.Row{{sql.NewOkResult(0)}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				// After granting access to the entire db, dolt_diff should work
@@ -933,7 +934,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "REVOKE SELECT ON mydb.* from tester@localhost;",
-				Expected: []sql.Row{{sql.NewOkResult(0)}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				// After revoking access, dolt_diff should fail
@@ -968,7 +969,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT SELECT ON *.* to tester@localhost;",
-				Expected: []sql.Row{{sql.NewOkResult(0)}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				// After granting global access to *.*, dolt_diff should work
@@ -989,7 +990,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "REVOKE ALL ON *.* from tester@localhost;",
-				Expected: []sql.Row{{sql.NewOkResult(0)}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				// After revoking global access, dolt_diff should fail
@@ -2361,7 +2362,7 @@ var LargeJsonObjectScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    `insert into t set j= concat('[', repeat('"word",', 10000000), '"word"]')`,
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
 			},
 		},
 	},
@@ -2373,7 +2374,7 @@ var LargeJsonObjectScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:       `insert into t set j= concat('[', repeat('"word",', 50000000), '"word"]')`,
-				ExpectedErr: sql.ErrLengthTooLarge,
+				ExpectedErr: types.ErrLengthTooLarge,
 			},
 		},
 	},
@@ -2463,7 +2464,7 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO test VALUES (8), (9)",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2}}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-am','made changes in other')",
@@ -2491,7 +2492,7 @@ var DoltRemoteTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
-				Expected: []sql.Row{{"origin", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin/*"]`), sql.MustJSON(`{}`)}},
+				Expected: []sql.Row{{"origin", "not null", types.MustJSON(`["refs/heads/*:refs/remotes/origin/*"]`), types.MustJSON(`{}`)}},
 			},
 			{
 				Query:          "CALL DOLT_REMOTE()",
@@ -2517,8 +2518,8 @@ var DoltRemoteTestScripts = []queries.ScriptTest{
 			{
 				Query: "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
 				Expected: []sql.Row{
-					{"origin1", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), sql.MustJSON(`{}`)},
-					{"origin2", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin2/*"]`), sql.MustJSON(`{}`)}},
+					{"origin1", "not null", types.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), types.MustJSON(`{}`)},
+					{"origin2", "not null", types.MustJSON(`["refs/heads/*:refs/remotes/origin2/*"]`), types.MustJSON(`{}`)}},
 			},
 			{
 				Query:    "CALL DOLT_REMOTE('remove','origin2')",
@@ -2526,7 +2527,7 @@ var DoltRemoteTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
-				Expected: []sql.Row{{"origin1", "not null", sql.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), sql.MustJSON(`{}`)}},
+				Expected: []sql.Row{{"origin1", "not null", types.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), types.MustJSON(`{}`)}},
 			},
 			// 'origin1' remote must exist in order this error to be returned; otherwise, no error from EOF
 			{
@@ -2579,7 +2580,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "insert into t (b) values (1), (2)",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
 			},
 			{
 				Query:            "call dolt_commit('-am', 'two values on main')",
@@ -2591,7 +2592,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "insert into t (b) values (3), (4)",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 3}}},
 			},
 			{
 				Query: "select * from t order by a",
@@ -2610,7 +2611,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "insert into t (b) values (5), (6)",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 5}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 5}}},
 			},
 			{
 				Query: "select * from t order by a",
@@ -2641,7 +2642,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "drop table t",
-				Expected: []sql.Row{{sql.NewOkResult(0)}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:            "call dolt_checkout('main')",
@@ -2650,7 +2651,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			{
 				// highest value in any branch is 6
 				Query:    "insert into t (b) values (7), (8)",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
 			},
 			{
 				Query: "select * from t order by a",
@@ -2663,7 +2664,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "drop table t",
-				Expected: []sql.Row{{sql.NewOkResult(0)}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:            "call dolt_checkout('branch2')",
@@ -2672,7 +2673,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			{
 				// highest value in any branch is still 6 (dropped table above)
 				Query:    "insert into t (b) values (7), (8)",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
 			},
 			{
 				Query: "select * from t order by a",
@@ -2685,7 +2686,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "drop table t",
-				Expected: []sql.Row{{sql.NewOkResult(0)}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:            "create table t (a int primary key auto_increment, b int)",
@@ -2694,7 +2695,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			{
 				// no value on any branch
 				Query:    "insert into t (b) values (1), (2)",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
 			},
 			{
 				Query: "select * from t order by a",
@@ -2731,7 +2732,7 @@ var BrokenAutoIncrementTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "truncate table t",
-				Expected: []sql.Row{{sql.NewOkResult(2)}},
+				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
 				Query:            "call dolt_checkout('main')",
@@ -2740,7 +2741,7 @@ var BrokenAutoIncrementTests = []queries.ScriptTest{
 			{
 				// highest value in any branch is 6
 				Query:    "insert into t (b) values (7), (8)",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
 			},
 			{
 				Query: "select * from t order by a",
@@ -2753,7 +2754,7 @@ var BrokenAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "truncate table t",
-				Expected: []sql.Row{{sql.NewOkResult(4)}},
+				Expected: []sql.Row{{types.NewOkResult(4)}},
 			},
 			{
 				Query:            "call dolt_checkout('branch2')",
@@ -2762,7 +2763,7 @@ var BrokenAutoIncrementTests = []queries.ScriptTest{
 			{
 				// highest value in any branch is still 6 (truncated table above)
 				Query:    "insert into t (b) values (7), (8)",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 7}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
 			},
 			{
 				Query: "select * from t order by a",
@@ -2775,12 +2776,12 @@ var BrokenAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "truncate table t",
-				Expected: []sql.Row{{sql.NewOkResult(4)}},
+				Expected: []sql.Row{{types.NewOkResult(4)}},
 			},
 			{
 				// no value on any branch
 				Query:    "insert into t (b) values (1), (2)",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 1}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
 			},
 			{
 				Query: "select * from t order by a",
@@ -2811,7 +2812,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			// update a table
 			{
 				Query:    "DELETE from t where pk = 1;",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-ALL', '-m', 'update table terminator');",
@@ -2843,7 +2844,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			// delete a table
 			{
 				Query:    "DROP TABLE t;",
-				Expected: []sql.Row{{sql.NewOkResult(0)}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-Am', 'drop table t');",
@@ -2860,7 +2861,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			// create a table
 			{
 				Query:    "CREATE table t2 (pk int primary key);",
-				Expected: []sql.Row{{sql.NewOkResult(0)}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-Am', 'add table 21');",
@@ -2989,7 +2990,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO test (id) VALUES (4)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_status;",
@@ -3027,7 +3028,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO test (id) VALUES (5)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_status;",
@@ -3097,7 +3098,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "DELETE FROM test WHERE id = 6",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "CALL DOLT_ADD('.');",
@@ -3210,7 +3211,7 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "insert into t values (0, 'a', 'a'), (1, 'ab','ab'), (2, 'abc', 'abc'), (3, 'abcde', 'abcde')",
-				Expected: []sql.Row{{sql.NewOkResult(4)}},
+				Expected: []sql.Row{{types.NewOkResult(4)}},
 			},
 			{
 				Query:       "insert into t values (99, 'ABC', 'ABCDE')",
@@ -3261,7 +3262,7 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 			{
 				Query: "update t set v1 = concat(v1, 'Z') where v1 >= 'A'",
 				Expected: []sql.Row{
-					{sql.OkResult{RowsAffected: 4, InsertID: 0, Info: plan.UpdateInfo{Matched: 4, Updated: 4}}},
+					{types.OkResult{RowsAffected: 4, InsertID: 0, Info: plan.UpdateInfo{Matched: 4, Updated: 4}}},
 				},
 			},
 			{
@@ -3276,7 +3277,7 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 			{
 				Query: "delete from t where v1 >= 'A'",
 				Expected: []sql.Row{
-					{sql.OkResult{RowsAffected: 4}},
+					{types.OkResult{RowsAffected: 4}},
 				},
 			},
 			{
@@ -3294,7 +3295,7 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table t modify column j int",
-				Expected: []sql.Row{{sql.OkResult{}}},
+				Expected: []sql.Row{{types.OkResult{}}},
 			},
 			{
 				Query:    "show create table t",
@@ -3310,7 +3311,7 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table t modify column j varchar(2)",
-				Expected: []sql.Row{{sql.OkResult{}}},
+				Expected: []sql.Row{{types.OkResult{}}},
 			},
 			{
 				Query:    "show create table t",
@@ -3326,7 +3327,7 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table t modify column j varchar(200)",
-				Expected: []sql.Row{{sql.OkResult{}}},
+				Expected: []sql.Row{{types.OkResult{}}},
 			},
 			{
 				Query:    "show create table t",
@@ -3342,7 +3343,7 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table t modify column j int",
-				Expected: []sql.Row{{sql.OkResult{}}},
+				Expected: []sql.Row{{types.OkResult{}}},
 			},
 			{
 				Query:    "show create table t",

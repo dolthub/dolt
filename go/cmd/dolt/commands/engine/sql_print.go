@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -201,7 +202,7 @@ func printOKResult(ctx *sql.Context, iter sql.RowIter, start time.Time) error {
 		return err
 	}
 
-	if okResult, ok := row[0].(sql.OkResult); ok {
+	if okResult, ok := row[0].(types.OkResult); ok {
 		rowNoun := "row"
 		if okResult.RowsAffected != 1 {
 			rowNoun = "rows"
@@ -219,7 +220,7 @@ func printOKResult(ctx *sql.Context, iter sql.RowIter, start time.Time) error {
 }
 
 func isOkResult(sch sql.Schema) bool {
-	return sch.Equals(sql.OkResultSchema)
+	return sch.Equals(types.OkResultSchema)
 }
 
 type verticalRowWriter struct {

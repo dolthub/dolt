@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 )
 
@@ -82,5 +83,5 @@ func (mf *MergeFunc) WithChildren(children ...sql.Expression) (sql.Expression, e
 
 // Type implements the Expression interface.
 func (mf *MergeFunc) Type() sql.Type {
-	return sql.Text
+	return types.Text
 }

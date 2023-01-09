@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/transform"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/ishell"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/dolthub/vitess/go/vt/vterrors"
@@ -1560,7 +1561,7 @@ func mergeResultIntoStats(ctx *sql.Context, statement sqlparser.Statement, rowIt
 		} else if err != nil {
 			return err
 		} else {
-			okResult := row[0].(sql.OkResult)
+			okResult := row[0].(types.OkResult)
 			s.unflushedEdits += int(okResult.RowsAffected)
 			s.unprintedEdits += int(okResult.RowsAffected)
 			switch statement.(type) {

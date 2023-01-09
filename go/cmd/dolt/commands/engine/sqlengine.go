@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/go-mysql-server/sql/sysvars"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -90,7 +91,7 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	config.ClusterController.ManageSystemVariables(sql.SystemVariables)
+	config.ClusterController.ManageSystemVariables(variables.SystemVariables)
 
 	err = config.ClusterController.ApplyStandbyReplicationConfig(ctx, bThreads, mrEnv, dbs...)
 	if err != nil {

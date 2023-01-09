@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -152,7 +153,7 @@ func (vc *ConstraintsVerifyFunc) Resolved() bool {
 }
 
 func (vc *ConstraintsVerifyFunc) Type() sql.Type {
-	return sql.Int8
+	return types.Int8
 }
 
 // Children implements the Expression interface.

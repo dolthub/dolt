@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -131,5 +132,5 @@ func (t *HashOf) WithChildren(children ...sql.Expression) (sql.Expression, error
 
 // Type implements the Expression interface.
 func (t *HashOf) Type() sql.Type {
-	return sql.Text
+	return types.Text
 }

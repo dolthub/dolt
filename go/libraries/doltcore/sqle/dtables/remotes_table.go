@@ -19,6 +19,7 @@ import (
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -57,10 +58,10 @@ func (bt *RemotesTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the remotes system table
 func (bt *RemotesTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "name", Type: sql.Text, Source: doltdb.RemotesTableName, PrimaryKey: true, Nullable: false},
-		{Name: "url", Type: sql.Text, Source: doltdb.RemotesTableName, PrimaryKey: false, Nullable: false},
-		{Name: "fetch_specs", Type: sql.JSON, Source: doltdb.RemotesTableName, PrimaryKey: false, Nullable: true},
-		{Name: "params", Type: sql.JSON, Source: doltdb.RemotesTableName, PrimaryKey: false, Nullable: true},
+		{Name: "name", Type: types.Text, Source: doltdb.RemotesTableName, PrimaryKey: true, Nullable: false},
+		{Name: "url", Type: types.Text, Source: doltdb.RemotesTableName, PrimaryKey: false, Nullable: false},
+		{Name: "fetch_specs", Type: types.JSON, Source: doltdb.RemotesTableName, PrimaryKey: false, Nullable: true},
+		{Name: "params", Type: types.JSON, Source: doltdb.RemotesTableName, PrimaryKey: false, Nullable: true},
 	}
 }
 
@@ -126,11 +127,11 @@ func (itr *RemoteItr) Next(*sql.Context) (sql.Row, error) {
 
 	remote := itr.remotes[itr.idx]
 
-	fs, err := sql.JSON.Convert(remote.FetchSpecs)
+	fs, err := types.JSON.Convert(remote.FetchSpecs)
 	if err != nil {
 		return nil, err
 	}
-	params, err := sql.JSON.Convert(remote.Params)
+	params, err := types.JSON.Convert(remote.Params)
 	if err != nil {
 		return nil, err
 	}

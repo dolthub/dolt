@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -59,7 +60,7 @@ func (d DoltBackupFunc) String() string {
 }
 
 func (d DoltBackupFunc) Type() sql.Type {
-	return sql.Int8
+	return types.Int8
 }
 
 func (d DoltBackupFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {

@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
@@ -84,7 +85,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO test VALUES (4)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 		},
 	},
@@ -260,7 +261,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "DELETE FROM dolt_conflicts_test",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "commit",
@@ -367,7 +368,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO test VALUES (4)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 		},
 	},
@@ -1029,7 +1030,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 5}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 3, InsertID: 5}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
@@ -1066,7 +1067,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO t VALUES (NULL,6),(7,7),(NULL,8);",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 6}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 3, InsertID: 6}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
@@ -1101,7 +1102,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO t VALUES (3,3),(NULL,6);",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 3}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
@@ -1137,7 +1138,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO t VALUES (3,3),(NULL,7);",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 3}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
@@ -1219,7 +1220,7 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "delete from t;",
-				Expected: []sql.Row{{sql.NewOkResult(2)}},
+				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "select * from t;",
@@ -1247,7 +1248,7 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "truncate t;",
-				Expected: []sql.Row{{sql.NewOkResult(2)}},
+				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "select * from t;",
@@ -1272,7 +1273,7 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "delete from t;",
-				Expected: []sql.Row{{sql.NewOkResult(4)}},
+				Expected: []sql.Row{{types.NewOkResult(4)}},
 			},
 			{
 				Query:    "select * from t;",
@@ -1294,7 +1295,7 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "truncate t;",
-				Expected: []sql.Row{{sql.NewOkResult(4)}},
+				Expected: []sql.Row{{types.NewOkResult(4)}},
 			},
 			{
 				Query:    "select * from t;",
@@ -1556,7 +1557,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			// Make sure that we can update using it
 			{
 				Query:    "update dolt_conflicts_t SET our_col1 = their_col1 where dolt_conflict_id = @hash1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
@@ -1568,7 +1569,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			// And delete
 			{
 				Query:    "delete from dolt_conflicts_t where dolt_conflict_id = @hash1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
@@ -1617,7 +1618,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "update dolt_conflicts_t set our_col1 = 1000 where our_pk = 1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
@@ -1635,7 +1636,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "update dolt_conflicts_t set our_col1 = their_col1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
@@ -1680,7 +1681,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "Update dolt_conflicts_t set our_col1 = 1000;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
 			},
 			{
 				Query: "select base_pk1, base_pk2, base_col1, our_pk1, our_pk2, our_col1, their_pk1, their_pk2, their_col1 from dolt_conflicts_t;",
@@ -1728,7 +1729,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			{
 				Query: "update dolt_conflicts_t set our_name = 'orange' where our_name = 'apple'",
 				Expected: []sql.Row{
-					{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Updated: 1, Matched: 1}}},
+					{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Updated: 1, Matched: 1}}},
 				},
 			},
 			{
@@ -1795,7 +1796,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "delete from t;",
-				Expected: []sql.Row{{sql.NewOkResult(3)}},
+				Expected: []sql.Row{{types.NewOkResult(3)}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
@@ -1818,7 +1819,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			// Take theirs
 			{
 				Query:    "update dolt_conflicts_t set our_pk = their_pk, our_col1 = their_col1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, Info: plan.UpdateInfo{Matched: 4, Updated: 3}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 3, Info: plan.UpdateInfo{Matched: 4, Updated: 3}}}},
 			},
 			{
 				Query:    "select * from t;",
@@ -1853,7 +1854,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "update dolt_conflicts_t set base_col1 = 9999, their_col1 = 9999;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
@@ -1955,7 +1956,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "UPDATE t SET col1 = 300;",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: 2,
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -2117,7 +2118,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "UPDATE child set fk = 4;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 0, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 0, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-afm', 'update children to new value');",
@@ -2353,7 +2354,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "DELETE FROM parent where pk = 1;",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-am', 'delete parent 1');",
@@ -2365,7 +2366,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO CHILD VALUES (1, 1);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-am', 'insert child of parent 1');",
@@ -2401,7 +2402,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "DELETE FROM parent where pk = 2;",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-afm', 'remove parent 2');",
@@ -2413,7 +2414,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO OTHER VALUES (1);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-am', 'non-fk insert');",
@@ -2449,7 +2450,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO CHILD VALUES (2, 2);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-afm', 'add child of parent 2');",

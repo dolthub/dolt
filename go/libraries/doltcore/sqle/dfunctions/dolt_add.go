@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -111,7 +112,7 @@ func (d DoltAddFunc) String() string {
 }
 
 func (d DoltAddFunc) Type() sql.Type {
-	return sql.Int8
+	return types.Int8
 }
 
 func (d DoltAddFunc) IsNullable() bool {

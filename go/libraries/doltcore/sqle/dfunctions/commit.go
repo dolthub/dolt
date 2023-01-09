@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 const CommitFuncName = "commit"
@@ -78,5 +79,5 @@ func (cf *CommitFunc) WithChildren(children ...sql.Expression) (sql.Expression, 
 }
 
 func (cf *CommitFunc) Type() sql.Type {
-	return sql.Text
+	return types.Text
 }

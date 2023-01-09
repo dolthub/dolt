@@ -19,6 +19,8 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/sysvars"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 // Per-DB system variables
@@ -54,14 +56,14 @@ const URLTemplateDatabasePlaceholder = "{database}"
 
 // DefineSystemVariablesForDB defines per database dolt-session variables in the engine as necessary
 func DefineSystemVariablesForDB(name string) {
-	if _, _, ok := sql.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
-		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+	if _, _, ok := variables.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
+		variables.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 			{
 				Name:              HeadRefKey(name),
 				Scope:             sql.SystemVariableScope_Session,
 				Dynamic:           true,
 				SetVarHintApplies: false,
-				Type:              sql.NewSystemStringType(HeadRefKey(name)),
+				Type:              types.NewSystemStringType(HeadRefKey(name)),
 				Default:           "",
 			},
 			// The following variable are Dynamic, but read-only. Their values
@@ -71,7 +73,7 @@ func DefineSystemVariablesForDB(name string) {
 				Scope:             sql.SystemVariableScope_Session,
 				Dynamic:           true,
 				SetVarHintApplies: false,
-				Type:              sql.NewSystemStringType(HeadKey(name)),
+				Type:              types.NewSystemStringType(HeadKey(name)),
 				Default:           "",
 			},
 			{
@@ -79,7 +81,7 @@ func DefineSystemVariablesForDB(name string) {
 				Scope:             sql.SystemVariableScope_Session,
 				Dynamic:           true,
 				SetVarHintApplies: false,
-				Type:              sql.NewSystemStringType(WorkingKey(name)),
+				Type:              types.NewSystemStringType(WorkingKey(name)),
 				Default:           "",
 			},
 			{
@@ -87,7 +89,7 @@ func DefineSystemVariablesForDB(name string) {
 				Scope:             sql.SystemVariableScope_Session,
 				Dynamic:           true,
 				SetVarHintApplies: false,
-				Type:              sql.NewSystemStringType(StagedKey(name)),
+				Type:              types.NewSystemStringType(StagedKey(name)),
 				Default:           "",
 			},
 			{
@@ -95,7 +97,7 @@ func DefineSystemVariablesForDB(name string) {
 				Scope:             sql.SystemVariableScope_Global,
 				Dynamic:           true,
 				SetVarHintApplies: false,
-				Type:              sql.NewSystemStringType(DefaultBranchKey(name)),
+				Type:              types.NewSystemStringType(DefaultBranchKey(name)),
 				Default:           "",
 			},
 		})
@@ -171,7 +173,7 @@ func GetBooleanSystemVar(ctx *sql.Context, varName string) (bool, error) {
 // IgnoreReplicationErrors returns true if the dolt_skip_replication_errors system variable is set to true, which means
 // that errors that occur during replication should be logged and ignored.
 func IgnoreReplicationErrors() bool {
-	_, skip, ok := sql.SystemVariables.GetGlobal(SkipReplicationErrors)
+	_, skip, ok := variables.SystemVariables.GetGlobal(SkipReplicationErrors)
 	if !ok {
 		panic("dolt system variables not loaded")
 	}

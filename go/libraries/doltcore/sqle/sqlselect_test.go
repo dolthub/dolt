@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -467,7 +468,7 @@ func BasicSelectTests() []SelectTest {
 			Query:        "select is_married and age >= 40 from people where last_name = 'Simpson' order by id limit 2",
 			ExpectedRows: []sql.Row{{true}, {false}},
 			ExpectedSqlSchema: sql.Schema{
-				&sql.Column{Name: "is_married and age >= 40", Type: sql.Int8},
+				&sql.Column{Name: "is_married and age >= 40", Type: types2.Int8},
 			},
 		},
 		{
@@ -481,7 +482,7 @@ func BasicSelectTests() []SelectTest {
 			},
 			ExpectedSqlSchema: sql.Schema{
 				&sql.Column{Name: "first_name", Type: typeinfo.StringDefaultType.ToSqlType()},
-				&sql.Column{Name: "not_marge", Type: sql.Int8},
+				&sql.Column{Name: "not_marge", Type: types2.Int8},
 			},
 		},
 		{
@@ -719,7 +720,7 @@ func BasicSelectTests() []SelectTest {
 			ExpectedSqlSchema: sql.Schema{
 				&sql.Column{
 					Name: "1",
-					Type: sql.Int8,
+					Type: types2.Int8,
 				},
 			},
 			ExpectedRows: []sql.Row{{int8(1)}},
@@ -758,11 +759,11 @@ func BasicSelectTests() []SelectTest {
 				},
 			},
 			ExpectedSqlSchema: sql.Schema{
-				&sql.Column{Name: "commit_hash", Type: sql.Text},
-				&sql.Column{Name: "committer", Type: sql.Text},
-				&sql.Column{Name: "email", Type: sql.Text},
-				&sql.Column{Name: "date", Type: sql.Datetime},
-				&sql.Column{Name: "message", Type: sql.Text},
+				&sql.Column{Name: "commit_hash", Type: types2.Text},
+				&sql.Column{Name: "committer", Type: types2.Text},
+				&sql.Column{Name: "email", Type: types2.Text},
+				&sql.Column{Name: "date", Type: types2.Datetime},
+				&sql.Column{Name: "message", Type: types2.Text},
 			},
 		},
 		{
@@ -770,8 +771,8 @@ func BasicSelectTests() []SelectTest {
 			Query:        "select * from dolt_conflicts",
 			ExpectedRows: []sql.Row{},
 			ExpectedSqlSchema: sql.Schema{
-				&sql.Column{Name: "table", Type: sql.Text},
-				&sql.Column{Name: "num_conflicts", Type: sql.Uint64},
+				&sql.Column{Name: "table", Type: types2.Text},
+				&sql.Column{Name: "num_conflicts", Type: types2.Uint64},
 			},
 		},
 		{
@@ -787,23 +788,23 @@ func BasicSelectTests() []SelectTest {
 				},
 			},
 			ExpectedSqlSchema: sql.Schema{
-				&sql.Column{Name: "name", Type: sql.Text},
-				&sql.Column{Name: "hash", Type: sql.Text},
-				&sql.Column{Name: "latest_committer", Type: sql.Text},
-				&sql.Column{Name: "latest_committer_email", Type: sql.Text},
-				&sql.Column{Name: "latest_commit_date", Type: sql.Datetime},
-				&sql.Column{Name: "latest_commit_message", Type: sql.Text},
+				&sql.Column{Name: "name", Type: types2.Text},
+				&sql.Column{Name: "hash", Type: types2.Text},
+				&sql.Column{Name: "latest_committer", Type: types2.Text},
+				&sql.Column{Name: "latest_committer_email", Type: types2.Text},
+				&sql.Column{Name: "latest_commit_date", Type: types2.Datetime},
+				&sql.Column{Name: "latest_commit_message", Type: types2.Text},
 			},
 		},
 	}
 }
 
 var sqlDiffSchema = sql.Schema{
-	&sql.Column{Name: "to_id", Type: sql.Int64},
+	&sql.Column{Name: "to_id", Type: types2.Int64},
 	&sql.Column{Name: "to_first_name", Type: typeinfo.StringDefaultType.ToSqlType()},
 	&sql.Column{Name: "to_last_name", Type: typeinfo.StringDefaultType.ToSqlType()},
 	&sql.Column{Name: "to_addr", Type: typeinfo.StringDefaultType.ToSqlType()},
-	&sql.Column{Name: "from_id", Type: sql.Int64},
+	&sql.Column{Name: "from_id", Type: types2.Int64},
 	&sql.Column{Name: "from_first_name", Type: typeinfo.StringDefaultType.ToSqlType()},
 	&sql.Column{Name: "from_last_name", Type: typeinfo.StringDefaultType.ToSqlType()},
 	&sql.Column{Name: "from_addr", Type: typeinfo.StringDefaultType.ToSqlType()},

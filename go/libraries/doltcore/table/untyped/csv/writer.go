@@ -25,6 +25,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -90,7 +91,7 @@ func (csvw *CSVWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 			var err error
 			colType := csvw.sch.GetAllCols().GetByIndex(i).TypeInfo.ToSqlType()
 			// Due to BIT's unique output, we special-case writing the integer specifically for CSV
-			if _, ok := colType.(sql.BitType); ok {
+			if _, ok := colType.(types.BitType); ok {
 				v = strconv.FormatUint(val.(uint64), 10)
 			} else {
 				v, err = sqlutil.SqlColToStr(colType, val)

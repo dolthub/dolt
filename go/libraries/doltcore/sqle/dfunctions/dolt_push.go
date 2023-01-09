@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -55,7 +56,7 @@ func (d DoltPushFunc) String() string {
 }
 
 func (d DoltPushFunc) Type() sql.Type {
-	return sql.Boolean
+	return types.Boolean
 }
 
 func (d DoltPushFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
