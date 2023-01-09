@@ -62,6 +62,7 @@ type doltBinlogReplicaController struct {
 var format mysql.BinlogFormat
 var tableMapsById = make(map[uint64]*mysql.TableMap)
 var stopReplicationChan = make(chan struct{})
+var currentGtid string
 
 func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 	controller := doltBinlogReplicaController{
@@ -333,13 +334,12 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// used to compute the random number. For more details, see: https://mariadb.com/kb/en/rand_event/
 		// Note: it is written only before a QUERY_EVENT and is NOT used with row-based logging.
 		logger.Debug("Received binlog event: Rand")
+		// TODO: Synchronize rand seeds
 
 	case event.IsXID():
 		// An XID event is generated for a COMMIT of a transaction that modifies one or more tables of an
 		// XA-capable storage engine. For more details, see: https://mariadb.com/kb/en/xid_event/
 		logger.Debug("Received binlog event: XID")
-		// TODO: parse XID transaction number and record it durably
-		//       gtid, b, err := event.GTID(format)
 		executeQueryWithEngine(ctx, engine, "commit;")
 		createDoltCommit = true
 
@@ -356,7 +356,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		logger.Debugf(" - Query: %s", query)
 		ctx.SetCurrentDatabase(query.Database)
 		executeQueryWithEngine(ctx, engine, query.SQL)
-		createDoltCommit = true
+		createDoltCommit = strings.ToLower(query.SQL) != "begin"
 
 	case event.IsRotate():
 		// When a binary log file exceeds the configured size limit, a ROTATE_EVENT is written at the end of the file,
@@ -396,10 +396,11 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// Seems like we don't have access to other fields for GTID?
 		// Does isBegin mean not FL_STANDALONE?
 		gtid, isBegin, err := event.GTID(format)
-		logger.Debugf(" - %v (isBegin: %t)", gtid, isBegin)
 		if err != nil {
 			return err
 		}
+		logger.Debugf(" - %v (isBegin: %t)", gtid, isBegin)
+		currentGtid = gtid.String()
 
 		replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
 		if err != nil {
@@ -430,18 +431,16 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		//		Table id refers to a table defined by TABLE_MAP_EVENT. The special value 0xFFFFFF should have
 		//	 	"end of statement flag" (0x0001) set and indicates that table maps can be freed.
 		if tableId == 0xFFFFFF {
-			logger.Debug("  - received signal to clear cached table maps")
+			logger.Debug("  - received signal to clear cached table maps!")
 		}
 		tableMapsById[tableId] = tableMap
 		logger.Debugf(" - tableMap: %v ", formatTableMapAsString(tableId, tableMap))
-		// TODO: Will these be resent before each row event, like the documentation seems to indicate? If so, that
-		//       seems to remove the requirement to make this metadata durable between server restarts.
+		// Note: TableMap events are sent before each row event, so there is no need to persist them between restarts.
 
 	case event.IsDeleteRows():
 		// A ROWS_EVENT is written for row based replication if data is inserted, deleted or updated.
 		// For more details, see: https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
 		logger.Debug("Received binlog event: DeleteRows")
-		createDoltCommit = true
 		tableId := event.TableID(format)
 		tableMap, ok := tableMapsById[tableId]
 		if !ok {
@@ -484,7 +483,6 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// A ROWS_EVENT is written for row based replication if data is inserted, deleted or updated.
 		// For more details, see: https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
 		logger.Debug("Received binlog event: WriteRows")
-		createDoltCommit = true
 		tableId := event.TableID(format)
 		tableMap, ok := tableMapsById[tableId]
 		if !ok {
@@ -527,7 +525,6 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// A ROWS_EVENT is written for row based replication if data is inserted, deleted or updated.
 		// For more details, see: https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
 		logger.Debug("Received binlog event: UpdateRows")
-		createDoltCommit = true
 		tableId := event.TableID(format)
 		tableMap, ok := tableMapsById[tableId]
 		if !ok {
@@ -595,7 +592,9 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 
 	// For now, create a Dolt commit from every data update. Eventually, we'll want to make this configurable.
 	if createDoltCommit {
-		executeQueryWithEngine(ctx, engine, "call dolt_commit('-Am', 'automatic Dolt replication commit');")
+		logger.Trace("Creating Dolt commit")
+		executeQueryWithEngine(ctx, engine,
+			fmt.Sprintf("call dolt_commit('-Am', 'automatic Dolt binlog replica commit: GTID %s');", currentGtid))
 	}
 
 	return nil

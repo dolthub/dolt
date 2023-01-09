@@ -39,7 +39,7 @@ var doltLogFile *os.File
 var testDir string
 var originalWorkingDir string
 
-func teardown(t *testing.T) {
+func teardown(_ *testing.T) {
 	if mySqlProcess != nil {
 		mySqlProcess.Kill()
 	}
@@ -69,6 +69,80 @@ func TestBinlogReplicationSanityCheck(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	expectedStatement := "CREATE TABLE t ( pk int NOT NULL, PRIMARY KEY (pk)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"
 	assertCreateTableStatement(t, replicaDatabase, "t", expectedStatement)
+}
+
+// TestDoltCommits tests that Dolt commits are created and use correct transaction boundaries.
+func TestDoltCommits(t *testing.T) {
+	startSqlServers(t)
+	startReplication(t, mySqlPort)
+	defer teardown(t)
+
+	// First transaction (DDL)
+	primaryDatabase.MustExec("create table t1 (pk int primary key);")
+
+	// Second transaction (DDL)
+	primaryDatabase.MustExec("create table t2 (pk int primary key);")
+
+	// Third transaction (autocommit DML)
+	primaryDatabase.MustExec("insert into t2 values (0);")
+
+	// Disable autocommit so we can manually control transactions
+	primaryDatabase.MustExec("set autocommit=0;")
+
+	// Fourth transaction (explicitly controlled transaction)
+	primaryDatabase.MustExec("start transaction;")
+	primaryDatabase.MustExec("insert into t1 values(1);")
+	primaryDatabase.MustExec("insert into t1 values(2);")
+	primaryDatabase.MustExec("insert into t1 values(3);")
+	primaryDatabase.MustExec("insert into t2 values(3), (2), (1);")
+	primaryDatabase.MustExec("commit;")
+
+	// Verify Dolt commit on replica
+	time.Sleep(500 * time.Millisecond)
+	rows, err := replicaDatabase.Queryx("select count(*) as count from db01.dolt_log;")
+	require.NoError(t, err)
+	row := convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "5", row["count"])
+
+	// Use dolt_diff so we can see what tables were edited and schema/data changes
+	// TODO: Error 1105: unable to lookup roots for database
+	//       We started getting this when we used a db qualifier... the dolt_diff system table must not take that
+	//       into account and always uses the current database.
+	// TODO: Convert the note above into a GH bug
+	replicaDatabase.MustExec("use db01;")
+	// Note: we don't use an order by clause, since the commits come in so quickly that they get the same timestamp
+	rows, err = replicaDatabase.Queryx("select * from db01.dolt_diff;")
+	require.NoError(t, err)
+
+	// Fourth transaction
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "1", row["data_change"])
+	require.Equal(t, "0", row["schema_change"])
+	require.Equal(t, "t1", row["table_name"])
+	commitId := row["commit_hash"]
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "1", row["data_change"])
+	require.Equal(t, "0", row["schema_change"])
+	require.Equal(t, "t2", row["table_name"])
+	require.Equal(t, commitId, row["commit_hash"])
+
+	// Third transaction
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "1", row["data_change"])
+	require.Equal(t, "0", row["schema_change"])
+	require.Equal(t, "t2", row["table_name"])
+
+	// Second transaction
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "0", row["data_change"])
+	require.Equal(t, "1", row["schema_change"])
+	require.Equal(t, "t2", row["table_name"])
+
+	// First transaction
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "0", row["data_change"])
+	require.Equal(t, "1", row["schema_change"])
+	require.Equal(t, "t1", row["table_name"])
 }
 
 // TestBinlogReplicationForAllTypes tests that operations (inserts, updates, and deletes) on all SQL
