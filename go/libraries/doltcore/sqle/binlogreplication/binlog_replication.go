@@ -63,6 +63,7 @@ var format mysql.BinlogFormat
 var tableMapsById = make(map[uint64]*mysql.TableMap)
 var stopReplicationChan = make(chan struct{})
 var currentGtid string
+var replicationSourceUuid string
 
 func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 	controller := doltBinlogReplicaController{
@@ -334,7 +335,6 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// used to compute the random number. For more details, see: https://mariadb.com/kb/en/rand_event/
 		// Note: it is written only before a QUERY_EVENT and is NOT used with row-based logging.
 		logger.Debug("Received binlog event: Rand")
-		// TODO: Synchronize rand seeds
 
 	case event.IsXID():
 		// An XID event is generated for a COMMIT of a transaction that modifies one or more tables of an
@@ -408,12 +408,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		}).Debug("Received binlog event: GTID")
 		currentGtid = gtid.String()
 
-		replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
-		if err != nil {
-			return err
-		}
-		replicaSourceInfo.Uuid = fmt.Sprintf("%v", gtid.SourceServer())
-		err = d.persistReplicationConfiguration(ctx, replicaSourceInfo)
+		err = d.persistSourceUuid(ctx, gtid.SourceServer())
 		if err != nil {
 			return err
 		}
@@ -604,6 +599,22 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 	}
 
 	return nil
+}
+
+// persistSourceUuid saves the specified |sourceUuid| to a persistent storage location. If the source UUID has already
+// been persisted, then no action is taken.
+func (d *doltBinlogReplicaController) persistSourceUuid(ctx *sql.Context, sourceUuid interface{}) error {
+	// If the source UUID is already set, then there's no need to persist it again, since it can't change
+	if sourceUuid != "" {
+		return nil
+	}
+
+	replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
+	if err != nil {
+		return err
+	}
+	replicaSourceInfo.Uuid = fmt.Sprintf("%v", sourceUuid)
+	return d.persistReplicationConfiguration(ctx, replicaSourceInfo)
 }
 
 // closeWriteSession flushes and closes the specified |writeSession| and returns an error if anything failed.

@@ -406,7 +406,7 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 		fmt.Sprintf("--port=%v", doltPort),
 		fmt.Sprintf("--socket=dolt.%v.sock", doltPort))
 
-	doltLogFilePath := filepath.Join(dir, "dolt.out.log")
+	doltLogFilePath := filepath.Join(dir, fmt.Sprintf("dolt-%d.out.log", time.Now().Unix()))
 	doltLogFile, err = os.Create(doltLogFilePath)
 	if err != nil {
 		return -1, nil, err
