@@ -496,4 +496,3 @@ func checkForUnixSocket(config ServerConfig) (string, bool, error) {
 
 	return "", false, nil
 }
- 

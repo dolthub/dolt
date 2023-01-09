@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,8 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	
-	_ "github.com/dolthub/go-mysql-server/sql/variables"
 )
 
 //var UUIDS = []uuid.UUID{
