@@ -22,7 +22,7 @@ teardown() {
     run dolt branch
     [[ ! "$output" =~ "new_branch" ]] || false
 
-    run dolt sql -q "SELECT DOLT_BRANCH('new-branch')"
+    run dolt sql -q "call dolt_branch('new-branch')"
     [ $status -eq 0 ]
 
     # should create new branch and should not checkout the new branch
@@ -72,12 +72,12 @@ teardown() {
 @test "sql-branch: DOLT_BRANCH throws error" {
     # branches that already exist
     dolt branch existing_branch
-    run dolt sql -q "SELECT DOLT_BRANCH('existing_branch')"
+    run dolt sql -q "call dolt_branch('existing_branch')"
     [ $status -eq 1 ]
     [[ "$output" =~ "fatal: A branch named 'existing_branch' already exists." ]] || false
 
     # empty branch
-    run dolt sql -q "SELECT DOLT_BRANCH('')"
+    run dolt sql -q "call dolt_branch('')"
     [ $status -eq 1 ]
     [[ "$output" =~ "error: cannot branch empty string" ]] || false
 }
@@ -109,7 +109,7 @@ teardown() {
 
     # Current branch should be still main with test table without entry 4
     run dolt sql << SQL
-SELECT DOLT_BRANCH('-c', 'original', 'copy');
+call dolt_branch('-c', 'original', 'copy');
 SELECT * FROM test WHERE pk > 3;
 SQL
     [ $status -eq 0 ]
@@ -162,12 +162,12 @@ SQL
     [[ "$output" =~ "main" ]] || false
 
     # branch copying from is empty
-    run dolt sql -q "SELECT DOLT_BRANCH('-c','','copy')"
+    run dolt sql -q "call dolt_branch('-c','','copy')"
     [ $status -eq 1 ]
     [[ "$output" =~ "error: cannot branch empty string" ]] || false
 
     # branch copying to is empty
-    run dolt sql -q "SELECT DOLT_BRANCH('-c','main','')"
+    run dolt sql -q "call dolt_branch('-c','main','')"
     [ $status -eq 1 ]
     [[ "$output" =~ "error: cannot branch empty string" ]] || false
 
@@ -178,12 +178,12 @@ SQL
     [[ ! "$output" =~ "original" ]] || false
 
     # branch copying from that don't exist
-    run dolt sql -q "SELECT DOLT_BRANCH('-c', 'original', 'copy');"
+    run dolt sql -q "call dolt_branch('-c', 'original', 'copy');"
     [ $status -eq 1 ]
     [[ "$output" =~ "fatal: A branch named 'original' not found" ]] || false
 
     # branch copying to that exists
-    run dolt sql -q "SELECT DOLT_BRANCH('-c', 'main', 'existing_branch');"
+    run dolt sql -q "call dolt_branch('-c', 'main', 'existing_branch');"
     [ $status -eq 1 ]
     [[ "$output" =~ "fatal: A branch named 'existing_branch' already exists." ]] || false
 }
@@ -226,7 +226,7 @@ SQL
     [ $status -eq 0 ]
     mainhash=$output
 
-    dolt sql -q "SELECT DOLT_BRANCH('feature-branch');"
+    dolt sql -q "call dolt_branch('feature-branch');"
     run dolt sql -q "SELECT hash FROM dolt_branches WHERE name='feature-branch';"
     [ $status -eq 0 ]
     [ "$output" = "$mainhash" ]
@@ -245,14 +245,14 @@ SQL
     [ "$output" = "$mainhash" ]
 }
 
-@test "sql-branch: SELECT DOLT_BRANCH to rename and delete" {
+@test "sql-branch: call dolt_branch to rename and delete" {
     dolt add . && dolt commit -m "1, 2, and 3 in test table"
     dolt branch new_branch
 
-    run dolt sql -q "SELECT DOLT_BRANCH('-m', 'new_branch', 'changed');"
+    run dolt sql -q "call dolt_branch('-m', 'new_branch', 'changed');"
     [ $status -eq 0 ]
 
-    run dolt sql -q "SELECT DOLT_BRANCH('-d', 'changed');"
+    run dolt sql -q "call dolt_branch('-d', 'changed');"
     [ $status -eq 0 ]
 
     dolt branch branch_with_unpushed_commit
@@ -260,11 +260,11 @@ SQL
     dolt commit --allow-empty -am 'empty commit'
     dolt checkout main
 
-    run dolt sql -q "SELECT DOLT_BRANCH('-d', 'branch_with_unpushed_commit');"
+    run dolt sql -q "call dolt_branch('-d', 'branch_with_unpushed_commit');"
     [ $status -eq 1 ]
     [[ "$output" =~ "attempted to delete a branch that is not fully merged" ]] || false
 
-    run dolt sql -q "SELECT DOLT_BRANCH('-D', 'branch_with_unpushed_commit');"
+    run dolt sql -q "call dolt_branch('-D', 'branch_with_unpushed_commit');"
     [ $status -eq 0 ]
 }
 

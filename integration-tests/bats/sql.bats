@@ -1291,7 +1291,7 @@ USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE table_a(x int primary key);
 CREATE TABLE table_b(x int primary key);
 CALL DOLT_ADD('.');
-SELECT DOLT_COMMIT('-a', '-m', 'two new tables');
+call dolt_commit('-a', '-m', 'two new tables');
 SQL
 
     run dolt sql -q "show tables" -r csv
@@ -1317,7 +1317,7 @@ USE test1;
 CREATE TABLE table_a(x int primary key);
 CALL DOLT_ADD('.');
 insert into table_a values (1), (2);
-SELECT DOLT_COMMIT('-a', '-m', 'created table_a');
+call dolt_commit('-a', '-m', 'created table_a');
 SQL
 
     cd test1
@@ -1380,7 +1380,7 @@ USE test1;
 CREATE TABLE table_a(x int primary key);
 CALL DOLT_ADD('.');
 insert into table_a values (1), (2);
-SELECT DOLT_COMMIT('-a', '-m', 'created table_a');
+call dolt_commit('-a', '-m', 'created table_a');
 SQL
 
     cd test1
@@ -1474,7 +1474,7 @@ SQL
 set @@dolt_repo_$$_head_ref = 'feature-branch';
 CREATE TABLE test (x int primary key);
 CALL DOLT_ADD('.');
-SELECT DOLT_COMMIT('-a', '-m', 'new table');
+call dolt_commit('-a', '-m', 'new table');
 SQL
 
     run dolt sql -q "show tables" -r csv
@@ -1492,7 +1492,7 @@ SQL
     dolt sql  <<SQL
 set @@dolt_repo_$$_head_ref = 'refs/heads/feature-branch';
 insert into test values (1), (2), (3);
-SELECT DOLT_COMMIT('-a', '-m', 'inserted 3 values');
+call dolt_commit('-a', '-m', 'inserted 3 values');
 SQL
 
     dolt checkout feature-branch
@@ -1526,7 +1526,7 @@ USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE a1(x int primary key);
 CALL DOLT_ADD('.');
 insert into a1 values (1), (2), (3);
-SELECT DOLT_COMMIT('-a', '-m', 'new table');
+call dolt_commit('-a', '-m', 'new table');
 SQL
 
     run dolt sql -q "select * from \`dolt_repo_$$/feature-branch\`.a1 order by x;" -r csv
@@ -1544,7 +1544,7 @@ USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE a1(x int primary key);
 CALL DOLT_ADD('.');
 insert into a1 values (1), (2), (3);
-SELECT DOLT_COMMIT('-a', '-m', 'new table');
+call dolt_commit('-a', '-m', 'new table');
 SQL
 
     run dolt sql -q "insert into \`dolt_repo_$$/feature-branch\`.a1 values (4);" -r csv
@@ -1563,9 +1563,9 @@ SQL
 CREATE TABLE a1(x int primary key);
 CALL DOLT_ADD('.');
 insert into a1 values (1), (2), (3);
-SELECT DOLT_COMMIT('-a', '-m', 'new table');
+call dolt_commit('-a', '-m', 'new table');
 insert into a1 values (4), (5), (6);
-select DOLT_COMMIT('-a', '-m', 'more values');
+call dolt_commit('-a', '-m', 'more values');
 SQL
 
     # get the second to last commit hash
@@ -1595,9 +1595,9 @@ SQL
 CREATE TABLE a1(x int primary key);
 CALL DOLT_ADD('.');
 insert into a1 values (1), (2), (3);
-SELECT DOLT_COMMIT('-a', '-m', 'new table');
+call dolt_commit('-a', '-m', 'new table');
 insert into a1 values (4), (5), (6);
-select DOLT_COMMIT('-a', '-m', 'more values');
+call dolt_commit('-a', '-m', 'more values');
 SQL
 
     # get the second to last commit hash
@@ -1625,9 +1625,9 @@ SQL
 CREATE TABLE a1(x int primary key);
 CALL DOLT_ADD('.');
 insert into a1 values (1), (2), (3);
-SELECT DOLT_COMMIT('-a', '-m', 'new table');
+call dolt_commit('-a', '-m', 'new table');
 insert into a1 values (4), (5), (6);
-select DOLT_COMMIT('-a', '-m', 'more values');
+call dolt_commit('-a', '-m', 'more values');
 SQL
 
     # get the second to last commit hash
@@ -1656,7 +1656,7 @@ USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE a1(x int primary key);
 CALL DOLT_ADD('.');
 insert into a1 values (1), (2), (3);
-SELECT DOLT_COMMIT('-a', '-m', 'new table');
+call dolt_commit('-a', '-m', 'new table');
 SQL
 
     run dolt tag v1
@@ -1692,9 +1692,9 @@ SQL
 CREATE TABLE a1(x int primary key);
 CALL DOLT_ADD('.');
 insert into a1 values (1), (2), (3);
-SELECT DOLT_COMMIT('-a', '-m', 'new table');
+call dolt_commit('-a', '-m', 'new table');
 insert into a1 values (4), (5), (6);
-select DOLT_COMMIT('-a', '-m', 'more values');
+call dolt_commit('-a', '-m', 'more values');
 SQL
 
     run dolt tag v1
@@ -1722,9 +1722,9 @@ SQL
 CREATE TABLE a1(x int primary key);
 CALL DOLT_ADD('.');
 insert into a1 values (1), (2), (3);
-SELECT DOLT_COMMIT('-a', '-m', 'new table');
+call dolt_commit('-a', '-m', 'new table');
 insert into a1 values (4), (5), (6);
-select DOLT_COMMIT('-a', '-m', 'more values');
+call dolt_commit('-a', '-m', 'more values');
 SQL
 
     run dolt tag v1

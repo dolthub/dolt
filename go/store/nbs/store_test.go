@@ -47,7 +47,7 @@ func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, no
 	require.NoError(t, err)
 
 	// create a v5 manifest
-	_, err = fileManifest{nomsDir}.Update(ctx, addr{}, manifestContents{}, &Stats{}, nil)
+	_, err = fileManifest{dir: nomsDir, mode: asyncFlush}.Update(ctx, addr{}, manifestContents{}, &Stats{}, nil)
 	require.NoError(t, err)
 
 	q = NewUnlimitedMemQuotaProvider()
@@ -157,7 +157,7 @@ func makeChunk(i uint32) chunks.Chunk {
 	return chunks.NewChunk(b)
 }
 
-type tableFileSet map[string]chunks.TableFile
+type tableFileSet map[string]TableFile
 
 func (s tableFileSet) contains(fileName string) (ok bool) {
 	_, ok = s[fileName]
@@ -174,7 +174,7 @@ func (s tableFileSet) findAbsent(ftd fileToData) (absent []string) {
 	return absent
 }
 
-func tableFileSetFromSources(sources []chunks.TableFile) (s tableFileSet) {
+func tableFileSetFromSources(sources []TableFile) (s tableFileSet) {
 	s = make(tableFileSet, len(sources))
 	for _, src := range sources {
 		s[src.FileID()] = src

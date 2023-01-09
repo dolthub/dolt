@@ -26,10 +26,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/nbs"
 )
 
 func Clone(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, eventCh chan<- TableFileEvent) error {
-	srcTS, srcOK := srcCS.(chunks.TableFileStore)
+	srcTS, srcOK := srcCS.(nbs.TableFileStore)
 
 	if !srcOK {
 		return errors.New("src db is not a Table File Store")
@@ -45,7 +46,7 @@ func Clone(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, eventCh chan<- 
 		return ErrNoData
 	}
 
-	sinkTS, sinkOK := sinkCS.(chunks.TableFileStore)
+	sinkTS, sinkOK := sinkCS.(nbs.TableFileStore)
 
 	if !sinkOK {
 		return errors.New("sink db is not a Table File Store")
@@ -66,14 +67,14 @@ const (
 
 type TableFileEvent struct {
 	EventType  CloneTableFileEvent
-	TableFiles []chunks.TableFile
+	TableFiles []nbs.TableFile
 	Stats      []iohelp.ReadStats
 }
 
-// mapTableFiles returns the list of all fileIDs for the table files, and a map from fileID to chunks.TableFile
-func mapTableFiles(tblFiles []chunks.TableFile) ([]string, map[string]chunks.TableFile, map[string]int) {
+// mapTableFiles returns the list of all fileIDs for the table files, and a map from fileID to nbs.TableFile
+func mapTableFiles(tblFiles []nbs.TableFile) ([]string, map[string]nbs.TableFile, map[string]int) {
 	fileIds := make([]string, len(tblFiles))
-	fileIDtoTblFile := make(map[string]chunks.TableFile)
+	fileIDtoTblFile := make(map[string]nbs.TableFile)
 	fileIDtoNumChunks := make(map[string]int)
 
 	for i, tblFile := range tblFiles {
@@ -87,7 +88,7 @@ func mapTableFiles(tblFiles []chunks.TableFile) ([]string, map[string]chunks.Tab
 
 const concurrentTableFileDownloads = 3
 
-func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, eventCh chan<- TableFileEvent) error {
+func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<- TableFileEvent) error {
 	root, sourceFiles, appendixFiles, err := srcTS.Sources(ctx)
 	if err != nil {
 		return err
@@ -131,7 +132,7 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, eventCh cha
 					return backoff.Permanent(errors.New("table file not found. please try again"))
 				}
 
-				report(TableFileEvent{EventType: DownloadStart, TableFiles: []chunks.TableFile{tblFile}})
+				report(TableFileEvent{EventType: DownloadStart, TableFiles: []nbs.TableFile{tblFile}})
 				err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), nil, func() (io.ReadCloser, uint64, error) {
 					rd, contentLength, err := tblFile.Open(ctx)
 					if err != nil {
@@ -142,7 +143,7 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, eventCh cha
 					rdStats.Start(func(s iohelp.ReadStats) {
 						report(TableFileEvent{
 							EventType:  DownloadStats,
-							TableFiles: []chunks.TableFile{tblFile},
+							TableFiles: []nbs.TableFile{tblFile},
 							Stats:      []iohelp.ReadStats{s},
 						})
 					})
@@ -150,11 +151,11 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, eventCh cha
 					return rdStats, contentLength, nil
 				})
 				if err != nil {
-					report(TableFileEvent{EventType: DownloadFailed, TableFiles: []chunks.TableFile{tblFile}})
+					report(TableFileEvent{EventType: DownloadFailed, TableFiles: []nbs.TableFile{tblFile}})
 					return err
 				}
 
-				report(TableFileEvent{EventType: DownloadSuccess, TableFiles: []chunks.TableFile{tblFile}})
+				report(TableFileEvent{EventType: DownloadSuccess, TableFiles: []nbs.TableFile{tblFile}})
 				completed[idx] = true
 				return nil
 			})
@@ -210,11 +211,11 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, eventCh cha
 	return sinkTS.SetRootChunk(ctx, root, hash.Hash{})
 }
 
-func filterAppendicesFromSourceFiles(appendixFiles []chunks.TableFile, sourceFiles []chunks.TableFile) []chunks.TableFile {
+func filterAppendicesFromSourceFiles(appendixFiles []nbs.TableFile, sourceFiles []nbs.TableFile) []nbs.TableFile {
 	if len(appendixFiles) == 0 {
 		return sourceFiles
 	}
-	tblFiles := make([]chunks.TableFile, 0)
+	tblFiles := make([]nbs.TableFile, 0)
 	_, appendixMap, _ := mapTableFiles(appendixFiles)
 	for _, sf := range sourceFiles {
 		if _, ok := appendixMap[sf.FileID()]; !ok {

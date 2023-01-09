@@ -638,6 +638,30 @@ teardown() {
     [ ! -f dumps/warehouse.json ]
 }
 
+@test "dump: dump with schema-only flag" {
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
+    dolt sql -q "INSERT INTO new_table VALUES (1), (2);"
+    run dolt dump --schema-only
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump_schema_only.sql ]
+
+    run grep 'CREATE TABLE' doltdump_schema_only.sql
+    [ "${#lines[@]}" -eq 1 ]
+
+    run grep 'INSERT' doltdump_schema_only.sql
+    [ "${#lines[@]}" -eq 0 ]
+}
+
+@test "dump: dump with schema-only flag errors with non-sql output file" {
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
+    dolt sql -q "INSERT INTO new_table VALUES (1), (2);"
+    run dolt dump --schema-only -r csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "schema-only dump is not supported for csv exports" ]] || false
+    [ ! -f doltdump_schema_only.csv ]
+}
+
 @test "dump: JSON type - export tables with types, longtext and blob" {
     skip "export table in json with these types not working"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"

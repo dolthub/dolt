@@ -529,7 +529,7 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ 'error: cannot merge two tables with different primary key sets' ]] || false
 
-    run dolt sql -q "SELECT DOLT_MERGE('test')"
+    run dolt sql -q "call dolt_merge('test')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ 'error: cannot merge two tables with different primary key sets' ]] || false
 

@@ -28,33 +28,40 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+func NewParentsClosure(ctx context.Context, c *Commit, sv types.SerialMessage, vr types.ValueReader, ns tree.NodeStore) (prolly.CommitClosure, error) {
+	var msg serial.Commit
+	err := serial.InitCommitRoot(&msg, sv, serial.MessagePrefixSz)
+	if err != nil {
+		return prolly.CommitClosure{}, err
+	}
+	addr := hash.New(msg.ParentClosureBytes())
+	if addr.IsEmpty() {
+		return prolly.CommitClosure{}, nil
+	}
+	v, err := vr.ReadValue(ctx, addr)
+	if err != nil {
+		return prolly.CommitClosure{}, err
+	}
+	if types.IsNull(v) {
+		return prolly.CommitClosure{}, fmt.Errorf("internal error or data loss: dangling commit parent closure for addr %s or commit %s", addr.String(), c.Addr().String())
+	}
+	node, err := tree.NodeFromBytes(v.(types.SerialMessage))
+	if err != nil {
+		return prolly.CommitClosure{}, err
+	}
+	return prolly.NewCommitClosure(node, ns)
+}
+
 func newParentsClosureIterator(ctx context.Context, c *Commit, vr types.ValueReader, ns tree.NodeStore) (parentsClosureIter, error) {
 	sv := c.NomsValue()
 
-	if _, ok := sv.(types.SerialMessage); ok {
-		var msg serial.Commit
-		err := serial.InitCommitRoot(&msg, sv.(types.SerialMessage), serial.MessagePrefixSz)
+	if sm, ok := sv.(types.SerialMessage); ok {
+		cc, err := NewParentsClosure(ctx, c, sm, vr, ns)
 		if err != nil {
 			return nil, err
 		}
-		addr := hash.New(msg.ParentClosureBytes())
-		if addr.IsEmpty() {
+		if cc.IsEmpty() {
 			return nil, nil
-		}
-		v, err := vr.ReadValue(ctx, addr)
-		if err != nil {
-			return nil, err
-		}
-		if types.IsNull(v) {
-			return nil, fmt.Errorf("internal error or data loss: dangling commit parent closure for addr %s or commit %s", addr.String(), c.Addr().String())
-		}
-		node, err := tree.NodeFromBytes(v.(types.SerialMessage))
-		if err != nil {
-			return nil, err
-		}
-		cc, err := prolly.NewCommitClosure(node, ns)
-		if err != nil {
-			return nil, err
 		}
 		ci, err := cc.IterAllReverse(ctx)
 		if err != nil {

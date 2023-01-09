@@ -286,13 +286,7 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggeste
 		return suggestedMsg, nil
 	}
 
-	isTerminal := false
-	cli.ExecuteWithStdioRestored(func() {
-		if goisatty.IsTerminal(os.Stdout.Fd()) {
-			isTerminal = true
-		}
-	})
-	if !isTerminal {
+	if !checkIsTerminal() {
 		return suggestedMsg, nil
 	}
 
@@ -322,10 +316,20 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggeste
 	})
 
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Failed to open commit editor: %v \n Check your `EDITOR` environment variable with `echo $EDITOR` or your dolt config with `dolt config --list` to ensure that your editor is valid", err)
 	}
 
 	return finalMsg, nil
+}
+
+func checkIsTerminal() bool {
+	isTerminal := false
+	cli.ExecuteWithStdioRestored(func() {
+		if goisatty.IsTerminal(os.Stdout.Fd()) || os.Getenv("DOLT_TEST_FORCE_OPEN_EDITOR") == "1" {
+			isTerminal = true
+		}
+	})
+	return isTerminal
 }
 
 func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg string) (string, error) {

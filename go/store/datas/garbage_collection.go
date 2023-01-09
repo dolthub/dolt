@@ -18,10 +18,11 @@ import (
 	"context"
 
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/nbs"
 )
 
 func PruneTableFiles(ctx context.Context, db Database) error {
-	tfs, ok := db.chunkStore().(chunks.TableFileStore)
+	tfs, ok := db.chunkStore().(nbs.TableFileStore)
 
 	if !ok {
 		return chunks.ErrUnsupportedOperation

@@ -434,6 +434,22 @@ func TestDoltUserPrivileges(t *testing.T) {
 	}
 }
 
+func TestJoinOps(t *testing.T) {
+	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
+		t.Skip("DOLT_LD keyless indexes are not sorted")
+	}
+
+	enginetest.TestJoinOps(t, newDoltHarness(t))
+}
+
+func TestJoinOpsPrepared(t *testing.T) {
+	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
+		t.Skip("DOLT_LD keyless indexes are not sorted")
+	}
+
+	enginetest.TestJoinOpsPrepared(t, newDoltHarness(t))
+}
+
 func TestJoinQueries(t *testing.T) {
 	enginetest.TestJoinQueries(t, newDoltHarness(t))
 }
@@ -991,7 +1007,7 @@ func TestDoltReset(t *testing.T) {
 }
 
 func TestDoltGC(t *testing.T) {
-	// TODO: This does not work because `db.chunkStore().(chunks.TableFileStore)`
+	// TODO: This does not work because `db.chunkStore().(nbs.TableFileStore)`
 	// returns not ok in PruneTableFiles
 	t.Skip()
 	for _, script := range DoltGC {
