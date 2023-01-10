@@ -16,8 +16,9 @@ package dbfactory
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/chunks"
 	"net/url"
+
+	"github.com/dolthub/dolt/go/store/chunks"
 
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
