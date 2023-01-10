@@ -22,6 +22,9 @@ import (
 
 // Blobstore is an interface for storing and retrieving blobs of data by key
 type Blobstore interface {
+	// Path returns this blobstore's path.
+	Path() (path string)
+
 	// Exists returns true if a blob keyed by |key| exists.
 	Exists(ctx context.Context, key string) (ok bool, err error)
 

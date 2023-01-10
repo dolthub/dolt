@@ -407,15 +407,9 @@ func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRe
 	logger = logger.WithField(RepoPathField, repoPath)
 	defer func() { logger.Info("finished") }()
 
-	cs, err := rs.getStore(logger, repoPath)
+	_, err := rs.getStore(logger, repoPath)
 	if err != nil {
 		return nil, err
-	}
-
-	err = cs.Rebase(ctx)
-	if err != nil {
-		logger.WithError(err).Error("error rebasing chunk store")
-		return nil, status.Error(codes.Internal, "error calling Rebase on chunk store")
 	}
 
 	return &remotesapi.RebaseResponse{}, nil
@@ -489,12 +483,6 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 
 	cs, err := rs.getOrCreateStore(logger, repoPath, req.ClientRepoFormat.NbfVersion)
 	if err != nil {
-		return nil, err
-	}
-
-	err = cs.Rebase(ctx)
-	if err != nil {
-		logger.WithError(err).Error("error calling Rebase")
 		return nil, err
 	}
 
