@@ -26,12 +26,11 @@ const (
 )
 
 type blobstoreManifest struct {
-	name string
-	bs   blobstore.Blobstore
+	bs blobstore.Blobstore
 }
 
 func (bsm blobstoreManifest) Name() string {
-	return bsm.name
+	return bsm.bs.Path()
 }
 
 func manifestVersionAndContents(ctx context.Context, bs blobstore.Blobstore) (string, manifestContents, error) {

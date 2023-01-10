@@ -52,6 +52,10 @@ func NewGCSBlobstore(gcs *storage.Client, bucketName, prefix string) *GCSBlobsto
 	return &GCSBlobstore{bucket, bucketName, prefix}
 }
 
+func (bs *GCSBlobstore) Path() string {
+	return path.Join(bs.bucketName, bs.prefix)
+}
+
 // Exists returns true if a blob exists for the given key, and false if it does not.
 // For InMemoryBlobstore instances error should never be returned (though other
 // implementations of this interface can)
