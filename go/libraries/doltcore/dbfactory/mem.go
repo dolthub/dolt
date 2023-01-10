@@ -16,13 +16,10 @@ package dbfactory
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"net/url"
 
-	"github.com/google/uuid"
-
-	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -39,14 +36,16 @@ func (fact MemFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, 
 // CreateDB creates an in memory backed database
 func (fact MemFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	var db datas.Database
-	bs := blobstore.NewInMemoryBlobstore(uuid.New().String())
-	q := nbs.NewUnlimitedMemQuotaProvider()
-	bsStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	vrw := types.NewValueStore(bsStore)
-	ns := tree.NewNodeStore(bsStore)
+	storage := &chunks.MemoryStorage{}
+	cs := storage.NewViewWithFormat(nbf.VersionString())
+	//bs := blobstore.NewInMemoryBlobstore(uuid.New().String())
+	//q := nbs.NewUnlimitedMemQuotaProvider()
+	//cs, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
+	//if err != nil {
+	//	return nil, nil, nil, err
+	//}
+	vrw := types.NewValueStore(cs)
+	ns := tree.NewNodeStore(cs)
 	db = datas.NewTypesDatabase(vrw, ns)
 	return db, vrw, ns, nil
 }
