@@ -75,6 +75,10 @@ func NewLocalBlobstore(dir string) *LocalBlobstore {
 	return &LocalBlobstore{dir}
 }
 
+func (bs *LocalBlobstore) Path() string {
+	return bs.RootDir
+}
+
 // Get retrieves an io.reader for the portion of a blob specified by br along with
 // its version
 func (bs *LocalBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, string, error) {

@@ -38,6 +38,7 @@ func newByteSliceReadCloser(data []byte) *byteSliceReadCloser {
 
 // InMemoryBlobstore provides an in memory implementation of the Blobstore interface
 type InMemoryBlobstore struct {
+	path     string
 	mutex    sync.RWMutex
 	blobs    map[string][]byte
 	versions map[string]string
@@ -46,8 +47,16 @@ type InMemoryBlobstore struct {
 var _ Blobstore = &InMemoryBlobstore{}
 
 // NewInMemoryBlobstore creates an instance of an InMemoryBlobstore
-func NewInMemoryBlobstore() *InMemoryBlobstore {
-	return &InMemoryBlobstore{blobs: make(map[string][]byte), versions: make(map[string]string)}
+func NewInMemoryBlobstore(path string) *InMemoryBlobstore {
+	return &InMemoryBlobstore{
+		path:     path,
+		blobs:    make(map[string][]byte),
+		versions: make(map[string]string),
+	}
+}
+
+func (bs *InMemoryBlobstore) Path() string {
+	return bs.path
 }
 
 // Get retrieves an io.reader for the portion of a blob specified by br along with

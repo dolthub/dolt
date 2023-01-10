@@ -91,7 +91,7 @@ func TestConjoin(t *testing.T) {
 	t.Run("in-memory blobstore persister", func(t *testing.T) {
 		testConjoin(t, func(*testing.T) tablePersister {
 			return &blobstorePersister{
-				bs:        blobstore.NewInMemoryBlobstore(),
+				bs:        blobstore.NewInMemoryBlobstore(""),
 				blockSize: 4096,
 				q:         &UnlimitedQuotaProvider{},
 			}
