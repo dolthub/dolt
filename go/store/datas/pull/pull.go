@@ -136,18 +136,14 @@ func pull(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, walkAddrs WalkAd
 }
 
 func persistChunks(ctx context.Context, cs chunks.ChunkStore) error {
-	// todo: there is no call to rebase on an unsuccessful Commit()
-	// will  this loop forever?
 	var success bool
 	for !success {
 		r, err := cs.Root(ctx)
-
 		if err != nil {
 			return err
 		}
 
 		success, err = cs.Commit(ctx, r, r)
-
 		if err != nil {
 			return err
 		}

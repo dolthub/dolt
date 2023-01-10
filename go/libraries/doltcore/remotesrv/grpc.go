@@ -383,15 +383,6 @@ func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRe
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
 
-	logger.Printf("found %s", repoPath)
-
-	err = cs.Rebase(ctx)
-
-	if err != nil {
-		logger.Printf("error occurred during processing of Rebase rpc of %s details: %v", repoPath, err)
-		return nil, status.Errorf(codes.Internal, "failed to rebase: %v", err)
-	}
-
 	return &remotesapi.RebaseResponse{}, nil
 }
 
@@ -474,11 +465,6 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 	}
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
-	}
-
-	err = cs.Rebase(ctx)
-	if err != nil {
-		return nil, err
 	}
 
 	size, err := cs.Size(ctx)

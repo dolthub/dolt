@@ -110,6 +110,7 @@ type DoltChunkStore struct {
 	repoPath    string
 	repoToken   *atomic.Value // string
 	host        string
+	root        hash.Hash
 	csClient    remotesapi.ChunkStoreServiceClient
 	cache       ChunkCache
 	metadata    *remotesapi.GetRepoMetadataResponse
@@ -146,10 +147,15 @@ func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, pa
 		return nil, err
 	}
 
+	repoToken := new(atomic.Value)
+	if metadata.RepoToken != "" {
+		repoToken.Store(metadata.RepoToken)
+	}
+
 	cs := &DoltChunkStore{
 		repoId:      repoId,
 		repoPath:    path,
-		repoToken:   new(atomic.Value),
+		repoToken:   repoToken,
 		host:        host,
 		csClient:    csClient,
 		cache:       newMapChunkCache(),
@@ -157,6 +163,10 @@ func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, pa
 		nbf:         nbf,
 		httpFetcher: globalHttpFetcher,
 		concurrency: defaultConcurrency,
+	}
+	err = cs.loadRoot(ctx)
+	if err != nil {
+		return nil, err
 	}
 	return cs, nil
 }
@@ -167,6 +177,7 @@ func (dcs *DoltChunkStore) WithHTTPFetcher(fetcher HTTPFetcher) *DoltChunkStore 
 		repoPath:    dcs.repoPath,
 		repoToken:   new(atomic.Value),
 		host:        dcs.host,
+		root:        dcs.root,
 		csClient:    dcs.csClient,
 		cache:       dcs.cache,
 		metadata:    dcs.metadata,
@@ -183,6 +194,7 @@ func (dcs *DoltChunkStore) WithNoopChunkCache() *DoltChunkStore {
 		repoPath:    dcs.repoPath,
 		repoToken:   new(atomic.Value),
 		host:        dcs.host,
+		root:        dcs.root,
 		csClient:    dcs.csClient,
 		cache:       noopChunkCache,
 		metadata:    dcs.metadata,
@@ -200,6 +212,7 @@ func (dcs *DoltChunkStore) WithChunkCache(cache ChunkCache) *DoltChunkStore {
 		repoPath:    dcs.repoPath,
 		repoToken:   new(atomic.Value),
 		host:        dcs.host,
+		root:        dcs.root,
 		csClient:    dcs.csClient,
 		cache:       cache,
 		metadata:    dcs.metadata,
@@ -217,6 +230,7 @@ func (dcs *DoltChunkStore) WithDownloadConcurrency(concurrency ConcurrencyParams
 		repoPath:    dcs.repoPath,
 		repoToken:   new(atomic.Value),
 		host:        dcs.host,
+		root:        dcs.root,
 		csClient:    dcs.csClient,
 		cache:       dcs.cache,
 		metadata:    dcs.metadata,
@@ -796,17 +810,10 @@ func (dcs *DoltChunkStore) Version() string {
 // Rebase brings this ChunkStore into sync with the persistent storage's
 // current root.
 func (dcs *DoltChunkStore) Rebase(ctx context.Context) error {
-	id, token := dcs.getRepoId()
-	req := &remotesapi.RebaseRequest{RepoId: id, RepoToken: token, RepoPath: dcs.repoPath}
-	resp, err := dcs.csClient.Rebase(ctx, req)
+	err := dcs.loadRoot(ctx)
 	if err != nil {
-		return NewRpcError(err, "Rebase", dcs.host, req)
+		return err
 	}
-
-	if resp.RepoToken != "" {
-		dcs.repoToken.Store(token)
-	}
-
 	return dcs.refreshRepoMetadata(ctx)
 }
 
@@ -833,18 +840,21 @@ func (dcs *DoltChunkStore) refreshRepoMetadata(ctx context.Context) error {
 // Root returns the root of the database as of the time the ChunkStore
 // was opened or the most recent call to Rebase.
 func (dcs *DoltChunkStore) Root(ctx context.Context) (hash.Hash, error) {
+	return dcs.root, nil
+}
+
+func (dcs *DoltChunkStore) loadRoot(ctx context.Context) error {
 	id, token := dcs.getRepoId()
 	req := &remotesapi.RootRequest{RepoId: id, RepoToken: token, RepoPath: dcs.repoPath}
 	resp, err := dcs.csClient.Root(ctx, req)
 	if err != nil {
-		return hash.Hash{}, NewRpcError(err, "Root", dcs.host, req)
+		return NewRpcError(err, "Root", dcs.host, req)
 	}
-
 	if resp.RepoToken != "" {
 		dcs.repoToken.Store(resp.RepoToken)
 	}
-
-	return hash.New(resp.RootHash), nil
+	dcs.root = hash.New(resp.RootHash)
+	return nil
 }
 
 // Commit atomically attempts to persist all novel Chunks and update the
@@ -875,6 +885,10 @@ func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 		},
 	}
 	resp, err := dcs.csClient.Commit(ctx, req)
+	if err != nil {
+		return false, NewRpcError(err, "Commit", dcs.host, req)
+	}
+	err = dcs.loadRoot(ctx)
 	if err != nil {
 		return false, NewRpcError(err, "Commit", dcs.host, req)
 	}
