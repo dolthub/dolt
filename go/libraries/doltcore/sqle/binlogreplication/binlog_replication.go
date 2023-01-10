@@ -16,6 +16,7 @@ package binlogreplication
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -32,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/datas"
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -62,8 +64,17 @@ type doltBinlogReplicaController struct {
 var format mysql.BinlogFormat
 var tableMapsById = make(map[uint64]*mysql.TableMap)
 var stopReplicationChan = make(chan struct{})
-var currentGtid string
+
+// currentGtid is the current GTID being processed, but not yet committed
+var currentGtid mysql.GTID
+
 var replicationSourceUuid string
+
+// currentPosition records which GTIDs have been successfully executed
+var currentPosition *mysql.Position
+
+// positionStore is the singleton instance for loading/saving binlog position state to disk for durable storage
+var positionStore = &binlogPositionStore{}
 
 func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 	controller := doltBinlogReplicaController{
@@ -123,7 +134,19 @@ func (d *doltBinlogReplicaController) loadReplicationConfiguration(ctx *sql.Cont
 			"replication commands may only be used when running from dolt sql-server, and not from dolt sql")
 	}
 	engine := server.Engine
-	return engine.Analyzer.Catalog.MySQLDb.GetReplicaSourceInfo(), nil
+	replicaSourceInfoTableData := engine.Analyzer.Catalog.MySQLDb.ReplicaSourceInfoTable().Data()
+
+	// ReplicaSourceInfo is keyed on channel name, but we currently only support
+	// the default channel (""), so we use that regardless of what was passed in.
+	entries := replicaSourceInfoTableData.Get(mysql_db.ReplicaSourceInfoPrimaryKey{
+		Channel: "",
+	})
+
+	if len(entries) == 1 {
+		return entries[0].(*mysql_db.ReplicaSourceInfo), nil
+	}
+
+	return nil, nil
 }
 
 func (d *doltBinlogReplicaController) persistReplicationConfiguration(ctx *sql.Context, replicaSourceInfo *mysql_db.ReplicaSourceInfo) error {
@@ -146,6 +169,10 @@ func (d *doltBinlogReplicaController) SetReplicationOptions(ctx *sql.Context, op
 	replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
 	if err != nil {
 		return err
+	}
+
+	if replicaSourceInfo == nil {
+		replicaSourceInfo = &mysql_db.ReplicaSourceInfo{}
 	}
 
 	for _, option := range options {
@@ -178,10 +205,13 @@ func (d *doltBinlogReplicaController) SetReplicationOptions(ctx *sql.Context, op
 }
 
 func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlogreplication.ReplicaStatus, error) {
-	// TODO: If there is NO ReplicaSourceInfo, then we should return a nil reference, but we can't distinguish that yet
 	replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	if replicaSourceInfo == nil {
+		return nil, nil
 	}
 
 	d.mu.Lock()
@@ -228,6 +258,10 @@ func (d *doltBinlogReplicaController) connectAndStartReplicationEventStream(ctx 
 	for connectionAttempts := uint(0); ; connectionAttempts++ {
 		replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
 
+		if replicaSourceInfo != nil && replicaSourceInfo.Uuid != "" {
+			replicationSourceUuid = replicaSourceInfo.Uuid
+		}
+
 		// TODO: Validate that all required settings are present
 		connParams := mysql.ConnParams{
 			Host:  replicaSourceInfo.Host,
@@ -249,7 +283,7 @@ func (d *doltBinlogReplicaController) connectAndStartReplicationEventStream(ctx 
 
 	// Request binlog events to start
 	// TODO: This also needs retry logic
-	err = startReplicationEventStream(conn)
+	err = d.startReplicationEventStream(ctx, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +361,7 @@ func (d *doltBinlogReplicaController) replicaBinlogEventHandler(ctx *sql.Context
 
 func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.BinlogEvent) error {
 	var err error
-	createDoltCommit := false
+	createCommit := false
 
 	switch {
 	case event.IsRand():
@@ -340,8 +374,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// An XID event is generated for a COMMIT of a transaction that modifies one or more tables of an
 		// XA-capable storage engine. For more details, see: https://mariadb.com/kb/en/xid_event/
 		logger.Debug("Received binlog event: XID")
-		executeQueryWithEngine(ctx, engine, "commit;")
-		createDoltCommit = true
+		createCommit = true
 
 	case event.IsQuery():
 		// A Query event represents a statement executed on the source server that should be executed on the
@@ -359,7 +392,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		}).Debug("Received binlog event: Query")
 		ctx.SetCurrentDatabase(query.Database)
 		executeQueryWithEngine(ctx, engine, query.SQL)
-		createDoltCommit = strings.ToLower(query.SQL) != "begin"
+		createCommit = strings.ToLower(query.SQL) != "begin"
 
 	case event.IsRotate():
 		// When a binary log file exceeds the configured size limit, a ROTATE_EVENT is written at the end of the file,
@@ -406,16 +439,11 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 			"gtid":    gtid,
 			"isBegin": isBegin,
 		}).Debug("Received binlog event: GTID")
-		currentGtid = gtid.String()
-
+		currentGtid = gtid
 		err = d.persistSourceUuid(ctx, gtid.SourceServer())
 		if err != nil {
 			return err
 		}
-
-		// TODO: Our server restart test is failing, because it is getting duplicate primary key errors –
-		//       it isn't restarting the replication stream from teh right GTID sequence! We need to persist
-		//       what GTIDs we have processed and then restart replication from the correct event with auto-positioning.
 
 	case event.IsTableMap():
 		// Used for row-based binary logging beginning (binlog_format=ROW or MIXED). This event precedes each row
@@ -506,19 +534,30 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 			}
 			logger.Debugf("     - Data: %v ", sql.FormatRow(newRow))
 
-			writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database)
-			if err != nil {
-				return err
-			}
+			retryCount := 0
+			for {
+				writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database)
+				if err != nil {
+					return err
+				}
 
-			err = tableWriter.Insert(ctx, newRow)
-			if err != nil {
-				return err
-			}
+				err = tableWriter.Insert(ctx, newRow)
+				if err != nil {
+					return err
+				}
 
-			err = closeWriteSession(ctx, engine, tableMap.Database, writeSession)
-			if err != nil {
-				return err
+				err = closeWriteSession(ctx, engine, tableMap.Database, writeSession)
+				if err != nil {
+					if errors.Is(datas.ErrOptimisticLockFailed, err) && retryCount < 3 {
+						logger.Errorf("Retrying after error writing table updates: %s", err)
+						retryCount++
+						continue
+					} else {
+						return err
+					}
+				} else {
+					break
+				}
 			}
 		}
 
@@ -591,11 +630,22 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		}
 	}
 
-	// For now, create a Dolt commit from every data update. Eventually, we'll want to make this configurable.
-	if createDoltCommit {
+	if createCommit {
+		// TODO: Add support and tests for working with multiple databases
+		executeQueryWithEngine(ctx, engine, "commit;")
+
+		// Record the last GTID processed after the commit
+		// TODO: Update GTID sys vars, too
+		currentPosition.GTIDSet = currentPosition.GTIDSet.AddGTID(currentGtid)
+		err = positionStore.Save(ctx, currentPosition)
+		if err != nil {
+			return err
+		}
+
+		// For now, create a Dolt commit from every data update. Eventually, we'll want to make this configurable.
 		logger.Trace("Creating Dolt commit")
 		executeQueryWithEngine(ctx, engine,
-			fmt.Sprintf("call dolt_commit('-Am', 'automatic Dolt binlog replica commit: GTID %s');", currentGtid))
+			fmt.Sprintf("call dolt_commit('-Am', 'Dolt binlog replica commit: GTID %s');", currentGtid))
 	}
 
 	return nil
@@ -605,7 +655,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 // been persisted, then no action is taken.
 func (d *doltBinlogReplicaController) persistSourceUuid(ctx *sql.Context, sourceUuid interface{}) error {
 	// If the source UUID is already set, then there's no need to persist it again, since it can't change
-	if sourceUuid != "" {
+	if replicationSourceUuid != "" {
 		return nil
 	}
 
@@ -613,7 +663,10 @@ func (d *doltBinlogReplicaController) persistSourceUuid(ctx *sql.Context, source
 	if err != nil {
 		return err
 	}
+
 	replicaSourceInfo.Uuid = fmt.Sprintf("%v", sourceUuid)
+	replicationSourceUuid = replicaSourceInfo.Uuid
+
 	return d.persistReplicationConfiguration(ctx, replicaSourceInfo)
 }
 
@@ -683,6 +736,7 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 	}
 
 	// TODO: Does this work correctly?
+	//       Test with autoincrement? This shouldn't matter with row-based replication, but might still be worth testing.
 	tracker, err := globalstate.NewAutoIncrementTracker(ctx, ws)
 	if err != nil {
 		return nil, nil, err
@@ -786,15 +840,29 @@ func convertSqlTypesValue(value sqltypes.Value, column *sql.Column) (interface{}
 
 // startReplicationEventStream sends a request over |conn|, the connection to the MySQL source server, to begin
 // sending binlog events.
-func startReplicationEventStream(conn *mysql.Conn) error {
-	// TODO: unhardcode GTID starting ID 1 and use the last executed GTID if available
-	gtid := mysql.Mysql56GTID{
-		Sequence: 1,
+func (d *doltBinlogReplicaController) startReplicationEventStream(ctx *sql.Context, conn *mysql.Conn) error {
+	position, err := positionStore.Load(ctx)
+	if err != nil {
+		return err
 	}
-	startPosition := mysql.Position{GTIDSet: gtid.GTIDSet()}
+
+	if position == nil {
+		// When there is no existing record of executed GTIDs, we create a GTIDSet with just one transaction ID
+		// for the 0000 server ID. There doesn't seem to be a cleaner way of saying "start at the very beginning".
+		//
+		// Also... "starting position" is a bit of a misnomer – it's actually the processed GTIDs, which
+		// indicate the NEXT GTID where replication should start, but it's not as direct as specifying
+		// a starting position, like the function signature seems to suggest.
+		gtid := mysql.Mysql56GTID{
+			Sequence: 1,
+		}
+		position = &mysql.Position{GTIDSet: gtid.GTIDSet()}
+	}
+
+	currentPosition = position
 
 	// TODO: unhardcode 1 as the replica's server_id
-	return conn.SendBinlogDumpCommand(1, startPosition)
+	return conn.SendBinlogDumpCommand(1, *position)
 }
 
 func formatTableMapAsString(tableId uint64, tableMap *mysql.TableMap) string {

@@ -21,8 +21,8 @@ import (
 	"time"
 )
 
-// TestBinlogReplicationServerRestart tests that a replica can be configured and started, then the server process can
-// be restarted and replica can be restarted without problems.
+// TestBinlogReplicationServerRestart tests that a replica can be configured and started, then the
+// server process can be restarted and replica can be restarted without problems.
 func TestBinlogReplicationServerRestart(t *testing.T) {
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
@@ -43,9 +43,9 @@ func TestBinlogReplicationServerRestart(t *testing.T) {
 	}()
 
 	// Let replication run for a second, then restart the Dolt sql-server
-	time.Sleep(1 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 	stopDoltSqlServer(t)
-	time.Sleep(1 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 	var err error
 	doltPort, doltProcess, err = startDoltSqlServer(testDir)
 	require.NoError(t, err)
@@ -65,7 +65,7 @@ func TestBinlogReplicationServerRestart(t *testing.T) {
 	// Assert that all changes have replicated from the primary
 	wg.Wait()
 	time.Sleep(1 * time.Second)
-	countMaxQuery := "SELECT COUNT(pk) AS count, MAX(pk) as max FROM t;"
+	countMaxQuery := "SELECT COUNT(pk) AS count, MAX(pk) as max FROM db01.t;"
 	primaryRows, err := primaryDatabase.Queryx(countMaxQuery)
 	require.NoError(t, err)
 	replicaRows, err := replicaDatabase.Queryx(countMaxQuery)

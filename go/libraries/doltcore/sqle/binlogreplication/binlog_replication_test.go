@@ -256,7 +256,9 @@ func startSqlServers(t *testing.T) {
 }
 
 func stopDoltSqlServer(t *testing.T) {
-	err := doltProcess.Kill()
+	err := doltProcess.Signal(os.Interrupt)
+	require.NoError(t, err)
+	err = doltProcess.Kill()
 	require.NoError(t, err)
 	time.Sleep(1 * time.Second)
 }
