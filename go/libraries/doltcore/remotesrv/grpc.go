@@ -414,7 +414,7 @@ func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRe
 
 	err = cs.Rebase(ctx)
 	if err != nil {
-		logger.WithError(err).Error("error reabasing chunk store")
+		logger.WithError(err).Error("error rebasing chunk store")
 		return nil, status.Error(codes.Internal, "error calling Rebase on chunk store")
 	}
 
