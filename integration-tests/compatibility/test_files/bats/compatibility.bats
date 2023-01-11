@@ -210,7 +210,7 @@ EOF
     dolt_version=$( echo $ver | sed -e "s/^v//" )
     echo $dolt_version
 
-    if [[ $dolt_version > "0.28.0" ]]; then
+    if [ $dolt_version > "0.28.0" ] || [ -z "$dolt_version" ]; then
         run dolt sql -q "select * from dolt_schemas"
         [ "$status" -eq 0 ]
         [[ "${lines[1]}" =~ "| type | name  | fragment                                  |" ]] || false
