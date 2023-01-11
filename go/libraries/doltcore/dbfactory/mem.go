@@ -19,6 +19,7 @@ import (
 	"net/url"
 
 	"github.com/dolthub/dolt/go/store/chunks"
+
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -38,9 +39,14 @@ func (fact MemFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, u
 	var db datas.Database
 	storage := &chunks.MemoryStorage{}
 	cs := storage.NewViewWithFormat(nbf.VersionString())
+	//bs := blobstore.NewInMemoryBlobstore(uuid.New().String())
+	//q := nbs.NewUnlimitedMemQuotaProvider()
+	//cs, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
+	//if err != nil {
+	//	return nil, nil, nil, err
+	//}
 	vrw := types.NewValueStore(cs)
 	ns := tree.NewNodeStore(cs)
 	db = datas.NewTypesDatabase(vrw, ns)
-
 	return db, vrw, ns, nil
 }

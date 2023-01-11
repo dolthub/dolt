@@ -226,11 +226,13 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 		datasDB := doltdb.HackDatasDatabaseFromDoltDB(destDB)
 		cs := datas.ChunkStoreFromDatabase(datasDB)
 		var curRootHash hash.Hash
-		if curRootHash, err = cs.Root(ctx); err == nil {
-			var ok bool
-			ok, err = cs.Commit(ctx, toPush, curRootHash)
-			if err == nil && !ok {
-				err = errDestDBRootHashMoved
+		if err = cs.Rebase(ctx); err == nil {
+			if curRootHash, err = cs.Root(ctx); err == nil {
+				var ok bool
+				ok, err = cs.Commit(ctx, toPush, curRootHash)
+				if err == nil && !ok {
+					err = errDestDBRootHashMoved
+				}
 			}
 		}
 	}
