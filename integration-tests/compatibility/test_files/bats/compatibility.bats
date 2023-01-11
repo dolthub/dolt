@@ -207,10 +207,10 @@ EOF
 }
 
 @test "dolt_schemas" {
-    dolt_version=$( dolt version | head -n 1 | sed "s/^.*dolt version \([^;]*\).*/\1/" )
+    dolt_version=$( dolt version | head -n 1 | sed "s/^.*dolt version \([^;]*\).*/\1/" | sed -e "s/^v//" )
     echo $dolt_version
 
-    if [[ $dolt_version > "v0.28.0" ]]; then
+    if [[ $dolt_version > "0.28.0" ]]; then
         run dolt sql -q "select * from dolt_schemas"
         [ "$status" -eq 0 ]
         [[ "${lines[1]}" =~ "| type | name  | fragment                                  |" ]] || false
