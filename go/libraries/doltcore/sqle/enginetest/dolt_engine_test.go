@@ -280,7 +280,6 @@ func TestQueryErrors(t *testing.T) {
 	enginetest.TestQueryErrors(t, newDoltHarness(t))
 }
 
-// Failing with blob not found
 func TestInfoSchema(t *testing.T) {
 	enginetest.TestInfoSchema(t, newDoltHarness(t))
 }
