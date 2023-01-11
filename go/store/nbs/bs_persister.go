@@ -20,8 +20,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 )
@@ -80,8 +78,10 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 	if err != nil {
 		return nil, err
 	}
+	address := nameFromSuffixes(plan.suffixes())
+	name := address.String()
 
-	// conjoin must contiguously append the chunk records of |sources|, but the raw contents
+	// conjoin must contiguously append the chunk records of |sources|, but the raw content
 	// of each source contains a chunk index in the tail. Blobstore does not expose a range
 	// copy (GCP Storage limitation), so we must create sub-objects from each source that
 	// contain only chunk records. We make an effort to store these sub-objects on Persist(),
@@ -96,17 +96,19 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 		conjoinees = append(conjoinees, sub)
 	}
 
-	index := uuid.New().String()
-	if _, err = blobstore.PutBytes(ctx, bsp.bs, index, plan.mergedIndex); err != nil {
+	// first concatenate all the sub-objects to create a composite sub-object
+	if _, err = bsp.bs.Concatenate(ctx, name+tableRecordsExt, conjoinees); err != nil {
 		return nil, err
 	}
-	conjoinees = append(conjoinees, index) // mergedIndex goes last
+	if _, err = blobstore.PutBytes(ctx, bsp.bs, name+tableTailExt, plan.mergedIndex); err != nil {
+		return nil, err
+	}
+	// then concatenate into a final blob
+	if _, err = bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt}); err != nil {
+		return emptyChunkSource{}, err
+	}
 
-	name := nameFromSuffixes(plan.suffixes())
-	if _, err = bsp.bs.Concatenate(ctx, name.String(), conjoinees); err != nil {
-		return nil, err
-	}
-	return newBSChunkSource(ctx, bsp.bs, name, plan.chunkCount, bsp.q, stats)
+	return newBSChunkSource(ctx, bsp.bs, address, plan.chunkCount, bsp.q, stats)
 }
 
 func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunkSource) (name string, err error) {
