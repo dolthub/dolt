@@ -21,8 +21,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -36,7 +34,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	diff2 "github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // constraintViolationsLoadedTable is a collection of items needed to process constraint violations for a single table.
