@@ -419,11 +419,12 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 			}
 		}
 
-		// Using lvs.getAddrs here makes a few store/types tests fail
 		getAddrs := func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
 			return hash.NewHashSet(), nil
 		}
-
+		if !lvs.enforceCompleteness {
+			getAddrs = lvs.getAddrs
+		}
 		return lvs.cs.Put(ctx, c, getAddrs)
 	}
 

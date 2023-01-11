@@ -343,7 +343,7 @@ func TestSkipEnforceCompleteness(t *testing.T) {
 	l, err := NewList(context.Background(), vs, r)
 	require.NoError(t, err)
 	_, err = vs.WriteValue(context.Background(), l)
-	require.NoError(t, err)
+	require.Error(t, err) // dangling ref, fails in bufferChunk when enforceCompleteness is true
 
 	rt, err := vs.Root(context.Background())
 	require.NoError(t, err)
