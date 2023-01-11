@@ -207,7 +207,7 @@ EOF
 }
 
 @test "dolt_schemas" {
-    dolt_version=$( dolt version | head -n 1 | sed "s/^.*dolt version \([^;]*\).*/\1/" | sed -e "s/^v//" )
+    dolt_version=$( echo $ver | sed -e "s/^v//" )
     echo $dolt_version
 
     if [[ $dolt_version > "0.28.0" ]]; then
