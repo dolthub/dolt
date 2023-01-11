@@ -66,6 +66,30 @@ teardown() {
     [[ "$output" =~ "Rows inserted: 6 Rows updated: 0 Rows deleted: 0" ]] || false
 }
 
+@test "dump: SQL type - database name is reserved word/keyword" {
+    dolt sql -q "CREATE DATABASE \`interval\`;"
+    cd interval
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
+    dolt sql -q "INSERT INTO new_table VALUES (1);"
+    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
+    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
+    dolt sql -q "create table enums (a varchar(10) primary key, b enum('one','two','three'))"
+    dolt sql -q "insert into enums values ('abc', 'one'), ('def', 'two')"
+
+    run dolt dump
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump.sql ]
+
+    run grep "CREATE DATABASE IF NOT EXISTS \`interval\`" doltdump.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+
+    run dolt sql -b < doltdump.sql
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows inserted: 6 Rows updated: 0 Rows deleted: 0" ]] || false
+}
+
 @test "dump: SQL type - compare tables in database with tables imported file " {
     dolt branch new_branch
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
