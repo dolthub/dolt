@@ -37,32 +37,9 @@ func pullerProgFunc(ctx context.Context, statsCh <-chan pull.Stats) {
 	}
 }
 
-func progFunc(ctx context.Context, progChan <-chan pull.PullProgress) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-progChan:
-		default:
-		}
-	}
-}
-
-func NoopRunProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.Stats) {
+func NoopRunProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.Stats) {
 	statsCh := make(chan pull.Stats)
-	progChan := make(chan pull.PullProgress)
 	wg := &sync.WaitGroup{}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		progFunc(ctx, progChan)
-	}()
 
 	wg.Add(1)
 	go func() {
@@ -70,12 +47,11 @@ func NoopRunProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgr
 		pullerProgFunc(ctx, statsCh)
 	}()
 
-	return wg, progChan, statsCh
+	return wg, statsCh
 }
 
-func NoopStopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, statsCh chan pull.Stats) {
+func NoopStopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, statsCh chan pull.Stats) {
 	cancel()
-	close(progChan)
 	close(statsCh)
 	wg.Wait()
 }

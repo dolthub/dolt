@@ -263,17 +263,12 @@ func mustForkDB(t *testing.T, fromDB *doltdb.DoltDB, bn string, cm *doltdb.Commi
 	forkEnv := createUninitializedEnv()
 	err = forkEnv.InitRepo(context.Background(), types.Format_Default, "Bill Billerson", "bill@billerson.com", env.DefaultInitBranch)
 	require.NoError(t, err)
-	p1 := make(chan pull.PullProgress)
-	p2 := make(chan pull.Stats)
+	ps := make(chan pull.Stats)
 	go func() {
-		for range p1 {
+		for range ps {
 		}
 	}()
-	go func() {
-		for range p2 {
-		}
-	}()
-	err = forkEnv.DoltDB.PullChunks(context.Background(), "", fromDB, []hash.Hash{h}, p1, p2)
+	err = forkEnv.DoltDB.PullChunks(context.Background(), "", fromDB, []hash.Hash{h}, ps)
 	if err == pull.ErrDBUpToDate {
 		err = nil
 	}

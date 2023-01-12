@@ -192,31 +192,9 @@ func pullerProgFunc(ctx context.Context, statsCh <-chan pull.Stats) {
 }
 
 // TODO: remove this as it does not do anything useful
-func progFunc(ctx context.Context, progChan <-chan pull.PullProgress) {
-	for {
-		if ctx.Err() != nil {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-progChan:
-		default:
-		}
-	}
-}
-
-// TODO: remove this as it does not do anything useful
-func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.Stats) {
+func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.Stats) {
 	statsCh := make(chan pull.Stats)
-	progChan := make(chan pull.PullProgress)
 	wg := &sync.WaitGroup{}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		progFunc(ctx, progChan)
-	}()
 
 	wg.Add(1)
 	go func() {
@@ -224,13 +202,12 @@ func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress,
 		pullerProgFunc(ctx, statsCh)
 	}()
 
-	return wg, progChan, statsCh
+	return wg, statsCh
 }
 
 // TODO: remove this as it does not do anything useful
-func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, statsCh chan pull.Stats) {
+func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, statsCh chan pull.Stats) {
 	cancel()
-	close(progChan)
 	close(statsCh)
 	wg.Wait()
 }

@@ -218,7 +218,7 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 
 	if err != nil {
 		if err == io.EOF {
-			err = fmt.Errorf("EOF read while tring to get nbf format len - %w", ErrCorruptNVF)
+			err = fmt.Errorf("EOF read while trying to get nbf format len - %w", ErrCorruptNVF)
 		}
 
 		return hash.Hash{}, nil, err
@@ -228,7 +228,7 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 
 	if err != nil {
 		if err == io.EOF {
-			err = fmt.Errorf("EOF read while tring to get nbf format string - %w", ErrCorruptNVF)
+			err = fmt.Errorf("EOF read while trying to get nbf format string - %w", ErrCorruptNVF)
 		}
 
 		return hash.Hash{}, nil, err
@@ -308,7 +308,7 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 		}
 
 		err = store.Put(ctx, ch, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-			return types.AddrsFromNomsValue(ctx, c, store.nbf)
+			return nil, nil
 		})
 
 		if err != nil {

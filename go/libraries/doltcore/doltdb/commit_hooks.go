@@ -60,7 +60,7 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, ds datas.Dat
 		return err
 	}
 
-	err := pullHash(ctx, destDB, srcDB, []hash.Hash{addr}, tmpDir, nil, nil)
+	err := pullHash(ctx, destDB, srcDB, []hash.Hash{addr}, tmpDir, nil)
 	if err != nil {
 		return err
 	}
