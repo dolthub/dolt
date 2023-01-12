@@ -262,6 +262,9 @@ func (p DoltDatabaseProvider) attemptCloneReplica(ctx *sql.Context, dbName strin
 
 func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 	_, err := p.Database(ctx, name)
+	if err != nil {
+		ctx.GetLogger().Errorf(err.Error())
+	}
 	return err == nil
 }
 

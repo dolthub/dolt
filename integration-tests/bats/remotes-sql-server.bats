@@ -430,6 +430,38 @@ teardown() {
     [[ "$output" =~ "empty" ]] || false
 }
 
+@test "remotes-sql-server: connect to remote tracking branch fails if there are multiple remotes" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+    dolt checkout -b feature
+    dolt commit -am "first commit"
+    dolt push remote1 feature
+    dolt checkout main
+    dolt push remote1 main
+
+    cd ../repo2
+    dolt fetch
+    dolt remote add remote2 file://../rem1
+    dolt fetch remote2
+    run dolt branch
+    [[ ! "$output" =~ "feature" ]] || false
+
+    start_sql_server repo2 >> server_log.txt 2>&1
+
+    # No data on main
+    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "show tables"
+    [ $status -eq 0 ]
+    [ "$output" = "" ]
+
+    run dolt sql-client --use-db repo2/feature -P $PORT -u dolt -q "select active_branch()"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "database not found: repo2/feature" ]] || false
+
+    run grep "'feature' matched multiple remote tracking branches" server_log.txt
+    [ "${#lines[@]}" -ne 0 ]
+}
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 13-44
 }
