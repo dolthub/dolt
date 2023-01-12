@@ -46,6 +46,7 @@ const (
 	noBatchFlag      = "no-batch"
 	noAutocommitFlag = "no-autocommit"
 	schemaOnlyFlag   = "schema-only"
+	noCreateDbFlag   = "no-create-db"
 
 	sqlFileExt     = "sql"
 	csvFileExt     = "csv"
@@ -65,7 +66,7 @@ csv,json or parquet file.
 `,
 
 	Synopsis: []string{
-		"[-f] [-r {{.LessThan}}result-format{{.GreaterThan}}] [-fn {{.LessThan}}file_name{{.GreaterThan}}]  [-d {{.LessThan}}directory{{.GreaterThan}}] [--batch] [--no-batch] [--no-autocommit] ",
+		"[-f] [-r {{.LessThan}}result-format{{.GreaterThan}}] [-fn {{.LessThan}}file_name{{.GreaterThan}}]  [-d {{.LessThan}}directory{{.GreaterThan}}] [--batch] [--no-batch] [--no-autocommit] [--no-create-db] ",
 	},
 }
 
@@ -97,6 +98,7 @@ func (cmd DumpCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(noBatchFlag, "", "Emit one row per statement, instead of batching multiple rows into each statement.")
 	ap.SupportsFlag(noAutocommitFlag, "na", "Turn off autocommit for each dumped table. Useful for speeding up loading of output SQL file.")
 	ap.SupportsFlag(schemaOnlyFlag, "", "Dump a table's schema, without including any data, to the output SQL file.")
+	ap.SupportsFlag(noCreateDbFlag, "", "Do not write `CREATE DATABASE` statements in SQL files.")
 	return ap
 }
 
@@ -178,9 +180,20 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return HandleVErrAndExitCode(err, usage)
 		}
 
-		err2 := addBulkLoadingParadigms(dEnv, fPath)
-		if err2 != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err2), usage)
+		if !apr.Contains(noCreateDbFlag) {
+			dbName, err := getActiveDatabaseName(ctx, dEnv)
+			if err != nil {
+				return HandleVErrAndExitCode(err, usage)
+			}
+			err = addCreateDatabaseHeader(dEnv, fPath, dbName)
+			if err != nil {
+				return HandleVErrAndExitCode(err, usage)
+			}
+		}
+
+		err = addBulkLoadingParadigms(dEnv, fPath)
+		if err != nil {
+			return HandleVErrAndExitCode(err, usage)
 		}
 
 		for _, tbl := range tblNames {
@@ -460,21 +473,62 @@ func dumpNonSqlTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dol
 // cc. https://dev.mysql.com/doc/refman/8.0/en/optimizing-innodb-bulk-data-loading.html
 // This includes turning off FOREIGN_KEY_CHECKS and UNIQUE_CHECKS off at the beginning of the file.
 // Note that the standard mysqldump program turns these variables off.
-func addBulkLoadingParadigms(dEnv *env.DoltEnv, fPath string) error {
+func addBulkLoadingParadigms(dEnv *env.DoltEnv, fPath string) errhand.VerboseError {
 	writer, err := dEnv.FS.OpenForWriteAppend(fPath, os.ModePerm)
 	if err != nil {
-		return err
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	_, err = writer.Write([]byte("SET FOREIGN_KEY_CHECKS=0;\n"))
 	if err != nil {
-		return err
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	_, err = writer.Write([]byte("SET UNIQUE_CHECKS=0;\n"))
 	if err != nil {
-		return err
+		return errhand.VerboseErrorFromError(err)
 	}
 
-	return writer.Close()
+	_ = writer.Close()
+
+	return nil
+}
+
+// addCreateDatabaseHeader adds a CREATE DATABASE header to prevent `no database selected` errors on dump file ingestion.
+func addCreateDatabaseHeader(dEnv *env.DoltEnv, fPath, dbName string) errhand.VerboseError {
+	writer, err := dEnv.FS.OpenForWriteAppend(fPath, os.ModePerm)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	str := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%[1]s`; USE `%[1]s`; \n", dbName)
+	_, err = writer.Write([]byte(str))
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	_ = writer.Close()
+
+	return nil
+}
+
+// TODO: find a more elegant way to get database name, possibly implement a method in DoltEnv
+// getActiveDatabaseName returns the name of the current active database
+func getActiveDatabaseName(ctx context.Context, dEnv *env.DoltEnv) (string, errhand.VerboseError) {
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	if err != nil {
+		return "", errhand.VerboseErrorFromError(err)
+	}
+
+	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
+	var dbName string
+	err = mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
+		dbName = name
+		return true, nil
+	})
+	if err != nil {
+		return "", errhand.VerboseErrorFromError(err)
+	}
+
+	return dbName, nil
 }
