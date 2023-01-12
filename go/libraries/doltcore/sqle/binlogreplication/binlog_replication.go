@@ -122,64 +122,8 @@ func (d *doltBinlogReplicaController) StopReplica(_ *sql.Context) error {
 	return nil
 }
 
-func (d *doltBinlogReplicaController) loadReplicationConfiguration(ctx *sql.Context) (*mysql_db.ReplicaSourceInfo, error) {
-	server := sqlserver.GetRunningServer()
-	if server == nil {
-		return nil, fmt.Errorf("no SQL server running; " +
-			"replication commands may only be used when running from dolt sql-server, and not from dolt sql")
-	}
-	engine := server.Engine
-	replicaSourceInfoTableData := engine.Analyzer.Catalog.MySQLDb.ReplicaSourceInfoTable().Data()
-
-	// ReplicaSourceInfo is keyed on channel name, but we currently only support
-	// the default channel (""), so we use that regardless of what was passed in.
-	entries := replicaSourceInfoTableData.Get(mysql_db.ReplicaSourceInfoPrimaryKey{
-		Channel: "",
-	})
-
-	if len(entries) == 1 {
-		return entries[0].(*mysql_db.ReplicaSourceInfo), nil
-	}
-
-	return nil, nil
-}
-
-// TODO: These interfaces to persist configuration could be pulled out into a separate type/file
-func (d *doltBinlogReplicaController) deleteReplicationConfiguration(ctx *sql.Context) error {
-	server := sqlserver.GetRunningServer()
-	if server == nil {
-		return fmt.Errorf("no SQL server running; " +
-			"replication commands may only be used when running from dolt sql-server, and not from dolt sql")
-	}
-	engine := server.Engine
-
-	replicaSourceInfoTableData := engine.Analyzer.Catalog.MySQLDb.ReplicaSourceInfoTable().Data()
-	err := replicaSourceInfoTableData.Remove(ctx, mysql_db.ReplicaSourceInfoPrimaryKey{}, nil)
-	if err != nil {
-		return err
-	}
-
-	return engine.Analyzer.Catalog.MySQLDb.Persist(ctx)
-}
-
-func (d *doltBinlogReplicaController) persistReplicationConfiguration(ctx *sql.Context, replicaSourceInfo *mysql_db.ReplicaSourceInfo) error {
-	server := sqlserver.GetRunningServer()
-	if server == nil {
-		return fmt.Errorf("no SQL server running; " +
-			"replication commands may only be used when running from dolt sql-server, and not from dolt sql")
-	}
-	engine := server.Engine
-
-	replicaSourceInfoTableData := engine.Analyzer.Catalog.MySQLDb.ReplicaSourceInfoTable().Data()
-	err := replicaSourceInfoTableData.Put(ctx, replicaSourceInfo)
-	if err != nil {
-		return err
-	}
-	return engine.Analyzer.Catalog.MySQLDb.Persist(ctx)
-}
-
 func (d *doltBinlogReplicaController) SetReplicationSourceOptions(ctx *sql.Context, options []binlogreplication.ReplicationOption) error {
-	replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
+	replicaSourceInfo, err := loadReplicationConfiguration(ctx)
 	if err != nil {
 		return err
 	}
@@ -223,11 +167,11 @@ func (d *doltBinlogReplicaController) SetReplicationSourceOptions(ctx *sql.Conte
 	}
 
 	// Persist the updated replica source configuration to disk
-	return d.persistReplicationConfiguration(ctx, replicaSourceInfo)
+	return persistReplicationConfiguration(ctx, replicaSourceInfo)
 }
 
 func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlogreplication.ReplicaStatus, error) {
-	replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
+	replicaSourceInfo, err := loadReplicationConfiguration(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +224,7 @@ func (d *doltBinlogReplicaController) connectAndStartReplicationEventStream(ctx 
 	var conn *mysql.Conn
 	var err error
 	for connectionAttempts := uint64(0); ; connectionAttempts++ {
-		replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
+		replicaSourceInfo, err := loadReplicationConfiguration(ctx)
 
 		if replicaSourceInfo != nil && replicaSourceInfo.Uuid != "" {
 			replicationSourceUuid = replicaSourceInfo.Uuid
@@ -462,7 +406,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 			"isBegin": isBegin,
 		}).Debug("Received binlog event: GTID")
 		currentGtid = gtid
-		err = d.persistSourceUuid(ctx, gtid.SourceServer())
+		err = persistSourceUuid(ctx, gtid.SourceServer())
 		if err != nil {
 			return err
 		}
@@ -671,25 +615,6 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 	}
 
 	return nil
-}
-
-// persistSourceUuid saves the specified |sourceUuid| to a persistent storage location. If the source UUID has already
-// been persisted, then no action is taken.
-func (d *doltBinlogReplicaController) persistSourceUuid(ctx *sql.Context, sourceUuid interface{}) error {
-	// If the source UUID is already set, then there's no need to persist it again, since it can't change
-	if replicationSourceUuid != "" {
-		return nil
-	}
-
-	replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
-	if err != nil {
-		return err
-	}
-
-	replicaSourceInfo.Uuid = fmt.Sprintf("%v", sourceUuid)
-	replicationSourceUuid = replicaSourceInfo.Uuid
-
-	return d.persistReplicationConfiguration(ctx, replicaSourceInfo)
 }
 
 // closeWriteSession flushes and closes the specified |writeSession| and returns an error if anything failed.
