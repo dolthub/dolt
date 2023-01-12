@@ -71,6 +71,45 @@ func TestBinlogReplicationSanityCheck(t *testing.T) {
 	assertCreateTableStatement(t, replicaDatabase, "t", expectedStatement)
 }
 
+// TestResetReplica tests that "RESET REPLICA" and "RESET REPLICA ALL" correctly clear out
+// replication configuration and metadata.
+func TestResetReplica(t *testing.T) {
+	startSqlServers(t)
+	startReplication(t, mySqlPort)
+	defer teardown(t)
+
+	// RESET REPLICA returns an error if replication is running
+	rows, err := replicaDatabase.Queryx("RESET REPLICA")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "unable to reset replica while replication is running")
+
+	// Calling RESET REPLICA clears out any errors
+	replicaDatabase.MustExec("STOP REPLICA;")
+	rows, err = replicaDatabase.Queryx("RESET REPLICA;")
+	require.NoError(t, err)
+	rows, err = replicaDatabase.Queryx("SHOW REPLICA STATUS;")
+	status := convertByteArraysToStrings(readNextRow(t, rows))
+	require.NoError(t, err)
+	require.Equal(t, "0", status["Last_Errno"])
+	require.Equal(t, "", status["Last_Error"])
+	require.Equal(t, "0", status["Last_IO_Errno"])
+	require.Equal(t, "", status["Last_IO_Error"])
+	require.Equal(t, "", status["Last_IO_Error_Timestamp"])
+	require.Equal(t, "0", status["Last_SQL_Errno"])
+	require.Equal(t, "", status["Last_SQL_Error"])
+	require.Equal(t, "", status["Last_SQL_Error_Timestamp"])
+
+	// Calling RESET REPLICA ALL clears out all replica configuration
+	rows, err = replicaDatabase.Queryx("RESET REPLICA ALL;")
+	require.NoError(t, err)
+	rows, err = replicaDatabase.Queryx("SHOW REPLICA STATUS;")
+	require.NoError(t, err)
+	require.False(t, rows.Next())
+	rows, err = replicaDatabase.Queryx("select * from mysql.slave_master_info;")
+	require.NoError(t, err)
+	require.False(t, rows.Next())
+}
+
 // TestDoltCommits tests that Dolt commits are created and use correct transaction boundaries.
 func TestDoltCommits(t *testing.T) {
 	startSqlServers(t)

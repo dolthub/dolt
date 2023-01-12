@@ -119,6 +119,13 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 
 func (d *doltBinlogReplicaController) StopReplica(_ *sql.Context) error {
 	stopReplicationChan <- struct{}{}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.status.ReplicaIoRunning = binlogreplication.ReplicaIoNotRunning
+	d.status.ReplicaSqlRunning = binlogreplication.ReplicaSqlNotRunning
+
 	return nil
 }
 
@@ -192,6 +199,41 @@ func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlo
 	copy.SourceRetryCount = replicaSourceInfo.ConnectRetryCount
 
 	return &copy, nil
+}
+
+// SetReplicationFilterOptions implements the BinlogReplicaController interface
+func (d *doltBinlogReplicaController) SetReplicationFilterOptions(ctx *sql.Context, options []binlogreplication.ReplicationOption) error {
+	panic("implement me")
+}
+
+// ResetReplica implements the BinlogReplicaController interface
+func (d *doltBinlogReplicaController) ResetReplica(ctx *sql.Context, resetAll bool) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.status.ReplicaIoRunning != binlogreplication.ReplicaIoNotRunning ||
+		d.status.ReplicaSqlRunning != binlogreplication.ReplicaSqlNotRunning {
+		return fmt.Errorf("unable to reset replica while replication is running; stop replication and try again")
+	}
+
+	// Reset error status
+	d.status.LastIoErrNumber = 0
+	d.status.LastSqlErrNumber = 0
+	d.status.LastIoErrorTimestamp = nil
+	d.status.LastSqlErrorTimestamp = nil
+	d.status.LastSqlError = ""
+	d.status.LastIoError = ""
+
+	if resetAll {
+		err := deleteReplicationConfiguration(ctx)
+		if err != nil {
+			return err
+		}
+
+		// TODO: Delete replication filters once they are supported
+	}
+
+	return nil
 }
 
 // Row Flags – https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
