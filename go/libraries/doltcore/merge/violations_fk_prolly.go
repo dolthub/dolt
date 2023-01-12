@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -39,8 +38,7 @@ func prollyParentFkConstraintViolations(
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild *constraintViolationsLoadedTable,
 	preParentRowData prolly.Map,
-	theirRootIsh hash.Hash,
-	jsonData []byte) (*doltdb.Table, bool, error) {
+	receiver FKViolationReceiver) error {
 	postParentRowData := durable.ProllyMapFromIndex(postParent.RowData)
 	postParentIndexData := durable.ProllyMapFromIndex(postParent.IndexData)
 
@@ -48,20 +46,11 @@ func prollyParentFkConstraintViolations(
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	partialKB := val.NewTupleBuilder(partialDesc)
 
-	artIdx, err := postChild.Table.GetArtifacts(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-	artM := durable.ProllyMapFromArtifactIndex(artIdx)
-	artEditor := artM.Editor()
-
 	childPriIdx := durable.ProllyMapFromIndex(postChild.RowData)
 	childScndryIdx := durable.ProllyMapFromIndex(postChild.IndexData)
 	primaryKD, _ := childPriIdx.Descriptors()
 
-	var foundViolation bool
-
-	err = prolly.DiffMaps(ctx, preParentRowData, postParentRowData, func(ctx context.Context, diff tree.Diff) error {
+	err := prolly.DiffMaps(ctx, preParentRowData, postParentRowData, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.RemovedDiff, tree.ModifiedDiff:
 			partialKey, hadNulls := makePartialKey(partialKB, foreignKey.ReferencedTableColumns, postParent.Index, postParent.Schema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentRowData.Pool())
@@ -87,12 +76,10 @@ func prollyParentFkConstraintViolations(
 
 			// All equivalent parents were deleted, let's check for dangling children.
 			// We search for matching keys in the child's secondary index
-			found, err := createCVsForPartialKeyMatches(ctx, partialKey, partialDesc, artEditor, primaryKD, childPriIdx, childScndryIdx, childPriIdx.Pool(), jsonData, theirRootIsh, postChild.TableName)
+			err = createCVsForPartialKeyMatches(ctx, partialKey, partialDesc, primaryKD, childPriIdx, childScndryIdx, childPriIdx.Pool(), receiver)
 			if err != nil {
 				return err
 			}
-
-			foundViolation = foundViolation || found
 
 		case tree.AddedDiff:
 		default:
@@ -102,20 +89,10 @@ func prollyParentFkConstraintViolations(
 		return nil
 	})
 	if err != nil && err != io.EOF {
-		return nil, false, err
+		return err
 	}
 
-	artM, err = artEditor.Flush(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-
-	updated, err := postChild.Table.SetArtifacts(ctx, durable.ArtifactIndexFromProllyMap(artM))
-	if err != nil {
-		return nil, false, err
-	}
-
-	return updated, foundViolation, nil
+	return nil
 }
 
 func prollyChildFkConstraintViolations(
@@ -123,27 +100,16 @@ func prollyChildFkConstraintViolations(
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild *constraintViolationsLoadedTable,
 	preChildRowData prolly.Map,
-	theirRootIsh hash.Hash,
-	jsonData []byte) (*doltdb.Table, bool, error) {
+	receiver FKViolationReceiver) error {
 	postChildRowData := durable.ProllyMapFromIndex(postChild.RowData)
 
 	idxDesc := postChild.Index.Schema().GetKeyDescriptor()
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	partialKB := val.NewTupleBuilder(partialDesc)
 
-	artIdx, err := postChild.Table.GetArtifacts(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-	artM := durable.ProllyMapFromArtifactIndex(artIdx)
-	artEditor := artM.Editor()
-
 	parentScndryIdx := durable.ProllyMapFromIndex(postParent.IndexData)
 
-	var foundViolation bool
-	kd, vd := postChildRowData.Descriptors()
-
-	err = prolly.DiffMaps(ctx, preChildRowData, postChildRowData, func(ctx context.Context, diff tree.Diff) error {
+	err := prolly.DiffMaps(ctx, preChildRowData, postChildRowData, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
 			k, v := val.Tuple(diff.Key), val.Tuple(diff.To)
@@ -152,11 +118,10 @@ func prollyChildFkConstraintViolations(
 				return nil
 			}
 
-			found, err := createCVIfNoPartialKeyMatches(ctx, k, v, partialKey, kd, vd, partialDesc, parentScndryIdx, artEditor, jsonData, theirRootIsh, postChild.TableName)
+			err := createCVIfNoPartialKeyMatches(ctx, k, v, partialKey, partialDesc, parentScndryIdx, receiver)
 			if err != nil {
 				return err
 			}
-			foundViolation = foundViolation || found
 		case tree.RemovedDiff:
 		default:
 			panic("unhandled diff type")
@@ -164,51 +129,36 @@ func prollyChildFkConstraintViolations(
 		return nil
 	})
 	if err != nil && err != io.EOF {
-		return nil, false, err
+		return err
 	}
 
-	artM, err = artEditor.Flush(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-
-	updated, err := postChild.Table.SetArtifacts(ctx, durable.ArtifactIndexFromProllyMap(artM))
-	if err != nil {
-		return nil, false, err
-	}
-
-	return updated, foundViolation, nil
+	return nil
 }
 
 func createCVIfNoPartialKeyMatches(
 	ctx context.Context,
 	k, v, partialKey val.Tuple,
-	kd, vd, partialKeyDesc val.TupleDesc,
+	partialKeyDesc val.TupleDesc,
 	idx prolly.Map,
-	editor prolly.ArtifactsEditor,
-	jsonData []byte,
-	theirRootIsh hash.Hash,
-	tblName string) (bool, error) {
+	receiver FKViolationReceiver) error {
 	itr, err := creation.NewPrefixItr(ctx, partialKey, partialKeyDesc, idx)
 	if err != nil {
-		return false, err
+		return err
 	}
 	_, _, err = itr.Next(ctx)
 	if err != nil && err != io.EOF {
-		return false, err
+		return err
 	}
 	if err == nil {
-		return false, nil
+		return nil
 	}
 
-	meta := prolly.ConstraintViolationMeta{VInfo: jsonData, Value: v}
-
-	err = editor.ReplaceConstraintViolation(ctx, k, theirRootIsh, prolly.ArtifactTypeForeignKeyViol, meta)
+	err = receiver.ProllyFKViolationFound(ctx, k, v)
 	if err != nil {
-		return false, handleFkMultipleViolForRowErr(err, kd, tblName)
+		return err
 	}
 
-	return true, nil
+	return nil
 }
 
 func handleFkMultipleViolForRowErr(err error, kd val.TupleDesc, tblName string) error {
@@ -237,26 +187,21 @@ func createCVsForPartialKeyMatches(
 	ctx context.Context,
 	partialKey val.Tuple,
 	partialKeyDesc val.TupleDesc,
-	editor prolly.ArtifactsEditor,
 	primaryKD val.TupleDesc,
 	primaryIdx prolly.Map,
 	secondaryIdx prolly.Map,
 	pool pool.BuffPool,
-	jsonData []byte,
-	theirRootIsh hash.Hash,
-	tblName string,
-) (bool, error) {
-	createdViolation := false
+	receiver FKViolationReceiver,
+) error {
 
 	itr, err := creation.NewPrefixItr(ctx, partialKey, partialKeyDesc, secondaryIdx)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	kb := val.NewTupleBuilder(primaryKD)
 
 	for k, _, err := itr.Next(ctx); err == nil; k, _, err = itr.Next(ctx) {
-		createdViolation = true
 
 		// convert secondary idx entry to primary row key
 		// the pks of the table are the last keys of the index
@@ -273,20 +218,19 @@ func createCVsForPartialKeyMatches(
 			return nil
 		})
 		if err != nil {
-			return false, err
+			return err
 		}
-		meta := prolly.ConstraintViolationMeta{VInfo: jsonData, Value: value}
 
-		err = editor.ReplaceConstraintViolation(ctx, primaryIdxKey, theirRootIsh, prolly.ArtifactTypeForeignKeyViol, meta)
+		err = receiver.ProllyFKViolationFound(ctx, primaryIdxKey, value)
 		if err != nil {
-			return false, handleFkMultipleViolForRowErr(err, primaryKD, tblName)
+			return err
 		}
 	}
 	if err != nil && err != io.EOF {
-		return false, err
+		return err
 	}
 
-	return createdViolation, nil
+	return nil
 }
 
 func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tblSch schema.Schema, k, v val.Tuple, pool pool.BuffPool) (val.Tuple, bool) {
