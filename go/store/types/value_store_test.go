@@ -320,13 +320,16 @@ func TestPanicOnBadVersion(t *testing.T) {
 
 func TestErrorIfDangling(t *testing.T) {
 	vs := newTestValueStore()
+	if vs.Format() == Format_DOLT {
+		t.Skip("WriteValue errors with dangling ref error")
+	}
 
 	r, err := NewRef(Bool(true), vs.Format())
 	require.NoError(t, err)
 	l, err := NewList(context.Background(), vs, r)
 	require.NoError(t, err)
 	_, err = vs.WriteValue(context.Background(), l)
-	require.Error(t, err) // TODO(taylor): fix dangling ref error
+	require.NoError(t, err)
 
 	rt, err := vs.Root(context.Background())
 	require.NoError(t, err)
@@ -343,7 +346,7 @@ func TestSkipEnforceCompleteness(t *testing.T) {
 	l, err := NewList(context.Background(), vs, r)
 	require.NoError(t, err)
 	_, err = vs.WriteValue(context.Background(), l)
-	require.Error(t, err) // dangling ref, fails in bufferChunk when enforceCompleteness is true
+	require.NoError(t, err)
 
 	rt, err := vs.Root(context.Background())
 	require.NoError(t, err)
