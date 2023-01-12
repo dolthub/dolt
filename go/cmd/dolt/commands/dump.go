@@ -46,6 +46,7 @@ const (
 	noBatchFlag      = "no-batch"
 	noAutocommitFlag = "no-autocommit"
 	schemaOnlyFlag   = "schema-only"
+	noCreateDbFlag   = "no-create-db"
 
 	sqlFileExt     = "sql"
 	csvFileExt     = "csv"
@@ -65,7 +66,7 @@ csv,json or parquet file.
 `,
 
 	Synopsis: []string{
-		"[-f] [-r {{.LessThan}}result-format{{.GreaterThan}}] [-fn {{.LessThan}}file_name{{.GreaterThan}}]  [-d {{.LessThan}}directory{{.GreaterThan}}] [--batch] [--no-batch] [--no-autocommit] ",
+		"[-f] [-r {{.LessThan}}result-format{{.GreaterThan}}] [-fn {{.LessThan}}file_name{{.GreaterThan}}]  [-d {{.LessThan}}directory{{.GreaterThan}}] [--batch] [--no-batch] [--no-autocommit] [--no-create-db] ",
 	},
 }
 
@@ -97,6 +98,7 @@ func (cmd DumpCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(noBatchFlag, "", "Emit one row per statement, instead of batching multiple rows into each statement.")
 	ap.SupportsFlag(noAutocommitFlag, "na", "Turn off autocommit for each dumped table. Useful for speeding up loading of output SQL file.")
 	ap.SupportsFlag(schemaOnlyFlag, "", "Dump a table's schema, without including any data, to the output SQL file.")
+	ap.SupportsFlag(noCreateDbFlag, "", "Do not write `CREATE DATABASE` statements in SQL files.")
 	return ap
 }
 
@@ -178,13 +180,15 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return HandleVErrAndExitCode(err, usage)
 		}
 
-		dbName, err := getActiveDatabaseName(ctx, dEnv)
-		if err != nil {
-			return HandleVErrAndExitCode(err, usage)
-		}
-		err = addCreateDatabaseHeader(dEnv, fPath, dbName)
-		if err != nil {
-			return HandleVErrAndExitCode(err, usage)
+		if !apr.Contains(noCreateDbFlag) {
+			dbName, err := getActiveDatabaseName(ctx, dEnv)
+			if err != nil {
+				return HandleVErrAndExitCode(err, usage)
+			}
+			err = addCreateDatabaseHeader(dEnv, fPath, dbName)
+			if err != nil {
+				return HandleVErrAndExitCode(err, usage)
+			}
 		}
 
 		err = addBulkLoadingParadigms(dEnv, fPath)
