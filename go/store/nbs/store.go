@@ -248,6 +248,10 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 }
 
 func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updates map[hash.Hash]uint32, option ManifestAppendixOption) (mi ManifestInfo, err error) {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+	nbs.waitForGC()
+
 	nbs.mm.LockForUpdate()
 	defer func() {
 		unlockErr := nbs.mm.UnlockForUpdate()
@@ -256,9 +260,6 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 			err = unlockErr
 		}
 	}()
-
-	nbs.mu.Lock()
-	defer nbs.mu.Unlock()
 
 	var updatedContents manifestContents
 	for {
@@ -584,16 +585,12 @@ func (nbs *NomsBlockStore) WithoutConjoiner() *NomsBlockStore {
 
 // Wait for GC to complete to continue with writes
 func (nbs *NomsBlockStore) waitForGC() {
-	nbs.cond.L.Lock()
-	defer nbs.cond.L.Unlock()
 	for nbs.gcInProgress {
 		nbs.cond.Wait()
 	}
 }
 
 func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
-	nbs.waitForGC()
-
 	t1 := time.Now()
 	a := addr(c.Hash())
 
@@ -613,6 +610,7 @@ func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
 func (nbs *NomsBlockStore) addChunk(ctx context.Context, h addr, data []byte) (bool, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	nbs.waitForGC()
 	if nbs.mt == nil {
 		nbs.mt = newMemTable(nbs.mtSize)
 	}
@@ -883,10 +881,9 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 }
 
 func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
-	nbs.waitForGC()
-
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	nbs.waitForGC()
 	exists, contents, _, err := nbs.mm.Fetch(ctx, nbs.stats)
 	if err != nil {
 		return err
@@ -922,8 +919,6 @@ func (nbs *NomsBlockStore) Root(ctx context.Context) (hash.Hash, error) {
 }
 
 func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) (success bool, err error) {
-	nbs.waitForGC()
-
 	t1 := time.Now()
 	defer nbs.stats.CommitLatency.SampleTimeSince(t1)
 
@@ -953,6 +948,7 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 		// all other tables are persisted in updateManifest()
 		nbs.mu.Lock()
 		defer nbs.mu.Unlock()
+		nbs.waitForGC()
 
 		if nbs.mt != nil {
 			cnt, err := nbs.mt.count()
@@ -977,6 +973,10 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 		return false, err
 	}
 
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+	nbs.waitForGC()
+
 	nbs.mm.LockForUpdate()
 	defer func() {
 		unlockErr := nbs.mm.UnlockForUpdate()
@@ -986,8 +986,6 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 		}
 	}()
 
-	nbs.mu.Lock()
-	defer nbs.mu.Unlock()
 	for {
 		if err := nbs.updateManifest(ctx, current, last); err == nil {
 			return true, nil
@@ -1395,6 +1393,7 @@ func (nbs *NomsBlockStore) AddTableFilesToManifest(ctx context.Context, fileIdTo
 func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	nbs.waitForGC()
 
 	nbs.mm.LockForUpdate()
 	defer func() {
@@ -1634,6 +1633,7 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 func (nbs *NomsBlockStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	nbs.waitForGC()
 	for {
 		err := nbs.updateManifest(ctx, root, previous)
 
