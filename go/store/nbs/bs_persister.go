@@ -15,14 +15,18 @@
 package nbs
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
+)
+
+const (
+	tableRecordsExt = ".records"
+	tableTailExt    = ".tail"
 )
 
 type blobstorePersister struct {
@@ -36,50 +40,110 @@ var _ tablePersister = &blobstorePersister{}
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
 func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
-	name, data, chunkCount, err := mt.write(haver, stats)
-
+	address, data, chunkCount, err := mt.write(haver, stats)
 	if err != nil {
+		return emptyChunkSource{}, err
+	} else if chunkCount == 0 {
 		return emptyChunkSource{}, nil
 	}
+	name := address.String()
 
-	if chunkCount == 0 {
-		return emptyChunkSource{}, nil
+	// persist this table in two parts to facilitate later conjoins
+	records, tail := splitTableParts(data, chunkCount)
+
+	// first write table records and tail (index+footer) as separate blobs
+	if _, err = bsp.bs.Put(ctx, name+tableRecordsExt, bytes.NewBuffer(records)); err != nil {
+		return emptyChunkSource{}, err
 	}
-
-	_, err = blobstore.PutBytes(ctx, bsp.bs, name.String(), data)
-
-	if err != nil {
+	if _, err = bsp.bs.Put(ctx, name+tableTailExt, bytes.NewBuffer(tail)); err != nil {
+		return emptyChunkSource{}, err
+	}
+	// then concatenate into a final blob
+	if _, err = bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt}); err != nil {
 		return emptyChunkSource{}, err
 	}
 
-	bsTRA := &bsTableReaderAt{name.String(), bsp.bs}
-	return newReaderFromIndexData(ctx, bsp.q, data, name, bsTRA, bsp.blockSize)
+	rdr := &bsTableReaderAt{name, bsp.bs}
+	return newReaderFromIndexData(ctx, bsp.q, data, address, rdr, bsp.blockSize)
 }
 
-// ConjoinAll (Not currently implemented) conjoins all chunks in |sources| into a single,
-// new chunkSource.
+// ConjoinAll implements tablePersister.
 func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
-	plan, err := planConcatenateConjoin(sources, stats)
+	var sized []sourceWithSize
+	for _, src := range sources {
+		sized = append(sized, sourceWithSize{src, src.currentSize()})
+	}
+
+	plan, err := planConjoin(sized, stats)
 	if err != nil {
 		return nil, err
 	}
+	address := nameFromSuffixes(plan.suffixes())
+	name := address.String()
+
+	// conjoin must contiguously append the chunk records of |sources|, but the raw content
+	// of each source contains a chunk index in the tail. Blobstore does not expose a range
+	// copy (GCP Storage limitation), so we must create sub-objects from each source that
+	// contain only chunk records. We make an effort to store these sub-objects on Persist(),
+	// but we will create them in getRecordsSubObjects if necessary.
 
 	conjoinees := make([]string, 0, len(sources)+1)
-	for _, src := range sources {
-		conjoinees = append(conjoinees, src.hash().String())
+	for _, src := range plan.sources.sws {
+		sub, err := bsp.getRecordsSubObject(ctx, src.source)
+		if err != nil {
+			return nil, err
+		}
+		conjoinees = append(conjoinees, sub)
 	}
 
-	idxKey := uuid.New().String()
-	if _, err = blobstore.PutBytes(ctx, bsp.bs, idxKey, plan.mergedIndex); err != nil {
+	// first concatenate all the sub-objects to create a composite sub-object
+	if _, err = bsp.bs.Concatenate(ctx, name+tableRecordsExt, conjoinees); err != nil {
 		return nil, err
 	}
-	conjoinees = append(conjoinees, idxKey) // mergedIndex goes last
+	if _, err = blobstore.PutBytes(ctx, bsp.bs, name+tableTailExt, plan.mergedIndex); err != nil {
+		return nil, err
+	}
+	// then concatenate into a final blob
+	if _, err = bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt}); err != nil {
+		return emptyChunkSource{}, err
+	}
 
-	name := nameFromSuffixes(plan.suffixes())
-	if _, err = bsp.bs.Concatenate(ctx, name.String(), conjoinees); err != nil {
-		return nil, err
+	return newBSChunkSource(ctx, bsp.bs, address, plan.chunkCount, bsp.q, stats)
+}
+
+func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunkSource) (name string, err error) {
+	name = cs.hash().String() + tableRecordsExt
+	// first check if we created this sub-object on Persist()
+	ok, err := bsp.bs.Exists(ctx, name)
+	if err != nil {
+		return "", err
+	} else if ok {
+		return name, nil
 	}
-	return newBSChunkSource(ctx, bsp.bs, name, plan.chunkCount, bsp.q, stats)
+
+	// otherwise create the sub-object from |table|
+	// (requires a round-trip for remote blobstores)
+	cnt, err := cs.count()
+	if err != nil {
+		return "", err
+	}
+	off := tableTailOffset(cs.currentSize(), cnt)
+	rng := blobstore.NewBlobRange(0, int64(off))
+
+	rdr, _, err := bsp.bs.Get(ctx, cs.hash().String(), rng)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		if cerr := rdr.Close(); cerr != nil {
+			err = cerr
+		}
+	}()
+
+	if _, err = bsp.bs.Put(ctx, name, rdr); err != nil {
+		return "", err
+	}
+	return name, nil
 }
 
 // Open a table named |name|, containing |chunkCount| chunks.
@@ -159,16 +223,17 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 	return &chunkSourceAdapter{tr, name}, nil
 }
 
-// planConcatenateConjoin computes a conjoin plan for tablePersisters that conjoin
-// by concatenating existing chunk sources (leaving behind old chunk indexes, footers).
-func planConcatenateConjoin(sources chunkSources, stats *Stats) (compactionPlan, error) {
-	var sized []sourceWithSize
-	for _, src := range sources {
-		index, err := src.index()
-		if err != nil {
-			return compactionPlan{}, err
-		}
-		sized = append(sized, sourceWithSize{src, index.tableFileSize()})
-	}
-	return planConjoin(sized, stats)
+// splitTableParts separates a table into chunk records and meta data.
+//
+//	              +----------------------+-------+--------+
+//	table format: | Chunk Record 0 ... N | Index | Footer |
+//	              +----------------------+-------+--------+
+func splitTableParts(data []byte, count uint32) (records, tail []byte) {
+	o := tableTailOffset(uint64(len(data)), count)
+	records, tail = data[:o], data[o:]
+	return
+}
+
+func tableTailOffset(size uint64, count uint32) uint64 {
+	return size - (indexSize(count) + footerSize)
 }
