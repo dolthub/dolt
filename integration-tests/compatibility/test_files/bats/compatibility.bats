@@ -210,10 +210,7 @@ EOF
     dolt_version=$( echo $DOLT_VERSION | sed -e "s/^v//" )
     echo $dolt_version
 
-    # 0 is '='; 1 is '>'; 2 is '<'
-    op=$( vercomp $dolt_version "0.28.0" )
-
-    if [[ $op = 2 ]]; then
+    if [[ ! -z $dolt_version ]]; then
         run dolt sql -q "select * from dolt_schemas"
         [ "$status" -eq 0 ]
         [[ "${lines[1]}" =~ "| type | name  | fragment             |" ]] || false
@@ -232,39 +229,4 @@ EOF
     [[ "${lines[1]}" =~ "2+2" ]] || false
     [[ "${lines[2]}" =~ "-----" ]] || false
     [[ "${lines[3]}" =~ " 4 " ]] || false
-}
-
-vercomp() {
-    if [[ $1 == $2 ]]
-    then
-        echo 0
-        return
-    fi
-    local IFS=.
-    local i ver1=($1) ver2=($2)
-    # fill empty fields in ver1 with zeros
-    for ((i=${#ver1[@]}; i<${#ver2[@]}; i++))
-    do
-        ver1[i]=0
-    done
-    for ((i=0; i<${#ver1[@]}; i++))
-    do
-        if [[ -z ${ver2[i]} ]]
-        then
-            # fill empty fields in ver2 with zeros
-            ver2[i]=0
-        fi
-        if ((10#${ver1[i]} > 10#${ver2[i]}))
-        then
-            echo 1
-            return
-        fi
-        if ((10#${ver1[i]} < 10#${ver2[i]}))
-        then
-            echo 2
-            return
-        fi
-    done
-    echo 0
-    return
 }
