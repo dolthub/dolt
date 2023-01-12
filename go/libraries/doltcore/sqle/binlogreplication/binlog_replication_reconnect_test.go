@@ -36,6 +36,7 @@ var proxyPort int
 func TestBinlogReplicationReconnection(t *testing.T) {
 	startSqlServers(t)
 	configureToxiProxy(t)
+	configureFastConnectionRetry(t)
 	startReplication(t, proxyPort)
 	defer teardown(t)
 
@@ -73,6 +74,13 @@ func TestBinlogReplicationReconnection(t *testing.T) {
 	require.Equal(t, "0", status["Last_SQL_Errno"])
 	require.Equal(t, "", status["Last_SQL_Error"])
 	require.Equal(t, "", status["Last_SQL_Error_Timestamp"])
+}
+
+// configureFastConnectionRetry configures the replica to retry a failed connection after 5s, instead of the default 60s
+// connection retry interval. This is used for testing connection retry logic without waiting the full default period.
+func configureFastConnectionRetry(_ *testing.T) {
+	replicaDatabase.MustExec(
+		fmt.Sprintf("change replication source to SOURCE_CONNECT_RETRY=5;"))
 }
 
 // testInitialReplicaStatus tests the data returned by SHOW REPLICA STATUS and errors

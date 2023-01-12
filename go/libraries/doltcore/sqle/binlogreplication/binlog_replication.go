@@ -84,11 +84,6 @@ func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 	controller.status.ReplicaIoRunning = binlogreplication.ReplicaIoNotRunning
 	controller.status.ReplicaSqlRunning = binlogreplication.ReplicaSqlNotRunning
 
-	controller.status.SourceRetryCount = 86400
-	// TODO: The ConnectRetry default *should* be 60s to match MySQL's behavior, but for easier testing,
-	//        we're starting with a very quick retry
-	controller.status.ConnectRetry = 5
-
 	initializeLogger()
 
 	return &controller
@@ -149,6 +144,24 @@ func (d *doltBinlogReplicaController) loadReplicationConfiguration(ctx *sql.Cont
 	return nil, nil
 }
 
+// TODO: These interfaces to persist configuration could be pulled out into a separate type/file
+func (d *doltBinlogReplicaController) deleteReplicationConfiguration(ctx *sql.Context) error {
+	server := sqlserver.GetRunningServer()
+	if server == nil {
+		return fmt.Errorf("no SQL server running; " +
+			"replication commands may only be used when running from dolt sql-server, and not from dolt sql")
+	}
+	engine := server.Engine
+
+	replicaSourceInfoTableData := engine.Analyzer.Catalog.MySQLDb.ReplicaSourceInfoTable().Data()
+	err := replicaSourceInfoTableData.Remove(ctx, mysql_db.ReplicaSourceInfoPrimaryKey{}, nil)
+	if err != nil {
+		return err
+	}
+
+	return engine.Analyzer.Catalog.MySQLDb.Persist(ctx)
+}
+
 func (d *doltBinlogReplicaController) persistReplicationConfiguration(ctx *sql.Context, replicaSourceInfo *mysql_db.ReplicaSourceInfo) error {
 	server := sqlserver.GetRunningServer()
 	if server == nil {
@@ -165,30 +178,44 @@ func (d *doltBinlogReplicaController) persistReplicationConfiguration(ctx *sql.C
 	return engine.Analyzer.Catalog.MySQLDb.Persist(ctx)
 }
 
-func (d *doltBinlogReplicaController) SetReplicationOptions(ctx *sql.Context, options []binlogreplication.ReplicationOption) error {
+func (d *doltBinlogReplicaController) SetReplicationSourceOptions(ctx *sql.Context, options []binlogreplication.ReplicationOption) error {
 	replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
 	if err != nil {
 		return err
 	}
 
 	if replicaSourceInfo == nil {
-		replicaSourceInfo = &mysql_db.ReplicaSourceInfo{}
+		replicaSourceInfo = mysql_db.NewReplicaSourceInfo()
 	}
 
 	for _, option := range options {
 		switch strings.ToUpper(option.Name) {
 		case "SOURCE_HOST":
-			replicaSourceInfo.Host = option.Value
+			// TODO: Fix these unsafe type casts...
+			replicaSourceInfo.Host = option.Value.(string)
 		case "SOURCE_USER":
-			replicaSourceInfo.User = option.Value
+			replicaSourceInfo.User = option.Value.(string)
 		case "SOURCE_PASSWORD":
-			replicaSourceInfo.Password = option.Value
+			replicaSourceInfo.Password = option.Value.(string)
 		case "SOURCE_PORT":
-			intValue, err := strconv.Atoi(option.Value)
+			intValue, err := strconv.Atoi(option.Value.(string))
 			if err != nil {
 				return fmt.Errorf("Unable to parse SOURCE_PORT value (%q) as an integer: %s", option.Value, err.Error())
 			}
 			replicaSourceInfo.Port = uint16(intValue)
+		case "SOURCE_CONNECT_RETRY":
+			intValue, err := strconv.Atoi(option.Value.(string))
+			if err != nil {
+				return fmt.Errorf("Unable to parse SOURCE_PORT value (%q) as an integer: %s", option.Value, err.Error())
+			}
+			replicaSourceInfo.ConnectRetryInterval = uint32(intValue)
+
+		case "SOURCE_RETRY_COUNT":
+			intValue, err := strconv.Atoi(option.Value.(string))
+			if err != nil {
+				return fmt.Errorf("Unable to parse SOURCE_PORT value (%q) as an integer: %s", option.Value, err.Error())
+			}
+			replicaSourceInfo.ConnectRetryCount = uint64(intValue)
 
 		default:
 			return fmt.Errorf("Unknown replication option: %s", option.Name)
@@ -196,12 +223,7 @@ func (d *doltBinlogReplicaController) SetReplicationOptions(ctx *sql.Context, op
 	}
 
 	// Persist the updated replica source configuration to disk
-	err = d.persistReplicationConfiguration(ctx, replicaSourceInfo)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return d.persistReplicationConfiguration(ctx, replicaSourceInfo)
 }
 
 func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlogreplication.ReplicaStatus, error) {
@@ -222,6 +244,8 @@ func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlo
 	copy.SourceHost = replicaSourceInfo.Host
 	copy.SourcePort = uint(replicaSourceInfo.Port)
 	copy.SourceServerUuid = replicaSourceInfo.Uuid
+	copy.ConnectRetry = replicaSourceInfo.ConnectRetryInterval
+	copy.SourceRetryCount = replicaSourceInfo.ConnectRetryCount
 
 	return &copy, nil
 }
@@ -255,7 +279,7 @@ func (d *doltBinlogReplicaController) connectAndStartReplicationEventStream(ctx 
 
 	var conn *mysql.Conn
 	var err error
-	for connectionAttempts := uint(0); ; connectionAttempts++ {
+	for connectionAttempts := uint64(0); ; connectionAttempts++ {
 		replicaSourceInfo, err := d.loadReplicationConfiguration(ctx)
 
 		if replicaSourceInfo != nil && replicaSourceInfo.Uuid != "" {
@@ -422,8 +446,6 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		logger.WithFields(logrus.Fields{
 			"previousGtids": position.GTIDSet.String(),
 		}).Debug("Received binlog event: PreviousGTIDs")
-		// TODO: record the last GTIDs seen
-		//       insert into gtid_executed for now if that's easy/quick, but that can't last long
 
 	case event.IsGTID():
 		// For global transaction ID, used to start a new transaction event group, instead of the old BEGIN query event,
@@ -803,7 +825,7 @@ func parseRow(tableMap *mysql.TableMap, schema sql.Schema, columnsPresentBitmap,
 func getSignedType(column *sql.Column) query.Type {
 	switch column.Type.Type() {
 	case query.Type_UINT8, query.Type_UINT16, query.Type_UINT24, query.Type_UINT32, query.Type_UINT64:
-		// For any unsigned numeric value, we just need to return any unsigned numeric type to signal to Vitess to treat
+		// For any unsigned integer value, we just need to return any unsigned numeric type to signal to Vitess to treat
 		// the value as unsigned. The actual type returned doesn't matter – only the signed/unsigned property is used.
 		return query.Type_UINT64
 	default:
@@ -862,6 +884,8 @@ func (d *doltBinlogReplicaController) startReplicationEventStream(ctx *sql.Conte
 	currentPosition = position
 
 	// TODO: unhardcode 1 as the replica's server_id
+	//       We should just use the server's ID – error out if it's not set and probably have a default value?
+	//       Need to add the server_id sys var
 	return conn.SendBinlogDumpCommand(1, *position)
 }
 
@@ -880,7 +904,8 @@ func formatTableMapAsString(tableId uint64, tableMap *mysql.TableMap) string {
 
 func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) {
 	if ctx.GetCurrentDatabase() == "" {
-		logger.Debug("No current database selected, aborting query")
+		// TODO: This shouldn't ever happen, right?
+		logger.Error("No current database selected, aborting query")
 		return
 	}
 
