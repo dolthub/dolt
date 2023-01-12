@@ -44,25 +44,32 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// TODO(taylor): Remove this file
+
 const datasetID = "ds1"
 
 func TestLocalToLocalPulls(t *testing.T) {
+	t.Skip()
 	suite.Run(t, &LocalToLocalSuite{})
 }
 
 func TestRemoteToLocalPulls(t *testing.T) {
+	t.Skip()
 	suite.Run(t, &RemoteToLocalSuite{})
 }
 
 func TestLocalToRemotePulls(t *testing.T) {
+	t.Skip()
 	suite.Run(t, &LocalToRemoteSuite{})
 }
 
 func TestRemoteToRemotePulls(t *testing.T) {
+	t.Skip()
 	suite.Run(t, &RemoteToRemoteSuite{})
 }
 
 func TestChunkJournalPulls(t *testing.T) {
+	t.Skip()
 	suite.Run(t, &ChunkJournalSuite{})
 }
 

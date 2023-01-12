@@ -35,6 +35,8 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+// TODO(taylor): Remove this file
+
 type PullProgress struct {
 	DoneCount, KnownCount, ApproxWrittenBytes uint64
 }
