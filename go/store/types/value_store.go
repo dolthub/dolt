@@ -102,9 +102,9 @@ func ErrorIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.Chu
 	return nil
 }
 
-func (lvs *ValueStore) getAddrs(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+func AddrsFromNomsValue(ctx context.Context, c chunks.Chunk, nbf *NomsBinFormat) (hash.HashSet, error) {
 	valRefs := make(hash.HashSet)
-	err := walkRefs(c.Data(), lvs.nbf, func(r Ref) error {
+	err := walkRefs(c.Data(), nbf, func(r Ref) error {
 		valRefs.Insert(r.TargetHash())
 		return nil
 	})
@@ -112,6 +112,10 @@ func (lvs *ValueStore) getAddrs(ctx context.Context, c chunks.Chunk) (hash.HashS
 		return nil, err
 	}
 	return valRefs, nil
+}
+
+func (lvs *ValueStore) getAddrs(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+	return AddrsFromNomsValue(ctx, c, lvs.nbf)
 }
 
 const (
@@ -419,11 +423,11 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 			}
 		}
 
-		getAddrs := func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-			return hash.NewHashSet(), nil
-		}
+		getAddrs := lvs.getAddrs
 		if !lvs.enforceCompleteness {
-			getAddrs = lvs.getAddrs
+			getAddrs = func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+				return hash.NewHashSet(), nil
+			}
 		}
 		return lvs.cs.Put(ctx, c, getAddrs)
 	}

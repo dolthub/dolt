@@ -103,7 +103,7 @@ func (f *FileValueStore) WriteValue(ctx context.Context, v types.Value) (types.R
 		}
 
 		err = f.Put(ctx, c, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-			return nil, nil // TODO (taylor): Is there a way to get referenced addr out of the chunk here?
+			return types.AddrsFromNomsValue(ctx, c, f.nbf)
 		})
 
 		if err != nil {
