@@ -308,7 +308,7 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 		}
 
 		err = store.Put(ctx, ch, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-			return nil, nil // TODO (taylor): Is there a way to get referenced addr out of the chunk here?
+			return types.AddrsFromNomsValue(ctx, c, store.nbf)
 		})
 
 		if err != nil {
