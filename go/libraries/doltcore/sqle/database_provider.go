@@ -416,7 +416,7 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 
 type InitDatabaseHook func(ctx *sql.Context, pro DoltDatabaseProvider, name string, env *env.DoltEnv) error
 
-// configureReplication sets up replication for a newly created database as necessary
+// ConfigureReplicationDatabaseHook sets up replication for a newly created database as necessary
 // TODO: consider the replication heads / all heads setting
 func ConfigureReplicationDatabaseHook(ctx *sql.Context, p DoltDatabaseProvider, name string, newEnv *env.DoltEnv) error {
 	_, replicationRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
@@ -1007,18 +1007,101 @@ func isBranch(ctx context.Context, db SqlDatabase, branchName string, dialer dbf
 		return "", false, fmt.Errorf("unrecognized type of database %T", db)
 	}
 
+	brName, branchExists, err := isLocalBranch(ctx, ddbs, branchName)
+	if err != nil {
+		return "", false, err
+	}
+	if branchExists {
+		return brName, true, nil
+	}
+
+	brName, branchExists, err = isRemoteBranch(ctx, db, ddbs, branchName)
+	if err != nil {
+		return "", false, err
+	}
+	if branchExists {
+		return brName, true, nil
+	}
+
+	return "", false, nil
+}
+
+func isLocalBranch(ctx context.Context, ddbs []*doltdb.DoltDB, branchName string) (string, bool, error) {
 	for _, ddb := range ddbs {
-		branchName, branchExists, err := ddb.HasBranch(ctx, branchName)
+		brName, branchExists, err := ddb.HasBranch(ctx, branchName)
 		if err != nil {
 			return "", false, err
 		}
 
 		if branchExists {
-			return branchName, true, nil
+			return brName, true, nil
 		}
 	}
 
 	return "", false, nil
+}
+
+// isRemoteBranch is called only when the branch in connection string does not exist locally. It searches for a remote branch.
+// If there is a match, it creates a new local branch from the remote branch and sets its upstream to the remote branch.
+func isRemoteBranch(ctx context.Context, srcDB SqlDatabase, ddbs []*doltdb.DoltDB, branchName string) (string, bool, error) {
+	// parse branch name for possible remote name
+	remName := "origin"
+	brName := branchName
+
+	parts := strings.SplitN(branchName, dbRevisionDelimiter, 2)
+	if len(parts) > 1 {
+		remName = parts[0]
+		brName = parts[1]
+	}
+
+	for _, ddb := range ddbs {
+		remoteRefs, err := ddb.GetRemoteRefs(ctx)
+		if err == nil {
+			for _, rf := range remoteRefs {
+				if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetRemote() == remName && remRef.GetBranch() == brName {
+					err = createBranchOnDBAndSetUpstream(ctx, srcDB, ddb, brName, remRef.GetPath(), remRef)
+					if err != nil {
+						return "", false, err
+					}
+					return brName, true, nil
+				}
+			}
+		}
+	}
+
+	return "", false, nil
+}
+
+// createBranchOnDBAndSetUpstream creates a new local branch from startPt, which is the remote branch, on the database
+// and sets its upstream to given remote branch Ref.
+func createBranchOnDBAndSetUpstream(ctx context.Context, srcDB SqlDatabase, doltdb *doltdb.DoltDB, branchName, startPt string, remoteRef ref.RemoteRef) error {
+	err := actions.CreateBranchOnDB(ctx, doltdb, branchName, startPt, false, remoteRef)
+	if err != nil {
+		return err
+	}
+
+	// at this point the branch is created on db
+	branchRef := ref.NewBranchRef(branchName)
+	remote := remoteRef.GetRemote()
+	refSpec, err := ref.ParseRefSpecForRemote(remote, remoteRef.GetBranch())
+	if err != nil {
+		return fmt.Errorf("%w: '%s'", err, remote)
+	}
+
+	src := refSpec.SrcRef(branchRef)
+	dest := refSpec.DestRef(src)
+
+	err = srcDB.DbData().Rsw.UpdateBranch(branchRef.GetPath(), env.BranchConfig{
+		Merge: ref.MarshalableRef{
+			Ref: dest,
+		},
+		Remote: remote,
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // isTag returns whether a tag with the given name is in scope for the database given
