@@ -1041,41 +1041,33 @@ func isLocalBranch(ctx context.Context, ddbs []*doltdb.DoltDB, branchName string
 	return "", false, nil
 }
 
-// isRemoteBranch is called only when the branch in connection string does not exist locally. It searches for a remote branch.
-// If there is a match, it creates a new local branch from the remote branch and sets its upstream to the remote branch.
+// isRemoteBranch is called when the branch in connection string is not available as a local branch, so it searches
+// for a remote tracking branch. If there is only one match, it creates a new local branch from the remote tracking
+// branch and sets its upstream to it.
 func isRemoteBranch(ctx context.Context, srcDB SqlDatabase, ddbs []*doltdb.DoltDB, branchName string) (string, bool, error) {
-	// parse branch name for possible remote name
-	remName := "origin"
-	brName := branchName
-
-	parts := strings.SplitN(branchName, dbRevisionDelimiter, 2)
-	if len(parts) > 1 {
-		remName = parts[0]
-		brName = parts[1]
-	}
-
 	for _, ddb := range ddbs {
-		remoteRefs, err := ddb.GetRemoteRefs(ctx)
-		if err == nil {
-			for _, rf := range remoteRefs {
-				if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetRemote() == remName && remRef.GetBranch() == brName {
-					err = createBranchOnDBAndSetUpstream(ctx, srcDB, ddb, brName, remRef.GetPath(), remRef)
-					if err != nil {
-						return "", false, err
-					}
-					return brName, true, nil
-				}
+		bn, branchExists, remoteRef, err := ddb.HasRemoteTrackingBranch(ctx, branchName)
+		if err != nil {
+			return "", false, err
+		}
+
+		if branchExists {
+			err = createLocalBranchFromRemoteTrackingBranch(ctx, srcDB.DbData(), ddb, branchName, remoteRef)
+			if err != nil {
+				return "", false, err
 			}
+			return bn, true, nil
 		}
 	}
 
 	return "", false, nil
 }
 
-// createBranchOnDBAndSetUpstream creates a new local branch from startPt, which is the remote branch, on the database
-// and sets its upstream to given remote branch Ref.
-func createBranchOnDBAndSetUpstream(ctx context.Context, srcDB SqlDatabase, doltdb *doltdb.DoltDB, branchName, startPt string, remoteRef ref.RemoteRef) error {
-	err := actions.CreateBranchOnDB(ctx, doltdb, branchName, startPt, false, remoteRef)
+// createLocalBranchFromRemoteTrackingBranch creates a new local branch from given remote tracking branch
+// and sets its upstream to it.
+func createLocalBranchFromRemoteTrackingBranch(ctx context.Context, dbData env.DbData, ddb *doltdb.DoltDB, branchName string, remoteRef ref.RemoteRef) error {
+	startPt := remoteRef.GetPath()
+	err := actions.CreateBranchOnDB(ctx, ddb, branchName, startPt, false, remoteRef)
 	if err != nil {
 		return err
 	}
@@ -1091,17 +1083,12 @@ func createBranchOnDBAndSetUpstream(ctx context.Context, srcDB SqlDatabase, dolt
 	src := refSpec.SrcRef(branchRef)
 	dest := refSpec.DestRef(src)
 
-	err = srcDB.DbData().Rsw.UpdateBranch(branchRef.GetPath(), env.BranchConfig{
+	return dbData.Rsw.UpdateBranch(branchRef.GetPath(), env.BranchConfig{
 		Merge: ref.MarshalableRef{
 			Ref: dest,
 		},
 		Remote: remote,
 	})
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // isTag returns whether a tag with the given name is in scope for the database given
