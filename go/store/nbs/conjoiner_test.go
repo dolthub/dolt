@@ -148,11 +148,15 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 		for _, src := range expectSrcs {
 			err := extractAllChunks(ctx, src, func(rec extractRecord) {
 				var ok bool
-				for _, src := range actualSrcs {
+				for _, act := range actualSrcs {
 					var err error
-					ok, err = src.has(rec.a)
+					ok, err = act.has(rec.a)
 					require.NoError(t, err)
+					var buf []byte
 					if ok {
+						buf, err = act.get(ctx, rec.a, stats)
+						require.NoError(t, err)
+						assert.Equal(t, rec.data, buf)
 						break
 					}
 				}

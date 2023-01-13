@@ -339,7 +339,7 @@ SQL
 
     run dolt sql -q "show create table geometry_type;" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "\`g\` geometry DEFAULT (POINT(1, 2))," ]] || false
+    [[ "$output" =~ "\`g\` geometry DEFAULT (point(1,2))," ]] || false
 
     run dolt sql <<SQL
 CREATE TABLE polygon_type (
@@ -352,19 +352,19 @@ SQL
 
     run dolt sql -q "show create table polygon_type;" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "\`p\` polygon DEFAULT (POLYGON(LINESTRING(POINT(0, 0),POINT(8, 0),POINT(12, 9),POINT(0, 9),POINT(0, 0))))," ]] || false
+    [[ "$output" =~ "\`p\` polygon DEFAULT (polygon(linestring(point(0,0),point(8,0),point(12,9),point(0,9),point(0,0))))," ]] || false
 }
 
 @test "import mysqldump: select into syntax in procedure" {
     run dolt sql <<SQL
 CREATE TABLE inventory (item_id int primary key, shelf_id int, item varchar(10));
 INSERT INTO inventory VALUES (1, 1, 'a'), (2, 1, 'b'), (3, 2, 'c'), (4, 1, 'd'), (5, 4, 'e');
-DELIMITER $$ ;
+DELIMITER $$
 CREATE PROCEDURE count_and_print(IN p_shelf_id INT, OUT p_count INT) BEGIN
   SELECT item FROM inventory WHERE shelf_id = p_shelf_id ORDER BY item ASC;
   SELECT COUNT(*) INTO p_count FROM inventory WHERE shelf_id = p_shelf_id;
 END$$
-DELIMITER ; $$
+DELIMITER ;
 SQL
     [ "$status" -eq 0 ]
 
@@ -389,11 +389,11 @@ CREATE TABLE film (
   description text,
   PRIMARY KEY (film_id)
 );
-DELIMITER $$ ;
+DELIMITER $$
 CREATE TRIGGER ins_film AFTER INSERT ON film FOR EACH ROW BEGIN
   INSERT INTO film_text (film_id, title, description) VALUES (new.film_id, new.title, new.description);
 END$$
-DELIMITER ; $$
+DELIMITER ;
 SQL
     [ "$status" -eq 0 ]
 
@@ -422,7 +422,7 @@ SQL
 CREATE TABLE t0 (id INT PRIMARY KEY AUTO_INCREMENT, v1 INT, v2 TEXT);
 CREATE TABLE t1 (id INT PRIMARY KEY AUTO_INCREMENT, v1 INT, v2 TEXT);
 INSERT INTO t0 VALUES (1, 2, 'abc'), (2, 3, 'def');
-DELIMITER $$ ;
+DELIMITER $$
 CREATE PROCEDURE add_entry(i INT, s TEXT) BEGIN
   IF i > 50 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'too big number';
@@ -432,7 +432,7 @@ END$$
 CREATE TRIGGER trig AFTER INSERT ON t0 FOR EACH ROW BEGIN
   CALL back_up(NEW.v1, NEW.v2);
 END$$
-DELIMITER ; $$
+DELIMITER ;
 SQL
     [ "$status" -eq 0 ]
 
@@ -492,7 +492,7 @@ SQL
 CREATE DATABASE IF NOT EXISTS testdb;
 SQL
 
-    run dolt dump --no-autocommit
+    run dolt dump --no-autocommit --no-create-db
     [ -f doltdump.sql ]
 
     # remove the utf8mb4_0900_bin collation which is not supported in this installation of mysql
