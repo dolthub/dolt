@@ -25,9 +25,9 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -305,41 +305,60 @@ func pullBranches(
 
 	// update the current working set if necessary
 	if remoteRef, ok := remoteRefsByPath[currentBranchRef.GetPath()]; ok {
-		cm, err := rrd.srcDB.ReadCommit(ctx, remoteRef.Hash)
-		wsRef, err := ref.WorkingSetRefForHead(currentBranchRef)
-		if err != nil {
-			return err
-		}
+		// Loop on optimistic lock failures.
+		for {
+			wsRef, err := ref.WorkingSetRefForHead(currentBranchRef)
+			if err != nil {
+				return err
+			}
+			ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
+			if err != nil {
+				return err
+			}
+			prevHash, err := ws.HashOf()
+			if err != nil {
+				return err
+			}
+			wsWorkingRootHash, err := ws.WorkingRoot().HashOf()
+			if err != nil {
+				return err
+			}
+			wsStagedRootHash, err := ws.StagedRoot().HashOf()
+			if err != nil {
+				return err
+			}
 
-		ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
-		if err != nil {
-			return err
-		}
+			// The branch heads could have moved since we pulled
+			// them. We re-resolve the upstream ref every time to
+			// ensure we don't go backwards if another thread moves
+			// our working set due to read replication.
+			cm, err := rrd.srcDB.ResolveCommitRef(ctx, remoteRef.Ref)
+			if err != nil {
+				return err
+			}
+			commitRoot, err := cm.GetRootValue(ctx)
+			if err != nil {
+				return err
+			}
+			commitRootHash, err := commitRoot.HashOf()
+			if err != nil {
+				return err
+			}
 
-		commitRoot, err := cm.GetRootValue(ctx)
-		if err != nil {
-			return err
-		}
+			if commitRootHash != wsWorkingRootHash || commitRootHash != wsStagedRootHash {
+				ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
 
-		ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-		h, err := ws.HashOf()
-		if err != nil {
-			return err
+				err = rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, prevHash, doltdb.TodoWorkingSetMeta())
+				if err == nil {
+					return nil
+				}
+				if !errors.Is(err, datas.ErrOptimisticLockFailed) {
+					return err
+				}
+			} else {
+				return nil
+			}
 		}
-
-		return rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
-	}
-
-	_, err = rrd.limiter.Run(ctx, "___tags", func() (any, error) {
-		tmpDir, err := rrd.rsw.TempTableFilesDir()
-		if err != nil {
-			return nil, err
-		}
-		// TODO: Not sure about this; see comment about the captured ctx below.
-		return nil, actions.FetchFollowTags(ctx, tmpDir, rrd.srcDB, rrd.ddb, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
-	})
-	if err != nil {
-		return err
 	}
 
 	return nil
