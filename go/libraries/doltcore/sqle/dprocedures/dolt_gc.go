@@ -53,6 +53,10 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 		return cmdFailure, err
 	}
 
+	if apr.NArg() != 0 {
+		return cmdFailure, InvalidArgErr
+	}
+
 	dSess := dsess.DSessFromSess(ctx.Session)
 	ddb, ok := dSess.GetDoltDB(ctx, dbName)
 	if !ok {
