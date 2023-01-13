@@ -715,6 +715,36 @@ func (ddb *DoltDB) HasBranch(ctx context.Context, branchName string) (string, bo
 	return "", false, nil
 }
 
+// HasRemoteTrackingBranch returns whether the DB has a remote tracking branch with the name given, case-insensitive.
+// Returns the case-sensitive matching branch if found, as well as a bool indicating if there was a case-insensitive match,
+// remote tracking branchRef that is the only match for the branchName and any error.
+func (ddb *DoltDB) HasRemoteTrackingBranch(ctx context.Context, branchName string) (string, bool, ref.RemoteRef, error) {
+	remoteRefFound := false
+	var remoteRef ref.RemoteRef
+
+	remoteRefs, err := ddb.GetRemoteRefs(ctx)
+	if err != nil {
+		return "", false, ref.RemoteRef{}, err
+	}
+
+	for _, rf := range remoteRefs {
+		if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetBranch() == branchName {
+			if remoteRefFound {
+				// if there are multiple remotes with matching branch names with defined branch name, it errors
+				return "", false, ref.RemoteRef{}, fmt.Errorf("'%s' matched multiple remote tracking branches", branchName)
+			}
+			remoteRefFound = true
+			remoteRef = remRef
+		}
+	}
+
+	if remoteRefFound {
+		return branchName, true, remoteRef, nil
+	}
+
+	return "", false, ref.RemoteRef{}, nil
+}
+
 type RefWithHash struct {
 	Ref  ref.DoltRef
 	Hash hash.Hash
