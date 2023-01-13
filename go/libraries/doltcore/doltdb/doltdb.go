@@ -1270,10 +1270,9 @@ func (ddb *DoltDB) PullChunks(
 	tempDir string,
 	srcDB *DoltDB,
 	targetHashes []hash.Hash,
-	progChan chan pull.PullProgress,
 	statsCh chan pull.Stats,
 ) error {
-	return pullHash(ctx, ddb.db, srcDB.db, targetHashes, tempDir, progChan, statsCh)
+	return pullHash(ctx, ddb.db, srcDB.db, targetHashes, tempDir, statsCh)
 }
 
 func pullHash(
@@ -1281,7 +1280,6 @@ func pullHash(
 	destDB, srcDB datas.Database,
 	targetHashes []hash.Hash,
 	tempDir string,
-	progChan chan pull.PullProgress,
 	statsCh chan pull.Stats,
 ) error {
 	srcCS := datas.ChunkStoreFromDatabase(srcDB)
@@ -1298,7 +1296,7 @@ func pullHash(
 
 		return puller.Pull(ctx)
 	} else {
-		return pull.Pull(ctx, srcCS, destCS, waf, targetHashes, progChan)
+		return errors.New("Puller not supported")
 	}
 }
 

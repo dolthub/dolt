@@ -222,41 +222,6 @@ func pullerProgFunc(ctx context.Context, statsCh chan pull.Stats, language progL
 	}
 }
 
-func progFunc(ctx context.Context, progChan chan pull.PullProgress) {
-	var latest pull.PullProgress
-	last := time.Now().UnixNano() - 1
-	done := false
-	p := cli.NewEphemeralPrinter()
-	for !done {
-		if ctx.Err() != nil {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case progress, ok := <-progChan:
-			if !ok {
-				done = true
-			}
-			latest = progress
-		case <-time.After(250 * time.Millisecond):
-			break
-		}
-
-		nowUnix := time.Now().UnixNano()
-		deltaTime := time.Duration(nowUnix - last)
-		halfSec := 500 * time.Millisecond
-		if done || deltaTime > halfSec {
-			last = nowUnix
-			if latest.KnownCount > 0 {
-				p.Printf("Counted chunks: %d, Buffered chunks: %d)\n", latest.KnownCount, latest.DoneCount)
-				p.Display()
-			}
-		}
-	}
-	p.Display()
-}
-
 // progLanguage is the language to use when displaying progress for a pull from a src db to a sink db.
 type progLanguage int
 
@@ -266,16 +231,9 @@ const (
 )
 
 func buildProgStarter(language progLanguage) actions.ProgStarter {
-	return func(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.Stats) {
+	return func(ctx context.Context) (*sync.WaitGroup, chan pull.Stats) {
 		statsCh := make(chan pull.Stats, 128)
-		progChan := make(chan pull.PullProgress, 128)
 		wg := &sync.WaitGroup{}
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			progFunc(ctx, progChan)
-		}()
 
 		wg.Add(1)
 		go func() {
@@ -283,13 +241,12 @@ func buildProgStarter(language progLanguage) actions.ProgStarter {
 			pullerProgFunc(ctx, statsCh, language)
 		}()
 
-		return wg, progChan, statsCh
+		return wg, statsCh
 	}
 }
 
-func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, statsCh chan pull.Stats) {
+func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, statsCh chan pull.Stats) {
 	cancel()
-	close(progChan)
 	close(statsCh)
 	wg.Wait()
 }

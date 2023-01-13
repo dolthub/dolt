@@ -790,11 +790,32 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 	return absent, nil
 }
 
+func (dcs *DoltChunkStore) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
+	absent, err := dcs.HasMany(ctx, addrs)
+	if err != nil {
+		return err
+	}
+	if len(absent) != 0 {
+		s := absent.String()
+		return fmt.Errorf("Found dangling references to %s", s)
+	}
+	return nil
+}
+
 // Put caches c. Upon return, c must be visible to
 // subsequent Get and Has calls, but must not be persistent until a call
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
-func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk) error {
+func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
+	addrs, err := getAddrs(ctx, c)
+	if err != nil {
+		return err
+	}
+	err = dcs.errorIfDangling(ctx, addrs)
+	if err != nil {
+		return err
+	}
+
 	cc := nbs.ChunkToCompressedChunk(c)
 	if dcs.cache.Put([]nbs.CompressedChunk{cc}) {
 		return ErrCacheCapacityExceeded
