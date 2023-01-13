@@ -745,8 +745,8 @@ var DoltScripts = []queries.ScriptTest{
 			{
 				Query: "SELECT type, name, fragment, id FROM dolt_schemas ORDER BY 1, 2",
 				Expected: []sql.Row{
-					{"view", "view1", "SELECT v1 FROM viewtest", int64(1)},
-					{"view", "view2", "SELECT v2 FROM viewtest", int64(2)},
+					{"view", "view1", "CREATE VIEW view1 AS SELECT v1 FROM viewtest", int64(1)},
+					{"view", "view2", "CREATE VIEW view2 AS SELECT v2 FROM viewtest", int64(2)},
 				},
 			},
 		},
