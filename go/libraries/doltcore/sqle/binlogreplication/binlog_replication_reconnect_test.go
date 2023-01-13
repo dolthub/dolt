@@ -65,7 +65,6 @@ func TestBinlogReplicationReconnection(t *testing.T) {
 	// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html
 	status := showReplicaStatus(t)
 	convertByteArraysToStrings(status)
-	fmt.Printf("REPLICA STATUS: %q \n", status)
 	require.Equal(t, "0", status["Last_Errno"])
 	require.Equal(t, "", status["Last_Error"])
 	require.Equal(t, "1158", status["Last_IO_Errno"])

@@ -56,8 +56,25 @@ func initializeLogger() {
 // doltBinlogReplicaController implements the BinlogReplicaController interface for a Dolt database in order to
 // provide support for a Dolt server to be a replica of a MySQL primary.
 type doltBinlogReplicaController struct {
-	status binlogreplication.ReplicaStatus
-	mu     *sync.Mutex
+	status  binlogreplication.ReplicaStatus
+	filters *filterConfiguration
+	mu      *sync.Mutex
+}
+
+// filterConfiguration defines the binlog filtering rules applied on the replica.
+type filterConfiguration struct {
+	// doTables holds a map of database name to map of table names, indicating tables that SHOULD be replicated.
+	doTables map[string]map[string]struct{}
+	// ignoreTables holds a map of database name to map of table names, indicating tables that should NOT be replicated.
+	ignoreTables map[string]map[string]struct{}
+}
+
+// newFilterConfiguration creates a new filterConfiguration instance and initializes members.
+func newFilterConfiguration() *filterConfiguration {
+	return &filterConfiguration{
+		doTables:     make(map[string]map[string]struct{}),
+		ignoreTables: make(map[string]map[string]struct{}),
+	}
 }
 
 // TODO: Move these into the doltBinlogReplicaController struct
@@ -168,19 +185,18 @@ func (d *doltBinlogReplicaController) SetReplicationSourceOptions(ctx *sql.Conte
 		case "SOURCE_CONNECT_RETRY":
 			intValue, err := strconv.Atoi(option.Value.(string))
 			if err != nil {
-				return fmt.Errorf("Unable to parse SOURCE_PORT value (%q) as an integer: %s", option.Value, err.Error())
+				return fmt.Errorf("unable to parse SOURCE_PORT value (%q) as an integer: %s", option.Value, err.Error())
 			}
 			replicaSourceInfo.ConnectRetryInterval = uint32(intValue)
-
 		case "SOURCE_RETRY_COUNT":
 			intValue, err := strconv.Atoi(option.Value.(string))
 			if err != nil {
-				return fmt.Errorf("Unable to parse SOURCE_PORT value (%q) as an integer: %s", option.Value, err.Error())
+				return fmt.Errorf("unable to parse SOURCE_PORT value (%q) as an integer: %s", option.Value, err.Error())
 			}
 			replicaSourceInfo.ConnectRetryCount = uint64(intValue)
 
 		default:
-			return fmt.Errorf("Unknown replication option: %s", option.Name)
+			return fmt.Errorf("unknown replication source option: %s", option.Name)
 		}
 	}
 
@@ -188,6 +204,73 @@ func (d *doltBinlogReplicaController) SetReplicationSourceOptions(ctx *sql.Conte
 	return persistReplicationConfiguration(ctx, replicaSourceInfo)
 }
 
+// SetReplicationFilterOptions implements the BinlogReplicaController interface
+func (d *doltBinlogReplicaController) SetReplicationFilterOptions(_ *sql.Context, options []binlogreplication.ReplicationOption) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.filters == nil {
+		d.filters = newFilterConfiguration()
+	}
+
+	// TODO: Enforce that all table names have a database qualifying them! Otherwise return an error.
+	//       We could do this in the parser grammar, or in GMS's parser, or here.
+
+	for _, option := range options {
+		switch strings.ToUpper(option.Name) {
+		case "REPLICATE_DO_TABLE":
+			// TODO: Extract helper function
+			d.filters.doTables = make(map[string]map[string]struct{})
+			if urts, ok := option.Value.([]sql.UnresolvedTable); ok {
+				for _, urt := range urts {
+					if urt.Database() == "" {
+						return fmt.Errorf("no database specified for table '%s'; "+
+							"all filter table names must be qualified with a database name", urt.Name())
+					}
+					if d.filters.doTables[urt.Database()] == nil {
+						d.filters.doTables[urt.Database()] = make(map[string]struct{})
+					}
+					tableMap := d.filters.doTables[urt.Database()]
+					tableMap[urt.Name()] = struct{}{}
+				}
+			} else {
+				return fmt.Errorf("unsupported replication filter option value type: %T, for option: %s",
+					option.Value, option.Name)
+			}
+		case "REPLICATE_IGNORE_TABLE":
+			// TODO: Extract helper function
+			d.filters.ignoreTables = make(map[string]map[string]struct{})
+			if urts, ok := option.Value.([]sql.UnresolvedTable); ok {
+				for _, urt := range urts {
+					if urt.Database() == "" {
+						return fmt.Errorf("no database specified for table '%s'; "+
+							"all filter table names must be qualified with a database name", urt.Name())
+					}
+					if d.filters.ignoreTables[urt.Database()] == nil {
+						d.filters.ignoreTables[urt.Database()] = make(map[string]struct{})
+					}
+					tableMap := d.filters.ignoreTables[urt.Database()]
+					tableMap[urt.Name()] = struct{}{}
+				}
+			} else {
+				return fmt.Errorf("unsupported replication filter option value type: %T, for option: %s",
+					option.Value, option.Name)
+			}
+		default:
+			return fmt.Errorf("unsupported replication filter option: %s", option.Name)
+		}
+	}
+
+	// TODO: Persist filter settings somewhere. MySQL doesn't actually do this... unlike CHANGE REPLICATION SOURCE,
+	//       CHANGE REPLICATION FILTER requires users to apply the filter options every time a server is restarted,
+	//       or to pass them to mysqld on the command line or in configuration. Since we don't want to force users
+	//       to specify these on the command line, we are diverging from MySQL behavior here slightly and persisting
+	//       the filter configuration options.
+
+	return nil
+}
+
+// GetReplicaStatus implements the BinlogReplicaController interface
 func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlogreplication.ReplicaStatus, error) {
 	replicaSourceInfo, err := loadReplicationConfiguration(ctx)
 	if err != nil {
@@ -210,11 +293,6 @@ func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlo
 	copy.SourceRetryCount = replicaSourceInfo.ConnectRetryCount
 
 	return &copy, nil
-}
-
-// SetReplicationFilterOptions implements the BinlogReplicaController interface
-func (d *doltBinlogReplicaController) SetReplicationFilterOptions(ctx *sql.Context, options []binlogreplication.ReplicationOption) error {
-	panic("implement me")
 }
 
 // ResetReplica implements the BinlogReplicaController interface
@@ -241,7 +319,7 @@ func (d *doltBinlogReplicaController) ResetReplica(ctx *sql.Context, resetAll bo
 			return err
 		}
 
-		// TODO: Delete replication filters once they are supported
+		d.filters = nil
 	}
 
 	return nil
@@ -485,12 +563,12 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 	case event.IsGTID():
 		// For global transaction ID, used to start a new transaction event group, instead of the old BEGIN query event,
 		// and also to mark stand-alone (ddl). For more details, see: https://mariadb.com/kb/en/gtid_event/
-		// TODO: Warnings for unsupported flags in event?
-		//       Seems like we don't have access to other fields for GTID?
-		//       Does isBegin mean not FL_STANDALONE?
 		gtid, isBegin, err := event.GTID(format)
 		if err != nil {
 			return err
+		}
+		if isBegin {
+			logger.Errorf("unsupported binlog protocol message: GTID event with 'isBegin' set to true")
 		}
 		logger.WithFields(logrus.Fields{
 			"gtid":    gtid,
@@ -506,22 +584,31 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// Used for row-based binary logging beginning (binlog_format=ROW or MIXED). This event precedes each row
 		// operation event and maps a table definition to a number, where the table definition consists of database
 		// and table names. For more details, see: https://mariadb.com/kb/en/table_map_event/
-		logger.Debug("Received binlog event: TableMap")
+		// Note: TableMap events are sent before each row event, so there is no need to persist them between restarts.
 		tableId := event.TableID(format)
 		tableMap, err := event.TableMap(format)
 		if err != nil {
 			return err
 		}
+		logger.WithFields(logrus.Fields{
+			"id":        tableId,
+			"tableName": tableMap.Name,
+			"database":  tableMap.Database,
+			"flags":     convertToHexString(tableMap.Flags),
+			"metadata":  tableMap.Metadata,
+			"types":     tableMap.Types,
+		}).Debug("Received binlog event: TableMap")
 
-		// TODO: Handle special Table ID value 0xFFFFFF:
-		//		Table id refers to a table defined by TABLE_MAP_EVENT. The special value 0xFFFFFF should have
-		//	 	"end of statement flag" (0x0001) set and indicates that table maps can be freed.
 		if tableId == 0xFFFFFF {
-			logger.Debug("  - received signal to clear cached table maps!")
+			// TODO: Handle special Table ID value 0xFFFFFF:
+			//		Table id refers to a table defined by TABLE_MAP_EVENT. The special value 0xFFFFFF should have
+			//	 	"end of statement flag" (0x0001) set and indicates that table maps can be freed.
+			logger.Errorf("unsupported binlog protocol message: TableMap event with table ID '0xFFFFFF'")
+		}
+		if tableMap.Flags != 0 {
+			logger.Errorf("unsupported binlog protocol message: TableMap event with flags '%x'", tableMap.Flags)
 		}
 		tableMapsById[tableId] = tableMap
-		logger.Debugf(" - tableMap: %v ", formatTableMapAsString(tableId, tableMap))
-		// Note: TableMap events are sent before each row event, so there is no need to persist them between restarts.
 
 	case event.IsDeleteRows():
 		// A ROWS_EVENT is written for row based replication if data is inserted, deleted or updated.
@@ -529,12 +616,21 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		logger.Debug("Received binlog event: DeleteRows")
 		tableId := event.TableID(format)
 		tableMap, ok := tableMapsById[tableId]
+
+		if d.isTableFilteredOut(tableMap) {
+			return nil
+		}
+
+		// TODO: Need to use tableMap.Database in order to commit to the right database!
 		if !ok {
 			return fmt.Errorf("unable to find replication metadata for table ID: %d", tableId)
 		}
 		rows, err := event.Rows(format, tableMap)
 		if err != nil {
 			return err
+		}
+		if rows.Flags != 0 {
+			logger.Errorf("unsupported binlog protocol message: DeleteRows event with flags '%x'", tableMap.Flags)
 		}
 		schema, err := getTableSchema(ctx, engine, tableMap.Name, tableMap.Database)
 		if err != nil {
@@ -574,9 +670,17 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		if !ok {
 			return fmt.Errorf("unable to find replication metadata for table ID: %d", tableId)
 		}
+
+		if d.isTableFilteredOut(tableMap) {
+			return nil
+		}
+
 		rows, err := event.Rows(format, tableMap)
 		if err != nil {
 			return err
+		}
+		if rows.Flags != 0 {
+			logger.Errorf("unsupported binlog protocol message: WriteRows event with flags '%x'", tableMap.Flags)
 		}
 		schema, err := getTableSchema(ctx, engine, tableMap.Name, tableMap.Database)
 		if err != nil {
@@ -627,16 +731,22 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		if !ok {
 			return fmt.Errorf("unable to find replication metadata for table ID: %d", tableId)
 		}
+
+		if d.isTableFilteredOut(tableMap) {
+			return nil
+		}
+
 		rows, err := event.Rows(format, tableMap)
 		if err != nil {
 			return err
+		}
+		if rows.Flags != 0 {
+			logger.Errorf("unsupported binlog protocol message: UpdateRows event with flags '%x'", tableMap.Flags)
 		}
 		schema, err := getTableSchema(ctx, engine, tableMap.Name, tableMap.Database)
 		if err != nil {
 			return err
 		}
-
-		// TODO: process rows.Flags
 
 		logger.Debugf(" - Updated Rows (table: %s)", tableMap.Name)
 		for _, row := range rows.Rows {
@@ -733,6 +843,32 @@ func closeWriteSession(ctx *sql.Context, engine *gms.Engine, databaseName string
 	}
 
 	return sqlDatabase.DbData().Ddb.UpdateWorkingSet(ctx, newWorkingSet.Ref(), newWorkingSet, hash, newWorkingSet.Meta())
+}
+
+// isTableFilteredOut returns true if the table identified by |tableMap| has been filtered out on this replica and
+// should not have any updates applied from binlog messages.
+func (d *doltBinlogReplicaController) isTableFilteredOut(tableMap *mysql.TableMap) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.filters != nil {
+		// TODO: Are these two fields mutually exclusive? Seems like they would be?
+		if len(d.filters.doTables) > 0 {
+			// TODO: fill in implementation and tests for doTables
+		}
+
+		if len(d.filters.ignoreTables) > 0 {
+			if ignoredTables, ok := d.filters.ignoreTables[tableMap.Database]; ok {
+				if _, ok := ignoredTables[tableMap.Name]; ok {
+					// If this table is being ignored, don't process any further
+					logger.Tracef("skipping table %s.%s", tableMap.Database, tableMap.Name)
+					return true
+				}
+			}
+		}
+	}
+
+	return false
 }
 
 // getTableSchema returns a sql.Schema for the specified table in the specified database.
@@ -905,17 +1041,8 @@ func (d *doltBinlogReplicaController) startReplicationEventStream(ctx *sql.Conte
 	return conn.SendBinlogDumpCommand(1, *position)
 }
 
-func formatTableMapAsString(tableId uint64, tableMap *mysql.TableMap) string {
-	var sb strings.Builder
-
-	sb.WriteString(fmt.Sprintf("ID: %v, ", tableId))
-	sb.WriteString(fmt.Sprintf("Name: %s, ", tableMap.Name))
-	sb.WriteString(fmt.Sprintf("Database: %s, ", tableMap.Database))
-	sb.WriteString(fmt.Sprintf("Flags: %v, ", tableMap.Flags))
-	sb.WriteString(fmt.Sprintf("Metadata: %v, ", tableMap.Metadata))
-	sb.WriteString(fmt.Sprintf("Types: %v, ", tableMap.Types))
-
-	return sb.String()
+func convertToHexString(v uint16) string {
+	return fmt.Sprintf("%x", v)
 }
 
 func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) {
