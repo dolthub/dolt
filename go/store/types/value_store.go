@@ -118,6 +118,10 @@ func (lvs *ValueStore) getAddrs(ctx context.Context, c chunks.Chunk) (hash.HashS
 	return AddrsFromNomsValue(ctx, c, lvs.nbf)
 }
 
+func noopGetAddrs(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+	return nil, nil
+}
+
 const (
 	defaultDecodedChunksSize = 1 << 25 // 32MB
 	defaultPendingPutMax     = 1 << 28 // 256MB
@@ -425,9 +429,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 
 		getAddrs := lvs.getAddrs
 		if !lvs.enforceCompleteness {
-			getAddrs = func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-				return hash.NewHashSet(), nil
-			}
+			getAddrs = noopGetAddrs
 		}
 		return lvs.cs.Put(ctx, c, getAddrs)
 	}
@@ -591,14 +593,8 @@ func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
 		}
 	}
 	for _, c := range lvs.bufferedChunks {
-		getAddrs := func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-			return nil, nil
-		}
-		if lvs.enforceCompleteness {
-			getAddrs = lvs.getAddrs
-		}
 		// Can't use put() because it's wrong to delete from a lvs.bufferedChunks while iterating it.
-		err := lvs.cs.Put(ctx, c, getAddrs)
+		err := lvs.cs.Put(ctx, c, lvs.getAddrs)
 		if err != nil {
 			return err
 		}
