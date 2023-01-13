@@ -593,8 +593,12 @@ func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
 		}
 	}
 	for _, c := range lvs.bufferedChunks {
+		getAddrs := lvs.getAddrs
+		if !lvs.enforceCompleteness {
+			getAddrs = noopGetAddrs
+		}
 		// Can't use put() because it's wrong to delete from a lvs.bufferedChunks while iterating it.
-		err := lvs.cs.Put(ctx, c, lvs.getAddrs)
+		err := lvs.cs.Put(ctx, c, getAddrs)
 		if err != nil {
 			return err
 		}
