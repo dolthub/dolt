@@ -723,16 +723,18 @@ func (ddb *DoltDB) HasRemoteTrackingBranch(ctx context.Context, branchName strin
 	var remoteRef ref.RemoteRef
 
 	remoteRefs, err := ddb.GetRemoteRefs(ctx)
-	if err == nil {
-		for _, rf := range remoteRefs {
-			if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetBranch() == branchName {
-				if remoteRefFound {
-					// if there are multiple remotes with matching branch names with defined branch name, it errors
-					return "", false, ref.RemoteRef{}, fmt.Errorf("'%s' matched multiple remote tracking branches", branchName)
-				}
-				remoteRefFound = true
-				remoteRef = remRef
+	if err != nil {
+		return "", false, ref.RemoteRef{}, err
+	}
+
+	for _, rf := range remoteRefs {
+		if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetBranch() == branchName {
+			if remoteRefFound {
+				// if there are multiple remotes with matching branch names with defined branch name, it errors
+				return "", false, ref.RemoteRef{}, fmt.Errorf("'%s' matched multiple remote tracking branches", branchName)
 			}
+			remoteRefFound = true
+			remoteRef = remRef
 		}
 	}
 
