@@ -88,8 +88,8 @@ func TestResetReplica(t *testing.T) {
 	rows, err = replicaDatabase.Queryx("RESET REPLICA;")
 	require.NoError(t, err)
 	rows, err = replicaDatabase.Queryx("SHOW REPLICA STATUS;")
-	status := convertByteArraysToStrings(readNextRow(t, rows))
 	require.NoError(t, err)
+	status := convertByteArraysToStrings(readNextRow(t, rows))
 	require.Equal(t, "0", status["Last_Errno"])
 	require.Equal(t, "", status["Last_Error"])
 	require.Equal(t, "0", status["Last_IO_Errno"])
@@ -108,6 +108,39 @@ func TestResetReplica(t *testing.T) {
 	rows, err = replicaDatabase.Queryx("select * from mysql.slave_master_info;")
 	require.NoError(t, err)
 	require.False(t, rows.Next())
+}
+
+// TestStartReplicaErrors tests that the "START REPLICA" command returns appropriate responses
+// for various error conditions.
+func TestStartReplicaErrors(t *testing.T) {
+	startSqlServers(t)
+	defer teardown(t)
+
+	// START REPLICA returns an error when no replication source is configured
+	_, err := replicaDatabase.Queryx("START REPLICA;")
+	require.Error(t, err)
+	require.ErrorContains(t, err, ErrServerNotConfiguredAsReplica.Error())
+
+	// For partial source configuration, START REPLICA doesn't throw an error, but an error will
+	// be populated in SHOW REPLICA STATUS after START REPLICA returns.
+	//START REPLICA doesn't returns an error when replication source is only partially configured
+	replicaDatabase.MustExec("CHANGE REPLICATION SOURCE TO SOURCE_PORT=1234, SOURCE_HOST='localhost';")
+	replicaDatabase.MustExec("START REPLICA;")
+	rows, err := replicaDatabase.Queryx("SHOW REPLICA STATUS;")
+	require.NoError(t, err)
+	status := convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "0", status["Last_Errno"])
+	require.Equal(t, "", status["Last_Error"])
+	require.Equal(t, "13117", status["Last_IO_Errno"])
+	require.NotEmpty(t, status["Last_IO_Error"])
+	require.NotEmpty(t, status["Last_IO_Error_Timestamp"])
+	require.Equal(t, "0", status["Last_SQL_Errno"])
+	require.Equal(t, "", status["Last_SQL_Error"])
+	require.Equal(t, "", status["Last_SQL_Error_Timestamp"])
+
+	// START REPLICA doesn't return an error if replication is already running
+	startReplication(t, mySqlPort)
+	replicaDatabase.MustExec("START REPLICA;")
 }
 
 // TestDoltCommits tests that Dolt commits are created and use correct transaction boundaries.

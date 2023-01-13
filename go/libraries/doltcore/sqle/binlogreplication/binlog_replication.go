@@ -76,6 +76,10 @@ var currentPosition *mysql.Position
 // positionStore is the singleton instance for loading/saving binlog position state to disk for durable storage
 var positionStore = &binlogPositionStore{}
 
+// ErrServerNotConfiguredAsReplica is returned when replication is started without enough configuration provided.
+var ErrServerNotConfiguredAsReplica = fmt.Errorf(
+	"server is not configured as a replica; fix with CHANGE REPLICATION SOURCE TO")
+
 func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 	controller := doltBinlogReplicaController{
 		mu: &sync.Mutex{},
@@ -92,14 +96,25 @@ func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 var _ binlogreplication.BinlogReplicaController = (*doltBinlogReplicaController)(nil)
 
 func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
-	// TODO: If the database is already configured for Dolt replication/clustering, then error out
 	if false {
-		return fmt.Errorf("dolt replication already enabled; unable to use binlog replication with other replication modes. Disable Dolt replication first before starting binlog replication")
+		// TODO: If the database is already configured for Dolt replication/clustering, then error out
+		//       Add a BATS test to cover this case
+		return fmt.Errorf("dolt replication already enabled; unable to use binlog replication with other replication modes. " +
+			"Disable Dolt replication first before starting binlog replication")
+	}
+
+	// TODO: If we aren't running in a sql-server context, return an error
+	//       Add a BATS test for this; today, an error would come from the GMS layer, so we can't give
+	//       a specific error message about needing to run Dolt as a sql-server yet.
+
+	configuration, err := loadReplicationConfiguration(ctx)
+	if err != nil {
+		return err
+	} else if configuration == nil {
+		return ErrServerNotConfiguredAsReplica
 	}
 
 	logger.Info("starting binlog replication...")
-
-	// TODO: If we aren't running in a sql-server context, return an error
 
 	// Create a new context to use, because otherwise the engine will cancel the original
 	// context after the 'start replica' statement has finished executing.
@@ -107,11 +122,7 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 	go func() {
 		err := d.replicaBinlogEventHandler(ctx)
 		if err != nil {
-			// TODO: Need better error handling here... we shouldn't be crashing the server obviously
-			//       Instead, we should log the errors and expose them through the replica status API
-			//       Do we need another log just for replication? (not the binlog relay log... just a debugging log)
-			//       For now though... this panic is convenient since it fails the tests hard for any unexpected error.
-			panic(fmt.Sprintf("unexpected error of type %T: '%v'", err, err.Error()))
+			logger.Errorf("unexpected error of type %T: '%v'", err, err.Error())
 		}
 	}()
 	return nil
@@ -236,6 +247,28 @@ func (d *doltBinlogReplicaController) ResetReplica(ctx *sql.Context, resetAll bo
 	return nil
 }
 
+// setIoError updates the current replication status with the specific |errno| and |message| to describe an IO error.
+func (d *doltBinlogReplicaController) setIoError(errno uint, message string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	currentTime := time.Now()
+	d.status.LastIoErrorTimestamp = &currentTime
+	d.status.LastIoErrNumber = errno
+	d.status.LastIoError = message
+}
+
+// setSqlError updates the current replication status with the specific |errno| and |message| to describe an SQL error.
+func (d *doltBinlogReplicaController) setSqlError(errno uint, message string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	currentTime := time.Now()
+	d.status.LastSqlErrorTimestamp = &currentTime
+	d.status.LastSqlErrNumber = errno
+	d.status.LastSqlError = message
+}
+
 // Row Flags – https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
 const endOfStatementRowFlag = 0x0001
 const noForeignKeyChecksRowFlag = 0x0002
@@ -268,11 +301,26 @@ func (d *doltBinlogReplicaController) connectAndStartReplicationEventStream(ctx 
 	for connectionAttempts := uint64(0); ; connectionAttempts++ {
 		replicaSourceInfo, err := loadReplicationConfiguration(ctx)
 
-		if replicaSourceInfo != nil && replicaSourceInfo.Uuid != "" {
+		if replicaSourceInfo == nil {
+			err = ErrServerNotConfiguredAsReplica
+			d.setIoError(13117, err.Error())
+			return nil, err
+		} else if replicaSourceInfo.Uuid != "" {
 			replicationSourceUuid = replicaSourceInfo.Uuid
 		}
 
-		// TODO: Validate that all required settings are present
+		if replicaSourceInfo.Host == "" {
+			err = fmt.Errorf("fatal error: Invalid (empty) hostname when attempting to connect " +
+				"to the source server. Connection attempt terminated")
+			d.setIoError(13117, err.Error())
+			return nil, err
+		} else if replicaSourceInfo.User == "" {
+			err = fmt.Errorf("fatal error: Invalid (empty) username when attempting to connect " +
+				"to the source server. Connection attempt terminated")
+			d.setIoError(13117, err.Error())
+			return nil, err
+		}
+
 		connParams := mysql.ConnParams{
 			Host:  replicaSourceInfo.Host,
 			Port:  int(replicaSourceInfo.Port),
@@ -362,8 +410,9 @@ func (d *doltBinlogReplicaController) replicaBinlogEventHandler(ctx *sql.Context
 			if err != nil {
 				logger.Errorf("unexpected error of type %T: '%v'", err, err.Error())
 				err = nil
-				// TODO: We don't currently return an error from this function yet, because the
-				//       calling function currently panics and crashes the process.
+				// TODO: We don't currently return an error from this function yet.
+				//       Need to refine error handling so that all errors are always logged, but not all errors
+				//       stop the replication processor and ensure proper retry is in place for various operations.
 			}
 		}
 	}
