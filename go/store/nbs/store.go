@@ -97,7 +97,7 @@ type NomsBlockStore struct {
 	upstream manifestContents
 
 	cond         *sync.Cond
-	gcInProgress bool
+	gcInProgress atomic.Bool
 
 	mtSize   uint64
 	putCount uint64
@@ -583,7 +583,7 @@ func (nbs *NomsBlockStore) WithoutConjoiner() *NomsBlockStore {
 
 // Wait for GC to complete to continue with writes
 func (nbs *NomsBlockStore) waitForGC() {
-	for nbs.gcInProgress {
+	for nbs.gcInProgress.Load() {
 		nbs.cond.Wait()
 	}
 }
@@ -1416,15 +1416,24 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 	return nbs.p.PruneTableFiles(ctx, contents, t)
 }
 
-func (nbs *NomsBlockStore) setGCInProgress(inProgress bool) {
+func (nbs *NomsBlockStore) setGCInProgress(inProgress bool) bool {
 	nbs.cond.L.Lock()
 	defer nbs.cond.L.Unlock()
-	nbs.gcInProgress = inProgress
-	nbs.cond.Broadcast()
+
+	swapped := nbs.gcInProgress.CompareAndSwap(!inProgress, inProgress)
+	if swapped {
+		nbs.cond.Broadcast()
+		return true
+	}
+
+	return false
 }
 
 func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest chunks.ChunkStore) error {
-	nbs.setGCInProgress(true)
+	swapped := nbs.setGCInProgress(true)
+	if !swapped {
+		return errors.New("gc already in progress")
+	}
 	defer nbs.setGCInProgress(false)
 
 	ops := nbs.SupportedOperations()
