@@ -291,7 +291,8 @@ func SqlRowAsCreateFragStmt(r sql.Row) (string, error) {
 
 	// TODO: this is temporary fix for create statements
 	if typeStr == "TRIGGER" {
-		defStr = strings.Replace(defStr, "create trigger", "CREATE TRIGGER", 1)
+		nameStr := r[1].(string)
+		defStr = fmt.Sprintf("CREATE TRIGGER `%s` %s", nameStr, defStr[len("CREATE TRIGGER ")+len(nameStr)+1:])
 	} else {
 		defStr = strings.Replace(defStr, "create ", "CREATE ", -1)
 		defStr = strings.Replace(defStr, " view ", " VIEW ", -1)
