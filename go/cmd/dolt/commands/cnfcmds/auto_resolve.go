@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type AutoResolveStrategy int
@@ -443,8 +442,7 @@ func validateConstraintViolations(ctx context.Context, before, after *doltdb.Roo
 		return err
 	}
 
-	// todo: this is an expensive way to compute this
-	_, violators, err := merge.AddForeignKeyViolations(ctx, after, before, set.NewStrSet(tables), hash.Of(nil))
+	violators, err := merge.GetForeignKeyViolatedTables(ctx, after, before, set.NewStrSet(tables))
 	if err != nil {
 		return err
 	}
