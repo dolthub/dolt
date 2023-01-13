@@ -248,7 +248,7 @@ func pullBranches(
 	}
 
 	_, err := rrd.limiter.Run(ctx, "-all", func() (any, error) {
-		err := rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, remoteHashes, nil, nil)
+		err := rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, remoteHashes, nil)
 
 		for _, remoteRef := range remoteRefs {
 			localRef, localRefExists := localRefsByPath[remoteRef.Ref.GetPath()]

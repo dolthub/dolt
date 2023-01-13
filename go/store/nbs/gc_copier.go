@@ -17,13 +17,7 @@ package nbs
 import (
 	"context"
 	"fmt"
-	"io"
-	"os"
-	"path"
 	"strings"
-
-	"github.com/dolthub/dolt/go/libraries/utils/file"
-	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 type gcErrAccum map[string]error
@@ -63,7 +57,7 @@ func (gcc *gcCopier) addChunk(ctx context.Context, c CompressedChunk) error {
 	return gcc.writer.AddCmpChunk(c)
 }
 
-func (gcc *gcCopier) copyTablesToDir(ctx context.Context, destDir string) (ts []tableSpec, err error) {
+func (gcc *gcCopier) copyTablesToDir(ctx context.Context, tfp tableFilePersister) (ts []tableSpec, err error) {
 	var filename string
 	filename, err = gcc.writer.Finish()
 	if err != nil {
@@ -78,19 +72,18 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, destDir string) (ts []
 		_ = gcc.writer.Remove()
 	}()
 
-	filepath := path.Join(destDir, filename)
-
 	var addr addr
 	addr, err = parseAddr(filename)
 	if err != nil {
 		return nil, err
 	}
 
-	if info, err := os.Stat(filepath); err == nil {
-		// file already exists
-		if gcc.writer.ContentLength() != uint64(info.Size()) {
-			return nil, fmt.Errorf("'%s' already exists with different contents.", filepath)
-		}
+	exists, err := tfp.Exists(ctx, addr, uint32(gcc.writer.ChunkCount()), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if exists {
 		return []tableSpec{
 			{
 				name:       addr,
@@ -99,44 +92,13 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, destDir string) (ts []
 		}, nil
 	}
 
-	// Otherwise, write the file.
-	var tf string
-	tf, err = func() (tf string, err error) {
-		var temp *os.File
-		temp, err = tempfiles.MovableTempFileProvider.NewFile(destDir, tempTablePrefix)
-		if err != nil {
-			return "", err
-		}
-		defer func() {
-			cerr := temp.Close()
-			if err == nil {
-				err = cerr
-			}
-		}()
-
-		r, err := gcc.writer.Reader()
-		if err != nil {
-			return "", err
-		}
-		defer func() {
-			cerr := r.Close()
-			if err == nil {
-				err = cerr
-			}
-		}()
-
-		_, err = io.Copy(temp, r)
-		if err != nil {
-			return "", err
-		}
-
-		return temp.Name(), nil
-	}()
+	r, err := gcc.writer.Reader()
 	if err != nil {
 		return nil, err
 	}
 
-	err = file.Rename(tf, filepath)
+	// Otherwise, write the file.
+	err = tfp.CopyTableFile(ctx, r, filename, uint32(gcc.writer.ChunkCount()))
 	if err != nil {
 		return nil, err
 	}

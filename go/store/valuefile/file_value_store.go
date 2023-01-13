@@ -16,6 +16,7 @@ package valuefile
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 
@@ -101,7 +102,9 @@ func (f *FileValueStore) WriteValue(ctx context.Context, v types.Value) (types.R
 			return types.Ref{}, err
 		}
 
-		err = f.Put(ctx, c)
+		err = f.Put(ctx, c, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+			return types.AddrsFromNomsValue(ctx, c, f.nbf)
+		})
 
 		if err != nil {
 			return types.Ref{}, err
@@ -168,8 +171,30 @@ func (f *FileValueStore) HasMany(ctx context.Context, hashes hash.HashSet) (abse
 	return absent, nil
 }
 
-// Put puts a chunk inton the store
-func (f *FileValueStore) Put(ctx context.Context, c chunks.Chunk) error {
+func (f *FileValueStore) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
+	absent, err := f.HasMany(ctx, addrs)
+	if err != nil {
+		return err
+	}
+	if len(absent) != 0 {
+		s := absent.String()
+		return fmt.Errorf("Found dangling references to %s", s)
+	}
+	return nil
+}
+
+// Put puts a chunk into the store
+func (f *FileValueStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
+	addrs, err := getAddrs(ctx, c)
+	if err != nil {
+		return err
+	}
+
+	err = f.errorIfDangling(ctx, addrs)
+	if err != nil {
+		return err
+	}
+
 	f.chunkLock.Lock()
 	defer f.chunkLock.Unlock()
 

@@ -17,11 +17,11 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"time"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
-	"github.com/dolthub/dolt/go/store/chunks"
 )
 
 const (
@@ -36,6 +36,7 @@ type blobstorePersister struct {
 }
 
 var _ tablePersister = &blobstorePersister{}
+var _ tableFilePersister = &blobstorePersister{}
 
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
@@ -156,11 +157,33 @@ func (bsp *blobstorePersister) Exists(ctx context.Context, name addr, chunkCount
 }
 
 func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents manifestContents, t time.Time) error {
-	return chunks.ErrUnsupportedOperation
+	return nil
 }
 
 func (bsp *blobstorePersister) Close() error {
 	return nil
+}
+
+func (bsp *blobstorePersister) Path() string {
+	return ""
+}
+
+func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, chunkCount uint32) error {
+	var err error
+
+	defer func() {
+		cerr := r.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
+
+	_, err = bsp.bs.Put(ctx, fileId, r)
+	if err != nil {
+		return err
+	}
+
+	return err
 }
 
 type bsTableReaderAt struct {
@@ -213,6 +236,10 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	if chunkCount != index.chunkCount() {
+		return nil, errors.New("unexpected chunk count")
 	}
 
 	tr, err := newTableReader(index, &bsTableReaderAt{name.String(), bs}, s3BlockSize)
