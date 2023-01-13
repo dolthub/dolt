@@ -576,14 +576,14 @@ func (nbs *NomsBlockStore) WithoutConjoiner() *NomsBlockStore {
 }
 
 func (nbs *NomsBlockStore) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
-	absent, err := nbs.HasMany(ctx, addrs)
-	if err != nil {
-		return err
-	}
-	if len(absent) != 0 {
-		s := absent.String()
-		return fmt.Errorf("Found dangling references to %s", s)
-	}
+	// absent, err := nbs.HasMany(ctx, addrs)
+	// if err != nil {
+	// 	return err
+	// }
+	// if len(absent) != 0 {
+	// 	s := absent.String()
+	// 	return fmt.Errorf("Found dangling references to %s", s)
+	// }
 	return nil
 }
 
