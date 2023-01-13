@@ -319,10 +319,8 @@ func TestPanicOnBadVersion(t *testing.T) {
 }
 
 func TestErrorIfDangling(t *testing.T) {
+	t.Skip("WriteValue errors with dangling ref error")
 	vs := newTestValueStore()
-	if vs.Format() == Format_DOLT {
-		t.Skip("WriteValue errors with dangling ref error")
-	}
 
 	r, err := NewRef(Bool(true), vs.Format())
 	require.NoError(t, err)

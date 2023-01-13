@@ -83,12 +83,7 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, tfp tableFilePersister
 		return nil, err
 	}
 
-	// file already exists
 	if exists {
-		// TODO(taylor)
-		// if gcc.writer.ContentLength() != uint64(tfp.ContentLength()) {
-		// 	return nil, fmt.Errorf("'%s' already exists with different contents.", filename)
-		// }
 		return []tableSpec{
 			{
 				name:       addr,
