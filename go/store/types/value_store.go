@@ -102,16 +102,21 @@ func ErrorIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.Chu
 	return nil
 }
 
-func AddrsFromNomsValue(ctx context.Context, c chunks.Chunk, nbf *NomsBinFormat) (hash.HashSet, error) {
-	valRefs := make(hash.HashSet)
-	err := walkRefs(c.Data(), nbf, func(r Ref) error {
-		valRefs.Insert(r.TargetHash())
+func AddrsFromNomsValue(ctx context.Context, c chunks.Chunk, nbf *NomsBinFormat) (addrs hash.HashSet, err error) {
+	addrs = hash.NewHashSet()
+	if NomsKind(c.Data()[0]) == SerialMessageKind {
+		err = SerialMessage(c.Data()).walkAddrs(nbf, func(a hash.Hash) error {
+			addrs.Insert(a)
+			return nil
+		})
+		return
+	}
+
+	err = walkRefs(c.Data(), nbf, func(r Ref) error {
+		addrs.Insert(r.TargetHash())
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	return valRefs, nil
+	return
 }
 
 func (lvs *ValueStore) getAddrs(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
@@ -414,22 +419,13 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 		// cheap enough that it would be possible to get back
 		// cache-locality in our flushes without ref heights.
 		if lvs.enforceCompleteness {
-			err := v.walkRefs(lvs.nbf, func(r Ref) error {
-				lvs.unresolvedRefs.Insert(r.TargetHash())
-				return nil
-			})
+			addrs, err := lvs.getAddrs(ctx, c)
 			if err != nil {
 				return err
 			}
+			lvs.unresolvedRefs.InsertAll(addrs)
 		}
-
-		getAddrs := lvs.getAddrs
-		if !lvs.enforceCompleteness {
-			getAddrs = func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-				return hash.NewHashSet(), nil
-			}
-		}
-		return lvs.cs.Put(ctx, c, getAddrs)
+		return lvs.cs.Put(ctx, c, lvs.getAddrs)
 	}
 
 	d.PanicIfTrue(height == 0)
@@ -593,14 +589,8 @@ func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
 		}
 	}
 	for _, c := range lvs.bufferedChunks {
-		getAddrs := func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-			return nil, nil
-		}
-		if lvs.enforceCompleteness {
-			getAddrs = lvs.getAddrs
-		}
 		// Can't use put() because it's wrong to delete from a lvs.bufferedChunks while iterating it.
-		err := lvs.cs.Put(ctx, c, getAddrs)
+		err := lvs.cs.Put(ctx, c, lvs.getAddrs)
 		if err != nil {
 			return err
 		}
