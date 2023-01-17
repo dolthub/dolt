@@ -61,6 +61,10 @@ func NewClusterDatabase(p ClusterStatusProvider) sql.Database {
 // Implement StoredProcedureDatabase so that external stored procedures are available.
 var _ sql.StoredProcedureDatabase = database{}
 
+func (database) GetStoredProcedure(ctx *sql.Context, name string) (sql.StoredProcedureDetails, bool, error) {
+	return sql.StoredProcedureDetails{}, false, nil
+}
+
 func (database) GetStoredProcedures(ctx *sql.Context) ([]sql.StoredProcedureDetails, error) {
 	return nil, nil
 }

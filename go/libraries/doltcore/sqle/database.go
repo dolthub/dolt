@@ -1229,9 +1229,21 @@ func (db Database) DropTrigger(ctx *sql.Context, name string) error {
 	return db.dropFragFromSchemasTable(ctx, "trigger", name, sql.ErrTriggerDoesNotExist.New(name))
 }
 
+// GetStoredProcedure implements sql.StoredProcedureDatabase.
+func (db Database) GetStoredProcedure(ctx *sql.Context, name string) (sql.StoredProcedureDetails, bool, error) {
+	procedures, err := DoltProceduresGetAll(ctx, db, strings.ToLower(name))
+	if err != nil {
+		return sql.StoredProcedureDetails{}, false, nil
+	}
+	if len(procedures) == 1 {
+		return procedures[0], true, nil
+	}
+	return sql.StoredProcedureDetails{}, false, nil
+}
+
 // GetStoredProcedures implements sql.StoredProcedureDatabase.
 func (db Database) GetStoredProcedures(ctx *sql.Context) ([]sql.StoredProcedureDetails, error) {
-	return DoltProceduresGetAll(ctx, db)
+	return DoltProceduresGetAll(ctx, db, "")
 }
 
 // SaveStoredProcedure implements sql.StoredProcedureDatabase.

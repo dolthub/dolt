@@ -3420,3 +3420,356 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 		},
 	},
 }
+
+// DoltCallAsOf are tests of using CALL ... AS OF using commits
+var DoltCallAsOf = []queries.ScriptTest{
+	{
+		Name: "Database syntax properly handles inter-CALL communication",
+		SetUpScript: []string{
+			`CREATE PROCEDURE p1()
+BEGIN
+	DECLARE str VARCHAR(20);
+    CALL p2(str);
+	SET str = CONCAT('a', str);
+    SELECT str;
+END`,
+			`CREATE PROCEDURE p2(OUT param VARCHAR(20))
+BEGIN
+	SET param = 'b';
+END`,
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'First procedures');",
+			"CALL DOLT_BRANCH('p12');",
+			"DROP PROCEDURE p1;",
+			"DROP PROCEDURE p2;",
+			`CREATE PROCEDURE p1()
+BEGIN
+	DECLARE str VARCHAR(20);
+    CALL p2(str);
+	SET str = CONCAT('c', str);
+    SELECT str;
+END`,
+			`CREATE PROCEDURE p2(OUT param VARCHAR(20))
+BEGIN
+	SET param = 'd';
+END`,
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'Second procedures');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL p1();",
+				Expected: []sql.Row{{"cd"}},
+			},
+			{
+				Query:    "CALL `mydb/main`.p1();",
+				Expected: []sql.Row{{"cd"}},
+			},
+			{
+				Query:    "CALL `mydb/p12`.p1();",
+				Expected: []sql.Row{{"ab"}},
+			},
+		},
+	},
+	{
+		Name: "CALL ... AS OF references historic data through nested calls",
+		SetUpScript: []string{
+			"CREATE TABLE test (v1 BIGINT);",
+			"INSERT INTO test VALUES (1);",
+			`CREATE PROCEDURE p1()
+BEGIN
+	CALL p2();
+END`,
+			`CREATE PROCEDURE p2()
+BEGIN
+	SELECT * FROM test;
+END`,
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit message');",
+			"UPDATE test SET v1 = 2;",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit message');",
+			"UPDATE test SET v1 = 3;",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit message');",
+			"UPDATE test SET v1 = 4;",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit message');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL p1();",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "CALL p1() AS OF 'HEAD';",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "CALL p1() AS OF 'HEAD~1';",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "CALL p1() AS OF 'HEAD~2';",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "CALL p1() AS OF 'HEAD~3';",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "CALL ... AS OF doesn't overwrite nested CALL ... AS OF",
+		SetUpScript: []string{
+			"CREATE TABLE myhistorytable (pk BIGINT PRIMARY KEY, s TEXT);",
+			"INSERT INTO myhistorytable VALUES (1, 'first row, 1'), (2, 'second row, 1'), (3, 'third row, 1');",
+			"CREATE PROCEDURE p1() BEGIN CALL p2(); END",
+			"CREATE PROCEDURE p1a() BEGIN CALL p2() AS OF 'HEAD~2'; END",
+			"CREATE PROCEDURE p1b() BEGIN CALL p2a(); END",
+			"CREATE PROCEDURE p2() BEGIN SELECT * FROM myhistorytable; END",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit message');",
+			"DELETE FROM myhistorytable;",
+			"INSERT INTO myhistorytable VALUES (1, 'first row, 2'), (2, 'second row, 2'), (3, 'third row, 2');",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit message');",
+			"DROP TABLE myhistorytable;",
+			"CREATE TABLE myhistorytable (pk BIGINT PRIMARY KEY, s TEXT, c TEXT);",
+			"INSERT INTO myhistorytable VALUES (1, 'first row, 3', '1'), (2, 'second row, 3', '2'), (3, 'third row, 3', '3');",
+			"CREATE PROCEDURE p2a() BEGIN SELECT * FROM myhistorytable AS OF 'HEAD~1'; END",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit message');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "CALL p1();",
+				Expected: []sql.Row{
+					{int64(1), "first row, 3", "1"},
+					{int64(2), "second row, 3", "2"},
+					{int64(3), "third row, 3", "3"},
+				},
+			},
+			{
+				Query: "CALL p1a();",
+				Expected: []sql.Row{
+					{int64(1), "first row, 1"},
+					{int64(2), "second row, 1"},
+					{int64(3), "third row, 1"},
+				},
+			},
+			{
+				Query: "CALL p1b();",
+				Expected: []sql.Row{
+					{int64(1), "first row, 2"},
+					{int64(2), "second row, 2"},
+					{int64(3), "third row, 2"},
+				},
+			},
+			{
+				Query: "CALL p2();",
+				Expected: []sql.Row{
+					{int64(1), "first row, 3", "1"},
+					{int64(2), "second row, 3", "2"},
+					{int64(3), "third row, 3", "3"},
+				},
+			},
+			{
+				Query: "CALL p2a();",
+				Expected: []sql.Row{
+					{int64(1), "first row, 2"},
+					{int64(2), "second row, 2"},
+					{int64(3), "third row, 2"},
+				},
+			},
+			{
+				Query: "CALL p1() AS OF 'HEAD~2';",
+				Expected: []sql.Row{
+					{int64(1), "first row, 1"},
+					{int64(2), "second row, 1"},
+					{int64(3), "third row, 1"},
+				},
+			},
+			{
+				Query: "CALL p1a() AS OF 'HEAD';",
+				Expected: []sql.Row{
+					{int64(1), "first row, 1"},
+					{int64(2), "second row, 1"},
+					{int64(3), "third row, 1"},
+				},
+			},
+			{
+				Query: "CALL p1b() AS OF 'HEAD';",
+				Expected: []sql.Row{
+					{int64(1), "first row, 2"},
+					{int64(2), "second row, 2"},
+					{int64(3), "third row, 2"},
+				},
+			},
+			{
+				Query: "CALL p2() AS OF 'HEAD~2';",
+				Expected: []sql.Row{
+					{int64(1), "first row, 1"},
+					{int64(2), "second row, 1"},
+					{int64(3), "third row, 1"},
+				},
+			},
+			{
+				Query: "CALL p2a() AS OF 'HEAD';",
+				Expected: []sql.Row{
+					{int64(1), "first row, 2"},
+					{int64(2), "second row, 2"},
+					{int64(3), "third row, 2"},
+				},
+			},
+		},
+	},
+	{
+		Name: "CALL ... AS OF errors if attempting to modify a table",
+		SetUpScript: []string{
+			"CREATE TABLE test (v1 BIGINT);",
+			"INSERT INTO test VALUES (2);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit message');",
+			`CREATE PROCEDURE p1()
+BEGIN
+	UPDATE test SET v1 = v1 * 2;
+END`,
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit message');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM test;",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "CALL p1();",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "SELECT * FROM test;",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:       "CALL p1() AS OF 'HEAD~1';",
+				ExpectedErr: sql.ErrProcedureCallAsOfReadOnly,
+			},
+		},
+	},
+	{
+		Name: "Database syntax propogates to inner calls",
+		SetUpScript: []string{
+			"CALL DOLT_CHECKOUT('main');",
+			`CREATE PROCEDURE p4()
+BEGIN
+	CALL p5();
+END`,
+			`CREATE PROCEDURE p5()
+BEGIN
+	SELECT 3;
+END`,
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit message');",
+			"CALL DOLT_BRANCH('p45');",
+			"DROP PROCEDURE p4;",
+			"DROP PROCEDURE p5;",
+			`CREATE PROCEDURE p4()
+BEGIN
+	CALL p5();
+END`,
+			`CREATE PROCEDURE p5()
+BEGIN
+	SELECT 4;
+END`,
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit message');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL p4();",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "CALL p5();",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "CALL `mydb/main`.p4();",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "CALL `mydb/main`.p5();",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "CALL `mydb/p45`.p4();",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "CALL `mydb/p45`.p5();",
+				Expected: []sql.Row{{3}},
+			},
+		},
+	},
+	{
+		Name: "Database syntax with AS OF",
+		SetUpScript: []string{
+			"CREATE TABLE test (v1 BIGINT);",
+			"INSERT INTO test VALUES (2);",
+			`CREATE PROCEDURE p1()
+BEGIN
+	SELECT v1 * 10 FROM test;
+END`,
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit message');",
+			"CALL DOLT_BRANCH('other');",
+			"DROP PROCEDURE p1;",
+			`CREATE PROCEDURE p1()
+BEGIN
+	SELECT v1 * 100 FROM test;
+END`,
+			"UPDATE test SET v1 = 3;",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit message');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL p1();",
+				Expected: []sql.Row{{300}},
+			},
+			{
+				Query:    "CALL `mydb/main`.p1();",
+				Expected: []sql.Row{{300}},
+			},
+			{
+				Query:    "CALL `mydb/other`.p1();",
+				Expected: []sql.Row{{30}},
+			},
+			{
+				Query:    "CALL p1() AS OF 'HEAD';",
+				Expected: []sql.Row{{300}},
+			},
+			{
+				Query:    "CALL `mydb/main`.p1() AS OF 'HEAD';",
+				Expected: []sql.Row{{300}},
+			},
+			{
+				Query:    "CALL `mydb/other`.p1() AS OF 'HEAD';",
+				Expected: []sql.Row{{30}},
+			},
+			{
+				Query:    "CALL p1() AS OF 'HEAD~1';",
+				Expected: []sql.Row{{200}},
+			},
+			{
+				Query:    "CALL `mydb/main`.p1() AS OF 'HEAD~1';",
+				Expected: []sql.Row{{200}},
+			},
+			{
+				Query:    "CALL `mydb/other`.p1() AS OF 'HEAD~1';",
+				Expected: []sql.Row{{20}},
+			},
+		},
+	},
+}
