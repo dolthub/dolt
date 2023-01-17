@@ -43,6 +43,10 @@ func benchmarkNovelWrite(refreshStore storeOpenFn, src *dataSource, t assert.Tes
 	return true
 }
 
+func getAddrsCb(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+	return nil, nil
+}
+
 func writeToEmptyStore(store chunks.ChunkStore, src *dataSource, t assert.TestingT) {
 	root, err := store.Root(context.Background())
 	assert.NoError(t, err)
@@ -50,11 +54,11 @@ func writeToEmptyStore(store chunks.ChunkStore, src *dataSource, t assert.Testin
 
 	chunx := goReadChunks(src)
 	for c := range chunx {
-		err := store.Put(context.Background(), *c)
+		err := store.Put(context.Background(), *c, getAddrsCb)
 		assert.NoError(t, err)
 	}
 	newRoot := chunks.NewChunk([]byte("root"))
-	err = store.Put(context.Background(), newRoot)
+	err = store.Put(context.Background(), newRoot, getAddrsCb)
 	assert.NoError(t, err)
 	success, err := store.Commit(context.Background(), newRoot.Hash(), root)
 	assert.NoError(t, err)
@@ -78,7 +82,7 @@ func benchmarkNoRefreshWrite(openStore storeOpenFn, src *dataSource, t assert.Te
 	assert.NoError(t, err)
 	chunx := goReadChunks(src)
 	for c := range chunx {
-		err := store.Put(context.Background(), *c)
+		err := store.Put(context.Background(), *c, getAddrsCb)
 		assert.NoError(t, err)
 	}
 	assert.NoError(t, store.Close())

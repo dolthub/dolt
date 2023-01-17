@@ -42,7 +42,6 @@ type GCSBlobstore struct {
 
 var _ Blobstore = &GCSBlobstore{}
 
-// NewGCSBlobstore creates a new instance of a GCSBlobstare
 func NewGCSBlobstore(gcs *storage.Client, bucketName, prefix string) *GCSBlobstore {
 	for len(prefix) > 0 && prefix[0] == '/' {
 		prefix = prefix[1:]
@@ -50,6 +49,10 @@ func NewGCSBlobstore(gcs *storage.Client, bucketName, prefix string) *GCSBlobsto
 
 	bucket := gcs.Bucket(bucketName)
 	return &GCSBlobstore{bucket, bucketName, prefix}
+}
+
+func (bs *GCSBlobstore) Path() string {
+	return path.Join(bs.bucketName, bs.prefix)
 }
 
 // Exists returns true if a blob exists for the given key, and false if it does not.

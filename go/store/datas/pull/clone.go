@@ -29,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
+var ErrNoData = errors.New("no data")
+
 func Clone(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, eventCh chan<- TableFileEvent) error {
 	srcTS, srcOK := srcCS.(nbs.TableFileStore)
 

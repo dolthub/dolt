@@ -67,8 +67,8 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ "type,name,fragment,id" ]] || false
     [[ "$output" =~ "trigger,trigger1,CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v1 = -new.v1,1" ]] || false
-    [[ "$output" =~ "view,view1,SELECT v1 FROM test,2" ]] || false
-    [[ "$output" =~ "view,view2,SELECT y FROM b,3" ]] || false
+    [[ "$output" =~ "view,view1,CREATE VIEW view1 AS SELECT v1 FROM test,2" ]] || false
+    [[ "$output" =~ "view,view2,CREATE VIEW view2 AS SELECT y FROM b,3" ]] || false
     [[ "$output" =~ "trigger,trigger2,CREATE TRIGGER trigger2 AFTER INSERT ON a FOR EACH ROW INSERT INTO b VALUES (new.x * 2),4" ]] || false
     [[ "${#lines[@]}" = "5" ]] || false
 }
@@ -214,8 +214,8 @@ SQL
     run dolt sql -q "SELECT * FROM dolt_schemas" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "type,name,fragment,id" ]] || false
-    [[ "$output" =~ "view,view1,SELECT 2+2 FROM dual,1" ]] || false
-    [[ "$output" =~ "view,view2,SELECT 3+3 FROM dual,2" ]] || false
+    [[ "$output" =~ "view,view1,CREATE VIEW view1 AS SELECT 2+2 FROM dual,1" ]] || false
+    [[ "$output" =~ "view,view2,CREATE VIEW view2 AS SELECT 3+3 FROM dual,2" ]] || false
     [[ "${#lines[@]}" = "3" ]] || false
 
     run dolt sql -q "SELECT * FROM view1" -r=csv

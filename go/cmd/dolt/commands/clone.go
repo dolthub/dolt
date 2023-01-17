@@ -163,11 +163,6 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = clonedEnv.RepoState.Save(clonedEnv.FS)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
 	return nil
 }
 

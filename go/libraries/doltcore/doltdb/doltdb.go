@@ -715,6 +715,36 @@ func (ddb *DoltDB) HasBranch(ctx context.Context, branchName string) (string, bo
 	return "", false, nil
 }
 
+// HasRemoteTrackingBranch returns whether the DB has a remote tracking branch with the name given, case-insensitive.
+// Returns the case-sensitive matching branch if found, as well as a bool indicating if there was a case-insensitive match,
+// remote tracking branchRef that is the only match for the branchName and any error.
+func (ddb *DoltDB) HasRemoteTrackingBranch(ctx context.Context, branchName string) (string, bool, ref.RemoteRef, error) {
+	remoteRefFound := false
+	var remoteRef ref.RemoteRef
+
+	remoteRefs, err := ddb.GetRemoteRefs(ctx)
+	if err != nil {
+		return "", false, ref.RemoteRef{}, err
+	}
+
+	for _, rf := range remoteRefs {
+		if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetBranch() == branchName {
+			if remoteRefFound {
+				// if there are multiple remotes with matching branch names with defined branch name, it errors
+				return "", false, ref.RemoteRef{}, fmt.Errorf("'%s' matched multiple remote tracking branches", branchName)
+			}
+			remoteRefFound = true
+			remoteRef = remRef
+		}
+	}
+
+	if remoteRefFound {
+		return branchName, true, remoteRef, nil
+	}
+
+	return "", false, ref.RemoteRef{}, nil
+}
+
 type RefWithHash struct {
 	Ref  ref.DoltRef
 	Hash hash.Hash
@@ -1270,10 +1300,9 @@ func (ddb *DoltDB) PullChunks(
 	tempDir string,
 	srcDB *DoltDB,
 	targetHashes []hash.Hash,
-	progChan chan pull.PullProgress,
 	statsCh chan pull.Stats,
 ) error {
-	return pullHash(ctx, ddb.db, srcDB.db, targetHashes, tempDir, progChan, statsCh)
+	return pullHash(ctx, ddb.db, srcDB.db, targetHashes, tempDir, statsCh)
 }
 
 func pullHash(
@@ -1281,7 +1310,6 @@ func pullHash(
 	destDB, srcDB datas.Database,
 	targetHashes []hash.Hash,
 	tempDir string,
-	progChan chan pull.PullProgress,
 	statsCh chan pull.Stats,
 ) error {
 	srcCS := datas.ChunkStoreFromDatabase(srcDB)
@@ -1298,7 +1326,7 @@ func pullHash(
 
 		return puller.Pull(ctx)
 	} else {
-		return pull.Pull(ctx, srcCS, destCS, waf, targetHashes, progChan)
+		return errors.New("Puller not supported")
 	}
 }
 
