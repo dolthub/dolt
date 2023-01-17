@@ -82,6 +82,9 @@ var format mysql.BinlogFormat
 var tableMapsById = make(map[uint64]*mysql.TableMap)
 var stopReplicationChan = make(chan struct{})
 
+// modifiedDatabases holds the set of databases that have had data changes and are pending commit
+var modifiedDatabases = make(map[string]struct{})
+
 // currentGtid is the current GTID being processed, but not yet committed
 var currentGtid mysql.GTID
 
@@ -499,6 +502,7 @@ func (d *doltBinlogReplicaController) replicaBinlogEventHandler(ctx *sql.Context
 func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.BinlogEvent) error {
 	var err error
 	createCommit := false
+	commitToAllDatabases := false
 
 	switch {
 	case event.IsRand():
@@ -527,6 +531,15 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 			"charset":  query.Charset,
 			"query":    query.SQL,
 		}).Debug("Received binlog event: Query")
+
+		// When executing SQL statements sent from the primary, we can't be sure what database was modified unless we
+		// look closely at the statement. For example, we could be connected to db01, but executed
+		// "create table db02.t (...);" – i.e., looking at query.Database is NOT enough to always determine the correct
+		// database that was modified, so instead, we commit to all databases when we see a Query binlog event to
+		// avoid issues with correctness, at the cost of being slightly less efficient
+		// TODO: This would be a good case to add to the binlog transaction test suite
+		commitToAllDatabases = true
+
 		ctx.SetCurrentDatabase(query.Database)
 		executeQueryWithEngine(ctx, engine, query.SQL)
 		createCommit = strings.ToLower(query.SQL) != "begin"
@@ -616,15 +629,15 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		logger.Debug("Received binlog event: DeleteRows")
 		tableId := event.TableID(format)
 		tableMap, ok := tableMapsById[tableId]
+		if !ok {
+			return fmt.Errorf("unable to find replication metadata for table ID: %d", tableId)
+		}
 
 		if d.isTableFilteredOut(tableMap) {
 			return nil
 		}
+		modifiedDatabases[tableMap.Database] = struct{}{}
 
-		// TODO: Need to use tableMap.Database in order to commit to the right database!
-		if !ok {
-			return fmt.Errorf("unable to find replication metadata for table ID: %d", tableId)
-		}
 		rows, err := event.Rows(format, tableMap)
 		if err != nil {
 			return err
@@ -674,6 +687,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		if d.isTableFilteredOut(tableMap) {
 			return nil
 		}
+		modifiedDatabases[tableMap.Database] = struct{}{}
 
 		rows, err := event.Rows(format, tableMap)
 		if err != nil {
@@ -735,6 +749,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		if d.isTableFilteredOut(tableMap) {
 			return nil
 		}
+		modifiedDatabases[tableMap.Database] = struct{}{}
 
 		rows, err := event.Rows(format, tableMap)
 		if err != nil {
@@ -776,12 +791,6 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 			}
 		}
 
-	//case event.IsStop():
-	// The primary server writes a STOP event to the binary log when it shuts down or when resuming after a mysqld
-	// process crash. A new binary log file is always created but there is no ROTATE_EVENT. STOP_EVENT is then the
-	// last written event after clean shutdown or resuming a crash.
-	// NOTE: this event is NEVER sent to replica servers!
-
 	default:
 		// TODO: we can't access the bytes directly because the non-interface types are not exposed
 		//       having a Bytes() or Type() method on the interface would let us clean this up.
@@ -798,8 +807,14 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 	}
 
 	if createCommit {
-		// TODO: Add support and tests for working with multiple databases
-		executeQueryWithEngine(ctx, engine, "commit;")
+		databasesToCommit := keys(modifiedDatabases)
+		if commitToAllDatabases {
+			databasesToCommit = getAllUserDatabaseNames(ctx, engine)
+		}
+		for _, database := range databasesToCommit {
+			executeQueryWithEngine(ctx, engine, "use `"+database+"`;")
+			executeQueryWithEngine(ctx, engine, "commit;")
+		}
 
 		// Record the last GTID processed after the commit
 		// TODO: Update GTID sys vars, too
@@ -810,9 +825,16 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		}
 
 		// For now, create a Dolt commit from every data update. Eventually, we'll want to make this configurable.
-		logger.Trace("Creating Dolt commit")
-		executeQueryWithEngine(ctx, engine,
-			fmt.Sprintf("call dolt_commit('-Am', 'Dolt binlog replica commit: GTID %s');", currentGtid))
+		logger.Trace("Creating Dolt commit(s)")
+		for _, database := range databasesToCommit {
+			executeQueryWithEngine(ctx, engine, "use `"+database+"`;")
+			executeQueryWithEngine(ctx, engine,
+				fmt.Sprintf("call dolt_commit('-Am', 'Dolt binlog replica commit: GTID %s');", currentGtid))
+		}
+
+		// Clear the modified database metadata for the next commit
+		modifiedDatabases = make(map[string]struct{})
+		commitToAllDatabases = false
 	}
 
 	return nil
@@ -1012,6 +1034,19 @@ func convertSqlTypesValue(value sqltypes.Value, column *sql.Column) (interface{}
 	return convertedValue, nil
 }
 
+func getAllUserDatabaseNames(ctx *sql.Context, engine *gms.Engine) []string {
+	allDatabases := engine.Analyzer.Catalog.AllDatabases(ctx)
+	userDatabaseNames := make([]string, 0, len(allDatabases))
+	for _, database := range allDatabases {
+		switch database.Name() {
+		case "information_schema", "mysql":
+		default:
+			userDatabaseNames = append(userDatabaseNames, database.Name())
+		}
+	}
+	return userDatabaseNames
+}
+
 // startReplicationEventStream sends a request over |conn|, the connection to the MySQL source server, to begin
 // sending binlog events.
 func (d *doltBinlogReplicaController) startReplicationEventStream(ctx *sql.Context, conn *mysql.Conn) error {
@@ -1041,20 +1076,18 @@ func (d *doltBinlogReplicaController) startReplicationEventStream(ctx *sql.Conte
 	return conn.SendBinlogDumpCommand(1, *position)
 }
 
-func convertToHexString(v uint16) string {
-	return fmt.Sprintf("%x", v)
-}
-
 func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) {
 	if ctx.GetCurrentDatabase() == "" {
-		// TODO: This shouldn't ever happen, right?
 		logger.Error("No current database selected, aborting query")
 		return
 	}
 
 	_, iter, err := engine.Query(ctx, query)
 	if err != nil {
-		logger.Errorf("ERROR executing query: %v ", err.Error())
+		// Log any errors, except for commits with "nothing to commit"
+		if err.Error() != "nothing to commit" {
+			logger.Errorf("ERROR executing query: %v ", err.Error())
+		}
 		return
 	}
 	for {
@@ -1067,4 +1100,22 @@ func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) 
 		}
 		logger.Debugf("   row: %s ", sql.FormatRow(row))
 	}
+}
+
+//
+// Generic util functions...
+//
+
+// convertToHexString returns a lower-case hex string representation of the specified uint16 value |v|.
+func convertToHexString(v uint16) string {
+	return fmt.Sprintf("%x", v)
+}
+
+// keys returns a slice containing the keys in the specified map |m|.
+func keys[K comparable, V any](m map[K]V) []K {
+	keys := make([]K, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
