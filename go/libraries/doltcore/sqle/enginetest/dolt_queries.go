@@ -3646,7 +3646,7 @@ END`,
 			},
 			{
 				Query:    "CALL p1();",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query:    "SELECT * FROM test;",
