@@ -35,6 +35,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	
+	_ "github.com/dolthub/go-mysql-server/sql/variables"
 )
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
