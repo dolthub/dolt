@@ -193,7 +193,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 
 	// add a chunk and flush to trigger a conjoin
 	c := chunks.NewChunk([]byte("it's a boy!"))
-	noop := func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+	noop := func(ctx context.Context, c chunks.Chunk) ([]hash.Hash, error) {
 		return nil, nil
 	}
 	ok, err := st.addChunk(ctx, c, noop)

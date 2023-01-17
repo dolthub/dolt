@@ -215,8 +215,7 @@ func (gcs *GenerationalNBS) Root(ctx context.Context) (hash.Hash, error) {
 func (gcs *GenerationalNBS) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
 	recs := gcs.newGen.mt.children
 	if err := gcs.errorIfDangling(recs); err != nil {
-		//return false, err
-		return false, nil
+		return false, err
 	}
 	return gcs.newGen.Commit(ctx, current, last)
 }

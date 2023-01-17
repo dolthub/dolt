@@ -468,7 +468,7 @@ func (t *testProtocol) NewDatabase(sp Spec) (datas.Database, error) {
 	return datas.NewDatabase(cs), nil
 }
 
-func getAddrsCb(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+func getAddrsCb(ctx context.Context, c chunks.Chunk) ([]hash.Hash, error) {
 	return nil, nil
 }
 

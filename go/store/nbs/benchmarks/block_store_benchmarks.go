@@ -43,7 +43,7 @@ func benchmarkNovelWrite(refreshStore storeOpenFn, src *dataSource, t assert.Tes
 	return true
 }
 
-func getAddrsCb(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+func getAddrsCb(ctx context.Context, c chunks.Chunk) ([]hash.Hash, error) {
 	return nil, nil
 }
 

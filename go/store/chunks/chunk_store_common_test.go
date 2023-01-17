@@ -36,7 +36,7 @@ type ChunkStoreTestSuite struct {
 	Factory *memoryStoreFactory
 }
 
-func getAddrsCb(ctx context.Context, c Chunk) (hash.HashSet, error) {
+func getAddrsCb(ctx context.Context, c Chunk) ([]hash.Hash, error) {
 	return nil, nil
 }
 
@@ -55,8 +55,8 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 	data := []byte("bcd")
 	r := hash.Of(data)
 	nc := NewChunk(data)
-	err = store.Put(context.Background(), nc, func(ctx context.Context, c Chunk) (hash.HashSet, error) {
-		return hash.NewHashSet(r), nil
+	err = store.Put(context.Background(), nc, func(ctx context.Context, c Chunk) ([]hash.Hash, error) {
+		return []hash.Hash{r}, nil
 	})
 	suite.Error(err)
 }

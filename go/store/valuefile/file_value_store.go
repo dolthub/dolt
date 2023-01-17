@@ -102,7 +102,7 @@ func (f *FileValueStore) WriteValue(ctx context.Context, v types.Value) (types.R
 			return types.Ref{}, err
 		}
 
-		err = f.Put(ctx, c, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+		err = f.Put(ctx, c, func(ctx context.Context, c chunks.Chunk) ([]hash.Hash, error) {
 			return types.AddrsFromNomsValue(ctx, c, f.nbf)
 		})
 
@@ -171,8 +171,8 @@ func (f *FileValueStore) HasMany(ctx context.Context, hashes hash.HashSet) (abse
 	return absent, nil
 }
 
-func (f *FileValueStore) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
-	absent, err := f.HasMany(ctx, addrs)
+func (f *FileValueStore) errorIfDangling(ctx context.Context, addrs []hash.Hash) error {
+	absent, err := f.HasMany(ctx, hash.NewHashSet(addrs...))
 	if err != nil {
 		return err
 	}
