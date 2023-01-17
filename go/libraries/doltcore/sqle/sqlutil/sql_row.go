@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
-	
+
 	// Necessary for the empty context used by some functions to be initialized with system vars
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 )
