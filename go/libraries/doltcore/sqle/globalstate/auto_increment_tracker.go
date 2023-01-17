@@ -20,7 +20,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -116,7 +116,7 @@ func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 	}
 
 	var err error
-	val, err = sql.Uint64.Convert(val)
+	val, err = types.Uint64.Convert(val)
 	if err != nil {
 		return 0, err
 	}

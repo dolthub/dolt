@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -120,12 +121,12 @@ type UniqCVMeta struct {
 	Name    string   `json:"Name"`
 }
 
-func (m UniqCVMeta) Unmarshall(ctx *sql.Context) (val sql.JSONDocument, err error) {
-	return sql.JSONDocument{Val: m}, nil
+func (m UniqCVMeta) Unmarshall(ctx *sql.Context) (val types.JSONDocument, err error) {
+	return types.JSONDocument{Val: m}, nil
 }
 
-func (m UniqCVMeta) Compare(ctx *sql.Context, v sql.JSONValue) (cmp int, err error) {
-	ours := sql.JSONDocument{Val: m}
+func (m UniqCVMeta) Compare(ctx *sql.Context, v types.JSONValue) (cmp int, err error) {
+	ours := types.JSONDocument{Val: m}
 	return ours.Compare(ctx, v)
 }
 

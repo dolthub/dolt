@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -48,11 +49,11 @@ func (dt *CommitsTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the commits system table.
 func (dt *CommitsTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: sql.Text, Source: doltdb.CommitsTableName, PrimaryKey: true},
-		{Name: "committer", Type: sql.Text, Source: doltdb.CommitsTableName, PrimaryKey: false},
-		{Name: "email", Type: sql.Text, Source: doltdb.CommitsTableName, PrimaryKey: false},
-		{Name: "date", Type: sql.Datetime, Source: doltdb.CommitsTableName, PrimaryKey: false},
-		{Name: "message", Type: sql.Text, Source: doltdb.CommitsTableName, PrimaryKey: false},
+		{Name: "commit_hash", Type: types.Text, Source: doltdb.CommitsTableName, PrimaryKey: true},
+		{Name: "committer", Type: types.Text, Source: doltdb.CommitsTableName, PrimaryKey: false},
+		{Name: "email", Type: types.Text, Source: doltdb.CommitsTableName, PrimaryKey: false},
+		{Name: "date", Type: types.Datetime, Source: doltdb.CommitsTableName, PrimaryKey: false},
+		{Name: "message", Type: types.Text, Source: doltdb.CommitsTableName, PrimaryKey: false},
 	}
 }
 

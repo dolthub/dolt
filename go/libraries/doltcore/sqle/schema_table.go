@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -355,7 +356,7 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 }
 
 func getCreatedTime(ctx *sql.Context, row sql.Row) (int64, error) {
-	doc, err := row[4].(sql.JSONValue).Unmarshall(ctx)
+	doc, err := row[4].(types2.JSONValue).Unmarshall(ctx)
 	if err != nil {
 		return 0, err
 	}

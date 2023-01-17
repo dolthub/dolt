@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -204,7 +205,7 @@ func TestSingleScriptPrepared(t *testing.T) {
 	tt := queries.QueryTest{
 		Query: "select * from test as of 'HEAD~2' where pk=?",
 		Bindings: map[string]sql.Expression{
-			"v1": expression.NewLiteral(0, sql.Int8),
+			"v1": expression.NewLiteral(0, types2.Int8),
 		},
 		Expected: []sql.Row{{0, 0}},
 	}
@@ -559,7 +560,7 @@ func TestDropDatabase(t *testing.T) {
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "DROP DATABASE TeSt2DB",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+				Expected: []sql.Row{{types2.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query:       "USE test2db",
@@ -571,7 +572,7 @@ func TestDropDatabase(t *testing.T) {
 			},
 			{
 				Query:    "DROP DATABASE IF EXISTS test1DB",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+				Expected: []sql.Row{{types2.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query:       "USE Test1db",
@@ -1070,7 +1071,7 @@ func TestSingleTransactionScript(t *testing.T) {
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types2.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
@@ -1082,7 +1083,7 @@ func TestSingleTransactionScript(t *testing.T) {
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types2.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
@@ -1106,7 +1107,7 @@ func TestSingleTransactionScript(t *testing.T) {
 			},
 			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
 				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types2.OkResult{
 					RowsAffected: 1,
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -1116,7 +1117,7 @@ func TestSingleTransactionScript(t *testing.T) {
 			},
 			{
 				Query:    "/* client b */ delete from dolt_conflicts_test",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types2.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ commit",

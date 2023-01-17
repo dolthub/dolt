@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -285,14 +286,14 @@ func (c *Controller) refreshSystemVars() {
 			Name:    DoltClusterRoleVariable,
 			Dynamic: false,
 			Scope:   sql.SystemVariableScope_Persist,
-			Type:    sql.NewSystemStringType(DoltClusterRoleVariable),
+			Type:    types2.NewSystemStringType(DoltClusterRoleVariable),
 			Default: role,
 		},
 		{
 			Name:    DoltClusterRoleEpochVariable,
 			Dynamic: false,
 			Scope:   sql.SystemVariableScope_Persist,
-			Type:    sql.NewSystemIntType(DoltClusterRoleEpochVariable, 0, 9223372036854775807, false),
+			Type:    types2.NewSystemIntType(DoltClusterRoleEpochVariable, 0, 9223372036854775807, false),
 			Default: epoch,
 		},
 	}

@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -276,12 +277,12 @@ type FkCVMeta struct {
 	Table             string   `json:"Table"`
 }
 
-func (m FkCVMeta) Unmarshall(ctx *sql.Context) (val sql.JSONDocument, err error) {
-	return sql.JSONDocument{Val: m}, nil
+func (m FkCVMeta) Unmarshall(ctx *sql.Context) (val types.JSONDocument, err error) {
+	return types.JSONDocument{Val: m}, nil
 }
 
-func (m FkCVMeta) Compare(ctx *sql.Context, v sql.JSONValue) (cmp int, err error) {
-	ours := sql.JSONDocument{Val: m}
+func (m FkCVMeta) Compare(ctx *sql.Context, v types.JSONValue) (cmp int, err error) {
+	ours := types.JSONDocument{Val: m}
 	return ours.Compare(ctx, v)
 }
 
@@ -289,7 +290,7 @@ func (m FkCVMeta) ToString(ctx *sql.Context) (string, error) {
 	return m.PrettyPrint(), nil
 }
 
-var _ sql.JSONValue = FkCVMeta{}
+var _ types.JSONValue = FkCVMeta{}
 
 // PrettyPrint is a custom pretty print function to match the old format's
 // output which includes additional whitespace between keys, values, and array elements.

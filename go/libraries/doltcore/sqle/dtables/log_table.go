@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -41,7 +42,7 @@ func NewLogTable(_ *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Ta
 
 // DataLength implements sql.StatisticsTable
 func (dt *LogTable) DataLength(ctx *sql.Context) (uint64, error) {
-	return uint64(4*sql.Text.MaxByteLength()*4 + 16), nil
+	return uint64(4*types.Text.MaxByteLength()*4 + 16), nil
 }
 
 // RowCount implements sql.StatisticsTable
@@ -70,11 +71,11 @@ func (dt *LogTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: true},
-		{Name: "committer", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: false},
-		{Name: "email", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: false},
-		{Name: "date", Type: sql.Datetime, Source: doltdb.LogTableName, PrimaryKey: false},
-		{Name: "message", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: false},
+		{Name: "commit_hash", Type: types.Text, Source: doltdb.LogTableName, PrimaryKey: true},
+		{Name: "committer", Type: types.Text, Source: doltdb.LogTableName, PrimaryKey: false},
+		{Name: "email", Type: types.Text, Source: doltdb.LogTableName, PrimaryKey: false},
+		{Name: "date", Type: types.Datetime, Source: doltdb.LogTableName, PrimaryKey: false},
+		{Name: "message", Type: types.Text, Source: doltdb.LogTableName, PrimaryKey: false},
 	}
 }
 

@@ -18,6 +18,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
@@ -45,7 +46,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ create table t(pk int primary key);",
-				Expected: []sql.Row{{sql.OkResult{}}},
+				Expected: []sql.Row{{types.OkResult{}}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from t;",
@@ -62,7 +63,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ insert into t values (2, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:       "/* client b */ insert into t values (2, 2)",
@@ -87,11 +88,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ insert into t values (2, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into t values (2, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -128,11 +129,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ insert into t values (2, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into t values (2, 3)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -169,7 +170,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "/* client a */ update t set y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -179,7 +180,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update t set y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(0),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -214,7 +215,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client a */ update t set y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -224,7 +225,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update t set y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -267,7 +268,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client a */ update t set y = 3",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(2),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -277,7 +278,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update t set y = 4",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(2),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -328,7 +329,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client a */ update t set y = 3 where x = 1",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -338,7 +339,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update t set y = 4 where x = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -381,7 +382,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client a */ update t set y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -391,7 +392,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update t set z = 3",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(2),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -426,11 +427,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ delete from t where y = 2",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ delete from t where y = 2",
-				Expected: []sql.Row{{sql.NewOkResult(0)}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
@@ -459,11 +460,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ delete from t where y = 2",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ delete from t where y = 2",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -500,11 +501,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ delete from t where y = 2",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ delete from t where y = 3",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -541,7 +542,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client a */ update t set y = 3 where y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -551,7 +552,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ delete from t where y = 2",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -592,15 +593,15 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ delete from t where y = 1",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ delete from t",
-				Expected: []sql.Row{{sql.NewOkResult(2)}},
+				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "/* client b */ insert into t values (1,1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -641,7 +642,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client a */ update t set y = 3 where y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -651,11 +652,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ delete from t where y = 1",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query: "/* client c */ update t set z = 4 where y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -714,7 +715,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client a */ update test set y = 3 where y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -724,7 +725,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update test set y = 5 where y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -784,11 +785,11 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -835,11 +836,11 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -886,11 +887,11 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -937,7 +938,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
@@ -949,7 +950,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
@@ -975,7 +976,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
 				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: 1,
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -985,7 +986,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ delete from dolt_conflicts_test",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ commit",
@@ -1028,7 +1029,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
@@ -1040,7 +1041,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
@@ -1064,7 +1065,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
 				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: 1,
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -1074,7 +1075,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ delete from dolt_conflicts_test",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ commit",
@@ -1117,7 +1118,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
@@ -1129,7 +1130,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
@@ -1149,7 +1150,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ insert into test values (2, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:          "/* client b */ commit",
@@ -1201,11 +1202,11 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			// They are needed to trigger a three-way transaction merge
 			{
 				Query:    "/* client a */ INSERT into t VALUES (2, 2);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT into t VALUES (3, 3);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ SET dolt_allow_commit_conflicts = on;",
@@ -1222,7 +1223,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ INSERT into t VALUES (3, 3);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query: "/* client b */ COMMIT;",
@@ -1250,19 +1251,19 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ UPDATE t SET col1 = -100 where pk = 1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query:    "/* client b */ UPDATE t SET col1 = 100 where pk = 1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query:    "/* client a */ INSERT into KEYLESS VALUES (1);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT into KEYLESS VALUES (1), (1);",
-				Expected: []sql.Row{{sql.NewOkResult(2)}},
+				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
@@ -1305,19 +1306,19 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ UPDATE t SET col1 = -100 where pk = 1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query:    "/* client b */ UPDATE t SET col1 = 100 where pk = 1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query:    "/* client a */ INSERT into KEYLESS VALUES (1);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT into KEYLESS VALUES (1), (1);",
-				Expected: []sql.Row{{sql.NewOkResult(2)}},
+				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "/* client b */ COMMIT;",
@@ -1463,11 +1464,11 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ DELETE FROM parent where pk = 1;",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO child VALUES (1, 1);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
@@ -1541,7 +1542,7 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ DELETE FROM PARENT where v1 = 2;",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
@@ -1575,11 +1576,11 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ DELETE FROM PARENT where v1 = 2;",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO parent VALUES (30, 3);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",

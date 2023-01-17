@@ -19,6 +19,7 @@ import (
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -38,12 +39,12 @@ func NewFixedWidthConflictTableWriter(schema sql.Schema, wr io.WriteCloser, numS
 		// diff type: *, -, +
 		&sql.Column{
 			Name: " ",
-			Type: sql.Text,
+			Type: types.Text,
 		},
 		// version name: base, ours, theirs
 		&sql.Column{
 			Name: " ",
-			Type: sql.Text,
+			Type: types.Text,
 		},
 	}, schema...)
 

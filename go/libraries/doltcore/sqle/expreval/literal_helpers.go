@@ -18,8 +18,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -246,7 +246,7 @@ func literalAsString(literal *expression.Literal) (string, error) {
 }
 
 func parseDate(s string) (time.Time, error) {
-	for _, layout := range sql.TimestampDatetimeLayouts {
+	for _, layout := range types2.TimestampDatetimeLayouts {
 		res, err := time.Parse(layout, s)
 
 		if err == nil {
@@ -254,7 +254,7 @@ func parseDate(s string) (time.Time, error) {
 		}
 	}
 
-	return time.Time{}, sql.ErrConvertingToTime.New(s)
+	return time.Time{}, types2.ErrConvertingToTime.New(s)
 }
 
 func literalAsTimestamp(literal *expression.Literal) (time.Time, error) {

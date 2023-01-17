@@ -20,17 +20,18 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/transform"
+	"github.com/dolthub/go-mysql-server/sql/types"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
-	"github.com/dolthub/go-mysql-server/sql/plan"
-	"github.com/dolthub/go-mysql-server/sql/transform"
 )
 
 var workingSetPartitionKey = []byte("workingset")
@@ -106,14 +107,14 @@ func (dt *UnscopedDiffTable) String() string {
 // Schema is a sql.Table interface function that returns the sql.Schema for this system table.
 func (dt *UnscopedDiffTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: sql.Text, Source: doltdb.DiffTableName, PrimaryKey: true},
-		{Name: "table_name", Type: sql.Text, Source: doltdb.DiffTableName, PrimaryKey: true},
-		{Name: "committer", Type: sql.Text, Source: doltdb.DiffTableName, PrimaryKey: false},
-		{Name: "email", Type: sql.Text, Source: doltdb.DiffTableName, PrimaryKey: false},
-		{Name: "date", Type: sql.Datetime, Source: doltdb.DiffTableName, PrimaryKey: false},
-		{Name: "message", Type: sql.Text, Source: doltdb.DiffTableName, PrimaryKey: false},
-		{Name: "data_change", Type: sql.Boolean, Source: doltdb.DiffTableName, PrimaryKey: false},
-		{Name: "schema_change", Type: sql.Boolean, Source: doltdb.DiffTableName, PrimaryKey: false},
+		{Name: "commit_hash", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: true},
+		{Name: "table_name", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: true},
+		{Name: "committer", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false},
+		{Name: "email", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false},
+		{Name: "date", Type: types.Datetime, Source: doltdb.DiffTableName, PrimaryKey: false},
+		{Name: "message", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false},
+		{Name: "data_change", Type: types.Boolean, Source: doltdb.DiffTableName, PrimaryKey: false},
+		{Name: "schema_change", Type: types.Boolean, Source: doltdb.DiffTableName, PrimaryKey: false},
 	}
 }
 
