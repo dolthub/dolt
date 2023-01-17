@@ -31,7 +31,7 @@ import (
 
 var ErrNothingToCollect = errors.New("no changes since last gc")
 
-type GetAddrsCb func(ctx context.Context, c Chunk) (hash.HashSet, error)
+type GetAddrsCb func(ctx context.Context, c Chunk) ([]hash.Hash, error)
 
 // ChunkStore is the core storage abstraction in noms. We can put data
 // anyplace we have a ChunkStore implementation for.

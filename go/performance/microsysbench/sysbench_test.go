@@ -60,6 +60,13 @@ func BenchmarkOltpPointSelect(b *testing.B) {
 	})
 }
 
+func BenchmarkOltpPointInsert(b *testing.B) {
+	benchmarkSysbenchQuery(b, func(int) string {
+		q := "INSERT INTO sbtest1 (id) VALUES (%d)"
+		return fmt.Sprintf(q, b.N+tableSize)
+	})
+}
+
 func BenchmarkOltpJoinScan(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
 		return `select a.id, a.k 

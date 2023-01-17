@@ -811,7 +811,7 @@ func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 	if err != nil {
 		return err
 	}
-	err = dcs.errorIfDangling(ctx, addrs)
+	err = dcs.errorIfDangling(ctx, hash.NewHashSet(addrs...))
 	if err != nil {
 		return err
 	}

@@ -102,24 +102,23 @@ func ErrorIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.Chu
 	return nil
 }
 
-func AddrsFromNomsValue(ctx context.Context, c chunks.Chunk, nbf *NomsBinFormat) (addrs hash.HashSet, err error) {
-	addrs = hash.NewHashSet()
+func AddrsFromNomsValue(ctx context.Context, c chunks.Chunk, nbf *NomsBinFormat) (addrs []hash.Hash, err error) {
 	if NomsKind(c.Data()[0]) == SerialMessageKind {
 		err = SerialMessage(c.Data()).walkAddrs(nbf, func(a hash.Hash) error {
-			addrs.Insert(a)
+			addrs = append(addrs, a)
 			return nil
 		})
 		return
 	}
 
 	err = walkRefs(c.Data(), nbf, func(r Ref) error {
-		addrs.Insert(r.TargetHash())
+		addrs = append(addrs, r.TargetHash())
 		return nil
 	})
 	return
 }
 
-func (lvs *ValueStore) getAddrs(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+func (lvs *ValueStore) getAddrs(ctx context.Context, c chunks.Chunk) ([]hash.Hash, error) {
 	return AddrsFromNomsValue(ctx, c, lvs.nbf)
 }
 
@@ -423,7 +422,9 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 			if err != nil {
 				return err
 			}
-			lvs.unresolvedRefs.InsertAll(addrs)
+			for _, a := range addrs {
+				lvs.unresolvedRefs.Insert(a)
+			}
 		}
 		return lvs.cs.Put(ctx, c, lvs.getAddrs)
 	}

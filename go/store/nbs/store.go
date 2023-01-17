@@ -587,21 +587,9 @@ func (nbs *NomsBlockStore) errorIfDangling(ctx context.Context, addrs hash.HashS
 	return nil
 }
 
-func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
+func (nbs *NomsBlockStore) Put(ctx context.Context, ch chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
 	t1 := time.Now()
-	a := addr(c.Hash())
-
-	addrs, err := getAddrs(ctx, c)
-	if err != nil {
-		return err
-	}
-
-	err = nbs.errorIfDangling(ctx, addrs)
-	if err != nil {
-		return err
-	}
-
-	success, err := nbs.addChunk(ctx, a, c.Data())
+	success, err := nbs.addChunk(ctx, ch, getAddrs)
 	if err != nil {
 		return err
 	} else if !success {
@@ -614,22 +602,32 @@ func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 	return nil
 }
 
-func (nbs *NomsBlockStore) addChunk(ctx context.Context, h addr, data []byte) (bool, error) {
+func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, cb chunks.GetAddrsCb) (bool, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	if nbs.mt == nil {
 		nbs.mt = newMemTable(nbs.mtSize)
 	}
-	if !nbs.mt.addChunk(h, data) {
+	a := addr(ch.Hash())
+
+	ok := nbs.mt.addChunk(a, ch.Data())
+	if !ok {
 		ts, err := nbs.tables.append(ctx, nbs.mt, nbs.stats)
 		if err != nil {
 			return false, err
 		}
 		nbs.tables = ts
 		nbs.mt = newMemTable(nbs.mtSize)
-		return nbs.mt.addChunk(h, data), nil
+		ok = nbs.mt.addChunk(a, ch.Data())
 	}
-	return true, nil
+	if ok {
+		addrs, err := cb(ctx, ch)
+		if err != nil {
+			return false, err
+		}
+		nbs.mt.addChildRefs(addrs)
+	}
+	return ok, nil
 }
 
 func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
@@ -825,36 +823,9 @@ func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 	t1 := time.Now()
 
 	reqs := toHasRecords(hashes)
-
-	tables, remaining, err := func() (tables chunkReader, remaining bool, err error) {
-		nbs.mu.RLock()
-		defer nbs.mu.RUnlock()
-		tables = nbs.tables
-
-		remaining = true
-		if nbs.mt != nil {
-			remaining, err = nbs.mt.hasMany(reqs)
-
-			if err != nil {
-				return nil, false, err
-			}
-		}
-
-		return tables, remaining, nil
-	}()
-
-	if err != nil {
+	if _, err := nbs.hasMany(reqs); err != nil {
 		return nil, err
 	}
-
-	if remaining {
-		_, err := tables.hasMany(reqs)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	if len(hashes) > 0 {
 		nbs.stats.HasLatency.SampleTimeSince(t1)
 		nbs.stats.AddressesPerHas.SampleLen(len(reqs))
@@ -867,6 +838,34 @@ func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 		}
 	}
 	return absent, nil
+}
+
+func (nbs *NomsBlockStore) hasMany(reqs []hasRecord) (absent bool, err error) {
+	var tables chunkReader
+	tables, absent, err = func() (chunkReader, bool, error) {
+		nbs.mu.RLock()
+		defer nbs.mu.RUnlock()
+		tables = nbs.tables
+
+		ok := true
+		if nbs.mt != nil {
+			ok, err = nbs.mt.hasMany(reqs)
+			if err != nil {
+				return nil, false, err
+			}
+		}
+		return tables, ok, nil
+	}()
+
+	if err != nil {
+		return false, err
+	} else if absent {
+		absent, err = tables.hasMany(reqs)
+		if err != nil {
+			return false, err
+		}
+	}
+	return
 }
 
 func toHasRecords(hashes hash.HashSet) []hasRecord {

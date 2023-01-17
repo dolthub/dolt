@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -139,7 +140,6 @@ func (gcs *GenerationalNBS) Has(ctx context.Context, h hash.Hash) (bool, error) 
 // absent from the store.
 func (gcs *GenerationalNBS) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error) {
 	notInOldGen, err := gcs.oldGen.HasMany(ctx, hashes)
-
 	if err != nil {
 		return nil, err
 	}
@@ -151,16 +151,30 @@ func (gcs *GenerationalNBS) HasMany(ctx context.Context, hashes hash.HashSet) (a
 	return gcs.newGen.HasMany(ctx, notInOldGen)
 }
 
-func (gcs *GenerationalNBS) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
-	absent, err := gcs.HasMany(ctx, addrs)
+func (gcs *GenerationalNBS) errorIfDangling(recs []hasRecord) error {
+	sort.Sort(hasRecordByPrefix(recs))
+
+	absent, err := gcs.newGen.hasMany(recs)
 	if err != nil {
 		return err
+	} else if !absent {
+		return nil // all found
 	}
-	if len(absent) != 0 {
-		s := absent.String()
-		return fmt.Errorf("Found dangling references to %s", s)
+
+	absent, err = gcs.oldGen.hasMany(recs)
+	if err != nil {
+		return err
+	} else if !absent {
+		return nil // all found
 	}
-	return nil
+
+	addrs := hash.NewHashSet()
+	for _, rec := range recs {
+		if !rec.has {
+			addrs.Insert(hash.Hash(*rec.a))
+		}
+	}
+	return fmt.Errorf("found dangling references to %s", addrs.String())
 }
 
 // Put caches c in the ChunkSource. Upon return, c must be visible to
@@ -168,19 +182,7 @@ func (gcs *GenerationalNBS) errorIfDangling(ctx context.Context, addrs hash.Hash
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
 func (gcs *GenerationalNBS) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
-	addrs, err := getAddrs(ctx, c)
-	if err != nil {
-		return err
-	}
-
-	err = gcs.errorIfDangling(ctx, addrs)
-	if err != nil {
-		return err
-	}
-
-	return gcs.newGen.Put(ctx, c, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-		return nil, nil
-	})
+	return gcs.newGen.Put(ctx, c, getAddrs)
 }
 
 // Returns the NomsVersion with which this ChunkSource is compatible.
@@ -211,6 +213,11 @@ func (gcs *GenerationalNBS) Root(ctx context.Context) (hash.Hash, error) {
 // persisted root hash from last to current (or keeps it the same).
 // If last doesn't match the root in persistent storage, returns false.
 func (gcs *GenerationalNBS) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
+	recs := gcs.newGen.mt.children
+	if err := gcs.errorIfDangling(recs); err != nil {
+		//return false, err
+		return false, nil
+	}
 	return gcs.newGen.Commit(ctx, current, last)
 }
 
@@ -257,7 +264,7 @@ func (gcs *GenerationalNBS) copyToOldGen(ctx context.Context, hashes hash.HashSe
 	var putErr error
 	err = gcs.newGen.GetMany(ctx, notInOldGen, func(ctx context.Context, chunk *chunks.Chunk) {
 		if putErr == nil {
-			putErr = gcs.oldGen.Put(ctx, *chunk, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+			putErr = gcs.oldGen.Put(ctx, *chunk, func(ctx context.Context, c chunks.Chunk) ([]hash.Hash, error) {
 				return nil, nil
 			})
 		}

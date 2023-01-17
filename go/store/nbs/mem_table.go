@@ -68,6 +68,7 @@ func writeChunksToMT(mt *memTable, chunks []chunks.Chunk) (string, []byte, error
 type memTable struct {
 	chunks             map[addr][]byte
 	order              []hasRecord // Must maintain the invariant that these are sorted by rec.order
+	children           []hasRecord
 	maxData, totalData uint64
 
 	snapper snappyEncoder
@@ -97,6 +98,18 @@ func (mt *memTable) addChunk(h addr, data []byte) bool {
 		false,
 	})
 	return true
+}
+
+func (mt *memTable) addChildRefs(addrs []hash.Hash) {
+	for _, h := range addrs {
+		a := addr(h)
+		o := len(mt.children)
+		mt.children = append(mt.children, hasRecord{
+			a:      &a,
+			prefix: a.Prefix(),
+			order:  o,
+		})
+	}
 }
 
 func (mt *memTable) count() (uint32, error) {

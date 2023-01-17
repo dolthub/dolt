@@ -149,10 +149,9 @@ func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 	c := chunks.NewChunk(nd.bytes())
 	assertTrue(c.Size() > 0, "cannot write empty chunk to ChunkStore")
 
-	getAddrs := func(ctx context.Context, ch chunks.Chunk) (addrs hash.HashSet, err error) {
-		addrs = hash.NewHashSet()
+	getAddrs := func(ctx context.Context, ch chunks.Chunk) (addrs []hash.Hash, err error) {
 		err = message.WalkAddresses(ctx, ch.Data(), func(ctx context.Context, a hash.Hash) error {
-			addrs.Insert(a)
+			addrs = append(addrs, a)
 			return nil
 		})
 		return

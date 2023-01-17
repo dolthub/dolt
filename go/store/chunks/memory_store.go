@@ -186,8 +186,8 @@ func (ms *MemoryStoreView) Version() string {
 	return ms.version
 }
 
-func (ms *MemoryStoreView) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
-	absent, err := ms.HasMany(ctx, addrs)
+func (ms *MemoryStoreView) errorIfDangling(ctx context.Context, addrs []hash.Hash) error {
+	absent, err := ms.HasMany(ctx, hash.NewHashSet(addrs...))
 	if err != nil {
 		return err
 	}
