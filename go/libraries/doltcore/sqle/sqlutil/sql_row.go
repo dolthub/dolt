@@ -20,13 +20,12 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	// Necessary for the empty context used by some functions to be initialized with system vars
+	_ "github.com/dolthub/go-mysql-server/sql/variables"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
-
-	// Necessary for the empty context used by some functions to be initialized with system vars
-	_ "github.com/dolthub/go-mysql-server/sql/variables"
 )
 
 // DoltRowToSqlRow constructs a go-mysql-server sql.Row from a Dolt row.Row.
