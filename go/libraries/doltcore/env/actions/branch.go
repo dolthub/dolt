@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -131,8 +132,8 @@ func DeleteBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliCon
 	return DeleteBranchOnDB(ctx, dbData, config, dref, opts)
 }
 
-func DeleteBranchOnDB(ctx context.Context, dbData env.DbData, config *env.DoltCliConfig, dref ref.DoltRef, opts DeleteOptions) error {
-	ddb := dbData.Ddb
+func DeleteBranchOnDB(ctx context.Context, dbdata env.DbData, config *env.DoltCliConfig, dref ref.DoltRef, opts DeleteOptions) error {
+	ddb := dbdata.Ddb
 	hasRef, err := ddb.HasRef(ctx, dref)
 
 	if err != nil {
@@ -142,6 +143,31 @@ func DeleteBranchOnDB(ctx context.Context, dbData env.DbData, config *env.DoltCl
 	}
 
 	if !opts.Force && !opts.Remote {
+		// check to see if the branch is fully merged into its parent
+		branch := dbdata.Rsr.CWBHeadRef()
+		trackedBranches, err := dbdata.Rsr.GetBranches()
+		if err != nil {
+			return err
+		}
+
+		trackedBranch, hasUpstream := trackedBranches[branch.GetPath()]
+		if hasUpstream {
+			remoteRef := trackedBranch.Merge.Ref
+			
+			remotes, err := dbdata.Rsr.GetRemotes()
+			if err != nil {
+				return err
+			}
+			remote, ok := remotes[remoteRef.GetPath()]
+			if !ok {
+				// TODO: skip error?
+				return fmt.Errorf("remote %s not found", remoteRef.GetPath())
+			}
+
+			sess := dsess.DSessFromSess(ctx.Session)
+			remoteDB, err := remote.GetRemoteDB(ctx, config)
+		}
+		
 		ms, err := doltdb.NewCommitSpec(env.GetDefaultInitBranch(config))
 		if err != nil {
 			return err

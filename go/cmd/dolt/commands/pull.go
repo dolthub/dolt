@@ -147,7 +147,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				return fmt.Errorf("fetch failed; %w", err)
 			}
 
-			// Only merge iff branch is current branch and there is an upstream set (pullSpec.Branch is set to nil if there is no upstream)
+			// Merge iff branch is current branch and there is an upstream set (pullSpec.Branch is set to nil if there is no upstream)
 			if branchRef != pullSpec.Branch {
 				continue
 			}

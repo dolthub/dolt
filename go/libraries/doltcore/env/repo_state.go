@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type RepoStateReader interface {
@@ -44,6 +45,11 @@ type RepoStateWriter interface {
 	RemoveBackup(ctx context.Context, name string) error
 	TempTableFilesDir() (string, error)
 	UpdateBranch(name string, new BranchConfig) error
+}
+
+// RemoteDbProvider is an interface for getting a database from a remote
+type RemoteDbProvider interface {
+	GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote, withCaching bool) (*doltdb.DoltDB, error)
 }
 
 type DbData struct {
