@@ -17,7 +17,6 @@ package sqle
 import (
 	"context"
 	"fmt"
-	types2 "github.com/dolthub/dolt/go/store/types"
 	"io"
 	"strings"
 
@@ -34,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	types2 "github.com/dolthub/dolt/go/store/types"
 )
 
 const (
