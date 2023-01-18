@@ -264,11 +264,11 @@ func (d *doltBinlogReplicaController) SetReplicationFilterOptions(_ *sql.Context
 		}
 	}
 
-	// TODO: Persist filter settings somewhere. MySQL doesn't actually do this... unlike CHANGE REPLICATION SOURCE,
-	//       CHANGE REPLICATION FILTER requires users to apply the filter options every time a server is restarted,
+	// TODO: Consider persisting filter settings. MySQL doesn't actually do this... unlike CHANGE REPLICATION SOURCE,
+	//       CHANGE REPLICATION FILTER requires users to re-apply the filter options every time a server is restarted,
 	//       or to pass them to mysqld on the command line or in configuration. Since we don't want to force users
-	//       to specify these on the command line, we are diverging from MySQL behavior here slightly and persisting
-	//       the filter configuration options.
+	//       to specify these on the command line, we should consider diverging from MySQL behavior here slightly and
+	//       persisting the filter configuration options if customers want this.
 
 	return nil
 }
