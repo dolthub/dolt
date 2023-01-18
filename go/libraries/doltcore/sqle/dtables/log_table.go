@@ -17,7 +17,6 @@ package dtables
 import (
 	"context"
 	"fmt"
-	types2 "github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -27,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
+	types2 "github.com/dolthub/dolt/go/store/types"
 )
 
 var _ sql.Table = (*LogTable)(nil)

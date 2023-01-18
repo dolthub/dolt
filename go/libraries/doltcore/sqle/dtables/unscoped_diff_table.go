@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	types2 "github.com/dolthub/dolt/go/store/types"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -34,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	types2 "github.com/dolthub/dolt/go/store/types"
 )
 
 var workingSetPartitionKey = []byte("workingset")
