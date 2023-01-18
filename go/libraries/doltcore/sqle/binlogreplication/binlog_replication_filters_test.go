@@ -21,13 +21,95 @@ import (
 	"time"
 )
 
-// TestBinlogReplicationFilters tests that replication filtering options are correctly
-// applied and honored.
-func TestBinlogReplicationFilters(t *testing.T) {
+// TestBinlogReplicationFilters_ignoreTablesOnly tests that the ignoreTables replication
+// filtering option is correctly applied and honored.
+func TestBinlogReplicationFilters_ignoreTablesOnly(t *testing.T) {
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
 	defer teardown(t)
 
+	// Ignore replication events for db01.t2
+	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_IGNORE_TABLE=(db01.t2);")
+
+	primaryDatabase.MustExec("CREATE TABLE db01.t1 (pk INT PRIMARY KEY);")
+	primaryDatabase.MustExec("CREATE TABLE db01.t2 (pk INT PRIMARY KEY);")
+	for i := 1; i < 12; i++ {
+		primaryDatabase.MustExec(fmt.Sprintf("INSERT INTO db01.t1 VALUES (%d);", i))
+		primaryDatabase.MustExec(fmt.Sprintf("INSERT INTO db01.t2 VALUES (%d);", i))
+	}
+	primaryDatabase.MustExec("UPDATE db01.t1 set pk = pk-1;")
+	primaryDatabase.MustExec("UPDATE db01.t2 set pk = pk-1;")
+	primaryDatabase.MustExec("DELETE FROM db01.t1 WHERE pk = 10;")
+	primaryDatabase.MustExec("DELETE FROM db01.t2 WHERE pk = 10;")
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify that all changes from t1 were applied on the replica
+	rows, err := replicaDatabase.Queryx("SELECT COUNT(pk) as count, MIN(pk) as min, MAX(pk) as max from db01.t1;")
+	require.NoError(t, err)
+	row := convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "10", row["count"])
+	require.Equal(t, "0", row["min"])
+	require.Equal(t, "9", row["max"])
+
+	// Verify that no changes from t2 were applied on the replica
+	rows, err = replicaDatabase.Queryx("SELECT COUNT(pk) as count, MIN(pk) as min, MAX(pk) as max from db01.t2;")
+	require.NoError(t, err)
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "0", row["count"])
+	require.Equal(t, nil, row["min"])
+	require.Equal(t, nil, row["max"])
+}
+
+// TestBinlogReplicationFilters_doTablesOnly tests that the doTables replication
+// filtering option is correctly applied and honored.
+func TestBinlogReplicationFilters_doTablesOnly(t *testing.T) {
+	startSqlServers(t)
+	startReplication(t, mySqlPort)
+	defer teardown(t)
+
+	// Do replication events for db01.t1
+	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(db01.t1);")
+
+	primaryDatabase.MustExec("CREATE TABLE db01.t1 (pk INT PRIMARY KEY);")
+	primaryDatabase.MustExec("CREATE TABLE db01.t2 (pk INT PRIMARY KEY);")
+	for i := 1; i < 12; i++ {
+		primaryDatabase.MustExec(fmt.Sprintf("INSERT INTO db01.t1 VALUES (%d);", i))
+		primaryDatabase.MustExec(fmt.Sprintf("INSERT INTO db01.t2 VALUES (%d);", i))
+	}
+	primaryDatabase.MustExec("UPDATE db01.t1 set pk = pk-1;")
+	primaryDatabase.MustExec("UPDATE db01.t2 set pk = pk-1;")
+	primaryDatabase.MustExec("DELETE FROM db01.t1 WHERE pk = 10;")
+	primaryDatabase.MustExec("DELETE FROM db01.t2 WHERE pk = 10;")
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify that all changes from t1 were applied on the replica
+	rows, err := replicaDatabase.Queryx("SELECT COUNT(pk) as count, MIN(pk) as min, MAX(pk) as max from db01.t1;")
+	require.NoError(t, err)
+	row := convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "10", row["count"])
+	require.Equal(t, "0", row["min"])
+	require.Equal(t, "9", row["max"])
+
+	// Verify that no changes from t2 were applied on the replica
+	rows, err = replicaDatabase.Queryx("SELECT COUNT(pk) as count, MIN(pk) as min, MAX(pk) as max from db01.t2;")
+	require.NoError(t, err)
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "0", row["count"])
+	require.Equal(t, nil, row["min"])
+	require.Equal(t, nil, row["max"])
+}
+
+// TestBinlogReplicationFilters_doTablesAndIgnoreTables tests that the doTables and ignoreTables
+// replication filtering options are correctly applied and honored when used together.
+func TestBinlogReplicationFilters_doTablesAndIgnoreTables(t *testing.T) {
+	startSqlServers(t)
+	startReplication(t, mySqlPort)
+	defer teardown(t)
+
+	// Do replication events for db01.t1, and db01.t2
+	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(db01.t1, db01.t2);")
 	// Ignore replication events for db01.t2
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_IGNORE_TABLE=(db01.t2);")
 

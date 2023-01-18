@@ -900,19 +900,29 @@ func (d *doltBinlogReplicaController) isTableFilteredOut(tableMap *mysql.TableMa
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if d.filters != nil {
-		// TODO: Are these two fields mutually exclusive? Seems like they would be?
-		if len(d.filters.doTables) > 0 {
-			// TODO: fill in implementation and tests for doTables
-		}
+	if d.filters == nil {
+		return false
+	}
 
-		if len(d.filters.ignoreTables) > 0 {
-			if ignoredTables, ok := d.filters.ignoreTables[tableMap.Database]; ok {
-				if _, ok := ignoredTables[tableMap.Name]; ok {
-					// If this table is being ignored, don't process any further
-					logger.Tracef("skipping table %s.%s", tableMap.Database, tableMap.Name)
-					return true
-				}
+	// If any filter doTable options are specified, then a table MUST be listed in the set
+	// for it to be replicated. doTables options are processed BEFORE ignoreTables options.
+	// If a table appears in both doTable and ignoreTables, it is ignored.
+	// https://dev.mysql.com/doc/refman/8.0/en/replication-rules-table-options.html
+	if len(d.filters.doTables) > 0 {
+		if doTables, ok := d.filters.doTables[tableMap.Database]; ok {
+			if _, ok := doTables[tableMap.Name]; !ok {
+				logger.Tracef("skipping table %s.%s (not in doTables) ", tableMap.Database, tableMap.Name)
+				return true
+			}
+		}
+	}
+
+	if len(d.filters.ignoreTables) > 0 {
+		if ignoredTables, ok := d.filters.ignoreTables[tableMap.Database]; ok {
+			if _, ok := ignoredTables[tableMap.Name]; ok {
+				// If this table is being ignored, don't process any further
+				logger.Tracef("skipping table %s.%s (in ignoreTables)", tableMap.Database, tableMap.Name)
+				return true
 			}
 		}
 	}
