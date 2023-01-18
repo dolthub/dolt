@@ -267,6 +267,10 @@ func TestIntegrationQueryPlans(t *testing.T) {
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
 	harness := newDoltHarness(t).WithParallelism(2) // want Exchange nodes
 	harness.Setup(setup.SimpleSetup...)
 	e, err := harness.NewEngine(t)
@@ -1145,6 +1149,10 @@ func TestBrokenSystemTableQueries(t *testing.T) {
 }
 
 func TestHistorySystemTable(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
 	harness := newDoltHarness(t).WithParallelism(2)
 	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
@@ -1156,6 +1164,10 @@ func TestHistorySystemTable(t *testing.T) {
 }
 
 func TestHistorySystemTablePrepared(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+	
 	harness := newDoltHarness(t).WithParallelism(2)
 	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
@@ -1283,6 +1295,10 @@ func TestCommitDiffSystemTablePrepared(t *testing.T) {
 }
 
 func TestDiffSystemTable(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {
@@ -1300,6 +1316,10 @@ func TestDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffSystemTablePrepared(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {
@@ -1325,6 +1345,10 @@ func mustNewEngine(t *testing.T, h enginetest.Harness) *gms.Engine {
 }
 
 func TestSystemTableIndexes(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
 	for _, stt := range SystemTableIndexTests {
 		harness := newDoltHarness(t).WithParallelism(2)
 		harness.SkipSetupCommit()
@@ -1352,6 +1376,10 @@ func TestSystemTableIndexes(t *testing.T) {
 }
 
 func TestSystemTableIndexesPrepared(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
 	for _, stt := range SystemTableIndexTests {
 		harness := newDoltHarness(t).WithParallelism(2)
 		harness.SkipSetupCommit()
