@@ -28,7 +28,8 @@ func TestBinlogReplicationFilters_ignoreTablesOnly(t *testing.T) {
 	startReplication(t, mySqlPort)
 	defer teardown(t)
 
-	// Ignore replication events for db01.t2
+	// Ignore replication events for db01.t2 (also tests that the first filter setting is overwritten by the second)
+	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_IGNORE_TABLE=(db01.t1);")
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_IGNORE_TABLE=(db01.t2);")
 
 	primaryDatabase.MustExec("CREATE TABLE db01.t1 (pk INT PRIMARY KEY);")
@@ -68,7 +69,8 @@ func TestBinlogReplicationFilters_doTablesOnly(t *testing.T) {
 	startReplication(t, mySqlPort)
 	defer teardown(t)
 
-	// Do replication events for db01.t1
+	// Do replication events for db01.t1 (also tests that the first filter setting is overwritten by the second)
+	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(db01.t2);")
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(db01.t1);")
 
 	primaryDatabase.MustExec("CREATE TABLE db01.t1 (pk INT PRIMARY KEY);")
@@ -141,4 +143,18 @@ func TestBinlogReplicationFilters_doTablesAndIgnoreTables(t *testing.T) {
 	require.Equal(t, "0", row["count"])
 	require.Equal(t, nil, row["min"])
 	require.Equal(t, nil, row["max"])
+}
+
+// TestBinlogReplicationFilters_errorCases test returned errors for various error cases.
+func TestBinlogReplicationFilters_errorCases(t *testing.T) {
+	startSqlServers(t)
+	defer teardown(t)
+
+	// All tables must be qualified with a database
+	_, err := replicaDatabase.Queryx("CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(t1);")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "no database specified for table")
+	_, err = replicaDatabase.Queryx("CHANGE REPLICATION FILTER REPLICATE_IGNORE_TABLE=(t1);")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "no database specified for table")
 }

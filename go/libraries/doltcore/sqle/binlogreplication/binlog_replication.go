@@ -173,26 +173,52 @@ func (d *doltBinlogReplicaController) SetReplicationSourceOptions(ctx *sql.Conte
 	for _, option := range options {
 		switch strings.ToUpper(option.Name) {
 		case "SOURCE_HOST":
-			// TODO: Fix these unsafe type casts...
-			replicaSourceInfo.Host = option.Value.(string)
+			value, err := getOptionValueAsString(option)
+			if err != nil {
+				return err
+			}
+			replicaSourceInfo.Host = value
 		case "SOURCE_USER":
-			replicaSourceInfo.User = option.Value.(string)
+			value, err := getOptionValueAsString(option)
+			if err != nil {
+				return err
+			}
+			replicaSourceInfo.User = value
 		case "SOURCE_PASSWORD":
-			replicaSourceInfo.Password = option.Value.(string)
+			value, err := getOptionValueAsString(option)
+			if err != nil {
+				return err
+			}
+			replicaSourceInfo.Password = value
 		case "SOURCE_PORT":
-			intValue, err := strconv.Atoi(option.Value.(string))
+			value, err := getOptionValueAsString(option)
+			if err != nil {
+				return err
+			}
+			// TODO: Convert this into IntegerReplicaOptionValue
+			intValue, err := strconv.Atoi(value)
 			if err != nil {
 				return fmt.Errorf("Unable to parse SOURCE_PORT value (%q) as an integer: %s", option.Value, err.Error())
 			}
 			replicaSourceInfo.Port = uint16(intValue)
 		case "SOURCE_CONNECT_RETRY":
-			intValue, err := strconv.Atoi(option.Value.(string))
+			value, err := getOptionValueAsString(option)
+			if err != nil {
+				return err
+			}
+			// TODO: Convert this into IntegerReplicaOptionValue
+			intValue, err := strconv.Atoi(value)
 			if err != nil {
 				return fmt.Errorf("unable to parse SOURCE_PORT value (%q) as an integer: %s", option.Value, err.Error())
 			}
 			replicaSourceInfo.ConnectRetryInterval = uint32(intValue)
 		case "SOURCE_RETRY_COUNT":
-			intValue, err := strconv.Atoi(option.Value.(string))
+			value, err := getOptionValueAsString(option)
+			if err != nil {
+				return err
+			}
+			// TODO: Convert this into IntegerReplicaOptionValue
+			intValue, err := strconv.Atoi(value)
 			if err != nil {
 				return fmt.Errorf("unable to parse SOURCE_PORT value (%q) as an integer: %s", option.Value, err.Error())
 			}
@@ -207,57 +233,123 @@ func (d *doltBinlogReplicaController) SetReplicationSourceOptions(ctx *sql.Conte
 	return persistReplicationConfiguration(ctx, replicaSourceInfo)
 }
 
-// SetReplicationFilterOptions implements the BinlogReplicaController interface
-func (d *doltBinlogReplicaController) SetReplicationFilterOptions(_ *sql.Context, options []binlogreplication.ReplicationOption) error {
+func getOptionValueAsString(option binlogreplication.ReplicationOption) (string, error) {
+	stringOptionValue, ok := option.Value.(binlogreplication.StringReplicationOptionValue)
+	if ok {
+		return stringOptionValue.GetValueAsString(), nil
+	}
+
+	return "", fmt.Errorf("unsupported value type for option %q; found %T, "+
+		"but expected a string", option.Name, option.Value.GetValue())
+}
+
+func getOptionValueAsTableNames(option binlogreplication.ReplicationOption) ([]sql.UnresolvedTable, error) {
+	tableNamesOptionValue, ok := option.Value.(binlogreplication.TableNamesReplicationOptionValue)
+	if ok {
+		return tableNamesOptionValue.GetValueAsTableList(), nil
+	}
+
+	return nil, fmt.Errorf("unsupported value type for option %q; found %T, "+
+		"but expected a list of tables", option.Name, option.Value.GetValue())
+}
+
+func getOptionValueAsInteger(option binlogreplication.ReplicationOption) (int, error) {
+	integerOptionValue, ok := option.Value.(binlogreplication.IntegerReplicationOptionValue)
+	if ok {
+		return integerOptionValue.GetValueAsInt(), nil
+	}
+
+	return -1, fmt.Errorf("unsupported value type for option %q; found %T, "+
+		"but expected an int", option.Name, option.Value.GetValue())
+}
+
+func verifyAllTablesAreQualified(urts []sql.UnresolvedTable) error {
+	for _, urt := range urts {
+		if urt.Database() == "" {
+			return fmt.Errorf("no database specified for table '%s'; "+
+				"all filter table names must be qualified with a database name", urt.Name())
+		}
+	}
+	return nil
+}
+
+func (d *doltBinlogReplicaController) updateDoTablesFilter(urts []sql.UnresolvedTable) error {
+	err := verifyAllTablesAreQualified(urts)
+	if err != nil {
+		return err
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	// Setting new replication filters clears out any existing filters
+	d.filters.doTables = make(map[string]map[string]struct{})
+
+	for _, urt := range urts {
+		if d.filters.doTables[urt.Database()] == nil {
+			d.filters.doTables[urt.Database()] = make(map[string]struct{})
+		}
+		tableMap := d.filters.doTables[urt.Database()]
+		tableMap[urt.Name()] = struct{}{}
+	}
+	return nil
+}
+
+func (d *doltBinlogReplicaController) updateIgnoreTablesFilter(urts []sql.UnresolvedTable) error {
+	err := verifyAllTablesAreQualified(urts)
+	if err != nil {
+		return err
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	// Setting new replication filters clears out any existing filters
+	d.filters.ignoreTables = make(map[string]map[string]struct{})
+
+	for _, urt := range urts {
+		if d.filters.ignoreTables[urt.Database()] == nil {
+			d.filters.ignoreTables[urt.Database()] = make(map[string]struct{})
+		}
+		tableMap := d.filters.ignoreTables[urt.Database()]
+		tableMap[urt.Name()] = struct{}{}
+	}
+	return nil
+}
+
+// initializeFilterConfiguration instantiates this binlog controller's filter configuration.
+func (d *doltBinlogReplicaController) initializeFilterConfiguration() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	if d.filters == nil {
 		d.filters = newFilterConfiguration()
 	}
+}
 
-	// TODO: Enforce that all table names have a database qualifying them! Otherwise return an error.
-	//       We could do this in the parser grammar, or in GMS's parser, or here.
+// SetReplicationFilterOptions implements the BinlogReplicaController interface
+func (d *doltBinlogReplicaController) SetReplicationFilterOptions(_ *sql.Context, options []binlogreplication.ReplicationOption) error {
+	d.initializeFilterConfiguration()
 
 	for _, option := range options {
 		switch strings.ToUpper(option.Name) {
 		case "REPLICATE_DO_TABLE":
-			// TODO: Extract helper function
-			d.filters.doTables = make(map[string]map[string]struct{})
-			if urts, ok := option.Value.([]sql.UnresolvedTable); ok {
-				for _, urt := range urts {
-					if urt.Database() == "" {
-						return fmt.Errorf("no database specified for table '%s'; "+
-							"all filter table names must be qualified with a database name", urt.Name())
-					}
-					if d.filters.doTables[urt.Database()] == nil {
-						d.filters.doTables[urt.Database()] = make(map[string]struct{})
-					}
-					tableMap := d.filters.doTables[urt.Database()]
-					tableMap[urt.Name()] = struct{}{}
-				}
-			} else {
-				return fmt.Errorf("unsupported replication filter option value type: %T, for option: %s",
-					option.Value, option.Name)
+			value, err := getOptionValueAsTableNames(option)
+			if err != nil {
+				return err
+			}
+			err = d.updateDoTablesFilter(value)
+			if err != nil {
+				return err
 			}
 		case "REPLICATE_IGNORE_TABLE":
-			// TODO: Extract helper function
-			d.filters.ignoreTables = make(map[string]map[string]struct{})
-			if urts, ok := option.Value.([]sql.UnresolvedTable); ok {
-				for _, urt := range urts {
-					if urt.Database() == "" {
-						return fmt.Errorf("no database specified for table '%s'; "+
-							"all filter table names must be qualified with a database name", urt.Name())
-					}
-					if d.filters.ignoreTables[urt.Database()] == nil {
-						d.filters.ignoreTables[urt.Database()] = make(map[string]struct{})
-					}
-					tableMap := d.filters.ignoreTables[urt.Database()]
-					tableMap[urt.Name()] = struct{}{}
-				}
-			} else {
-				return fmt.Errorf("unsupported replication filter option value type: %T, for option: %s",
-					option.Value, option.Name)
+			value, err := getOptionValueAsTableNames(option)
+			if err != nil {
+				return err
+			}
+			err = d.updateIgnoreTablesFilter(value)
+			if err != nil {
+				return err
 			}
 		default:
 			return fmt.Errorf("unsupported replication filter option: %s", option.Name)
