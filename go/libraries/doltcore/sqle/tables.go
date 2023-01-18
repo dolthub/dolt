@@ -183,8 +183,8 @@ var _ doltReadOnlyTableInterface = (*DoltTable)(nil)
 //var _ sql.ProjectedTable = (*DoltTable)(nil)
 
 // IndexedAccess implements sql.IndexAddressableTable
-func (t *DoltTable) IndexedAccess(idx sql.Index) sql.IndexedTable {
-	return NewIndexedDoltTable(t, idx.(index.DoltIndex))
+func (t *DoltTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	return NewIndexedDoltTable(t, lookup.Index.(index.DoltIndex))
 }
 
 // doltTable returns the underlying doltTable from the current session
@@ -506,8 +506,8 @@ func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue)
 	return t.db.SetRoot(ctx, newRoot)
 }
 
-func (t *WritableDoltTable) IndexedAccess(idx sql.Index) sql.IndexedTable {
-	return NewWritableIndexedDoltTable(t, idx.(index.DoltIndex))
+func (t *WritableDoltTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	return NewWritableIndexedDoltTable(t, lookup.Index.(index.DoltIndex))
 }
 
 // WithProjections implements sql.ProjectedTable
