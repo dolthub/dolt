@@ -81,6 +81,9 @@ func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 }
 
 func (ht *HistoryTable) IndexedAccess(l sql.IndexLookup) sql.IndexedTable {
+	if !types2.IsFormat_DOLT(dt.ddb.Format()) {
+		return nil
+	}
 	if l.Index.ID() == index.CommitHashIndexId {
 		_, ok := index.LookupToPointSelectStr(l)
 		if !ok {

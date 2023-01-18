@@ -326,6 +326,9 @@ func (dt *DiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 
 // IndexedAccess implements sql.IndexAddressable
 func (dt *DiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	if !types.IsFormat_DOLT(dt.ddb.Format()) {
+		return nil
+	}
 	if lookup.Index.ID() == index.CommitHashIndexId {
 		_, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {

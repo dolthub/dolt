@@ -17,6 +17,7 @@ package dtables
 import (
 	"context"
 	"fmt"
+	types2 "github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -110,6 +111,9 @@ func (dt *LogTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 
 // IndexedAccess implements sql.IndexAddressable
 func (dt *LogTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	if !types2.IsFormat_DOLT(dt.ddb.Format()) {
+		return nil
+	}
 	if lookup.Index.ID() == index.CommitHashIndexId {
 		_, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {

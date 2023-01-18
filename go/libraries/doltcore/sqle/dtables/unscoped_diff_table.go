@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	types2 "github.com/dolthub/dolt/go/store/types"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -157,6 +158,9 @@ func (dt *UnscopedDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 
 // IndexedAccess implements sql.IndexAddressable
 func (dt *UnscopedDiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	if !types2.IsFormat_DOLT(dt.ddb.Format()) {
+		return nil
+	}
 	if lookup.Index.ID() == index.CommitHashIndexId {
 		_, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
