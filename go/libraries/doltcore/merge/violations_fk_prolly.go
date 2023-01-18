@@ -43,7 +43,7 @@ func prollyParentFkConstraintViolations(
 	postParentRowData := durable.ProllyMapFromIndex(postParent.RowData)
 	postParentIndexData := durable.ProllyMapFromIndex(postParent.IndexData)
 
-	idxDesc := postParent.Index.Schema().GetKeyDescriptor()
+	idxDesc, _ := postParentIndexData.Descriptors()
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	partialKB := val.NewTupleBuilder(partialDesc)
 
@@ -103,12 +103,11 @@ func prollyChildFkConstraintViolations(
 	preChildRowData prolly.Map,
 	receiver FKViolationReceiver) error {
 	postChildRowData := durable.ProllyMapFromIndex(postChild.RowData)
+	parentScndryIdx := durable.ProllyMapFromIndex(postParent.IndexData)
 
-	idxDesc := postChild.Index.Schema().GetKeyDescriptor()
+	idxDesc, _ := parentScndryIdx.Descriptors()
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	partialKB := val.NewTupleBuilder(partialDesc)
-
-	parentScndryIdx := durable.ProllyMapFromIndex(postParent.IndexData)
 
 	err := prolly.DiffMaps(ctx, preChildRowData, postChildRowData, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {

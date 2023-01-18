@@ -661,7 +661,7 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName st
 			IsUserDefined: false,
 			Comment:       "",
 		}
-		pkIdx := schema.NewIndex("", pkCols.SortedTags, pkCols.SortedTags, pkIdxColl, pkIdxProps)
+		pkIdx := schema.NewIndex("", pkCols.Tags, pkCols.Tags, pkIdxColl, pkIdxProps)
 		return &constraintViolationsLoadedTable{
 			TableName:   trueTblName,
 			Table:       tbl,
