@@ -124,9 +124,9 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 	case apr.Contains(copyFlag):
 		return copyBranch(ctx, dEnv, apr, usage)
 	case apr.Contains(deleteFlag):
-		return deleteBranches(ctx, dEnv, apr, usage)
+		return deleteBranches(ctx, dEnv, apr, usage, apr.Contains(forceFlag))
 	case apr.Contains(deleteForceFlag):
-		return deleteForceBranches(ctx, dEnv, apr, usage)
+		return deleteBranches(ctx, dEnv, apr, usage, true)
 	case apr.Contains(listFlag):
 		return printBranches(ctx, dEnv, apr, usage)
 	case apr.Contains(showCurrentFlag):
@@ -310,19 +310,12 @@ func copyBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func deleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
-	return handleDeleteBranches(ctx, dEnv, apr, usage, apr.Contains(forceFlag))
-}
-
-func deleteForceBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
-	return handleDeleteBranches(ctx, dEnv, apr, usage, true)
-}
-
-func handleDeleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter, force bool) int {
+func deleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter, force bool) int {
 	if apr.NArg() == 0 {
 		usage()
 		return 1
 	}
+	
 	for i := 0; i < apr.NArg(); i++ {
 		brName := apr.Arg(i)
 
