@@ -2819,6 +2819,10 @@ var SystemTableIndexTests = []systabScript{
 				exp:   []sql.Row{{0}},
 			},
 			{
+				query: "select count(*) from dolt_commit_ancestors where commit_hash = 'WORKING';",
+				exp:   []sql.Row{{0}},
+			},
+			{
 				query: "select sum(to_x) from dolt_diff_xy where to_commit in (@commit, 'WORKING');",
 				exp:   []sql.Row{{530.0}},
 			},
@@ -2857,6 +2861,27 @@ var SystemTableIndexTests = []systabScript{
 			{
 				query: "select count(*) from dolt_commits where commit_hash in (@commit, @root_commit);",
 				exp:   []sql.Row{{2}},
+			},
+			// unknown
+			{
+				query: "select from_x, to_x from dolt_diff_xy where to_commit = 'unknown';",
+				exp:   []sql.Row{},
+			},
+			{
+				query: "select * from dolt_diff_xy where from_commit = 'unknown';",
+				exp:   []sql.Row{},
+			},
+			{
+				query: "select * from dolt_diff where commit_hash = 'unknown';",
+				exp:   []sql.Row{},
+			},
+			{
+				query: "select * from dolt_history_xy where commit_hash = 'unknown';",
+				exp:   []sql.Row{},
+			},
+			{
+				query: "select * from dolt_commit_ancestors where commit_hash = 'unknown';",
+				exp:   []sql.Row{},
 			},
 		},
 	},

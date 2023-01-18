@@ -158,7 +158,7 @@ func (dt *UnscopedDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 // IndexedAccess implements sql.IndexAddressable
 func (dt *UnscopedDiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	if lookup.Index.ID() == index.CommitHashIndexId {
-		_, ok := index.LookupToPointSelects(lookup)
+		_, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
 			return nil
 		}
@@ -169,7 +169,7 @@ func (dt *UnscopedDiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTa
 
 func (dt *UnscopedDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	if lookup.Index.ID() == index.CommitHashIndexId {
-		hs, ok := index.LookupToPointSelects(lookup)
+		hs, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
 			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
 		}

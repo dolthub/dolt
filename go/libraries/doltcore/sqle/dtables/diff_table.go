@@ -207,7 +207,7 @@ func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.Ro
 
 func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	if lookup.Index.ID() == index.ToCommitIndexId {
-		hs, ok := index.LookupToPointSelects(lookup)
+		hs, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
 			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
 		}
@@ -327,7 +327,7 @@ func (dt *DiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 // IndexedAccess implements sql.IndexAddressable
 func (dt *DiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	if lookup.Index.ID() == index.CommitHashIndexId {
-		_, ok := index.LookupToPointSelects(lookup)
+		_, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
 			return nil
 		}

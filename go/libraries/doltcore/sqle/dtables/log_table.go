@@ -111,7 +111,7 @@ func (dt *LogTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 // IndexedAccess implements sql.IndexAddressable
 func (dt *LogTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	if lookup.Index.ID() == index.CommitHashIndexId {
-		_, ok := index.LookupToPointSelects(lookup)
+		_, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
 			return nil
 		}
@@ -129,7 +129,7 @@ func (dt *LogTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (
 }
 
 func (dt *LogTable) commitHashPartitionIter(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
-	hashStrs, ok := index.LookupToPointSelects(lookup)
+	hashStrs, ok := index.LookupToPointSelectStr(lookup)
 	if !ok {
 		return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
 	}

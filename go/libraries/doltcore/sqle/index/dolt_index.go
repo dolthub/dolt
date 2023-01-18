@@ -1028,7 +1028,11 @@ func SplitNullsFromRanges(rs []sql.Range) ([]sql.Range, error) {
 	}
 	return ret, nil
 }
-func LookupToPointSelects(lookup sql.IndexLookup) ([]string, bool) {
+
+// LookupToPointSelectStr converts a set of point lookups on string
+// fields, returning a nil list and false if any expression failed
+// to convert.
+func LookupToPointSelectStr(lookup sql.IndexLookup) ([]string, bool) {
 	var selects []string
 	for _, r := range lookup.Ranges {
 		if len(r) != 1 {
@@ -1055,6 +1059,15 @@ func LookupToPointSelects(lookup sql.IndexLookup) ([]string, bool) {
 	return selects, true
 }
 
+// HashesToCommits converts a set of strings into hashes, commits,
+// and commit metadata. Strings that are invalid hashes, or do
+// not refer to commits are filtered from the return lists.
+//
+// The doltdb.Working edge case is handled specially depending on
+// whether we are: 1) interested in converting "WORKING" into a
+// commit hash (or leave it as "WORKING"), and 2) whether we want
+// to attempt to load a commit if WORKING == HEAD. The commit and
+// metadata for a working hash will be nil if indicated.
 func HashesToCommits(
 	ctx *sql.Context,
 	ddb *doltdb.DoltDB,

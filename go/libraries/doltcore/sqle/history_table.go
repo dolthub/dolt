@@ -82,7 +82,7 @@ func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 
 func (ht *HistoryTable) IndexedAccess(l sql.IndexLookup) sql.IndexedTable {
 	if l.Index.ID() == index.CommitHashIndexId {
-		_, ok := index.LookupToPointSelects(l)
+		_, ok := index.LookupToPointSelectStr(l)
 		if !ok {
 			return nil
 		}
@@ -92,7 +92,7 @@ func (ht *HistoryTable) IndexedAccess(l sql.IndexLookup) sql.IndexedTable {
 
 func (ht *HistoryTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	if lookup.Index.ID() == index.CommitHashIndexId {
-		hs, ok := index.LookupToPointSelects(lookup)
+		hs, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
 			return nil, fmt.Errorf("failed to parse commit hash lookup: %s", sql.DebugString(lookup.Ranges))
 		}
