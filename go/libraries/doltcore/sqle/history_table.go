@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	types2 "github.com/dolthub/dolt/go/store/types"
 	"io"
 	"strings"
 
@@ -81,7 +82,7 @@ func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 }
 
 func (ht *HistoryTable) IndexedAccess(l sql.IndexLookup) sql.IndexedTable {
-	if !types2.IsFormat_DOLT(dt.ddb.Format()) {
+	if !types2.IsFormat_DOLT(ht.doltTable.db.DbData().Ddb.Format()) {
 		return nil
 	}
 	if l.Index.ID() == index.CommitHashIndexId {
