@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -35,25 +36,25 @@ const (
 var namespaceSchema = sql.Schema{
 	&sql.Column{
 		Name:       "database",
-		Type:       sql.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
 		Source:     NamespaceTableName,
 		PrimaryKey: true,
 	},
 	&sql.Column{
 		Name:       "branch",
-		Type:       sql.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
 		Source:     NamespaceTableName,
 		PrimaryKey: true,
 	},
 	&sql.Column{
 		Name:       "user",
-		Type:       sql.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_bin),
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_bin),
 		Source:     NamespaceTableName,
 		PrimaryKey: true,
 	},
 	&sql.Column{
 		Name:       "host",
-		Type:       sql.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
 		Source:     NamespaceTableName,
 		PrimaryKey: true,
 	},

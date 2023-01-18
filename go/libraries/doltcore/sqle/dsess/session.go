@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -1037,7 +1038,7 @@ func (d *DoltSession) setHeadRefSessionVar(ctx *sql.Context, db, value string) e
 }
 
 func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string, value interface{}) error {
-	convertedVal, err := sql.Int64.Convert(value)
+	convertedVal, err := sqltypes.Int64.Convert(value)
 	if err != nil {
 		return err
 	}

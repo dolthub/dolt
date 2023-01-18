@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -47,9 +48,9 @@ func (dt *CommitAncestorsTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the commit_ancestors system table.
 func (dt *CommitAncestorsTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: sql.Text, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true},
-		{Name: "parent_hash", Type: sql.Text, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true},
-		{Name: "parent_index", Type: sql.Int32, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true},
+		{Name: "commit_hash", Type: types.Text, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true},
+		{Name: "parent_hash", Type: types.Text, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true},
+		{Name: "parent_index", Type: types.Int32, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true},
 	}
 }
 

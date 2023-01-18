@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/require"
 
@@ -50,8 +51,8 @@ func generateBitType(t *testing.T, bits uint8) *bitType {
 
 func generateDecimalTypes(t *testing.T, numOfTypes uint16) []TypeInfo {
 	var res []TypeInfo
-	scaleMult := float64(sql.DecimalTypeMaxScale) / sql.DecimalTypeMaxPrecision
-	loop(t, 1, sql.DecimalTypeMaxPrecision, numOfTypes, func(i int64) {
+	scaleMult := float64(types2.DecimalTypeMaxScale) / types2.DecimalTypeMaxPrecision
+	loop(t, 1, types2.DecimalTypeMaxPrecision, numOfTypes, func(i int64) {
 		if i%9 <= 5 {
 			res = append(res, generateDecimalType(t, i, int64(float64(i)*scaleMult)))
 		} else {
@@ -81,7 +82,7 @@ func generateEnumTypes(t *testing.T, numOfTypes int64) []TypeInfo {
 }
 
 func generateEnumType(t *testing.T, numOfElements int) *enumType {
-	require.True(t, numOfElements >= 1 && numOfElements <= sql.EnumTypeMaxElements)
+	require.True(t, numOfElements >= 1 && numOfElements <= types2.EnumTypeMaxElements)
 	vals := make([]string, numOfElements)
 	str := make([]byte, 4)
 	alphabet := "abcdefghijklmnopqrstuvwxyz"
@@ -94,7 +95,7 @@ func generateEnumType(t *testing.T, numOfElements int) *enumType {
 		str[3] = alphabet[i%len(alphabet)]
 		vals[i] = string(str)
 	}
-	return &enumType{sql.MustCreateEnumType(vals, sql.Collation_Default)}
+	return &enumType{types2.MustCreateEnumType(vals, sql.Collation_Default)}
 }
 
 func generateSetTypes(t *testing.T, numOfTypes int64) []TypeInfo {
@@ -106,14 +107,14 @@ func generateSetTypes(t *testing.T, numOfTypes int64) []TypeInfo {
 }
 
 func generateSetType(t *testing.T, numOfElements int) *setType {
-	require.True(t, numOfElements >= 1 && numOfElements <= sql.SetTypeMaxElements)
+	require.True(t, numOfElements >= 1 && numOfElements <= types2.SetTypeMaxElements)
 	vals := make([]string, numOfElements)
 	alphabet := "abcdefghijklmnopqrstuvwxyz"
 	lenAlphabet := len(alphabet)
 	for i := 0; i < numOfElements; i++ {
 		vals[i] = string([]byte{alphabet[(i/lenAlphabet)%lenAlphabet], alphabet[i%lenAlphabet]})
 	}
-	return &setType{sql.MustCreateSetType(vals, sql.Collation_Default)}
+	return &setType{types2.MustCreateSetType(vals, sql.Collation_Default)}
 }
 
 func generateInlineBlobTypes(t *testing.T, numOfTypes uint16) []TypeInfo {
@@ -131,12 +132,12 @@ func generateInlineBlobTypes(t *testing.T, numOfTypes uint16) []TypeInfo {
 func generateInlineBlobType(t *testing.T, length int64, pad bool) *inlineBlobType {
 	require.True(t, length > 0)
 	if pad {
-		t, err := sql.CreateBinary(sqltypes.Binary, length)
+		t, err := types2.CreateBinary(sqltypes.Binary, length)
 		if err == nil {
 			return &inlineBlobType{t}
 		}
 	}
-	return &inlineBlobType{sql.MustCreateBinary(sqltypes.VarBinary, length)}
+	return &inlineBlobType{types2.MustCreateBinary(sqltypes.VarBinary, length)}
 }
 
 func generateVarStringTypes(t *testing.T, numOfTypes uint16) []TypeInfo {
@@ -154,17 +155,17 @@ func generateVarStringTypes(t *testing.T, numOfTypes uint16) []TypeInfo {
 func generateVarStringType(t *testing.T, length int64, rts bool) *varStringType {
 	require.True(t, length > 0)
 	if rts {
-		t, err := sql.CreateStringWithDefaults(sqltypes.Char, length)
+		t, err := types2.CreateStringWithDefaults(sqltypes.Char, length)
 		if err == nil {
 			return &varStringType{t}
 		}
 	}
-	return &varStringType{sql.MustCreateStringWithDefaults(sqltypes.VarChar, length)}
+	return &varStringType{types2.MustCreateStringWithDefaults(sqltypes.VarChar, length)}
 }
 
 func generateBlobStringType(t *testing.T, length int64) *blobStringType {
 	require.True(t, length > 0)
-	return &blobStringType{sql.MustCreateStringWithDefaults(sqltypes.Text, length)}
+	return &blobStringType{types2.MustCreateStringWithDefaults(sqltypes.Text, length)}
 }
 
 func mustBlobString(t *testing.T, str string) types.Blob {

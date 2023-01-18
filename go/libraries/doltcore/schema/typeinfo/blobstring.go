@@ -23,6 +23,7 @@ import (
 	"unsafe"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -38,16 +39,16 @@ const (
 // repositories that were made before the introduction of blobStringType will still use varStringType for existing
 // columns.
 type blobStringType struct {
-	sqlStringType sql.StringType
+	sqlStringType types2.StringType
 }
 
 var _ TypeInfo = (*blobStringType)(nil)
 
 var (
-	TinyTextType   TypeInfo = &blobStringType{sqlStringType: sql.TinyText}
-	TextType       TypeInfo = &blobStringType{sqlStringType: sql.Text}
-	MediumTextType TypeInfo = &blobStringType{sqlStringType: sql.MediumText}
-	LongTextType   TypeInfo = &blobStringType{sqlStringType: sql.LongText}
+	TinyTextType   TypeInfo = &blobStringType{sqlStringType: types2.TinyText}
+	TextType       TypeInfo = &blobStringType{sqlStringType: types2.Text}
+	MediumTextType TypeInfo = &blobStringType{sqlStringType: types2.MediumText}
+	LongTextType   TypeInfo = &blobStringType{sqlStringType: types2.LongText}
 )
 
 func CreateBlobStringTypeFromParams(params map[string]string) (TypeInfo, error) {
@@ -71,7 +72,7 @@ func CreateBlobStringTypeFromParams(params map[string]string) (TypeInfo, error) 
 	} else {
 		return nil, fmt.Errorf(`create blobstring type info is missing param "%v"`, blobStringTypeParam_Length)
 	}
-	sqlType, err := sql.CreateString(sqltypes.Text, length, collation)
+	sqlType, err := types2.CreateString(sqltypes.Text, length, collation)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +83,7 @@ func CreateBlobStringTypeFromParams(params map[string]string) (TypeInfo, error) 
 func (ti *blobStringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Blob); ok {
 		b, err := fromBlob(val)
-		if sql.IsBinaryType(ti.sqlStringType) {
+		if types2.IsBinaryType(ti.sqlStringType) {
 			return b, err
 		}
 		return string(b), err
@@ -103,7 +104,7 @@ func (ti *blobStringType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecRea
 			return nil, err
 		}
 		b, err := fromBlob(val)
-		if sql.IsBinaryType(ti.sqlStringType) {
+		if types2.IsBinaryType(ti.sqlStringType) {
 			return b, err
 		}
 		return string(b), err
@@ -191,7 +192,7 @@ func (ti *blobStringType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *blobStringType) Promote() TypeInfo {
-	return &blobStringType{ti.sqlStringType.Promote().(sql.StringType)}
+	return &blobStringType{ti.sqlStringType.Promote().(types2.StringType)}
 }
 
 // String implements TypeInfo interface.

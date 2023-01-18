@@ -21,17 +21,18 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 type boolType struct {
-	sqlBitType sql.BitType
+	sqlBitType types2.BitType
 }
 
 var _ TypeInfo = (*boolType)(nil)
 
-var BoolType TypeInfo = &boolType{sql.MustCreateBitType(1)}
+var BoolType TypeInfo = &boolType{types2.MustCreateBitType(1)}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *boolType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
@@ -173,7 +174,7 @@ func (ti *boolType) String() string {
 
 // ToSqlType implements TypeInfo interface.
 func (ti *boolType) ToSqlType() sql.Type {
-	return sql.Boolean
+	return types2.Boolean
 }
 
 // boolTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.

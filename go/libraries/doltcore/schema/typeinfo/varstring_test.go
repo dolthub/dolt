@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -53,7 +54,7 @@ func TestVarStringConvertNomsValueToValue(t *testing.T) {
 			false,
 		},
 		{
-			&varStringType{sql.CreateLongText(sql.Collation_Default)},
+			&varStringType{types2.CreateLongText(sql.Collation_Default)},
 			"  This is a sentence.  ",
 			"  This is a sentence.  ",
 			false,
@@ -99,7 +100,7 @@ func TestVarStringConvertValueToNomsValue(t *testing.T) {
 			false,
 		},
 		{
-			&varStringType{sql.CreateLongText(sql.Collation_Default)},
+			&varStringType{types2.CreateLongText(sql.Collation_Default)},
 			float32(3724.75),
 			"3724.75",
 			false,
@@ -164,7 +165,7 @@ func TestVarStringFormatValue(t *testing.T) {
 			false,
 		},
 		{
-			&varStringType{sql.CreateLongText(sql.Collation_Default)},
+			&varStringType{types2.CreateLongText(sql.Collation_Default)},
 			"  This is a sentence.  ",
 			"  This is a sentence.  ",
 			false,
@@ -210,7 +211,7 @@ func TestVarStringParseValue(t *testing.T) {
 			false,
 		},
 		{
-			&varStringType{sql.CreateLongText(sql.Collation_Default)},
+			&varStringType{types2.CreateLongText(sql.Collation_Default)},
 			"  This is a sentence.  ",
 			"  This is a sentence.  ",
 			false,

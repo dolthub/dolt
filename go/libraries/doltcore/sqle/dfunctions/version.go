@@ -14,7 +14,10 @@
 
 package dfunctions
 
-import "github.com/dolthub/go-mysql-server/sql"
+import (
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
+)
 
 const VersionFuncName = "dolt_version"
 
@@ -54,7 +57,7 @@ func (*Version) String() string {
 
 // Type implements the Expression interface.
 func (*Version) Type() sql.Type {
-	return sql.Text
+	return types.Text
 }
 
 // WithChildren implements the Expression interface.

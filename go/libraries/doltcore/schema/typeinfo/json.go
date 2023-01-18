@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/store/types"
@@ -29,7 +30,7 @@ type jsonType struct {
 }
 
 var _ TypeInfo = (*jsonType)(nil)
-var JSONType = &jsonType{sql.JSON}
+var JSONType = &jsonType{types2.JSON}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *jsonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
@@ -71,7 +72,7 @@ func (ti *jsonType) ConvertValueToNomsValue(ctx context.Context, vrw types.Value
 		return nil, err
 	}
 
-	jsVal, ok := jsDoc.(sql.JSONValue)
+	jsVal, ok := jsDoc.(types2.JSONValue)
 	if !ok {
 		return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 	}

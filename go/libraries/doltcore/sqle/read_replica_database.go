@@ -247,6 +247,12 @@ func pullBranches(
 		localRefsByPath[b.Ref.GetPath()] = b
 	}
 
+	// XXX: Our view of which remote branches to pull and what to set the
+	// local branches to was computed outside of the limiter, concurrently
+	// with other possible attempts to pull from the remote. Now we are
+	// applying changes based on that view. This seems capable of rolling
+	// back changes which were applied from another thread.
+
 	_, err := rrd.limiter.Run(ctx, "-all", func() (any, error) {
 		err := rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, remoteHashes, nil)
 
@@ -257,38 +263,29 @@ func pullBranches(
 			case localRefExists:
 				// TODO: this should work for workspaces too but doesn't, only branches
 				if localRef.Ref.GetType() == ref.BranchRefType {
-					if behavior == pullBehavior_forcePull {
-						err = rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
-						if err != nil {
-							return nil, err
-						}
-					} else if localRefsByPath[remoteRef.Ref.GetPath()].Hash != remoteRef.Hash {
-						err = rrd.ddb.FastForwardToHash(ctx, remoteRef.Ref, remoteRef.Hash)
-						if err != nil {
-							return nil, err
+					if localRef.Hash != remoteRef.Hash {
+						if behavior == pullBehavior_forcePull {
+							err = rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
+							if err != nil {
+								return nil, err
+							}
+						} else {
+							err = rrd.ddb.FastForwardToHash(ctx, remoteRef.Ref, remoteRef.Hash)
+							if err != nil {
+								return nil, err
+							}
 						}
 					}
 				}
 			default:
 				switch remoteRef.Ref.GetType() {
 				case ref.BranchRefType:
-					cm, err := rrd.srcDB.ReadCommit(ctx, remoteRef.Hash)
-					if err != nil {
-						return nil, err
-					}
-
-					err = rrd.ddb.NewBranchAtCommit(ctx, remoteRef.Ref, cm)
+					err = rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
 					if err != nil {
 						return nil, err
 					}
 				case ref.TagRefType:
-					tagRef := remoteRef.Ref.(ref.TagRef)
-					tag, err := rrd.srcDB.ResolveTag(ctx, tagRef)
-					if err != nil {
-						return nil, err
-					}
-
-					err = rrd.ddb.NewTagAtCommit(ctx, tagRef, tag.Commit, tag.Meta)
+					err = rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
 					if err != nil {
 						return nil, err
 					}
