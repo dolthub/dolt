@@ -1167,7 +1167,7 @@ func TestHistorySystemTablePrepared(t *testing.T) {
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip("only new format support system table indexing")
 	}
-	
+
 	harness := newDoltHarness(t).WithParallelism(2)
 	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
