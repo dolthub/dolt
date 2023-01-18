@@ -765,9 +765,6 @@ func TestConcurrentTransactions(t *testing.T) {
 }
 
 func TestDoltScripts(t *testing.T) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip("only new format support system table indexing")
-	}
 	harness := newDoltHarness(t)
 	for _, script := range DoltScripts {
 		enginetest.TestScript(t, harness, script)
@@ -1152,10 +1149,6 @@ func TestBrokenSystemTableQueries(t *testing.T) {
 }
 
 func TestHistorySystemTable(t *testing.T) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip("only new format support system table indexing")
-	}
-
 	harness := newDoltHarness(t).WithParallelism(2)
 	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
@@ -1167,10 +1160,6 @@ func TestHistorySystemTable(t *testing.T) {
 }
 
 func TestHistorySystemTablePrepared(t *testing.T) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip("only new format support system table indexing")
-	}
-
 	harness := newDoltHarness(t).WithParallelism(2)
 	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {

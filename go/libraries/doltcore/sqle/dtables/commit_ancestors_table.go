@@ -22,7 +22,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	types2 "github.com/dolthub/dolt/go/store/types"
 )
 
 var _ sql.Table = (*CommitAncestorsTable)(nil)
@@ -88,16 +87,6 @@ func (dt *CommitAncestorsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error
 
 // IndexedAccess implements sql.IndexAddressable
 func (dt *CommitAncestorsTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
-	if !types2.IsFormat_DOLT(dt.ddb.Format()) {
-		return nil
-	}
-	if lookup.Index.ID() == index.CommitHashIndexId {
-		_, ok := index.LookupToPointSelectStr(lookup)
-		if !ok {
-			return nil
-		}
-	}
-
 	nt := *dt
 	return &nt
 }

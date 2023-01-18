@@ -33,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
-	types2 "github.com/dolthub/dolt/go/store/types"
 )
 
 var workingSetPartitionKey = []byte("workingset")
@@ -158,15 +157,6 @@ func (dt *UnscopedDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 
 // IndexedAccess implements sql.IndexAddressable
 func (dt *UnscopedDiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
-	if !types2.IsFormat_DOLT(dt.ddb.Format()) {
-		return nil
-	}
-	if lookup.Index.ID() == index.CommitHashIndexId {
-		_, ok := index.LookupToPointSelectStr(lookup)
-		if !ok {
-			return nil
-		}
-	}
 	nt := *dt
 	return &nt
 }

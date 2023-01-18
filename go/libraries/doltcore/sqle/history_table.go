@@ -33,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
-	types2 "github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -81,17 +80,9 @@ func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return index.DoltHistoryIndexesFromTable(ctx, ht.doltTable.db.Name(), ht.Name(), tbl, ht.doltTable.db.DbData().Ddb)
 }
 
-func (ht *HistoryTable) IndexedAccess(l sql.IndexLookup) sql.IndexedTable {
-	if !types2.IsFormat_DOLT(ht.doltTable.db.DbData().Ddb.Format()) {
-		return nil
-	}
-	if l.Index.ID() == index.CommitHashIndexId {
-		_, ok := index.LookupToPointSelectStr(l)
-		if !ok {
-			return nil
-		}
-	}
-	return ht
+func (ht *HistoryTable) IndexedAccess(_ sql.IndexLookup) sql.IndexedTable {
+	ret := *ht
+	return &ret
 }
 
 func (ht *HistoryTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {

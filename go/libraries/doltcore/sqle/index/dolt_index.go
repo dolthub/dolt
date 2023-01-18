@@ -60,6 +60,43 @@ type DoltIndex interface {
 	lookupTags(s *durableIndexState) map[uint64]int
 }
 
+func NewCommitIndex(i *doltIndex) *CommitIndex {
+	return &CommitIndex{doltIndex: i}
+}
+
+type CommitIndex struct {
+	*doltIndex
+}
+
+func (p *CommitIndex) CanSupport(ranges ...sql.Range) bool {
+	var selects []string
+	for _, r := range ranges {
+		if len(r) != 1 {
+			return false
+		}
+		lb, ok := r[0].LowerBound.(sql.Below)
+		if !ok {
+			return false
+		}
+		lk, ok := lb.Key.(string)
+		if !ok {
+			return false
+		}
+		ub, ok := r[0].UpperBound.(sql.Above)
+		if !ok {
+			return false
+		}
+		uk, ok := ub.Key.(string)
+		if uk != lk {
+			return false
+		}
+		selects = append(selects, uk)
+	}
+	return true
+}
+
+var _ DoltIndex = (*CommitIndex)(nil)
+
 func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
 	sch, err := t.GetSchema(ctx)
 	if err != nil {
@@ -104,7 +141,7 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 	}
 
 	indexes = append(indexes, &toIndex)
-	indexes = append(indexes, &doltIndex{
+	indexes = append(indexes, NewCommitIndex(&doltIndex{
 		id:      ToCommitIndexId,
 		tblName: doltdb.DoltDiffTablePrefix + tbl,
 		dbName:  db,
@@ -119,13 +156,17 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		ns:                            t.NodeStore(),
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: false,
-	})
+	}))
 	return indexes, nil
 }
 
 func DoltCommitIndexes(tab string, db *doltdb.DoltDB, unique bool) (indexes []sql.Index, err error) {
+	if !types.IsFormat_DOLT(db.Format()) {
+		return nil, nil
+	}
+
 	return []sql.Index{
-		&doltIndex{
+		NewCommitIndex(&doltIndex{
 			id:      CommitHashIndexId,
 			tblName: tab,
 			dbName:  "",
@@ -140,7 +181,7 @@ func DoltCommitIndexes(tab string, db *doltdb.DoltDB, unique bool) (indexes []sq
 			ns:                            db.NodeStore(),
 			order:                         sql.IndexOrderNone,
 			constrainedToLookupExpression: false,
-		},
+		}),
 	}, nil
 }
 
