@@ -1,0 +1,17 @@
+tests:
+- name: "system table"
+  repos:
+  - name: dolt
+    server:
+      port: 3309
+      args: [ "--port", "3309", "--password", "password"]
+  scripts:
+  - gen/dolt_diff_log_join_on_commit.gen.lua
+- name: "dummy system table"
+  repos:
+    - name: dolt
+      server:
+        port: 3309
+        args: [ "--port", "3309" ]
+  scripts:
+    - gen/dolt_diff_log_join_on_commit_dummy.gen.lua

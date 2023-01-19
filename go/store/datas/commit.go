@@ -61,6 +61,8 @@ const (
 	commitName          = "Commit"
 )
 
+var ErrCommitNotFound = errors.New("target commit not found")
+
 type Commit struct {
 	val    types.Value
 	addr   hash.Hash
@@ -311,7 +313,7 @@ func LoadCommitRef(ctx context.Context, vr types.ValueReader, r types.Ref) (*Com
 		return nil, err
 	}
 	if v == nil {
-		return nil, errors.New("target commit not found")
+		return nil, ErrCommitNotFound
 	}
 	return commitPtr(vr.Format(), v, &r)
 }

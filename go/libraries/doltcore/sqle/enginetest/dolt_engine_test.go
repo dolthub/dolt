@@ -20,6 +20,7 @@ import (
 	"os"
 	"testing"
 
+	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -266,6 +267,10 @@ func TestIntegrationQueryPlans(t *testing.T) {
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
 	harness := newDoltHarness(t).WithParallelism(2) // want Exchange nodes
 	harness.Setup(setup.SimpleSetup...)
 	e, err := harness.NewEngine(t)
@@ -1282,6 +1287,10 @@ func TestCommitDiffSystemTablePrepared(t *testing.T) {
 }
 
 func TestDiffSystemTable(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {
@@ -1299,6 +1308,10 @@ func TestDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffSystemTablePrepared(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {
@@ -1311,6 +1324,76 @@ func TestDiffSystemTablePrepared(t *testing.T) {
 	if types.IsFormat_DOLT(types.Format_Default) {
 		for _, test := range Dolt1DiffSystemTableScripts {
 			enginetest.TestScriptPrepared(t, newDoltHarness(t), test)
+		}
+	}
+}
+
+func mustNewEngine(t *testing.T, h enginetest.Harness) *gms.Engine {
+	e, err := h.NewEngine(t)
+	if err != nil {
+		require.NoError(t, err)
+	}
+	return e
+}
+
+func TestSystemTableIndexes(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
+	for _, stt := range SystemTableIndexTests {
+		harness := newDoltHarness(t).WithParallelism(2)
+		harness.SkipSetupCommit()
+		e := mustNewEngine(t, harness)
+		defer e.Close()
+
+		ctx := enginetest.NewContext(harness)
+		for _, q := range stt.setup {
+			enginetest.RunQuery(t, e, harness, q)
+		}
+
+		for _, tt := range stt.queries {
+			t.Run(fmt.Sprintf("%s: %s", stt.name, tt.query), func(t *testing.T) {
+				if tt.skip {
+					t.Skip()
+				}
+
+				ctx = ctx.WithQuery(tt.query)
+				if tt.exp != nil {
+					enginetest.TestQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil)
+				}
+			})
+		}
+	}
+}
+
+func TestSystemTableIndexesPrepared(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
+	for _, stt := range SystemTableIndexTests {
+		harness := newDoltHarness(t).WithParallelism(2)
+		harness.SkipSetupCommit()
+		e := mustNewEngine(t, harness)
+		defer e.Close()
+
+		ctx := enginetest.NewContext(harness)
+		for _, q := range stt.setup {
+			enginetest.RunQuery(t, e, harness, q)
+		}
+
+		for _, tt := range stt.queries {
+			t.Run(fmt.Sprintf("%s: %s", stt.name, tt.query), func(t *testing.T) {
+				if tt.skip {
+					t.Skip()
+				}
+
+				ctx = ctx.WithQuery(tt.query)
+				if tt.exp != nil {
+					enginetest.TestPreparedQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil)
+				}
+			})
 		}
 	}
 }

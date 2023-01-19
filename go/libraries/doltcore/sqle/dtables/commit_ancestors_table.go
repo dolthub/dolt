@@ -15,6 +15,8 @@
 package dtables
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -66,8 +68,45 @@ func (dt *CommitAncestorsTable) Partitions(*sql.Context) (sql.PartitionIter, err
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition.
-func (dt *CommitAncestorsTable) PartitionRows(sqlCtx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return NewCommitAncestorsRowItr(sqlCtx, dt.ddb)
+func (dt *CommitAncestorsTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIter, error) {
+	switch p := p.(type) {
+	case *doltdb.CommitPart:
+		return &CommitAncestorsRowItr{
+			itr: doltdb.NewOneCommitIter(p.Commit(), p.Hash(), p.Meta()),
+			ddb: dt.ddb,
+		}, nil
+	default:
+		return NewCommitAncestorsRowItr(ctx, dt.ddb)
+	}
+}
+
+// GetIndexes implements sql.IndexAddressable
+func (dt *CommitAncestorsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return index.DoltCommitIndexes(dt.Name(), dt.ddb, true)
+}
+
+// IndexedAccess implements sql.IndexAddressable
+func (dt *CommitAncestorsTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	nt := *dt
+	return &nt
+}
+
+func (dt *CommitAncestorsTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	if lookup.Index.ID() == index.CommitHashIndexId {
+		hs, ok := index.LookupToPointSelectStr(lookup)
+		if !ok {
+			return nil, fmt.Errorf("failed to parse commit hash lookup: %s", sql.DebugString(lookup.Ranges))
+		}
+
+		hashes, commits, metas := index.HashesToCommits(ctx, dt.ddb, hs, nil, false)
+		if len(hashes) == 0 {
+			return sql.PartitionsToPartitionIter(), nil
+		}
+
+		return doltdb.NewCommitSlicePartitionIter(hashes, commits, metas), nil
+	}
+
+	return dt.Partitions(ctx)
 }
 
 // CommitAncestorsRowItr is a sql.RowItr which iterates over each

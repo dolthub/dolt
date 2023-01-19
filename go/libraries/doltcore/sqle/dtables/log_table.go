@@ -15,14 +15,17 @@
 package dtables
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
-	"github.com/dolthub/dolt/go/store/hash"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
 )
 
 var _ sql.Table = (*LogTable)(nil)
@@ -31,8 +34,10 @@ var _ sql.StatisticsTable = (*LogTable)(nil)
 
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
-	ddb  *doltdb.DoltDB
-	head *doltdb.Commit
+	ddb               *doltdb.DoltDB
+	head              *doltdb.Commit
+	headHash          hash.Hash
+	headCommitClosure *prolly.CommitClosure
 }
 
 // NewLogTable creates a LogTable
@@ -90,8 +95,100 @@ func (dt *LogTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
-func (dt *LogTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return NewLogItr(ctx, dt.ddb, dt.head)
+func (dt *LogTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIter, error) {
+	switch p := p.(type) {
+	case *doltdb.CommitPart:
+		return sql.RowsToRowIter(sql.NewRow(p.Hash().String(), p.Meta().Name, p.Meta().Email, p.Meta().Time(), p.Meta().Description)), nil
+	default:
+		return NewLogItr(ctx, dt.ddb, dt.head)
+	}
+}
+
+func (dt *LogTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return index.DoltCommitIndexes(dt.Name(), dt.ddb, true)
+}
+
+// IndexedAccess implements sql.IndexAddressable
+func (dt *LogTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	nt := *dt
+	return &nt
+}
+
+func (dt *LogTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	if lookup.Index.ID() == index.CommitHashIndexId {
+		return dt.commitHashPartitionIter(ctx, lookup)
+	}
+
+	return dt.Partitions(ctx)
+}
+
+func (dt *LogTable) commitHashPartitionIter(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	hashStrs, ok := index.LookupToPointSelectStr(lookup)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
+	}
+	hashes, commits, metas := index.HashesToCommits(ctx, dt.ddb, hashStrs, nil, false)
+	if len(hashes) == 0 {
+		return sql.PartitionsToPartitionIter(), nil
+	}
+	var partitions []sql.Partition
+	for i, h := range hashes {
+		height, err := commits[i].Height()
+		if err != nil {
+			return nil, err
+		}
+
+		ok, err = dt.CommitIsInScope(ctx, height, h)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+
+		partitions = append(partitions, doltdb.NewCommitPart(h, commits[i], metas[i]))
+
+	}
+	return sql.PartitionsToPartitionIter(partitions...), nil
+}
+
+// CommitIsInScope returns true if a given commit hash is head or is
+// visible from the current head's ancestry graph.
+func (dt *LogTable) CommitIsInScope(ctx context.Context, height uint64, h hash.Hash) (bool, error) {
+	cc, err := dt.HeadCommitClosure(ctx)
+	if err != nil {
+		return false, err
+	}
+	headHash, err := dt.HeadHash()
+	if err != nil {
+		return false, err
+	}
+	if headHash == h {
+		return true, nil
+	}
+	return cc.ContainsKey(ctx, h, height)
+}
+
+func (dt *LogTable) HeadCommitClosure(ctx context.Context) (*prolly.CommitClosure, error) {
+	if dt.headCommitClosure == nil {
+		cc, err := dt.head.GetCommitClosure(ctx)
+		dt.headCommitClosure = &cc
+		if err != nil {
+			return nil, err
+		}
+	}
+	return dt.headCommitClosure, nil
+}
+
+func (dt *LogTable) HeadHash() (hash.Hash, error) {
+	if dt.headHash.IsEmpty() {
+		var err error
+		dt.headHash, err = dt.head.HashOf()
+		if err != nil {
+			return hash.Hash{}, err
+		}
+	}
+	return dt.headHash, nil
 }
 
 // LogItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
