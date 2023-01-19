@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -39,9 +40,9 @@ func (*StringBuilderCloser) Close() error {
 
 func TestFixedWidthWriter(t *testing.T) {
 	sch := sql.Schema{
-		{Name: nameColName, Type: sql.Text},
-		{Name: ageColName, Type: sql.Int64},
-		{Name: titleColName, Type: sql.Text},
+		{Name: nameColName, Type: types.Text},
+		{Name: ageColName, Type: types.Int64},
+		{Name: titleColName, Type: types.Text},
 	}
 
 	names := []interface{}{

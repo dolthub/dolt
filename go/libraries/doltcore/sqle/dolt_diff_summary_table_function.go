@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -43,18 +44,18 @@ type DiffSummaryTableFunction struct {
 }
 
 var diffSummaryTableSchema = sql.Schema{
-	&sql.Column{Name: "table_name", Type: sql.LongText, Nullable: false},
-	&sql.Column{Name: "rows_unmodified", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "rows_added", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "rows_deleted", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "rows_modified", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "cells_added", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "cells_deleted", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "cells_modified", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "old_row_count", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "new_row_count", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "old_cell_count", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "new_cell_count", Type: sql.Int64, Nullable: true},
+	&sql.Column{Name: "table_name", Type: types.LongText, Nullable: false},
+	&sql.Column{Name: "rows_unmodified", Type: types.Int64, Nullable: true},
+	&sql.Column{Name: "rows_added", Type: types.Int64, Nullable: true},
+	&sql.Column{Name: "rows_deleted", Type: types.Int64, Nullable: true},
+	&sql.Column{Name: "rows_modified", Type: types.Int64, Nullable: true},
+	&sql.Column{Name: "cells_added", Type: types.Int64, Nullable: true},
+	&sql.Column{Name: "cells_deleted", Type: types.Int64, Nullable: true},
+	&sql.Column{Name: "cells_modified", Type: types.Int64, Nullable: true},
+	&sql.Column{Name: "old_row_count", Type: types.Int64, Nullable: true},
+	&sql.Column{Name: "new_row_count", Type: types.Int64, Nullable: true},
+	&sql.Column{Name: "old_cell_count", Type: types.Int64, Nullable: true},
+	&sql.Column{Name: "new_cell_count", Type: types.Int64, Nullable: true},
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -138,7 +139,7 @@ func (ds *DiffSummaryTableFunction) WithChildren(children ...sql.Node) (sql.Node
 // CheckPrivileges implements the interface sql.Node.
 func (ds *DiffSummaryTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
 	if ds.tableNameExpr != nil {
-		if !sql.IsText(ds.tableNameExpr.Type()) {
+		if !types.IsText(ds.tableNameExpr.Type()) {
 			return false
 		}
 
@@ -220,20 +221,20 @@ func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression
 
 	// validate the expressions
 	if ds.dotCommitExpr != nil {
-		if !sql.IsText(ds.dotCommitExpr.Type()) {
+		if !types.IsText(ds.dotCommitExpr.Type()) {
 			return nil, sql.ErrInvalidArgumentDetails.New(ds.Name(), ds.dotCommitExpr.String())
 		}
 	} else {
-		if !sql.IsText(ds.fromCommitExpr.Type()) {
+		if !types.IsText(ds.fromCommitExpr.Type()) {
 			return nil, sql.ErrInvalidArgumentDetails.New(ds.Name(), ds.fromCommitExpr.String())
 		}
-		if !sql.IsText(ds.toCommitExpr.Type()) {
+		if !types.IsText(ds.toCommitExpr.Type()) {
 			return nil, sql.ErrInvalidArgumentDetails.New(ds.Name(), ds.toCommitExpr.String())
 		}
 	}
 
 	if ds.tableNameExpr != nil {
-		if !sql.IsText(ds.tableNameExpr.Type()) {
+		if !types.IsText(ds.tableNameExpr.Type()) {
 			return nil, sql.ErrInvalidArgumentDetails.New(ds.Name(), ds.tableNameExpr.String())
 		}
 	}

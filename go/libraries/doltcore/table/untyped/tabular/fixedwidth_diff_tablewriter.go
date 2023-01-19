@@ -20,6 +20,7 @@ import (
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -35,7 +36,7 @@ func NewFixedWidthDiffTableWriter(schema sql.Schema, wr io.WriteCloser, numSampl
 	// leading diff type column with empty name
 	schema = append(sql.Schema{&sql.Column{
 		Name: " ",
-		Type: sql.Text,
+		Type: types.Text,
 	}}, schema...)
 
 	tableWriter := NewFixedWidthTableWriter(schema, wr, numSamples)

@@ -20,6 +20,7 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -27,12 +28,12 @@ import (
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type pointType struct {
-	sqlPointType sql.PointType
+	sqlPointType types2.PointType
 }
 
 var _ TypeInfo = (*pointType)(nil)
 
-var PointType = &pointType{sql.PointType{}}
+var PointType = &pointType{types2.PointType{}}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *pointType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
@@ -78,7 +79,7 @@ func (ti *pointType) ConvertValueToNomsValue(ctx context.Context, vrw types.Valu
 		return nil, err
 	}
 
-	return types.ConvertSQLPointToTypesPoint(point.(sql.Point)), nil
+	return types.ConvertSQLPointToTypesPoint(point.(types2.Point)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -135,7 +136,7 @@ func (ti *pointType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *pointType) Promote() TypeInfo {
-	return &pointType{ti.sqlPointType.Promote().(sql.PointType)}
+	return &pointType{ti.sqlPointType.Promote().(types2.PointType)}
 }
 
 // String implements TypeInfo interface.
@@ -227,5 +228,5 @@ func CreatePointTypeFromParams(params map[string]string) (TypeInfo, error) {
 		}
 	}
 
-	return &pointType{sqlPointType: sql.PointType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
+	return &pointType{sqlPointType: types2.PointType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

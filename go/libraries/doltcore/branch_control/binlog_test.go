@@ -1,4 +1,4 @@
-// Copyright 2021 Dolthub, Inc.
+// Copyright 2023 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package enginetest
+package branch_control
 
 import (
-	"github.com/dolthub/go-mysql-server/enginetest/queries"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	fb "github.com/google/flatbuffers/go"
 )
 
-var BigBlobQueries = []queries.WriteQueryTest{
-	{
-		WriteQuery:          "INSERT INTO blobt VALUES(4, LOAD_FILE('testdata/test1.png'))",
-		ExpectedWriteResult: []sql.Row{{types.NewOkResult(1)}},
-		SelectQuery:         "select sha1(b) from blobt where i = 4",
-		ExpectedSelect:      []sql.Row{{"012bcb75a319f2913614a5170fc046fb6c49ee86"}},
-	},
+func TestBinlogRowSerialization(t *testing.T) {
+	row := BinlogRow{
+		IsInsert:    true,
+		Database:    "foo",
+		Branch:      "bar",
+		User:        "baz",
+		Host:        "qux",
+		Permissions: 0,
+	}
+	b := fb.NewBuilder(0)
+	o := row.Serialize(b)
+	b.Finish(o)
+	buf := b.Bytes[b.Head():]
+	assert.Equal(t, 76, len(buf))
 }

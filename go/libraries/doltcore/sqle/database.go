@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -942,7 +943,7 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch
 	// Prevent any tables that use BINARY, CHAR, VARBINARY, VARCHAR prefixes in Primary Key
 	for _, idxCol := range idxDef.Columns {
 		col := sch.Schema[sch.Schema.IndexOfColName(idxCol.Name)]
-		if col.PrimaryKey && sql.IsText(col.Type) && idxCol.Length > 0 {
+		if col.PrimaryKey && types.IsText(col.Type) && idxCol.Length > 0 {
 			return sql.ErrUnsupportedIndexPrefix.New(col.Name)
 		}
 	}
@@ -1229,9 +1230,21 @@ func (db Database) DropTrigger(ctx *sql.Context, name string) error {
 	return db.dropFragFromSchemasTable(ctx, "trigger", name, sql.ErrTriggerDoesNotExist.New(name))
 }
 
+// GetStoredProcedure implements sql.StoredProcedureDatabase.
+func (db Database) GetStoredProcedure(ctx *sql.Context, name string) (sql.StoredProcedureDetails, bool, error) {
+	procedures, err := DoltProceduresGetAll(ctx, db, strings.ToLower(name))
+	if err != nil {
+		return sql.StoredProcedureDetails{}, false, nil
+	}
+	if len(procedures) == 1 {
+		return procedures[0], true, nil
+	}
+	return sql.StoredProcedureDetails{}, false, nil
+}
+
 // GetStoredProcedures implements sql.StoredProcedureDatabase.
 func (db Database) GetStoredProcedures(ctx *sql.Context) ([]sql.StoredProcedureDetails, error) {
-	return DoltProceduresGetAll(ctx, db)
+	return DoltProceduresGetAll(ctx, db, "")
 }
 
 // SaveStoredProcedure implements sql.StoredProcedureDatabase.

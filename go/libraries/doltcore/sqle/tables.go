@@ -29,6 +29,7 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -182,8 +183,8 @@ var _ doltReadOnlyTableInterface = (*DoltTable)(nil)
 //var _ sql.ProjectedTable = (*DoltTable)(nil)
 
 // IndexedAccess implements sql.IndexAddressableTable
-func (t *DoltTable) IndexedAccess(idx sql.Index) sql.IndexedTable {
-	return NewIndexedDoltTable(t, idx.(index.DoltIndex))
+func (t *DoltTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	return NewIndexedDoltTable(t, lookup.Index.(index.DoltIndex))
 }
 
 // doltTable returns the underlying doltTable from the current session
@@ -407,9 +408,9 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 		switch n := col.Type.(type) {
 		case sql.NumberType:
 			numBytesPerRow += 8
-		case sql.StringType:
+		case types2.StringType:
 			numBytesPerRow += uint64(n.MaxByteLength())
-		case sql.BitType:
+		case types2.BitType:
 			numBytesPerRow += 1
 		case sql.DatetimeType:
 			numBytesPerRow += 8
@@ -421,7 +422,7 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 			numBytesPerRow += 20
 		case sql.NullType:
 			numBytesPerRow += 1
-		case sql.TimeType:
+		case types2.TimeType:
 			numBytesPerRow += 16
 		case sql.YearType:
 			numBytesPerRow += 8
@@ -505,8 +506,8 @@ func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue)
 	return t.db.SetRoot(ctx, newRoot)
 }
 
-func (t *WritableDoltTable) IndexedAccess(idx sql.Index) sql.IndexedTable {
-	return NewWritableIndexedDoltTable(t, idx.(index.DoltIndex))
+func (t *WritableDoltTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	return NewWritableIndexedDoltTable(t, lookup.Index.(index.DoltIndex))
 }
 
 // WithProjections implements sql.ProjectedTable
@@ -1310,7 +1311,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 				if strings.ToLower(oldColumn.Name) == strings.ToLower(colName) {
 					colNames = append(colNames, newColumn.Name)
 					if len(prefixLengths) > 0 {
-						if !sql.IsText(newColumn.Type) {
+						if !types2.IsText(newColumn.Type) {
 							// drop prefix lengths if column is not a string type
 							prefixLengths[i] = 0
 						} else if uint32(prefixLengths[i]) > newColumn.Type.MaxTextResponseByteLength() {
@@ -1498,7 +1499,7 @@ func validateSchemaChange(
 ) error {
 	for _, idxCol := range idxCols {
 		col := newSchema.Schema[newSchema.Schema.IndexOfColName(idxCol.Name)]
-		if col.PrimaryKey && idxCol.Length > 0 && sql.IsText(col.Type) {
+		if col.PrimaryKey && idxCol.Length > 0 && types2.IsText(col.Type) {
 			return sql.ErrUnsupportedIndexPrefix.New(col.Name)
 		}
 	}

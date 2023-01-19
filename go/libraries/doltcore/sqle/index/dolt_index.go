@@ -27,11 +27,18 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
+)
+
+const (
+	CommitHashIndexId = "commit_hash"
+	ToCommitIndexId   = "to_commit"
 )
 
 type DoltTableable interface {
@@ -52,6 +59,43 @@ type DoltIndex interface {
 	sqlRowConverter(*durableIndexState, []uint64) *KVToSqlRowConverter
 	lookupTags(s *durableIndexState) map[uint64]int
 }
+
+func NewCommitIndex(i *doltIndex) *CommitIndex {
+	return &CommitIndex{doltIndex: i}
+}
+
+type CommitIndex struct {
+	*doltIndex
+}
+
+func (p *CommitIndex) CanSupport(ranges ...sql.Range) bool {
+	var selects []string
+	for _, r := range ranges {
+		if len(r) != 1 {
+			return false
+		}
+		lb, ok := r[0].LowerBound.(sql.Below)
+		if !ok {
+			return false
+		}
+		lk, ok := lb.Key.(string)
+		if !ok {
+			return false
+		}
+		ub, ok := r[0].UpperBound.(sql.Above)
+		if !ok {
+			return false
+		}
+		uk, ok := ub.Key.(string)
+		if uk != lk {
+			return false
+		}
+		selects = append(selects, uk)
+	}
+	return true
+}
+
+var _ DoltIndex = (*CommitIndex)(nil)
 
 func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
 	sch, err := t.GetSchema(ctx)
@@ -96,7 +140,49 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		constrainedToLookupExpression: false,
 	}
 
-	return append(indexes, &toIndex), nil
+	indexes = append(indexes, &toIndex)
+	indexes = append(indexes, NewCommitIndex(&doltIndex{
+		id:      ToCommitIndexId,
+		tblName: doltdb.DoltDiffTablePrefix + tbl,
+		dbName:  db,
+		columns: []schema.Column{
+			schema.NewColumn("to_commit", schema.DiffCommitTag, types.StringKind, false),
+		},
+		indexSch:                      sch,
+		tableSch:                      sch,
+		unique:                        true,
+		comment:                       "",
+		vrw:                           t.ValueReadWriter(),
+		ns:                            t.NodeStore(),
+		order:                         sql.IndexOrderAsc,
+		constrainedToLookupExpression: false,
+	}))
+	return indexes, nil
+}
+
+func DoltCommitIndexes(tab string, db *doltdb.DoltDB, unique bool) (indexes []sql.Index, err error) {
+	if !types.IsFormat_DOLT(db.Format()) {
+		return nil, nil
+	}
+
+	return []sql.Index{
+		NewCommitIndex(&doltIndex{
+			id:      CommitHashIndexId,
+			tblName: tab,
+			dbName:  "",
+			columns: []schema.Column{
+				schema.NewColumn(CommitHashIndexId, 0, types.StringKind, false),
+			},
+			indexSch:                      nil,
+			tableSch:                      nil,
+			unique:                        unique,
+			comment:                       "",
+			vrw:                           db.ValueReadWriter(),
+			ns:                            db.NodeStore(),
+			order:                         sql.IndexOrderNone,
+			constrainedToLookupExpression: false,
+		}),
+	}, nil
 }
 
 func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
@@ -173,7 +259,7 @@ func indexesMatch(a sql.Index, b sql.Index) bool {
 	return true
 }
 
-func DoltHistoryIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) ([]sql.Index, error) {
+func DoltHistoryIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table, ddb *doltdb.DoltDB) ([]sql.Index, error) {
 	indexes, err := DoltIndexesFromTable(ctx, db, tbl, t)
 	if err != nil {
 		return nil, err
@@ -188,6 +274,12 @@ func DoltHistoryIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.
 		di.constrainedToLookupExpression = false
 		unorderedIndexes[i] = di
 	}
+
+	cmIdx, err := DoltCommitIndexes(tbl, ddb, false)
+	if err != nil {
+		return nil, err
+	}
+	unorderedIndexes = append(unorderedIndexes, cmIdx...)
 
 	return unorderedIndexes, nil
 }
@@ -976,4 +1068,111 @@ func SplitNullsFromRanges(rs []sql.Range) ([]sql.Range, error) {
 		ret = append(ret, nr...)
 	}
 	return ret, nil
+}
+
+// LookupToPointSelectStr converts a set of point lookups on string
+// fields, returning a nil list and false if any expression failed
+// to convert.
+func LookupToPointSelectStr(lookup sql.IndexLookup) ([]string, bool) {
+	var selects []string
+	for _, r := range lookup.Ranges {
+		if len(r) != 1 {
+			return nil, false
+		}
+		lb, ok := r[0].LowerBound.(sql.Below)
+		if !ok {
+			return nil, false
+		}
+		if lb.Key == nil {
+			continue
+		}
+		lk, ok := lb.Key.(string)
+		if !ok {
+			return nil, false
+		}
+		ub, ok := r[0].UpperBound.(sql.Above)
+		if !ok {
+			return nil, false
+		}
+		if ub.Key == nil {
+			continue
+		}
+		uk, ok := ub.Key.(string)
+		if uk != lk {
+			return nil, false
+		}
+		selects = append(selects, uk)
+	}
+	return selects, true
+}
+
+// HashesToCommits converts a set of strings into hashes, commits,
+// and commit metadata. Strings that are invalid hashes, or do
+// not refer to commits are filtered from the return lists.
+//
+// The doltdb.Working edge case is handled specially depending on
+// whether we are: 1) interested in converting "WORKING" into a
+// commit hash (or leave it as "WORKING"), and 2) whether we want
+// to attempt to load a commit if WORKING == HEAD. The commit and
+// metadata for a working hash will be nil if indicated.
+func HashesToCommits(
+	ctx *sql.Context,
+	ddb *doltdb.DoltDB,
+	hashStrs []string,
+	head *doltdb.Commit,
+	convertWorkingToCommit bool,
+) ([]hash.Hash, []*doltdb.Commit, []*datas.CommitMeta) {
+	var hashes []hash.Hash
+	var commits []*doltdb.Commit
+	var metas []*datas.CommitMeta
+	var err error
+	var ok bool
+	for _, hs := range hashStrs {
+		var h hash.Hash
+		var cm *doltdb.Commit
+		var meta *datas.CommitMeta
+		switch hs {
+		case doltdb.Working:
+			if head == nil {
+				continue
+			}
+			h, err = head.HashOf()
+			if err != nil {
+				continue
+			}
+
+			if convertWorkingToCommit {
+				cm, err = doltdb.HashToCommit(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), h)
+				if err != nil {
+					cm = nil
+				} else {
+					cm = head
+					meta, err = cm.GetCommitMeta(ctx)
+					if err != nil {
+						continue
+					}
+				}
+			}
+		default:
+			h, ok = hash.MaybeParse(hs)
+			if !ok {
+				continue
+			}
+			cm, err = doltdb.HashToCommit(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), h)
+			if err != nil {
+				continue
+			}
+			meta, err = cm.GetCommitMeta(ctx)
+			if err != nil {
+				continue
+			}
+		}
+		if err != nil {
+			continue
+		}
+		hashes = append(hashes, h)
+		commits = append(commits, cm)
+		metas = append(metas, meta)
+	}
+	return hashes, commits, metas
 }

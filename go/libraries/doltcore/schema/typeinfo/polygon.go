@@ -20,6 +20,7 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -27,12 +28,12 @@ import (
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type polygonType struct {
-	sqlPolygonType sql.PolygonType
+	sqlPolygonType types2.PolygonType
 }
 
 var _ TypeInfo = (*polygonType)(nil)
 
-var PolygonType = &polygonType{sql.PolygonType{}}
+var PolygonType = &polygonType{types2.PolygonType{}}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *polygonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
@@ -78,7 +79,7 @@ func (ti *polygonType) ConvertValueToNomsValue(ctx context.Context, vrw types.Va
 		return nil, err
 	}
 
-	return types.ConvertSQLPolygonToTypesPolygon(poly.(sql.Polygon)), nil
+	return types.ConvertSQLPolygonToTypesPolygon(poly.(types2.Polygon)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -135,7 +136,7 @@ func (ti *polygonType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *polygonType) Promote() TypeInfo {
-	return &polygonType{ti.sqlPolygonType.Promote().(sql.PolygonType)}
+	return &polygonType{ti.sqlPolygonType.Promote().(types2.PolygonType)}
 }
 
 // String implements TypeInfo interface.
@@ -227,5 +228,5 @@ func CreatePolygonTypeFromParams(params map[string]string) (TypeInfo, error) {
 		}
 	}
 
-	return &polygonType{sqlPolygonType: sql.PolygonType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
+	return &polygonType{sqlPolygonType: types2.PolygonType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

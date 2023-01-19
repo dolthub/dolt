@@ -19,6 +19,7 @@ import (
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -44,9 +45,9 @@ func (s StatusTable) String() string {
 
 func (s StatusTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "table_name", Type: sql.Text, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
-		{Name: "staged", Type: sql.Boolean, Source: doltdb.StatusTableName, PrimaryKey: false, Nullable: false},
-		{Name: "status", Type: sql.Text, Source: doltdb.StatusTableName, PrimaryKey: false, Nullable: false},
+		{Name: "table_name", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
+		{Name: "staged", Type: types.Boolean, Source: doltdb.StatusTableName, PrimaryKey: false, Nullable: false},
+		{Name: "status", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: false, Nullable: false},
 	}
 }
 
