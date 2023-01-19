@@ -220,27 +220,30 @@ func DoltIndexFromSqlIndex(idx sql.Index) DoltIndex {
 	return idx.(DoltIndex)
 }
 
+// LexFloat maps the float64 into an uint64 representation in lexicographical order
+// For positive floats, we flip the signed bit
+// For negative floats, we flip all the bits
 func LexFloat(f float64) uint64 {
 	b := math.Float64bits(f)
-	if b>>63 == 1 {
-		tmp := math.Float64bits(math.MaxFloat64)
-		b = tmp - b
-	}
-	b = b ^ (1 << 63) // flip the sign bit
-	return b
-}
-
-func UnLexFloat(b uint64) float64 {
 	if b>>63 == 0 {
-		b = math.Float64bits(math.MaxFloat64) - b
+		return b ^ (1 << 63) // flip the sign bit
 	}
-	b = b ^ (1 << 63) // flip the sign bit
-	if b == math.MaxInt64 {
-		return math.Inf(-1)
+	return ^b // flip all the bits
+}
+// UnLexFloat maps the lexicographic uint64 representation of a float64 back into a float64
+// For positive uint64s, we flip the signed bit
+// For negative floats, we flip all the bits
+func UnLexFloat(b uint64) float64 {
+	if b>>63 == 1 {
+		b = b ^ (1 << 63) // flip the sign bit
+	} else {
+		b = ^b
 	}
 	return math.Float64frombits(b)
 }
 
+// ZValue takes a Point and interleaves the bits into a [16]byte
+// It will put the bits in this order: x_0, y_0, x_1, y_1 ... x_63, Y_63
 func ZValue(p sqltypes.Point) [16]byte {
 	xLex := LexFloat(p.X)
 	yLex := LexFloat(p.Y)
@@ -255,7 +258,7 @@ func ZValue(p sqltypes.Point) [16]byte {
 	}
 	return res
 }
-
+// UnZValue takes a [16]byte Z-Value and converts it back to a sql.Point
 func UnZValue(z [16]byte) sqltypes.Point {
 	var x, y uint64
 	for i := 15; i >= 0; i-- {
