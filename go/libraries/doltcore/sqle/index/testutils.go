@@ -16,13 +16,13 @@ package index
 
 import (
 	"bytes"
-	"github.com/dolthub/go-mysql-server/sql"
 	"math"
 	"sort"
 
-	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -221,7 +221,7 @@ func DoltIndexFromSqlIndex(idx sql.Index) DoltIndex {
 
 func LexFloat(f float64) uint64 {
 	b := math.Float64bits(f)
-	if b >> 63 == 1 {
+	if b>>63 == 1 {
 		tmp := math.Float64bits(math.MaxFloat64)
 		b = tmp - b
 	}
@@ -230,7 +230,7 @@ func LexFloat(f float64) uint64 {
 }
 
 func UnLexFloat(b uint64) float64 {
-	if b >> 63 == 0 {
+	if b>>63 == 0 {
 		b = math.Float64bits(math.MaxFloat64) - b
 	}
 	b = b ^ (1 << 63) // flip the sign bit
@@ -247,7 +247,7 @@ func ZValue(p sql.Point) [16]byte {
 	res := [16]byte{}
 	for i := 0; i < 16; i++ {
 		for j := 0; j < 4; j++ {
-			x, y := byte((xLex&1) << 1), byte(yLex&1)
+			x, y := byte((xLex&1)<<1), byte(yLex&1)
 			res[15-i] |= (x | y) << (2 * j)
 			xLex, yLex = xLex>>1, yLex>>1
 		}
@@ -260,10 +260,10 @@ func UnZValue(z [16]byte) sql.Point {
 	for i := 15; i >= 0; i-- {
 		zv := uint64(z[i])
 		for j := 3; j >= 0; j-- {
-			y |= (zv & 1) << (63 - (4 * i + j))
+			y |= (zv & 1) << (63 - (4*i + j))
 			zv >>= 1
 
-			x |= (zv & 1) << (63 - (4 * i + j))
+			x |= (zv & 1) << (63 - (4*i + j))
 			zv >>= 1
 		}
 	}
@@ -272,8 +272,8 @@ func UnZValue(z [16]byte) sql.Point {
 	return sql.Point{X: xf, Y: yf}
 }
 
-func ZSort(points []sql.Point) []sql.Point{
-	sort.Slice(points, func (i,j int) bool {
+func ZSort(points []sql.Point) []sql.Point {
+	sort.Slice(points, func(i, j int) bool {
 		zi, zj := ZValue(points[i]), ZValue(points[j])
 		return bytes.Compare(zi[:], zj[:]) < 0
 	})
