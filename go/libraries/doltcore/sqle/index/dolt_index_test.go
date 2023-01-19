@@ -1532,27 +1532,27 @@ func TestSplitNullsFromRange(t *testing.T) {
 
 func TestLexFloat(t *testing.T) {
 	t.Run("test edge case lex float values", func(t *testing.T) {
-		assert.Equal(t, uint64(0x0000000000000000), index.LexFloat(-math.MaxFloat64))
-		assert.Equal(t, uint64(0x7feffffffffffffe), index.LexFloat(-math.SmallestNonzeroFloat64))
+		assert.Equal(t, uint64(0x0010000000000000), index.LexFloat(-math.MaxFloat64))
+		assert.Equal(t, uint64(0x7ffffffffffffffe), index.LexFloat(-math.SmallestNonzeroFloat64))
 		assert.Equal(t, uint64(0x8000000000000000), index.LexFloat(0.0))
 		assert.Equal(t, uint64(0x8000000000000001), index.LexFloat(math.SmallestNonzeroFloat64))
 		assert.Equal(t, uint64(0xffefffffffffffff), index.LexFloat(math.MaxFloat64))
 		assert.Equal(t, uint64(0xfff8000000000001), index.LexFloat(math.NaN()))
-		assert.Equal(t, uint64(0xfff7fffffffffffe), index.LexFloat(-math.NaN()))
+		assert.Equal(t, uint64(0x0007fffffffffffe), index.LexFloat(-math.NaN()))
 		assert.Equal(t, uint64(0xfff0000000000000), index.LexFloat(math.Inf(1)))
-		assert.Equal(t, uint64(0xffffffffffffffff), index.LexFloat(math.Inf(-1)))
+		assert.Equal(t, uint64(0x000fffffffffffff), index.LexFloat(math.Inf(-1)))
 	})
 
 	t.Run("test reverse lex float values", func(t *testing.T) {
-		assert.Equal(t, -math.MaxFloat64, index.UnLexFloat(0x0000000000000000))
-		assert.Equal(t, -math.SmallestNonzeroFloat64, index.UnLexFloat(0x7feffffffffffffe))
+		assert.Equal(t, -math.MaxFloat64, index.UnLexFloat(0x0010000000000000))
+		assert.Equal(t, -math.SmallestNonzeroFloat64, index.UnLexFloat(0x7ffffffffffffffe))
 		assert.Equal(t, 0.0, index.UnLexFloat(0x8000000000000000))
 		assert.Equal(t, math.SmallestNonzeroFloat64, index.UnLexFloat(0x8000000000000001))
 		assert.Equal(t, math.MaxFloat64, index.UnLexFloat(0xffefffffffffffff))
 		assert.True(t, math.IsNaN(index.UnLexFloat(0xfff8000000000001)))
 		assert.True(t, math.IsNaN(index.UnLexFloat(0xfff7fffffffffffe)))
 		assert.True(t, math.IsInf(index.UnLexFloat(0xfff0000000000000), 1))
-		assert.True(t, math.IsInf(index.UnLexFloat(0xffffffffffffffff), -1))
+		assert.True(t, math.IsInf(index.UnLexFloat(0x000fffffffffffff), -1))
 	})
 
 	t.Run("test sort lex float", func(t *testing.T) {
@@ -1587,22 +1587,22 @@ func TestLexFloat(t *testing.T) {
 func TestZValue(t *testing.T) {
 	t.Run("test z-values", func(t *testing.T) {
 		z := index.ZValue(types.Point{X: -5000, Y: -5000})
-		assert.Equal(t, "0fff0ff03f3fffffffffffffffffffff", hex.EncodeToString(z[:]))
+		assert.Equal(t, "0fff30f03f3fffffffffffffffffffff", hex.EncodeToString(z[:]))
 
 		z = index.ZValue(types.Point{X: -1, Y: -1})
-		assert.Equal(t, "0fffffffffffffffffffffffffffffff", hex.EncodeToString(z[:]))
+		assert.Equal(t, "300000ffffffffffffffffffffffffff", hex.EncodeToString(z[:]))
 
 		z = index.ZValue(types.Point{X: -1, Y: 0})
-		assert.Equal(t, "4aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", hex.EncodeToString(z[:]))
+		assert.Equal(t, "600000aaaaaaaaaaaaaaaaaaaaaaaaaa", hex.EncodeToString(z[:]))
 
 		z = index.ZValue(types.Point{X: -1, Y: 1})
-		assert.Equal(t, "4fffffaaaaaaaaaaaaaaaaaaaaaaaaaa", hex.EncodeToString(z[:]))
-
-		z = index.ZValue(types.Point{X: 1, Y: -1})
-		assert.Equal(t, "8fffff55555555555555555555555555", hex.EncodeToString(z[:]))
+		assert.Equal(t, "655555aaaaaaaaaaaaaaaaaaaaaaaaaa", hex.EncodeToString(z[:]))
 
 		z = index.ZValue(types.Point{X: 0, Y: -1})
-		assert.Equal(t, "85555555555555555555555555555555", hex.EncodeToString(z[:]))
+		assert.Equal(t, "90000055555555555555555555555555", hex.EncodeToString(z[:]))
+
+		z = index.ZValue(types.Point{X: 1, Y: -1})
+		assert.Equal(t, "9aaaaa55555555555555555555555555", hex.EncodeToString(z[:]))
 
 		z = index.ZValue(types.Point{X: 0, Y: 0})
 		assert.Equal(t, "c0000000000000000000000000000000", hex.EncodeToString(z[:]))
