@@ -55,10 +55,10 @@ func TestBinlogReplicationReconnection(t *testing.T) {
 	rows, err := replicaDatabase.Queryx("select min(pk) as min, max(pk) as max, count(pk) as count from db01.reconnect_test;")
 	require.NoError(t, err)
 
-	row := readNextRow(t, rows)
-	require.Equal(t, "0", toString(row["min"]))
-	require.Equal(t, "999", toString(row["max"]))
-	require.Equal(t, "1000", toString(row["count"]))
+	row := convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "0", row["min"])
+	require.Equal(t, "999", row["max"])
+	require.Equal(t, "1000", row["count"])
 
 	// Assert that show replica status show reconnection IO error
 	// TODO: Use real MySQL error codes and messages and time format :-/
