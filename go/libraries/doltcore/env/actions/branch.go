@@ -152,23 +152,12 @@ func DeleteBranchOnDB(ctx context.Context, dbdata env.DbData, config *env.DoltCl
 		trackedBranch, hasUpstream := trackedBranches[branch.GetPath()]
 		if hasUpstream {
 			remoteRef := trackedBranch.Merge.Ref
-			
-			remotes, err := dbdata.Rsr.GetRemotes()
-			if err != nil {
-				return err
-			}
-			remote, ok := remotes[remoteRef.GetPath()]
-			if !ok {
-				// TODO: skip error?
-				return fmt.Errorf("remote %s not found", remoteRef.GetPath())
-			}
-
-			remoteDb, err := pro.GetRemoteDB(ctx, dbdata.Ddb.ValueReadWriter().Format(), remote, false)
+			err = validateBranchMergedIntoUpstream(ctx, dbdata, branch, remoteRef, pro)
 			if err != nil {
 				return err
 			}
 		}
-		
+
 		ms, err := doltdb.NewCommitSpec(env.GetDefaultInitBranch(config))
 		if err != nil {
 			return err
@@ -211,6 +200,56 @@ func DeleteBranchOnDB(ctx context.Context, dbdata env.DbData, config *env.DoltCl
 	}
 
 	return ddb.DeleteBranch(ctx, dref)
+}
+
+// validateBranchMergedIntoUpstream returns an error if the branch provided is not fully merged into its upstream	
+func validateBranchMergedIntoUpstream(ctx context.Context, dbdata env.DbData, branch ref.DoltRef, remoteRef ref.DoltRef, pro env.RemoteDbProvider) error {
+	remotes, err := dbdata.Rsr.GetRemotes()
+	if err != nil {
+		return err
+	}
+	remote, ok := remotes[remoteRef.GetPath()]
+	if !ok {
+		// TODO: skip error?
+		return fmt.Errorf("remote %s not found", remoteRef.GetPath())
+	}
+
+	remoteDb, err := pro.GetRemoteDB(ctx, dbdata.Ddb.ValueReadWriter().Format(), remote, false)
+	if err != nil {
+		return err
+	}
+
+	cs, err := doltdb.NewCommitSpec(remoteRef.GetPath())
+	if err != nil {
+		return err
+	}
+
+	remoteBranchHead, err := remoteDb.Resolve(ctx, cs, nil)
+	if err != nil {
+		return err
+	}
+
+	cs, err = doltdb.NewCommitSpec(branch.GetPath())
+	if err != nil {
+		return err
+	}
+
+	localBranchHead, err := dbdata.Ddb.Resolve(ctx, cs, nil)
+	if err != nil {
+		return err
+	}
+
+	canFF, err := localBranchHead.CanFastForwardTo(ctx, remoteBranchHead)
+	if err != nil {
+		// TODO: no common ancestor is not an error
+		return err
+	}
+
+	if !canFF {
+		return ErrUnmergedBranchDelete
+	}
+	
+	return nil
 }
 
 func CreateBranchWithStartPt(ctx context.Context, dbData env.DbData, newBranch, startPt string, force bool) error {
