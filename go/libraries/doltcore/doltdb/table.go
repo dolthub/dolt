@@ -373,11 +373,16 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 	if t.Format() == types.Format_DOLT {
 		// the commit hash or working set hash of the right side during merge
 		colColl = colColl.Append(schema.NewColumn("from_root_ish", 0, types.StringKind, false))
+		colColl = colColl.Append(typeCol)
+		colColl = colColl.Append(sch.GetPKCols().GetColumns()...)
+		colColl = colColl.Append(sch.GetNonPKCols().GetColumns()...)
+		colColl = colColl.Append(infoCol)
+	} else {
+		colColl = colColl.Append(typeCol)
+		colColl = colColl.Append(sch.GetAllCols().GetColumns()...)
+		colColl = colColl.Append(infoCol)
 	}
 
-	colColl = colColl.Append(typeCol)
-	colColl = colColl.Append(sch.GetAllCols().GetColumns()...)
-	colColl = colColl.Append(infoCol)
 	return schema.SchemaFromCols(colColl)
 }
 
