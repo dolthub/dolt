@@ -199,7 +199,7 @@ func validateBranchMergedIntoCurrentWorkingBranch(ctx context.Context, dbdata en
 		return err
 	}
 
-	isMerged, _ := cwbHead.CanFastForwardTo(ctx, branchHead)
+	isMerged, _ := branchHead.CanFastForwardTo(ctx, cwbHead)
 	if err != nil {
 		if errors.Is(err, doltdb.ErrUpToDate) {
 			return nil
