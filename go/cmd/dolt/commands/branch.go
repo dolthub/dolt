@@ -315,7 +315,7 @@ func deleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPa
 		usage()
 		return 1
 	}
-	
+
 	for i := 0; i < apr.NArg(); i++ {
 		brName := apr.Arg(i)
 

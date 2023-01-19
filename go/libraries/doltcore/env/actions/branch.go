@@ -211,15 +211,15 @@ func validateBranchMergedIntoCurrentWorkingBranch(ctx context.Context, dbdata en
 		// TODO: no common ancestor is not an error
 		return err
 	}
-	
+
 	if !isMerged {
 		return fmt.Errorf(ErrUnmergedBranchDelete.Error(), branch.GetPath(), branch.GetPath())
 	}
-	
+
 	return nil
 }
 
-// validateBranchMergedIntoUpstream returns an error if the branch provided is not fully merged into its upstream	
+// validateBranchMergedIntoUpstream returns an error if the branch provided is not fully merged into its upstream
 func validateBranchMergedIntoUpstream(ctx context.Context, dbdata env.DbData, branch ref.DoltRef, remoteName string, pro env.RemoteDbProvider) error {
 	remotes, err := dbdata.Rsr.GetRemotes()
 	if err != nil {
@@ -266,7 +266,7 @@ func validateBranchMergedIntoUpstream(ctx context.Context, dbdata env.DbData, br
 	if !canFF {
 		return fmt.Errorf(ErrUnmergedBranchDelete.Error(), branch.GetPath(), branch.GetPath())
 	}
-	
+
 	return nil
 }
 
