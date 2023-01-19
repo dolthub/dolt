@@ -2703,3 +2703,194 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 }
+
+type systabScript struct {
+	name    string
+	setup   []string
+	queries []systabQuery
+}
+
+type systabQuery struct {
+	query string
+	exp   []sql.Row
+	skip  bool
+}
+
+var systabSetup = []string{
+	"create table xy (x int primary key, y varchar(20));",
+	"insert into xy values (0, 'row 0'), (1, 'row 1'), (2, 'row 2'), (3, 'row 3'), (4, 'row 4');",
+	"call dolt_add('.');",
+	"call dolt_commit('-m', 'commit 0');",
+	"update xy set y = y+1 where x < 10",
+	"insert into xy values (20, 'row 20'), (21, 'row 21'), (22, 'row 22'), (23, 'row 23'), (24, 'row 24');",
+	"call dolt_add('.');",
+	"call dolt_commit('-m', 'commit 1');",
+	"update xy set y = y+1 where x > 10 and x < 30",
+	"insert into xy values (40, 'row 40'), (41, 'row 41'), (42, 'row 42'), (43, 'row 43'), (44, 'row 44');",
+	"call dolt_add('.');",
+	"call dolt_commit('-m', 'commit 2');",
+	"update xy set y = y+1 where x > 30 and x < 50",
+	"insert into xy values (60, 'row 60'), (61, 'row 61'), (62, 'row 62'), (63, 'row 63'), (64, 'row 64');",
+	"call dolt_add('.');",
+	"call dolt_commit('-m', 'commit 3');",
+	"update xy set y = y+1 where x > 50 and x < 70",
+	"insert into xy values (80, 'row 80'), (81, 'row 81'), (82, 'row 82'), (83, 'row 83'), (84, 'row 84');",
+	"call dolt_add('.');",
+	"call dolt_commit('-m', 'commit 4');",
+}
+
+var SystemTableIndexTests = []systabScript{
+	{
+		name: "systab benchmarks",
+		setup: append(systabSetup,
+			"set @commit = (select commit_hash from dolt_log where message = 'commit 2');",
+		),
+		queries: []systabQuery{
+			{
+				query: "select from_x, to_x from dolt_diff_xy where to_commit = @commit;",
+				exp:   []sql.Row{{20, 20}, {21, 21}, {22, 22}, {23, 23}, {24, 24}, {nil, 40}, {nil, 41}, {nil, 42}, {nil, 43}, {nil, 44}},
+			},
+			{
+				query: "select from_x, to_x from dolt_diff_xy where from_commit = @commit;",
+				exp:   []sql.Row{{40, 40}, {41, 41}, {42, 42}, {43, 43}, {44, 44}, {nil, 60}, {nil, 61}, {nil, 62}, {nil, 63}, {nil, 64}},
+			},
+			{
+				query: "select count(*) from dolt_diff where commit_hash = @commit;",
+				exp:   []sql.Row{{1}},
+			},
+			{
+				query: "select count(*) from dolt_history_xy where commit_hash = @commit;",
+				exp:   []sql.Row{{15}},
+			},
+			{
+				query: "select count(*) from dolt_log where commit_hash = @commit;",
+				exp:   []sql.Row{{1}},
+			},
+			{
+				query: "select count(*) from dolt_commits where commit_hash = @commit;",
+				exp:   []sql.Row{{1}},
+			},
+			{
+				query: "select count(*) from dolt_commit_ancestors where commit_hash = @commit;",
+				exp:   []sql.Row{{1}},
+			},
+			{
+				query: "select count(*) from dolt_diff_xy join dolt_log on commit_hash = to_commit",
+				exp:   []sql.Row{{45}},
+			},
+			{
+				query: "select count(*) from dolt_diff_xy join dolt_log on commit_hash = from_commit",
+				exp:   []sql.Row{{45}},
+			},
+			{
+				query: "select count(*) from dolt_blame_xy",
+				exp:   []sql.Row{{25}},
+			},
+			{
+				query: `SELECT count(*)
+           FROM dolt_commits as cm
+           JOIN dolt_commit_ancestors as an
+           ON cm.commit_hash = an.parent_hash
+           ORDER BY cm.date, cm.message asc`,
+				exp: []sql.Row{{5}},
+			},
+		},
+	},
+	{
+		name: "commit indexing edge cases",
+		setup: append(systabSetup,
+			"call dolt_checkout('-b', 'feat');",
+			"call dolt_commit('--allow-empty', '-m', 'feat commit');",
+			"call dolt_checkout('main');",
+			"update xy set y = y+1 where x > 70 and x < 90;",
+			"set @commit = (select commit_hash from dolt_log where message = 'commit 1');",
+			"set @root_commit = (select commit_hash from dolt_log where message = 'Initialize data repository');",
+			"set @feat_head = hashof('feat');",
+		),
+		queries: []systabQuery{
+			{
+				query: "select from_x, to_x from dolt_diff_xy where to_commit = 'WORKING';",
+				exp:   []sql.Row{{80, 80}, {81, 81}, {82, 82}, {83, 83}, {84, 84}},
+			},
+			{
+				// TODO from_commit should find all commits that reference it
+				// as a parent
+				query: "select * from dolt_diff_xy where from_commit = 'WORKING';",
+				exp:   []sql.Row{},
+			},
+			{
+				query: "select count(*) from dolt_diff where commit_hash = 'WORKING';",
+				exp:   []sql.Row{{1}},
+			},
+			{
+				query: "select count(*) from dolt_history_xy where commit_hash = 'WORKING';",
+				exp:   []sql.Row{{0}},
+			},
+			{
+				query: "select count(*) from dolt_commit_ancestors where commit_hash = 'WORKING';",
+				exp:   []sql.Row{{0}},
+			},
+			{
+				query: "select sum(to_x) from dolt_diff_xy where to_commit in (@commit, 'WORKING');",
+				exp:   []sql.Row{{530.0}},
+			},
+			{
+				// TODO from_commit optimization
+				query: "select sum(to_x) from dolt_diff_xy where from_commit in (@commit, 'WORKING');",
+				exp:   []sql.Row{{320.0}},
+			},
+			{
+				query: "select count(*) from dolt_diff where commit_hash in (@commit, 'WORKING');",
+				exp:   []sql.Row{{2}},
+			},
+			{
+				query: "select sum(x) from dolt_history_xy where commit_hash in (@commit, 'WORKING');",
+				exp:   []sql.Row{{120.0}},
+			},
+			{
+				// init commit has nil ancestor
+				query: "select count(*) from dolt_commit_ancestors where commit_hash in (@commit, @root_commit);",
+				exp:   []sql.Row{{2}},
+			},
+			{
+				query: "select count(*) from dolt_log where commit_hash in (@commit, @root_commit);",
+				exp:   []sql.Row{{2}},
+			},
+			{
+				// log table cannot access commits is feature branch
+				query: "select count(*) from dolt_log where commit_hash = @feat_head;",
+				exp:   []sql.Row{{0}},
+			},
+			{
+				// commit table can access all commits
+				query: "select count(*) from dolt_commits where commit_hash = @feat_head;",
+				exp:   []sql.Row{{1}},
+			},
+			{
+				query: "select count(*) from dolt_commits where commit_hash in (@commit, @root_commit);",
+				exp:   []sql.Row{{2}},
+			},
+			// unknown
+			{
+				query: "select from_x, to_x from dolt_diff_xy where to_commit = 'unknown';",
+				exp:   []sql.Row{},
+			},
+			{
+				query: "select * from dolt_diff_xy where from_commit = 'unknown';",
+				exp:   []sql.Row{},
+			},
+			{
+				query: "select * from dolt_diff where commit_hash = 'unknown';",
+				exp:   []sql.Row{},
+			},
+			{
+				query: "select * from dolt_history_xy where commit_hash = 'unknown';",
+				exp:   []sql.Row{},
+			},
+			{
+				query: "select * from dolt_commit_ancestors where commit_hash = 'unknown';",
+				exp:   []sql.Row{},
+			},
+		},
+	},
+}

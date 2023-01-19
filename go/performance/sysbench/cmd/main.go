@@ -29,6 +29,7 @@ var run = flag.String("run", "", "the path to a test file")
 var scriptDir = flag.String("script-dir", "", "the path to the script directory")
 var config = flag.String("config", "", "the path to a config file")
 var out = flag.String("out", "", "result output path")
+var verbose = flag.Bool("verbose", true, "verbose output")
 
 func main() {
 	flag.Parse()
@@ -42,7 +43,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	conf = conf.WithScriptDir(*scriptDir)
+	conf = conf.WithScriptDir(*scriptDir).WithVerbose(*verbose)
 	if err := os.Chdir(*scriptDir); err != nil {
 		log.Fatalf("failed to 'cd %s'", *scriptDir)
 	}

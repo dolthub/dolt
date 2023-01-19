@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
+	"log"
 	"math"
 	"os"
 	"os/exec"
@@ -53,10 +54,16 @@ type Config struct {
 	TableSize int    `yaml:"tableSize"`
 	Histogram bool   `yaml:"histogram"`
 	ScriptDir string `yaml:"scriptDir"`
+	Verbose   bool   `yaml:"verbose"`
 }
 
 func (c Config) WithScriptDir(dir string) Config {
 	c.ScriptDir = dir
+	return c
+}
+
+func (c Config) WithVerbose(v bool) Config {
+	c.Verbose = v
 	return c
 }
 
@@ -491,7 +498,7 @@ func (test *Script) RunExternalServerTests(repoName string, s *driver.ExternalSe
 func (test *Script) RunSqlServerTests(repo driver.TestRepo, user driver.DoltUser, conf Config) error {
 	return test.IterSysbenchScripts(conf, test.Scripts, func(script string, prep, run, clean *exec.Cmd) error {
 		//make a new server for every test
-		server, err := newServer(user, repo)
+		server, err := newServer(user, repo, conf)
 		if err != nil {
 			return err
 		}
@@ -515,6 +522,7 @@ func (test *Script) RunSqlServerTests(repo driver.TestRepo, user driver.DoltUser
 		run.Stdout = buf
 		err = run.Run()
 		if err != nil {
+			fmt.Println(buf)
 			return err
 		}
 
@@ -527,11 +535,14 @@ func (test *Script) RunSqlServerTests(repo driver.TestRepo, user driver.DoltUser
 		}
 		test.Results.Append(r)
 
+		if conf.Verbose {
+			return nil
+		}
 		return clean.Run()
 	})
 }
 
-func newServer(u driver.DoltUser, r driver.TestRepo) (*driver.SqlServer, error) {
+func newServer(u driver.DoltUser, r driver.TestRepo, conf Config) (*driver.SqlServer, error) {
 	rs, err := u.MakeRepoStore()
 	if err != nil {
 		return nil, err
@@ -541,6 +552,10 @@ func newServer(u driver.DoltUser, r driver.TestRepo) (*driver.SqlServer, error) 
 	if err != nil {
 		return nil, err
 	}
+	if conf.Verbose {
+		log.Printf("database at: '%s'", repo.Dir)
+	}
+
 	r.Server.Args = append(r.Server.Args, "")
 	server, err := MakeServer(repo, r.Server)
 	if err != nil {

@@ -1255,17 +1255,6 @@ func TestSelect(t *testing.T) {
 	}
 }
 
-func TestDiffQueries(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip("") // todo: convert to enginetests
-	}
-	for _, test := range SelectDiffTests {
-		t.Run(test.Name, func(t *testing.T) {
-			testSelectDiffQuery(t, test)
-		})
-	}
-}
-
 func TestAsOfQueries(t *testing.T) {
 	if types.Format_Default != types.Format_LD_1 {
 		t.Skip("") // todo: convert to enginetests
