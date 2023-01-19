@@ -20,6 +20,8 @@ import (
 	"sort"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
+
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -240,7 +242,7 @@ func UnLexFloat(b uint64) float64 {
 	return math.Float64frombits(b)
 }
 
-func ZValue(p sql.Point) [16]byte {
+func ZValue(p sqltypes.Point) [16]byte {
 	xLex := LexFloat(p.X)
 	yLex := LexFloat(p.Y)
 
@@ -255,7 +257,7 @@ func ZValue(p sql.Point) [16]byte {
 	return res
 }
 
-func UnZValue(z [16]byte) sql.Point {
+func UnZValue(z [16]byte) sqltypes.Point {
 	var x, y uint64
 	for i := 15; i >= 0; i-- {
 		zv := uint64(z[i])
@@ -269,10 +271,10 @@ func UnZValue(z [16]byte) sql.Point {
 	}
 	xf := UnLexFloat(x)
 	yf := UnLexFloat(y)
-	return sql.Point{X: xf, Y: yf}
+	return sqltypes.Point{X: xf, Y: yf}
 }
 
-func ZSort(points []sql.Point) []sql.Point {
+func ZSort(points []sqltypes.Point) []sqltypes.Point {
 	sort.Slice(points, func(i, j int) bool {
 		zi, zj := ZValue(points[i]), ZValue(points[j])
 		return bytes.Compare(zi[:], zj[:]) < 0
