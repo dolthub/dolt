@@ -261,7 +261,7 @@ func moveBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 	force := apr.Contains(forceFlag)
 	src := apr.Arg(0)
 	dest := apr.Arg(1)
-	err := actions.RenameBranch(ctx, dEnv.DbData(), dEnv.Config, src, apr.Arg(1), force)
+	err := actions.RenameBranch(ctx, dEnv.DbData(), dEnv.Config, src, apr.Arg(1), dEnv, force)
 
 	var verr errhand.VerboseError
 	if err != nil {
