@@ -3050,6 +3050,49 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "verify-constraints: Regression test for bad compound primary key reuse as foreign key index - no error",
+		SetUpScript: []string{
+			"create table parent (col1 int not null, col2 float not null, primary key (col1, col2));",
+			"create table child (col1 int not null, col2 float not null, col3 int not null, col4 float not null, col5 int not null, col6 float not null, primary key (col1, col2, col3, col4, col5, col6), foreign key (col1, col2) references parent (col1, col2));",
+			"set foreign_key_checks = 0;",
+			"insert into parent values (1, 2.5), (7, 8.5);",
+			"insert into child values (1, 2.5, 3, 4.5, 5, 6.5), (7, 8.5, 9, 10.5, 11, 12.5);",
+			"set foreign_key_checks = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call DOLT_VERIFY_CONSTRAINTS('--all');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "verify-constraints: Regression test for bad compound primary key reuse as foreign key index - error",
+		SetUpScript: []string{
+			"create table parent (col1 int not null, col2 float not null, primary key (col1, col2));",
+			"create table child (col1 int not null, col2 float not null, col3 int not null, col4 float not null, col5 int not null, col6 float not null, primary key (col1, col2, col3, col4, col5, col6), foreign key (col1, col2) references parent (col1, col2));",
+			"set foreign_key_checks = 0;",
+			"insert into parent values (1, 2.5);",
+			"insert into child values (1, 2.5, 3, 4.5, 5, 6.5), (7, 8.5, 9, 10.5, 11, 12.5);",
+			"set foreign_key_checks = 1;",
+			"set dolt_force_transaction_commit = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call DOLT_VERIFY_CONSTRAINTS('--all');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"child", uint64(1)}},
+			},
+		},
+	},
 }
 
 var errTmplNoAutomaticMerge = "table %s can't be automatically merged.\nTo merge this table, make the schema on the source and target branch equal."

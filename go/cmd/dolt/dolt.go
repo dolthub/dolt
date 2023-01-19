@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	Version = "0.52.5"
+	Version = "0.52.6"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -254,7 +254,7 @@ func runMain() int {
 			case stdOutFlag, stdErrFlag, stdOutAndErrFlag:
 				filename := args[1]
 
-				f, err := os.OpenFile(filename, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, os.ModePerm)
+				f, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, os.ModePerm)
 				if err != nil {
 					cli.PrintErrln("Failed to open", filename, "for writing:", err.Error())
 					return 1
