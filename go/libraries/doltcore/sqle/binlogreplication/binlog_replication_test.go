@@ -217,6 +217,287 @@ func TestDoltCommits(t *testing.T) {
 	require.Equal(t, "t1", row["table_name"])
 }
 
+type typeDescription struct {
+	//Name         string
+	TypeDefinition string
+	DefaultValue   interface{}
+	MinValue       interface{}
+	MinGoValue     interface{} // Optional
+	MaxValue       interface{}
+	MaxGoValue     interface{} // Optional
+}
+
+func (td *typeDescription) ColumnName() string {
+	name := "_" + strings.ReplaceAll(td.TypeDefinition, "(", "_")
+	name = strings.ReplaceAll(name, ")", "_")
+	name = strings.ReplaceAll(name, " ", "_")
+	return name
+}
+
+var allTypes = []typeDescription{
+	{
+		TypeDefinition: "bit",
+		DefaultValue:   0,
+		MinValue:       0,
+		MinGoValue:     []uint8{0},
+		MaxValue:       1,
+	},
+	{
+		TypeDefinition: "bit(64)",
+		DefaultValue:   0,
+		MinValue:       "0",
+		MinGoValue:     []byte{0, 0, 0, 0, 0, 0, 0, 0},
+		MaxValue:       "1",
+		MaxGoValue:     []byte{0, 0, 0, 0, 0, 0, 0, 1},
+	},
+	{
+		TypeDefinition: "tinyint",
+		DefaultValue:   0,
+		MinValue:       "-128",
+		MaxValue:       "127",
+	},
+	{
+		TypeDefinition: "tinyint unsigned",
+		DefaultValue:   0,
+		MinValue:       "0",
+		MaxValue:       "255",
+	},
+	{
+		TypeDefinition: "bool",
+		DefaultValue:   0,
+		MinValue:       "0",
+		MaxValue:       "1",
+	},
+	{
+		TypeDefinition: "smallint",
+		DefaultValue:   0,
+		MinValue:       "-32768",
+		MaxValue:       "32767",
+	},
+	{
+		TypeDefinition: "smallint unsigned",
+		DefaultValue:   0,
+		MinValue:       "0",
+		MaxValue:       "65535",
+	},
+	/*
+		    From: https://www.w3resource.com/mysql/mysql-data-types.php
+
+			Type	Length
+			in Bytes	Minimum Value
+			(Signed)	Maximum Value
+			(Signed)	Minimum Value
+			(Unsigned)	Maximum Value
+			(Unsigned)
+			FLOAT	4	-3.402823466E+38	 -1.175494351E-38	 1.175494351E-38 	3.402823466E+38
+			DOUBLE	8	-1.7976931348623
+			157E+ 308	-2.22507385850720
+			14E- 308	0, and
+			2.22507385850720
+			14E- 308 	1.797693134862315
+			7E+ 308
+	*/
+	{
+		TypeDefinition: "float",
+		DefaultValue:   0,
+		MinValue:       "-0.1234", // Placeholder
+		MaxValue:       "0.1234",  // Placeholder
+	},
+	{
+		TypeDefinition: "float unsigned",
+		DefaultValue:   0,
+		MinValue:       "0",          // Placeholder
+		MaxValue:       "0.12345678", // Placeholder
+	},
+	{
+		TypeDefinition: "double",
+		DefaultValue:   0,
+		MinValue:       "-0.12345678", // Placeholder
+		MaxValue:       "0.12345678",  // Placeholder
+	},
+	{
+		TypeDefinition: "double unsigned",
+		DefaultValue:   0,
+		MinValue:       "0",          // Placeholder
+		MaxValue:       "0.12345678", // Placeholder
+	},
+	{
+		TypeDefinition: "date",
+		DefaultValue:   0,
+		MinValue:       "DATE('1981-02-16')",
+		MinGoValue:     "1981-02-16",
+		MaxValue:       "DATE('1981-02-16')",
+		MaxGoValue:     "1981-02-16",
+	},
+	// ------------------------
+	//{
+	//	TypeDefinition: "??",
+	//	DefaultValue:   0,
+	//	MinValue:       -100,
+	//	MaxValue:       100,
+	//},
+	//{
+	//	TypeDefinition: "??",
+	//	DefaultValue:   0,
+	//	MinValue:       -100,
+	//	MaxValue:       100,
+	//},
+	//{
+	//	TypeDefinition: "??",
+	//	DefaultValue:   0,
+	//	MinValue:       -100,
+	//	MaxValue:       100,
+	//},
+	//{
+	//	TypeDefinition: "??",
+	//	DefaultValue:   0,
+	//	MinValue:       -100,
+	//	MaxValue:       100,
+	//},
+	//{
+	//	TypeDefinition: "??",
+	//	DefaultValue:   0,
+	//	MinValue:       -100,
+	//	MaxValue:       100,
+	//},
+	//{
+	//	TypeDefinition: "??",
+	//	DefaultValue:   0,
+	//	MinValue:       -100,
+	//	MaxValue:       100,
+	//},
+}
+
+// TODO: Break this test out into it's own file since it's going to get large
+
+func generateCreateTableStatement(tableName string) string {
+	sb := strings.Builder{}
+	sb.WriteString("create table " + tableName)
+	sb.WriteString("(pk int primary key auto_increment")
+	for _, typeDesc := range allTypes {
+		sb.WriteString(fmt.Sprintf(", %s %s",
+			typeDesc.ColumnName(), typeDesc.TypeDefinition))
+	}
+	sb.WriteString(");")
+	return sb.String()
+}
+
+func generateInsertMaxValuesStatement(tableName string) string {
+	sb := strings.Builder{}
+	sb.WriteString("insert into " + tableName)
+	sb.WriteString(" values (DEFAULT")
+	for _, typeDesc := range allTypes {
+		sb.WriteString(", " + fmt.Sprintf("%v", typeDesc.MaxValue))
+	}
+	sb.WriteString(");")
+
+	fmt.Printf("InsertMaxValuesStatement: %s\n", sb.String())
+	return sb.String()
+}
+
+func generateInsertMinValuesStatement(tableName string) string {
+	sb := strings.Builder{}
+	sb.WriteString("insert into " + tableName)
+	sb.WriteString(" values (DEFAULT")
+	for _, typeDesc := range allTypes {
+		// TODO: Handle types (e.g. quote strings)
+		sb.WriteString(", " + fmt.Sprintf("%v", typeDesc.MinValue))
+	}
+	sb.WriteString(");")
+
+	fmt.Printf("InsertMinValuesStatement: %s\n", sb.String())
+	return sb.String()
+}
+
+func generateInsertNullValuesStatement(tableName string) string {
+	sb := strings.Builder{}
+	sb.WriteString("insert into " + tableName)
+	sb.WriteString(" values (DEFAULT")
+	for range allTypes {
+		sb.WriteString(", null")
+	}
+	sb.WriteString(");")
+
+	fmt.Printf("InsertNullValuesStatement: %s\n", sb.String())
+	return sb.String()
+}
+
+func generateUpdateToNullValuesStatement(tableName string, pk int) string {
+	sb := strings.Builder{}
+	sb.WriteString("update " + tableName + " set ")
+	for i, typeDesc := range allTypes {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(fmt.Sprintf("%s=NULL", typeDesc.ColumnName()))
+	}
+	sb.WriteString(fmt.Sprintf(" where pk=%d;", pk))
+
+	fmt.Printf("generateUpdateToNullValuesStatement: %s\n", sb.String())
+	return sb.String()
+}
+
+func generateUpdateToMaxValuesStatement(tableName string, pk int) string {
+	sb := strings.Builder{}
+	sb.WriteString("update " + tableName + " set ")
+	for i, typeDesc := range allTypes {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(fmt.Sprintf("%s=%v",
+			typeDesc.ColumnName(), typeDesc.MaxValue))
+	}
+	sb.WriteString(fmt.Sprintf(" where pk=%d;", pk))
+
+	fmt.Printf("generateUpdateToMaxValuesStatement: %s\n", sb.String())
+	return sb.String()
+}
+
+func generateUpdateToMinValuesStatement(tableName string, pk int) string {
+	sb := strings.Builder{}
+	sb.WriteString("update " + tableName + " set ")
+	for i, typeDesc := range allTypes {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(fmt.Sprintf("%s=%v",
+			typeDesc.ColumnName(), typeDesc.MinValue))
+	}
+	sb.WriteString(fmt.Sprintf(" where pk=%d;", pk))
+
+	fmt.Printf("generateUpdateToMinValuesStatement: %s\n", sb.String())
+	return sb.String()
+}
+
+func assertMinValues(t *testing.T, row map[string]interface{}) {
+	for _, typeDesc := range allTypes {
+		expectedValue := typeDesc.MinValue
+		if typeDesc.MinGoValue != nil {
+			expectedValue = typeDesc.MinGoValue
+		}
+		require.EqualValues(t, expectedValue, row[typeDesc.ColumnName()],
+			"Failed on min value for for column %q", typeDesc.ColumnName())
+	}
+}
+
+func assertMaxValues(t *testing.T, row map[string]interface{}) {
+	for _, typeDesc := range allTypes {
+		expectedValue := typeDesc.MaxValue
+		if typeDesc.MaxGoValue != nil {
+			expectedValue = typeDesc.MaxGoValue
+		}
+		require.EqualValues(t, expectedValue, row[typeDesc.ColumnName()],
+			"Failed on max value for for column %q", typeDesc.ColumnName())
+	}
+}
+
+func assertNullValues(t *testing.T, row map[string]interface{}) {
+	for _, typeDesc := range allTypes {
+		require.Nil(t, row[typeDesc.ColumnName()],
+			"Failed on NULL value for for column %q", typeDesc.ColumnName())
+	}
+}
+
 // TestBinlogReplicationForAllTypes tests that operations (inserts, updates, and deletes) on all SQL
 // data types can be successfully replicated.
 // TODO: This doesn't cover all types; look into generating this data (types, min/max values, etc)
@@ -225,74 +506,60 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	startReplication(t, mySqlPort)
 	defer teardown(t)
 
-	// Test inserts on the primary – min, max, and null values
-	primaryDatabase.MustExec("create table alltypes(pk int primary key auto_increment, n_bit bit, n_bit_64 bit(64), n_tinyint tinyint, n_utinyint tinyint unsigned, n_bool bool, n_smallint smallint, n_usmallint smallint unsigned, n_float float, n_double double, n_ufloat float unsigned, n_udouble double unsigned, d_date date);")
-	primaryDatabase.MustExec("insert into alltypes value (DEFAULT, 0, 1, -128, 0, 0, 0 ,0, -0.1234, -0.12345678, 0.0, 0.0, DATE('1981-02-16'));")
-	primaryDatabase.MustExec("insert into alltypes value (DEFAULT, 0, 1, 127, 255, 0, 0 ,0, 0.0, 0.0, 0.1234, 0.12345678, DATE('1981-02-16'));")
-	primaryDatabase.MustExec("insert into alltypes value (DEFAULT, null, null, null, null, null, null, null, null, null, null, null, null);")
+	tableName := "alltypes"
+	createTableStatement := generateCreateTableStatement(tableName)
+	primaryDatabase.MustExec(createTableStatement)
 
-	// Verify on replica
-	time.Sleep(1 * time.Second) // TODO: Could get rid of this manually maintained lag by using toxiproxy
-	rows, err := replicaDatabase.Queryx("select * from alltypes;")
+	// Make inserts on the primary – min, max, and null values
+	primaryDatabase.MustExec(generateInsertMinValuesStatement(tableName))
+	primaryDatabase.MustExec(generateInsertMaxValuesStatement(tableName))
+	primaryDatabase.MustExec(generateInsertNullValuesStatement(tableName))
+
+	// Verify inserts on replica
+	time.Sleep(100 * time.Millisecond)
+	rows, err := replicaDatabase.Queryx("select * from alltypes order by pk asc;")
 	require.NoError(t, err)
-
-	// Test min values
-	row := readNextRow(t, rows)
-	require.Equal(t, "1", string(row["pk"].([]byte)))
-	// MapScan doesn't honor the correct type – it converts everything to a []byte string :-/
-	// https://github.com/jmoiron/sqlx/issues/225
-	require.EqualValues(t, []byte{0}, row["n_bit"])
-	require.EqualValues(t, []byte{0, 0, 0, 0, 0, 0, 0, 1}, row["n_bit_64"])
-	require.EqualValues(t, "-0.1234", string(row["n_float"].([]byte)))
-	require.EqualValues(t, "-0.12345678", string(row["n_double"].([]byte)))
-	require.EqualValues(t, "0", string(row["n_ufloat"].([]byte)))
-	require.EqualValues(t, "0", string(row["n_udouble"].([]byte)))
-	require.EqualValues(t, "0", string(row["n_usmallint"].([]byte)))
-	require.EqualValues(t, "1981-02-16", string(row["d_date"].([]byte)))
-
-	// Test max values
-	row = readNextRow(t, rows)
-	require.Equal(t, "2", string(row["pk"].([]byte)))
-	require.Equal(t, "127", string(row["n_tinyint"].([]byte)))
-	require.EqualValues(t, "0", string(row["n_float"].([]byte)))
-	require.EqualValues(t, "0", string(row["n_double"].([]byte)))
-	require.EqualValues(t, "0.1234", string(row["n_ufloat"].([]byte)))
-	require.EqualValues(t, "0.12345678", string(row["n_udouble"].([]byte)))
-	require.EqualValues(t, "255", string(row["n_utinyint"].([]byte)))
-
-	// Test null values
-	row = readNextRow(t, rows)
-	require.Equal(t, "3", toString(row["pk"]))
-	require.Equal(t, nil, row["n_bit"])
-	require.Equal(t, nil, row["n_tinyint"])
-	require.EqualValues(t, nil, row["n_usmallint"])
-	require.Equal(t, nil, row["d_date"])
-
+	row := convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "1", row["pk"])
+	assertMinValues(t, row)
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "2", row["pk"])
+	assertMaxValues(t, row)
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "3", row["pk"])
+	assertNullValues(t, row)
 	require.False(t, rows.Next())
 
-	// Test updates
-	primaryDatabase.MustExec("update alltypes set n_bit=0x01, n_float=123.4, n_tinyint=42 where pk=2;")
-	primaryDatabase.MustExec("update alltypes set n_bit=NULL, n_float=NULL, n_tinyint=NULL where pk=1;")
+	// Make updates on the primary
+	primaryDatabase.MustExec(generateUpdateToNullValuesStatement(tableName, 1))
+	primaryDatabase.MustExec(generateUpdateToMinValuesStatement(tableName, 2))
+	primaryDatabase.MustExec(generateUpdateToMaxValuesStatement(tableName, 3))
 
-	time.Sleep(1 * time.Second)
-	rows, err = replicaDatabase.Queryx("select * from alltypes order by pk;")
+	// Verify updates on the replica
+	time.Sleep(100 * time.Millisecond)
+	rows, err = replicaDatabase.Queryx("select * from alltypes order by pk asc;")
 	require.NoError(t, err)
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "1", row["pk"])
+	assertNullValues(t, row)
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "2", row["pk"])
+	assertMinValues(t, row)
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "3", row["pk"])
+	assertMaxValues(t, row)
+	require.False(t, rows.Next())
 
-	row = readNextRow(t, rows)
-	require.Equal(t, "1", toString(row["pk"]))
-	require.Nil(t, row["n_bit"])
-	require.Nil(t, row["n_float"])
-	require.Nil(t, row["n_tinyint"])
+	// Make deletes on the primary
+	primaryDatabase.MustExec("delete from alltypes where pk=1;")
+	primaryDatabase.MustExec("delete from alltypes where pk=2;")
+	primaryDatabase.MustExec("delete from alltypes where pk=3;")
 
-	row = readNextRow(t, rows)
-	require.Equal(t, "2", toString(row["pk"]))
-	require.EqualValues(t, []byte{1}, row["n_bit"])
-	require.EqualValues(t, "123.4", string(row["n_float"].([]byte)))
-	require.EqualValues(t, "42", string(row["n_tinyint"].([]byte)))
-
-	// Test deletes
-	// TODO: Run deletes on primary
-	// TODO: Verify on the replica
+	// Verify deletes on the replica
+	time.Sleep(100 * time.Millisecond)
+	rows, err = replicaDatabase.Queryx("select * from alltypes order by pk asc;")
+	require.NoError(t, err)
+	require.False(t, rows.Next())
 }
 
 func toString(value interface{}) string {
