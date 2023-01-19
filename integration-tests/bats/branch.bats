@@ -52,14 +52,22 @@ teardown() {
     mkdir -p remotes/origin
     dolt remote add origin file://./remotes/origin
     dolt branch b1
+    dolt branch b2
+    dolt branch b3
+    
     dolt push --set-upstream origin b1
+    dolt push --set-upstream origin b2
+    dolt push --set-upstream origin b3
 
     dolt checkout b1
     dolt sql -q "create table test (id int primary key);"
     dolt commit -Am "new table"
 
     dolt checkout main
-    dolt branch -d b1
+    run dolt branch -d b1
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "branch 'b1' is not fully merged" ]] || false
+    [[ "$output" =~ "run 'dolt branch -D b1'" ]] || false
 }
 
 @test "branch: deleting an unmerged branch with no remote" {
