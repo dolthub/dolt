@@ -146,7 +146,7 @@ func doDoltBackup(ctx *sql.Context, args []string) (int, error) {
 		return statusErr, fmt.Errorf("unrecognized dolt_backup parameter: %s", apr.Arg(0))
 	}
 
-	destDb, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb, b, true)
+	destDb, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), b, true)
 	if err != nil {
 		return statusErr, fmt.Errorf("error loading backup destination: %w", err)
 	}

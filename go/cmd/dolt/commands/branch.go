@@ -322,7 +322,7 @@ func deleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPa
 		err := actions.DeleteBranch(ctx, dEnv.DbData(), dEnv.Config, brName, actions.DeleteOptions{
 			Force:  force,
 			Remote: apr.Contains(remoteFlag),
-		})
+		}, dEnv)
 
 		if err != nil {
 			var verr errhand.VerboseError

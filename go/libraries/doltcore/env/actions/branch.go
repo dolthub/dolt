@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -33,7 +32,7 @@ var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
 var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into its parent; use `-f` to force")
 var ErrWorkingSetsOnBothBranches = errors.New("checkout would overwrite uncommitted changes on target branch")
 
-func RenameBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliConfig, oldBranch, newBranch string, force bool) error {
+func RenameBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliConfig, oldBranch, newBranch string, remoteDbPro env.RemoteDbProvider, force bool) error {
 	oldRef := ref.NewBranchRef(oldBranch)
 	newRef := ref.NewBranchRef(newBranch)
 
@@ -68,7 +67,7 @@ func RenameBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliCon
 		}
 	}
 
-	return DeleteBranch(ctx, dbData, config, oldBranch, DeleteOptions{Force: true})
+	return DeleteBranch(ctx, dbData, config, oldBranch, DeleteOptions{Force: true}, remoteDbPro)
 }
 
 func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
@@ -114,7 +113,7 @@ type DeleteOptions struct {
 	Remote bool
 }
 
-func DeleteBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliConfig, brName string, opts DeleteOptions) error {
+func DeleteBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliConfig, brName string, opts DeleteOptions, remoteDbPro env.RemoteDbProvider) error {
 	var dref ref.DoltRef
 	if opts.Remote {
 		var err error
@@ -129,10 +128,10 @@ func DeleteBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliCon
 		}
 	}
 
-	return DeleteBranchOnDB(ctx, dbData, config, dref, opts)
+	return DeleteBranchOnDB(ctx, dbData, config, dref, opts, remoteDbPro)
 }
 
-func DeleteBranchOnDB(ctx context.Context, dbdata env.DbData, config *env.DoltCliConfig, dref ref.DoltRef, opts DeleteOptions) error {
+func DeleteBranchOnDB(ctx context.Context, dbdata env.DbData, config *env.DoltCliConfig, dref ref.DoltRef, opts DeleteOptions, pro env.RemoteDbProvider) error {
 	ddb := dbdata.Ddb
 	hasRef, err := ddb.HasRef(ctx, dref)
 
@@ -164,8 +163,10 @@ func DeleteBranchOnDB(ctx context.Context, dbdata env.DbData, config *env.DoltCl
 				return fmt.Errorf("remote %s not found", remoteRef.GetPath())
 			}
 
-			sess := dsess.DSessFromSess(ctx.Session)
-			remoteDB, err := remote.GetRemoteDB(ctx, config)
+			remoteDb, err := pro.GetRemoteDB(ctx, dbdata.Ddb.ValueReadWriter().Format(), remote, false)
+			if err != nil {
+				return err
+			}
 		}
 		
 		ms, err := doltdb.NewCommitSpec(env.GetDefaultInitBranch(config))
