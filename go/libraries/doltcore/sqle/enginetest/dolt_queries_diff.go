@@ -2893,4 +2893,16 @@ var SystemTableIndexTests = []systabScript{
 			},
 		},
 	},
+	{
+		name: "empty log table",
+		setup: []string{
+			"create table xy (x int primary key, y int)",
+		},
+		queries: []systabQuery{
+			{
+				query: "select count(*) from dolt_log as dc join dolt_commit_ancestors as dca on dc.commit_hash = dca.commit_hash;",
+				exp:   []sql.Row{{1}},
+			},
+		},
+	},
 }
