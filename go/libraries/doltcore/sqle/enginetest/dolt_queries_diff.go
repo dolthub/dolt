@@ -2786,6 +2786,20 @@ var SystemTableIndexTests = []systabScript{
 				query: "select count(*) from dolt_blame_xy",
 				exp:   []sql.Row{{25}},
 			},
+			{
+				query: `SELECT an.parent_index,cm.message
+           FROM dolt_commits as cm
+           JOIN dolt_commit_ancestors as an
+           ON cm.commit_hash = an.parent_hash
+           ORDER BY cm.date`,
+				exp: []sql.Row{
+					{0, "Initialize data repository"},
+					{0, "commit 0"},
+					{0, "commit 1"},
+					{0, "commit 2"},
+					{0, "commit 3"},
+				},
+			},
 		},
 	},
 	{

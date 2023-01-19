@@ -1083,6 +1083,9 @@ func LookupToPointSelectStr(lookup sql.IndexLookup) ([]string, bool) {
 		if !ok {
 			return nil, false
 		}
+		if lb.Key == nil {
+			continue
+		}
 		lk, ok := lb.Key.(string)
 		if !ok {
 			return nil, false
@@ -1090,6 +1093,9 @@ func LookupToPointSelectStr(lookup sql.IndexLookup) ([]string, bool) {
 		ub, ok := r[0].UpperBound.(sql.Above)
 		if !ok {
 			return nil, false
+		}
+		if ub.Key == nil {
+			continue
 		}
 		uk, ok := ub.Key.(string)
 		if uk != lk {
