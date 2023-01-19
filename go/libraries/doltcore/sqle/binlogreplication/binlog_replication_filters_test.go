@@ -32,6 +32,12 @@ func TestBinlogReplicationFilters_ignoreTablesOnly(t *testing.T) {
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_IGNORE_TABLE=(db01.t1);")
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_IGNORE_TABLE=(db01.t2);")
 
+	// Assert that status shows replication filters
+	status := convertByteArraysToStrings(showReplicaStatus(t))
+	require.Equal(t, "db01.t2", status["Replicate_Ignore_Table"])
+	require.Equal(t, "", status["Replicate_Do_Table"])
+
+	// Make changes on the primary
 	primaryDatabase.MustExec("CREATE TABLE db01.t1 (pk INT PRIMARY KEY);")
 	primaryDatabase.MustExec("CREATE TABLE db01.t2 (pk INT PRIMARY KEY);")
 	for i := 1; i < 12; i++ {
@@ -73,6 +79,12 @@ func TestBinlogReplicationFilters_doTablesOnly(t *testing.T) {
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(db01.t2);")
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(db01.t1);")
 
+	// Assert that status shows replication filters
+	status := convertByteArraysToStrings(showReplicaStatus(t))
+	require.Equal(t, "db01.t1", status["Replicate_Do_Table"])
+	require.Equal(t, "", status["Replicate_Ignore_Table"])
+
+	// Make changes on the primary
 	primaryDatabase.MustExec("CREATE TABLE db01.t1 (pk INT PRIMARY KEY);")
 	primaryDatabase.MustExec("CREATE TABLE db01.t2 (pk INT PRIMARY KEY);")
 	for i := 1; i < 12; i++ {
@@ -115,6 +127,12 @@ func TestBinlogReplicationFilters_doTablesAndIgnoreTables(t *testing.T) {
 	// Ignore replication events for db01.t2
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_IGNORE_TABLE=(db01.t2);")
 
+	// Assert that replica status shows replication filters
+	status := convertByteArraysToStrings(showReplicaStatus(t))
+	require.Equal(t, "db01.t1,db01.t2", status["Replicate_Do_Table"])
+	require.Equal(t, "db01.t2", status["Replicate_Ignore_Table"])
+
+	// Make changes on the primary
 	primaryDatabase.MustExec("CREATE TABLE db01.t1 (pk INT PRIMARY KEY);")
 	primaryDatabase.MustExec("CREATE TABLE db01.t2 (pk INT PRIMARY KEY);")
 	for i := 1; i < 12; i++ {

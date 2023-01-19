@@ -387,7 +387,30 @@ func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlo
 	copy.ConnectRetry = replicaSourceInfo.ConnectRetryInterval
 	copy.SourceRetryCount = replicaSourceInfo.ConnectRetryCount
 
+	if d.filters != nil {
+		copy.ReplicateDoTables = convertFilterMapToStringSlice(d.filters.doTables)
+		copy.ReplicateIgnoreTables = convertFilterMapToStringSlice(d.filters.ignoreTables)
+	}
+
 	return &copy, nil
+}
+
+// convertFilterMapToStringSlice converts the specified |filterMap| into a string slice, by iterating over every
+// key in the top level map, which stores a database name, and for each of those keys, iterating over every key
+// in the inner map, which stores a table name. Each table name is qualified with the matching database name and the
+// results are returned as a slice of qualified table names.
+func convertFilterMapToStringSlice(filterMap map[string]map[string]struct{}) []string {
+	if filterMap == nil {
+		return nil
+	}
+
+	tableNames := make([]string, 0, len(filterMap))
+	for dbName, tableMap := range filterMap {
+		for tableName, _ := range tableMap {
+			tableNames = append(tableNames, fmt.Sprintf("%s.%s", dbName, tableName))
+		}
+	}
+	return tableNames
 }
 
 // ResetReplica implements the BinlogReplicaController interface

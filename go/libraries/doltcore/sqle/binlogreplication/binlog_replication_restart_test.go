@@ -51,8 +51,7 @@ func TestBinlogReplicationServerRestart(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check replication status on the replica and assert configuration is still present
-	status := showReplicaStatus(t)
-	convertByteArraysToStrings(status)
+	status := convertByteArraysToStrings(showReplicaStatus(t))
 	// The default Connect_Retry interval is 60s; but some tests configure a faster connection retry interval
 	require.True(t, status["Connect_Retry"] == "5" || status["Connect_Retry"] == "60")
 	require.Equal(t, "86400", status["Source_Retry_Count"])

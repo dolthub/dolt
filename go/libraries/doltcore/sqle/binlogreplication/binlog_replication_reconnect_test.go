@@ -63,8 +63,7 @@ func TestBinlogReplicationReconnection(t *testing.T) {
 	// Assert that show replica status show reconnection IO error
 	// TODO: Use real MySQL error codes and messages and time format :-/
 	// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html
-	status := showReplicaStatus(t)
-	convertByteArraysToStrings(status)
+	status := convertByteArraysToStrings(showReplicaStatus(t))
 	require.Equal(t, "0", status["Last_Errno"])
 	require.Equal(t, "", status["Last_Error"])
 	require.Equal(t, "1158", status["Last_IO_Errno"])
@@ -108,6 +107,10 @@ func testInitialReplicaStatus(t *testing.T) {
 	require.Equal(t, "0", status["Last_SQL_Errno"])
 	require.Equal(t, "", status["Last_SQL_Error"])
 	require.Equal(t, "", status["Last_SQL_Error_Timestamp"])
+
+	// Empty filter configuration
+	require.Equal(t, "", status["Replicate_Do_Table"])
+	require.Equal(t, "", status["Replicate_Ignore_Table"])
 
 	// Thread status
 	require.True(t,
