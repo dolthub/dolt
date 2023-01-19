@@ -114,26 +114,26 @@ type DeleteOptions struct {
 }
 
 func DeleteBranch(ctx context.Context, dbData env.DbData, brName string, opts DeleteOptions, remoteDbPro env.RemoteDbProvider) error {
-	var dref ref.DoltRef
+	var branchRef ref.DoltRef
 	if opts.Remote {
 		var err error
-		dref, err = ref.NewRemoteRefFromPathStr(brName)
+		branchRef, err = ref.NewRemoteRefFromPathStr(brName)
 		if err != nil {
 			return err
 		}
 	} else {
-		dref = ref.NewBranchRef(brName)
-		if ref.Equals(dbData.Rsr.CWBHeadRef(), dref) {
+		branchRef = ref.NewBranchRef(brName)
+		if ref.Equals(dbData.Rsr.CWBHeadRef(), branchRef) {
 			return ErrCOBranchDelete
 		}
 	}
 
-	return DeleteBranchOnDB(ctx, dbData, dref, opts, remoteDbPro)
+	return DeleteBranchOnDB(ctx, dbData, branchRef, opts, remoteDbPro)
 }
 
-func DeleteBranchOnDB(ctx context.Context, dbdata env.DbData, dref ref.DoltRef, opts DeleteOptions, pro env.RemoteDbProvider) error {
+func DeleteBranchOnDB(ctx context.Context, dbdata env.DbData, branchRef ref.DoltRef, opts DeleteOptions, pro env.RemoteDbProvider) error {
 	ddb := dbdata.Ddb
-	hasRef, err := ddb.HasRef(ctx, dref)
+	hasRef, err := ddb.HasRef(ctx, branchRef)
 
 	if err != nil {
 		return err
@@ -143,27 +143,26 @@ func DeleteBranchOnDB(ctx context.Context, dbdata env.DbData, dref ref.DoltRef, 
 
 	if !opts.Force && !opts.Remote {
 		// check to see if the branch is fully merged into its parent
-		branch := dbdata.Rsr.CWBHeadRef()
 		trackedBranches, err := dbdata.Rsr.GetBranches()
 		if err != nil {
 			return err
 		}
 
-		trackedBranch, hasUpstream := trackedBranches[branch.GetPath()]
+		trackedBranch, hasUpstream := trackedBranches[branchRef.GetPath()]
 		if hasUpstream {
-			err = validateBranchMergedIntoUpstream(ctx, dbdata, branch, trackedBranch.Remote, pro)
+			err = validateBranchMergedIntoUpstream(ctx, dbdata, branchRef, trackedBranch.Remote, pro)
 			if err != nil {
 				return err
 			}
 		} else {
-			err = validateBranchMergedIntoCurrentWorkingBranch(ctx, dbdata, branch)
+			err = validateBranchMergedIntoCurrentWorkingBranch(ctx, dbdata, branchRef)
 			if err != nil {
 				return err
 			}
 		}
 	}
 
-	wsRef, err := ref.WorkingSetRefForHead(dref)
+	wsRef, err := ref.WorkingSetRefForHead(branchRef)
 	if err != nil {
 		if !errors.Is(err, ref.ErrWorkingSetUnsupported) {
 			return err
@@ -175,7 +174,7 @@ func DeleteBranchOnDB(ctx context.Context, dbdata env.DbData, dref ref.DoltRef, 
 		}
 	}
 
-	return ddb.DeleteBranch(ctx, dref)
+	return ddb.DeleteBranch(ctx, branchRef)
 }
 
 // validateBranchMergedIntoCurrentWorkingBranch returns an error if the given branch is not fully merged into the HEAD of the current branch.

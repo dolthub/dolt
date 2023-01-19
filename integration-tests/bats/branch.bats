@@ -47,3 +47,22 @@ teardown() {
     run dolt sql -q 'show tables'
     [[ "$output" =~ "test" ]] || false
 }
+
+@test "branch: deleting an unmerged branch with a remote" {
+    mkdir -p remotes/origin
+    dolt remote add origin file://./remotes/origin
+    dolt branch b1
+    dolt push --set-upstream origin b1
+
+    dolt checkout b1
+    dolt sql -q "create table test (id int primary key);"
+    dolt commit -Am "new table"
+
+    dolt checkout main
+    dolt branch -d b1
+}
+
+@test "branch: deleting an unmerged branch with no remote" {
+
+}
+
