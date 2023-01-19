@@ -158,7 +158,10 @@ func SaveData(ctx context.Context) error {
 	serial.BranchControlAddAccessTbl(b, accessOffset)
 	serial.BranchControlAddNamespaceTbl(b, namespaceOffset)
 	root := serial.BranchControlEnd(b)
-	data := serial.FinishMessage(b, root, []byte(serial.BranchControlFileID))
+	// serial.FinishMessage() limits files to 2^24 bytes, so this works around it while maintaining read compatibility
+	b.Prep(1, flatbuffers.SizeInt32+4+serial.MessagePrefixSz)
+	b.FinishWithFileIdentifier(root, []byte(serial.BranchControlFileID))
+	data := b.Bytes[b.Head()-serial.MessagePrefixSz:]
 	return os.WriteFile(controller.branchControlFilePath, data, 0777)
 }
 

@@ -316,10 +316,10 @@ func (tbl *Namespace) filterHosts(filters []uint32) []MatchExpression {
 
 // Serialize returns the offset for the NamespaceValue written to the given builder.
 func (val *NamespaceValue) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
-	database := b.CreateString(val.Database)
-	branch := b.CreateString(val.Branch)
-	user := b.CreateString(val.User)
-	host := b.CreateString(val.Host)
+	database := b.CreateSharedString(val.Database)
+	branch := b.CreateSharedString(val.Branch)
+	user := b.CreateSharedString(val.User)
+	host := b.CreateSharedString(val.Host)
 
 	serial.BranchControlNamespaceValueStart(b)
 	serial.BranchControlNamespaceValueAddDatabase(b, database)
