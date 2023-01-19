@@ -1586,40 +1586,40 @@ func TestLexFloat(t *testing.T) {
 
 func TestZValue(t *testing.T) {
 	t.Run("test z-values", func(t *testing.T) {
-		z := index.ZValue(sql.Point{X: -5000, Y: -5000})
+		z := index.ZValue(types.Point{X: -5000, Y: -5000})
 		assert.Equal(t, "0fff0ff03f3fffffffffffffffffffff", hex.EncodeToString(z[:]))
 
-		z = index.ZValue(sql.Point{X: -1, Y: -1})
+		z = index.ZValue(types.Point{X: -1, Y: -1})
 		assert.Equal(t, "0fffffffffffffffffffffffffffffff", hex.EncodeToString(z[:]))
 
-		z = index.ZValue(sql.Point{X: -1, Y: 0})
+		z = index.ZValue(types.Point{X: -1, Y: 0})
 		assert.Equal(t, "4aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", hex.EncodeToString(z[:]))
 
-		z = index.ZValue(sql.Point{X: -1, Y: 1})
+		z = index.ZValue(types.Point{X: -1, Y: 1})
 		assert.Equal(t, "4fffffaaaaaaaaaaaaaaaaaaaaaaaaaa", hex.EncodeToString(z[:]))
 
-		z = index.ZValue(sql.Point{X: 1, Y: -1})
+		z = index.ZValue(types.Point{X: 1, Y: -1})
 		assert.Equal(t, "8fffff55555555555555555555555555", hex.EncodeToString(z[:]))
 
-		z = index.ZValue(sql.Point{X: 0, Y: -1})
+		z = index.ZValue(types.Point{X: 0, Y: -1})
 		assert.Equal(t, "85555555555555555555555555555555", hex.EncodeToString(z[:]))
 
-		z = index.ZValue(sql.Point{X: 0, Y: 0})
+		z = index.ZValue(types.Point{X: 0, Y: 0})
 		assert.Equal(t, "c0000000000000000000000000000000", hex.EncodeToString(z[:]))
 
-		z = index.ZValue(sql.Point{X: 1, Y: 0})
+		z = index.ZValue(types.Point{X: 1, Y: 0})
 		assert.Equal(t, "caaaaa00000000000000000000000000", hex.EncodeToString(z[:]))
 
-		z = index.ZValue(sql.Point{X: 0, Y: 1})
+		z = index.ZValue(types.Point{X: 0, Y: 1})
 		assert.Equal(t, "c5555500000000000000000000000000", hex.EncodeToString(z[:]))
 
-		z = index.ZValue(sql.Point{X: 1, Y: 1})
+		z = index.ZValue(types.Point{X: 1, Y: 1})
 		assert.Equal(t, "cfffff00000000000000000000000000", hex.EncodeToString(z[:]))
 
-		z = index.ZValue(sql.Point{X: 2, Y: 2})
+		z = index.ZValue(types.Point{X: 2, Y: 2})
 		assert.Equal(t, "f0000000000000000000000000000000", hex.EncodeToString(z[:]))
 
-		z = index.ZValue(sql.Point{X: 50000, Y: 50000})
+		z = index.ZValue(types.Point{X: 50000, Y: 50000})
 		assert.Equal(t, "f000fcc03ccc00000000000000000000", hex.EncodeToString(z[:]))
 	})
 
@@ -1629,18 +1629,18 @@ func TestZValue(t *testing.T) {
 		for i, v := range v {
 			z[i] = v
 		}
-		assert.Equal(t, sql.Point{X: 0, Y: 0}, index.UnZValue(z))
+		assert.Equal(t, types.Point{X: 0, Y: 0}, index.UnZValue(z))
 
 		v, _ = hex.DecodeString("daaaaa00000000000000000000000000")
 		z = [16]byte{}
 		for i, v := range v {
 			z[i] = v
 		}
-		assert.Equal(t, sql.Point{X: 1, Y: 2}, index.UnZValue(z))
+		assert.Equal(t, types.Point{X: 1, Y: 2}, index.UnZValue(z))
 	})
 
 	t.Run("test sorting points by z-value", func(t *testing.T) {
-		sortedPoints := []sql.Point{
+		sortedPoints := []types.Point{
 			{X: -5000, Y: -5000},
 			{X: -1, Y: -1},
 			{X: -1, Y: 0},
@@ -1652,7 +1652,7 @@ func TestZValue(t *testing.T) {
 			{X: 2, Y: 2},
 			{X: 100, Y: 100},
 		}
-		randPoints := append([]sql.Point{}, sortedPoints...)
+		randPoints := append([]types.Point{}, sortedPoints...)
 		rand.Shuffle(len(randPoints), func(i, j int) {
 			randPoints[i], randPoints[j] = randPoints[j], randPoints[i]
 		})
