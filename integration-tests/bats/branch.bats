@@ -105,6 +105,9 @@ teardown() {
     dolt checkout b1
     dolt sql -q "create table t3 (id int primary key);"
     dolt commit -Am "new table"
+    # two additional copies
+    dolt branch b1-1
+    dolt branch b1-2
 
     # b2 is even with main
 
@@ -119,6 +122,13 @@ teardown() {
     [[ "$output" =~ "run 'dolt branch -D b1'" ]] || false
 
     dolt branch -D b1
+
+    dolt checkout b1-1
+    # this works because it's even with the checked out branch (but not with main)
+    dolt branch -d b1-2
+
+    dolt checkout main
+    dolt branch -D b1-1
     dolt branch -d b2
     dolt branch -d b3
 
