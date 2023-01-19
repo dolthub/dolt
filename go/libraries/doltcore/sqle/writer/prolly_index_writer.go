@@ -440,8 +440,6 @@ func FormatKeyForUniqKeyErr(key val.Tuple, d val.TupleDesc) string {
 	return sb.String()
 }
 
-
-
 type prollySpatialIndexWriter struct {
 	name          string
 	mut           *prolly.MutableMap
