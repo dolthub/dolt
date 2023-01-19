@@ -261,7 +261,7 @@ func moveBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 	force := apr.Contains(forceFlag)
 	src := apr.Arg(0)
 	dest := apr.Arg(1)
-	err := actions.RenameBranch(ctx, dEnv.DbData(), dEnv.Config, src, apr.Arg(1), dEnv, force)
+	err := actions.RenameBranch(ctx, dEnv.DbData(), src, apr.Arg(1), dEnv, force)
 
 	var verr errhand.VerboseError
 	if err != nil {
@@ -319,7 +319,7 @@ func deleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPa
 	for i := 0; i < apr.NArg(); i++ {
 		brName := apr.Arg(i)
 
-		err := actions.DeleteBranch(ctx, dEnv.DbData(), dEnv.Config, brName, actions.DeleteOptions{
+		err := actions.DeleteBranch(ctx, dEnv.DbData(), brName, actions.DeleteOptions{
 			Force:  force,
 			Remote: apr.Contains(remoteFlag),
 		}, dEnv)

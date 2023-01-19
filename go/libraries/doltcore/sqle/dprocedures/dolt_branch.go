@@ -111,7 +111,7 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 		return err
 	}
 
-	err := actions.RenameBranch(ctx, dbData, loadConfig(ctx), oldBranchName, newBranchName, sess.Provider(), force)
+	err := actions.RenameBranch(ctx, dbData, oldBranchName, newBranchName, sess.Provider(), force)
 	if err != nil {
 		return err
 	}
@@ -175,7 +175,7 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 				return err
 			}
 		}
-		err = actions.DeleteBranch(ctx, dbData, loadConfig(ctx), branchName, actions.DeleteOptions{
+		err = actions.DeleteBranch(ctx, dbData, branchName, actions.DeleteOptions{
 			Force: force,
 		}, dSess.Provider())
 		if err != nil {

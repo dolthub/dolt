@@ -32,7 +32,7 @@ var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
 var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into its parent; use `-f` to force")
 var ErrWorkingSetsOnBothBranches = errors.New("checkout would overwrite uncommitted changes on target branch")
 
-func RenameBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliConfig, oldBranch, newBranch string, remoteDbPro env.RemoteDbProvider, force bool) error {
+func RenameBranch(ctx context.Context, dbData env.DbData, oldBranch, newBranch string, remoteDbPro env.RemoteDbProvider, force bool) error {
 	oldRef := ref.NewBranchRef(oldBranch)
 	newRef := ref.NewBranchRef(newBranch)
 
@@ -67,7 +67,7 @@ func RenameBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliCon
 		}
 	}
 
-	return DeleteBranch(ctx, dbData, config, oldBranch, DeleteOptions{Force: true}, remoteDbPro)
+	return DeleteBranch(ctx, dbData, oldBranch, DeleteOptions{Force: true}, remoteDbPro)
 }
 
 func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
@@ -113,7 +113,7 @@ type DeleteOptions struct {
 	Remote bool
 }
 
-func DeleteBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliConfig, brName string, opts DeleteOptions, remoteDbPro env.RemoteDbProvider) error {
+func DeleteBranch(ctx context.Context, dbData env.DbData, brName string, opts DeleteOptions, remoteDbPro env.RemoteDbProvider) error {
 	var dref ref.DoltRef
 	if opts.Remote {
 		var err error
@@ -128,10 +128,10 @@ func DeleteBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliCon
 		}
 	}
 
-	return DeleteBranchOnDB(ctx, dbData, config, dref, opts, remoteDbPro)
+	return DeleteBranchOnDB(ctx, dbData, dref, opts, remoteDbPro)
 }
 
-func DeleteBranchOnDB(ctx context.Context, dbdata env.DbData, config *env.DoltCliConfig, dref ref.DoltRef, opts DeleteOptions, pro env.RemoteDbProvider) error {
+func DeleteBranchOnDB(ctx context.Context, dbdata env.DbData, dref ref.DoltRef, opts DeleteOptions, pro env.RemoteDbProvider) error {
 	ddb := dbdata.Ddb
 	hasRef, err := ddb.HasRef(ctx, dref)
 
@@ -156,34 +156,11 @@ func DeleteBranchOnDB(ctx context.Context, dbdata env.DbData, config *env.DoltCl
 			if err != nil {
 				return err
 			}
-		}
-
-		ms, err := doltdb.NewCommitSpec(env.GetDefaultInitBranch(config))
-		if err != nil {
-			return err
-		}
-
-		init, err := ddb.Resolve(ctx, ms, nil)
-		if err != nil {
-			return err
-		}
-
-		cs, err := doltdb.NewCommitSpec(dref.String())
-		if err != nil {
-			return err
-		}
-
-		cm, err := ddb.Resolve(ctx, cs, nil)
-		if err != nil {
-			return err
-		}
-
-		isMerged, _ := init.CanFastReverseTo(ctx, cm)
-		if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
-			return err
-		}
-		if !isMerged {
-			return ErrUnmergedBranchDelete
+		} else {
+			err = validateBranchMergedIntoCurrentWorkingBranch(ctx, dbdata, branch)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -200,6 +177,41 @@ func DeleteBranchOnDB(ctx context.Context, dbdata env.DbData, config *env.DoltCl
 	}
 
 	return ddb.DeleteBranch(ctx, dref)
+}
+
+// validateBranchMergedIntoCurrentWorkingBranch returns an error if the given branch is not fully merged into the HEAD of the current branch.
+func validateBranchMergedIntoCurrentWorkingBranch(ctx context.Context, dbdata env.DbData, branch ref.DoltRef) error {
+	branchSpec, err := doltdb.NewCommitSpec(branch.GetPath())
+	if err != nil {
+		return err
+	}
+
+	branchHead, err := dbdata.Ddb.Resolve(ctx, branchSpec, nil)
+	if err != nil {
+		return err
+	}
+
+	cwbCs, err := doltdb.NewCommitSpec("HEAD")
+	if err != nil {
+		return err
+	}
+
+	cwbHead, err := dbdata.Ddb.Resolve(ctx, cwbCs, dbdata.Rsr.CWBHeadRef())
+	if err != nil {
+		return err
+	}
+
+	isMerged, _ := cwbHead.CanFastForwardTo(ctx, branchHead)
+	if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
+		// TODO: no common ancestor is not an error
+		return err
+	}
+	
+	if !isMerged {
+		return ErrUnmergedBranchDelete
+	}
+	
+	return nil
 }
 
 // validateBranchMergedIntoUpstream returns an error if the branch provided is not fully merged into its upstream	
@@ -240,7 +252,7 @@ func validateBranchMergedIntoUpstream(ctx context.Context, dbdata env.DbData, br
 	}
 
 	canFF, err := localBranchHead.CanFastForwardTo(ctx, remoteBranchHead)
-	if err != nil {
+	if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
 		// TODO: no common ancestor is not an error
 		return err
 	}
