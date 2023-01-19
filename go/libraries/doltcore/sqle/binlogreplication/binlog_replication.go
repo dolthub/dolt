@@ -39,6 +39,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/proto/query"
@@ -191,39 +192,23 @@ func (d *doltBinlogReplicaController) SetReplicationSourceOptions(ctx *sql.Conte
 			}
 			replicaSourceInfo.Password = value
 		case "SOURCE_PORT":
-			value, err := getOptionValueAsString(option)
+			intValue, err := getOptionValueAsInt(option)
 			if err != nil {
 				return err
-			}
-			// TODO: Convert this into IntegerReplicaOptionValue
-			intValue, err := strconv.Atoi(value)
-			if err != nil {
-				return fmt.Errorf("Unable to parse SOURCE_PORT value (%q) as an integer: %s", option.Value, err.Error())
 			}
 			replicaSourceInfo.Port = uint16(intValue)
 		case "SOURCE_CONNECT_RETRY":
-			value, err := getOptionValueAsString(option)
+			intValue, err := getOptionValueAsInt(option)
 			if err != nil {
 				return err
-			}
-			// TODO: Convert this into IntegerReplicaOptionValue
-			intValue, err := strconv.Atoi(value)
-			if err != nil {
-				return fmt.Errorf("unable to parse SOURCE_PORT value (%q) as an integer: %s", option.Value, err.Error())
 			}
 			replicaSourceInfo.ConnectRetryInterval = uint32(intValue)
 		case "SOURCE_RETRY_COUNT":
-			value, err := getOptionValueAsString(option)
+			intValue, err := getOptionValueAsInt(option)
 			if err != nil {
 				return err
 			}
-			// TODO: Convert this into IntegerReplicaOptionValue
-			intValue, err := strconv.Atoi(value)
-			if err != nil {
-				return fmt.Errorf("unable to parse SOURCE_PORT value (%q) as an integer: %s", option.Value, err.Error())
-			}
 			replicaSourceInfo.ConnectRetryCount = uint64(intValue)
-
 		default:
 			return fmt.Errorf("unknown replication source option: %s", option.Name)
 		}
@@ -241,6 +226,16 @@ func getOptionValueAsString(option binlogreplication.ReplicationOption) (string,
 
 	return "", fmt.Errorf("unsupported value type for option %q; found %T, "+
 		"but expected a string", option.Name, option.Value.GetValue())
+}
+
+func getOptionValueAsInt(option binlogreplication.ReplicationOption) (int, error) {
+	integerOptionValue, ok := option.Value.(binlogreplication.IntegerReplicationOptionValue)
+	if ok {
+		return integerOptionValue.GetValueAsInt(), nil
+	}
+
+	return 0, fmt.Errorf("unsupported value type for option %q; found %T, "+
+		"but expected an integer", option.Name, option.Value.GetValue())
 }
 
 func getOptionValueAsTableNames(option binlogreplication.ReplicationOption) ([]sql.UnresolvedTable, error) {
@@ -1170,7 +1165,7 @@ func convertSqlTypesValue(value sqltypes.Value, column *sql.Column) (interface{}
 	var convertedValue interface{}
 	var err error
 	switch {
-	case sql.IsEnum(column.Type), sql.IsSet(column.Type):
+	case types.IsEnum(column.Type), types.IsSet(column.Type):
 		atoi, err := strconv.Atoi(value.ToString())
 		if err != nil {
 			return nil, err
