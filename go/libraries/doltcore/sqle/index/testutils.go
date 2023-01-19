@@ -230,6 +230,7 @@ func LexFloat(f float64) uint64 {
 	}
 	return ^b // flip all the bits
 }
+
 // UnLexFloat maps the lexicographic uint64 representation of a float64 back into a float64
 // For positive uint64s, we flip the signed bit
 // For negative floats, we flip all the bits
@@ -258,6 +259,7 @@ func ZValue(p sqltypes.Point) [16]byte {
 	}
 	return res
 }
+
 // UnZValue takes a [16]byte Z-Value and converts it back to a sql.Point
 func UnZValue(z [16]byte) sqltypes.Point {
 	var x, y uint64
