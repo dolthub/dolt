@@ -16,9 +16,12 @@ package index_test
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"math/rand"
 	"sort"
 	"strings"
 	"testing"
@@ -1523,5 +1526,135 @@ func TestSplitNullsFromRange(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
 		assert.Len(t, rs, 8)
+	})
+}
+
+func TestLexFloat(t *testing.T) {
+	t.Run("test edge case lex float values", func(t *testing.T) {
+		assert.Equal(t, uint64(0x0000000000000000), index.LexFloat(-math.MaxFloat64))
+		assert.Equal(t, uint64(0x7feffffffffffffe), index.LexFloat(-math.SmallestNonzeroFloat64))
+		assert.Equal(t, uint64(0x8000000000000000), index.LexFloat(0.0))
+		assert.Equal(t, uint64(0x8000000000000001), index.LexFloat(math.SmallestNonzeroFloat64))
+		assert.Equal(t, uint64(0xffefffffffffffff), index.LexFloat(math.MaxFloat64))
+		assert.Equal(t, uint64(0xfff8000000000001), index.LexFloat(math.NaN()))
+		assert.Equal(t, uint64(0xfff7fffffffffffe), index.LexFloat(-math.NaN()))
+		assert.Equal(t, uint64(0xfff0000000000000), index.LexFloat(math.Inf(1)))
+		assert.Equal(t, uint64(0xffffffffffffffff), index.LexFloat(math.Inf(-1)))
+	})
+
+	t.Run("test reverse lex float values", func(t *testing.T) {
+		assert.Equal(t,-math.MaxFloat64, index.UnLexFloat(0x0000000000000000))
+		assert.Equal(t,-math.SmallestNonzeroFloat64, index.UnLexFloat(0x7feffffffffffffe))
+		assert.Equal(t,0.0, index.UnLexFloat(0x8000000000000000))
+		assert.Equal(t,math.SmallestNonzeroFloat64, index.UnLexFloat(0x8000000000000001))
+		assert.Equal(t,math.MaxFloat64, index.UnLexFloat(0xffefffffffffffff))
+		assert.True(t, math.IsNaN(index.UnLexFloat(0xfff8000000000001)))
+		assert.True(t, math.IsNaN(index.UnLexFloat(0xfff7fffffffffffe)))
+		assert.True(t, math.IsInf(index.UnLexFloat(0xfff0000000000000), 1))
+		assert.True(t, math.IsInf(index.UnLexFloat(0xffffffffffffffff), -1))
+	})
+
+	t.Run("test sort lex float", func(t *testing.T) {
+		sortedFloats := []float64{
+			-math.MaxFloat64,
+			-1.0,
+			-0.5,
+			-0.123456789,
+			-math.SmallestNonzeroFloat64,
+			-0.0,
+			0.0,
+			math.SmallestNonzeroFloat64,
+			0.5,
+			0.987654321,
+			1.0,
+			math.MaxFloat64,
+		}
+
+		randFloats := append([]float64{}, sortedFloats...)
+		rand.Shuffle(len(randFloats), func(i, j int) {
+			randFloats[i], randFloats[j] = randFloats[j], randFloats[i]
+		})
+		sort.Slice(randFloats, func(i, j int) bool {
+			l1 := index.LexFloat(randFloats[i])
+			l2 := index.LexFloat(randFloats[j])
+			return l1 < l2
+		})
+		assert.Equal(t, sortedFloats, randFloats)
+	})
+}
+
+func TestZValue(t *testing.T) {
+	t.Run("test z-values", func(t *testing.T) {
+		z := index.ZValue(sql.Point{X:-5000, Y: -5000})
+		assert.Equal(t, "0fff0ff03f3fffffffffffffffffffff", hex.EncodeToString(z[:]))
+
+		z = index.ZValue(sql.Point{X:-1, Y: -1})
+		assert.Equal(t, "0fffffffffffffffffffffffffffffff", hex.EncodeToString(z[:]))
+
+		z = index.ZValue(sql.Point{X:-1, Y: 0})
+		assert.Equal(t, "4aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", hex.EncodeToString(z[:]))
+
+		z = index.ZValue(sql.Point{X:-1, Y: 1})
+		assert.Equal(t, "4fffffaaaaaaaaaaaaaaaaaaaaaaaaaa", hex.EncodeToString(z[:]))
+
+		z = index.ZValue(sql.Point{X: 1, Y: -1})
+		assert.Equal(t, "8fffff55555555555555555555555555", hex.EncodeToString(z[:]))
+
+		z = index.ZValue(sql.Point{X:0, Y: -1})
+		assert.Equal(t, "85555555555555555555555555555555", hex.EncodeToString(z[:]))
+
+		z = index.ZValue(sql.Point{X:0, Y: 0})
+		assert.Equal(t, "c0000000000000000000000000000000", hex.EncodeToString(z[:]))
+
+		z = index.ZValue(sql.Point{X:1, Y: 0})
+		assert.Equal(t, "caaaaa00000000000000000000000000", hex.EncodeToString(z[:]))
+
+		z = index.ZValue(sql.Point{X:0, Y: 1})
+		assert.Equal(t, "c5555500000000000000000000000000", hex.EncodeToString(z[:]))
+
+		z = index.ZValue(sql.Point{X:1, Y: 1})
+		assert.Equal(t, "cfffff00000000000000000000000000", hex.EncodeToString(z[:]))
+
+		z = index.ZValue(sql.Point{X:2, Y: 2})
+		assert.Equal(t, "f0000000000000000000000000000000", hex.EncodeToString(z[:]))
+
+		z = index.ZValue(sql.Point{X:50000, Y: 50000})
+		assert.Equal(t, "f000fcc03ccc00000000000000000000", hex.EncodeToString(z[:]))
+	})
+
+	t.Run("test un-z-values", func(t *testing.T) {
+		v, _ := hex.DecodeString("c0000000000000000000000000000000")
+		z := [16]byte{}
+		for i, v := range v {
+			z[i] = v
+		}
+		assert.Equal(t, sql.Point{X:0, Y: 0}, index.UnZValue(z))
+
+		v, _ = hex.DecodeString("daaaaa00000000000000000000000000")
+		z = [16]byte{}
+		for i, v := range v {
+			z[i] = v
+		}
+		assert.Equal(t, sql.Point{X:1, Y: 2}, index.UnZValue(z))
+	})
+
+	t.Run("test sorting points by z-value", func(t *testing.T) {
+		sortedPoints := []sql.Point{
+			{X:-5000, Y: -5000},
+			{X:-1, Y: -1},
+			{X:-1, Y: 0},
+			{X:-1, Y: 1},
+			{X: 1, Y: -1},
+			{X: 0, Y: 0},
+			{X: 1, Y: 0},
+			{X: 1, Y: 1},
+			{X: 2, Y: 2},
+			{X: 100, Y: 100},
+		}
+		randPoints := append([]sql.Point{}, sortedPoints...)
+		rand.Shuffle(len(randPoints), func(i, j int) {
+			randPoints[i], randPoints[j] = randPoints[j], randPoints[i]
+		})
+		assert.Equal(t, sortedPoints, index.ZSort(randPoints))
 	})
 }

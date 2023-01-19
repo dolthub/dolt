@@ -15,7 +15,10 @@
 package index
 
 import (
+	"bytes"
 	"github.com/dolthub/go-mysql-server/sql"
+	"math"
+	"sort"
 
 	"github.com/dolthub/dolt/go/store/prolly"
 
@@ -214,4 +217,65 @@ func ProllyRangesFromIndexLookup(ctx *sql.Context, lookup sql.IndexLookup) ([]pr
 
 func DoltIndexFromSqlIndex(idx sql.Index) DoltIndex {
 	return idx.(DoltIndex)
+}
+
+func LexFloat(f float64) uint64 {
+	b := math.Float64bits(f)
+	if b >> 63 == 1 {
+		tmp := math.Float64bits(math.MaxFloat64)
+		b = tmp - b
+	}
+	b = b ^ (1 << 63) // flip the sign bit
+	return b
+}
+
+func UnLexFloat(b uint64) float64 {
+	if b >> 63 == 0 {
+		b = math.Float64bits(math.MaxFloat64) - b
+	}
+	b = b ^ (1 << 63) // flip the sign bit
+	if b == math.MaxInt64 {
+		return math.Inf(-1)
+	}
+	return math.Float64frombits(b)
+}
+
+func ZValue(p sql.Point) [16]byte {
+	xLex := LexFloat(p.X)
+	yLex := LexFloat(p.Y)
+
+	res := [16]byte{}
+	for i := 0; i < 16; i++ {
+		for j := 0; j < 4; j++ {
+			x, y := byte((xLex&1) << 1), byte(yLex&1)
+			res[15-i] |= (x | y) << (2 * j)
+			xLex, yLex = xLex>>1, yLex>>1
+		}
+	}
+	return res
+}
+
+func UnZValue(z [16]byte) sql.Point {
+	var x, y uint64
+	for i := 15; i >= 0; i-- {
+		zv := uint64(z[i])
+		for j := 3; j >= 0; j-- {
+			y |= (zv & 1) << (63 - (4 * i + j))
+			zv >>= 1
+
+			x |= (zv & 1) << (63 - (4 * i + j))
+			zv >>= 1
+		}
+	}
+	xf := UnLexFloat(x)
+	yf := UnLexFloat(y)
+	return sql.Point{X: xf, Y: yf}
+}
+
+func ZSort(points []sql.Point) []sql.Point{
+	sort.Slice(points, func (i,j int) bool {
+		zi, zj := ZValue(points[i]), ZValue(points[j])
+		return bytes.Compare(zi[:], zj[:]) < 0
+	})
+	return points
 }
