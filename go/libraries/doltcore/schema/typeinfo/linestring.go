@@ -19,20 +19,21 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/dolthub/dolt/go/store/types"
-
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type linestringType struct {
-	sqlLineStringType sql.LineStringType
+	sqlLineStringType types2.LineStringType
 }
 
 var _ TypeInfo = (*linestringType)(nil)
 
-var LineStringType = &linestringType{sql.LineStringType{}}
+var LineStringType = &linestringType{types2.LineStringType{}}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *linestringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
@@ -78,7 +79,7 @@ func (ti *linestringType) ConvertValueToNomsValue(ctx context.Context, vrw types
 		return nil, err
 	}
 
-	return types.ConvertSQLLineStringToTypesLineString(line.(sql.LineString)), nil
+	return types.ConvertSQLLineStringToTypesLineString(line.(types2.LineString)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -135,7 +136,7 @@ func (ti *linestringType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *linestringType) Promote() TypeInfo {
-	return &linestringType{ti.sqlLineStringType.Promote().(sql.LineStringType)}
+	return &linestringType{ti.sqlLineStringType.Promote().(types2.LineStringType)}
 }
 
 // String implements TypeInfo interface.
@@ -226,5 +227,5 @@ func CreateLineStringTypeFromParams(params map[string]string) (TypeInfo, error) 
 			return nil, err
 		}
 	}
-	return &linestringType{sqlLineStringType: sql.LineStringType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
+	return &linestringType{sqlLineStringType: types2.LineStringType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

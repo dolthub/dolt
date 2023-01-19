@@ -51,7 +51,7 @@ func (nb nullBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (pres
 	panic("not impl")
 }
 
-func (nb nullBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
+func (nb nullBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
 	return nil
 }
 

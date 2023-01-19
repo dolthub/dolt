@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -101,7 +102,7 @@ func testPersistQuery(t *testing.T, test PersistTest) {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	sql.InitSystemVariables()
+	variables.InitSystemVariables()
 
 	root, _ := dEnv.WorkingRoot(context.Background())
 	root, err = executeModify(t, context.Background(), dEnv, root, test.PersistQuery)

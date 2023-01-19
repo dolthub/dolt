@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -345,8 +346,8 @@ func testTypeInfoConversionsExist(t *testing.T, tiArrays [][]TypeInfo) {
 func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 	return [][]TypeInfo{
 			generateBitTypes(t, 16),
-			{&blobStringType{sql.TinyText}, &blobStringType{sql.Text},
-				&blobStringType{sql.MediumText}, &blobStringType{sql.LongText}},
+			{&blobStringType{types2.TinyText}, &blobStringType{types2.Text},
+				&blobStringType{types2.MediumText}, &blobStringType{types2.LongText}},
 			{BoolType},
 			{DateType, DatetimeType, TimestampType},
 			generateDecimalTypes(t, 16),
@@ -367,11 +368,11 @@ func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 			{TimeType},
 			{Uint8Type, Uint16Type, Uint24Type, Uint32Type, Uint64Type},
 			{UuidType},
-			{&varBinaryType{sql.TinyBlob}, &varBinaryType{sql.Blob},
-				&varBinaryType{sql.MediumBlob}, &varBinaryType{sql.LongBlob}},
+			{&varBinaryType{types2.TinyBlob}, &varBinaryType{types2.Blob},
+				&varBinaryType{types2.MediumBlob}, &varBinaryType{types2.LongBlob}},
 			append(generateVarStringTypes(t, 12),
-				&varStringType{sql.CreateTinyText(sql.Collation_Default)}, &varStringType{sql.CreateText(sql.Collation_Default)},
-				&varStringType{sql.CreateMediumText(sql.Collation_Default)}, &varStringType{sql.CreateLongText(sql.Collation_Default)}),
+				&varStringType{types2.CreateTinyText(sql.Collation_Default)}, &varStringType{types2.CreateText(sql.Collation_Default)},
+				&varStringType{types2.CreateMediumText(sql.Collation_Default)}, &varStringType{types2.CreateLongText(sql.Collation_Default)}),
 			{YearType},
 		},
 		[][]types.Value{

@@ -88,16 +88,39 @@ type ValueStore struct {
 	versOnce sync.Once
 }
 
-func PanicIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.ChunkStore) {
+func ErrorIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.ChunkStore) error {
 	absent, err := cs.HasMany(ctx, unresolved)
-
-	// TODO: fix panics
-	d.PanicIfError(err)
+	if err != nil {
+		return err
+	}
 
 	if len(absent) != 0 {
 		s := absent.String()
-		d.Panic("Found dangling references to %s", s)
+		return fmt.Errorf("Found dangling references to %s", s)
 	}
+
+	return nil
+}
+
+func AddrsFromNomsValue(ctx context.Context, c chunks.Chunk, nbf *NomsBinFormat) (addrs hash.HashSet, err error) {
+	addrs = hash.NewHashSet()
+	if NomsKind(c.Data()[0]) == SerialMessageKind {
+		err = SerialMessage(c.Data()).walkAddrs(nbf, func(a hash.Hash) error {
+			addrs.Insert(a)
+			return nil
+		})
+		return
+	}
+
+	err = walkRefs(c.Data(), nbf, func(r Ref) error {
+		addrs.Insert(r.TargetHash())
+		return nil
+	})
+	return
+}
+
+func (lvs *ValueStore) getAddrs(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+	return AddrsFromNomsValue(ctx, c, lvs.nbf)
 }
 
 const (
@@ -396,15 +419,13 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 		// cheap enough that it would be possible to get back
 		// cache-locality in our flushes without ref heights.
 		if lvs.enforceCompleteness {
-			err := v.walkRefs(lvs.nbf, func(r Ref) error {
-				lvs.unresolvedRefs.Insert(r.TargetHash())
-				return nil
-			})
+			addrs, err := lvs.getAddrs(ctx, c)
 			if err != nil {
 				return err
 			}
+			lvs.unresolvedRefs.InsertAll(addrs)
 		}
-		return lvs.cs.Put(ctx, c)
+		return lvs.cs.Put(ctx, c, lvs.getAddrs)
 	}
 
 	d.PanicIfTrue(height == 0)
@@ -415,7 +436,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 	}
 
 	put := func(h hash.Hash, c chunks.Chunk) error {
-		err := lvs.cs.Put(ctx, c)
+		err := lvs.cs.Put(ctx, c, lvs.getAddrs)
 
 		if err != nil {
 			return err
@@ -535,8 +556,7 @@ func (lvs *ValueStore) Flush(ctx context.Context) error {
 
 func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
 	put := func(h hash.Hash, chunk chunks.Chunk) error {
-		err := lvs.cs.Put(ctx, chunk)
-
+		err := lvs.cs.Put(ctx, chunk, lvs.getAddrs)
 		if err != nil {
 			return err
 		}
@@ -570,8 +590,7 @@ func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
 	}
 	for _, c := range lvs.bufferedChunks {
 		// Can't use put() because it's wrong to delete from a lvs.bufferedChunks while iterating it.
-		err := lvs.cs.Put(ctx, c)
-
+		err := lvs.cs.Put(ctx, c, lvs.getAddrs)
 		if err != nil {
 			return err
 		}
@@ -599,7 +618,10 @@ func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
 			}
 		}
 
-		PanicIfDangling(ctx, lvs.unresolvedRefs, lvs.cs)
+		err = ErrorIfDangling(ctx, lvs.unresolvedRefs, lvs.cs)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

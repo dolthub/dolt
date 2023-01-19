@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/transform"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -47,10 +48,10 @@ const (
 
 var (
 	// CommitHashColType is the sql type of the commit hash column
-	CommitHashColType = sql.MustCreateString(sqltypes.Char, 32, sql.Collation_ascii_bin)
+	CommitHashColType = types.MustCreateString(sqltypes.Char, 32, sql.Collation_ascii_bin)
 
 	// CommitterColType is the sql type of the committer column
-	CommitterColType = sql.MustCreateString(sqltypes.VarChar, 1024, sql.Collation_ascii_bin)
+	CommitterColType = types.MustCreateString(sqltypes.VarChar, 1024, sql.Collation_ascii_bin)
 )
 
 var _ sql.Table = (*HistoryTable)(nil)
@@ -124,7 +125,7 @@ func historyTableSchema(tableName string, table *DoltTable) sql.Schema {
 		&sql.Column{
 			Name:   CommitDateCol,
 			Source: tableName,
-			Type:   sql.Datetime,
+			Type:   types.Datetime,
 		},
 	)
 	return newSch
@@ -306,7 +307,7 @@ func (ht *HistoryTable) Schema() sql.Schema {
 			projectedSch[i] = &sql.Column{
 				Name:   CommitDateCol,
 				Source: ht.Name(),
-				Type:   sql.Datetime,
+				Type:   types.Datetime,
 			}
 		} else {
 			panic("column not found")

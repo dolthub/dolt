@@ -123,7 +123,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 
 	var newGenSt *nbs.NomsBlockStore
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	if nbs.ChunkJournalFeatureFlag {
+	if nbs.UseJournalStore(path) {
 		newGenSt, err = nbs.NewLocalJournalingStore(ctx, nbf.VersionString(), path, q)
 	} else {
 		newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q)

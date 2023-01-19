@@ -78,6 +78,43 @@ func (ftp *fsTablePersister) Path() string {
 	return ftp.dir
 }
 
+func (ftp *fsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, chunkCount uint32) error {
+	tn, err := func() (n string, err error) {
+		defer func() {
+			cerr := r.Close()
+			if err == nil {
+				err = cerr
+			}
+		}()
+
+		var temp *os.File
+		temp, err = tempfiles.MovableTempFileProvider.NewFile(ftp.dir, tempTablePrefix)
+		if err != nil {
+			return "", err
+		}
+
+		defer func() {
+			cerr := temp.Close()
+			if err == nil {
+				err = cerr
+			}
+		}()
+
+		_, err = io.Copy(temp, r)
+		if err != nil {
+			return "", err
+		}
+
+		return temp.Name(), nil
+	}()
+	if err != nil {
+		return err
+	}
+
+	path := filepath.Join(ftp.dir, fileId)
+	return file.Rename(tn, path)
+}
+
 func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data []byte, chunkCount uint32, stats *Stats) (cs chunkSource, err error) {
 	if chunkCount == 0 {
 		return emptyChunkSource{}, nil

@@ -20,6 +20,7 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -40,11 +41,11 @@ type intType struct {
 
 var _ TypeInfo = (*intType)(nil)
 var (
-	Int8Type  = &intType{sql.Int8}
-	Int16Type = &intType{sql.Int16}
-	Int24Type = &intType{sql.Int24}
-	Int32Type = &intType{sql.Int32}
-	Int64Type = &intType{sql.Int64}
+	Int8Type  = &intType{types2.Int8}
+	Int16Type = &intType{types2.Int16}
+	Int24Type = &intType{types2.Int24}
+	Int32Type = &intType{types2.Int32}
+	Int64Type = &intType{types2.Int64}
 )
 
 func CreateIntTypeFromParams(params map[string]string) (TypeInfo, error) {
@@ -71,15 +72,15 @@ func CreateIntTypeFromParams(params map[string]string) (TypeInfo, error) {
 func (ti *intType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Int); ok {
 		switch ti.sqlIntType {
-		case sql.Int8:
+		case types2.Int8:
 			return int8(val), nil
-		case sql.Int16:
+		case types2.Int16:
 			return int16(val), nil
-		case sql.Int24:
+		case types2.Int24:
 			return int32(val), nil
-		case sql.Int32:
+		case types2.Int32:
 			return int32(val), nil
-		case sql.Int64:
+		case types2.Int64:
 			return int64(val), nil
 		}
 	}
@@ -96,15 +97,15 @@ func (ti *intType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (i
 	case types.IntKind:
 		val := reader.ReadInt()
 		switch ti.sqlIntType {
-		case sql.Int8:
+		case types2.Int8:
 			return int8(val), nil
-		case sql.Int16:
+		case types2.Int16:
 			return int16(val), nil
-		case sql.Int24:
+		case types2.Int24:
 			return int32(val), nil
-		case sql.Int32:
+		case types2.Int32:
 			return int32(val), nil
-		case sql.Int64:
+		case types2.Int64:
 			return int64(val), nil
 		}
 	case types.NullKind:

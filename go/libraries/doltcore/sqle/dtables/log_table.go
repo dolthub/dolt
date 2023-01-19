@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -26,6 +27,8 @@ import (
 
 var _ sql.Table = (*LogTable)(nil)
 
+var _ sql.StatisticsTable = (*LogTable)(nil)
+
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
 	ddb  *doltdb.DoltDB
@@ -35,6 +38,22 @@ type LogTable struct {
 // NewLogTable creates a LogTable
 func NewLogTable(_ *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	return &LogTable{ddb: ddb, head: head}
+}
+
+// DataLength implements sql.StatisticsTable
+func (dt *LogTable) DataLength(ctx *sql.Context) (uint64, error) {
+	return uint64(4*types.Text.MaxByteLength()*4 + 16), nil
+}
+
+// RowCount implements sql.StatisticsTable
+func (dt *LogTable) RowCount(ctx *sql.Context) (uint64, error) {
+	cc, err := dt.head.GetCommitClosure(ctx)
+	if err != nil {
+		// TODO: remove this when we deprecate LD
+		return 1000, nil
+	}
+	cnt, err := cc.Count()
+	return uint64(cnt + 1), err
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
@@ -52,11 +71,11 @@ func (dt *LogTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: true},
-		{Name: "committer", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: false},
-		{Name: "email", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: false},
-		{Name: "date", Type: sql.Datetime, Source: doltdb.LogTableName, PrimaryKey: false},
-		{Name: "message", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: false},
+		{Name: "commit_hash", Type: types.Text, Source: doltdb.LogTableName, PrimaryKey: true},
+		{Name: "committer", Type: types.Text, Source: doltdb.LogTableName, PrimaryKey: false},
+		{Name: "email", Type: types.Text, Source: doltdb.LogTableName, PrimaryKey: false},
+		{Name: "date", Type: types.Datetime, Source: doltdb.LogTableName, PrimaryKey: false},
+		{Name: "message", Type: types.Text, Source: doltdb.LogTableName, PrimaryKey: false},
 	}
 }
 

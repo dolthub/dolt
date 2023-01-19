@@ -38,7 +38,7 @@ teardown() {
 
 @test "sql-push: dolt_push origin" {
     cd repo1
-    dolt sql -q "select dolt_push('origin', 'main')"
+    dolt sql -q "call dolt_push('origin', 'main')"
 
     cd ../repo2
     dolt pull origin
@@ -77,7 +77,7 @@ teardown() {
 
 @test "sql-push: dolt_push custom remote" {
     cd repo1
-    dolt sql -q "select dolt_push('test-remote', 'main')"
+    dolt sql -q "call dolt_push('test-remote', 'main')"
 
     cd ../repo2
     dolt pull origin
@@ -104,7 +104,7 @@ teardown() {
 @test "sql-push: dolt_push active branch" {
     skip "upstream state lost between sessions"
     cd repo1
-    dolt sql -q "select dolt_push('origin')"
+    dolt sql -q "call dolt_push('origin')"
 
     cd ../repo2
     dolt pull origin
@@ -132,7 +132,7 @@ teardown() {
 @test "sql-push: dolt_push feature branch" {
     cd repo1
     dolt checkout -b feature
-    dolt sql -q "select dolt_push('origin', 'feature')"
+    dolt sql -q "call dolt_push('origin', 'feature')"
 
     cd ../repo2
     dolt fetch origin feature
@@ -166,7 +166,7 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "The current branch other has no upstream branch." ]] || false
 
-    dolt sql -q "select dolt_push('-u', 'origin', 'other')"
+    dolt sql -q "call dolt_push('-u', 'origin', 'other')"
     # upstream should be set still
     run dolt push
     [ "$status" -eq 0 ]
@@ -182,7 +182,7 @@ teardown() {
     [[ "$output" =~ "The current branch other has no upstream branch." ]] || false
 
     dolt config --local --add push.autoSetUpRemote true
-    dolt sql -q "select dolt_push()"
+    dolt sql -q "call dolt_push()"
     # upstream should be set still
     run dolt push
     [ "$status" -eq 0 ]
@@ -198,7 +198,7 @@ teardown() {
     [[ "$output" =~ "The current branch other has no upstream branch." ]] || false
 
     dolt config --local --add push.autoSetUpRemote TRUE
-    dolt sql -q "select dolt_push()"
+    dolt sql -q "call dolt_push()"
     # upstream should be set still
     run dolt push
     [ "$status" -eq 0 ]
@@ -228,11 +228,11 @@ teardown() {
     dolt push origin main
 
     cd ../repo1
-    run dolt sql -q "select dolt_push('origin', 'main')"
+    run dolt sql -q "call dolt_push('origin', 'main')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "the tip of your current branch is behind its remote counterpart" ]] || false
 
-    dolt sql -q "select dolt_push('--force', 'origin', 'main')"
+    dolt sql -q "call dolt_push('--force', 'origin', 'main')"
 }
 
 @test "sql-push: CALL dolt_push --force flag" {
@@ -252,7 +252,7 @@ teardown() {
 
 @test "sql-push: push to unknown remote" {
     cd repo1
-    run dolt sql -q "select dolt_push('unknown', 'main')"
+    run dolt sql -q "call dolt_push('unknown', 'main')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unknown remote: 'unknown'" ]] || false
 }
@@ -266,7 +266,7 @@ teardown() {
 
 @test "sql-push: push unknown branch" {
     cd repo1
-    run dolt sql -q "select dolt_push('origin', 'unknown')"
+    run dolt sql -q "call dolt_push('origin', 'unknown')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "refspec not found: 'unknown'" ]] || false
 }
@@ -280,7 +280,7 @@ teardown() {
 
 @test "sql-push: not specifying a branch throws an error" {
     cd repo1
-    run dolt sql -q "select dolt_push('-u', 'origin')"
+    run dolt sql -q "call dolt_push('-u', 'origin')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid set-upstream arguments" ]] || false
 }
@@ -294,7 +294,7 @@ teardown() {
 
 @test "sql-push: pushing empty branch does not panic" {
     cd repo1
-    run dolt sql -q "select dolt_push('origin', '')"
+    run dolt sql -q "call dolt_push('origin', '')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid ref spec: ''" ]] || false
 }

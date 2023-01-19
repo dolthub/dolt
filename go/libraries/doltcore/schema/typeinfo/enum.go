@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -59,7 +60,7 @@ func CreateEnumTypeFromParams(params map[string]string) (TypeInfo, error) {
 	} else {
 		return nil, fmt.Errorf(`create enum type info is missing param "%v"`, enumTypeParam_Values)
 	}
-	sqlEnumType, err := sql.CreateEnumType(values, collation)
+	sqlEnumType, err := types2.CreateEnumType(values, collation)
 	if err != nil {
 		return nil, err
 	}

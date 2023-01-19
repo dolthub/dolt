@@ -976,6 +976,11 @@ func (dEnv *DoltEnv) UpdateBranch(name string, new BranchConfig) error {
 	}
 
 	dEnv.RepoState.Branches[name] = new
+
+	err := dEnv.RepoState.Save(dEnv.FS)
+	if err != nil {
+		return ErrFailedToWriteRepoState
+	}
 	return nil
 }
 

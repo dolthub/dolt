@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -27,7 +28,7 @@ import (
 
 var _ chunks.ChunkStore = (*GenerationalNBS)(nil)
 var _ chunks.GenerationalCS = (*GenerationalNBS)(nil)
-var _ chunks.TableFileStore = (*GenerationalNBS)(nil)
+var _ TableFileStore = (*GenerationalNBS)(nil)
 
 type GenerationalNBS struct {
 	oldGen *NomsBlockStore
@@ -150,12 +151,36 @@ func (gcs *GenerationalNBS) HasMany(ctx context.Context, hashes hash.HashSet) (a
 	return gcs.newGen.HasMany(ctx, notInOldGen)
 }
 
+func (gcs *GenerationalNBS) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
+	absent, err := gcs.HasMany(ctx, addrs)
+	if err != nil {
+		return err
+	}
+	if len(absent) != 0 {
+		s := absent.String()
+		return fmt.Errorf("Found dangling references to %s", s)
+	}
+	return nil
+}
+
 // Put caches c in the ChunkSource. Upon return, c must be visible to
 // subsequent Get and Has calls, but must not be persistent until a call
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
-func (gcs *GenerationalNBS) Put(ctx context.Context, c chunks.Chunk) error {
-	return gcs.newGen.Put(ctx, c)
+func (gcs *GenerationalNBS) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
+	addrs, err := getAddrs(ctx, c)
+	if err != nil {
+		return err
+	}
+
+	err = gcs.errorIfDangling(ctx, addrs)
+	if err != nil {
+		return err
+	}
+
+	return gcs.newGen.Put(ctx, c, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+		return nil, nil
+	})
 }
 
 // Returns the NomsVersion with which this ChunkSource is compatible.
@@ -232,7 +257,9 @@ func (gcs *GenerationalNBS) copyToOldGen(ctx context.Context, hashes hash.HashSe
 	var putErr error
 	err = gcs.newGen.GetMany(ctx, notInOldGen, func(ctx context.Context, chunk *chunks.Chunk) {
 		if putErr == nil {
-			putErr = gcs.oldGen.Put(ctx, *chunk)
+			putErr = gcs.oldGen.Put(ctx, *chunk, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+				return nil, nil
+			})
 		}
 	})
 
@@ -244,7 +271,7 @@ func (gcs *GenerationalNBS) copyToOldGen(ctx context.Context, hashes hash.HashSe
 }
 
 type prefixedTableFile struct {
-	chunks.TableFile
+	TableFile
 	prefix string
 }
 
@@ -254,7 +281,7 @@ func (p prefixedTableFile) FileID() string {
 
 // Sources retrieves the current root hash, a list of all the table files (which may include appendix table files),
 // and a second list containing only appendix table files for both the old gen and new gen stores.
-func (gcs *GenerationalNBS) Sources(ctx context.Context) (hash.Hash, []chunks.TableFile, []chunks.TableFile, error) {
+func (gcs *GenerationalNBS) Sources(ctx context.Context) (hash.Hash, []TableFile, []TableFile, error) {
 	root, tFiles, appFiles, err := gcs.newGen.Sources(ctx)
 	if err != nil {
 		return hash.Hash{}, nil, nil, err
@@ -321,7 +348,7 @@ func (gcs *GenerationalNBS) SetRootChunk(ctx context.Context, root, previous has
 }
 
 // SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
-func (gcs *GenerationalNBS) SupportedOperations() chunks.TableFileStoreOps {
+func (gcs *GenerationalNBS) SupportedOperations() TableFileStoreOps {
 	return gcs.newGen.SupportedOperations()
 }
 

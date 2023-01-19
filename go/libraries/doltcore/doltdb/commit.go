@@ -17,6 +17,9 @@ package doltdb
 import (
 	"context"
 	"errors"
+	"fmt"
+
+	"github.com/dolthub/dolt/go/store/prolly"
 
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -101,6 +104,15 @@ func (c *Commit) GetRootValue(ctx context.Context) (*RootValue, error) {
 
 func (c *Commit) GetParent(ctx context.Context, idx int) (*Commit, error) {
 	return NewCommit(ctx, c.vrw, c.ns, c.parents[idx])
+}
+
+func (c *Commit) GetCommitClosure(ctx context.Context) (prolly.CommitClosure, error) {
+	switch v := c.dCommit.NomsValue().(type) {
+	case types.SerialMessage:
+		return datas.NewParentsClosure(ctx, c.dCommit, v, c.vrw, c.ns)
+	default:
+		return prolly.CommitClosure{}, fmt.Errorf("old format lacks commit closure")
+	}
 }
 
 var ErrNoCommonAncestor = errors.New("no common ancestor")

@@ -96,6 +96,10 @@ func (c CommitClosure) IterAllReverse(ctx context.Context) (CommitClosureIter, e
 	return c.closure.IterAllReverse(ctx)
 }
 
+func (c CommitClosure) IsEmpty() bool {
+	return c.Node().Size() == 0
+}
+
 func DecodeCommitClosureKey(key []byte) (height uint64, addr hash.Hash) {
 	height = binary.LittleEndian.Uint64(key)
 	addr = hash.New(key[8:])

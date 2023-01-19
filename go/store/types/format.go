@@ -68,6 +68,14 @@ func IsFormat_DOLT(nbf *NomsBinFormat) bool {
 	return nbf.tag == formatTag_DOLT
 }
 
+func IsFormat_DOLT_DEV(nbf *NomsBinFormat) bool {
+	return nbf.tag == formatTag_DOLT_DEV
+}
+
+func IsFormat_LD(nbf *NomsBinFormat) bool {
+	return nbf.tag == formatTag_LD_1
+}
+
 func GetFormatForVersionString(s string) (*NomsBinFormat, error) {
 	if s == constants.Format718String {
 		return Format_7_18, nil

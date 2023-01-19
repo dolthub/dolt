@@ -15,16 +15,56 @@
 package dprocedures
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 // doltClean is the stored procedure version of the function `dolt_clean`.
 func doltClean(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	res, err := dfunctions.DoDoltClean(ctx, args)
+	res, err := doDoltClean(ctx, args)
 	if err != nil {
 		return nil, err
 	}
 	return rowToIter(int64(res)), nil
+}
+
+func doDoltClean(ctx *sql.Context, args []string) (int, error) {
+	dbName := ctx.GetCurrentDatabase()
+
+	if len(dbName) == 0 {
+		return 1, fmt.Errorf("Empty database name.")
+	}
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return statusErr, err
+	}
+
+	dSess := dsess.DSessFromSess(ctx.Session)
+
+	apr, err := cli.CreateCleanArgParser().Parse(args)
+	if err != nil {
+		return 1, err
+	}
+
+	// Get all the needed roots.
+	roots, ok := dSess.GetRoots(ctx, dbName)
+	if !ok {
+		return 1, fmt.Errorf("Could not load database %s", dbName)
+	}
+
+	roots, err = actions.CleanUntracked(ctx, roots, apr.Args, apr.ContainsAll(cli.DryRunFlag))
+	if err != nil {
+		return 1, fmt.Errorf("failed to clean; %w", err)
+	}
+
+	err = dSess.SetRoots(ctx, dbName, roots)
+	if err != nil {
+		return 1, err
+	}
+	return 0, nil
 }

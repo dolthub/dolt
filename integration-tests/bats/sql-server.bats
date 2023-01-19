@@ -257,18 +257,18 @@ SQL
 
     dolt sql --user=dolt -q "CALL DOLT_ADD('.')"
     # check that dolt_commit works properly when autocommit is on
-    run dolt sql --user=dolt -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+    run dolt sql --user=dolt -q "call dolt_commit('-a', '-m', 'Commit1')"
     [ "$status" -eq 0 ]
 
     # check that dolt_commit throws error now that there are no working set changes.
-    run dolt sql --user=dolt -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+    run dolt sql --user=dolt -q "call dolt_commit('-a', '-m', 'Commit1')"
     [ "$status" -eq 1 ]
 
     # Make a change to the working set but not the staged set.
     run dolt sql --user=dolt -q "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
 
     # check that dolt_commit throws error now that there are no staged changes.
-    run dolt sql --user=dolt -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+    run dolt sql --user=dolt -q "call dolt_commit('-m', 'Commit1')"
     [ "$status" -eq 1 ]
 
     run dolt log
@@ -577,14 +577,14 @@ SQL
           pk int primary key
      );
      INSERT INTO test VALUES (0),(1),(2);
-     SELECT DOLT_ADD('.');
-     SELECT DOLT_COMMIT('-m', 'Step 1');
-     SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+     call dolt_add('.');
+     call dolt_commit('-m', 'Step 1');
+     call dolt_checkout('-b', 'feature-branch');
      INSERT INTO test VALUES (3);
      UPDATE test SET pk=1000 WHERE pk=0;
-     SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
-     SELECT DOLT_CHECKOUT('main');
-     SELECT DOLT_MERGE('feature-branch');
+     call dolt_commit('-a', '-m', 'this is a ff');
+     call dolt_checkout('main');
+     call dolt_merge('feature-branch');
      "
 
      run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SELECT * FROM test"
@@ -836,7 +836,7 @@ SQL
     start_sql_server repo1
 
     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q '
-    select dolt_checkout("new");
+    call dolt_checkout("new");
     CREATE TABLE t (a int primary key, b int);
     INSERT INTO t VALUES (2,2),(3,3);'
 

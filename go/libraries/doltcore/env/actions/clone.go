@@ -32,9 +32,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/strhelp"
-	stchunks "github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -95,7 +95,7 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 		chunksDownloading int64
 		chunksDownloaded  int64
 		currStats         = make(map[string]iohelp.ReadStats)
-		tableFiles        = make(map[string]*stchunks.TableFile)
+		tableFiles        = make(map[string]*nbs.TableFile)
 	)
 
 	p := cli.NewEphemeralPrinter()

@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -40,11 +39,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 var (
@@ -105,7 +102,7 @@ type NomsBlockStore struct {
 	stats *Stats
 }
 
-var _ chunks.TableFileStore = &NomsBlockStore{}
+var _ TableFileStore = &NomsBlockStore{}
 var _ chunks.ChunkStoreGarbageCollector = &NomsBlockStore{}
 
 type Range struct {
@@ -455,7 +452,7 @@ func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string,
 func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 
-	mm := makeManifestManager(blobstoreManifest{"manifest", bs})
+	mm := makeManifestManager(blobstoreManifest{bs})
 
 	p := &blobstorePersister{bs, s3BlockSize, q}
 	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
@@ -471,7 +468,7 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 		return nil, err
 	}
 
-	m, err := getFileManifest(ctx, dir)
+	m, err := getFileManifest(ctx, dir, asyncFlush)
 	if err != nil {
 		return nil, err
 	}
@@ -487,7 +484,7 @@ func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQ
 		return nil, err
 	}
 
-	m, err := getFileManifest(ctx, dir)
+	m, err := getFileManifest(ctx, dir, syncFlush)
 	if err != nil {
 		return nil, err
 	}
@@ -578,9 +575,32 @@ func (nbs *NomsBlockStore) WithoutConjoiner() *NomsBlockStore {
 	}
 }
 
-func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
+func (nbs *NomsBlockStore) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
+	absent, err := nbs.HasMany(ctx, addrs)
+	if err != nil {
+		return err
+	}
+	if len(absent) != 0 {
+		s := absent.String()
+		return fmt.Errorf("Found dangling references to %s", s)
+	}
+	return nil
+}
+
+func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
 	t1 := time.Now()
 	a := addr(c.Hash())
+
+	addrs, err := getAddrs(ctx, c)
+	if err != nil {
+		return err
+	}
+
+	err = nbs.errorIfDangling(ctx, addrs)
+	if err != nil {
+		return err
+	}
+
 	success, err := nbs.addChunk(ctx, a, c.Data())
 	if err != nil {
 		return err
@@ -1164,7 +1184,7 @@ func (tf tableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
 
 // Sources retrieves the current root hash, a list of all table files (which may include appendix tablefiles),
 // and a second list of only the appendix table files
-func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []chunks.TableFile, []chunks.TableFile, error) {
+func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile, []TableFile, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
@@ -1200,8 +1220,8 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []chunks.Tab
 	return contents.GetRoot(), allTableFiles, appendixTableFiles, nil
 }
 
-func getTableFiles(css map[addr]chunkSource, contents manifestContents, numSpecs int, specFunc func(mc manifestContents, idx int) tableSpec) ([]chunks.TableFile, error) {
-	tableFiles := make([]chunks.TableFile, 0)
+func getTableFiles(css map[addr]chunkSource, contents manifestContents, numSpecs int, specFunc func(mc manifestContents, idx int) tableSpec) ([]TableFile, error) {
+	tableFiles := make([]TableFile, 0)
 	if numSpecs == 0 {
 		return tableFiles, nil
 	}
@@ -1274,13 +1294,11 @@ func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[addr]chunkSource, error) {
 
 }
 
-func (nbs *NomsBlockStore) SupportedOperations() chunks.TableFileStoreOps {
+func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
 	var ok bool
-	switch nbs.p.(type) {
-	case *fsTablePersister, *chunkJournal:
-		ok = true
-	}
-	return chunks.TableFileStoreOps{
+	_, ok = nbs.p.(tableFilePersister)
+
+	return TableFileStoreOps{
 		CanRead:  true,
 		CanWrite: ok,
 		CanPrune: ok,
@@ -1290,62 +1308,29 @@ func (nbs *NomsBlockStore) SupportedOperations() chunks.TableFileStoreOps {
 
 func (nbs *NomsBlockStore) Path() (string, bool) {
 	if tfp, ok := nbs.p.(tableFilePersister); ok {
-		return tfp.Path(), true
+		switch p := tfp.(type) {
+		case *fsTablePersister, *chunkJournal:
+			return p.Path(), true
+		default:
+			return "", false
+		}
 	}
 	return "", false
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
 func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
-	var fsPersister *fsTablePersister
-	switch t := nbs.p.(type) {
-	case *fsTablePersister:
-		fsPersister = t
-	case *chunkJournal:
-		fsPersister = t.persister
-	default:
+	tfp, ok := nbs.p.(tableFilePersister)
+	if !ok {
 		return errors.New("Not implemented")
 	}
 
-	tn, err := func() (n string, err error) {
-		var r io.ReadCloser
-		r, _, err = getRd()
-		if err != nil {
-			return "", err
-		}
-		defer func() {
-			cerr := r.Close()
-			if err == nil {
-				err = cerr
-			}
-		}()
-
-		var temp *os.File
-		temp, err = tempfiles.MovableTempFileProvider.NewFile(fsPersister.dir, tempTablePrefix)
-		if err != nil {
-			return "", err
-		}
-
-		defer func() {
-			cerr := temp.Close()
-			if err == nil {
-				err = cerr
-			}
-		}()
-
-		_, err = io.Copy(temp, r)
-		if err != nil {
-			return "", err
-		}
-
-		return temp.Name(), nil
-	}()
+	r, _, err := getRd()
 	if err != nil {
 		return err
 	}
 
-	path := filepath.Join(fsPersister.dir, fileId)
-	return file.Rename(tn, path)
+	return tfp.CopyTableFile(ctx, r, fileId, uint32(numChunks))
 }
 
 // AddTableFilesToManifest adds table files to the manifest
@@ -1496,7 +1481,6 @@ func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-ch
 	if !ok {
 		return nil, fmt.Errorf("NBS does not support copying garbage collection")
 	}
-	path := tfp.Path()
 
 LOOP:
 	for {
@@ -1526,10 +1510,10 @@ LOOP:
 			return nil, ctx.Err()
 		}
 	}
-	return gcc.copyTablesToDir(ctx, path)
+	return gcc.copyTablesToDir(ctx, tfp)
 }
 
-// todo: what's the optimal table currentSize to copy to?
+// todo: what's the optimal table size to copy to?
 func (nbs *NomsBlockStore) gcTableSize() (uint64, error) {
 	total, err := nbs.tables.physicalLen()
 

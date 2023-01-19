@@ -88,7 +88,7 @@ func appendLocalTest(tests []BlobstoreTest) []BlobstoreTest {
 
 func newBlobStoreTests() []BlobstoreTest {
 	var tests []BlobstoreTest
-	tests = append(tests, BlobstoreTest{"inmem", NewInMemoryBlobstore(), 10, 20})
+	tests = append(tests, BlobstoreTest{"inmem", NewInMemoryBlobstore(""), 10, 20})
 	tests = appendLocalTest(tests)
 	tests = appendGCSTest(tests)
 

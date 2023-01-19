@@ -272,30 +272,33 @@ func SqlRowAsCreateProcStmt(r sql.Row) (string, error) {
 func SqlRowAsCreateFragStmt(r sql.Row) (string, error) {
 	var b strings.Builder
 
-	// Write create
-	b.WriteString("CREATE ")
-
-	// Write type
+	// If type is view, add DROP VIEW IF EXISTS statement before CREATE VIEW STATEMENT
 	typeStr := strings.ToUpper(r[0].(string))
-	b.WriteString(typeStr)
-	b.WriteString(" ") // add a space
-
-	// Write view/trigger name
-	nameStr := r[1].(string)
-	b.WriteString(QuoteIdentifier(nameStr))
-	b.WriteString(" ") // add a space
+	if typeStr == "VIEW" {
+		nameStr := r[1].(string)
+		dropStmt := fmt.Sprintf("DROP VIEW IF EXISTS `%s`", nameStr)
+		b.WriteString(dropStmt)
+		b.WriteString(";\n")
+	}
 
 	// Parse statement to extract definition (and remove any weird whitespace issues)
 	defStmt, err := sqlparser.Parse(r[2].(string))
 	if err != nil {
 		return "", err
 	}
+
 	defStr := sqlparser.String(defStmt)
-	if typeStr == "TRIGGER" { // triggers need the create trigger <trig_name> to be cut off
-		defStr = defStr[len("CREATE TRIGGER ")+len(nameStr)+1:]
-	} else { // views need the prefixed with "AS"
-		defStr = "AS " + defStr
+
+	// TODO: this is temporary fix for create statements
+	if typeStr == "TRIGGER" {
+		nameStr := r[1].(string)
+		defStr = fmt.Sprintf("CREATE TRIGGER `%s` %s", nameStr, defStr[len("CREATE TRIGGER ")+len(nameStr)+1:])
+	} else {
+		defStr = strings.Replace(defStr, "create ", "CREATE ", -1)
+		defStr = strings.Replace(defStr, " view ", " VIEW ", -1)
+		defStr = strings.Replace(defStr, " as ", " AS ", -1)
 	}
+
 	b.WriteString(defStr)
 
 	b.WriteString(";")

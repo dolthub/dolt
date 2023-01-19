@@ -81,7 +81,7 @@ create database mydb;
 use mydb;
 create table test(a int primary key);
 call dolt_add('.');
-select dolt_commit("-am", "first commit");
+call dolt_commit("-am", "first commit");
 SQL
 
     [ -d mydb ]
@@ -109,12 +109,12 @@ create database mydb2;
 use mydb1;
 create table test(a int primary key);
 call dolt_add('.');
-select dolt_commit("-am", "first commit mydb1");
+call dolt_commit("-am", "first commit mydb1");
 use mydb2;
 begin;
 create table test(a int primary key);
 call dolt_add('.');
-select dolt_commit("-am", "first commit mydb2");
+call dolt_commit("-am", "first commit mydb2");
 SQL
 
     [ -d db_dir/mydb1 ]
@@ -153,12 +153,12 @@ create database mydb2;
 use mydb1;
 create table test(a int primary key);
 call dolt_add('.');
-select dolt_commit("-am", "first commit mydb1");
+call dolt_commit("-am", "first commit mydb1");
 use mydb2;
 begin;
 create table test(a int primary key);
 call dolt_add('.');
-select dolt_commit("-am", "first commit mydb2");
+call dolt_commit("-am", "first commit mydb2");
 SQL
 
     [ -d "$absdir/mydb1" ]

@@ -183,9 +183,8 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_feature
     start_sql_server repo2
 
-    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "select dolt_checkout('new_feature') as b"
+    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "call dolt_checkout('new_feature')"
     [ $status -eq 0 ]
-    [[ "$output" =~ "b" ]] || false
     [[ "$output" =~ "0" ]] || false
     
     run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "select name from dolt_branches order by name"
@@ -240,7 +239,7 @@ teardown() {
 
     # Creating a branch locally that doesn't exist on the remote
     # works, but connecting to it is an error (nothing to pull)
-    dolt sql-client --use-db "repo2/new_feature" -u dolt -P $PORT -q "select dolt_checkout('-b', 'new_branch')"
+    dolt sql-client --use-db "repo2/new_feature" -u dolt -P $PORT -q "call dolt_checkout('-b', 'new_branch')"
 
     run dolt sql-client --use-db "repo2/new_branch" -u dolt -P $PORT -q "show tables"
     [ $status -ne 0 ]
@@ -382,6 +381,85 @@ teardown() {
     run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "use \`repo2/v1\`"
     [ $status -eq 0 ]
     [ "$output" = "" ]
+}
+
+@test "remotes-sql-server: connect to remote branch that does not exist locally" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+    dolt checkout -b feature
+    dolt commit -am "first commit"
+    dolt push remote1 feature
+    dolt checkout main
+    dolt push remote1 main
+
+    cd ../repo2
+    dolt fetch
+    run dolt branch
+    [[ ! "$output" =~ "feature" ]] || false
+
+    start_sql_server repo2
+
+    # No data on main
+    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "show tables"
+    [ $status -eq 0 ]
+    [ "$output" = "" ]
+
+    run dolt sql-client --use-db repo2/feature -P $PORT -u dolt -q "select active_branch()"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "feature" ]] || false
+    [[ ! "$output" =~ "main" ]] || false
+
+    # connecting to remote branch that does not exist creates new local branch and sets upstream
+    run dolt sql-client --use-db repo2/feature -P $PORT -u dolt -q "call dolt_commit('--allow-empty', '-m', 'empty'); call dolt_push()"
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "the current branch has no upstream branch" ]] || false
+
+    run dolt sql-client --use-db repo2/feature -P $PORT -u dolt -q "show tables"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Tables_in_repo2/feature" ]] || false
+    [[ "$output" =~ "test" ]] || false
+
+    run dolt branch
+    [[ "$output" =~ "feature" ]] || false
+
+    cd ../repo1
+    dolt checkout feature
+    dolt pull remote1 feature
+    run dolt log -n 1 --oneline
+    [[ "$output" =~ "empty" ]] || false
+}
+
+@test "remotes-sql-server: connect to remote tracking branch fails if there are multiple remotes" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+    dolt checkout -b feature
+    dolt commit -am "first commit"
+    dolt push remote1 feature
+    dolt checkout main
+    dolt push remote1 main
+
+    cd ../repo2
+    dolt fetch
+    dolt remote add remote2 file://../rem1
+    dolt fetch remote2
+    run dolt branch
+    [[ ! "$output" =~ "feature" ]] || false
+
+    start_sql_server repo2 >> server_log.txt 2>&1
+
+    # No data on main
+    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "show tables"
+    [ $status -eq 0 ]
+    [ "$output" = "" ]
+
+    run dolt sql-client --use-db repo2/feature -P $PORT -u dolt -q "select active_branch()"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "database not found: repo2/feature" ]] || false
+
+    run grep "'feature' matched multiple remote tracking branches" server_log.txt
+    [ "${#lines[@]}" -ne 0 ]
 }
 
 get_head_commit() {

@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -35,10 +36,10 @@ const (
 // logic to be kept separate from the storage-layer code in pkg types.
 type NomsJSON types.JSON
 
-var _ sql.JSONValue = NomsJSON{}
+var _ types2.JSONValue = NomsJSON{}
 
 // NomsJSONFromJSONValue converts a sql.JSONValue to a NomsJSON value.
-func NomsJSONFromJSONValue(ctx context.Context, vrw types.ValueReadWriter, val sql.JSONValue) (NomsJSON, error) {
+func NomsJSONFromJSONValue(ctx context.Context, vrw types.ValueReadWriter, val types2.JSONValue) (NomsJSON, error) {
 	if noms, ok := val.(NomsJSON); ok {
 		return noms, nil
 	}
@@ -134,18 +135,18 @@ func marshalJSONObject(ctx context.Context, vrw types.ValueReadWriter, obj map[s
 }
 
 // Unmarshall implements the sql.JSONValue interface.
-func (v NomsJSON) Unmarshall(ctx *sql.Context) (doc sql.JSONDocument, err error) {
+func (v NomsJSON) Unmarshall(ctx *sql.Context) (doc types2.JSONDocument, err error) {
 	nomsVal, err := types.JSON(v).Inner()
 	if err != nil {
-		return sql.JSONDocument{}, err
+		return types2.JSONDocument{}, err
 	}
 
 	val, err := unmarshalJSON(ctx, nomsVal)
 	if err != nil {
-		return sql.JSONDocument{}, err
+		return types2.JSONDocument{}, err
 	}
 
-	return sql.JSONDocument{Val: val}, nil
+	return types2.JSONDocument{Val: val}, nil
 }
 
 func unmarshalJSON(ctx context.Context, val types.Value) (interface{}, error) {
@@ -191,7 +192,7 @@ func unmarshalJSONObject(ctx context.Context, m types.Map) (obj map[string]inter
 }
 
 // Compare implements the sql.JSONValue interface.
-func (v NomsJSON) Compare(ctx *sql.Context, other sql.JSONValue) (cmp int, err error) {
+func (v NomsJSON) Compare(ctx *sql.Context, other types2.JSONValue) (cmp int, err error) {
 	noms, ok := other.(NomsJSON)
 	if !ok {
 		doc, err := v.Unmarshall(ctx)
