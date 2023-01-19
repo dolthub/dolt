@@ -226,9 +226,9 @@ func DoltIndexFromSqlIndex(idx sql.Index) DoltIndex {
 func LexFloat(f float64) uint64 {
 	b := math.Float64bits(f)
 	if b>>63 == 0 {
-		return b ^ (1 << 63) // flip the sign bit
+		return b ^ (1 << 63)
 	}
-	return ^b // flip all the bits
+	return ^b
 }
 
 // UnLexFloat maps the lexicographic uint64 representation of a float64 back into a float64
@@ -236,7 +236,7 @@ func LexFloat(f float64) uint64 {
 // For negative floats, we flip all the bits
 func UnLexFloat(b uint64) float64 {
 	if b>>63 == 1 {
-		b = b ^ (1 << 63) // flip the sign bit
+		b = b ^ (1 << 63)
 	} else {
 		b = ^b
 	}
