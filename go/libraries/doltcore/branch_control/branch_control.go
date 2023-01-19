@@ -317,10 +317,10 @@ func HasDatabasePrivileges(ctx Context, database string) bool {
 	if counter == 0 {
 		return false
 	}
-	hasSuper := privSet.Has(sql.PrivilegeType_Super, sql.PrivilegeType_Grant)
+	hasSuper := privSet.Has(sql.PrivilegeType_Super, sql.PrivilegeType_GrantOption)
 	isGlobalAdmin := privSet.Has(sql.PrivilegeType_Create, sql.PrivilegeType_Alter, sql.PrivilegeType_Drop,
-		sql.PrivilegeType_Insert, sql.PrivilegeType_Update, sql.PrivilegeType_Delete, sql.PrivilegeType_Execute, sql.PrivilegeType_Grant)
+		sql.PrivilegeType_Insert, sql.PrivilegeType_Update, sql.PrivilegeType_Delete, sql.PrivilegeType_Execute, sql.PrivilegeType_GrantOption)
 	isDatabaseAdmin := privSet.Database(database).Has(sql.PrivilegeType_Create, sql.PrivilegeType_Alter, sql.PrivilegeType_Drop,
-		sql.PrivilegeType_Insert, sql.PrivilegeType_Update, sql.PrivilegeType_Delete, sql.PrivilegeType_Execute, sql.PrivilegeType_Grant)
+		sql.PrivilegeType_Insert, sql.PrivilegeType_Update, sql.PrivilegeType_Delete, sql.PrivilegeType_Execute, sql.PrivilegeType_GrantOption)
 	return hasSuper || isGlobalAdmin || isDatabaseAdmin
 }
