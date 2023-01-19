@@ -200,7 +200,14 @@ func validateBranchMergedIntoCurrentWorkingBranch(ctx context.Context, dbdata en
 	}
 
 	isMerged, _ := cwbHead.CanFastForwardTo(ctx, branchHead)
-	if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
+	if err != nil {
+		if errors.Is(err, doltdb.ErrUpToDate) {
+			return nil
+		}
+		if errors.Is(err, doltdb.ErrIsAhead) {
+			return ErrUnmergedBranchDelete
+		}
+
 		// TODO: no common ancestor is not an error
 		return err
 	}
@@ -245,7 +252,13 @@ func validateBranchMergedIntoUpstream(ctx context.Context, dbdata env.DbData, br
 	}
 
 	canFF, err := localBranchHead.CanFastForwardTo(ctx, remoteBranchHead)
-	if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
+	if err != nil {
+		if errors.Is(err, doltdb.ErrUpToDate) {
+			return nil
+		}
+		if errors.Is(err, doltdb.ErrIsAhead) {
+			return ErrUnmergedBranchDelete
+		}
 		// TODO: no common ancestor is not an error
 		return err
 	}
