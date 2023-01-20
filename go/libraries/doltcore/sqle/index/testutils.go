@@ -15,16 +15,10 @@
 package index
 
 import (
-	"bytes"
-	"math"
-	"sort"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 func ClosedRange(tpl1, tpl2 types.Tuple) *noms.ReadRange {
@@ -218,113 +212,4 @@ func ProllyRangesFromIndexLookup(ctx *sql.Context, lookup sql.IndexLookup) ([]pr
 
 func DoltIndexFromSqlIndex(idx sql.Index) DoltIndex {
 	return idx.(DoltIndex)
-}
-
-// LexFloat maps the float64 into an uint64 representation in lexicographical order
-// For positive floats, we flip the signed bit
-// For negative floats, we flip all the bits
-func LexFloat(f float64) uint64 {
-	b := math.Float64bits(f)
-	if b>>63 == 0 {
-		return b ^ (1 << 63)
-	}
-	return ^b
-}
-
-// UnLexFloat maps the lexicographic uint64 representation of a float64 back into a float64
-// For positive uint64s, we flip the signed bit
-// For negative floats, we flip all the bits
-func UnLexFloat(b uint64) float64 {
-	if b>>63 == 1 {
-		b = b ^ (1 << 63)
-	} else {
-		b = ^b
-	}
-	return math.Float64frombits(b)
-}
-
-// ZValuePoint takes a Point and interleaves the bits into a [16]byte
-// It will put the bits in this order: x_0, y_0, x_1, y_1 ... x_63, Y_63
-func ZValuePoint(p sqltypes.Point) [16]byte {
-	xLex := LexFloat(p.X)
-	yLex := LexFloat(p.Y)
-
-	res := [16]byte{}
-	for i := 0; i < 16; i++ {
-		for j := 0; j < 4; j++ {
-			x, y := byte((xLex&1)<<1), byte(yLex&1)
-			res[15-i] |= (x | y) << (2 * j)
-			xLex, yLex = xLex>>1, yLex>>1
-		}
-	}
-	return res
-}
-
-// UnZValuePoint takes a [16]byte Z-Value and converts it back to a sql.Point
-func UnZValuePoint(z [16]byte) sqltypes.Point {
-	var x, y uint64
-	for i := 15; i >= 0; i-- {
-		zv := uint64(z[i])
-		for j := 3; j >= 0; j-- {
-			y |= (zv & 1) << (63 - (4*i + j))
-			zv >>= 1
-
-			x |= (zv & 1) << (63 - (4*i + j))
-			zv >>= 1
-		}
-	}
-	xf := UnLexFloat(x)
-	yf := UnLexFloat(y)
-	return sqltypes.Point{X: xf, Y: yf}
-}
-
-func ZSortPoint(points []sqltypes.Point) []sqltypes.Point {
-	sort.Slice(points, func(i, j int) bool {
-		zi, zj := ZValuePoint(points[i]), ZValuePoint(points[j])
-		return bytes.Compare(zi[:], zj[:]) < 0
-	})
-	return points
-}
-
-// ZValue takes a Point and interleaves the bits into a [16]byte
-// It will put the bits in this order: x_0, y_0, x_1, y_1 ... x_63, Y_63
-func ZValue(p [2]float64) string {
-	xLex := LexFloat(p[0])
-	yLex := LexFloat(p[1])
-
-	res := make([]byte, 16)
-	for i := 0; i < 16; i++ {
-		for j := 0; j < 4; j++ {
-			x, y := byte((xLex&1)<<1), byte(yLex&1)
-			res[15-i] |= (x | y) << (2 * j)
-			xLex, yLex = xLex>>1, yLex>>1
-		}
-	}
-	return string(res)
-}
-
-// UnZValue takes a [16]byte Z-Value and converts it back to a sql.Point
-func UnZValue(z string) [2]float64 {
-	var x, y uint64
-	for i := 15; i >= 0; i-- {
-		zv := uint64(z[i])
-		for j := 3; j >= 0; j-- {
-			y |= (zv & 1) << (63 - (4*i + j))
-			zv >>= 1
-
-			x |= (zv & 1) << (63 - (4*i + j))
-			zv >>= 1
-		}
-	}
-	xf := UnLexFloat(x)
-	yf := UnLexFloat(y)
-	return [2]float64{xf, yf}
-}
-
-func ZSort(points []sqltypes.Point) []sqltypes.Point {
-	sort.Slice(points, func(i, j int) bool {
-		zi, zj := ZValue([2]float64{points[i].X, points[i].Y}), ZValue([2]float64{points[j].X, points[j].Y})
-		return zi < zj
-	})
-	return points
 }
