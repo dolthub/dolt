@@ -159,7 +159,6 @@ func TestZValue(t *testing.T) {
 }
 
 func TestZAddr(t *testing.T) {
-
 	t.Run("test points z-addrs", func(t *testing.T) {
 		p := types.Point{X: 1, Y: 2}
 		res := ZAddr(p)
