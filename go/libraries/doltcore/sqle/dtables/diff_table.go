@@ -275,11 +275,13 @@ func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) 
 	}
 }
 
-// fromCommitLookupPartitions creates a diff partition iterator for a set of
-// commits. The structure of the iter requires we pre-populate the parents of
-// from_commit for diffing. We walk the commit graph looking for commits that
-// reference |from_commit| as a parent, and forward populate for the |from_commit|
-// diff partitions we will iterate.
+// fromCommitLookupPartitions creates a diff partition iterator for a set
+// of commits. The structure of the iter requires we pre-populate the
+// children of from_commit for diffing. We walk the commit graph looking
+// for commits that reference |from_commit| as a parent, and forward populate
+// for the |from_commit| diff partitions we will iterate.
+// TODO the structure of the diff iterator doesn't appear to accommodate
+// several children for a parent hash.
 func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.Hash, commits []*doltdb.Commit, metas []*datas.CommitMeta) (sql.PartitionIter, error) {
 	_, exactName, ok, err := dt.workingRoot.GetTableInsensitive(ctx, dt.name)
 	if err != nil {
@@ -413,9 +415,9 @@ func tableInfoForCommit(ctx context.Context, table string, cm *doltdb.Commit, hs
 	return NewTblInfoAtCommit(hs.String(), &ts, tbl, tblHash), nil
 }
 
-// toCommitLookupPartitions creates a diff partition iterator for a specific
-// commit. The structure of the iter requires we pre-populate the parents of
-// to_commit for diffing.
+// toCommitLookupPartitions creates a diff partition iterator for a set of
+// commits. The structure of the iter requires we pre-populate the parents
+// of to_commit for diffing.
 func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Hash, commits []*doltdb.Commit, metas []*datas.CommitMeta) (sql.PartitionIter, error) {
 	t, exactName, ok, err := dt.workingRoot.GetTableInsensitive(ctx, dt.name)
 	if err != nil {

@@ -2800,12 +2800,14 @@ var SystemTableIndexTests = []systabScript{
 		name: "commit indexing edge cases",
 		setup: append(systabSetup,
 			"call dolt_checkout('-b', 'feat');",
-			"call dolt_commit('--allow-empty', '-m', 'feat commit');",
+			"call dolt_commit('--allow-empty', '-m', 'feat commit 1');",
+			"call dolt_commit('--allow-empty', '-m', 'feat commit 2');",
 			"call dolt_checkout('main');",
 			"update xy set y = y+1 where x > 70 and x < 90;",
 			"set @commit = (select commit_hash from dolt_log where message = 'commit 1');",
 			"set @root_commit = (select commit_hash from dolt_log where message = 'Initialize data repository');",
 			"set @feat_head = hashof('feat');",
+			"set @feat_head1 = hashof('feat~');",
 		),
 		queries: []systabQuery{
 			{
@@ -2813,8 +2815,10 @@ var SystemTableIndexTests = []systabScript{
 				exp:   []sql.Row{{80, 80}, {81, 81}, {82, 82}, {83, 83}, {84, 84}},
 			},
 			{
-				// TODO from_commit should find all commits that reference it
-				// as a parent
+				query: "select * from dolt_diff_xy where from_commit = @feat_head1;",
+				exp:   []sql.Row{},
+			},
+			{
 				query: "select * from dolt_diff_xy where from_commit = 'WORKING';",
 				exp:   []sql.Row{},
 			},
