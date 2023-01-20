@@ -16,6 +16,8 @@ package writer
 
 import (
 	"context"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"io"
 	"strings"
 
@@ -500,13 +502,47 @@ func (m prollySpatialIndexWriter) trimKeyPart(to int, keyPart interface{}) inter
 }
 
 func (m prollySpatialIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
+	// there should only ever be 1 geometry type column; everything else fails
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		keyPart := m.trimKeyPart(to, sqlRow[from])
-		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
+		//keyPart := m.trimKeyPart(to, sqlRow[from])
+		// call lex here to create a key consisting of (level, z-value of minimum bounding rect)
+		// we will always have to do the extended look up thing (i forgot what it's called)
+		// but we need to use pk to get actual type unless it's a point
+
+		geom, ok := sqlRow[from].(types.GeometryValue)
+		if !ok {
+			panic("impossible")
+		}
+		bbox := spatial.FindBBox(geom)
+		zMin := index.ZValue([2]float64{bbox[0], bbox[1]})
+		zMax := index.ZValue([2]float64{bbox[2], bbox[3]})
+		zVal := ""
+
+		// find "level", by dropping all non-matching bits
+		for i := 0; i < 16; i++ {
+			var c uint8
+			var mask uint8 = 0x80
+			matches := ^(zMin[i] ^ zMax[i])
+			if mask & matches == 0 {
+				break
+			}
+			for j := 0; j < 8; j++ {
+				c |= mask & zMin[i]
+				mask = mask >> 1
+				if mask & matches == 0 {
+					break
+				}
+			}
+			zVal += string(c)
+		}
+
+		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, zVal); err != nil {
 			return nil, err
 		}
 	}
+
+	// need custom build probably...
 	return m.keyBld.Build(sharePool), nil
 }
 
