@@ -169,7 +169,7 @@ func TestZAddr(t *testing.T) {
 		a := types.Point{X: 1, Y: 1}
 		b := types.Point{X: 2, Y: 2}
 		c := types.Point{X: 3, Y: 3}
-		l := types.LineString{Points: []types.Point{a,b,c}}
+		l := types.LineString{Points: []types.Point{a, b, c}}
 		res := ZAddr(l)
 		assert.Equal(t, "cfffff0000000000000000000000000007", hex.EncodeToString(res[:]))
 	})
@@ -179,7 +179,7 @@ func TestZAddr(t *testing.T) {
 		b := types.Point{X: 1, Y: 1}
 		c := types.Point{X: 1, Y: -1}
 		d := types.Point{X: -1, Y: -1}
-		l := types.LineString{Points: []types.Point{a,b,c,d,a}}
+		l := types.LineString{Points: []types.Point{a, b, c, d, a}}
 		p := types.Polygon{Lines: []types.LineString{l}}
 		res := ZAddr(p)
 		assert.Equal(t, "300000ffffffffffffffffffffffffff07", hex.EncodeToString(res[:]))

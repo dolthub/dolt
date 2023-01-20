@@ -16,9 +16,10 @@ package index
 
 import (
 	"bytes"
-	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
 	"math"
 	"sort"
+
+	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
 
 	"github.com/dolthub/go-mysql-server/sql/types"
 )
@@ -110,8 +111,8 @@ func ZAddr(v types.GeometryValue) [17]byte {
 		}
 		var mask uint8 = 0x80
 		for j := uint8(0); j < 8; j++ {
-			if mask & match == 1 {
-				level = 8 * i + j
+			if mask&match == 1 {
+				level = 8*i + j
 			}
 			mask = mask >> 1
 		}
