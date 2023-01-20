@@ -215,4 +215,3 @@ func ProllyRangesFromIndexLookup(ctx *sql.Context, lookup sql.IndexLookup) ([]pr
 func DoltIndexFromSqlIndex(idx sql.Index) DoltIndex {
 	return idx.(DoltIndex)
 }
-
