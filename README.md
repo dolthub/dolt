@@ -136,6 +136,14 @@ You can install `dolt` using [Chocolatey](https://chocolatey.org/):
 choco install dolt
 ```
 
+#### Docker
+
+There are following official Docker images for Dolt:
+
+* [`dolthub/dolt`](https://hub.docker.com/r/dolthub/dolt) for running Dolt
+as CLI tool.
+* [`dolthub/dolt-sql-server`](https://hub.docker.com/r/dolthub/dolt-sql-server) for running Dolt in server mode.
+
 ## From Source
 
 Make sure you have Go installed, and that `go` is in your path.
