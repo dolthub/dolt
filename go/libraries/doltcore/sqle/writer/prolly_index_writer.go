@@ -16,7 +16,6 @@ package writer
 
 import (
 	"context"
-	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"io"
 	"strings"
@@ -478,66 +477,17 @@ func (m prollySpatialIndexWriter) ValidateKeyViolations(ctx context.Context, sql
 	return nil
 }
 
-// trimKeyPart will trim entry into the sql.Row depending on the prefixLengths
-func (m prollySpatialIndexWriter) trimKeyPart(to int, keyPart interface{}) interface{} {
-	var prefixLength uint16
-	if len(m.prefixLengths) > to {
-		prefixLength = m.prefixLengths[to]
-	}
-	if prefixLength != 0 {
-		switch kp := keyPart.(type) {
-		case string:
-			if prefixLength > uint16(len(kp)) {
-				prefixLength = uint16(len(kp))
-			}
-			keyPart = kp[:prefixLength]
-		case []uint8:
-			if prefixLength > uint16(len(kp)) {
-				prefixLength = uint16(len(kp))
-			}
-			keyPart = kp[:prefixLength]
-		}
-	}
-	return keyPart
-}
-
 func (m prollySpatialIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
 	// there should only ever be 1 geometry type column; everything else fails
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		//keyPart := m.trimKeyPart(to, sqlRow[from])
-		// call lex here to create a key consisting of (level, z-value of minimum bounding rect)
-		// we will always have to do the extended look up thing (i forgot what it's called)
-		// but we need to use pk to get actual type unless it's a point
-
 		geom, ok := sqlRow[from].(types.GeometryValue)
 		if !ok {
 			panic("impossible")
 		}
-		bbox := spatial.FindBBox(geom)
-		zMin := index.ZValue([2]float64{bbox[0], bbox[1]})
-		zMax := index.ZValue([2]float64{bbox[2], bbox[3]})
-		zVal := ""
 
-		// find "level", by dropping all non-matching bits
-		for i := 0; i < 16; i++ {
-			var c uint8
-			var mask uint8 = 0x80
-			matches := ^(zMin[i] ^ zMax[i])
-			if mask & matches == 0 {
-				break
-			}
-			for j := 0; j < 8; j++ {
-				c |= mask & zMin[i]
-				mask = mask >> 1
-				if mask & matches == 0 {
-					break
-				}
-			}
-			zVal += string(c)
-		}
-
-		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, zVal); err != nil {
+		zAddr := index.ZAddr(geom)
+		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, zAddr); err != nil {
 			return nil, err
 		}
 	}
@@ -552,52 +502,6 @@ func (m prollySpatialIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) er
 		return err
 	}
 	return m.mut.Put(ctx, k, val.EmptyTuple)
-}
-
-func (m prollySpatialIndexWriter) checkForUniqueKeyErr(ctx context.Context, sqlRow sql.Row) error {
-	ns := m.mut.NodeStore()
-	for to := range m.keyMap[:m.idxCols] {
-		from := m.keyMap.MapOrdinal(to)
-		if sqlRow[from] == nil {
-			// NULL is incomparable and cannot
-			// trigger a UNIQUE KEY violation
-			m.keyBld.Recycle()
-			return nil
-		}
-		keyPart := m.trimKeyPart(to, sqlRow[from])
-		if err := index.PutField(ctx, ns, m.keyBld, to, keyPart); err != nil {
-			return err
-		}
-	}
-
-	// build a val.Tuple containing only fields for the unique column prefix
-	key := m.keyBld.BuildPrefix(ns.Pool(), m.idxCols)
-	desc := m.keyBld.Desc.PrefixDesc(m.idxCols)
-	rng := prolly.PrefixRange(key, desc)
-	iter, err := m.mut.IterRange(ctx, rng)
-	if err != nil {
-		return err
-	}
-
-	idxKey, _, err := iter.Next(ctx)
-	if err == io.EOF {
-		return nil // no violation
-	} else if err != nil {
-		return err
-	}
-
-	// |prefix| collides with an existing key
-	idxDesc := m.keyBld.Desc
-	for to := range m.pkMap {
-		from := m.pkMap.MapOrdinal(to)
-		m.pkBld.PutRaw(to, idxDesc.GetField(from, idxKey))
-	}
-	existingPK := m.pkBld.Build(sharePool)
-
-	return secondaryUniqueKeyError{
-		keyStr:      FormatKeyForUniqKeyErr(key, desc),
-		existingKey: existingPK,
-	}
 }
 
 func (m prollySpatialIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
@@ -615,16 +519,8 @@ func (m prollySpatialIndexWriter) Update(ctx context.Context, oldRow sql.Row, ne
 		return err
 	}
 
-	// todo(andy): we can skip building, deleting |oldKey|
-	//  if we know the key fields are unchanged
 	if err := m.mut.Delete(ctx, oldKey); err != nil {
 		return err
-	}
-
-	if m.unique {
-		if err := m.checkForUniqueKeyErr(ctx, newRow); err != nil {
-			return err
-		}
 	}
 
 	newKey, err := m.keyFromRow(ctx, newRow)
