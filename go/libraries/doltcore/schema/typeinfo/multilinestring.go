@@ -20,6 +20,7 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -27,12 +28,12 @@ import (
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type multilinestringType struct {
-	sqlMultiLineStringType sql.MultiLineStringType
+	sqlMultiLineStringType types2.MultiLineStringType
 }
 
 var _ TypeInfo = (*multilinestringType)(nil)
 
-var MultiLineStringType = &multilinestringType{sql.MultiLineStringType{}}
+var MultiLineStringType = &multilinestringType{types2.MultiLineStringType{}}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *multilinestringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
@@ -78,7 +79,7 @@ func (ti *multilinestringType) ConvertValueToNomsValue(ctx context.Context, vrw 
 		return nil, err
 	}
 
-	return types.ConvertSQLMultiLineStringToTypesMultiLineString(mline.(sql.MultiLineString)), nil
+	return types.ConvertSQLMultiLineStringToTypesMultiLineString(mline.(types2.MultiLineString)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -135,7 +136,7 @@ func (ti *multilinestringType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *multilinestringType) Promote() TypeInfo {
-	return &multilinestringType{ti.sqlMultiLineStringType.Promote().(sql.MultiLineStringType)}
+	return &multilinestringType{ti.sqlMultiLineStringType.Promote().(types2.MultiLineStringType)}
 }
 
 // String implements TypeInfo interface.
@@ -227,5 +228,5 @@ func CreateMultiLineStringTypeFromParams(params map[string]string) (TypeInfo, er
 		}
 	}
 
-	return &multilinestringType{sqlMultiLineStringType: sql.MultiLineStringType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
+	return &multilinestringType{sqlMultiLineStringType: types2.MultiLineStringType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

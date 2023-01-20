@@ -14,7 +14,10 @@
 
 package dprocedures
 
-import "github.com/dolthub/go-mysql-server/sql"
+import (
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
+)
 
 var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_add", Schema: int64Schema("status"), Function: doltAdd},
@@ -62,7 +65,7 @@ func stringSchema(columnNames ...string) sql.Schema {
 	for i, colName := range columnNames {
 		sch[i] = &sql.Column{
 			Name:     colName,
-			Type:     sql.LongText,
+			Type:     types.LongText,
 			Nullable: false,
 		}
 	}
@@ -75,7 +78,7 @@ func int64Schema(columnNames ...string) sql.Schema {
 	for i, colName := range columnNames {
 		sch[i] = &sql.Column{
 			Name:     colName,
-			Type:     sql.Int64,
+			Type:     types.Int64,
 			Nullable: false,
 		}
 	}

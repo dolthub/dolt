@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -231,9 +232,9 @@ func emptyRowDiff(columns int) rowDiff {
 }
 
 func strCol(name string) *sql.Column {
-	return &sql.Column{Name: name, Type: sql.Text}
+	return &sql.Column{Name: name, Type: types.Text}
 }
 
 func intCol(name string) *sql.Column {
-	return &sql.Column{Name: name, Type: sql.Int64}
+	return &sql.Column{Name: name, Type: types.Int64}
 }

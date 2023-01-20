@@ -30,6 +30,7 @@ import (
 	"github.com/cespare/xxhash"
 	"github.com/creasty/defaults"
 	sql2 "github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 	ast "github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/stretchr/testify/require"
@@ -635,7 +636,7 @@ func parseTableAndSchema(q string) (string, []string, []sql2.Type) {
 		table = n.Table.String()
 		for _, col := range n.TableSpec.Columns {
 			names = append(names, col.Name.String())
-			typ, err := sql2.ColumnTypeToType(&col.Type)
+			typ, err := types2.ColumnTypeToType(&col.Type)
 			if err != nil {
 				panic(fmt.Sprintf("unexpected error reading type: %s", err))
 			}

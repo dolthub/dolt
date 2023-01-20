@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -27,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
+var hashType = types.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
 // doltCommit is the stored procedure version for the CLI function `commit`.
 func doltCommit(ctx *sql.Context, args ...string) (sql.RowIter, error) {
@@ -159,7 +160,7 @@ func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]st
 			return nil, err
 		}
 
-		text, err := sql.Text.Convert(childVal)
+		text, err := types.Text.Convert(childVal)
 
 		if err != nil {
 			return nil, err

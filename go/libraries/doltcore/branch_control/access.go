@@ -364,10 +364,10 @@ func (tbl *Access) insert(database string, branch string, user string, host stri
 
 // Serialize returns the offset for the AccessValue written to the given builder.
 func (val *AccessValue) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
-	database := b.CreateString(val.Database)
-	branch := b.CreateString(val.Branch)
-	user := b.CreateString(val.User)
-	host := b.CreateString(val.Host)
+	database := b.CreateSharedString(val.Database)
+	branch := b.CreateSharedString(val.Branch)
+	user := b.CreateSharedString(val.User)
+	host := b.CreateSharedString(val.Host)
 
 	serial.BranchControlAccessValueStart(b)
 	serial.BranchControlAccessValueAddDatabase(b, database)

@@ -15,7 +15,7 @@
 package types
 
 import (
-	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 func ConvertTypesGeometryToSQLGeometry(g Geometry) interface{} {
@@ -39,52 +39,52 @@ func ConvertTypesGeometryToSQLGeometry(g Geometry) interface{} {
 	}
 }
 
-func ConvertTypesPointToSQLPoint(p Point) sql.Point {
-	return sql.Point{SRID: p.SRID, X: p.X, Y: p.Y}
+func ConvertTypesPointToSQLPoint(p Point) types.Point {
+	return types.Point{SRID: p.SRID, X: p.X, Y: p.Y}
 }
 
-func ConvertTypesLineStringToSQLLineString(l LineString) sql.LineString {
-	points := make([]sql.Point, len(l.Points))
+func ConvertTypesLineStringToSQLLineString(l LineString) types.LineString {
+	points := make([]types.Point, len(l.Points))
 	for i, p := range l.Points {
 		points[i] = ConvertTypesPointToSQLPoint(p)
 	}
-	return sql.LineString{SRID: l.SRID, Points: points}
+	return types.LineString{SRID: l.SRID, Points: points}
 }
 
-func ConvertTypesPolygonToSQLPolygon(p Polygon) sql.Polygon {
-	lines := make([]sql.LineString, len(p.Lines))
+func ConvertTypesPolygonToSQLPolygon(p Polygon) types.Polygon {
+	lines := make([]types.LineString, len(p.Lines))
 	for i, l := range p.Lines {
 		lines[i] = ConvertTypesLineStringToSQLLineString(l)
 	}
-	return sql.Polygon{SRID: p.SRID, Lines: lines}
+	return types.Polygon{SRID: p.SRID, Lines: lines}
 }
 
-func ConvertTypesMultiPointToSQLMultiPoint(p MultiPoint) sql.MultiPoint {
-	points := make([]sql.Point, len(p.Points))
+func ConvertTypesMultiPointToSQLMultiPoint(p MultiPoint) types.MultiPoint {
+	points := make([]types.Point, len(p.Points))
 	for i, point := range p.Points {
 		points[i] = ConvertTypesPointToSQLPoint(point)
 	}
-	return sql.MultiPoint{SRID: p.SRID, Points: points}
+	return types.MultiPoint{SRID: p.SRID, Points: points}
 }
 
-func ConvertTypesMultiLineStringToSQLMultiLineString(l MultiLineString) sql.MultiLineString {
-	lines := make([]sql.LineString, len(l.Lines))
+func ConvertTypesMultiLineStringToSQLMultiLineString(l MultiLineString) types.MultiLineString {
+	lines := make([]types.LineString, len(l.Lines))
 	for i, l := range l.Lines {
 		lines[i] = ConvertTypesLineStringToSQLLineString(l)
 	}
-	return sql.MultiLineString{SRID: l.SRID, Lines: lines}
+	return types.MultiLineString{SRID: l.SRID, Lines: lines}
 }
 
-func ConvertTypesMultiPolygonToSQLMultiPolygon(p MultiPolygon) sql.MultiPolygon {
-	polys := make([]sql.Polygon, len(p.Polygons))
+func ConvertTypesMultiPolygonToSQLMultiPolygon(p MultiPolygon) types.MultiPolygon {
+	polys := make([]types.Polygon, len(p.Polygons))
 	for i, p := range p.Polygons {
 		polys[i] = ConvertTypesPolygonToSQLPolygon(p)
 	}
-	return sql.MultiPolygon{SRID: p.SRID, Polygons: polys}
+	return types.MultiPolygon{SRID: p.SRID, Polygons: polys}
 }
 
-func ConvertTypesGeomCollToSQLGeomColl(g GeomColl) sql.GeomColl {
-	geoms := make([]sql.GeometryValue, len(g.Geometries))
+func ConvertTypesGeomCollToSQLGeomColl(g GeomColl) types.GeomColl {
+	geoms := make([]types.GeometryValue, len(g.Geometries))
 	for i, geom := range g.Geometries {
 		switch geo := geom.(type) {
 		case Point:
@@ -103,35 +103,35 @@ func ConvertTypesGeomCollToSQLGeomColl(g GeomColl) sql.GeomColl {
 			geoms[i] = ConvertTypesGeomCollToSQLGeomColl(geo)
 		}
 	}
-	return sql.GeomColl{SRID: g.SRID, Geoms: geoms}
+	return types.GeomColl{SRID: g.SRID, Geoms: geoms}
 }
 
 func ConvertSQLGeometryToTypesGeometry(p interface{}) Value {
 	switch inner := p.(type) {
-	case sql.Point:
+	case types.Point:
 		return ConvertSQLPointToTypesPoint(inner)
-	case sql.LineString:
+	case types.LineString:
 		return ConvertSQLLineStringToTypesLineString(inner)
-	case sql.Polygon:
+	case types.Polygon:
 		return ConvertSQLPolygonToTypesPolygon(inner)
-	case sql.MultiPoint:
+	case types.MultiPoint:
 		return ConvertSQLMultiPointToTypesMultiPoint(inner)
-	case sql.MultiLineString:
+	case types.MultiLineString:
 		return ConvertSQLMultiLineStringToTypesMultiLineString(inner)
-	case sql.MultiPolygon:
+	case types.MultiPolygon:
 		return ConvertSQLMultiPolygonToTypesMultiPolygon(inner)
-	case sql.GeomColl:
+	case types.GeomColl:
 		return ConvertSQLGeomCollToTypesGeomColl(inner)
 	default:
 		panic("used an invalid type sql.Geometry.Inner")
 	}
 }
 
-func ConvertSQLPointToTypesPoint(p sql.Point) Point {
+func ConvertSQLPointToTypesPoint(p types.Point) Point {
 	return Point{SRID: p.SRID, X: p.X, Y: p.Y}
 }
 
-func ConvertSQLLineStringToTypesLineString(l sql.LineString) LineString {
+func ConvertSQLLineStringToTypesLineString(l types.LineString) LineString {
 	points := make([]Point, len(l.Points))
 	for i, p := range l.Points {
 		points[i] = ConvertSQLPointToTypesPoint(p)
@@ -139,7 +139,7 @@ func ConvertSQLLineStringToTypesLineString(l sql.LineString) LineString {
 	return LineString{SRID: l.SRID, Points: points}
 }
 
-func ConvertSQLPolygonToTypesPolygon(p sql.Polygon) Polygon {
+func ConvertSQLPolygonToTypesPolygon(p types.Polygon) Polygon {
 	lines := make([]LineString, len(p.Lines))
 	for i, l := range p.Lines {
 		lines[i] = ConvertSQLLineStringToTypesLineString(l)
@@ -147,7 +147,7 @@ func ConvertSQLPolygonToTypesPolygon(p sql.Polygon) Polygon {
 	return Polygon{SRID: p.SRID, Lines: lines}
 }
 
-func ConvertSQLMultiPointToTypesMultiPoint(p sql.MultiPoint) MultiPoint {
+func ConvertSQLMultiPointToTypesMultiPoint(p types.MultiPoint) MultiPoint {
 	points := make([]Point, len(p.Points))
 	for i, point := range p.Points {
 		points[i] = ConvertSQLPointToTypesPoint(point)
@@ -155,7 +155,7 @@ func ConvertSQLMultiPointToTypesMultiPoint(p sql.MultiPoint) MultiPoint {
 	return MultiPoint{SRID: p.SRID, Points: points}
 }
 
-func ConvertSQLMultiLineStringToTypesMultiLineString(p sql.MultiLineString) MultiLineString {
+func ConvertSQLMultiLineStringToTypesMultiLineString(p types.MultiLineString) MultiLineString {
 	lines := make([]LineString, len(p.Lines))
 	for i, l := range p.Lines {
 		lines[i] = ConvertSQLLineStringToTypesLineString(l)
@@ -163,7 +163,7 @@ func ConvertSQLMultiLineStringToTypesMultiLineString(p sql.MultiLineString) Mult
 	return MultiLineString{SRID: p.SRID, Lines: lines}
 }
 
-func ConvertSQLMultiPolygonToTypesMultiPolygon(p sql.MultiPolygon) MultiPolygon {
+func ConvertSQLMultiPolygonToTypesMultiPolygon(p types.MultiPolygon) MultiPolygon {
 	polys := make([]Polygon, len(p.Polygons))
 	for i, p := range p.Polygons {
 		polys[i] = ConvertSQLPolygonToTypesPolygon(p)
@@ -171,23 +171,23 @@ func ConvertSQLMultiPolygonToTypesMultiPolygon(p sql.MultiPolygon) MultiPolygon 
 	return MultiPolygon{SRID: p.SRID, Polygons: polys}
 }
 
-func ConvertSQLGeomCollToTypesGeomColl(g sql.GeomColl) GeomColl {
+func ConvertSQLGeomCollToTypesGeomColl(g types.GeomColl) GeomColl {
 	geoms := make([]Value, len(g.Geoms))
 	for i, geom := range g.Geoms {
 		switch geo := geom.(type) {
-		case sql.Point:
+		case types.Point:
 			geoms[i] = ConvertSQLPointToTypesPoint(geo)
-		case sql.LineString:
+		case types.LineString:
 			geoms[i] = ConvertSQLLineStringToTypesLineString(geo)
-		case sql.Polygon:
+		case types.Polygon:
 			geoms[i] = ConvertSQLPolygonToTypesPolygon(geo)
-		case sql.MultiPoint:
+		case types.MultiPoint:
 			geoms[i] = ConvertSQLMultiPointToTypesMultiPoint(geo)
-		case sql.MultiLineString:
+		case types.MultiLineString:
 			geoms[i] = ConvertSQLMultiLineStringToTypesMultiLineString(geo)
-		case sql.MultiPolygon:
+		case types.MultiPolygon:
 			geoms[i] = ConvertSQLMultiPolygonToTypesMultiPolygon(geo)
-		case sql.GeomColl:
+		case types.GeomColl:
 			geoms[i] = ConvertSQLGeomCollToTypesGeomColl(geo)
 		}
 	}
@@ -197,63 +197,63 @@ func ConvertSQLGeomCollToTypesGeomColl(g sql.GeomColl) GeomColl {
 // TODO: all methods here just defer to their SQL equivalents, and assume we always receive good data
 
 func DeserializeEWKBHeader(buf []byte) (uint32, bool, uint32, error) {
-	return sql.DeserializeEWKBHeader(buf)
+	return types.DeserializeEWKBHeader(buf)
 }
 
 func DeserializeWKBHeader(buf []byte) (bool, uint32, error) {
-	return sql.DeserializeWKBHeader(buf)
+	return types.DeserializeWKBHeader(buf)
 }
 
-func DeserializePoint(buf []byte, isBig bool, srid uint32) sql.Point {
-	p, _, err := sql.DeserializePoint(buf, isBig, srid)
+func DeserializePoint(buf []byte, isBig bool, srid uint32) types.Point {
+	p, _, err := types.DeserializePoint(buf, isBig, srid)
 	if err != nil {
 		panic(err)
 	}
 	return p
 }
 
-func DeserializeLine(buf []byte, isBig bool, srid uint32) sql.LineString {
-	l, _, err := sql.DeserializeLine(buf, isBig, srid)
+func DeserializeLine(buf []byte, isBig bool, srid uint32) types.LineString {
+	l, _, err := types.DeserializeLine(buf, isBig, srid)
 	if err != nil {
 		panic(err)
 	}
 	return l
 }
 
-func DeserializePoly(buf []byte, isBig bool, srid uint32) sql.Polygon {
-	p, _, err := sql.DeserializePoly(buf, isBig, srid)
+func DeserializePoly(buf []byte, isBig bool, srid uint32) types.Polygon {
+	p, _, err := types.DeserializePoly(buf, isBig, srid)
 	if err != nil {
 		panic(err)
 	}
 	return p
 }
 
-func DeserializeMPoint(buf []byte, isBig bool, srid uint32) sql.MultiPoint {
-	p, _, err := sql.DeserializeMPoint(buf, isBig, srid)
+func DeserializeMPoint(buf []byte, isBig bool, srid uint32) types.MultiPoint {
+	p, _, err := types.DeserializeMPoint(buf, isBig, srid)
 	if err != nil {
 		panic(err)
 	}
 	return p
 }
 
-func DeserializeMLine(buf []byte, isBig bool, srid uint32) sql.MultiLineString {
-	p, _, err := sql.DeserializeMLine(buf, isBig, srid)
+func DeserializeMLine(buf []byte, isBig bool, srid uint32) types.MultiLineString {
+	p, _, err := types.DeserializeMLine(buf, isBig, srid)
 	if err != nil {
 		panic(err)
 	}
 	return p
 }
 
-func DeserializeMPoly(buf []byte, isBig bool, srid uint32) sql.MultiPolygon {
-	p, _, err := sql.DeserializeMPoly(buf, isBig, srid)
+func DeserializeMPoly(buf []byte, isBig bool, srid uint32) types.MultiPolygon {
+	p, _, err := types.DeserializeMPoly(buf, isBig, srid)
 	if err != nil {
 		panic(err)
 	}
 	return p
 }
 
-func DeserializeGeomColl(buf []byte, isBig bool, srid uint32) sql.GeomColl {
-	g, _, err := sql.DeserializeGeomColl(buf, isBig, srid)
+func DeserializeGeomColl(buf []byte, isBig bool, srid uint32) types.GeomColl {
+	g, _, err := types.DeserializeGeomColl(buf, isBig, srid)
 	if err != nil {
 		panic(err)
 	}

@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -42,7 +43,7 @@ func prollyParentFkConstraintViolations(
 	postParentRowData := durable.ProllyMapFromIndex(postParent.RowData)
 	postParentIndexData := durable.ProllyMapFromIndex(postParent.IndexData)
 
-	idxDesc := postParent.Index.Schema().GetKeyDescriptor()
+	idxDesc, _ := postParentIndexData.Descriptors()
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	partialKB := val.NewTupleBuilder(partialDesc)
 
@@ -102,12 +103,11 @@ func prollyChildFkConstraintViolations(
 	preChildRowData prolly.Map,
 	receiver FKViolationReceiver) error {
 	postChildRowData := durable.ProllyMapFromIndex(postChild.RowData)
+	parentScndryIdx := durable.ProllyMapFromIndex(postParent.IndexData)
 
-	idxDesc := postChild.Index.Schema().GetKeyDescriptor()
+	idxDesc, _ := parentScndryIdx.Descriptors()
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	partialKB := val.NewTupleBuilder(partialDesc)
-
-	parentScndryIdx := durable.ProllyMapFromIndex(postParent.IndexData)
 
 	err := prolly.DiffMaps(ctx, preChildRowData, postChildRowData, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
@@ -276,12 +276,12 @@ type FkCVMeta struct {
 	Table             string   `json:"Table"`
 }
 
-func (m FkCVMeta) Unmarshall(ctx *sql.Context) (val sql.JSONDocument, err error) {
-	return sql.JSONDocument{Val: m}, nil
+func (m FkCVMeta) Unmarshall(ctx *sql.Context) (val types.JSONDocument, err error) {
+	return types.JSONDocument{Val: m}, nil
 }
 
-func (m FkCVMeta) Compare(ctx *sql.Context, v sql.JSONValue) (cmp int, err error) {
-	ours := sql.JSONDocument{Val: m}
+func (m FkCVMeta) Compare(ctx *sql.Context, v types.JSONValue) (cmp int, err error) {
+	ours := types.JSONDocument{Val: m}
 	return ours.Compare(ctx, v)
 }
 
@@ -289,7 +289,7 @@ func (m FkCVMeta) ToString(ctx *sql.Context) (string, error) {
 	return m.PrettyPrint(), nil
 }
 
-var _ sql.JSONValue = FkCVMeta{}
+var _ types.JSONValue = FkCVMeta{}
 
 // PrettyPrint is a custom pretty print function to match the old format's
 // output which includes additional whitespace between keys, values, and array elements.

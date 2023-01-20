@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
@@ -84,7 +85,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO test VALUES (4)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 		},
 	},
@@ -260,7 +261,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "DELETE FROM dolt_conflicts_test",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "commit",
@@ -367,7 +368,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO test VALUES (4)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 		},
 	},
@@ -1029,7 +1030,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 5}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 3, InsertID: 5}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
@@ -1066,7 +1067,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO t VALUES (NULL,6),(7,7),(NULL,8);",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, InsertID: 6}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 3, InsertID: 6}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
@@ -1101,7 +1102,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO t VALUES (3,3),(NULL,6);",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 3}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
@@ -1137,7 +1138,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO t VALUES (3,3),(NULL,7);",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 3}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 3}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
@@ -1219,7 +1220,7 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "delete from t;",
-				Expected: []sql.Row{{sql.NewOkResult(2)}},
+				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "select * from t;",
@@ -1247,7 +1248,7 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "truncate t;",
-				Expected: []sql.Row{{sql.NewOkResult(2)}},
+				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "select * from t;",
@@ -1272,7 +1273,7 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "delete from t;",
-				Expected: []sql.Row{{sql.NewOkResult(4)}},
+				Expected: []sql.Row{{types.NewOkResult(4)}},
 			},
 			{
 				Query:    "select * from t;",
@@ -1294,7 +1295,7 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "truncate t;",
-				Expected: []sql.Row{{sql.NewOkResult(4)}},
+				Expected: []sql.Row{{types.NewOkResult(4)}},
 			},
 			{
 				Query:    "select * from t;",
@@ -1556,7 +1557,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			// Make sure that we can update using it
 			{
 				Query:    "update dolt_conflicts_t SET our_col1 = their_col1 where dolt_conflict_id = @hash1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
@@ -1568,7 +1569,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			// And delete
 			{
 				Query:    "delete from dolt_conflicts_t where dolt_conflict_id = @hash1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
@@ -1617,7 +1618,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "update dolt_conflicts_t set our_col1 = 1000 where our_pk = 1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
@@ -1635,7 +1636,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "update dolt_conflicts_t set our_col1 = their_col1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
@@ -1680,7 +1681,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "Update dolt_conflicts_t set our_col1 = 1000;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
 			},
 			{
 				Query: "select base_pk1, base_pk2, base_col1, our_pk1, our_pk2, our_col1, their_pk1, their_pk2, their_col1 from dolt_conflicts_t;",
@@ -1728,7 +1729,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			{
 				Query: "update dolt_conflicts_t set our_name = 'orange' where our_name = 'apple'",
 				Expected: []sql.Row{
-					{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Updated: 1, Matched: 1}}},
+					{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Updated: 1, Matched: 1}}},
 				},
 			},
 			{
@@ -1795,7 +1796,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "delete from t;",
-				Expected: []sql.Row{{sql.NewOkResult(3)}},
+				Expected: []sql.Row{{types.NewOkResult(3)}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
@@ -1818,7 +1819,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			// Take theirs
 			{
 				Query:    "update dolt_conflicts_t set our_pk = their_pk, our_col1 = their_col1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 3, Info: plan.UpdateInfo{Matched: 4, Updated: 3}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 3, Info: plan.UpdateInfo{Matched: 4, Updated: 3}}}},
 			},
 			{
 				Query:    "select * from t;",
@@ -1853,7 +1854,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "update dolt_conflicts_t set base_col1 = 9999, their_col1 = 9999;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
@@ -1955,7 +1956,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "UPDATE t SET col1 = 300;",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: 2,
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -2117,7 +2118,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "UPDATE child set fk = 4;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 0, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 0, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-afm', 'update children to new value');",
@@ -2252,6 +2253,125 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "unique key violation should be thrown even if a PK column is used in the unique index",
+		SetUpScript: []string{
+			"create table t (col1 int not null, col2 int not null, col3 int, primary key (col1, col2));",
+			"alter table t add unique (col2, col3);",
+			"call dolt_commit('-Am', 'init');",
+
+			"call dolt_checkout('-b', 'right');",
+			"insert into t values (1, 2, 3);",
+			"call dolt_commit('-Am', 'right');",
+
+			"call dolt_checkout('main');",
+			"insert into t values (2, 2, 3);",
+			"call dolt_commit('-Am', 'left');",
+
+			"set dolt_force_transaction_commit = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select col1, col2, col3 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{1, 2, 3}, {2, 2, 3}},
+			},
+		},
+	},
+	{
+		Name: "unique key violations should not be thrown for keys with null values",
+		SetUpScript: []string{
+			"create table t (col1 int not null, col2 int not null, col3 int, primary key (col1, col2));",
+			"alter table t add unique (col2, col3);",
+			"call dolt_commit('-Am', 'init');",
+
+			"call dolt_checkout('-b', 'right');",
+			"insert into t values (1, 2, null);",
+			"call dolt_commit('-Am', 'right');",
+
+			"call dolt_checkout('main');",
+			"insert into t values (2, 2, null);",
+			"call dolt_commit('-Am', 'left');",
+
+			"set dolt_force_transaction_commit = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select count(*) from dolt_constraint_violations;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 2, nil}, {2, 2, nil}},
+			},
+		},
+	},
+	{
+		// this won't automatically become a PK because col2 is nullable
+		Name: "unique key violation for keyless table",
+		SetUpScript: []string{
+			"create table t (col1 int not null, col2 int, col3 int);",
+			"alter table t add unique index (col1, col2);",
+			"call dolt_commit('-Am', 'init');",
+
+			"call dolt_checkout('-b', 'right');",
+			"insert into t values (1, null, null);",
+			"insert into t values (3, 3, null);",
+			"call dolt_commit('-Am', 'right cm');",
+
+			"call dolt_checkout('main');",
+			"insert into t values (2, null, null);",
+			"insert into t values (3, 3, 1);",
+			"call dolt_commit('-Am', 'left cm');",
+
+			"set dolt_force_transaction_commit = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select col1, col2, col3 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{3, 3, nil}, {3, 3, 1}},
+			},
+		},
+	},
+	{
+		Name: "regression test for bad column ordering in schema",
+		SetUpScript: []string{
+			"CREATE TABLE t (col1 enum ('A', 'B'), col2 varchar(max), primary key (col2));",
+			"ALTER TABLE t add unique index (col1);",
+			"call DOLT_COMMIT('-Am', 'initial');",
+
+			"call DOLT_CHECKOUT('-b', 'right');",
+			"insert into t values ('A', 'first');",
+			"call DOLT_COMMIT('-Am', 'right');",
+
+			"call DOLT_CHECKOUT('main');",
+			"insert into t values ('A', 'second');",
+			"call DOLT_COMMIT('-Am', 'left');",
+
+			"set dolt_force_transaction_commit = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select col1, col2 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{uint64(1), "first"}, {uint64(1), "second"}},
+			},
+		},
+	},
+	{
 		Name: "Multiple foreign key violations for a given row not supported",
 		SetUpScript: []string{
 			"SET dolt_force_transaction_commit = on;",
@@ -2353,7 +2473,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "DELETE FROM parent where pk = 1;",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-am', 'delete parent 1');",
@@ -2365,7 +2485,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO CHILD VALUES (1, 1);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-am', 'insert child of parent 1');",
@@ -2401,7 +2521,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "DELETE FROM parent where pk = 2;",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-afm', 'remove parent 2');",
@@ -2413,7 +2533,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO OTHER VALUES (1);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-am', 'non-fk insert');",
@@ -2449,7 +2569,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO CHILD VALUES (2, 2);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-afm', 'add child of parent 2');",
@@ -3046,6 +3166,49 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * from dolt_constraint_violations;",
 				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "verify-constraints: Regression test for bad compound primary key reuse as foreign key index - no error",
+		SetUpScript: []string{
+			"create table parent (col1 int not null, col2 float not null, primary key (col1, col2));",
+			"create table child (col1 int not null, col2 float not null, col3 int not null, col4 float not null, col5 int not null, col6 float not null, primary key (col1, col2, col3, col4, col5, col6), foreign key (col1, col2) references parent (col1, col2));",
+			"set foreign_key_checks = 0;",
+			"insert into parent values (1, 2.5), (7, 8.5);",
+			"insert into child values (1, 2.5, 3, 4.5, 5, 6.5), (7, 8.5, 9, 10.5, 11, 12.5);",
+			"set foreign_key_checks = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call DOLT_VERIFY_CONSTRAINTS('--all');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "verify-constraints: Regression test for bad compound primary key reuse as foreign key index - error",
+		SetUpScript: []string{
+			"create table parent (col1 int not null, col2 float not null, primary key (col1, col2));",
+			"create table child (col1 int not null, col2 float not null, col3 int not null, col4 float not null, col5 int not null, col6 float not null, primary key (col1, col2, col3, col4, col5, col6), foreign key (col1, col2) references parent (col1, col2));",
+			"set foreign_key_checks = 0;",
+			"insert into parent values (1, 2.5);",
+			"insert into child values (1, 2.5, 3, 4.5, 5, 6.5), (7, 8.5, 9, 10.5, 11, 12.5);",
+			"set foreign_key_checks = 1;",
+			"set dolt_force_transaction_commit = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call DOLT_VERIFY_CONSTRAINTS('--all');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"child", uint64(1)}},
 			},
 		},
 	},

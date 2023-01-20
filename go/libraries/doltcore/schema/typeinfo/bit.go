@@ -24,6 +24,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -36,12 +37,12 @@ const (
 // This is a dolt implementation of the MySQL type Bit, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type bitType struct {
-	sqlBitType sql.BitType
+	sqlBitType types2.BitType
 }
 
 var _ TypeInfo = (*bitType)(nil)
 
-var PseudoBoolType TypeInfo = &bitType{sql.MustCreateBitType(1)}
+var PseudoBoolType TypeInfo = &bitType{types2.MustCreateBitType(1)}
 
 func CreateBitTypeFromParams(params map[string]string) (TypeInfo, error) {
 	if bitStr, ok := params[bitTypeParam_Bits]; ok {
@@ -49,7 +50,7 @@ func CreateBitTypeFromParams(params map[string]string) (TypeInfo, error) {
 		if err != nil {
 			return nil, err
 		}
-		sqlBitType, err := sql.CreateBitType(uint8(bitUint))
+		sqlBitType, err := types2.CreateBitType(uint8(bitUint))
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +163,7 @@ func (ti *bitType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *bitType) Promote() TypeInfo {
-	return &bitType{ti.sqlBitType.Promote().(sql.BitType)}
+	return &bitType{ti.sqlBitType.Promote().(types2.BitType)}
 }
 
 // String implements TypeInfo interface.
@@ -198,7 +199,7 @@ func bitTypeConverter(ctx context.Context, src *bitType, destTi TypeInfo) (tc Ty
 				return nil, fmt.Errorf("unexpected type converting bit to %s: %T", strings.ToLower(dest.String()), v)
 			}
 			if val == 0 {
-				return types.Timestamp(sql.Datetime.Zero().(time.Time)), nil
+				return types.Timestamp(types2.Datetime.Zero().(time.Time)), nil
 			}
 			return nil, fmt.Errorf("invalid %s value: %d", strings.ToLower(dest.String()), uint64(val))
 		}, true, nil
