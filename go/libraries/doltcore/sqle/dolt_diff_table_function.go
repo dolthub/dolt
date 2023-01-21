@@ -156,7 +156,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 		return nil, err
 	}
 
-	sqledb, ok := dtf.database.(Database)
+	sqledb, ok := dtf.database.(SqlDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unable to get dolt database")
 	}
@@ -166,7 +166,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 		return nil, err
 	}
 
-	ddb := sqledb.GetDoltDB()
+	ddb := sqledb.DbData().Ddb
 	dp := dtables.NewDiffPartition(dtf.tableDelta.ToTable, dtf.tableDelta.FromTable, toCommitStr, fromCommitStr, dtf.toDate, dtf.fromDate, dtf.tableDelta.ToSch, dtf.tableDelta.FromSch)
 
 	return NewDiffTableFunctionRowIterForSinglePartition(*dp, ddb, dtf.joiner), nil
