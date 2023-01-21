@@ -309,58 +309,66 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 			continue
 		}
 
-		var childrenCm []*doltdb.Commit
-		var childrenHs []hash.Hash
-		q := []*doltdb.Commit{dt.head}
-		for len(q) > 0 {
-			n := q[0]
-			q = q[1:]
-			nh, err := n.Height()
-			if err != nil {
-				return nil, err
-			}
-			if nh <= height {
-				continue
-			}
-			if err != nil {
-				return nil, err
-			}
-			phs, err := n.ParentHashes(ctx)
-			if err != nil {
-				return nil, err
-			}
-			for i, ph := range phs {
-				p, err := n.GetParent(ctx, i)
+		var ti TblInfoAtCommit
+		// have to check head independently
+		headParentHs, err := dt.head.ParentHashes(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, ph := range headParentHs {
+			if ph == hs {
+				headHash, err := dt.head.HashOf()
+				ti, err = tableInfoForCommit(ctx, dt.name, dt.head, headHash)
 				if err != nil {
 					return nil, err
 				}
-				if ph == hs {
-					childrenCm = append(childrenCm, n)
-					nHs, err := n.HashOf()
-					if err != nil {
-						return nil, err
-					}
-					childrenHs = append(childrenHs, nHs)
-					// TODO we don't appear to support multiple children?
-					break
-				} else {
-					q = append(q, p)
-				}
+				break
 			}
 		}
-
-		for i, c := range childrenCm {
-			cHs := childrenHs[i]
-			ti, err := tableInfoForCommit(ctx, dt.name, c, cHs)
+		if !ti.IsEmpty() {
+			cmHashToTblInfo[hs] = ti
+			parentHashes = append(parentHashes, hs)
+			pCommits = append(pCommits, cm)
+		} else {
+			cc, err := dt.HeadCommitClosure(ctx)
 			if err != nil {
 				return nil, err
 			}
-			if !ti.IsEmtpy() {
-				cmHashToTblInfo[hs] = ti
+			iter, err := cc.IterHeight(ctx, height+1)
+			if err != nil {
+				return nil, err
+			}
+			for {
+				k, _, err := iter.Next(ctx)
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				if err != nil {
+					return nil, err
+				}
+
+				c, err := doltdb.HashToCommit(ctx, dt.ddb.ValueReadWriter(), dt.ddb.NodeStore(), k.Addr())
+				phs, err := c.ParentHashes(ctx)
+				if err != nil {
+					return nil, err
+				}
+				for _, ph := range phs {
+					if ph == hs {
+						ti, err = tableInfoForCommit(ctx, dt.name, c, k.Addr())
+						if err != nil {
+							return nil, err
+						}
+						break
+					}
+				}
+				if !ti.IsEmpty() {
+					cmHashToTblInfo[hs] = ti
+					parentHashes = append(parentHashes, hs)
+					pCommits = append(pCommits, cm)
+					break
+				}
 			}
 		}
-		parentHashes = append(parentHashes, hs)
-		pCommits = append(pCommits, cm)
 	}
 
 	if len(parentHashes) == 0 {
@@ -468,7 +476,7 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 		if err != nil {
 			return nil, err
 		}
-		if ti.IsEmtpy() {
+		if ti.IsEmpty() {
 			continue
 		}
 
@@ -569,7 +577,7 @@ func NewTblInfoAtCommit(name string, date *types.Timestamp, tbl *doltdb.Table, t
 	}
 }
 
-func (ti TblInfoAtCommit) IsEmtpy() bool {
+func (ti TblInfoAtCommit) IsEmpty() bool {
 	return ti.name == ""
 }
 
