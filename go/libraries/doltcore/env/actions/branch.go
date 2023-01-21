@@ -29,7 +29,7 @@ import (
 
 var ErrAlreadyExists = errors.New("already exists")
 var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
-var ErrUnmergedBranchDelete = errors.New("The branch '%s' is not fully merged.\nIf you are sure you want to delete it, run 'dolt branch -D %s'.")
+var ErrUnmergedBranch = errors.New("branch is not fully merged")
 var ErrWorkingSetsOnBothBranches = errors.New("checkout would overwrite uncommitted changes on target branch")
 
 func RenameBranch(ctx context.Context, dbData env.DbData, oldBranch, newBranch string, remoteDbPro env.RemoteDbProvider, force bool) error {
@@ -205,7 +205,7 @@ func validateBranchMergedIntoCurrentWorkingBranch(ctx context.Context, dbdata en
 			return nil
 		}
 		if errors.Is(err, doltdb.ErrIsAhead) {
-			return fmt.Errorf(ErrUnmergedBranchDelete.Error(), branch.GetPath(), branch.GetPath())
+			return ErrUnmergedBranch
 		}
 
 		// TODO: no common ancestor is not an error
@@ -213,7 +213,7 @@ func validateBranchMergedIntoCurrentWorkingBranch(ctx context.Context, dbdata en
 	}
 
 	if !isMerged {
-		return fmt.Errorf(ErrUnmergedBranchDelete.Error(), branch.GetPath(), branch.GetPath())
+		return ErrUnmergedBranch
 	}
 
 	return nil
@@ -257,14 +257,14 @@ func validateBranchMergedIntoUpstream(ctx context.Context, dbdata env.DbData, br
 			return nil
 		}
 		if errors.Is(err, doltdb.ErrIsAhead) {
-			return fmt.Errorf(ErrUnmergedBranchDelete.Error(), branch.GetPath(), branch.GetPath())
+			return ErrUnmergedBranch
 		}
 		// TODO: no common ancestor is not an error
 		return err
 	}
 
 	if !canFF {
-		return fmt.Errorf(ErrUnmergedBranchDelete.Error(), branch.GetPath(), branch.GetPath())
+		return ErrUnmergedBranch
 	}
 
 	return nil

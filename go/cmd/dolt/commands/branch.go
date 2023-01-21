@@ -72,6 +72,8 @@ const (
 	showCurrentFlag = "show-current"
 )
 
+var ErrUnmergedBranchDelete = errors.New("The branch '%s' is not fully merged.\nIf you are sure you want to delete it, run 'dolt branch -D %s'.")
+
 type BranchCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -328,6 +330,8 @@ func deleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPa
 			var verr errhand.VerboseError
 			if err == doltdb.ErrBranchNotFound {
 				verr = errhand.BuildDError("fatal: branch '%s' not found", brName).Build()
+			} else if err == actions.ErrUnmergedBranch {
+				verr = errhand.BuildDError(ErrUnmergedBranchDelete.Error(), brName, brName).Build()
 			} else if err == actions.ErrCOBranchDelete {
 				verr = errhand.BuildDError("error: Cannot delete checked out branch '%s'", brName).Build()
 			} else {
