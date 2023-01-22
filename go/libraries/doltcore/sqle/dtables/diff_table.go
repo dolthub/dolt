@@ -301,73 +301,27 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 		if err != nil {
 			return nil, err
 		}
-		ok, err := dt.CommitIsInScope(ctx, height, hs)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			continue
-		}
 
-		var ti TblInfoAtCommit
-		// have to check head independently
-		headParentHs, err := dt.head.ParentHashes(ctx)
+		childCm, childHs, err := dt.scanHeightForChild(ctx, hs, height+1)
 		if err != nil {
 			return nil, err
 		}
-		for _, ph := range headParentHs {
-			if ph == hs {
-				headHash, err := dt.head.HashOf()
-				ti, err = tableInfoForCommit(ctx, dt.name, dt.head, headHash)
-				if err != nil {
-					return nil, err
-				}
-				break
+		if childCm == nil {
+			// non-linear commit graph, fallback to top-down scan
+			childCm, childHs, err = dt.reverseIterForChild(ctx, hs)
+			if err != nil {
+				return nil, err
 			}
 		}
-		if !ti.IsEmpty() {
+
+		if childCm != nil {
+			ti, err := tableInfoForCommit(ctx, dt.name, childCm, childHs)
+			if err != nil {
+				return nil, err
+			}
 			cmHashToTblInfo[hs] = ti
 			parentHashes = append(parentHashes, hs)
 			pCommits = append(pCommits, cm)
-		} else {
-			cc, err := dt.HeadCommitClosure(ctx)
-			if err != nil {
-				return nil, err
-			}
-			iter, err := cc.IterHeight(ctx, height+1)
-			if err != nil {
-				return nil, err
-			}
-			for {
-				k, _, err := iter.Next(ctx)
-				if errors.Is(err, io.EOF) {
-					break
-				}
-				if err != nil {
-					return nil, err
-				}
-
-				c, err := doltdb.HashToCommit(ctx, dt.ddb.ValueReadWriter(), dt.ddb.NodeStore(), k.Addr())
-				phs, err := c.ParentHashes(ctx)
-				if err != nil {
-					return nil, err
-				}
-				for _, ph := range phs {
-					if ph == hs {
-						ti, err = tableInfoForCommit(ctx, dt.name, c, k.Addr())
-						if err != nil {
-							return nil, err
-						}
-						break
-					}
-				}
-				if !ti.IsEmpty() {
-					cmHashToTblInfo[hs] = ti
-					parentHashes = append(parentHashes, hs)
-					pCommits = append(pCommits, cm)
-					break
-				}
-			}
 		}
 	}
 
@@ -393,6 +347,74 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 		toSch:           dt.targetSch,
 		fromSch:         dt.targetSch,
 	}, nil
+}
+
+// scanHeightForChild searches for a child commit that references a target parent hash
+// at a specific height. This is an optimization for the common case where a parent and
+// its child are one level apart, and there is no branching that creates the potential
+// for a child higher in the graph.
+func (dt *DiffTable) scanHeightForChild(ctx *sql.Context, parent hash.Hash, height uint64) (*doltdb.Commit, hash.Hash, error) {
+	cc, err := dt.HeadCommitClosure(ctx)
+	if err != nil {
+		return nil, hash.Hash{}, err
+	}
+	iter, err := cc.IterHeight(ctx, height)
+	if err != nil {
+		return nil, hash.Hash{}, err
+	}
+	var childHs hash.Hash
+	var childCm *doltdb.Commit
+	var cnt int
+	for {
+		k, _, err := iter.Next(ctx)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, hash.Hash{}, err
+		}
+		cnt++
+		if cnt > 1 {
+			return nil, hash.Hash{}, nil
+		}
+
+		c, err := doltdb.HashToCommit(ctx, dt.ddb.ValueReadWriter(), dt.ddb.NodeStore(), k.Addr())
+		phs, err := c.ParentHashes(ctx)
+		if err != nil {
+			return nil, hash.Hash{}, err
+		}
+		for _, ph := range phs {
+			if ph == parent {
+				childCm = c
+				childHs = k.Addr()
+				break
+			}
+		}
+	}
+	return childCm, childHs, nil
+}
+
+// reverseIterForChild finds the commit with the largest height that
+// is a child of the |parent| hash, or nil if no commit is found.
+func (dt *DiffTable) reverseIterForChild(ctx *sql.Context, parent hash.Hash) (*doltdb.Commit, hash.Hash, error) {
+	iter := doltdb.CommitItrForRoots(dt.ddb, dt.head)
+	for {
+		childHs, childCm, err := iter.Next(ctx)
+		if errors.Is(err, io.EOF) {
+			return nil, hash.Hash{}, nil
+		} else if err != nil {
+			return nil, hash.Hash{}, err
+		}
+		phs, err := childCm.ParentHashes(ctx)
+		if err != nil {
+			return nil, hash.Hash{}, err
+		}
+		for _, ph := range phs {
+			if ph == parent {
+				return childCm, childHs, nil
+			}
+		}
+	}
 }
 
 func tableInfoForCommit(ctx context.Context, table string, cm *doltdb.Commit, hs hash.Hash) (TblInfoAtCommit, error) {
