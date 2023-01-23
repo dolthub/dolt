@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -79,7 +80,7 @@ func (*ActiveBranchFunc) Resolved() bool {
 }
 
 func (ab *ActiveBranchFunc) Type() sql.Type {
-	return sql.Text
+	return types.Text
 }
 
 // Children implements the Expression interface.

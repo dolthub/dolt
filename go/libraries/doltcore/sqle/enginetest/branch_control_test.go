@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/src-d/go-errors.v1"
@@ -387,7 +388,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_namespace_control VALUES ('%', 'other%', 'root', 'localhost');",
 				Expected: []sql.Row{
-					{sql.NewOkResult(1)},
+					{types.NewOkResult(1)},
 				},
 			},
 			{
@@ -401,7 +402,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_namespace_control VALUES ('%', 'other%', 'testuser', 'localhost');",
 				Expected: []sql.Row{
-					{sql.NewOkResult(1)},
+					{types.NewOkResult(1)},
 				},
 			},
 			{
@@ -415,7 +416,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_namespace_control VALUES ('%', 'otherbranch%', 'root', 'localhost');",
 				Expected: []sql.Row{
-					{sql.NewOkResult(1)},
+					{types.NewOkResult(1)},
 				},
 			},
 			{ // Matches both "other%" and "otherbranch%", but "otherbranch%" wins by being the longer match
@@ -435,7 +436,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_namespace_control VALUES ('%', 'otherbranch%', 'testuser', 'localhost');",
 				Expected: []sql.Row{
-					{sql.NewOkResult(1)},
+					{types.NewOkResult(1)},
 				},
 			},
 			{
@@ -483,7 +484,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_control VALUES ('%', 'prefix1%', 'b', 'localhost', 'write');",
 				Expected: []sql.Row{
-					{sql.NewOkResult(1)},
+					{types.NewOkResult(1)},
 				},
 			},
 			{
@@ -509,7 +510,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "UPDATE dolt_branch_control SET permissions = 'admin' WHERE branch = 'prefix1%';",
 				Expected: []sql.Row{
-					{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}},
+					{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}},
 				},
 			},
 			{
@@ -517,7 +518,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "DELETE FROM dolt_branch_control WHERE branch = 'prefix1%';",
 				Expected: []sql.Row{
-					{sql.NewOkResult(1)},
+					{types.NewOkResult(1)},
 				},
 			},
 			{
@@ -531,7 +532,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_namespace_control VALUES ('%', 'prefix___', 'a', 'localhost');",
 				Expected: []sql.Row{
-					{sql.NewOkResult(1)},
+					{types.NewOkResult(1)},
 				},
 			},
 			{
@@ -545,7 +546,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "UPDATE dolt_branch_namespace_control SET branch = 'prefix%';",
 				Expected: []sql.Row{
-					{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}},
+					{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}},
 				},
 			},
 			{
@@ -601,7 +602,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "INSERT INTO test VALUES (1);",
 				Expected: []sql.Row{
-					{sql.NewOkResult(1)},
+					{types.NewOkResult(1)},
 				},
 			},
 		},
@@ -762,7 +763,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "CREATE TABLE test (pk BIGINT PRIMARY KEY);",
 				Expected: []sql.Row{
-					{sql.NewOkResult(0)},
+					{types.NewOkResult(0)},
 				},
 			},
 			{
@@ -770,7 +771,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "DROP TABLE test;",
 				Expected: []sql.Row{
-					{sql.NewOkResult(0)},
+					{types.NewOkResult(0)},
 				},
 			},
 			{
@@ -808,7 +809,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "CREATE TABLE test (pk BIGINT PRIMARY KEY);",
 				Expected: []sql.Row{
-					{sql.NewOkResult(0)},
+					{types.NewOkResult(0)},
 				},
 			},
 		},
@@ -871,7 +872,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_control VALUES ('dba', 'dummy1', '%', '%', 'write');",
 				Expected: []sql.Row{
-					{sql.NewOkResult(1)},
+					{types.NewOkResult(1)},
 				},
 			},
 			{
@@ -903,7 +904,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_control VALUES ('dbb', 'dummy6', '%', '%', 'write');",
 				Expected: []sql.Row{
-					{sql.NewOkResult(1)},
+					{types.NewOkResult(1)},
 				},
 			},
 			{
@@ -911,7 +912,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "GRANT SUPER ON *.* TO a@localhost WITH GRANT OPTION;",
 				Expected: []sql.Row{
-					{sql.NewOkResult(0)},
+					{types.NewOkResult(0)},
 				},
 			},
 			{
@@ -919,7 +920,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_control VALUES ('db_', 'dummy7', '%', '%', 'write');",
 				Expected: []sql.Row{
-					{sql.NewOkResult(1)},
+					{types.NewOkResult(1)},
 				},
 			},
 			{
@@ -1015,7 +1016,7 @@ func TestBranchControlBlocks(t *testing.T) {
 			})
 			enginetest.AssertErrWithCtx(t, engine, harness, userCtx, test.Query, test.ExpectedErr)
 			addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'write'), ('%', 'other', 'testuser', 'localhost', 'write');"
-			addUserQueryResults := []sql.Row{{sql.NewOkResult(2)}}
+			addUserQueryResults := []sql.Row{{types.NewOkResult(2)}}
 			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
 			sch, iter, err := engine.Query(userCtx, test.Query)
 			if err == nil {

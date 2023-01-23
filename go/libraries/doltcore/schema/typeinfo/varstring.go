@@ -22,6 +22,7 @@ import (
 	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -42,13 +43,13 @@ const (
 // legacy repositories will run into issues if they attempt to insert very large strings. Any and all new repositories
 // must use blobStringType for all TEXT types to ensure proper behavior.
 type varStringType struct {
-	sqlStringType sql.StringType
+	sqlStringType types2.StringType
 }
 
 var _ TypeInfo = (*varStringType)(nil)
 
 var (
-	StringDefaultType = &varStringType{sql.MustCreateStringWithDefaults(sqltypes.VarChar, 16383)}
+	StringDefaultType = &varStringType{types2.MustCreateStringWithDefaults(sqltypes.VarChar, 16383)}
 )
 
 func CreateVarStringTypeFromParams(params map[string]string) (TypeInfo, error) {
@@ -73,14 +74,14 @@ func CreateVarStringTypeFromParams(params map[string]string) (TypeInfo, error) {
 		return nil, fmt.Errorf(`create varstring type info is missing param "%v"`, varStringTypeParam_Length)
 	}
 	if sqlStr, ok := params[varStringTypeParam_SQL]; ok {
-		var sqlType sql.StringType
+		var sqlType types2.StringType
 		switch sqlStr {
 		case varStringTypeParam_SQL_Char:
-			sqlType, err = sql.CreateString(sqltypes.Char, length, collation)
+			sqlType, err = types2.CreateString(sqltypes.Char, length, collation)
 		case varStringTypeParam_SQL_VarChar:
-			sqlType, err = sql.CreateString(sqltypes.VarChar, length, collation)
+			sqlType, err = types2.CreateString(sqltypes.VarChar, length, collation)
 		case varStringTypeParam_SQL_Text:
-			sqlType, err = sql.CreateString(sqltypes.Text, length, collation)
+			sqlType, err = types2.CreateString(sqltypes.Text, length, collation)
 		default:
 			return nil, fmt.Errorf(`create varstring type info has "%v" param with value "%v"`, varStringTypeParam_SQL, sqlStr)
 		}
@@ -225,7 +226,7 @@ func (ti *varStringType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *varStringType) Promote() TypeInfo {
-	return &varStringType{ti.sqlStringType.Promote().(sql.StringType)}
+	return &varStringType{ti.sqlStringType.Promote().(types2.StringType)}
 }
 
 // String implements TypeInfo interface.

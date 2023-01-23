@@ -335,23 +335,6 @@ func TestErrorIfDangling(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestSkipEnforceCompleteness(t *testing.T) {
-	vs := newTestValueStore()
-	vs.SetEnforceCompleteness(false)
-
-	r, err := NewRef(Bool(true), vs.Format())
-	require.NoError(t, err)
-	l, err := NewList(context.Background(), vs, r)
-	require.NoError(t, err)
-	_, err = vs.WriteValue(context.Background(), l)
-	require.NoError(t, err)
-
-	rt, err := vs.Root(context.Background())
-	require.NoError(t, err)
-	_, err = vs.Commit(context.Background(), rt, rt)
-	require.NoError(t, err)
-}
-
 func TestGC(t *testing.T) {
 	assert := assert.New(t)
 

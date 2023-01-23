@@ -20,6 +20,7 @@ import (
 	"math"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -173,22 +174,22 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		return YearType, nil
 	case sqltypes.Geometry:
 		switch sqlType.String() {
-		case sql.PointType{}.String():
-			return &pointType{sqlType.(sql.PointType)}, nil
-		case sql.LineStringType{}.String():
-			return &linestringType{sqlType.(sql.LineStringType)}, nil
-		case sql.PolygonType{}.String():
-			return &polygonType{sqlType.(sql.PolygonType)}, nil
-		case sql.MultiPointType{}.String():
+		case types2.PointType{}.String():
+			return &pointType{sqlType.(types2.PointType)}, nil
+		case types2.LineStringType{}.String():
+			return &linestringType{sqlType.(types2.LineStringType)}, nil
+		case types2.PolygonType{}.String():
+			return &polygonType{sqlType.(types2.PolygonType)}, nil
+		case types2.MultiPointType{}.String():
 			return &multipointType{}, nil
-		case sql.MultiLineStringType{}.String():
+		case types2.MultiLineStringType{}.String():
 			return &multilinestringType{}, nil
-		case sql.MultiPolygonType{}.String():
+		case types2.MultiPolygonType{}.String():
 			return &multipolygonType{}, nil
-		case sql.GeomCollType{}.String():
+		case types2.GeomCollType{}.String():
 			return &geomcollType{}, nil
-		case sql.GeometryType{}.String():
-			return &geometryType{sqlGeometryType: sqlType.(sql.GeometryType)}, nil
+		case types2.GeometryType{}.String():
+			return &geometryType{sqlGeometryType: sqlType.(types2.GeometryType)}, nil
 		default:
 			return nil, fmt.Errorf(`expected "PointTypeIdentifier" from SQL basetype "Geometry"`)
 		}
@@ -199,43 +200,43 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		}
 		return &decimalType{decimalSQLType}, nil
 	case sqltypes.Text:
-		stringType, ok := sqlType.(sql.StringType)
+		stringType, ok := sqlType.(types2.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Text"`)
 		}
 		return &blobStringType{stringType}, nil
 	case sqltypes.Blob:
-		stringType, ok := sqlType.(sql.StringType)
+		stringType, ok := sqlType.(types2.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Blob"`)
 		}
 		return &varBinaryType{stringType}, nil
 	case sqltypes.VarChar:
-		stringType, ok := sqlType.(sql.StringType)
+		stringType, ok := sqlType.(types2.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "VarChar"`)
 		}
 		return &varStringType{stringType}, nil
 	case sqltypes.VarBinary:
-		stringType, ok := sqlType.(sql.StringType)
+		stringType, ok := sqlType.(types2.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "VarBinary"`)
 		}
 		return &inlineBlobType{stringType}, nil
 	case sqltypes.Char:
-		stringType, ok := sqlType.(sql.StringType)
+		stringType, ok := sqlType.(types2.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Char"`)
 		}
 		return &varStringType{stringType}, nil
 	case sqltypes.Binary:
-		stringType, ok := sqlType.(sql.StringType)
+		stringType, ok := sqlType.(types2.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Binary"`)
 		}
 		return &inlineBlobType{stringType}, nil
 	case sqltypes.Bit:
-		bitSQLType, ok := sqlType.(sql.BitType)
+		bitSQLType, ok := sqlType.(types2.BitType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "BitTypeIdentifier" from SQL basetype "Bit"`)
 		}
@@ -327,13 +328,13 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 func FromKind(kind types.NomsKind) TypeInfo {
 	switch kind {
 	case types.BlobKind:
-		return &varBinaryType{sql.LongBlob}
+		return &varBinaryType{types2.LongBlob}
 	case types.BoolKind:
 		return BoolType
 	case types.FloatKind:
 		return Float64Type
 	case types.InlineBlobKind:
-		return &inlineBlobType{sql.MustCreateBinary(sqltypes.VarBinary, math.MaxUint16)}
+		return &inlineBlobType{types2.MustCreateBinary(sqltypes.VarBinary, math.MaxUint16)}
 	case types.IntKind:
 		return Int64Type
 	case types.JSONKind:
@@ -359,7 +360,7 @@ func FromKind(kind types.NomsKind) TypeInfo {
 	case types.UUIDKind:
 		return UuidType
 	case types.DecimalKind:
-		return &decimalType{sql.MustCreateDecimalType(65, 30)}
+		return &decimalType{types2.MustCreateDecimalType(65, 30)}
 	default:
 		panic(fmt.Errorf(`no default type info for NomsKind "%v"`, kind.String()))
 	}

@@ -19,6 +19,7 @@ import (
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -55,12 +56,12 @@ func (bt *BranchesTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the branches system table
 func (bt *BranchesTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "name", Type: sql.Text, Source: doltdb.BranchesTableName, PrimaryKey: true, Nullable: false},
-		{Name: "hash", Type: sql.Text, Source: doltdb.BranchesTableName, PrimaryKey: false, Nullable: false},
-		{Name: "latest_committer", Type: sql.Text, Source: doltdb.BranchesTableName, PrimaryKey: false, Nullable: true},
-		{Name: "latest_committer_email", Type: sql.Text, Source: doltdb.BranchesTableName, PrimaryKey: false, Nullable: true},
-		{Name: "latest_commit_date", Type: sql.Datetime, Source: doltdb.BranchesTableName, PrimaryKey: false, Nullable: true},
-		{Name: "latest_commit_message", Type: sql.Text, Source: doltdb.BranchesTableName, PrimaryKey: false, Nullable: true},
+		{Name: "name", Type: types.Text, Source: doltdb.BranchesTableName, PrimaryKey: true, Nullable: false},
+		{Name: "hash", Type: types.Text, Source: doltdb.BranchesTableName, PrimaryKey: false, Nullable: false},
+		{Name: "latest_committer", Type: types.Text, Source: doltdb.BranchesTableName, PrimaryKey: false, Nullable: true},
+		{Name: "latest_committer_email", Type: types.Text, Source: doltdb.BranchesTableName, PrimaryKey: false, Nullable: true},
+		{Name: "latest_commit_date", Type: types.Datetime, Source: doltdb.BranchesTableName, PrimaryKey: false, Nullable: true},
+		{Name: "latest_commit_message", Type: types.Text, Source: doltdb.BranchesTableName, PrimaryKey: false, Nullable: true},
 	}
 }
 

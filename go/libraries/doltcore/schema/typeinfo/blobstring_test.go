@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -47,7 +48,7 @@ func TestBlobStringConvertNomsValueToValue(t *testing.T) {
 			false,
 		},
 		{
-			&blobStringType{sql.CreateLongText(sql.Collation_Default)},
+			&blobStringType{types2.CreateLongText(sql.Collation_Default)},
 			mustBlobString(t, "  This is a sentence.  "),
 			"  This is a sentence.  ",
 			false,
@@ -87,7 +88,7 @@ func TestBlobStringConvertValueToNomsValue(t *testing.T) {
 			false,
 		},
 		{
-			&blobStringType{sql.CreateLongText(sql.Collation_Default)},
+			&blobStringType{types2.CreateLongText(sql.Collation_Default)},
 			float32(3724.75),
 			mustBlobString(t, "3724.75"),
 			false,
@@ -134,7 +135,7 @@ func TestBlobStringFormatValue(t *testing.T) {
 			false,
 		},
 		{
-			&blobStringType{sql.CreateLongText(sql.Collation_Default)},
+			&blobStringType{types2.CreateLongText(sql.Collation_Default)},
 			mustBlobString(t, "  This is a sentence.  "),
 			"  This is a sentence.  ",
 			false,
@@ -174,7 +175,7 @@ func TestBlobStringParseValue(t *testing.T) {
 			false,
 		},
 		{
-			&blobStringType{sql.CreateLongText(sql.Collation_Default)},
+			&blobStringType{types2.CreateLongText(sql.Collation_Default)},
 			"  This is a sentence.  ",
 			mustBlobString(t, "  This is a sentence.  "),
 			false,

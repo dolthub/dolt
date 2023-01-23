@@ -26,6 +26,7 @@ import (
 
 	"github.com/abiosoft/readline"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/ishell"
 	"github.com/fatih/color"
 	mysqlDriver "github.com/go-sql-driver/mysql"
@@ -390,7 +391,7 @@ func NewMysqlRowWrapper(rows *mysql.Rows) (*MysqlRowWrapper, error) {
 	for i, colName := range colNames {
 		schema[i] = &sql.Column{
 			Name:     colName,
-			Type:     sql.LongText,
+			Type:     types.LongText,
 			Nullable: true,
 		}
 		iRow[i] = &vRow[i]

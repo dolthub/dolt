@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -51,9 +52,9 @@ func TestSchemaTableRecreationOlder(t *testing.T) {
 	ctx.SetCurrentDatabase(db.Name())
 
 	err = db.createSqlTable(ctx, doltdb.SchemasTableName, sql.NewPrimaryKeySchema(sql.Schema{ // schema of dolt_schemas table before the change
-		{Name: doltdb.SchemasTablesTypeCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
-		{Name: doltdb.SchemasTablesNameCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
-		{Name: doltdb.SchemasTablesFragmentCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
+		{Name: doltdb.SchemasTablesTypeCol, Type: types2.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
+		{Name: doltdb.SchemasTablesNameCol, Type: types2.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
+		{Name: doltdb.SchemasTablesFragmentCol, Type: types2.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
 	}), sql.Collation_Default)
 	require.NoError(t, err)
 	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
@@ -137,10 +138,10 @@ func TestSchemaTableRecreation(t *testing.T) {
 
 	// This is the schema of dolt_schemas table after the change adding the ID column, but before adding the extra column
 	err = db.createSqlTable(ctx, doltdb.SchemasTableName, sql.NewPrimaryKeySchema(sql.Schema{ //
-		{Name: doltdb.SchemasTablesTypeCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
-		{Name: doltdb.SchemasTablesNameCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
-		{Name: doltdb.SchemasTablesFragmentCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
-		{Name: doltdb.SchemasTablesIdCol, Type: sql.Int64, Source: doltdb.SchemasTableName, PrimaryKey: false},
+		{Name: doltdb.SchemasTablesTypeCol, Type: types2.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
+		{Name: doltdb.SchemasTablesNameCol, Type: types2.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
+		{Name: doltdb.SchemasTablesFragmentCol, Type: types2.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
+		{Name: doltdb.SchemasTablesIdCol, Type: types2.Int64, Source: doltdb.SchemasTableName, PrimaryKey: false},
 	}), sql.Collation_Default)
 	require.NoError(t, err)
 	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)

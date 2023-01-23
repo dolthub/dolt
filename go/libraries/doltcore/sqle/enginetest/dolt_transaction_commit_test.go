@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -77,11 +78,11 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 			},
 			{
 				Query:    "/* client a */ INSERT INTO x VALUES (2,2);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO x VALUES (3,3);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ SELECT * FROM x ORDER BY y;",
@@ -217,11 +218,11 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 			},
 			{
 				Query:    "/* client a */ INSERT INTO x VALUES (2,2);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO x VALUES (3,3);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ SELECT * FROM x ORDER BY y;",
@@ -270,6 +271,13 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 			{
 				Query:    "/* client c */ SELECT * FROM x ORDER BY y;",
 				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+			// After we commit both of these transactions, our working set should not have any pending changes.
+			// In the past, we have merged the working set but failed to land the merged root value in the
+			// commit itself.
+			{
+				Query:    "/* client c */ SELECT COUNT(*) FROM DOLT_DIFF('HEAD', 'WORKING', 'x');",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	})
@@ -327,11 +335,11 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 			},
 			{
 				Query:    "/* client a */ INSERT INTO x VALUES (2,2);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO x VALUES (3,3);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ SELECT * FROM x ORDER BY y;",
@@ -415,11 +423,11 @@ func TestDoltTransactionCommitLateFkResolution(t *testing.T) {
 			},
 			{
 				Query:    "/* client a */ INSERT INTO child VALUES (1, 1);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO child VALUES (2, 2);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",

@@ -39,16 +39,17 @@ import (
 )
 
 type DoltHarness struct {
-	t              *testing.T
-	provider       dsess.DoltDatabaseProvider
-	multiRepoEnv   *env.MultiRepoEnv
-	session        *dsess.DoltSession
-	branchControl  *branch_control.Controller
-	parallelism    int
-	skippedQueries []string
-	setupData      []setup.SetupScript
-	resetData      []setup.SetupScript
-	engine         *gms.Engine
+	t               *testing.T
+	provider        dsess.DoltDatabaseProvider
+	multiRepoEnv    *env.MultiRepoEnv
+	session         *dsess.DoltSession
+	branchControl   *branch_control.Controller
+	parallelism     int
+	skippedQueries  []string
+	setupData       []setup.SetupScript
+	resetData       []setup.SetupScript
+	engine          *gms.Engine
+	skipSetupCommit bool
 }
 
 var _ enginetest.Harness = (*DoltHarness)(nil)
@@ -85,6 +86,10 @@ func (d *DoltHarness) Setup(setupData ...[]setup.SetupScript) {
 	for i := range setupData {
 		d.setupData = append(d.setupData, setupData[i]...)
 	}
+}
+
+func (d *DoltHarness) SkipSetupCommit() {
+	d.skipSetupCommit = true
 }
 
 // resetScripts returns a set of queries that will reset the given database
@@ -184,9 +189,11 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 			dbs = append(dbs, db.Name())
 		}
 
-		e, err = enginetest.RunEngineScripts(ctx, e, commitScripts(dbs), d.SupportsNativeIndexCreation())
-		if err != nil {
-			return nil, err
+		if !d.skipSetupCommit {
+			e, err = enginetest.RunEngineScripts(ctx, e, commitScripts(dbs), d.SupportsNativeIndexCreation())
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		return e, nil

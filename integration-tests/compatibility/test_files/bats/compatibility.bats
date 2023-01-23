@@ -207,11 +207,23 @@ EOF
 }
 
 @test "dolt_schemas" {
-    run dolt sql -q "select * from dolt_schemas"
-    [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "| type | name  | fragment             |" ]] || false
-    [[ "${lines[2]}" =~ "+------+-------+----------------------+" ]] || false
-    [[ "${lines[3]}" =~ "| view | view1 | SELECT 2+2 FROM dual |" ]] || false
+    dolt_version=$( echo $DOLT_VERSION | sed -e "s/^v//" )
+    echo $dolt_version
+
+    if [[ ! -z $dolt_version ]]; then
+        run dolt sql -q "select * from dolt_schemas"
+        [ "$status" -eq 0 ]
+        [[ "${lines[1]}" =~ "| type | name  | fragment             |" ]] || false
+        [[ "${lines[2]}" =~ "+------+-------+----------------------+" ]] || false
+        [[ "${lines[3]}" =~ "| view | view1 | SELECT 2+2 FROM dual |" ]] || false
+    else
+        run dolt sql -q "select * from dolt_schemas"
+        [ "$status" -eq 0 ]
+        [[ "${lines[1]}" =~ "| type | name  | fragment                                  |" ]] || false
+        [[ "${lines[2]}" =~ "+------+-------+-------------------------------------------+" ]] || false
+        [[ "${lines[3]}" =~ "| view | view1 | CREATE VIEW view1 AS SELECT 2+2 FROM dual |" ]] || false
+    fi
+
     run dolt sql -q 'select * from view1'
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "2+2" ]] || false

@@ -22,6 +22,7 @@ import (
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -34,7 +35,7 @@ const jsonHeader = `{"rows": [`
 const jsonFooter = `]}`
 
 var WriteBufSize = 256 * 1024
-var defaultString = sql.MustCreateStringWithDefaults(sqltypes.VarChar, 16383)
+var defaultString = types.MustCreateStringWithDefaults(sqltypes.VarChar, 16383)
 
 type RowWriter struct {
 	closer      io.Closer

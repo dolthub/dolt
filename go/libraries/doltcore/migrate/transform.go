@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"golang.org/x/sync/errgroup"
 
@@ -501,7 +502,7 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 	// String types are sorted using a binary collation in __LD_1__
 	// force-set collation to utf8mb4_0900_bin to match the order
 	for i, c := range cols {
-		st, ok := c.TypeInfo.ToSqlType().(sql.StringType)
+		st, ok := c.TypeInfo.ToSqlType().(types2.StringType)
 		if !ok {
 			continue
 		}
@@ -510,9 +511,9 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 		var err error
 		switch st.Type() {
 		case query.Type_CHAR, query.Type_VARCHAR, query.Type_TEXT:
-			st, err = sql.CreateString(st.Type(), st.Length(), sql.Collation_utf8mb4_0900_bin)
+			st, err = types2.CreateString(st.Type(), st.Length(), sql.Collation_utf8mb4_0900_bin)
 		case query.Type_BINARY, query.Type_VARBINARY, query.Type_BLOB:
-			st, err = sql.CreateString(st.Type(), st.Length(), sql.Collation_binary)
+			st, err = types2.CreateString(st.Type(), st.Length(), sql.Collation_binary)
 		}
 		if err != nil {
 			return nil, err
