@@ -39,6 +39,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -651,7 +652,6 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// "create table db02.t (...);" – i.e., looking at query.Database is NOT enough to always determine the correct
 		// database that was modified, so instead, we commit to all databases when we see a Query binlog event to
 		// avoid issues with correctness, at the cost of being slightly less efficient
-		// TODO: This would be a good case to add to the binlog transaction test suite
 		commitToAllDatabases = true
 
 		ctx.SetCurrentDatabase(query.Database)
@@ -777,7 +777,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 
 		logger.Debugf(" - Deleted Rows (table: %s)", tableMap.Name)
 		for _, row := range rows.Rows {
-			deletedRow, err := parseRow(tableMap, schema, rows.IdentifyColumns, row.NullIdentifyColumns, row.Identify)
+			deletedRow, err := parseRow(ctx, tableMap, schema, rows.IdentifyColumns, row.NullIdentifyColumns, row.Identify)
 			if err != nil {
 				return err
 			}
@@ -834,7 +834,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 
 		logger.Debugf(" - New Rows (table: %s)", tableMap.Name)
 		for _, row := range rows.Rows {
-			newRow, err := parseRow(tableMap, schema, rows.DataColumns, row.NullColumns, row.Data)
+			newRow, err := parseRow(ctx, tableMap, schema, rows.DataColumns, row.NullColumns, row.Data)
 			if err != nil {
 				return err
 			}
@@ -902,11 +902,11 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 
 		logger.Debugf(" - Updated Rows (table: %s)", tableMap.Name)
 		for _, row := range rows.Rows {
-			identifyRow, err := parseRow(tableMap, schema, rows.IdentifyColumns, row.NullIdentifyColumns, row.Identify)
+			identifyRow, err := parseRow(ctx, tableMap, schema, rows.IdentifyColumns, row.NullIdentifyColumns, row.Identify)
 			if err != nil {
 				return err
 			}
-			updatedRow, err := parseRow(tableMap, schema, rows.DataColumns, row.NullColumns, row.Data)
+			updatedRow, err := parseRow(ctx, tableMap, schema, rows.DataColumns, row.NullColumns, row.Data)
 			if err != nil {
 				return err
 			}
@@ -1078,8 +1078,6 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 		return nil, nil, err
 	}
 
-	// TODO: Does this work correctly?
-	//       Test with autoincrement? This shouldn't matter with row-based replication, but might still be worth testing.
 	tracker, err := globalstate.NewAutoIncrementTracker(ctx, ws)
 	if err != nil {
 		return nil, nil, err
@@ -1100,7 +1098,7 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 // parseRow parses the binary row data from a MySQL binlog event and converts it into a go-mysql-server Row using the
 // |schema| information provided. |columnsPresentBitmap| indicates which column values are present in |data| and
 // |nullValuesBitmap| indicates which columns have null values and are NOT present in |data|.
-func parseRow(tableMap *mysql.TableMap, schema sql.Schema, columnsPresentBitmap, nullValuesBitmap mysql.Bitmap, data []byte) (sql.Row, error) {
+func parseRow(ctx *sql.Context, tableMap *mysql.TableMap, schema sql.Schema, columnsPresentBitmap, nullValuesBitmap mysql.Bitmap, data []byte) (sql.Row, error) {
 	var parsedRow sql.Row
 	pos := 0
 
@@ -1128,7 +1126,7 @@ func parseRow(tableMap *mysql.TableMap, schema sql.Schema, columnsPresentBitmap,
 			pos += length
 		}
 
-		convertedValue, err := convertSqlTypesValue(value, column)
+		convertedValue, err := convertSqlTypesValue(ctx, value, column)
 		if err != nil {
 			return nil, err
 		}
@@ -1154,10 +1152,8 @@ func getSignedType(column *sql.Column) query.Type {
 	}
 }
 
-// convertSqlTypesValues converts a sqltypes.Value instance (vitess) into a sql.Type value (go-mysql-server).
-func convertSqlTypesValue(value sqltypes.Value, column *sql.Column) (interface{}, error) {
-	// TODO: This is currently a pretty hacky way to convert values and needs to be cleaned up so that it's more
-	//	     efficient and handles all types.
+// convertSqlTypesValues converts a sqltypes.Value instance (from vitess) into a sql.Type value (for go-mysql-server).
+func convertSqlTypesValue(ctx *sql.Context, value sqltypes.Value, column *sql.Column) (interface{}, error) {
 	if value.IsNull() {
 		return nil, nil
 	}
@@ -1171,14 +1167,63 @@ func convertSqlTypesValue(value sqltypes.Value, column *sql.Column) (interface{}
 			return nil, err
 		}
 		convertedValue, err = column.Type.Convert(atoi)
+	case types.IsDecimal(column.Type):
+		// Decimal values need to have any leading/trailing whitespace trimmed off
+		// TODO: Consider moving this into DecimalType_.Convert; if DecimalType_.Convert handled trimming
+		//       leading/trailing whitespace, this special case for Decimal types wouldn't be needed.
+		convertedValue, err = column.Type.Convert(strings.TrimSpace(value.ToString()))
+	case types.IsJSON(column.Type):
+		convertedValue, err = convertVitessJsonExpressionString(ctx, value)
 	default:
 		convertedValue, err = column.Type.Convert(value.ToString())
 	}
 	if err != nil {
-		return nil, fmt.Errorf("unable to convert value %q: %v", value, err.Error())
+		return nil, fmt.Errorf("unable to convert value %q, for column of type %T: %v", value.ToString(), column.Type, err.Error())
 	}
 
 	return convertedValue, nil
+}
+
+// convertVitessJsonExpressionString extracts a JSON value from the specified |value| instance, which Vitess has
+// encoded as a SQL expression string. Vitess parses the binary JSON representation from an incoming binlog event,
+// and converts it into an expression string containing JSON_OBJECT and JSON_ARRAY function calls. Because we don't
+// have access to the raw JSON string or JSON bytes, we have to do extra work to translate from Vitess' SQL
+// expression syntax into a raw JSON string value that we can pass to the storage layer. If Vitess kept around the
+// raw string representation and returned it from value.ToString, this logic would not be necessary.
+func convertVitessJsonExpressionString(ctx *sql.Context, value sqltypes.Value) (interface{}, error) {
+	if value.Type() != query.Type_EXPRESSION {
+		return nil, fmt.Errorf("invalid sqltypes.Value specified; expected a Value instance with an Expression type")
+	}
+
+	strValue := value.String()
+	if strings.HasPrefix(strValue, "EXPRESSION(") {
+		strValue = strValue[len("EXPRESSION(") : len(strValue)-1]
+	}
+
+	node, err := parse.Parse(ctx, "SELECT "+strValue)
+	if err != nil {
+		return nil, err
+	}
+
+	server := sqlserver.GetRunningServer()
+	if server == nil {
+		return nil, fmt.Errorf("unable to access running SQL server")
+	}
+
+	analyze, err := server.Engine.Analyzer.Analyze(ctx, node, nil)
+	if err != nil {
+		return nil, err
+	}
+	rowIter, err := analyze.RowIter(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	row, err := rowIter.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return row[0], nil
 }
 
 func getAllUserDatabaseNames(ctx *sql.Context, engine *gms.Engine) []string {

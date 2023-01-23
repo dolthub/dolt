@@ -16,10 +16,12 @@ package binlogreplication
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/require"
+	"math/rand"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestBinlogReplicationForAllTypes tests that operations (inserts, updates, and deletes) on all SQL
@@ -29,13 +31,18 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	startReplication(t, mySqlPort)
 	defer teardown(t)
 
+	// Set the session's timezone to UTC, to avoid TIMESTAMP test values changing
+	// when they are converted to UTC for storage.
+	primaryDatabase.MustExec("SET SESSION time_zone = '+0:00';")
+
+	// Create the test table
 	tableName := "alltypes"
 	createTableStatement := generateCreateTableStatement(tableName)
 	primaryDatabase.MustExec(createTableStatement)
 
-	// Make inserts on the primary – min, max, and null values
-	primaryDatabase.MustExec(generateInsertMinValuesStatement(tableName))
-	primaryDatabase.MustExec(generateInsertMaxValuesStatement(tableName))
+	// Make inserts on the primary – small, large, and null values
+	primaryDatabase.MustExec(generateInsertValuesStatement(tableName, 0))
+	primaryDatabase.MustExec(generateInsertValuesStatement(tableName, 1))
 	primaryDatabase.MustExec(generateInsertNullValuesStatement(tableName))
 
 	// Verify inserts on replica
@@ -44,10 +51,10 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	require.NoError(t, err)
 	row := convertByteArraysToStrings(readNextRow(t, rows))
 	require.Equal(t, "1", row["pk"])
-	assertMinValues(t, row)
+	assertValues(t, 0, row)
 	row = convertByteArraysToStrings(readNextRow(t, rows))
 	require.Equal(t, "2", row["pk"])
-	assertMaxValues(t, row)
+	assertValues(t, 1, row)
 	row = convertByteArraysToStrings(readNextRow(t, rows))
 	require.Equal(t, "3", row["pk"])
 	assertNullValues(t, row)
@@ -55,8 +62,8 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 
 	// Make updates on the primary
 	primaryDatabase.MustExec(generateUpdateToNullValuesStatement(tableName, 1))
-	primaryDatabase.MustExec(generateUpdateToMinValuesStatement(tableName, 2))
-	primaryDatabase.MustExec(generateUpdateToMaxValuesStatement(tableName, 3))
+	primaryDatabase.MustExec(generateUpdateValuesStatement(tableName, 2, 0))
+	primaryDatabase.MustExec(generateUpdateValuesStatement(tableName, 3, 1))
 
 	// Verify updates on the replica
 	time.Sleep(100 * time.Millisecond)
@@ -67,10 +74,10 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	assertNullValues(t, row)
 	row = convertByteArraysToStrings(readNextRow(t, rows))
 	require.Equal(t, "2", row["pk"])
-	assertMinValues(t, row)
+	assertValues(t, 0, row)
 	row = convertByteArraysToStrings(readNextRow(t, rows))
 	require.Equal(t, "3", row["pk"])
-	assertMaxValues(t, row)
+	assertValues(t, 1, row)
 	require.False(t, rows.Next())
 
 	// Make deletes on the primary
@@ -89,180 +96,422 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 // Test Data
 // ---------------------
 
+type typeDescriptionAssertion struct {
+	Value         interface{}
+	ExpectedValue interface{}
+}
+
+func newTypeDescriptionAssertion(v interface{}) typeDescriptionAssertion {
+	return typeDescriptionAssertion{Value: v}
+}
+
+func newTypeDescriptionAssertionWithExpectedValue(v interface{}, x interface{}) typeDescriptionAssertion {
+	return typeDescriptionAssertion{Value: v, ExpectedValue: x}
+}
+
+func (tda *typeDescriptionAssertion) getExpectedValue() interface{} {
+	if tda.ExpectedValue != nil {
+		return tda.ExpectedValue
+	}
+
+	if valueString, isString := tda.Value.(string); isString {
+		removedPrefixes := []string{"DATE", "TIMESTAMP", "TIME"}
+		lowercaseValue := strings.ToUpper(valueString)
+		for _, prefix := range removedPrefixes {
+			if strings.HasPrefix(lowercaseValue, prefix) {
+				return valueString[len(prefix)+2 : len(valueString)-2]
+			}
+		}
+	}
+
+	return tda.Value
+}
+
 type typeDescription struct {
-	//Name         string
 	TypeDefinition string
-	DefaultValue   interface{}
-	MinValue       interface{}
-	MinGoValue     interface{} // Optional
-	MaxValue       interface{}
-	MaxGoValue     interface{} // Optional
+	Assertions     [2]typeDescriptionAssertion
 }
 
 func (td *typeDescription) ColumnName() string {
 	name := "_" + strings.ReplaceAll(td.TypeDefinition, "(", "_")
 	name = strings.ReplaceAll(name, ")", "_")
 	name = strings.ReplaceAll(name, " ", "_")
+	name = strings.ReplaceAll(name, ",", "_")
+	name = strings.ReplaceAll(name, "\"", "")
+	name = strings.ReplaceAll(name, "'", "")
 	return name
 }
 
+func (td *typeDescription) IsStringType() bool {
+	def := strings.ToLower(td.TypeDefinition)
+	switch {
+	case strings.Contains(def, "char"),
+		strings.Contains(def, "binary"),
+		strings.Contains(def, "blob"),
+		strings.Contains(def, "text"),
+		strings.Contains(def, "enum"),
+		strings.Contains(def, "set"),
+		strings.Contains(def, "json"):
+		return true
+	default:
+		return false
+	}
+}
+
+// allTypes contains test data covering all SQL types.
+//
+// TODO: TypeWireTests contains most of the test data we need. I found it after implementing this, but we
+// could simplify this test code by converting to use TypeWireTests and enhancing it with any additional
+// test cases we need to cover (e.g. NULL values).
 var allTypes = []typeDescription{
+	// Bit types
 	{
 		TypeDefinition: "bit",
-		DefaultValue:   0,
-		MinValue:       0,
-		MinGoValue:     []uint8{0},
-		MaxValue:       1,
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertionWithExpectedValue("0", []uint8{0}),
+			newTypeDescriptionAssertionWithExpectedValue("1", []uint8{1}),
+		},
 	},
 	{
 		TypeDefinition: "bit(64)",
-		DefaultValue:   0,
-		MinValue:       "0",
-		MinGoValue:     []byte{0, 0, 0, 0, 0, 0, 0, 0},
-		MaxValue:       "1",
-		MaxGoValue:     []byte{0, 0, 0, 0, 0, 0, 0, 1},
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertionWithExpectedValue("0", []byte{0, 0, 0, 0, 0, 0, 0, 0}),
+			newTypeDescriptionAssertionWithExpectedValue("1", []byte{0, 0, 0, 0, 0, 0, 0, 1}),
+		},
 	},
+
+	// Integer types
 	{
 		TypeDefinition: "tinyint",
-		DefaultValue:   0,
-		MinValue:       "-128",
-		MaxValue:       "127",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("-128"),
+			newTypeDescriptionAssertion("127"),
+		},
 	},
 	{
 		TypeDefinition: "tinyint unsigned",
-		DefaultValue:   0,
-		MinValue:       "0",
-		MaxValue:       "255",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion("255"),
+		},
 	},
 	{
 		TypeDefinition: "bool",
-		DefaultValue:   0,
-		MinValue:       "0",
-		MaxValue:       "1",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion("1"),
+		},
 	},
 	{
 		TypeDefinition: "smallint",
-		DefaultValue:   0,
-		MinValue:       "-32768",
-		MaxValue:       "32767",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("-32768"),
+			newTypeDescriptionAssertion("32767"),
+		},
 	},
 	{
 		TypeDefinition: "smallint unsigned",
-		DefaultValue:   0,
-		MinValue:       "0",
-		MaxValue:       "65535",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion("65535"),
+		},
 	},
-	/*
-		    From: https://www.w3resource.com/mysql/mysql-data-types.php
+	{
+		TypeDefinition: "mediumint",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("-32768"),
+			newTypeDescriptionAssertion("32767"),
+		},
+	},
+	{
+		TypeDefinition: "mediumint unsigned",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion("65535"),
+		},
+	},
+	{
+		TypeDefinition: "int",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("-32768"),
+			newTypeDescriptionAssertion("32767"),
+		},
+	},
+	{
+		TypeDefinition: "int unsigned",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion("65535"),
+		},
+	},
+	{
+		TypeDefinition: "bigint",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("-32768"),
+			newTypeDescriptionAssertion("32767"),
+		},
+	},
+	{
+		TypeDefinition: "bigint unsigned",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion("65535"),
+		},
+	},
+	{
+		TypeDefinition: "decimal",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion("1234567890"),
+		},
+	},
+	{
+		TypeDefinition: "decimal(10,2)",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0.00"),
+			newTypeDescriptionAssertion("12345678.00"),
+		},
+	},
+	{
+		TypeDefinition: "decimal(20,8)",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("-1234567890.12345678"),
+			newTypeDescriptionAssertion("999999999999.00000001"),
+		},
+	},
 
-			Type	Length
-			in Bytes	Minimum Value
-			(Signed)	Maximum Value
-			(Signed)	Minimum Value
-			(Unsigned)	Maximum Value
-			(Unsigned)
-			FLOAT	4	-3.402823466E+38	 -1.175494351E-38	 1.175494351E-38 	3.402823466E+38
-			DOUBLE	8	-1.7976931348623
-			157E+ 308	-2.22507385850720
-			14E- 308	0, and
-			2.22507385850720
-			14E- 308 	1.797693134862315
-			7E+ 308
-	*/
+	// Floating point types
 	{
 		TypeDefinition: "float",
-		DefaultValue:   0,
-		MinValue:       "-0.1234", // Placeholder
-		MaxValue:       "0.1234",  // Placeholder
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("-3.40282e+38"),
+			newTypeDescriptionAssertion("-1.17549e-38"),
+		},
 	},
 	{
 		TypeDefinition: "float unsigned",
-		DefaultValue:   0,
-		MinValue:       "0",          // Placeholder
-		MaxValue:       "0.12345678", // Placeholder
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("1.17549e-38"),
+			newTypeDescriptionAssertion("3.40282e+38"),
+		},
 	},
 	{
 		TypeDefinition: "double",
-		DefaultValue:   0,
-		MinValue:       "-0.12345678", // Placeholder
-		MaxValue:       "0.12345678",  // Placeholder
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("-1.7976931348623157e+308"),
+			newTypeDescriptionAssertion("-2.2250738585072014e-308"),
+		},
 	},
 	{
 		TypeDefinition: "double unsigned",
-		DefaultValue:   0,
-		MinValue:       "0",          // Placeholder
-		MaxValue:       "0.12345678", // Placeholder
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("2.2250738585072014e-308"),
+			newTypeDescriptionAssertion("1.7976931348623157e+308"),
+		},
+	},
+
+	// String types
+	{
+		TypeDefinition: "char(1)",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion(""),
+			newTypeDescriptionAssertion("0"),
+		},
 	},
 	{
-		TypeDefinition: "date",
-		DefaultValue:   0,
-		MinValue:       "DATE('1981-02-16')",
-		MinGoValue:     "1981-02-16",
-		MaxValue:       "DATE('1981-02-16')",
-		MaxGoValue:     "1981-02-16",
+		TypeDefinition: "char(10)",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion(""),
+			newTypeDescriptionAssertion("0123456789"),
+		},
 	},
-	// ------------------------
-	//{
-	//	TypeDefinition: "??",
-	//	DefaultValue:   0,
-	//	MinValue:       -100,
-	//	MaxValue:       100,
-	//},
-	//{
-	//	TypeDefinition: "??",
-	//	DefaultValue:   0,
-	//	MinValue:       -100,
-	//	MaxValue:       100,
-	//},
-	//{
-	//	TypeDefinition: "??",
-	//	DefaultValue:   0,
-	//	MinValue:       -100,
-	//	MaxValue:       100,
-	//},
-	//{
-	//	TypeDefinition: "??",
-	//	DefaultValue:   0,
-	//	MinValue:       -100,
-	//	MaxValue:       100,
-	//},
-	//{
-	//	TypeDefinition: "??",
-	//	DefaultValue:   0,
-	//	MinValue:       -100,
-	//	MaxValue:       100,
-	//},
-	//{
-	//	TypeDefinition: "??",
-	//	DefaultValue:   0,
-	//	MinValue:       -100,
-	//	MaxValue:       100,
-	//},
+	{
+		TypeDefinition: "varchar(255)",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion(""),
+			newTypeDescriptionAssertion(generateTestDataString(255)),
+		},
+	},
+	{
+		TypeDefinition: "char(1) binary",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion("1"),
+		},
+	},
+	{
+		TypeDefinition: "binary(1)",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion("1"),
+		},
+	},
+	{
+		TypeDefinition: "binary(255)",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion(generateTestDataString(255)),
+			newTypeDescriptionAssertion(generateTestDataString(255)),
+		},
+	},
+	{
+		TypeDefinition: "varbinary(1)",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion("1"),
+		},
+	},
+	{
+		TypeDefinition: "varbinary(255)",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion(generateTestDataString(0)),
+			newTypeDescriptionAssertion(generateTestDataString(255)),
+		},
+	},
+
+	// Blob/Text types
+	{
+		TypeDefinition: "tinyblob",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion(generateTestDataString(255)),
+		},
+	},
+	{
+		TypeDefinition: "blob",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion(generateTestDataString(10_000)),
+		},
+	},
+	{
+		TypeDefinition: "mediumblob",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion(generateTestDataString(15_000)),
+		},
+	},
+	{
+		TypeDefinition: "longblob",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion(generateTestDataString(20_000)),
+		},
+	},
+	{
+		TypeDefinition: "tinytext",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion(generateTestDataString(255)),
+		},
+	},
+	{
+		TypeDefinition: "text",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion(generateTestDataString(10_000)),
+		},
+	},
+	{
+		TypeDefinition: "mediumtext",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion(generateTestDataString(15_000)),
+		},
+	},
+	{
+		TypeDefinition: "longtext",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("0"),
+			newTypeDescriptionAssertion(generateTestDataString(20_000)),
+		},
+	},
+
+	// Enum and Set types
+	{
+		TypeDefinition: "ENUM(\"\",\"a\",\"b\",\"c\")",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion(""),
+			newTypeDescriptionAssertion("c"),
+		},
+	},
+	{
+		TypeDefinition: "SET(\"a\",\"b\",\"c\")",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("a"),
+			newTypeDescriptionAssertion("a,b,c"),
+		},
+	},
+
+	// Date types
+	{
+		TypeDefinition: "date",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("DATE('1981-02-16')"),
+			newTypeDescriptionAssertion("DATE('1981-02-16')"),
+		},
+	},
+	{
+		TypeDefinition: "time",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("TIME('01:02:03')"),
+			newTypeDescriptionAssertion("TIME('01:02:03')"),
+		},
+	},
+	{
+		TypeDefinition: "datetime",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("TIMESTAMP('1981-02-16 12:13:14')"),
+			newTypeDescriptionAssertion("TIMESTAMP('1981-02-16 12:13:14')"),
+		},
+	},
+	{
+		TypeDefinition: "timestamp",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("TIMESTAMP('1981-02-16 12:13:14')"),
+			newTypeDescriptionAssertion("TIMESTAMP('1981-02-16 12:13:14')"),
+		},
+	},
+	{
+		TypeDefinition: "year",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("1981"),
+			newTypeDescriptionAssertion("2020"),
+		},
+	},
+
+	// Spatial types
+	{
+		TypeDefinition: "geometry",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertionWithExpectedValue("POINT(18, 23)",
+				"\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x002@\x00\x00\x00\x00\x00\x007@"),
+			newTypeDescriptionAssertionWithExpectedValue("LINESTRING(POINT(0,0),POINT(1,2),POINT(2,4))",
+				"\x00\x00\x00\x00\x01\x02\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"+
+					"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00"+
+					"\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x10@"),
+		},
+	},
+
+	// JSON types
+	{
+		TypeDefinition: "json",
+		Assertions: [2]typeDescriptionAssertion{
+			newTypeDescriptionAssertion("{}"),
+			newTypeDescriptionAssertion("{\"name\":\"BillyBob\",\"os\":\"Mac\",\"resolution\":{\"x\":1920,\"y\":1080}}"),
+		},
+	},
 }
 
 // ---------------------
 // Test Helper Functions
 // ---------------------
 
-func assertMinValues(t *testing.T, row map[string]interface{}) {
+func assertValues(t *testing.T, assertionIndex int, row map[string]interface{}) {
 	for _, typeDesc := range allTypes {
-		expectedValue := typeDesc.MinValue
-		if typeDesc.MinGoValue != nil {
-			expectedValue = typeDesc.MinGoValue
-		}
+		assertion := typeDesc.Assertions[assertionIndex]
+		expectedValue := assertion.getExpectedValue()
 		require.EqualValues(t, expectedValue, row[typeDesc.ColumnName()],
-			"Failed on min value for for column %q", typeDesc.ColumnName())
-	}
-}
-
-func assertMaxValues(t *testing.T, row map[string]interface{}) {
-	for _, typeDesc := range allTypes {
-		expectedValue := typeDesc.MaxValue
-		if typeDesc.MaxGoValue != nil {
-			expectedValue = typeDesc.MaxGoValue
-		}
-		require.EqualValues(t, expectedValue, row[typeDesc.ColumnName()],
-			"Failed on max value for for column %q", typeDesc.ColumnName())
+			"Failed on assertion %d for for column %q", assertionIndex, typeDesc.ColumnName())
 	}
 }
 
@@ -285,30 +534,20 @@ func generateCreateTableStatement(tableName string) string {
 	return sb.String()
 }
 
-func generateInsertMaxValuesStatement(tableName string) string {
+func generateInsertValuesStatement(tableName string, assertionIndex int) string {
 	sb := strings.Builder{}
 	sb.WriteString("insert into " + tableName)
 	sb.WriteString(" values (DEFAULT")
 	for _, typeDesc := range allTypes {
-		sb.WriteString(", " + fmt.Sprintf("%v", typeDesc.MaxValue))
+		assertion := typeDesc.Assertions[assertionIndex]
+		value := assertion.Value
+		if typeDesc.IsStringType() {
+			value = fmt.Sprintf("'%s'", value)
+		}
+		sb.WriteString(", " + fmt.Sprintf("%v", value))
 	}
 	sb.WriteString(");")
 
-	fmt.Printf("InsertMaxValuesStatement: %s\n", sb.String())
-	return sb.String()
-}
-
-func generateInsertMinValuesStatement(tableName string) string {
-	sb := strings.Builder{}
-	sb.WriteString("insert into " + tableName)
-	sb.WriteString(" values (DEFAULT")
-	for _, typeDesc := range allTypes {
-		// TODO: Handle types (e.g. quote strings)
-		sb.WriteString(", " + fmt.Sprintf("%v", typeDesc.MinValue))
-	}
-	sb.WriteString(");")
-
-	fmt.Printf("InsertMinValuesStatement: %s\n", sb.String())
 	return sb.String()
 }
 
@@ -321,7 +560,6 @@ func generateInsertNullValuesStatement(tableName string) string {
 	}
 	sb.WriteString(");")
 
-	fmt.Printf("InsertNullValuesStatement: %s\n", sb.String())
 	return sb.String()
 }
 
@@ -336,38 +574,33 @@ func generateUpdateToNullValuesStatement(tableName string, pk int) string {
 	}
 	sb.WriteString(fmt.Sprintf(" where pk=%d;", pk))
 
-	fmt.Printf("generateUpdateToNullValuesStatement: %s\n", sb.String())
 	return sb.String()
 }
 
-func generateUpdateToMaxValuesStatement(tableName string, pk int) string {
+func generateUpdateValuesStatement(tableName string, pk int, assertionIndex int) string {
 	sb := strings.Builder{}
 	sb.WriteString("update " + tableName + " set ")
 	for i, typeDesc := range allTypes {
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(fmt.Sprintf("%s=%v",
-			typeDesc.ColumnName(), typeDesc.MaxValue))
+		assertion := typeDesc.Assertions[assertionIndex]
+		value := assertion.Value
+		if typeDesc.IsStringType() {
+			value = fmt.Sprintf("'%s'", value)
+		}
+		sb.WriteString(fmt.Sprintf("%s=%v", typeDesc.ColumnName(), value))
 	}
 	sb.WriteString(fmt.Sprintf(" where pk=%d;", pk))
 
-	fmt.Printf("generateUpdateToMaxValuesStatement: %s\n", sb.String())
 	return sb.String()
 }
 
-func generateUpdateToMinValuesStatement(tableName string, pk int) string {
+func generateTestDataString(length uint) string {
 	sb := strings.Builder{}
-	sb.WriteString("update " + tableName + " set ")
-	for i, typeDesc := range allTypes {
-		if i > 0 {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(fmt.Sprintf("%s=%v",
-			typeDesc.ColumnName(), typeDesc.MinValue))
+	for ; length > 0; length-- {
+		sb.WriteRune(rune(rand.Intn(90-48) + 48))
 	}
-	sb.WriteString(fmt.Sprintf(" where pk=%d;", pk))
 
-	fmt.Printf("generateUpdateToMinValuesStatement: %s\n", sb.String())
 	return sb.String()
 }
