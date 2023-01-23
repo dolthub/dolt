@@ -675,7 +675,19 @@ func (rcv *Index) MutatePrefixLengths(j int, n uint16) bool {
 	return false
 }
 
-const IndexNumFields = 9
+func (rcv *Index) SpatialKey() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(22))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Index) MutateSpatialKey(n bool) bool {
+	return rcv._tab.MutateBoolSlot(22, n)
+}
+
+const IndexNumFields = 10
 
 func IndexStart(builder *flatbuffers.Builder) {
 	builder.StartObject(IndexNumFields)
@@ -718,6 +730,9 @@ func IndexAddPrefixLengths(builder *flatbuffers.Builder, prefixLengths flatbuffe
 }
 func IndexStartPrefixLengthsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(2, numElems, 2)
+}
+func IndexAddSpatialKey(builder *flatbuffers.Builder, spatialKey bool) {
+	builder.PrependBoolSlot(9, spatialKey, false)
 }
 func IndexEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

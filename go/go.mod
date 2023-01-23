@@ -137,6 +137,8 @@ replace (
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 	github.com/google/flatbuffers => github.com/dolthub/flatbuffers v1.13.0-dh.1
 	github.com/oliveagle/jsonpath => github.com/dolthub/jsonpath v0.0.0-20210609232853-d49537a30474
+	github.com/dolthub/go-mysql-server => ../../go-mysql-server
+	github.com/dolthub/vitess => ../../vitess
 )
 
 go 1.19
