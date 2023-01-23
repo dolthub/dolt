@@ -49,6 +49,7 @@ func CreateIndex(
 	columns []string,
 	prefixLengths []uint16,
 	isUnique bool,
+	isSpatial bool,
 	isUserDefined bool,
 	comment string,
 	opts editor.Options,
@@ -103,6 +104,7 @@ func CreateIndex(
 		prefixLengths,
 		schema.IndexProperties{
 			IsUnique:      isUnique,
+			IsSpatial:     isSpatial,
 			IsUserDefined: isUserDefined,
 			Comment:       comment,
 		},

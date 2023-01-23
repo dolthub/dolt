@@ -151,6 +151,7 @@ type encodedIndex struct {
 	Tags            []uint64 `noms:"tags" json:"tags"`
 	Comment         string   `noms:"comment" json:"comment"`
 	Unique          bool     `noms:"unique" json:"unique"`
+	Spatial         bool     `noms:"spatial" json:"spatial"`
 	IsSystemDefined bool     `noms:"hidden,omitempty" json:"hidden,omitempty"` // Was previously named Hidden, do not change noms name
 	PrefixLengths   []uint16 `noms:"prefixLengths,omitempty" json:"prefixLengths,omitempty"`
 }
@@ -244,6 +245,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 			Tags:            index.IndexedColumnTags(),
 			Comment:         index.Comment(),
 			Unique:          index.IsUnique(),
+			Spatial:          index.IsSpatial(),
 			IsSystemDefined: !index.IsUserDefined(),
 			PrefixLengths:   index.PrefixLengths(),
 		}
@@ -307,6 +309,7 @@ func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) er
 			encodedIndex.PrefixLengths,
 			schema.IndexProperties{
 				IsUnique:      encodedIndex.Unique,
+				IsSpatial:      encodedIndex.Spatial,
 				IsUserDefined: !encodedIndex.IsSystemDefined,
 				Comment:       encodedIndex.Comment,
 			},

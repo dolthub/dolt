@@ -272,6 +272,7 @@ func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
 		cols,
 		allocatePrefixLengths(idx.Columns),
 		idx.Constraint == sql.IndexConstraint_Unique,
+		idx.Constraint == sql.IndexConstraint_Spatial,
 		true,
 		idx.Comment,
 		t.opts,
