@@ -19,6 +19,8 @@ import (
 	"math"
 	"sort"
 
+	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
+
 	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
@@ -86,4 +88,36 @@ func ZSort(points []types.Point) []types.Point {
 		return bytes.Compare(zi[:], zj[:]) < 0
 	})
 	return points
+}
+
+// ZAddr converts the GeometryValue into a key: (min_z_val, level)
+// Note: there is an inefficiency here where small polygons may be placed into a level that's significantly larger
+func ZAddr(v types.GeometryValue) [17]byte {
+	bbox := spatial.FindBBox(v)
+	zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
+	zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
+
+	addr := [17]byte{}
+	for i := 0; i < 16; i++ {
+		addr[i] = zMin[i]
+	}
+
+	// TODO: 64 levels sufficient?
+	var level uint8
+	for i := uint8(0); i < 16; i++ {
+		match := zMin[i] ^ zMax[i]
+		if match == 0 {
+			continue
+		}
+		var mask uint8 = 0x80
+		for j := uint8(0); j < 8; j++ {
+			if mask&match == 1 {
+				level = 8*i + j
+			}
+			mask = mask >> 1
+		}
+		break
+	}
+	addr[16] = level
+	return addr
 }
