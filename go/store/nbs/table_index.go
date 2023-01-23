@@ -113,7 +113,11 @@ func parseTableIndex(ctx context.Context, buff []byte, q MemoryQuotaProvider) (o
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
-	return newOnHeapTableIndex(buff, offsetsBuff1, chunkCount, totalUncompressedData, q)
+	idx, err := newOnHeapTableIndex(buff, offsetsBuff1, chunkCount, totalUncompressedData, q)
+	if err != nil {
+		q.ReleaseQuotaBytes(offsetsBuff1)
+	}
+	return idx, err
 }
 
 // similar to parseTableIndex except that it uses the given |offsetsBuff1|
@@ -153,16 +157,23 @@ func readTableIndexByCopy(ctx context.Context, rd io.ReadSeeker, q MemoryQuotaPr
 
 	_, err = io.ReadFull(rd, buff)
 	if err != nil {
+		q.ReleaseQuotaBytes(buff)
 		return onHeapTableIndex{}, err
 	}
 
 	chunks1 := chunkCount - (chunkCount / 2)
 	offsets1Buff, err := q.AcquireQuotaBytes(ctx, uint64(chunks1*offsetSize))
 	if err != nil {
+		q.ReleaseQuotaBytes(buff)
 		return onHeapTableIndex{}, err
 	}
 
-	return newOnHeapTableIndex(buff, offsets1Buff, chunkCount, totalUncompressedData, q)
+	idx, err := newOnHeapTableIndex(buff, offsets1Buff, chunkCount, totalUncompressedData, q)
+	if err != nil {
+		q.ReleaseQuotaBytes(buff)
+		q.ReleaseQuotaBytes(offsets1Buff)
+	}
+	return idx, err
 }
 
 type onHeapTableIndex struct {
