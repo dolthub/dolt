@@ -232,6 +232,9 @@ func (tx *DoltTransaction) doCommit(
 			}
 
 			var newCommit *doltdb.Commit
+			if commit != nil {
+				commit.Roots.Staged = mergedWorkingSet.WorkingRoot()
+			}
 			mergedWorkingSet, newCommit, err = writeFn(ctx, tx, commit, mergedWorkingSet, existingWSHash)
 			if err == datas.ErrOptimisticLockFailed {
 				// this is effectively a `continue` in the loop
