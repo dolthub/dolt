@@ -79,13 +79,8 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 
 	switch resultFormat {
 	case FormatCsv:
-		// TODO: provide a CSV writer that takes a sql schema
-		sch, err := sqlutil.ToDoltResultSchema(sqlSch)
-		if err != nil {
-			return err
-		}
-
-		wr, err = csv.NewCSVWriter(iohelp.NopWrCloser(cli.CliOut), sch, csv.NewCSVInfo())
+		var err error
+		wr, err = csv.NewCSVSqlWriter(iohelp.NopWrCloser(cli.CliOut), sqlSch, csv.NewCSVInfo())
 		if err != nil {
 			return err
 		}

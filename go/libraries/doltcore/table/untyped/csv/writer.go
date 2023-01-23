@@ -109,13 +109,14 @@ func NewCSVSqlWriter(wr io.WriteCloser, sch sql.Schema, info *CSVFileInfo) (*CSV
 
 func (csvw *CSVWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 	var colValStrs []*string
+	var err error
 	if csvw.sch != nil {
-		err := csvw.processRowWithSchema(r)
+		colValStrs, err = csvw.processRowWithSchema(r)
 		if err != nil {
 			return err
 		}
 	} else {
-		err := csvw.processRowWithSqlSchema(r)
+		colValStrs, err = csvw.processRowWithSqlSchema(r)
 		if err != nil {
 			return err
 		}
@@ -140,7 +141,7 @@ func toCsvString(colType sql.Type, val interface{}) (string, error) {
 	return v, nil
 }
 
-func (csvw *CSVWriter) processRowWithSchema(r sql.Row) error {
+func (csvw *CSVWriter) processRowWithSchema(r sql.Row) ([]*string, error) {
 	colValStrs := make([]*string, csvw.sch.GetAllCols().Size())
 	for i, val := range r {
 		if val == nil {
@@ -149,15 +150,15 @@ func (csvw *CSVWriter) processRowWithSchema(r sql.Row) error {
 			colType := csvw.sch.GetAllCols().GetByIndex(i).TypeInfo.ToSqlType()
 			v, err := toCsvString(colType, val)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			colValStrs[i] = &v
 		}
 	}
-	return nil
+	return colValStrs, nil
 }
 
-func (csvw *CSVWriter) processRowWithSqlSchema(r sql.Row) error {
+func (csvw *CSVWriter) processRowWithSqlSchema(r sql.Row) ([]*string, error) {
 	colValStrs := make([]*string, len(csvw.sqlSch))
 	for i, val := range r {
 		if val == nil {
@@ -166,12 +167,12 @@ func (csvw *CSVWriter) processRowWithSqlSchema(r sql.Row) error {
 			colType := csvw.sqlSch[i].Type
 			v, err := toCsvString(colType, val)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			colValStrs[i] = &v
 		}
 	}
-	return nil
+	return colValStrs, nil
 }
 
 // Close should flush all writes, release resources being held
