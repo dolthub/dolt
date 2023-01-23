@@ -248,6 +248,7 @@ type prollySecondaryIndexWriter struct {
 	name          string
 	mut           *prolly.MutableMap
 	unique        bool
+	spatial       bool
 	prefixLengths []uint16
 
 	// number of indexed cols
@@ -311,8 +312,17 @@ func (m prollySecondaryIndexWriter) trimKeyPart(to int, keyPart interface{}) int
 func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		keyPart := m.trimKeyPart(to, sqlRow[from])
-		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
+		var key interface{}
+		if m.spatial {
+			geom, ok := sqlRow[from].(types.GeometryValue)
+			if !ok {
+				panic("impossible") // TODO: make error
+			}
+			key = index.ZAddr(geom)
+		} else {
+			key = m.trimKeyPart(to, sqlRow[from])
+		}
+		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, key); err != nil {
 			return nil, err
 		}
 	}

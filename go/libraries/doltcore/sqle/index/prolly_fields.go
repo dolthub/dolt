@@ -188,7 +188,7 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 		if len(geo) > math.MaxUint16 {
 			return ErrValueExceededMaxFieldSize
 		}
-		tb.PutGeometry(i, serializeGeometry(v))
+		tb.PutGeometry(i, geo)
 	case val.JSONAddrEnc:
 		buf, err := convJson(v)
 		if err != nil {
