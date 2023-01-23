@@ -245,7 +245,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 			Tags:            index.IndexedColumnTags(),
 			Comment:         index.Comment(),
 			Unique:          index.IsUnique(),
-			Spatial:          index.IsSpatial(),
+			Spatial:         index.IsSpatial(),
 			IsSystemDefined: !index.IsUserDefined(),
 			PrefixLengths:   index.PrefixLengths(),
 		}
@@ -309,7 +309,7 @@ func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) er
 			encodedIndex.PrefixLengths,
 			schema.IndexProperties{
 				IsUnique:      encodedIndex.Unique,
-				IsSpatial:      encodedIndex.Spatial,
+				IsSpatial:     encodedIndex.Spatial,
 				IsUserDefined: !encodedIndex.IsSystemDefined,
 				Comment:       encodedIndex.Comment,
 			},

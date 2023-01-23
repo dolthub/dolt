@@ -243,7 +243,7 @@ type fmtIndex struct {
 
 	cols      []schema.Column
 	unique    bool
-	spatial    bool
+	spatial   bool
 	generated bool
 	comment   string
 }

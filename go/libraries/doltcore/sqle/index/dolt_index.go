@@ -464,7 +464,7 @@ type doltIndex struct {
 	indexSch schema.Schema
 	tableSch schema.Schema
 	unique   bool
-	spatial   bool
+	spatial  bool
 	isPk     bool
 	comment  string
 	order    sql.IndexOrder
