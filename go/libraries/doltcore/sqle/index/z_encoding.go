@@ -20,7 +20,6 @@ import (
 	"sort"
 
 	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
-
 	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
