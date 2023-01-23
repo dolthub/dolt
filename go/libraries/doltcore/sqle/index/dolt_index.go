@@ -335,6 +335,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		indexSch:                      idx.Schema(),
 		tableSch:                      sch,
 		unique:                        idx.IsUnique(),
+		spatial:                       idx.IsSpatial(),
 		isPk:                          false,
 		comment:                       idx.Comment(),
 		vrw:                           vrw,
@@ -463,6 +464,7 @@ type doltIndex struct {
 	indexSch schema.Schema
 	tableSch schema.Schema
 	unique   bool
+	spatial   bool
 	isPk     bool
 	comment  string
 	order    sql.IndexOrder
@@ -760,6 +762,11 @@ func (di *doltIndex) ID() string {
 // IsUnique implements sql.Index
 func (di *doltIndex) IsUnique() bool {
 	return di.unique
+}
+
+// IsSpatial implements sql.Index
+func (di *doltIndex) IsSpatial() bool {
+	return di.spatial
 }
 
 // IsPrimaryKey implements DoltIndex.

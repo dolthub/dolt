@@ -1342,6 +1342,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 				prefixLengths,
 				schema.IndexProperties{
 					IsUnique:      index.IsUnique(),
+					IsSpatial:     index.IsSpatial(),
 					IsUserDefined: index.IsUserDefined(),
 					Comment:       index.Comment(),
 				})

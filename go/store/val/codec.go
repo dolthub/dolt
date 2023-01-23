@@ -63,6 +63,7 @@ const (
 	commitAddrEnc ByteSize = hash.ByteLen
 	stringAddrEnc ByteSize = hash.ByteLen
 	jsonAddrEnc   ByteSize = hash.ByteLen
+	zAddrSize  ByteSize = 17
 )
 
 type Encoding byte
@@ -597,6 +598,10 @@ func compareAddr(l, r hash.Hash) int {
 	return l.Compare(r)
 }
 
+func compareZAddr(l, r []byte) int {
+	return bytes.Compare(l, r) // TODO: deal with level?
+}
+
 func writeRaw(buf, val []byte) {
 	expectSize(buf, ByteSize(len(val)))
 	copy(buf, val)
@@ -621,4 +626,9 @@ func expectSize(buf []byte, sz ByteSize) {
 // stringFromBytes converts a []byte to string without a heap allocation.
 func stringFromBytes(b []byte) string {
 	return *(*string)(unsafe.Pointer(&b))
+}
+
+func readZAddr(val []byte) []byte {
+	expectSize(val, zAddrSize)
+	return val
 }

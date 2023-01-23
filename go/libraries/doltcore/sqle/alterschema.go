@@ -270,6 +270,7 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 			index.PrefixLengths(),
 			schema.IndexProperties{
 				IsUnique:      index.IsUnique(),
+				IsSpatial:     index.IsSpatial(),
 				IsUserDefined: index.IsUserDefined(),
 				Comment:       index.Comment(),
 			})

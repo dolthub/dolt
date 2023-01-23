@@ -350,6 +350,7 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		serial.IndexAddUniqueKey(b, idx.IsUnique())
 		serial.IndexAddSystemDefined(b, !idx.IsUserDefined())
 		serial.IndexAddPrefixLengths(b, po)
+		//serial.IndexAddSpatialKey(b, idx.IsSpatial())
 		offs[i] = serial.IndexEnd(b)
 	}
 

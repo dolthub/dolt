@@ -68,6 +68,7 @@ type IndexCollection interface {
 
 type IndexProperties struct {
 	IsUnique      bool
+	IsSpatial     bool
 	IsUserDefined bool
 	Comment       string
 }
@@ -159,6 +160,7 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		tags:          tags,
 		allTags:       combineAllTags(tags, ixc.pks),
 		isUnique:      props.IsUnique,
+		isSpatial:     props.IsSpatial,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
 		prefixLengths: prefixLengths,
@@ -185,6 +187,7 @@ func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags [
 		tags:          tags,
 		allTags:       combineAllTags(tags, ixc.pks),
 		isUnique:      props.IsUnique,
+		isSpatial:     props.IsSpatial,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
 		prefixLengths: prefixLengths,
@@ -325,6 +328,7 @@ func (ixc *indexCollectionImpl) Merge(indexes ...Index) {
 				tags:          tags,
 				indexColl:     ixc,
 				isUnique:      index.IsUnique(),
+				isSpatial:     index.IsSpatial(),
 				isUserDefined: index.IsUserDefined(),
 				comment:       index.Comment(),
 				prefixLengths: index.PrefixLengths(),
