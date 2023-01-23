@@ -1784,7 +1784,7 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 		return err
 	}
 	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
-		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
+		//return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
 
 	columns := make([]string, len(idx.Columns))
@@ -2272,7 +2272,7 @@ func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, s
 // CreateIndexForForeignKey implements sql.ForeignKeyTable
 func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
 	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
-		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
+		//return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
 	columns := make([]string, len(idx.Columns))
 	for i, indexCol := range idx.Columns {
