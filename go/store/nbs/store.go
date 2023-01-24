@@ -623,6 +623,8 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs 
 type refCheck func(reqs []hasRecord) (hash.HashSet, error)
 
 func (nbs *NomsBlockStore) errorIfDangling(checker refCheck) error {
+	nbs.mu.RLock()
+	defer nbs.mu.RUnlock()
 	if (nbs.mt == nil || nbs.mt.pendingRefs == nil) && (len(nbs.tables.novel) == 0) {
 		return nil // no refs to check
 	}
