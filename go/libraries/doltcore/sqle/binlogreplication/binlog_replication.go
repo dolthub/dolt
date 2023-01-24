@@ -954,11 +954,14 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		}
 
 		// Record the last GTID processed after the commit
-		// TODO: Update GTID sys vars, too
 		currentPosition.GTIDSet = currentPosition.GTIDSet.AddGTID(currentGtid)
+		err := sql.SystemVariables.SetGlobal("gtid_executed", currentPosition.GTIDSet.String())
+		if err != nil {
+			logger.Errorf("unable to set @@GLOBAL.gtid_executed: %s", err.Error())
+		}
 		err = positionStore.Save(ctx, currentPosition)
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to store GTID executed metadata to disk: %s", err.Error())
 		}
 
 		// For now, create a Dolt commit from every data update. Eventually, we'll want to make this configurable.
