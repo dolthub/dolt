@@ -98,7 +98,7 @@ func ZValue(p types.Point) (z [2]uint64) {
 // 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp 0x00000000FFFFFFFF
 // 0000 0000 0000 0000 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp
 func UnInterleaveUint64(z uint64) (x, y uint64) {
-	x, y = z, z >> 1
+	x, y = z, z>>1
 	for i := 4; i >= 0; i-- {
 		x &= masks[i]
 		x |= x >> shifts[i]
