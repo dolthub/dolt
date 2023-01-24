@@ -16,6 +16,7 @@ package index
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math"
 	"math/bits"
 	"sort"
@@ -144,10 +145,7 @@ func UnZValue(z [2]uint64) types.Point {
 func ZSort(points []types.Point) []types.Point {
 	sort.Slice(points, func(i, j int) bool {
 		zi, zj := ZValue(points[i]), ZValue(points[j])
-		if zi[0] == zj[0] {
-			return zi[1] < zj[1]
-		}
-		return zi[0] < zj[0]
+		return zi[0] < zj[0] || (zi[0] == zj[0] && zi[1] < zi[1])
 	})
 	return points
 }
@@ -160,11 +158,8 @@ func ZAddr(v types.GeometryValue) [17]byte {
 	zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
 
 	addr := [17]byte{}
-	for i := 0; i < 2; i++ {
-		for j := 0; j < 8; j++ {
-			addr[8*i+j+1] = byte((zMin[i] >> (8 * (7 - j))) & 0xFF)
-		}
-	}
+	binary.BigEndian.PutUint64(addr[1:], zMin[0])
+	binary.BigEndian.PutUint64(addr[9:], zMin[1])
 	if res := zMin[0] ^ zMax[0]; res != 0 {
 		addr[0] = byte(64 - bits.LeadingZeros64(res)/2)
 	} else {
