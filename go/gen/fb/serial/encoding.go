@@ -46,6 +46,7 @@ const (
 	EncodingCommitAddr Encoding = 22
 	EncodingStringAddr Encoding = 23
 	EncodingJSONAddr   Encoding = 24
+	EncodingZAddr      Encoding = 25
 	EncodingString     Encoding = 128
 	EncodingBytes      Encoding = 129
 	EncodingDecimal    Encoding = 130
@@ -77,6 +78,7 @@ var EnumNamesEncoding = map[Encoding]string{
 	EncodingCommitAddr: "CommitAddr",
 	EncodingStringAddr: "StringAddr",
 	EncodingJSONAddr:   "JSONAddr",
+	EncodingZAddr:      "ZAddr",
 	EncodingString:     "String",
 	EncodingBytes:      "Bytes",
 	EncodingDecimal:    "Decimal",
@@ -108,6 +110,7 @@ var EnumValuesEncoding = map[string]Encoding{
 	"CommitAddr": EncodingCommitAddr,
 	"StringAddr": EncodingStringAddr,
 	"JSONAddr":   EncodingJSONAddr,
+	"ZAddr":      EncodingZAddr,
 	"String":     EncodingString,
 	"Bytes":      EncodingBytes,
 	"Decimal":    EncodingDecimal,
