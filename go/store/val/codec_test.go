@@ -240,6 +240,12 @@ func TestCompare(t *testing.T) {
 			l:   encStr("b"), r: encStr("a"),
 			cmp: 1,
 		},
+		// z-address / geometry
+		{
+			typ: Type{Enc: GeometryEnc},
+			l:   encStr("b"), r: encStr("a"),
+			cmp: 1,
+		},
 	}
 
 	for _, test := range tests {
