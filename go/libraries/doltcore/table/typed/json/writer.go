@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+
 	// needed so that system vars are initialized correctly in the empty context used during printing
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -66,7 +67,7 @@ func NewJSONSqlWriter(wr io.WriteCloser, sch sql.Schema) (*RowWriter, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	w.sqlSch = sch
 	return w, nil
 }
@@ -221,10 +222,9 @@ func (j *RowWriter) jsonDataForSqlSchema(row sql.Row) ([]byte, error) {
 
 		colValMap[col.Name] = val
 	}
-	
+
 	return marshalToJson(colValMap)
 }
-
 
 func (j *RowWriter) Flush() error {
 	return j.bWr.Flush()
