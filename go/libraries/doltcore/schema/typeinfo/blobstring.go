@@ -23,7 +23,7 @@ import (
 	"unsafe"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -45,10 +45,10 @@ type blobStringType struct {
 var _ TypeInfo = (*blobStringType)(nil)
 
 var (
-	TinyTextType   TypeInfo = &blobStringType{sqlStringType: types2.TinyText}
-	TextType       TypeInfo = &blobStringType{sqlStringType: types2.Text}
-	MediumTextType TypeInfo = &blobStringType{sqlStringType: types2.MediumText}
-	LongTextType   TypeInfo = &blobStringType{sqlStringType: types2.LongText}
+	TinyTextType   TypeInfo = &blobStringType{sqlStringType: gmstypes.TinyText}
+	TextType       TypeInfo = &blobStringType{sqlStringType: gmstypes.Text}
+	MediumTextType TypeInfo = &blobStringType{sqlStringType: gmstypes.MediumText}
+	LongTextType   TypeInfo = &blobStringType{sqlStringType: gmstypes.LongText}
 )
 
 func CreateBlobStringTypeFromParams(params map[string]string) (TypeInfo, error) {
@@ -72,7 +72,7 @@ func CreateBlobStringTypeFromParams(params map[string]string) (TypeInfo, error) 
 	} else {
 		return nil, fmt.Errorf(`create blobstring type info is missing param "%v"`, blobStringTypeParam_Length)
 	}
-	sqlType, err := types2.CreateString(sqltypes.Text, length, collation)
+	sqlType, err := gmstypes.CreateString(sqltypes.Text, length, collation)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func CreateBlobStringTypeFromParams(params map[string]string) (TypeInfo, error) 
 func (ti *blobStringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Blob); ok {
 		b, err := fromBlob(val)
-		if types2.IsBinaryType(ti.sqlStringType) {
+		if gmstypes.IsBinaryType(ti.sqlStringType) {
 			return b, err
 		}
 		return string(b), err
@@ -104,7 +104,7 @@ func (ti *blobStringType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecRea
 			return nil, err
 		}
 		b, err := fromBlob(val)
-		if types2.IsBinaryType(ti.sqlStringType) {
+		if gmstypes.IsBinaryType(ti.sqlStringType) {
 			return b, err
 		}
 		return string(b), err

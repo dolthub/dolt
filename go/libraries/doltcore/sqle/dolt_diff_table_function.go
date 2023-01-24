@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -347,7 +347,7 @@ func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, int
 		return nil, nil, nil, "", nil
 	}
 
-	if !types2.IsText(dtf.tableNameExpr.Type()) {
+	if !gmstypes.IsText(dtf.tableNameExpr.Type()) {
 		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.tableNameExpr.String())
 	}
 
@@ -362,7 +362,7 @@ func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, int
 	}
 
 	if dtf.dotCommitExpr != nil {
-		if !types2.IsText(dtf.dotCommitExpr.Type()) {
+		if !gmstypes.IsText(dtf.dotCommitExpr.Type()) {
 			return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.dotCommitExpr.String())
 		}
 
@@ -374,10 +374,10 @@ func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, int
 		return nil, nil, dotCommitVal, tableName, nil
 	}
 
-	if !types2.IsText(dtf.fromCommitExpr.Type()) {
+	if !gmstypes.IsText(dtf.fromCommitExpr.Type()) {
 		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.fromCommitExpr.String())
 	}
-	if !types2.IsText(dtf.toCommitExpr.Type()) {
+	if !gmstypes.IsText(dtf.toCommitExpr.Type()) {
 		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.toCommitExpr.String())
 	}
 

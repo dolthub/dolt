@@ -22,7 +22,7 @@ import (
 	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -49,7 +49,7 @@ type varStringType struct {
 var _ TypeInfo = (*varStringType)(nil)
 
 var (
-	StringDefaultType = &varStringType{types2.MustCreateStringWithDefaults(sqltypes.VarChar, 16383)}
+	StringDefaultType = &varStringType{gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 16383)}
 )
 
 func CreateVarStringTypeFromParams(params map[string]string) (TypeInfo, error) {
@@ -77,11 +77,11 @@ func CreateVarStringTypeFromParams(params map[string]string) (TypeInfo, error) {
 		var sqlType sql.StringType
 		switch sqlStr {
 		case varStringTypeParam_SQL_Char:
-			sqlType, err = types2.CreateString(sqltypes.Char, length, collation)
+			sqlType, err = gmstypes.CreateString(sqltypes.Char, length, collation)
 		case varStringTypeParam_SQL_VarChar:
-			sqlType, err = types2.CreateString(sqltypes.VarChar, length, collation)
+			sqlType, err = gmstypes.CreateString(sqltypes.VarChar, length, collation)
 		case varStringTypeParam_SQL_Text:
-			sqlType, err = types2.CreateString(sqltypes.Text, length, collation)
+			sqlType, err = gmstypes.CreateString(sqltypes.Text, length, collation)
 		default:
 			return nil, fmt.Errorf(`create varstring type info has "%v" param with value "%v"`, varStringTypeParam_SQL, sqlStr)
 		}

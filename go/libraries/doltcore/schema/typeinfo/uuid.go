@@ -19,7 +19,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/google/uuid"
 
@@ -32,7 +32,7 @@ type uuidType struct {
 
 var _ TypeInfo = (*uuidType)(nil)
 
-var UuidType = &uuidType{types2.MustCreateString(sqltypes.Char, 36, sql.Collation_ascii_bin)}
+var UuidType = &uuidType{gmstypes.MustCreateString(sqltypes.Char, 36, sql.Collation_ascii_bin)}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *uuidType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
