@@ -96,7 +96,7 @@ func NewCSVSqlWriter(wr io.WriteCloser, sch sql.Schema, info *CSVFileInfo) (*CSV
 			nm := col.Name
 			colNames[i] = &nm
 		}
-		
+
 		err := csvw.write(colNames)
 		if err != nil {
 			wr.Close()
@@ -137,7 +137,7 @@ func toCsvString(colType sql.Type, val interface{}) (string, error) {
 			return "", err
 		}
 	}
-	
+
 	return v, nil
 }
 
