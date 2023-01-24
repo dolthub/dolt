@@ -177,6 +177,10 @@ func configureToxiProxy(t *testing.T) {
 	fmt.Printf("Toxiproxy proxy with limit_data toxic (1KB) started on port %d \n", proxyPort)
 }
 
+// convertByteArraysToStrings converts each []byte value in the specified map |m| into a string.
+// This is necessary because MapScan doesn't honor (or know about) the correct underlying SQL types – it
+// gets all results back as strings, typed as []byte.
+// More info at the end of this issue: https://github.com/jmoiron/sqlx/issues/225
 func convertByteArraysToStrings(m map[string]interface{}) map[string]interface{} {
 	for key, value := range m {
 		if bytes, ok := value.([]byte); ok {
