@@ -85,13 +85,8 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 			return err
 		}
 	case FormatJson:
-		// TODO: provide a JSON writer that takes a sql schema
-		sch, err := sqlutil.ToDoltResultSchema(sqlSch)
-		if err != nil {
-			return err
-		}
-
-		wr, err = json.NewJSONWriter(iohelp.NopWrCloser(cli.CliOut), sch)
+		var err error
+		wr, err = json.NewJSONSqlWriter(iohelp.NopWrCloser(cli.CliOut), sqlSch)
 		if err != nil {
 			return err
 		}
