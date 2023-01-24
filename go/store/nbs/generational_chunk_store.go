@@ -136,6 +136,8 @@ func (gcs *GenerationalNBS) Has(ctx context.Context, h hash.Hash) (bool, error) 
 
 // HasMany returns a new HashSet containing any members of |hashes| that are absent from the store.
 func (gcs *GenerationalNBS) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error) {
+	gcs.newGen.mu.RLock()
+	defer gcs.newGen.mu.RUnlock()
 	return gcs.hasMany(toHasRecords(hashes))
 }
 
@@ -146,6 +148,9 @@ func (gcs *GenerationalNBS) hasMany(recs []hasRecord) (absent hash.HashSet, err 
 	} else if len(absent) == 0 {
 		return absent, nil
 	}
+
+	gcs.oldGen.mu.RLock()
+	defer gcs.oldGen.mu.RUnlock()
 	return gcs.oldGen.hasMany(recs)
 }
 
@@ -166,19 +171,7 @@ func (gcs *GenerationalNBS) errorIfDangling(ctx context.Context, addrs hash.Hash
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
 func (gcs *GenerationalNBS) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
-	addrs, err := getAddrs(ctx, c)
-	if err != nil {
-		return err
-	}
-
-	err = gcs.errorIfDangling(ctx, addrs)
-	if err != nil {
-		return err
-	}
-
-	return gcs.newGen.Put(ctx, c, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-		return nil, nil
-	})
+	return gcs.newGen.Put(ctx, c, getAddrs)
 }
 
 // Returns the NomsVersion with which this ChunkSource is compatible.
