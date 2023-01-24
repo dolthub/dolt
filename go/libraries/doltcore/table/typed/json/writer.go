@@ -21,11 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-
+	
+	// _ import needed so that system vars are initialized correctly in the empty context used during printing
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-
-	// _ import needed so that system vars are initialized correctly in the empty context used during printing
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/dolthub/vitess/go/sqltypes"
 
