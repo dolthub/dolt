@@ -183,7 +183,7 @@ func doltCommit(ctx *sql.Context,
 				tx.mergeEditOpts,
 				mo)
 			if err != nil {
-			        return nil, nil, err
+				return nil, nil, err
 			}
 			logrus.Tracef("staged and HEAD merge took %s", time.Since(start))
 		}
