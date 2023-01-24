@@ -25,6 +25,35 @@ import (
 	assert "github.com/stretchr/testify/require"
 )
 
+// these are sorted
+var ps = []types.Point{
+	{X: -2, Y: -2}, // 0
+	{X: -1, Y: -2},
+	{X: -2, Y: -1},
+	{X: -1, Y: -1},
+	{X: 0, Y: -2}, // 4
+	{X: 1, Y: -2},
+	{X: 2, Y: -2},
+	{X: 0, Y: -1},
+	{X: 1, Y: -1}, // 8
+	{X: 2, Y: -1},
+	{X: -2, Y: 0},
+	{X: -2, Y: 1},
+	{X: -1, Y: 0}, // 12
+	{X: -1, Y: 1},
+	{X: -2, Y: 2},
+	{X: -1, Y: 2},
+	{X: 0, Y: 0}, // 16
+	{X: 1, Y: 0},
+	{X: 0, Y: 1},
+	{X: 1, Y: 1},
+	{X: 2, Y: 0}, // 20
+	{X: 2, Y: 1},
+	{X: 0, Y: 2},
+	{X: 1, Y: 2},
+	{X: 2, Y: 2}, // 24
+}
+
 func TestLexFloat(t *testing.T) {
 	t.Run("test edge case lex float values", func(t *testing.T) {
 		assert.Equal(t, uint64(0x0010000000000000), LexFloat(-math.MaxFloat64))
@@ -168,7 +197,7 @@ func TestZAddr(t *testing.T) {
 	t.Run("test points z-addrs", func(t *testing.T) {
 		p := types.Point{X: 1, Y: 2}
 		res := ZAddr(p)
-		assert.Equal(t, "daaaaa0000000000000000000000000080", hex.EncodeToString(res[:]))
+		assert.Equal(t, "80e5555500000000000000000000000000", hex.EncodeToString(res[:]))
 	})
 
 	t.Run("test linestring z-addrs", func(t *testing.T) {
@@ -177,7 +206,7 @@ func TestZAddr(t *testing.T) {
 		c := types.Point{X: 3, Y: 3}
 		l := types.LineString{Points: []types.Point{a, b, c}}
 		res := ZAddr(l)
-		assert.Equal(t, "cfffff0000000000000000000000000002", hex.EncodeToString(res[:]))
+		assert.Equal(t, "02cfffff00000000000000000000000000", hex.EncodeToString(res[:]))
 	})
 
 	t.Run("test polygon z-addrs", func(t *testing.T) {
@@ -188,60 +217,47 @@ func TestZAddr(t *testing.T) {
 		l := types.LineString{Points: []types.Point{a, b, c, d, a}}
 		p := types.Polygon{Lines: []types.LineString{l}}
 		res := ZAddr(p)
-		assert.Equal(t, "300000ffffffffffffffffffffffffff00", hex.EncodeToString(res[:]))
+		assert.Equal(t, "00300000ffffffffffffffffffffffffff", hex.EncodeToString(res[:]))
 	})
 }
 
 func TestZSort(t *testing.T) {
-	// these are sorted
-	ps := []types.Point{
-		{X: -2, Y: -2}, // 0
-		{X: -1, Y: -2},
-		{X: -2, Y: -1},
-		{X: -1, Y: -1},
-		{X: 0, Y: -2}, // 4
-		{X: 1, Y: -2},
-		{X: 2, Y: -2},
-		{X: 0, Y: -1},
-		{X: 1, Y: -1}, // 8
-		{X: 2, Y: -1},
-		{X: -2, Y: 0},
-		{X: -2, Y: 1},
-		{X: -1, Y: 0}, // 12
-		{X: -1, Y: 1},
-		{X: -2, Y: 2},
-		{X: -1, Y: 2},
-		{X: 0, Y: 0}, // 16
-		{X: 1, Y: 0},
-		{X: 0, Y: 1},
-		{X: 1, Y: 1},
-		{X: 2, Y: 0}, // 20
-		{X: 2, Y: 1},
-		{X: 0, Y: 2},
-		{X: 1, Y: 2},
-		{X: 2, Y: 2}, // 24
-	}
+	p1 := types.LineString{Points: []types.Point{ps[16], ps[19]}}
+	p2 := types.LineString{Points: []types.Point{ps[0], ps[3]}}
+	p3 := types.LineString{Points: []types.Point{ps[19], ps[24]}}
+	p4 := types.LineString{Points: []types.Point{ps[3], ps[16]}}
+	p5 := types.LineString{Points: []types.Point{ps[3], ps[19]}}
+	p6 := types.LineString{Points: []types.Point{ps[24], ps[24]}}
 
-	p1 := types.LineString{Points: []types.Point{ps[0], ps[3]}}
-	p2 := types.LineString{Points: []types.Point{ps[3], ps[16]}}
-	p3 := types.LineString{Points: []types.Point{ps[3], ps[19]}}
-	p4 := types.LineString{Points: []types.Point{ps[16], ps[19]}}
-	p5 := types.LineString{Points: []types.Point{ps[19], ps[24]}}
+	t.Run("test z-addr p1", func(t *testing.T) {
+		z := ZAddr(p1) // bbox: (0, 0), (1, 1)
+		assert.Equal(t, "3ec0000000000000000000000000000000", hex.EncodeToString(z[:]))
+	})
 
-	z := ZAddr(p1)
-	assert.Equal(t, "0fffffffffffffffffffffffffffffff02", hex.EncodeToString(z[:]))
+	t.Run("test z-addr p2", func(t *testing.T) {
+		z := ZAddr(p2) // bbox: (-2, -2), (-1, -1)
+		assert.Equal(t, "3f0fffffffffffffffffffffffffffffff", hex.EncodeToString(z[:]))
+	})
 
-	z = ZAddr(p2)
-	assert.Equal(t, "300000ffffffffffffffffffffffffff00", hex.EncodeToString(z[:]))
+	t.Run("test z-addr p3", func(t *testing.T) {
+		z := ZAddr(p3) // bbox: (1, 1), (2, 2)
+		assert.Equal(t, "3fcfffff00000000000000000000000000", hex.EncodeToString(z[:]))
+	})
 
-	z = ZAddr(p3)
-	assert.Equal(t, "300000ffffffffffffffffffffffffff00", hex.EncodeToString(z[:]))
+	t.Run("test z-addr p4", func(t *testing.T) {
+		z := ZAddr(p4) // bbox: (-1, -1), (1, 1)
+		assert.Equal(t, "40300000ffffffffffffffffffffffffff", hex.EncodeToString(z[:]))
+	})
 
-	z = ZAddr(p4)
-	assert.Equal(t, "c000000000000000000000000000000004", hex.EncodeToString(z[:]))
+	t.Run("test z-addr p5", func(t *testing.T) {
+		z := ZAddr(p5) // bbox: (-1, -1), (0, 0)
+		assert.Equal(t, "40300000ffffffffffffffffffffffffff", hex.EncodeToString(z[:]))
+	})
 
-	z = ZAddr(p5)
-	assert.Equal(t, "cfffff0000000000000000000000000002", hex.EncodeToString(z[:]))
+	t.Run("test z-addr p6", func(t *testing.T) {
+		z := ZAddr(p6) // bbox: (2, 2), (2, 2)
+		assert.Equal(t, "60f0000000000000000000000000000000", hex.EncodeToString(z[:]))
+	})
 
 	t.Run("test z-addr sorting", func(t *testing.T) {
 		sortedGeoms := []types.GeometryValue{p1, p2, p3, p4, p5}

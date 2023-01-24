@@ -140,13 +140,13 @@ func ZAddr(v types.GeometryValue) [17]byte {
 	addr := [17]byte{}
 	for i := 0; i < 2; i++ {
 		for j := 0; j < 8; j++ {
-			addr[8*i+j] = byte((zMin[i] >> (8 * (7 - j))) & 0xFF)
+			addr[8*i+j+1] = byte((zMin[i] >> (8 * (7 - j))) & 0xFF)
 		}
 	}
 	if res := zMin[0] ^ zMax[0]; res != 0 {
-		addr[16] = byte(bits.LeadingZeros64(res))
+		addr[0] = byte(64 - bits.LeadingZeros64(res) / 2)
 	} else {
-		addr[16] = byte(64 + bits.LeadingZeros64(zMin[1]^zMax[1]))
+		addr[0] = byte(32 + bits.LeadingZeros64(zMin[1]^zMax[1]))
 	}
 	return addr
 }
