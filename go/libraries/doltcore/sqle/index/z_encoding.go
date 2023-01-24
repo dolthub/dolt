@@ -15,8 +15,8 @@
 package index
 
 import (
-	"bytes"
 	"math"
+	"math/bits"
 	"sort"
 
 	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
@@ -46,35 +46,38 @@ func UnLexFloat(b uint64) float64 {
 	return math.Float64frombits(b)
 }
 
-// ZValue takes a Point and interleaves the bits into a [16]byte
+// ZValue takes a Point and interleaves the bits into a [2]uint64
 // It will put the bits in this order: x_0, y_0, x_1, y_1 ... x_63, Y_63
-func ZValue(p types.Point) [16]byte {
-	xLex := LexFloat(p.X)
-	yLex := LexFloat(p.Y)
+func ZValue(p types.Point) [2]uint64 {
+	xLex, yLex := LexFloat(p.X), LexFloat(p.Y)
 
-	res := [16]byte{}
-	for i := 0; i < 16; i++ {
-		for j := 0; j < 4; j++ {
-			x, y := byte((xLex&1)<<1), byte(yLex&1)
-			res[15-i] |= (x | y) << (2 * j)
+	res := [2]uint64{}
+	for i := 0; i < 2; i++ {
+		for j := 0; j < 32; j++ {
+			x, y := (xLex&1)<<1, yLex&1
+			res[1-i] |= (x | y) << (2 * j)
 			xLex, yLex = xLex>>1, yLex>>1
 		}
 	}
+
 	return res
 }
 
-// UnZValue takes a [16]byte Z-Value and converts it back to a sql.Point
-func UnZValue(z [16]byte) types.Point {
-	var x, y uint64
-	for i := 15; i >= 0; i-- {
-		zv := uint64(z[i])
-		for j := 3; j >= 0; j-- {
-			y |= (zv & 1) << (63 - (4*i + j))
-			zv >>= 1
-
-			x |= (zv & 1) << (63 - (4*i + j))
-			zv >>= 1
-		}
+// UnZValue takes a [2]uint64 Z-Value and converts it back to a sql.Point
+func UnZValue(z [2]uint64) types.Point {
+	x, y, zv := uint64(0), uint64(0), z[0]
+	for i := 0; i < 32; i++ {
+		y |= (zv & 1) << (32 - i)
+		zv >>= 1
+		x |= (zv & 1) << (32 - i)
+		zv >>= 1
+	}
+	x, y, zv = x<<32, y<<32, z[1]
+	for i := 0; i < 32; i++ {
+		y |= (zv & 1) << (32 - i)
+		zv >>= 1
+		x |= (zv & 1) << (32 - i)
+		zv >>= 1
 	}
 	xf := UnLexFloat(x)
 	yf := UnLexFloat(y)
@@ -84,7 +87,10 @@ func UnZValue(z [16]byte) types.Point {
 func ZSort(points []types.Point) []types.Point {
 	sort.Slice(points, func(i, j int) bool {
 		zi, zj := ZValue(points[i]), ZValue(points[j])
-		return bytes.Compare(zi[:], zj[:]) < 0
+		if zi[0] == zj[0] {
+			return zi[1] < zj[1]
+		}
+		return zi[0] < zj[0]
 	})
 	return points
 }
@@ -97,26 +103,13 @@ func ZAddr(v types.GeometryValue) [17]byte {
 	zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
 
 	addr := [17]byte{}
-	for i := 0; i < 16; i++ {
-		addr[i] = zMin[i]
+	for i := 0; i < 8; i++ {
+		addr[i] = byte((zMin[0] >> (8 * (7 - i))) & 0xFF)
+	}
+	for i := 0; i < 8; i++ {
+		addr[8 + i] = byte((zMin[1] >> (8 * (7 - i))) & 0xFF)
 	}
 
-	// TODO: 64 levels sufficient?
-	var level uint8
-	for i := uint8(0); i < 16; i++ {
-		match := zMin[i] ^ zMax[i]
-		if match == 0 {
-			continue
-		}
-		var mask uint8 = 0x80
-		for j := uint8(0); j < 8; j++ {
-			if mask&match == 1 {
-				level = 8*i + j
-			}
-			mask = mask >> 1
-		}
-		break
-	}
-	addr[16] = level
+	addr[16]  = uint8(bits.LeadingZeros64(zMin[0] ^ zMax[0]) + bits.LeadingZeros64(zMin[1] ^ zMax[1]))
 	return addr
 }

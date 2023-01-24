@@ -82,58 +82,72 @@ func TestLexFloat(t *testing.T) {
 	})
 }
 
+func zValToString(z [2]uint64) string {
+	addr := [16]byte{}
+	for i := 0; i < 8; i++ {
+		addr[i] = byte((z[0] >> (8 * (7 - i))) & 0xFF)
+	}
+	for i := 0; i < 8; i++ {
+		addr[8 + i] = byte((z[1] >> (8 * (7 - i))) & 0xFF)
+	}
+	return hex.EncodeToString(addr[:])
+}
+
+func stringToZVal(s string) [2]uint64 {
+	sb, _ := hex.DecodeString(s)
+	z := [2]uint64{}
+	for i := 0; i < 8; i++ {
+		z[0] |= uint64(((sb[i] >> (7 - i)) & 0xFF) << (7 - i))
+	}
+	for i := 8; i < 16; i++ {
+		z[1] |= uint64(((sb[i] >> (7 - (i - 8))) & 0xFF) << (7 - (i - 8)))
+	}
+	return z
+}
+
 func TestZValue(t *testing.T) {
 	t.Run("test z-values", func(t *testing.T) {
 		z := ZValue(types.Point{X: -5000, Y: -5000})
-		assert.Equal(t, "0fff30f03f3fffffffffffffffffffff", hex.EncodeToString(z[:]))
+		assert.Equal(t, "0fff30f03f3fffffffffffffffffffff", zValToString(z))
 
 		z = ZValue(types.Point{X: -1, Y: -1})
-		assert.Equal(t, "300000ffffffffffffffffffffffffff", hex.EncodeToString(z[:]))
+		assert.Equal(t, "300000ffffffffffffffffffffffffff", zValToString(z))
 
 		z = ZValue(types.Point{X: -1, Y: 0})
-		assert.Equal(t, "600000aaaaaaaaaaaaaaaaaaaaaaaaaa", hex.EncodeToString(z[:]))
+		assert.Equal(t, "600000aaaaaaaaaaaaaaaaaaaaaaaaaa", zValToString(z))
 
 		z = ZValue(types.Point{X: -1, Y: 1})
-		assert.Equal(t, "655555aaaaaaaaaaaaaaaaaaaaaaaaaa", hex.EncodeToString(z[:]))
+		assert.Equal(t, "655555aaaaaaaaaaaaaaaaaaaaaaaaaa", zValToString(z))
 
 		z = ZValue(types.Point{X: 0, Y: -1})
-		assert.Equal(t, "90000055555555555555555555555555", hex.EncodeToString(z[:]))
+		assert.Equal(t, "90000055555555555555555555555555", zValToString(z))
 
 		z = ZValue(types.Point{X: 1, Y: -1})
-		assert.Equal(t, "9aaaaa55555555555555555555555555", hex.EncodeToString(z[:]))
+		assert.Equal(t, "9aaaaa55555555555555555555555555", zValToString(z))
 
 		z = ZValue(types.Point{X: 0, Y: 0})
-		assert.Equal(t, "c0000000000000000000000000000000", hex.EncodeToString(z[:]))
+		assert.Equal(t, "c0000000000000000000000000000000", zValToString(z))
 
 		z = ZValue(types.Point{X: 1, Y: 0})
-		assert.Equal(t, "caaaaa00000000000000000000000000", hex.EncodeToString(z[:]))
+		assert.Equal(t, "caaaaa00000000000000000000000000", zValToString(z))
 
 		z = ZValue(types.Point{X: 0, Y: 1})
-		assert.Equal(t, "c5555500000000000000000000000000", hex.EncodeToString(z[:]))
+		assert.Equal(t, "c5555500000000000000000000000000", zValToString(z))
 
 		z = ZValue(types.Point{X: 1, Y: 1})
-		assert.Equal(t, "cfffff00000000000000000000000000", hex.EncodeToString(z[:]))
+		assert.Equal(t, "cfffff00000000000000000000000000", zValToString(z))
 
 		z = ZValue(types.Point{X: 2, Y: 2})
-		assert.Equal(t, "f0000000000000000000000000000000", hex.EncodeToString(z[:]))
+		assert.Equal(t, "f0000000000000000000000000000000", zValToString(z))
 
 		z = ZValue(types.Point{X: 50000, Y: 50000})
-		assert.Equal(t, "f000fcc03ccc00000000000000000000", hex.EncodeToString(z[:]))
+		assert.Equal(t, "f000fcc03ccc00000000000000000000", zValToString(z))
 	})
 
 	t.Run("test un-z-values", func(t *testing.T) {
-		v, _ := hex.DecodeString("c0000000000000000000000000000000")
-		z := [16]byte{}
-		for i, v := range v {
-			z[i] = v
-		}
+		z := stringToZVal("c0000000000000000000000000000000")
 		assert.Equal(t, types.Point{X: 0, Y: 0}, UnZValue(z))
-
-		v, _ = hex.DecodeString("daaaaa00000000000000000000000000")
-		z = [16]byte{}
-		for i, v := range v {
-			z[i] = v
-		}
+		z = stringToZVal("daaaaa00000000000000000000000000")
 		assert.Equal(t, types.Point{X: 1, Y: 2}, UnZValue(z))
 	})
 
