@@ -93,6 +93,7 @@ const (
 	CommitAddrEnc = Encoding(serial.EncodingCommitAddr)
 	StringAddrEnc = Encoding(serial.EncodingStringAddr)
 	JSONAddrEnc   = Encoding(serial.EncodingJSONAddr)
+	ZAddrEnc      = Encoding(serial.EncodingZAddr)
 
 	sentinel Encoding = 127
 )
