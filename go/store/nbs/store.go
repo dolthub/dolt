@@ -575,33 +575,14 @@ func (nbs *NomsBlockStore) WithoutConjoiner() *NomsBlockStore {
 	}
 }
 
-func (nbs *NomsBlockStore) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
-	absent, err := nbs.HasMany(ctx, addrs)
-	if err != nil {
-		return err
-	}
-	if len(absent) != 0 {
-		s := absent.String()
-		return fmt.Errorf("Found dangling references to %s", s)
-	}
-	return nil
-}
-
 func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
 	t1 := time.Now()
-	a := addr(c.Hash())
-
 	addrs, err := getAddrs(ctx, c)
 	if err != nil {
 		return err
 	}
 
-	err = nbs.errorIfDangling(ctx, addrs)
-	if err != nil {
-		return err
-	}
-
-	success, err := nbs.addChunk(ctx, a, c.Data())
+	success, err := nbs.addChunk(ctx, c, addrs)
 	if err != nil {
 		return err
 	} else if !success {
@@ -614,22 +595,70 @@ func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 	return nil
 }
 
-func (nbs *NomsBlockStore) addChunk(ctx context.Context, h addr, data []byte) (bool, error) {
+func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs hash.HashSet) (bool, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	if nbs.mt == nil {
 		nbs.mt = newMemTable(nbs.mtSize)
 	}
-	if !nbs.mt.addChunk(h, data) {
+	a := addr(ch.Hash())
+
+	ok := nbs.mt.addChunk(a, ch.Data())
+	if !ok {
 		ts, err := nbs.tables.append(ctx, nbs.mt, nbs.stats)
 		if err != nil {
 			return false, err
 		}
 		nbs.tables = ts
 		nbs.mt = newMemTable(nbs.mtSize)
-		return nbs.mt.addChunk(h, data), nil
+		ok = nbs.mt.addChunk(a, ch.Data())
 	}
-	return true, nil
+	if ok {
+		nbs.mt.addChildRefs(addrs)
+	}
+	return ok, nil
+}
+
+// refCheck checks that no dangling references are being committed.
+type refCheck func(reqs []hasRecord) (hash.HashSet, error)
+
+func (nbs *NomsBlockStore) errorIfDangling(checker refCheck) error {
+	if (nbs.mt == nil || nbs.mt.pendingRefs == nil) && (len(nbs.tables.novel) == 0) {
+		return nil // no refs to check
+	}
+
+	sort.Sort(hasRecordByPrefix(nbs.mt.pendingRefs))
+	absent, err := checker(nbs.mt.pendingRefs)
+	if err != nil {
+		return err
+	} else if absent.Size() > 0 {
+		return fmt.Errorf("found dangling references to %s", absent.String())
+	}
+
+	if len(nbs.tables.novel) == 0 {
+		return nil
+	}
+
+	pending := hash.NewHashSet()
+	for _, cs := range nbs.tables.novel {
+		var idx tableIndex
+		var set hash.HashSet
+		if idx, err = cs.index(); err != nil {
+			return err
+		}
+		if set, err = hashSetFromTableIndex(idx); err != nil {
+			return err
+		}
+		pending.InsertAll(set)
+	}
+
+	absent, err = checker(toHasRecords(pending))
+	if err != nil {
+		return err
+	} else if absent.Size() > 0 {
+		return fmt.Errorf("found dangling references to %s", absent.String())
+	}
+	return nil
 }
 
 func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
@@ -822,13 +851,21 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 }
 
 func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
+	if hashes.Size() == 0 {
+		return nil, nil
+	}
+
 	t1 := time.Now()
+	defer nbs.stats.HasLatency.SampleTimeSince(t1)
+	nbs.stats.AddressesPerHas.SampleLen(hashes.Size())
 
-	reqs := toHasRecords(hashes)
+	nbs.mu.RLock()
+	defer nbs.mu.RUnlock()
+	return nbs.hasMany(toHasRecords(hashes))
+}
 
+func (nbs *NomsBlockStore) hasMany(reqs []hasRecord) (hash.HashSet, error) {
 	tables, remaining, err := func() (tables chunkReader, remaining bool, err error) {
-		nbs.mu.RLock()
-		defer nbs.mu.RUnlock()
 		tables = nbs.tables
 
 		remaining = true
@@ -853,11 +890,6 @@ func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	if len(hashes) > 0 {
-		nbs.stats.HasLatency.SampleTimeSince(t1)
-		nbs.stats.AddressesPerHas.SampleLen(len(reqs))
 	}
 
 	absent := hash.HashSet{}
@@ -924,6 +956,10 @@ func (nbs *NomsBlockStore) Root(ctx context.Context) (hash.Hash, error) {
 }
 
 func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) (success bool, err error) {
+	return nbs.commit(ctx, current, last, nbs.hasMany)
+}
+
+func (nbs *NomsBlockStore) commit(ctx context.Context, current, last hash.Hash, checker refCheck) (success bool, err error) {
 	t1 := time.Now()
 	defer nbs.stats.CommitLatency.SampleTimeSince(t1)
 
@@ -942,6 +978,13 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 
 		return true, nil
 	}
+
+	// check for dangling references in |nbs.mt|
+	nbs.mu.Lock()
+	if err = nbs.errorIfDangling(checker); err != nil {
+		return false, err
+	}
+	nbs.mu.Unlock()
 
 	err = func() error {
 		// This is unfortunate. We want to serialize commits to the same store

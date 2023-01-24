@@ -41,23 +41,28 @@ func getAddrsCb(ctx context.Context, c Chunk) (hash.HashSet, error) {
 }
 
 func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
-	store := suite.Factory.CreateStore(context.Background(), "ns")
+	ctx := context.Background()
+	store := suite.Factory.CreateStore(ctx, "ns")
 	input := "abc"
 	c := NewChunk([]byte(input))
-	err := store.Put(context.Background(), c, getAddrsCb)
+	err := store.Put(ctx, c, getAddrsCb)
 	suite.NoError(err)
 	h := c.Hash()
 
 	// Reading it via the API should work.
 	assertInputInStore(input, h, store, suite.Assert())
 
-	// Put chunk with dangling ref should error
+	// Put chunk with dangling ref should error on Commit
 	data := []byte("bcd")
-	r := hash.Of(data)
 	nc := NewChunk(data)
-	err = store.Put(context.Background(), nc, func(ctx context.Context, c Chunk) (hash.HashSet, error) {
-		return hash.NewHashSet(r), nil
+	err = store.Put(ctx, nc, func(ctx context.Context, c Chunk) (hash.HashSet, error) {
+		return hash.NewHashSet(hash.Of([]byte("nonsense"))), nil
 	})
+	suite.NoError(err)
+	root, err := store.Root(ctx)
+	suite.NoError(err)
+
+	_, err = store.Commit(ctx, root, root)
 	suite.Error(err)
 }
 

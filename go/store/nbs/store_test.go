@@ -192,8 +192,8 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	fileToData := populateLocalStore(t, st, numTableFiles)
 
 	// add a chunk and flush to trigger a conjoin
-	c := []byte("it's a boy!")
-	ok, err := st.addChunk(ctx, computeAddr(c), c)
+	c := chunks.NewChunk([]byte("it's a boy!"))
+	ok, err := st.addChunk(ctx, c, hash.NewHashSet())
 	require.NoError(t, err)
 	require.True(t, ok)
 	ok, err = st.Commit(ctx, st.upstream.root, st.upstream.root)
