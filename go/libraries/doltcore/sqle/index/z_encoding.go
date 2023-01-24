@@ -156,7 +156,7 @@ func ZAddr(v types.GeometryValue) [17]byte {
 func ZAddrSort(geoms []types.GeometryValue) []types.GeometryValue {
 	sort.Slice(geoms, func(i, j int) bool {
 		zi, zj := ZAddr(geoms[i]), ZAddr(geoms[j])
-		return bytes.Compare(zi[:], zj[:]) <= 0
+		return bytes.Compare(zi[:], zj[:]) < 0
 	})
 	return geoms
 }

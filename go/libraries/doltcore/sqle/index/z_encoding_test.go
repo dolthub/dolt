@@ -197,7 +197,7 @@ func TestZAddr(t *testing.T) {
 	t.Run("test points z-addrs", func(t *testing.T) {
 		p := types.Point{X: 1, Y: 2}
 		res := ZAddr(p)
-		assert.Equal(t, "80e5555500000000000000000000000000", hex.EncodeToString(res[:]))
+		assert.Equal(t, "60e5555500000000000000000000000000", hex.EncodeToString(res[:]))
 	})
 
 	t.Run("test linestring z-addrs", func(t *testing.T) {
@@ -206,7 +206,7 @@ func TestZAddr(t *testing.T) {
 		c := types.Point{X: 3, Y: 3}
 		l := types.LineString{Points: []types.Point{a, b, c}}
 		res := ZAddr(l)
-		assert.Equal(t, "02cfffff00000000000000000000000000", hex.EncodeToString(res[:]))
+		assert.Equal(t, "3fcfffff00000000000000000000000000", hex.EncodeToString(res[:]))
 	})
 
 	t.Run("test polygon z-addrs", func(t *testing.T) {
@@ -217,7 +217,7 @@ func TestZAddr(t *testing.T) {
 		l := types.LineString{Points: []types.Point{a, b, c, d, a}}
 		p := types.Polygon{Lines: []types.LineString{l}}
 		res := ZAddr(p)
-		assert.Equal(t, "00300000ffffffffffffffffffffffffff", hex.EncodeToString(res[:]))
+		assert.Equal(t, "40300000ffffffffffffffffffffffffff", hex.EncodeToString(res[:]))
 	})
 }
 
