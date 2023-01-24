@@ -129,6 +129,11 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 	//       Add a BATS test for this; today, an error would come from the GMS layer, so we can't give
 	//       a specific error message about needing to run Dolt as a sql-server yet.
 
+	_, err := loadReplicaServerId()
+	if err != nil {
+		return fmt.Errorf("unable to start replication: %s", err.Error())
+	}
+
 	configuration, err := loadReplicationConfiguration(ctx)
 	if err != nil {
 		return err
@@ -1043,6 +1048,37 @@ func (d *doltBinlogReplicaController) isTableFilteredOut(tableMap *mysql.TableMa
 	return false
 }
 
+// startReplicationEventStream sends a request over |conn|, the connection to the MySQL source server, to begin
+// sending binlog events.
+func (d *doltBinlogReplicaController) startReplicationEventStream(ctx *sql.Context, conn *mysql.Conn) error {
+	serverId, err := loadReplicaServerId()
+	if err != nil {
+		return err
+	}
+
+	position, err := positionStore.Load(ctx)
+	if err != nil {
+		return err
+	}
+
+	if position == nil {
+		// When there is no existing record of executed GTIDs, we create a GTIDSet with just one transaction ID
+		// for the 0000 server ID. There doesn't seem to be a cleaner way of saying "start at the very beginning".
+		//
+		// Also... "starting position" is a bit of a misnomer – it's actually the processed GTIDs, which
+		// indicate the NEXT GTID where replication should start, but it's not as direct as specifying
+		// a starting position, like the function signature seems to suggest.
+		gtid := mysql.Mysql56GTID{
+			Sequence: 1,
+		}
+		position = &mysql.Position{GTIDSet: gtid.GTIDSet()}
+	}
+
+	currentPosition = position
+
+	return conn.SendBinlogDumpCommand(serverId, *position)
+}
+
 // getTableSchema returns a sql.Schema for the specified table in the specified database.
 func getTableSchema(ctx *sql.Context, engine *gms.Engine, tableName, databaseName string) (sql.Schema, error) {
 	database, err := engine.Analyzer.Catalog.Database(ctx, databaseName)
@@ -1242,33 +1278,25 @@ func getAllUserDatabaseNames(ctx *sql.Context, engine *gms.Engine) []string {
 	return userDatabaseNames
 }
 
-// startReplicationEventStream sends a request over |conn|, the connection to the MySQL source server, to begin
-// sending binlog events.
-func (d *doltBinlogReplicaController) startReplicationEventStream(ctx *sql.Context, conn *mysql.Conn) error {
-	position, err := positionStore.Load(ctx)
-	if err != nil {
-		return err
+// loadReplicaServerId loads the @@GLOBAL.server_id system variable needed to register the replica with the source,
+// and returns an error specific to replication configuration if the variable is not set to a valid value.
+func loadReplicaServerId() (uint32, error) {
+	_, value, ok := sql.SystemVariables.GetGlobal("server_id")
+	if !ok {
+		return 0, fmt.Errorf("no server_id global system variable set")
 	}
 
-	if position == nil {
-		// When there is no existing record of executed GTIDs, we create a GTIDSet with just one transaction ID
-		// for the 0000 server ID. There doesn't seem to be a cleaner way of saying "start at the very beginning".
-		//
-		// Also... "starting position" is a bit of a misnomer – it's actually the processed GTIDs, which
-		// indicate the NEXT GTID where replication should start, but it's not as direct as specifying
-		// a starting position, like the function signature seems to suggest.
-		gtid := mysql.Mysql56GTID{
-			Sequence: 1,
-		}
-		position = &mysql.Position{GTIDSet: gtid.GTIDSet()}
+	serverId, ok := value.(uint32)
+	if !ok {
+		return 0, fmt.Errorf("unexpected type for @@GLOBAL.server_id value: %T", value)
 	}
 
-	currentPosition = position
+	if serverId == 0 {
+		return 0, fmt.Errorf("invalid server ID configured for @@GLOBAL.server_id (%d); "+
+			"must be an integer greater than zero and less than 4,294,967,296", serverId)
+	}
 
-	// TODO: unhardcode 1 as the replica's server_id
-	//       We should just use the server's ID – error out if it's not set and probably have a default value?
-	//       Need to add the server_id sys var
-	return conn.SendBinlogDumpCommand(1, *position)
+	return serverId, nil
 }
 
 func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) {
