@@ -130,16 +130,31 @@ func TestZValue(t *testing.T) {
 
 	t.Run("test sorting points by z-value", func(t *testing.T) {
 		sortedPoints := []types.Point{
-			{X: -5000, Y: -5000},
+			{X: -2, Y: -2},
+			{X: -2, Y: -1},
+			{X: -1, Y: -2},
 			{X: -1, Y: -1},
+			{X: -2, Y: 0},
+			{X: -2, Y: 1},
+			{X: -2, Y: 2},
 			{X: -1, Y: 0},
 			{X: -1, Y: 1},
+			{X: -1, Y: 2},
+			{X: 0, Y: -2},
+			{X: 1, Y: -2},
+			{X: 0, Y: -1},
 			{X: 1, Y: -1},
+			{X: 2, Y: -2},
+			{X: 2, Y: -1},
 			{X: 0, Y: 0},
+			{X: 0, Y: 1},
 			{X: 1, Y: 0},
 			{X: 1, Y: 1},
+			{X: 0, Y: 2},
+			{X: 1, Y: 2},
+			{X: 2, Y: 0},
+			{X: 2, Y: 1},
 			{X: 2, Y: 2},
-			{X: 100, Y: 100},
 		}
 		randPoints := append([]types.Point{}, sortedPoints...)
 		rand.Shuffle(len(randPoints), func(i, j int) {
@@ -174,5 +189,66 @@ func TestZAddr(t *testing.T) {
 		p := types.Polygon{Lines: []types.LineString{l}}
 		res := ZAddr(p)
 		assert.Equal(t, "300000ffffffffffffffffffffffffff00", hex.EncodeToString(res[:]))
+	})
+}
+
+func TestZSort(t *testing.T) {
+	// these are sorted
+	ps := []types.Point{
+		{X: -2, Y: -2}, // 0
+		{X: -2, Y: -1},
+		{X: -1, Y: -2},
+		{X: -1, Y: -1},
+		{X: -2, Y: 0},  // 4
+		{X: -2, Y: 1},
+		{X: -2, Y: 2},
+		{X: -1, Y: 0},
+		{X: -1, Y: 1},  // 8
+		{X: -1, Y: 2},
+		{X: 0, Y: -2},
+		{X: 1, Y: -2},
+		{X: 0, Y: -1},  // 12
+		{X: 1, Y: -1},
+		{X: 2, Y: -2},
+		{X: 2, Y: -1},
+		{X: 0, Y: 0},   // 16
+		{X: 0, Y: 1},
+		{X: 1, Y: 0},
+		{X: 1, Y: 1},
+		{X: 0, Y: 2},   // 20
+		{X: 1, Y: 2},
+		{X: 2, Y: 0},
+		{X: 2, Y: 1},
+		{X: 2, Y: 2},   // 24
+	}
+
+	p1 := types.LineString{Points: []types.Point{ps[0],ps[3]}}
+	p2 := types.LineString{Points: []types.Point{ps[3],ps[16]}}
+	p3 := types.LineString{Points: []types.Point{ps[3],ps[19]}}
+	p4 := types.LineString{Points: []types.Point{ps[16],ps[19]}}
+	p5 := types.LineString{Points: []types.Point{ps[19],ps[24]}}
+
+	z := ZAddr(p1)
+	assert.Equal(t, "0fffffffffffffffffffffffffffffff02", hex.EncodeToString(z[:]))
+
+	z = ZAddr(p2)
+	assert.Equal(t, "300000ffffffffffffffffffffffffff00", hex.EncodeToString(z[:]))
+
+	z = ZAddr(p3)
+	assert.Equal(t, "300000ffffffffffffffffffffffffff00", hex.EncodeToString(z[:]))
+
+	z = ZAddr(p4)
+	assert.Equal(t, "c000000000000000000000000000000004", hex.EncodeToString(z[:]))
+
+	z = ZAddr(p5)
+	assert.Equal(t, "cfffff0000000000000000000000000002", hex.EncodeToString(z[:]))
+
+	t.Run("test z-addr sorting", func(t *testing.T) {
+		sortedGeoms := []types.GeometryValue{p1,p2,p3,p4,p5}
+		randomGeoms := append([]types.GeometryValue{}, sortedGeoms...)
+		rand.Shuffle(len(randomGeoms), func(i, j int) {
+			randomGeoms[i], randomGeoms[j] = randomGeoms[j], randomGeoms[i]
+		})
+		assert.Equal(t, sortedGeoms, ZAddrSort(randomGeoms))
 	})
 }
