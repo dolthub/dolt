@@ -20,7 +20,7 @@ import (
 	"math"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -174,22 +174,22 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		return YearType, nil
 	case sqltypes.Geometry:
 		switch sqlType.String() {
-		case types2.PointType{}.String():
-			return &pointType{sqlType.(types2.PointType)}, nil
-		case types2.LineStringType{}.String():
-			return &linestringType{sqlType.(types2.LineStringType)}, nil
-		case types2.PolygonType{}.String():
-			return &polygonType{sqlType.(types2.PolygonType)}, nil
-		case types2.MultiPointType{}.String():
+		case gmstypes.PointType{}.String():
+			return &pointType{sqlType.(gmstypes.PointType)}, nil
+		case gmstypes.LineStringType{}.String():
+			return &linestringType{sqlType.(gmstypes.LineStringType)}, nil
+		case gmstypes.PolygonType{}.String():
+			return &polygonType{sqlType.(gmstypes.PolygonType)}, nil
+		case gmstypes.MultiPointType{}.String():
 			return &multipointType{}, nil
-		case types2.MultiLineStringType{}.String():
+		case gmstypes.MultiLineStringType{}.String():
 			return &multilinestringType{}, nil
-		case types2.MultiPolygonType{}.String():
+		case gmstypes.MultiPolygonType{}.String():
 			return &multipolygonType{}, nil
-		case types2.GeomCollType{}.String():
+		case gmstypes.GeomCollType{}.String():
 			return &geomcollType{}, nil
-		case types2.GeometryType{}.String():
-			return &geometryType{sqlGeometryType: sqlType.(types2.GeometryType)}, nil
+		case gmstypes.GeometryType{}.String():
+			return &geometryType{sqlGeometryType: sqlType.(gmstypes.GeometryType)}, nil
 		default:
 			return nil, fmt.Errorf(`expected "PointTypeIdentifier" from SQL basetype "Geometry"`)
 		}
@@ -236,13 +236,13 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		}
 		return &inlineBlobType{stringType}, nil
 	case sqltypes.Bit:
-		bitSQLType, ok := sqlType.(types2.BitType)
+		bitSQLType, ok := sqlType.(gmstypes.BitType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "BitTypeIdentifier" from SQL basetype "Bit"`)
 		}
 		return &bitType{bitSQLType}, nil
 	case sqltypes.TypeJSON:
-		js, ok := sqlType.(sql.JsonType)
+		js, ok := sqlType.(gmstypes.JsonType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "JsonType" from SQL basetype "TypeJSON"`)
 		}
@@ -328,13 +328,13 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 func FromKind(kind types.NomsKind) TypeInfo {
 	switch kind {
 	case types.BlobKind:
-		return &varBinaryType{types2.LongBlob}
+		return &varBinaryType{gmstypes.LongBlob}
 	case types.BoolKind:
 		return BoolType
 	case types.FloatKind:
 		return Float64Type
 	case types.InlineBlobKind:
-		return &inlineBlobType{types2.MustCreateBinary(sqltypes.VarBinary, math.MaxUint16)}
+		return &inlineBlobType{gmstypes.MustCreateBinary(sqltypes.VarBinary, math.MaxUint16)}
 	case types.IntKind:
 		return Int64Type
 	case types.JSONKind:
@@ -360,7 +360,7 @@ func FromKind(kind types.NomsKind) TypeInfo {
 	case types.UUIDKind:
 		return UuidType
 	case types.DecimalKind:
-		return &decimalType{types2.MustCreateDecimalType(65, 30)}
+		return &decimalType{gmstypes.MustCreateDecimalType(65, 30)}
 	default:
 		panic(fmt.Errorf(`no default type info for NomsKind "%v"`, kind.String()))
 	}

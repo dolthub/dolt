@@ -193,7 +193,18 @@ func (j *RowWriter) jsonDataForSqlSchema(row sql.Row) ([]byte, error) {
 		}
 
 		switch col.Type.(type) {
-		case sql.JsonType:
+		case sql.DatetimeType,
+			sql.DecimalType,
+			sql.EnumType,
+			sql.StringType,
+			sql.SetType,
+			types.TupleType:
+			sqlVal, err := col.Type.SQL(sqlContext, nil, val)
+			if err != nil {
+				return nil, err
+			}
+			val = sqlVal.ToString()
+		case types.JsonType:
 			sqlVal, err := col.Type.SQL(sqlContext, nil, val)
 			if err != nil {
 				return nil, err
@@ -206,12 +217,6 @@ func (j *RowWriter) jsonDataForSqlSchema(row sql.Row) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-		default:
-			sqlVal, err := col.Type.SQL(sqlContext, nil, val)
-			if err != nil {
-				return nil, err
-			}
-			val = sqlVal.ToString()
 		}
 
 		colValMap[col.Name] = val
