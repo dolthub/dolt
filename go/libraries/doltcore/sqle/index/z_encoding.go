@@ -46,41 +46,74 @@ func UnLexFloat(b uint64) float64 {
 	return math.Float64frombits(b)
 }
 
+var masks = []uint64{
+	0x0000FFFF0000FFFF,
+	0x00FF00FF00FF00FF,
+	0x0F0F0F0F0F0F0F0F,
+	0x3333333333333333,
+	0x5555555555555555}
+
+var shifts = []uint64{16, 8, 4, 2, 1}
+
+// InterleaveUInt64 interleaves the bits of the uint64s x and y.
+// The first 32 bits of x and y must be 0.
+// Example:
+// 0000 0000 0000 0000 0000 0000 0000 0000 abcd efgh ijkl mnop abcd efgh ijkl mnop
+// 0000 0000 0000 0000 abcd efgh ijkl mnop 0000 0000 0000 0000 abcd efgh ijkl mnop
+// 0000 0000 abcd efgh 0000 0000 ijkl mnop 0000 0000 abcd efgh 0000 0000 ijkl mnop
+// 0000 abcd 0000 efgh 0000 ijkl 0000 mnop 0000 abcd 0000 efgh 0000 ijkl 0000 mnop
+// 00ab 00cd 00ef 00gh 00ij 00kl 00mn 00op 00ab 00cd 00ef 00gh 00ij 00kl 00mn 00op
+// 0a0b 0c0d 0e0f 0g0h 0i0j 0k0l 0m0n 0o0p 0a0b 0c0d 0e0f 0g0h 0i0j 0k0l 0m0n 0o0p
+// Alternatively, just precompute all the results from 0 to 0x0000FFFFF
+func InterleaveUInt64(x, y uint64) uint64 {
+	for i := 0; i < 5; i++ {
+		x = (x | (x << shifts[i])) & masks[i]
+		y = (y | (y << shifts[i])) & masks[i]
+	}
+	return (x << 1) | y
+}
+
 // ZValue takes a Point and interleaves the bits into a [2]uint64
 // It will put the bits in this order: x_0, y_0, x_1, y_1 ... x_63, Y_63
-func ZValue(p types.Point) [2]uint64 {
+func ZValue(p types.Point) (z [2]uint64) {
 	xLex, yLex := LexFloat(p.X), LexFloat(p.Y)
-
-	res := [2]uint64{}
-	for i := 0; i < 2; i++ {
-		for j := 0; j < 32; j++ {
-			x, y := (xLex&1)<<1, yLex&1
-			res[1-i] |= (x | y) << (2 * j)
-			xLex, yLex = xLex>>1, yLex>>1
-		}
+	z[0], z[1] = InterleaveUInt64(xLex >> 32, yLex >> 32), InterleaveUInt64(xLex & 0xFFFFFFFF, yLex & 0xFFFFFFFF)
+	return
+}
+// UnInterleaveUint64 splits up the bits of the uint64 z into two uint64s
+// The first 32 bits of x and y must be 0.
+// Example:
+// abcd efgh ijkl mnop abcd efgh ijkl mnop abcd efgh ijkl mnop abcd efgh ijkl mnop 0x5555555555555555
+// 0b0d 0f0h 0j0l 0n0p 0b0d 0f0h 0j0l 0n0p 0b0d 0f0h 0j0l 0n0p 0b0d 0f0h 0j0l 0n0p x | x >> 1
+// 0bbd dffh hjjl lnnp pbbd dffh hjjl lnnp pbbd dffh hjjl lnnp pnbd dffh hjjl lnnp 0x3333333333333333
+// 00bd 00fh 00jl 00np 00bd 00fh 00jl 00np 00bd 00fh 00jl 00np 00bd 00fh 00jl 00np x | x >> 2
+// 0000 bdfh fhjl jlnp npbd bdfh fhjl jlnp npdb bdfh fhjl jlnp npdb bdfh fhjl jlnp 0x0F0F0F0F0F0F0F0F
+// 0000 bdfh 0000 jlnp 0000 bdfh 0000 jlnp 0000 bdfh 0000 jlnp 0000 bdfh 0000 jlnp x | x >> 4
+// 0000 bdfh bdfh jlnp jlnp bdfh bdfh jlnp jlnp bdfh bdfh jlnp jlnp bdfh bdfh jlnp 0x00FF00FF00FF00FF
+// 0000 0000 bdfh jlnp 0000 0000 bdfh jlnp 0000 0000 bdfh jlnp 0000 0000 bdfh jlnp x | x >> 8
+// 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp 0x0000FFFF0000FFFF
+// 0000 0000 0000 0000 bdfh jlnp bdfh jlnp 0000 0000 0000 0000 bdfh jlnp bdfh jlnp x | x >> 16
+// 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp 0x00000000FFFFFFFF
+// 0000 0000 0000 0000 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp
+func UnInterleaveUint64(z uint64) (x, y uint64) {
+	x, y = z >> 1, z
+	for i := 4; i >= 0; i-- {
+		x &= masks[i]
+		x |= x >> shifts[i]
+		y &= masks[i]
+		y |= y >> shifts[i]
 	}
-
-	return res
+	x &= 0xFFFFFFFF
+	y &= 0xFFFFFFFF
+	return
 }
 
 // UnZValue takes a [2]uint64 Z-Value and converts it back to a sql.Point
 func UnZValue(z [2]uint64) types.Point {
-	x, y, zv := uint64(0), uint64(0), z[0]
-	for i := 0; i < 32; i++ {
-		y |= (zv & 1) << (32 - i)
-		zv >>= 1
-		x |= (zv & 1) << (32 - i)
-		zv >>= 1
-	}
-	x, y, zv = x<<32, y<<32, z[1]
-	for i := 0; i < 32; i++ {
-		y |= (zv & 1) << (32 - i)
-		zv >>= 1
-		x |= (zv & 1) << (32 - i)
-		zv >>= 1
-	}
-	xf := UnLexFloat(x)
-	yf := UnLexFloat(y)
+	xl, yl := UnInterleaveUint64(z[0])
+	xr, yr := UnInterleaveUint64(z[1])
+	xf := UnLexFloat((xl << 32) | xr)
+	yf := UnLexFloat((yl << 32) | yr)
 	return types.Point{X: xf, Y: yf}
 }
 
@@ -103,13 +136,16 @@ func ZAddr(v types.GeometryValue) [17]byte {
 	zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
 
 	addr := [17]byte{}
-	for i := 0; i < 8; i++ {
-		addr[i] = byte((zMin[0] >> (8 * (7 - i))) & 0xFF)
+	for i := 0; i < 2; i++ {
+		for j := 0; j < 8; j++ {
+			addr[8 * i + j] = byte((zMin[i] >> (8 * (7 - j))) & 0xFF)
+		}
 	}
-	for i := 0; i < 8; i++ {
-		addr[8 + i] = byte((zMin[1] >> (8 * (7 - i))) & 0xFF)
+	if res := zMin[0] ^ zMax[0]; res != 0 {
+		addr[16] = byte(bits.LeadingZeros64(res))
+	} else {
+		addr[16] = byte(64 + bits.LeadingZeros64(zMin[1] ^ zMax[1]))
 	}
 
-	addr[16]  = uint8(bits.LeadingZeros64(zMin[0] ^ zMax[0]) + bits.LeadingZeros64(zMin[1] ^ zMax[1]))
 	return addr
 }

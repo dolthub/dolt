@@ -82,72 +82,49 @@ func TestLexFloat(t *testing.T) {
 	})
 }
 
-func zValToString(z [2]uint64) string {
-	addr := [16]byte{}
-	for i := 0; i < 8; i++ {
-		addr[i] = byte((z[0] >> (8 * (7 - i))) & 0xFF)
-	}
-	for i := 0; i < 8; i++ {
-		addr[8 + i] = byte((z[1] >> (8 * (7 - i))) & 0xFF)
-	}
-	return hex.EncodeToString(addr[:])
-}
-
-func stringToZVal(s string) [2]uint64 {
-	sb, _ := hex.DecodeString(s)
-	z := [2]uint64{}
-	for i := 0; i < 8; i++ {
-		z[0] |= uint64(((sb[i] >> (7 - i)) & 0xFF) << (7 - i))
-	}
-	for i := 8; i < 16; i++ {
-		z[1] |= uint64(((sb[i] >> (7 - (i - 8))) & 0xFF) << (7 - (i - 8)))
-	}
-	return z
-}
-
 func TestZValue(t *testing.T) {
 	t.Run("test z-values", func(t *testing.T) {
 		z := ZValue(types.Point{X: -5000, Y: -5000})
-		assert.Equal(t, "0fff30f03f3fffffffffffffffffffff", zValToString(z))
+		assert.Equal(t, [2]uint64{0x0fff30f03f3fffff, 0xffffffffffffffff}, z)
 
 		z = ZValue(types.Point{X: -1, Y: -1})
-		assert.Equal(t, "300000ffffffffffffffffffffffffff", zValToString(z))
+		assert.Equal(t, [2]uint64{0x300000ffffffffff, 0xffffffffffffffff}, z)
 
 		z = ZValue(types.Point{X: -1, Y: 0})
-		assert.Equal(t, "600000aaaaaaaaaaaaaaaaaaaaaaaaaa", zValToString(z))
+		assert.Equal(t, [2]uint64{0x600000aaaaaaaaaa, 0xaaaaaaaaaaaaaaaa}, z)
 
 		z = ZValue(types.Point{X: -1, Y: 1})
-		assert.Equal(t, "655555aaaaaaaaaaaaaaaaaaaaaaaaaa", zValToString(z))
+		assert.Equal(t, [2]uint64{0x655555aaaaaaaaaa, 0xaaaaaaaaaaaaaaaa}, z)
 
 		z = ZValue(types.Point{X: 0, Y: -1})
-		assert.Equal(t, "90000055555555555555555555555555", zValToString(z))
+		assert.Equal(t, [2]uint64{0x9000005555555555, 0x5555555555555555}, z)
 
 		z = ZValue(types.Point{X: 1, Y: -1})
-		assert.Equal(t, "9aaaaa55555555555555555555555555", zValToString(z))
+		assert.Equal(t, [2]uint64{0x9aaaaa5555555555, 0x5555555555555555}, z)
 
 		z = ZValue(types.Point{X: 0, Y: 0})
-		assert.Equal(t, "c0000000000000000000000000000000", zValToString(z))
+		assert.Equal(t, [2]uint64{0xc000000000000000, 0x000000000000000}, z)
 
 		z = ZValue(types.Point{X: 1, Y: 0})
-		assert.Equal(t, "caaaaa00000000000000000000000000", zValToString(z))
+		assert.Equal(t, [2]uint64{0xcaaaaa0000000000, 0x000000000000000}, z)
 
 		z = ZValue(types.Point{X: 0, Y: 1})
-		assert.Equal(t, "c5555500000000000000000000000000", zValToString(z))
+		assert.Equal(t, [2]uint64{0xc555550000000000, 0x000000000000000}, z)
 
 		z = ZValue(types.Point{X: 1, Y: 1})
-		assert.Equal(t, "cfffff00000000000000000000000000", zValToString(z))
+		assert.Equal(t, [2]uint64{0xcfffff0000000000, 0x000000000000000}, z)
 
 		z = ZValue(types.Point{X: 2, Y: 2})
-		assert.Equal(t, "f0000000000000000000000000000000", zValToString(z))
+		assert.Equal(t, [2]uint64{0xf000000000000000, 0x000000000000000}, z)
 
 		z = ZValue(types.Point{X: 50000, Y: 50000})
-		assert.Equal(t, "f000fcc03ccc00000000000000000000", zValToString(z))
+		assert.Equal(t, [2]uint64{0xf000fcc03ccc0000, 0x000000000000000}, z)
 	})
 
 	t.Run("test un-z-values", func(t *testing.T) {
-		z := stringToZVal("c0000000000000000000000000000000")
+		z := [2]uint64{0xc000000000000000, 0x000000000000000}
 		assert.Equal(t, types.Point{X: 0, Y: 0}, UnZValue(z))
-		z = stringToZVal("daaaaa00000000000000000000000000")
+		z = [2]uint64{0xdaaaaa0000000000, 0x000000000000000}
 		assert.Equal(t, types.Point{X: 1, Y: 2}, UnZValue(z))
 	})
 
@@ -176,7 +153,7 @@ func TestZAddr(t *testing.T) {
 	t.Run("test points z-addrs", func(t *testing.T) {
 		p := types.Point{X: 1, Y: 2}
 		res := ZAddr(p)
-		assert.Equal(t, "daaaaa0000000000000000000000000000", hex.EncodeToString(res[:]))
+		assert.Equal(t, "daaaaa0000000000000000000000000080", hex.EncodeToString(res[:]))
 	})
 
 	t.Run("test linestring z-addrs", func(t *testing.T) {
@@ -185,7 +162,7 @@ func TestZAddr(t *testing.T) {
 		c := types.Point{X: 3, Y: 3}
 		l := types.LineString{Points: []types.Point{a, b, c}}
 		res := ZAddr(l)
-		assert.Equal(t, "cfffff0000000000000000000000000007", hex.EncodeToString(res[:]))
+		assert.Equal(t, "cfffff0000000000000000000000000002", hex.EncodeToString(res[:]))
 	})
 
 	t.Run("test polygon z-addrs", func(t *testing.T) {
@@ -196,6 +173,6 @@ func TestZAddr(t *testing.T) {
 		l := types.LineString{Points: []types.Point{a, b, c, d, a}}
 		p := types.Polygon{Lines: []types.LineString{l}}
 		res := ZAddr(p)
-		assert.Equal(t, "300000ffffffffffffffffffffffffff07", hex.EncodeToString(res[:]))
+		assert.Equal(t, "300000ffffffffffffffffffffffffff00", hex.EncodeToString(res[:]))
 	})
 }
