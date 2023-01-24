@@ -80,6 +80,7 @@ func ZValue(p types.Point) (z [2]uint64) {
 	z[0], z[1] = InterleaveUInt64(xLex >> 32, yLex >> 32), InterleaveUInt64(xLex & 0xFFFFFFFF, yLex & 0xFFFFFFFF)
 	return
 }
+
 // UnInterleaveUint64 splits up the bits of the uint64 z into two uint64s
 // The first 32 bits of x and y must be 0.
 // Example:
