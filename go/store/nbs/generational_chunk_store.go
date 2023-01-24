@@ -119,8 +119,7 @@ func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.H
 	return gcs.newGen.GetManyCompressed(ctx, notInOldGen, found)
 }
 
-// Returns true iff the value at the address |h| is contained in the
-// store
+// Has returns true iff the value at the address |h| is contained in the store
 func (gcs *GenerationalNBS) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	has, err := gcs.oldGen.Has(ctx, h)
 
@@ -135,20 +134,19 @@ func (gcs *GenerationalNBS) Has(ctx context.Context, h hash.Hash) (bool, error) 
 	return gcs.newGen.Has(ctx, h)
 }
 
-// Returns a new HashSet containing any members of |hashes| that are
-// absent from the store.
+// HasMany returns a new HashSet containing any members of |hashes| that are absent from the store.
 func (gcs *GenerationalNBS) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error) {
-	notInOldGen, err := gcs.oldGen.HasMany(ctx, hashes)
+	return gcs.hasMany(toHasRecords(hashes))
+}
 
+func (gcs *GenerationalNBS) hasMany(recs []hasRecord) (absent hash.HashSet, err error) {
+	absent, err = gcs.newGen.hasMany(recs)
 	if err != nil {
 		return nil, err
+	} else if len(absent) == 0 {
+		return absent, nil
 	}
-
-	if len(notInOldGen) == 0 {
-		return notInOldGen, nil
-	}
-
-	return gcs.newGen.HasMany(ctx, notInOldGen)
+	return gcs.oldGen.hasMany(recs)
 }
 
 func (gcs *GenerationalNBS) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
@@ -211,7 +209,7 @@ func (gcs *GenerationalNBS) Root(ctx context.Context) (hash.Hash, error) {
 // persisted root hash from last to current (or keeps it the same).
 // If last doesn't match the root in persistent storage, returns false.
 func (gcs *GenerationalNBS) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
-	return gcs.newGen.Commit(ctx, current, last)
+	return gcs.newGen.commit(ctx, current, last, gcs.hasMany)
 }
 
 // Stats may return some kind of struct that reports statistics about the
