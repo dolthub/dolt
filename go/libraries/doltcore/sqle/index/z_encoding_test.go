@@ -91,25 +91,25 @@ func TestZValue(t *testing.T) {
 		assert.Equal(t, [2]uint64{0x300000ffffffffff, 0xffffffffffffffff}, z)
 
 		z = ZValue(types.Point{X: -1, Y: 0})
-		assert.Equal(t, [2]uint64{0x600000aaaaaaaaaa, 0xaaaaaaaaaaaaaaaa}, z)
-
-		z = ZValue(types.Point{X: -1, Y: 1})
-		assert.Equal(t, [2]uint64{0x655555aaaaaaaaaa, 0xaaaaaaaaaaaaaaaa}, z)
-
-		z = ZValue(types.Point{X: 0, Y: -1})
 		assert.Equal(t, [2]uint64{0x9000005555555555, 0x5555555555555555}, z)
 
-		z = ZValue(types.Point{X: 1, Y: -1})
+		z = ZValue(types.Point{X: -1, Y: 1})
 		assert.Equal(t, [2]uint64{0x9aaaaa5555555555, 0x5555555555555555}, z)
+
+		z = ZValue(types.Point{X: 0, Y: -1})
+		assert.Equal(t, [2]uint64{0x600000aaaaaaaaaa, 0xaaaaaaaaaaaaaaaa}, z)
+
+		z = ZValue(types.Point{X: 1, Y: -1})
+		assert.Equal(t, [2]uint64{0x655555aaaaaaaaaa, 0xaaaaaaaaaaaaaaaa}, z)
 
 		z = ZValue(types.Point{X: 0, Y: 0})
 		assert.Equal(t, [2]uint64{0xc000000000000000, 0x000000000000000}, z)
 
 		z = ZValue(types.Point{X: 1, Y: 0})
-		assert.Equal(t, [2]uint64{0xcaaaaa0000000000, 0x000000000000000}, z)
+		assert.Equal(t, [2]uint64{0xc555550000000000, 0x000000000000000}, z)
 
 		z = ZValue(types.Point{X: 0, Y: 1})
-		assert.Equal(t, [2]uint64{0xc555550000000000, 0x000000000000000}, z)
+		assert.Equal(t, [2]uint64{0xcaaaaa0000000000, 0x000000000000000}, z)
 
 		z = ZValue(types.Point{X: 1, Y: 1})
 		assert.Equal(t, [2]uint64{0xcfffff0000000000, 0x000000000000000}, z)
@@ -125,35 +125,35 @@ func TestZValue(t *testing.T) {
 		z := [2]uint64{0xc000000000000000, 0x000000000000000}
 		assert.Equal(t, types.Point{X: 0, Y: 0}, UnZValue(z))
 		z = [2]uint64{0xdaaaaa0000000000, 0x000000000000000}
-		assert.Equal(t, types.Point{X: 1, Y: 2}, UnZValue(z))
+		assert.Equal(t, types.Point{X: 2, Y: 1}, UnZValue(z))
 	})
 
 	t.Run("test sorting points by z-value", func(t *testing.T) {
 		sortedPoints := []types.Point{
 			{X: -2, Y: -2},
-			{X: -2, Y: -1},
 			{X: -1, Y: -2},
+			{X: -2, Y: -1},
 			{X: -1, Y: -1},
-			{X: -2, Y: 0},
-			{X: -2, Y: 1},
-			{X: -2, Y: 2},
-			{X: -1, Y: 0},
-			{X: -1, Y: 1},
-			{X: -1, Y: 2},
 			{X: 0, Y: -2},
 			{X: 1, Y: -2},
+			{X: 2, Y: -2},
 			{X: 0, Y: -1},
 			{X: 1, Y: -1},
-			{X: 2, Y: -2},
 			{X: 2, Y: -1},
+			{X: -2, Y: 0},
+			{X: -2, Y: 1},
+			{X: -1, Y: 0},
+			{X: -1, Y: 1},
+			{X: -2, Y: 2},
+			{X: -1, Y: 2},
 			{X: 0, Y: 0},
-			{X: 0, Y: 1},
 			{X: 1, Y: 0},
+			{X: 0, Y: 1},
 			{X: 1, Y: 1},
-			{X: 0, Y: 2},
-			{X: 1, Y: 2},
 			{X: 2, Y: 0},
 			{X: 2, Y: 1},
+			{X: 0, Y: 2},
+			{X: 1, Y: 2},
 			{X: 2, Y: 2},
 		}
 		randPoints := append([]types.Point{}, sortedPoints...)
@@ -196,29 +196,29 @@ func TestZSort(t *testing.T) {
 	// these are sorted
 	ps := []types.Point{
 		{X: -2, Y: -2}, // 0
-		{X: -2, Y: -1},
 		{X: -1, Y: -2},
+		{X: -2, Y: -1},
 		{X: -1, Y: -1},
-		{X: -2, Y: 0},  // 4
-		{X: -2, Y: 1},
-		{X: -2, Y: 2},
-		{X: -1, Y: 0},
-		{X: -1, Y: 1},  // 8
-		{X: -1, Y: 2},
-		{X: 0, Y: -2},
+		{X: 0, Y: -2},  // 4
 		{X: 1, Y: -2},
-		{X: 0, Y: -1},  // 12
-		{X: 1, Y: -1},
 		{X: 2, Y: -2},
+		{X: 0, Y: -1},
+		{X: 1, Y: -1},  // 8
 		{X: 2, Y: -1},
+		{X: -2, Y: 0},
+		{X: -2, Y: 1},
+		{X: -1, Y: 0},  // 12
+		{X: -1, Y: 1},
+		{X: -2, Y: 2},
+		{X: -1, Y: 2},
 		{X: 0, Y: 0},   // 16
-		{X: 0, Y: 1},
 		{X: 1, Y: 0},
+		{X: 0, Y: 1},
 		{X: 1, Y: 1},
-		{X: 0, Y: 2},   // 20
-		{X: 1, Y: 2},
-		{X: 2, Y: 0},
+		{X: 2, Y: 0},   // 20
 		{X: 2, Y: 1},
+		{X: 0, Y: 2},
+		{X: 1, Y: 2},
 		{X: 2, Y: 2},   // 24
 	}
 

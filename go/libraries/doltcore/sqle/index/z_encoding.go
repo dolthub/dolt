@@ -71,7 +71,6 @@ func InterleaveUInt64(x, y uint64) uint64 {
 		x = (x | (x << shifts[i])) & masks[i]
 		y = (y | (y << shifts[i])) & masks[i]
 	}
-	//return (x << 1) | y
 	return x | (y << 1)
 }
 
@@ -79,7 +78,7 @@ func InterleaveUInt64(x, y uint64) uint64 {
 // It will put the bits in this order: x_0, y_0, x_1, y_1 ... x_63, Y_63
 func ZValue(p types.Point) (z [2]uint64) {
 	xLex, yLex := LexFloat(p.X), LexFloat(p.Y)
-	z[0], z[1] = InterleaveUInt64(xLex >> 32, yLex >> 32), InterleaveUInt64(xLex & 0xFFFFFFFF, yLex & 0xFFFFFFFF)
+	z[0], z[1] = InterleaveUInt64(xLex>>32, yLex>>32), InterleaveUInt64(xLex&0xFFFFFFFF, yLex&0xFFFFFFFF)
 	return
 }
 
@@ -99,7 +98,6 @@ func ZValue(p types.Point) (z [2]uint64) {
 // 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp 0x00000000FFFFFFFF
 // 0000 0000 0000 0000 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp
 func UnInterleaveUint64(z uint64) (x, y uint64) {
-	//x, y = z >> 1, z
 	x, y = z, z >> 1
 	for i := 4; i >= 0; i-- {
 		x &= masks[i]
@@ -142,13 +140,13 @@ func ZAddr(v types.GeometryValue) [17]byte {
 	addr := [17]byte{}
 	for i := 0; i < 2; i++ {
 		for j := 0; j < 8; j++ {
-			addr[8 * i + j] = byte((zMin[i] >> (8 * (7 - j))) & 0xFF)
+			addr[8*i+j] = byte((zMin[i] >> (8 * (7 - j))) & 0xFF)
 		}
 	}
 	if res := zMin[0] ^ zMax[0]; res != 0 {
 		addr[16] = byte(bits.LeadingZeros64(res))
 	} else {
-		addr[16] = byte(64 + bits.LeadingZeros64(zMin[1] ^ zMax[1]))
+		addr[16] = byte(64 + bits.LeadingZeros64(zMin[1]^zMax[1]))
 	}
 	return addr
 }
