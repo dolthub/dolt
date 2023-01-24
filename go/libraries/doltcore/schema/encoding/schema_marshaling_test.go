@@ -101,10 +101,10 @@ func getSqlTypes() []sql.Type {
 		//sql.Blob, //BLOB
 		gmstypes.Boolean, //BOOLEAN
 		gmstypes.MustCreateStringWithDefaults(sqltypes.Char, 10), //CHAR(10)
-		gmstypes.Date,                              //DATE
-		gmstypes.Datetime,                          //DATETIME
+		gmstypes.Date,     //DATE
+		gmstypes.Datetime, //DATETIME
 		gmstypes.MustCreateColumnDecimalType(9, 5), //DECIMAL(9, 5)
-		gmstypes.Float64,                           //DOUBLE
+		gmstypes.Float64, //DOUBLE
 		gmstypes.MustCreateEnumType([]string{"a", "b", "c"}, sql.Collation_Default), //ENUM('a','b','c')
 		gmstypes.Float32, //FLOAT
 		gmstypes.Int32,   //INT
