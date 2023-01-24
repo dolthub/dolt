@@ -143,13 +143,55 @@ func doltCommit(ctx *sql.Context,
 	workingSet *doltdb.WorkingSet,
 	currHash hash.Hash,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
+	pending := *commit
+
 	headRef, err := workingSet.Ref().ToHeadRef()
 	if err != nil {
 		return nil, nil, err
 	}
 
+	headSpec, _ := doltdb.NewCommitSpec("HEAD")
+	curHead, err := tx.dbData.Ddb.Resolve(ctx, headSpec, headRef)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if curHead != nil {
+		curRootVal, err := curHead.ResolveRootValue(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		curRootValHash, err := curRootVal.HashOf()
+		if err != nil {
+			return nil, nil, err
+		}
+		headRootValHash, err := pending.Roots.Head.HashOf()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if curRootValHash != headRootValHash {
+			start := time.Now()
+			mo := merge.MergeOpts{IsCherryPick: false}
+			pending.Roots.Staged, _, err = merge.MergeRoots(
+				ctx,
+				pending.Roots.Staged,
+				curRootVal,
+				pending.Roots.Head,
+				curHead,
+				tx.startState,
+				tx.mergeEditOpts,
+				mo)
+			if err != nil {
+			        return nil, nil, err
+			}
+			logrus.Tracef("staged and HEAD merge took %s", time.Since(start))
+		}
+	}
+
 	workingSet = workingSet.ClearMerge()
-	newCommit, err := tx.dbData.Ddb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, commit, workingSet, currHash, tx.getWorkingSetMeta(ctx))
+
+	newCommit, err := tx.dbData.Ddb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, &pending, workingSet, currHash, tx.getWorkingSetMeta(ctx))
 	return workingSet, newCommit, err
 }
 
@@ -224,7 +266,7 @@ func (tx *DoltTransaction) doCommit(
 			if err != nil {
 				return nil, nil, err
 			}
-			logrus.Tracef("merge took %s", time.Since(start))
+			logrus.Tracef("working set merge took %s", time.Since(start))
 
 			err = tx.validateWorkingSetForCommit(ctx, mergedWorkingSet, notFfMerge)
 			if err != nil {
@@ -232,9 +274,6 @@ func (tx *DoltTransaction) doCommit(
 			}
 
 			var newCommit *doltdb.Commit
-			if commit != nil {
-				commit.Roots.Staged = mergedWorkingSet.WorkingRoot()
-			}
 			mergedWorkingSet, newCommit, err = writeFn(ctx, tx, commit, mergedWorkingSet, existingWSHash)
 			if err == datas.ErrOptimisticLockFailed {
 				// this is effectively a `continue` in the loop

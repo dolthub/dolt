@@ -122,7 +122,7 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 			// This is a valid ref
 			if ok {
-				err = actions.ResetSoftToRef(ctx, dEnv.DbData(), apr.Arg(0))
+				_, err = actions.ResetSoftToRef(ctx, dEnv.DbData(), apr.Arg(0))
 				return handleResetError(err, usage)
 			}
 		}

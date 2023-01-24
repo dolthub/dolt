@@ -570,16 +570,17 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 			mergeParentCommits = append(mergeParentCommits, parentCommit)
 		}
 
-		err = actions.ResetSoftToRef(ctx, sessionState.dbData, "HEAD~1")
+		root, err := actions.ResetSoftToRef(ctx, sessionState.dbData, "HEAD~1")
 		if err != nil {
 			return nil, err
 		}
+		roots.Head = root
 	}
 
 	pendingCommit, err := actions.GetCommitStaged(ctx, roots, sessionState.WorkingSet.MergeActive(), mergeParentCommits, sessionState.dbData.Ddb, props)
 	if err != nil {
 		if props.Amend {
-			err = actions.ResetSoftToRef(ctx, sessionState.dbData, headHash.String())
+			_, err = actions.ResetSoftToRef(ctx, sessionState.dbData, headHash.String())
 			if err != nil {
 				return nil, err
 			}

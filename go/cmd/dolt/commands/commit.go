@@ -170,7 +170,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 			}
 		}
 
-		err = actions.ResetSoftToRef(ctx, dEnv.DbData(), "HEAD~1")
+		_, err = actions.ResetSoftToRef(ctx, dEnv.DbData(), "HEAD~1")
 		if err != nil {
 			return handleResetError(err, usage)
 		}
@@ -203,7 +203,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 	})
 	if err != nil {
 		if apr.Contains(cli.AmendFlag) {
-			errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
+			_, errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
 			if errRes != nil {
 				return handleResetError(errRes, usage)
 			}
@@ -222,7 +222,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 	)
 	if err != nil {
 		if apr.Contains(cli.AmendFlag) {
-			errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
+			_, errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
 			if errRes != nil {
 				return handleResetError(errRes, usage)
 			}
