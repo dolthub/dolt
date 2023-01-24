@@ -27,7 +27,7 @@ import (
 )
 
 type uuidType struct {
-	sqlCharType types2.StringType
+	sqlCharType sql.StringType
 }
 
 var _ TypeInfo = (*uuidType)(nil)

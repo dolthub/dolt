@@ -408,7 +408,7 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 		switch n := col.Type.(type) {
 		case sql.NumberType:
 			numBytesPerRow += 8
-		case types2.StringType:
+		case sql.StringType:
 			numBytesPerRow += uint64(n.MaxByteLength())
 		case types2.BitType:
 			numBytesPerRow += 1

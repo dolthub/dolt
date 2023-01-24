@@ -43,7 +43,7 @@ const (
 // legacy repositories will run into issues if they attempt to insert very large strings. Any and all new repositories
 // must use blobStringType for all TEXT types to ensure proper behavior.
 type varStringType struct {
-	sqlStringType types2.StringType
+	sqlStringType sql.StringType
 }
 
 var _ TypeInfo = (*varStringType)(nil)
@@ -74,7 +74,7 @@ func CreateVarStringTypeFromParams(params map[string]string) (TypeInfo, error) {
 		return nil, fmt.Errorf(`create varstring type info is missing param "%v"`, varStringTypeParam_Length)
 	}
 	if sqlStr, ok := params[varStringTypeParam_SQL]; ok {
-		var sqlType types2.StringType
+		var sqlType sql.StringType
 		switch sqlStr {
 		case varStringTypeParam_SQL_Char:
 			sqlType, err = types2.CreateString(sqltypes.Char, length, collation)
@@ -226,7 +226,7 @@ func (ti *varStringType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *varStringType) Promote() TypeInfo {
-	return &varStringType{ti.sqlStringType.Promote().(types2.StringType)}
+	return &varStringType{ti.sqlStringType.Promote().(sql.StringType)}
 }
 
 // String implements TypeInfo interface.

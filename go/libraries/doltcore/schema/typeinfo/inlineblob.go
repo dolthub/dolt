@@ -37,7 +37,7 @@ const (
 
 // inlineBlobType handles BINARY and VARBINARY. BLOB types are handled by varBinaryType.
 type inlineBlobType struct {
-	sqlBinaryType types2.StringType
+	sqlBinaryType sql.StringType
 }
 
 var _ TypeInfo = (*inlineBlobType)(nil)
@@ -58,7 +58,7 @@ func CreateInlineBlobTypeFromParams(params map[string]string) (TypeInfo, error) 
 		return nil, fmt.Errorf(`create inlineblob type info is missing param "%v"`, inlineBlobTypeParam_Length)
 	}
 	if sqlStr, ok := params[inlineBlobTypeParam_SQL]; ok {
-		var sqlType types2.StringType
+		var sqlType sql.StringType
 		switch sqlStr {
 		case inlineBlobTypeParam_SQL_Binary:
 			sqlType, err = types2.CreateBinary(sqltypes.Binary, length)
@@ -187,7 +187,7 @@ func (ti *inlineBlobType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *inlineBlobType) Promote() TypeInfo {
-	return &inlineBlobType{ti.sqlBinaryType.Promote().(types2.StringType)}
+	return &inlineBlobType{ti.sqlBinaryType.Promote().(sql.StringType)}
 }
 
 // String implements TypeInfo interface.

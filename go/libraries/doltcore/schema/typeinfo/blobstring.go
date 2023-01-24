@@ -39,7 +39,7 @@ const (
 // repositories that were made before the introduction of blobStringType will still use varStringType for existing
 // columns.
 type blobStringType struct {
-	sqlStringType types2.StringType
+	sqlStringType sql.StringType
 }
 
 var _ TypeInfo = (*blobStringType)(nil)
@@ -192,7 +192,7 @@ func (ti *blobStringType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *blobStringType) Promote() TypeInfo {
-	return &blobStringType{ti.sqlStringType.Promote().(types2.StringType)}
+	return &blobStringType{ti.sqlStringType.Promote().(sql.StringType)}
 }
 
 // String implements TypeInfo interface.

@@ -502,7 +502,7 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 	// String types are sorted using a binary collation in __LD_1__
 	// force-set collation to utf8mb4_0900_bin to match the order
 	for i, c := range cols {
-		st, ok := c.TypeInfo.ToSqlType().(types2.StringType)
+		st, ok := c.TypeInfo.ToSqlType().(sql.StringType)
 		if !ok {
 			continue
 		}

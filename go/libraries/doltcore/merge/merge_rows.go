@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"strings"
 
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -32,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type MergeOpts struct {
@@ -408,8 +407,8 @@ func validateTupleFields(existingSch schema.Schema, targetSch schema.Schema) (bo
 
 		// If the collation was changed, bail.
 		// Different collations will affect the ordering of any secondary indexes using this column.
-		existingStr, ok1 := existingSch.GetNonPKCols().GetByIndex(i).TypeInfo.ToSqlType().(types2.StringType)
-		targetStr, ok2 := targetSch.GetNonPKCols().GetByIndex(i).TypeInfo.ToSqlType().(types2.StringType)
+		existingStr, ok1 := existingSch.GetNonPKCols().GetByIndex(i).TypeInfo.ToSqlType().(sql.StringType)
+		targetStr, ok2 := targetSch.GetNonPKCols().GetByIndex(i).TypeInfo.ToSqlType().(sql.StringType)
 
 		if ok1 && ok2 && !existingStr.Collation().Equals(targetStr.Collation()) {
 			return false, nil

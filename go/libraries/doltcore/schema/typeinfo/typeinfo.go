@@ -200,37 +200,37 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		}
 		return &decimalType{decimalSQLType}, nil
 	case sqltypes.Text:
-		stringType, ok := sqlType.(types2.StringType)
+		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Text"`)
 		}
 		return &blobStringType{stringType}, nil
 	case sqltypes.Blob:
-		stringType, ok := sqlType.(types2.StringType)
+		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Blob"`)
 		}
 		return &varBinaryType{stringType}, nil
 	case sqltypes.VarChar:
-		stringType, ok := sqlType.(types2.StringType)
+		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "VarChar"`)
 		}
 		return &varStringType{stringType}, nil
 	case sqltypes.VarBinary:
-		stringType, ok := sqlType.(types2.StringType)
+		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "VarBinary"`)
 		}
 		return &inlineBlobType{stringType}, nil
 	case sqltypes.Char:
-		stringType, ok := sqlType.(types2.StringType)
+		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Char"`)
 		}
 		return &varStringType{stringType}, nil
 	case sqltypes.Binary:
-		stringType, ok := sqlType.(types2.StringType)
+		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Binary"`)
 		}

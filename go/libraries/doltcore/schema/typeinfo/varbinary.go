@@ -41,7 +41,7 @@ const (
 //
 // This type handles the BLOB types. BINARY and VARBINARY are handled by inlineBlobType.
 type varBinaryType struct {
-	sqlBinaryType types2.StringType
+	sqlBinaryType sql.StringType
 }
 
 var _ TypeInfo = (*varBinaryType)(nil)
@@ -174,7 +174,7 @@ func (ti *varBinaryType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *varBinaryType) Promote() TypeInfo {
-	return &varBinaryType{ti.sqlBinaryType.Promote().(types2.StringType)}
+	return &varBinaryType{ti.sqlBinaryType.Promote().(sql.StringType)}
 }
 
 // String implements TypeInfo interface.

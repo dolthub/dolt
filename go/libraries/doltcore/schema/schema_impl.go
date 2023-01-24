@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -439,7 +438,7 @@ func (si *schemaImpl) GetKeyDescriptor() val.TupleDesc {
 		tt = append(tt, t)
 		if queryType == query.Type_CHAR || queryType == query.Type_VARCHAR || queryType == query.Type_TEXT {
 			useCollations = true
-			collations = append(collations, sqlType.(types2.StringType).Collation())
+			collations = append(collations, sqlType.(sql.StringType).Collation())
 		} else {
 			collations = append(collations, sql.Collation_Unspecified)
 		}
@@ -476,7 +475,7 @@ func (si *schemaImpl) GetValueDescriptor() val.TupleDesc {
 		})
 		if queryType == query.Type_CHAR || queryType == query.Type_VARCHAR {
 			useCollations = true
-			collations = append(collations, sqlType.(types2.StringType).Collation())
+			collations = append(collations, sqlType.(sql.StringType).Collation())
 		} else {
 			collations = append(collations, sql.Collation_Unspecified)
 		}
