@@ -16,6 +16,7 @@ package index
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math"
 	"math/bits"
 	"sort"
@@ -47,15 +48,6 @@ func UnLexFloat(b uint64) float64 {
 	return math.Float64frombits(b)
 }
 
-var masks = []uint64{
-	0x0000FFFF0000FFFF,
-	0x00FF00FF00FF00FF,
-	0x0F0F0F0F0F0F0F0F,
-	0x3333333333333333,
-	0x5555555555555555}
-
-var shifts = []uint64{16, 8, 4, 2, 1}
-
 // InterleaveUInt64 interleaves the bits of the uint64s x and y.
 // The first 32 bits of x and y must be 0.
 // Example:
@@ -67,10 +59,21 @@ var shifts = []uint64{16, 8, 4, 2, 1}
 // 0a0b 0c0d 0e0f 0g0h 0i0j 0k0l 0m0n 0o0p 0a0b 0c0d 0e0f 0g0h 0i0j 0k0l 0m0n 0o0p
 // Alternatively, just precompute all the results from 0 to 0x0000FFFFF
 func InterleaveUInt64(x, y uint64) uint64 {
-	for i := 0; i < 5; i++ {
-		x = (x | (x << shifts[i])) & masks[i]
-		y = (y | (y << shifts[i])) & masks[i]
-	}
+	x = (x | (x << 16)) & 0x0000FFFF0000FFFF
+	y = (y | (y << 16)) & 0x0000FFFF0000FFFF
+
+	x = (x | (x << 8)) & 0x00FF00FF00FF00FF
+	y = (y | (y << 8)) & 0x00FF00FF00FF00FF
+
+	x = (x | (x << 4)) & 0x0F0F0F0F0F0F0F0F
+	y = (y | (y << 4)) & 0x0F0F0F0F0F0F0F0F
+
+	x = (x | (x << 2)) & 0x3333333333333333
+	y = (y | (y << 2)) & 0x3333333333333333
+
+	x = (x | (x << 1)) & 0x5555555555555555
+	y = (y | (y << 1)) & 0x5555555555555555
+
 	return x | (y << 1)
 }
 
@@ -99,12 +102,32 @@ func ZValue(p types.Point) (z [2]uint64) {
 // 0000 0000 0000 0000 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp
 func UnInterleaveUint64(z uint64) (x, y uint64) {
 	x, y = z, z>>1
-	for i := 4; i >= 0; i-- {
-		x &= masks[i]
-		x |= x >> shifts[i]
-		y &= masks[i]
-		y |= y >> shifts[i]
-	}
+
+	x &= 0x5555555555555555
+	x |= x >> 1
+	y &= 0x5555555555555555
+	y |= y >> 1
+
+	x &= 0x3333333333333333
+	x |= x >> 2
+	y &= 0x3333333333333333
+	y |= y >> 2
+
+	x &= 0x0F0F0F0F0F0F0F0F
+	x |= x >> 4
+	y &= 0x0F0F0F0F0F0F0F0F
+	y |= y >> 4
+
+	x &= 0x00FF00FF00FF00FF
+	x |= x >> 8
+	y &= 0x00FF00FF00FF00FF
+	y |= y >> 8
+
+	x &= 0x0000FFFF0000FFFF
+	x |= x >> 16
+	y &= 0x0000FFFF0000FFFF
+	y |= y >> 16
+
 	x &= 0xFFFFFFFF
 	y &= 0xFFFFFFFF
 	return
@@ -122,10 +145,7 @@ func UnZValue(z [2]uint64) types.Point {
 func ZSort(points []types.Point) []types.Point {
 	sort.Slice(points, func(i, j int) bool {
 		zi, zj := ZValue(points[i]), ZValue(points[j])
-		if zi[0] == zj[0] {
-			return zi[1] < zj[1]
-		}
-		return zi[0] < zj[0]
+		return zi[0] < zj[0] || (zi[0] == zj[0] && zi[1] < zi[1])
 	})
 	return points
 }
@@ -138,15 +158,12 @@ func ZAddr(v types.GeometryValue) [17]byte {
 	zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
 
 	addr := [17]byte{}
-	for i := 0; i < 2; i++ {
-		for j := 0; j < 8; j++ {
-			addr[8*i+j+1] = byte((zMin[i] >> (8 * (7 - j))) & 0xFF)
-		}
-	}
+	binary.BigEndian.PutUint64(addr[1:], zMin[0])
+	binary.BigEndian.PutUint64(addr[9:], zMin[1])
 	if res := zMin[0] ^ zMax[0]; res != 0 {
-		addr[0] = byte(64 - bits.LeadingZeros64(res) / 2)
+		addr[0] = byte(64 - bits.LeadingZeros64(res)/2)
 	} else {
-		addr[0] = byte(32 + bits.LeadingZeros64(zMin[1]^zMax[1]))
+		addr[0] = byte(32 + bits.LeadingZeros64(zMin[1]^zMax[1])/2)
 	}
 	return addr
 }
