@@ -468,11 +468,11 @@ func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 	panic("incorrect value encoding")
 }
 
-func (td TupleDesc) GetZAddr(i int, tup Tuple) (v [zAddrSize]byte, ok bool) {
-	td.expectEncoding(i, ZAddrEnc)
+func (td TupleDesc) GetCell(i int, tup Tuple) (v Cell, ok bool) {
+	td.expectEncoding(i, CellEnc)
 	b := td.GetField(i, tup)
 	if b != nil {
-		v = readZAddr(b)
+		v = readCell(b)
 		ok = true
 	}
 	return
@@ -571,6 +571,8 @@ func formatValue(enc Encoding, value []byte) string {
 	case BytesAddrEnc:
 		return hex.EncodeToString(value)
 	case CommitAddrEnc:
+		return hex.EncodeToString(value)
+	case CellEnc:
 		return hex.EncodeToString(value)
 	default:
 		return string(value)

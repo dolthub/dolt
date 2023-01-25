@@ -62,8 +62,8 @@ const (
 	bytesAddrEnc  ByteSize = hash.ByteLen
 	commitAddrEnc ByteSize = hash.ByteLen
 	stringAddrEnc ByteSize = hash.ByteLen
-	jsonAddrEnc   ByteSize = hash.ByteLen
-	zAddrSize     ByteSize = 17
+	jsonAddrEnc ByteSize = hash.ByteLen
+	cellSize    ByteSize = 17
 )
 
 type Encoding byte
@@ -92,8 +92,8 @@ const (
 	BytesAddrEnc  = Encoding(serial.EncodingBytesAddr)
 	CommitAddrEnc = Encoding(serial.EncodingCommitAddr)
 	StringAddrEnc = Encoding(serial.EncodingStringAddr)
-	JSONAddrEnc   = Encoding(serial.EncodingJSONAddr)
-	ZAddrEnc      = Encoding(serial.EncodingZAddr)
+	JSONAddrEnc = Encoding(serial.EncodingJSONAddr)
+	CellEnc     = Encoding(serial.EncodingCell)
 
 	sentinel Encoding = 127
 )
@@ -625,17 +625,30 @@ func stringFromBytes(b []byte) string {
 	return *(*string)(unsafe.Pointer(&b))
 }
 
-func compareZAddr(l, r [zAddrSize]byte) int {
-	return bytes.Compare(l[:], r[:])
+// Cell is a representation of a subregion for Spatial Indexes
+// Level encodes the size of the region
+// ZValue is the z-value encoding of the minimum point of the bbox of a geometry
+type Cell struct {
+	Level byte
+	ZValue [16]byte
 }
 
-func readZAddr(val []byte) (res [zAddrSize]byte) {
-	expectSize(val, zAddrSize)
-	copy(res[:zAddrSize], val[:zAddrSize])
+func compareCell(l, r Cell) int {
+	if l.Level != r.Level {
+		return int(l.Level - r.Level)
+	}
+	return bytes.Compare(l.ZValue[:], r.ZValue[:])
+}
+
+func readCell(val []byte) (res Cell) {
+	expectSize(val, cellSize)
+	res.Level = val[0]
+	copy(res.ZValue[:], val[1:])
 	return
 }
 
-func writeZAddr(buf []byte, v [zAddrSize]byte) {
-	expectSize(buf, zAddrSize)
-	copy(buf, v[:zAddrSize])
+func writeCell(buf []byte, v Cell) {
+	expectSize(buf, cellSize)
+	buf[0] = v.Level
+	copy(buf[1:], v.ZValue[:])
 }

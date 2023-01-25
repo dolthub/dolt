@@ -243,8 +243,8 @@ func TestCompare(t *testing.T) {
 		// z-address
 		{
 			typ: Type{Enc: StringEnc},
-			l:   encZAddr([zAddrSize]byte{}),
-			r:   encZAddr([zAddrSize]byte{}),
+			l:   encZAddr([cellSize]byte{}),
+			r:   encZAddr([cellSize]byte{}),
 			cmp: 0,
 		},
 	}
@@ -304,9 +304,9 @@ func encStr(s string) []byte {
 	return buf
 }
 
-func encZAddr(z [zAddrSize]byte) []byte {
-	buf := make([]byte, zAddrSize)
-	writeZAddr(buf, z)
+func encZAddr(z [cellSize]byte) []byte {
+	buf := make([]byte, cellSize)
+	writeCell(buf, z)
 	return buf
 }
 
