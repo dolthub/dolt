@@ -1012,10 +1012,17 @@ SQL
     [[ "$output" =~ '5,5.5,5,' ]] || false
     [ "${#lines[@]}" -eq 6 ]
 
+    run dolt sql -r csv -q "select @@character_set_client"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "utf8mb4" ]] || false
+    
     run dolt sql -r json -q "select * from test order by a"
     [ $status -eq 0 ]
-    echo $output
     [ "$output" == '{"rows": [{"a":1,"b":1.5,"c":"1","d":"2020-01-01 00:00:00"},{"a":2,"b":2.5,"c":"2","d":"2020-02-02 00:00:00"},{"a":3,"c":"3","d":"2020-03-03 00:00:00"},{"a":4,"b":4.5,"d":"2020-04-04 00:00:00"},{"a":5,"b":5.5,"c":"5"}]}' ]
+
+    run dolt sql -r json -q "select @@character_set_client"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "utf8mb4" ]] || false
 }
 
 @test "sql: output for escaped longtext exports properly" {

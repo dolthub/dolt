@@ -23,7 +23,7 @@ import (
 	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -355,7 +355,7 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 	}
 
 	typeType, err := typeinfo.FromSqlType(
-		types2.MustCreateEnumType([]string{"foreign key", "unique index", "check constraint"}, sql.Collation_Default))
+		gmstypes.MustCreateEnumType([]string{"foreign key", "unique index", "check constraint"}, sql.Collation_Default))
 	if err != nil {
 		return nil, err
 	}
@@ -373,11 +373,16 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 	if t.Format() == types.Format_DOLT {
 		// the commit hash or working set hash of the right side during merge
 		colColl = colColl.Append(schema.NewColumn("from_root_ish", 0, types.StringKind, false))
+		colColl = colColl.Append(typeCol)
+		colColl = colColl.Append(sch.GetPKCols().GetColumns()...)
+		colColl = colColl.Append(sch.GetNonPKCols().GetColumns()...)
+		colColl = colColl.Append(infoCol)
+	} else {
+		colColl = colColl.Append(typeCol)
+		colColl = colColl.Append(sch.GetAllCols().GetColumns()...)
+		colColl = colColl.Append(infoCol)
 	}
 
-	colColl = colColl.Append(typeCol)
-	colColl = colColl.Append(sch.GetAllCols().GetColumns()...)
-	colColl = colColl.Append(infoCol)
 	return schema.SchemaFromCols(colColl)
 }
 

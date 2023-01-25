@@ -43,6 +43,8 @@ func addUniqIdxViols(
 	theirRootIsh doltdb.Rootish,
 	tblName string) error {
 
+	pkMapping := ordinalMappingFromIndex(index)
+
 	meta, err := makeUniqViolMeta(postMergeSchema, index)
 	if err != nil {
 		return err
@@ -57,29 +59,37 @@ func addUniqIdxViols(
 	prefixKB := val.NewTupleBuilder(prefixKD)
 	p := left.Pool()
 
-	suffixKD, _ := m.Descriptors()
-	suffixKB := val.NewTupleBuilder(suffixKD)
+	primaryKD, _ := m.Descriptors()
+	primaryKB := val.NewTupleBuilder(primaryKD)
 
 	err = prolly.DiffMaps(ctx, base, right, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.AddedDiff:
 			pre := getPrefix(prefixKB, p, val.Tuple(diff.Key))
+
+			// if the indexed column values includes a null, don't throw a unique key violation for it
+			for i := 0; i < prefixKD.Count(); i++ {
+				if prefixKD.IsNull(i, pre) {
+					return nil
+				}
+			}
+
 			itr, err := creation.NewPrefixItr(ctx, pre, prefixKD, left)
 			if err != nil {
 				return err
 			}
-			k, _, err := itr.Next(ctx)
+			indexK, _, err := itr.Next(ctx)
 			if err != nil && err != io.EOF {
 				return nil
 			}
 			if err == nil {
-				existingPK := getSuffix(suffixKB, p, k)
-				newPK := getSuffix(suffixKB, p, val.Tuple(diff.Key))
-				err = replaceUniqueKeyViolation(ctx, artEditor, m, existingPK, suffixKD, theirRootIsh, vInfo, tblName)
+				existingPK := getPKFromSecondaryKey(primaryKB, p, pkMapping, indexK)
+				newPK := getPKFromSecondaryKey(primaryKB, p, pkMapping, val.Tuple(diff.Key))
+				err = replaceUniqueKeyViolation(ctx, artEditor, m, existingPK, primaryKD, theirRootIsh, vInfo, tblName)
 				if err != nil {
 					return err
 				}
-				err = replaceUniqueKeyViolation(ctx, artEditor, m, newPK, suffixKD, theirRootIsh, vInfo, tblName)
+				err = replaceUniqueKeyViolation(ctx, artEditor, m, newPK, primaryKD, theirRootIsh, vInfo, tblName)
 				if err != nil {
 					return err
 				}
@@ -193,11 +203,30 @@ func getPrefix(pKB *val.TupleBuilder, pool pool.BuffPool, k val.Tuple) val.Tuple
 	return pKB.Build(pool)
 }
 
-func getSuffix(sKB *val.TupleBuilder, pool pool.BuffPool, k val.Tuple) val.Tuple {
-	n := sKB.Desc.Count()
-	m := k.Count()
-	for i, j := 0, m-n; j < k.Count(); i, j = i+1, j+1 {
-		sKB.PutRaw(i, k.GetField(j))
+func getPKFromSecondaryKey(pKB *val.TupleBuilder, pool pool.BuffPool, pkMapping val.OrdinalMapping, k val.Tuple) val.Tuple {
+	for to := range pkMapping {
+		from := pkMapping.MapOrdinal(to)
+		pKB.PutRaw(to, k.GetField(from))
 	}
-	return sKB.Build(pool)
+	return pKB.Build(pool)
+}
+
+func ordinalMappingFromIndex(def schema.Index) (m val.OrdinalMapping) {
+	pks := def.PrimaryKeyTags()
+	if len(pks) == 0 { // keyless index
+		m = make(val.OrdinalMapping, 1)
+		m[0] = len(def.AllTags())
+		return m
+	}
+
+	m = make(val.OrdinalMapping, len(pks))
+	for i, pk := range pks {
+		for j, tag := range def.AllTags() {
+			if tag == pk {
+				m[i] = j
+				break
+			}
+		}
+	}
+	return
 }

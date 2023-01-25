@@ -1713,7 +1713,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			{
 				// Trying to delete a branch with unpushed changes fails without force option
 				Query:          "CALL DOLT_BRANCH('-d', 'myNewBranchWithCommit')",
-				ExpectedErrStr: "attempted to delete a branch that is not fully merged into its parent; use `-f` to force",
+				ExpectedErrStr: "branch is not fully merged",
 			},
 			{
 				Query:    "CALL DOLT_BRANCH('-df', 'myNewBranchWithCommit')",

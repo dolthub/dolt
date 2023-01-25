@@ -20,6 +20,7 @@ import (
 	"os"
 	"testing"
 
+	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -28,7 +29,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -205,7 +206,7 @@ func TestSingleScriptPrepared(t *testing.T) {
 	tt := queries.QueryTest{
 		Query: "select * from test as of 'HEAD~2' where pk=?",
 		Bindings: map[string]sql.Expression{
-			"v1": expression.NewLiteral(0, types2.Int8),
+			"v1": expression.NewLiteral(0, gmstypes.Int8),
 		},
 		Expected: []sql.Row{{0, 0}},
 	}
@@ -266,6 +267,10 @@ func TestIntegrationQueryPlans(t *testing.T) {
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
 	harness := newDoltHarness(t).WithParallelism(2) // want Exchange nodes
 	harness.Setup(setup.SimpleSetup...)
 	e, err := harness.NewEngine(t)
@@ -560,7 +565,7 @@ func TestDropDatabase(t *testing.T) {
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "DROP DATABASE TeSt2DB",
-				Expected: []sql.Row{{types2.OkResult{RowsAffected: 1}}},
+				Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query:       "USE test2db",
@@ -572,7 +577,7 @@ func TestDropDatabase(t *testing.T) {
 			},
 			{
 				Query:    "DROP DATABASE IF EXISTS test1DB",
-				Expected: []sql.Row{{types2.OkResult{RowsAffected: 1}}},
+				Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query:       "USE Test1db",
@@ -1071,7 +1076,7 @@ func TestSingleTransactionScript(t *testing.T) {
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{types2.NewOkResult(1)}},
+				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
@@ -1083,7 +1088,7 @@ func TestSingleTransactionScript(t *testing.T) {
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{types2.NewOkResult(1)}},
+				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
@@ -1107,7 +1112,7 @@ func TestSingleTransactionScript(t *testing.T) {
 			},
 			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
 				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
-				Expected: []sql.Row{{types2.OkResult{
+				Expected: []sql.Row{{gmstypes.OkResult{
 					RowsAffected: 1,
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -1117,7 +1122,7 @@ func TestSingleTransactionScript(t *testing.T) {
 			},
 			{
 				Query:    "/* client b */ delete from dolt_conflicts_test",
-				Expected: []sql.Row{{types2.NewOkResult(1)}},
+				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ commit",
@@ -1282,6 +1287,10 @@ func TestCommitDiffSystemTablePrepared(t *testing.T) {
 }
 
 func TestDiffSystemTable(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {
@@ -1299,6 +1308,10 @@ func TestDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffSystemTablePrepared(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {
@@ -1311,6 +1324,76 @@ func TestDiffSystemTablePrepared(t *testing.T) {
 	if types.IsFormat_DOLT(types.Format_Default) {
 		for _, test := range Dolt1DiffSystemTableScripts {
 			enginetest.TestScriptPrepared(t, newDoltHarness(t), test)
+		}
+	}
+}
+
+func mustNewEngine(t *testing.T, h enginetest.Harness) *gms.Engine {
+	e, err := h.NewEngine(t)
+	if err != nil {
+		require.NoError(t, err)
+	}
+	return e
+}
+
+func TestSystemTableIndexes(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
+	for _, stt := range SystemTableIndexTests {
+		harness := newDoltHarness(t).WithParallelism(2)
+		harness.SkipSetupCommit()
+		e := mustNewEngine(t, harness)
+		defer e.Close()
+
+		ctx := enginetest.NewContext(harness)
+		for _, q := range stt.setup {
+			enginetest.RunQuery(t, e, harness, q)
+		}
+
+		for _, tt := range stt.queries {
+			t.Run(fmt.Sprintf("%s: %s", stt.name, tt.query), func(t *testing.T) {
+				if tt.skip {
+					t.Skip()
+				}
+
+				ctx = ctx.WithQuery(tt.query)
+				if tt.exp != nil {
+					enginetest.TestQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil)
+				}
+			})
+		}
+	}
+}
+
+func TestSystemTableIndexesPrepared(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
+	for _, stt := range SystemTableIndexTests {
+		harness := newDoltHarness(t).WithParallelism(2)
+		harness.SkipSetupCommit()
+		e := mustNewEngine(t, harness)
+		defer e.Close()
+
+		ctx := enginetest.NewContext(harness)
+		for _, q := range stt.setup {
+			enginetest.RunQuery(t, e, harness, q)
+		}
+
+		for _, tt := range stt.queries {
+			t.Run(fmt.Sprintf("%s: %s", stt.name, tt.query), func(t *testing.T) {
+				if tt.skip {
+					t.Skip()
+				}
+
+				ctx = ctx.WithQuery(tt.query)
+				if tt.exp != nil {
+					enginetest.TestPreparedQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil)
+				}
+			})
 		}
 	}
 }

@@ -174,7 +174,7 @@ func (db *SingleTableInfoDatabase) GetForeignKeyEditor(ctx *sql.Context) sql.For
 }
 
 // IndexedAccess implements sql.IndexedTable.
-func (db *SingleTableInfoDatabase) IndexedAccess(sql.Index) sql.IndexedTable {
+func (db *SingleTableInfoDatabase) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	return db
 }
 
@@ -301,7 +301,7 @@ func (idx fmtIndex) IsGenerated() bool {
 	return idx.generated
 }
 
-func (idx fmtIndex) IndexedAccess(index sql.IndexLookup) (sql.IndexedTable, error) {
+func (idx fmtIndex) IndexedAccess(_ sql.IndexLookup) (sql.IndexedTable, error) {
 	panic("unimplemented")
 }
 

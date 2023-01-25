@@ -39,10 +39,10 @@ func NewMergeBase(left, right sql.Expression) sql.Expression {
 
 // Eval implements the sql.Expression interface.
 func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	if _, ok := d.Left.Type().(types.StringType); !ok {
+	if _, ok := d.Left.Type().(sql.StringType); !ok {
 		return nil, sql.ErrInvalidType.New(d.Left.Type())
 	}
-	if _, ok := d.Right.Type().(types.StringType); !ok {
+	if _, ok := d.Right.Type().(sql.StringType); !ok {
 		return nil, sql.ErrInvalidType.New(d.Right.Type())
 	}
 

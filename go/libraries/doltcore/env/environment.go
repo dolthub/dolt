@@ -98,6 +98,14 @@ type DoltEnv struct {
 	IgnoreLockFile bool
 }
 
+func (dEnv *DoltEnv) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote, withCaching bool) (*doltdb.DoltDB, error) {
+	if withCaching {
+		return r.GetRemoteDB(ctx, format, dEnv)
+	} else {
+		return r.GetRemoteDBWithoutCaching(ctx, format, dEnv)
+	}
+}
+
 // Load loads the DoltEnv for the .dolt directory determined by resolving the specified urlStr with the specified Filesys.
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
 	cfg, cfgErr := LoadDoltCliConfig(hdp, fs)
