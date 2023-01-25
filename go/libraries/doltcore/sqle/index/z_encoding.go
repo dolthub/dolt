@@ -189,11 +189,8 @@ func ZAddr(v types.GeometryValue) [17]byte {
 // Note: there is an inefficiency here where small polygons may be placed into a level that's significantly larger
 func ZAddrSort(geoms []types.GeometryValue) []types.GeometryValue {
 	sort.Slice(geoms, func(i, j int) bool {
-		zi, zj := ZCell(geoms[i]), ZCell(geoms[j])
-		if zi.Level != zj.Level {
-			return zi.Level < zj.Level
-		}
-		return bytes.Compare(zi.ZValue[:], zj.ZValue[:]) < 0
+		zi, zj := ZAddr(geoms[i]), ZAddr(geoms[j])
+		return bytes.Compare(zi[:], zj[:]) < 0
 	})
 	return geoms
 }
