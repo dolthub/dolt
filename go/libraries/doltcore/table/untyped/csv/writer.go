@@ -42,6 +42,7 @@ type CSVWriter struct {
 	closer  io.Closer
 	info    *CSVFileInfo
 	sch     schema.Schema
+	sqlSch  sql.Schema
 	useCRLF bool // True to use \r\n as the line terminator
 }
 
@@ -49,7 +50,6 @@ var _ table.SqlRowWriter = (*CSVWriter)(nil)
 
 // NewCSVWriter writes rows to the given WriteCloser based on the Schema and CSVFileInfo provided
 func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {
-
 	csvw := &CSVWriter{
 		wr:     bufio.NewWriterSize(wr, writeBufSize),
 		closer: wr,
@@ -81,29 +81,98 @@ func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*
 	return csvw, nil
 }
 
+// NewCSVSqlWriter writes rows to the given WriteCloser based on the sql schema and CSVFileInfo provided
+func NewCSVSqlWriter(wr io.WriteCloser, sch sql.Schema, info *CSVFileInfo) (*CSVWriter, error) {
+	csvw := &CSVWriter{
+		wr:     bufio.NewWriterSize(wr, writeBufSize),
+		closer: wr,
+		info:   info,
+		sqlSch: sch,
+	}
+
+	if info.HasHeaderLine {
+		colNames := make([]*string, len(sch))
+		for i, col := range sch {
+			nm := col.Name
+			colNames[i] = &nm
+		}
+
+		err := csvw.write(colNames)
+		if err != nil {
+			wr.Close()
+			return nil, err
+		}
+	}
+
+	return csvw, nil
+}
+
 func (csvw *CSVWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
+	var colValStrs []*string
+	var err error
+	if csvw.sch != nil {
+		colValStrs, err = csvw.processRowWithSchema(r)
+		if err != nil {
+			return err
+		}
+	} else {
+		colValStrs, err = csvw.processRowWithSqlSchema(r)
+		if err != nil {
+			return err
+		}
+	}
+
+	return csvw.write(colValStrs)
+}
+
+func toCsvString(colType sql.Type, val interface{}) (string, error) {
+	var v string
+	// Due to BIT's unique output, we special-case writing the integer specifically for CSV
+	if _, ok := colType.(types.BitType); ok {
+		v = strconv.FormatUint(val.(uint64), 10)
+	} else {
+		var err error
+		v, err = sqlutil.SqlColToStr(colType, val)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return v, nil
+}
+
+func (csvw *CSVWriter) processRowWithSchema(r sql.Row) ([]*string, error) {
 	colValStrs := make([]*string, csvw.sch.GetAllCols().Size())
 	for i, val := range r {
 		if val == nil {
 			colValStrs[i] = nil
 		} else {
-			var v string
-			var err error
 			colType := csvw.sch.GetAllCols().GetByIndex(i).TypeInfo.ToSqlType()
-			// Due to BIT's unique output, we special-case writing the integer specifically for CSV
-			if _, ok := colType.(types.BitType); ok {
-				v = strconv.FormatUint(val.(uint64), 10)
-			} else {
-				v, err = sqlutil.SqlColToStr(colType, val)
-				if err != nil {
-					return err
-				}
+			v, err := toCsvString(colType, val)
+			if err != nil {
+				return nil, err
 			}
 			colValStrs[i] = &v
 		}
 	}
+	return colValStrs, nil
+}
 
-	return csvw.write(colValStrs)
+func (csvw *CSVWriter) processRowWithSqlSchema(r sql.Row) ([]*string, error) {
+	colValStrs := make([]*string, len(csvw.sqlSch))
+	for i, val := range r {
+		if val == nil {
+			colValStrs[i] = nil
+		} else {
+			colType := csvw.sqlSch[i].Type
+			v, err := toCsvString(colType, val)
+			if err != nil {
+				return nil, err
+			}
+			colValStrs[i] = &v
+		}
+	}
+	return colValStrs, nil
 }
 
 // Close should flush all writes, release resources being held
@@ -119,12 +188,12 @@ func (csvw *CSVWriter) Close(ctx context.Context) error {
 }
 
 func (csvw *CSVWriter) write(record []*string) error {
-	return WriteCSVRow(csvw.wr, record, csvw.info.Delim, csvw.useCRLF)
+	return writeCsvRow(csvw.wr, record, csvw.info.Delim, csvw.useCRLF)
 }
 
-// WriteCSVRow is directly copied from csv.Writer.Write() with the addition of the `isNull []bool` parameter
+// writeCsvRow is directly copied from csv.Writer.Write() with the addition of the `isNull []bool` parameter
 // this method has been adapted for Dolt's special quoting logic, ie `10,,""` -> (10,NULL,"")
-func WriteCSVRow(wr *bufio.Writer, record []*string, delim string, useCRLF bool) error {
+func writeCsvRow(wr *bufio.Writer, record []*string, delim string, useCRLF bool) error {
 	for n, field := range record {
 		if n > 0 {
 			if _, err := wr.WriteString(delim); err != nil {

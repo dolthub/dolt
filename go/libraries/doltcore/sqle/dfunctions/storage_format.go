@@ -19,7 +19,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/types"
@@ -81,7 +81,7 @@ func (*StorageFormat) String() string {
 
 // Type implements the Expression interface.
 func (*StorageFormat) Type() sql.Type {
-	return types2.Text
+	return gmstypes.Text
 }
 
 // WithChildren implements the Expression interface.

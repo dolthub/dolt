@@ -22,7 +22,7 @@ import (
 	"unsafe"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -37,13 +37,13 @@ const (
 
 // inlineBlobType handles BINARY and VARBINARY. BLOB types are handled by varBinaryType.
 type inlineBlobType struct {
-	sqlBinaryType types2.StringType
+	sqlBinaryType sql.StringType
 }
 
 var _ TypeInfo = (*inlineBlobType)(nil)
 
 var (
-	VarbinaryDefaultType = &inlineBlobType{types2.MustCreateBinary(sqltypes.VarBinary, 16383)}
+	VarbinaryDefaultType = &inlineBlobType{gmstypes.MustCreateBinary(sqltypes.VarBinary, 16383)}
 )
 
 func CreateInlineBlobTypeFromParams(params map[string]string) (TypeInfo, error) {
@@ -58,12 +58,12 @@ func CreateInlineBlobTypeFromParams(params map[string]string) (TypeInfo, error) 
 		return nil, fmt.Errorf(`create inlineblob type info is missing param "%v"`, inlineBlobTypeParam_Length)
 	}
 	if sqlStr, ok := params[inlineBlobTypeParam_SQL]; ok {
-		var sqlType types2.StringType
+		var sqlType sql.StringType
 		switch sqlStr {
 		case inlineBlobTypeParam_SQL_Binary:
-			sqlType, err = types2.CreateBinary(sqltypes.Binary, length)
+			sqlType, err = gmstypes.CreateBinary(sqltypes.Binary, length)
 		case inlineBlobTypeParam_SQL_VarBinary:
-			sqlType, err = types2.CreateBinary(sqltypes.VarBinary, length)
+			sqlType, err = gmstypes.CreateBinary(sqltypes.VarBinary, length)
 		default:
 			return nil, fmt.Errorf(`create inlineblob type info has "%v" param with value "%v"`, inlineBlobTypeParam_SQL, sqlStr)
 		}
@@ -187,7 +187,7 @@ func (ti *inlineBlobType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *inlineBlobType) Promote() TypeInfo {
-	return &inlineBlobType{ti.sqlBinaryType.Promote().(types2.StringType)}
+	return &inlineBlobType{ti.sqlBinaryType.Promote().(sql.StringType)}
 }
 
 // String implements TypeInfo interface.

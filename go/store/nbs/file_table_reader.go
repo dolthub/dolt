@@ -93,6 +93,7 @@ func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint
 
 		_, err = io.ReadFull(r, b)
 		if err != nil {
+			q.ReleaseQuotaBytes(b)
 			return
 		}
 
@@ -106,6 +107,7 @@ func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint
 
 		ti, err = parseTableIndex(ctx, b, q)
 		if err != nil {
+			q.ReleaseQuotaBytes(b)
 			return
 		}
 
@@ -116,11 +118,13 @@ func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint
 	}
 
 	if chunkCount != index.chunkCount() {
+		index.Close()
 		return nil, errors.New("unexpected chunk count")
 	}
 
 	tr, err := newTableReader(index, &cacheReaderAt{path, fc}, fileBlockSize)
 	if err != nil {
+		index.Close()
 		return nil, err
 	}
 	return &fileTableReader{
