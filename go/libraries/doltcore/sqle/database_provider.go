@@ -303,11 +303,11 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 	return all
 }
 
-func (p DoltDatabaseProvider) GetRemoteDB(ctx *sql.Context, srcDB *doltdb.DoltDB, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
+func (p DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
 	if withCaching {
-		return r.GetRemoteDB(ctx, srcDB.ValueReadWriter().Format(), p.remoteDialer)
+		return r.GetRemoteDB(ctx, format, p.remoteDialer)
 	}
-	return r.GetRemoteDBWithoutCaching(ctx, srcDB.ValueReadWriter().Format(), p.remoteDialer)
+	return r.GetRemoteDBWithoutCaching(ctx, format, p.remoteDialer)
 }
 
 func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) error {

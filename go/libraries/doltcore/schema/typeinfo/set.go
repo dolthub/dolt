@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -60,7 +60,7 @@ func CreateSetTypeFromParams(params map[string]string) (TypeInfo, error) {
 	} else {
 		return nil, fmt.Errorf(`create set type info is missing param "%v"`, setTypeParam_Values)
 	}
-	sqlSetType, err := types2.CreateSetType(values, collation)
+	sqlSetType, err := gmstypes.CreateSetType(values, collation)
 	if err != nil {
 		return nil, err
 	}

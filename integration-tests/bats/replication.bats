@@ -130,6 +130,32 @@ teardown() {
     [[ ! "$output" =~ "feature" ]] || false
 }
 
+@test "replication: table functions work" {
+    cd repo1
+    dolt sql <<SQL
+create table t1 (a int primary key);
+call dolt_commit("-Am", "new table");
+insert into t1 values (1);
+call dolt_commit("-Am", "first row");
+insert into t1 values (2);
+call dolt_commit("-Am", "second row");
+SQL
+
+    dolt push remote1 main
+
+    cd ..
+    dolt clone file://./rem1 repo2
+
+    cd repo2
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote origin
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+
+    dolt sql -q "select * from t1"
+    dolt sql -q "select count(*) from dolt_diff('HEAD~', 'HEAD', 't1')"
+    dolt sql -q "select count(*) from dolt_diff_summary('HEAD', 'HEAD~', 't1')"
+    dolt sql -q "select count(*) from dolt_log()"
+}
+
 @test "replication: tag does not trigger replication" {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1

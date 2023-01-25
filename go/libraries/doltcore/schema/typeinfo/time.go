@@ -19,7 +19,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -27,17 +27,17 @@ import (
 // This is a dolt implementation of the MySQL type Time, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type timeType struct {
-	sqlTimeType types2.TimeType
+	sqlTimeType gmstypes.TimeType
 }
 
 var _ TypeInfo = (*timeType)(nil)
 
-var TimeType = &timeType{types2.Time}
+var TimeType = &timeType{gmstypes.Time}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *timeType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Int); ok {
-		return ti.sqlTimeType.Convert(types2.Timespan(val))
+		return ti.sqlTimeType.Convert(gmstypes.Timespan(val))
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -51,7 +51,7 @@ func (ti *timeType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (
 	switch k {
 	case types.IntKind:
 		val := reader.ReadInt()
-		return ti.sqlTimeType.Convert(types2.Timespan(val))
+		return ti.sqlTimeType.Convert(gmstypes.Timespan(val))
 	case types.NullKind:
 		return nil, nil
 	}
@@ -68,7 +68,7 @@ func (ti *timeType) ConvertValueToNomsValue(ctx context.Context, vrw types.Value
 	if err != nil {
 		return nil, err
 	}
-	return types.Int(val.(types2.Timespan)), nil
+	return types.Int(val.(gmstypes.Timespan)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -89,7 +89,7 @@ func (ti *timeType) FormatValue(v types.Value) (*string, error) {
 	if err != nil {
 		return nil, err
 	}
-	val := convVal.(types2.Timespan).String()
+	val := convVal.(gmstypes.Timespan).String()
 	return &val, nil
 }
 
@@ -121,7 +121,7 @@ func (ti *timeType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *timeType) Promote() TypeInfo {
-	return &timeType{ti.sqlTimeType.Promote().(types2.TimeType)}
+	return &timeType{ti.sqlTimeType.Promote().(gmstypes.TimeType)}
 }
 
 // String implements TypeInfo interface.

@@ -16,9 +16,12 @@ package index
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math"
+	"math/bits"
 	"sort"
 
+	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
 	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
@@ -45,45 +48,132 @@ func UnLexFloat(b uint64) float64 {
 	return math.Float64frombits(b)
 }
 
-// ZValue takes a Point and interleaves the bits into a [16]byte
-// It will put the bits in this order: x_0, y_0, x_1, y_1 ... x_63, Y_63
-func ZValue(p types.Point) [16]byte {
-	xLex := LexFloat(p.X)
-	yLex := LexFloat(p.Y)
+// InterleaveUInt64 interleaves the bits of the uint64s x and y.
+// The first 32 bits of x and y must be 0.
+// Example:
+// 0000 0000 0000 0000 0000 0000 0000 0000 abcd efgh ijkl mnop abcd efgh ijkl mnop
+// 0000 0000 0000 0000 abcd efgh ijkl mnop 0000 0000 0000 0000 abcd efgh ijkl mnop
+// 0000 0000 abcd efgh 0000 0000 ijkl mnop 0000 0000 abcd efgh 0000 0000 ijkl mnop
+// 0000 abcd 0000 efgh 0000 ijkl 0000 mnop 0000 abcd 0000 efgh 0000 ijkl 0000 mnop
+// 00ab 00cd 00ef 00gh 00ij 00kl 00mn 00op 00ab 00cd 00ef 00gh 00ij 00kl 00mn 00op
+// 0a0b 0c0d 0e0f 0g0h 0i0j 0k0l 0m0n 0o0p 0a0b 0c0d 0e0f 0g0h 0i0j 0k0l 0m0n 0o0p
+// Alternatively, just precompute all the results from 0 to 0x0000FFFFF
+func InterleaveUInt64(x, y uint64) uint64 {
+	x = (x | (x << 16)) & 0x0000FFFF0000FFFF
+	y = (y | (y << 16)) & 0x0000FFFF0000FFFF
 
-	res := [16]byte{}
-	for i := 0; i < 16; i++ {
-		for j := 0; j < 4; j++ {
-			x, y := byte((xLex&1)<<1), byte(yLex&1)
-			res[15-i] |= (x | y) << (2 * j)
-			xLex, yLex = xLex>>1, yLex>>1
-		}
-	}
-	return res
+	x = (x | (x << 8)) & 0x00FF00FF00FF00FF
+	y = (y | (y << 8)) & 0x00FF00FF00FF00FF
+
+	x = (x | (x << 4)) & 0x0F0F0F0F0F0F0F0F
+	y = (y | (y << 4)) & 0x0F0F0F0F0F0F0F0F
+
+	x = (x | (x << 2)) & 0x3333333333333333
+	y = (y | (y << 2)) & 0x3333333333333333
+
+	x = (x | (x << 1)) & 0x5555555555555555
+	y = (y | (y << 1)) & 0x5555555555555555
+
+	return x | (y << 1)
 }
 
-// UnZValue takes a [16]byte Z-Value and converts it back to a sql.Point
-func UnZValue(z [16]byte) types.Point {
-	var x, y uint64
-	for i := 15; i >= 0; i-- {
-		zv := uint64(z[i])
-		for j := 3; j >= 0; j-- {
-			y |= (zv & 1) << (63 - (4*i + j))
-			zv >>= 1
+// ZValue takes a Point and interleaves the bits into a [2]uint64
+// It will put the bits in this order: x_0, y_0, x_1, y_1 ... x_63, Y_63
+func ZValue(p types.Point) (z [2]uint64) {
+	xLex, yLex := LexFloat(p.X), LexFloat(p.Y)
+	z[0], z[1] = InterleaveUInt64(xLex>>32, yLex>>32), InterleaveUInt64(xLex&0xFFFFFFFF, yLex&0xFFFFFFFF)
+	return
+}
 
-			x |= (zv & 1) << (63 - (4*i + j))
-			zv >>= 1
-		}
-	}
-	xf := UnLexFloat(x)
-	yf := UnLexFloat(y)
+// UnInterleaveUint64 splits up the bits of the uint64 z into two uint64s
+// The first 32 bits of x and y must be 0.
+// Example:
+// abcd efgh ijkl mnop abcd efgh ijkl mnop abcd efgh ijkl mnop abcd efgh ijkl mnop 0x5555555555555555
+// 0b0d 0f0h 0j0l 0n0p 0b0d 0f0h 0j0l 0n0p 0b0d 0f0h 0j0l 0n0p 0b0d 0f0h 0j0l 0n0p x | x >> 1
+// 0bbd dffh hjjl lnnp pbbd dffh hjjl lnnp pbbd dffh hjjl lnnp pnbd dffh hjjl lnnp 0x3333333333333333
+// 00bd 00fh 00jl 00np 00bd 00fh 00jl 00np 00bd 00fh 00jl 00np 00bd 00fh 00jl 00np x | x >> 2
+// 0000 bdfh fhjl jlnp npbd bdfh fhjl jlnp npdb bdfh fhjl jlnp npdb bdfh fhjl jlnp 0x0F0F0F0F0F0F0F0F
+// 0000 bdfh 0000 jlnp 0000 bdfh 0000 jlnp 0000 bdfh 0000 jlnp 0000 bdfh 0000 jlnp x | x >> 4
+// 0000 bdfh bdfh jlnp jlnp bdfh bdfh jlnp jlnp bdfh bdfh jlnp jlnp bdfh bdfh jlnp 0x00FF00FF00FF00FF
+// 0000 0000 bdfh jlnp 0000 0000 bdfh jlnp 0000 0000 bdfh jlnp 0000 0000 bdfh jlnp x | x >> 8
+// 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp 0x0000FFFF0000FFFF
+// 0000 0000 0000 0000 bdfh jlnp bdfh jlnp 0000 0000 0000 0000 bdfh jlnp bdfh jlnp x | x >> 16
+// 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp 0x00000000FFFFFFFF
+// 0000 0000 0000 0000 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp
+func UnInterleaveUint64(z uint64) (x, y uint64) {
+	x, y = z, z>>1
+
+	x &= 0x5555555555555555
+	x |= x >> 1
+	y &= 0x5555555555555555
+	y |= y >> 1
+
+	x &= 0x3333333333333333
+	x |= x >> 2
+	y &= 0x3333333333333333
+	y |= y >> 2
+
+	x &= 0x0F0F0F0F0F0F0F0F
+	x |= x >> 4
+	y &= 0x0F0F0F0F0F0F0F0F
+	y |= y >> 4
+
+	x &= 0x00FF00FF00FF00FF
+	x |= x >> 8
+	y &= 0x00FF00FF00FF00FF
+	y |= y >> 8
+
+	x &= 0x0000FFFF0000FFFF
+	x |= x >> 16
+	y &= 0x0000FFFF0000FFFF
+	y |= y >> 16
+
+	x &= 0xFFFFFFFF
+	y &= 0xFFFFFFFF
+	return
+}
+
+// UnZValue takes a [2]uint64 Z-Value and converts it back to a sql.Point
+func UnZValue(z [2]uint64) types.Point {
+	xl, yl := UnInterleaveUint64(z[0])
+	xr, yr := UnInterleaveUint64(z[1])
+	xf := UnLexFloat((xl << 32) | xr)
+	yf := UnLexFloat((yl << 32) | yr)
 	return types.Point{X: xf, Y: yf}
 }
 
 func ZSort(points []types.Point) []types.Point {
 	sort.Slice(points, func(i, j int) bool {
 		zi, zj := ZValue(points[i]), ZValue(points[j])
-		return bytes.Compare(zi[:], zj[:]) < 0
+		return zi[0] < zj[0] || (zi[0] == zj[0] && zi[1] < zi[1])
 	})
 	return points
+}
+
+// ZAddr converts the GeometryValue into a key: (min_z_val, level)
+// Note: there is an inefficiency here where small polygons may be placed into a level that's significantly larger
+func ZAddr(v types.GeometryValue) [17]byte {
+	bbox := spatial.FindBBox(v)
+	zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
+	zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
+
+	addr := [17]byte{}
+	binary.BigEndian.PutUint64(addr[1:], zMin[0])
+	binary.BigEndian.PutUint64(addr[9:], zMin[1])
+	if res := zMin[0] ^ zMax[0]; res != 0 {
+		addr[0] = byte(64 - bits.LeadingZeros64(res)/2)
+	} else {
+		addr[0] = byte(32 + bits.LeadingZeros64(zMin[1]^zMax[1])/2)
+	}
+	return addr
+}
+
+// ZAddrSort converts the GeometryValue into a key: (min_z_val, level)
+// Note: there is an inefficiency here where small polygons may be placed into a level that's significantly larger
+func ZAddrSort(geoms []types.GeometryValue) []types.GeometryValue {
+	sort.Slice(geoms, func(i, j int) bool {
+		zi, zj := ZAddr(geoms[i]), ZAddr(geoms[j])
+		return bytes.Compare(zi[:], zj[:]) < 0
+	})
+	return geoms
 }

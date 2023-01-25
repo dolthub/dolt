@@ -20,7 +20,7 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -60,7 +60,7 @@ func CreateDecimalTypeFromParams(params map[string]string) (TypeInfo, error) {
 	} else {
 		return nil, fmt.Errorf(`create decimal type info is missing param "%v"`, decimalTypeParam_Scale)
 	}
-	sqlDecimalType, err := types2.CreateColumnDecimalType(precision, scale)
+	sqlDecimalType, err := gmstypes.CreateColumnDecimalType(precision, scale)
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +233,7 @@ func decimalTypeConverter(ctx context.Context, src *decimalType, destTi TypeInfo
 			if !ok {
 				return nil, fmt.Errorf("unexpected type converting decimal to enum: %T", v)
 			}
-			uintVal, err := types2.Uint64.Convert(decimal.Decimal(val))
+			uintVal, err := gmstypes.Uint64.Convert(decimal.Decimal(val))
 			if err != nil {
 				return nil, err
 			}
@@ -329,7 +329,7 @@ func decimalTypeConverter(ctx context.Context, src *decimalType, destTi TypeInfo
 			if !ok {
 				return nil, fmt.Errorf("unexpected type converting decimal to year: %T", v)
 			}
-			intVal, err := types2.Int64.Convert(decimal.Decimal(val))
+			intVal, err := gmstypes.Int64.Convert(decimal.Decimal(val))
 			if err != nil {
 				return nil, err
 			}

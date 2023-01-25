@@ -156,11 +156,15 @@ func (suite *BlockStoreSuite) TestChunkStorePut() {
 		suite.Equal(2, suite.putCountFn())
 	}
 
-	// Put chunk with dangling ref should error
+	// Put chunk with dangling ref should error on Commit
 	nc := chunks.NewChunk([]byte("bcd"))
 	err = suite.store.Put(context.Background(), nc, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-		return hash.NewHashSet(c.Hash()), nil
+		return hash.NewHashSet(hash.Of([]byte("lorem ipsum"))), nil
 	})
+	suite.NoError(err)
+	root, err := suite.store.Root(context.Background())
+	suite.NoError(err)
+	_, err = suite.store.Commit(context.Background(), root, root)
 	suite.Error(err)
 }
 

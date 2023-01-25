@@ -19,10 +19,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 
+	// _ import needed so that system vars are initialized correctly in the empty context used during printing
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -44,6 +47,7 @@ type RowWriter struct {
 	separator   string
 	bWr         *bufio.Writer
 	sch         schema.Schema
+	sqlSch      sql.Schema
 	rowsWritten int
 }
 
@@ -53,6 +57,18 @@ var _ table.SqlRowWriter = (*RowWriter)(nil)
 // slice of all rows. To customize the output of the JSON object emitted, use |NewJSONWriterWithHeader|
 func NewJSONWriter(wr io.WriteCloser, outSch schema.Schema) (*RowWriter, error) {
 	return NewJSONWriterWithHeader(wr, outSch, jsonHeader, jsonFooter, ",")
+}
+
+// NewJSONSqlWriter returns a new writer that encodes rows as a single JSON object with a single key: "rows", which is a
+// slice of all rows. To customize the output of the JSON object emitted, use |NewJSONWriterWithHeader|
+func NewJSONSqlWriter(wr io.WriteCloser, sch sql.Schema) (*RowWriter, error) {
+	w, err := NewJSONWriterWithHeader(wr, nil, jsonHeader, jsonFooter, ",")
+	if err != nil {
+		return nil, err
+	}
+
+	w.sqlSch = sch
+	return w, nil
 }
 
 func NewJSONWriterWithHeader(wr io.WriteCloser, outSch schema.Schema, header, footer, separator string) (*RowWriter, error) {
@@ -67,17 +83,14 @@ func NewJSONWriterWithHeader(wr io.WriteCloser, outSch schema.Schema, header, fo
 	}, nil
 }
 
-func (j *RowWriter) GetSchema() schema.Schema {
-	return j.sch
-}
+// The Type.SQL() call takes in a SQL context to determine the output character set for types that use a collation.
+// The context given is not a SQL context, so we force the `utf8mb4` character set to be used, as it is the most
+// likely to be supported by the destination. `utf8mb4` is the default character set for empty SQL contexts, so we
+// don't need to explicitly set it.
+// TODO: we could get this from a sql context in many cases
+var sqlContext = sql.NewEmptyContext()
 
 func (j *RowWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
-	// The Type.SQL() call takes in a SQL context to determine the output character set for types that use a collation.
-	// The context given is not a SQL context, so we force the `utf8mb4` character set to be used, as it is the most
-	// likely to be supported by the destination. `utf8mb4` is the default character set for empty SQL contexts, so we
-	// don't need to explicitly set it.
-	sqlContext := sql.NewEmptyContext()
-
 	if j.rowsWritten == 0 {
 		err := iohelp.WriteAll(j.bWr, []byte(j.header))
 		if err != nil {
@@ -85,6 +98,39 @@ func (j *RowWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
 		}
 	}
 
+	var jsonRowData []byte
+	if j.sch != nil {
+		var err error
+		jsonRowData, err = j.jsonDataForSchema(row)
+		if err != nil {
+			return err
+		}
+	} else {
+		var err error
+		jsonRowData, err = j.jsonDataForSqlSchema(row)
+		if err != nil {
+			return err
+		}
+	}
+
+	if j.rowsWritten != 0 {
+		_, err := j.bWr.WriteString(j.separator)
+		if err != nil {
+			return err
+		}
+	}
+
+	newErr := iohelp.WriteAll(j.bWr, jsonRowData)
+	if newErr != nil {
+		return newErr
+	}
+	j.rowsWritten++
+
+	return nil
+}
+
+// jsonDataForSchema returns a JSON representation of the given row, using the schema for serialization hints
+func (j *RowWriter) jsonDataForSchema(row sql.Row) ([]byte, error) {
 	allCols := j.sch.GetAllCols()
 	colValMap := make(map[string]interface{}, allCols.Size())
 	if err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -127,28 +173,56 @@ func (j *RowWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
 
 		return false, nil
 	}); err != nil {
-		return err
+		return nil, err
 	}
 
-	data, err := marshalToJson(colValMap)
+	jsonRowData, err := marshalToJson(colValMap)
 	if err != nil {
-		return errors.New("marshaling did not work")
+		return nil, fmt.Errorf("error marshalling row to json: %w", err)
 	}
+	return jsonRowData, nil
+}
 
-	if j.rowsWritten != 0 {
-		_, err := j.bWr.WriteString(j.separator)
-		if err != nil {
-			return err
+// jsonDataForSqlSchema returns a JSON representation of the given row, using the sql schema for serialization hints
+func (j *RowWriter) jsonDataForSqlSchema(row sql.Row) ([]byte, error) {
+	colValMap := make(map[string]interface{}, len(j.sqlSch))
+	for i, col := range j.sqlSch {
+		val := row[i]
+		if val == nil {
+			continue
 		}
+
+		switch col.Type.(type) {
+		case sql.DatetimeType,
+			sql.DecimalType,
+			sql.EnumType,
+			sql.StringType,
+			sql.SetType,
+			types.TupleType:
+			sqlVal, err := col.Type.SQL(sqlContext, nil, val)
+			if err != nil {
+				return nil, err
+			}
+			val = sqlVal.ToString()
+		case types.JsonType:
+			sqlVal, err := col.Type.SQL(sqlContext, nil, val)
+			if err != nil {
+				return nil, err
+			}
+			str := sqlVal.ToString()
+
+			// This is kind of silly: we are unmarshalling JSON just to marshall it back again
+			// But it makes marshalling much simpler
+			err = json.Unmarshal([]byte(str), &val)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		colValMap[col.Name] = val
 	}
 
-	newErr := iohelp.WriteAll(j.bWr, data)
-	if newErr != nil {
-		return newErr
-	}
-	j.rowsWritten++
-
-	return nil
+	return marshalToJson(colValMap)
 }
 
 func (j *RowWriter) Flush() error {

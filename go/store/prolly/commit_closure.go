@@ -96,6 +96,12 @@ func (c CommitClosure) IterAllReverse(ctx context.Context) (CommitClosureIter, e
 	return c.closure.IterAllReverse(ctx)
 }
 
+func (c CommitClosure) IterHeight(ctx context.Context, height uint64) (CommitClosureIter, error) {
+	start := NewCommitClosureKey(c.closure.NodeStore.Pool(), height, hash.Hash{})
+	stop := NewCommitClosureKey(c.closure.NodeStore.Pool(), height+1, hash.Hash{})
+	return c.closure.IterKeyRange(ctx, start, stop)
+}
+
 func (c CommitClosure) IsEmpty() bool {
 	return c.Node().Size() == 0
 }
