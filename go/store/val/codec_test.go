@@ -243,8 +243,8 @@ func TestCompare(t *testing.T) {
 		// z-address
 		{
 			typ: Type{Enc: StringEnc},
-			l: encZAddr([zAddrSize]byte{}),
-			r: encZAddr([zAddrSize]byte{}),
+			l:   encZAddr([zAddrSize]byte{}),
+			r:   encZAddr([zAddrSize]byte{}),
 			cmp: 0,
 		},
 	}
