@@ -773,7 +773,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    "/* client a */ call dolt_commit('-m', 'initial commit of t1')",
+				Query:            "/* client a */ call dolt_commit('-m', 'initial commit of t1')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -825,7 +825,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client a */ call dolt_commit('-m', 'add 3 to t1')",
+				Query:            "/* client a */ call dolt_commit('-m', 'add 3 to t1')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -841,7 +841,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
 			},
 			{
-				Query:    "/* client b */ call dolt_commit('-m', 'add 4 to t1')",
+				Query:            "/* client b */ call dolt_commit('-m', 'add 4 to t1')",
 				SkipResultsCheck: true,
 			},
 			{
