@@ -92,7 +92,7 @@ SQL
 
     run dolt sql -q "SELECT trigger_name, event_object_table, action_statement, definer FROM information_schema.triggers" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "tt,mytable,SET NEW.v1 = NEW.v1 * 11,\`root\`@\`localhost\`" ]] || false
+    [[ "$output" =~ "tt,mytable,SET NEW.v1 = NEW.v1 * 11,root@localhost" ]] || false
 }
 
 @test "import-mysqldump: database with procedure dumped with --routines flag" {
@@ -114,7 +114,7 @@ SQL
 
     run dolt sql -q "SHOW PROCEDURE STATUS" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "new_proc,PROCEDURE,\`root\`@\`localhost\`" ]] || false
+    [[ "$output" =~ "new_proc,PROCEDURE,root@localhost" ]] || false
 }
 
 @test "import-mysqldump: a table with all types with DEFAULT NULL dump" {
