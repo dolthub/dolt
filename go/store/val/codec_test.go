@@ -248,6 +248,18 @@ func TestCompare(t *testing.T) {
 			r: encZAddr(types.Point{X: 123, Y: 456}),
 			cmp: 1,
 		},
+		{
+			typ: Type{Enc: ZAddrEnc},
+			r: encZAddr(types.Point{}),
+			l: encZAddr(types.LineString{Points: []types.Point{{}, {}, {}}}),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: ZAddrEnc},
+			r: encZAddr(types.Point{X: 123, Y: 456}),
+			l: encZAddr(types.LineString{Points: []types.Point{{X: -10, Y: -10}, {X: 10, Y: 10}}}),
+			cmp: -1,
+		},
 	}
 
 	for _, test := range tests {
