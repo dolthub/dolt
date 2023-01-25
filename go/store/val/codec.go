@@ -93,6 +93,7 @@ const (
 	CommitAddrEnc = Encoding(serial.EncodingCommitAddr)
 	StringAddrEnc = Encoding(serial.EncodingStringAddr)
 	JSONAddrEnc   = Encoding(serial.EncodingJSONAddr)
+	ZAddrEnc      = Encoding(serial.EncodingZAddr)
 
 	sentinel Encoding = 127
 )
@@ -599,7 +600,7 @@ func compareAddr(l, r hash.Hash) int {
 }
 
 func compareZAddr(l, r []byte) int {
-	return bytes.Compare(l, r) // TODO: deal with level?
+	return bytes.Compare(l, r)
 }
 
 func writeRaw(buf, val []byte) {

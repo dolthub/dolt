@@ -2800,12 +2800,14 @@ var SystemTableIndexTests = []systabScript{
 		name: "commit indexing edge cases",
 		setup: append(systabSetup,
 			"call dolt_checkout('-b', 'feat');",
-			"call dolt_commit('--allow-empty', '-m', 'feat commit');",
+			"call dolt_commit('--allow-empty', '-m', 'feat commit 1');",
+			"call dolt_commit('--allow-empty', '-m', 'feat commit 2');",
 			"call dolt_checkout('main');",
 			"update xy set y = y+1 where x > 70 and x < 90;",
 			"set @commit = (select commit_hash from dolt_log where message = 'commit 1');",
 			"set @root_commit = (select commit_hash from dolt_log where message = 'Initialize data repository');",
 			"set @feat_head = hashof('feat');",
+			"set @feat_head1 = hashof('feat~');",
 		),
 		queries: []systabQuery{
 			{
@@ -2813,8 +2815,10 @@ var SystemTableIndexTests = []systabScript{
 				exp:   []sql.Row{{80, 80}, {81, 81}, {82, 82}, {83, 83}, {84, 84}},
 			},
 			{
-				// TODO from_commit should find all commits that reference it
-				// as a parent
+				query: "select * from dolt_diff_xy where from_commit = @feat_head1;",
+				exp:   []sql.Row{},
+			},
+			{
 				query: "select * from dolt_diff_xy where from_commit = 'WORKING';",
 				exp:   []sql.Row{},
 			},
@@ -2902,6 +2906,35 @@ var SystemTableIndexTests = []systabScript{
 			{
 				query: "select count(*) from dolt_log as dc join dolt_commit_ancestors as dca on dc.commit_hash = dca.commit_hash;",
 				exp:   []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		name: "from_commit at multiple heights, choose highest",
+		setup: []string{
+			"create table x (x int primary key)",
+			"call dolt_add('.');",
+			"call dolt_commit_hash_out(@m1h1, '-am', 'main 1');",
+			"insert into x values (1),(2);",
+			"call dolt_commit_hash_out(@m2h2, '-am', 'main 2');",
+			"call dolt_checkout('-b', 'other');",
+			"call dolt_reset('--hard', @main1);",
+			"insert into x values (3),(4);",
+			"call dolt_commit_hash_out(@o1h2, '-am', 'other 1');",
+			"insert into x values (5),(6);",
+			"call dolt_commit_hash_out(@o2h3, '-am', 'other 2');",
+			"call dolt_merge('main');",
+			"set @o3h4 = hashof('head~');",
+			"call dolt_checkout('main');",
+			"insert into x values (7),(8);",
+			"call dolt_commit_hash_out(@m32h3, '-am', 'main 3');",
+			"call dolt_merge('other');",
+			"set @m4h5 = hashof('head~');",
+		},
+		queries: []systabQuery{
+			{
+				query: "select count(*) from dolt_diff_x where from_commit = @m2h2",
+				exp:   []sql.Row{{4}},
 			},
 		},
 	},
