@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -33,47 +33,47 @@ import (
 func TestJSONValueMarshallingRoundTrip(t *testing.T) {
 	tests := []struct {
 		name string
-		doc  types2.JSONDocument
+		doc  gmstypes.JSONDocument
 	}{
 		{
 			name: "smoke",
-			doc:  types2.MustJSON(`[]`),
+			doc:  gmstypes.MustJSON(`[]`),
 		},
 		{
 			name: "null",
-			doc:  types2.MustJSON(`null`),
+			doc:  gmstypes.MustJSON(`null`),
 		},
 		{
 			name: "boolean",
-			doc:  types2.MustJSON(`false`),
+			doc:  gmstypes.MustJSON(`false`),
 		},
 		{
 			name: "string",
-			doc:  types2.MustJSON(`"lorem ipsum"`),
+			doc:  gmstypes.MustJSON(`"lorem ipsum"`),
 		},
 		{
 			name: "number",
-			doc:  types2.MustJSON(`2.71`),
+			doc:  gmstypes.MustJSON(`2.71`),
 		},
 		{
 			name: "type homogenous object",
-			doc:  types2.MustJSON(`{"a": 2, "b": 3, "c": 4}`),
+			doc:  gmstypes.MustJSON(`{"a": 2, "b": 3, "c": 4}`),
 		},
 		{
 			name: "type heterogeneous object",
-			doc:  types2.MustJSON(`{"a": 2, "b": "two", "c": false}`),
+			doc:  gmstypes.MustJSON(`{"a": 2, "b": "two", "c": false}`),
 		},
 		{
 			name: "homogenous array",
-			doc:  types2.MustJSON(`[1, 2, 3]`),
+			doc:  gmstypes.MustJSON(`[1, 2, 3]`),
 		},
 		{
 			name: "heterogeneous array",
-			doc:  types2.MustJSON(`[1, "two", false]`),
+			doc:  gmstypes.MustJSON(`[1, "two", false]`),
 		},
 		{
 			name: "nested",
-			doc:  types2.MustJSON(`[{"a":1}, {"b":2}, null, [false, 3.14, [], {"c": [0]}], ""]`),
+			doc:  gmstypes.MustJSON(`[{"a":1}, {"b":2}, null, [false, 3.14, [], {"c": [0]}], ""]`),
 		},
 	}
 
@@ -99,7 +99,7 @@ func TestJSONValueMarshallingRoundTrip(t *testing.T) {
 			err = js.Unmarshal([]byte(str), &val)
 			assert.NoError(t, err)
 
-			jsDoc = types2.JSONDocument{Val: val}
+			jsDoc = gmstypes.JSONDocument{Val: val}
 			assert.Equal(t, test.doc.Val, jsDoc.Val)
 		})
 	}

@@ -29,7 +29,7 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -408,9 +408,9 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 		switch n := col.Type.(type) {
 		case sql.NumberType:
 			numBytesPerRow += 8
-		case types2.StringType:
+		case sql.StringType:
 			numBytesPerRow += uint64(n.MaxByteLength())
-		case types2.BitType:
+		case sqltypes.BitType:
 			numBytesPerRow += 1
 		case sql.DatetimeType:
 			numBytesPerRow += 8
@@ -418,11 +418,11 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 			numBytesPerRow += uint64(n.MaximumScale())
 		case sql.EnumType:
 			numBytesPerRow += 2
-		case sql.JsonType:
+		case sqltypes.JsonType:
 			numBytesPerRow += 20
 		case sql.NullType:
 			numBytesPerRow += 1
-		case types2.TimeType:
+		case sqltypes.TimeType:
 			numBytesPerRow += 16
 		case sql.YearType:
 			numBytesPerRow += 8
@@ -1311,7 +1311,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 				if strings.ToLower(oldColumn.Name) == strings.ToLower(colName) {
 					colNames = append(colNames, newColumn.Name)
 					if len(prefixLengths) > 0 {
-						if !types2.IsText(newColumn.Type) {
+						if !sqltypes.IsText(newColumn.Type) {
 							// drop prefix lengths if column is not a string type
 							prefixLengths[i] = 0
 						} else if uint32(prefixLengths[i]) > newColumn.Type.MaxTextResponseByteLength() {
@@ -1499,7 +1499,7 @@ func validateSchemaChange(
 ) error {
 	for _, idxCol := range idxCols {
 		col := newSchema.Schema[newSchema.Schema.IndexOfColName(idxCol.Name)]
-		if col.PrimaryKey && idxCol.Length > 0 && types2.IsText(col.Type) {
+		if col.PrimaryKey && idxCol.Length > 0 && sqltypes.IsText(col.Type) {
 			return sql.ErrUnsupportedIndexPrefix.New(col.Name)
 		}
 	}

@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -344,7 +344,7 @@ func TestDecimalMarshal(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%v %v %v", test.precision, test.scale, test.val), func(t *testing.T) {
-			typ := &decimalType{types2.MustCreateDecimalType(test.precision, test.scale)}
+			typ := &decimalType{gmstypes.MustCreateDecimalType(test.precision, test.scale)}
 			vrw := types.NewMemoryValueStore()
 			val, err := typ.ConvertValueToNomsValue(context.Background(), vrw, test.val)
 			if test.expectedErr {
