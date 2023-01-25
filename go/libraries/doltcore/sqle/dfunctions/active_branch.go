@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -60,7 +61,7 @@ func (ab *ActiveBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, er
 		}
 	}
 
-	return nil, fmt.Errorf("active branch not found")
+	return nil, nil
 }
 
 // String implements the Stringer interface.
@@ -79,7 +80,7 @@ func (*ActiveBranchFunc) Resolved() bool {
 }
 
 func (ab *ActiveBranchFunc) Type() sql.Type {
-	return sql.Text
+	return types.Text
 }
 
 // Children implements the Expression interface.

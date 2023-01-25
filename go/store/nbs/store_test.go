@@ -47,7 +47,7 @@ func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, no
 	require.NoError(t, err)
 
 	// create a v5 manifest
-	_, err = fileManifest{nomsDir}.Update(ctx, addr{}, manifestContents{}, &Stats{}, nil)
+	_, err = fileManifest{dir: nomsDir, mode: asyncFlush}.Update(ctx, addr{}, manifestContents{}, &Stats{}, nil)
 	require.NoError(t, err)
 
 	q = NewUnlimitedMemQuotaProvider()
@@ -133,7 +133,7 @@ func TestConcurrentPuts(t *testing.T) {
 		c := makeChunk(uint32(i))
 		hashes[i] = c.Hash()
 		errgrp.Go(func() error {
-			err := st.Put(ctx, c)
+			err := st.Put(ctx, c, getAddrsCb)
 			require.NoError(t, err)
 			return nil
 		})
@@ -157,7 +157,7 @@ func makeChunk(i uint32) chunks.Chunk {
 	return chunks.NewChunk(b)
 }
 
-type tableFileSet map[string]chunks.TableFile
+type tableFileSet map[string]TableFile
 
 func (s tableFileSet) contains(fileName string) (ok bool) {
 	_, ok = s[fileName]
@@ -174,7 +174,7 @@ func (s tableFileSet) findAbsent(ftd fileToData) (absent []string) {
 	return absent
 }
 
-func tableFileSetFromSources(sources []chunks.TableFile) (s tableFileSet) {
+func tableFileSetFromSources(sources []TableFile) (s tableFileSet) {
 	s = make(tableFileSet, len(sources))
 	for _, src := range sources {
 		s[src.FileID()] = src
@@ -192,8 +192,8 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	fileToData := populateLocalStore(t, st, numTableFiles)
 
 	// add a chunk and flush to trigger a conjoin
-	c := []byte("it's a boy!")
-	ok, err := st.addChunk(ctx, computeAddr(c), c)
+	c := chunks.NewChunk([]byte("it's a boy!"))
+	ok, err := st.addChunk(ctx, c, hash.NewHashSet())
 	require.NoError(t, err)
 	require.True(t, ok)
 	ok, err = st.Commit(ctx, st.upstream.root, st.upstream.root)
@@ -277,7 +277,7 @@ func TestNBSCopyGC(t *testing.T) {
 	tossers := makeChunkSet(64, 64)
 
 	for _, c := range keepers {
-		err := st.Put(ctx, c)
+		err := st.Put(ctx, c, getAddrsCb)
 		require.NoError(t, err)
 	}
 	for h, c := range keepers {
@@ -293,7 +293,7 @@ func TestNBSCopyGC(t *testing.T) {
 		assert.Equal(t, chunks.Chunk{}, c)
 	}
 	for _, c := range tossers {
-		err := st.Put(ctx, c)
+		err := st.Put(ctx, c, getAddrsCb)
 		require.NoError(t, err)
 	}
 	for h, c := range tossers {
@@ -363,7 +363,7 @@ func prepStore(ctx context.Context, t *testing.T, assert *assert.Assertions) (*f
 
 	rootChunk := chunks.NewChunk([]byte("root"))
 	rootHash := rootChunk.Hash()
-	err = store.Put(ctx, rootChunk)
+	err = store.Put(ctx, rootChunk, getAddrsCb)
 	require.NoError(t, err)
 	success, err := store.Commit(ctx, rootHash, hash.Hash{})
 	require.NoError(t, err)
@@ -562,7 +562,7 @@ func TestNBSCommitRetainsAppendix(t *testing.T) {
 	// Make second Commit
 	secondRootChunk := chunks.NewChunk([]byte("newer root"))
 	secondRoot := secondRootChunk.Hash()
-	err = store.Put(ctx, secondRootChunk)
+	err = store.Put(ctx, secondRootChunk, getAddrsCb)
 	require.NoError(t, err)
 	success, err := store.Commit(ctx, secondRoot, rootChunk.Hash())
 	require.NoError(t, err)

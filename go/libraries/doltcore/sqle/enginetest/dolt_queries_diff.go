@@ -29,7 +29,8 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2, 3), (4, 5, 6);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -51,10 +52,12 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2, 3), (4, 5, 6);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"update t set c2=0 where pk=1",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'modifying row'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'modifying row');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -75,10 +78,12 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2, 3), (4, 5, 6);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"delete from t where pk=1",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'modifying row'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'modifying row');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -100,15 +105,18 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2), (3, 4);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"drop table t;",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping table t'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping table t');",
 
 			"create table t (pk int primary key, c int);",
 			"call dolt_add('.')",
 			"insert into t values (100, 200), (300, 400);",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'recreating table t'));",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'recreating table t');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -131,10 +139,12 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2, 3), (4, 5, 6);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"alter table t drop column c1;",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping column c'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping column c');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -164,14 +174,17 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2), (3, 4);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"alter table t drop column c;",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping column c'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping column c');",
 
 			"alter table t add column c int;",
 			"insert into t values (100, 101);",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'inserting into t'));",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'inserting into t');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -207,14 +220,17 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2, 3), (4, 5, 6);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"alter table t drop column c1;",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping column c1'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping column c1');",
 
 			"alter table t rename column c2 to c1;",
 			"insert into t values (100, 101);",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'inserting into t'));",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'inserting into t');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -295,14 +311,17 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2), (3, 4);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"alter table t drop column c;",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping column c'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping column c');",
 
 			"alter table t add column c varchar(20);",
 			"insert into t values (100, '101');",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 're-adding column c'));",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 're-adding column c');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -337,14 +356,17 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c varchar(20));",
 			"call dolt_add('.')",
 			"insert into t values (1, 'two'), (3, 'four');",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"alter table t drop column c;",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping column c'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping column c');",
 
 			"alter table t add column c int;",
 			"insert into t values (100, 101);",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 're-adding column c'));",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 're-adding column c');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -386,18 +408,22 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"alter table t rename column c1 to c2;",
 			"insert into t values (3, 4);",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'renaming c1 to c2'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'renaming c1 to c2');",
 
 			"alter table t drop column c2;",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'dropping column c2'));",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'dropping column c2');",
 
 			"alter table t add column c2 int;",
 			"insert into t values (100, '101');",
-			"set @Commit4 = (select DOLT_COMMIT('-am', 'recreating column c2'));",
+			"set @Commit4 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit4, '-am', 'recreating column c2');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -437,17 +463,21 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2), (3, 4);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"alter table t drop primary key;",
 			"insert into t values (5, 6);",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping primary key'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping primary key');",
 
 			"alter table t add primary key (c1);",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'adding primary key'));",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'adding primary key');",
 
 			"insert into t values (7, 8);",
-			"set @Commit4 = (select DOLT_COMMIT('-am', 'adding more data'));",
+			"set @Commit4 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit4, '-am', 'adding more data');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -489,11 +519,14 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2, 3), (4, 5, 6);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'first commit'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'first commit');",
 			"insert into t values (7, 8, 9);",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'second commit'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'second commit');",
 			"update t set c1 = 0 where pk > 5;",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'third commit'));",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'third commit');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -522,11 +555,14 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk1 int, pk2 int, c1 int, primary key (pk1, pk2));",
 			"call dolt_add('.')",
 			"insert into t values (1, 2, 3), (4, 5, 6);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'first commit'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'first commit');",
 			"insert into t values (7, 8, 9);",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'second commit'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'second commit');",
 			"update t set c1 = 0 where pk1 > 5;",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'third commit'));",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'third commit');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -633,10 +669,12 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"call dolt_add('.')",
-			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
 
 			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
-			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting into t');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -741,19 +779,23 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"call dolt_add('.')",
-			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
 
 			"insert into t values(1, 'one', 'two');",
-			"set @Commit2 = dolt_commit('-am', 'inserting into table t');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting into table t');",
 
 			"create table t2 (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"call dolt_add('.')",
 			"insert into t2 values(100, 'hundred', 'hundert');",
-			"set @Commit3 = dolt_commit('-am', 'inserting into table t2');",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'inserting into table t2');",
 
 			"insert into t values(2, 'two', 'three'), (3, 'three', 'four');",
 			"update t set c1='uno', c2='dos' where pk=1;",
-			"set @Commit4 = dolt_commit('-am', 'inserting into table t');",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'inserting into table t');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -819,7 +861,8 @@ inner join t on to_pk = t.pk;`,
 			"create table t (pk int primary key, c1 text, c2 text);",
 			"call dolt_add('.')",
 			"insert into t values (1, 'one', 'two'), (2, 'three', 'four');",
-			"set @Commit1 = dolt_commit('-am', 'inserting two rows into table t');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'inserting two rows into table t');",
 
 			"insert into t values (3, 'five', 'six');",
 			"delete from t where pk = 2",
@@ -893,24 +936,30 @@ inner join t on to_pk = t.pk;`,
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"call dolt_add('.')",
-			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
 
 			"insert into t values(1, 'one', 'two');",
-			"set @Commit2 = dolt_commit('-am', 'inserting row 1 into t in main');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting row 1 into t in main');",
 
-			"select dolt_checkout('-b', 'branch1');",
+			"CALL DOLT_checkout('-b', 'branch1');",
 			"alter table t drop column c2;",
-			"set @Commit3 = dolt_commit('-am', 'dropping column c2 in branch1');",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'dropping column c2 in branch1');",
 
 			"delete from t where pk=1;",
-			"set @Commit4 = dolt_commit('-am', 'deleting row 1 in branch1');",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'deleting row 1 in branch1');",
 
 			"insert into t values (2, 'two');",
-			"set @Commit5 = dolt_commit('-am', 'inserting row 2 in branch1');",
+			"set @Commit5 = '';",
+			"call dolt_commit_hash_out(@Commit5, '-am', 'inserting row 2 in branch1');",
 
-			"select dolt_checkout('main');",
+			"CALL DOLT_checkout('main');",
 			"insert into t values (2, 'two', 'three');",
-			"set @Commit6 = dolt_commit('-am', 'inserting row 2 in main');",
+			"set @Commit6 = '';",
+			"call dolt_commit_hash_out(@Commit6, '-am', 'inserting row 2 in main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -990,18 +1039,22 @@ inner join t on to_pk = t.pk;`,
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"call dolt_add('.')",
-			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
 
 			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
-			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting into t');",
 
 			"alter table t drop column c2;",
-			"set @Commit3 = dolt_commit('-am', 'dropping column c2');",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'dropping column c2');",
 
 			"alter table t add column c2 varchar(20);",
 			"insert into t values (3, 'three', 'four');",
 			"update t set c2='foo' where pk=1;",
-			"set @Commit4 = dolt_commit('-am', 'adding column c2, inserting, and updating data');",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'adding column c2, inserting, and updating data');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1050,21 +1103,26 @@ inner join t on to_pk = t.pk;`,
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(20), c2 int);",
 			"call dolt_add('.')",
-			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
 
 			"insert into t values(1, 'one', -1), (2, 'two', -2);",
-			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting into t');",
 
 			"alter table t rename column c2 to c3;",
-			"set @Commit3 = dolt_commit('-am', 'renaming column c2 to c3');",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'renaming column c2 to c3');",
 
 			"insert into t values (3, 'three', -3);",
 			"update t set c3=1 where pk=1;",
-			"set @Commit4 = dolt_commit('-am', 'inserting and updating data');",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'inserting and updating data');",
 
 			"alter table t rename column c3 to c2;",
 			"insert into t values (4, 'four', -4);",
-			"set @Commit5 = dolt_commit('-am', 'renaming column c3 to c2, and inserting data');",
+			"set @Commit5 = '';",
+			"call dolt_commit_hash_out(@Commit5, '-am', 'renaming column c3 to c2, and inserting data');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1119,21 +1177,26 @@ inner join t on to_pk = t.pk;`,
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"call dolt_add('.')",
-			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
 
 			"insert into t values(1, 'one', 'asdf'), (2, 'two', '2');",
-			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting into t');",
 
 			"alter table t drop column c2;",
-			"set @Commit3 = dolt_commit('-am', 'dropping column c2');",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'dropping column c2');",
 
 			"insert into t values (3, 'three');",
 			"update t set c1='fdsa' where pk=1;",
-			"set @Commit4 = dolt_commit('-am', 'inserting and updating data');",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'inserting and updating data');",
 
 			"alter table t add column c2 int;",
 			"insert into t values (4, 'four', -4);",
-			"set @Commit5 = dolt_commit('-am', 'adding column c2, and inserting data');",
+			"set @Commit5 = '';",
+			"call dolt_commit_hash_out(@Commit5, '-am', 'adding column c2, and inserting data');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1288,10 +1351,12 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"call dolt_add('.')",
-			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
 
 			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
-			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting into t');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1368,25 +1433,30 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Name: "basic case with single table",
 		SetUpScript: []string{
 			"set @Commit0 = HashOf('HEAD');",
-			"set @Commit1 = dolt_commit('--allow-empty', '-m', 'creating table t');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '--allow-empty', '-m', 'creating table t');",
 
 			// create table t only
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"call dolt_add('.')",
-			"set @Commit2 = dolt_commit('-am', 'creating table t');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'creating table t');",
 
 			// insert 1 row into t
 			"insert into t values(1, 'one', 'two');",
-			"set @Commit3 = dolt_commit('-am', 'inserting 1 into table t');",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'inserting 1 into table t');",
 
 			// insert 2 rows into t and update two cells
 			"insert into t values(2, 'two', 'three'), (3, 'three', 'four');",
 			"update t set c1='uno', c2='dos' where pk=1;",
-			"set @Commit4 = dolt_commit('-am', 'inserting 2 into table t');",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'inserting 2 into table t');",
 
 			// drop table t only
 			"drop table t;",
-			"set @Commit5 = dolt_commit('-am', 'drop table t');",
+			"set @Commit5 = '';",
+			"call dolt_commit_hash_out(@Commit5, '-am', 'drop table t');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1433,25 +1503,30 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		Name: "basic case with single keyless table",
 		SetUpScript: []string{
 			"set @Commit0 = HashOf('HEAD');",
-			"set @Commit1 = dolt_commit('--allow-empty', '-m', 'creating table t');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '--allow-empty', '-m', 'creating table t');",
 
 			// create table t only
 			"create table t (id int, c1 varchar(20), c2 varchar(20));",
 			"call dolt_add('.')",
-			"set @Commit2 = dolt_commit('-am', 'creating table t');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'creating table t');",
 
 			// insert 1 row into t
 			"insert into t values(1, 'one', 'two');",
-			"set @Commit3 = dolt_commit('-am', 'inserting 1 into table t');",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'inserting 1 into table t');",
 
 			// insert 2 rows into t and update two cells
 			"insert into t values(2, 'two', 'three'), (3, 'three', 'four');",
 			"update t set c1='uno', c2='dos' where id=1;",
-			"set @Commit4 = dolt_commit('-am', 'inserting 2 into table t');",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'inserting 2 into table t');",
 
 			// drop table t only
 			"drop table t;",
-			"set @Commit5 = dolt_commit('-am', 'drop table t');",
+			"set @Commit5 = '';",
+			"call dolt_commit_hash_out(@Commit5, '-am', 'drop table t');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1500,24 +1575,28 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"insert into t values(1, 'one', 'two');",
 			"call dolt_add('.')",
-			"set @Commit1 = dolt_commit('-am', 'inserting into table t');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'inserting into table t');",
 
 			// add table t2 with 1 row
 			"create table t2 (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"insert into t2 values(100, 'hundred', 'hundert');",
 			"call dolt_add('.')",
-			"set @Commit2 = dolt_commit('-am', 'inserting into table t2');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting into table t2');",
 
 			// changes on both tables
 			"insert into t values(2, 'two', 'three'), (3, 'three', 'four'), (4, 'four', 'five');",
 			"update t set c1='uno', c2='dos' where pk=1;",
 			"insert into t2 values(101, 'hundred one', 'one');",
-			"set @Commit3 = dolt_commit('-am', 'inserting into table t');",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'inserting into table t');",
 
 			// changes on both tables
 			"delete from t where c2 = 'four';",
 			"update t2 set c2='zero' where pk=100;",
-			"set @Commit4 = dolt_commit('-am', 'inserting into table t');",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'inserting into table t');",
 
 			// create keyless table
 			"create table keyless (id int);",
@@ -1557,7 +1636,8 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 			"create table t (pk int primary key, c1 text, c2 text);",
 			"call dolt_add('.')",
 			"insert into t values (1, 'one', 'two'), (2, 'three', 'four');",
-			"set @Commit1 = dolt_commit('-am', 'inserting two rows into table t');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'inserting two rows into table t');",
 
 			"insert into t values (3, 'five', 'six');",
 			"delete from t where pk = 2",
@@ -1611,28 +1691,35 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"call dolt_add('.')",
-			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
 
 			"insert into t values(1, 'one', 'two');",
-			"set @Commit2 = dolt_commit('-am', 'inserting row 1 into t in main');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting row 1 into t in main');",
 
-			"select dolt_checkout('-b', 'branch1');",
+			"CALL DOLT_checkout('-b', 'branch1');",
 			"alter table t drop column c2;",
-			"set @Commit3 = dolt_commit('-am', 'dropping column c2 in branch1');",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'dropping column c2 in branch1');",
 
 			"delete from t where pk=1;",
-			"set @Commit4 = dolt_commit('-am', 'deleting row 1 in branch1');",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'deleting row 1 in branch1');",
 
 			"insert into t values (2, 'two');",
-			"set @Commit5 = dolt_commit('-am', 'inserting row 2 in branch1');",
+			"set @Commit5 = '';",
+			"call dolt_commit_hash_out(@Commit5, '-am', 'inserting row 2 in branch1');",
 
-			"select dolt_checkout('main');",
+			"CALL DOLT_checkout('main');",
 			"insert into t values (2, 'two', 'three');",
-			"set @Commit6 = dolt_commit('-am', 'inserting row 2 in main');",
+			"set @Commit6 = '';",
+			"call dolt_commit_hash_out(@Commit6, '-am', 'inserting row 2 in main');",
 
 			"create table newtable (pk int primary key);",
 			"insert into newtable values (1), (2);",
-			"set @Commit7 = dolt_commit('-Am', 'new table newtable');",
+			"set @Commit7 = '';",
+			"call dolt_commit_hash_out(@Commit7, '-Am', 'new table newtable');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1714,21 +1801,25 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"call dolt_add('.');",
 			"insert into t values (1, 'one', 'two'), (2, 'two', 'three');",
-			"set @Commit1 = dolt_commit('-am', 'inserting row 1, 2 into t');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'inserting row 1, 2 into t');",
 
 			// drop 1 column and add 1 row
 			"alter table t drop column c2;",
-			"set @Commit2 = dolt_commit('-am', 'dropping column c2');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'dropping column c2');",
 
 			// drop 1 column and add 1 row
 			"insert into t values (3, 'three');",
-			"set @Commit3 = dolt_commit('-am', 'inserting row 3');",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'inserting row 3');",
 
 			// add 1 column and 1 row and update
 			"alter table t add column c2 varchar(20);",
 			"insert into t values (4, 'four', 'five');",
 			"update t set c2='foo' where pk=1;",
-			"set @Commit4 = dolt_commit('-am', 'adding column c2, inserting, and updating data');",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'adding column c2, inserting, and updating data');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1758,21 +1849,26 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(20), c2 int);",
 			"call dolt_add('.')",
-			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
 
 			"insert into t values(1, 'one', -1), (2, 'two', -2);",
-			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting into t');",
 
 			"alter table t rename column c2 to c3;",
-			"set @Commit3 = dolt_commit('-am', 'renaming column c2 to c3');",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'renaming column c2 to c3');",
 
 			"insert into t values (3, 'three', -3);",
 			"update t set c3=1 where pk=1;",
-			"set @Commit4 = dolt_commit('-am', 'inserting and updating data');",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'inserting and updating data');",
 
 			"alter table t rename column c3 to c2;",
 			"insert into t values (4, 'four', -4);",
-			"set @Commit5 = dolt_commit('-am', 'renaming column c3 to c2, and inserting data');",
+			"set @Commit5 = '';",
+			"call dolt_commit_hash_out(@Commit5, '-am', 'renaming column c3 to c2, and inserting data');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1961,7 +2057,8 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 			"call dolt_add('.')",
 			"insert into regularTable values (1, 2, 3), (2, 3, 4);",
 			"insert into droppedTable values (1, 2, 3), (2, 3, 4);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'Creating tables x and y');",
 
 			// changeSet: STAGED; data change: false; schema change: true
 			"create table addedTable (a int primary key, b int, c int);",
@@ -2025,19 +2122,23 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table y (a int primary key, b int, c int);",
 			"call dolt_add('.')",
 			"insert into x values (1, 2, 3), (2, 3, 4);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'Creating tables x and y');",
 
 			"create table z (a int primary key, b int, c int);",
 			"call dolt_add('.')",
 			"insert into z values (100, 101, 102);",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'Creating tables z'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'Creating tables z');",
 
 			"insert into y values (-1, -2, -3), (-2, -3, -4);",
 			"insert into z values (101, 102, 103);",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'Inserting into tables y and z'));",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'Inserting into tables y and z');",
 
 			"alter table y add column d int;",
-			"set @Commit4 = (select DOLT_COMMIT('-am', 'Modify schema of table y'));",
+			"set @Commit4 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit4, '-am', 'Modify schema of table y');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2065,21 +2166,25 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table y (a int primary key, b int, c int)",
 			"call dolt_add('.')",
 			"insert into x values (1, 2, 3), (2, 3, 4)",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'))",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'Creating tables x and y')",
 
 			"create table z (a int primary key, b int, c int)",
 			"call dolt_add('.')",
 			"insert into z values (100, 101, 102)",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'Creating tables z'))",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'Creating tables z')",
 
 			"rename table x to x1",
 			"call dolt_add('.')",
 			"insert into x1 values (1000, 1001, 1002);",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'Renaming table x to x1 and inserting data'))",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'Renaming table x to x1 and inserting data')",
 
 			"rename table x1 to x2",
 			"call dolt_add('.')",
-			"set @Commit4 = (select DOLT_COMMIT('-am', 'Renaming table x1 to x2'))",
+			"set @Commit4 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit4, '-am', 'Renaming table x1 to x2')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2111,13 +2216,16 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table y (a int primary key, b int, c int)",
 			"call dolt_add('.')",
 			"insert into x values (1, 2, 3), (2, 3, 4)",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'))",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'Creating tables x and y')",
 
 			"drop table x",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'Dropping non-empty table x'))",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'Dropping non-empty table x')",
 
 			"drop table y",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'Dropping empty table y'))",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'Dropping empty table y')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2145,12 +2253,13 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table y (a int primary key, b int, c int)",
 			"call dolt_add('.')",
 			"insert into x values (1, 2, 3), (2, 3, 4)",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'))",
-
-			"set @Commit2 = (select DOLT_COMMIT('--allow-empty', '-m', 'Empty!'))",
-
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'Creating tables x and y')",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '--allow-empty', '-m', 'Empty!')",
 			"insert into y values (-1, -2, -3), (-2, -3, -4)",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'Inserting into table y'))",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'Inserting into table y')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2174,22 +2283,25 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "includes commits from all branches",
 		SetUpScript: []string{
-			"select dolt_checkout('-b', 'branch1')",
+			"CALL DOLT_checkout('-b', 'branch1')",
 			"create table x (a int primary key, b int, c int)",
 			"create table y (a int primary key, b int, c int)",
 			"call dolt_add('.')",
 			"insert into x values (1, 2, 3), (2, 3, 4)",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'))",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'Creating tables x and y')",
 
-			"select dolt_checkout('-b', 'branch2')",
+			"CALL DOLT_checkout('-b', 'branch2')",
 			"create table z (a int primary key, b int, c int)",
 			"call dolt_add('.')",
 			"insert into z values (100, 101, 102)",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'Creating tables z'))",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'Creating tables z')",
 
 			"insert into y values (-1, -2, -3), (-2, -3, -4)",
 			"insert into z values (101, 102, 103)",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'Inserting into tables y and z'))",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'Inserting into tables y and z')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2216,21 +2328,24 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "merge history handling",
 		SetUpScript: []string{
-			"select dolt_checkout('-b', 'branch1')",
+			"CALL DOLT_checkout('-b', 'branch1')",
 			"create table x (a int primary key, b int, c int)",
 			"create table y (a int primary key, b int, c int)",
 			"call dolt_add('.')",
 			"insert into x values (1, 2, 3), (2, 3, 4)",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'))",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'Creating tables x and y')",
 
-			"select dolt_checkout('-b', 'branch2')",
+			"CALL DOLT_checkout('-b', 'branch2')",
 			"create table z (a int primary key, b int, c int)",
 			"call dolt_add('.')",
 			"insert into z values (100, 101, 102)",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'Creating tables z'))",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'Creating tables z')",
 
-			"select DOLT_MERGE('branch1', '--no-commit')",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'Merging branch1 into branch2'))",
+			"CALL DOLT_MERGE('branch1', '--no-commit')",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'Merging branch1 into branch2')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2260,7 +2375,8 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2, 3), (4, 5, 6);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2284,19 +2400,24 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2, 3), (4, 5, 6);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"update t set c2=0 where pk=1",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'modifying row'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'modifying row');",
 
 			"update t set c2=-1 where pk=1",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'modifying row'));",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'modifying row');",
 
 			"update t set c2=-2 where pk=1",
-			"set @Commit4 = (select DOLT_COMMIT('-am', 'modifying row'));",
+			"set @Commit4 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit4, '-am', 'modifying row');",
 
 			"delete from t where pk=1",
-			"set @Commit5 = (select DOLT_COMMIT('-am', 'modifying row'));",
+			"set @Commit5 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit5, '-am', 'modifying row');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2340,10 +2461,12 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2, 3), (4, 5, 6);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"alter table t drop column c1;",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping column c'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping column c');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2370,14 +2493,17 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2), (3, 4);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"alter table t drop column c;",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping column c'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping column c');",
 
 			"alter table t add column c int;",
 			"insert into t values (100, 101);",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'inserting into t'));",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'inserting into t');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2410,14 +2536,17 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2, 3), (4, 5, 6);",
-			"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"alter table t drop column c1;",
-			"set @Commit2 = DOLT_COMMIT('-am', 'dropping column c1');",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping column c1');",
 
 			"alter table t rename column c2 to c1;",
 			"insert into t values (100, 101);",
-			"set @Commit3 = DOLT_COMMIT('-am', 'inserting into t');",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'inserting into t');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2453,14 +2582,17 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2), (3, 4);",
-			"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"alter table t drop column c;",
-			"set @Commit2 = DOLT_COMMIT('-am', 'dropping column c');",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping column c');",
 
 			"alter table t add column c varchar(20);",
 			"insert into t values (100, '101');",
-			"set @Commit3 = DOLT_COMMIT('-am', 're-adding column c');",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 're-adding column c');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2492,14 +2624,17 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c varchar(20));",
 			"call dolt_add('.')",
 			"insert into t values (1, 'two'), (3, 'four');",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"alter table t drop column c;",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping column c'));",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping column c');",
 
 			"alter table t add column c int;",
 			"insert into t values (100, 101);",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 're-adding column c'));",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 're-adding column c');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2537,17 +2672,21 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int);",
 			"call dolt_add('.')",
 			"insert into t values (1, 2), (3, 4);",
-			"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
 
 			"alter table t drop primary key;",
 			"insert into t values (5, 6);",
-			"set @Commit2 = DOLT_COMMIT('-am', 'dropping primary key');",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping primary key');",
 
 			"alter table t add primary key (c1);",
-			"set @Commit3 = DOLT_COMMIT('-am', 'adding primary key');",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'adding primary key');",
 
 			"insert into t values (7, 8);",
-			"set @Commit4 = DOLT_COMMIT('-am', 'adding more data');",
+			"set @Commit4 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit4, '-am', 'adding more data');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2560,6 +2699,242 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_commit_DIFF_t where from_commit=@Commit3 and to_commit=@Commit4;",
 				Expected: []sql.Row{{7, 8, nil, nil, "added"}},
+			},
+		},
+	},
+}
+
+type systabScript struct {
+	name    string
+	setup   []string
+	queries []systabQuery
+}
+
+type systabQuery struct {
+	query string
+	exp   []sql.Row
+	skip  bool
+}
+
+var systabSetup = []string{
+	"create table xy (x int primary key, y varchar(20));",
+	"insert into xy values (0, 'row 0'), (1, 'row 1'), (2, 'row 2'), (3, 'row 3'), (4, 'row 4');",
+	"call dolt_add('.');",
+	"call dolt_commit('-m', 'commit 0');",
+	"update xy set y = y+1 where x < 10",
+	"insert into xy values (20, 'row 20'), (21, 'row 21'), (22, 'row 22'), (23, 'row 23'), (24, 'row 24');",
+	"call dolt_add('.');",
+	"call dolt_commit('-m', 'commit 1');",
+	"update xy set y = y+1 where x > 10 and x < 30",
+	"insert into xy values (40, 'row 40'), (41, 'row 41'), (42, 'row 42'), (43, 'row 43'), (44, 'row 44');",
+	"call dolt_add('.');",
+	"call dolt_commit('-m', 'commit 2');",
+	"update xy set y = y+1 where x > 30 and x < 50",
+	"insert into xy values (60, 'row 60'), (61, 'row 61'), (62, 'row 62'), (63, 'row 63'), (64, 'row 64');",
+	"call dolt_add('.');",
+	"call dolt_commit('-m', 'commit 3');",
+	"update xy set y = y+1 where x > 50 and x < 70",
+	"insert into xy values (80, 'row 80'), (81, 'row 81'), (82, 'row 82'), (83, 'row 83'), (84, 'row 84');",
+	"call dolt_add('.');",
+	"call dolt_commit('-m', 'commit 4');",
+}
+
+var SystemTableIndexTests = []systabScript{
+	{
+		name: "systab benchmarks",
+		setup: append(systabSetup,
+			"set @commit = (select commit_hash from dolt_log where message = 'commit 2');",
+		),
+		queries: []systabQuery{
+			{
+				query: "select from_x, to_x from dolt_diff_xy where to_commit = @commit;",
+				exp:   []sql.Row{{20, 20}, {21, 21}, {22, 22}, {23, 23}, {24, 24}, {nil, 40}, {nil, 41}, {nil, 42}, {nil, 43}, {nil, 44}},
+			},
+			{
+				query: "select from_x, to_x from dolt_diff_xy where from_commit = @commit;",
+				exp:   []sql.Row{{40, 40}, {41, 41}, {42, 42}, {43, 43}, {44, 44}, {nil, 60}, {nil, 61}, {nil, 62}, {nil, 63}, {nil, 64}},
+			},
+			{
+				query: "select count(*) from dolt_diff where commit_hash = @commit;",
+				exp:   []sql.Row{{1}},
+			},
+			{
+				query: "select count(*) from dolt_history_xy where commit_hash = @commit;",
+				exp:   []sql.Row{{15}},
+			},
+			{
+				query: "select count(*) from dolt_log where commit_hash = @commit;",
+				exp:   []sql.Row{{1}},
+			},
+			{
+				query: "select count(*) from dolt_commits where commit_hash = @commit;",
+				exp:   []sql.Row{{1}},
+			},
+			{
+				query: "select count(*) from dolt_commit_ancestors where commit_hash = @commit;",
+				exp:   []sql.Row{{1}},
+			},
+			{
+				query: "select count(*) from dolt_diff_xy join dolt_log on commit_hash = to_commit",
+				exp:   []sql.Row{{45}},
+			},
+			{
+				query: "select count(*) from dolt_diff_xy join dolt_log on commit_hash = from_commit",
+				exp:   []sql.Row{{45}},
+			},
+			{
+				query: "select count(*) from dolt_blame_xy",
+				exp:   []sql.Row{{25}},
+			},
+			{
+				query: `SELECT count(*)
+           FROM dolt_commits as cm
+           JOIN dolt_commit_ancestors as an
+           ON cm.commit_hash = an.parent_hash
+           ORDER BY cm.date, cm.message asc`,
+				exp: []sql.Row{{5}},
+			},
+		},
+	},
+	{
+		name: "commit indexing edge cases",
+		setup: append(systabSetup,
+			"call dolt_checkout('-b', 'feat');",
+			"call dolt_commit('--allow-empty', '-m', 'feat commit 1');",
+			"call dolt_commit('--allow-empty', '-m', 'feat commit 2');",
+			"call dolt_checkout('main');",
+			"update xy set y = y+1 where x > 70 and x < 90;",
+			"set @commit = (select commit_hash from dolt_log where message = 'commit 1');",
+			"set @root_commit = (select commit_hash from dolt_log where message = 'Initialize data repository');",
+			"set @feat_head = hashof('feat');",
+			"set @feat_head1 = hashof('feat~');",
+		),
+		queries: []systabQuery{
+			{
+				query: "select from_x, to_x from dolt_diff_xy where to_commit = 'WORKING';",
+				exp:   []sql.Row{{80, 80}, {81, 81}, {82, 82}, {83, 83}, {84, 84}},
+			},
+			{
+				query: "select * from dolt_diff_xy where from_commit = @feat_head1;",
+				exp:   []sql.Row{},
+			},
+			{
+				query: "select * from dolt_diff_xy where from_commit = 'WORKING';",
+				exp:   []sql.Row{},
+			},
+			{
+				query: "select count(*) from dolt_diff where commit_hash = 'WORKING';",
+				exp:   []sql.Row{{1}},
+			},
+			{
+				query: "select count(*) from dolt_history_xy where commit_hash = 'WORKING';",
+				exp:   []sql.Row{{0}},
+			},
+			{
+				query: "select count(*) from dolt_commit_ancestors where commit_hash = 'WORKING';",
+				exp:   []sql.Row{{0}},
+			},
+			{
+				query: "select sum(to_x) from dolt_diff_xy where to_commit in (@commit, 'WORKING');",
+				exp:   []sql.Row{{530.0}},
+			},
+			{
+				// TODO from_commit optimization
+				query: "select sum(to_x) from dolt_diff_xy where from_commit in (@commit, 'WORKING');",
+				exp:   []sql.Row{{320.0}},
+			},
+			{
+				query: "select count(*) from dolt_diff where commit_hash in (@commit, 'WORKING');",
+				exp:   []sql.Row{{2}},
+			},
+			{
+				query: "select sum(x) from dolt_history_xy where commit_hash in (@commit, 'WORKING');",
+				exp:   []sql.Row{{120.0}},
+			},
+			{
+				// init commit has nil ancestor
+				query: "select count(*) from dolt_commit_ancestors where commit_hash in (@commit, @root_commit);",
+				exp:   []sql.Row{{2}},
+			},
+			{
+				query: "select count(*) from dolt_log where commit_hash in (@commit, @root_commit);",
+				exp:   []sql.Row{{2}},
+			},
+			{
+				// log table cannot access commits is feature branch
+				query: "select count(*) from dolt_log where commit_hash = @feat_head;",
+				exp:   []sql.Row{{0}},
+			},
+			{
+				// commit table can access all commits
+				query: "select count(*) from dolt_commits where commit_hash = @feat_head;",
+				exp:   []sql.Row{{1}},
+			},
+			{
+				query: "select count(*) from dolt_commits where commit_hash in (@commit, @root_commit);",
+				exp:   []sql.Row{{2}},
+			},
+			// unknown
+			{
+				query: "select from_x, to_x from dolt_diff_xy where to_commit = 'unknown';",
+				exp:   []sql.Row{},
+			},
+			{
+				query: "select * from dolt_diff_xy where from_commit = 'unknown';",
+				exp:   []sql.Row{},
+			},
+			{
+				query: "select * from dolt_diff where commit_hash = 'unknown';",
+				exp:   []sql.Row{},
+			},
+			{
+				query: "select * from dolt_history_xy where commit_hash = 'unknown';",
+				exp:   []sql.Row{},
+			},
+			{
+				query: "select * from dolt_commit_ancestors where commit_hash = 'unknown';",
+				exp:   []sql.Row{},
+			},
+		},
+	},
+	{
+		name: "empty log table",
+		setup: []string{
+			"create table xy (x int primary key, y int)",
+		},
+		queries: []systabQuery{
+			{
+				query: "select count(*) from dolt_log as dc join dolt_commit_ancestors as dca on dc.commit_hash = dca.commit_hash;",
+				exp:   []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		name: "from_commit at multiple heights, choose highest",
+		setup: []string{
+			"create table x (x int primary key)",
+			"call dolt_add('.');",
+			"call dolt_commit_hash_out(@m1h1, '-am', 'main 1');",
+			"insert into x values (1),(2);",
+			"call dolt_commit_hash_out(@m2h2, '-am', 'main 2');",
+			"call dolt_checkout('-b', 'other');",
+			"call dolt_reset('--hard', @main1);",
+			"insert into x values (3),(4);",
+			"call dolt_commit_hash_out(@o1h2, '-am', 'other 1');",
+			"insert into x values (5),(6);",
+			"call dolt_commit_hash_out(@o2h3, '-am', 'other 2');",
+			"call dolt_merge('main');",
+			"set @o3h4 = hashof('head~');",
+			"call dolt_checkout('main');",
+			"insert into x values (7),(8);",
+			"call dolt_commit_hash_out(@m32h3, '-am', 'main 3');",
+			"call dolt_merge('other');",
+			"set @m4h5 = hashof('head~');",
+		},
+		queries: []systabQuery{
+			{
+				query: "select count(*) from dolt_diff_x where from_commit = @m2h2",
+				exp:   []sql.Row{{4}},
 			},
 		},
 	},

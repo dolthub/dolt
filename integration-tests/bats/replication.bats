@@ -50,7 +50,7 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
     dolt sql -q "create table t1 (a int primary key)"
     dolt sql -q "call dolt_add('.')"
-    dolt sql -q "select dolt_commit('-am', 'cm')"
+    dolt sql -q "call dolt_commit('-am', 'cm')"
 
     cd ..
     dolt clone file://./bac1 repo2
@@ -128,6 +128,32 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "main" ]] || false
     [[ ! "$output" =~ "feature" ]] || false
+}
+
+@test "replication: table functions work" {
+    cd repo1
+    dolt sql <<SQL
+create table t1 (a int primary key);
+call dolt_commit("-Am", "new table");
+insert into t1 values (1);
+call dolt_commit("-Am", "first row");
+insert into t1 values (2);
+call dolt_commit("-Am", "second row");
+SQL
+
+    dolt push remote1 main
+
+    cd ..
+    dolt clone file://./rem1 repo2
+
+    cd repo2
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote origin
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+
+    dolt sql -q "select * from t1"
+    dolt sql -q "select count(*) from dolt_diff('HEAD~', 'HEAD', 't1')"
+    dolt sql -q "select count(*) from dolt_diff_summary('HEAD', 'HEAD~', 't1')"
+    dolt sql -q "select count(*) from dolt_log()"
 }
 
 @test "replication: tag does not trigger replication" {
@@ -473,7 +499,7 @@ SQL
     dolt checkout -b new_feature
     dolt sql -q "create table t1 (a int primary key)"
     dolt sql -q "call dolt_add('.')"
-    dolt sql -q "select dolt_commit('-am', 'cm')"
+    dolt sql -q "call dolt_commit('-am', 'cm')"
 
     cd ..
     dolt clone file://./rem1 repo2
@@ -501,10 +527,9 @@ SQL
 
     dolt add .
 
-    run dolt sql -q "select dolt_commit('-am', 'cm')"
+    run dolt sql -q "call dolt_commit('-am', 'cm')"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
-    [[ "$output" =~ "dolt_commit('-am', 'cm')" ]] || false
 }
 
 @test "replication: bad source doesn't error during non-transactional commands" {
@@ -652,7 +677,7 @@ SQL
     dolt config --local --add sqlserver.global.dolt_async_replication 1
     dolt sql -q "create table t1 (a int primary key)"
     dolt sql -q "call dolt_add('.')"
-    dolt sql -q "select dolt_commit('-am', 'cm')"
+    dolt sql -q "call dolt_commit('-am', 'cm')"
     sleep 5
 
     cd ..

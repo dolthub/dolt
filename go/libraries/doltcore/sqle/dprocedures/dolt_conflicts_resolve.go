@@ -316,8 +316,7 @@ func validateConstraintViolations(ctx *sql.Context, before, after *doltdb.RootVa
 		return err
 	}
 
-	// todo: this is an expensive way to compute this
-	_, violators, err := merge.AddForeignKeyViolations(ctx, after, before, set.NewStrSet(tables), hash.Of(nil))
+	violators, err := merge.GetForeignKeyViolatedTables(ctx, after, before, set.NewStrSet(tables))
 	if err != nil {
 		return err
 	}

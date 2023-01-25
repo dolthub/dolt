@@ -118,7 +118,7 @@ SQL
     [[ "$output" =~ "test" ]] || false
 
    dolt sql -b <<SQL
-SELECT dolt_reset('--hard');
+call dolt_reset('--hard');
 SQL
 
     run dolt status
@@ -127,7 +127,7 @@ SQL
 
     dolt sql -b <<SQL
 INSERT INTO test VALUES (1,1);
-SELECT dolt_reset('--hard');
+call dolt_reset('--hard');
 SQL
 
     run dolt status

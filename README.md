@@ -136,6 +136,14 @@ You can install `dolt` using [Chocolatey](https://chocolatey.org/):
 choco install dolt
 ```
 
+#### Docker
+
+There are following official Docker images for Dolt:
+
+* [`dolthub/dolt`](https://hub.docker.com/r/dolthub/dolt) for running Dolt
+as CLI tool.
+* [`dolthub/dolt-sql-server`](https://hub.docker.com/r/dolthub/dolt-sql-server) for running Dolt in server mode.
+
 ## From Source
 
 Make sure you have Go installed, and that `go` is in your path.
@@ -177,7 +185,9 @@ Dolt needs a place to store your databases. I'm going to put my databases in `~/
 % cd dolt
 ```
 
-Any databases you create will be stored in this directory. So, for this example, a directory named `getting_started` will be created here later in this walkthrough, after you run `create database getting_started;` in a SQL shell (see section [Create a schema](#create-a-schema)). Navigating to `~/dolt/getting_started` will then allow you to access this database using the Dolt command line.
+Any databases you create will be stored in this directory. So, for this example, a directory named `getting_started` will be created here once you run `create database getting_started`. Navigating to `~/dolt/getting_started` will allow you to access this database using the Dolt command line.
+
+NOTE: For this example, the `getting_started` directory will be created after you run `create database getting_started;` in a SQL shell in the [Create a schema section](#create-a-schema). Don't do anything except make the directory and navigate to it just yet.
 
 ## Start a MySQL-compatible database server
 

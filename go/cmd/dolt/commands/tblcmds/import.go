@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
@@ -737,7 +738,7 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 
 		// Bit types need additional verification due to the differing values they can take on. "4", "0x04", b'100' should
 		// be interpreted in the correct manner.
-		if _, ok := col.Type.(sql.BitType); ok {
+		if _, ok := col.Type.(gmstypes.BitType); ok {
 			colAsString, ok := row[i].(string)
 			if !ok {
 				return nil, fmt.Errorf("error: column value should be of type string")

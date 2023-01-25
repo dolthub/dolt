@@ -18,6 +18,7 @@ import (
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -51,8 +52,8 @@ func (dt *TableOfTablesInConflict) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *TableOfTablesInConflict) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "table", Type: sql.Text, Source: doltdb.TableOfTablesInConflictName, PrimaryKey: true},
-		{Name: "num_conflicts", Type: sql.Uint64, Source: doltdb.TableOfTablesInConflictName, PrimaryKey: false},
+		{Name: "table", Type: types.Text, Source: doltdb.TableOfTablesInConflictName, PrimaryKey: true},
+		{Name: "num_conflicts", Type: types.Uint64, Source: doltdb.TableOfTablesInConflictName, PrimaryKey: false},
 	}
 }
 

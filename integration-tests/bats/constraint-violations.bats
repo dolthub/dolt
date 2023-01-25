@@ -79,14 +79,14 @@ SQL
 
     run dolt sql <<"SQL"
 SET dolt_allow_commit_conflicts = 0;
-SELECT DOLT_MERGE('other');
+call dolt_merge('other');
 SQL
     log_status_eq "1"
     [[ "$output" =~ "constraint violations" ]] || false
     run dolt sql <<"SQL"
 SET dolt_force_transaction_commit = 1;
-SELECT DOLT_MERGE('other');
-SELECT DOLT_COMMIT("-am", "msg", "--force");
+call dolt_merge('other');
+call dolt_commit("-am", "msg", "--force");
 SQL
     log_status_eq "0"
     [[ ! "$output" =~ "constraint violations" ]] || false

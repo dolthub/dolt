@@ -338,10 +338,6 @@ func SetRemoteUpstreamForBranchRef(dEnv *env.DoltEnv, remote, remoteBranch strin
 	if err != nil {
 		return errhand.BuildDError(err.Error()).Build()
 	}
-	err = dEnv.RepoState.Save(dEnv.FS)
-	if err != nil {
-		return errhand.BuildDError(actions.ErrFailedToSaveRepoState.Error()).AddCause(err).Build()
-	}
 	cli.Printf("branch '%s' set up to track '%s/%s'.\n", branchRef.GetPath(), remote, remoteBranch)
 
 	return nil

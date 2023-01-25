@@ -14,13 +14,13 @@ var queries = [12]string{
 	"select * from test",
 	"insert into test (pk, `value`) values (0,0)",
 	"select * from test",
-	"select dolt_add('-A')",
-	"select dolt_commit('-m', 'added table test')",
-	"select dolt_checkout('-b', 'mybranch')",
+	"call dolt_add('-A')",
+	"call dolt_commit('-m', 'added table test')",
+	"call dolt_checkout('-b', 'mybranch')",
 	"insert into test values (1,1)",
-	"select dolt_commit('-a', '-m', 'updated test')",
-	"select dolt_checkout('main')",
-	"select dolt_merge('mybranch')"}
+	"call dolt_commit('-a', '-m', 'updated test')",
+	"call dolt_checkout('main')",
+	"call dolt_merge('mybranch')"}
 
 type ResFunc func(rows *sql.Rows) error
 

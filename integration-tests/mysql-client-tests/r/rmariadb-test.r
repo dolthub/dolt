@@ -56,13 +56,13 @@ if (!isTRUE(all.equal(want, got))) {
     quit(1)
 }
 
-dolt_queries = list("SELECT DOLT_ADD('-A')",
-                    "select dolt_commit('-m', 'my commit')",
-                    "select dolt_checkout('-b', 'mybranch')",
+dolt_queries = list("call DOLT_ADD('-A')",
+                    "call dolt_commit('-m', 'my commit')",
+                    "call dolt_checkout('-b', 'mybranch')",
                     "insert into test (pk, `value`) values (2,2)",
-                     "select dolt_commit('-a', '-m', 'my commit2')",
-                     "select dolt_checkout('main')",
-                     "select dolt_merge('mybranch')")
+                     "call dolt_commit('-a', '-m', 'my commit2')",
+                     "call dolt_checkout('main')",
+                     "call dolt_merge('mybranch')")
 
 for(i in 1:length(dolt_queries)) {
     q = dolt_queries[[i]]

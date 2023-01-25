@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -1037,7 +1038,7 @@ func (d *DoltSession) setHeadRefSessionVar(ctx *sql.Context, db, value string) e
 }
 
 func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string, value interface{}) error {
-	convertedVal, err := sql.Int64.Convert(value)
+	convertedVal, err := sqltypes.Int64.Convert(value)
 	if err != nil {
 		return err
 	}
@@ -1118,7 +1119,6 @@ func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.Err != nil {
 		sessionState.Err = dbState.Err
-
 	} else if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
 		tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx)
@@ -1186,6 +1186,11 @@ func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, 
 	if err != nil {
 		return nil, err
 	}
+
+	if dbState.WorkingSet == nil {
+		return nil, nil
+	}
+
 	return dbState.WorkingSet.Ref().ToHeadRef()
 }
 

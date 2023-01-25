@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -46,11 +47,11 @@ type LogTableFunction struct {
 }
 
 var logTableSchema = sql.Schema{
-	&sql.Column{Name: "commit_hash", Type: sql.Text},
-	&sql.Column{Name: "committer", Type: sql.Text},
-	&sql.Column{Name: "email", Type: sql.Text},
-	&sql.Column{Name: "date", Type: sql.Datetime},
-	&sql.Column{Name: "message", Type: sql.Text},
+	&sql.Column{Name: "commit_hash", Type: types.Text},
+	&sql.Column{Name: "committer", Type: types.Text},
+	&sql.Column{Name: "email", Type: types.Text},
+	&sql.Column{Name: "date", Type: types.Datetime},
+	&sql.Column{Name: "message", Type: types.Text},
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -135,10 +136,10 @@ func (ltf *LogTableFunction) Schema() sql.Schema {
 	logSchema := logTableSchema
 
 	if ltf.showParents {
-		logSchema = append(logSchema, &sql.Column{Name: "parents", Type: sql.Text})
+		logSchema = append(logSchema, &sql.Column{Name: "parents", Type: types.Text})
 	}
 	if shouldDecorateWithRefs(ltf.decoration) {
-		logSchema = append(logSchema, &sql.Column{Name: "refs", Type: sql.Text})
+		logSchema = append(logSchema, &sql.Column{Name: "refs", Type: types.Text})
 	}
 
 	return logSchema
@@ -195,11 +196,11 @@ func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, name string) ([
 			return nil, err
 		}
 
-		if !sql.IsText(expr.Type()) {
+		if !types.IsText(expr.Type()) {
 			return args, sql.ErrInvalidArgumentDetails.New(name, expr.String())
 		}
 
-		text, err := sql.Text.Convert(childVal)
+		text, err := types.Text.Convert(childVal)
 		if err != nil {
 			return nil, err
 		}
@@ -301,7 +302,7 @@ func (ltf *LogTableFunction) validateRevisionExpressions() error {
 
 	if ltf.revisionExpr != nil {
 		revisionStr = mustExpressionToString(ltf.ctx, ltf.revisionExpr)
-		if !sql.IsText(ltf.revisionExpr.Type()) {
+		if !types.IsText(ltf.revisionExpr.Type()) {
 			return sql.ErrInvalidArgumentDetails.New(ltf.Name(), ltf.revisionExpr.String())
 		}
 		if ltf.secondRevisionExpr == nil && strings.HasPrefix(revisionStr, "^") {
@@ -314,7 +315,7 @@ func (ltf *LogTableFunction) validateRevisionExpressions() error {
 
 	if ltf.secondRevisionExpr != nil {
 		secondRevisionStr = mustExpressionToString(ltf.ctx, ltf.secondRevisionExpr)
-		if !sql.IsText(ltf.secondRevisionExpr.Type()) {
+		if !types.IsText(ltf.secondRevisionExpr.Type()) {
 			return sql.ErrInvalidArgumentDetails.New(ltf.Name(), ltf.secondRevisionExpr.String())
 		}
 		if strings.Contains(secondRevisionStr, "..") {
@@ -362,7 +363,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		return nil, err
 	}
 
-	sqledb, ok := ltf.database.(Database)
+	sqledb, ok := ltf.database.(SqlDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unexpected database type: %T", ltf.database)
 	}
@@ -376,13 +377,13 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 			return nil, err
 		}
 
-		commit, err = sqledb.ddb.Resolve(ctx, cs, nil)
+		commit, err = sqledb.DbData().Ddb.Resolve(ctx, cs, nil)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		// If revisionExpr not defined, use session head
-		commit, err = sess.GetHeadCommit(ctx, sqledb.name)
+		commit, err = sess.GetHeadCommit(ctx, sqledb.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -392,7 +393,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		return commit.NumParents() >= ltf.minParents, nil
 	}
 
-	cHashToRefs, err := getCommitHashToRefs(ctx, sqledb.ddb, ltf.decoration)
+	cHashToRefs, err := getCommitHashToRefs(ctx, sqledb.DbData().Ddb, ltf.decoration)
 	if err != nil {
 		return nil, err
 	}
@@ -404,7 +405,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 			return nil, err
 		}
 
-		secondCommit, err := sqledb.ddb.Resolve(ctx, secondCs, nil)
+		secondCommit, err := sqledb.DbData().Ddb.Resolve(ctx, secondCs, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -421,19 +422,19 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 			}
 
 			// Use merge base as excluding commit
-			mergeCommit, err := sqledb.ddb.Resolve(ctx, mergeCs, nil)
+			mergeCommit, err := sqledb.DbData().Ddb.Resolve(ctx, mergeCs, nil)
 			if err != nil {
 				return nil, err
 			}
 
-			return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.ddb, []*doltdb.Commit{commit, secondCommit}, mergeCommit, matchFunc, cHashToRefs)
+			return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, []*doltdb.Commit{commit, secondCommit}, mergeCommit, matchFunc, cHashToRefs)
 		}
 
-		return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.ddb, []*doltdb.Commit{commit}, secondCommit, matchFunc, cHashToRefs)
+		return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, []*doltdb.Commit{commit}, secondCommit, matchFunc, cHashToRefs)
 
 	}
 
-	return ltf.NewLogTableFunctionRowIter(ctx, sqledb.ddb, commit, matchFunc, cHashToRefs)
+	return ltf.NewLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commit, matchFunc, cHashToRefs)
 }
 
 func getCommitHashToRefs(ctx *sql.Context, ddb *doltdb.DoltDB, decoration string) (map[hash.Hash][]string, error) {

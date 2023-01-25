@@ -116,7 +116,7 @@ func LoadData(branchControlFilePath string, doltConfigDirPath string) (*Controll
 	}
 	// The Deserialize functions acquire write locks, so we don't acquire them here
 	if err = controller.Access.Deserialize(access); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to deserialize config at '%s': %w", branchControlFilePath, err)
 	}
 	if err = controller.Namespace.Deserialize(namespace); err != nil {
 		return nil, err
@@ -158,7 +158,10 @@ func SaveData(ctx context.Context) error {
 	serial.BranchControlAddAccessTbl(b, accessOffset)
 	serial.BranchControlAddNamespaceTbl(b, namespaceOffset)
 	root := serial.BranchControlEnd(b)
-	data := serial.FinishMessage(b, root, []byte(serial.BranchControlFileID))
+	// serial.FinishMessage() limits files to 2^24 bytes, so this works around it while maintaining read compatibility
+	b.Prep(1, flatbuffers.SizeInt32+4+serial.MessagePrefixSz)
+	b.FinishWithFileIdentifier(root, []byte(serial.BranchControlFileID))
+	data := b.Bytes[b.Head()-serial.MessagePrefixSz:]
 	return os.WriteFile(controller.branchControlFilePath, data, 0777)
 }
 
@@ -314,10 +317,10 @@ func HasDatabasePrivileges(ctx Context, database string) bool {
 	if counter == 0 {
 		return false
 	}
-	hasSuper := privSet.Has(sql.PrivilegeType_Super, sql.PrivilegeType_Grant)
+	hasSuper := privSet.Has(sql.PrivilegeType_Super, sql.PrivilegeType_GrantOption)
 	isGlobalAdmin := privSet.Has(sql.PrivilegeType_Create, sql.PrivilegeType_Alter, sql.PrivilegeType_Drop,
-		sql.PrivilegeType_Insert, sql.PrivilegeType_Update, sql.PrivilegeType_Delete, sql.PrivilegeType_Execute, sql.PrivilegeType_Grant)
+		sql.PrivilegeType_Insert, sql.PrivilegeType_Update, sql.PrivilegeType_Delete, sql.PrivilegeType_Execute, sql.PrivilegeType_GrantOption)
 	isDatabaseAdmin := privSet.Database(database).Has(sql.PrivilegeType_Create, sql.PrivilegeType_Alter, sql.PrivilegeType_Drop,
-		sql.PrivilegeType_Insert, sql.PrivilegeType_Update, sql.PrivilegeType_Delete, sql.PrivilegeType_Execute, sql.PrivilegeType_Grant)
+		sql.PrivilegeType_Insert, sql.PrivilegeType_Update, sql.PrivilegeType_Delete, sql.PrivilegeType_Execute, sql.PrivilegeType_GrantOption)
 	return hasSuper || isGlobalAdmin || isDatabaseAdmin
 }

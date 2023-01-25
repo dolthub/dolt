@@ -20,6 +20,7 @@ import (
 	"os"
 	"testing"
 
+	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -28,6 +29,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,7 +48,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 83
+const SkipPreparedsCount = 84
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -204,7 +206,7 @@ func TestSingleScriptPrepared(t *testing.T) {
 	tt := queries.QueryTest{
 		Query: "select * from test as of 'HEAD~2' where pk=?",
 		Bindings: map[string]sql.Expression{
-			"v1": expression.NewLiteral(0, sql.Int8),
+			"v1": expression.NewLiteral(0, gmstypes.Int8),
 		},
 		Expected: []sql.Row{{0, 0}},
 	}
@@ -265,6 +267,10 @@ func TestIntegrationQueryPlans(t *testing.T) {
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
 	harness := newDoltHarness(t).WithParallelism(2) // want Exchange nodes
 	harness.Setup(setup.SimpleSetup...)
 	e, err := harness.NewEngine(t)
@@ -433,6 +439,22 @@ func TestDoltUserPrivileges(t *testing.T) {
 	}
 }
 
+func TestJoinOps(t *testing.T) {
+	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
+		t.Skip("DOLT_LD keyless indexes are not sorted")
+	}
+
+	enginetest.TestJoinOps(t, newDoltHarness(t))
+}
+
+func TestJoinOpsPrepared(t *testing.T) {
+	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
+		t.Skip("DOLT_LD keyless indexes are not sorted")
+	}
+
+	enginetest.TestJoinOpsPrepared(t, newDoltHarness(t))
+}
+
 func TestJoinQueries(t *testing.T) {
 	enginetest.TestJoinQueries(t, newDoltHarness(t))
 }
@@ -543,7 +565,7 @@ func TestDropDatabase(t *testing.T) {
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "DROP DATABASE TeSt2DB",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+				Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query:       "USE test2db",
@@ -555,7 +577,7 @@ func TestDropDatabase(t *testing.T) {
 			},
 			{
 				Query:    "DROP DATABASE IF EXISTS test1DB",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+				Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query:       "USE Test1db",
@@ -700,6 +722,12 @@ func TestStoredProcedures(t *testing.T) {
 	enginetest.TestStoredProcedures(t, newDoltHarness(t))
 }
 
+func TestCallAsOf(t *testing.T) {
+	for _, script := range DoltCallAsOf {
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+}
+
 func TestLargeJsonObjects(t *testing.T) {
 	SkipByDefaultInCI(t)
 	harness := newDoltHarness(t)
@@ -785,6 +813,12 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 			{
 				Query:    "use mydb/" + commithash,
 				Expected: []sql.Row{},
+			},
+			{
+				Query: "select active_branch();",
+				Expected: []sql.Row{
+					{nil},
+				},
 			},
 			{
 				Query:    "select database();",
@@ -984,7 +1018,7 @@ func TestDoltReset(t *testing.T) {
 }
 
 func TestDoltGC(t *testing.T) {
-	// TODO: This does not work because `db.chunkStore().(chunks.TableFileStore)`
+	// TODO: This does not work because `db.chunkStore().(nbs.TableFileStore)`
 	// returns not ok in PruneTableFiles
 	t.Skip()
 	for _, script := range DoltGC {
@@ -1042,7 +1076,7 @@ func TestSingleTransactionScript(t *testing.T) {
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
@@ -1054,7 +1088,7 @@ func TestSingleTransactionScript(t *testing.T) {
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
@@ -1078,7 +1112,7 @@ func TestSingleTransactionScript(t *testing.T) {
 			},
 			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
 				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{gmstypes.OkResult{
 					RowsAffected: 1,
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -1088,7 +1122,7 @@ func TestSingleTransactionScript(t *testing.T) {
 			},
 			{
 				Query:    "/* client b */ delete from dolt_conflicts_test",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ commit",
@@ -1253,6 +1287,10 @@ func TestCommitDiffSystemTablePrepared(t *testing.T) {
 }
 
 func TestDiffSystemTable(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {
@@ -1270,6 +1308,10 @@ func TestDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffSystemTablePrepared(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {
@@ -1282,6 +1324,76 @@ func TestDiffSystemTablePrepared(t *testing.T) {
 	if types.IsFormat_DOLT(types.Format_Default) {
 		for _, test := range Dolt1DiffSystemTableScripts {
 			enginetest.TestScriptPrepared(t, newDoltHarness(t), test)
+		}
+	}
+}
+
+func mustNewEngine(t *testing.T, h enginetest.Harness) *gms.Engine {
+	e, err := h.NewEngine(t)
+	if err != nil {
+		require.NoError(t, err)
+	}
+	return e
+}
+
+func TestSystemTableIndexes(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
+	for _, stt := range SystemTableIndexTests {
+		harness := newDoltHarness(t).WithParallelism(2)
+		harness.SkipSetupCommit()
+		e := mustNewEngine(t, harness)
+		defer e.Close()
+
+		ctx := enginetest.NewContext(harness)
+		for _, q := range stt.setup {
+			enginetest.RunQuery(t, e, harness, q)
+		}
+
+		for _, tt := range stt.queries {
+			t.Run(fmt.Sprintf("%s: %s", stt.name, tt.query), func(t *testing.T) {
+				if tt.skip {
+					t.Skip()
+				}
+
+				ctx = ctx.WithQuery(tt.query)
+				if tt.exp != nil {
+					enginetest.TestQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil)
+				}
+			})
+		}
+	}
+}
+
+func TestSystemTableIndexesPrepared(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
+	for _, stt := range SystemTableIndexTests {
+		harness := newDoltHarness(t).WithParallelism(2)
+		harness.SkipSetupCommit()
+		e := mustNewEngine(t, harness)
+		defer e.Close()
+
+		ctx := enginetest.NewContext(harness)
+		for _, q := range stt.setup {
+			enginetest.RunQuery(t, e, harness, q)
+		}
+
+		for _, tt := range stt.queries {
+			t.Run(fmt.Sprintf("%s: %s", stt.name, tt.query), func(t *testing.T) {
+				if tt.skip {
+					t.Skip()
+				}
+
+				ctx = ctx.WithQuery(tt.query)
+				if tt.exp != nil {
+					enginetest.TestPreparedQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil)
+				}
+			})
 		}
 	}
 }

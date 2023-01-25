@@ -139,8 +139,8 @@ func (te *nomsTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) e
 	return te.flush(ctx)
 }
 
-func (te *nomsTableWriter) IndexedAccess(i sql.Index) sql.IndexedTable {
-	idx := index.DoltIndexFromSqlIndex(i)
+func (te *nomsTableWriter) IndexedAccess(i sql.IndexLookup) sql.IndexedTable {
+	idx := index.DoltIndexFromSqlIndex(i.Index)
 	return &nomsFkIndexer{
 		writer:  te,
 		idxName: idx.ID(),

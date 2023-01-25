@@ -219,7 +219,7 @@ teardown() {
     [[ "$output" =~ "There is no tracking information for the current branch." ]] || false
 }
 
-@test "remotes: select DOLT_CHECKOUT('new_branch') without '-b' sets upstream if there is a remote branch with matching name" {
+@test "remotes: call dolt_checkout('new_branch') without '-b' sets upstream if there is a remote branch with matching name" {
     mkdir remote
     mkdir repo1
 
@@ -253,9 +253,9 @@ teardown() {
     [[ ! "$output" =~ "test-branch" ]] || false
 
     run dolt sql << SQL
-SELECT DOLT_CHECKOUT('test-branch');
+call dolt_checkout('test-branch');
 SELECT * FROM test;
-SELECT DOLT_PULL();
+call dolt_pull();
 SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "pk" ]] || false
@@ -293,8 +293,8 @@ SQL
 
     # Checkout with DOLT_CHECKOUT and confirm the table has the row added in the remote
     run dolt sql << SQL
-SELECT DOLT_CHECKOUT('-b','other');
-SELECT DOLT_PULL();
+call dolt_checkout('-b','other');
+call dolt_pull();
 SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "There is no tracking information for the current branch." ]] || false
@@ -1294,6 +1294,11 @@ SQL
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
+
+    # test pull with workspace up to date
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
 
     # turn back on the configs and make a change in the remote
     dolt config --global --add user.name mysql-test-runner

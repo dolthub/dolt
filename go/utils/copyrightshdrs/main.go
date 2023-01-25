@@ -23,7 +23,7 @@ import (
 	"strings"
 )
 
-var ExpectedHeader = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2019-2020|2019-2021|2019-2022|2020-2021|2020-2022) Dolthub, Inc.
+var ExpectedHeader = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2023|2019-2020|2019-2021|2019-2022|2020-2021|2020-2022) Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 \(the "License"\);
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ var ExpectedHeader = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2019-
 
 `)
 
-var ExpectedHeaderForFileFromNoms = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2019-2020|2019-2021|2019-2022|2020-2021|2020-2022) Dolthub, Inc.
+var ExpectedHeaderForFileFromNoms = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2023|2019-2020|2019-2021|2019-2022|2020-2021|2020-2022) Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 \(the "License"\);
 // you may not use this file except in compliance with the License.
@@ -113,8 +113,6 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/cmd/noms/noms_show.go", NomsPath: "cmd/noms/noms_show.go", HadCopyrightNotice: true},
 	{Path: "store/cmd/noms/noms_show_test.go", NomsPath: "cmd/noms/noms_show_test.go", HadCopyrightNotice: true},
 	{Path: "store/cmd/noms/noms_stats.go", NomsPath: "cmd/noms/noms_stats.go", HadCopyrightNotice: true},
-	{Path: "store/cmd/noms/noms_sync.go", NomsPath: "cmd/noms/noms_sync.go", HadCopyrightNotice: true},
-	{Path: "store/cmd/noms/noms_sync_test.go", NomsPath: "cmd/noms/noms_sync_test.go", HadCopyrightNotice: true},
 	{Path: "store/cmd/noms/noms_version.go", NomsPath: "cmd/noms/noms_version.go", HadCopyrightNotice: true},
 	{Path: "store/cmd/noms/noms_version_test.go", NomsPath: "cmd/noms/noms_version_test.go", HadCopyrightNotice: true},
 	{Path: "store/config/config.go", NomsPath: "go/config/config.go", HadCopyrightNotice: true},
@@ -132,8 +130,6 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/datas/database_test.go", NomsPath: "go/datas/database_test.go", HadCopyrightNotice: true},
 	{Path: "store/datas/dataset.go", NomsPath: "go/datas/dataset.go", HadCopyrightNotice: true},
 	{Path: "store/datas/dataset_test.go", NomsPath: "go/datas/dataset_test.go", HadCopyrightNotice: true},
-	{Path: "store/datas/pull/pull.go", NomsPath: "go/datas/pull.go", HadCopyrightNotice: true},
-	{Path: "store/datas/pull/pull_test.go", NomsPath: "go/datas/pull_test.go", HadCopyrightNotice: true},
 	{Path: "store/diff/apply_patch.go", NomsPath: "go/diff/apply_patch.go", HadCopyrightNotice: true},
 	{Path: "store/diff/apply_patch_test.go", NomsPath: "go/diff/apply_patch_test.go", HadCopyrightNotice: true},
 	{Path: "store/diff/diff.go", NomsPath: "go/diff/diff.go", HadCopyrightNotice: true},
@@ -385,7 +381,7 @@ func CheckGo() bool {
 		}
 		return nil
 	})
-	for path, _ := range nomsLookup {
+	for path := range nomsLookup {
 		fmt.Printf("ERROR: Missing noms file from CopiedNomsFiles: %v\n", path)
 		fmt.Printf("  Please update with new location or remove the reference in ./utils/copyrightshdrs/")
 		failed = true

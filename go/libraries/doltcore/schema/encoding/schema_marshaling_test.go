@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -93,41 +94,41 @@ func getSqlTypes() []sql.Type {
 	//TODO: determine the storage format for TINYBLOB
 	//TODO: determine the storage format for VARBINARY
 	return []sql.Type{
-		sql.Int64,  //BIGINT
-		sql.Uint64, //BIGINT UNSIGNED
+		gmstypes.Int64,  //BIGINT
+		gmstypes.Uint64, //BIGINT UNSIGNED
 		//sql.MustCreateBinary(sqltypes.Binary, 10), //BINARY(10)
-		sql.MustCreateBitType(10), //BIT(10)
+		gmstypes.MustCreateBitType(10), //BIT(10)
 		//sql.Blob, //BLOB
-		sql.Boolean, //BOOLEAN
-		sql.MustCreateStringWithDefaults(sqltypes.Char, 10), //CHAR(10)
-		sql.Date,                              //DATE
-		sql.Datetime,                          //DATETIME
-		sql.MustCreateColumnDecimalType(9, 5), //DECIMAL(9, 5)
-		sql.Float64,                           //DOUBLE
-		sql.MustCreateEnumType([]string{"a", "b", "c"}, sql.Collation_Default), //ENUM('a','b','c')
-		sql.Float32, //FLOAT
-		sql.Int32,   //INT
-		sql.Uint32,  //INT UNSIGNED
+		gmstypes.Boolean, //BOOLEAN
+		gmstypes.MustCreateStringWithDefaults(sqltypes.Char, 10), //CHAR(10)
+		gmstypes.Date,     //DATE
+		gmstypes.Datetime, //DATETIME
+		gmstypes.MustCreateColumnDecimalType(9, 5), //DECIMAL(9, 5)
+		gmstypes.Float64, //DOUBLE
+		gmstypes.MustCreateEnumType([]string{"a", "b", "c"}, sql.Collation_Default), //ENUM('a','b','c')
+		gmstypes.Float32, //FLOAT
+		gmstypes.Int32,   //INT
+		gmstypes.Uint32,  //INT UNSIGNED
 		//sql.LongBlob, //LONGBLOB
-		sql.LongText, //LONGTEXT
+		gmstypes.LongText, //LONGTEXT
 		//sql.MediumBlob, //MEDIUMBLOB
-		sql.Int24,      //MEDIUMINT
-		sql.Uint24,     //MEDIUMINT UNSIGNED
-		sql.MediumText, //MEDIUMTEXT
-		sql.MustCreateSetType([]string{"a", "b", "c"}, sql.Collation_Default), //SET('a','b','c')
-		sql.Int16,     //SMALLINT
-		sql.Uint16,    //SMALLINT UNSIGNED
-		sql.Text,      //TEXT
-		sql.Time,      //TIME
-		sql.Timestamp, //TIMESTAMP
+		gmstypes.Int24,      //MEDIUMINT
+		gmstypes.Uint24,     //MEDIUMINT UNSIGNED
+		gmstypes.MediumText, //MEDIUMTEXT
+		gmstypes.MustCreateSetType([]string{"a", "b", "c"}, sql.Collation_Default), //SET('a','b','c')
+		gmstypes.Int16,     //SMALLINT
+		gmstypes.Uint16,    //SMALLINT UNSIGNED
+		gmstypes.Text,      //TEXT
+		gmstypes.Time,      //TIME
+		gmstypes.Timestamp, //TIMESTAMP
 		//sql.TinyBlob, //TINYBLOB
-		sql.Int8,     //TINYINT
-		sql.Uint8,    //TINYINT UNSIGNED
-		sql.TinyText, //TINYTEXT
+		gmstypes.Int8,     //TINYINT
+		gmstypes.Uint8,    //TINYINT UNSIGNED
+		gmstypes.TinyText, //TINYTEXT
 		//sql.MustCreateBinary(sqltypes.VarBinary, 10), //VARBINARY(10)
-		sql.MustCreateStringWithDefaults(sqltypes.VarChar, 10),                //VARCHAR(10)
-		sql.MustCreateString(sqltypes.VarChar, 10, sql.Collation_utf8mb3_bin), //VARCHAR(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin
-		sql.Year, //YEAR
+		gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 10),                //VARCHAR(10)
+		gmstypes.MustCreateString(sqltypes.VarChar, 10, sql.Collation_utf8mb3_bin), //VARCHAR(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin
+		gmstypes.Year, //YEAR
 	}
 }
 

@@ -30,7 +30,9 @@ func TestAddressMap(t *testing.T) {
 	t.Run("smoke test address map", func(t *testing.T) {
 		ctx := context.Background()
 		ns := tree.NewTestNodeStore()
-		pairs := randomAddressPairs(10_000)
+		addr, err := ns.Write(ctx, tree.NewEmptyTestNode())
+		require.NoError(t, err)
+		pairs := randomAddressPairs(10_000, addr)
 
 		empty, err := NewEmptyAddressMap(ns)
 		require.NoError(t, err)
@@ -56,25 +58,28 @@ func TestAddressMap(t *testing.T) {
 	})
 }
 
-type addrPair [2][]byte
+type addrPair struct {
+	n []byte
+	h hash.Hash
+}
 
 func (a addrPair) name() string {
-	return string(a[0])
+	return string(a.n)
 }
 
 func (a addrPair) addr() hash.Hash {
-	return hash.New(a[1])
+	return a.h
 }
 
-func randomAddressPairs(cnt int) (ap []addrPair) {
+func randomAddressPairs(cnt int, addr hash.Hash) (ap []addrPair) {
 	buf := make([]byte, cnt*20*2)
 	testRand.Read(buf)
 
 	ap = make([]addrPair, cnt)
 	for i := range ap {
 		o := i * 40
-		ap[i][0] = buf[o : o+20]
-		ap[i][1] = buf[o+20 : o+40]
+		ap[i].n = buf[o : o+20]
+		ap[i].h = addr
 	}
 	return
 }

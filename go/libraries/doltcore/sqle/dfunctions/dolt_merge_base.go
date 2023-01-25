@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
@@ -112,7 +113,7 @@ func (d MergeBase) String() string {
 
 // Type implements the sql.Expression interface.
 func (d MergeBase) Type() sql.Type {
-	return sql.Text
+	return types.Text
 }
 
 // WithChildren implements the sql.Expression interface.

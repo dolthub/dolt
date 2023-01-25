@@ -21,7 +21,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
@@ -272,15 +272,15 @@ func NewJSONDoc(addr hash.Hash, ns NodeStore) *JSONDoc {
 	return &JSONDoc{ImmutableTree{Addr: addr, ns: ns}}
 }
 
-func (b *JSONDoc) ToJSONDocument(ctx context.Context) (sql.JSONDocument, error) {
+func (b *JSONDoc) ToJSONDocument(ctx context.Context) (types.JSONDocument, error) {
 	buf, err := b.bytes(ctx)
 	if err != nil {
-		return sql.JSONDocument{}, err
+		return types.JSONDocument{}, err
 	}
-	var doc sql.JSONDocument
+	var doc types.JSONDocument
 	err = json.Unmarshal(buf, &doc.Val)
 	if err != nil {
-		return sql.JSONDocument{}, err
+		return types.JSONDocument{}, err
 	}
 	return doc, err
 }

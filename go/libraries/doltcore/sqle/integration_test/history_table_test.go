@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -247,8 +246,5 @@ func testHistoryTable(t *testing.T, test historyTableTest, dEnv *env.DoltEnv) {
 	actRows, err := sqle.ExecuteSelect(dEnv, root, test.query)
 	require.NoError(t, err)
 
-	require.Equal(t, len(test.rows), len(actRows))
-	for i := range test.rows {
-		assert.Equal(t, test.rows[i], actRows[i])
-	}
+	require.ElementsMatch(t, test.rows, actRows)
 }

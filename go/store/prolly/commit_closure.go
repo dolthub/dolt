@@ -96,6 +96,25 @@ func (c CommitClosure) IterAllReverse(ctx context.Context) (CommitClosureIter, e
 	return c.closure.IterAllReverse(ctx)
 }
 
+func (c CommitClosure) IterHeight(ctx context.Context, height uint64) (CommitClosureIter, error) {
+	start := NewCommitClosureKey(c.closure.NodeStore.Pool(), height, hash.Hash{})
+	stop := NewCommitClosureKey(c.closure.NodeStore.Pool(), height+1, hash.Hash{})
+	return c.closure.IterKeyRange(ctx, start, stop)
+}
+
+func (c CommitClosure) IsEmpty() bool {
+	return c.Node().Size() == 0
+}
+
+func (c CommitClosure) ContainsKey(ctx context.Context, h hash.Hash, height uint64) (bool, error) {
+	k := NewCommitClosureKey(c.closure.NodeStore.Pool(), height, h)
+	cur, err := tree.NewCursorAtKey(ctx, c.closure.NodeStore, c.closure.Root, k, c.closure.Order)
+	if err != nil {
+		return false, err
+	}
+	return cur.Valid(), nil
+}
+
 func DecodeCommitClosureKey(key []byte) (height uint64, addr hash.Hash) {
 	height = binary.LittleEndian.Uint64(key)
 	addr = hash.New(key[8:])

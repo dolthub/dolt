@@ -15,7 +15,7 @@ teardown() {
 create table test(a int primary key, b int null);
 insert into test values (1,1), (2,2);
 call dolt_add('.');
-select dolt_commit("-am", "table with two rows");
+call dolt_commit("-am", "table with two rows");
 SQL
 
     dolt sql -q "drop table test"
@@ -43,7 +43,7 @@ SQL
 create table test(a int primary key, b int null);
 call dolt_add('.');
 insert into test values (1,1), (2,2);
-select dolt_commit("-am", "table with two rows");
+call dolt_commit("-am", "table with two rows");
 SQL
 
     dolt sql -q "drop table test"
@@ -81,7 +81,7 @@ SQL
 create table test(a int primary key, b int null);
 call dolt_add('.');
 insert into test values (1,1), (2,2);
-select dolt_commit("-am", "table with two rows");
+call dolt_commit("-am", "table with two rows");
 SQL
 
     dolt sql -q "drop table test"
@@ -136,7 +136,7 @@ EOF
 create table test(a int primary key, b int null);
 call dolt_add('.');
 insert into test values (1,1), (2,2);
-select dolt_commit("-am", "table with two rows");
+call dolt_commit("-am", "table with two rows");
 SQL
 
     dolt sql -q "drop table test"
@@ -174,7 +174,7 @@ SQL
 create table test(a int primary key, b int null, c int null);
 call dolt_add('.');
 insert into test values (1,2,3), (4,5,6);
-select dolt_commit("-am", "table with two rows");
+call dolt_commit("-am", "table with two rows");
 SQL
 
     dolt sql -q "drop table test"
@@ -211,7 +211,7 @@ SQL
 create table test(a int primary key, b int null, c int null);
 call dolt_add('.');
 insert into test values (1,2,3), (4,5,6);
-select dolt_commit("-am", "table with two rows");
+call dolt_commit("-am", "table with two rows");
 SQL
 
     dolt sql -q "drop table test"
@@ -249,7 +249,7 @@ SQL
 create table test(a int primary key, b int null);
 call dolt_add('.');
 insert into test values (1,1), (2,2);
-select dolt_commit("-am", "table with two rows");
+call dolt_commit("-am", "table with two rows");
 SQL
 
     dolt sql -q "drop table test"
@@ -299,7 +299,7 @@ EOF
 create table test(a int primary key, b int null);
 call dolt_add('.');
 insert into test values (1,1), (2,2);
-select dolt_commit("-am", "table with two rows");
+call dolt_commit("-am", "table with two rows");
 SQL
 
     dolt sql -q "drop table test"
@@ -340,7 +340,7 @@ SQL
 create table test(a int primary key, b int null default 10);
 call dolt_add('.');
 insert into test values (1,1), (2,2);
-select dolt_commit("-am", "table with two rows");
+call dolt_commit("-am", "table with two rows");
 SQL
 
     dolt sql -q "drop table test"
