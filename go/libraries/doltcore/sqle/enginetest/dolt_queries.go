@@ -429,7 +429,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			{
 				Query:    "create table working_set_table(pk int primary key);",
 				Skip:     true,
-				Expected: []sql.Row{{sql.NewOkResult(0)}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				// Create a table in the working set to verify the main db
@@ -1886,7 +1886,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			{
 				Query: "insert into t values (1)",
 				Expected: []sql.Row{
-					{sql.OkResult{RowsAffected: 1}},
+					{types.OkResult{RowsAffected: 1}},
 				},
 			},
 			{
