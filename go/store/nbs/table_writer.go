@@ -112,7 +112,7 @@ func (tw *tableWriter) addChunk(h addr, data []byte) bool {
 	// Stored in insertion order
 	tw.prefixes = append(tw.prefixes, prefixIndexRec{
 		h.Prefix(),
-		h[addrPrefixSize:],
+		h.Suffix(),
 		uint32(len(tw.prefixes)),
 		uint32(checksumSize + dataLength),
 	})
@@ -133,7 +133,7 @@ func (tw *tableWriter) finish() (uncompressedLength uint64, blockAddr addr, err 
 
 type prefixIndexRec struct {
 	prefix      uint64
-	suffix      []byte
+	suffix      [12]byte
 	order, size uint32
 }
 
@@ -183,7 +183,7 @@ func writeChunkIndex(buf []byte, prefixes prefixIndexSlice) (n uint64, a addr, e
 
 		// hash suffix
 		o = suffixesOff + uint64(pi.order)*addrSuffixSize
-		copy(buf[o:], pi.suffix)
+		copy(buf[o:], pi.suffix[:])
 	}
 
 	// hash the suffixes for the table name

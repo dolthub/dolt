@@ -15,9 +15,11 @@
 package nbs
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/rand"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -106,7 +108,7 @@ func TestJournalWriter(t *testing.T) {
 			},
 		},
 		{
-			name: "successive writes trigger buffer flush ",
+			name: "successive writes trigger buffer flush",
 			size: 16,
 			ops: []operation{
 				{kind: writeOp, buf: []byte("lorem")},
@@ -194,7 +196,7 @@ func TestJournalWriterWriteChunk(t *testing.T) {
 	require.NotNil(t, j)
 	require.NoError(t, err)
 
-	data := randomCompressedChunks()
+	data := randomCompressedChunks(128)
 	lookups := make(map[addr]recLookup)
 
 	for a, cc := range data {
@@ -216,7 +218,7 @@ func TestJournalWriterBootstrap(t *testing.T) {
 	require.NotNil(t, j)
 	require.NoError(t, err)
 
-	data := randomCompressedChunks()
+	data := randomCompressedChunks(128)
 	lookups := make(map[addr]recLookup)
 	for a, cc := range data {
 		l, err := j.WriteChunk(cc)
@@ -243,17 +245,6 @@ func TestJournalWriterBootstrap(t *testing.T) {
 	require.NoError(t, j.Close())
 }
 
-func validateLookup(t *testing.T, j *journalWriter, l recLookup, cc CompressedChunk) {
-	b := make([]byte, l.recordLen)
-	n, err := j.ReadAt(b, l.journalOff)
-	require.NoError(t, err)
-	assert.Equal(t, int(l.recordLen), n)
-	rec, err := readJournalRecord(b)
-	require.NoError(t, err)
-	assert.Equal(t, hash.Hash(rec.address), cc.Hash())
-	assert.Equal(t, rec.payload, cc.FullCompressedChunk)
-}
-
 func TestJournalWriterSyncClose(t *testing.T) {
 	ctx := context.Background()
 	j, err := createJournalWriter(ctx, newTestFilePath(t))
@@ -272,23 +263,66 @@ func TestJournalWriterSyncClose(t *testing.T) {
 	assert.Equal(t, 3, int(j.off))
 }
 
+func TestWriteJournalToTableFile(t *testing.T) {
+	ctx := context.Background()
+	j, err := createJournalWriter(ctx, newTestFilePath(t))
+	require.NotNil(t, j)
+	require.NoError(t, err)
+
+	var uncompressed uint64
+	data := randomCompressedChunks(16)
+	chks := make([][]byte, 0, len(data))
+	for _, cc := range data {
+		_, err = j.WriteChunk(cc)
+		require.NoError(t, err)
+		ch, err := cc.ToChunk()
+		require.NoError(t, err)
+		chks = append(chks, ch.Data())
+		uncompressed += uint64(ch.Size())
+	}
+	require.NoError(t, j.flush())
+
+	rd, err := os.Open(j.path)
+	require.NoError(t, err)
+
+	wr := bytes.NewBuffer(nil)
+	require.NoError(t, err)
+	_, err = writeJournalToTable(ctx, rd, wr)
+	require.NoError(t, err)
+
+	expected, _, err := buildTable(chks)
+	require.NoError(t, err)
+	assert.Equal(t, expected, wr.Bytes())
+}
+
+func validateLookup(t *testing.T, j *journalWriter, l recLookup, cc CompressedChunk) {
+	b := make([]byte, l.recordLen)
+	n, err := j.ReadAt(b, l.journalOff)
+	require.NoError(t, err)
+	assert.Equal(t, int(l.recordLen), n)
+	rec, err := readJournalRecord(b)
+	require.NoError(t, err)
+	assert.Equal(t, hash.Hash(rec.address), cc.Hash())
+	assert.Equal(t, rec.payload, cc.FullCompressedChunk)
+}
+
 func newTestFilePath(t *testing.T) string {
 	name := fmt.Sprintf("journal%d.log", rand.Intn(65536))
 	return filepath.Join(t.TempDir(), name)
 }
 
-func randomCompressedChunks() (compressed map[addr]CompressedChunk) {
-	buf := make([]byte, 1024*1024)
-	rand.Read(buf)
-
+func randomCompressedChunks(count int) (compressed map[addr]CompressedChunk) {
 	compressed = make(map[addr]CompressedChunk)
-	for {
-		k := rand.Intn(51) + 50
-		if k >= len(buf) {
-			return
+	var buf []byte
+	for i := 0; i < count; i++ {
+		if len(buf) < 100 {
+			buf = make([]byte, 8096)
+			rand.Read(buf)
 		}
+		k := rand.Intn(51) + 50
 		c := chunks.NewChunk(buf[:k])
 		buf = buf[k:]
 		compressed[addr(c.Hash())] = ChunkToCompressedChunk(c)
 	}
+	return
 }

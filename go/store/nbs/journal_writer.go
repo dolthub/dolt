@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -315,5 +316,42 @@ func (wr *journalWriter) flush() (err error) {
 	}
 	wr.off += int64(len(wr.buf))
 	wr.buf = wr.buf[:0]
+	return
+}
+
+// todo: table file addr name
+func writeJournalToTable(ctx context.Context, journal io.ReadSeeker, wr io.Writer) (name addr, err error) {
+	var uncompressed uint64
+	prefixes := make([]prefixIndexRec, 0, 1024)
+	_, err = processRecords(ctx, journal, func(_ int64, r journalRec) (err error) {
+		if r.kind != chunkRecKind {
+			return
+		}
+		if _, err = wr.Write(r.payload); err != nil {
+			return
+		}
+		prefixes = append(prefixes, prefixIndexRec{
+			prefix: r.address.Prefix(),
+			suffix: r.address.Suffix(),
+			order:  uint32(len(prefixes)),
+			size:   uint32(len(r.payload)),
+		})
+		// |r.payload| is snappy-encoded and starts with
+		// its uvarint-encoded uncompressed size
+		sz, _ := binary.Uvarint(r.payload)
+		uncompressed += sz
+		return
+	})
+
+	cnt := uint32(len(prefixes))
+	buf := make([]byte, indexSize(cnt)+footerSize)
+
+	var o uint64
+	if o, name, err = writeChunkIndex(buf, prefixes); err != nil {
+		return
+	}
+	writeFooter(buf[o:], cnt, uncompressed)
+
+	_, err = wr.Write(buf)
 	return
 }

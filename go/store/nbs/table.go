@@ -166,6 +166,11 @@ func (a addr) Prefix() uint64 {
 	return binary.BigEndian.Uint64(a[:])
 }
 
+func (a addr) Suffix() (suf [12]byte) {
+	copy(suf[:], a[addrPrefixSize:])
+	return
+}
+
 func (a addr) Checksum() uint32 {
 	return binary.BigEndian.Uint32(a[addrSize-checksumSize:])
 }

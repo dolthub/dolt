@@ -105,7 +105,7 @@ func (tw *CmpChunkTableWriter) AddCmpChunk(c CompressedChunk) error {
 	// Stored in insertion order
 	tw.prefixes = append(tw.prefixes, prefixIndexRec{
 		a.Prefix(),
-		a[addrPrefixSize:],
+		a.Suffix(),
 		uint32(len(tw.prefixes)),
 		uint32(fullLen),
 	})
@@ -210,7 +210,7 @@ func (tw *CmpChunkTableWriter) writeIndex() (hash.Hash, error) {
 
 		// hash suffix
 		offset = suffixesOffset + uint64(pi.order)*addrSuffixSize
-		n = uint64(copy(buff[offset:], pi.suffix))
+		n = uint64(copy(buff[offset:], pi.suffix[:]))
 
 		if n != addrSuffixSize {
 			return nil, errors.New("failed to copy all bytes")
