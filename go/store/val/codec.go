@@ -62,8 +62,8 @@ const (
 	bytesAddrEnc  ByteSize = hash.ByteLen
 	commitAddrEnc ByteSize = hash.ByteLen
 	stringAddrEnc ByteSize = hash.ByteLen
-	jsonAddrEnc ByteSize = hash.ByteLen
-	cellSize    ByteSize = 17
+	jsonAddrEnc   ByteSize = hash.ByteLen
+	cellSize      ByteSize = 17
 )
 
 type Encoding byte
@@ -92,8 +92,8 @@ const (
 	BytesAddrEnc  = Encoding(serial.EncodingBytesAddr)
 	CommitAddrEnc = Encoding(serial.EncodingCommitAddr)
 	StringAddrEnc = Encoding(serial.EncodingStringAddr)
-	JSONAddrEnc = Encoding(serial.EncodingJSONAddr)
-	CellEnc     = Encoding(serial.EncodingCell)
+	JSONAddrEnc   = Encoding(serial.EncodingJSONAddr)
+	CellEnc       = Encoding(serial.EncodingCell)
 
 	sentinel Encoding = 127
 )
@@ -629,7 +629,7 @@ func stringFromBytes(b []byte) string {
 // Level encodes the size of the region
 // ZValue is the z-value encoding of the minimum point of the bbox of a geometry
 type Cell struct {
-	Level byte
+	Level  byte
 	ZValue [16]byte
 }
 
