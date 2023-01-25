@@ -80,21 +80,13 @@ func deleteReplicationConfiguration(ctx *sql.Context) error {
 	return engine.Analyzer.Catalog.MySQLDb.Persist(ctx)
 }
 
-// persistSourceUuid saves the specified |sourceUuid| to a persistent storage location. If the source UUID has already
-// been persisted, then no action is taken.
-func persistSourceUuid(ctx *sql.Context, sourceUuid interface{}) error {
-	// If the source UUID is already set, then there's no need to persist it again, since it can't change
-	if replicationSourceUuid != "" {
-		return nil
-	}
-
+// persistSourceUuid saves the specified |sourceUuid| to a persistent storage location.
+func persistSourceUuid(ctx *sql.Context, sourceUuid string) error {
 	replicaSourceInfo, err := loadReplicationConfiguration(ctx)
 	if err != nil {
 		return err
 	}
 
-	replicaSourceInfo.Uuid = fmt.Sprintf("%v", sourceUuid)
-	replicationSourceUuid = replicaSourceInfo.Uuid
-
+	replicaSourceInfo.Uuid = sourceUuid
 	return persistReplicationConfiguration(ctx, replicaSourceInfo)
 }

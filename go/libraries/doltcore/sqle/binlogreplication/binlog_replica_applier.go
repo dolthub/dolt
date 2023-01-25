@@ -1,4 +1,4 @@
-// Copyright 2022 Dolthub, Inc.
+// Copyright 2023 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,455 +15,63 @@
 package binlogreplication
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"io"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
-	"github.com/sirupsen/logrus"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/store/datas"
-
-	gms "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/proto/query"
+	"io"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/sirupsen/logrus"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
+	"github.com/dolthub/dolt/go/store/datas"
+	gms "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
+	"github.com/dolthub/vitess/go/mysql"
 )
 
-var DoltBinlogReplicaController = newDoltBinlogReplicaController()
-
-var logger *logrus.Logger
-
-func initializeLogger() {
-	logger = logrus.StandardLogger()
-	logger.SetLevel(logrus.TraceLevel)
-}
-
-// doltBinlogReplicaController implements the BinlogReplicaController interface for a Dolt database in order to
-// provide support for a Dolt server to be a replica of a MySQL primary.
-type doltBinlogReplicaController struct {
-	status  binlogreplication.ReplicaStatus
-	filters *filterConfiguration
-	mu      *sync.Mutex
-}
-
-// filterConfiguration defines the binlog filtering rules applied on the replica.
-type filterConfiguration struct {
-	// doTables holds a map of database name to map of table names, indicating tables that SHOULD be replicated.
-	doTables map[string]map[string]struct{}
-	// ignoreTables holds a map of database name to map of table names, indicating tables that should NOT be replicated.
-	ignoreTables map[string]map[string]struct{}
-}
-
-// newFilterConfiguration creates a new filterConfiguration instance and initializes members.
-func newFilterConfiguration() *filterConfiguration {
-	return &filterConfiguration{
-		doTables:     make(map[string]map[string]struct{}),
-		ignoreTables: make(map[string]map[string]struct{}),
-	}
-}
-
-// TODO: Move these into the doltBinlogReplicaController struct
-var format mysql.BinlogFormat
-var tableMapsById = make(map[uint64]*mysql.TableMap)
-var stopReplicationChan = make(chan struct{})
-
-// modifiedDatabases holds the set of databases that have had data changes and are pending commit
-var modifiedDatabases = make(map[string]struct{})
-
-// currentGtid is the current GTID being processed, but not yet committed
-var currentGtid mysql.GTID
-
-var replicationSourceUuid string
-
-// currentPosition records which GTIDs have been successfully executed
-var currentPosition *mysql.Position
-
-// positionStore is the singleton instance for loading/saving binlog position state to disk for durable storage
+// positionStore is a singleton instance for loading/saving binlog position state to disk for durable storage.
 var positionStore = &binlogPositionStore{}
 
-// ErrServerNotConfiguredAsReplica is returned when replication is started without enough configuration provided.
-var ErrServerNotConfiguredAsReplica = fmt.Errorf(
-	"server is not configured as a replica; fix with CHANGE REPLICATION SOURCE TO")
-
-func newDoltBinlogReplicaController() *doltBinlogReplicaController {
-	controller := doltBinlogReplicaController{
-		mu: &sync.Mutex{},
-	}
-	controller.status.AutoPosition = true
-	controller.status.ReplicaIoRunning = binlogreplication.ReplicaIoNotRunning
-	controller.status.ReplicaSqlRunning = binlogreplication.ReplicaSqlNotRunning
-
-	initializeLogger()
-
-	return &controller
+// binlogReplicaApplier represents the process that applies updates from a binlog connection.
+//
+// This type is NOT used concurrently – there is currently only one single applier process running to process binlog
+// events, so the state in this type is NOT protected with a mutex.
+type binlogReplicaApplier struct {
+	format              mysql.BinlogFormat
+	tableMapsById       map[uint64]*mysql.TableMap
+	stopReplicationChan chan struct{}
+	// modifiedDatabases holds the set of databases that have had data changes and are pending commit
+	modifiedDatabases map[string]struct{}
+	// currentGtid is the current GTID being processed, but not yet committed
+	currentGtid mysql.GTID
+	// replicationSourceUuid holds the UUID of the source server
+	replicationSourceUuid string
+	// currentPosition records which GTIDs have been successfully executed
+	currentPosition *mysql.Position
+	filters         *filterConfiguration
 }
 
-var _ binlogreplication.BinlogReplicaController = (*doltBinlogReplicaController)(nil)
-
-func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
-	if false {
-		// TODO: If the database is already configured for Dolt replication/clustering, then error out
-		//       Add a BATS test to cover this case
-		return fmt.Errorf("dolt replication already enabled; unable to use binlog replication with other replication modes. " +
-			"Disable Dolt replication first before starting binlog replication")
+func newBinlogReplicaApplier(filters *filterConfiguration) *binlogReplicaApplier {
+	return &binlogReplicaApplier{
+		tableMapsById:       make(map[uint64]*mysql.TableMap),
+		stopReplicationChan: make(chan struct{}),
+		modifiedDatabases:   make(map[string]struct{}),
+		filters:             filters,
 	}
-
-	// TODO: If we aren't running in a sql-server context, return an error
-	//       Add a BATS test for this; today, an error would come from the GMS layer, so we can't give
-	//       a specific error message about needing to run Dolt as a sql-server yet.
-
-	_, err := loadReplicaServerId()
-	if err != nil {
-		return fmt.Errorf("unable to start replication: %s", err.Error())
-	}
-
-	configuration, err := loadReplicationConfiguration(ctx)
-	if err != nil {
-		return err
-	} else if configuration == nil {
-		return ErrServerNotConfiguredAsReplica
-	}
-
-	logger.Info("starting binlog replication...")
-
-	// Create a new context to use, because otherwise the engine will cancel the original
-	// context after the 'start replica' statement has finished executing.
-	ctx = ctx.WithContext(context.Background())
-	go func() {
-		err := d.replicaBinlogEventHandler(ctx)
-		if err != nil {
-			logger.Errorf("unexpected error of type %T: '%v'", err, err.Error())
-		}
-	}()
-	return nil
-}
-
-func (d *doltBinlogReplicaController) StopReplica(_ *sql.Context) error {
-	stopReplicationChan <- struct{}{}
-
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.status.ReplicaIoRunning = binlogreplication.ReplicaIoNotRunning
-	d.status.ReplicaSqlRunning = binlogreplication.ReplicaSqlNotRunning
-
-	return nil
-}
-
-func (d *doltBinlogReplicaController) SetReplicationSourceOptions(ctx *sql.Context, options []binlogreplication.ReplicationOption) error {
-	replicaSourceInfo, err := loadReplicationConfiguration(ctx)
-	if err != nil {
-		return err
-	}
-
-	if replicaSourceInfo == nil {
-		replicaSourceInfo = mysql_db.NewReplicaSourceInfo()
-	}
-
-	for _, option := range options {
-		switch strings.ToUpper(option.Name) {
-		case "SOURCE_HOST":
-			value, err := getOptionValueAsString(option)
-			if err != nil {
-				return err
-			}
-			replicaSourceInfo.Host = value
-		case "SOURCE_USER":
-			value, err := getOptionValueAsString(option)
-			if err != nil {
-				return err
-			}
-			replicaSourceInfo.User = value
-		case "SOURCE_PASSWORD":
-			value, err := getOptionValueAsString(option)
-			if err != nil {
-				return err
-			}
-			replicaSourceInfo.Password = value
-		case "SOURCE_PORT":
-			intValue, err := getOptionValueAsInt(option)
-			if err != nil {
-				return err
-			}
-			replicaSourceInfo.Port = uint16(intValue)
-		case "SOURCE_CONNECT_RETRY":
-			intValue, err := getOptionValueAsInt(option)
-			if err != nil {
-				return err
-			}
-			replicaSourceInfo.ConnectRetryInterval = uint32(intValue)
-		case "SOURCE_RETRY_COUNT":
-			intValue, err := getOptionValueAsInt(option)
-			if err != nil {
-				return err
-			}
-			replicaSourceInfo.ConnectRetryCount = uint64(intValue)
-		default:
-			return fmt.Errorf("unknown replication source option: %s", option.Name)
-		}
-	}
-
-	// Persist the updated replica source configuration to disk
-	return persistReplicationConfiguration(ctx, replicaSourceInfo)
-}
-
-func getOptionValueAsString(option binlogreplication.ReplicationOption) (string, error) {
-	stringOptionValue, ok := option.Value.(binlogreplication.StringReplicationOptionValue)
-	if ok {
-		return stringOptionValue.GetValueAsString(), nil
-	}
-
-	return "", fmt.Errorf("unsupported value type for option %q; found %T, "+
-		"but expected a string", option.Name, option.Value.GetValue())
-}
-
-func getOptionValueAsInt(option binlogreplication.ReplicationOption) (int, error) {
-	integerOptionValue, ok := option.Value.(binlogreplication.IntegerReplicationOptionValue)
-	if ok {
-		return integerOptionValue.GetValueAsInt(), nil
-	}
-
-	return 0, fmt.Errorf("unsupported value type for option %q; found %T, "+
-		"but expected an integer", option.Name, option.Value.GetValue())
-}
-
-func getOptionValueAsTableNames(option binlogreplication.ReplicationOption) ([]sql.UnresolvedTable, error) {
-	tableNamesOptionValue, ok := option.Value.(binlogreplication.TableNamesReplicationOptionValue)
-	if ok {
-		return tableNamesOptionValue.GetValueAsTableList(), nil
-	}
-
-	return nil, fmt.Errorf("unsupported value type for option %q; found %T, "+
-		"but expected a list of tables", option.Name, option.Value.GetValue())
-}
-
-func getOptionValueAsInteger(option binlogreplication.ReplicationOption) (int, error) {
-	integerOptionValue, ok := option.Value.(binlogreplication.IntegerReplicationOptionValue)
-	if ok {
-		return integerOptionValue.GetValueAsInt(), nil
-	}
-
-	return -1, fmt.Errorf("unsupported value type for option %q; found %T, "+
-		"but expected an int", option.Name, option.Value.GetValue())
-}
-
-func verifyAllTablesAreQualified(urts []sql.UnresolvedTable) error {
-	for _, urt := range urts {
-		if urt.Database() == "" {
-			return fmt.Errorf("no database specified for table '%s'; "+
-				"all filter table names must be qualified with a database name", urt.Name())
-		}
-	}
-	return nil
-}
-
-func (d *doltBinlogReplicaController) updateDoTablesFilter(urts []sql.UnresolvedTable) error {
-	err := verifyAllTablesAreQualified(urts)
-	if err != nil {
-		return err
-	}
-
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	// Setting new replication filters clears out any existing filters
-	d.filters.doTables = make(map[string]map[string]struct{})
-
-	for _, urt := range urts {
-		if d.filters.doTables[urt.Database()] == nil {
-			d.filters.doTables[urt.Database()] = make(map[string]struct{})
-		}
-		tableMap := d.filters.doTables[urt.Database()]
-		tableMap[urt.Name()] = struct{}{}
-	}
-	return nil
-}
-
-func (d *doltBinlogReplicaController) updateIgnoreTablesFilter(urts []sql.UnresolvedTable) error {
-	err := verifyAllTablesAreQualified(urts)
-	if err != nil {
-		return err
-	}
-
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	// Setting new replication filters clears out any existing filters
-	d.filters.ignoreTables = make(map[string]map[string]struct{})
-
-	for _, urt := range urts {
-		if d.filters.ignoreTables[urt.Database()] == nil {
-			d.filters.ignoreTables[urt.Database()] = make(map[string]struct{})
-		}
-		tableMap := d.filters.ignoreTables[urt.Database()]
-		tableMap[urt.Name()] = struct{}{}
-	}
-	return nil
-}
-
-// initializeFilterConfiguration instantiates this binlog controller's filter configuration.
-func (d *doltBinlogReplicaController) initializeFilterConfiguration() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if d.filters == nil {
-		d.filters = newFilterConfiguration()
-	}
-}
-
-// SetReplicationFilterOptions implements the BinlogReplicaController interface
-func (d *doltBinlogReplicaController) SetReplicationFilterOptions(_ *sql.Context, options []binlogreplication.ReplicationOption) error {
-	d.initializeFilterConfiguration()
-
-	for _, option := range options {
-		switch strings.ToUpper(option.Name) {
-		case "REPLICATE_DO_TABLE":
-			value, err := getOptionValueAsTableNames(option)
-			if err != nil {
-				return err
-			}
-			err = d.updateDoTablesFilter(value)
-			if err != nil {
-				return err
-			}
-		case "REPLICATE_IGNORE_TABLE":
-			value, err := getOptionValueAsTableNames(option)
-			if err != nil {
-				return err
-			}
-			err = d.updateIgnoreTablesFilter(value)
-			if err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("unsupported replication filter option: %s", option.Name)
-		}
-	}
-
-	// TODO: Consider persisting filter settings. MySQL doesn't actually do this... unlike CHANGE REPLICATION SOURCE,
-	//       CHANGE REPLICATION FILTER requires users to re-apply the filter options every time a server is restarted,
-	//       or to pass them to mysqld on the command line or in configuration. Since we don't want to force users
-	//       to specify these on the command line, we should consider diverging from MySQL behavior here slightly and
-	//       persisting the filter configuration options if customers want this.
-
-	return nil
-}
-
-// GetReplicaStatus implements the BinlogReplicaController interface
-func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlogreplication.ReplicaStatus, error) {
-	replicaSourceInfo, err := loadReplicationConfiguration(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if replicaSourceInfo == nil {
-		return nil, nil
-	}
-
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	var copy = d.status
-
-	copy.SourceUser = replicaSourceInfo.User
-	copy.SourceHost = replicaSourceInfo.Host
-	copy.SourcePort = uint(replicaSourceInfo.Port)
-	copy.SourceServerUuid = replicaSourceInfo.Uuid
-	copy.ConnectRetry = replicaSourceInfo.ConnectRetryInterval
-	copy.SourceRetryCount = replicaSourceInfo.ConnectRetryCount
-
-	if d.filters != nil {
-		copy.ReplicateDoTables = convertFilterMapToStringSlice(d.filters.doTables)
-		copy.ReplicateIgnoreTables = convertFilterMapToStringSlice(d.filters.ignoreTables)
-	}
-
-	return &copy, nil
-}
-
-// convertFilterMapToStringSlice converts the specified |filterMap| into a string slice, by iterating over every
-// key in the top level map, which stores a database name, and for each of those keys, iterating over every key
-// in the inner map, which stores a table name. Each table name is qualified with the matching database name and the
-// results are returned as a slice of qualified table names.
-func convertFilterMapToStringSlice(filterMap map[string]map[string]struct{}) []string {
-	if filterMap == nil {
-		return nil
-	}
-
-	tableNames := make([]string, 0, len(filterMap))
-	for dbName, tableMap := range filterMap {
-		for tableName, _ := range tableMap {
-			tableNames = append(tableNames, fmt.Sprintf("%s.%s", dbName, tableName))
-		}
-	}
-	return tableNames
-}
-
-// ResetReplica implements the BinlogReplicaController interface
-func (d *doltBinlogReplicaController) ResetReplica(ctx *sql.Context, resetAll bool) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if d.status.ReplicaIoRunning != binlogreplication.ReplicaIoNotRunning ||
-		d.status.ReplicaSqlRunning != binlogreplication.ReplicaSqlNotRunning {
-		return fmt.Errorf("unable to reset replica while replication is running; stop replication and try again")
-	}
-
-	// Reset error status
-	d.status.LastIoErrNumber = 0
-	d.status.LastSqlErrNumber = 0
-	d.status.LastIoErrorTimestamp = nil
-	d.status.LastSqlErrorTimestamp = nil
-	d.status.LastSqlError = ""
-	d.status.LastIoError = ""
-
-	if resetAll {
-		err := deleteReplicationConfiguration(ctx)
-		if err != nil {
-			return err
-		}
-
-		d.filters = nil
-	}
-
-	return nil
-}
-
-// setIoError updates the current replication status with the specific |errno| and |message| to describe an IO error.
-func (d *doltBinlogReplicaController) setIoError(errno uint, message string) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	currentTime := time.Now()
-	d.status.LastIoErrorTimestamp = &currentTime
-	d.status.LastIoErrNumber = errno
-	d.status.LastIoError = message
-}
-
-// setSqlError updates the current replication status with the specific |errno| and |message| to describe an SQL error.
-func (d *doltBinlogReplicaController) setSqlError(errno uint, message string) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	currentTime := time.Now()
-	d.status.LastSqlErrorTimestamp = &currentTime
-	d.status.LastSqlErrNumber = errno
-	d.status.LastSqlError = message
 }
 
 // Row Flags – https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
@@ -477,6 +85,16 @@ const rowFlag_noCheckConstraints = 0x0010
 // rowFlag_rowsAreComplete indicates that rows in this event are complete, and contain values for all columns of the table.
 const rowFlag_rowsAreComplete = 0x0008
 
+// Go spawns a new goroutine to run the applier's binlog event handler.
+func (a *binlogReplicaApplier) Go(ctx *sql.Context) {
+	go func() {
+		err := a.replicaBinlogEventHandler(ctx)
+		if err != nil {
+			logger.Errorf("unexpected error of type %T: '%v'", err, err.Error())
+		}
+	}()
+}
+
 // connectAndStartReplicationEventStream connects to the configured MySQL replication source, including pausing
 // and retrying if errors are encountered.
 //
@@ -489,13 +107,15 @@ const rowFlag_rowsAreComplete = 0x0008
 //	    default-authentication-plugin=mysql_native_password
 //	or start mysqld with:
 //	    --default-authentication-plugin=mysql_native_password
-func (d *doltBinlogReplicaController) connectAndStartReplicationEventStream(ctx *sql.Context) (*mysql.Conn, error) {
-	d.mu.Lock()
-	d.status.ReplicaIoRunning = binlogreplication.ReplicaIoConnecting
-	d.status.ReplicaSqlRunning = binlogreplication.ReplicaSqlRunning
-	maxConnectionAttempts := d.status.SourceRetryCount
-	connectRetryDelay := d.status.ConnectRetry
-	d.mu.Unlock()
+func (a *binlogReplicaApplier) connectAndStartReplicationEventStream(ctx *sql.Context) (*mysql.Conn, error) {
+	var maxConnectionAttempts uint64
+	var connectRetryDelay uint32
+	DoltBinlogReplicaController.updateStatus(func(status *binlogreplication.ReplicaStatus) {
+		status.ReplicaIoRunning = binlogreplication.ReplicaIoConnecting
+		status.ReplicaSqlRunning = binlogreplication.ReplicaSqlRunning
+		maxConnectionAttempts = status.SourceRetryCount
+		connectRetryDelay = status.ConnectRetry
+	})
 
 	var conn *mysql.Conn
 	var err error
@@ -504,30 +124,30 @@ func (d *doltBinlogReplicaController) connectAndStartReplicationEventStream(ctx 
 
 		if replicaSourceInfo == nil {
 			err = ErrServerNotConfiguredAsReplica
-			d.setIoError(13117, err.Error())
+			DoltBinlogReplicaController.setIoError(13117, err.Error())
 			return nil, err
 		} else if replicaSourceInfo.Uuid != "" {
-			replicationSourceUuid = replicaSourceInfo.Uuid
+			a.replicationSourceUuid = replicaSourceInfo.Uuid
 		}
 
 		if replicaSourceInfo.Host == "" {
 			err = fmt.Errorf("fatal error: Invalid (empty) hostname when attempting to connect " +
 				"to the source server. Connection attempt terminated")
-			d.setIoError(13117, err.Error())
+			DoltBinlogReplicaController.setIoError(13117, err.Error())
 			return nil, err
 		} else if replicaSourceInfo.User == "" {
 			err = fmt.Errorf("fatal error: Invalid (empty) username when attempting to connect " +
 				"to the source server. Connection attempt terminated")
-			d.setIoError(13117, err.Error())
+			DoltBinlogReplicaController.setIoError(13117, err.Error())
 			return nil, err
 		}
 
 		connParams := mysql.ConnParams{
-			Host:  replicaSourceInfo.Host,
-			Port:  int(replicaSourceInfo.Port),
-			Uname: replicaSourceInfo.User,
-			Pass:  replicaSourceInfo.Password,
-			// ConnectTimeoutMs: 0, // TODO: Set a non-zero timeout
+			Host:             replicaSourceInfo.Host,
+			Port:             int(replicaSourceInfo.Port),
+			Uname:            replicaSourceInfo.User,
+			Pass:             replicaSourceInfo.Password,
+			ConnectTimeoutMs: 4_000,
 		}
 
 		conn, err = mysql.Connect(ctx, &connParams)
@@ -542,26 +162,59 @@ func (d *doltBinlogReplicaController) connectAndStartReplicationEventStream(ctx 
 
 	// Request binlog events to start
 	// TODO: This also needs retry logic
-	err = d.startReplicationEventStream(ctx, conn)
+	err = a.startReplicationEventStream(ctx, conn)
 	if err != nil {
 		return nil, err
 	}
 
-	d.mu.Lock()
-	d.status.ReplicaIoRunning = binlogreplication.ReplicaIoRunning
-	d.mu.Unlock()
+	DoltBinlogReplicaController.updateStatus(func(status *binlogreplication.ReplicaStatus) {
+		status.ReplicaIoRunning = binlogreplication.ReplicaIoRunning
+	})
 
 	return conn, nil
 }
 
-func (d *doltBinlogReplicaController) replicaBinlogEventHandler(ctx *sql.Context) error {
+// startReplicationEventStream sends a request over |conn|, the connection to the MySQL source server, to begin
+// sending binlog events.
+func (a *binlogReplicaApplier) startReplicationEventStream(ctx *sql.Context, conn *mysql.Conn) error {
+	serverId, err := loadReplicaServerId()
+	if err != nil {
+		return err
+	}
+
+	position, err := positionStore.Load(ctx)
+	if err != nil {
+		return err
+	}
+
+	if position == nil {
+		// When there is no existing record of executed GTIDs, we create a GTIDSet with just one transaction ID
+		// for the 0000 server ID. There doesn't seem to be a cleaner way of saying "start at the very beginning".
+		//
+		// Also... "starting position" is a bit of a misnomer – it's actually the processed GTIDs, which
+		// indicate the NEXT GTID where replication should start, but it's not as direct as specifying
+		// a starting position, like the Vitess function signature seems to suggest.
+		gtid := mysql.Mysql56GTID{
+			Sequence: 1,
+		}
+		position = &mysql.Position{GTIDSet: gtid.GTIDSet()}
+	}
+
+	a.currentPosition = position
+
+	return conn.SendBinlogDumpCommand(serverId, *position)
+}
+
+// replicaBinlogEventHandler runs a loop, processing binlog events until the applier's stop replication channel
+// receives a signal to stop.
+func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error {
 	server := sqlserver.GetRunningServer()
 	if server == nil {
 		return fmt.Errorf("unable to access a running SQL server")
 	}
 	engine := server.Engine
 
-	conn, err := d.connectAndStartReplicationEventStream(ctx)
+	conn, err := a.connectAndStartReplicationEventStream(ctx)
 	if err != nil {
 		return err
 	}
@@ -569,10 +222,9 @@ func (d *doltBinlogReplicaController) replicaBinlogEventHandler(ctx *sql.Context
 	// Process binlog events
 	for {
 		select {
-		case <-stopReplicationChan:
+		case <-a.stopReplicationChan:
 			return nil
 		default:
-			// TODO: What are the default network timeouts in vitess?
 			event, err := conn.ReadBinlogEvent()
 			if err != nil {
 				if sqlError, isSqlError := err.(*mysql.SQLError); isSqlError {
@@ -583,14 +235,15 @@ func (d *doltBinlogReplicaController) replicaBinlogEventHandler(ctx *sql.Context
 					} else if strings.HasPrefix(sqlError.Message, io.ErrUnexpectedEOF.Error()) {
 						// TODO: Do we have these errors defined in GMS anywhere yet?
 						//       https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html
+						// TODO: Are we also setting errors when we log them?
 						const ER_NET_READ_ERROR = 1158
-						d.mu.Lock()
-						d.status.LastIoError = io.ErrUnexpectedEOF.Error()
-						d.status.LastIoErrNumber = ER_NET_READ_ERROR
-						currentTime := time.Now()
-						d.status.LastIoErrorTimestamp = &currentTime
-						d.mu.Unlock()
-						conn, err = d.connectAndStartReplicationEventStream(ctx)
+						DoltBinlogReplicaController.updateStatus(func(status *binlogreplication.ReplicaStatus) {
+							status.LastIoError = io.ErrUnexpectedEOF.Error()
+							status.LastIoErrNumber = ER_NET_READ_ERROR
+							currentTime := time.Now()
+							status.LastIoErrorTimestamp = &currentTime
+						})
+						conn, err = a.connectAndStartReplicationEventStream(ctx)
 						if err != nil {
 							return err
 						}
@@ -607,10 +260,11 @@ func (d *doltBinlogReplicaController) replicaBinlogEventHandler(ctx *sql.Context
 				continue
 			}
 
-			err = d.processBinlogEvent(ctx, engine, event)
+			err = a.processBinlogEvent(ctx, engine, event)
 			if err != nil {
 				logger.Errorf("unexpected error of type %T: '%v'", err, err.Error())
 				err = nil
+				// TODO: Need a general pass on error handling; make sure handling is sane and logged and status updated
 				// TODO: We don't currently return an error from this function yet.
 				//       Need to refine error handling so that all errors are always logged, but not all errors
 				//       stop the replication processor and ensure proper retry is in place for various operations.
@@ -619,7 +273,9 @@ func (d *doltBinlogReplicaController) replicaBinlogEventHandler(ctx *sql.Context
 	}
 }
 
-func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.BinlogEvent) error {
+// processBinlogEvent processes a single binlog event message and returns an error if there were any problems
+// processing it.
+func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.BinlogEvent) error {
 	var err error
 	createCommit := false
 	commitToAllDatabases := false
@@ -636,13 +292,14 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// XA-capable storage engine. For more details, see: https://mariadb.com/kb/en/xid_event/
 		logger.Debug("Received binlog event: XID")
 		createCommit = true
+		commitToAllDatabases = true
 
 	case event.IsQuery():
 		// A Query event represents a statement executed on the source server that should be executed on the
 		// replica. Used for all statements with statement-based replication, DDL statements with row-based replication
 		// as well as COMMITs for non-transactional engines such as MyISAM.
 		// For more details, see: https://mariadb.com/kb/en/query_event/
-		query, err := event.Query(format)
+		query, err := event.Query(a.format)
 		if err != nil {
 			return err
 		}
@@ -673,18 +330,18 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 	case event.IsFormatDescription():
 		// This is a descriptor event that is written to the beginning of a binary log file, at position 4 (after
 		// the 4 magic number bytes). For more details, see: https://mariadb.com/kb/en/format_description_event/
-		format, err = event.Format()
+		a.format, err = event.Format()
 		if err != nil {
 			return err
 		}
 		logger.WithFields(logrus.Fields{
-			"format": format,
+			"format": a.format,
 		}).Debug("Received binlog event: FormatDescription")
 
 	case event.IsPreviousGTIDs():
 		// Logged in every binlog to record the current replication state. Consists of the last GTID seen for each
 		// replication domain. For more details, see: https://mariadb.com/kb/en/gtid_list_event/
-		position, err := event.PreviousGTIDs(format)
+		position, err := event.PreviousGTIDs(a.format)
 		if err != nil {
 			return err
 		}
@@ -695,7 +352,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 	case event.IsGTID():
 		// For global transaction ID, used to start a new transaction event group, instead of the old BEGIN query event,
 		// and also to mark stand-alone (ddl). For more details, see: https://mariadb.com/kb/en/gtid_event/
-		gtid, isBegin, err := event.GTID(format)
+		gtid, isBegin, err := event.GTID(a.format)
 		if err != nil {
 			return err
 		}
@@ -706,10 +363,15 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 			"gtid":    gtid,
 			"isBegin": isBegin,
 		}).Debug("Received binlog event: GTID")
-		currentGtid = gtid
-		err = persistSourceUuid(ctx, gtid.SourceServer())
-		if err != nil {
-			return err
+		a.currentGtid = gtid
+		// if the source's UUID hasn't been set yet, set it and persist it
+		if a.replicationSourceUuid == "" {
+			uuid := fmt.Sprintf("%v", gtid.SourceServer())
+			err = persistSourceUuid(ctx, uuid)
+			if err != nil {
+				return err
+			}
+			a.replicationSourceUuid = uuid
 		}
 
 	case event.IsTableMap():
@@ -717,8 +379,8 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// operation event and maps a table definition to a number, where the table definition consists of database
 		// and table names. For more details, see: https://mariadb.com/kb/en/table_map_event/
 		// Note: TableMap events are sent before each row event, so there is no need to persist them between restarts.
-		tableId := event.TableID(format)
-		tableMap, err := event.TableMap(format)
+		tableId := event.TableID(a.format)
+		tableMap, err := event.TableMap(a.format)
 		if err != nil {
 			return err
 		}
@@ -732,37 +394,37 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		}).Debug("Received binlog event: TableMap")
 
 		if tableId == 0xFFFFFF {
-			// TODO: Handle special Table ID value 0xFFFFFF. We have yet to see this specific message.
-			//		Table id refers to a table defined by TABLE_MAP_EVENT. The special value 0xFFFFFF should have
-			//	 	"end of statement flag" (0x0001) set and indicates that table maps can be freed.
-			logger.Errorf("unsupported binlog protocol message: TableMap event with table ID '0xFFFFFF'")
+			// Table ID 0xFFFFFF is a special value that indicates table maps can be freed.
+			logger.Infof("binlog protocol message: table ID '0xFFFFFF'; clearing table maps")
+			a.tableMapsById = make(map[uint64]*mysql.TableMap)
+		} else {
+			flags := tableMap.Flags
+			if flags&rowFlag_endOfStatement == rowFlag_endOfStatement {
+				// nothing to be done for end of statement; just clear the flag
+				flags = flags ^ rowFlag_endOfStatement
+			}
+			if flags != 0 {
+				logger.Errorf("unsupported binlog protocol message: TableMap event with flags '%x'", tableMap.Flags)
+			}
+			a.tableMapsById[tableId] = tableMap
 		}
-		flags := tableMap.Flags
-		if flags&rowFlag_endOfStatement == rowFlag_endOfStatement {
-			// nothing to be done for end of statement; just clear the flag
-			flags = flags ^ rowFlag_endOfStatement
-		}
-		if flags != 0 {
-			logger.Errorf("unsupported binlog protocol message: TableMap event with flags '%x'", tableMap.Flags)
-		}
-		tableMapsById[tableId] = tableMap
 
 	case event.IsDeleteRows():
 		// A ROWS_EVENT is written for row based replication if data is inserted, deleted or updated.
 		// For more details, see: https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
 		logger.Debug("Received binlog event: DeleteRows")
-		tableId := event.TableID(format)
-		tableMap, ok := tableMapsById[tableId]
+		tableId := event.TableID(a.format)
+		tableMap, ok := a.tableMapsById[tableId]
 		if !ok {
 			return fmt.Errorf("unable to find replication metadata for table ID: %d", tableId)
 		}
 
-		if d.isTableFilteredOut(tableMap) {
+		if a.filters.isTableFilteredOut(tableMap) {
 			return nil
 		}
-		modifiedDatabases[tableMap.Database] = struct{}{}
+		a.modifiedDatabases[tableMap.Database] = struct{}{}
 
-		rows, err := event.Rows(format, tableMap)
+		rows, err := event.Rows(a.format, tableMap)
 		if err != nil {
 			return err
 		}
@@ -808,18 +470,18 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// A ROWS_EVENT is written for row based replication if data is inserted, deleted or updated.
 		// For more details, see: https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
 		logger.Debug("Received binlog event: WriteRows")
-		tableId := event.TableID(format)
-		tableMap, ok := tableMapsById[tableId]
+		tableId := event.TableID(a.format)
+		tableMap, ok := a.tableMapsById[tableId]
 		if !ok {
 			return fmt.Errorf("unable to find replication metadata for table ID: %d", tableId)
 		}
 
-		if d.isTableFilteredOut(tableMap) {
+		if a.filters.isTableFilteredOut(tableMap) {
 			return nil
 		}
-		modifiedDatabases[tableMap.Database] = struct{}{}
+		a.modifiedDatabases[tableMap.Database] = struct{}{}
 
-		rows, err := event.Rows(format, tableMap)
+		rows, err := event.Rows(a.format, tableMap)
 		if err != nil {
 			return err
 		}
@@ -838,6 +500,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		}
 
 		logger.Debugf(" - New Rows (table: %s)", tableMap.Name)
+		// TODO: batch writes to the same table
 		for _, row := range rows.Rows {
 			newRow, err := parseRow(ctx, tableMap, schema, rows.DataColumns, row.NullColumns, row.Data)
 			if err != nil {
@@ -845,6 +508,8 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 			}
 			logger.Debugf("     - Data: %v ", sql.FormatRow(newRow))
 
+			// TODO: Make this retry logic generic for insert/update/delete ?
+			// TODO: LOTS of duplication here! This would be super helpful to clean up
 			retryCount := 0
 			for {
 				writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database)
@@ -876,18 +541,18 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		// A ROWS_EVENT is written for row based replication if data is inserted, deleted or updated.
 		// For more details, see: https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
 		logger.Debug("Received binlog event: UpdateRows")
-		tableId := event.TableID(format)
-		tableMap, ok := tableMapsById[tableId]
+		tableId := event.TableID(a.format)
+		tableMap, ok := a.tableMapsById[tableId]
 		if !ok {
 			return fmt.Errorf("unable to find replication metadata for table ID: %d", tableId)
 		}
 
-		if d.isTableFilteredOut(tableMap) {
+		if a.filters.isTableFilteredOut(tableMap) {
 			return nil
 		}
-		modifiedDatabases[tableMap.Database] = struct{}{}
+		a.modifiedDatabases[tableMap.Database] = struct{}{}
 
-		rows, err := event.Rows(format, tableMap)
+		rows, err := event.Rows(a.format, tableMap)
 		if err != nil {
 			return err
 		}
@@ -934,8 +599,8 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		}
 
 	default:
-		// TODO: we can't access the bytes directly because the non-interface types are not exposed
-		//       having a Bytes() or Type() method on the interface would let us clean this up.
+		// We can't access the bytes directly because these non-interface types in Vitess are not exposed.
+		// Having a Bytes() or Type() method on the Vitess interface would let us clean this up.
 		byteString := fmt.Sprintf("%v", event)
 		if strings.HasPrefix(byteString, "{[0 0 0 0 27 ") {
 			// Type 27 is a Heartbeat event. This event does not appear in the binary log. It's only sent over the
@@ -949,7 +614,7 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 	}
 
 	if createCommit {
-		databasesToCommit := keys(modifiedDatabases)
+		databasesToCommit := keys(a.modifiedDatabases)
 		if commitToAllDatabases {
 			databasesToCommit = getAllUserDatabaseNames(ctx, engine)
 		}
@@ -959,12 +624,12 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		}
 
 		// Record the last GTID processed after the commit
-		currentPosition.GTIDSet = currentPosition.GTIDSet.AddGTID(currentGtid)
-		err := sql.SystemVariables.SetGlobal("gtid_executed", currentPosition.GTIDSet.String())
+		a.currentPosition.GTIDSet = a.currentPosition.GTIDSet.AddGTID(a.currentGtid)
+		err := sql.SystemVariables.SetGlobal("gtid_executed", a.currentPosition.GTIDSet.String())
 		if err != nil {
 			logger.Errorf("unable to set @@GLOBAL.gtid_executed: %s", err.Error())
 		}
-		err = positionStore.Save(ctx, currentPosition)
+		err = positionStore.Save(ctx, a.currentPosition)
 		if err != nil {
 			return fmt.Errorf("unable to store GTID executed metadata to disk: %s", err.Error())
 		}
@@ -974,16 +639,20 @@ func (d *doltBinlogReplicaController) processBinlogEvent(ctx *sql.Context, engin
 		for _, database := range databasesToCommit {
 			executeQueryWithEngine(ctx, engine, "use `"+database+"`;")
 			executeQueryWithEngine(ctx, engine,
-				fmt.Sprintf("call dolt_commit('-Am', 'Dolt binlog replica commit: GTID %s');", currentGtid))
+				fmt.Sprintf("call dolt_commit('-Am', 'Dolt binlog replica commit: GTID %s');", a.currentGtid))
 		}
 
 		// Clear the modified database metadata for the next commit
-		modifiedDatabases = make(map[string]struct{})
+		a.modifiedDatabases = make(map[string]struct{})
 		commitToAllDatabases = false
 	}
 
 	return nil
 }
+
+//
+// Helper functions
+//
 
 // closeWriteSession flushes and closes the specified |writeSession| and returns an error if anything failed.
 func closeWriteSession(ctx *sql.Context, engine *gms.Engine, databaseName string, writeSession writer.WriteSession) error {
@@ -1010,73 +679,6 @@ func closeWriteSession(ctx *sql.Context, engine *gms.Engine, databaseName string
 	}
 
 	return sqlDatabase.DbData().Ddb.UpdateWorkingSet(ctx, newWorkingSet.Ref(), newWorkingSet, hash, newWorkingSet.Meta())
-}
-
-// isTableFilteredOut returns true if the table identified by |tableMap| has been filtered out on this replica and
-// should not have any updates applied from binlog messages.
-func (d *doltBinlogReplicaController) isTableFilteredOut(tableMap *mysql.TableMap) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if d.filters == nil {
-		return false
-	}
-
-	// If any filter doTable options are specified, then a table MUST be listed in the set
-	// for it to be replicated. doTables options are processed BEFORE ignoreTables options.
-	// If a table appears in both doTable and ignoreTables, it is ignored.
-	// https://dev.mysql.com/doc/refman/8.0/en/replication-rules-table-options.html
-	if len(d.filters.doTables) > 0 {
-		if doTables, ok := d.filters.doTables[tableMap.Database]; ok {
-			if _, ok := doTables[tableMap.Name]; !ok {
-				logger.Tracef("skipping table %s.%s (not in doTables) ", tableMap.Database, tableMap.Name)
-				return true
-			}
-		}
-	}
-
-	if len(d.filters.ignoreTables) > 0 {
-		if ignoredTables, ok := d.filters.ignoreTables[tableMap.Database]; ok {
-			if _, ok := ignoredTables[tableMap.Name]; ok {
-				// If this table is being ignored, don't process any further
-				logger.Tracef("skipping table %s.%s (in ignoreTables)", tableMap.Database, tableMap.Name)
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-// startReplicationEventStream sends a request over |conn|, the connection to the MySQL source server, to begin
-// sending binlog events.
-func (d *doltBinlogReplicaController) startReplicationEventStream(ctx *sql.Context, conn *mysql.Conn) error {
-	serverId, err := loadReplicaServerId()
-	if err != nil {
-		return err
-	}
-
-	position, err := positionStore.Load(ctx)
-	if err != nil {
-		return err
-	}
-
-	if position == nil {
-		// When there is no existing record of executed GTIDs, we create a GTIDSet with just one transaction ID
-		// for the 0000 server ID. There doesn't seem to be a cleaner way of saying "start at the very beginning".
-		//
-		// Also... "starting position" is a bit of a misnomer – it's actually the processed GTIDs, which
-		// indicate the NEXT GTID where replication should start, but it's not as direct as specifying
-		// a starting position, like the function signature seems to suggest.
-		gtid := mysql.Mysql56GTID{
-			Sequence: 1,
-		}
-		position = &mysql.Position{GTIDSet: gtid.GTIDSet()}
-	}
-
-	currentPosition = position
-
-	return conn.SendBinlogDumpCommand(serverId, *position)
 }
 
 // getTableSchema returns a sql.Schema for the specified table in the specified database.
