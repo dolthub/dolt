@@ -200,6 +200,22 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 				Query:    "/* client b */ START TRANSACTION;",
 				Expected: []sql.Row{},
 			},
+			// Concurrent with the two transactions which are going to (dolt_)commit changes, we
+			// have a transaction which only modifies the working set. At the end of this
+			// sequence, the changes to the working set should not be committed.
+			{
+				Query:    "/* client c */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client c */ INSERT INTO x values (4, 4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client c */ COMMIT",
+				Expected: []sql.Row{},
+			},
+			// Now we have the two concurrent transactions commit their changes.
 			{
 				Query:    "/* client a */ SET @@dolt_transaction_commit=1;",
 				Expected: []sql.Row{{}},
@@ -262,22 +278,25 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 			},
 			{
 				Query:    "/* client a */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 			},
 			{
 				Query:    "/* client b */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 			},
 			{
 				Query:    "/* client c */ SELECT * FROM x ORDER BY y;",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+			},
+			{
+				Query:    "/* client c */ SELECT * FROM x AS OF 'HEAD' ORDER BY y;",
 				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
 			},
-			// After we commit both of these transactions, our working set should not have any pending changes.
-			// In the past, we have merged the working set but failed to land the merged root value in the
-			// commit itself.
+			// After we commit both transactions, our working set should still have the change which
+			// was never dolt_committed.
 			{
 				Query:    "/* client c */ SELECT COUNT(*) FROM DOLT_DIFF('HEAD', 'WORKING', 'x');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{1}},
 			},
 		},
 	})
