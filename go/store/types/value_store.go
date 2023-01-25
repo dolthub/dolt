@@ -123,10 +123,6 @@ func (lvs *ValueStore) getAddrs(ctx context.Context, c chunks.Chunk) (hash.HashS
 	return AddrsFromNomsValue(ctx, c, lvs.nbf)
 }
 
-func noopGetAddrs(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-	return nil, nil
-}
-
 const (
 	defaultDecodedChunksSize = 1 << 25 // 32MB
 	defaultPendingPutMax     = 1 << 28 // 256MB

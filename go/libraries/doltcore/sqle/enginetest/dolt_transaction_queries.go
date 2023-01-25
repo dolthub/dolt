@@ -1617,7 +1617,7 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ INSERT into t VALUES (300);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
