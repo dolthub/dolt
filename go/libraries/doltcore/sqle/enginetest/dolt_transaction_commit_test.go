@@ -292,9 +292,8 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 				Query:    "/* client c */ SELECT * FROM x AS OF 'HEAD' ORDER BY y;",
 				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
 			},
-			// After we commit both of these transactions, our working set should not have any pending changes.
-			// In the past, we have merged the working set but failed to land the merged root value in the
-			// commit itself.
+			// After we commit both transactions, our working set should still have the change which
+			// was never dolt_committed.
 			{
 				Query:    "/* client c */ SELECT COUNT(*) FROM DOLT_DIFF('HEAD', 'WORKING', 'x');",
 				Expected: []sql.Row{{1}},

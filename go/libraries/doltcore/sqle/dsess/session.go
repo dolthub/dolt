@@ -570,6 +570,8 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 			mergeParentCommits = append(mergeParentCommits, parentCommit)
 		}
 
+		// TODO: This is not the correct way to write this commit as an amend. While this commit is running
+		// the branch head moves backwards and concurrency control here is not principled.
 		root, err := actions.ResetSoftToRef(ctx, sessionState.dbData, "HEAD~1")
 		if err != nil {
 			return nil, err

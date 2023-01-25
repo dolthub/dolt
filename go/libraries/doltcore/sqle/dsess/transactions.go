@@ -156,6 +156,7 @@ func doltCommit(ctx *sql.Context,
 		return nil, nil, err
 	}
 
+	// We check if the branch HEAD has changed since our transaction started.
 	if curHead != nil {
 		curRootVal, err := curHead.ResolveRootValue(ctx)
 		if err != nil {
@@ -171,8 +172,13 @@ func doltCommit(ctx *sql.Context,
 		}
 
 		if curRootValHash != headRootValHash {
+			// If the branch head changed since our transaction started, then we merge
+			// the existing branch head (curRootVal) into our staged root value. We
+			// treat the HEAD of the branch when our transaction started as the common
+			// ancestor (TODO: This will not be true in the case of destructive branch
+			// updates). The merged root value becomes our new Staged root value which
+			// is the value which we are trying to commit.
 			start := time.Now()
-			mo := merge.MergeOpts{IsCherryPick: false}
 			pending.Roots.Staged, _, err = merge.MergeRoots(
 				ctx,
 				pending.Roots.Staged,
@@ -181,7 +187,7 @@ func doltCommit(ctx *sql.Context,
 				curHead,
 				tx.startState,
 				tx.mergeEditOpts,
-				mo)
+				merge.MergeOpts{})
 			if err != nil {
 				return nil, nil, err
 			}
@@ -303,7 +309,6 @@ func (tx *DoltTransaction) mergeRoots(
 	existingWorkingRoot *doltdb.WorkingSet,
 	workingSet *doltdb.WorkingSet,
 ) (*doltdb.WorkingSet, error) {
-	mo := merge.MergeOpts{IsCherryPick: false}
 	mergedRoot, _, err := merge.MergeRoots(
 		ctx,
 		existingWorkingRoot.WorkingRoot(),
@@ -311,7 +316,8 @@ func (tx *DoltTransaction) mergeRoots(
 		tx.startState.WorkingRoot(),
 		workingSet,
 		tx.startState,
-		tx.mergeEditOpts, mo)
+		tx.mergeEditOpts,
+		merge.MergeOpts{})
 	if err != nil {
 		return nil, err
 	}
