@@ -197,7 +197,7 @@ func TestZAddr(t *testing.T) {
 	t.Run("test points z-addrs", func(t *testing.T) {
 		p := types.Point{X: 1, Y: 2}
 		res := ZAddr(p)
-		assert.Equal(t, "40e5555500000000000000000000000000", hex.EncodeToString(res[:]))
+		assert.Equal(t, "00e5555500000000000000000000000000", hex.EncodeToString(res[:]))
 	})
 
 	t.Run("test linestring z-addrs", func(t *testing.T) {
@@ -222,35 +222,35 @@ func TestZAddr(t *testing.T) {
 }
 
 func TestZSort(t *testing.T) {
-	p1 := types.LineString{Points: []types.Point{ps[16], ps[19]}}
-	p2 := types.LineString{Points: []types.Point{ps[0], ps[3]}}
-	p3 := types.LineString{Points: []types.Point{ps[19], ps[24]}}
-	p4 := types.LineString{Points: []types.Point{ps[3], ps[19]}}
-	p5 := types.LineString{Points: []types.Point{ps[24], ps[24]}}
+	p1 := types.LineString{Points: []types.Point{ps[24], ps[24]}}
+	p2 := types.LineString{Points: []types.Point{ps[16], ps[19]}}
+	p3 := types.LineString{Points: []types.Point{ps[0], ps[3]}}
+	p4 := types.LineString{Points: []types.Point{ps[19], ps[24]}}
+	p5 := types.LineString{Points: []types.Point{ps[3], ps[19]}}
 
 	t.Run("test z-addr p1", func(t *testing.T) {
-		z := ZAddr(p1) // bbox: (0, 0), (1, 1)
-		assert.Equal(t, "3ec0000000000000000000000000000000", hex.EncodeToString(z[:]))
+		z := ZAddr(p1) // bbox: (2, 2), (2, 2)
+		assert.Equal(t, "00f0000000000000000000000000000000", hex.EncodeToString(z[:]))
 	})
 
 	t.Run("test z-addr p2", func(t *testing.T) {
-		z := ZAddr(p2) // bbox: (-2, -2), (-1, -1)
-		assert.Equal(t, "3f0fffffffffffffffffffffffffffffff", hex.EncodeToString(z[:]))
+		z := ZAddr(p2) // bbox: (0, 0), (1, 1)
+		assert.Equal(t, "3ec0000000000000000000000000000000", hex.EncodeToString(z[:]))
 	})
 
 	t.Run("test z-addr p3", func(t *testing.T) {
-		z := ZAddr(p3) // bbox: (1, 1), (2, 2)
-		assert.Equal(t, "3fcfffff00000000000000000000000000", hex.EncodeToString(z[:]))
+		z := ZAddr(p3) // bbox: (-2, -2), (-1, -1)
+		assert.Equal(t, "3f0fffffffffffffffffffffffffffffff", hex.EncodeToString(z[:]))
 	})
 
 	t.Run("test z-addr p4", func(t *testing.T) {
-		z := ZAddr(p4) // bbox: (-1, -1), (1, 1)
-		assert.Equal(t, "40300000ffffffffffffffffffffffffff", hex.EncodeToString(z[:]))
+		z := ZAddr(p4) // bbox: (1, 1), (2, 2)
+		assert.Equal(t, "3fcfffff00000000000000000000000000", hex.EncodeToString(z[:]))
 	})
 
-	t.Run("test z-addr p6", func(t *testing.T) {
-		z := ZAddr(p5) // bbox: (2, 2), (2, 2)
-		assert.Equal(t, "40f0000000000000000000000000000000", hex.EncodeToString(z[:]))
+	t.Run("test z-addr p5", func(t *testing.T) {
+		z := ZAddr(p5) // bbox: (-1, -1), (1, 1)
+		assert.Equal(t, "40300000ffffffffffffffffffffffffff", hex.EncodeToString(z[:]))
 	})
 
 	t.Run("test z-addr sorting", func(t *testing.T) {
