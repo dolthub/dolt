@@ -118,6 +118,8 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 		}
 	case val.CommitAddrEnc:
 		v, ok = td.GetCommitAddr(i, tup)
+	case val.ZAddrEnc:
+		v, ok = td.GetZAddr(i, tup)
 	default:
 		panic("unknown val.encoding")
 	}
@@ -214,6 +216,8 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 		tb.PutStringAddr(i, h)
 	case val.CommitAddrEnc:
 		tb.PutCommitAddr(i, v.(hash.Hash))
+	case val.ZAddrEnc:
+		tb.PutZAddr(i, ZAddr(v.(types.GeometryValue)))
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}

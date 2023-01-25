@@ -468,6 +468,16 @@ func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 	panic("incorrect value encoding")
 }
 
+func (td TupleDesc) GetZAddr(i int, tup Tuple) (v [zAddrSize]byte, ok bool) {
+	td.expectEncoding(i, ZAddrEnc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v = readZAddr(b)
+		ok = true
+	}
+	return
+}
+
 // Format prints a Tuple as a string.
 func (td TupleDesc) Format(tup Tuple) string {
 	if tup == nil || tup.Count() == 0 {

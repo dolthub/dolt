@@ -163,7 +163,7 @@ func ZAddr(v types.GeometryValue) [17]byte {
 	if res := zMin[0] ^ zMax[0]; res != 0 {
 		addr[0] = byte(64 - bits.LeadingZeros64(res)/2)
 	} else {
-		addr[0] = byte(32 + bits.LeadingZeros64(zMin[1]^zMax[1])/2)
+		addr[0] = byte(32 - bits.LeadingZeros64(zMin[1]^zMax[1])/2)
 	}
 	return addr
 }
