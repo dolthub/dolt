@@ -599,10 +599,6 @@ func compareAddr(l, r hash.Hash) int {
 	return l.Compare(r)
 }
 
-func compareZAddr(l, r []byte) int {
-	return bytes.Compare(l, r)
-}
-
 func writeRaw(buf, val []byte) {
 	expectSize(buf, ByteSize(len(val)))
 	copy(buf, val)
@@ -629,7 +625,17 @@ func stringFromBytes(b []byte) string {
 	return *(*string)(unsafe.Pointer(&b))
 }
 
-func readZAddr(val []byte) []byte {
+func compareZAddr(l, r [zAddrSize]byte) int {
+	return bytes.Compare(l[:], r[:])
+}
+
+func readZAddr(val []byte) (res [zAddrSize]byte) {
 	expectSize(val, zAddrSize)
-	return val
+	copy(res[:zAddrSize], val[:zAddrSize])
+	return
+}
+
+func writeZAddr(buf []byte, v [zAddrSize]byte) {
+	expectSize(buf, zAddrSize)
+	copy(buf, v[:zAddrSize])
 }

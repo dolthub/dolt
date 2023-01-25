@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -30,7 +30,7 @@ import (
 func TestTimeConvertNomsValueToValue(t *testing.T) {
 	tests := []struct {
 		input       types.Int
-		output      types2.Timespan
+		output      gmstypes.Timespan
 		expectedErr bool
 	}{
 		{

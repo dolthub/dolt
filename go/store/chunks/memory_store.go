@@ -124,10 +124,11 @@ func (ms *MemoryStorage) Update(current, last hash.Hash, novel map[hash.Hash]Chu
 // storage := &MemoryStorage{}
 // ms := storage.NewView()
 type MemoryStoreView struct {
-	pending  map[hash.Hash]Chunk
-	rootHash hash.Hash
-	mu       sync.RWMutex
-	version  string
+	pending     map[hash.Hash]Chunk
+	pendingRefs hash.HashSet
+	rootHash    hash.Hash
+	mu          sync.RWMutex
+	version     string
 
 	storage *MemoryStorage
 }
@@ -187,13 +188,20 @@ func (ms *MemoryStoreView) Version() string {
 }
 
 func (ms *MemoryStoreView) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
-	absent, err := ms.HasMany(ctx, addrs)
-	if err != nil {
-		return err
+	absent := hash.NewHashSet()
+	for h := range addrs {
+		if _, ok := ms.pending[h]; ok {
+			continue
+		}
+		ok, err := ms.storage.Has(ctx, h)
+		if err != nil {
+			return err
+		} else if !ok {
+			absent.Insert(h)
+		}
 	}
-	if len(absent) != 0 {
-		s := absent.String()
-		return fmt.Errorf("Found dangling references to %s", s)
+	if absent.Size() != 0 {
+		return fmt.Errorf("Found dangling references to %s", absent.String())
 	}
 	return nil
 }
@@ -204,9 +212,10 @@ func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb
 		return err
 	}
 
-	err = ms.errorIfDangling(ctx, addrs)
-	if err != nil {
-		return err
+	if ms.pendingRefs == nil {
+		ms.pendingRefs = addrs
+	} else {
+		ms.pendingRefs.InsertAll(addrs)
 	}
 
 	ms.mu.Lock()
@@ -246,9 +255,14 @@ func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) 
 		return false, nil
 	}
 
+	if err := ms.errorIfDangling(ctx, ms.pendingRefs); err != nil {
+		return false, err
+	}
+
 	success := ms.storage.Update(current, last, ms.pending)
 	if success {
 		ms.pending = nil
+		ms.pendingRefs = nil
 	}
 	ms.rootHash = ms.storage.Root(ctx)
 	return success, nil

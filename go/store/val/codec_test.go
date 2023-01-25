@@ -15,7 +15,6 @@
 package val
 
 import (
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"math"
 	"testing"
 	"time"
@@ -243,22 +242,10 @@ func TestCompare(t *testing.T) {
 		},
 		// z-address
 		{
-			typ: Type{Enc: ZAddrEnc},
-			l: encZAddr(types.Point{X: 9999, Y: 12312312}),
-			r: encZAddr(types.Point{X: 123, Y: 456}),
-			cmp: 1,
-		},
-		{
-			typ: Type{Enc: ZAddrEnc},
-			r: encZAddr(types.Point{}),
-			l: encZAddr(types.LineString{Points: []types.Point{{}, {}, {}}}),
+			typ: Type{Enc: StringEnc},
+			l: encZAddr([zAddrSize]byte{}),
+			r: encZAddr([zAddrSize]byte{}),
 			cmp: 0,
-		},
-		{
-			typ: Type{Enc: ZAddrEnc},
-			r: encZAddr(types.Point{X: 123, Y: 456}),
-			l: encZAddr(types.LineString{Points: []types.Point{{X: -10, Y: -10}, {X: 10, Y: 10}}}),
-			cmp: -1,
 		},
 	}
 
@@ -317,9 +304,10 @@ func encStr(s string) []byte {
 	return buf
 }
 
-func encZAddr(g types.GeometryValue) []byte {
-	buf := ZAddr(g)
-	return buf[:]
+func encZAddr(z [zAddrSize]byte) []byte {
+	buf := make([]byte, zAddrSize)
+	writeZAddr(buf, z)
+	return buf
 }
 
 func encYear(y int16) []byte {

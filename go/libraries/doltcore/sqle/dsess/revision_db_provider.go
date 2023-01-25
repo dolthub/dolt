@@ -15,12 +15,15 @@
 package dsess
 
 import (
+	"context"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // ErrRevisionDbNotFound is thrown when a RevisionDatabaseProvider cannot find a specified revision database.
@@ -66,6 +69,7 @@ type RemoteReadReplicaDatabase interface {
 type DoltDatabaseProvider interface {
 	sql.MutableDatabaseProvider
 	RevisionDatabaseProvider
+	// env.RemoteDbProvider
 
 	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases.
 	FileSystem() filesys.Filesys
@@ -77,7 +81,7 @@ type DoltDatabaseProvider interface {
 	// withCaching defines whether the remoteDB gets cached or not.
 	// This function replaces env.Remote's GetRemoteDB method during SQL session to access dialer in order
 	// to get remote database associated to the env.Remote object.
-	GetRemoteDB(ctx *sql.Context, srcDB *doltdb.DoltDB, r env.Remote, withCaching bool) (*doltdb.DoltDB, error)
+	GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote, withCaching bool) (*doltdb.DoltDB, error)
 	// CloneDatabaseFromRemote clones the database from the specified remoteURL as a new database in this provider.
 	// dbName is the name for the new database, branch is an optional parameter indicating which branch to clone
 	// (otherwise all branches are cloned), remoteName is the name for the remote created in the new database, and
@@ -113,7 +117,7 @@ func (e emptyRevisionDatabaseProvider) IsRevisionDatabase(_ *sql.Context, _ stri
 	return false, nil
 }
 
-func (e emptyRevisionDatabaseProvider) GetRemoteDB(ctx *sql.Context, srcDB *doltdb.DoltDB, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
+func (e emptyRevisionDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
 	return nil, nil
 }
 
