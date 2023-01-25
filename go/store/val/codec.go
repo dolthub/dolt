@@ -63,7 +63,7 @@ const (
 	commitAddrEnc ByteSize = hash.ByteLen
 	stringAddrEnc ByteSize = hash.ByteLen
 	jsonAddrEnc   ByteSize = hash.ByteLen
-	zAddrSize ByteSize = 17
+	zAddrSize     ByteSize = 17
 )
 
 type Encoding byte
