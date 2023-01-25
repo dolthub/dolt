@@ -315,6 +315,7 @@ func (ts tableSet) flatten(ctx context.Context) (tableSet, error) {
 
 func (ts tableSet) checkAllTablesExist(ctx context.Context, specs []tableSpec, stats *Stats) error {
 	eg, ectx := errgroup.WithContext(ctx)
+	eg.SetLimit(128)
 	for _, s := range specs {
 		spec := s
 		eg.Go(func() error {
