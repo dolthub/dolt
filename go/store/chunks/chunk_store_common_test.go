@@ -36,7 +36,7 @@ type ChunkStoreTestSuite struct {
 	Factory *memoryStoreFactory
 }
 
-func getAddrsCb(ctx context.Context, c Chunk) (hash.HashSet, error) {
+func noopGetAddrs(ctx context.Context, c Chunk) (hash.HashSet, error) {
 	return nil, nil
 }
 
@@ -45,7 +45,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 	store := suite.Factory.CreateStore(ctx, "ns")
 	input := "abc"
 	c := NewChunk([]byte(input))
-	err := store.Put(ctx, c, getAddrsCb)
+	err := store.Put(ctx, c, noopGetAddrs)
 	suite.NoError(err)
 	h := c.Hash()
 
@@ -91,7 +91,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreCommitPut() {
 	store := suite.Factory.CreateStore(context.Background(), name)
 	input := "abc"
 	c := NewChunk([]byte(input))
-	err := store.Put(context.Background(), c, getAddrsCb)
+	err := store.Put(context.Background(), c, noopGetAddrs)
 	suite.NoError(err)
 	h := c.Hash()
 
@@ -133,7 +133,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreCommitUnchangedRoot() {
 	store1, store2 := suite.Factory.CreateStore(context.Background(), "ns"), suite.Factory.CreateStore(context.Background(), "ns")
 	input := "abc"
 	c := NewChunk([]byte(input))
-	err := store1.Put(context.Background(), c, getAddrsCb)
+	err := store1.Put(context.Background(), c, noopGetAddrs)
 	suite.NoError(err)
 	h := c.Hash()
 

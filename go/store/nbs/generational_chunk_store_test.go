@@ -131,7 +131,7 @@ func requireChunks(t *testing.T, ctx context.Context, chunks []chunks.Chunk, gen
 
 func putChunks(t *testing.T, ctx context.Context, chunks []chunks.Chunk, cs chunks.ChunkStore, indexesIn map[int]bool, chunkIndexes ...int) {
 	for _, idx := range chunkIndexes {
-		err := cs.Put(ctx, chunks[idx], getAddrsCb)
+		err := cs.Put(ctx, chunks[idx], noopGetAddrs)
 		require.NoError(t, err)
 		indexesIn[idx] = true
 	}

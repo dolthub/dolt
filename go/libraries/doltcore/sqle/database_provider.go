@@ -929,7 +929,7 @@ func (p DoltDatabaseProvider) GetRevisionForRevisionDatabase(ctx *sql.Context, d
 // IsRevisionDatabase returns true if the specified dbName represents a database that is tied to a specific
 // branch or commit from a database (e.g. "dolt/branch1").
 func (p DoltDatabaseProvider) IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error) {
-	dbName, revision, err := p.GetRevisionForRevisionDatabase(ctx, dbName)
+	_, revision, err := p.GetRevisionForRevisionDatabase(ctx, dbName)
 	if err != nil {
 		return false, err
 	}

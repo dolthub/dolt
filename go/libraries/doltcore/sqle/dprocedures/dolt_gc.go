@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
@@ -47,15 +48,31 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 		return cmdFailure, err
 	}
 
+	apr, err := cli.CreateGCArgParser().Parse(args)
+	if err != nil {
+		return cmdFailure, err
+	}
+
+	if apr.NArg() != 0 {
+		return cmdFailure, InvalidArgErr
+	}
+
 	dSess := dsess.DSessFromSess(ctx.Session)
 	ddb, ok := dSess.GetDoltDB(ctx, dbName)
 	if !ok {
 		return cmdFailure, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	err := ddb.ShallowGC(ctx)
-	if err != nil {
-		return cmdFailure, err
+	if apr.Contains(cli.ShallowFlag) {
+		err = ddb.ShallowGC(ctx)
+		if err != nil {
+			return cmdFailure, err
+		}
+	} else {
+		err = ddb.GC(ctx)
+		if err != nil {
+			return cmdFailure, err
+		}
 	}
 
 	return cmdSuccess, nil

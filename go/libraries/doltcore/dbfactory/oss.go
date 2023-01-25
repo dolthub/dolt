@@ -97,6 +97,7 @@ func (fact OSSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinForm
 	if err != nil {
 		return nil, errors.New("failed to initialize oss blob store")
 	}
+
 	q := nbs.NewUnlimitedMemQuotaProvider()
 	return nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
 }

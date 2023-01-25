@@ -158,7 +158,7 @@ func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, 
 				}
 			}
 
-			// No appendix change occured, so we remove the appendix
+			// No appendix change occurred, so we remove the appendix
 			// on the "latest" upstream which will be added back
 			// before the conjoin completes
 			upstream, appendixSpecs = upstream.removeAppendixSpecs()

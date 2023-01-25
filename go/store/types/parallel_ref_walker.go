@@ -146,7 +146,7 @@ func (w *parallelRefWalker) Close() error {
 // |parallelRefWalker| provides a way to walk the |Ref|s in a |ValueSlice|
 // using background worker threads to exploit hardware parallelism in cases
 // where walking the merkle-DAG can become CPU bound. Construct a
-// |parllelRefWalker| with a configured level of |concurrency| and then call
+// |parallelRefWalker| with a configured level of |concurrency| and then call
 // |GetRefs(hash.HashSet, ValueSlice)| with the |ValueSlice| to get back a
 // slice of |hash.Hash| for all the |Ref|s which appear in the values of
 // |ValueSlice|. |GetRefs| will not return any |Ref|s which already appear in

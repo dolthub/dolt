@@ -524,8 +524,6 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 		}
 
 		err := putChildren(tallest)
-
-		// TODO: fix panics
 		if err != nil {
 			return err
 		}
@@ -783,7 +781,7 @@ func (lvs *ValueStore) gc(ctx context.Context, root hash.Hash, toVisit hash.Hash
 		// closes, it signals to NBSStore.MarkAndSweepChunks that we
 		// are done walking the references. If gcProcessRefs returns an
 		// error, we did not successfully walk all references and we do
-		// not want MarkAndSweepChunks finishing its work, swaping
+		// not want MarkAndSweepChunks finishing its work, swapping
 		// table files, etc. It would be racing with returning an error
 		// here. Instead, we have returned the error above and that
 		// will force it to fail when the errgroup ctx fails.

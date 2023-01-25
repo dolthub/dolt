@@ -133,7 +133,7 @@ func TestConcurrentPuts(t *testing.T) {
 		c := makeChunk(uint32(i))
 		hashes[i] = c.Hash()
 		errgrp.Go(func() error {
-			err := st.Put(ctx, c, getAddrsCb)
+			err := st.Put(ctx, c, noopGetAddrs)
 			require.NoError(t, err)
 			return nil
 		})
@@ -277,7 +277,7 @@ func TestNBSCopyGC(t *testing.T) {
 	tossers := makeChunkSet(64, 64)
 
 	for _, c := range keepers {
-		err := st.Put(ctx, c, getAddrsCb)
+		err := st.Put(ctx, c, noopGetAddrs)
 		require.NoError(t, err)
 	}
 	for h, c := range keepers {
@@ -293,7 +293,7 @@ func TestNBSCopyGC(t *testing.T) {
 		assert.Equal(t, chunks.Chunk{}, c)
 	}
 	for _, c := range tossers {
-		err := st.Put(ctx, c, getAddrsCb)
+		err := st.Put(ctx, c, noopGetAddrs)
 		require.NoError(t, err)
 	}
 	for h, c := range tossers {
@@ -363,7 +363,7 @@ func prepStore(ctx context.Context, t *testing.T, assert *assert.Assertions) (*f
 
 	rootChunk := chunks.NewChunk([]byte("root"))
 	rootHash := rootChunk.Hash()
-	err = store.Put(ctx, rootChunk, getAddrsCb)
+	err = store.Put(ctx, rootChunk, noopGetAddrs)
 	require.NoError(t, err)
 	success, err := store.Commit(ctx, rootHash, hash.Hash{})
 	require.NoError(t, err)
@@ -562,7 +562,7 @@ func TestNBSCommitRetainsAppendix(t *testing.T) {
 	// Make second Commit
 	secondRootChunk := chunks.NewChunk([]byte("newer root"))
 	secondRoot := secondRootChunk.Hash()
-	err = store.Put(ctx, secondRootChunk, getAddrsCb)
+	err = store.Put(ctx, secondRootChunk, noopGetAddrs)
 	require.NoError(t, err)
 	success, err := store.Commit(ctx, secondRoot, rootChunk.Hash())
 	require.NoError(t, err)
