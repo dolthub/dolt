@@ -314,11 +314,10 @@ func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.R
 		from := m.keyMap.MapOrdinal(to)
 		var key interface{}
 		if m.spatial {
-			geom, ok := sqlRow[from].(types.GeometryValue)
+			_, ok := sqlRow[from].(types.GeometryValue)
 			if !ok {
 				panic("impossible") // TODO: make error
 			}
-			key = index.ZAddr(geom)
 		} else {
 			key = m.trimKeyPart(to, sqlRow[from])
 		}
