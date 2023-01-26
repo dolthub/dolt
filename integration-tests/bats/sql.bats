@@ -1419,6 +1419,12 @@ SQL
     run dolt sql -r csv -q "show databases"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
+
+    # make sure we aren't double-counting revision dbs
+    run dolt sql -r csv -q 'use `db1/main`; show databases'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Database changed" ]] || false
+    [ "${#lines[@]}" -eq 12 ] # one line for above output, 11 dbs
 }
 
 @test "sql: run outside a dolt directory" {
