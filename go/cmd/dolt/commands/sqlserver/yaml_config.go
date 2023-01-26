@@ -130,6 +130,7 @@ type UserSessionVars struct {
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
 	LogLevelStr       *string               `yaml:"log_level"`
+	MaxQueryLenInLogs *int                  `yaml:"max_logged_query_len"`
 	BehaviorConfig    BehaviorYAMLConfig    `yaml:"behavior"`
 	UserConfig        UserYAMLConfig        `yaml:"user"`
 	ListenerConfig    ListenerYAMLConfig    `yaml:"listener"`
@@ -428,6 +429,17 @@ func (cfg YAMLConfig) RequireSecureTransport() bool {
 		return false
 	}
 	return *cfg.ListenerConfig.RequireSecureTransport
+}
+
+// MaxLoggedQueryLen is the max length of queries written to the logs.  Queries longer than this number are truncated.
+// If this value is 0 then the query is not truncated and will be written to the logs in its entirety.  If the value
+// is less than 0 then the queries will be omitted from the logs completely
+func (cfg YAMLConfig) MaxLoggedQueryLen() int {
+	if cfg.MaxQueryLenInLogs == nil {
+		return defaultMaxLoggedQueryLen
+	}
+
+	return *cfg.MaxQueryLenInLogs
 }
 
 // PersistenceBehavior is "load" if we include persisted system globals on server init
