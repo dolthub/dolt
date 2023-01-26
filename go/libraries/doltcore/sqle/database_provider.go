@@ -271,7 +271,7 @@ func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database) {
 	p.mu.RLock()
 
-	showBranches, _ := dsess.GetBooleanSystemVar(ctx, dsess.ShowBranchDatabase)
+	showBranches, _ := dsess.GetBooleanSystemVar(ctx, dsess.ShowBranchDatabases)
 
 	all = make([]sql.Database, 0, len(p.databases))
 	var foundDatabase bool

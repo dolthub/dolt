@@ -49,7 +49,7 @@ const (
 	AwsCredsFile                  = "aws_credentials_file"
 	AwsCredsProfile               = "aws_credentials_profile"
 	AwsCredsRegion                = "aws_credentials_region"
-	ShowBranchDatabase            = "dolt_show_branch_databases"
+	ShowBranchDatabases           = "dolt_show_branch_databases"
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"

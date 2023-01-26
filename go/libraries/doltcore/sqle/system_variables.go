@@ -159,11 +159,11 @@ func AddDoltSystemVariables() {
 			Default:           nil,
 		},
 		{
-			Name:              dsess.ShowBranchDatabase,
+			Name:              dsess.ShowBranchDatabases,
 			Scope:             sql.SystemVariableScope_Both,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              types.NewSystemBoolType(dsess.ShowBranchDatabase),
+			Type:              types.NewSystemBoolType(dsess.ShowBranchDatabases),
 			Default:           int8(0),
 		},
 	})
