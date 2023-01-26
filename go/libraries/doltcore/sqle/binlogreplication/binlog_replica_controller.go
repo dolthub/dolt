@@ -274,6 +274,11 @@ func (d *doltBinlogReplicaController) setIoError(errno uint, message string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
+	// truncate the message to avoid errors when reporting replica status
+	if len(message) > 256 {
+		message = message[:256]
+	}
+
 	currentTime := time.Now()
 	d.status.LastIoErrorTimestamp = &currentTime
 	d.status.LastIoErrNumber = errno
@@ -284,6 +289,11 @@ func (d *doltBinlogReplicaController) setIoError(errno uint, message string) {
 func (d *doltBinlogReplicaController) setSqlError(errno uint, message string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
+	// truncate the message to avoid errors when reporting replica status
+	if len(message) > 256 {
+		message = message[:256]
+	}
 
 	currentTime := time.Now()
 	d.status.LastSqlErrorTimestamp = &currentTime

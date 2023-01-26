@@ -276,6 +276,50 @@ func TestForeignKeyChecks(t *testing.T) {
 	require.False(t, rows.Next())
 }
 
+// TestCharsetsAndCollations tests that we can successfully replicate data using various charsets and collations.
+func TestCharsetsAndCollations(t *testing.T) {
+	startSqlServers(t)
+	startReplication(t, mySqlPort)
+	defer teardown(t)
+
+	// Use non-default charset/collations to create data on the primary
+	primaryDatabase.MustExec("CREATE TABLE t1 (pk int primary key, c1 varchar(255) COLLATE ascii_general_ci, c2 varchar(255) COLLATE utf16_general_ci);")
+	primaryDatabase.MustExec("insert into t1 values (1, \"one\", \"one\");")
+
+	// Verify on the replica
+	time.Sleep(100 * time.Millisecond)
+	rows, err := replicaDatabase.Queryx("show create table db01.t1;")
+	require.NoError(t, err)
+	row := convertByteArraysToStrings(readNextRow(t, rows))
+	require.Contains(t, row["Create Table"], "ascii_general_ci")
+	require.Contains(t, row["Create Table"], "utf16_general_ci")
+
+	rows, err = replicaDatabase.Queryx("select * from db01.t1;")
+	require.NoError(t, err)
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "one", row["c1"])
+	require.Equal(t, "\x00o\x00n\x00e", row["c2"])
+
+	// Test that we get an error for unsupported charsets/collations
+	primaryDatabase.MustExec("CREATE TABLE t2 (pk int primary key, c1 varchar(255) COLLATE utf16_german2_ci);")
+	time.Sleep(100 * time.Millisecond)
+	replicaDatabase.MustExec("use db01;")
+	rows, err = replicaDatabase.Queryx("SHOW TABLES WHERE Tables_in_db01 like 't2';")
+	require.NoError(t, err)
+	require.False(t, rows.Next())
+	rows, err = replicaDatabase.Queryx("SHOW REPLICA STATUS;")
+	require.NoError(t, err)
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "1105", row["Last_SQL_Errno"])
+	require.NotEmpty(t, row["Last_SQL_Error_Timestamp"])
+	require.Contains(t, row["Last_SQL_Error"], "The collation `utf16_german2_ci` has not yet been implemented")
+	require.False(t, rows.Next())
+}
+
+//
+// Test Helper Functions
+//
+
 func readNextRow(t *testing.T, rows *sqlx.Rows) map[string]interface{} {
 	row := make(map[string]interface{})
 	require.True(t, rows.Next())
@@ -489,24 +533,4 @@ func waitForSqlServerToStart(database *sqlx.DB) error {
 	}
 
 	return database.Ping()
-}
-
-// comparePrimaryAndReplicaTable asserts that the specified |table| is identical in the MySQL primary
-// and in the Dolt replica.
-// TODO: Finish this experiment; try dumping the mysql db and loading it into a dolt branch to diff.
-func comparePrimaryAndReplicaTable(t *testing.T, table string) {
-	dumpFile, err := os.Create("/tmp/mysql.dump")
-	require.NoError(t, err)
-	defer dumpFile.Close()
-
-	cmd := exec.Command("mysqldump", "--protocol=TCP", "--user=root", fmt.Sprintf("--port=%v", mySqlPort), "db01", table)
-	cmd.Stdout = dumpFile
-	err = cmd.Run()
-	require.NoError(t, err)
-
-	// TODO: Now we need to load our dump into a new dolt database
-	//       - we could read each line of the file and execute it against our Dolt database (with a new db)
-	//         TODO: If all databases are made read only, then will this still work?
-	//               We could shut down the database and then import with `dolt sql < mysql.dump`
-	fmt.Printf("Created dump file at: /tmp/mysql.dump \n")
 }
