@@ -401,10 +401,15 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			flags := tableMap.Flags
 			if flags&rowFlag_endOfStatement == rowFlag_endOfStatement {
 				// nothing to be done for end of statement; just clear the flag
-				flags = flags ^ rowFlag_endOfStatement
+				flags = flags &^ rowFlag_endOfStatement
+			}
+			if flags&rowFlag_noForeignKeyChecks == rowFlag_noForeignKeyChecks {
+				flags = flags &^ rowFlag_noForeignKeyChecks
 			}
 			if flags != 0 {
-				logger.Errorf("unsupported binlog protocol message: TableMap event with flags '%x'", tableMap.Flags)
+				msg := fmt.Sprintf("unsupported binlog protocol message: TableMap event with unsupported flags '%x'", flags)
+				logger.Errorf(msg)
+				DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, msg)
 			}
 			a.tableMapsById[tableId] = tableMap
 		}
@@ -432,10 +437,15 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 		flags := rows.Flags
 		if flags&rowFlag_endOfStatement == rowFlag_endOfStatement {
 			// nothing to be done for end of statement; just clear the flag and move on
-			flags = flags ^ rowFlag_endOfStatement
+			flags = flags &^ rowFlag_endOfStatement
+		}
+		if flags&rowFlag_noForeignKeyChecks == rowFlag_noForeignKeyChecks {
+			flags = flags &^ rowFlag_noForeignKeyChecks
 		}
 		if flags != 0 {
-			logger.Errorf("unsupported binlog protocol message: DeleteRows event with flags '%x'", tableMap.Flags)
+			msg := fmt.Sprintf("unsupported binlog protocol message: DeleteRows event with unsupported flags '%x'", flags)
+			logger.Errorf(msg)
+			DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, msg)
 		}
 		schema, err := getTableSchema(ctx, engine, tableMap.Name, tableMap.Database)
 		if err != nil {
@@ -450,7 +460,8 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			}
 			logger.Debugf("     - Identify: %v ", sql.FormatRow(deletedRow))
 
-			writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database)
+			foreignKeyChecksDisabled := tableMap.Flags&rowFlag_noForeignKeyChecks > 0
+			writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database, foreignKeyChecksDisabled)
 			if err != nil {
 				return err
 			}
@@ -489,10 +500,16 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 		flags := rows.Flags
 		if flags&rowFlag_endOfStatement == rowFlag_endOfStatement {
 			// nothing to be done for end of statement; just clear the flag and move on
-			flags = flags ^ rowFlag_endOfStatement
+			flags = flags &^ rowFlag_endOfStatement
+		}
+		if flags&rowFlag_noForeignKeyChecks == rowFlag_noForeignKeyChecks {
+			// nothing to be done for end of statement; just clear the flag and move on
+			flags = flags &^ rowFlag_noForeignKeyChecks
 		}
 		if flags != 0 {
-			logger.Errorf("unsupported binlog protocol message: WriteRows event with flags '%x'", tableMap.Flags)
+			msg := fmt.Sprintf("unsupported binlog protocol message: WriteRows event with unsupported flags '%x'", flags)
+			logger.Errorf(msg)
+			DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, msg)
 		}
 		schema, err := getTableSchema(ctx, engine, tableMap.Name, tableMap.Database)
 		if err != nil {
@@ -512,7 +529,8 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			// TODO: LOTS of duplication here! This would be super helpful to clean up
 			retryCount := 0
 			for {
-				writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database)
+				foreignKeyChecksDisabled := rows.Flags&rowFlag_noForeignKeyChecks > 0
+				writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database, foreignKeyChecksDisabled)
 				if err != nil {
 					return err
 				}
@@ -560,10 +578,15 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 		flags := rows.Flags
 		if flags&rowFlag_endOfStatement == rowFlag_endOfStatement {
 			// nothing to be done for end of statement; just clear the flag and move on
-			flags = flags ^ rowFlag_endOfStatement
+			flags = flags &^ rowFlag_endOfStatement
+		}
+		if flags&rowFlag_noForeignKeyChecks == rowFlag_noForeignKeyChecks {
+			flags = flags &^ rowFlag_noForeignKeyChecks
 		}
 		if flags != 0 {
-			logger.Errorf("unsupported binlog protocol message: UpdateRows event with flags '%x'", tableMap.Flags)
+			msg := fmt.Sprintf("unsupported binlog protocol message: UpdateRows event with unsupported flags '%x'", flags)
+			logger.Errorf(msg)
+			DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, msg)
 		}
 		schema, err := getTableSchema(ctx, engine, tableMap.Name, tableMap.Database)
 		if err != nil {
@@ -582,7 +605,8 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			}
 			logger.Debugf("     - Identify: %v Data: %v ", sql.FormatRow(identifyRow), sql.FormatRow(updatedRow))
 
-			writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database)
+			foreignKeyChecksDisabled := tableMap.Flags&rowFlag_noForeignKeyChecks > 0
+			writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database, foreignKeyChecksDisabled)
 			if err != nil {
 				return err
 			}
@@ -699,7 +723,7 @@ func getTableSchema(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 }
 
 // getTableWriter returns a WriteSession and a TableWriter for writing to the specified |table| in the specified |database|.
-func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseName string) (writer.WriteSession, writer.TableWriter, error) {
+func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseName string, foreignKeyChecksDisabled bool) (writer.WriteSession, writer.TableWriter, error) {
 	database, err := engine.Analyzer.Catalog.Database(ctx, databaseName)
 	if err != nil {
 		return nil, nil, err
@@ -724,7 +748,11 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 		return nil, nil, err
 	}
 
-	writeSession := writer.NewWriteSession(binFormat, ws, tracker, editor.Options{})
+	// TODO: This doesn't seem to actually apply to TableWriter?
+	options := editor.Options{
+		ForeignKeyChecksDisabled: foreignKeyChecksDisabled,
+	}
+	writeSession := writer.NewWriteSession(binFormat, ws, tracker, options)
 
 	ds := dsess.DSessFromSess(ctx.Session)
 	setter := ds.SetRoot

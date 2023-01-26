@@ -224,6 +224,58 @@ func TestDoltCommits(t *testing.T) {
 	require.Equal(t, "t1", row["table_name"])
 }
 
+// TestForeignKeyChecks tests that foreign key constraints replicate correctly when foreign key checks are
+// enabled and disabled.
+func TestForeignKeyChecks(t *testing.T) {
+	startSqlServers(t)
+	startReplication(t, mySqlPort)
+	defer teardown(t)
+
+	// Insert a record with a foreign key check
+	primaryDatabase.MustExec("CREATE TABLE colors (name varchar(100) primary key);")
+	primaryDatabase.MustExec("CREATE TABLE t1 (pk int primary key, color varchar(100), FOREIGN KEY (color) REFERENCES colors(name));")
+	primaryDatabase.MustExec("START TRANSACTION;")
+	primaryDatabase.MustExec("SET foreign_key_checks = 1;")
+	primaryDatabase.MustExec("INSERT INTO colors VALUES ('green'), ('red'), ('blue');")
+	primaryDatabase.MustExec("INSERT INTO t1 VALUES (1, 'red'), (2, 'green');")
+	primaryDatabase.MustExec("COMMIT;")
+
+	// Test the Insert path with foreign key checks turned off
+	primaryDatabase.MustExec("START TRANSACTION;")
+	primaryDatabase.MustExec("SET foreign_key_checks = 0;")
+	primaryDatabase.MustExec("INSERT INTO t1 VALUES (3, 'not-a-color');")
+	primaryDatabase.MustExec("COMMIT;")
+
+	// Test the Update and Delete paths with foreign key checks turned off
+	primaryDatabase.MustExec("START TRANSACTION;")
+	primaryDatabase.MustExec("DELETE FROM colors WHERE name='red';")
+	primaryDatabase.MustExec("UPDATE t1 SET color='still-not-a-color' WHERE pk=2;")
+	primaryDatabase.MustExec("COMMIT;")
+
+	// Verify the changes on the replica
+	time.Sleep(100 * time.Millisecond)
+	rows, err := replicaDatabase.Queryx("select * from t1 order by pk;")
+	require.NoError(t, err)
+	row := convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "1", row["pk"])
+	require.Equal(t, "red", row["color"])
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "2", row["pk"])
+	require.Equal(t, "still-not-a-color", row["color"])
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "3", row["pk"])
+	require.Equal(t, "not-a-color", row["color"])
+	require.False(t, rows.Next())
+
+	rows, err = replicaDatabase.Queryx("select * from colors order by name;")
+	require.NoError(t, err)
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "blue", row["name"])
+	row = convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, "green", row["name"])
+	require.False(t, rows.Next())
+}
+
 func readNextRow(t *testing.T, rows *sqlx.Rows) map[string]interface{} {
 	row := make(map[string]interface{})
 	require.True(t, rows.Next())
