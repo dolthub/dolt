@@ -66,7 +66,7 @@ func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 // StartReplica implements the BinlogReplicaController interface.
 func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 	if false {
-		// TODO: If the database is already configured for Dolt replication/clustering, then error out
+		// TODO: If the database is already configured for Dolt replication/clustering, then error out.
 		//       Add a (BATS?) test to cover this case
 		return fmt.Errorf("dolt replication already enabled; unable to use binlog replication with other replication modes. " +
 			"Disable Dolt replication first before starting binlog replication")
@@ -291,7 +291,9 @@ func (d *doltBinlogReplicaController) setSqlError(errno uint, message string) {
 	d.status.LastSqlError = message
 }
 
-// ------------------------------------------------
+//
+// Helper functions
+//
 
 func getOptionValueAsString(option binlogreplication.ReplicationOption) (string, error) {
 	stringOptionValue, ok := option.Value.(binlogreplication.StringReplicationOptionValue)
