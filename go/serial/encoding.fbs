@@ -39,6 +39,7 @@ enum Encoding : uint8 {
   CommitAddr = 22,
   StringAddr = 23,
   JSONAddr   = 24,
+  Cell       = 25,
 
   // variable width
   String   = 128,

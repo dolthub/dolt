@@ -23,6 +23,8 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
 	"github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // LexFloat maps the float64 into an uint64 representation in lexicographical order
@@ -150,20 +152,36 @@ func ZSort(points []types.Point) []types.Point {
 	return points
 }
 
-// ZAddr converts the GeometryValue into a key: (min_z_val, level)
+// ZCell converts the GeometryValue into a Cell
 // Note: there is an inefficiency here where small polygons may be placed into a level that's significantly larger
-func ZAddr(v types.GeometryValue) [17]byte {
+func ZCell(v types.GeometryValue) val.Cell {
 	bbox := spatial.FindBBox(v)
 	zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
 	zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
 
+	cell := val.Cell{}
+	binary.BigEndian.PutUint64(cell.ZValue[:], zMin[0])
+	binary.BigEndian.PutUint64(cell.ZValue[8:], zMin[1])
+	if res := zMin[0] ^ zMax[0]; res != 0 {
+		cell.Level = byte(64 - bits.LeadingZeros64(res)/2)
+	} else {
+		cell.Level = byte(32 - bits.LeadingZeros64(zMin[1]^zMax[1])/2)
+	}
+	return cell
+}
+
+// ZAddr converts the GeometryValue into a key: (level, min_z_val)
+func ZAddr(v types.GeometryValue) [17]byte {
+	bbox := spatial.FindBBox(v)
+	zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
+	zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
 	addr := [17]byte{}
 	binary.BigEndian.PutUint64(addr[1:], zMin[0])
 	binary.BigEndian.PutUint64(addr[9:], zMin[1])
 	if res := zMin[0] ^ zMax[0]; res != 0 {
 		addr[0] = byte(64 - bits.LeadingZeros64(res)/2)
 	} else {
-		addr[0] = byte(32 + bits.LeadingZeros64(zMin[1]^zMax[1])/2)
+		addr[0] = byte(32 - bits.LeadingZeros64(zMin[1]^zMax[1])/2)
 	}
 	return addr
 }

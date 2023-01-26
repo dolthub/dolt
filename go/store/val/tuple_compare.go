@@ -143,6 +143,8 @@ func compare(typ Type, left, right []byte) int {
 		return compareAddr(readAddr(left), readAddr(right))
 	case StringAddrEnc:
 		return compareAddr(readAddr(left), readAddr(right))
+	case CellEnc:
+		return compareCell(readCell(left), readCell(right))
 	default:
 		panic("unknown encoding")
 	}

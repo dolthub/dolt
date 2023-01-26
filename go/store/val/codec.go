@@ -63,6 +63,7 @@ const (
 	commitAddrEnc ByteSize = hash.ByteLen
 	stringAddrEnc ByteSize = hash.ByteLen
 	jsonAddrEnc   ByteSize = hash.ByteLen
+	cellSize      ByteSize = 17
 )
 
 type Encoding byte
@@ -92,6 +93,7 @@ const (
 	CommitAddrEnc = Encoding(serial.EncodingCommitAddr)
 	StringAddrEnc = Encoding(serial.EncodingStringAddr)
 	JSONAddrEnc   = Encoding(serial.EncodingJSONAddr)
+	CellEnc       = Encoding(serial.EncodingCell)
 
 	sentinel Encoding = 127
 )
@@ -621,4 +623,32 @@ func expectSize(buf []byte, sz ByteSize) {
 // stringFromBytes converts a []byte to string without a heap allocation.
 func stringFromBytes(b []byte) string {
 	return *(*string)(unsafe.Pointer(&b))
+}
+
+// Cell is a representation of a subregion for Spatial Indexes
+// Level encodes the size of the region
+// ZValue is the z-value encoding of the minimum point of the bbox of a geometry
+type Cell struct {
+	Level  byte
+	ZValue [16]byte
+}
+
+func compareCell(l, r Cell) int {
+	if l.Level != r.Level {
+		return int(l.Level - r.Level)
+	}
+	return bytes.Compare(l.ZValue[:], r.ZValue[:])
+}
+
+func readCell(val []byte) (res Cell) {
+	expectSize(val, cellSize)
+	res.Level = val[0]
+	copy(res.ZValue[:], val[1:])
+	return
+}
+
+func writeCell(buf []byte, v Cell) {
+	expectSize(buf, cellSize)
+	buf[0] = v.Level
+	copy(buf[1:], v.ZValue[:])
 }
