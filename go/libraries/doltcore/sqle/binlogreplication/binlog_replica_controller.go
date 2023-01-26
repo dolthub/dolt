@@ -60,10 +60,6 @@ func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 	controller.status.ReplicaIoRunning = binlogreplication.ReplicaIoNotRunning
 	controller.status.ReplicaSqlRunning = binlogreplication.ReplicaSqlNotRunning
 	controller.applier = newBinlogReplicaApplier(controller.filters)
-
-	// TODO: Set the log level in the tests; don't just hardcode it here
-	logger.SetLevel(logrus.TraceLevel)
-
 	return &controller
 }
 

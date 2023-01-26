@@ -393,7 +393,7 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 	cmd := exec.Command("go", "run", "./cmd/dolt",
 		"sql-server",
 		"-uroot",
-		"--loglevel=DEBUG",
+		"--loglevel=TRACE",
 		fmt.Sprintf("--data-dir=%s", dir),
 		fmt.Sprintf("--port=%v", doltPort),
 		fmt.Sprintf("--socket=dolt.%v.sock", doltPort))
