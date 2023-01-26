@@ -200,12 +200,8 @@ func walkAddresses(ctx context.Context, nd Node, cb AddressCb) (err error) {
 	return message.WalkAddresses(ctx, nd.msg, cb)
 }
 
-func GetLastKey(nd Node) Item {
+func getLastKey(nd Node) Item {
 	return nd.GetKey(int(nd.count) - 1)
-}
-
-func GetLastValue(nd Node) Item {
-	return nd.GetValue(int(nd.count) - 1)
 }
 
 // OutputProllyNode writes the node given to the writer given in a semi-human-readable format, where values are still

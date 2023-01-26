@@ -43,7 +43,7 @@ func writeNewNode[S message.Serializer](ctx context.Context, ns NodeStore, bld *
 
 	var lastKey Item
 	if node.count > 0 {
-		k := GetLastKey(node)
+		k := getLastKey(node)
 		lastKey = ns.Pool().Get(uint64(len(k)))
 		copy(lastKey, k)
 	}

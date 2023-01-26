@@ -247,10 +247,12 @@ func (t StaticMap[K, V, O]) Has(ctx context.Context, query K) (ok bool, err erro
 	return
 }
 
-func (t StaticMap[K, V, O]) Last(ctx context.Context) (key K, value V, err error) {
+func (t StaticMap[K, V, O]) LastKey(ctx context.Context) (key K) {
 	if t.Root.count > 0 {
-		key = K(GetLastKey(t.Root))
-		value = V(GetLastValue(t.Root))
+		// if |t.Root| is a leaf node, it represents the entire map
+		// if |t.Root| is an internal node, its last key is the
+		// delimiter for last subtree and is the last key in the map
+		key = K(getLastKey(t.Root))
 	}
 	return
 }
