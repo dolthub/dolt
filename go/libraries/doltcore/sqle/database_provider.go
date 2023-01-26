@@ -286,9 +286,20 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 			revisionDbs, err := p.allRevisionDbs(ctx, db)
 			if err != nil {
 				// TODO: this interface is wrong, needs to return errors
+				ctx.GetLogger().Warnf("error fetching revision databases: %s", err.Error())
 				continue
 			}
 			all = append(all, revisionDbs...)
+			
+			// if one of the revisions we just expanded matches the curr db, mark it so we don't double-include that 
+			// revision db
+			if !foundDatabase && currDb != "" {
+				for _, revisionDb := range revisionDbs {
+					if strings.ToLower(revisionDb.Name()) == currDb {
+						foundDatabase = true
+					} 
+				}
+			}
 		}
 	}
 	p.mu.RUnlock()
