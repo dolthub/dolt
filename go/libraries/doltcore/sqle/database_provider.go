@@ -270,9 +270,9 @@ func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 
 func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database) {
 	p.mu.RLock()
-	
+
 	showBranches, _ := dsess.GetBooleanSystemVar(ctx, dsess.ShowBranchDatabase)
-	
+
 	all = make([]sql.Database, 0, len(p.databases))
 	var foundDatabase bool
 	currDb := strings.ToLower(ctx.GetCurrentDatabase())
@@ -281,14 +281,14 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 			foundDatabase = true
 		}
 		all = append(all, db)
-		
+
 		if showBranches {
 			revisionDbs, err := p.allRevisionDbs(ctx, db)
 			if err != nil {
 				// TODO: this interface is wrong, needs to return errors
 				continue
 			}
-			all = append(all, revisionDbs...)	
+			all = append(all, revisionDbs...)
 		}
 	}
 	p.mu.RUnlock()
@@ -320,7 +320,7 @@ func (p DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db SqlDatabase) (
 	if err != nil {
 		return nil, err
 	}
-	
+
 	revDbs := make([]sql.Database, len(branches))
 	for i, branch := range branches {
 		revDb, _, ok, err := p.databaseForRevision(ctx, fmt.Sprintf("%s/%s", db.Name(), branch.GetPath()))
@@ -332,7 +332,7 @@ func (p DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db SqlDatabase) (
 		}
 		revDbs[i] = revDb
 	}
-	
+
 	return revDbs, nil
 }
 
