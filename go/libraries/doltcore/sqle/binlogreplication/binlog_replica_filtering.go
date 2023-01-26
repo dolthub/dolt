@@ -16,9 +16,10 @@ package binlogreplication
 
 import (
 	"fmt"
+	"sync"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/mysql"
-	"sync"
 )
 
 // filterConfiguration defines the binlog filtering rules applied on the replica.

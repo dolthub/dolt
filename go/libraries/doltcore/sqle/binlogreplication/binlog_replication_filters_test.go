@@ -16,9 +16,10 @@ package binlogreplication
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestBinlogReplicationFilters_ignoreTablesOnly tests that the ignoreTables replication

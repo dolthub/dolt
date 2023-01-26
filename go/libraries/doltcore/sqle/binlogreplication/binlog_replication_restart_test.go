@@ -15,10 +15,11 @@
 package binlogreplication
 
 import (
-	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestBinlogReplicationServerRestart tests that a replica can be configured and started, then the

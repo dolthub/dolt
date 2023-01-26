@@ -16,9 +16,11 @@ package binlogreplication
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
 
 // persistReplicationConfiguration saves the specified |replicaSourceInfo| to disk; if any problems are encountered

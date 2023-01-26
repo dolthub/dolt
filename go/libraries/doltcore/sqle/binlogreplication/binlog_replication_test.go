@@ -16,7 +16,6 @@ package binlogreplication
 
 import (
 	"fmt"
-	"github.com/jmoiron/sqlx"
 	"net"
 	"os"
 	"os/exec"
@@ -25,6 +24,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jmoiron/sqlx"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"

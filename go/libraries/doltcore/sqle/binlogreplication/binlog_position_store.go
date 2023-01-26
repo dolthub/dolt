@@ -16,14 +16,16 @@ package binlogreplication
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/mysql"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/mysql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 const binlogPositionFilename = "binlog-position"
