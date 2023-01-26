@@ -290,14 +290,14 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 				continue
 			}
 			all = append(all, revisionDbs...)
-			
-			// if one of the revisions we just expanded matches the curr db, mark it so we don't double-include that 
+
+			// if one of the revisions we just expanded matches the curr db, mark it so we don't double-include that
 			// revision db
 			if !foundDatabase && currDb != "" {
 				for _, revisionDb := range revisionDbs {
 					if strings.ToLower(revisionDb.Name()) == currDb {
 						foundDatabase = true
-					} 
+					}
 				}
 			}
 		}
