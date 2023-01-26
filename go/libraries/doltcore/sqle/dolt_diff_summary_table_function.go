@@ -249,7 +249,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		return nil, err
 	}
 
-	sqledb, ok := ds.database.(Database)
+	sqledb, ok := ds.database.(SqlDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unexpected database type: %T", ds.database)
 	}

@@ -1713,7 +1713,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			{
 				// Trying to delete a branch with unpushed changes fails without force option
 				Query:          "CALL DOLT_BRANCH('-d', 'myNewBranchWithCommit')",
-				ExpectedErrStr: "attempted to delete a branch that is not fully merged into its parent; use `-f` to force",
+				ExpectedErrStr: "branch is not fully merged",
 			},
 			{
 				Query:    "CALL DOLT_BRANCH('-df', 'myNewBranchWithCommit')",
@@ -1832,12 +1832,28 @@ func gcSetup() []string {
 
 var DoltGC = []queries.ScriptTest{
 	{
-		Name:        "base case: shallow gc",
+		Name:        "base case: gc",
 		SetUpScript: gcSetup(),
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:          "CALL DOLT_GC(null);",
+				ExpectedErrStr: "error: invalid usage",
+			},
+			{
+				Query:          "CALL DOLT_GC('bad', '--shallow');",
+				ExpectedErrStr: "error: invalid usage",
+			},
+			{
+				Query:    "CALL DOLT_GC('--shallow');",
+				Expected: []sql.Row{{1}},
+			},
+			{
 				Query:    "CALL DOLT_GC();",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:          "CALL DOLT_GC();",
+				ExpectedErrStr: "no changes since last gc",
 			},
 		},
 	},

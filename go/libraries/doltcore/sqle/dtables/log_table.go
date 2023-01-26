@@ -57,6 +57,9 @@ func (dt *LogTable) RowCount(ctx *sql.Context) (uint64, error) {
 		// TODO: remove this when we deprecate LD
 		return 1000, nil
 	}
+	if cc.IsEmpty() {
+		return 1, nil
+	}
 	cnt, err := cc.Count()
 	return uint64(cnt + 1), err
 }

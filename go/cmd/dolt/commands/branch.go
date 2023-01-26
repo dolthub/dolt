@@ -72,6 +72,8 @@ const (
 	showCurrentFlag = "show-current"
 )
 
+var ErrUnmergedBranchDelete = errors.New("The branch '%s' is not fully merged.\nIf you are sure you want to delete it, run 'dolt branch -D %s'.")
+
 type BranchCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -124,9 +126,9 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 	case apr.Contains(copyFlag):
 		return copyBranch(ctx, dEnv, apr, usage)
 	case apr.Contains(deleteFlag):
-		return deleteBranches(ctx, dEnv, apr, usage)
+		return deleteBranches(ctx, dEnv, apr, usage, apr.Contains(forceFlag))
 	case apr.Contains(deleteForceFlag):
-		return deleteForceBranches(ctx, dEnv, apr, usage)
+		return deleteBranches(ctx, dEnv, apr, usage, true)
 	case apr.Contains(listFlag):
 		return printBranches(ctx, dEnv, apr, usage)
 	case apr.Contains(showCurrentFlag):
@@ -261,7 +263,7 @@ func moveBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 	force := apr.Contains(forceFlag)
 	src := apr.Arg(0)
 	dest := apr.Arg(1)
-	err := actions.RenameBranch(ctx, dEnv.DbData(), dEnv.Config, src, apr.Arg(1), force)
+	err := actions.RenameBranch(ctx, dEnv.DbData(), src, apr.Arg(1), dEnv, force)
 
 	var verr errhand.VerboseError
 	if err != nil {
@@ -310,31 +312,26 @@ func copyBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func deleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
-	return handleDeleteBranches(ctx, dEnv, apr, usage, apr.Contains(forceFlag))
-}
-
-func deleteForceBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
-	return handleDeleteBranches(ctx, dEnv, apr, usage, true)
-}
-
-func handleDeleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter, force bool) int {
+func deleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter, force bool) int {
 	if apr.NArg() == 0 {
 		usage()
 		return 1
 	}
+
 	for i := 0; i < apr.NArg(); i++ {
 		brName := apr.Arg(i)
 
-		err := actions.DeleteBranch(ctx, dEnv.DbData(), dEnv.Config, brName, actions.DeleteOptions{
+		err := actions.DeleteBranch(ctx, dEnv.DbData(), brName, actions.DeleteOptions{
 			Force:  force,
 			Remote: apr.Contains(remoteFlag),
-		})
+		}, dEnv)
 
 		if err != nil {
 			var verr errhand.VerboseError
 			if err == doltdb.ErrBranchNotFound {
 				verr = errhand.BuildDError("fatal: branch '%s' not found", brName).Build()
+			} else if err == actions.ErrUnmergedBranch {
+				verr = errhand.BuildDError(ErrUnmergedBranchDelete.Error(), brName, brName).Build()
 			} else if err == actions.ErrCOBranchDelete {
 				verr = errhand.BuildDError("error: Cannot delete checked out branch '%s'", brName).Build()
 			} else {

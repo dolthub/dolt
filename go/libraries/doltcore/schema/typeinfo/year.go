@@ -20,7 +20,7 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -33,7 +33,7 @@ type yearType struct {
 
 var _ TypeInfo = (*yearType)(nil)
 
-var YearType = &yearType{types2.Year}
+var YearType = &yearType{gmstypes.Year}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *yearType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {

@@ -363,7 +363,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		return nil, err
 	}
 
-	sqledb, ok := ltf.database.(Database)
+	sqledb, ok := ltf.database.(SqlDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unexpected database type: %T", ltf.database)
 	}
@@ -377,13 +377,13 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 			return nil, err
 		}
 
-		commit, err = sqledb.ddb.Resolve(ctx, cs, nil)
+		commit, err = sqledb.DbData().Ddb.Resolve(ctx, cs, nil)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		// If revisionExpr not defined, use session head
-		commit, err = sess.GetHeadCommit(ctx, sqledb.name)
+		commit, err = sess.GetHeadCommit(ctx, sqledb.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -393,7 +393,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		return commit.NumParents() >= ltf.minParents, nil
 	}
 
-	cHashToRefs, err := getCommitHashToRefs(ctx, sqledb.ddb, ltf.decoration)
+	cHashToRefs, err := getCommitHashToRefs(ctx, sqledb.DbData().Ddb, ltf.decoration)
 	if err != nil {
 		return nil, err
 	}
@@ -405,7 +405,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 			return nil, err
 		}
 
-		secondCommit, err := sqledb.ddb.Resolve(ctx, secondCs, nil)
+		secondCommit, err := sqledb.DbData().Ddb.Resolve(ctx, secondCs, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -422,19 +422,19 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 			}
 
 			// Use merge base as excluding commit
-			mergeCommit, err := sqledb.ddb.Resolve(ctx, mergeCs, nil)
+			mergeCommit, err := sqledb.DbData().Ddb.Resolve(ctx, mergeCs, nil)
 			if err != nil {
 				return nil, err
 			}
 
-			return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.ddb, []*doltdb.Commit{commit, secondCommit}, mergeCommit, matchFunc, cHashToRefs)
+			return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, []*doltdb.Commit{commit, secondCommit}, mergeCommit, matchFunc, cHashToRefs)
 		}
 
-		return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.ddb, []*doltdb.Commit{commit}, secondCommit, matchFunc, cHashToRefs)
+		return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, []*doltdb.Commit{commit}, secondCommit, matchFunc, cHashToRefs)
 
 	}
 
-	return ltf.NewLogTableFunctionRowIter(ctx, sqledb.ddb, commit, matchFunc, cHashToRefs)
+	return ltf.NewLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commit, matchFunc, cHashToRefs)
 }
 
 func getCommitHashToRefs(ctx *sql.Context, ddb *doltdb.DoltDB, decoration string) (map[hash.Hash][]string, error) {

@@ -24,7 +24,7 @@ import (
 	"unsafe"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -41,16 +41,16 @@ const (
 //
 // This type handles the BLOB types. BINARY and VARBINARY are handled by inlineBlobType.
 type varBinaryType struct {
-	sqlBinaryType types2.StringType
+	sqlBinaryType sql.StringType
 }
 
 var _ TypeInfo = (*varBinaryType)(nil)
 
 var (
-	TinyBlobType   TypeInfo = &varBinaryType{sqlBinaryType: types2.TinyBlob}
-	BlobType       TypeInfo = &varBinaryType{sqlBinaryType: types2.Blob}
-	MediumBlobType TypeInfo = &varBinaryType{sqlBinaryType: types2.MediumBlob}
-	LongBlobType   TypeInfo = &varBinaryType{sqlBinaryType: types2.LongBlob}
+	TinyBlobType   TypeInfo = &varBinaryType{sqlBinaryType: gmstypes.TinyBlob}
+	BlobType       TypeInfo = &varBinaryType{sqlBinaryType: gmstypes.Blob}
+	MediumBlobType TypeInfo = &varBinaryType{sqlBinaryType: gmstypes.MediumBlob}
+	LongBlobType   TypeInfo = &varBinaryType{sqlBinaryType: gmstypes.LongBlob}
 )
 
 func CreateVarBinaryTypeFromParams(params map[string]string) (TypeInfo, error) {
@@ -64,7 +64,7 @@ func CreateVarBinaryTypeFromParams(params map[string]string) (TypeInfo, error) {
 	} else {
 		return nil, fmt.Errorf(`create varbinary type info is missing param "%v"`, varBinaryTypeParam_Length)
 	}
-	sqlType, err := types2.CreateBinary(sqltypes.Blob, length)
+	sqlType, err := gmstypes.CreateBinary(sqltypes.Blob, length)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +174,7 @@ func (ti *varBinaryType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *varBinaryType) Promote() TypeInfo {
-	return &varBinaryType{ti.sqlBinaryType.Promote().(types2.StringType)}
+	return &varBinaryType{ti.sqlBinaryType.Promote().(sql.StringType)}
 }
 
 // String implements TypeInfo interface.

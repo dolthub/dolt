@@ -303,11 +303,11 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 	return all
 }
 
-func (p DoltDatabaseProvider) GetRemoteDB(ctx *sql.Context, srcDB *doltdb.DoltDB, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
+func (p DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
 	if withCaching {
-		return r.GetRemoteDB(ctx, srcDB.ValueReadWriter().Format(), p.remoteDialer)
+		return r.GetRemoteDB(ctx, format, p.remoteDialer)
 	}
-	return r.GetRemoteDBWithoutCaching(ctx, srcDB.ValueReadWriter().Format(), p.remoteDialer)
+	return r.GetRemoteDBWithoutCaching(ctx, format, p.remoteDialer)
 }
 
 func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) error {
@@ -929,7 +929,7 @@ func (p DoltDatabaseProvider) GetRevisionForRevisionDatabase(ctx *sql.Context, d
 // IsRevisionDatabase returns true if the specified dbName represents a database that is tied to a specific
 // branch or commit from a database (e.g. "dolt/branch1").
 func (p DoltDatabaseProvider) IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error) {
-	dbName, revision, err := p.GetRevisionForRevisionDatabase(ctx, dbName)
+	_, revision, err := p.GetRevisionForRevisionDatabase(ctx, dbName)
 	if err != nil {
 		return false, err
 	}

@@ -40,7 +40,7 @@ var ExpectedHeader = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2023|
 
 `)
 
-var ExpectedHeaderForFileFromNoms = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2019-2020|2019-2021|2019-2022|2020-2021|2020-2022) Dolthub, Inc.
+var ExpectedHeaderForFileFromNoms = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2023|2019-2020|2019-2021|2019-2022|2020-2021|2020-2022) Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 \(the "License"\);
 // you may not use this file except in compliance with the License.

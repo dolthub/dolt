@@ -42,6 +42,7 @@ type GCSBlobstore struct {
 
 var _ Blobstore = &GCSBlobstore{}
 
+// NewGCSBlobstore creates a new instance of a GCSBlobstore
 func NewGCSBlobstore(gcs *storage.Client, bucketName, prefix string) *GCSBlobstore {
 	for len(prefix) > 0 && prefix[0] == '/' {
 		prefix = prefix[1:]

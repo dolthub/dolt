@@ -24,7 +24,7 @@ import (
 	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"golang.org/x/sync/errgroup"
 
@@ -185,13 +185,13 @@ func equalRows(old, new sql.Row, sch sql.Schema) (bool, error) {
 		// for precision changes between formats
 		if _, ok := old[i].(time.Time); ok {
 			var o, n interface{}
-			if o, err = types2.Int64.Convert(old[i]); err != nil {
+			if o, err = gmstypes.Int64.Convert(old[i]); err != nil {
 				return false, err
 			}
-			if n, err = types2.Int64.Convert(new[i]); err != nil {
+			if n, err = gmstypes.Int64.Convert(new[i]); err != nil {
 				return false, err
 			}
-			if cmp, err = types2.Int64.Compare(o, n); err != nil {
+			if cmp, err = gmstypes.Int64.Compare(o, n); err != nil {
 				return false, err
 			}
 		} else {

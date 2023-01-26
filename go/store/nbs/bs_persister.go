@@ -21,6 +21,8 @@ import (
 	"io"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/dolthub/dolt/go/store/blobstore"
 )
 
@@ -53,17 +55,23 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 	records, tail := splitTableParts(data, chunkCount)
 
 	// first write table records and tail (index+footer) as separate blobs
-	if _, err = bsp.bs.Put(ctx, name+tableRecordsExt, bytes.NewBuffer(records)); err != nil {
-		return emptyChunkSource{}, err
+	eg, ectx := errgroup.WithContext(ctx)
+	eg.Go(func() (err error) {
+		_, err = bsp.bs.Put(ectx, name+tableRecordsExt, bytes.NewBuffer(records))
+		return
+	})
+	eg.Go(func() (err error) {
+		_, err = bsp.bs.Put(ectx, name+tableTailExt, bytes.NewBuffer(tail))
+		return
+	})
+	if err = eg.Wait(); err != nil {
+		return nil, err
 	}
-	if _, err = bsp.bs.Put(ctx, name+tableTailExt, bytes.NewBuffer(tail)); err != nil {
-		return emptyChunkSource{}, err
-	}
+
 	// then concatenate into a final blob
 	if _, err = bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt}); err != nil {
 		return emptyChunkSource{}, err
 	}
-
 	rdr := &bsTableReaderAt{name, bsp.bs}
 	return newReaderFromIndexData(ctx, bsp.q, data, address, rdr, bsp.blockSize)
 }

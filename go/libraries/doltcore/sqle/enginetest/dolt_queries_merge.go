@@ -2253,6 +2253,125 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "unique key violation should be thrown even if a PK column is used in the unique index",
+		SetUpScript: []string{
+			"create table t (col1 int not null, col2 int not null, col3 int, primary key (col1, col2));",
+			"alter table t add unique (col2, col3);",
+			"call dolt_commit('-Am', 'init');",
+
+			"call dolt_checkout('-b', 'right');",
+			"insert into t values (1, 2, 3);",
+			"call dolt_commit('-Am', 'right');",
+
+			"call dolt_checkout('main');",
+			"insert into t values (2, 2, 3);",
+			"call dolt_commit('-Am', 'left');",
+
+			"set dolt_force_transaction_commit = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select col1, col2, col3 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{1, 2, 3}, {2, 2, 3}},
+			},
+		},
+	},
+	{
+		Name: "unique key violations should not be thrown for keys with null values",
+		SetUpScript: []string{
+			"create table t (col1 int not null, col2 int not null, col3 int, primary key (col1, col2));",
+			"alter table t add unique (col2, col3);",
+			"call dolt_commit('-Am', 'init');",
+
+			"call dolt_checkout('-b', 'right');",
+			"insert into t values (1, 2, null);",
+			"call dolt_commit('-Am', 'right');",
+
+			"call dolt_checkout('main');",
+			"insert into t values (2, 2, null);",
+			"call dolt_commit('-Am', 'left');",
+
+			"set dolt_force_transaction_commit = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select count(*) from dolt_constraint_violations;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 2, nil}, {2, 2, nil}},
+			},
+		},
+	},
+	{
+		// this won't automatically become a PK because col2 is nullable
+		Name: "unique key violation for keyless table",
+		SetUpScript: []string{
+			"create table t (col1 int not null, col2 int, col3 int);",
+			"alter table t add unique index (col1, col2);",
+			"call dolt_commit('-Am', 'init');",
+
+			"call dolt_checkout('-b', 'right');",
+			"insert into t values (1, null, null);",
+			"insert into t values (3, 3, null);",
+			"call dolt_commit('-Am', 'right cm');",
+
+			"call dolt_checkout('main');",
+			"insert into t values (2, null, null);",
+			"insert into t values (3, 3, 1);",
+			"call dolt_commit('-Am', 'left cm');",
+
+			"set dolt_force_transaction_commit = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select col1, col2, col3 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{3, 3, nil}, {3, 3, 1}},
+			},
+		},
+	},
+	{
+		Name: "regression test for bad column ordering in schema",
+		SetUpScript: []string{
+			"CREATE TABLE t (col1 enum ('A', 'B'), col2 varchar(max), primary key (col2));",
+			"ALTER TABLE t add unique index (col1);",
+			"call DOLT_COMMIT('-Am', 'initial');",
+
+			"call DOLT_CHECKOUT('-b', 'right');",
+			"insert into t values ('A', 'first');",
+			"call DOLT_COMMIT('-Am', 'right');",
+
+			"call DOLT_CHECKOUT('main');",
+			"insert into t values ('A', 'second');",
+			"call DOLT_COMMIT('-Am', 'left');",
+
+			"set dolt_force_transaction_commit = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select col1, col2 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{uint64(1), "first"}, {uint64(1), "second"}},
+			},
+		},
+	},
+	{
 		Name: "Multiple foreign key violations for a given row not supported",
 		SetUpScript: []string{
 			"SET dolt_force_transaction_commit = on;",

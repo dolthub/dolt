@@ -211,6 +211,8 @@ func buildIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStor
 		kb := val.NewTupleBuilder(kd)
 		p := m.Pool()
 
+		pkMapping := ordinalMappingFromIndex(index)
+
 		mergedMap, err := creation.BuildUniqueProllyIndex(
 			ctx,
 			vrw,
@@ -219,8 +221,8 @@ func buildIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStor
 			index,
 			m,
 			func(ctx context.Context, existingKey, newKey val.Tuple) (err error) {
-				eK := getSuffix(kb, p, existingKey)
-				nK := getSuffix(kb, p, newKey)
+				eK := getPKFromSecondaryKey(kb, p, pkMapping, existingKey)
+				nK := getPKFromSecondaryKey(kb, p, pkMapping, newKey)
 				err = replaceUniqueKeyViolation(ctx, artEditor, m, eK, kd, theirRootIsh, vInfo, tblName)
 				if err != nil {
 					return err

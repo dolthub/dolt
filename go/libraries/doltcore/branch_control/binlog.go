@@ -203,10 +203,10 @@ func (binlog *Binlog) Rows() []BinlogRow {
 
 // Serialize returns the offset for the BinlogRow written to the given builder.
 func (row *BinlogRow) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
-	database := b.CreateString(row.Database)
-	branch := b.CreateString(row.Branch)
-	user := b.CreateString(row.User)
-	host := b.CreateString(row.Host)
+	database := b.CreateSharedString(row.Database)
+	branch := b.CreateSharedString(row.Branch)
+	user := b.CreateSharedString(row.User)
+	host := b.CreateSharedString(row.Host)
 
 	serial.BranchControlBinlogRowStart(b)
 	serial.BranchControlBinlogRowAddIsInsert(b, row.IsInsert)

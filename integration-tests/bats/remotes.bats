@@ -1295,6 +1295,11 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
 
+    # test pull with workspace up to date
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+
     # turn back on the configs and make a change in the remote
     dolt config --global --add user.name mysql-test-runner
     dolt config --global --add user.email mysql-test-runner@liquidata.co

@@ -119,8 +119,7 @@ func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.H
 	return gcs.newGen.GetManyCompressed(ctx, notInOldGen, found)
 }
 
-// Returns true iff the value at the address |h| is contained in the
-// store
+// Has returns true iff the value at the address |h| is contained in the store
 func (gcs *GenerationalNBS) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	has, err := gcs.oldGen.Has(ctx, h)
 
@@ -135,20 +134,24 @@ func (gcs *GenerationalNBS) Has(ctx context.Context, h hash.Hash) (bool, error) 
 	return gcs.newGen.Has(ctx, h)
 }
 
-// Returns a new HashSet containing any members of |hashes| that are
-// absent from the store.
+// HasMany returns a new HashSet containing any members of |hashes| that are absent from the store.
 func (gcs *GenerationalNBS) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error) {
-	notInOldGen, err := gcs.oldGen.HasMany(ctx, hashes)
+	gcs.newGen.mu.RLock()
+	defer gcs.newGen.mu.RUnlock()
+	return gcs.hasMany(toHasRecords(hashes))
+}
 
+func (gcs *GenerationalNBS) hasMany(recs []hasRecord) (absent hash.HashSet, err error) {
+	absent, err = gcs.newGen.hasMany(recs)
 	if err != nil {
 		return nil, err
+	} else if len(absent) == 0 {
+		return absent, nil
 	}
 
-	if len(notInOldGen) == 0 {
-		return notInOldGen, nil
-	}
-
-	return gcs.newGen.HasMany(ctx, notInOldGen)
+	gcs.oldGen.mu.RLock()
+	defer gcs.oldGen.mu.RUnlock()
+	return gcs.oldGen.hasMany(recs)
 }
 
 func (gcs *GenerationalNBS) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
@@ -168,19 +171,7 @@ func (gcs *GenerationalNBS) errorIfDangling(ctx context.Context, addrs hash.Hash
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
 func (gcs *GenerationalNBS) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
-	addrs, err := getAddrs(ctx, c)
-	if err != nil {
-		return err
-	}
-
-	err = gcs.errorIfDangling(ctx, addrs)
-	if err != nil {
-		return err
-	}
-
-	return gcs.newGen.Put(ctx, c, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-		return nil, nil
-	})
+	return gcs.newGen.Put(ctx, c, getAddrs)
 }
 
 // Returns the NomsVersion with which this ChunkSource is compatible.
@@ -211,7 +202,7 @@ func (gcs *GenerationalNBS) Root(ctx context.Context) (hash.Hash, error) {
 // persisted root hash from last to current (or keeps it the same).
 // If last doesn't match the root in persistent storage, returns false.
 func (gcs *GenerationalNBS) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
-	return gcs.newGen.Commit(ctx, current, last)
+	return gcs.newGen.commit(ctx, current, last, gcs.hasMany)
 }
 
 // Stats may return some kind of struct that reports statistics about the

@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -39,9 +39,9 @@ type datetimeType struct {
 
 var _ TypeInfo = (*datetimeType)(nil)
 var (
-	DateType      = &datetimeType{types2.Date}
-	DatetimeType  = &datetimeType{types2.Datetime}
-	TimestampType = &datetimeType{types2.Timestamp}
+	DateType      = &datetimeType{gmstypes.Date}
+	DatetimeType  = &datetimeType{gmstypes.Datetime}
+	TimestampType = &datetimeType{gmstypes.Timestamp}
 )
 
 func CreateDatetimeTypeFromParams(params map[string]string) (TypeInfo, error) {

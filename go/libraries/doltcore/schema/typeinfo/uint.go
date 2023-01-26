@@ -20,7 +20,7 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -41,11 +41,11 @@ type uintType struct {
 
 var _ TypeInfo = (*uintType)(nil)
 var (
-	Uint8Type  = &uintType{types2.Uint8}
-	Uint16Type = &uintType{types2.Uint16}
-	Uint24Type = &uintType{types2.Uint24}
-	Uint32Type = &uintType{types2.Uint32}
-	Uint64Type = &uintType{types2.Uint64}
+	Uint8Type  = &uintType{gmstypes.Uint8}
+	Uint16Type = &uintType{gmstypes.Uint16}
+	Uint24Type = &uintType{gmstypes.Uint24}
+	Uint32Type = &uintType{gmstypes.Uint32}
+	Uint64Type = &uintType{gmstypes.Uint64}
 )
 
 func CreateUintTypeFromParams(params map[string]string) (TypeInfo, error) {
@@ -72,15 +72,15 @@ func CreateUintTypeFromParams(params map[string]string) (TypeInfo, error) {
 func (ti *uintType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Uint); ok {
 		switch ti.sqlUintType {
-		case types2.Uint8:
+		case gmstypes.Uint8:
 			return uint8(val), nil
-		case types2.Uint16:
+		case gmstypes.Uint16:
 			return uint16(val), nil
-		case types2.Uint24:
+		case gmstypes.Uint24:
 			return uint32(val), nil
-		case types2.Uint32:
+		case gmstypes.Uint32:
 			return uint32(val), nil
-		case types2.Uint64:
+		case gmstypes.Uint64:
 			return uint64(val), nil
 		}
 	}
@@ -97,15 +97,15 @@ func (ti *uintType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (
 	case types.UintKind:
 		val := reader.ReadUint()
 		switch ti.sqlUintType {
-		case types2.Uint8:
+		case gmstypes.Uint8:
 			return uint8(val), nil
-		case types2.Uint16:
+		case gmstypes.Uint16:
 			return uint16(val), nil
-		case types2.Uint24:
+		case gmstypes.Uint24:
 			return uint32(val), nil
-		case types2.Uint32:
+		case gmstypes.Uint32:
 			return uint32(val), nil
-		case types2.Uint64:
+		case gmstypes.Uint64:
 			return val, nil
 		}
 	case types.NullKind:

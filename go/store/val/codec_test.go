@@ -240,6 +240,13 @@ func TestCompare(t *testing.T) {
 			l:   encStr("b"), r: encStr("a"),
 			cmp: 1,
 		},
+		// z-address
+		{
+			typ: Type{Enc: StringEnc},
+			l:   encCell(Cell{}),
+			r:   encCell(Cell{}),
+			cmp: 0,
+		},
 	}
 
 	for _, test := range tests {
@@ -294,6 +301,12 @@ func encDecimal(d decimal.Decimal) []byte {
 func encStr(s string) []byte {
 	buf := make([]byte, len(s)+1)
 	writeString(buf, s)
+	return buf
+}
+
+func encCell(c Cell) []byte {
+	buf := make([]byte, cellSize)
+	writeCell(buf, c)
 	return buf
 }
 

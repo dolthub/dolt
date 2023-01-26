@@ -22,7 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/parse"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -645,7 +645,7 @@ func TestModifyColumn(t *testing.T) {
 		schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 	)
-	ti, err := typeinfo.FromSqlType(types2.MustCreateStringWithDefaults(sqltypes.VarChar, 599))
+	ti, err := typeinfo.FromSqlType(gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 599))
 	require.NoError(t, err)
 	newNameColSameTag, err := schema.NewColumnWithTypeInfo("name", dtestutils.NameTag, ti, false, "", false, "", schema.NotNullConstraint{})
 	require.NoError(t, err)

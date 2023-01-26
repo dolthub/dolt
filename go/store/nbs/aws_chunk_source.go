@@ -22,20 +22,13 @@
 package nbs
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"time"
 )
 
 func tableExistsInChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (bool, error) {
-	idxSz := int(indexSize(chunkCount) + footerSize)
-	offsetSz := int((chunkCount - (chunkCount / 2)) * offsetSize)
-	buf, err := q.AcquireQuotaBytes(ctx, uint64(idxSz+offsetSz))
-	if err != nil {
-		return false, err
-	}
-	p := buf[:idxSz]
-
 	if al.tableMayBeInDynamo(chunkCount) {
 		data, err := ddb.ReadTable(ctx, name, nil)
 		if err != nil {
@@ -44,20 +37,18 @@ func tableExistsInChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3Obj
 		if data == nil {
 			return false, nil
 		}
-		if len(p) > len(data) {
-			return false, errors.New("not enough data for chunk count")
-		}
 		return true, nil
 	}
 
-	n, _, err := s3.ReadFromEnd(ctx, name, p, stats)
+	magic := make([]byte, magicNumberSize)
+	n, _, err := s3.ReadFromEnd(ctx, name, magic, stats)
 	if err != nil {
 		return false, err
 	}
-	if len(p) != n {
+	if n != len(magic) {
 		return false, errors.New("failed to read all data")
 	}
-	return true, nil
+	return bytes.Equal(magic, []byte(magicNumber)), nil
 }
 
 func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
@@ -114,10 +105,15 @@ func loadTableIndex(ctx context.Context, stats *Stats, cnt uint32, q MemoryQuota
 
 	t1 := time.Now()
 	if err := loadIndexBytes(buf[:idxSz]); err != nil {
+		q.ReleaseQuotaBytes(buf)
 		return nil, err
 	}
 	stats.IndexReadLatency.SampleTimeSince(t1)
 	stats.IndexBytesPerRead.Sample(uint64(len(buf)))
 
-	return parseTableIndexWithOffsetBuff(buf[:idxSz], buf[idxSz:], q)
+	idx, err := parseTableIndexWithOffsetBuff(buf[:idxSz], buf[idxSz:], q)
+	if err != nil {
+		q.ReleaseQuotaBytes(buf)
+	}
+	return idx, err
 }

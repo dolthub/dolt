@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-var DefaultInlineBlobType = &inlineBlobType{types2.MustCreateBinary(sqltypes.VarBinary, math.MaxUint16)}
+var DefaultInlineBlobType = &inlineBlobType{gmstypes.MustCreateBinary(sqltypes.VarBinary, math.MaxUint16)}
 
 func TestInlineBlobConvertNomsValueToValue(t *testing.T) {
 	tests := []struct {

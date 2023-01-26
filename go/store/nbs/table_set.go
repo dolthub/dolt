@@ -314,16 +314,21 @@ func (ts tableSet) flatten(ctx context.Context) (tableSet, error) {
 }
 
 func (ts tableSet) checkAllTablesExist(ctx context.Context, specs []tableSpec, stats *Stats) error {
-	for _, spec := range specs {
-		exists, err := ts.p.Exists(ctx, spec.name, spec.chunkCount, stats)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return fmt.Errorf("table spec does not exist")
-		}
+	eg, ectx := errgroup.WithContext(ctx)
+	eg.SetLimit(128)
+	for _, s := range specs {
+		spec := s
+		eg.Go(func() error {
+			exists, err := ts.p.Exists(ectx, spec.name, spec.chunkCount, stats)
+			if err != nil {
+				return err
+			} else if !exists {
+				return fmt.Errorf("table spec does not exist")
+			}
+			return nil
+		})
 	}
-	return nil
+	return eg.Wait()
 }
 
 // rebase returns a new tableSet holding the novel tables managed by |ts| and

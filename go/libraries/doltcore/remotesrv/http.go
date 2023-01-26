@@ -104,6 +104,7 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 			respWr.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		respWr.Header().Add("Accept-Ranges", "bytes")
 		logger, statusCode = readTableFile(logger, abs, respWr, req.Header.Get("Range"))
 
 	case http.MethodPost, http.MethodPut:
@@ -184,7 +185,7 @@ func readTableFile(logger *logrus.Entry, path string, respWr http.ResponseWriter
 			logger = logger.WithField("whole_file", true)
 			r, readSize, fileErr = getFileReader(path)
 		} else {
-			offset, length, err := offsetAndLenFromRange(rangeStr)
+			offset, length, headerStr, err := offsetAndLenFromRange(rangeStr)
 			if err != nil {
 				logger.Println(err.Error())
 				return logger, http.StatusBadRequest
@@ -194,7 +195,11 @@ func readTableFile(logger *logrus.Entry, path string, respWr http.ResponseWriter
 				"read_length": length,
 			})
 			readSize = length
-			r, fileErr = getFileReaderAt(path, offset, length)
+			var fSize int64
+			r, fSize, fileErr = getFileReaderAt(path, offset, length)
+			if fileErr == nil {
+				respWr.Header().Add("Content-Range", headerStr+strconv.Itoa(int(fSize)))
+			}
 		}
 	}
 	if fileErr != nil {
@@ -216,6 +221,12 @@ func readTableFile(logger *logrus.Entry, path string, respWr http.ResponseWriter
 			logger.WithError(err).Warn("failed to close file")
 		}
 	}()
+
+	if rangeStr == "" {
+		respWr.WriteHeader(http.StatusPartialContent)
+	} else {
+		respWr.WriteHeader(http.StatusOK)
+	}
 
 	n, err := io.Copy(respWr, r)
 	if err != nil {
@@ -313,34 +324,34 @@ func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, 
 	return logger, http.StatusOK
 }
 
-func offsetAndLenFromRange(rngStr string) (int64, int64, error) {
+func offsetAndLenFromRange(rngStr string) (int64, int64, string, error) {
 	if rngStr == "" {
-		return -1, -1, nil
+		return -1, -1, "", nil
 	}
 
 	if !strings.HasPrefix(rngStr, "bytes=") {
-		return -1, -1, errors.New("range string does not start with 'bytes=")
+		return -1, -1, "", errors.New("range string does not start with 'bytes=")
 	}
 
 	tokens := strings.Split(rngStr[6:], "-")
 
 	if len(tokens) != 2 {
-		return -1, -1, errors.New("invalid range format. should be bytes=#-#")
+		return -1, -1, "", errors.New("invalid range format. should be bytes=#-#")
 	}
 
 	start, err := strconv.ParseUint(strings.TrimSpace(tokens[0]), 10, 64)
 
 	if err != nil {
-		return -1, -1, errors.New("invalid offset is not a number. should be bytes=#-#")
+		return -1, -1, "", errors.New("invalid offset is not a number. should be bytes=#-#")
 	}
 
 	end, err := strconv.ParseUint(strings.TrimSpace(tokens[1]), 10, 64)
 
 	if err != nil {
-		return -1, -1, errors.New("invalid length is not a number. should be bytes=#-#")
+		return -1, -1, "", errors.New("invalid length is not a number. should be bytes=#-#")
 	}
 
-	return int64(start), int64(end-start) + 1, nil
+	return int64(start), int64(end-start) + 1, "bytes " + tokens[0] + "-" + tokens[1] + "/", nil
 }
 
 // getFileReader opens a file at the given path and returns an io.ReadCloser,
@@ -368,21 +379,21 @@ type closerReaderWrapper struct {
 	io.Closer
 }
 
-func getFileReaderAt(path string, offset int64, length int64) (io.ReadCloser, error) {
+func getFileReaderAt(path string, offset int64, length int64) (io.ReadCloser, int64, error) {
 	f, fSize, err := openFile(path)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	if fSize < int64(offset+length) {
-		return nil, fmt.Errorf("failed to read file %s at offset %d, length %d: %w", path, offset, length, ErrReadOutOfBounds)
+		return nil, 0, fmt.Errorf("failed to read file %s at offset %d, length %d: %w", path, offset, length, ErrReadOutOfBounds)
 	}
 
 	_, err = f.Seek(int64(offset), 0)
 	if err != nil {
-		return nil, fmt.Errorf("failed to seek file at path %s to offset %d: %w", path, offset, err)
+		return nil, 0, fmt.Errorf("failed to seek file at path %s to offset %d: %w", path, offset, err)
 	}
 
 	r := closerReaderWrapper{io.LimitReader(f, length), f}
-	return r, nil
+	return r, fSize, nil
 }

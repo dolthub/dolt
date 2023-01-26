@@ -21,7 +21,7 @@ import (
 	"io"
 	"time"
 
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -774,7 +774,7 @@ func jsonDataToNomsValue(ctx context.Context, vrw types.ValueReadWriter, data []
 	if err := json.Unmarshal(data, &doc); err != nil {
 		return types.JSON{}, err
 	}
-	sqlDoc := types2.JSONDocument{Val: doc}
+	sqlDoc := gmstypes.JSONDocument{Val: doc}
 	nomsJson, err := json2.NomsJSONFromJSONValue(ctx, vrw, sqlDoc)
 	if err != nil {
 		return types.JSON{}, err

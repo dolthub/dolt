@@ -241,7 +241,7 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 	if h.role == RolePrimary {
 		if err == nil {
 			h.currentError = nil
-			lgr.Tracef("cluster/commithook: successfully Commited chunks on destDB")
+			lgr.Tracef("cluster/commithook: successfully Committed chunks on destDB")
 			h.lastPushedHead = toPush
 			h.lastSuccess = incomingTime
 			h.nextPushAttempt = time.Time{}

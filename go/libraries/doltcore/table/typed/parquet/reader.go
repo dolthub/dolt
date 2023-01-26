@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/common"
 	"github.com/xitongsys/parquet-go/reader"
@@ -111,7 +111,7 @@ func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 			case typeinfo.DatetimeTypeIdentifier:
 				val = time.UnixMicro(val.(int64))
 			case typeinfo.TimeTypeIdentifier:
-				val = types2.Timespan(time.Duration(val.(int64)).Microseconds())
+				val = gmstypes.Timespan(time.Duration(val.(int64)).Microseconds())
 			}
 		}
 

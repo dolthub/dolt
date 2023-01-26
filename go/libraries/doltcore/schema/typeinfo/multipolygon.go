@@ -20,7 +20,7 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -28,12 +28,12 @@ import (
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type multipolygonType struct {
-	sqlMultiPolygonType types2.MultiPolygonType
+	sqlMultiPolygonType gmstypes.MultiPolygonType
 }
 
 var _ TypeInfo = (*multipolygonType)(nil)
 
-var MultiPolygonType = &multipolygonType{types2.MultiPolygonType{}}
+var MultiPolygonType = &multipolygonType{gmstypes.MultiPolygonType{}}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *multipolygonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
@@ -79,7 +79,7 @@ func (ti *multipolygonType) ConvertValueToNomsValue(ctx context.Context, vrw typ
 		return nil, err
 	}
 
-	return types.ConvertSQLMultiPolygonToTypesMultiPolygon(mpoly.(types2.MultiPolygon)), nil
+	return types.ConvertSQLMultiPolygonToTypesMultiPolygon(mpoly.(gmstypes.MultiPolygon)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -136,7 +136,7 @@ func (ti *multipolygonType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *multipolygonType) Promote() TypeInfo {
-	return &multipolygonType{ti.sqlMultiPolygonType.Promote().(types2.MultiPolygonType)}
+	return &multipolygonType{ti.sqlMultiPolygonType.Promote().(gmstypes.MultiPolygonType)}
 }
 
 // String implements TypeInfo interface.
@@ -228,5 +228,5 @@ func CreateMultiPolygonTypeFromParams(params map[string]string) (TypeInfo, error
 		}
 	}
 
-	return &multipolygonType{sqlMultiPolygonType: types2.MultiPolygonType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
+	return &multipolygonType{sqlMultiPolygonType: gmstypes.MultiPolygonType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }
