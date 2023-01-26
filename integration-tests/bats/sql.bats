@@ -1375,6 +1375,58 @@ SQL
     [[ "$output" =~ "exists" ]] || false
 }
 
+@test "sql: dolt_show_branch_databases" {
+    mkdir new && cd new
+
+    dolt sql <<SQL
+create database db1;
+create database db2;
+use db1;
+create table t1 (a int primary key);
+call dolt_commit('-Am', 'new table');
+call dolt_branch('b1');
+call dolt_branch('b2');
+use db2;
+create table t2 (b int primary key);
+call dolt_commit('-Am', 'new table');
+call dolt_branch('b3');
+call dolt_branch('b4');
+SQL
+
+    run dolt sql -r csv -q "show databases"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "db1" ]] || false
+    [[ "$output" =~ "db2" ]] || false
+    [[ ! "$output" =~ "/" ]] || false
+
+    run dolt sql -r csv -q "set dolt_show_branch_databases = 1; show databases"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 11 ] # 2 base dbs, 3 branch dbs each, 2 mysql dbs, 1 header line
+    [[ "$output" =~ "db1/b1" ]] || false
+    [[ "$output" =~ "db1/b2" ]] || false
+    [[ "$output" =~ "db1/main" ]] || false
+    [[ "$output" =~ "db2/b3" ]] || false
+    [[ "$output" =~ "db2/b4" ]] || false
+    [[ "$output" =~ "db2/main" ]] || false
+
+    run dolt sql -q "show databases"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "db1" ]] || false
+    [[ "$output" =~ "db2" ]] || false
+    [[ ! "$output" =~ "/" ]] || false
+
+    dolt sql -q "set @@persist.dolt_show_branch_databases = 1"
+    run dolt sql -r csv -q "show databases"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 11 ]
+
+    # make sure we aren't double-counting revision dbs
+    run dolt sql -r csv -q 'use `db1/main`; show databases'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Database changed" ]] || false
+    [ "${#lines[@]}" -eq 12 ] # one line for above output, 11 dbs
+}
+
 @test "sql: run outside a dolt directory" {
     mkdir new && cd new
 

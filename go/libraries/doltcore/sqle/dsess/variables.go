@@ -49,6 +49,7 @@ const (
 	AwsCredsFile                  = "aws_credentials_file"
 	AwsCredsProfile               = "aws_credentials_profile"
 	AwsCredsRegion                = "aws_credentials_region"
+	ShowBranchDatabases           = "dolt_show_branch_databases"
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"
@@ -166,7 +167,7 @@ func GetBooleanSystemVar(ctx *sql.Context, varName string) (bool, error) {
 		return false, fmt.Errorf("unexpected type for variable %s: %T", varName, val)
 	}
 
-	return i8 == 1, nil
+	return i8 == int8(1), nil
 }
 
 // IgnoreReplicationErrors returns true if the dolt_skip_replication_errors system variable is set to true, which means
