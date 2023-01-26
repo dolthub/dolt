@@ -296,7 +296,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 			return err
 		}
 		if !iscommit {
-			return fmt.Errorf("SetHead failed: reffered to value is not a tag:")
+			return fmt.Errorf("SetHead failed: referred to value is not a tag:")
 		}
 	default:
 		return fmt.Errorf("Unrecognized dataset value: %s", headType)
@@ -855,7 +855,7 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 		return types.Struct{}, fmt.Errorf("validateRefAsCommit: unable to validate ref; %s not found", r.TargetHash().String())
 	}
 	if rHead.TypeName() != commitName {
-		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred valus is not a commit")
+		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred values is not a commit")
 	}
 
 	var v types.Value
@@ -868,7 +868,7 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	}
 
 	if !is {
-		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred valus is not a commit")
+		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred values is not a commit")
 	}
 
 	return v.(types.Struct), nil

@@ -366,3 +366,12 @@ func (tb *TupleBuilder) ensureCapacity(sz ByteSize) {
 		}
 	}
 }
+
+// PutCell writes a Cell to the ith field of the Tuple being built.
+func (tb *TupleBuilder) PutCell(i int, v Cell) {
+	tb.Desc.expectEncoding(i, CellEnc)
+	tb.ensureCapacity(cellSize)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+cellSize]
+	writeCell(tb.fields[i], v)
+	tb.pos += cellSize
+}
