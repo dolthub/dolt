@@ -244,6 +244,16 @@ func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 		return j.contents, nil // |next| is stale
 	}
 
+	if j.wr.IsFull() {
+		// synchronously swap the journal file
+		nbsPath := filepath.Dir(j.path)
+		contents, wr, err := rotateJournalFile(ctx, nbsPath, j.backing, j.contents)
+		if err != nil {
+			return manifestContents{}, err
+		}
+		j.contents, j.wr = contents, wr
+	}
+
 	if writeHook != nil {
 		if err := writeHook(); err != nil {
 			return manifestContents{}, err

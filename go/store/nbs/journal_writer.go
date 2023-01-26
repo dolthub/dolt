@@ -93,7 +93,7 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 
 	_, err = os.Stat(path)
 	if err == nil {
-		return nil, fmt.Errorf("journal file %s already exists", chunkJournalName)
+		return nil, fmt.Errorf("journal file at %s already exists", path)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
@@ -188,7 +188,13 @@ func (wr *journalWriter) Snapshot() (io.Reader, int64, error) {
 func (wr *journalWriter) CurrentSize() int64 {
 	wr.lock.RLock()
 	defer wr.lock.RUnlock()
-	return wr.off
+	return wr.offset()
+}
+
+func (wr *journalWriter) IsFull() bool {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
+	return wr.offset() > chunkJournalFileSize
 }
 
 func (wr *journalWriter) Write(p []byte) (n int, err error) {
@@ -320,7 +326,7 @@ func (wr *journalWriter) flush() (err error) {
 }
 
 // todo: table file addr name
-func writeJournalToTable(ctx context.Context, journal io.ReadSeeker, wr io.Writer) (name addr, err error) {
+func writeJournalToTable(ctx context.Context, journal io.ReadSeeker, wr io.Writer) (spec tableSpec, err error) {
 	var uncompressed uint64
 	prefixes := make([]prefixIndexRec, 0, 1024)
 	_, err = processRecords(ctx, journal, func(_ int64, r journalRec) (err error) {
@@ -330,14 +336,15 @@ func writeJournalToTable(ctx context.Context, journal io.ReadSeeker, wr io.Write
 		if _, err = wr.Write(r.payload); err != nil {
 			return
 		}
+		spec.chunkCount++
 		prefixes = append(prefixes, prefixIndexRec{
 			prefix: r.address.Prefix(),
 			suffix: r.address.Suffix(),
 			order:  uint32(len(prefixes)),
 			size:   uint32(len(r.payload)),
+			// |r.payload| is snappy-encoded and starts with
+			// its uvarint-encoded uncompressed size
 		})
-		// |r.payload| is snappy-encoded and starts with
-		// its uvarint-encoded uncompressed size
 		sz, _ := binary.Uvarint(r.payload)
 		uncompressed += sz
 		return
@@ -346,11 +353,12 @@ func writeJournalToTable(ctx context.Context, journal io.ReadSeeker, wr io.Write
 	cnt := uint32(len(prefixes))
 	buf := make([]byte, indexSize(cnt)+footerSize)
 
-	var o uint64
-	if o, name, err = writeChunkIndex(buf, prefixes); err != nil {
+	var off uint64
+	off, spec.name, err = writeChunkIndex(buf, prefixes)
+	if err != nil {
 		return
 	}
-	writeFooter(buf[o:], cnt, uncompressed)
+	writeFooter(buf[off:], cnt, uncompressed)
 
 	_, err = wr.Write(buf)
 	return
