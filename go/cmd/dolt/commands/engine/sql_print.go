@@ -103,6 +103,11 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 		return err
 	}
 
+	// if there is no row data and result format is JSON, then create empty JSON.
+	if resultFormat == FormatJson && numRows == 0 {
+		iohelp.WriteLine(cli.CliOut, "{}")
+	}
+
 	if summary == PrintRowCountAndTiming {
 		err = printResultSetSummary(numRows, start)
 		if err != nil {
