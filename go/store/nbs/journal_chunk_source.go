@@ -87,10 +87,10 @@ func (m lookupMap) count() int {
 // it is not immutable and its set of chunks grows as
 // more commits are made to the chunkJournal.
 type journalChunkSource struct {
-	address      addr
-	journal      snapshotReader
-	lookups      lookupMap
-	compressedSz uint64
+	address        addr
+	journal        snapshotReader
+	lookups        lookupMap
+	uncompressedSz uint64
 }
 
 var _ chunkSource = journalChunkSource{}
@@ -185,8 +185,7 @@ func (s journalChunkSource) count() (uint32, error) {
 }
 
 func (s journalChunkSource) uncompressedLen() (uint64, error) {
-	// todo(andy)
-	return s.compressedSz, nil
+	return s.uncompressedSz, nil
 }
 
 func (s journalChunkSource) hash() addr {

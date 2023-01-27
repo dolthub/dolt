@@ -184,7 +184,7 @@ func (j *chunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkRea
 			return nil, err
 		}
 		j.src.lookups.put(*record.a, lookup)
-		j.src.compressedSz += uint64(cc.CompressedSize())
+		j.src.uncompressedSz += uint64(c.Size())
 	}
 	return j.src, nil
 }
