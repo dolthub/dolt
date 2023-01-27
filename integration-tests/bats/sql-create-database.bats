@@ -313,4 +313,10 @@ SQL
     [[ "$output" =~ "dolt_repo_$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
     [[ "$output" =~ "metabase" ]] || false
+
+    cd metabase
+    # check information_schema.SCHEMATA table
+    run dolt sql -q "select * from information_schema.SCHEMATA where schema_name = 'metabase';" -r csv
+    [[ "$output" =~ "def,metabase,utf8mb4,utf8mb4_unicode_ci,,NO" ]] || false
+    cd ..
 }

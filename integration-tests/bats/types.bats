@@ -56,6 +56,11 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, -40000000000000000000);"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test';" -r csv
+    [[ "$output" =~ 'test,pk,1,,NO,bigint,,,19,0,,,,bigint,PRI,"","insert,references,select,update","","",' ]] || false
+    [[ "$output" =~ 'test,v,2,,YES,bigint,,,19,0,,,,bigint,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: BIGINT UNSIGNED" {
@@ -88,6 +93,10 @@ DELIM
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, -1);"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS  where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,bigint,,,20,0,,,,bigint unsigned,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: BINARY(10)" {
@@ -111,6 +120,10 @@ SQL
     [[ "${lines[3]}" =~ " 1234567890 " ]] || false
     run dolt sql -q "INSERT INTO test VALUES (2, '12345678901');"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,binary,10,10,,,,,,binary(10),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: BIT(10)" {
@@ -136,6 +149,10 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, -1);"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,bit,,,10,,,,,bit(10),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: BLOB" {
@@ -157,6 +174,10 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1234567890 " ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,blob,65535,65535,,,,,,blob,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: BOOL" {
@@ -170,6 +191,11 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` tinyint" ]] || false
+
+    # check information_schema.COLUMNS table
+    # TODO : 'column_type' should be 'tinyint(1)'
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,tinyint,,,3,0,,,,tinyint,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: BOOLEAN" {
@@ -191,6 +217,11 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 0 " ]] || false
+
+    # check information_schema.COLUMNS table
+    # TODO : 'column_type' should be 'tinyint(1)'
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,tinyint,,,3,0,,,,tinyint,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: CHAR(10)" {
@@ -214,6 +245,10 @@ SQL
     [[ "${lines[3]}" =~ " 1234567890 " ]] || false
     run dolt sql -q "INSERT INTO test VALUES (2, '12345678901');"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,char,10,40,,,,utf8mb4,utf8mb4_0900_bin,char(10),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: CHARACTER(10)" {
@@ -227,6 +262,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` char(10)" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,char,10,40,,,,utf8mb4,utf8mb4_0900_bin,char(10),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: CHARACTER VARYING(10)" {
@@ -240,6 +279,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` varchar(10)" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,varchar,10,40,,,,utf8mb4,utf8mb4_0900_bin,varchar(10),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: DATE" {
@@ -285,6 +328,10 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, '10000-01-01 00:00:00');"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,date,,,,,,,,date,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: DATETIME" {
@@ -330,6 +377,10 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, '10000-01-01 00:00:00');"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,datetime,,,,,0,,,datetime,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: DEC" {
@@ -343,6 +394,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` decimal(10,0)" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,decimal,,,10,0,,,,"decimal(10,0)","","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: DEC(9)" {
@@ -356,6 +411,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` decimal(9,0)" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,decimal,,,9,0,,,,"decimal(9,0)","","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: DEC(9,5)" {
@@ -369,6 +428,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` decimal(9,5)" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,decimal,,,9,5,,,,"decimal(9,5)","","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: DECIMAL" {
@@ -382,6 +445,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` decimal(10,0)" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,decimal,,,10,0,,,,"decimal(10,0)","","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: DECIMAL(9)" {
@@ -395,6 +462,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` decimal(9,0)" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,decimal,,,9,0,,,,"decimal(9,0)","","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: DECIMAL(9,5)" {
@@ -418,6 +489,10 @@ SQL
     [[ "${lines[3]}" =~ " 2469.13578 " ]] || false
     run dolt sql -q "INSERT INTO test VALUES (2, 10000);"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,decimal,,,9,5,,,,"decimal(9,5)","","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: DOUBLE" {
@@ -452,6 +527,10 @@ pk,v
 DELIM
     run dolt table import -u test double.csv
     [ "$status" -ne "0" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,double,,,22,,,,,double,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: DOUBLE PRECISION" {
@@ -465,6 +544,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` double" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,double,,,22,,,,,double,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: Double with precision and scale correctly gets interpreted as a decimal" {
@@ -489,6 +572,10 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ "column_name, numeric_scale, numeric_precision" ]] || false
     [[ "$output" =~ "pk,5,2" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,double,,,5,1,,,,double(5,1),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: ENUM('a','b','c')" {
@@ -514,6 +601,10 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, '');"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ "test,v,2,,YES,enum,1,4,,,,utf8mb4,utf8mb4_0900_bin,\"enum('a','b','c')\",\"\",\"\",\"insert,references,select,update\",\"\",\"\"," ]] || false
 }
 
 @test "types: FIXED" {
@@ -527,6 +618,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` decimal(10,0)" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,decimal,,,10,0,,,,"decimal(10,0)","","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: FIXED(9)" {
@@ -540,6 +635,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` decimal(9,0)" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,decimal,,,9,0,,,,"decimal(9,0)","","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: FIXED(9,5)" {
@@ -553,6 +652,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` decimal(9,5)" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,decimal,,,9,5,,,,"decimal(9,5)","","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: FLOAT" {
@@ -596,6 +699,10 @@ pk,v
 DELIM
     run dolt table import -u test float.csv
     [ "$status" -ne "0" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,float,,,12,,,,,float,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: INT" {
@@ -621,6 +728,10 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, -2147483649);"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,int,,,10,0,,,,int,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: INT UNSIGNED" {
@@ -646,6 +757,10 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, -1);"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,int,,,10,0,,,,int unsigned,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: INTEGER" {
@@ -659,6 +774,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` int" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,int,,,10,0,,,,int,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: INTEGER UNSIGNED" {
@@ -672,6 +791,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` int unsigned" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,int,,,10,0,,,,int unsigned,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: LONG" {
@@ -685,6 +808,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` mediumtext" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,mediumtext,4194303,16777215,,,,utf8mb4,utf8mb4_0900_bin,mediumtext,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: LONG VARCHAR" {
@@ -698,6 +825,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` mediumtext" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,mediumtext,4194303,16777215,,,,utf8mb4,utf8mb4_0900_bin,mediumtext,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: LONGBLOB" {
@@ -719,6 +850,10 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1234567890 " ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,longblob,4294967295,4294967295,,,,,,longblob,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: LONGTEXT" {
@@ -763,6 +898,10 @@ SQL
     [[ "$output" =~ "5,01" ]] || false
     [[ "$output" =~ "6,0" ]] || false
     [[ "${#lines[@]}" = "6" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,longtext,1073741823,4294967295,,,,utf8mb4,utf8mb4_0900_bin,longtext,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: MEDIUMBLOB" {
@@ -784,6 +923,10 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1234567890 " ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,mediumblob,16777215,16777215,,,,,,mediumblob,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: MEDIUMINT" {
@@ -809,6 +952,10 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, -8388609);"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,mediumint,,,7,0,,,,mediumint,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: MEDIUMINT UNSIGNED" {
@@ -834,6 +981,10 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, -1);"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,mediumint,,,7,0,,,,mediumint unsigned,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: MEDIUMTEXT" {
@@ -855,6 +1006,10 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1234567890 " ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,mediumtext,4194303,16777215,,,,utf8mb4,utf8mb4_0900_bin,mediumtext,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: NATIONAL CHAR(10)" {
@@ -868,6 +1023,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` char(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,char,10,30,,,,utf8mb3,utf8mb3_general_ci,char(10),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: NATIONAL CHARACTER(10)" {
@@ -881,6 +1040,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` char(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,char,10,30,,,,utf8mb3,utf8mb3_general_ci,char(10),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: NATIONAL CHARACTER VARYING(10)" {
@@ -894,6 +1057,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` varchar(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,varchar,10,30,,,,utf8mb3,utf8mb3_general_ci,varchar(10),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: NATIONAL VARCHAR(10)" {
@@ -907,6 +1074,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` varchar(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,varchar,10,30,,,,utf8mb3,utf8mb3_general_ci,varchar(10),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: NCHAR(10)" {
@@ -920,6 +1091,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` char(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,char,10,30,,,,utf8mb3,utf8mb3_general_ci,char(10),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: NVARCHAR(10)" {
@@ -933,6 +1108,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` varchar(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,varchar,10,30,,,,utf8mb3,utf8mb3_general_ci,varchar(10),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: NUMERIC" {
@@ -946,6 +1125,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` decimal(10,0)" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,decimal,,,10,0,,,,"decimal(10,0)","","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: NUMERIC(9)" {
@@ -959,6 +1142,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` decimal(9,0)" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,decimal,,,9,0,,,,"decimal(9,0)","","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: NUMERIC(9,5)" {
@@ -972,6 +1159,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` decimal(9,5)" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,decimal,,,9,5,,,,"decimal(9,5)","","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: REAL" {
@@ -985,6 +1176,10 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` double" ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,double,,,22,,,,,double,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: SET('a','b','c')" {
@@ -1011,6 +1206,10 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, 'a,d');"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ "test,v,2,,YES,set,5,20,,,,utf8mb4,utf8mb4_0900_bin,\"set('a','b','c')\",\"\",\"\",\"insert,references,select,update\",\"\",\"\"," ]] || false
 }
 
 @test "types: SMALLINT" {
@@ -1036,6 +1235,10 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, -32769);"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,smallint,,,5,0,,,,smallint,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: SMALLINT UNSIGNED" {
@@ -1061,6 +1264,10 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, -1);"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,smallint,,,5,0,,,,smallint unsigned,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: TEXT" {
@@ -1082,6 +1289,10 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1234567890 " ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,text,16383,65535,,,,utf8mb4,utf8mb4_0900_bin,text,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: TIME" {
@@ -1111,6 +1322,11 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " -838:59:59 " ]] || false
+
+    # check information_schema.COLUMNS table
+    # TODO: time precision is not supported, this type's 'datetime_precision' and 'column_type' should be '0', 'time' respectively.
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,time,,,,,6,,,time(6),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: TIMESTAMP" {
@@ -1140,6 +1356,10 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, '2038-01-19 03:14:08');"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,timestamp,,,,,0,,,timestamp,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: TINYBLOB" {
@@ -1161,6 +1381,10 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1234567890 " ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,tinyblob,255,255,,,,,,tinyblob,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: TINYINT" {
@@ -1186,6 +1410,10 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, -129);"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,tinyint,,,3,0,,,,tinyint,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: TINYINT UNSIGNED" {
@@ -1211,6 +1439,10 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, -1);"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,tinyint,,,3,0,,,,tinyint unsigned,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: TINYTEXT" {
@@ -1232,6 +1464,10 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1234567890 " ]] || false
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,tinytext,63,255,,,,utf8mb4,utf8mb4_0900_bin,tinytext,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: VARBINARY(10)" {
@@ -1255,6 +1491,10 @@ SQL
     [[ "${lines[3]}" =~ " 1234567890 " ]] || false
     run dolt sql -q "INSERT INTO test VALUES (2, '12345678901');"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,varbinary,10,10,,,,,,varbinary(10),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: VARCHAR(10)" {
@@ -1278,6 +1518,10 @@ SQL
     [[ "${lines[3]}" =~ " 1234567890 " ]] || false
     run dolt sql -q "INSERT INTO test VALUES (2, '12345678901');"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,varchar,10,40,,,,utf8mb4,utf8mb4_0900_bin,varchar(10),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" {
@@ -1301,6 +1545,10 @@ SQL
     [[ "${lines[3]}" =~ " 1234567890 " ]] || false
     run dolt sql -q "INSERT INTO test VALUES (2, '12345678901');"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,varchar,10,40,,,,utf32,utf32_general_ci,varchar(10),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: YEAR" {
@@ -1326,4 +1574,8 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, '2156');"
     [ "$status" -eq "1" ]
+
+    # check information_schema.COLUMNS table
+    run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
+    [[ "$output" =~ 'test,v,2,,YES,year,,,,,,,,year,"","","insert,references,select,update","","",' ]] || false
 }

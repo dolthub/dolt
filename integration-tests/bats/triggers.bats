@@ -113,6 +113,10 @@ SQL
     [[ "$output" =~ "2,3" ]] || false
     [[ "$output" =~ "3,4" ]] || false
     [[ "${#lines[@]}" = "4" ]] || false
+
+    # check information_schema.TRIGGERS table
+    run dolt sql -q "select trigger_name, event_manipulation, event_object_table, action_order, action_condition, action_statement, action_timing, definer, character_set_client, collation_connection, database_collation from information_schema.TRIGGERS;" -r csv
+    [[ "$output" =~ "trigger1,INSERT,test,1,,SET new.v1 = new.v1 + 1,BEFORE,root@localhost,utf8mb4,utf8mb4_0900_bin,utf8mb4_0900_bin" ]] || false
 }
 
 @test "triggers: Writing directly into dolt_schemas" {
