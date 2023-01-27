@@ -15,7 +15,6 @@
 package dtables
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"strings"
@@ -121,7 +120,8 @@ func (tbl BranchControlTable) PartitionRows(context *sql.Context, partition sql.
 	defer tbl.RWMutex.RUnlock()
 
 	var rows []sql.Row
-	for _, value := range tbl.Values {
+	rowIter := tbl.Iter()
+	for value, ok := rowIter.Next(); ok; value, ok = rowIter.Next() {
 		rows = append(rows, sql.Row{
 			value.Database,
 			value.Branch,
@@ -204,8 +204,7 @@ func (tbl BranchControlTable) Insert(ctx *sql.Context, row sql.Row) error {
 
 	// We check if we're inserting a subset of an already-existing row. If we are, we deny the insertion as the existing
 	// row will already match against ALL possible values for this row.
-	_, modPerms := tbl.Match(database, branch, user, host)
-	if modPerms&branch_control.Permissions_Admin == branch_control.Permissions_Admin {
+	if ok, modPerms := tbl.Match(database, branch, user, host); ok {
 		permBits := uint64(modPerms)
 		permStr, _ := accessSchema[4].Type.(sql.SetType).BitsToString(permBits)
 		return sql.NewUniqueKeyErr(
@@ -214,7 +213,8 @@ func (tbl BranchControlTable) Insert(ctx *sql.Context, row sql.Row) error {
 			sql.Row{database, branch, user, host, permBits})
 	}
 
-	return tbl.insert(ctx, database, branch, user, host, perms)
+	tbl.Access.Insert(database, branch, user, host, perms)
+	return nil
 }
 
 // Update implements the interface sql.RowUpdater.
@@ -238,10 +238,10 @@ func (tbl BranchControlTable) Update(ctx *sql.Context, old sql.Row, new sql.Row)
 		return branch_control.ErrExpressionsTooLong.New(newDatabase, newBranch, newUser, newHost)
 	}
 
-	// If we're not updating the same row, then we pre-emptively check for a row violation
+	// If we're not updating the same row, then we check for a row violation
 	if oldDatabase != newDatabase || oldBranch != newBranch || oldUser != newUser || oldHost != newHost {
-		if tblIndex := tbl.GetIndex(newDatabase, newBranch, newUser, newHost); tblIndex != -1 {
-			permBits := uint64(tbl.Values[tblIndex].Permissions)
+		if ok, modPerms := tbl.Match(newDatabase, newBranch, newUser, newHost); ok {
+			permBits := uint64(modPerms)
 			permStr, _ := accessSchema[4].Type.(sql.SetType).BitsToString(permBits)
 			return sql.NewUniqueKeyErr(
 				fmt.Sprintf(`[%q, %q, %q, %q, %q]`, newDatabase, newBranch, newUser, newHost, permStr),
@@ -272,24 +272,9 @@ func (tbl BranchControlTable) Update(ctx *sql.Context, old sql.Row, new sql.Row)
 		}
 	}
 
-	// We check if we're updating to a subset of an already-existing row. If we are, we deny the update as the existing
-	// row will already match against ALL possible values for this updated row.
-	_, modPerms := tbl.Match(newDatabase, newBranch, newUser, newHost)
-	if modPerms&branch_control.Permissions_Admin == branch_control.Permissions_Admin {
-		permBits := uint64(modPerms)
-		permStr, _ := accessSchema[4].Type.(sql.SetType).BitsToString(permBits)
-		return sql.NewUniqueKeyErr(
-			fmt.Sprintf(`[%q, %q, %q, %q, %q]`, newDatabase, newBranch, newUser, newHost, permStr),
-			true,
-			sql.Row{newDatabase, newBranch, newUser, newHost, permBits})
-	}
-
-	if tblIndex := tbl.GetIndex(oldDatabase, oldBranch, oldUser, oldHost); tblIndex != -1 {
-		if err := tbl.delete(ctx, oldDatabase, oldBranch, oldUser, oldHost); err != nil {
-			return err
-		}
-	}
-	return tbl.insert(ctx, newDatabase, newBranch, newUser, newHost, newPerms)
+	tbl.Access.Delete(oldDatabase, oldBranch, oldUser, oldHost)
+	tbl.Access.Insert(newDatabase, newBranch, newUser, newHost, newPerms)
+	return nil
 }
 
 // Delete implements the interface sql.RowDeleter.
@@ -317,79 +302,11 @@ func (tbl BranchControlTable) Delete(ctx *sql.Context, row sql.Row) error {
 		}
 	}
 
-	return tbl.delete(ctx, database, branch, user, host)
+	tbl.Access.Delete(database, branch, user, host)
+	return nil
 }
 
 // Close implements the interface sql.Closer.
 func (tbl BranchControlTable) Close(context *sql.Context) error {
 	return branch_control.SaveData(context)
-}
-
-// insert adds the given branch, user, and host expression strings to the table. Assumes that the expressions have
-// already been folded.
-func (tbl BranchControlTable) insert(ctx context.Context, database, branch, user, host string, perms branch_control.Permissions) error {
-	// If we already have this in the table, then we return a duplicate PK error
-	if tblIndex := tbl.GetIndex(database, branch, user, host); tblIndex != -1 {
-		permBits := uint64(tbl.Values[tblIndex].Permissions)
-		permStr, _ := accessSchema[4].Type.(sql.SetType).BitsToString(permBits)
-		return sql.NewUniqueKeyErr(
-			fmt.Sprintf(`[%q, %q, %q, %q, %q]`, database, branch, user, host, permStr),
-			true,
-			sql.Row{database, branch, user, host, permBits})
-	}
-
-	// Add an entry to the binlog
-	tbl.GetBinlog().Insert(database, branch, user, host, uint64(perms))
-	// Add the expressions to their respective slices
-	databaseExpr := branch_control.ParseExpression(database, sql.Collation_utf8mb4_0900_ai_ci)
-	branchExpr := branch_control.ParseExpression(branch, sql.Collation_utf8mb4_0900_ai_ci)
-	userExpr := branch_control.ParseExpression(user, sql.Collation_utf8mb4_0900_bin)
-	hostExpr := branch_control.ParseExpression(host, sql.Collation_utf8mb4_0900_ai_ci)
-	nextIdx := uint32(len(tbl.Values))
-	tbl.Databases = append(tbl.Databases, branch_control.MatchExpression{CollectionIndex: nextIdx, SortOrders: databaseExpr})
-	tbl.Branches = append(tbl.Branches, branch_control.MatchExpression{CollectionIndex: nextIdx, SortOrders: branchExpr})
-	tbl.Users = append(tbl.Users, branch_control.MatchExpression{CollectionIndex: nextIdx, SortOrders: userExpr})
-	tbl.Hosts = append(tbl.Hosts, branch_control.MatchExpression{CollectionIndex: nextIdx, SortOrders: hostExpr})
-	tbl.Values = append(tbl.Values, branch_control.AccessValue{
-		Database:    database,
-		Branch:      branch,
-		User:        user,
-		Host:        host,
-		Permissions: perms,
-	})
-	return nil
-}
-
-// delete removes the given branch, user, and host expression strings from the table. Assumes that the expressions have
-// already been folded.
-func (tbl BranchControlTable) delete(ctx context.Context, database, branch, user, host string) error {
-	// If we don't have this in the table, then we just return
-	tblIndex := tbl.GetIndex(database, branch, user, host)
-	if tblIndex == -1 {
-		return nil
-	}
-
-	endIndex := len(tbl.Values) - 1
-	// Add an entry to the binlog
-	tbl.GetBinlog().Delete(database, branch, user, host, uint64(tbl.Values[tblIndex].Permissions))
-	// Remove the matching row from all slices by first swapping with the last element
-	tbl.Databases[tblIndex], tbl.Databases[endIndex] = tbl.Databases[endIndex], tbl.Databases[tblIndex]
-	tbl.Branches[tblIndex], tbl.Branches[endIndex] = tbl.Branches[endIndex], tbl.Branches[tblIndex]
-	tbl.Users[tblIndex], tbl.Users[endIndex] = tbl.Users[endIndex], tbl.Users[tblIndex]
-	tbl.Hosts[tblIndex], tbl.Hosts[endIndex] = tbl.Hosts[endIndex], tbl.Hosts[tblIndex]
-	tbl.Values[tblIndex], tbl.Values[endIndex] = tbl.Values[endIndex], tbl.Values[tblIndex]
-	// Then we remove the last element
-	tbl.Databases = tbl.Databases[:endIndex]
-	tbl.Branches = tbl.Branches[:endIndex]
-	tbl.Users = tbl.Users[:endIndex]
-	tbl.Hosts = tbl.Hosts[:endIndex]
-	tbl.Values = tbl.Values[:endIndex]
-	// Then we update the index for the match expressions
-	if tblIndex != endIndex {
-		tbl.Databases[tblIndex].CollectionIndex = uint32(tblIndex)
-		tbl.Branches[tblIndex].CollectionIndex = uint32(tblIndex)
-		tbl.Users[tblIndex].CollectionIndex = uint32(tblIndex)
-		tbl.Hosts[tblIndex].CollectionIndex = uint32(tblIndex)
-	}
-	return nil
 }

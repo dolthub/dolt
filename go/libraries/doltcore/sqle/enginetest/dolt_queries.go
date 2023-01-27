@@ -2067,7 +2067,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{3}},
 			},
 			{
-				Query:    "SELECT count(*)	 from dolt_log('main') join dolt_diff(@Commit1, @Commit2, 't') where commit_hash = to_commit;",
+				Query: "SELECT count(*)	 from dolt_log('main') join dolt_diff(@Commit1, @Commit2, 't') where commit_hash = to_commit;",
 				Expected: []sql.Row{{2}},
 			},
 		},
