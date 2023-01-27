@@ -55,6 +55,14 @@ func (r journalRec) payloadOffset() uint32 {
 	return r.length - uint32(len(r.payload)+recChecksumSz)
 }
 
+// uncompressedPayloadSize returns the uncompressed size of the payload.
+func (r journalRec) uncompressedPayloadSize() (sz uint64) {
+	// |r.payload| is snappy-encoded and starts with
+	// the uvarint-encoded uncompressed data size
+	sz, _ = binary.Uvarint(r.payload)
+	return
+}
+
 type recKind uint8
 
 const (

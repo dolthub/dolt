@@ -264,8 +264,8 @@ func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 	return m.tuples.Has(ctx, key)
 }
 
-func (m Map) Last(ctx context.Context) (key, value val.Tuple, err error) {
-	return m.tuples.Last(ctx)
+func (m Map) LastKey(ctx context.Context) val.Tuple {
+	return m.tuples.LastKey(ctx)
 }
 
 // IterAll returns a MapIter that iterates over the entire Map.

@@ -226,8 +226,7 @@ func (wr *journalWriter) ProcessJournal(ctx context.Context) (last hash.Hash, cs
 				recordLen:  r.length,
 				payloadOff: r.payloadOffset(),
 			})
-			src.compressedSz += uint64(r.length)
-			// todo(andy): uncompressed size
+			src.uncompressedSz += r.uncompressedPayloadSize()
 		case rootHashRecKind:
 			last = hash.Hash(r.address)
 		default:
