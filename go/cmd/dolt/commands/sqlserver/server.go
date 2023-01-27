@@ -228,29 +228,29 @@ func Serve(
 
 	var remoteSrv *remotesrv.Server
 	if serverConfig.RemotesapiPort() != nil {
-		if remoteSrvSqlCtx, err := sqlEngine.NewContext(context.Background()); err == nil {
-			listenaddr := fmt.Sprintf(":%d", *serverConfig.RemotesapiPort())
+		port := *serverConfig.RemotesapiPort()
+		if remoteSrvSqlCtx, err := sqlEngine.NewContext(ctx); err == nil {
+			listenaddr := fmt.Sprintf(":%d", port)
 			args := sqle.RemoteSrvServerArgs(remoteSrvSqlCtx, remotesrv.ServerArgs{
 				Logger:         logrus.NewEntry(lgr),
 				ReadOnly:       true,
 				HttpListenAddr: listenaddr,
 				GrpcListenAddr: listenaddr,
 			})
+			args.TLSConfig = serverConf.TLSConfig
 			remoteSrv, err = remotesrv.NewServer(args)
 			if err != nil {
-				lgr.Errorf("error creating remotesapi server on port %d: %v", *serverConfig.RemotesapiPort(), err)
+				lgr.Errorf("error creating remotesapi server on port %d: %v", port, err)
 				startError = err
 				return
 			}
 			listeners, err := remoteSrv.Listeners()
 			if err != nil {
-				lgr.Errorf("error starting remotesapi server listeners on port %d: %v", *serverConfig.RemotesapiPort(), err)
+				lgr.Errorf("error starting remotesapi server listeners on port %d: %v", port, err)
 				startError = err
 				return
 			} else {
-				go func() {
-					remoteSrv.Serve(listeners)
-				}()
+				go remoteSrv.Serve(listeners)
 			}
 		} else {
 			lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
@@ -261,7 +261,7 @@ func Serve(
 
 	var clusterRemoteSrv *remotesrv.Server
 	if clusterController != nil {
-		if remoteSrvSqlCtx, err := sqlEngine.NewContext(context.Background()); err == nil {
+		if remoteSrvSqlCtx, err := sqlEngine.NewContext(ctx); err == nil {
 			args := clusterController.RemoteSrvServerArgs(remoteSrvSqlCtx, remotesrv.ServerArgs{
 				Logger: logrus.NewEntry(lgr),
 			})
