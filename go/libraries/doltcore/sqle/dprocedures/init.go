@@ -24,6 +24,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_backup", Schema: int64Schema("success"), Function: doltBackup},
 	{Name: "dolt_branch", Schema: int64Schema("status"), Function: doltBranch},
 	{Name: "dolt_checkout", Schema: int64Schema("status"), Function: doltCheckout},
+	{Name: "dolt_cherry_pick", Schema: stringSchema("hash"), Function: doltCherryPick},
 	{Name: "dolt_clean", Schema: int64Schema("status"), Function: doltClean},
 	{Name: "dolt_clone", Schema: int64Schema("status"), Function: doltClone},
 	{Name: "dolt_commit", Schema: stringSchema("hash"), Function: doltCommit},
@@ -41,9 +42,11 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_verify_constraints", Schema: int64Schema("violations"), Function: doltVerifyConstraints},
 
 	// Dolt stored procedure aliases
+	// TODO: Add new procedure aliases in doltProcedureAliasSet in go-mysql-server/sql/information_schema/routines.go file
 	{Name: "dadd", Schema: int64Schema("status"), Function: doltAdd},
 	{Name: "dbranch", Schema: int64Schema("status"), Function: doltBranch},
 	{Name: "dcheckout", Schema: int64Schema("status"), Function: doltCheckout},
+	{Name: "dcherry_pick", Schema: stringSchema("hash"), Function: doltCherryPick},
 	{Name: "dclean", Schema: int64Schema("status"), Function: doltClean},
 	{Name: "dclone", Schema: int64Schema("status"), Function: doltClone},
 	{Name: "dcommit", Schema: stringSchema("hash"), Function: doltCommit},
