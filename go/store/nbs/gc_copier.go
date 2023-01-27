@@ -96,9 +96,10 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, tfp tableFilePersister
 	if err != nil {
 		return nil, err
 	}
+	sz := gcc.writer.ContentLength()
 
 	// Otherwise, write the file.
-	err = tfp.CopyTableFile(ctx, r, filename, uint32(gcc.writer.ChunkCount()))
+	err = tfp.CopyTableFile(ctx, r, filename, sz, uint32(gcc.writer.ChunkCount()))
 	if err != nil {
 		return nil, err
 	}

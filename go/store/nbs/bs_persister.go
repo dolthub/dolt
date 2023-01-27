@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
@@ -176,22 +177,32 @@ func (bsp *blobstorePersister) Path() string {
 	return ""
 }
 
-func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, chunkCount uint32) error {
-	var err error
-
+func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, name string, fileSz uint64, chunkCount uint32) (err error) {
 	defer func() {
-		cerr := r.Close()
-		if err == nil {
+		if cerr := r.Close(); cerr != nil {
 			err = cerr
 		}
 	}()
 
-	_, err = bsp.bs.Put(ctx, fileId, r)
-	if err != nil {
-		return err
+	// sanity check file size
+	if fileSz < indexSize(chunkCount)+footerSize {
+		return fmt.Errorf("table file size %d too small for chunk count %s", fileSz, chunkCount)
 	}
 
-	return err
+	// first write the chunk records
+	lr := io.LimitReader(r, int64(tableTailOffset(fileSz, chunkCount)))
+	if _, err = bsp.bs.Put(ctx, name+tableRecordsExt, lr); err != nil {
+		return err
+	}
+	// then the table file tail
+	if _, err = bsp.bs.Put(ctx, name+tableTailExt, r); err != nil {
+		return err
+	}
+	// finally concatenate into the complete table
+	if _, err = bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt}); err != nil {
+		return err
+	}
+	return
 }
 
 type bsTableReaderAt struct {
