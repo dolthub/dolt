@@ -1041,6 +1041,21 @@ SQL
     [[ "$output" =~ "utf8mb4" ]] || false
 }
 
+@test "sql: empty JSON output format" {
+    dolt sql <<SQL
+    CREATE TABLE test (
+    a int primary key,
+    b float,
+    c varchar(80),
+    d datetime
+);
+SQL
+
+    run dolt sql -r json -q "select * from test order by a"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "{}" ]] || false
+}
+
 @test "sql: output for escaped longtext exports properly" {
  dolt sql <<SQL
     CREATE TABLE test (
