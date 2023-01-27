@@ -83,7 +83,9 @@ RUN curl -LO https://bootstrap.pypa.io/get-pip.py && \
   pip --version
 
 # install mysql connector and pymsql
-RUN pip install mysql-connector-python PyMySQL sqlalchemy
+RUN pip install mysql-connector-python==8.0.32
+RUN pip install PyMySQL==1.0.2
+RUN pip install sqlalchemy==1.4.46
 
 # Setup JAVA_HOME -- useful for docker commandline
 ENV JAVA_HOME /usr/lib/jvm/java-17-openjdk-amd64/
