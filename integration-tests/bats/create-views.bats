@@ -107,6 +107,11 @@ SQL
     [[ "${lines[4]}" =~ ' 1 ' ]] || false
     [[ "${lines[5]}" =~ ' 2 ' ]] || false
     [[ "${lines[6]}" =~ ' 3 ' ]] || false
+
+    # check information_schema.VIEWS table
+    # TODO: view_definition should be "select `mybin`.`my_users`.`id` AS `id` from `mybin`.`my_users` order by `mybin`.`my_users`.`id`"
+    run dolt sql -q "select * from information_schema.VIEWS;" -r csv
+    [[ "$output" =~ "def,dolt_repo_$$,my_users_view,select id from my_users order by id asc,NONE,YES,root@localhost,DEFINER,utf8mb4,utf8mb4_0900_bin" ]] || false
 }
 
 @test "create-views: view referencing table selects values inserted after it was created" {

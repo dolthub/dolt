@@ -211,6 +211,10 @@ teardown() {
 
     run dolt sql -q "SELECT ST_ASWKT(p) FROM pt"
     [[ ! "$output" =~ "POINT(1 2)" ]] || false
+
+    # check information_schema.ST_GEOMETRY_COLUMNS table
+    run dolt sql -q "select * from information_schema.ST_GEOMETRY_COLUMNS;" -r csv
+    [[ "$output" =~ "pt,p,\"\",0,point" ]] || false
 }
 
 @test "sql-spatial-types: SRID defined in column definition in ALTER TABLE" {

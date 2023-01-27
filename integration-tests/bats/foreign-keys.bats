@@ -129,6 +129,27 @@ SQL
     dolt sql -q 'select * from objects'
     dolt add .
     dolt commit -m 'update 1'
+
+    # check information_schema.CHECK_CONSTRAINTS table
+    run dolt sql -q "select constraint_name, table_name, column_name, ordinal_position, position_in_unique_constraint, referenced_table_name, referenced_column_name from information_schema.KEY_COLUMN_USAGE;" -r csv
+    [[ "$output" =~ "PRIMARY,colors,id,1,,," ]] || false
+    [[ "$output" =~ "PRIMARY,materials,id,1,,," ]] || false
+    [[ "$output" =~ "jb6i5huc,materials,color,1,1,colors,color" ]] || false
+    [[ "$output" =~ "PRIMARY,objects,id,1,,," ]] || false
+    [[ "$output" =~ "i5lsjmoo,objects,color,1,1,materials,color" ]] || false
+    [[ "$output" =~ "i5lsjmoo,objects,material,2,2,materials,material" ]] || false
+    [[ "$output" =~ "PRIMARY,child,id,1,,," ]] || false
+    [[ "$output" =~ "PRIMARY,parent,id,1,,," ]] || false
+
+    # check information_schema.TABLE_CONSTRAINTS table
+    run dolt sql -q "select * from information_schema.TABLE_CONSTRAINTS where table_name = 'materials';" -r csv
+    [[ "$output" =~ "def,dolt_repo_$$,PRIMARY,dolt_repo_$$,materials,PRIMARY KEY,YES" ]] || false
+    [[ "$output" =~ "def,dolt_repo_$$,jb6i5huc,dolt_repo_$$,materials,FOREIGN KEY,YES" ]] || false
+
+    # check information_schema.TABLE_CONSTRAINTS_EXTENSIONS table
+    run dolt sql -q "select constraint_name from information_schema.TABLE_CONSTRAINTS_EXTENSIONS where table_name = 'materials';" -r csv
+    [[ "$output" =~ "PRIMARY" ]] || false
+    [[ "$output" =~ "color_mat_index" ]] || false
 }
 
 @test "foreign-keys: ALTER TABLE Single Named FOREIGN KEY" {
@@ -732,6 +753,10 @@ SQL
     run dolt sql -q "DELETE FROM one;"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "violation" ]] || false
+
+    # check information_schema.REFERENTIAL_CONSTRAINTS table
+    run dolt sql -q "select constraint_name, unique_constraint_name, match_option, update_rule, delete_rule, table_name, referenced_table_name from information_schema.REFERENTIAL_CONSTRAINTS;" -r csv
+    [[ "$output" =~ "fk_name_1,,NONE,RESTRICT,RESTRICT,two,one" ]] || false
 }
 
 @test "foreign-keys: SQL no reference options" {
