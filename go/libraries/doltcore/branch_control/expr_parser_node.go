@@ -29,9 +29,9 @@ var (
 // MatchNode contains a collection of sort orders that allow for an optimized level of traversal compared to
 // MatchExpression due to the sharing of like sort orders, reducing the overall number of comparisons needed.
 type MatchNode struct {
-	SortOrders  []int32        // These are the sort orders that will be compared against when matching a given rune.
-	Divergences []MatchNode    // These are the children of this node that each represent a divergence in the sort orders.
-	Data        *MatchNodeData // This is the collection of data that the node holds. Will be nil if it's not a destination node.
+	SortOrders  []int32              // These are the sort orders that will be compared against when matching a given rune.
+	Divergences map[int32]*MatchNode // These are the children of this node that each represent a divergence in the sort orders.
+	Data        *MatchNodeData       // This is the collection of data that the node holds. Will be nil if it's not a destination node.
 }
 
 // MatchNodeData is the data contained in a destination MatchNode.
@@ -92,9 +92,22 @@ func (mn *MatchNode) Match(database, branch, user, host string) []MatchResult {
 	for _, sortOrder := range allSortOrders {
 		for _, node := range matchSubset {
 			if len(node.SortOrders) == 0 {
-				for _, divergence := range node.Divergences {
+				// At most we'll look at three divergences that may match, we can ignore all other divergences
+				if divergence, ok := node.Divergences[singleMatch]; ok {
 					matches = processMatch(matches, matchNodeCounted{
-						MatchNode: divergence,
+						MatchNode: *divergence,
+						Count:     node.Count,
+					}, sortOrder)
+				}
+				if divergence, ok := node.Divergences[anyMatch]; ok {
+					matches = processMatch(matches, matchNodeCounted{
+						MatchNode: *divergence,
+						Count:     node.Count,
+					}, sortOrder)
+				}
+				if divergence, ok := node.Divergences[sortOrder]; ok {
+					matches = processMatch(matches, matchNodeCounted{
+						MatchNode: *divergence,
 						Count:     node.Count,
 					}, sortOrder)
 				}
@@ -189,7 +202,7 @@ ParentLoop:
 			} else if len(remainingRootSortOrders) > 1 && i == allSortOrdersMaxIndex {
 				// We have more sort orders on the root, but no more in our expressions, so we put the remaining root
 				// sort orders as a divergence and set this as a destination node
-				root.Divergences = []MatchNode{{
+				root.Divergences = map[int32]*MatchNode{remainingRootSortOrders[1]: {
 					SortOrders:  remainingRootSortOrders[1:],
 					Divergences: root.Divergences,
 					Data:        root.Data,
@@ -198,26 +211,24 @@ ParentLoop:
 				root.Data = &data
 				break
 			} else if len(remainingRootSortOrders) == 1 && i < allSortOrdersMaxIndex {
-				// We've run out of sort orders on the root, but still have more from the expressions, so check if a
-				// divergence will match the next sort order from the expressions
+				// We've run out of sort orders on the root, but still have more from divergences, so check if there's a
+				// matching divergence
 				nextSortOrder := allSortOrders[i+1]
-				for divergenceIdx, divergence := range root.Divergences {
-					if divergence.SortOrders[0] == nextSortOrder {
-						remainingRootSortOrders = divergence.SortOrders
-						root = &root.Divergences[divergenceIdx]
-						continue ParentLoop
-					}
+				if divergence, ok := root.Divergences[nextSortOrder]; ok {
+					remainingRootSortOrders = divergence.SortOrders
+					root = root.Divergences[nextSortOrder]
+					continue ParentLoop
 				}
 				// None of the divergences matched, so we create a new one and add it. As we're using a pool, we need to
 				// create a new slice.
 				originalSortOrders := allSortOrders[i+1:]
 				newSortOrders := make([]int32, len(originalSortOrders))
 				copy(newSortOrders, originalSortOrders)
-				root.Divergences = append(root.Divergences, MatchNode{
+				root.Divergences[newSortOrders[0]] = &MatchNode{
 					SortOrders:  newSortOrders,
 					Divergences: nil,
 					Data:        &data,
-				})
+				}
 				break
 			} else {
 				// We have no more sort orders on either side so this is an exact match, therefore we update the data
@@ -227,7 +238,7 @@ ParentLoop:
 		} else {
 			// Since the sort orders do not match, we create a divergence here with the remaining expressions' sort
 			// orders, and move the root's remaining sort orders to its own divergence.
-			splitRoot := MatchNode{
+			splitRoot := &MatchNode{
 				SortOrders:  remainingRootSortOrders,
 				Divergences: root.Divergences,
 				Data:        root.Data,
@@ -236,13 +247,13 @@ ParentLoop:
 			originalSortOrders := allSortOrders[i:]
 			newSortOrders := make([]int32, len(originalSortOrders))
 			copy(newSortOrders, originalSortOrders)
-			newDivergence := MatchNode{
+			newDivergence := &MatchNode{
 				SortOrders:  newSortOrders,
 				Divergences: nil,
 				Data:        &data,
 			}
 			root.SortOrders = root.SortOrders[:len(root.SortOrders)-len(remainingRootSortOrders)]
-			root.Divergences = []MatchNode{splitRoot, newDivergence}
+			root.Divergences = map[int32]*MatchNode{splitRoot.SortOrders[0]: splitRoot, newDivergence.SortOrders[0]: newDivergence}
 			// As the root's data is now in the split, we set the data here to nil as it's no longer a destination node.
 			// If it wasn't a destination node, then nothing changes (we just set the split's data to nil as well).
 			root.Data = nil
@@ -262,7 +273,7 @@ func (mn *MatchNode) Remove(databaseExpr, branchExpr, userExpr, hostExpr string)
 
 	// We track the parent of the root node so that we can delete its divergence if applicable
 	var rootParent *MatchNode = nil
-	childIndex := 0
+	childIndex := int32(0)
 
 	remainingRootSortOrders := root.SortOrders
 	allSortOrdersMaxIndex := len(allSortOrders) - 1
@@ -282,14 +293,12 @@ ParentLoop:
 				// We've run out of sort orders on the root, but still have more from the expressions, so check if a
 				// divergence will match the next sort order from the expressions
 				nextSortOrder := allSortOrders[i+1]
-				for divergenceIdx, divergence := range root.Divergences {
-					if divergence.SortOrders[0] == nextSortOrder {
-						remainingRootSortOrders = divergence.SortOrders
-						rootParent = root
-						childIndex = divergenceIdx
-						root = &root.Divergences[divergenceIdx]
-						continue ParentLoop
-					}
+				if divergence, ok := root.Divergences[nextSortOrder]; ok {
+					remainingRootSortOrders = divergence.SortOrders
+					rootParent = root
+					childIndex = nextSortOrder
+					root = divergence
+					continue ParentLoop
 				}
 				// None of the divergences matched, so this set of expressions don't have a match
 				break
@@ -302,19 +311,26 @@ ParentLoop:
 				root.Data = nil
 				if len(root.Divergences) == 1 {
 					// Since there is only a single divergence, we merge it with this node
-					root.SortOrders = append(root.SortOrders, root.Divergences[0].SortOrders...)
-					root.Data = root.Divergences[0].Data
-					root.Divergences = nil
+					for _, divergence := range root.Divergences {
+						// The fact that you gotta do a range + break to get a single map element is silly
+						root.SortOrders = append(root.SortOrders, divergence.SortOrders...)
+						root.Data = divergence.Data
+						root.Divergences = nil
+						break
+					}
 				} else if len(root.Divergences) == 0 && rootParent != nil {
 					// With no divergences, we can remove this node from the parent
-					rootParent.Divergences = append(rootParent.Divergences[:childIndex], rootParent.Divergences[childIndex+1:]...)
+					delete(rootParent.Divergences, childIndex)
 					// If the parent only has a single divergence, and it's not a destination node, we can merge that
 					// divergence with the parent
 					if len(rootParent.Divergences) == 1 && rootParent.Data == nil {
 						// Since there is only a single divergence, we merge it with this node
-						rootParent.SortOrders = append(rootParent.SortOrders, rootParent.Divergences[0].SortOrders...)
-						rootParent.Data = rootParent.Divergences[0].Data
-						rootParent.Divergences = nil
+						for _, divergence := range rootParent.Divergences {
+							// It was silly a few lines ago, and it's still silly here
+							rootParent.SortOrders = append(rootParent.SortOrders, divergence.SortOrders...)
+							rootParent.Data = divergence.Data
+							rootParent.Divergences = nil
+						}
 					}
 				}
 				// If this node has multiple divergences then we have nothing more to do

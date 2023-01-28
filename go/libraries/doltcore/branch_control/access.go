@@ -65,7 +65,7 @@ func newAccess() *Access {
 	return &Access{
 		Root: &MatchNode{
 			SortOrders:  []int32{separator},
-			Divergences: nil,
+			Divergences: make(map[int32]*MatchNode),
 			Data:        nil,
 		},
 		RWMutex: &sync.RWMutex{},
