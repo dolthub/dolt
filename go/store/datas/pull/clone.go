@@ -209,7 +209,9 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 		}
 	}
 
-	sinkTS.AddTableFilesToManifest(ctx, fileIDToNumChunks)
+	if err = sinkTS.AddTableFilesToManifest(ctx, fileIDToNumChunks); err != nil {
+		return err
+	}
 	return sinkTS.SetRootChunk(ctx, root, hash.Hash{})
 }
 
