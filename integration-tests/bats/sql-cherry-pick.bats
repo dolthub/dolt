@@ -4,7 +4,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
     setup_common
 
-dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))"
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))"
     dolt add .
     dolt commit -am "Created table"
     dolt checkout -b branch1
