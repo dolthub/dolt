@@ -194,7 +194,22 @@ func (a *binlogReplicaApplier) startReplicationEventStream(ctx *sql.Context, con
 	}
 
 	if position == nil {
-		// When there is no existing record of executed GTIDs, we create a GTIDSet with just one transaction ID
+		// If the positionStore doesn't have a record of executed GTIDs, check to see if the gtid_purged system
+		// variable is set. If it holds a GTIDSet, then we use that as our starting position. As part of loading
+		// a mysqldump onto a replica, gtid_purged will be set to indicate where to start replication.
+		_, value, ok := sql.SystemVariables.GetGlobal("gtid_purged")
+		gtidPurged, isString := value.(string)
+		if ok && value != nil && isString {
+			purged, err := mysql.ParsePosition(mysqlFlavor, gtidPurged)
+			if err != nil {
+				return err
+			}
+			position = &purged
+		}
+	}
+
+	if position == nil {
+		// If we still don't have any record of executed GTIDs, we create a GTIDSet with just one transaction ID
 		// for the 0000 server ID. There doesn't seem to be a cleaner way of saying "start at the very beginning".
 		//
 		// Also... "starting position" is a bit of a misnomer – it's actually the processed GTIDs, which
