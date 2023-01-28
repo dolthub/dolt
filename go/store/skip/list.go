@@ -21,7 +21,7 @@ import (
 
 const (
 	maxHeight  = 9
-	maxCount   = math.MaxUint32 - 1
+	maxCount   = math.MaxInt - 1
 	sentinelId = nodeId(0)
 	initSize   = 8
 )

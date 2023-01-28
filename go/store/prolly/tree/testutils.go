@@ -213,16 +213,16 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type, ns NodeStore) {
 		v := uint16(testRand.Intn(math.MaxUint16))
 		tb.PutUint16(idx, v)
 	case val.Int32Enc:
-		v := int32(testRand.Intn(math.MaxInt32) * neg)
+		v := testRand.Int31() * int32(neg)
 		tb.PutInt32(idx, v)
 	case val.Uint32Enc:
-		v := uint32(testRand.Intn(math.MaxUint32))
+		v := testRand.Uint32()
 		tb.PutUint32(idx, v)
 	case val.Int64Enc:
-		v := int64(testRand.Intn(math.MaxInt64) * neg)
+		v := testRand.Int63() * int64(neg)
 		tb.PutInt64(idx, v)
 	case val.Uint64Enc:
-		v := uint64(testRand.Uint64())
+		v := testRand.Uint64()
 		tb.PutUint64(idx, v)
 	case val.Float32Enc:
 		tb.PutFloat32(idx, testRand.Float32())
