@@ -219,8 +219,8 @@ func (j *chunkJournal) Path() string {
 	return filepath.Dir(j.path)
 }
 
-func (j *chunkJournal) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, chunkCount uint32) error {
-	return j.persister.CopyTableFile(ctx, r, fileId, chunkCount)
+func (j *chunkJournal) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, fileSz uint64, chunkCount uint32) error {
+	return j.persister.CopyTableFile(ctx, r, fileId, fileSz, chunkCount)
 }
 
 // Name implements manifest.
