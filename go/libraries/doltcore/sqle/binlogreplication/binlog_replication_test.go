@@ -487,13 +487,15 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 		panic(err)
 	}
 
+	socketPath := filepath.Join("/tmp", fmt.Sprintf("dolt.%v.sock", doltPort))
+
 	cmd := exec.Command("go", "run", "./cmd/dolt",
 		"sql-server",
 		"-uroot",
 		"--loglevel=TRACE",
 		fmt.Sprintf("--data-dir=%s", dir),
 		fmt.Sprintf("--port=%v", doltPort),
-		fmt.Sprintf("--socket=dolt.%v.sock", doltPort))
+		fmt.Sprintf("--socket=%s", socketPath))
 
 	doltLogFilePath := filepath.Join(dir, fmt.Sprintf("dolt-%d.out.log", time.Now().Unix()))
 	doltLogFile, err = os.Create(doltLogFilePath)
