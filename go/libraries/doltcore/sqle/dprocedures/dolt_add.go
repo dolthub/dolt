@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-// doltAdd is the stored procedure version of the function `dolt_add`.
+// doltAdd is the stored procedure version for the CLI command `dolt add`.
 func doltAdd(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltAdd(ctx, args)
 	if err != nil {

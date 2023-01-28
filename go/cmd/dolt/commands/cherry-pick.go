@@ -161,9 +161,7 @@ func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cherryStr string) errhan
 		return errhand.BuildDError("dolt add failed").AddCause(err).Build()
 	}
 
-	// Pass in the final parameters for the author string.
 	commitParams := []string{"-m", commitMsg}
-
 	res = CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv)
 	if res != 0 {
 		return errhand.BuildDError("dolt commit failed").AddCause(err).Build()

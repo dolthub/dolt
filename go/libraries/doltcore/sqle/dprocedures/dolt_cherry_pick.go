@@ -15,7 +15,6 @@
 package dprocedures
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -29,10 +28,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-var ErrEmptyCherryPick = errors.New("error: cannot cherry-pick empty string")
+var ErrEmptyCherryPick = errors.New("cannot cherry-pick empty string")
 var ErrCherryPickUncommittedChanges = errors.New("cannot cherry-pick with uncommitted changes")
 
-// doltCheckout is the stored procedure version of the function `dolt_cherry_pick`.
+// doltCherryPick is the stored procedure version for the CLI command `dolt cherry-pick`.
 func doltCherryPick(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltCherryPick(ctx, args)
 	if err != nil {
@@ -137,7 +136,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 	if err != nil {
 		return nil, "", err
 	}
-	cherryCommit, err := doltDB.Resolve(context.TODO(), cherryCommitSpec, dbData.Rsr.CWBHeadRef())
+	cherryCommit, err := doltDB.Resolve(ctx, cherryCommitSpec, dbData.Rsr.CWBHeadRef())
 	if err != nil {
 		return nil, "", err
 	}
