@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -123,7 +124,7 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 			}
 		}
 
-		preChild, _, err := newConstraintViolationsLoadedTable(ctx, foreignKey.TableName, "", baseRoot)
+		preChild, _, err := newConstraintViolationsLoadedTable(ctx, foreignKey.TableName, foreignKey.TableIndex, baseRoot)
 		if err != nil {
 			if err != doltdb.ErrTableNotFound {
 				return err
@@ -133,13 +134,16 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 			if err != nil {
 				return err
 			}
-			err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, postChild.Schema, emptyIdx, receiver)
+
+			err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, postChild, emptyIdx, receiver)
 			if err != nil {
 				return err
 			}
 		} else {
+			log.Printf("fk table: %s, ref table: %s ref index: %s, time: %s", foreignKey.TableName, foreignKey.ReferencedTableName, foreignKey.ReferencedTableIndex, time.Now().String())
+			// TODO find index in pre/post child to diff
 			// Child exists in the ancestor
-			err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChild.Schema, preChild.RowData, receiver)
+			err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChild, preChild.RowData, receiver)
 			if err != nil {
 				return err
 			}
@@ -369,17 +373,20 @@ func parentFkConstraintViolations(
 func childFkConstraintViolations(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
-	preChildSch schema.Schema,
+	postParent, postChild, preChild *constraintViolationsLoadedTable,
 	preChildRowData durable.Index,
 	receiver FKViolationReceiver) error {
 	if preChildRowData.Format() == types.Format_DOLT {
-		m := durable.ProllyMapFromIndex(preChildRowData)
-		return prollyChildFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
+		if preChild.IndexData != nil {
+			m := durable.ProllyMapFromIndex(preChild.IndexData)
+			return prollyChildSecDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
+		}
+		m := durable.ProllyMapFromIndex(preChild.RowData)
+		return prollyChildPriDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
 	}
 
 	m := durable.NomsMapFromIndex(preChildRowData)
-	return nomsChildFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChildSch, m, receiver)
+	return nomsChildFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChild.Schema, m, receiver)
 }
 
 func nomsParentFkConstraintViolations(
