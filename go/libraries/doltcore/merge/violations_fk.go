@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"time"
 
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -140,9 +139,6 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 				return err
 			}
 		} else {
-			log.Printf("fk table: %s, ref table: %s ref index: %s, time: %s", foreignKey.TableName, foreignKey.ReferencedTableName, foreignKey.ReferencedTableIndex, time.Now().String())
-			// TODO find index in pre/post child to diff
-			// Child exists in the ancestor
 			err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChild, preChild.RowData, receiver)
 			if err != nil {
 				return err
@@ -375,13 +371,16 @@ func childFkConstraintViolations(
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild, preChild *constraintViolationsLoadedTable,
 	preChildRowData durable.Index,
-	receiver FKViolationReceiver) error {
+	receiver FKViolationReceiver,
+) error {
 	if preChildRowData.Format() == types.Format_DOLT {
-		if preChild.IndexData != nil {
+		if empty, err := preChildRowData.Empty(); err != nil {
+			return err
+		} else if !empty && preChild.IndexData != nil {
 			m := durable.ProllyMapFromIndex(preChild.IndexData)
 			return prollyChildSecDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
 		}
-		m := durable.ProllyMapFromIndex(preChild.RowData)
+		m := durable.ProllyMapFromIndex(preChildRowData)
 		return prollyChildPriDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
 	}
 
