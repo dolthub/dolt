@@ -200,6 +200,16 @@ func (a *binlogReplicaApplier) startReplicationEventStream(ctx *sql.Context, con
 		_, value, ok := sql.SystemVariables.GetGlobal("gtid_purged")
 		gtidPurged, isString := value.(string)
 		if ok && value != nil && isString {
+			// Starting in MySQL 8.0, when setting the GTID_PURGED sys variable, if the new value starts with '+', then
+			// the specified GTID Set value is added to the current GTID Set value to get a new GTID Set that contains
+			// all the previous GTIDs, plus the new ones from the current assignment. Dolt doesn't support this
+			// special behavior for appending to GTID Sets yet, so in this case the GTID_PURGED sys var will end up
+			// with a "+" prefix. For now, just ignore the "+" prefix if we see it.
+			// https://dev.mysql.com/doc/refman/8.0/en/replication-options-gtids.html#sysvar_gtid_purged
+			if strings.HasPrefix(gtidPurged, "+") {
+				gtidPurged = gtidPurged[1:]
+			}
+
 			purged, err := mysql.ParsePosition(mysqlFlavor, gtidPurged)
 			if err != nil {
 				return err
@@ -932,13 +942,8 @@ func loadReplicaServerId() (uint32, error) {
 	}
 
 	serverId, ok := value.(uint32)
-	if !ok {
+	if !ok || serverId == 0 {
 		return 0, fmt.Errorf("unexpected type for @@GLOBAL.server_id value: %T", value)
-	}
-
-	if serverId == 0 {
-		return 0, fmt.Errorf("invalid server ID configured for @@GLOBAL.server_id (%d); "+
-			"must be an integer greater than zero and less than 4,294,967,296", serverId)
 	}
 
 	return serverId, nil

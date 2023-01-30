@@ -142,7 +142,6 @@ func NewSqlEngine(
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
 	})
 
-	// TODO: This could be a cleaner interface
 	engine.Analyzer.BinlogReplicaController = config.BinlogReplicaController
 
 	// Load MySQL Db information
