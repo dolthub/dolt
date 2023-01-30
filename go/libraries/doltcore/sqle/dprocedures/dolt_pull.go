@@ -32,7 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
-// doltPull is the stored procedure version of the function `dolt_pull`.
+// doltPull is the stored procedure version for the CLI command `dolt pull`.
 func doltPull(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	conflicts, ff, err := doDoltPull(ctx, args)
 	if err != nil {

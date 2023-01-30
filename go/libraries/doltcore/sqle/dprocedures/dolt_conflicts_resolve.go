@@ -42,7 +42,7 @@ import (
 
 var ErrConfSchIncompatible = errors.New("the conflict schema's columns are not equal to the current schema's columns, please resolve manually")
 
-// doltConflictsResolve is the stored procedure version of the function `dolt conflict resolve`.
+// doltConflictsResolve is the stored procedure version for the CLI command `dolt conflict resolve`.
 func doltConflictsResolve(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := DoDoltConflictsResolve(ctx, args)
 	if err != nil {

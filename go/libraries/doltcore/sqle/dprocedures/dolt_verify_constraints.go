@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
-// doltVerifyConstraints is the stored procedure version of the function `constraints_verify`.
+// doltVerifyConstraints is the stored procedure version for the CLI command `dolt constraints verify`.
 func doltVerifyConstraints(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltConstraintsVerify(ctx, args)
 	if err != nil {

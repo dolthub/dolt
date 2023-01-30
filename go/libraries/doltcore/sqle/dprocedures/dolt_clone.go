@@ -28,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 )
 
-// doltClone is a stored procedure to clone a database from a remote
+// doltClone is the stored procedure version for the CLI command `dolt clone`.
 func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	ap := cli.CreateCloneArgParser()
 	apr, err := ap.Parse(args)

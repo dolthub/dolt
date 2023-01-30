@@ -46,7 +46,7 @@ const (
 
 var ErrUncommittedChanges = goerrors.NewKind("cannot merge with uncommitted changes")
 
-// doltMerge is the stored procedure version of the functions `merge` and `dolt_merge`.
+// doltMerge is the stored procedure version for the CLI command `dolt merge`.
 func doltMerge(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	hasConflicts, ff, err := doDoltMerge(ctx, args)
 	if err != nil {

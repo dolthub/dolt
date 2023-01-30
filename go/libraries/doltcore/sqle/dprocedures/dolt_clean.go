@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-// doltClean is the stored procedure version of the function `dolt_clean`.
+// doltClean is the stored procedure version for the CLI command `dolt clean`.
 func doltClean(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltClean(ctx, args)
 	if err != nil {
