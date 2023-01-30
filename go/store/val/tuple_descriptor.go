@@ -468,6 +468,16 @@ func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 	panic("incorrect value encoding")
 }
 
+func (td TupleDesc) GetCell(i int, tup Tuple) (v Cell, ok bool) {
+	td.expectEncoding(i, CellEnc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v = readCell(b)
+		ok = true
+	}
+	return
+}
+
 // Format prints a Tuple as a string.
 func (td TupleDesc) Format(tup Tuple) string {
 	if tup == nil || tup.Count() == 0 {
@@ -561,6 +571,8 @@ func formatValue(enc Encoding, value []byte) string {
 	case BytesAddrEnc:
 		return hex.EncodeToString(value)
 	case CommitAddrEnc:
+		return hex.EncodeToString(value)
+	case CellEnc:
 		return hex.EncodeToString(value)
 	default:
 		return string(value)

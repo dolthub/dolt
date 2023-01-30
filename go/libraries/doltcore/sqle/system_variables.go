@@ -158,6 +158,14 @@ func AddDoltSystemVariables() {
 			Type:              types.NewSystemStringType(dsess.AwsCredsRegion),
 			Default:           nil,
 		},
+		{
+			Name:              dsess.ShowBranchDatabases,
+			Scope:             sql.SystemVariableScope_Both,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemBoolType(dsess.ShowBranchDatabases),
+			Default:           int8(0),
+		},
 	})
 }
 

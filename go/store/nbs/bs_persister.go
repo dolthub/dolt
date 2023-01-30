@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
@@ -176,22 +177,55 @@ func (bsp *blobstorePersister) Path() string {
 	return ""
 }
 
-func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, chunkCount uint32) error {
-	var err error
-
+func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, name string, fileSz uint64, chunkCount uint32) (err error) {
 	defer func() {
-		cerr := r.Close()
-		if err == nil {
+		if cerr := r.Close(); cerr != nil {
 			err = cerr
 		}
 	}()
 
-	_, err = bsp.bs.Put(ctx, fileId, r)
-	if err != nil {
-		return err
+	// sanity check file size
+	if fileSz < indexSize(chunkCount)+footerSize {
+		return fmt.Errorf("table file size %d too small for chunk count %d", fileSz, chunkCount)
 	}
 
-	return err
+	off := int64(tableTailOffset(fileSz, chunkCount))
+	lr := io.LimitReader(r, off)
+
+	// check if we can Put concurrently
+	rr, ok := r.(io.ReaderAt)
+	if !ok {
+		// sequentially write chunk records then tail
+		if _, err = bsp.bs.Put(ctx, name+tableRecordsExt, lr); err != nil {
+			return err
+		}
+		if _, err = bsp.bs.Put(ctx, name+tableTailExt, r); err != nil {
+			return err
+		}
+	} else {
+		// on the push path, we expect to Put concurrently
+		// see BufferedFileByteSink in byte_sink.go
+		eg, ectx := errgroup.WithContext(ctx)
+		eg.Go(func() (err error) {
+			buf := make([]byte, indexSize(chunkCount)+footerSize)
+			if _, err = rr.ReadAt(buf, off); err != nil {
+				return err
+			}
+			_, err = bsp.bs.Put(ectx, name+tableTailExt, bytes.NewBuffer(buf))
+			return
+		})
+		eg.Go(func() (err error) {
+			_, err = bsp.bs.Put(ectx, name+tableRecordsExt, lr)
+			return
+		})
+		if err = eg.Wait(); err != nil {
+			return err
+		}
+	}
+
+	// finally concatenate into the complete table
+	_, err = bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt})
+	return
 }
 
 type bsTableReaderAt struct {

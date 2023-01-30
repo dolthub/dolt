@@ -1018,9 +1018,6 @@ func TestDoltReset(t *testing.T) {
 }
 
 func TestDoltGC(t *testing.T) {
-	// TODO: This does not work because `db.chunkStore().(nbs.TableFileStore)`
-	// returns not ok in PruneTableFiles
-	t.Skip()
 	for _, script := range DoltGC {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}

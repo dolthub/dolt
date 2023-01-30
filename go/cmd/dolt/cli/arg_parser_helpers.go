@@ -112,6 +112,7 @@ const (
 	MinParentsFlag   = "min-parents"
 	DecorateFlag     = "decorate"
 	OneLineFlag      = "oneline"
+	ShallowFlag      = "shallow"
 )
 
 const (
@@ -270,6 +271,7 @@ func CreateTagArgParser() *argparser.ArgParser {
 	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the tag message.")
 	ap.SupportsFlag(VerboseFlag, "v", "list tags along with their metadata.")
 	ap.SupportsFlag(DeleteFlag, "d", "Delete a tag.")
+	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
 	return ap
 }
 
@@ -303,6 +305,12 @@ func CreateLogArgParser() *argparser.ArgParser {
 	ap.SupportsString(DecorateFlag, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
 	ap.SupportsFlag(OneLineFlag, "", "Shows logs in a compact format.")
 	ap.SupportsStringList(NotFlag, "", "revision", "Excludes commits from revision.")
+	return ap
+}
+
+func CreateGCArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(ShallowFlag, "s", "perform a fast, but incomplete garbage collection pass")
 	return ap
 }
 

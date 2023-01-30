@@ -755,6 +755,109 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		Name: "call dolt_commit commits staged stuff, merges with working set and branch head",
+		SetUpScript: []string{
+			"create table t1 (id int primary key, val int)",
+			"create table t2 (id int primary key, val int)",
+			"insert into t1 values (1, 1), (2, 2)",
+			"insert into t2 values (1, 1), (2, 2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ set autocommit = off",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ call dolt_add('t1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:            "/* client a */ call dolt_commit('-m', 'initial commit of t1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ set autocommit = off",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t1 values (3, 3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into t1 values (4, 4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into t2 values (3, 3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into t2 values (4, 4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ call dolt_add('t1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ call dolt_add('t1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ insert into t1 values (5, 5)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into t1 values (6, 6)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client c */ insert into t2 values (6, 6)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:            "/* client a */ call dolt_commit('-m', 'add 3 to t1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select * from t2 order by id asc",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {6, 6}},
+			},
+			{
+				Query:    "/* client a */ select * from t1 order by id asc",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {5, 5}},
+			},
+			{
+				Query:    "/* client a */ select * from t1 as of 'HEAD' order by id asc",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-m', 'add 4 to t1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from t2 order by id asc",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {6, 6}},
+			},
+			{
+				Query:    "/* client b */ select * from t1 order by id asc",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}},
+			},
+			{
+				Query:    "/* client b */ select * from t1 as of 'HEAD' order by id asc",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+			},
+		},
+	},
 }
 
 var DoltConflictHandlingTests = []queries.TransactionTest{
@@ -1592,6 +1695,48 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 					"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
 					"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
 					"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.",
+			},
+		},
+	},
+	{
+		Name:        "Run GC concurrently with other transactions",
+		SetUpScript: gcSetup(),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ SELECT count(*) FROM t;",
+				Expected: []sql.Row{{250}},
+			},
+			{
+				Query:    "/* client a */ START TRANSACTION",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ START TRANSACTION",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ CALL DOLT_GC();",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client b */ INSERT into t VALUES (300);",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ SELECT count(*) FROM t;",
+				Expected: []sql.Row{{251}},
+			},
+			{
+				Query:    "/* client b */ SELECT count(*) FROM t;",
+				Expected: []sql.Row{{251}},
 			},
 		},
 	},

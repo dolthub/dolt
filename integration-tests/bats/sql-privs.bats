@@ -613,7 +613,11 @@ behavior:
      run dolt sql-client -P $PORT -u dolt --use-db test_db -q "show tables"
      [ $status -eq 0 ]
      [[ $output =~ t1 ]] || false
-     
+
+     # check information_schema.SCHEMA_PRIVILEGES table
+     run dolt sql-client -P $PORT -u dolt --use-db test_db -q "select * from information_schema.SCHEMA_PRIVILEGES;"
+     [[ "$output" =~ "| 'test'@'%' | def           | test_db      | SELECT         | NO           |" ]] || false
+
      # Revoke works as expected
      dolt sql-client -P $PORT -u dolt --use-db test_db -q "revoke select on test_db.* from test"
      run dolt sql-client -P $PORT -u test --use-db test_db -q "show tables"
@@ -627,7 +631,20 @@ behavior:
      [ $status -eq 0 ]
      [[ $output =~ t1 ]] || false
 
-     
+     # check information_schema.SCHEMA_PRIVILEGES table
+     run dolt sql-client -P $PORT -u dolt --use-db test_db -q "select * from information_schema.SCHEMA_PRIVILEGES;"
+     [[ "$output" =~ "| 'test'@'127.0.0.1' | def           | test_db      | SELECT         | NO           |" ]] || false
+
+     dolt sql-client -P $PORT -u dolt --use-db test_db -q "grant update on test_db.t1 to test@'127.0.0.1'"
+     # check information_schema.TABLE_PRIVILEGES table
+     run dolt sql-client -P $PORT -u dolt --use-db test_db -q "select * from information_schema.TABLE_PRIVILEGES;"
+     [[ "$output" =~ "| 'test'@'127.0.0.1' | def           | test_db      | t1         | UPDATE         | NO           |" ]] || false
+
+     dolt sql-client -P $PORT -u dolt --use-db test_db -q "grant insert on *.* to test@'127.0.0.1'"
+     # check information_schema.USER_PRIVILEGES table
+     run dolt sql-client -P $PORT -u test -H 127.0.0.1 --use-db test_db -q "select * from information_schema.USER_PRIVILEGES;"
+     [[ "$output" =~ "| 'test'@'127.0.0.1' | def           | INSERT         | NO           |" ]] || false
+
      dolt sql-client -P $PORT -u dolt --use-db test_db -q "drop user test@'127.0.0.1'"
      dolt sql-client -P $PORT -u dolt --use-db test_db -q "create user test@'10.10.10.10'"
      dolt sql-client -P $PORT -u dolt --use-db test_db -q "grant select on test_db.* to test@'10.10.10.10'"

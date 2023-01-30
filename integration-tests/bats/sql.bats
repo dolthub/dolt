@@ -879,6 +879,22 @@ SQL
     [[ "$output" =~ foo ]] || false
     [[ "$output" =~ bar ]] || false
     [ "${#lines[@]}" -eq 8 ]
+
+    # check information_schema.STATISTICS table
+    # TODO: caridnality here are all 0's as it's not supported yet
+    run dolt sql -q "select * from information_schema.STATISTICS;" -r csv
+    [[ "$output" =~ "has_datetimes,0,dolt_repo_$$,PRIMARY,1,pk,A,0,,,\"\",BTREE,\"\",\"\",YES," ]] || false
+    [[ "$output" =~ "one_pk,0,dolt_repo_$$,PRIMARY,1,pk,A,0,,,\"\",BTREE,\"\",\"\",YES," ]] || false
+    [[ "$output" =~ "two_pk,0,dolt_repo_$$,PRIMARY,1,pk1,A,0,,,\"\",BTREE,\"\",\"\",YES," ]] || false
+    [[ "$output" =~ "two_pk,0,dolt_repo_$$,PRIMARY,2,pk2,A,0,,,\"\",BTREE,\"\",\"\",YES," ]] || false
+
+    skip "ALTER VIEW is unsupported"
+    # check cardinality on information_schema.STATISTICS table
+    run dolt sql -q "select table_name, column_name, cardinality from information_schema.STATISTICS;" -r csv
+    [[ "$output" =~ "has_datetimes,pk,1" ]] || false
+    [[ "$output" =~ "one_pk,pk,4" ]] || false
+    [[ "$output" =~ "two_pk,pk1,2" ]] || false
+    [[ "$output" =~ "two_pk,pk2,4" ]] || false
 }
 
 @test "sql: AS OF queries" {
@@ -1023,6 +1039,21 @@ SQL
     run dolt sql -r json -q "select @@character_set_client"
     [ $status -eq 0 ]
     [[ "$output" =~ "utf8mb4" ]] || false
+}
+
+@test "sql: empty JSON output format" {
+    dolt sql <<SQL
+    CREATE TABLE test (
+    a int primary key,
+    b float,
+    c varchar(80),
+    d datetime
+);
+SQL
+
+    run dolt sql -r json -q "select * from test order by a"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "{}" ]] || false
 }
 
 @test "sql: output for escaped longtext exports properly" {
@@ -1373,6 +1404,58 @@ SQL
     run dolt sql -q "create database existing_dir"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "exists" ]] || false
+}
+
+@test "sql: dolt_show_branch_databases" {
+    mkdir new && cd new
+
+    dolt sql <<SQL
+create database db1;
+create database db2;
+use db1;
+create table t1 (a int primary key);
+call dolt_commit('-Am', 'new table');
+call dolt_branch('b1');
+call dolt_branch('b2');
+use db2;
+create table t2 (b int primary key);
+call dolt_commit('-Am', 'new table');
+call dolt_branch('b3');
+call dolt_branch('b4');
+SQL
+
+    run dolt sql -r csv -q "show databases"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "db1" ]] || false
+    [[ "$output" =~ "db2" ]] || false
+    [[ ! "$output" =~ "/" ]] || false
+
+    run dolt sql -r csv -q "set dolt_show_branch_databases = 1; show databases"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 11 ] # 2 base dbs, 3 branch dbs each, 2 mysql dbs, 1 header line
+    [[ "$output" =~ "db1/b1" ]] || false
+    [[ "$output" =~ "db1/b2" ]] || false
+    [[ "$output" =~ "db1/main" ]] || false
+    [[ "$output" =~ "db2/b3" ]] || false
+    [[ "$output" =~ "db2/b4" ]] || false
+    [[ "$output" =~ "db2/main" ]] || false
+
+    run dolt sql -q "show databases"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "db1" ]] || false
+    [[ "$output" =~ "db2" ]] || false
+    [[ ! "$output" =~ "/" ]] || false
+
+    dolt sql -q "set @@persist.dolt_show_branch_databases = 1"
+    run dolt sql -r csv -q "show databases"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 11 ]
+
+    # make sure we aren't double-counting revision dbs
+    run dolt sql -r csv -q 'use `db1/main`; show databases'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Database changed" ]] || false
+    [ "${#lines[@]}" -eq 12 ] # one line for above output, 11 dbs
 }
 
 @test "sql: run outside a dolt directory" {
@@ -2346,6 +2429,26 @@ SQL
     [[ ! "$output" =~ ',p1,PROCEDURE,' ]] || false
     [[ ! "$output" =~ ',p2,PROCEDURE,' ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
+}
+
+@test "sql: check info_schema routines and parameters tables for stored procedures" {
+    dolt sql <<SQL
+CREATE TABLE inventory (item_id int primary key, shelf_id int, items varchar(100));
+CREATE PROCEDURE in_stock (IN p_id INT, OUT p_count INT) SELECT COUNT(*) FROM inventory WHERE shelf_id = p_id INTO p_count;
+SQL
+
+    # check information_schema.PARAMETERS table
+    run dolt sql -q "select specific_name, ordinal_position, parameter_mode, parameter_name, data_type, dtd_identifier, routine_type from information_schema.PARAMETERS;" -r csv
+    [[ "$output" =~ "in_stock,1,IN,p_id,int,int,PROCEDURE" ]] || false
+    [[ "$output" =~ "in_stock,2,OUT,p_count,int,int,PROCEDURE" ]] || false
+
+    # check information_schema.ROUTINES table
+    run dolt sql -q "select specific_name, routine_name, routine_type, routine_body, routine_definition from information_schema.ROUTINES;" -r csv
+    [[ "$output" =~ "in_stock,in_stock,PROCEDURE,SQL,SELECT COUNT(*) FROM inventory WHERE shelf_id = p_id INTO p_count" ]] || false
+
+    # check information_schema.ROUTINES table
+    run dolt sql -q "select specific_name, is_deterministic, sql_data_access, security_type, routine_comment, definer, character_set_client, collation_connection, database_collation from information_schema.ROUTINES;" -r csv
+    [[ "$output" =~ "in_stock,NO,CONTAINS SQL,DEFINER,\"\",\"\",utf8mb4,utf8mb4_0900_bin,utf8mb4_0900_bin" ]] || false
 }
 
 @test "sql: active_branch() func" {

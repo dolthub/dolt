@@ -214,6 +214,8 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 		tb.PutStringAddr(i, h)
 	case val.CommitAddrEnc:
 		tb.PutCommitAddr(i, v.(hash.Hash))
+	case val.CellEnc:
+		tb.PutCell(i, ZCell(v.(types.GeometryValue)))
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}

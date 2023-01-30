@@ -204,34 +204,34 @@ func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, roots do
 
 // ResetSoftToRef matches the `git reset --soft <REF>` pattern. It resets both staged and head to the previous ref
 // and leaves the working unset. The user can then choose to create a commit that contains all changes since the ref.
-func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) error {
+func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) (*doltdb.RootValue, error) {
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	newHead, err := dbData.Ddb.Resolve(ctx, cs, dbData.Rsr.CWBHeadRef())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	foundRoot, err := newHead.GetRootValue(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Changed the staged to the old root. Leave the working as is.
 	err = dbData.Rsw.UpdateStagedRoot(ctx, foundRoot)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Update the head to this commit
 	if err = dbData.Ddb.SetHeadToCommit(ctx, dbData.Rsr.CWBHeadRef(), newHead); err != nil {
-		return err
+		return nil, err
 	}
 
-	return err
+	return foundRoot, err
 }
 
 func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot *doltdb.RootValue) ([]string, error) {

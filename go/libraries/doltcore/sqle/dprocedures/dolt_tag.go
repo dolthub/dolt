@@ -73,8 +73,17 @@ func doDoltTag(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("create tag takes at most two args")
 	}
 
-	name := dSess.Username()
-	email := dSess.Email()
+	var name, email string
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		name, email, err = cli.ParseAuthor(authorStr)
+		if err != nil {
+			return 1, err
+		}
+	} else {
+		name = dSess.Username()
+		email = dSess.Email()
+	}
+
 	msg, _ := apr.GetValue(cli.MessageArg)
 
 	props := actions.TagProps{

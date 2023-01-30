@@ -113,7 +113,7 @@ func TestChunkStoreCommit(t *testing.T) {
 
 	newRootChunk := chunks.NewChunk([]byte("new root"))
 	newRoot := newRootChunk.Hash()
-	err = store.Put(context.Background(), newRootChunk, getAddrsCb)
+	err = store.Put(context.Background(), newRootChunk, noopGetAddrs)
 	require.NoError(t, err)
 	success, err := store.Commit(context.Background(), newRoot, hash.Hash{})
 	require.NoError(t, err)
@@ -128,7 +128,7 @@ func TestChunkStoreCommit(t *testing.T) {
 
 	secondRootChunk := chunks.NewChunk([]byte("newer root"))
 	secondRoot := secondRootChunk.Hash()
-	err = store.Put(context.Background(), secondRootChunk, getAddrsCb)
+	err = store.Put(context.Background(), secondRootChunk, noopGetAddrs)
 	require.NoError(t, err)
 	success, err = store.Commit(context.Background(), secondRoot, newRoot)
 	require.NoError(t, err)
@@ -241,13 +241,13 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	}()
 
 	chunk := chunks.NewChunk([]byte("hello"))
-	err = interloper.Put(context.Background(), chunk, getAddrsCb)
+	err = interloper.Put(context.Background(), chunk, noopGetAddrs)
 	require.NoError(t, err)
 	assert.True(interloper.Commit(context.Background(), chunk.Hash(), hash.Hash{}))
 
 	// Try to land a new chunk in store, which should fail AND not persist the contents of store.mt
 	chunk = chunks.NewChunk([]byte("goodbye"))
-	err = store.Put(context.Background(), chunk, getAddrsCb)
+	err = store.Put(context.Background(), chunk, noopGetAddrs)
 	require.NoError(t, err)
 	assert.NotNil(store.mt)
 	assert.False(store.Commit(context.Background(), chunk.Hash(), hash.Hash{}))
@@ -296,7 +296,7 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 	}
 
 	rootChunk := chunks.NewChunk([]byte("new root"))
-	err = store.Put(context.Background(), rootChunk, getAddrsCb)
+	err = store.Put(context.Background(), rootChunk, noopGetAddrs)
 	require.NoError(t, err)
 	h, err := store.Root(context.Background())
 	require.NoError(t, err)
@@ -352,7 +352,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := interloper.Put(context.Background(), interloperChunk, getAddrsCb)
+			err := interloper.Put(context.Background(), interloperChunk, noopGetAddrs)
 			require.NoError(t, err)
 			h, err := interloper.Root(context.Background())
 			require.NoError(t, err)
@@ -364,7 +364,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 		updateCount++
 	}
 
-	err = store.Put(context.Background(), storeChunk, getAddrsCb)
+	err = store.Put(context.Background(), storeChunk, noopGetAddrs)
 	require.NoError(t, err)
 	h, err := store.Root(context.Background())
 	require.NoError(t, err)

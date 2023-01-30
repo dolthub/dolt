@@ -262,7 +262,7 @@ func (p DoltDatabaseProvider) attemptCloneReplica(ctx *sql.Context, dbName strin
 
 func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 	_, err := p.Database(ctx, name)
-	if err != nil {
+	if err != nil && !sql.ErrDatabaseNotFound.Is(err) {
 		ctx.GetLogger().Errorf(err.Error())
 	}
 	return err == nil
@@ -270,6 +270,8 @@ func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 
 func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database) {
 	p.mu.RLock()
+
+	showBranches, _ := dsess.GetBooleanSystemVar(ctx, dsess.ShowBranchDatabases)
 
 	all = make([]sql.Database, 0, len(p.databases))
 	var foundDatabase bool
@@ -279,6 +281,26 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 			foundDatabase = true
 		}
 		all = append(all, db)
+
+		if showBranches {
+			revisionDbs, err := p.allRevisionDbs(ctx, db)
+			if err != nil {
+				// TODO: this interface is wrong, needs to return errors
+				ctx.GetLogger().Warnf("error fetching revision databases: %s", err.Error())
+				continue
+			}
+			all = append(all, revisionDbs...)
+
+			// if one of the revisions we just expanded matches the curr db, mark it so we don't double-include that
+			// revision db
+			if !foundDatabase && currDb != "" {
+				for _, revisionDb := range revisionDbs {
+					if strings.ToLower(revisionDb.Name()) == currDb {
+						foundDatabase = true
+					}
+				}
+			}
+		}
 	}
 	p.mu.RUnlock()
 
@@ -301,6 +323,28 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 	})
 
 	return all
+}
+
+// allRevisionDbs returns all revision dbs for the database given
+func (p DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db SqlDatabase) ([]sql.Database, error) {
+	branches, err := db.DbData().Ddb.GetBranches(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	revDbs := make([]sql.Database, len(branches))
+	for i, branch := range branches {
+		revDb, _, ok, err := p.databaseForRevision(ctx, fmt.Sprintf("%s/%s", db.Name(), branch.GetPath()))
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("cannot get revision database for %s/%s", db.Name(), branch.GetPath())
+		}
+		revDbs[i] = revDb
+	}
+
+	return revDbs, nil
 }
 
 func (p DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
@@ -929,7 +973,7 @@ func (p DoltDatabaseProvider) GetRevisionForRevisionDatabase(ctx *sql.Context, d
 // IsRevisionDatabase returns true if the specified dbName represents a database that is tied to a specific
 // branch or commit from a database (e.g. "dolt/branch1").
 func (p DoltDatabaseProvider) IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error) {
-	dbName, revision, err := p.GetRevisionForRevisionDatabase(ctx, dbName)
+	_, revision, err := p.GetRevisionForRevisionDatabase(ctx, dbName)
 	if err != nil {
 		return false, err
 	}

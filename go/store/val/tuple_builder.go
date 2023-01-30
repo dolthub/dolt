@@ -367,11 +367,11 @@ func (tb *TupleBuilder) ensureCapacity(sz ByteSize) {
 	}
 }
 
-// PutZAddr writes a bounding box to the ith field of the Tuple being built.
-func (tb *TupleBuilder) PutZAddr(i int, v [zAddrSize]byte) {
-	tb.Desc.expectEncoding(i, ZAddrEnc)
-	tb.ensureCapacity(zAddrSize)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+zAddrSize]
-	writeZAddr(tb.fields[i], v)
-	tb.pos += zAddrSize
+// PutCell writes a Cell to the ith field of the Tuple being built.
+func (tb *TupleBuilder) PutCell(i int, v Cell) {
+	tb.Desc.expectEncoding(i, CellEnc)
+	tb.ensureCapacity(cellSize)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+cellSize]
+	writeCell(tb.fields[i], v)
+	tb.pos += cellSize
 }

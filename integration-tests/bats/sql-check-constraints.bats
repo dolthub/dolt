@@ -78,6 +78,10 @@ SQL
     echo $output
     [[ "$output" =~ "CHECK" ]] || false
     [[ "$output" =~ "`c1` > 3" ]] || false
+
+    # check information_schema.CHECK_CONSTRAINTS table
+    run dolt sql -q "select constraint_catalog, constraint_name, check_clause from information_schema.CHECK_CONSTRAINTS;" -r csv
+    [[ "$output" =~ "def,chk_eq3jn5ra,(c1 > 3)" ]] || false
 }
 
 @test "sql-check-constraints: check constraints survive renaming a column" {

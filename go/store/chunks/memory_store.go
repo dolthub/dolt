@@ -220,6 +220,7 @@ func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb
 
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
+
 	if ms.pending == nil {
 		ms.pending = map[hash.Hash]Chunk{}
 	}

@@ -109,7 +109,7 @@ func (s3p awsTablePersister) Exists(ctx context.Context, name addr, chunkCount u
 	)
 }
 
-func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, chunkCount uint32) error {
+func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, fileSz uint64, chunkCount uint32) error {
 	var err error
 
 	defer func() {

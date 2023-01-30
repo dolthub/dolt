@@ -317,6 +317,11 @@ func (ts tableSet) checkAllTablesExist(ctx context.Context, specs []tableSpec, s
 	eg, ectx := errgroup.WithContext(ctx)
 	eg.SetLimit(128)
 	for _, s := range specs {
+		// if the table file already exists in our upstream chunkSourceSet, we do not need to
+		// check with the upstream if it still exists.
+		if _, ok := ts.upstream[s.name]; ok {
+			continue
+		}
 		spec := s
 		eg.Go(func() error {
 			exists, err := ts.p.Exists(ectx, spec.name, spec.chunkCount, stats)

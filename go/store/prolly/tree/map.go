@@ -247,14 +247,12 @@ func (t StaticMap[K, V, O]) Has(ctx context.Context, query K) (ok bool, err erro
 	return
 }
 
-func (t StaticMap[K, V, O]) Last(ctx context.Context) (key K, value V, err error) {
-	cur, err := NewCursorAtEnd(ctx, t.NodeStore, t.Root)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if cur.Valid() {
-		key, value = K(cur.CurrentKey()), V(cur.CurrentValue())
+func (t StaticMap[K, V, O]) LastKey(ctx context.Context) (key K) {
+	if t.Root.count > 0 {
+		// if |t.Root| is a leaf node, it represents the entire map
+		// if |t.Root| is an internal node, its last key is the
+		// delimiter for last subtree and is the last key in the map
+		key = K(getLastKey(t.Root))
 	}
 	return
 }
@@ -445,7 +443,7 @@ func (t StaticMap[K, V, O]) getKeyRangeCursors(ctx context.Context, startInclusi
 	return
 }
 
-// getOrdinalForKey returns the smallest ordinal position at which the key >= |query|.
+// GetOrdinalForKey returns the smallest ordinal position at which the key >= |query|.
 func (t StaticMap[K, V, O]) GetOrdinalForKey(ctx context.Context, query K) (uint64, error) {
 	cur, err := NewCursorAtKey(ctx, t.NodeStore, t.Root, query, t.Order)
 	if err != nil {
