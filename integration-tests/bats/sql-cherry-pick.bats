@@ -89,7 +89,7 @@ CALL DOLT_CHECKOUT('main');
 CALL DOLT_CHERRY_PICK('branch1');
 SQL
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "no changes were made" ]] || false
+    [[ "$output" =~ "no changes were made, nothing to commit" ]] || false
 }
 
 @test "sql-cherry-pick: invalid hash" {

@@ -194,8 +194,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 	}
 
 	if headRootHash.Equal(workingRootHash) {
-		// TODO: should it be warning? or nothing?
-		return nil, "", fmt.Errorf("no changes were made")
+		return nil, "", fmt.Errorf("no changes were made, nothing to commit")
 	}
 
 	cherryCommitMeta, err := cherryCommit.GetCommitMeta(ctx)
