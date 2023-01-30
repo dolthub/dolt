@@ -483,6 +483,7 @@ type doltIndex struct {
 	indexSch schema.Schema
 	tableSch schema.Schema
 	unique   bool
+	spatial  bool
 	isPk     bool
 	comment  string
 	order    sql.IndexOrder
@@ -780,6 +781,11 @@ func (di *doltIndex) ID() string {
 // IsUnique implements sql.Index
 func (di *doltIndex) IsUnique() bool {
 	return di.unique
+}
+
+// IsSpatial implements sql.Index
+func (di *doltIndex) IsSpatial() bool {
+	return di.spatial
 }
 
 // IsPrimaryKey implements DoltIndex.
