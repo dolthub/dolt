@@ -76,7 +76,17 @@ func (bs *GCSBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 func (bs *GCSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, string, error) {
 	absKey := path.Join(bs.prefix, key)
 	oh := bs.bucket.Object(absKey)
-	attrs, err := oh.Attrs(ctx)
+	var reader *storage.Reader
+	var err error
+	if br.isAllRange() {
+		reader, err = oh.NewReader(ctx)
+	} else {
+		offset, length := br.offset, br.length
+		if offset < 0 {
+			length = -1
+		}
+		reader, err = oh.NewRangeReader(ctx, offset, length)
+	}
 
 	if err == storage.ErrObjectNotExist {
 		return nil, "", NotFound{"gs://" + path.Join(bs.bucketName, absKey)}
@@ -84,19 +94,8 @@ func (bs *GCSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.R
 		return nil, "", err
 	}
 
+	attrs := reader.Attrs
 	generation := attrs.Generation
-
-	var reader *storage.Reader
-	if br.isAllRange() {
-		reader, err = oh.Generation(generation).NewReader(ctx)
-	} else {
-		posBr := br.positiveRange(attrs.Size)
-		reader, err = oh.Generation(generation).NewRangeReader(ctx, posBr.offset, posBr.length)
-	}
-
-	if err != nil {
-		return nil, "", err
-	}
 
 	return reader, fmtGeneration(generation), nil
 }
