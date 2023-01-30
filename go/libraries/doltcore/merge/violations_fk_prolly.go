@@ -96,10 +96,6 @@ func prollyParentFkConstraintViolations(
 	return nil
 }
 
-type cvKey struct {
-	k, v, partial val.Tuple
-}
-
 func prollyChildPriDiffFkConstraintViolations(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
