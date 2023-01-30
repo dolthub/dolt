@@ -26,9 +26,9 @@ import (
 )
 
 const (
-	singleMatch = -1 // Equivalent to the single match character '_'
-	anyMatch    = -2 // Equivalent to the any-length match character '%'
-	separator   = -3 // Marks a separation between columns
+	singleMatch  = -1 // Equivalent to the single match character '_'
+	anyMatch     = -2 // Equivalent to the any-length match character '%'
+	columnMarker = -3 // Marks the start of a new column
 )
 
 // invalidMatchExpression is a match expression that does not match anything

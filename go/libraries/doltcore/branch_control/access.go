@@ -64,9 +64,9 @@ type AccessRowIter struct {
 func newAccess() *Access {
 	return &Access{
 		Root: &MatchNode{
-			SortOrders:  []int32{separator},
-			Divergences: make(map[int32]*MatchNode),
-			Data:        nil,
+			SortOrders: []int32{columnMarker},
+			Children:   make(map[int32]*MatchNode),
+			Data:       nil,
 		},
 		RWMutex: &sync.RWMutex{},
 		binlog:  NewAccessBinlog(nil),
