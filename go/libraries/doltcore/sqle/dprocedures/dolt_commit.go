@@ -30,7 +30,7 @@ import (
 
 var hashType = types.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
-// doltCommit is the stored procedure version for the CLI function `commit`.
+// doltCommit is the stored procedure version for the CLI command `dolt commit`.
 func doltCommit(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltCommit(ctx, args)
 	if err != nil {
