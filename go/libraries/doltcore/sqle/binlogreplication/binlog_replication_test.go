@@ -356,8 +356,9 @@ func startSqlServers(t *testing.T) {
 		t.Skip("Skipping binlog replication integ tests in CI environment on Mac OS")
 	}
 
-	var err error
-	testDir, err = os.MkdirTemp("", t.Name()+"-"+time.Now().Format("12345"))
+	testDir := filepath.Join(os.TempDir(), t.Name()+"-"+time.Now().Format("12345"))
+	err := os.MkdirAll(testDir, 0777)
+
 	require.NoError(t, err)
 	fmt.Printf("temp dir: %v \n", testDir)
 
@@ -431,7 +432,7 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 
 	dir = dir + string(os.PathSeparator) + "mysql" + string(os.PathSeparator)
 	dataDir := dir + "mysql_data"
-	err = os.MkdirAll(dir, 0700)
+	err = os.MkdirAll(dir, 0777)
 	if err != nil {
 		return -1, nil, err
 	}
@@ -445,6 +446,7 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 	// Create a fresh MySQL server for the primary
 	cmd := exec.Command("mysqld",
 		"--no-defaults",
+		"--user=mysql",
 		"--initialize-insecure",
 		"--datadir="+dataDir,
 		"--default-authentication-plugin=mysql_native_password")
@@ -455,6 +457,7 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 
 	cmd = exec.Command("mysqld",
 		"--no-defaults",
+		"--user=mysql",
 		"--datadir="+dataDir,
 		"--default-authentication-plugin=mysql_native_password",
 		"--gtid-mode=ON",
@@ -507,7 +510,7 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 
 func startDoltSqlServer(dir string) (int, *os.Process, error) {
 	dir = filepath.Join(dir, "dolt")
-	err := os.MkdirAll(dir, 0700)
+	err := os.MkdirAll(dir, 0777)
 	if err != nil {
 		return -1, nil, err
 	}
