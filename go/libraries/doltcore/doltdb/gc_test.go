@@ -16,13 +16,17 @@ package doltdb_test
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -30,6 +34,154 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/store/hash"
 )
+
+func TestConcurrentGC(t *testing.T) {
+	tests := []concurrentGCtest{
+		{
+			name: "smoke test",
+			setup: queryGen{fn: func(_ int) []string {
+				return []string{
+					"CREATE TABLE t (id int primary key)",
+				}
+			}},
+			clients: []queryGen{
+				{fn: func(i int) (queries []string) {
+					return []string{
+						fmt.Sprintf("INSERT INTO t VALUES (%d)", i),
+						"SELECT COUNT(*) FROM t",
+					}
+				}},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testConcurrentGC(t, test)
+		})
+	}
+}
+
+type concurrentGCtest struct {
+	name    string
+	setup   queryGen
+	clients []queryGen
+}
+
+type queryGen struct {
+	fn func(idx int) (queries []string)
+}
+
+func testConcurrentGC(t *testing.T, test concurrentGCtest) {
+	ctx := context.Background()
+	eng := setupConcurrencyTest(t, ctx)
+
+	require.NoError(t, executeQueries(ctx, eng, 1, test.setup))
+
+	eg, ctx := errgroup.WithContext(ctx)
+	for _, client := range test.clients {
+		eg.Go(func() (err error) {
+			err = executeQueries(ctx, eng, 128, client)
+			return
+		})
+	}
+	assert.NoError(t, eg.Wait())
+}
+
+const (
+	// DB name matches dtestutils.CreateTestEnv()
+	testDB = "dolt"
+)
+
+func setupConcurrencyTest(t *testing.T, ctx context.Context) (eng *engine.SqlEngine) {
+	dEnv := dtestutils.CreateTestEnv()
+	mrEnv, err := env.MultiEnvForDirectory(
+		ctx,
+		dEnv.Config.WriteableConfig(),
+		dEnv.FS,
+		dEnv.Version,
+		dEnv.IgnoreLockFile,
+		dEnv)
+	if err != nil {
+		panic(err)
+	}
+
+	eng, err = engine.NewSqlEngine(ctx, mrEnv, engine.FormatNull, &engine.SqlEngineConfig{
+		InitialDb:    testDB,
+		IsReadOnly:   false,
+		PrivFilePath: "",
+		ServerUser:   "root",
+		ServerPass:   "",
+		ServerHost:   "localhost",
+		Autocommit:   true,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	sqlCtx, err := eng.NewContext(ctx)
+	require.NoError(t, err)
+	sqlCtx.Session.SetClient(sql.Client{
+		User: "root", Address: "%",
+	})
+	return
+}
+
+func executeQueries(ctx context.Context, eng *engine.SqlEngine, iters int, generator queryGen) error {
+	sess, err := eng.NewDoltSession(ctx, sql.NewBaseSession())
+	if err != nil {
+		return err
+	}
+	sctx := sql.NewContext(ctx, sql.WithSession(sess))
+	sctx.SetCurrentDatabase(testDB)
+	sctx.Session.SetClient(sql.Client{User: "root", Address: "%"})
+
+	runQuery := func(sctx *sql.Context, eng *engine.SqlEngine, query string) (err error) {
+		_, iter, err := eng.Query(sctx, query)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			// tx commit
+			if cerr := iter.Close(sctx); err == nil {
+				err = cerr
+			}
+		}()
+		for {
+			_, err = iter.Next(sctx)
+			if err == io.EOF {
+				err = nil
+				break
+			} else if err != nil {
+				return err
+			}
+		}
+		return
+	}
+
+	// generate and run |iters| batches of queries
+	for i := 0; i < iters; i++ {
+		for _, q := range generator.fn(i) {
+			err = runQuery(sctx, eng, q)
+			if sql.ErrLockDeadlock.Is(err) {
+				err = nil // allow serialization errors
+			} else if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func TestGarbageCollection(t *testing.T) {
+	require.True(t, true)
+	assert.True(t, true)
+
+	for _, gct := range gcTests {
+		t.Run(gct.name, func(t *testing.T) {
+			testGarbageCollection(t, gct)
+		})
+	}
+}
 
 type stage struct {
 	commands     []testCommand
@@ -94,17 +246,6 @@ var gcSetupCommon = []testCommand{
 	{commands.SqlCmd{}, []string{"-q", "CREATE TABLE test (pk int PRIMARY KEY)"}},
 	{commands.AddCmd{}, []string{"."}},
 	{commands.CommitCmd{}, []string{"-m", "created test table"}},
-}
-
-func TestGarbageCollection(t *testing.T) {
-	require.True(t, true)
-	assert.True(t, true)
-
-	for _, gct := range gcTests {
-		t.Run(gct.name, func(t *testing.T) {
-			testGarbageCollection(t, gct)
-		})
-	}
 }
 
 func testGarbageCollection(t *testing.T, test gcTest) {
