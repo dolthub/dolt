@@ -31,8 +31,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TODO: Will we need to run this in a Docker container? Will we have the mysqld binary around?
-
 var mySqlPort, doltPort int
 var primaryDatabase, replicaDatabase *sqlx.DB
 var mySqlProcess, doltProcess *os.Process
@@ -416,7 +414,7 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 	mySqlPort = findFreePort()
 
 	// Create a fresh MySQL server for the primary
-	cmd := exec.Command("mysqld", "--initialize-insecure", "--user=root", "--datadir="+dataDir)
+	cmd := exec.Command("mysqld", "--initialize-insecure", "--datadir="+dataDir)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return -1, nil, fmt.Errorf("unable to execute command %v: %v – %v", cmd.String(), err.Error(), string(output))
