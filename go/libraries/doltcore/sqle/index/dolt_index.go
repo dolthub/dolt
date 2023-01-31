@@ -925,82 +925,106 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 
 	pranges := make([]prolly.Range, len(ranges))
 
-	for k, rng := range ranges {
-		fields := make([]prolly.RangeField, len(rng))
-		for j, expr := range rng {
-			if rangeCutIsBinding(expr.LowerBound) {
-				// accumulate bound values in |tb|
-				v, err := getRangeCutValue(expr.LowerBound, rng[j].Typ)
-				if err != nil {
-					return nil, err
-				}
-				nv := di.trimRangeCutValue(j, v)
-				if err = PutField(ctx, ns, tb, j, nv); err != nil {
-					return nil, err
-				}
-				bound := expr.LowerBound.TypeAsLowerBound()
-				fields[j].Lo = prolly.Bound{
-					Binding:   true,
-					Inclusive: bound == sql.Closed,
-				}
-			} else {
-				fields[j].Lo = prolly.Bound{}
-			}
+	// TODO: incorporate this code with the bottom block later
+	if di.spatial {
+		// should be exactly one range
+		rng := ranges[0][0]
+		lower, upper := sql.GetRangeCutKey(rng.LowerBound), sql.GetRangeCutKey(rng.UpperBound)
+		// create bbox
+		field := prolly.RangeField{}
+		if err = PutField(ctx, ns, tb, 0, lower); err != nil {
+			return nil, err
 		}
-		// BuildPermissive() allows nulls in non-null fields
-		tup := tb.BuildPermissive(sharePool)
-		for i := range fields {
-			fields[i].Lo.Value = tup.GetField(i)
+		field.Lo = prolly.Bound{
+			Binding: true,
+			Inclusive: true,
+			Value: lower.(types.Geom,
 		}
 
-		for i, expr := range rng {
-			if rangeCutIsBinding(expr.UpperBound) {
-				bound := expr.UpperBound.TypeAsUpperBound()
-				// accumulate bound values in |tb|
-				v, err := getRangeCutValue(expr.UpperBound, rng[i].Typ)
-				if err != nil {
-					return nil, err
-				}
-				nv := di.trimRangeCutValue(i, v)
-				if err = PutField(ctx, ns, tb, i, nv); err != nil {
-					return nil, err
-				}
-				fields[i].Hi = prolly.Bound{
-					Binding:   true,
-					Inclusive: bound == sql.Closed || nv != v, // TODO (james): this might panic for []byte
-				}
-			} else {
-				fields[i].Hi = prolly.Bound{}
-			}
-		}
 
-		tup = tb.BuildPermissive(sharePool)
-		for i := range fields {
-			fields[i].Hi.Value = tup.GetField(i)
-		}
 
-		order := di.keyBld.Desc.Comparator()
-		for i, field := range fields {
-			// lookups on non-unique indexes can't be point lookups
-			if !di.unique {
-				fields[i].Exact = false
-				continue
+
+
+
+
+	} else {
+		for k, rng := range ranges {
+			fields := make([]prolly.RangeField, len(rng))
+			for j, expr := range rng {
+				if rangeCutIsBinding(expr.LowerBound) {
+					// accumulate bound values in |tb|
+					v, err := getRangeCutValue(expr.LowerBound, rng[j].Typ)
+					if err != nil {
+						return nil, err
+					}
+					nv := di.trimRangeCutValue(j, v)
+					if err = PutField(ctx, ns, tb, j, nv); err != nil {
+						return nil, err
+					}
+					bound := expr.LowerBound.TypeAsLowerBound()
+					fields[j].Lo = prolly.Bound{
+						Binding:   true,
+						Inclusive: bound == sql.Closed,
+					}
+				} else {
+					fields[j].Lo = prolly.Bound{}
+				}
 			}
-			if !field.Hi.Binding || !field.Lo.Binding {
-				fields[i].Exact = false
-				continue
+			// BuildPermissive() allows nulls in non-null fields
+			tup := tb.BuildPermissive(sharePool)
+			for i := range fields {
+				fields[i].Lo.Value = tup.GetField(i)
 			}
-			typ := di.keyBld.Desc.Types[i]
-			cmp := order.CompareValues(i, field.Hi.Value, field.Lo.Value, typ)
-			fields[i].Exact = cmp == 0
+
+			for i, expr := range rng {
+				if rangeCutIsBinding(expr.UpperBound) {
+					bound := expr.UpperBound.TypeAsUpperBound()
+					// accumulate bound values in |tb|
+					v, err := getRangeCutValue(expr.UpperBound, rng[i].Typ)
+					if err != nil {
+						return nil, err
+					}
+					nv := di.trimRangeCutValue(i, v)
+					if err = PutField(ctx, ns, tb, i, nv); err != nil {
+						return nil, err
+					}
+					fields[i].Hi = prolly.Bound{
+						Binding:   true,
+						Inclusive: bound == sql.Closed || nv != v, // TODO (james): this might panic for []byte
+					}
+				} else {
+					fields[i].Hi = prolly.Bound{}
+				}
+			}
+
+			tup = tb.BuildPermissive(sharePool)
+			for i := range fields {
+				fields[i].Hi.Value = tup.GetField(i)
+			}
+
+			order := di.keyBld.Desc.Comparator()
+			for i, field := range fields {
+				// lookups on non-unique indexes can't be point lookups
+				if !di.unique {
+					fields[i].Exact = false
+					continue
+				}
+				if !field.Hi.Binding || !field.Lo.Binding {
+					fields[i].Exact = false
+					continue
+				}
+				typ := di.keyBld.Desc.Types[i]
+				cmp := order.CompareValues(i, field.Hi.Value, field.Lo.Value, typ)
+				fields[i].Exact = cmp == 0
+			}
+			pranges[k] = prolly.Range{
+				Fields: fields,
+				Desc:   di.keyBld.Desc,
+				Tup:    tup,
+			}
 		}
-		pranges[k] = prolly.Range{
-			Fields: fields,
-			Desc:   di.keyBld.Desc,
-			Tup:    tup,
-		}
+		return pranges, nil
 	}
-	return pranges, nil
 }
 
 func rangeCutIsBinding(c sql.RangeCut) bool {
