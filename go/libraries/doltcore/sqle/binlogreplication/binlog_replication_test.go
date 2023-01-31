@@ -359,6 +359,14 @@ func startSqlServers(t *testing.T) {
 	testDir := filepath.Join(os.TempDir(), t.Name()+"-"+time.Now().Format("12345"))
 	err := os.MkdirAll(testDir, 0777)
 
+	cmd := exec.Command("chmod", "777", testDir)
+	output, err := cmd.Output()
+	if err != nil {
+		panic(err)
+	} else {
+		fmt.Printf("chmod output: %s", string(output))
+	}
+
 	require.NoError(t, err)
 	fmt.Printf("temp dir: %v \n", testDir)
 
@@ -436,6 +444,14 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 	if err != nil {
 		return -1, nil, err
 	}
+	cmd := exec.Command("chmod", "777", dir)
+	output, err := cmd.Output()
+	if err != nil {
+		panic(err)
+	} else {
+		fmt.Printf("chmod output: %s", string(output))
+	}
+
 	err = os.Chdir(dir)
 	if err != nil {
 		return -1, nil, err
@@ -444,13 +460,13 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 	mySqlPort = findFreePort()
 
 	// Create a fresh MySQL server for the primary
-	cmd := exec.Command("mysqld",
+	chmodCmd := exec.Command("mysqld",
 		"--no-defaults",
 		"--user=mysql",
 		"--initialize-insecure",
 		"--datadir="+dataDir,
 		"--default-authentication-plugin=mysql_native_password")
-	output, err := cmd.CombinedOutput()
+	output, err = chmodCmd.CombinedOutput()
 	if err != nil {
 		return -1, nil, fmt.Errorf("unable to execute command %v: %v – %v", cmd.String(), err.Error(), string(output))
 	}
