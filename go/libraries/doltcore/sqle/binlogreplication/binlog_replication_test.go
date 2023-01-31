@@ -15,7 +15,9 @@
 package binlogreplication
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -36,10 +38,45 @@ var mySqlPort, doltPort int
 var primaryDatabase, replicaDatabase *sqlx.DB
 var mySqlProcess, doltProcess *os.Process
 var doltLogFile *os.File
+var mysqlLogFile *os.File
 var testDir string
 var originalWorkingDir string
 
-func teardown(_ *testing.T) {
+func printFile(f *os.File) {
+	if f == nil {
+		return
+	}
+
+	// Reopen the file for reading
+	file, err := os.Open(f.Name())
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	reader := bufio.NewReader(file)
+	for {
+		s, err := reader.ReadString(byte('\n'))
+		if err != nil {
+			if err == io.EOF {
+				break
+			} else {
+				panic(err)
+			}
+		}
+		fmt.Print(s)
+	}
+}
+
+func teardown(t *testing.T) {
+	//if t.Failed() {
+	if true {
+		fmt.Printf("Dolt server log:\n")
+		printFile(doltLogFile)
+		fmt.Println()
+		fmt.Printf("MySQL server log:\n")
+		printFile(mysqlLogFile)
+	}
 	if mySqlProcess != nil {
 		mySqlProcess.Kill()
 	}
@@ -455,6 +492,15 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 		"--slow_query_log_file="+dir+"slow_query_log",
 		"--log-error="+dir+"log_error",
 		fmt.Sprintf("--pid-file="+dir+"pid-%v.pid", mySqlPort))
+
+	mysqlLogFilePath := filepath.Join(dir, fmt.Sprintf("mysql-%d.out.log", time.Now().Unix()))
+	mysqlLogFile, err = os.Create(mysqlLogFilePath)
+	if err != nil {
+		return -1, nil, err
+	}
+	fmt.Printf("MySQL server logs at: %s \n", mysqlLogFilePath)
+	cmd.Stdout = mysqlLogFile
+	cmd.Stderr = mysqlLogFile
 	err = cmd.Start()
 	if err != nil {
 		// TODO: We should capture the process output here (without blocking for process completion)
