@@ -413,14 +413,28 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 
 	mySqlPort = findFreePort()
 
+	// Print out debugging information on default MySQL configuration
+	cmd2 := exec.Command("mysqld", "--print-defaults")
+	output2, err2 := cmd2.CombinedOutput()
+	if err2 != nil {
+		fmt.Printf("unable to execute command %v: %v – %v", cmd2.String(), err2.Error(), string(output2))
+	} else {
+		fmt.Printf("mysqld --print-defaults: %s", string(output2))
+	}
+
 	// Create a fresh MySQL server for the primary
-	cmd := exec.Command("mysqld", "--initialize-insecure", "--datadir="+dataDir)
+	cmd := exec.Command("mysqld",
+		"--no-defaults",
+		"--initialize-insecure",
+		"--datadir="+dataDir,
+		"--default-authentication-plugin=mysql_native_password")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return -1, nil, fmt.Errorf("unable to execute command %v: %v – %v", cmd.String(), err.Error(), string(output))
 	}
 
 	cmd = exec.Command("mysqld",
+		"--no-defaults",
 		"--datadir="+dataDir,
 		"--default-authentication-plugin=mysql_native_password",
 		"--gtid-mode=ON",
