@@ -43,6 +43,20 @@ var testDir string
 var originalWorkingDir string
 
 func teardown(t *testing.T) {
+	if mySqlProcess != nil {
+		mySqlProcess.Kill()
+	}
+	if doltProcess != nil {
+		doltProcess.Kill()
+	}
+	if mysqlLogFile != nil {
+		mysqlLogFile.Close()
+	}
+	if doltLogFile != nil {
+		doltLogFile.Close()
+	}
+
+	// Output server logs on failure for easier debugging
 	if t.Failed() {
 		fmt.Printf("Dolt server log:\n")
 		printFile(doltLogFilePath)
@@ -50,20 +64,16 @@ func teardown(t *testing.T) {
 		fmt.Printf("MySQL server log:\n")
 		printFile(mysqlLogFilePath)
 	}
-	if mySqlProcess != nil {
-		mySqlProcess.Kill()
-	}
-	if doltProcess != nil {
-		doltProcess.Kill()
-	}
+
 	if toxiClient != nil {
 		proxies, _ := toxiClient.Proxies()
 		for _, value := range proxies {
 			value.Delete()
 		}
 	}
-	// TODO: clean up temp files
-	//defer os.RemoveAll(testDir)
+
+	// clean up temp files
+	defer os.RemoveAll(testDir)
 }
 
 // TestBinlogReplicationSanityCheck performs the simplest possible binlog replication test. It starts up
