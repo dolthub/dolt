@@ -200,6 +200,10 @@ func walkAddresses(ctx context.Context, nd Node, cb AddressCb) (err error) {
 	return message.WalkAddresses(ctx, nd.msg, cb)
 }
 
+func getLastKey(nd Node) Item {
+	return nd.GetKey(int(nd.count) - 1)
+}
+
 // OutputProllyNode writes the node given to the writer given in a semi-human-readable format, where values are still
 // displayed in hex-encoded byte strings, but are delineated into their fields. All nodes have keys displayed in this
 // manner. Interior nodes have their child hash references spelled out, leaf nodes have value tuples delineated like

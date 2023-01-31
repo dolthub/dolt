@@ -271,6 +271,7 @@ func CreateTagArgParser() *argparser.ArgParser {
 	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the tag message.")
 	ap.SupportsFlag(VerboseFlag, "v", "list tags along with their metadata.")
 	ap.SupportsFlag(DeleteFlag, "d", "Delete a tag.")
+	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
 	return ap
 }
 

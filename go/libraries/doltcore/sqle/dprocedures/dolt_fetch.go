@@ -27,7 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-// doltFetch is the stored procedure version of the function `dolt_fetch`.
+// doltFetch is the stored procedure version for the CLI command `dolt fetch`.
 func doltFetch(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltFetch(ctx, args)
 	if err != nil {

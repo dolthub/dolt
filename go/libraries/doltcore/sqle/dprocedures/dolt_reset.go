@@ -26,7 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-// doltReset is the stored procedure version of the function `dolt_reset`.
+// doltReset is the stored procedure version for the CLI command `dolt reset`.
 func doltReset(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltReset(ctx, args)
 	if err != nil {

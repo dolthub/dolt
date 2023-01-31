@@ -1386,12 +1386,11 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 		return errors.New("Not implemented")
 	}
 
-	r, _, err := getRd()
+	r, sz, err := getRd()
 	if err != nil {
 		return err
 	}
-
-	return tfp.CopyTableFile(ctx, r, fileId, uint32(numChunks))
+	return tfp.CopyTableFile(ctx, r, fileId, sz, uint32(numChunks))
 }
 
 // AddTableFilesToManifest adds table files to the manifest

@@ -41,6 +41,15 @@ teardown() {
     [[ "$output" =~ "v1" ]] || false
 }
 
+@test "commit_tags: create a tag with author arg given" {
+    run dolt tag v1 --author "John Doe <john@doe.com>"
+    [ $status -eq 0 ]
+    run dolt tag -v
+    [ $status -eq 0 ]
+    [[ "$output" =~ "v1" ]] || false
+    [[ "$output" =~ "Tagger: John Doe <john@doe.com>" ]] || false
+}
+
 @test "commit_tags: create tag v1.2.3" {
     run dolt tag v1.2.3
     [ $status -eq 0 ]

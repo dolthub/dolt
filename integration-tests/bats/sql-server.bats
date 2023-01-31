@@ -1860,3 +1860,16 @@ s.close()
     [ "$status" -eq 0 ]
     [[ "$output" =~ "42" ]] || false
 }
+
+@test "sql-server: locks made in session should be released on session end" {
+    start_sql_server
+    EXPECTED=$(echo -e "\"GET_LOCK('mylock', 1000)\"\n1\nIS_FREE_LOCK('mylock')\n0")
+    run dolt sql-client -P $PORT -u dolt --use-db '' --result-format csv -q "SELECT GET_LOCK('mylock', 1000); SELECT IS_FREE_LOCK('mylock');"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    EXPECTED=$(echo -e "IS_FREE_LOCK('mylock')\n1")
+    run dolt sql-client -P $PORT -u dolt --use-db '' --result-format csv -q "SELECT IS_FREE_LOCK('mylock');"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+}

@@ -231,10 +231,7 @@ func nextSchemasTableIndex(ctx *sql.Context, root *doltdb.RootValue) (int64, err
 
 	if types.IsFormat_DOLT(tbl.Format()) {
 		p := durable.ProllyMapFromIndex(rows)
-		key, _, err := p.Last(ctx)
-		if err != nil {
-			return 0, err
-		}
+		key := p.LastKey(ctx)
 		kd, _ := p.Descriptors()
 
 		i, _ := kd.GetInt64(0, key)
