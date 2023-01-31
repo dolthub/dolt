@@ -376,6 +376,10 @@ func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSp
 // assumes that stores grow monotonically unless the |gcGen| of a manifest changes. Since this interface
 // cannot set |gcGen|, callers must ensure that calls to this function grow the store monotonically.
 func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root hash.Hash, tableFiles map[hash.Hash]uint32, appendixTableFiles map[hash.Hash]uint32) (err error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	store.waitForGC()
+
 	contents := manifestContents{
 		root:    root,
 		nbfVers: store.upstream.nbfVers,
@@ -400,8 +404,6 @@ func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root has
 			err = unlockErr
 		}
 	}()
-	store.mu.Lock()
-	defer store.mu.Unlock()
 	updatedContents, err := store.mm.Update(ctx, store.upstream.lock, contents, store.stats, nil)
 	if err != nil {
 		return err
@@ -994,51 +996,36 @@ func (nbs *NomsBlockStore) commit(ctx context.Context, current, last hash.Hash, 
 		return true, nil
 	}
 
-	// check for dangling references in |nbs.mt|
-	nbs.mu.Lock()
-	if err = nbs.errorIfDangling(checker); err != nil {
-		return false, err
-	}
-	nbs.mu.Unlock()
-
-	err = func() error {
-		// This is unfortunate. We want to serialize commits to the same store
-		// so that we avoid writing a bunch of unreachable small tables which result
-		// from optimistic lock failures. However, this means that the time to
-		// write tables is included in "commit" time and if all commits are
-		// serialized, it means a lot more waiting.
-		// "non-trivial" tables are persisted here, outside of the commit-lock.
-		// all other tables are persisted in updateManifest()
-		nbs.mu.Lock()
-		defer nbs.mu.Unlock()
-		nbs.waitForGC()
-
-		if nbs.mt != nil {
-			cnt, err := nbs.mt.count()
-
-			if err != nil {
-				return err
-			}
-
-			if cnt > preflushChunkCount {
-				ts, err := nbs.tables.append(ctx, nbs.mt, nbs.stats)
-				if err != nil {
-					return err
-				}
-				nbs.tables, nbs.mt = ts, nil
-			}
-		}
-
-		return nil
-	}()
-
-	if err != nil {
-		return false, err
-	}
-
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	nbs.waitForGC()
+
+	// check for dangling references in |nbs.mt|
+	if err = nbs.errorIfDangling(checker); err != nil {
+		return false, err
+	}
+
+	// This is unfortunate. We want to serialize commits to the same store
+	// so that we avoid writing a bunch of unreachable small tables which result
+	// from optimistic lock failures. However, this means that the time to
+	// write tables is included in "commit" time and if all commits are
+	// serialized, it means a lot more waiting.
+	// "non-trivial" tables are persisted here, outside of the commit-lock.
+	// all other tables are persisted in updateManifest()
+	if nbs.mt != nil {
+		cnt, err := nbs.mt.count()
+		if err != nil {
+			return false, err
+		}
+
+		if cnt > preflushChunkCount {
+			ts, err := nbs.tables.append(ctx, nbs.mt, nbs.stats)
+			if err != nil {
+				return false, err
+			}
+			nbs.tables, nbs.mt = ts, nil
+		}
+	}
 
 	nbs.mm.LockForUpdate()
 	defer func() {
@@ -1611,6 +1598,9 @@ func (nbs *NomsBlockStore) gcTableSize() (uint64, error) {
 }
 
 func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (err error) {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
 	nbs.mm.LockForUpdate()
 	defer func() {
 		unlockErr := nbs.mm.UnlockForUpdate()
@@ -1618,9 +1608,6 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 			err = unlockErr
 		}
 	}()
-
-	nbs.mu.Lock()
-	defer nbs.mu.Unlock()
 
 	newLock := generateLockHash(nbs.upstream.root, specs, []tableSpec{})
 	newContents := manifestContents{
@@ -1645,21 +1632,12 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 		return errors.New("concurrent manifest edit during GC, before swapTables. GC failed.")
 	}
 
-	// clear memTable
-	nbs.mt = newMemTable(nbs.mtSize)
-
-	// clear nbs.tables.novel
-	nbs.tables, err = nbs.tables.flatten(ctx)
-	if err != nil {
-		return err
-	}
-
 	// replace nbs.tables.upstream with gc compacted tables
-	nbs.upstream = upstream
-	nbs.tables, err = nbs.tables.rebase(ctx, upstream.specs, nbs.stats)
+	ts, err := nbs.tables.rebase(ctx, upstream.specs, nbs.stats)
 	if err != nil {
 		return err
 	}
+	nbs.tables, nbs.upstream = ts, upstream
 
 	return nil
 }
