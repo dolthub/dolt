@@ -46,7 +46,7 @@ func (w *parallelRefWalker) goWork() error {
 			}
 			var res []hash.Hash
 			for _, v := range work.vals {
-				if v != nil {
+				// if v != nil {
 					err := v.walkRefs(w.nbf, func(r Ref) error {
 						res = append(res, r.TargetHash())
 						return nil
@@ -54,7 +54,7 @@ func (w *parallelRefWalker) goWork() error {
 					if err != nil {
 						return err
 					}
-				}
+				// }
 			}
 			select {
 			case work.res <- res:
