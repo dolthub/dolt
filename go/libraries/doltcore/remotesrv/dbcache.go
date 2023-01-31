@@ -26,7 +26,7 @@ type DBCache interface {
 
 type RemoteSrvStore interface {
 	chunks.ChunkStore
-	nbs.TableFileStore
+	chunks.TableFileStore
 
 	Path() (string, bool)
 	GetChunkLocationsWithPaths(hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, error)

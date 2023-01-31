@@ -34,8 +34,8 @@ import (
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -548,7 +548,7 @@ func getTableFileInfo(
 	logger *logrus.Entry,
 	md metadata.MD,
 	rs *RemoteChunkStore,
-	tableList []nbs.TableFile,
+	tableList []chunks.TableFile,
 	req *remotesapi.ListTableFilesRequest,
 	cs RemoteSrvStore,
 ) ([]*remotesapi.TableFileInfo, error) {

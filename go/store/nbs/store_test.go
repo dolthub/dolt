@@ -157,7 +157,7 @@ func makeChunk(i uint32) chunks.Chunk {
 	return chunks.NewChunk(b)
 }
 
-type tableFileSet map[string]TableFile
+type tableFileSet map[string]chunks.TableFile
 
 func (s tableFileSet) contains(fileName string) (ok bool) {
 	_, ok = s[fileName]
@@ -174,7 +174,7 @@ func (s tableFileSet) findAbsent(ftd fileToData) (absent []string) {
 	return absent
 }
 
-func tableFileSetFromSources(sources []TableFile) (s tableFileSet) {
+func tableFileSetFromSources(sources []chunks.TableFile) (s tableFileSet) {
 	s = make(tableFileSet, len(sources))
 	for _, src := range sources {
 		s[src.FileID()] = src
