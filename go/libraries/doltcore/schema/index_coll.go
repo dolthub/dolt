@@ -16,9 +16,19 @@ package schema
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 )
+
+func init() {
+	if v := os.Getenv("DOLT_ENABLE_SPATIAL_INDEX"); v != "" {
+		EnableSpatialIndex = true
+	}
+}
+
+// EnableSpatialIndex enables the creation and use of spatial indexes
+var EnableSpatialIndex = false
 
 type IndexCollection interface {
 	// AddIndex adds the given index, overwriting any current indexes with the same name or columns.
@@ -172,7 +182,7 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 
 // validateColumnIndexable returns an error if the column given cannot be used in an index
 func validateColumnIndexable(c Column) error {
-	if IsColSpatialType(c) {
+	if !EnableSpatialIndex && IsColSpatialType(c) {
 		return fmt.Errorf("cannot create an index over spatial type columns")
 	}
 	return nil
