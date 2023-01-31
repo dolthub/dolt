@@ -943,7 +943,8 @@ func loadReplicaServerId() (uint32, error) {
 
 	serverId, ok := value.(uint32)
 	if !ok || serverId == 0 {
-		return 0, fmt.Errorf("unexpected type for @@GLOBAL.server_id value: %T", value)
+		return 0, fmt.Errorf("invalid server ID configured for @@GLOBAL.server_id (%v); "+
+			"must be an integer greater than zero and less than 4,294,967,296", serverId)
 	}
 
 	return serverId, nil

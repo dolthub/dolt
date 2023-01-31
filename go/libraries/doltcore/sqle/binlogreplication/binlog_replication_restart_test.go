@@ -61,6 +61,9 @@ func TestBinlogReplicationServerRestart(t *testing.T) {
 	require.NotEmpty(t, status["Source_User"])
 
 	// Restart replication on replica
+	// TODO: For now, we have to set server_id each time we start the service.
+	//       Turn this into a persistent sys var
+	replicaDatabase.MustExec("set @@global.server_id=123;")
 	replicaDatabase.MustExec("START REPLICA")
 
 	// Assert that all changes have replicated from the primary

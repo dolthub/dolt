@@ -73,7 +73,7 @@ func teardown(t *testing.T) {
 	}
 
 	// clean up temp files
-	defer os.RemoveAll(testDir)
+	//defer os.RemoveAll(testDir)
 }
 
 // TestBinlogReplicationSanityCheck performs the simplest possible binlog replication test. It starts up
