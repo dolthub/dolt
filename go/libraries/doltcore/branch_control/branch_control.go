@@ -281,7 +281,7 @@ func AddAdminForContext(ctx context.Context, branchName string) error {
 		return nil
 	}
 	controller.Access.RWMutex.Lock()
-	controller.Access.insert(database, branchName, user, host, Permissions_Admin)
+	controller.Access.Insert(database, branchName, user, host, Permissions_Admin)
 	controller.Access.RWMutex.Unlock()
 	return SaveData(ctx)
 }

@@ -31,7 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
-// doltRemote is the stored procedure version of the CLI `dolt remote` command
+// doltRemote is the stored procedure version for the CLI command `dolt remote`.
 func doltRemote(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltRemote(ctx, args)
 	if err != nil {
