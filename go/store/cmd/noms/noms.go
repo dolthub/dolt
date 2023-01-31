@@ -217,7 +217,8 @@ See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spell
 	walk := noms.Command("walk", `Walks references contained in an object.
 See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the object argument.
 `)
-	walk.Arg("object", "a noms object").Required().String()
+	walk.Arg("object", "a noms object").String()
+	walk.Flag("quiet", "If true, prints only dangling refs, not the paths of all refs").Bool()
 
 	// version
 	noms.Command("version", "Print the noms version")
