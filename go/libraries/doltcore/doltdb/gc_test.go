@@ -39,52 +39,146 @@ func TestConcurrentGC(t *testing.T) {
 	tests := []concurrentGCtest{
 		{
 			name: "smoke test",
-			setup: queryGen{fn: func(_ int) []string {
+			setup: client{queries: func(string, int) []string {
 				return []string{
 					"CREATE TABLE t (id int primary key)",
 				}
 			}},
-			clients: []queryGen{
-				{fn: func(i int) (queries []string) {
+			clients: []client{
+				{queries: func(id string, i int) (queries []string) {
 					return []string{
 						fmt.Sprintf("INSERT INTO t VALUES (%d)", i),
 						"SELECT COUNT(*) FROM t",
 					}
 				}},
 			},
+			iters: 100,
+		},
+		{
+			name: "aaron's repro",
+			skip: true,
+			// create 32 branches
+			setup: client{queries: func(string, int) []string {
+				queries := []string{
+					"CREATE TABLE t (id int primary key, val TEXT)",
+					"CALL dcommit('-Am', 'new table t');",
+				}
+				for b := 0; b < 32; b++ {
+					q := fmt.Sprintf("CALL dolt_checkout('-b', 'branch_%d');", b)
+					queries = append(queries, q)
+				}
+				return queries
+			}},
+			// create a client for each branch
+			clients: func() []client {
+				cc := []client{{
+					queries: func(string, int) []string {
+						return []string{"CALL dolt_gc();"}
+					},
+				}}
+				for b := 0; b < 32; b++ {
+					branch := fmt.Sprintf("branch_%d", b)
+					cc = append(cc, client{
+						id: branch,
+						queries: func(id string, idx int) []string {
+							q := fmt.Sprintf("INSERT INTO `%s/%s`.t VALUES (%d, '%s_%d')",
+								testDB, id, idx, id, idx)
+							return []string{q}
+						}})
+				}
+				return cc
+			}(),
+			iters: 100,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			if test.skip {
+				t.Skip()
+			}
 			testConcurrentGC(t, test)
 		})
 	}
 }
 
+// concurrentGCtest tests concurrent GC
 type concurrentGCtest struct {
 	name    string
-	setup   queryGen
-	clients []queryGen
+	skip    bool
+	setup   client
+	clients []client
+	iters   int
 }
 
-type queryGen struct {
-	fn func(idx int) (queries []string)
+type client struct {
+	id      string
+	queries func(id string, idx int) []string
 }
 
 func testConcurrentGC(t *testing.T, test concurrentGCtest) {
+	require.NotZero(t, test.iters)
 	ctx := context.Background()
 	eng := setupConcurrencyTest(t, ctx)
 
 	require.NoError(t, executeQueries(ctx, eng, 1, test.setup))
-
 	eg, ctx := errgroup.WithContext(ctx)
-	for _, client := range test.clients {
+	for _, c := range test.clients {
+		c := c
 		eg.Go(func() (err error) {
-			err = executeQueries(ctx, eng, 128, client)
+			err = executeQueries(ctx, eng, test.iters, c)
+			if err != nil {
+				panic(err)
+			}
 			return
 		})
 	}
 	assert.NoError(t, eg.Wait())
+}
+
+func executeQueries(ctx context.Context, eng *engine.SqlEngine, iters int, c client) error {
+	sess, err := eng.NewDoltSession(ctx, sql.NewBaseSession())
+	if err != nil {
+		return err
+	}
+	sctx := sql.NewContext(ctx, sql.WithSession(sess))
+	sctx.SetCurrentDatabase(testDB)
+	sctx.Session.SetClient(sql.Client{User: "root", Address: "%"})
+
+	runQuery := func(sctx *sql.Context, eng *engine.SqlEngine, query string) (err error) {
+		_, iter, err := eng.Query(sctx, query)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			// tx commit
+			if cerr := iter.Close(sctx); err == nil {
+				err = cerr
+			}
+		}()
+		for {
+			_, err = iter.Next(sctx)
+			if err == io.EOF {
+				err = nil
+				break
+			} else if err != nil {
+				return err
+			}
+		}
+		return
+	}
+
+	// generate and run |iters| batches of queries
+	for i := 0; i < iters; i++ {
+		for _, q := range c.queries(c.id, i) {
+			err = runQuery(sctx, eng, q)
+			if sql.ErrLockDeadlock.Is(err) {
+				err = nil // allow serialization errors
+			} else if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 const (
@@ -124,52 +218,6 @@ func setupConcurrencyTest(t *testing.T, ctx context.Context) (eng *engine.SqlEng
 		User: "root", Address: "%",
 	})
 	return
-}
-
-func executeQueries(ctx context.Context, eng *engine.SqlEngine, iters int, generator queryGen) error {
-	sess, err := eng.NewDoltSession(ctx, sql.NewBaseSession())
-	if err != nil {
-		return err
-	}
-	sctx := sql.NewContext(ctx, sql.WithSession(sess))
-	sctx.SetCurrentDatabase(testDB)
-	sctx.Session.SetClient(sql.Client{User: "root", Address: "%"})
-
-	runQuery := func(sctx *sql.Context, eng *engine.SqlEngine, query string) (err error) {
-		_, iter, err := eng.Query(sctx, query)
-		if err != nil {
-			return err
-		}
-		defer func() {
-			// tx commit
-			if cerr := iter.Close(sctx); err == nil {
-				err = cerr
-			}
-		}()
-		for {
-			_, err = iter.Next(sctx)
-			if err == io.EOF {
-				err = nil
-				break
-			} else if err != nil {
-				return err
-			}
-		}
-		return
-	}
-
-	// generate and run |iters| batches of queries
-	for i := 0; i < iters; i++ {
-		for _, q := range generator.fn(i) {
-			err = runQuery(sctx, eng, q)
-			if sql.ErrLockDeadlock.Is(err) {
-				err = nil // allow serialization errors
-			} else if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 func TestGarbageCollection(t *testing.T) {
