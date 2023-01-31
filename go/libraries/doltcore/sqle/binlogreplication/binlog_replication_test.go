@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -327,6 +328,12 @@ func readNextRow(t *testing.T, rows *sqlx.Rows) map[string]interface{} {
 }
 
 func startSqlServers(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping binlog replication integ tests on Windows OS")
+	} else if runtime.GOOS == "darwin" && os.Getenv("CI") == "true" {
+		t.Skip("Skipping binlog replication integ tests in CI environment on Mac OS")
+	}
+
 	var err error
 	testDir, err = os.MkdirTemp("", t.Name()+"-"+time.Now().Format("12345"))
 	require.NoError(t, err)
