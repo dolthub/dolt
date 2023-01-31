@@ -37,45 +37,19 @@ import (
 var mySqlPort, doltPort int
 var primaryDatabase, replicaDatabase *sqlx.DB
 var mySqlProcess, doltProcess *os.Process
-var doltLogFile *os.File
-var mysqlLogFile *os.File
+var doltLogFilePath, mysqlLogFilePath string
+var doltLogFile, mysqlLogFile *os.File
 var testDir string
 var originalWorkingDir string
-
-func printFile(f *os.File) {
-	if f == nil {
-		return
-	}
-
-	// Reopen the file for reading
-	file, err := os.Open(f.Name())
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-
-	reader := bufio.NewReader(file)
-	for {
-		s, err := reader.ReadString(byte('\n'))
-		if err != nil {
-			if err == io.EOF {
-				break
-			} else {
-				panic(err)
-			}
-		}
-		fmt.Print(s)
-	}
-}
 
 func teardown(t *testing.T) {
 	//if t.Failed() {
 	if true {
 		fmt.Printf("Dolt server log:\n")
-		printFile(doltLogFile)
+		printFile(doltLogFilePath)
 		fmt.Println()
 		fmt.Printf("MySQL server log:\n")
-		printFile(mysqlLogFile)
+		printFile(mysqlLogFilePath)
 	}
 	if mySqlProcess != nil {
 		mySqlProcess.Kill()
@@ -97,9 +71,9 @@ func teardown(t *testing.T) {
 // a MySQL primary and a Dolt replica, and asserts that a CREATE TABLE statement properly replicates to the
 // Dolt replica.
 func TestBinlogReplicationSanityCheck(t *testing.T) {
+	defer teardown(t)
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
-	defer teardown(t)
 
 	// Make changes on the primary and verify on the replica
 	primaryDatabase.MustExec("create table t (pk int primary key)")
@@ -314,9 +288,9 @@ func TestForeignKeyChecks(t *testing.T) {
 
 // TestCharsetsAndCollations tests that we can successfully replicate data using various charsets and collations.
 func TestCharsetsAndCollations(t *testing.T) {
+	defer teardown(t)
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
-	defer teardown(t)
 
 	// Use non-default charset/collations to create data on the primary
 	primaryDatabase.MustExec("CREATE TABLE t1 (pk int primary key, c1 varchar(255) COLLATE ascii_general_ci, c2 varchar(255) COLLATE utf16_general_ci);")
@@ -457,15 +431,6 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 
 	mySqlPort = findFreePort()
 
-	// Print out debugging information on default MySQL configuration
-	cmd2 := exec.Command("mysqld", "--print-defaults")
-	output2, err2 := cmd2.CombinedOutput()
-	if err2 != nil {
-		fmt.Printf("unable to execute command %v: %v – %v", cmd2.String(), err2.Error(), string(output2))
-	} else {
-		fmt.Printf("mysqld --print-defaults: %s", string(output2))
-	}
-
 	// Create a fresh MySQL server for the primary
 	cmd := exec.Command("mysqld",
 		"--no-defaults",
@@ -493,7 +458,7 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 		"--log-error="+dir+"log_error",
 		fmt.Sprintf("--pid-file="+dir+"pid-%v.pid", mySqlPort))
 
-	mysqlLogFilePath := filepath.Join(dir, fmt.Sprintf("mysql-%d.out.log", time.Now().Unix()))
+	mysqlLogFilePath = filepath.Join(dir, fmt.Sprintf("mysql-%d.out.log", time.Now().Unix()))
 	mysqlLogFile, err = os.Create(mysqlLogFilePath)
 	if err != nil {
 		return -1, nil, err
@@ -562,7 +527,7 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 		fmt.Sprintf("--port=%v", doltPort),
 		fmt.Sprintf("--socket=%s", socketPath))
 
-	doltLogFilePath := filepath.Join(dir, fmt.Sprintf("dolt-%d.out.log", time.Now().Unix()))
+	doltLogFilePath = filepath.Join(dir, fmt.Sprintf("dolt-%d.out.log", time.Now().Unix()))
 	doltLogFile, err = os.Create(doltLogFilePath)
 	if err != nil {
 		return -1, nil, err
@@ -600,4 +565,27 @@ func waitForSqlServerToStart(database *sqlx.DB) error {
 	}
 
 	return database.Ping()
+}
+
+// printFile opens the specified filepath |path| and outputs the contents of that file to stdout.
+func printFile(path string) {
+	file, err := os.Open(path)
+	if err != nil {
+		fmt.Printf("Unable to open file: %s \n", err)
+		return
+	}
+	defer file.Close()
+
+	reader := bufio.NewReader(file)
+	for {
+		s, err := reader.ReadString(byte('\n'))
+		if err != nil {
+			if err == io.EOF {
+				break
+			} else {
+				panic(err)
+			}
+		}
+		fmt.Print(s)
+	}
 }
