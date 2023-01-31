@@ -503,7 +503,7 @@ SQL
 SELECT count(*) from testdb.mytable
 SQL
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "333" ]] || false
 
     # Give the server a chance to drop the database
     sleep 1
