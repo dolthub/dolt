@@ -25,9 +25,9 @@ import (
 // TestBinlogReplicationServerRestart tests that a replica can be configured and started, then the
 // server process can be restarted and replica can be restarted without problems.
 func TestBinlogReplicationServerRestart(t *testing.T) {
+	defer teardown(t)
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
-	defer teardown(t)
 
 	var wg sync.WaitGroup
 

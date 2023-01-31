@@ -24,9 +24,9 @@ import (
 // TestBinlogReplicationMultiDb tests that binlog events spanning multiple databases are correctly
 // applied by a replica.
 func TestBinlogReplicationMultiDb(t *testing.T) {
+	defer teardown(t)
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
-	defer teardown(t)
 
 	// Make changes on the primary to db01 and db02
 	primaryDatabase.MustExec("create database db02;")
@@ -118,9 +118,9 @@ func TestBinlogReplicationMultiDb(t *testing.T) {
 // TestBinlogReplicationMultiDbTransactions tests that binlog events for transactions that span
 // multiple DBs are applied correctly to a replica.
 func TestBinlogReplicationMultiDbTransactions(t *testing.T) {
+	defer teardown(t)
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
-	defer teardown(t)
 
 	// Make changes on the primary to db01 and db02
 	primaryDatabase.MustExec("create database db02;")

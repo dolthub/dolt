@@ -34,11 +34,11 @@ var proxyPort int
 // TestBinlogReplicationReconnection tests that the replica's connection to the primary is correctly
 // reestablished if it drops.
 func TestBinlogReplicationReconnection(t *testing.T) {
+	defer teardown(t)
 	startSqlServers(t)
 	configureToxiProxy(t)
 	configureFastConnectionRetry(t)
 	startReplication(t, proxyPort)
-	defer teardown(t)
 
 	testInitialReplicaStatus(t)
 

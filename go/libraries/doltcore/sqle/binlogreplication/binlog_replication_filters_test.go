@@ -25,9 +25,9 @@ import (
 // TestBinlogReplicationFilters_ignoreTablesOnly tests that the ignoreTables replication
 // filtering option is correctly applied and honored.
 func TestBinlogReplicationFilters_ignoreTablesOnly(t *testing.T) {
+	defer teardown(t)
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
-	defer teardown(t)
 
 	// Ignore replication events for db01.t2 (also tests that the first filter setting is overwritten by the second)
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_IGNORE_TABLE=(db01.t1);")
@@ -72,9 +72,9 @@ func TestBinlogReplicationFilters_ignoreTablesOnly(t *testing.T) {
 // TestBinlogReplicationFilters_doTablesOnly tests that the doTables replication
 // filtering option is correctly applied and honored.
 func TestBinlogReplicationFilters_doTablesOnly(t *testing.T) {
+	defer teardown(t)
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
-	defer teardown(t)
 
 	// Do replication events for db01.t1 (also tests that the first filter setting is overwritten by the second)
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(db01.t2);")
@@ -119,9 +119,9 @@ func TestBinlogReplicationFilters_doTablesOnly(t *testing.T) {
 // TestBinlogReplicationFilters_doTablesAndIgnoreTables tests that the doTables and ignoreTables
 // replication filtering options are correctly applied and honored when used together.
 func TestBinlogReplicationFilters_doTablesAndIgnoreTables(t *testing.T) {
+	defer teardown(t)
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
-	defer teardown(t)
 
 	// Do replication events for db01.t1, and db01.t2
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(db01.t1, db01.t2);")
@@ -166,8 +166,8 @@ func TestBinlogReplicationFilters_doTablesAndIgnoreTables(t *testing.T) {
 
 // TestBinlogReplicationFilters_errorCases test returned errors for various error cases.
 func TestBinlogReplicationFilters_errorCases(t *testing.T) {
-	startSqlServers(t)
 	defer teardown(t)
+	startSqlServers(t)
 
 	// All tables must be qualified with a database
 	_, err := replicaDatabase.Queryx("CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(t1);")

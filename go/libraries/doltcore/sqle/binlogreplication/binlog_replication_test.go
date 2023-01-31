@@ -43,8 +43,7 @@ var testDir string
 var originalWorkingDir string
 
 func teardown(t *testing.T) {
-	//if t.Failed() {
-	if true {
+	if t.Failed() {
 		fmt.Printf("Dolt server log:\n")
 		printFile(doltLogFilePath)
 		fmt.Println()
@@ -85,9 +84,9 @@ func TestBinlogReplicationSanityCheck(t *testing.T) {
 // TestResetReplica tests that "RESET REPLICA" and "RESET REPLICA ALL" correctly clear out
 // replication configuration and metadata.
 func TestResetReplica(t *testing.T) {
+	defer teardown(t)
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
-	defer teardown(t)
 
 	// RESET REPLICA returns an error if replication is running
 	rows, err := replicaDatabase.Queryx("RESET REPLICA")
@@ -124,8 +123,8 @@ func TestResetReplica(t *testing.T) {
 // TestStartReplicaErrors tests that the "START REPLICA" command returns appropriate responses
 // for various error conditions.
 func TestStartReplicaErrors(t *testing.T) {
-	startSqlServers(t)
 	defer teardown(t)
+	startSqlServers(t)
 
 	// START REPLICA returns an error if server_id has not been set to a non-zero value
 	_, err := replicaDatabase.Queryx("START REPLICA;")
@@ -162,9 +161,9 @@ func TestStartReplicaErrors(t *testing.T) {
 
 // TestDoltCommits tests that Dolt commits are created and use correct transaction boundaries.
 func TestDoltCommits(t *testing.T) {
+	defer teardown(t)
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
-	defer teardown(t)
 
 	// First transaction (DDL)
 	primaryDatabase.MustExec("create table t1 (pk int primary key);")
@@ -237,9 +236,9 @@ func TestDoltCommits(t *testing.T) {
 // TestForeignKeyChecks tests that foreign key constraints replicate correctly when foreign key checks are
 // enabled and disabled.
 func TestForeignKeyChecks(t *testing.T) {
+	defer teardown(t)
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
-	defer teardown(t)
 
 	// Insert a record with a foreign key check
 	primaryDatabase.MustExec("CREATE TABLE colors (name varchar(100) primary key);")

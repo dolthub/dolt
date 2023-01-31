@@ -27,9 +27,9 @@ import (
 // TestBinlogReplicationForAllTypes tests that operations (inserts, updates, and deletes) on all SQL
 // data types can be successfully replicated.
 func TestBinlogReplicationForAllTypes(t *testing.T) {
+	defer teardown(t)
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
-	defer teardown(t)
 
 	// Set the session's timezone to UTC, to avoid TIMESTAMP test values changing
 	// when they are converted to UTC for storage.
