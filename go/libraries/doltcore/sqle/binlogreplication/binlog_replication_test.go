@@ -272,7 +272,7 @@ func TestForeignKeyChecks(t *testing.T) {
 
 	// Verify the changes on the replica
 	waitForReplicaToCatchUp(t)
-	rows, err := replicaDatabase.Queryx("select * from t1 order by pk;")
+	rows, err := replicaDatabase.Queryx("select * from db01.t1 order by pk;")
 	require.NoError(t, err)
 	row := convertByteArraysToStrings(readNextRow(t, rows))
 	require.Equal(t, "1", row["pk"])
@@ -285,7 +285,7 @@ func TestForeignKeyChecks(t *testing.T) {
 	require.Equal(t, "not-a-color", row["color"])
 	require.False(t, rows.Next())
 
-	rows, err = replicaDatabase.Queryx("select * from colors order by name;")
+	rows, err = replicaDatabase.Queryx("select * from db01.colors order by name;")
 	require.NoError(t, err)
 	row = convertByteArraysToStrings(readNextRow(t, rows))
 	require.Equal(t, "blue", row["name"])

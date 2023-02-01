@@ -46,7 +46,7 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 
 	// Verify inserts on replica
 	waitForReplicaToCatchUp(t)
-	rows, err := replicaDatabase.Queryx("select * from alltypes order by pk asc;")
+	rows, err := replicaDatabase.Queryx("select * from db01.alltypes order by pk asc;")
 	require.NoError(t, err)
 	row := convertByteArraysToStrings(readNextRow(t, rows))
 	require.Equal(t, "1", row["pk"])
@@ -66,7 +66,7 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 
 	// Verify updates on the replica
 	waitForReplicaToCatchUp(t)
-	rows, err = replicaDatabase.Queryx("select * from alltypes order by pk asc;")
+	rows, err = replicaDatabase.Queryx("select * from db01.alltypes order by pk asc;")
 	require.NoError(t, err)
 	row = convertByteArraysToStrings(readNextRow(t, rows))
 	require.Equal(t, "1", row["pk"])
@@ -86,7 +86,7 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 
 	// Verify deletes on the replica
 	waitForReplicaToCatchUp(t)
-	rows, err = replicaDatabase.Queryx("select * from alltypes order by pk asc;")
+	rows, err = replicaDatabase.Queryx("select * from db01.alltypes order by pk asc;")
 	require.NoError(t, err)
 	require.False(t, rows.Next())
 }
