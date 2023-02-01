@@ -84,7 +84,7 @@ func runWalk(ctx context.Context, args []string) int {
 		fullPath = ".dolt/noms::#" + fullPath
 	}
 	
-	database, _, value, err := cfg.GetPath(ctx, fullPath)
+	database, vrw, value, err := cfg.GetPath(ctx, fullPath)
 
 	if err != nil {
 		util.CheckErrorNoUsage(err)
@@ -102,13 +102,13 @@ func runWalk(ctx context.Context, args []string) int {
 		pgr := outputpager.Start()
 		defer pgr.Stop()
 
-		err := walkAddrs(ctx, pgr.Writer, startHash, value, cfg)
+		err := walkAddrs(ctx, pgr.Writer, startHash, value, vrw)
 		if err != nil {
 			fmt.Fprintf(pgr.Writer, "error encountered: %s", err.Error())
 		}
 		fmt.Fprintln(pgr.Writer)
 	} else {
-		err := walkAddrs(ctx, os.Stdout, startHash, value, cfg)
+		err := walkAddrs(ctx, os.Stdout, startHash, value, vrw)
 		if err != nil {
 			if err != nil {
 				fmt.Fprintf(os.Stdout, "error encountered: %s", err.Error())
@@ -121,23 +121,30 @@ func runWalk(ctx context.Context, args []string) int {
 }
 
 var seenMessages = hash.NewHashSet()
+var numProcessed = 0
 
-func walkAddrs(ctx context.Context, w io.Writer, path string, value types.Value, cfg *config.Resolver) error {
+func walkAddrs(ctx context.Context, w io.Writer, path string, value types.Value, cfg types.ValueReadWriter) error {
 	walk := func(addr hash.Hash) error {
-		_, _, value, err := cfg.GetPath(ctx, ".dolt/noms::#" + addr.String())
+		value, err := cfg.ReadValue(ctx, addr)
 
 		if err != nil {
 			return err
 		}
 
 		if value == nil {
-			fmt.Fprintf(w, "Dangling reference: hash %s not found for path %s", addr.String(), path)
-			return fmt.Errorf("Dangling reference: hash %s not found for path %s", addr.String(), path)
+			fmt.Fprintf(w, "Dangling reference: hash %s not found for path %s\n", addr.String(), path)
+			return nil
 		}
 
+		numProcessed++
+		
 		newPath := fmt.Sprintf("%s > %s(%s)", path, addr.String(), serialType(value))
 		if !quiet {
 			fmt.Fprintf(w, "%s\n", newPath)
+		}
+		
+		if numProcessed % 100_000 == 0 {
+			fmt.Fprintf(os.Stderr, "%d refs walked\n", numProcessed)
 		}
 		
 		// We only want to recurse on messages we haven't seen before. This means not outputting some possible paths to 
@@ -151,10 +158,10 @@ func walkAddrs(ctx context.Context, w io.Writer, path string, value types.Value,
 	}
 
 	switch msg := value.(type) {
-	// Some types of serial message need to be output here because of dependency cycles between types / tree package
 	case types.SerialMessage:
 		return msg.WalkAddrs(types.Format_Default, walk)
 	default:
+		// non-serial values can't be walked
 		return nil
 	}
 }
