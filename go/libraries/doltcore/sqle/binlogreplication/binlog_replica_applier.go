@@ -39,7 +39,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -773,10 +772,8 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 		return nil, nil, err
 	}
 
-	// TODO: This doesn't seem to actually apply to TableWriter?
-	options := editor.Options{
-		ForeignKeyChecksDisabled: foreignKeyChecksDisabled,
-	}
+	options := sqlDatabase.EditOptions()
+	options.ForeignKeyChecksDisabled = foreignKeyChecksDisabled
 	writeSession := writer.NewWriteSession(binFormat, ws, tracker, options)
 
 	ds := dsess.DSessFromSess(ctx.Session)
