@@ -59,10 +59,10 @@ func teardown(t *testing.T) {
 
 	// Output server logs on failure for easier debugging
 	if t.Failed() {
-		fmt.Printf("Dolt server log:\n")
+		fmt.Printf("Dolt server log from %s:\n", doltLogFilePath)
 		printFile(doltLogFilePath)
 		fmt.Println()
-		fmt.Printf("MySQL server log:\n")
+		fmt.Printf("MySQL server log from %s:\n", mysqlLogFilePath)
 		printFile(mysqlLogFilePath)
 	}
 
@@ -357,7 +357,7 @@ func startSqlServers(t *testing.T) {
 		t.Skip("Skipping binlog replication integ tests in CI environment on Mac OS")
 	}
 
-	testDir := filepath.Join(os.TempDir(), t.Name()+"-"+time.Now().Format("12345"))
+	testDir = filepath.Join(os.TempDir(), t.Name()+"-"+time.Now().Format("12345"))
 	err := os.MkdirAll(testDir, 0777)
 
 	cmd := exec.Command("chmod", "777", testDir)
@@ -571,7 +571,7 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 	}
 
 	doltPort = findFreePort()
-	fmt.Printf("Starting Dolt sql-server on port %d\n", doltPort)
+	fmt.Printf("Starting Dolt sql-server on port: %d, with data dir %s\n", doltPort, dir)
 
 	// take the CWD and move up four directories to find the go directory
 	if originalWorkingDir == "" {

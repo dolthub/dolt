@@ -25,10 +25,6 @@ import (
 // TestBinlogReplicationServerRestart tests that a replica can be configured and started, then the
 // server process can be restarted and replica can be restarted without problems.
 func TestBinlogReplicationServerRestart(t *testing.T) {
-	// TODO: Debug this test failure. Seems like the replica doesn't have it's replication source
-	//       configuration persisted after it is restarted?
-	t.Skip("Temporarily skipped while we debug this test failure")
-
 	defer teardown(t)
 	startSqlServers(t)
 	startReplication(t, mySqlPort)

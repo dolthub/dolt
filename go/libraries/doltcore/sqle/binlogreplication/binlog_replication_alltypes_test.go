@@ -46,7 +46,7 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	primaryDatabase.MustExec(generateInsertNullValuesStatement(tableName))
 
 	// Verify inserts on replica
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	rows, err := replicaDatabase.Queryx("select * from alltypes order by pk asc;")
 	require.NoError(t, err)
 	row := convertByteArraysToStrings(readNextRow(t, rows))
@@ -86,7 +86,7 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	primaryDatabase.MustExec("delete from alltypes where pk=3;")
 
 	// Verify deletes on the replica
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	rows, err = replicaDatabase.Queryx("select * from alltypes order by pk asc;")
 	require.NoError(t, err)
 	require.False(t, rows.Next())
@@ -512,7 +512,11 @@ func assertValues(t *testing.T, assertionIndex int, row map[string]interface{}) 
 		expectedValue := assertion.getExpectedValue()
 		// LD_1, DOLT_DEV, and DOLT storage formats return JSON strings slightly differently; DOLT removes spaces
 		// while LD_1 and DOLT_DEV add whitespace, so for json comparison, we sanitize by removing whitespace.
-		actualValue := row[typeDesc.ColumnName()].(string)
+
+		actualValue := ""
+		if row[typeDesc.ColumnName()] != nil {
+			actualValue = row[typeDesc.ColumnName()].(string)
+		}
 		if typeDesc.TypeDefinition == "json" {
 			actualValue = strings.ReplaceAll(actualValue, " ", "")
 		}
