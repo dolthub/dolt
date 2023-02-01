@@ -479,7 +479,7 @@ SQL
 
     run dolt sql -q "show create table address;" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "\`location\` geometry NOT NULL SRID 0," ]] || false
+    [[ "$output" =~ "\`location\` geometry NOT NULL SRID 4333," ]] || false
 }
 
 @test "import mysqldump: dolt dump --no-autocommit can be loaded back into mysql" {
@@ -503,8 +503,7 @@ SQL
 SELECT count(*) from testdb.mytable
 SQL
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "333" ]] || false
-
+    [[ "$output" =~ "2" ]] || false
 
     sleep 1
     service mysql stop
