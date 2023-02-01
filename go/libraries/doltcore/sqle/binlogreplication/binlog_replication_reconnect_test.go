@@ -161,6 +161,7 @@ func configureToxiProxy(t *testing.T) {
 	go func() {
 		toxiproxyServer.Listen("localhost", strconv.Itoa(toxiproxyPort))
 	}()
+	time.Sleep(500 * time.Millisecond)
 	fmt.Printf("Toxiproxy server running on port %d \n", toxiproxyPort)
 
 	toxiClient = toxiproxyclient.NewClient(fmt.Sprintf("localhost:%d", toxiproxyPort))
