@@ -146,39 +146,67 @@ func prollyChildSecDiffFkConstraintViolations(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild *constraintViolationsLoadedTable,
-	preChildScndryIdx prolly.Map,
+	preChildSecIdx prolly.Map,
 	receiver FKViolationReceiver) error {
 	postChildRowData := durable.ProllyMapFromIndex(postChild.RowData)
-	postChildScndryIdx := durable.ProllyMapFromIndex(postChild.IndexData)
-	parentScndryIdx := durable.ProllyMapFromIndex(postParent.IndexData)
+	postChildSecIdx := durable.ProllyMapFromIndex(postChild.IndexData)
+	parentSecIdx := durable.ProllyMapFromIndex(postParent.IndexData)
 
-	idxDesc, _ := parentScndryIdx.Descriptors()
+	idxDesc, _ := parentSecIdx.Descriptors()
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	partialKB := val.NewTupleBuilder(partialDesc)
 
 	primaryKD, _ := postChildRowData.Descriptors()
 	kb := val.NewTupleBuilder(primaryKD)
 
-	err := prolly.DiffMaps(ctx, preChildScndryIdx, postChildScndryIdx, func(ctx context.Context, diff tree.Diff) error {
+	var cur *tree.Cursor
+	err := prolly.DiffMaps(ctx, preChildSecIdx, postChildSecIdx, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
-			k, v := val.Tuple(diff.Key), val.Tuple(diff.To)
+			k, _ := val.Tuple(diff.Key), val.Tuple(diff.To)
+			postChildSecKD, _ := postChildSecIdx.Descriptors()
+			if cur == nil {
+				newCur, err := tree.NewCursorAtKey(ctx, postChildSecIdx.NodeStore(), postChildSecIdx.Node(), k, postChildSecKD)
+				if err != nil {
+					return err
+				}
+				if !newCur.Valid() {
+					// map does not contain |rng|
+					return nil
+				}
+				cur = newCur
+			}
+			err := tree.Seek(ctx, cur, k, postChildSecKD)
+			if err != nil {
+				return err
+			}
+			if !cur.Valid() {
+				return nil
+			}
+
+			key := val.Tuple(cur.CurrentKey())
+			value := val.Tuple(cur.CurrentValue())
+			rng := prolly.PrefixRange(k, idxDesc)
+			if !rng.Matches(key) {
+				return nil
+			}
 			partialKey, hasNulls := makePartialKey(
 				partialKB,
 				foreignKey.TableColumns,
 				postChild.Index,
 				postChild.IndexSchema,
-				k,
-				v,
-				preChildScndryIdx.Pool())
+				key,
+				value,
+				preChildSecIdx.Pool())
 			if hasNulls {
 				return nil
 			}
 
-			err := createCVIfNoPartialKeyMatchesSec(ctx, k, v, partialKey, partialDesc, primaryKD, kb, parentScndryIdx, postChildRowData, postChildRowData.Pool(), receiver)
+			err = createCVIfNoPartialKeyMatchesSec(ctx, key, value, partialKey, partialDesc, primaryKD, kb, parentSecIdx, postChildRowData, postChildRowData.Pool(), receiver)
 			if err != nil {
 				return err
 			}
+			return nil
 		case tree.RemovedDiff:
 		default:
 			panic("unhandled diff type")
