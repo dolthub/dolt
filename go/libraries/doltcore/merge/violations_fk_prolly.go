@@ -109,8 +109,6 @@ func prollyChildPriDiffFkConstraintViolations(
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	partialKB := val.NewTupleBuilder(partialDesc)
 
-	//panic(fmt.Sprintf("%s, %d, " ,foreignKey.Name, postChild.Schema.GetPKCols().Size()))
-
 	err := prolly.DiffMaps(ctx, preChildRowData, postChildRowData, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:

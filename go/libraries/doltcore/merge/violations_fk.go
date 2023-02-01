@@ -373,26 +373,29 @@ func childFkConstraintViolations(
 	preChildRowData durable.Index,
 	receiver FKViolationReceiver,
 ) error {
-	if preChildRowData.Format() == types.Format_DOLT {
-		if empty, err := preChildRowData.Empty(); err != nil {
+	if preChildRowData.Format() != types.Format_DOLT {
+		m := durable.NomsMapFromIndex(preChildRowData)
+		return nomsChildFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChild.Schema, m, receiver)
+	}
+	if preChild.IndexData != nil && postChild.Schema.GetPKCols().Size() > 0 && preChild.Schema.GetPKCols().Size() > 0 {
+		empty, err := preChildRowData.Empty()
+		if err != nil {
 			return err
-		} else if empty {
-			emptyIdx, err := durable.NewEmptyIndex(ctx, postChild.Table.ValueReadWriter(), postChild.Table.NodeStore(), postChild.Schema)
+		}
+		var idx durable.Index
+		if empty {
+			idx, err = durable.NewEmptyIndex(ctx, postChild.Table.ValueReadWriter(), postChild.Table.NodeStore(), postChild.Schema)
 			if err != nil {
 				return err
 			}
-			m := durable.ProllyMapFromIndex(emptyIdx)
-			return prollyChildSecDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
-		} else if preChild.IndexData != nil && postChild.Schema.GetPKCols().Size() > 0 && preChild.Schema.GetPKCols().Size() > 0 {
-			m := durable.ProllyMapFromIndex(preChild.IndexData)
-			return prollyChildSecDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
+		} else {
+			idx = preChild.IndexData
 		}
-		m := durable.ProllyMapFromIndex(preChildRowData)
-		return prollyChildPriDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
+		m := durable.ProllyMapFromIndex(idx)
+		return prollyChildSecDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
 	}
-
-	m := durable.NomsMapFromIndex(preChildRowData)
-	return nomsChildFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChild.Schema, m, receiver)
+	m := durable.ProllyMapFromIndex(preChildRowData)
+	return prollyChildPriDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
 }
 
 func nomsParentFkConstraintViolations(
