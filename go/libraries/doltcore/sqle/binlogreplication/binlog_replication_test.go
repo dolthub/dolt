@@ -604,7 +604,10 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 // available.
 func waitForSqlServerToStart(database *sqlx.DB) error {
 	fmt.Printf("Waiting for server to start...\n")
-	for counter := 0; counter < 20; counter++ {
+	// TODO: Try extending the waiting period as a sanity test
+	//       We could probably pre-compile a simple command
+	//       to warm up it up? e.g. go run ./cmd/dolt version
+	for counter := 0; counter < 100; counter++ {
 		if database.Ping() == nil {
 			return nil
 		}
