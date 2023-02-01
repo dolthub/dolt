@@ -161,7 +161,7 @@ func (td *typeDescription) IsStringType() bool {
 // allTypes contains test data covering all SQL types.
 //
 // TODO: TypeWireTests contains most of the test data we need. I found it after implementing this, but we
-// could simplify this test code by converting to use TypeWireTests and enhancing it with any additional
+// could simplify this test code by converting to use TypeWireTests and enhancing it with the additional
 // test cases we need to cover (e.g. NULL values).
 var allTypes = []typeDescription{
 	// Bit types
@@ -510,7 +510,13 @@ func assertValues(t *testing.T, assertionIndex int, row map[string]interface{}) 
 	for _, typeDesc := range allTypes {
 		assertion := typeDesc.Assertions[assertionIndex]
 		expectedValue := assertion.getExpectedValue()
-		require.EqualValues(t, expectedValue, row[typeDesc.ColumnName()],
+		// LD_1, DOLT_DEV, and DOLT storage formats return JSON strings slightly differently; DOLT removes spaces
+		// while LD_1 and DOLT_DEV add whitespace, so for json comparison, we sanitize by removing whitespace.
+		actualValue := row[typeDesc.ColumnName()].(string)
+		if typeDesc.TypeDefinition == "json" {
+			actualValue = strings.ReplaceAll(actualValue, " ", "")
+		}
+		require.EqualValues(t, expectedValue, actualValue,
 			"Failed on assertion %d for for column %q", assertionIndex, typeDesc.ColumnName())
 	}
 }
