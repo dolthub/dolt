@@ -253,6 +253,7 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 	for {
 		select {
 		case <-a.stopReplicationChan:
+			logger.Trace("received signal to stop replication routine")
 			return nil
 		default:
 			event, err := conn.ReadBinlogEvent()

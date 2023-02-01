@@ -99,10 +99,11 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 
 // StopReplica implements the BinlogReplicaController interface.
 func (d *doltBinlogReplicaController) StopReplica(_ *sql.Context) error {
+	d.applier.stopReplicationChan <- struct{}{}
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	d.applier.stopReplicationChan <- struct{}{}
 	d.status.ReplicaIoRunning = binlogreplication.ReplicaIoNotRunning
 	d.status.ReplicaSqlRunning = binlogreplication.ReplicaSqlNotRunning
 
