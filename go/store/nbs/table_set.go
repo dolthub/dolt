@@ -275,7 +275,15 @@ func (ts tableSet) Size() int {
 
 // append adds a memTable to an existing tableSet, compacting |mt| and
 // returning a new tableSet with newly compacted table added.
-func (ts tableSet) append(ctx context.Context, mt *memTable, stats *Stats) (tableSet, error) {
+func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, stats *Stats) (tableSet, error) {
+	sort.Sort(hasRecordByPrefix(mt.pendingRefs))
+	absent, err := checker(mt.pendingRefs)
+	if err != nil {
+		return tableSet{}, err
+	} else if absent.Size() > 0 {
+		return tableSet{}, fmt.Errorf("found dangling references to %s", absent.String())
+	}
+
 	cs, err := ts.p.Persist(ctx, mt, ts, stats)
 	if err != nil {
 		return tableSet{}, err
