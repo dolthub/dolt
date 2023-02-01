@@ -402,21 +402,31 @@ func (p *Puller) Pull(ctx context.Context) error {
 		if err := p.tablefileSema.Acquire(ctx, 1); err != nil {
 			return err
 		}
-		for len(absent) > 0 {
-			limitToNewChunks(absent, p.downloaded)
 
-			var err error
-			absent, err = p.sinkDBCS.HasMany(ctx, absent)
-			if err != nil {
-				return err
-			}
+		numAbsent := int64(len(absent))
+		for numAbsent > 0 {
+			var absentBatches []hash.HashSet
+			numAbsent, absentBatches = limitToNewChunks(absent, p.downloaded, 64*1024)
 
-			if len(absent) > 0 {
-				leaves, absent, err = p.getCmp(ctx, leaves, absent, completedTables)
+			nextLeaves := make(hash.HashSet, numAbsent)
+			nextAbsent := make(hash.HashSet, numAbsent)
+			for i := range absentBatches {
+				var err error
+				absentBatches[i], err = p.sinkDBCS.HasMany(ctx, absentBatches[i])
 				if err != nil {
 					return err
 				}
+
+				if len(absentBatches[i]) > 0 {
+					err = p.getCmp(ctx, leaves, nextLeaves, absentBatches[i], nextAbsent, completedTables)
+					if err != nil {
+						return err
+					}
+				}
 			}
+
+			leaves = nextLeaves
+			absent = nextAbsent
 		}
 
 		if p.wr != nil && p.wr.ChunkCount() > 0 {
@@ -433,22 +443,48 @@ func (p *Puller) Pull(ctx context.Context) error {
 	return eg.Wait()
 }
 
-func limitToNewChunks(absent hash.HashSet, downloaded hash.HashSet) {
-	smaller := absent
-	longer := downloaded
-	if len(absent) > len(downloaded) {
-		smaller = downloaded
-		longer = absent
-	}
-
-	for k := range smaller {
-		if longer.Has(k) {
-			absent.Remove(k)
+func limitToNewChunks(absent hash.HashSet, downloaded hash.HashSet, maxBatchSize int64) (int64, []hash.HashSet) {
+	numAbsent := int64(len(absent))
+	if numAbsent < maxBatchSize {
+		smaller := absent
+		longer := downloaded
+		if len(absent) > len(downloaded) {
+			smaller = downloaded
+			longer = absent
 		}
+
+		for k := range smaller {
+			if longer.Has(k) {
+				absent.Remove(k)
+			}
+		}
+
+		return int64(len(absent)), []hash.HashSet{absent}
+	} else {
+		var numBatches = (numAbsent / maxBatchSize) + 1
+		var batchSize = (numAbsent / numBatches) + 1
+
+		newBatches := make([]hash.HashSet, 1, numBatches)
+		currentNewBatch := hash.NewHashSet()
+		newBatches[0] = currentNewBatch
+
+		var totalAbsent int64
+		for k := range absent {
+			if !downloaded.Has(k) {
+				currentNewBatch.Insert(k)
+				totalAbsent++
+
+				if totalAbsent%batchSize == 0 {
+					currentNewBatch = hash.NewHashSet()
+					newBatches = append(newBatches, currentNewBatch)
+				}
+			}
+		}
+		return totalAbsent, newBatches
 	}
 }
 
-func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, completedTables chan FilledWriters) (hash.HashSet, hash.HashSet, error) {
+func (p *Puller) getCmp(ctx context.Context, leaves, nextLeaves, batch, nextLevel hash.HashSet, completedTables chan FilledWriters) error {
 	found := make(chan nbs.CompressedChunk, 4096)
 	processed := make(chan CmpChnkAndRefs, 4096)
 
@@ -513,10 +549,6 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 		return nil
 	})
 
-	batchSize := len(batch)
-	nextLeaves := make(hash.HashSet, batchSize)
-	nextLevel := make(hash.HashSet, batchSize)
-
 	eg.Go(func() error {
 		var seen int
 	LOOP:
@@ -558,6 +590,9 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 						nextLeaves.Insert(h)
 					}
 				}
+
+				cmpAndRef.cmpChnk.FullCompressedChunk = nil
+				cmpAndRef.cmpChnk.CompressedData = nil
 			case <-ctx.Done():
 				return ctx.Err()
 			}
@@ -570,7 +605,7 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 
 	err := eg.Wait()
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
-	return nextLeaves, nextLevel, nil
+	return nil
 }
