@@ -50,7 +50,8 @@ func TestBinlogReplicationFilters_ignoreTablesOnly(t *testing.T) {
 	primaryDatabase.MustExec("DELETE FROM db01.t1 WHERE pk = 10;")
 	primaryDatabase.MustExec("DELETE FROM db01.t2 WHERE pk = 10;")
 
-	time.Sleep(100 * time.Millisecond)
+	// Pause to let the replica catch up
+	time.Sleep(500 * time.Millisecond)
 
 	// Verify that all changes from t1 were applied on the replica
 	rows, err := replicaDatabase.Queryx("SELECT COUNT(pk) as count, MIN(pk) as min, MAX(pk) as max from db01.t1;")
@@ -97,7 +98,8 @@ func TestBinlogReplicationFilters_doTablesOnly(t *testing.T) {
 	primaryDatabase.MustExec("DELETE FROM db01.t1 WHERE pk = 10;")
 	primaryDatabase.MustExec("DELETE FROM db01.t2 WHERE pk = 10;")
 
-	time.Sleep(100 * time.Millisecond)
+	// Pause to let the replica catch up
+	time.Sleep(500 * time.Millisecond)
 
 	// Verify that all changes from t1 were applied on the replica
 	rows, err := replicaDatabase.Queryx("SELECT COUNT(pk) as count, MIN(pk) as min, MAX(pk) as max from db01.t1;")
@@ -146,7 +148,8 @@ func TestBinlogReplicationFilters_doTablesAndIgnoreTables(t *testing.T) {
 	primaryDatabase.MustExec("DELETE FROM db01.t1 WHERE pk = 10;")
 	primaryDatabase.MustExec("DELETE FROM db01.t2 WHERE pk = 10;")
 
-	time.Sleep(100 * time.Millisecond)
+	// Pause to let the replica catch up
+	time.Sleep(500 * time.Millisecond)
 
 	// Verify that all changes from t1 were applied on the replica
 	rows, err := replicaDatabase.Queryx("SELECT COUNT(pk) as count, MIN(pk) as min, MAX(pk) as max from db01.t1;")

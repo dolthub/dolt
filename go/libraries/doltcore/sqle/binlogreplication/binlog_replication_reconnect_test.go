@@ -51,7 +51,10 @@ func TestBinlogReplicationReconnection(t *testing.T) {
 	mysqlProxy.RemoveToxic("limit_data")
 
 	// Assert that all records get written to the table
-	time.Sleep(5 * time.Second)
+	// TODO: The replication delay is longer in the CI environment, so some timeouts, like this one, are
+	//       larger than they absoluately need to be. A better way of dealing with this would be to query
+	//       @@gtid_executed on the primary and conditionally wait until we know the replica has caught up.
+	time.Sleep(10 * time.Second)
 	rows, err := replicaDatabase.Queryx("select min(pk) as min, max(pk) as max, count(pk) as count from db01.reconnect_test;")
 	require.NoError(t, err)
 
