@@ -1,7 +1,5 @@
 #!/bin/sh
 
-cd ./integration-tests/data-dump-loading-tests
-
 echo "Updating dolt config for tests:"
 dolt config --global --add metrics.disabled true
 dolt config --global --add metrics.host localhost
