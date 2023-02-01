@@ -206,10 +206,6 @@ func TestDoltCommits(t *testing.T) {
 	require.Equal(t, "5", row["count"])
 
 	// Use dolt_diff so we can see what tables were edited and schema/data changes
-	// TODO: Error 1105: unable to lookup roots for database
-	//       We started getting this when we used a db qualifier... the dolt_diff system table must not take that
-	//       into account and always uses the current database.
-	// TODO: Convert the note above into a GH bug
 	replicaDatabase.MustExec("use db01;")
 	// Note: we don't use an order by clause, since the commits come in so quickly that they get the same timestamp
 	rows, err = replicaDatabase.Queryx("select * from db01.dolt_diff;")
@@ -341,6 +337,36 @@ func TestCharsetsAndCollations(t *testing.T) {
 //
 // Test Helper Functions
 //
+
+// waitForReplicaToCatchUp waits (up to 10s) for the replica to catch up with the primary database. The
+// lag is measured by checking that gtid_executed is the same on the primary and replica.
+func waitForReplicaToCatchUp(t *testing.T) {
+	timeLimit := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeLimit) {
+
+		primaryGtid := queryGtid(t, primaryDatabase)
+		replicaGtid := queryGtid(t, replicaDatabase)
+
+		if primaryGtid == replicaGtid {
+			return
+		} else {
+			fmt.Printf("primary and replica not in sync yet... (primary: %s, replica: %s)\n", primaryGtid, replicaGtid)
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+
+	t.Fatal("primary and replica did not synchronize within 10s")
+}
+
+func queryGtid(t *testing.T, database *sqlx.DB) string {
+	rows, err := database.Queryx("SELECT @@global.gtid_executed as gtid_executed;")
+	require.NoError(t, err)
+	row := convertByteArraysToStrings(readNextRow(t, rows))
+	if row["gtid_executed"] == nil {
+		t.Fatal("no value for @@GLOBAL.gtid_executed")
+	}
+	return row["gtid_executed"].(string)
+}
 
 func readNextRow(t *testing.T, rows *sqlx.Rows) map[string]interface{} {
 	row := make(map[string]interface{})
