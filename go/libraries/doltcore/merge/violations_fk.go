@@ -377,22 +377,25 @@ func childFkConstraintViolations(
 		m := durable.NomsMapFromIndex(preChildRowData)
 		return nomsChildFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChild.Schema, m, receiver)
 	}
-	if preChild.IndexData != nil && postChild.Schema.GetPKCols().Size() > 0 && preChild.Schema.GetPKCols().Size() > 0 {
-		empty, err := preChildRowData.Empty()
+	if preChild.IndexData == nil || postChild.Schema.GetPKCols().Size() == 0 || preChild.Schema.GetPKCols().Size() == 0 {
+		m := durable.ProllyMapFromIndex(preChildRowData)
+		return prollyChildPriDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
+	}
+	empty, err := preChildRowData.Empty()
+	if err != nil {
+		return err
+	}
+	var idx durable.Index
+	if empty {
+		idx, err = durable.NewEmptyIndex(ctx, postChild.Table.ValueReadWriter(), postChild.Table.NodeStore(), postChild.Schema)
 		if err != nil {
 			return err
 		}
-		if empty {
-			preChild.IndexData, err = durable.NewEmptyIndex(ctx, postChild.Table.ValueReadWriter(), postChild.Table.NodeStore(), postChild.Schema)
-			if err != nil {
-				return err
-			}
-		}
-		m := durable.ProllyMapFromIndex(preChild.IndexData)
-		return prollyChildSecDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
+	} else {
+		idx = preChild.IndexData
 	}
-	m := durable.ProllyMapFromIndex(preChildRowData)
-	return prollyChildPriDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
+	m := durable.ProllyMapFromIndex(idx)
+	return prollyChildSecDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
 }
 
 func nomsParentFkConstraintViolations(
