@@ -21,14 +21,14 @@ import (
 	"os"
 	"strings"
 
+	flag "github.com/juju/gnuflag"
+
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/cmd/noms/util"
+	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
-	flag "github.com/juju/gnuflag"
-
-	"github.com/dolthub/dolt/go/store/cmd/noms/util"
-	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 	"github.com/dolthub/dolt/go/store/util/verbose"
@@ -44,7 +44,7 @@ var nomsWalk = &util.Command{
 }
 
 var (
-	quiet   = false
+	quiet = false
 )
 
 func setupWalkFlags() *flag.FlagSet {
@@ -59,8 +59,8 @@ func runWalk(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
 
 	var value types.Value
-	
-	var startHash string 
+
+	var startHash string
 	if len(args) < 1 {
 		manifestReader, err := os.Open("./.dolt/noms/manifest")
 		if err != nil {
@@ -70,12 +70,12 @@ func runWalk(ctx context.Context, args []string) int {
 
 		manifest, err := nbs.ParseManifest(manifestReader)
 		d.PanicIfError(err)
-		
+
 		startHash = manifest.GetRoot().String()
 	} else {
 		startHash = args[0]
 	}
-	
+
 	fullPath := startHash
 
 	if strings.HasPrefix(fullPath, "#") && !strings.HasPrefix(fullPath, ".dolt/noms::#") {
@@ -83,7 +83,7 @@ func runWalk(ctx context.Context, args []string) int {
 	} else if !strings.HasPrefix(fullPath, ".dolt/noms::#") {
 		fullPath = ".dolt/noms::#" + fullPath
 	}
-	
+
 	database, vrw, value, err := cfg.GetPath(ctx, fullPath)
 
 	if err != nil {
@@ -97,7 +97,7 @@ func runWalk(ctx context.Context, args []string) int {
 		fmt.Fprintf(os.Stderr, "Object not found: %s\n", fullPath)
 		return 0
 	}
-	
+
 	if showPages {
 		pgr := outputpager.Start()
 		defer pgr.Stop()
@@ -137,23 +137,23 @@ func walkAddrs(ctx context.Context, w io.Writer, path string, value types.Value,
 		}
 
 		numProcessed++
-		
+
 		newPath := fmt.Sprintf("%s > %s(%s)", path, addr.String(), serialType(value))
 		if !quiet {
 			fmt.Fprintf(w, "%s\n", newPath)
 		}
-		
-		if numProcessed % 100_000 == 0 {
+
+		if numProcessed%100_000 == 0 {
 			fmt.Fprintf(os.Stderr, "%d refs walked\n", numProcessed)
 		}
-		
-		// We only want to recurse on messages we haven't seen before. This means not outputting some possible paths to 
+
+		// We only want to recurse on messages we haven't seen before. This means not outputting some possible paths to
 		// some chunks, but since there are so very many paths to a typical chunk this is a huge time saver.
 		if !seenMessages.Has(addr) {
 			seenMessages.Insert(addr)
 			return walkAddrs(ctx, w, newPath, value, cfg)
 		}
-		
+
 		return nil
 	}
 

@@ -350,7 +350,7 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 	default:
 		return fmt.Errorf("unsupported SerialMessage message with FileID: %s", serial.GetFileID(sm))
 	}
-return nil
+	return nil
 }
 
 func SerialCommitParentAddrs(nbf *NomsBinFormat, sm SerialMessage) ([]hash.Hash, error) {
