@@ -130,7 +130,8 @@ func TestBinlogReplicationFilters_doTablesAndIgnoreTables(t *testing.T) {
 
 	// Assert that replica status shows replication filters
 	status := convertByteArraysToStrings(showReplicaStatus(t))
-	require.Equal(t, "db01.t1,db01.t2", status["Replicate_Do_Table"])
+	require.True(t, status["Replicate_Do_Table"] == "db01.t1,db01.t2" ||
+		status["Replicate_Do_Table"] == "db01.t2,db01.t1")
 	require.Equal(t, "db01.t2", status["Replicate_Ignore_Table"])
 
 	// Make changes on the primary
