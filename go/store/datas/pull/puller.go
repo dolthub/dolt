@@ -407,7 +407,7 @@ func (p *Puller) Pull(ctx context.Context) error {
 			var absentBatches []hash.HashSet
 			numAbsent, absentBatches = limitToNewChunks(absent, p.downloaded, 64*1024)
 
-			nextAbsent := make(hash.HashSet, numAbsent)
+			nextAbsent := make(hash.HashSet)
 			for i := range absentBatches {
 				var err error
 				absentBatches[i], err = p.sinkDBCS.HasMany(ctx, absentBatches[i])
