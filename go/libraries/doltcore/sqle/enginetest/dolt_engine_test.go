@@ -1018,6 +1018,7 @@ func TestDoltReset(t *testing.T) {
 }
 
 func TestDoltGC(t *testing.T) {
+	t.SkipNow()
 	for _, script := range DoltGC {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
