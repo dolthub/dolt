@@ -216,6 +216,10 @@ func (m Map) NodeStore() tree.NodeStore {
 	return m.tuples.NodeStore
 }
 
+func (m Map) Tuples() tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc] {
+	return m.tuples
+}
+
 // Mutate makes a MutableMap from a Map.
 func (m Map) Mutate() *MutableMap {
 	return newMutableMap(m)

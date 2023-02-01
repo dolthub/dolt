@@ -31,7 +31,10 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_commit_hash_out", Schema: stringSchema("hash"), Function: doltCommitHashOut},
 	{Name: "dolt_conflicts_resolve", Schema: int64Schema("status"), Function: doltConflictsResolve},
 	{Name: "dolt_fetch", Schema: int64Schema("success"), Function: doltFetch},
-	{Name: "dolt_gc", Schema: int64Schema("success"), Function: doltGC},
+
+	// dolt_gc is disabled for now.
+	//	{Name: "dolt_gc", Schema: int64Schema("success"), Function: doltGC},
+
 	{Name: "dolt_merge", Schema: int64Schema("fast_forward", "conflicts"), Function: doltMerge},
 	{Name: "dolt_pull", Schema: int64Schema("fast_forward", "conflicts"), Function: doltPull},
 	{Name: "dolt_push", Schema: int64Schema("success"), Function: doltPush},
@@ -51,7 +54,9 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dclone", Schema: int64Schema("status"), Function: doltClone},
 	{Name: "dcommit", Schema: stringSchema("hash"), Function: doltCommit},
 	{Name: "dfetch", Schema: int64Schema("success"), Function: doltFetch},
-	{Name: "dgc", Schema: int64Schema("status"), Function: doltGC},
+
+	//	{Name: "dgc", Schema: int64Schema("status"), Function: doltGC},
+
 	{Name: "dmerge", Schema: int64Schema("fast_forward", "conflicts"), Function: doltMerge},
 	{Name: "dpull", Schema: int64Schema("fast_forward", "conflicts"), Function: doltPull},
 	{Name: "dpush", Schema: int64Schema("success"), Function: doltPush},
