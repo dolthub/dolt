@@ -115,7 +115,14 @@ func prollyChildPriDiffFkConstraintViolations(
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
 			k, v := val.Tuple(diff.Key), val.Tuple(diff.To)
-			partialKey, hasNulls := makePartialKey(partialKB, foreignKey.TableColumns, postChild.Index, postChild.Schema, k, v, preChildRowData.Pool())
+			partialKey, hasNulls := makePartialKey(
+				partialKB,
+				foreignKey.TableColumns,
+				postChild.Index,
+				postChild.Schema,
+				k,
+				v,
+				preChildRowData.Pool())
 			if hasNulls {
 				return nil
 			}
@@ -141,29 +148,36 @@ func prollyChildSecDiffFkConstraintViolations(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild *constraintViolationsLoadedTable,
-	preChildRowData prolly.Map,
+	preChildScndryIdx prolly.Map,
 	receiver FKViolationReceiver) error {
-	postChildRowData := durable.ProllyMapFromIndex(postChild.IndexData)
+	postChildRowData := durable.ProllyMapFromIndex(postChild.RowData)
+	postChildScndryIdx := durable.ProllyMapFromIndex(postChild.IndexData)
 	parentScndryIdx := durable.ProllyMapFromIndex(postParent.IndexData)
-	postChildPrimaryRowData := durable.ProllyMapFromIndex(postChild.RowData)
 
 	idxDesc, _ := parentScndryIdx.Descriptors()
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	partialKB := val.NewTupleBuilder(partialDesc)
 
-	primaryKD, _ := postChildPrimaryRowData.Descriptors()
+	primaryKD, _ := postChildRowData.Descriptors()
 	kb := val.NewTupleBuilder(primaryKD)
 
-	err := prolly.DiffMaps(ctx, preChildRowData, postChildRowData, func(ctx context.Context, diff tree.Diff) error {
+	err := prolly.DiffMaps(ctx, preChildScndryIdx, postChildScndryIdx, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
 			k, v := val.Tuple(diff.Key), val.Tuple(diff.To)
-			partialKey, hasNulls := makePartialKey(partialKB, foreignKey.TableColumns, postChild.Index, postChild.IndexSchema, k, v, preChildRowData.Pool())
+			partialKey, hasNulls := makePartialKey(
+				partialKB,
+				foreignKey.TableColumns,
+				postChild.Index,
+				postChild.IndexSchema,
+				k,
+				v,
+				preChildScndryIdx.Pool())
 			if hasNulls {
 				return nil
 			}
 
-			err := createCVIfNoPartialKeyMatchesSec(ctx, k, v, partialKey, partialDesc, primaryKD, kb, parentScndryIdx, postChildPrimaryRowData, postChildPrimaryRowData.Pool(), receiver)
+			err := createCVIfNoPartialKeyMatchesSec(ctx, k, v, partialKey, partialDesc, primaryKD, kb, parentScndryIdx, postChildRowData, postChildRowData.Pool(), receiver)
 			if err != nil {
 				return err
 			}

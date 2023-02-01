@@ -374,11 +374,16 @@ func childFkConstraintViolations(
 	receiver FKViolationReceiver,
 ) error {
 	if preChildRowData.Format() == types.Format_DOLT {
-		_, err := preChildRowData.Empty()
-		if err != nil {
+		if empty, err := preChildRowData.Empty(); err != nil {
 			return err
-		}
-		if preChild.IndexData != nil && postChild.Schema.GetPKCols().Size() > 0 && preChild.Schema.GetPKCols().Size() > 0 {
+		} else if empty {
+			emptyIdx, err := durable.NewEmptyIndex(ctx, postChild.Table.ValueReadWriter(), postChild.Table.NodeStore(), postChild.Schema)
+			if err != nil {
+				return err
+			}
+			m := durable.ProllyMapFromIndex(emptyIdx)
+			return prollyChildSecDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
+		} else if preChild.IndexData != nil && postChild.Schema.GetPKCols().Size() > 0 && preChild.Schema.GetPKCols().Size() > 0 {
 			m := durable.ProllyMapFromIndex(preChild.IndexData)
 			return prollyChildSecDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
 		}
