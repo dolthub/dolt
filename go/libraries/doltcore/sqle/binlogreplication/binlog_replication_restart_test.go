@@ -70,7 +70,7 @@ func TestBinlogReplicationServerRestart(t *testing.T) {
 	// TODO: if the test fails before this wg.Wait call.. then the goroutine is still running
 	//       and can fail the next test
 	wg.Wait()
-	time.Sleep(1 * time.Second)
+	waitForReplicaToCatchUp(t)
 	countMaxQuery := "SELECT COUNT(pk) AS count, MAX(pk) as max FROM db01.t;"
 	primaryRows, err := primaryDatabase.Queryx(countMaxQuery)
 	require.NoError(t, err)

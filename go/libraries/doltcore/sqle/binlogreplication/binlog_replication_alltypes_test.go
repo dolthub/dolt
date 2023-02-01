@@ -19,7 +19,6 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -46,7 +45,7 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	primaryDatabase.MustExec(generateInsertNullValuesStatement(tableName))
 
 	// Verify inserts on replica
-	time.Sleep(500 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	rows, err := replicaDatabase.Queryx("select * from alltypes order by pk asc;")
 	require.NoError(t, err)
 	row := convertByteArraysToStrings(readNextRow(t, rows))
@@ -66,7 +65,7 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	primaryDatabase.MustExec(generateUpdateValuesStatement(tableName, 3, 1))
 
 	// Verify updates on the replica
-	time.Sleep(100 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	rows, err = replicaDatabase.Queryx("select * from alltypes order by pk asc;")
 	require.NoError(t, err)
 	row = convertByteArraysToStrings(readNextRow(t, rows))
@@ -86,7 +85,7 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	primaryDatabase.MustExec("delete from alltypes where pk=3;")
 
 	// Verify deletes on the replica
-	time.Sleep(500 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	rows, err = replicaDatabase.Queryx("select * from alltypes order by pk asc;")
 	require.NoError(t, err)
 	require.False(t, rows.Next())

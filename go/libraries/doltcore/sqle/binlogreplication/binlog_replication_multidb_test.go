@@ -16,7 +16,6 @@ package binlogreplication
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -40,7 +39,7 @@ func TestBinlogReplicationMultiDb(t *testing.T) {
 	primaryDatabase.MustExec("update db02.t02 set pk=8 where pk=7;")
 
 	// Verify the changes in db01 on the replica
-	time.Sleep(500 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	rows, err := replicaDatabase.Queryx("select * from db01.t01 order by pk asc;")
 	require.NoError(t, err)
 	row := convertByteArraysToStrings(readNextRow(t, rows))
@@ -138,7 +137,7 @@ func TestBinlogReplicationMultiDbTransactions(t *testing.T) {
 	primaryDatabase.MustExec("commit;")
 
 	// Verify the changes in db01 on the replica
-	time.Sleep(500 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	rows, err := replicaDatabase.Queryx("select * from db01.t01 order by pk asc;")
 	require.NoError(t, err)
 	row := convertByteArraysToStrings(readNextRow(t, rows))

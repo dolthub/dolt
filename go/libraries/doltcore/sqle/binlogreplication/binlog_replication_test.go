@@ -87,7 +87,7 @@ func TestBinlogReplicationSanityCheck(t *testing.T) {
 
 	// Make changes on the primary and verify on the replica
 	primaryDatabase.MustExec("create table t (pk int primary key)")
-	time.Sleep(1 * time.Second)
+	waitForReplicaToCatchUp(t)
 	expectedStatement := "CREATE TABLE t ( pk int NOT NULL, PRIMARY KEY (pk)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"
 	assertCreateTableStatement(t, replicaDatabase, "t", expectedStatement)
 }
@@ -199,7 +199,7 @@ func TestDoltCommits(t *testing.T) {
 	primaryDatabase.MustExec("commit;")
 
 	// Verify Dolt commit on replica
-	time.Sleep(500 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	rows, err := replicaDatabase.Queryx("select count(*) as count from db01.dolt_log;")
 	require.NoError(t, err)
 	row := convertByteArraysToStrings(readNextRow(t, rows))
@@ -271,7 +271,7 @@ func TestForeignKeyChecks(t *testing.T) {
 	primaryDatabase.MustExec("COMMIT;")
 
 	// Verify the changes on the replica
-	time.Sleep(100 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	rows, err := replicaDatabase.Queryx("select * from t1 order by pk;")
 	require.NoError(t, err)
 	row := convertByteArraysToStrings(readNextRow(t, rows))
@@ -305,7 +305,7 @@ func TestCharsetsAndCollations(t *testing.T) {
 	primaryDatabase.MustExec("insert into t1 values (1, \"one\", \"one\");")
 
 	// Verify on the replica
-	time.Sleep(100 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	rows, err := replicaDatabase.Queryx("show create table db01.t1;")
 	require.NoError(t, err)
 	row := convertByteArraysToStrings(readNextRow(t, rows))
@@ -320,7 +320,7 @@ func TestCharsetsAndCollations(t *testing.T) {
 
 	// Test that we get an error for unsupported charsets/collations
 	primaryDatabase.MustExec("CREATE TABLE t2 (pk int primary key, c1 varchar(255) COLLATE utf16_german2_ci);")
-	time.Sleep(100 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	replicaDatabase.MustExec("use db01;")
 	rows, err = replicaDatabase.Queryx("SHOW TABLES WHERE Tables_in_db01 like 't2';")
 	require.NoError(t, err)
