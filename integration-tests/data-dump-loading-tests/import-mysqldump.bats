@@ -505,7 +505,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "333" ]] || false
 
-    # Give the server a chance to drop the database
+
     sleep 1
     service mysql stop
 }
