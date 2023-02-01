@@ -536,6 +536,36 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 	return mySqlPort, cmd.Process, nil
 }
 
+func initializeDevDoltBuild(dir string, goDirPath string) string {
+	// If we're not in a CI environment, don't worry about building a dev build
+	if os.Getenv("CI") != "true" {
+		return ""
+	}
+
+	basedir := filepath.Dir(filepath.Dir(dir))
+	fullpath := filepath.Join(basedir, fmt.Sprintf("devDolt-%d", os.Getpid()))
+
+	fmt.Printf("building dolt dev build at: %s \n", fullpath)
+
+	_, err := os.Stat(fullpath)
+	if err == nil {
+		return fullpath
+	}
+
+	cmd := exec.Command("go", "build", "-o", fullpath, "./cmd/dolt")
+	cmd.Dir = goDirPath
+
+	output, err := cmd.CombinedOutput()
+	wd, _ := os.Getwd()
+	fmt.Printf("CWD: " + wd + "\n\n")
+	fmt.Printf("CMD: " + cmd.String() + "\n\n")
+	fmt.Printf("OUTPUT: " + string(output) + "\n\n")
+	if err != nil {
+		panic("unable to build dolt for binlog integration tests: " + err.Error() + "\nFull output: " + string(output) + "\n")
+	}
+	return fullpath
+}
+
 func startDoltSqlServer(dir string) (int, *os.Process, error) {
 	dir = filepath.Join(dir, "dolt")
 	err := os.MkdirAll(dir, 0777)
@@ -563,13 +593,23 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 
 	socketPath := filepath.Join("/tmp", fmt.Sprintf("dolt.%v.sock", doltPort))
 
-	cmd := exec.Command("go", "run", "./cmd/dolt",
+	// Don't recompile dolt for every dolt server startup!
+	devDoltPath := initializeDevDoltBuild(dir, goDirPath)
+
+	args := []string{"go", "run", "./cmd/dolt",
 		"sql-server",
 		"-uroot",
 		"--loglevel=TRACE",
 		fmt.Sprintf("--data-dir=%s", dir),
 		fmt.Sprintf("--port=%v", doltPort),
-		fmt.Sprintf("--socket=%s", socketPath))
+		fmt.Sprintf("--socket=%s", socketPath)}
+
+	// If we're running in CI, use a precompiled dolt binary
+	if devDoltPath != "" {
+		args[2] = devDoltPath
+		args = args[2:]
+	}
+	cmd := exec.Command(args[0], args[1:]...)
 
 	doltLogFilePath = filepath.Join(dir, fmt.Sprintf("dolt-%d.out.log", time.Now().Unix()))
 	doltLogFile, err = os.Create(doltLogFilePath)
