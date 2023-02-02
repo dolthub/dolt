@@ -505,7 +505,8 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2" ]] || false
 
-    # Give the server a chance to drop the database
+    # Give the server a chance to complete the last query
+    # TODO: `service mysqld stop` is hanging when a check above fails.
     sleep 1
     service mysql stop
 }
