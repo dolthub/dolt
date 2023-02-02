@@ -16,13 +16,17 @@ package doltdb_test
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -30,6 +34,202 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/store/hash"
 )
+
+func TestConcurrentGC(t *testing.T) {
+	tests := []concurrentGCtest{
+		{
+			name: "smoke test",
+			setup: client{queries: func(string, int) []string {
+				return []string{
+					"CREATE TABLE t (id int primary key)",
+				}
+			}},
+			clients: []client{
+				{queries: func(id string, i int) (queries []string) {
+					return []string{
+						fmt.Sprintf("INSERT INTO t VALUES (%d)", i),
+						"SELECT COUNT(*) FROM t",
+					}
+				}},
+			},
+			iters: 100,
+		},
+		{
+			name: "aaron's repro",
+			skip: true,
+			// create 32 branches
+			setup: client{queries: func(string, int) []string {
+				queries := []string{
+					"CREATE TABLE t (id int primary key, val TEXT)",
+					"CALL dcommit('-Am', 'new table t');",
+				}
+				for b := 0; b < 32; b++ {
+					q := fmt.Sprintf("CALL dolt_checkout('-b', 'branch_%d');", b)
+					queries = append(queries, q)
+				}
+				return queries
+			}},
+			// create a client for each branch
+			clients: func() []client {
+				cc := []client{{
+					queries: func(string, int) []string {
+						return []string{"CALL dolt_gc();"}
+					},
+				}}
+				for b := 0; b < 32; b++ {
+					branch := fmt.Sprintf("branch_%d", b)
+					cc = append(cc, client{
+						id: branch,
+						queries: func(id string, idx int) []string {
+							q := fmt.Sprintf("INSERT INTO `%s/%s`.t VALUES (%d, '%s_%d')",
+								testDB, id, idx, id, idx)
+							return []string{q}
+						}})
+				}
+				return cc
+			}(),
+			iters: 100,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.skip {
+				t.Skip()
+			}
+			testConcurrentGC(t, test)
+		})
+	}
+}
+
+// concurrentGCtest tests concurrent GC
+type concurrentGCtest struct {
+	name    string
+	skip    bool
+	setup   client
+	clients []client
+	iters   int
+}
+
+type client struct {
+	id      string
+	queries func(id string, idx int) []string
+}
+
+func testConcurrentGC(t *testing.T, test concurrentGCtest) {
+	require.NotZero(t, test.iters)
+	ctx := context.Background()
+	eng := setupConcurrencyTest(t, ctx)
+
+	require.NoError(t, executeQueries(ctx, eng, 1, test.setup))
+	eg, ctx := errgroup.WithContext(ctx)
+	for _, c := range test.clients {
+		c := c
+		eg.Go(func() (err error) {
+			err = executeQueries(ctx, eng, test.iters, c)
+			if err != nil {
+				panic(err)
+			}
+			return
+		})
+	}
+	assert.NoError(t, eg.Wait())
+}
+
+func executeQueries(ctx context.Context, eng *engine.SqlEngine, iters int, c client) error {
+	sess, err := eng.NewDoltSession(ctx, sql.NewBaseSession())
+	if err != nil {
+		return err
+	}
+	sctx := sql.NewContext(ctx, sql.WithSession(sess))
+	sctx.SetCurrentDatabase(testDB)
+	sctx.Session.SetClient(sql.Client{User: "root", Address: "%"})
+
+	runQuery := func(sctx *sql.Context, eng *engine.SqlEngine, query string) (err error) {
+		_, iter, err := eng.Query(sctx, query)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			// tx commit
+			if cerr := iter.Close(sctx); err == nil {
+				err = cerr
+			}
+		}()
+		for {
+			_, err = iter.Next(sctx)
+			if err == io.EOF {
+				err = nil
+				break
+			} else if err != nil {
+				return err
+			}
+		}
+		return
+	}
+
+	// generate and run |iters| batches of queries
+	for i := 0; i < iters; i++ {
+		for _, q := range c.queries(c.id, i) {
+			err = runQuery(sctx, eng, q)
+			if sql.ErrLockDeadlock.Is(err) {
+				err = nil // allow serialization errors
+			} else if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+const (
+	// DB name matches dtestutils.CreateTestEnv()
+	testDB = "dolt"
+)
+
+func setupConcurrencyTest(t *testing.T, ctx context.Context) (eng *engine.SqlEngine) {
+	dEnv := dtestutils.CreateTestEnv()
+	mrEnv, err := env.MultiEnvForDirectory(
+		ctx,
+		dEnv.Config.WriteableConfig(),
+		dEnv.FS,
+		dEnv.Version,
+		dEnv.IgnoreLockFile,
+		dEnv)
+	if err != nil {
+		panic(err)
+	}
+
+	eng, err = engine.NewSqlEngine(ctx, mrEnv, engine.FormatNull, &engine.SqlEngineConfig{
+		InitialDb:    testDB,
+		IsReadOnly:   false,
+		PrivFilePath: "",
+		ServerUser:   "root",
+		ServerPass:   "",
+		ServerHost:   "localhost",
+		Autocommit:   true,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	sqlCtx, err := eng.NewContext(ctx)
+	require.NoError(t, err)
+	sqlCtx.Session.SetClient(sql.Client{
+		User: "root", Address: "%",
+	})
+	return
+}
+
+func TestGarbageCollection(t *testing.T) {
+	require.True(t, true)
+	assert.True(t, true)
+
+	for _, gct := range gcTests {
+		t.Run(gct.name, func(t *testing.T) {
+			testGarbageCollection(t, gct)
+		})
+	}
+}
 
 type stage struct {
 	commands     []testCommand
@@ -94,17 +294,6 @@ var gcSetupCommon = []testCommand{
 	{commands.SqlCmd{}, []string{"-q", "CREATE TABLE test (pk int PRIMARY KEY)"}},
 	{commands.AddCmd{}, []string{"."}},
 	{commands.CommitCmd{}, []string{"-m", "created test table"}},
-}
-
-func TestGarbageCollection(t *testing.T) {
-	require.True(t, true)
-	assert.True(t, true)
-
-	for _, gct := range gcTests {
-		t.Run(gct.name, func(t *testing.T) {
-			testGarbageCollection(t, gct)
-		})
-	}
 }
 
 func testGarbageCollection(t *testing.T, test gcTest) {

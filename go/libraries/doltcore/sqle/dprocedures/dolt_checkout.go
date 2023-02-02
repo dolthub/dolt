@@ -32,7 +32,7 @@ import (
 
 var ErrEmptyBranchName = errors.New("error: cannot checkout empty string")
 
-// doltCheckout is the stored procedure version of the function `dolt_checkout`.
+// doltCheckout is the stored procedure version for the CLI command `dolt checkout`.
 func doltCheckout(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltCheckout(ctx, args)
 	if err != nil {

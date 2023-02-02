@@ -51,7 +51,7 @@ type BinlogOverlay struct {
 
 // NewAccessBinlog returns a new Binlog that represents the construction of the given Access values. May be used to
 // truncate the Binlog's history.
-func NewAccessBinlog(vals []AccessValue) *Binlog {
+func NewAccessBinlog(vals []AccessRow) *Binlog {
 	rows := make([]BinlogRow, len(vals))
 	for i, val := range vals {
 		rows[i] = BinlogRow{

@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
-// doltPush is the stored procedure version of the function `dolt_push`.
+// doltPush is the stored procedure version for the CLI command `dolt push`.
 func doltPush(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltPush(ctx, args)
 	if err != nil {
