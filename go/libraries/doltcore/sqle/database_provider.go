@@ -954,7 +954,7 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 	return nil, sql.ErrTableFunctionNotFound.New(name)
 }
 
-func (p DoltDatabaseProvider) WithTableFunction(name string, fn sql.TableFunction) error {
+func (p DoltDatabaseProvider) SetTableFunction(name string, fn sql.TableFunction) error {
 	return fmt.Errorf("DoltDatabaseProvider does not provide support mutable table functions")
 }
 
