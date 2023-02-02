@@ -445,10 +445,6 @@ func (p *Puller) Pull(ctx context.Context) error {
 }
 
 func batchNovelHashes(absent hash.HashSet, visited hash.HashSet, maxBatchSize int64) []hash.HashSet {
-	for h := range absent {
-		visited.Insert(h)
-	}
-
 	numAbsent := int64(len(absent))
 	if numAbsent < maxBatchSize {
 		smaller := absent
@@ -463,6 +459,9 @@ func batchNovelHashes(absent hash.HashSet, visited hash.HashSet, maxBatchSize in
 				absent.Remove(k)
 			}
 		}
+		for h := range absent {
+			visited.Insert(h)
+		}
 		return []hash.HashSet{absent}
 	} else {
 		var numBatches = (numAbsent / maxBatchSize) + 1
@@ -475,6 +474,7 @@ func batchNovelHashes(absent hash.HashSet, visited hash.HashSet, maxBatchSize in
 		var totalAbsent int64
 		for k := range absent {
 			if !visited.Has(k) {
+				visited.Insert(k)
 				currentNewBatch.Insert(k)
 				totalAbsent++
 
