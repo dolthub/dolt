@@ -2075,7 +2075,8 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Everything up-to-date." ]] || false
 
-    run dolt branch --track direct feature origin/other
+    # TODO: this command fails on GitHub requiring `--track=direct`, when both branch name and starting point name are defined, but Dolt allows both formats.
+    run dolt branch feature --track direct origin/other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "branch 'feature' set up to track 'origin/other'" ]] || false
 

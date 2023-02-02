@@ -366,22 +366,35 @@ func createBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		} else if trackVal == "direct" && apr.NArg() != 2 {
 			return HandleVErrAndExitCode(errhand.BuildDError("invalid arguments").Build(), usage)
 		}
-		if apr.NArg() == 2 {
-			newBranch = apr.Arg(0)
-			startPt = apr.Arg(1)
-		} else {
-			// if track option is defined with no value, the branch name is taken as track value
-			newBranch = trackVal
-			startPt = apr.Arg(0)
-		}
-		remote, remoteBranch = ParseRemoteBranchName(startPt)
+
 		remotes, err := dEnv.RepoStateReader().GetRemotes()
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usage)
 		}
-		_, remoteOk := remotes[remote]
-		if !remoteOk {
-			return HandleVErrAndExitCode(errhand.BuildDError("'%s' is not a valid remote ref and a branch '%s' cannot be created from it", startPt, newBranch).Build(), usage)
+
+		if apr.NArg() == 2 {
+			newBranch = apr.Arg(0)
+			startPt = apr.Arg(1)
+			remote, remoteBranch = ParseRemoteBranchName(startPt)
+			_, remoteOk := remotes[remote]
+			if !remoteOk {
+				return HandleVErrAndExitCode(errhand.BuildDError("'%s' is not a valid remote ref and a branch '%s' cannot be created from it", startPt, newBranch).Build(), usage)
+			}
+		} else {
+			// if track option is defined with no value,
+			// the track value can either be starting point name OR branch name
+			startPt = trackVal
+			remote, remoteBranch = ParseRemoteBranchName(startPt)
+			_, remoteOk := remotes[remote]
+			if !remoteOk {
+				newBranch = trackVal
+				startPt = apr.Arg(0)
+				remote, remoteBranch = ParseRemoteBranchName(startPt)
+				_, remoteOk = remotes[remote]
+				if !remoteOk {
+					return HandleVErrAndExitCode(errhand.BuildDError("'%s' is not a valid remote ref and a branch '%s' cannot be created from it", startPt, newBranch).Build(), usage)
+				}
+			}
 		}
 	}
 
