@@ -153,59 +153,40 @@ func prollyChildSecDiffFkConstraintViolations(
 	parentSecIdx := durable.ProllyMapFromIndex(postParent.IndexData)
 
 	idxDesc, _ := parentSecIdx.Descriptors()
-	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
-	partialKB := val.NewTupleBuilder(partialDesc)
-
 	primaryKD, _ := postChildRowData.Descriptors()
-	kb := val.NewTupleBuilder(primaryKD)
+	primaryKB := val.NewTupleBuilder(primaryKD)
 
-	var cur *tree.Cursor
+	var parentSecIdxCur *tree.Cursor
 	err := prolly.DiffMaps(ctx, preChildSecIdx, postChildSecIdx, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
-			k, _ := val.Tuple(diff.Key), val.Tuple(diff.To)
-			postChildSecKD, _ := postChildSecIdx.Descriptors()
-			if cur == nil {
-				newCur, err := tree.NewCursorAtKey(ctx, postChildSecIdx.NodeStore(), postChildSecIdx.Node(), k, postChildSecKD)
+			k := val.Tuple(diff.Key)
+			if parentSecIdxCur == nil {
+				newCur, err := tree.NewCursorAtKey(ctx, parentSecIdx.NodeStore(), parentSecIdx.Node(), k, idxDesc)
 				if err != nil {
 					return err
 				}
 				if !newCur.Valid() {
-					// map does not contain |rng|
-					return nil
+					return createNewCVForSecIdx(ctx, k, primaryKD, primaryKB, parentSecIdx, postChildRowData.Pool(), receiver)
 				}
-				cur = newCur
+				parentSecIdxCur = newCur
 			}
-			err := tree.Seek(ctx, cur, k, postChildSecKD)
+
+			err := tree.Seek(ctx, parentSecIdxCur, k, idxDesc)
 			if err != nil {
 				return err
 			}
-			if !cur.Valid() {
-				return nil
+			if !parentSecIdxCur.Valid() {
+				return createNewCVForSecIdx(ctx, k, primaryKD, primaryKB, parentSecIdx, postChildRowData.Pool(), receiver)
 			}
 
-			key := val.Tuple(cur.CurrentKey())
-			value := val.Tuple(cur.CurrentValue())
+			// TODO: why check range if cur is valid?
+			key := val.Tuple(parentSecIdxCur.CurrentKey())
 			rng := prolly.PrefixRange(k, idxDesc)
 			if !rng.Matches(key) {
-				return nil
-			}
-			partialKey, hasNulls := makePartialKey(
-				partialKB,
-				foreignKey.TableColumns,
-				postChild.Index,
-				postChild.IndexSchema,
-				key,
-				value,
-				preChildSecIdx.Pool())
-			if hasNulls {
-				return nil
+				return createNewCVForSecIdx(ctx, k, primaryKD, primaryKB, parentSecIdx, postChildRowData.Pool(), receiver)
 			}
 
-			err = createCVIfNoPartialKeyMatchesSec(ctx, key, value, partialKey, partialDesc, primaryKD, kb, parentSecIdx, postChildRowData, postChildRowData.Pool(), receiver)
-			if err != nil {
-				return err
-			}
 			return nil
 		case tree.RemovedDiff:
 		default:
@@ -239,6 +220,37 @@ func createCVIfNoPartialKeyMatchesPri(
 	}
 
 	return receiver.ProllyFKViolationFound(ctx, k, v)
+}
+
+func createNewCVForSecIdx(
+	ctx context.Context,
+	k val.Tuple,
+	primaryKD val.TupleDesc,
+	primaryKb *val.TupleBuilder,
+	pri prolly.Map,
+	pool pool.BuffPool,
+	receiver FKViolationReceiver) error {
+
+	// convert secondary idx entry to primary row key
+	// the pks of the table are the last keys of the index
+	o := k.Count() - primaryKD.Count()
+	for i := 0; i < primaryKD.Count(); i++ {
+		j := o + i
+		primaryKb.PutRaw(i, k.GetField(j))
+	}
+	primaryIdxKey := primaryKb.Build(pool)
+
+	var value val.Tuple
+	err := pri.Get(ctx, primaryIdxKey, func(k, v val.Tuple) error {
+		value = v
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return receiver.ProllyFKViolationFound(ctx, primaryIdxKey, value)
+
 }
 
 func createCVIfNoPartialKeyMatchesSec(
