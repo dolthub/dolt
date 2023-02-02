@@ -69,7 +69,7 @@ type Puller struct {
 	srcChunkStore nbs.NBSCompressedChunkStore
 	sinkDBCS      chunks.ChunkStore
 	hashes        hash.HashSet
-	downloaded    hash.HashSet
+	visited       hash.HashSet
 
 	wr            *nbs.CmpChunkTableWriter
 	tablefileSema *semaphore.Weighted
@@ -142,7 +142,7 @@ func NewPuller(
 		srcChunkStore: srcChunkStore,
 		sinkDBCS:      sinkCS,
 		hashes:        hash.NewHashSet(hashes...),
-		downloaded:    hash.HashSet{},
+		visited:       hash.HashSet{},
 		tablefileSema: semaphore.NewWeighted(outstandingTableFiles),
 		tempDir:       tempDir,
 		wr:            wr,
@@ -403,7 +403,7 @@ func (p *Puller) Pull(ctx context.Context) error {
 			return err
 		}
 
-		batches := limitToNewChunks(absent, p.downloaded, batchSize)
+		batches := batchNovelHashes(absent, p.visited, batchSize)
 		absent = make(hash.HashSet)
 
 		var b hash.HashSet
@@ -423,7 +423,7 @@ func (p *Puller) Pull(ctx context.Context) error {
 
 			// try to avoid unbounded growth of |absent|
 			if len(batches) == 0 || absent.Size() > batchSize*4 {
-				next := limitToNewChunks(absent, p.downloaded, batchSize)
+				next := batchNovelHashes(absent, p.visited, batchSize)
 				batches = append(next, batches...)
 				absent = make(hash.HashSet)
 			}
@@ -443,17 +443,17 @@ func (p *Puller) Pull(ctx context.Context) error {
 	return eg.Wait()
 }
 
-func limitToNewChunks(absent hash.HashSet, downloaded hash.HashSet, maxBatchSize int64) []hash.HashSet {
+func batchNovelHashes(absent hash.HashSet, visited hash.HashSet, maxBatchSize int64) []hash.HashSet {
 	for h := range absent {
-		downloaded.Insert(h)
+		visited.Insert(h)
 	}
 
 	numAbsent := int64(len(absent))
 	if numAbsent < maxBatchSize {
 		smaller := absent
-		longer := downloaded
-		if len(absent) > len(downloaded) {
-			smaller = downloaded
+		longer := visited
+		if len(absent) > len(visited) {
+			smaller = visited
 			longer = absent
 		}
 
@@ -473,7 +473,7 @@ func limitToNewChunks(absent hash.HashSet, downloaded hash.HashSet, maxBatchSize
 
 		var totalAbsent int64
 		for k := range absent {
-			if !downloaded.Has(k) {
+			if !visited.Has(k) {
 				currentNewBatch.Insert(k)
 				totalAbsent++
 
