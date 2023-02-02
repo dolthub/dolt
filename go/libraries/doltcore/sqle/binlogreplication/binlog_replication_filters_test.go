@@ -59,6 +59,7 @@ func TestBinlogReplicationFilters_ignoreTablesOnly(t *testing.T) {
 	require.Equal(t, "10", row["count"])
 	require.Equal(t, "0", row["min"])
 	require.Equal(t, "9", row["max"])
+	require.NoError(t, rows.Close())
 
 	// Verify that no changes from t2 were applied on the replica
 	rows, err = replicaDatabase.Queryx("SELECT COUNT(pk) as count, MIN(pk) as min, MAX(pk) as max from db01.t2;")
@@ -67,6 +68,7 @@ func TestBinlogReplicationFilters_ignoreTablesOnly(t *testing.T) {
 	require.Equal(t, "0", row["count"])
 	require.Equal(t, nil, row["min"])
 	require.Equal(t, nil, row["max"])
+	require.NoError(t, rows.Close())
 }
 
 // TestBinlogReplicationFilters_doTablesOnly tests that the doTables replication
@@ -107,6 +109,7 @@ func TestBinlogReplicationFilters_doTablesOnly(t *testing.T) {
 	require.Equal(t, "10", row["count"])
 	require.Equal(t, "0", row["min"])
 	require.Equal(t, "9", row["max"])
+	require.NoError(t, rows.Close())
 
 	// Verify that no changes from t2 were applied on the replica
 	rows, err = replicaDatabase.Queryx("SELECT COUNT(pk) as count, MIN(pk) as min, MAX(pk) as max from db01.t2;")
@@ -115,6 +118,7 @@ func TestBinlogReplicationFilters_doTablesOnly(t *testing.T) {
 	require.Equal(t, "0", row["count"])
 	require.Equal(t, nil, row["min"])
 	require.Equal(t, nil, row["max"])
+	require.NoError(t, rows.Close())
 }
 
 // TestBinlogReplicationFilters_doTablesAndIgnoreTables tests that the doTables and ignoreTables
@@ -157,6 +161,7 @@ func TestBinlogReplicationFilters_doTablesAndIgnoreTables(t *testing.T) {
 	require.Equal(t, "10", row["count"])
 	require.Equal(t, "0", row["min"])
 	require.Equal(t, "9", row["max"])
+	require.NoError(t, rows.Close())
 
 	// Verify that no changes from t2 were applied on the replica
 	rows, err = replicaDatabase.Queryx("SELECT COUNT(pk) as count, MIN(pk) as min, MAX(pk) as max from db01.t2;")
@@ -165,6 +170,7 @@ func TestBinlogReplicationFilters_doTablesAndIgnoreTables(t *testing.T) {
 	require.Equal(t, "0", row["count"])
 	require.Equal(t, nil, row["min"])
 	require.Equal(t, nil, row["max"])
+	require.NoError(t, rows.Close())
 }
 
 // TestBinlogReplicationFilters_errorCases test returned errors for various error cases.
@@ -176,6 +182,7 @@ func TestBinlogReplicationFilters_errorCases(t *testing.T) {
 	_, err := replicaDatabase.Queryx("CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(t1);")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "no database specified for table")
+
 	_, err = replicaDatabase.Queryx("CHANGE REPLICATION FILTER REPLICATE_IGNORE_TABLE=(t1);")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "no database specified for table")

@@ -52,6 +52,7 @@ func TestBinlogReplicationMultiDb(t *testing.T) {
 	require.Equal(t, "7", row["pk"])
 	require.False(t, rows.Next())
 	require.NoError(t, rows.Close())
+	require.NoError(t, rows.Close())
 
 	// Verify db01.dolt_diff
 	replicaDatabase.MustExec("use db01;")
@@ -74,6 +75,7 @@ func TestBinlogReplicationMultiDb(t *testing.T) {
 	require.EqualValues(t, "0", row["data_change"])
 	require.EqualValues(t, "1", row["schema_change"])
 	require.False(t, rows.Next())
+	require.NoError(t, rows.Close())
 	require.NoError(t, rows.Close())
 
 	// Verify the changes in db02 on the replica
@@ -167,6 +169,7 @@ func TestBinlogReplicationMultiDbTransactions(t *testing.T) {
 	require.NoError(t, rows.Close())
 
 	// Verify the changes in db02 on the replica
+	waitForReplicaToCatchUp(t)
 	replicaDatabase.MustExec("use db02;")
 	rows, err = replicaDatabase.Queryx("select * from db02.t02 order by pk asc;")
 	require.NoError(t, err)

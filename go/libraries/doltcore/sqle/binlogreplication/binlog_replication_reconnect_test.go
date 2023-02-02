@@ -60,6 +60,7 @@ func TestBinlogReplicationReconnection(t *testing.T) {
 	require.Equal(t, "0", row["min"])
 	require.Equal(t, "999", row["max"])
 	require.Equal(t, "1000", row["count"])
+	require.NoError(t, rows.Close())
 
 	// Assert that show replica status show reconnection IO error
 	// TODO: Use real MySQL error codes and messages and time format :-/
@@ -150,6 +151,7 @@ func requireRecentTimeString(t *testing.T, datetime interface{}) {
 // name of each column.
 func showReplicaStatus(t *testing.T) map[string]interface{} {
 	rows, err := replicaDatabase.Queryx("show replica status;")
+	defer rows.Close()
 	require.NoError(t, err)
 	return readNextRow(t, rows)
 }

@@ -80,4 +80,5 @@ func TestBinlogReplicationServerRestart(t *testing.T) {
 	replicaRow := convertByteArraysToStrings(readNextRow(t, replicaRows))
 	require.Equal(t, primaryRow["count"], replicaRow["count"])
 	require.Equal(t, primaryRow["max"], replicaRow["max"])
+	require.NoError(t, replicaRows.Close())
 }

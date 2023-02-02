@@ -100,14 +100,16 @@ func TestResetReplica(t *testing.T) {
 	startReplication(t, mySqlPort)
 
 	// RESET REPLICA returns an error if replication is running
-	rows, err := replicaDatabase.Queryx("RESET REPLICA")
+	_, err := replicaDatabase.Queryx("RESET REPLICA")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "unable to reset replica while replication is running")
 
 	// Calling RESET REPLICA clears out any errors
 	replicaDatabase.MustExec("STOP REPLICA;")
-	rows, err = replicaDatabase.Queryx("RESET REPLICA;")
+	rows, err := replicaDatabase.Queryx("RESET REPLICA;")
 	require.NoError(t, err)
+	require.NoError(t, rows.Close())
+
 	rows, err = replicaDatabase.Queryx("SHOW REPLICA STATUS;")
 	require.NoError(t, err)
 	status := convertByteArraysToStrings(readNextRow(t, rows))
@@ -119,16 +121,22 @@ func TestResetReplica(t *testing.T) {
 	require.Equal(t, "0", status["Last_SQL_Errno"])
 	require.Equal(t, "", status["Last_SQL_Error"])
 	require.Equal(t, "", status["Last_SQL_Error_Timestamp"])
+	require.NoError(t, rows.Close())
 
 	// Calling RESET REPLICA ALL clears out all replica configuration
 	rows, err = replicaDatabase.Queryx("RESET REPLICA ALL;")
 	require.NoError(t, err)
+	require.NoError(t, rows.Close())
+
 	rows, err = replicaDatabase.Queryx("SHOW REPLICA STATUS;")
 	require.NoError(t, err)
 	require.False(t, rows.Next())
+	require.NoError(t, rows.Close())
+
 	rows, err = replicaDatabase.Queryx("select * from mysql.slave_master_info;")
 	require.NoError(t, err)
 	require.False(t, rows.Next())
+	require.NoError(t, rows.Close())
 }
 
 // TestStartReplicaErrors tests that the "START REPLICA" command returns appropriate responses
@@ -141,6 +149,7 @@ func TestStartReplicaErrors(t *testing.T) {
 	_, err := replicaDatabase.Queryx("START REPLICA;")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "invalid server ID configured")
+
 	replicaDatabase.MustExec("SET @@GLOBAL.server_id=4321")
 
 	// START REPLICA returns an error when no replication source is configured
@@ -159,6 +168,7 @@ func TestStartReplicaErrors(t *testing.T) {
 	require.Equal(t, "13117", status["Last_IO_Errno"])
 	require.NotEmpty(t, status["Last_IO_Error"])
 	require.NotEmpty(t, status["Last_IO_Error_Timestamp"])
+	require.NoError(t, rows.Close())
 
 	// TODO: These are getting set by another error?
 	//require.Equal(t, "0", status["Last_Errno"])
@@ -204,6 +214,7 @@ func TestDoltCommits(t *testing.T) {
 	require.NoError(t, err)
 	row := convertByteArraysToStrings(readNextRow(t, rows))
 	require.Equal(t, "5", row["count"])
+	require.NoError(t, rows.Close())
 
 	// Use dolt_diff so we can see what tables were edited and schema/data changes
 	replicaDatabase.MustExec("use db01;")
@@ -240,6 +251,8 @@ func TestDoltCommits(t *testing.T) {
 	require.Equal(t, "0", row["data_change"])
 	require.Equal(t, "1", row["schema_change"])
 	require.Equal(t, "t1", row["table_name"])
+
+	require.NoError(t, rows.Close())
 }
 
 // TestForeignKeyChecks tests that foreign key constraints replicate correctly when foreign key checks are
@@ -284,6 +297,7 @@ func TestForeignKeyChecks(t *testing.T) {
 	require.Equal(t, "3", row["pk"])
 	require.Equal(t, "not-a-color", row["color"])
 	require.False(t, rows.Next())
+	require.NoError(t, rows.Close())
 
 	rows, err = replicaDatabase.Queryx("select * from db01.colors order by name;")
 	require.NoError(t, err)
@@ -292,6 +306,7 @@ func TestForeignKeyChecks(t *testing.T) {
 	row = convertByteArraysToStrings(readNextRow(t, rows))
 	require.Equal(t, "green", row["name"])
 	require.False(t, rows.Next())
+	require.NoError(t, rows.Close())
 }
 
 // TestCharsetsAndCollations tests that we can successfully replicate data using various charsets and collations.
@@ -311,12 +326,14 @@ func TestCharsetsAndCollations(t *testing.T) {
 	row := convertByteArraysToStrings(readNextRow(t, rows))
 	require.Contains(t, row["Create Table"], "ascii_general_ci")
 	require.Contains(t, row["Create Table"], "utf16_general_ci")
+	require.NoError(t, rows.Close())
 
 	rows, err = replicaDatabase.Queryx("select * from db01.t1;")
 	require.NoError(t, err)
 	row = convertByteArraysToStrings(readNextRow(t, rows))
 	require.Equal(t, "one", row["c1"])
 	require.Equal(t, "\x00o\x00n\x00e", row["c2"])
+	require.NoError(t, rows.Close())
 
 	// Test that we get an error for unsupported charsets/collations
 	primaryDatabase.MustExec("CREATE TABLE t2 (pk int primary key, c1 varchar(255) COLLATE utf16_german2_ci);")
@@ -325,6 +342,8 @@ func TestCharsetsAndCollations(t *testing.T) {
 	rows, err = replicaDatabase.Queryx("SHOW TABLES WHERE Tables_in_db01 like 't2';")
 	require.NoError(t, err)
 	require.False(t, rows.Next())
+	require.NoError(t, rows.Close())
+
 	rows, err = replicaDatabase.Queryx("SHOW REPLICA STATUS;")
 	require.NoError(t, err)
 	row = convertByteArraysToStrings(readNextRow(t, rows))
@@ -332,6 +351,7 @@ func TestCharsetsAndCollations(t *testing.T) {
 	require.NotEmpty(t, row["Last_SQL_Error_Timestamp"])
 	require.Contains(t, row["Last_SQL_Error"], "The collation `utf16_german2_ci` has not yet been implemented")
 	require.False(t, rows.Next())
+	require.NoError(t, rows.Close())
 }
 
 //
@@ -343,7 +363,6 @@ func TestCharsetsAndCollations(t *testing.T) {
 func waitForReplicaToCatchUp(t *testing.T) {
 	timeLimit := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeLimit) {
-
 		primaryGtid := queryGtid(t, primaryDatabase)
 		replicaGtid := queryGtid(t, replicaDatabase)
 
@@ -361,6 +380,7 @@ func waitForReplicaToCatchUp(t *testing.T) {
 func queryGtid(t *testing.T, database *sqlx.DB) string {
 	rows, err := database.Queryx("SELECT @@global.gtid_executed as gtid_executed;")
 	require.NoError(t, err)
+	defer rows.Close()
 	row := convertByteArraysToStrings(readNextRow(t, rows))
 	if row["gtid_executed"] == nil {
 		t.Fatal("no value for @@GLOBAL.gtid_executed")
@@ -420,7 +440,7 @@ func startReplication(_ *testing.T, port int) {
 }
 
 func assertCreateTableStatement(t *testing.T, database *sqlx.DB, table string, expectedStatement string) {
-	rows, err := database.Query("show create table " + table + ";")
+	rows, err := database.Queryx("show create table db01." + table + ";")
 	require.NoError(t, err)
 	var actualTable, actualStatement string
 	require.True(t, rows.Next())

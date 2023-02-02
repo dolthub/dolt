@@ -58,6 +58,7 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	require.Equal(t, "3", row["pk"])
 	assertNullValues(t, row)
 	require.False(t, rows.Next())
+	require.NoError(t, rows.Close())
 
 	// Make updates on the primary
 	primaryDatabase.MustExec(generateUpdateToNullValuesStatement(tableName, 1))
@@ -78,6 +79,7 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	require.Equal(t, "3", row["pk"])
 	assertValues(t, 1, row)
 	require.False(t, rows.Next())
+	require.NoError(t, rows.Close())
 
 	// Make deletes on the primary
 	primaryDatabase.MustExec("delete from alltypes where pk=1;")
@@ -89,6 +91,7 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	rows, err = replicaDatabase.Queryx("select * from db01.alltypes order by pk asc;")
 	require.NoError(t, err)
 	require.False(t, rows.Next())
+	require.NoError(t, rows.Close())
 }
 
 // ---------------------
@@ -509,16 +512,17 @@ func assertValues(t *testing.T, assertionIndex int, row map[string]interface{}) 
 	for _, typeDesc := range allTypes {
 		assertion := typeDesc.Assertions[assertionIndex]
 		expectedValue := assertion.getExpectedValue()
-		// LD_1, DOLT_DEV, and DOLT storage formats return JSON strings slightly differently; DOLT removes spaces
-		// while LD_1 and DOLT_DEV add whitespace, so for json comparison, we sanitize by removing whitespace.
 
 		actualValue := ""
 		if row[typeDesc.ColumnName()] != nil {
 			actualValue = row[typeDesc.ColumnName()].(string)
 		}
 		if typeDesc.TypeDefinition == "json" {
+			// LD_1, DOLT_DEV, and DOLT storage formats return JSON strings slightly differently; DOLT removes spaces
+			// while LD_1 and DOLT_DEV add whitespace, so for json comparison, we sanitize by removing whitespace.
 			actualValue = strings.ReplaceAll(actualValue, " ", "")
 		}
+
 		require.EqualValues(t, expectedValue, actualValue,
 			"Failed on assertion %d for for column %q", assertionIndex, typeDesc.ColumnName())
 	}
