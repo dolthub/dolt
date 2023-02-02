@@ -67,6 +67,7 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 
 	// Verify updates on the replica
 	waitForReplicaToCatchUp(t)
+	replicaDatabase.MustExec("use db01;")
 	rows, err = replicaDatabase.Queryx("select * from db01.alltypes order by pk asc;")
 	require.NoError(t, err)
 	row = convertByteArraysToStrings(readNextRow(t, rows))
