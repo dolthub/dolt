@@ -938,15 +938,24 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		field.Lo = prolly.Bound{
 			Binding: true,
 			Inclusive: true,
-			Value: lower.(types.Geom,
 		}
+		tup := tb.BuildPermissive(sharePool)
+		field.Lo.Value = tup.GetField(0)
 
-
-
-
-
-
-
+		if err = PutField(ctx, ns, tb, 1, upper); err != nil {
+			return nil, err
+		}
+		field.Hi = prolly.Bound{
+			Binding: true,
+			Inclusive: true,
+		}
+		tup := tb.BuildPermissive(sharePool)
+		pranges[0] = prolly.Range{
+			Fields: []prolly.RangeField{field},
+			Desc:   di.keyBld.Desc,
+			Tup:    tup,
+		}
+		return pranges, nil
 	} else {
 		for k, rng := range ranges {
 			fields := make([]prolly.RangeField, len(rng))
