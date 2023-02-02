@@ -15,7 +15,6 @@
 package binlogreplication
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -45,6 +44,7 @@ type doltBinlogReplicaController struct {
 	status  binlogreplication.ReplicaStatus
 	filters *filterConfiguration
 	applier *binlogReplicaApplier
+	ctx     *sql.Context
 	mu      *sync.Mutex
 }
 
@@ -88,13 +88,20 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 		return ErrServerNotConfiguredAsReplica
 	}
 
-	logger.Info("starting binlog replication...")
+	if d.ctx == nil {
+		return fmt.Errorf("no execution context set for the replica controller")
+	}
 
-	// Create a new context to use, because otherwise the engine will cancel the original
-	// context after the 'start replica' statement has finished executing.
-	ctx = ctx.WithContext(context.Background()).WithQuery("")
-	d.applier.Go(ctx)
+	logger.Info("starting binlog replication...")
+	d.applier.Go(d.ctx)
 	return nil
+}
+
+// SetExecutionContext sets the unique |ctx| for the replica's applier to use when applying changes from binlog events
+// to a database. The applier cannot reuse any existing context, because it executes in a separate routine and would
+// cause race conditions.
+func (d *doltBinlogReplicaController) SetExecutionContext(ctx *sql.Context) {
+	d.ctx = ctx
 }
 
 // StopReplica implements the BinlogReplicaController interface.

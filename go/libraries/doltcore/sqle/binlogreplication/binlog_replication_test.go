@@ -364,8 +364,8 @@ func waitForReplicaToCatchUp(t *testing.T) {
 	timeLimit := 20 * time.Second
 	endTime := time.Now().Add(timeLimit)
 	for time.Now().Before(endTime) {
-		primaryGtid := queryGtid(t, primaryDatabase)
 		replicaGtid := queryGtid(t, replicaDatabase)
+		primaryGtid := queryGtid(t, primaryDatabase)
 
 		if primaryGtid == replicaGtid {
 			return
@@ -395,6 +395,20 @@ func readNextRow(t *testing.T, rows *sqlx.Rows) map[string]interface{} {
 	err := rows.MapScan(row)
 	require.NoError(t, err)
 	return row
+}
+
+func readAllRows(t *testing.T, rows *sqlx.Rows) []map[string]interface{} {
+	result := make([]map[string]interface{}, 0)
+	for {
+		row := make(map[string]interface{})
+		if rows.Next() == false {
+			return result
+		}
+		err := rows.MapScan(row)
+		require.NoError(t, err)
+		row = convertByteArraysToStrings(row)
+		result = append(result, row)
+	}
 }
 
 func startSqlServers(t *testing.T) {

@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	dblr "github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
@@ -142,8 +143,6 @@ func NewSqlEngine(
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
 	})
 
-	engine.Analyzer.BinlogReplicaController = config.BinlogReplicaController
-
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {
 		return nil, err
@@ -171,6 +170,8 @@ func NewSqlEngine(
 	if err != nil {
 		return nil, err
 	}
+
+	configureBinlogReplicaController(config, engine, sess)
 
 	return &SqlEngine{
 		provider:       pro,
@@ -272,6 +273,29 @@ func (se *SqlEngine) Close() error {
 	if se.engine != nil {
 		return se.engine.Close()
 	}
+	return nil
+}
+
+// configureBinlogReplicaController examines the specified |config| and if a binlog replica controller is provided,
+// it creates a new context from the specified |sess| for the replia's applier to use, and it configures the
+// binlog replica controller with the |engine|.
+func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engine, sess *dsess.DoltSession) error {
+	if config.BinlogReplicaController == nil {
+		return nil
+	}
+
+	contextFactory := newSqlContext(sess, config.InitialDb)
+	newCtx, err := contextFactory(context.Background())
+	if err != nil {
+		return err
+	}
+	newCtx.SetClient(sql.Client{
+		User:    "root",
+		Address: "localhost",
+	})
+	dblr.DoltBinlogReplicaController.SetExecutionContext(newCtx)
+	engine.Analyzer.BinlogReplicaController = config.BinlogReplicaController
+
 	return nil
 }
 
