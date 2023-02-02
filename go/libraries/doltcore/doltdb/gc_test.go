@@ -135,7 +135,7 @@ func testConcurrentGC(t *testing.T, test concurrentGCtest) {
 						if qerr != nil {
 							// allow clients to error
 							// todo: restrict errors to dangling refs
-							t.Logf("error in client %s: %s", c.id, qerr.Error())
+							t.Logf("error in client %s: %s", cl.id, qerr.Error())
 						}
 					}
 				}
