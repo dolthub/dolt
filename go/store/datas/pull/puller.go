@@ -375,6 +375,7 @@ LOOP:
 			return ctx.Err()
 		}
 	}
+	p.visited = nil // gc early
 
 	return p.sinkDBCS.(nbs.TableFileStore).AddTableFilesToManifest(ctx, fileIdToNumChunks)
 }
