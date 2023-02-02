@@ -96,7 +96,7 @@ func prollyParentFkConstraintViolations(
 	return nil
 }
 
-func prollyChildFkConstraintViolations(
+func prollyChildPriDiffFkConstraintViolations(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild *constraintViolationsLoadedTable,
@@ -113,12 +113,19 @@ func prollyChildFkConstraintViolations(
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
 			k, v := val.Tuple(diff.Key), val.Tuple(diff.To)
-			partialKey, hasNulls := makePartialKey(partialKB, foreignKey.TableColumns, postChild.Index, postChild.Schema, k, v, preChildRowData.Pool())
+			partialKey, hasNulls := makePartialKey(
+				partialKB,
+				foreignKey.TableColumns,
+				postChild.Index,
+				postChild.Schema,
+				k,
+				v,
+				preChildRowData.Pool())
 			if hasNulls {
 				return nil
 			}
 
-			err := createCVIfNoPartialKeyMatches(ctx, k, v, partialKey, partialDesc, parentScndryIdx, receiver)
+			err := createCVIfNoPartialKeyMatchesPri(ctx, k, v, partialKey, partialDesc, parentScndryIdx, receiver)
 			if err != nil {
 				return err
 			}
@@ -135,7 +142,57 @@ func prollyChildFkConstraintViolations(
 	return nil
 }
 
-func createCVIfNoPartialKeyMatches(
+func prollyChildSecDiffFkConstraintViolations(
+	ctx context.Context,
+	foreignKey doltdb.ForeignKey,
+	postParent, postChild *constraintViolationsLoadedTable,
+	preChildScndryIdx prolly.Map,
+	receiver FKViolationReceiver) error {
+	postChildRowData := durable.ProllyMapFromIndex(postChild.RowData)
+	postChildScndryIdx := durable.ProllyMapFromIndex(postChild.IndexData)
+	parentScndryIdx := durable.ProllyMapFromIndex(postParent.IndexData)
+
+	idxDesc, _ := parentScndryIdx.Descriptors()
+	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
+	partialKB := val.NewTupleBuilder(partialDesc)
+
+	primaryKD, _ := postChildRowData.Descriptors()
+	kb := val.NewTupleBuilder(primaryKD)
+
+	err := prolly.DiffMaps(ctx, preChildScndryIdx, postChildScndryIdx, func(ctx context.Context, diff tree.Diff) error {
+		switch diff.Type {
+		case tree.AddedDiff, tree.ModifiedDiff:
+			k, v := val.Tuple(diff.Key), val.Tuple(diff.To)
+			partialKey, hasNulls := makePartialKey(
+				partialKB,
+				foreignKey.TableColumns,
+				postChild.Index,
+				postChild.IndexSchema,
+				k,
+				v,
+				preChildScndryIdx.Pool())
+			if hasNulls {
+				return nil
+			}
+
+			err := createCVIfNoPartialKeyMatchesSec(ctx, k, v, partialKey, partialDesc, primaryKD, kb, parentScndryIdx, postChildRowData, postChildRowData.Pool(), receiver)
+			if err != nil {
+				return err
+			}
+		case tree.RemovedDiff:
+		default:
+			panic("unhandled diff type")
+		}
+		return nil
+	})
+	if err != nil && err != io.EOF {
+		return err
+	}
+
+	return nil
+}
+
+func createCVIfNoPartialKeyMatchesPri(
 	ctx context.Context,
 	k, v, partialKey val.Tuple,
 	partialKeyDesc val.TupleDesc,
@@ -153,12 +210,50 @@ func createCVIfNoPartialKeyMatches(
 		return nil
 	}
 
-	err = receiver.ProllyFKViolationFound(ctx, k, v)
+	return receiver.ProllyFKViolationFound(ctx, k, v)
+}
+
+func createCVIfNoPartialKeyMatchesSec(
+	ctx context.Context,
+	k, v, partialKey val.Tuple,
+	partialKeyDesc val.TupleDesc,
+	primaryKD val.TupleDesc,
+	primaryKb *val.TupleBuilder,
+	idx prolly.Map,
+	pri prolly.Map,
+	pool pool.BuffPool,
+	receiver FKViolationReceiver) error {
+	itr, err := creation.NewPrefixItr(ctx, partialKey, partialKeyDesc, idx)
+	if err != nil {
+		return err
+	}
+	_, _, err = itr.Next(ctx)
+	if err != nil && err != io.EOF {
+		return err
+	}
+	if err == nil {
+		return nil
+	}
+
+	// convert secondary idx entry to primary row key
+	// the pks of the table are the last keys of the index
+	o := k.Count() - primaryKD.Count()
+	for i := 0; i < primaryKD.Count(); i++ {
+		j := o + i
+		primaryKb.PutRaw(i, k.GetField(j))
+	}
+	primaryIdxKey := primaryKb.Build(pool)
+
+	var value val.Tuple
+	err = pri.Get(ctx, primaryIdxKey, func(k, v val.Tuple) error {
+		value = v
+		return nil
+	})
 	if err != nil {
 		return err
 	}
 
-	return nil
+	return receiver.ProllyFKViolationFound(ctx, primaryIdxKey, value)
 }
 
 func handleFkMultipleViolForRowErr(err error, kd val.TupleDesc, tblName string) error {

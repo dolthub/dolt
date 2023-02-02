@@ -85,6 +85,9 @@ type ValueStore struct {
 	decodedChunks        *sizecache.SizeCache
 	nbf                  *NomsBinFormat
 
+	gcCond  *sync.Cond
+	doingGC bool
+
 	versOnce sync.Once
 }
 
@@ -157,7 +160,7 @@ func NewValueStore(cs chunks.ChunkStore) *ValueStore {
 }
 
 func newValueStoreWithCacheAndPending(cs chunks.ChunkStore, cacheSize, pendingMax uint64) *ValueStore {
-	return &ValueStore{
+	vs := &ValueStore{
 		cs: cs,
 
 		bufferMu:             sync.RWMutex{},
@@ -169,6 +172,8 @@ func newValueStoreWithCacheAndPending(cs chunks.ChunkStore, cacheSize, pendingMa
 		enforceCompleteness:  true,
 		versOnce:             sync.Once{},
 	}
+	vs.gcCond = sync.NewCond(&vs.bufferMu)
+	return vs
 }
 
 func (lvs *ValueStore) expectVersion() {
@@ -407,6 +412,7 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk, height uint64) error {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
+	lvs.waitForGC()
 
 	if lvs.Format().UsesFlatbuffers() {
 		// We do not do write buffering in the new format.
@@ -549,7 +555,39 @@ func (lvs *ValueStore) Rebase(ctx context.Context) error {
 func (lvs *ValueStore) Flush(ctx context.Context) error {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
+	lvs.waitForGC()
 	return lvs.flush(ctx, hash.Hash{})
+}
+
+// Call with lvs.bufferMu locked. Blocks until doingGC == false, releasing the
+// lock while we are blocked. Returns with the lock held, doingGC == false.
+func (lvs *ValueStore) waitForGC() {
+	for lvs.doingGC {
+		lvs.gcCond.Wait()
+	}
+}
+
+// Call without lvs.bufferMu held. If val == false, then doingGC must equal
+// true when this is called. We will set it to false and return without
+// lvs.bufferMu held. If val == true, we will set doingGC to true and return
+// with lvs.bufferMu not held.
+//
+// When val == true, this routine will block until it has a unique opportunity
+// to toggle doingGC from false to true while holding the lock.
+func (lvs *ValueStore) toggleGC(val bool) {
+	lvs.bufferMu.Lock()
+	defer lvs.bufferMu.Unlock()
+	if !val {
+		if !lvs.doingGC {
+			panic("tried to toggleGC to false while it was not true...")
+		}
+		lvs.doingGC = false
+		lvs.gcCond.Broadcast()
+	} else {
+		lvs.waitForGC()
+		lvs.doingGC = true
+	}
+	return
 }
 
 func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
@@ -634,6 +672,7 @@ func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
 func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
+	lvs.waitForGC()
 
 	err := lvs.flush(ctx, current)
 	if err != nil {
@@ -690,20 +729,11 @@ func (lvs *ValueStore) numBuffChunks() int {
 
 // GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
 func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet) error {
+	lvs.toggleGC(true)
+	defer lvs.toggleGC(false)
+
 	if lvs.numBuffChunks() > 0 {
 		return errors.New("invalid GC state; bufferedChunks must be empty.")
-	}
-
-	err := func() error {
-		lvs.bufferMu.RLock()
-		defer lvs.bufferMu.RUnlock()
-		if len(lvs.bufferedChunks) > 0 {
-			return errors.New("invalid GC state; bufferedChunks must be empty.")
-		}
-		return nil
-	}()
-	if err != nil {
-		return err
 	}
 
 	lvs.versOnce.Do(lvs.expectVersion)
@@ -733,16 +763,27 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 			return err
 		}
 
-		return lvs.gc(ctx, root, newGenRefs, oldGen.HasMany, newGen, newGen)
+		err = lvs.gc(ctx, root, newGenRefs, oldGen.HasMany, newGen, newGen)
+		if err != nil {
+			return err
+		}
 	} else if collector, ok := lvs.cs.(chunks.ChunkStoreGarbageCollector); ok {
 		if len(oldGenRefs) > 0 {
 			newGenRefs.InsertAll(oldGenRefs)
 		}
 
-		return lvs.gc(ctx, root, newGenRefs, unfilteredHashFunc, collector, collector)
+		err = lvs.gc(ctx, root, newGenRefs, unfilteredHashFunc, collector, collector)
+		if err != nil {
+			return err
+		}
 	} else {
 		return chunks.ErrUnsupportedOperation
 	}
+
+	if tfs, ok := lvs.cs.(chunks.TableFileStore); ok {
+		return tfs.PruneTableFiles(ctx)
+	}
+	return nil
 }
 
 func (lvs *ValueStore) gc(ctx context.Context, root hash.Hash, toVisit hash.HashSet, hashFilter HashFilterFunc, src, dest chunks.ChunkStoreGarbageCollector) error {
@@ -788,11 +829,6 @@ func (lvs *ValueStore) gc(ctx context.Context, root hash.Hash, toVisit hash.Hash
 		close(keepChunks)
 		return nil
 	})
-
-	err := eg.Wait()
-	if err != nil {
-		return err
-	}
 
 	return eg.Wait()
 }

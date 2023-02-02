@@ -61,7 +61,7 @@ var ErrUploadFailed = errors.New("upload failed")
 
 var globalHttpFetcher HTTPFetcher = &http.Client{}
 
-var _ nbs.TableFileStore = (*DoltChunkStore)(nil)
+var _ chunks.TableFileStore = (*DoltChunkStore)(nil)
 var _ nbs.NBSCompressedChunkStore = (*DoltChunkStore)(nil)
 var _ chunks.ChunkStore = (*DoltChunkStore)(nil)
 var _ chunks.LoggingChunkStore = (*DoltChunkStore)(nil)
@@ -1275,8 +1275,8 @@ func collapseBuffers(bufs [][]byte, length uint64) []byte {
 	return res
 }
 
-func (dcs *DoltChunkStore) SupportedOperations() nbs.TableFileStoreOps {
-	return nbs.TableFileStoreOps{
+func (dcs *DoltChunkStore) SupportedOperations() chunks.TableFileStoreOps {
+	return chunks.TableFileStoreOps{
 		CanRead:  true,
 		CanWrite: true,
 		CanPrune: false,
@@ -1341,7 +1341,7 @@ func (dcs *DoltChunkStore) PruneTableFiles(ctx context.Context) error {
 
 // Sources retrieves the current root hash, a list of all the table files (which may include appendix table files)
 // and a list of only appendix table files
-func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, []nbs.TableFile, error) {
+func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []chunks.TableFile, []chunks.TableFile, error) {
 	id, token := dcs.getRepoId()
 	req := &remotesapi.ListTableFilesRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token}
 	resp, err := dcs.csClient.ListTableFiles(ctx, req)
@@ -1356,8 +1356,8 @@ func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableF
 	return hash.New(resp.RootHash), sourceFiles, appendixFiles, nil
 }
 
-func getTableFiles(dcs *DoltChunkStore, infoList []*remotesapi.TableFileInfo) []nbs.TableFile {
-	tableFiles := make([]nbs.TableFile, 0)
+func getTableFiles(dcs *DoltChunkStore, infoList []*remotesapi.TableFileInfo) []chunks.TableFile {
+	tableFiles := make([]chunks.TableFile, 0)
 	for _, nfo := range infoList {
 		tableFiles = append(tableFiles, DoltRemoteTableFile{dcs, nfo})
 	}
