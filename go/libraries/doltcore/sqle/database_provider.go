@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"sort"
 	"strings"
 	"sync"
@@ -937,6 +938,8 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 	// currently, only one table function is supported, if we extend this, we should clean this up
 	// and store table functions in a map, similar to regular functions.
 	switch strings.ToLower(name) {
+	case "sequence_table":
+		return &plan.SequenceTableFn{}, nil
 	case "dolt_diff":
 		dtf := &DiffTableFunction{}
 		return dtf, nil
@@ -949,6 +952,10 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 	}
 
 	return nil, sql.ErrTableFunctionNotFound.New(name)
+}
+
+func (p DoltDatabaseProvider) WithTableFunction(name string, fn sql.TableFunction) error {
+	return fmt.Errorf("DoltDatabaseProvider does not provide support mutable table functions")
 }
 
 // GetRevisionForRevisionDatabase implements dsess.RevisionDatabaseProvider
