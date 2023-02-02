@@ -17,12 +17,12 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/plan"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
