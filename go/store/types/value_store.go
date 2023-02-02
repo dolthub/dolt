@@ -79,8 +79,6 @@ type ValueStore struct {
 	bufferedChunksMax    uint64
 	bufferedChunkSize    uint64
 	withBufferedChildren map[hash.Hash]uint64 // chunk Hash -> ref height
-	unresolvedRefs       hash.HashSet
-	enforceCompleteness  bool
 	validateContentAddr  bool
 	decodedChunks        *sizecache.SizeCache
 	nbf                  *NomsBinFormat
@@ -89,20 +87,6 @@ type ValueStore struct {
 	doingGC bool
 
 	versOnce sync.Once
-}
-
-func ErrorIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.ChunkStore) error {
-	absent, err := cs.HasMany(ctx, unresolved)
-	if err != nil {
-		return err
-	}
-
-	if len(absent) != 0 {
-		s := absent.String()
-		return fmt.Errorf("Found dangling references to %s", s)
-	}
-
-	return nil
 }
 
 func AddrsFromNomsValue(ctx context.Context, c chunks.Chunk, nbf *NomsBinFormat) (addrs hash.HashSet, err error) {
@@ -168,8 +152,6 @@ func newValueStoreWithCacheAndPending(cs chunks.ChunkStore, cacheSize, pendingMa
 		bufferedChunksMax:    pendingMax,
 		withBufferedChildren: map[hash.Hash]uint64{},
 		decodedChunks:        sizecache.New(cacheSize),
-		unresolvedRefs:       hash.HashSet{},
-		enforceCompleteness:  true,
 		versOnce:             sync.Once{},
 	}
 	vs.gcCond = sync.NewCond(&vs.bufferMu)
@@ -183,10 +165,6 @@ func (lvs *ValueStore) expectVersion() {
 		panic(err)
 	}
 	lvs.nbf = nbf
-}
-
-func (lvs *ValueStore) SetEnforceCompleteness(enforce bool) {
-	lvs.enforceCompleteness = enforce
 }
 
 func (lvs *ValueStore) SetValidateContentAddresses(validate bool) {
@@ -424,13 +402,6 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 		// possible, and in __DOLT__, WalkAddrs may be
 		// cheap enough that it would be possible to get back
 		// cache-locality in our flushes without ref heights.
-		if lvs.enforceCompleteness {
-			addrs, err := lvs.getAddrs(ctx, c)
-			if err != nil {
-				return err
-			}
-			lvs.unresolvedRefs.InsertAll(addrs)
-		}
 		return lvs.cs.Put(ctx, c, lvs.getAddrs)
 	}
 
@@ -485,10 +456,6 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 			childHash := childRef.TargetHash()
 			if _, isBuffered := lvs.bufferedChunks[childHash]; isBuffered {
 				lvs.withBufferedChildren[h] = height
-			} else if lvs.enforceCompleteness {
-				// If the childRef isn't presently buffered, we must consider it an
-				// unresolved ref.
-				lvs.unresolvedRefs.Insert(childHash)
 			}
 
 			if _, hasBufferedChildren := lvs.withBufferedChildren[childHash]; hasBufferedChildren {
@@ -638,28 +605,6 @@ func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
 	lvs.withBufferedChildren = map[hash.Hash]uint64{}
 	lvs.bufferedChunks = map[hash.Hash]chunks.Chunk{}
 
-	if lvs.enforceCompleteness {
-		root, err := lvs.Root(ctx)
-
-		if err != nil {
-			return err
-		}
-
-		if (current != hash.Hash{} && current != root) {
-			if _, ok := lvs.bufferedChunks[current]; !ok {
-				// If the client is attempting to move the root and the referenced
-				// value isn't still buffered, we need to ensure that it is contained
-				// in the ChunkStore.
-				lvs.unresolvedRefs.Insert(current)
-			}
-		}
-
-		err = ErrorIfDangling(ctx, lvs.unresolvedRefs, lvs.cs)
-		if err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -685,10 +630,6 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 	}
 	if !success {
 		return false, nil
-	}
-
-	if lvs.enforceCompleteness {
-		lvs.unresolvedRefs = hash.HashSet{}
 	}
 
 	return true, nil
