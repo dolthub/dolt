@@ -32,7 +32,7 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 
 	// Set the session's timezone to UTC, to avoid TIMESTAMP test values changing
 	// when they are converted to UTC for storage.
-	primaryDatabase.MustExec("SET SESSION time_zone = '+0:00';")
+	primaryDatabase.MustExec("SET @@time_zone = '+0:00';")
 
 	// Create the test table
 	tableName := "alltypes"
