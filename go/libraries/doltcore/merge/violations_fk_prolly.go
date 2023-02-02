@@ -152,39 +152,40 @@ func prollyChildSecDiffFkConstraintViolations(
 	postChildSecIdx := durable.ProllyMapFromIndex(postChild.IndexData)
 	parentSecIdx := durable.ProllyMapFromIndex(postParent.IndexData)
 
-	idxDesc, _ := parentSecIdx.Descriptors()
-	primaryKD, _ := postChildRowData.Descriptors()
-	primaryKB := val.NewTupleBuilder(primaryKD)
+	parentSecIdxDesc, _ := parentSecIdx.Descriptors()
+	partialDesc := parentSecIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
+	childPriKD, _ := postChildRowData.Descriptors()
+	childPriKB := val.NewTupleBuilder(childPriKD)
 
 	var parentSecIdxCur *tree.Cursor
 	err := prolly.DiffMaps(ctx, preChildSecIdx, postChildSecIdx, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
-			k := val.Tuple(diff.Key)
+			k := val.Tuple(diff.Key) // this is the secondary key to the child; it is a partial key
 			if parentSecIdxCur == nil {
-				newCur, err := tree.NewCursorAtKey(ctx, parentSecIdx.NodeStore(), parentSecIdx.Node(), k, idxDesc)
+				newCur, err := tree.NewCursorAtKey(ctx, parentSecIdx.NodeStore(), parentSecIdx.Node(), k, partialDesc)
 				if err != nil {
 					return err
 				}
 				if !newCur.Valid() {
-					return createNewCVForSecIdx(ctx, k, primaryKD, primaryKB, parentSecIdx, postChildRowData.Pool(), receiver)
+					return createNewCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
 				}
 				parentSecIdxCur = newCur
 			}
 
-			err := tree.Seek(ctx, parentSecIdxCur, k, idxDesc)
+			err := tree.Seek(ctx, parentSecIdxCur, k, partialDesc)
 			if err != nil {
 				return err
 			}
 			if !parentSecIdxCur.Valid() {
-				return createNewCVForSecIdx(ctx, k, primaryKD, primaryKB, parentSecIdx, postChildRowData.Pool(), receiver)
+				return createNewCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
 			}
 
 			// TODO: why check range if cur is valid?
+			rng := prolly.PrefixRange(k, partialDesc)
 			key := val.Tuple(parentSecIdxCur.CurrentKey())
-			rng := prolly.PrefixRange(k, idxDesc)
 			if !rng.Matches(key) {
-				return createNewCVForSecIdx(ctx, k, primaryKD, primaryKB, parentSecIdx, postChildRowData.Pool(), receiver)
+				return createNewCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
 			}
 
 			return nil
@@ -263,6 +264,7 @@ func createCVIfNoPartialKeyMatchesSec(
 	pri prolly.Map,
 	pool pool.BuffPool,
 	receiver FKViolationReceiver) error {
+
 	itr, err := creation.NewPrefixItr(ctx, partialKey, partialKeyDesc, idx)
 	if err != nil {
 		return err

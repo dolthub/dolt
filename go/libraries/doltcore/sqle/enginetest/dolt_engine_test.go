@@ -17,6 +17,7 @@ package enginetest
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"os"
 	"testing"
 
@@ -110,30 +111,35 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "trigger before update, with indexed update",
+			Name: "Constraint violations are persisted",
 			SetUpScript: []string{
-				"create table a (x int primary key, y int, unique key (y))",
-				"create table b (z int primary key)",
-				"insert into a values (1,3), (10,20)",
-				"create trigger insert_b before update on a for each row insert into b values (old.x * 10)",
-				"update a set x = x + 1 where y = 20",
+				"set dolt_force_transaction_commit = on;",
+				"CREATE table parent (pk int PRIMARY KEY, col1 int);",
+				"CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));",
+				"CREATE table other (pk int);",
+				"CALL DOLT_ADD('.')",
+				"INSERT INTO parent VALUES (1, 1), (2, 2);",
+				"CALL DOLT_COMMIT('-am', 'setup');",
+				"CALL DOLT_BRANCH('branch1');",
+				"CALL DOLT_BRANCH('branch2');",
+				"DELETE FROM parent where pk = 1;",
+				"CALL DOLT_COMMIT('-am', 'delete parent 1');",
+				"CALL DOLT_CHECKOUT('branch1');",
+				"INSERT INTO CHILD VALUES (1, 1);",
+				"CALL DOLT_COMMIT('-am', 'insert child of parent 1');",
+				"CALL DOLT_CHECKOUT('main');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "select x, y from a order by 1",
-					Expected: []sql.Row{
-						{1, 3},
-						{11, 20},
-					},
+					Query:    "CALL DOLT_MERGE('branch1');",
+					Expected: []sql.Row{{0, 1}},
 				},
 				{
-					Query: "select z from b",
-					Expected: []sql.Row{
-						{100},
-					},
+					Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
+					Expected: []sql.Row{{uint64(merge.CvType_ForeignKey), 1, 1}},
 				},
 			},
 		},
