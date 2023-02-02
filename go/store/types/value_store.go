@@ -733,16 +733,27 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 			return err
 		}
 
-		return lvs.gc(ctx, root, newGenRefs, oldGen.HasMany, newGen, newGen)
+		err = lvs.gc(ctx, root, newGenRefs, oldGen.HasMany, newGen, newGen)
+		if err != nil {
+			return err
+		}
 	} else if collector, ok := lvs.cs.(chunks.ChunkStoreGarbageCollector); ok {
 		if len(oldGenRefs) > 0 {
 			newGenRefs.InsertAll(oldGenRefs)
 		}
 
-		return lvs.gc(ctx, root, newGenRefs, unfilteredHashFunc, collector, collector)
+		err = lvs.gc(ctx, root, newGenRefs, unfilteredHashFunc, collector, collector)
+		if err != nil {
+			return err
+		}
 	} else {
 		return chunks.ErrUnsupportedOperation
 	}
+
+	if tfs, ok := lvs.cs.(chunks.TableFileStore); ok {
+		return tfs.PruneTableFiles(ctx)
+	}
+	return nil
 }
 
 func (lvs *ValueStore) gc(ctx context.Context, root hash.Hash, toVisit hash.HashSet, hashFilter HashFilterFunc, src, dest chunks.ChunkStoreGarbageCollector) error {

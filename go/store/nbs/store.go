@@ -105,7 +105,7 @@ type NomsBlockStore struct {
 	stats *Stats
 }
 
-var _ TableFileStore = &NomsBlockStore{}
+var _ chunks.TableFileStore = &NomsBlockStore{}
 var _ chunks.ChunkStoreGarbageCollector = &NomsBlockStore{}
 
 type Range struct {
@@ -1232,7 +1232,7 @@ func (tf tableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
 
 // Sources retrieves the current root hash, a list of all table files (which may include appendix tablefiles),
 // and a second list of only the appendix table files
-func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile, []TableFile, error) {
+func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []chunks.TableFile, []chunks.TableFile, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
@@ -1268,8 +1268,8 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile,
 	return contents.GetRoot(), allTableFiles, appendixTableFiles, nil
 }
 
-func getTableFiles(css map[addr]chunkSource, contents manifestContents, numSpecs int, specFunc func(mc manifestContents, idx int) tableSpec) ([]TableFile, error) {
-	tableFiles := make([]TableFile, 0)
+func getTableFiles(css map[addr]chunkSource, contents manifestContents, numSpecs int, specFunc func(mc manifestContents, idx int) tableSpec) ([]chunks.TableFile, error) {
+	tableFiles := make([]chunks.TableFile, 0)
 	if numSpecs == 0 {
 		return tableFiles, nil
 	}
@@ -1342,11 +1342,11 @@ func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[addr]chunkSource, error) {
 
 }
 
-func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
+func (nbs *NomsBlockStore) SupportedOperations() chunks.TableFileStoreOps {
 	var ok bool
 	_, ok = nbs.p.(tableFilePersister)
 
-	return TableFileStoreOps{
+	return chunks.TableFileStoreOps{
 		CanRead:  true,
 		CanWrite: ok,
 		CanPrune: ok,
@@ -1510,23 +1510,7 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 	}
 
 	if destNBS == nbs {
-		err = nbs.swapTables(ctx, specs)
-		if err != nil {
-			return err
-		}
-
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-
-		currentContents := func() manifestContents {
-			nbs.mu.RLock()
-			defer nbs.mu.RUnlock()
-			return nbs.upstream
-		}()
-
-		t := time.Now()
-		return nbs.p.PruneTableFiles(ctx, currentContents, t)
+		return nbs.swapTables(ctx, specs)
 	} else {
 		fileIdToNumChunks := tableSpecsToMap(specs)
 		err = destNBS.AddTableFilesToManifest(ctx, fileIdToNumChunks)

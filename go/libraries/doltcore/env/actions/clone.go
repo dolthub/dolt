@@ -32,9 +32,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/strhelp"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
-	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -91,11 +91,11 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 
 func cloneProg(eventCh <-chan pull.TableFileEvent) {
 	var (
-		chunks            int64
+		chunksC           int64
 		chunksDownloading int64
 		chunksDownloaded  int64
 		currStats         = make(map[string]iohelp.ReadStats)
-		tableFiles        = make(map[string]*nbs.TableFile)
+		tableFiles        = make(map[string]*chunks.TableFile)
 	)
 
 	p := cli.NewEphemeralPrinter()
@@ -109,7 +109,7 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 			for _, tf := range tblFEvt.TableFiles {
 				c := tf
 				tableFiles[c.FileID()] = &c
-				chunks += int64(tf.NumChunks())
+				chunksC += int64(tf.NumChunks())
 			}
 		case pull.DownloadStart:
 			for _, tf := range tblFEvt.TableFiles {
@@ -134,7 +134,7 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 		}
 
 		p.Printf("%s of %s chunks complete. %s chunks being downloaded currently.\n",
-			strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunks), strhelp.CommaIfy(chunksDownloading))
+			strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunksC), strhelp.CommaIfy(chunksDownloading))
 		for _, fileId := range sortedKeys(currStats) {
 			s := currStats[fileId]
 			bps := float64(s.Read) / s.Elapsed.Seconds()
