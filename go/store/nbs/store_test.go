@@ -305,6 +305,10 @@ func TestNBSCopyGC(t *testing.T) {
 	r, err := st.Root(ctx)
 	require.NoError(t, err)
 
+	ok, err := st.Commit(ctx, r, r)
+	require.NoError(t, err)
+	require.True(t, ok)
+
 	keepChan := make(chan []hash.Hash, 16)
 	var msErr error
 	wg := &sync.WaitGroup{}
