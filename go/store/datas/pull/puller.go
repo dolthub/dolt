@@ -57,7 +57,6 @@ type FilledWriters struct {
 // CmpChnkAndRefs holds a CompressedChunk and all of it's references
 type CmpChnkAndRefs struct {
 	cmpChnk nbs.CompressedChunk
-	refs    hash.HashSet
 }
 
 type WalkAddrs func(chunks.Chunk, func(hash.Hash, bool) error) error
@@ -69,7 +68,6 @@ type Puller struct {
 	srcChunkStore nbs.NBSCompressedChunkStore
 	sinkDBCS      chunks.ChunkStore
 	hashes        hash.HashSet
-	visited       hash.HashSet
 
 	wr            *nbs.CmpChunkTableWriter
 	tablefileSema *semaphore.Weighted
@@ -142,7 +140,6 @@ func NewPuller(
 		srcChunkStore: srcChunkStore,
 		sinkDBCS:      sinkCS,
 		hashes:        hash.NewHashSet(hashes...),
-		visited:       hash.HashSet{},
 		tablefileSema: semaphore.NewWeighted(outstandingTableFiles),
 		tempDir:       tempDir,
 		wr:            wr,
@@ -375,7 +372,6 @@ LOOP:
 			return ctx.Err()
 		}
 	}
-	p.visited = nil // gc early
 
 	return p.sinkDBCS.(nbs.TableFileStore).AddTableFilesToManifest(ctx, fileIdToNumChunks)
 }
@@ -387,9 +383,6 @@ func (p *Puller) Pull(ctx context.Context) error {
 		defer c()
 	}
 
-	absent := make(hash.HashSet)
-	absent.InsertAll(p.hashes)
-
 	eg, ctx := errgroup.WithContext(ctx)
 
 	completedTables := make(chan FilledWriters, 8)
@@ -398,35 +391,43 @@ func (p *Puller) Pull(ctx context.Context) error {
 		return p.processCompletedTables(ctx, completedTables)
 	})
 
-	const batchSize = 64 * 1024
 	eg.Go(func() (err error) {
-		if err := p.tablefileSema.Acquire(ctx, 1); err != nil {
+		if err = p.tablefileSema.Acquire(ctx, 1); err != nil {
 			return err
 		}
 
-		batches := batchNovelHashes(absent, p.visited, batchSize)
-		absent = make(hash.HashSet)
+		const batchSize = 64 * 1024
+		// refs are added to |visited| on first sight
+		visited := p.hashes
+		// |absent| are visited, un-batched refs
+		absent := p.hashes.Copy()
+		// |batches| are visited, un-fetched refs
+		batches := make([]hash.HashSet, 0, 64)
 
-		var b hash.HashSet
-		for len(batches) > 0 {
-			b, batches = batches[0], batches[1:]
+		for absent.Size() > 0 || len(batches) > 0 {
+			if absent.Size() >= batchSize {
+				var bb []hash.HashSet
+				absent, bb = batchNovel(absent, batchSize)
+				batches = append(batches, bb...)
+			}
+			if len(batches) == 0 {
+				batches = append(batches, absent)
+				absent = make(hash.HashSet)
+			}
+
+			b := batches[len(batches)-1]
+			batches = batches[:len(batches)-1]
+
 			b, err = p.sinkDBCS.HasMany(ctx, b)
 			if err != nil {
 				return err
+			} else if b.Size() == 0 {
+				continue
 			}
 
-			if b.Size() > 0 {
-				err = p.getCmp(ctx, b, absent, completedTables)
-				if err != nil {
-					return err
-				}
-			}
-
-			// try to avoid unbounded growth of |absent|
-			if len(batches) == 0 || absent.Size() > batchSize*4 {
-				next := batchNovelHashes(absent, p.visited, batchSize)
-				batches = append(next, batches...)
-				absent = make(hash.HashSet)
+			err = p.getCmp(ctx, b, absent, visited, completedTables)
+			if err != nil {
+				return err
 			}
 		}
 
@@ -444,51 +445,21 @@ func (p *Puller) Pull(ctx context.Context) error {
 	return eg.Wait()
 }
 
-func batchNovelHashes(absent hash.HashSet, visited hash.HashSet, maxBatchSize int64) []hash.HashSet {
-	numAbsent := int64(len(absent))
-	if numAbsent < maxBatchSize {
-		smaller := absent
-		longer := visited
-		if len(absent) > len(visited) {
-			smaller = visited
-			longer = absent
+// batchNovel returns a slice of |batch| size HashSets and partial |remainder| HashSet.
+func batchNovel(absent hash.HashSet, batch int) (remainder hash.HashSet, batches []hash.HashSet) {
+	curr := make(hash.HashSet, batch)
+	for h := range absent {
+		curr.Insert(h)
+		if curr.Size() >= batch {
+			batches = append(batches, curr)
+			curr = make(hash.HashSet, batch)
 		}
-
-		for k := range smaller {
-			if longer.Has(k) {
-				absent.Remove(k)
-			}
-		}
-		for h := range absent {
-			visited.Insert(h)
-		}
-		return []hash.HashSet{absent}
-	} else {
-		var numBatches = (numAbsent / maxBatchSize) + 1
-		var batchSize = (numAbsent / numBatches) + 1
-
-		newBatches := make([]hash.HashSet, 1, numBatches)
-		currentNewBatch := hash.NewHashSet()
-		newBatches[0] = currentNewBatch
-
-		var totalAbsent int64
-		for k := range absent {
-			if !visited.Has(k) {
-				visited.Insert(k)
-				currentNewBatch.Insert(k)
-				totalAbsent++
-
-				if totalAbsent%batchSize == 0 {
-					currentNewBatch = hash.NewHashSet()
-					newBatches = append(newBatches, currentNewBatch)
-				}
-			}
-		}
-		return newBatches
 	}
+	remainder = curr
+	return
 }
 
-func (p *Puller) getCmp(ctx context.Context, batch, nextLevel hash.HashSet, completedTables chan FilledWriters) error {
+func (p *Puller) getCmp(ctx context.Context, batch, absent, visited hash.HashSet, completedTables chan FilledWriters) error {
 	found := make(chan nbs.CompressedChunk, 4096)
 	processed := make(chan CmpChnkAndRefs, 4096)
 
@@ -518,20 +489,24 @@ func (p *Puller) getCmp(ctx context.Context, batch, nextLevel hash.HashSet, comp
 				if !ok {
 					break LOOP
 				}
+
 				chnk, err := cmpChnk.ToChunk()
 				if err != nil {
 					return err
 				}
-				refs := make(hash.HashSet)
 				err = p.waf(chnk, func(h hash.Hash, _ bool) error {
-					refs.Insert(h)
+					if !visited.Has(h) {
+						// first sight of |h|
+						visited.Insert(h)
+						absent.Insert(h)
+					}
 					return nil
 				})
 				if err != nil {
 					return err
 				}
 				select {
-				case processed <- CmpChnkAndRefs{cmpChnk: cmpChnk, refs: refs}:
+				case processed <- CmpChnkAndRefs{cmpChnk: cmpChnk}:
 				case <-ctx.Done():
 					return ctx.Err()
 				}
@@ -577,10 +552,6 @@ func (p *Puller) getCmp(ctx context.Context, batch, nextLevel hash.HashSet, comp
 					if err != nil {
 						return err
 					}
-				}
-
-				for h := range cmpAndRef.refs {
-					nextLevel.Insert(h)
 				}
 
 				cmpAndRef.cmpChnk.FullCompressedChunk = nil
