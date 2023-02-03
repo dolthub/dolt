@@ -24,10 +24,11 @@ package nbs
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/blobstore"
 	"io"
 	"math/rand"
 	"testing"
+
+	"github.com/dolthub/dolt/go/store/blobstore"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
