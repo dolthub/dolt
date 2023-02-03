@@ -2075,7 +2075,8 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Everything up-to-date." ]] || false
 
-    run dolt branch --track direct feature origin/other
+    # NOTE: this command fails with git, requiring `--track=direct`, when both branch name and starting point name are defined, but Dolt allows both formats.
+    run dolt branch feature --track direct origin/other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "branch 'feature' set up to track 'origin/other'" ]] || false
 
@@ -2089,6 +2090,18 @@ SQL
     run dolt pull
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Fast-forward" ]] || false
+
+    run dolt branch feature1 --track origin/other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "branch 'feature1' set up to track 'origin/other'" ]] || false
+
+    run dolt branch --track direct feature2 origin/other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "branch 'feature2' set up to track 'origin/other'" ]] || false
+
+    run dolt branch --track=direct feature3 origin/other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "branch 'feature3' set up to track 'origin/other'" ]] || false
 }
 
 @test "remotes: dolt_clone failure cleanup" {
