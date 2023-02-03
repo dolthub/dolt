@@ -40,7 +40,7 @@ import (
 var mySqlPort, doltPort int
 var primaryDatabase, replicaDatabase *sqlx.DB
 var mySqlProcess, doltProcess *os.Process
-var doltLogFilePath, mysqlLogFilePath string
+var doltLogFilePath, oldDoltLogFilePath, mysqlLogFilePath string
 var doltLogFile, mysqlLogFile *os.File
 var testDir string
 var originalWorkingDir string
@@ -61,6 +61,11 @@ func teardown(t *testing.T) {
 
 	// Output server logs on failure for easier debugging
 	if t.Failed() {
+		if oldDoltLogFilePath != "" {
+			fmt.Printf("Dolt server log from %s:\n", oldDoltLogFilePath)
+			printFile(oldDoltLogFilePath)
+		}
+
 		fmt.Printf("Dolt server log from %s:\n", doltLogFilePath)
 		printFile(doltLogFilePath)
 		fmt.Println()
@@ -646,9 +651,6 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 
 	socketPath := filepath.Join("/tmp", fmt.Sprintf("dolt.%v.sock", doltPort))
 
-	// Don't recompile dolt for every dolt server startup!
-	devDoltPath := initializeDevDoltBuild(dir, goDirPath)
-
 	args := []string{"go", "run", "./cmd/dolt",
 		"sql-server",
 		"-uroot",
@@ -657,7 +659,8 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 		fmt.Sprintf("--port=%v", doltPort),
 		fmt.Sprintf("--socket=%s", socketPath)}
 
-	// If we're running in CI, use a precompiled dolt binary
+	// If we're running in CI, use a precompiled dolt binary instead of go run
+	devDoltPath := initializeDevDoltBuild(dir, goDirPath)
 	if devDoltPath != "" {
 		args[2] = devDoltPath
 		args = args[2:]
@@ -674,6 +677,12 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 	f := s.FieldByName("Setpgid")
 	f.SetBool(true)
 	cmd.SysProcAttr = procAttr
+
+	// Some tests restart the Dolt sql-server, so if we have a current log file, save a reference
+	// to it so we can print the results later if the test fails.
+	if doltLogFilePath != "" {
+		oldDoltLogFilePath = doltLogFilePath
+	}
 
 	doltLogFilePath = filepath.Join(dir, fmt.Sprintf("dolt-%d.out.log", time.Now().Unix()))
 	doltLogFile, err = os.Create(doltLogFilePath)
