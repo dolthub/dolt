@@ -155,6 +155,7 @@ var persistedSystemTables = []string{
 
 var generatedSystemTables = []string{
 	BranchesTableName,
+	AllBranchesTableName,
 	LogTableName,
 	TableOfTablesInConflictName,
 	TableOfTablesWithViolationsName,

@@ -22,6 +22,7 @@ teardown() {
     [[ "$output" =~ "dolt_log" ]] || false
     [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
+    [[ "$output" =~ "dolt_all_branches" ]] || false
     [[ "$output" =~ "dolt_remotes" ]] || false
     [[ "$output" =~ "dolt_status" ]] || false
     [[ ! "$output" =~ " test" ]] || false  # spaces are impt!
@@ -33,6 +34,7 @@ teardown() {
     [[ "$output" =~ "dolt_commit_ancestors" ]] || false
     [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
+    [[ "$output" =~ "dolt_all_branches" ]] || false
     [[ "$output" =~ "dolt_remotes" ]] || false
     [[ "$output" =~ "dolt_status" ]] || false
     [[ "$output" =~ "test" ]] || false
@@ -65,6 +67,7 @@ teardown() {
     [[ "$output" =~ "dolt_log" ]] || false
     [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
+    [[ "$output" =~ "dolt_all_branches" ]] || false
     [[ "$output" =~ "dolt_remotes" ]] || false
     [[ ! "$output" =~ "dolt_history_test" ]] || false
     [[ ! "$output" =~ "dolt_diff_test" ]] || false
@@ -74,6 +77,7 @@ teardown() {
     [[ "$output" =~ "dolt_log" ]] || false
     [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
+    [[ "$output" =~ "dolt_all_branches" ]] || false
     [[ "$output" =~ "dolt_remotes" ]] || false
     [[ "$output" =~ "dolt_history_test" ]] || false
     [[ "$output" =~ "dolt_commit_diff_test" ]] || false
@@ -90,6 +94,7 @@ teardown() {
     [[ "$output" =~ "dolt_log" ]] || false
     [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
+    [[ "$output" =~ "dolt_all_branches" ]] || false
     [[ "$output" =~ "dolt_remotes" ]] || false
     [[ ! "$output" =~ "dolt_history_test" ]] || false
     [[ ! "$output" =~ "dolt_diff_test" ]] || false
@@ -99,6 +104,7 @@ teardown() {
     [[ "$output" =~ "dolt_log" ]] || false
     [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
+    [[ "$output" =~ "dolt_all_branches" ]] || false
     [[ "$output" =~ "dolt_remotes" ]] || false
     [[ "$output" =~ "dolt_history_test" ]] || false
     [[ "$output" =~ "dolt_diff_test" ]] || false
@@ -136,8 +142,44 @@ teardown() {
     [[ "$output" =~ "create-table-branch" ]] || false
 }
 
-@test "system-tables: query dolt_remotes system table" {
+@test "system-tables: query dolt_all_branches system table" {
+    dolt checkout -b create-table-branch
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add test
+    dolt commit -m "Added test table"
+    dolt branch "b1"
+    mkdir ./remote1
+    dolt remote add rem1 file://./remote1
+    dolt push rem1 b1
+    dolt branch -d b1
+    
+    run dolt sql -q "select * from dolt_branches"
+    [ $status -eq 0 ]
+    [[ "$output" =~ main.*Initialize\ data\ repository ]] || false
+    [[ "$output" =~ create-table-branch.*Added\ test\ table ]] || false
+    [[ ! "$output" =~ b1 ]] || false
 
+    run dolt sql -q "select * from dolt_all_branches"
+    [ $status -eq 0 ]
+    [[ "$output" =~ main.*Initialize\ data\ repository ]] || false
+    [[ "$output" =~ create-table-branch.*Added\ test\ table ]] || false
+    [[ "$output" =~ b1 ]] || false
+    [[ "$output" =~ "remotes/rem1/b1" ]] || false
+    
+    run dolt sql -q "select * from dolt_all_branches where latest_commit_message ='Initialize data repository'"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "create-table-branch" ]] || false
+    [[ ! "$output" =~ "remotes/rem1/b1" ]] || false
+    
+    run dolt sql -q "select * from dolt_all_branches where latest_commit_message ='Added test table'"
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "main" ]] || false
+    [[ "$output" =~ "create-table-branch" ]] || false
+    [[ "$output" =~ "remotes/rem1/b1" ]] || false
+}
+
+@test "system-tables: query dolt_remotes system table" {
     run dolt sql -q "select count(*) from dolt_remotes" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ 0 ]] || false
