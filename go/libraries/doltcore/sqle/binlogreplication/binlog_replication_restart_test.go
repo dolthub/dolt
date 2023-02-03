@@ -15,6 +15,9 @@
 package binlogreplication
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -46,6 +49,16 @@ func TestBinlogReplicationServerRestart(t *testing.T) {
 	// Let replication run for a second, then restart the Dolt sql-server
 	time.Sleep(500 * time.Millisecond)
 	stopDoltSqlServer(t)
+
+	// TODO: Temporary hack to debug a failure in CI
+	doltDir := filepath.Join(testDir, "dolt", "db01", ".dolt")
+	entries, err2 := os.ReadDir(doltDir)
+	require.NoError(t, err2)
+	fmt.Println("Files in " + doltDir + ":")
+	for _, f := range entries {
+		fmt.Println(" - " + f.Name())
+	}
+
 	time.Sleep(500 * time.Millisecond)
 	var err error
 	doltPort, doltProcess, err = startDoltSqlServer(testDir)

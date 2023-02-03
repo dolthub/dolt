@@ -610,13 +610,12 @@ func initializeDevDoltBuild(dir string, goDirPath string) string {
 	basedir := filepath.Dir(filepath.Dir(dir))
 	fullpath := filepath.Join(basedir, fmt.Sprintf("devDolt-%d", os.Getpid()))
 
-	fmt.Printf("building dolt dev build at: %s \n", fullpath)
-
 	_, err := os.Stat(fullpath)
 	if err == nil {
 		return fullpath
 	}
 
+	fmt.Printf("building dolt dev build at: %s \n", fullpath)
 	cmd := exec.Command("go", "build", "-o", fullpath, "./cmd/dolt")
 	cmd.Dir = goDirPath
 
