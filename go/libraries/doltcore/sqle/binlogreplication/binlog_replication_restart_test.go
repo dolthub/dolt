@@ -25,17 +25,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func printDoltDirContents() {
+	// TODO: Temporary hack to debug a failure in CI
+	doltDir := filepath.Join(testDir, "dolt", "db01", ".dolt")
+	entries, err := os.ReadDir(doltDir)
+	if err != nil {
+		fmt.Println("unable to list directory: " + err.Error())
+		return
+	}
+	fmt.Println("Files in " + doltDir + ":")
+	for _, f := range entries {
+		fmt.Println(" - " + f.Name())
+	}
+}
+
 // TestBinlogReplicationServerRestart tests that a replica can be configured and started, then the
 // server process can be restarted and replica can be restarted without problems.
 func TestBinlogReplicationServerRestart(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
+	printDoltDirContents()
 
 	var wg sync.WaitGroup
 
 	// Launch a goroutine that inserts data for 5 seconds
 	primaryDatabase.MustExec("create table t (pk int auto_increment primary key)")
+	printDoltDirContents()
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -46,18 +63,14 @@ func TestBinlogReplicationServerRestart(t *testing.T) {
 		}
 	}()
 
+	printDoltDirContents()
+
 	// Let replication run for a second, then restart the Dolt sql-server
 	time.Sleep(500 * time.Millisecond)
 	stopDoltSqlServer(t)
 
 	// TODO: Temporary hack to debug a failure in CI
-	doltDir := filepath.Join(testDir, "dolt", "db01", ".dolt")
-	entries, err2 := os.ReadDir(doltDir)
-	require.NoError(t, err2)
-	fmt.Println("Files in " + doltDir + ":")
-	for _, f := range entries {
-		fmt.Println(" - " + f.Name())
-	}
+	printDoltDirContents()
 
 	time.Sleep(500 * time.Millisecond)
 	var err error

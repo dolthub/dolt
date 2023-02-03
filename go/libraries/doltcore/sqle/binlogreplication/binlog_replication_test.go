@@ -92,6 +92,9 @@ func TestBinlogReplicationSanityCheck(t *testing.T) {
 	waitForReplicaToCatchUp(t)
 	expectedStatement := "CREATE TABLE t ( pk int NOT NULL, PRIMARY KEY (pk)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"
 	assertCreateTableStatement(t, replicaDatabase, "t", expectedStatement)
+
+	fmt.Println("Directory contents...")
+	printDoltDirContents()
 }
 
 // TestResetReplica tests that "RESET REPLICA" and "RESET REPLICA ALL" correctly clear out

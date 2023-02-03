@@ -341,7 +341,11 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 		// avoid issues with correctness, at the cost of being slightly less efficient
 		commitToAllDatabases = true
 
-		ctx.SetCurrentDatabase(query.Database)
+		// TODO: Trying another theory that perhaps setting ctx when we aren't actually using
+		//       that database yet messed up repo_state.json creation...
+		if strings.HasPrefix(strings.ToLower(query.SQL), "create database") == false {
+			ctx.SetCurrentDatabase(query.Database)
+		}
 		executeQueryWithEngine(ctx, engine, query.SQL)
 		createCommit = strings.ToLower(query.SQL) != "begin"
 
@@ -950,8 +954,7 @@ func loadReplicaServerId() (uint32, error) {
 
 func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) {
 	if ctx.GetCurrentDatabase() == "" {
-		logger.Error("No current database selected, aborting query")
-		return
+		logger.Warn("No current database selected")
 	}
 
 	_, iter, err := engine.Query(ctx, query)
