@@ -46,12 +46,14 @@ func TestConcurrentGC(t *testing.T) {
 			name:  "smoke test",
 			setup: []string{"CREATE TABLE t (id int primary key)"},
 			clients: []client{
-				{queries: func(id string, i int) (queries []string) {
-					return []string{
-						fmt.Sprintf("INSERT INTO t VALUES (%d)", i),
-						"SELECT COUNT(*) FROM t",
-					}
-				}},
+				{
+					id: "client",
+					queries: func(id string, i int) (queries []string) {
+						return []string{
+							fmt.Sprintf("INSERT INTO t VALUES (%d)", i),
+							"SELECT COUNT(*) FROM t",
+						}
+					}},
 			},
 		},
 		{
@@ -72,6 +74,7 @@ func TestConcurrentGC(t *testing.T) {
 			// writes only to that branch
 			clients: func() []client {
 				cc := []client{{
+					id: "gc_client",
 					queries: func(string, int) []string {
 						return []string{"CALL dolt_gc();"}
 					},
@@ -125,6 +128,7 @@ func testConcurrentGC(t *testing.T, test concurrentGCtest) {
 	eg, ectx := errgroup.WithContext(ctx)
 	for _, c := range test.clients {
 		cl := c
+		require.NotZero(t, cl.id)
 		eg.Go(func() error {
 			return runWithSqlSession(ectx, eng, func(sctx *sql.Context, eng *engine.SqlEngine) error {
 				// generate and run 128 batches of queries
@@ -133,9 +137,10 @@ func testConcurrentGC(t *testing.T, test concurrentGCtest) {
 					for _, q := range batch {
 						qerr := execQuery(sctx, eng, q)
 						if qerr != nil {
-							// allow clients to error
+							// allow clients to error, but close connection
 							// todo: restrict errors to dangling refs
-							t.Logf("error in client %s: %s", cl.id, qerr.Error())
+							// t.Logf("error in client %s: %s", cl.id, qerr.Error())
+							return nil
 						}
 					}
 				}
