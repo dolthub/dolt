@@ -268,6 +268,9 @@ const (
 	// BranchesTableName is the branches system table name
 	BranchesTableName = "dolt_branches"
 
+	// AllBranchesTableName is the all-branches system table name
+	AllBranchesTableName = "dolt_all_branches"
+
 	// RemotesTableName is the remotes system table name
 	RemotesTableName = "dolt_remotes"
 

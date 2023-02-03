@@ -186,7 +186,6 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		} else if branch.GetType() == ref.RemoteRefType {
 			branchName = "  " + color.RedString("remotes/"+branch.GetPath())
 			branchLen += len("remotes/")
-
 		}
 
 		if verbose {
