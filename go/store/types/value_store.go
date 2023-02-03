@@ -821,7 +821,7 @@ func (lvs *ValueStore) gcProcessRefs(ctx context.Context, visited hash.HashSet, 
 	}
 
 	// purge the cache
-	lvs.decodedChunks = sizecache.New(lvs.decodedChunks.Size())
+	lvs.decodedChunks.Purge()
 	lvs.bufferedChunks = make(map[hash.Hash]chunks.Chunk, lvs.bufferedChunkSize)
 	lvs.bufferedChunkSize = 0
 	lvs.withBufferedChildren = map[hash.Hash]uint64{}

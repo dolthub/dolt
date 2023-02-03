@@ -93,6 +93,17 @@ func TestSizeCache(t *testing.T) {
 	assert.Equal(uint64(800), c.totalSize)
 	assert.Equal(4, c.lru.Len())
 	assert.Equal(4, len(c.cache))
+
+	c.Purge()
+	assert.Equal(uint64(0), c.totalSize)
+	for i, v := range []string{"data-1", "data-2", "data-3", "data-4", "data-5", "data-6", "data-7", "data-8", "data-9"} {
+		c.Add(hashFromString(v), defSize, v)
+		maxElements := uint64(i + 1)
+		if maxElements >= uint64(5) {
+			maxElements = uint64(5)
+		}
+		assert.Equal(maxElements*defSize, c.totalSize)
+	}
 }
 
 func TestSizeCacheWithExpiry(t *testing.T) {
