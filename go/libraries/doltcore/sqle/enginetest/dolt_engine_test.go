@@ -36,7 +36,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -111,33 +110,30 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Constraint violations are persisted",
+			Name: "trigger before update, with indexed update",
 			SetUpScript: []string{
-				"set dolt_force_transaction_commit = on;",
-				"create table parent (i int primary key, x int, y int, z int, index (y, x, z));",
-				"create table child (y int, x int, primary key(y, x), foreign key (y, x) references parent(y, x));",
-				"insert into parent values (100,1,1,1), (200,2,1,2), (300,1,null,1);",
-				"CALL DOLT_ADD('.')",
-				"CALL DOLT_COMMIT('-am', 'setup');",
-				"CALL DOLT_BRANCH('other');",
-				"DELETE FROM parent where x = 2;",
-				"CALL DOLT_COMMIT('-am', 'delete x = 2');",
-				"CALL DOLT_CHECKOUT('other');",
-				"INSERT INTO child VALUES (1, 2);",
-				"CALL DOLT_COMMIT('-am', 'insert child of parent 1');",
-				"CALL DOLT_CHECKOUT('main');",
+				"create table a (x int primary key, y int, unique key (y))",
+				"create table b (z int primary key)",
+				"insert into a values (1,3), (10,20)",
+				"create trigger insert_b before update on a for each row insert into b values (old.x * 10)",
+				"update a set x = x + 1 where y = 20",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "CALL DOLT_MERGE('other');",
-					Expected: []sql.Row{{0, 1}},
+					Query: "select x, y from a order by 1",
+					Expected: []sql.Row{
+						{1, 3},
+						{11, 20},
+					},
 				},
 				{
-					Query:    "SELECT violation_type, y, x from dolt_constraint_violations_child;",
-					Expected: []sql.Row{{uint64(merge.CvType_ForeignKey), 1, 2}},
+					Query: "select z from b",
+					Expected: []sql.Row{
+						{100},
+					},
 				},
 			},
 		},

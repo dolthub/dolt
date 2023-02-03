@@ -161,7 +161,8 @@ func prollyChildSecDiffFkConstraintViolations(
 	err := prolly.DiffMaps(ctx, preChildSecIdx, postChildSecIdx, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
-			k := val.Tuple(diff.Key) // this is the secondary key to the child; it is a partial key
+			k := val.Tuple(diff.Key)
+			// TODO: possible to skip this if there are not null constraints over entire index
 			for i := 0; i < k.Count(); i++ {
 				if k.FieldIsNull(i) {
 					return nil
@@ -184,11 +185,9 @@ func prollyChildSecDiffFkConstraintViolations(
 				return err
 			}
 			if !parentSecIdxCur.Valid() {
-				// TODO: if k has nil, it's ok?
 				return createNewCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
 			}
 
-			// TODO: why check range if cur is valid?
 			rng := prolly.PrefixRange(k, partialDesc)
 			key := val.Tuple(parentSecIdxCur.CurrentKey())
 			if !rng.Matches(key) {
@@ -259,50 +258,6 @@ func createNewCVForSecIdx(
 
 	return receiver.ProllyFKViolationFound(ctx, primaryIdxKey, value)
 
-}
-
-func createCVIfNoPartialKeyMatchesSec(
-	ctx context.Context,
-	k, v, partialKey val.Tuple,
-	partialKeyDesc val.TupleDesc,
-	primaryKD val.TupleDesc,
-	primaryKb *val.TupleBuilder,
-	idx prolly.Map,
-	pri prolly.Map,
-	pool pool.BuffPool,
-	receiver FKViolationReceiver) error {
-
-	itr, err := creation.NewPrefixItr(ctx, partialKey, partialKeyDesc, idx)
-	if err != nil {
-		return err
-	}
-	_, _, err = itr.Next(ctx)
-	if err != nil && err != io.EOF {
-		return err
-	}
-	if err == nil {
-		return nil
-	}
-
-	// convert secondary idx entry to primary row key
-	// the pks of the table are the last keys of the index
-	o := k.Count() - primaryKD.Count()
-	for i := 0; i < primaryKD.Count(); i++ {
-		j := o + i
-		primaryKb.PutRaw(i, k.GetField(j))
-	}
-	primaryIdxKey := primaryKb.Build(pool)
-
-	var value val.Tuple
-	err = pri.Get(ctx, primaryIdxKey, func(k, v val.Tuple) error {
-		value = v
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	return receiver.ProllyFKViolationFound(ctx, primaryIdxKey, value)
 }
 
 func handleFkMultipleViolForRowErr(err error, kd val.TupleDesc, tblName string) error {
