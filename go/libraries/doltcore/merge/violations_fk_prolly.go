@@ -371,7 +371,7 @@ func createCVsForPartialKeyMatches(
 }
 
 func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tblSch schema.Schema, k, v val.Tuple, pool pool.BuffPool) (val.Tuple, bool) {
-	if idxSch.Name() != "" {
+	if idxSch.Name() != "" && len(idxSch.IndexedColumnTags()) <= len(tags) {
 		tags = idxSch.IndexedColumnTags()
 	}
 	for i, tag := range tags {
