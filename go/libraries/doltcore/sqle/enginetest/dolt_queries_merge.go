@@ -754,7 +754,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT * from dolt_constraint_violations",
+				Query: "SELECT * from dolt_constraint_violations",
 				Expected: []sql.Row{
 					{"child", uint64(1)},
 				},
@@ -764,7 +764,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "SELECT y, x from dolt_constraint_violations_child",
+				Query: "SELECT y, x from dolt_constraint_violations_child",
 				Expected: []sql.Row{
 					{1, 2},
 				},
