@@ -92,7 +92,7 @@ type ValueStore struct {
 func AddrsFromNomsValue(ctx context.Context, c chunks.Chunk, nbf *NomsBinFormat) (addrs hash.HashSet, err error) {
 	addrs = hash.NewHashSet()
 	if NomsKind(c.Data()[0]) == SerialMessageKind {
-		err = SerialMessage(c.Data()).walkAddrs(nbf, func(a hash.Hash) error {
+		err = SerialMessage(c.Data()).WalkAddrs(nbf, func(a hash.Hash) error {
 			addrs.Insert(a)
 			return nil
 		})
