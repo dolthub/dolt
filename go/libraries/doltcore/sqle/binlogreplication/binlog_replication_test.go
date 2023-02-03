@@ -100,6 +100,7 @@ func TestBinlogReplicationSanityCheck(t *testing.T) {
 
 	fmt.Println("Directory contents...")
 	printDoltDirContents()
+	assertRepoStateFileExists(t)
 }
 
 // TestResetReplica tests that "RESET REPLICA" and "RESET REPLICA ALL" correctly clear out

@@ -39,6 +39,13 @@ func printDoltDirContents() {
 	}
 }
 
+func assertRepoStateFileExists(t *testing.T) {
+	repoStateFile := filepath.Join(testDir, "dolt", "db01", ".dolt", "repo_state.json")
+
+	_, err := os.Stat(repoStateFile)
+	require.NoError(t, err)
+}
+
 // TestBinlogReplicationServerRestart tests that a replica can be configured and started, then the
 // server process can be restarted and replica can be restarted without problems.
 func TestBinlogReplicationServerRestart(t *testing.T) {
