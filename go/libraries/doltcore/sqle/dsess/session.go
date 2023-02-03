@@ -1230,11 +1230,6 @@ func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string) error
 
 	roots := state.GetRoots()
 
-	// TODO: Testing an assumption about a failing test when dolt_chunk_journal is enabled...
-	if roots.Working == nil {
-		panic("roots.Working is nil!")
-	}
-
 	h, err := roots.Working.HashOf()
 	if err != nil {
 		return err

@@ -63,20 +63,10 @@ func TestBinlogReplicationReconnection(t *testing.T) {
 	require.NoError(t, rows.Close())
 
 	// Assert that show replica status show reconnection IO error
-	// TODO: Use real MySQL error codes and messages and time format :-/
-	// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html
 	status := convertByteArraysToStrings(showReplicaStatus(t))
 	require.Equal(t, "1158", status["Last_IO_Errno"])
 	require.Equal(t, "unexpected EOF", status["Last_IO_Error"])
 	requireRecentTimeString(t, status["Last_IO_Error_Timestamp"])
-
-	// TODO: These get filled in from another error. Go back and see if we can
-	//       safely turn these off or if we just need to remove these checks.
-	//require.Equal(t, "0", status["Last_Errno"])
-	//require.Equal(t, "", status["Last_Error"])
-	//require.Equal(t, "0", status["Last_SQL_Errno"])
-	//require.Equal(t, "", status["Last_SQL_Error"])
-	//require.Equal(t, "", status["Last_SQL_Error_Timestamp"])
 }
 
 // configureFastConnectionRetry configures the replica to retry a failed connection after 5s, instead of the default 60s
@@ -122,9 +112,6 @@ func testInitialReplicaStatus(t *testing.T) {
 		status["Replica_IO_Running"] == "Yes" ||
 			status["Replica_IO_Running"] == "Connecting")
 	require.Equal(t, "Yes", status["Replica_SQL_Running"])
-	// TODO: Set and test initial Replica_IO_State and Replica_SQL_Running_State
-	//       https://dev.mysql.com/doc/refman/8.0/en/replica-io-thread-states.html
-	//       https://dev.mysql.com/doc/refman/8.0/en/replica-sql-thread-states.html
 
 	// Unsupported fields
 	require.Equal(t, "INVALID", status["Source_Log_File"])
