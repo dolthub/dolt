@@ -175,13 +175,6 @@ func TestStartReplicaErrors(t *testing.T) {
 	require.NotEmpty(t, status["Last_IO_Error_Timestamp"])
 	require.NoError(t, rows.Close())
 
-	// TODO: These are getting set by another error?
-	//require.Equal(t, "0", status["Last_Errno"])
-	//require.Equal(t, "", status["Last_Error"])
-	//require.Equal(t, "0", status["Last_SQL_Errno"])
-	//require.Equal(t, "", status["Last_SQL_Error"])
-	//require.Equal(t, "", status["Last_SQL_Error_Timestamp"])
-
 	// START REPLICA doesn't return an error if replication is already running
 	startReplication(t, mySqlPort)
 	replicaDatabase.MustExec("START REPLICA;")
@@ -578,8 +571,6 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 	cmd.Stderr = mysqlLogFile
 	err = cmd.Start()
 	if err != nil {
-		// TODO: We should capture the process output here (without blocking for process completion)
-		//       to help debug any mysql startup errors.
 		return -1, nil, fmt.Errorf("unable to start process %q: %v", cmd.String(), err.Error())
 	}
 
@@ -623,10 +614,6 @@ func initializeDevDoltBuild(dir string, goDirPath string) string {
 	cmd.Dir = goDirPath
 
 	output, err := cmd.CombinedOutput()
-	wd, _ := os.Getwd()
-	fmt.Printf("CWD: " + wd + "\n\n")
-	fmt.Printf("CMD: " + cmd.String() + "\n\n")
-	fmt.Printf("OUTPUT: " + string(output) + "\n\n")
 	if err != nil {
 		panic("unable to build dolt for binlog integration tests: " + err.Error() + "\nFull output: " + string(output) + "\n")
 	}
@@ -652,7 +639,6 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 		}
 	}
 	goDirPath := filepath.Join(originalWorkingDir, "..", "..", "..", "..")
-	fmt.Printf("goDirPath: %s\n", goDirPath)
 	err = os.Chdir(goDirPath)
 	if err != nil {
 		panic(err)
