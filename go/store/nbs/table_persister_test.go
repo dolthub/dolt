@@ -23,6 +23,10 @@ package nbs
 
 import (
 	"context"
+	"fmt"
+	"github.com/dolthub/dolt/go/store/blobstore"
+	"io"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -76,4 +80,65 @@ func TestPlanCompaction(t *testing.T) {
 	for _, content := range tableContents {
 		assertChunksInReader(content, tr, assert)
 	}
+}
+
+func TestRoundTripTable(t *testing.T) {
+	cacheOnce.Do(makeGlobalCaches)
+	t.Run("local fs persister", func(t *testing.T) {
+		q := new(UnlimitedQuotaProvider)
+		p := newFSTablePersister(t.TempDir(), globalFDCache, q)
+		testRoundTripTable(t, p)
+	})
+	t.Run("memory blobstore persister", func(t *testing.T) {
+		q := new(UnlimitedQuotaProvider)
+		bs := blobstore.NewInMemoryBlobstore(t.TempDir())
+		p := &blobstorePersister{bs, s3BlockSize, q}
+		testRoundTripTable(t, p)
+	})
+}
+
+func testRoundTripTable(t *testing.T, p tablePersister) {
+	const count = 12
+	chunx := randomChunks(count)
+	// build golden in-memory table
+	expected, _, err := buildTable(chunx)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	src, err := persistChunks(p, chunx...)
+	require.NoError(t, err)
+	rdr, sz, err := src.reader(ctx)
+	require.NoError(t, err)
+
+	actual := make([]byte, sz)
+	_, err = io.ReadFull(rdr, actual)
+	require.NoError(t, err)
+
+	assert.Equal(t, len(expected), int(sz))
+	assert.Equal(t, expected, actual)
+}
+
+func persistChunks(p tablePersister, chunx ...[]byte) (src chunkSource, err error) {
+	mt := newMemTable(1 << 14)
+	for _, c := range chunx {
+		if !mt.addChunk(computeAddr(c), c) {
+			return nil, fmt.Errorf("memTable too full to add %s", computeAddr(c))
+		}
+	}
+	return p.Persist(context.Background(), mt, nil, &Stats{})
+}
+
+func randomChunks(cnt int) [][]byte {
+	chunx := make([][]byte, cnt)
+	var buf []byte
+	for i := range chunx {
+		k := rand.Intn(51) + 50
+		if k >= len(buf) {
+			buf = make([]byte, 1024)
+			rand.Read(buf)
+		}
+		chunx[i] = buf[:k]
+		buf = buf[k:]
+	}
+	return chunx
 }
