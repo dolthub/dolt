@@ -18,11 +18,12 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 var _ sql.Table = (*BranchesTable)(nil)
@@ -71,7 +72,7 @@ func (bt *BranchesTable) Schema() sql.Schema {
 	if bt.all {
 		tableName = doltdb.AllBranchesTableName
 	}
-	
+
 	return []*sql.Column{
 		{Name: "name", Type: types.Text, Source: tableName, PrimaryKey: true, Nullable: false},
 		{Name: "hash", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: false},
@@ -108,7 +109,7 @@ type BranchItr struct {
 func NewBranchItr(ctx *sql.Context, ddb *doltdb.DoltDB, all bool) (*BranchItr, error) {
 	var branchRefs []ref.DoltRef
 	var err error
-	
+
 	if all {
 		branchRefs, err = ddb.GetRefsOfType(ctx, map[ref.RefType]struct{}{ref.BranchRefType: {}, ref.RemoteRefType: {}})
 		if err != nil {
@@ -133,9 +134,9 @@ func NewBranchItr(ctx *sql.Context, ddb *doltdb.DoltDB, all bool) (*BranchItr, e
 		if branch.GetType() == ref.RemoteRefType {
 			branchNames[i] = "  " + "remotes/" + branch.GetPath()
 		} else {
-			branchNames[i] = branch.GetPath()	
+			branchNames[i] = branch.GetPath()
 		}
-		
+
 		commits[i] = commit
 	}
 
