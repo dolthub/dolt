@@ -162,6 +162,12 @@ func prollyChildSecDiffFkConstraintViolations(
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
 			k := val.Tuple(diff.Key) // this is the secondary key to the child; it is a partial key
+			for i := 0; i < k.Count(); i++ {
+				if k.FieldIsNull(i) {
+					return nil
+				}
+			}
+
 			if parentSecIdxCur == nil {
 				newCur, err := tree.NewCursorAtKey(ctx, parentSecIdx.NodeStore(), parentSecIdx.Node(), k, partialDesc)
 				if err != nil {
@@ -178,6 +184,7 @@ func prollyChildSecDiffFkConstraintViolations(
 				return err
 			}
 			if !parentSecIdxCur.Valid() {
+				// TODO: if k has nil, it's ok?
 				return createNewCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
 			}
 
