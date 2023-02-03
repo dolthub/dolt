@@ -175,7 +175,7 @@ func prollyChildSecDiffFkConstraintViolations(
 					return err
 				}
 				if !newCur.Valid() {
-					return createNewCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
+					return createCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
 				}
 				parentSecIdxCur = newCur
 			}
@@ -185,15 +185,15 @@ func prollyChildSecDiffFkConstraintViolations(
 				return err
 			}
 			if !parentSecIdxCur.Valid() {
-				return createNewCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
+				return createCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
 			}
 
+			// Perform a range check for keys that are less than the smallest key in parentSecIdxCur
 			rng := prolly.PrefixRange(k, partialDesc)
 			key := val.Tuple(parentSecIdxCur.CurrentKey())
 			if !rng.Matches(key) {
-				return createNewCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
+				return createCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
 			}
-
 			return nil
 		case tree.RemovedDiff:
 		default:
@@ -229,7 +229,7 @@ func createCVIfNoPartialKeyMatchesPri(
 	return receiver.ProllyFKViolationFound(ctx, k, v)
 }
 
-func createNewCVForSecIdx(
+func createCVForSecIdx(
 	ctx context.Context,
 	k val.Tuple,
 	primaryKD val.TupleDesc,
@@ -257,7 +257,6 @@ func createNewCVForSecIdx(
 	}
 
 	return receiver.ProllyFKViolationFound(ctx, primaryIdxKey, value)
-
 }
 
 func handleFkMultipleViolForRowErr(err error, kd val.TupleDesc, tblName string) error {
@@ -333,6 +332,7 @@ func createCVsForPartialKeyMatches(
 }
 
 func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tblSch schema.Schema, k, v val.Tuple, pool pool.BuffPool) (val.Tuple, bool) {
+	// Possible that the parent index (idxSch) is longer than the partial key (tags).
 	if idxSch.Name() != "" && len(idxSch.IndexedColumnTags()) <= len(tags) {
 		tags = idxSch.IndexedColumnTags()
 	}
