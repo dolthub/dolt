@@ -15,7 +15,9 @@
 package dprocedures
 
 import (
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -29,8 +31,19 @@ const (
 	cmdSuccess = 1
 )
 
+func init() {
+	if os.Getenv("DOLT_ENABLE_GC_PROCEDURE") != "" {
+		DoltGCFeatureFlag = true
+	}
+}
+
+var DoltGCFeatureFlag = false
+
 // doltGC is the stored procedure to run online garbage collection on a database.
 func doltGC(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+	if !DoltGCFeatureFlag {
+		return nil, errors.New("DOLT_GC() stored procedure disabled")
+	}
 	res, err := doDoltGC(ctx, args)
 	if err != nil {
 		return nil, err

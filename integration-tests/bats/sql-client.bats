@@ -147,3 +147,15 @@ teardown() {
     [ $status -eq 0 ]
     [[ $output =~ " test_dashes " ]] || false
 }
+
+@test "sql-client: prints accurate query timing" {
+    skiponwindows "Missing dependencies"
+    cd repo1
+    start_sql_server repo1
+    cd ../
+    run dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
+USE repo1;
+SELECT SLEEP(2);
+SQL
+    [[ $output =~ "1 row in set (2".*" sec)" ]] || false
+}

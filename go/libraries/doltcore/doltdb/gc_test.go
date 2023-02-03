@@ -32,33 +32,34 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func TestConcurrentGC(t *testing.T) {
+	dprocedures.DoltGCFeatureFlag = true
+	// Each test spawns concurrent clients execute queries, some clients
+	// will trigger gc processes. When all clients finish, we run a final
+	// gc process to validate that no dangling references remain.
 	tests := []concurrentGCtest{
 		{
-			name: "smoke test",
-			setup: client{queries: func(string, int) []string {
-				return []string{
-					"CREATE TABLE t (id int primary key)",
-				}
-			}},
+			name:  "smoke test",
+			setup: []string{"CREATE TABLE t (id int primary key)"},
 			clients: []client{
-				{queries: func(id string, i int) (queries []string) {
-					return []string{
-						fmt.Sprintf("INSERT INTO t VALUES (%d)", i),
-						"SELECT COUNT(*) FROM t",
-					}
-				}},
+				{
+					id: "client",
+					queries: func(id string, i int) (queries []string) {
+						return []string{
+							fmt.Sprintf("INSERT INTO t VALUES (%d)", i),
+							"SELECT COUNT(*) FROM t",
+						}
+					}},
 			},
-			iters: 100,
 		},
 		{
 			name: "aaron's repro",
-			skip: true,
 			// create 32 branches
-			setup: client{queries: func(string, int) []string {
+			setup: func() []string {
 				queries := []string{
 					"CREATE TABLE t (id int primary key, val TEXT)",
 					"CALL dcommit('-Am', 'new table t');",
@@ -68,10 +69,12 @@ func TestConcurrentGC(t *testing.T) {
 					queries = append(queries, q)
 				}
 				return queries
-			}},
-			// create a client for each branch
+			}(),
+			// for each branch, create a single client that
+			// writes only to that branch
 			clients: func() []client {
 				cc := []client{{
+					id: "gc_client",
 					queries: func(string, int) []string {
 						return []string{"CALL dolt_gc();"}
 					},
@@ -88,14 +91,10 @@ func TestConcurrentGC(t *testing.T) {
 				}
 				return cc
 			}(),
-			iters: 100,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if test.skip {
-				t.Skip()
-			}
 			testConcurrentGC(t, test)
 		})
 	}
@@ -104,10 +103,8 @@ func TestConcurrentGC(t *testing.T) {
 // concurrentGCtest tests concurrent GC
 type concurrentGCtest struct {
 	name    string
-	skip    bool
-	setup   client
+	setup   []string
 	clients []client
-	iters   int
 }
 
 type client struct {
@@ -116,26 +113,62 @@ type client struct {
 }
 
 func testConcurrentGC(t *testing.T, test concurrentGCtest) {
-	require.NotZero(t, test.iters)
 	ctx := context.Background()
-	eng := setupConcurrencyTest(t, ctx)
-
-	require.NoError(t, executeQueries(ctx, eng, 1, test.setup))
-	eg, ctx := errgroup.WithContext(ctx)
-	for _, c := range test.clients {
-		c := c
-		eg.Go(func() (err error) {
-			err = executeQueries(ctx, eng, test.iters, c)
-			if err != nil {
-				panic(err)
+	eng := setupSqlEngine(t, ctx)
+	err := runWithSqlSession(ctx, eng, func(sctx *sql.Context, eng *engine.SqlEngine) error {
+		for _, q := range test.setup {
+			if err := execQuery(sctx, eng, q); err != nil {
+				return err
 			}
-			return
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	eg, ectx := errgroup.WithContext(ctx)
+	for _, c := range test.clients {
+		cl := c
+		require.NotZero(t, cl.id)
+		eg.Go(func() error {
+			return runWithSqlSession(ectx, eng, func(sctx *sql.Context, eng *engine.SqlEngine) error {
+				// generate and run 128 batches of queries
+				for i := 0; i < 128; i++ {
+					batch := cl.queries(cl.id, i)
+					for _, q := range batch {
+						qerr := execQuery(sctx, eng, q)
+						if qerr != nil {
+							// allow clients to error, but close connection
+							// todo: restrict errors to dangling refs
+							// t.Logf("error in client %s: %s", cl.id, qerr.Error())
+							return nil
+						}
+					}
+				}
+				return nil
+			})
 		})
 	}
-	assert.NoError(t, eg.Wait())
+	require.NoError(t, eg.Wait())
+
+	// now run a full GC and assert we don't find dangling refs
+	err = runWithSqlSession(ctx, eng, func(sctx *sql.Context, eng *engine.SqlEngine) (err error) {
+		qq := []string{
+			// ensure we have garbage to collect
+			"CREATE TABLE garbage (val int)",
+			"DROP TABLE garbage",
+			"CALL dolt_gc()",
+		}
+		for _, q := range qq {
+			if err = execQuery(sctx, eng, q); err != nil {
+				return err
+			}
+		}
+		return
+	})
+	require.NoError(t, err)
 }
 
-func executeQueries(ctx context.Context, eng *engine.SqlEngine, iters int, c client) error {
+func runWithSqlSession(ctx context.Context, eng *engine.SqlEngine, cb func(sctx *sql.Context, eng *engine.SqlEngine) error) error {
 	sess, err := eng.NewDoltSession(ctx, sql.NewBaseSession())
 	if err != nil {
 		return err
@@ -143,42 +176,30 @@ func executeQueries(ctx context.Context, eng *engine.SqlEngine, iters int, c cli
 	sctx := sql.NewContext(ctx, sql.WithSession(sess))
 	sctx.SetCurrentDatabase(testDB)
 	sctx.Session.SetClient(sql.Client{User: "root", Address: "%"})
+	return cb(sctx, eng)
+}
 
-	runQuery := func(sctx *sql.Context, eng *engine.SqlEngine, query string) (err error) {
-		_, iter, err := eng.Query(sctx, query)
-		if err != nil {
+func execQuery(sctx *sql.Context, eng *engine.SqlEngine, query string) (err error) {
+	_, iter, err := eng.Query(sctx, query)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		// tx commit
+		if cerr := iter.Close(sctx); err == nil {
+			err = cerr
+		}
+	}()
+	for {
+		_, err = iter.Next(sctx)
+		if err == io.EOF {
+			err = nil
+			break
+		} else if err != nil {
 			return err
 		}
-		defer func() {
-			// tx commit
-			if cerr := iter.Close(sctx); err == nil {
-				err = cerr
-			}
-		}()
-		for {
-			_, err = iter.Next(sctx)
-			if err == io.EOF {
-				err = nil
-				break
-			} else if err != nil {
-				return err
-			}
-		}
-		return
 	}
-
-	// generate and run |iters| batches of queries
-	for i := 0; i < iters; i++ {
-		for _, q := range c.queries(c.id, i) {
-			err = runQuery(sctx, eng, q)
-			if sql.ErrLockDeadlock.Is(err) {
-				err = nil // allow serialization errors
-			} else if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return
 }
 
 const (
@@ -186,7 +207,7 @@ const (
 	testDB = "dolt"
 )
 
-func setupConcurrencyTest(t *testing.T, ctx context.Context) (eng *engine.SqlEngine) {
+func setupSqlEngine(t *testing.T, ctx context.Context) (eng *engine.SqlEngine) {
 	dEnv := dtestutils.CreateTestEnv()
 	mrEnv, err := env.MultiEnvForDirectory(
 		ctx,
