@@ -323,6 +323,9 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			return
 		}
 
+		// grab time for query timing
+		startTime := time.Now()
+
 		rows, err := conn.Query(query)
 		if err != nil {
 			shell.Println(color.RedString(err.Error()))
@@ -336,6 +339,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			}
 			if wrapper.HasMoreRows() {
 				sqlCtx := sql.NewContext(ctx)
+				sqlCtx.SetQueryTime(startTime)
 				err = engine.PrettyPrintResultsExtended(sqlCtx, engine.FormatTabular, wrapper.Schema(), wrapper)
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
