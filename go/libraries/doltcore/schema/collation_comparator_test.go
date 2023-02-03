@@ -16,9 +16,10 @@ package schema
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestCompareCollatedStrings(t *testing.T) {
