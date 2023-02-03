@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -438,11 +439,9 @@ func startSqlServers(t *testing.T) {
 }
 
 func stopDoltSqlServer(t *testing.T) {
-	err := doltProcess.Signal(os.Interrupt)
+	err := syscall.Kill(-doltProcess.Pid, syscall.SIGKILL)
 	require.NoError(t, err)
-	err = doltProcess.Kill()
-	require.NoError(t, err)
-	time.Sleep(1 * time.Second)
+	time.Sleep(250 * time.Millisecond)
 }
 
 func startReplication(_ *testing.T, port int) {
@@ -668,6 +667,10 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 		args = args[2:]
 	}
 	cmd := exec.Command(args[0], args[1:]...)
+
+	// Set a unique process group ID so that we can cleanly kill this process, as well as
+	// any spawned child processes later.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	doltLogFilePath = filepath.Join(dir, fmt.Sprintf("dolt-%d.out.log", time.Now().Unix()))
 	doltLogFile, err = os.Create(doltLogFilePath)

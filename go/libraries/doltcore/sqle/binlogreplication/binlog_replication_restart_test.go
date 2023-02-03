@@ -67,8 +67,6 @@ func TestBinlogReplicationServerRestart(t *testing.T) {
 	replicaDatabase.MustExec("START REPLICA")
 
 	// Assert that all changes have replicated from the primary
-	// TODO: if the test fails before this wg.Wait call.. then the goroutine is still running
-	//       and can fail the next test
 	wg.Wait()
 	waitForReplicaToCatchUp(t)
 	countMaxQuery := "SELECT COUNT(pk) AS count, MAX(pk) as max FROM db01.t;"
