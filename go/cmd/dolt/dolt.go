@@ -186,7 +186,7 @@ func runMain() int {
 					cli.Println(cyanStar, "  /trace: A trace of execution of the current program. You can specify the duration in the seconds GET parameter. After you get the trace file, use the go tool trace command to investigate the trace.")
 					cli.Println()
 
-					err := http.ListenAndServe("localhost:6060", nil)
+					err := http.ListenAndServe("0.0.0.0:6060", nil)
 
 					if err != nil {
 						cli.Println(color.YellowString("pprof server exited with error: %v", err))
