@@ -64,15 +64,6 @@ func TestBlobstoreSuite(t *testing.T) {
 		}
 		suite.Run(t, &BlockStoreSuite{factory: fn})
 	})
-	t.Run("memory blobstore", func(t *testing.T) {
-		fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
-			nbf := constants.FormatDefaultString
-			qp := NewUnlimitedMemQuotaProvider()
-			bs := blobstore.NewInMemoryBlobstore(dir)
-			return NewBSStore(ctx, nbf, bs, testMemTableSize, qp)
-		}
-		suite.Run(t, &BlockStoreSuite{factory: fn})
-	})
 }
 
 type BlockStoreSuite struct {

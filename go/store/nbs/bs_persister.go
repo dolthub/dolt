@@ -69,11 +69,12 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 		return nil, err
 	}
 
-	// then concatenate into a final blob
-	if _, err = bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt}); err != nil {
-		return emptyChunkSource{}, err
+	rdr := &blobTablePartReader{
+		records:    name + tableRecordsExt,
+		tail:       name + tableTailExt,
+		tailOffset: int64(len(records)),
+		store:      bsp.bs,
 	}
-	rdr := &bsTableReaderAt{name, bsp.bs}
 	return newReaderFromIndexData(ctx, bsp.q, data, address, rdr, bsp.blockSize)
 }
 
@@ -106,18 +107,12 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 		conjoinees = append(conjoinees, sub)
 	}
 
-	// first concatenate all the sub-objects to create a composite sub-object
 	if _, err = bsp.bs.Concatenate(ctx, name+tableRecordsExt, conjoinees); err != nil {
 		return nil, err
 	}
 	if _, err = blobstore.PutBytes(ctx, bsp.bs, name+tableTailExt, plan.mergedIndex); err != nil {
 		return nil, err
 	}
-	// then concatenate into a final blob
-	if _, err = bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt}); err != nil {
-		return emptyChunkSource{}, err
-	}
-
 	return openBlobChunkSource(ctx, bsp.bs, address, plan.chunkCount, bsp.q, stats)
 }
 
@@ -162,6 +157,23 @@ func (bsp *blobstorePersister) Open(ctx context.Context, name addr, chunkCount u
 }
 
 func (bsp *blobstorePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
+	var records, tail bool
+	eg, ectx := errgroup.WithContext(ctx)
+	eg.Go(func() (err error) {
+		records, err = bsp.bs.Exists(ectx, name.String()+tableRecordsExt)
+		return
+	})
+	eg.Go(func() (err error) {
+		tail, err = bsp.bs.Exists(ectx, name.String()+tableTailExt)
+		return
+	})
+	if err := eg.Wait(); err != nil {
+		return false, err
+	}
+	if records && tail {
+		return true, nil
+	}
+	// check for full table if table parts are absent
 	return bsp.bs.Exists(ctx, name.String())
 }
 
@@ -222,9 +234,6 @@ func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.ReadClose
 			return err
 		}
 	}
-
-	// finally concatenate into the complete table
-	_, err = bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt})
 	return
 }
 
@@ -236,25 +245,12 @@ func openBlobChunkSource(
 	q MemoryQuotaProvider,
 	stats *Stats,
 ) (chunkSource, error) {
-
-	var records, tail bool
-	eg, ectx := errgroup.WithContext(ctx)
-	eg.Go(func() (err error) {
-		records, err = bs.Exists(ectx, name.String()+tableRecordsExt)
-		return
-	})
-	eg.Go(func() (err error) {
-		tail, err = bs.Exists(ectx, name.String()+tableTailExt)
-		return
-	})
-	if err := eg.Wait(); err != nil {
-		return nil, err
+	// optimistically try to load the chunk source from table parts
+	cs, err := chunkSourceFromTableParts(ctx, bs, name, chunkCount, q, stats)
+	if err != nil {
+		return chunkSourceFromCompleteBlob(ctx, bs, name, chunkCount, q, stats)
 	}
-
-	if records && tail {
-		return chunkSourceFromTableParts(ctx, bs, name, chunkCount, q, stats)
-	}
-	return chunkSourceFromCompleteBlob(ctx, bs, name, chunkCount, q, stats)
+	return cs, err
 }
 
 type blobTablePartReader struct {
@@ -271,21 +267,36 @@ func chunkSourceFromTableParts(
 	q MemoryQuotaProvider,
 	stats *Stats,
 ) (chunkSource, error) {
-	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) (err error) {
-		tail := name.String() + tableTailExt
-		var rc io.ReadCloser
-		if rc, _, err = bs.Get(ctx, tail, blobstore.AllRange); err != nil {
+	var index tableIndex
+	eg, ectx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		records, err := bs.Exists(ectx, name.String()+tableRecordsExt)
+		if err != nil {
 			return err
+		} else if !records {
+			return fmt.Errorf("records blob not does not exist for table %s", name.String())
 		}
-		defer func() {
-			if cerr := rc.Close(); err == nil {
-				err = cerr
-			}
-		}()
-		_, err = io.ReadFull(rc, p)
-		return
+		return nil
 	})
-	if err != nil {
+	eg.Go(func() error {
+		var err error
+		index, err = loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) (err error) {
+			tail := name.String() + tableTailExt
+			var rc io.ReadCloser
+			if rc, _, err = bs.Get(ctx, tail, blobstore.AllRange); err != nil {
+				return err
+			}
+			defer func() {
+				if cerr := rc.Close(); err == nil {
+					err = cerr
+				}
+			}()
+			_, err = io.ReadFull(rc, p)
+			return
+		})
+		return err
+	})
+	if err := eg.Wait(); err != nil {
 		return nil, err
 	}
 
@@ -311,7 +322,6 @@ func chunkSourceFromTableParts(
 
 // ReadAtWithStats is the bsTableReaderAt implementation of the tableReaderAt interface
 func (r blobTablePartReader) ReadAtWithStats(ctx context.Context, p []byte, off int64, _ *Stats) (int, error) {
-
 	var n int
 	if off < r.tailOffset {
 		sz := int64(len(p))
