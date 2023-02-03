@@ -27,7 +27,6 @@ import (
 	"errors"
 	"io"
 	"sort"
-	"sync/atomic"
 
 	"github.com/golang/snappy"
 	"golang.org/x/sync/errgroup"
@@ -453,28 +452,15 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 		stats *Stats) error,
 ) error {
 	batches := toReadBatches(offsetRecords, tr.blockSize)
-	var idx int32
-	readBatches := func() error {
-		for {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			i := atomic.AddInt32(&idx, 1) - 1
-			if int(i) >= len(batches) {
-				return nil
-			}
-			rb := batches[i]
-			err := readAtOffsets(ctx, rb, stats)
-			if err != nil {
-				return err
-			}
+	for i := range batches {
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
+		i := i
+		eg.Go(func() error {
+			return readAtOffsets(ctx, batches[i], stats)
+		})
 	}
-	ioParallelism := 4
-	for i := 0; i < ioParallelism; i++ {
-		eg.Go(readBatches)
-	}
-
 	return nil
 }
 
