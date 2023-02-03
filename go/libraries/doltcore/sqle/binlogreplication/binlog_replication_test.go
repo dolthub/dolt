@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"strings"
@@ -439,7 +440,14 @@ func startSqlServers(t *testing.T) {
 }
 
 func stopDoltSqlServer(t *testing.T) {
-	err := syscall.Kill(-doltProcess.Pid, syscall.SIGKILL)
+	// Use the negative process ID so that we grab the entire process group.
+	// This is necessary to kill all the processes the child spawns.
+	// Note that we use os.FindProcess, instead of syscall.Kill, since syscall.Kill
+	// is not available on windows.
+	p, err := os.FindProcess(-doltProcess.Pid)
+	require.NoError(t, err)
+
+	err = p.Signal(syscall.SIGKILL)
 	require.NoError(t, err)
 	time.Sleep(250 * time.Millisecond)
 }
@@ -669,8 +677,15 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 	cmd := exec.Command(args[0], args[1:]...)
 
 	// Set a unique process group ID so that we can cleanly kill this process, as well as
-	// any spawned child processes later.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// any spawned child processes later. Mac/Unix can set the "Setpgid" field directly, but
+	// on windows, this field isn't present, so we need to use reflection so that this code
+	// can still compile for windows, even though we don't run it there.
+	procAttr := &syscall.SysProcAttr{}
+	ps := reflect.ValueOf(procAttr)
+	s := ps.Elem()
+	f := s.FieldByName("Setpgid")
+	f.SetBool(true)
+	cmd.SysProcAttr = procAttr
 
 	doltLogFilePath = filepath.Join(dir, fmt.Sprintf("dolt-%d.out.log", time.Now().Unix()))
 	doltLogFile, err = os.Create(doltLogFilePath)
