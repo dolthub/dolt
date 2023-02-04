@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -380,6 +381,38 @@ func waitForReplicaToCatchUp(t *testing.T) {
 	}
 
 	t.Fatal("primary and replica did not synchronize within " + timeLimit.String())
+}
+
+// waitForReplicaToReachGtid waits (up to 10s) for the replica's @@gtid_executed sys var to show that
+// it has executed the |target| gtid transaction number.
+func waitForReplicaToReachGtid(t *testing.T, target int) {
+	timeLimit := 10 * time.Second
+	endTime := time.Now().Add(timeLimit)
+	for time.Now().Before(endTime) {
+		time.Sleep(250 * time.Millisecond)
+		replicaGtid := queryGtid(t, replicaDatabase)
+
+		if replicaGtid != "" {
+			components := strings.Split(replicaGtid, ":")
+			require.Equal(t, 2, len(components))
+			sourceGtid := components[1]
+			if strings.Contains(sourceGtid, "-") {
+				gtidRange := strings.Split(sourceGtid, "-")
+				require.Equal(t, 2, len(gtidRange))
+				sourceGtid = gtidRange[1]
+			}
+
+			i, err := strconv.Atoi(sourceGtid)
+			require.NoError(t, err)
+			if i >= target {
+				return
+			}
+		}
+
+		fmt.Printf("replica has not reached transaction %d yet; currently at: %s \n", target, replicaGtid)
+	}
+
+	t.Fatal("replica did not reach target GTID within " + timeLimit.String())
 }
 
 func queryGtid(t *testing.T, database *sqlx.DB) string {

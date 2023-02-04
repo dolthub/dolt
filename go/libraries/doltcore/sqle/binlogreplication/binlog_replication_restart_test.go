@@ -72,8 +72,8 @@ func TestBinlogReplicationServerRestart(t *testing.T) {
 
 	printDoltDirContents()
 
-	// Let replication run for a second, then restart the Dolt sql-server
-	time.Sleep(500 * time.Millisecond)
+	// Let replication process a few transactions, then stop and restart the server.
+	waitForReplicaToReachGtid(t, 3)
 	stopDoltSqlServer(t)
 
 	// TODO: Temporary hack to debug a failure in CI
