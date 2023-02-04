@@ -77,22 +77,14 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	updateMode := ref.UpdateMode{Force: apr.Contains(cli.ForceFlag)}
 
 	srcDB, err := r.GetRemoteDBWithoutCaching(ctx, dEnv.DbData().Ddb.ValueReadWriter().Format(), dEnv)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	err = actions.FetchRefSpecs(ctx, dEnv.DbData(), srcDB, refSpecs, r, updateMode, buildProgStarter(downloadLanguage), stopProgFuncs)
-	switch err {
-	case doltdb.ErrUpToDate:
-		return HandleVErrAndExitCode(nil, usage)
-	case actions.ErrCantFF:
-		verr := errhand.BuildDError("error: fetch failed, can't fast forward remote tracking ref").AddCause(err).Build()
-		return HandleVErrAndExitCode(verr, usage)
-	}
-	if err != nil {
+	err = actions.FetchRefSpecs(ctx, dEnv.DbData(), srcDB, refSpecs, r, ref.UpdateMode{Force: true}, buildProgStarter(downloadLanguage), stopProgFuncs)
+	if err != nil && err != doltdb.ErrUpToDate {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	return HandleVErrAndExitCode(nil, usage)
