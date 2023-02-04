@@ -188,10 +188,9 @@ func prollyChildSecDiffFkConstraintViolations(
 				return createCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
 			}
 
-			// Perform a range check for keys that are less than the smallest key in parentSecIdxCur
-			rng := prolly.PrefixRange(k, partialDesc)
+			// possible that k is less than the smallest key in parentSecIdxCur, so still should compare
 			key := val.Tuple(parentSecIdxCur.CurrentKey())
-			if !rng.Matches(key) {
+			if partialDesc.Compare(k, key) != 0 {
 				return createCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
 			}
 			return nil
