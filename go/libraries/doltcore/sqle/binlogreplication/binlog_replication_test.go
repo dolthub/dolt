@@ -98,10 +98,7 @@ func TestBinlogReplicationSanityCheck(t *testing.T) {
 	waitForReplicaToCatchUp(t)
 	expectedStatement := "CREATE TABLE t ( pk int NOT NULL, PRIMARY KEY (pk)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"
 	assertCreateTableStatement(t, replicaDatabase, "t", expectedStatement)
-
-	fmt.Println("Directory contents...")
-	printDoltDirContents()
-	assertRepoStateFileExists(t)
+	assertRepoStateFileExists(t, "db01")
 }
 
 // TestResetReplica tests that "RESET REPLICA" and "RESET REPLICA ALL" correctly clear out
@@ -783,4 +780,13 @@ func printFile(path string) {
 		}
 		fmt.Print(s)
 	}
+}
+
+// assertRepoStateFileExists asserts that the repo_state.json file is present for the specified
+// database |db|.
+func assertRepoStateFileExists(t *testing.T, db string) {
+	repoStateFile := filepath.Join(testDir, "dolt", db, ".dolt", "repo_state.json")
+
+	_, err := os.Stat(repoStateFile)
+	require.NoError(t, err)
 }

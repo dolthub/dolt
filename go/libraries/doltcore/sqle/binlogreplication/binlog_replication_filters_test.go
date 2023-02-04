@@ -33,7 +33,7 @@ func TestBinlogReplicationFilters_ignoreTablesOnly(t *testing.T) {
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_IGNORE_TABLE=(db01.t2);")
 
 	// Assert that status shows replication filters
-	status := convertByteArraysToStrings(showReplicaStatus(t))
+	status := showReplicaStatus(t)
 	require.Equal(t, "db01.t2", status["Replicate_Ignore_Table"])
 	require.Equal(t, "", status["Replicate_Do_Table"])
 
@@ -83,7 +83,7 @@ func TestBinlogReplicationFilters_doTablesOnly(t *testing.T) {
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(db01.t1);")
 
 	// Assert that status shows replication filters
-	status := convertByteArraysToStrings(showReplicaStatus(t))
+	status := showReplicaStatus(t)
 	require.Equal(t, "db01.t1", status["Replicate_Do_Table"])
 	require.Equal(t, "", status["Replicate_Ignore_Table"])
 
@@ -134,7 +134,7 @@ func TestBinlogReplicationFilters_doTablesAndIgnoreTables(t *testing.T) {
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_IGNORE_TABLE=(db01.t2);")
 
 	// Assert that replica status shows replication filters
-	status := convertByteArraysToStrings(showReplicaStatus(t))
+	status := showReplicaStatus(t)
 	require.True(t, status["Replicate_Do_Table"] == "db01.t1,db01.t2" ||
 		status["Replicate_Do_Table"] == "db01.t2,db01.t1")
 	require.Equal(t, "db01.t2", status["Replicate_Ignore_Table"])

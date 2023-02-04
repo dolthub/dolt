@@ -15,9 +15,6 @@
 package binlogreplication
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -25,41 +22,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func printDoltDirContents() {
-	// TODO: Temporary hack to debug a failure in CI
-	doltDir := filepath.Join(testDir, "dolt", "db01", ".dolt")
-	entries, err := os.ReadDir(doltDir)
-	if err != nil {
-		fmt.Println("unable to list directory: " + err.Error())
-		return
-	}
-	fmt.Println("Files in " + doltDir + ":")
-	for _, f := range entries {
-		fmt.Println(" - " + f.Name())
-	}
-}
-
-func assertRepoStateFileExists(t *testing.T) {
-	repoStateFile := filepath.Join(testDir, "dolt", "db01", ".dolt", "repo_state.json")
-
-	_, err := os.Stat(repoStateFile)
-	require.NoError(t, err)
-}
-
 // TestBinlogReplicationServerRestart tests that a replica can be configured and started, then the
 // server process can be restarted and replica can be restarted without problems.
 func TestBinlogReplicationServerRestart(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
-	printDoltDirContents()
 
-	var wg sync.WaitGroup
+	primaryDatabase.MustExec("create table t (pk int auto_increment primary key)")
 
 	// Launch a goroutine that inserts data for 5 seconds
-	primaryDatabase.MustExec("create table t (pk int auto_increment primary key)")
-	printDoltDirContents()
-
+	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -70,22 +43,17 @@ func TestBinlogReplicationServerRestart(t *testing.T) {
 		}
 	}()
 
-	printDoltDirContents()
-
-	// Let replication process a few transactions, then stop and restart the server.
+	// Let the replica process a few transactions, then stop the server and pause a second
 	waitForReplicaToReachGtid(t, 3)
 	stopDoltSqlServer(t)
+	time.Sleep(1000 * time.Millisecond)
 
-	// TODO: Temporary hack to debug a failure in CI
-	printDoltDirContents()
-
-	time.Sleep(500 * time.Millisecond)
 	var err error
 	doltPort, doltProcess, err = startDoltSqlServer(testDir)
 	require.NoError(t, err)
 
-	// Check replication status on the replica and assert configuration is still present
-	status := convertByteArraysToStrings(showReplicaStatus(t))
+	// Check replication status on the replica and assert configuration persisted
+	status := showReplicaStatus(t)
 	// The default Connect_Retry interval is 60s; but some tests configure a faster connection retry interval
 	require.True(t, status["Connect_Retry"] == "5" || status["Connect_Retry"] == "60")
 	require.Equal(t, "86400", status["Source_Retry_Count"])

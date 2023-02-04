@@ -63,7 +63,7 @@ func TestBinlogReplicationReconnection(t *testing.T) {
 	require.NoError(t, rows.Close())
 
 	// Assert that show replica status show reconnection IO error
-	status := convertByteArraysToStrings(showReplicaStatus(t))
+	status := showReplicaStatus(t)
 	require.Equal(t, "1158", status["Last_IO_Errno"])
 	require.Equal(t, "unexpected EOF", status["Last_IO_Error"])
 	requireRecentTimeString(t, status["Last_IO_Error_Timestamp"])
@@ -81,7 +81,6 @@ func configureFastConnectionRetry(_ *testing.T) {
 // to a MySQL primary.
 func testInitialReplicaStatus(t *testing.T) {
 	status := showReplicaStatus(t)
-	convertByteArraysToStrings(status)
 
 	// Positioning settings
 	require.Equal(t, "true", status["Auto_Position"])
@@ -140,7 +139,7 @@ func showReplicaStatus(t *testing.T) map[string]interface{} {
 	rows, err := replicaDatabase.Queryx("show replica status;")
 	defer rows.Close()
 	require.NoError(t, err)
-	return readNextRow(t, rows)
+	return convertByteArraysToStrings(readNextRow(t, rows))
 }
 
 func configureToxiProxy(t *testing.T) {
