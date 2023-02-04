@@ -1307,6 +1307,46 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "parent index is longer than child index",
+		SetUpScript: []string{
+			"create table parent (i int primary key, x int, y int, z int, index (y, x, z));",
+			"create table child (y int, x int, primary key(y, x), foreign key (y, x) references parent(y, x));",
+			"insert into parent values (100,1,1,1), (200,2,1,2), (300,1,null,1);",
+			"CALL DOLT_ADD('.')",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+			"CALL DOLT_BRANCH('other');",
+
+			"DELETE from parent WHERE x = 2;",
+			"CALL DOLT_COMMIT('-am', 'main');",
+
+			"CALL DOLT_CHECKOUT('other');",
+			"INSERT INTO child VALUES (1, 2);",
+			"CALL DOLT_COMMIT('-am', 'other');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"set DOLT_FORCE_TRANSACTION_COMMIT = on;",
+			"CALL DOLT_MERGE('other');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * from dolt_constraint_violations",
+				Expected: []sql.Row{
+					{"child", uint64(1)},
+				},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations_parent",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "SELECT y, x from dolt_constraint_violations_child",
+				Expected: []sql.Row{
+					{1, 2},
+				},
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
@@ -3209,6 +3249,38 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				Query:    "select * from dolt_constraint_violations;",
 				Expected: []sql.Row{{"child", uint64(1)}},
+			},
+		},
+	},
+	{
+		Name: "verify-constraints: Stored Procedure ignores null",
+		SetUpScript: []string{
+			"create table parent (id bigint primary key, v1 bigint, v2 bigint, index (v1, v2))",
+			"create table child (id bigint primary key, v1 bigint, v2 bigint, foreign key (v1, v2) references parent(v1, v2))",
+			"insert into parent values (1, 1, 1), (2, 2, 2)",
+			"insert into child values (1, 1, 1), (2, 90, NULL)",
+			"set dolt_force_transaction_commit = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('child')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:            "set foreign_key_checks = 0;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "insert into child values (3, 30, 30);",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:            "set foreign_key_checks = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('child')",
+				Expected: []sql.Row{{1}},
 			},
 		},
 	},
