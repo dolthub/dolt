@@ -3253,8 +3253,8 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name:        "verify-constraints: Stored Procedure ignores null",
-		SetUpScript: []string {
+		Name: "verify-constraints: Stored Procedure ignores null",
+		SetUpScript: []string{
 			"create table parent (id bigint primary key, v1 bigint, v2 bigint, index (v1, v2))",
 			"create table child (id bigint primary key, v1 bigint, v2 bigint, foreign key (v1, v2) references parent(v1, v2))",
 			"insert into parent values (1, 1, 1), (2, 2, 2)",
@@ -3267,7 +3267,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    "set foreign_key_checks = 0;",
+				Query:            "set foreign_key_checks = 0;",
 				SkipResultsCheck: true,
 			},
 			{
@@ -3275,7 +3275,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
-				Query:    "set foreign_key_checks = 1;",
+				Query:            "set foreign_key_checks = 1;",
 				SkipResultsCheck: true,
 			},
 			{
