@@ -180,7 +180,20 @@ teardown() {
     run dolt sql -q "select * from dolt_branches union select * from dolt_remote_branches"
     [[ "$output" =~ "main" ]] || false
     [[ "$output" =~ "create-table-branch" ]] || false
-    [[ "$output" =~ "remotes/rem1/b1" ]] || false    
+    [[ "$output" =~ "remotes/rem1/b1" ]] || false
+
+    # make sure table works with no remote branches
+    mkdir noremotes && cd noremotes
+    dolt init
+    dolt sql <<SQL
+create table t1(a int primary key);
+SQL
+    dolt commit -Am 'new table';
+    dolt branch b1
+
+    run dolt sql -q "select * from dolt_remote_branches" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
 }
 
 @test "system-tables: query dolt_remotes system table" {
