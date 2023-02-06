@@ -58,9 +58,13 @@ const (
 
 var MappingFileHelp = "A mapping file is json in the format:" + `
 
-	{
-		"source_field_name":"dest_field_name"
-		...
+	{ "rows": 
+		[
+			{
+				"source_field_name":"dest_field_name"
+				...
+			}, ...
+		]
 	}
 
 where source_field_name is the name of a field in the file being imported and dest_field_name is the name of a field in the table being imported to.
