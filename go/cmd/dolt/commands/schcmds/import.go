@@ -56,15 +56,11 @@ const (
 	delimParam          = "delim"
 )
 
-var MappingFileHelp = "A mapping file is json in the format:" + `
+var mappingFileHelp = "A mapping file is json in the format:" + `
 
-	{ "rows": 
-		[
-			{
-				"source_field_name":"dest_field_name"
-				...
-			}, ...
-		]
+	{
+		"source_field_name":"dest_field_name"
+		...
 	}
 
 where source_field_name is the name of a field in the file being imported and dest_field_name is the name of a field in the table being imported to.
@@ -80,7 +76,7 @@ If {{.EmphasisLeft}}--replace | -r{{.EmphasisRight}} is given the operation will
 
 A mapping file can be used to map fields between the file being imported and the table's schema being inferred.  This can be used when creating a new table, or updating or replacing an existing table.
 
-` + MappingFileHelp + `
+` + mappingFileHelp + `
 
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (Currently only csv is supported).  For files separated by a delimiter other than a ',', the --delim parameter can be used to specify a delimiter.
 
