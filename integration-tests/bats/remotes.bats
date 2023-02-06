@@ -1217,6 +1217,28 @@ SQL
     [ "$status" -eq 0 ]
 }
 
+@test "remotes: fetch after force push" {
+    mkdir remote clone1
+    cd clone1
+    dolt init
+    dolt sql -q "create table t (pk int primary key);"
+    dolt commit -Am "commit1"
+
+    dolt remote add origin file://../remote
+    dolt push origin main
+
+    cd ..
+    dolt clone file://./remote clone2
+
+    cd clone1
+    dolt commit --amend -m "commit1 edited"
+    dolt push origin main -f
+
+    cd ../clone2
+    run dolt fetch
+    [ "$status" -eq 0 ]
+}
+
 @test "remotes: force fetch from main" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push --set-upstream test-remote main
@@ -1256,11 +1278,9 @@ SQL
     dolt fetch
     dolt push -f origin main
     cd ../../
-    run dolt fetch test-remote
-    [ "$status" -ne 0 ]
     run dolt pull
     [ "$status" -ne 0 ]
-    run dolt fetch -f test-remote
+    run dolt fetch test-remote
     [ "$status" -eq 0 ]
     run dolt pull --no-edit
     [ "$status" -eq 0 ]
