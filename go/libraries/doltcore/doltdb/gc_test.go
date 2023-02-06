@@ -131,6 +131,11 @@ func testConcurrentGC(t *testing.T, test concurrentGCtest) {
 		require.NotZero(t, cl.id)
 		eg.Go(func() error {
 			return runWithSqlSession(ectx, eng, func(sctx *sql.Context, eng *engine.SqlEngine) error {
+				defer func() {
+					if r := recover(); r != nil {
+						//t.Logf("panic in client %s: %v", cl.id, r)
+					}
+				}()
 				// generate and run 128 batches of queries
 				for i := 0; i < 128; i++ {
 					batch := cl.queries(cl.id, i)

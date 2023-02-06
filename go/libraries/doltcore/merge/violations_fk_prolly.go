@@ -146,39 +146,54 @@ func prollyChildSecDiffFkConstraintViolations(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild *constraintViolationsLoadedTable,
-	preChildScndryIdx prolly.Map,
+	preChildSecIdx prolly.Map,
 	receiver FKViolationReceiver) error {
 	postChildRowData := durable.ProllyMapFromIndex(postChild.RowData)
-	postChildScndryIdx := durable.ProllyMapFromIndex(postChild.IndexData)
-	parentScndryIdx := durable.ProllyMapFromIndex(postParent.IndexData)
+	postChildSecIdx := durable.ProllyMapFromIndex(postChild.IndexData)
+	parentSecIdx := durable.ProllyMapFromIndex(postParent.IndexData)
 
-	idxDesc, _ := parentScndryIdx.Descriptors()
-	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
-	partialKB := val.NewTupleBuilder(partialDesc)
+	parentSecIdxDesc, _ := parentSecIdx.Descriptors()
+	partialDesc := parentSecIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
+	childPriKD, _ := postChildRowData.Descriptors()
+	childPriKB := val.NewTupleBuilder(childPriKD)
 
-	primaryKD, _ := postChildRowData.Descriptors()
-	kb := val.NewTupleBuilder(primaryKD)
-
-	err := prolly.DiffMaps(ctx, preChildScndryIdx, postChildScndryIdx, func(ctx context.Context, diff tree.Diff) error {
+	var parentSecIdxCur *tree.Cursor
+	err := prolly.DiffMaps(ctx, preChildSecIdx, postChildSecIdx, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
-			k, v := val.Tuple(diff.Key), val.Tuple(diff.To)
-			partialKey, hasNulls := makePartialKey(
-				partialKB,
-				foreignKey.TableColumns,
-				postChild.Index,
-				postChild.IndexSchema,
-				k,
-				v,
-				preChildScndryIdx.Pool())
-			if hasNulls {
-				return nil
+			k := val.Tuple(diff.Key)
+			// TODO: possible to skip this if there are not null constraints over entire index
+			for i := 0; i < k.Count(); i++ {
+				if k.FieldIsNull(i) {
+					return nil
+				}
 			}
 
-			err := createCVIfNoPartialKeyMatchesSec(ctx, k, v, partialKey, partialDesc, primaryKD, kb, parentScndryIdx, postChildRowData, postChildRowData.Pool(), receiver)
+			if parentSecIdxCur == nil {
+				newCur, err := tree.NewCursorAtKey(ctx, parentSecIdx.NodeStore(), parentSecIdx.Node(), k, partialDesc)
+				if err != nil {
+					return err
+				}
+				if !newCur.Valid() {
+					return createCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
+				}
+				parentSecIdxCur = newCur
+			}
+
+			err := tree.Seek(ctx, parentSecIdxCur, k, partialDesc)
 			if err != nil {
 				return err
 			}
+			if !parentSecIdxCur.Valid() {
+				return createCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
+			}
+
+			// possible that k is less than the smallest key in parentSecIdxCur, so still should compare
+			key := val.Tuple(parentSecIdxCur.CurrentKey())
+			if partialDesc.Compare(k, key) != 0 {
+				return createCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
+			}
+			return nil
 		case tree.RemovedDiff:
 		default:
 			panic("unhandled diff type")
@@ -213,27 +228,14 @@ func createCVIfNoPartialKeyMatchesPri(
 	return receiver.ProllyFKViolationFound(ctx, k, v)
 }
 
-func createCVIfNoPartialKeyMatchesSec(
+func createCVForSecIdx(
 	ctx context.Context,
-	k, v, partialKey val.Tuple,
-	partialKeyDesc val.TupleDesc,
+	k val.Tuple,
 	primaryKD val.TupleDesc,
 	primaryKb *val.TupleBuilder,
-	idx prolly.Map,
 	pri prolly.Map,
 	pool pool.BuffPool,
 	receiver FKViolationReceiver) error {
-	itr, err := creation.NewPrefixItr(ctx, partialKey, partialKeyDesc, idx)
-	if err != nil {
-		return err
-	}
-	_, _, err = itr.Next(ctx)
-	if err != nil && err != io.EOF {
-		return err
-	}
-	if err == nil {
-		return nil
-	}
 
 	// convert secondary idx entry to primary row key
 	// the pks of the table are the last keys of the index
@@ -245,7 +247,7 @@ func createCVIfNoPartialKeyMatchesSec(
 	primaryIdxKey := primaryKb.Build(pool)
 
 	var value val.Tuple
-	err = pri.Get(ctx, primaryIdxKey, func(k, v val.Tuple) error {
+	err := pri.Get(ctx, primaryIdxKey, func(k, v val.Tuple) error {
 		value = v
 		return nil
 	})
@@ -329,7 +331,8 @@ func createCVsForPartialKeyMatches(
 }
 
 func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tblSch schema.Schema, k, v val.Tuple, pool pool.BuffPool) (val.Tuple, bool) {
-	if idxSch.Name() != "" {
+	// Possible that the parent index (idxSch) is longer than the partial key (tags).
+	if idxSch.Name() != "" && len(idxSch.IndexedColumnTags()) <= len(tags) {
 		tags = idxSch.IndexedColumnTags()
 	}
 	for i, tag := range tags {

@@ -260,7 +260,7 @@ type chunkSource interface {
 	hash() addr
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
-	reader(context.Context) (io.Reader, uint64, error)
+	reader(context.Context) (io.ReadCloser, uint64, error)
 
 	// getRecordRanges sets getRecord.found to true, and returns a Range for each present getRecord query.
 	getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error)

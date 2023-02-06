@@ -62,14 +62,12 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 		return cmdFailure, err
 	}
 
-	updateMode := ref.UpdateMode{Force: apr.Contains(cli.ForceFlag)}
-
 	srcDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), remote, false)
 	if err != nil {
 		return 1, err
 	}
 
-	err = actions.FetchRefSpecs(ctx, dbData, srcDB, refSpecs, remote, updateMode, runProgFuncs, stopProgFuncs)
+	err = actions.FetchRefSpecs(ctx, dbData, srcDB, refSpecs, remote, ref.UpdateMode{Force: true}, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		return cmdFailure, fmt.Errorf("fetch failed: %w", err)
 	}

@@ -1292,7 +1292,7 @@ func newTableFile(cs chunkSource, info tableSpec) tableFile {
 			if err != nil {
 				return nil, 0, err
 			}
-			return io.NopCloser(r), s, nil
+			return r, s, nil
 		},
 	}
 }
