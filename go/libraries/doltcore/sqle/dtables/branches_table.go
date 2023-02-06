@@ -32,10 +32,10 @@ var _ sql.DeletableTable = (*BranchesTable)(nil)
 var _ sql.InsertableTable = (*BranchesTable)(nil)
 var _ sql.ReplaceableTable = (*BranchesTable)(nil)
 
-// BranchesTable is a sql.Table implementation that implements a system table which shows the dolt branches
+// BranchesTable is the system table that accesses branches
 type BranchesTable struct {
-	ddb *doltdb.DoltDB
-	all bool
+	ddb    *doltdb.DoltDB
+	remote bool
 }
 
 // NewBranchesTable creates a BranchesTable
@@ -43,16 +43,16 @@ func NewBranchesTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
 	return &BranchesTable{ddb, false}
 }
 
-// NewAllBranchesTable creates a BranchesTable with remote refs included
-func NewAllBranchesTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
+// NewRemoteBranchesTable creates a BranchesTable with only remote refs
+func NewRemoteBranchesTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
 	return &BranchesTable{ddb, true}
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
 // BranchesTableName
 func (bt *BranchesTable) Name() string {
-	if bt.all {
-		return doltdb.AllBranchesTableName
+	if bt.remote {
+		return doltdb.RemoteBranchesTableName
 	}
 	return doltdb.BranchesTableName
 }
@@ -60,8 +60,8 @@ func (bt *BranchesTable) Name() string {
 // String is a sql.Table interface function which returns the name of the table which is defined by the constant
 // BranchesTableName
 func (bt *BranchesTable) String() string {
-	if bt.all {
-		return doltdb.AllBranchesTableName
+	if bt.remote {
+		return doltdb.RemoteBranchesTableName
 	}
 	return doltdb.BranchesTableName
 }
@@ -69,8 +69,8 @@ func (bt *BranchesTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the branches system table
 func (bt *BranchesTable) Schema() sql.Schema {
 	tableName := doltdb.BranchesTableName
-	if bt.all {
-		tableName = doltdb.AllBranchesTableName
+	if bt.remote {
+		tableName = doltdb.RemoteBranchesTableName
 	}
 
 	return []*sql.Column{
@@ -95,7 +95,7 @@ func (bt *BranchesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
 func (bt *BranchesTable) PartitionRows(sqlCtx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return NewBranchItr(sqlCtx, bt.ddb, bt.all)
+	return NewBranchItr(sqlCtx, bt.ddb, bt.remote)
 }
 
 // BranchItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
@@ -106,12 +106,12 @@ type BranchItr struct {
 }
 
 // NewBranchItr creates a BranchItr from the current environment.
-func NewBranchItr(ctx *sql.Context, ddb *doltdb.DoltDB, all bool) (*BranchItr, error) {
+func NewBranchItr(ctx *sql.Context, ddb *doltdb.DoltDB, remote bool) (*BranchItr, error) {
 	var branchRefs []ref.DoltRef
 	var err error
 
-	if all {
-		branchRefs, err = ddb.GetRefsOfType(ctx, map[ref.RefType]struct{}{ref.BranchRefType: {}, ref.RemoteRefType: {}})
+	if remote {
+		branchRefs, err = ddb.GetRefsOfType(ctx, map[ref.RefType]struct{}{ref.RemoteRefType: {}})
 		if err != nil {
 			return nil, err
 		}
@@ -132,7 +132,7 @@ func NewBranchItr(ctx *sql.Context, ddb *doltdb.DoltDB, all bool) (*BranchItr, e
 		}
 
 		if branch.GetType() == ref.RemoteRefType {
-			branchNames[i] = "  " + "remotes/" + branch.GetPath()
+			branchNames[i] = "remotes/" + branch.GetPath()
 		} else {
 			branchNames[i] = branch.GetPath()
 		}

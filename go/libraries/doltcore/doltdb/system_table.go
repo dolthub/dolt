@@ -155,7 +155,7 @@ var persistedSystemTables = []string{
 
 var generatedSystemTables = []string{
 	BranchesTableName,
-	AllBranchesTableName,
+	RemoteBranchesTableName,
 	LogTableName,
 	TableOfTablesInConflictName,
 	TableOfTablesWithViolationsName,
@@ -269,8 +269,8 @@ const (
 	// BranchesTableName is the branches system table name
 	BranchesTableName = "dolt_branches"
 
-	// AllBranchesTableName is the all-branches system table name
-	AllBranchesTableName = "dolt_all_branches"
+	// RemoteBranchesTableName is the all-branches system table name
+	RemoteBranchesTableName = "dolt_remote_branches"
 
 	// RemotesTableName is the remotes system table name
 	RemotesTableName = "dolt_remotes"
