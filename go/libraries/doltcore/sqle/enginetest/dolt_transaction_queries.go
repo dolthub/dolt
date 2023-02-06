@@ -1698,46 +1698,46 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 		},
 	},
-	{
-		Name:        "Run GC concurrently with other transactions",
-		SetUpScript: gcSetup(),
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "/* client a */ SELECT count(*) FROM t;",
-				Expected: []sql.Row{{250}},
-			},
-			{
-				Query:    "/* client a */ START TRANSACTION",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client b */ START TRANSACTION",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client a */ CALL DOLT_GC();",
-				Expected: []sql.Row{{1}},
-			},
-			{
-				Query:    "/* client b */ INSERT into t VALUES (300);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
-			},
-			{
-				Query:    "/* client a */ COMMIT;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client b */ COMMIT;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client a */ SELECT count(*) FROM t;",
-				Expected: []sql.Row{{251}},
-			},
-			{
-				Query:    "/* client b */ SELECT count(*) FROM t;",
-				Expected: []sql.Row{{251}},
-			},
-		},
-	},
+	//	{
+	//		Name:        "Run GC concurrently with other transactions",
+	//		SetUpScript: gcSetup(),
+	//		Assertions: []queries.ScriptTestAssertion{
+	//			{
+	//				Query:    "/* client a */ SELECT count(*) FROM t;",
+	//				Expected: []sql.Row{{250}},
+	//			},
+	//			{
+	//				Query:    "/* client a */ START TRANSACTION",
+	//				Expected: []sql.Row{},
+	//			},
+	//			{
+	//				Query:    "/* client b */ START TRANSACTION",
+	//				Expected: []sql.Row{},
+	//			},
+	//			{
+	//				Query:    "/* client a */ CALL DOLT_GC();",
+	//				Expected: []sql.Row{{1}},
+	//			},
+	//			{
+	//				Query:    "/* client b */ INSERT into t VALUES (300);",
+	//				Expected: []sql.Row{{types.NewOkResult(1)}},
+	//			},
+	//			{
+	//				Query:    "/* client a */ COMMIT;",
+	//				Expected: []sql.Row{},
+	//			},
+	//			{
+	//				Query:    "/* client b */ COMMIT;",
+	//				Expected: []sql.Row{},
+	//			},
+	//			{
+	//				Query:    "/* client a */ SELECT count(*) FROM t;",
+	//				Expected: []sql.Row{{251}},
+	//			},
+	//			{
+	//				Query:    "/* client b */ SELECT count(*) FROM t;",
+	//				Expected: []sql.Row{{251}},
+	//			},
+	//		},
+	//	},
 }

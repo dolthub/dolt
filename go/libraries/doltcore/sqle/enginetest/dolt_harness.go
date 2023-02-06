@@ -176,7 +176,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 		)
 		require.NoError(t, err)
 
-		e, err := enginetest.NewEngineWithProviderSetup(t, d, d.setupData)
+		e, err := enginetest.NewEngine(t, d, d.provider, d.setupData)
 		if err != nil {
 			return nil, err
 		}
@@ -190,7 +190,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 		}
 
 		if !d.skipSetupCommit {
-			e, err = enginetest.RunEngineScripts(ctx, e, commitScripts(dbs), d.SupportsNativeIndexCreation())
+			e, err = enginetest.RunSetupScripts(ctx, e, commitScripts(dbs), d.SupportsNativeIndexCreation())
 			if err != nil {
 				return nil, err
 			}
@@ -204,7 +204,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 
 	ctx := enginetest.NewContext(d)
-	e, err := enginetest.RunEngineScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
+	e, err := enginetest.RunSetupScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
 
 	return e, err
 }

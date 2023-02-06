@@ -79,33 +79,20 @@ type ValueStore struct {
 	bufferedChunksMax    uint64
 	bufferedChunkSize    uint64
 	withBufferedChildren map[hash.Hash]uint64 // chunk Hash -> ref height
-	unresolvedRefs       hash.HashSet
-	enforceCompleteness  bool
 	validateContentAddr  bool
 	decodedChunks        *sizecache.SizeCache
 	nbf                  *NomsBinFormat
 
+	gcCond  *sync.Cond
+	doingGC bool
+
 	versOnce sync.Once
-}
-
-func ErrorIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.ChunkStore) error {
-	absent, err := cs.HasMany(ctx, unresolved)
-	if err != nil {
-		return err
-	}
-
-	if len(absent) != 0 {
-		s := absent.String()
-		return fmt.Errorf("Found dangling references to %s", s)
-	}
-
-	return nil
 }
 
 func AddrsFromNomsValue(ctx context.Context, c chunks.Chunk, nbf *NomsBinFormat) (addrs hash.HashSet, err error) {
 	addrs = hash.NewHashSet()
 	if NomsKind(c.Data()[0]) == SerialMessageKind {
-		err = SerialMessage(c.Data()).walkAddrs(nbf, func(a hash.Hash) error {
+		err = SerialMessage(c.Data()).WalkAddrs(nbf, func(a hash.Hash) error {
 			addrs.Insert(a)
 			return nil
 		})
@@ -157,7 +144,7 @@ func NewValueStore(cs chunks.ChunkStore) *ValueStore {
 }
 
 func newValueStoreWithCacheAndPending(cs chunks.ChunkStore, cacheSize, pendingMax uint64) *ValueStore {
-	return &ValueStore{
+	vs := &ValueStore{
 		cs: cs,
 
 		bufferMu:             sync.RWMutex{},
@@ -165,10 +152,10 @@ func newValueStoreWithCacheAndPending(cs chunks.ChunkStore, cacheSize, pendingMa
 		bufferedChunksMax:    pendingMax,
 		withBufferedChildren: map[hash.Hash]uint64{},
 		decodedChunks:        sizecache.New(cacheSize),
-		unresolvedRefs:       hash.HashSet{},
-		enforceCompleteness:  true,
 		versOnce:             sync.Once{},
 	}
+	vs.gcCond = sync.NewCond(&vs.bufferMu)
+	return vs
 }
 
 func (lvs *ValueStore) expectVersion() {
@@ -178,10 +165,6 @@ func (lvs *ValueStore) expectVersion() {
 		panic(err)
 	}
 	lvs.nbf = nbf
-}
-
-func (lvs *ValueStore) SetEnforceCompleteness(enforce bool) {
-	lvs.enforceCompleteness = enforce
 }
 
 func (lvs *ValueStore) SetValidateContentAddresses(validate bool) {
@@ -407,6 +390,7 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk, height uint64) error {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
+	lvs.waitForGC()
 
 	if lvs.Format().UsesFlatbuffers() {
 		// We do not do write buffering in the new format.
@@ -418,13 +402,6 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 		// possible, and in __DOLT__, WalkAddrs may be
 		// cheap enough that it would be possible to get back
 		// cache-locality in our flushes without ref heights.
-		if lvs.enforceCompleteness {
-			addrs, err := lvs.getAddrs(ctx, c)
-			if err != nil {
-				return err
-			}
-			lvs.unresolvedRefs.InsertAll(addrs)
-		}
 		return lvs.cs.Put(ctx, c, lvs.getAddrs)
 	}
 
@@ -479,10 +456,6 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 			childHash := childRef.TargetHash()
 			if _, isBuffered := lvs.bufferedChunks[childHash]; isBuffered {
 				lvs.withBufferedChildren[h] = height
-			} else if lvs.enforceCompleteness {
-				// If the childRef isn't presently buffered, we must consider it an
-				// unresolved ref.
-				lvs.unresolvedRefs.Insert(childHash)
 			}
 
 			if _, hasBufferedChildren := lvs.withBufferedChildren[childHash]; hasBufferedChildren {
@@ -549,7 +522,39 @@ func (lvs *ValueStore) Rebase(ctx context.Context) error {
 func (lvs *ValueStore) Flush(ctx context.Context) error {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
+	lvs.waitForGC()
 	return lvs.flush(ctx, hash.Hash{})
+}
+
+// Call with lvs.bufferMu locked. Blocks until doingGC == false, releasing the
+// lock while we are blocked. Returns with the lock held, doingGC == false.
+func (lvs *ValueStore) waitForGC() {
+	for lvs.doingGC {
+		lvs.gcCond.Wait()
+	}
+}
+
+// Call without lvs.bufferMu held. If val == false, then doingGC must equal
+// true when this is called. We will set it to false and return without
+// lvs.bufferMu held. If val == true, we will set doingGC to true and return
+// with lvs.bufferMu not held.
+//
+// When val == true, this routine will block until it has a unique opportunity
+// to toggle doingGC from false to true while holding the lock.
+func (lvs *ValueStore) toggleGC(val bool) {
+	lvs.bufferMu.Lock()
+	defer lvs.bufferMu.Unlock()
+	if !val {
+		if !lvs.doingGC {
+			panic("tried to toggleGC to false while it was not true...")
+		}
+		lvs.doingGC = false
+		lvs.gcCond.Broadcast()
+	} else {
+		lvs.waitForGC()
+		lvs.doingGC = true
+	}
+	return
 }
 
 func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
@@ -600,28 +605,6 @@ func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
 	lvs.withBufferedChildren = map[hash.Hash]uint64{}
 	lvs.bufferedChunks = map[hash.Hash]chunks.Chunk{}
 
-	if lvs.enforceCompleteness {
-		root, err := lvs.Root(ctx)
-
-		if err != nil {
-			return err
-		}
-
-		if (current != hash.Hash{} && current != root) {
-			if _, ok := lvs.bufferedChunks[current]; !ok {
-				// If the client is attempting to move the root and the referenced
-				// value isn't still buffered, we need to ensure that it is contained
-				// in the ChunkStore.
-				lvs.unresolvedRefs.Insert(current)
-			}
-		}
-
-		err = ErrorIfDangling(ctx, lvs.unresolvedRefs, lvs.cs)
-		if err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -634,6 +617,7 @@ func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
 func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
+	lvs.waitForGC()
 
 	err := lvs.flush(ctx, current)
 	if err != nil {
@@ -646,10 +630,6 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 	}
 	if !success {
 		return false, nil
-	}
-
-	if lvs.enforceCompleteness {
-		lvs.unresolvedRefs = hash.HashSet{}
 	}
 
 	return true, nil
@@ -690,20 +670,11 @@ func (lvs *ValueStore) numBuffChunks() int {
 
 // GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
 func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet) error {
+	lvs.toggleGC(true)
+	defer lvs.toggleGC(false)
+
 	if lvs.numBuffChunks() > 0 {
 		return errors.New("invalid GC state; bufferedChunks must be empty.")
-	}
-
-	err := func() error {
-		lvs.bufferMu.RLock()
-		defer lvs.bufferMu.RUnlock()
-		if len(lvs.bufferedChunks) > 0 {
-			return errors.New("invalid GC state; bufferedChunks must be empty.")
-		}
-		return nil
-	}()
-	if err != nil {
-		return err
 	}
 
 	lvs.versOnce.Do(lvs.expectVersion)
@@ -733,16 +704,27 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 			return err
 		}
 
-		return lvs.gc(ctx, root, newGenRefs, oldGen.HasMany, newGen, newGen)
+		err = lvs.gc(ctx, root, newGenRefs, oldGen.HasMany, newGen, newGen)
+		if err != nil {
+			return err
+		}
 	} else if collector, ok := lvs.cs.(chunks.ChunkStoreGarbageCollector); ok {
 		if len(oldGenRefs) > 0 {
 			newGenRefs.InsertAll(oldGenRefs)
 		}
 
-		return lvs.gc(ctx, root, newGenRefs, unfilteredHashFunc, collector, collector)
+		err = lvs.gc(ctx, root, newGenRefs, unfilteredHashFunc, collector, collector)
+		if err != nil {
+			return err
+		}
 	} else {
 		return chunks.ErrUnsupportedOperation
 	}
+
+	if tfs, ok := lvs.cs.(chunks.TableFileStore); ok {
+		return tfs.PruneTableFiles(ctx)
+	}
+	return nil
 }
 
 func (lvs *ValueStore) gc(ctx context.Context, root hash.Hash, toVisit hash.HashSet, hashFilter HashFilterFunc, src, dest chunks.ChunkStoreGarbageCollector) error {
@@ -788,11 +770,6 @@ func (lvs *ValueStore) gc(ctx context.Context, root hash.Hash, toVisit hash.Hash
 		close(keepChunks)
 		return nil
 	})
-
-	err := eg.Wait()
-	if err != nil {
-		return err
-	}
 
 	return eg.Wait()
 }
@@ -844,7 +821,7 @@ func (lvs *ValueStore) gcProcessRefs(ctx context.Context, visited hash.HashSet, 
 	}
 
 	// purge the cache
-	lvs.decodedChunks = sizecache.New(lvs.decodedChunks.Size())
+	lvs.decodedChunks.Purge()
 	lvs.bufferedChunks = make(map[hash.Hash]chunks.Chunk, lvs.bufferedChunkSize)
 	lvs.bufferedChunkSize = 0
 	lvs.withBufferedChildren = map[hash.Hash]uint64{}

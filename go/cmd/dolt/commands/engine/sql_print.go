@@ -68,7 +68,7 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 		}
 	}()
 
-	start := time.Now()
+	start := ctx.QueryTime()
 
 	// TODO: this isn't appropriate for JSON, CSV, other structured result formats
 	if isOkResult(sqlSch) {

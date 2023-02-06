@@ -16,20 +16,246 @@ package doltdb_test
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/store/hash"
 )
+
+func TestConcurrentGC(t *testing.T) {
+	dprocedures.DoltGCFeatureFlag = true
+	// Each test spawns concurrent clients execute queries, some clients
+	// will trigger gc processes. When all clients finish, we run a final
+	// gc process to validate that no dangling references remain.
+	tests := []concurrentGCtest{
+		{
+			name:  "smoke test",
+			setup: []string{"CREATE TABLE t (id int primary key)"},
+			clients: []client{
+				{
+					id: "client",
+					queries: func(id string, i int) (queries []string) {
+						return []string{
+							fmt.Sprintf("INSERT INTO t VALUES (%d)", i),
+							"SELECT COUNT(*) FROM t",
+						}
+					}},
+			},
+		},
+		{
+			name: "aaron's repro",
+			// create 32 branches
+			setup: func() []string {
+				queries := []string{
+					"CREATE TABLE t (id int primary key, val TEXT)",
+					"CALL dcommit('-Am', 'new table t');",
+				}
+				for b := 0; b < 32; b++ {
+					q := fmt.Sprintf("CALL dolt_checkout('-b', 'branch_%d');", b)
+					queries = append(queries, q)
+				}
+				return queries
+			}(),
+			// for each branch, create a single client that
+			// writes only to that branch
+			clients: func() []client {
+				cc := []client{{
+					id: "gc_client",
+					queries: func(string, int) []string {
+						return []string{"CALL dolt_gc();"}
+					},
+				}}
+				for b := 0; b < 32; b++ {
+					branch := fmt.Sprintf("branch_%d", b)
+					cc = append(cc, client{
+						id: branch,
+						queries: func(id string, idx int) []string {
+							q := fmt.Sprintf("INSERT INTO `%s/%s`.t VALUES (%d, '%s_%d')",
+								testDB, id, idx, id, idx)
+							return []string{q}
+						}})
+				}
+				return cc
+			}(),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testConcurrentGC(t, test)
+		})
+	}
+}
+
+// concurrentGCtest tests concurrent GC
+type concurrentGCtest struct {
+	name    string
+	setup   []string
+	clients []client
+}
+
+type client struct {
+	id      string
+	queries func(id string, idx int) []string
+}
+
+func testConcurrentGC(t *testing.T, test concurrentGCtest) {
+	ctx := context.Background()
+	eng := setupSqlEngine(t, ctx)
+	err := runWithSqlSession(ctx, eng, func(sctx *sql.Context, eng *engine.SqlEngine) error {
+		for _, q := range test.setup {
+			if err := execQuery(sctx, eng, q); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	eg, ectx := errgroup.WithContext(ctx)
+	for _, c := range test.clients {
+		cl := c
+		require.NotZero(t, cl.id)
+		eg.Go(func() error {
+			return runWithSqlSession(ectx, eng, func(sctx *sql.Context, eng *engine.SqlEngine) error {
+				defer func() {
+					if r := recover(); r != nil {
+						//t.Logf("panic in client %s: %v", cl.id, r)
+					}
+				}()
+				// generate and run 128 batches of queries
+				for i := 0; i < 128; i++ {
+					batch := cl.queries(cl.id, i)
+					for _, q := range batch {
+						qerr := execQuery(sctx, eng, q)
+						if qerr != nil {
+							// allow clients to error, but close connection
+							// todo: restrict errors to dangling refs
+							// t.Logf("error in client %s: %s", cl.id, qerr.Error())
+							return nil
+						}
+					}
+				}
+				return nil
+			})
+		})
+	}
+	require.NoError(t, eg.Wait())
+
+	// now run a full GC and assert we don't find dangling refs
+	err = runWithSqlSession(ctx, eng, func(sctx *sql.Context, eng *engine.SqlEngine) (err error) {
+		qq := []string{
+			// ensure we have garbage to collect
+			"CREATE TABLE garbage (val int)",
+			"DROP TABLE garbage",
+			"CALL dolt_gc()",
+		}
+		for _, q := range qq {
+			if err = execQuery(sctx, eng, q); err != nil {
+				return err
+			}
+		}
+		return
+	})
+	require.NoError(t, err)
+}
+
+func runWithSqlSession(ctx context.Context, eng *engine.SqlEngine, cb func(sctx *sql.Context, eng *engine.SqlEngine) error) error {
+	sess, err := eng.NewDoltSession(ctx, sql.NewBaseSession())
+	if err != nil {
+		return err
+	}
+	sctx := sql.NewContext(ctx, sql.WithSession(sess))
+	sctx.SetCurrentDatabase(testDB)
+	sctx.Session.SetClient(sql.Client{User: "root", Address: "%"})
+	return cb(sctx, eng)
+}
+
+func execQuery(sctx *sql.Context, eng *engine.SqlEngine, query string) (err error) {
+	_, iter, err := eng.Query(sctx, query)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		// tx commit
+		if cerr := iter.Close(sctx); err == nil {
+			err = cerr
+		}
+	}()
+	for {
+		_, err = iter.Next(sctx)
+		if err == io.EOF {
+			err = nil
+			break
+		} else if err != nil {
+			return err
+		}
+	}
+	return
+}
+
+const (
+	// DB name matches dtestutils.CreateTestEnv()
+	testDB = "dolt"
+)
+
+func setupSqlEngine(t *testing.T, ctx context.Context) (eng *engine.SqlEngine) {
+	dEnv := dtestutils.CreateTestEnv()
+	mrEnv, err := env.MultiEnvForDirectory(
+		ctx,
+		dEnv.Config.WriteableConfig(),
+		dEnv.FS,
+		dEnv.Version,
+		dEnv.IgnoreLockFile,
+		dEnv)
+	if err != nil {
+		panic(err)
+	}
+
+	eng, err = engine.NewSqlEngine(ctx, mrEnv, engine.FormatNull, &engine.SqlEngineConfig{
+		InitialDb:    testDB,
+		IsReadOnly:   false,
+		PrivFilePath: "",
+		ServerUser:   "root",
+		ServerPass:   "",
+		ServerHost:   "localhost",
+		Autocommit:   true,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	sqlCtx, err := eng.NewContext(ctx)
+	require.NoError(t, err)
+	sqlCtx.Session.SetClient(sql.Client{
+		User: "root", Address: "%",
+	})
+	return
+}
+
+func TestGarbageCollection(t *testing.T) {
+	require.True(t, true)
+	assert.True(t, true)
+
+	for _, gct := range gcTests {
+		t.Run(gct.name, func(t *testing.T) {
+			testGarbageCollection(t, gct)
+		})
+	}
+}
 
 type stage struct {
 	commands     []testCommand
@@ -94,17 +320,6 @@ var gcSetupCommon = []testCommand{
 	{commands.SqlCmd{}, []string{"-q", "CREATE TABLE test (pk int PRIMARY KEY)"}},
 	{commands.AddCmd{}, []string{"."}},
 	{commands.CommitCmd{}, []string{"-m", "created test table"}},
-}
-
-func TestGarbageCollection(t *testing.T) {
-	require.True(t, true)
-	assert.True(t, true)
-
-	for _, gct := range gcTests {
-		t.Run(gct.name, func(t *testing.T) {
-			testGarbageCollection(t, gct)
-		})
-	}
 }
 
 func testGarbageCollection(t *testing.T, test gcTest) {

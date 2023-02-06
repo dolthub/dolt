@@ -175,7 +175,7 @@ func (sm SerialMessage) Less(nbf *NomsBinFormat, other LesserValuable) (bool, er
 const SerialMessageRefHeight = 1024
 
 func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
-	return sm.walkAddrs(nbf, func(addr hash.Hash) error {
+	return sm.WalkAddrs(nbf, func(addr hash.Hash) error {
 		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 		if err != nil {
 			return err
@@ -183,7 +183,7 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 		return cb(r)
 	})
 }
-func (sm SerialMessage) walkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) error) error {
+func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) error) error {
 	switch serial.GetFileID(sm) {
 	case serial.StoreRootFileID:
 		var msg serial.StoreRoot
@@ -193,7 +193,7 @@ func (sm SerialMessage) walkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 		}
 		if msg.AddressMapLength() > 0 {
 			mapbytes := msg.AddressMapBytes()
-			return SerialMessage(mapbytes).walkAddrs(nbf, cb)
+			return SerialMessage(mapbytes).WalkAddrs(nbf, cb)
 		}
 	case serial.TagFileID:
 		var msg serial.Tag
@@ -231,7 +231,7 @@ func (sm SerialMessage) walkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 		if err != nil {
 			return err
 		}
-		err = SerialMessage(msg.TablesBytes()).walkAddrs(nbf, cb)
+		err = SerialMessage(msg.TablesBytes()).WalkAddrs(nbf, cb)
 		if err != nil {
 			return err
 		}
@@ -295,7 +295,7 @@ func (sm SerialMessage) walkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 			}
 		}
 
-		err = SerialMessage(msg.SecondaryIndexesBytes()).walkAddrs(nbf, cb)
+		err = SerialMessage(msg.SecondaryIndexesBytes()).WalkAddrs(nbf, cb)
 		if err != nil {
 			return err
 		}
@@ -312,7 +312,7 @@ func (sm SerialMessage) walkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 				return cb(ref.TargetHash())
 			})
 		} else {
-			return SerialMessage(mapbytes).walkAddrs(nbf, cb)
+			return SerialMessage(mapbytes).WalkAddrs(nbf, cb)
 		}
 	case serial.CommitFileID:
 		parents, err := SerialCommitParentAddrs(nbf, sm)
@@ -340,19 +340,10 @@ func (sm SerialMessage) walkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 				return err
 			}
 		}
-	case serial.TableSchemaFileID:
+	case serial.TableSchemaFileID, serial.ForeignKeyCollectionFileID:
+		// no further references from these file types
 		return nil
-	case serial.ForeignKeyCollectionFileID:
-		return nil
-	case serial.ProllyTreeNodeFileID:
-		fallthrough
-	case serial.AddressMapFileID:
-		fallthrough
-	case serial.MergeArtifactsFileID:
-		fallthrough
-	case serial.BlobFileID:
-		fallthrough
-	case serial.CommitClosureFileID:
+	case serial.ProllyTreeNodeFileID, serial.AddressMapFileID, serial.MergeArtifactsFileID, serial.BlobFileID, serial.CommitClosureFileID:
 		return message.WalkAddresses(context.TODO(), serial.Message(sm), func(ctx context.Context, addr hash.Hash) error {
 			return cb(addr)
 		})
