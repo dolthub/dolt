@@ -496,13 +496,15 @@ func HandleInitRemoteStorageClientErr(name, url string, err error) error {
 	return fmt.Errorf("%w; %s; %s", ErrFailedToGetRemoteDb, detail, err.Error())
 }
 
+// ParseRemoteBranchName takes remote branch ref name, parses it and returns remote branch name.
+// For example, it parses the input string 'origin/john/mybranch' and returns remote name 'origin' and branch name 'john/mybranch'.
 func ParseRemoteBranchName(startPt string) (string, string) {
 	startPt = strings.TrimPrefix(startPt, "remotes/")
-	names := strings.Split(startPt, "/")
+	names := strings.SplitN(startPt, "/", 2)
 	if len(names) < 2 {
 		return "", ""
 	}
-	return names[0], strings.Join(names[1:], "/")
+	return names[0], names[1]
 }
 
 // GetRemoteBranchRef returns a remote ref with matching name for a branch for each remote.
