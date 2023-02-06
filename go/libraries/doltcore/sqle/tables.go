@@ -930,6 +930,11 @@ func (t DoltTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
 
 // Projections implements sql.ProjectedTable
 func (t *DoltTable) Projections() []string {
+	// The semantics of nil v. empty are important for this inteface, they display differently in explain plans
+	if t.projectedCols == nil {
+		return nil
+	}
+	
 	names := make([]string, len(t.projectedCols))
 	cols := t.sch.GetAllCols()
 	for i := range t.projectedCols {

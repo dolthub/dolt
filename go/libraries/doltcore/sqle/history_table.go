@@ -311,6 +311,11 @@ func (ht *HistoryTable) WithProjections(colNames []string) sql.Table {
 }
 
 func (ht *HistoryTable) Projections() []string {
+	// The semantics of nil v. zero length is important when displaying explain plans
+	if ht.projectedCols == nil {
+		return nil
+	}
+	
 	names := make([]string, len(ht.projectedCols))
 	cols := ht.doltTable.sch.GetAllCols()
 	for i := range ht.projectedCols {

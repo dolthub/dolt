@@ -180,6 +180,10 @@ func (t *WritableIndexedDoltTable) WithProjections(colNames []string) sql.Table 
 
 // Projections implements sql.ProjectedTable
 func (t *WritableIndexedDoltTable) Projections() []string {
+	if t.projectedCols == nil {
+		return nil
+	}
+	
 	names := make([]string, len(t.projectedCols))
 	cols := t.sch.GetAllCols()
 	for i := range t.projectedCols {
