@@ -2112,8 +2112,7 @@ SQL
     dolt init
     dolt remote add origin file://../remote
     dolt sql -q "CREATE TABLE a (pk int)"
-    dolt add .
-    dolt commit -am "add table a"
+    dolt commit -Am "add table a"
     dolt push --set-upstream origin main
     dolt checkout -b other
     dolt push --set-upstream origin other
