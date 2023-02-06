@@ -357,46 +357,17 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
-@test "sql-fetch: dolt_fetch --force" {
+@test "sql-fetch: dolt_fetch with forced commit" {
     # reverse information flow for force fetch repo1->rem1->repo2
     cd repo2
     dolt sql -q "create table t2 (a int)"
     dolt add .
     dolt commit -am "forced commit"
     dolt push --force origin main
-
     cd ../repo1
+
     run dolt sql -q "call dolt_fetch('origin', 'main')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "fetch failed: can't fast forward merge" ]] || false
-
-    dolt sql -q "call dolt_fetch('--force', 'origin', 'main')"
-    
-    dolt diff main origin/main
-    run dolt diff main origin/main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "deleted table" ]] || false
-
-    run dolt sql -q "show tables as of hashof('origin/main')" -r csv
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t2" ]] || false
-}
-
-@test "sql-fetch: CALL dolt_fetch --force" {
-    # reverse information flow for force fetch repo1->rem1->repo2
-    cd repo2
-    dolt sql -q "create table t2 (a int)"
-    dolt add .
-    dolt commit -am "forced commit"
-    dolt push --force origin main
-
-    cd ../repo1
-    run dolt sql -q "CALL dolt_fetch('origin', 'main')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "fetch failed: can't fast forward merge" ]] || false
-
-    dolt sql -q "CALL dolt_fetch('--force', 'origin', 'main')"
     
     run dolt diff main origin/main
     [ "$status" -eq 0 ]
