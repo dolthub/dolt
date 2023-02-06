@@ -68,7 +68,7 @@ const (
 	disableFkChecks   = "disable-fk-checks"
 )
 
-var jsonInputFileHelp = "A mapping file is json in the format:" + `
+var jsonInputFileHelp = "The expected JSON input file format is:" + `
 
 	{ "rows":
 		[
@@ -98,6 +98,8 @@ If the schema for the existing table does not match the schema for the new file,
 
 A mapping file can be used to map fields between the file being imported and the table being written to. This can be used when creating a new table, or updating or replacing an existing table.
 
+` + schcmds.MappingFileHelp +
+		`
 ` + jsonInputFileHelp +
 		`
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimiter`,
