@@ -351,7 +351,7 @@ func (t *DoltTable) Format() *types.NomsBinFormat {
 
 // Schema returns the schema for this table.
 func (t *DoltTable) Schema() sql.Schema {
-	if len(t.projectedSchema) > 0 {
+	if t.projectedSchema != nil {
 		return t.projectedSchema
 	}
 	return t.sqlSchema().Schema
@@ -954,8 +954,8 @@ func (t *DoltTable) ProjectedTags() []uint64 {
 // WithProjections implements sql.ProjectedTable
 func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 	nt := *t
-	nt.projectedCols = make([]uint64, 0, len(colNames))
-	nt.projectedSchema = make(sql.Schema, 0, len(colNames))
+	nt.projectedCols = make([]uint64, len(colNames))
+	nt.projectedSchema = make(sql.Schema, len(colNames))
 	cols := t.sch.GetAllCols()
 	sch := t.Schema()
 	for i := range colNames {
@@ -969,8 +969,8 @@ func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 			// filling the gaps with nil values.
 			continue
 		}
-		nt.projectedCols = append(nt.projectedCols, col.Tag)
-		nt.projectedSchema = append(nt.projectedSchema, sch[sch.IndexOfColName(lowerName)])
+		nt.projectedCols[i] = col.Tag
+		nt.projectedSchema[i] = sch[sch.IndexOfColName(lowerName)]
 	}
 	return &nt
 }

@@ -69,31 +69,31 @@ func TestSingleQuery(t *testing.T) {
 	t.Skip()
 
 	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData, setup.MytableData)
+	harness.Setup(setup.SimpleSetup...)
 	engine, err := harness.NewEngine(t)
 	if err != nil {
 		panic(err)
 	}
 
 	setupQueries := []string{
-		"create table t1 (pk int primary key, c int);",
-		"insert into t1 values (1,2), (3,4)",
-		"call dolt_add('.')",
-		"set @Commit1 = dolt_commit('-am', 'initial table');",
-		"insert into t1 values (5,6), (7,8)",
-		"set @Commit2 = dolt_commit('-am', 'two more rows');",
+		// "create table t1 (pk int primary key, c int);",
+		// "insert into t1 values (1,2), (3,4)",
+		// "call dolt_add('.')",
+		// "set @Commit1 = dolt_commit('-am', 'initial table');",
+		// "insert into t1 values (5,6), (7,8)",
+		// "set @Commit2 = dolt_commit('-am', 'two more rows');",
 	}
 
 	for _, q := range setupQueries {
 		enginetest.RunQuery(t, engine, harness, q)
 	}
 
-	//engine.Analyzer.Debug = true
-	//engine.Analyzer.Verbose = true
+	engine.Analyzer.Debug = true
+	engine.Analyzer.Verbose = true
 
 	var test queries.QueryTest
 	test = queries.QueryTest{
-		Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
+		Query: "explain SELECT a.* FROM mytable a, mytable b where a.i = a.s",
 		Expected: []sql.Row{
 			{"Exchange"},
 			{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},

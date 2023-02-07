@@ -338,7 +338,7 @@ func (ht *HistoryTable) Projections() []string {
 }
 
 func (ht *HistoryTable) ProjectedTags() []uint64 {
-	if len(ht.projectedCols) > 0 {
+	if ht.projectedCols != nil {
 		return ht.projectedCols
 	}
 	return append(ht.doltTable.ProjectedTags(), schema.HistoryCommitHashTag, schema.HistoryCommitterTag, schema.HistoryCommitDateTag)
@@ -357,7 +357,7 @@ func (ht *HistoryTable) String() string {
 // Schema returns the schema for the history table
 func (ht *HistoryTable) Schema() sql.Schema {
 	sch := historyTableSchema(ht.Name(), ht.doltTable)
-	if len(ht.projectedCols) == 0 {
+	if ht.projectedCols == nil {
 		return sch
 	}
 
