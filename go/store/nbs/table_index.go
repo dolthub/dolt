@@ -19,9 +19,10 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"github.com/bits-and-blooms/bloom/v3"
 	"io"
 	"sync/atomic"
+
+	"github.com/bits-and-blooms/bloom/v3"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -256,7 +257,7 @@ func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, to
 
 	bloomFilter := bloom.NewWithEstimates(uint(count), 0.1)
 	for i := uint32(0); i < count; i++ {
-		prefix := tuples[i*prefixTupleSize:i*prefixTupleSize+addrPrefixSize]
+		prefix := tuples[i*prefixTupleSize : i*prefixTupleSize+addrPrefixSize]
 		bloomFilter.Add(prefix)
 	}
 
