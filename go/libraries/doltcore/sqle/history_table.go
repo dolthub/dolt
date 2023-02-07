@@ -453,7 +453,7 @@ type historyIter struct {
 }
 
 func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTable, h hash.Hash, cm *doltdb.Commit, lookup sql.IndexLookup, projections []uint64) (*historyIter, error) {
-	targetSchema := table.Schema().Copy()
+	targetSchema := table.sqlSchema().Schema.Copy()
 
 	root, err := cm.GetRootValue(ctx)
 	if err != nil {
@@ -506,7 +506,10 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 			return nil, err
 		}
 	}
-	converter := rowConverter(histTable.Schema(), targetSchema, h, meta, projections)
+	
+	// note the use of sqlSchema here, not table.Schema() -- we need the entire table schema for the converter, not any
+	// projection of it
+	converter := rowConverter(table.sqlSchema().Schema, targetSchema, h, meta, projections)
 	return &historyIter{
 		table:           histTable,
 		tablePartitions: partIter,
