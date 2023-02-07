@@ -27,7 +27,6 @@ import (
 	"errors"
 	"io"
 	"sort"
-	"sync/atomic"
 
 	"github.com/golang/snappy"
 	"golang.org/x/sync/errgroup"
@@ -131,6 +130,7 @@ func (ir indexResult) Length() uint32 {
 
 type tableReaderAt interface {
 	ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error)
+	Reader(ctx context.Context) (io.ReadCloser, error)
 }
 
 // tableReader implements get & has queries against a single nbs table. goroutine safe.
@@ -453,28 +453,15 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 		stats *Stats) error,
 ) error {
 	batches := toReadBatches(offsetRecords, tr.blockSize)
-	var idx int32
-	readBatches := func() error {
-		for {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			i := atomic.AddInt32(&idx, 1) - 1
-			if int(i) >= len(batches) {
-				return nil
-			}
-			rb := batches[i]
-			err := readAtOffsets(ctx, rb, stats)
-			if err != nil {
-				return err
-			}
+	for i := range batches {
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
+		i := i
+		eg.Go(func() error {
+			return readAtOffsets(ctx, batches[i], stats)
+		})
 	}
-	ioParallelism := 4
-	for i := 0; i < ioParallelism; i++ {
-		eg.Go(readBatches)
-	}
-
 	return nil
 }
 
@@ -645,10 +632,14 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 	return nil
 }
 
-func (tr tableReader) reader(ctx context.Context) (io.Reader, uint64, error) {
+func (tr tableReader) reader(ctx context.Context) (io.ReadCloser, uint64, error) {
 	i, _ := tr.index()
 	sz := i.tableFileSize()
-	return io.LimitReader(&readerAdapter{tr.r, 0, ctx}, int64(sz)), sz, nil
+	r, err := tr.r.Reader(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	return r, sz, nil
 }
 
 func (tr tableReader) getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error) {

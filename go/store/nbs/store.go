@@ -591,13 +591,17 @@ func (nbs *NomsBlockStore) waitForGC() {
 }
 
 func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
+	return nbs.putChunk(ctx, c, getAddrs, nbs.hasMany)
+}
+
+func (nbs *NomsBlockStore) putChunk(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb, checker refCheck) error {
 	t1 := time.Now()
 	addrs, err := getAddrs(ctx, c)
 	if err != nil {
 		return err
 	}
 
-	success, err := nbs.addChunk(ctx, c, addrs)
+	success, err := nbs.addChunk(ctx, c, addrs, checker)
 	if err != nil {
 		return err
 	} else if !success {
@@ -610,7 +614,7 @@ func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 	return nil
 }
 
-func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs hash.HashSet) (bool, error) {
+func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs hash.HashSet, checker refCheck) (bool, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	nbs.waitForGC()
@@ -621,8 +625,11 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs 
 
 	ok := nbs.mt.addChunk(a, ch.Data())
 	if !ok {
-		ts, err := nbs.tables.append(ctx, nbs.mt, nbs.stats)
+		ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.stats)
 		if err != nil {
+			if errors.Is(err, ErrDanglingRef) {
+				nbs.mt = nil
+			}
 			return false, err
 		}
 		nbs.tables = ts
@@ -638,8 +645,8 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs 
 // refCheck checks that no dangling references are being committed.
 type refCheck func(reqs []hasRecord) (hash.HashSet, error)
 
-func (nbs *NomsBlockStore) errorIfDangling(checker refCheck) error {
-	if (nbs.mt == nil || nbs.mt.pendingRefs == nil) && (len(nbs.tables.novel) == 0) {
+func (nbs *NomsBlockStore) errorIfDangling(root hash.Hash, checker refCheck) error {
+	if nbs.mt == nil || nbs.mt.pendingRefs == nil {
 		return nil // no refs to check
 	}
 
@@ -648,32 +655,20 @@ func (nbs *NomsBlockStore) errorIfDangling(checker refCheck) error {
 	if err != nil {
 		return err
 	} else if absent.Size() > 0 {
-		return fmt.Errorf("found dangling references to %s", absent.String())
+		return fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
 	}
 
-	if len(nbs.tables.novel) == 0 {
-		return nil
-	}
-
-	pending := hash.NewHashSet()
-	for _, cs := range nbs.tables.novel {
-		var idx tableIndex
-		var set hash.HashSet
-		if idx, err = cs.index(); err != nil {
-			return err
-		}
-		if set, err = hashSetFromTableIndex(idx); err != nil {
-			return err
-		}
-		pending.InsertAll(set)
-	}
-
-	absent, err = checker(toHasRecords(pending))
+	var hr [1]hasRecord
+	a := addr(root)
+	hr[0].a = &a
+	hr[0].prefix = a.Prefix()
+	absent, err = checker(hr[:])
 	if err != nil {
 		return err
 	} else if absent.Size() > 0 {
-		return fmt.Errorf("found dangling references to %s", absent.String())
+		return fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
 	}
+
 	return nil
 }
 
@@ -756,6 +751,8 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 	}()
 
 	eg, ctx := errgroup.WithContext(ctx)
+	const ioParallelism = 16
+	eg.SetLimit(ioParallelism)
 
 	tables, remaining, err := func() (tables chunkReader, remaining bool, err error) {
 		nbs.mu.RLock()
@@ -980,28 +977,27 @@ func (nbs *NomsBlockStore) commit(ctx context.Context, current, last hash.Hash, 
 	t1 := time.Now()
 	defer nbs.stats.CommitLatency.SampleTimeSince(t1)
 
-	anyPossiblyNovelChunks := func() bool {
-		nbs.mu.Lock()
-		defer nbs.mu.Unlock()
-		return nbs.mt != nil || len(nbs.tables.novel) > 0
-	}
+	nbs.mu.Lock()
+	nbs.waitForGC()
 
-	if !anyPossiblyNovelChunks() && current == last {
+	anyPossiblyNovelChunks := nbs.mt != nil || len(nbs.tables.novel) > 0
+
+	if !anyPossiblyNovelChunks && current == last {
+		nbs.mu.Unlock()
 		err := nbs.Rebase(ctx)
-
 		if err != nil {
 			return false, err
 		}
-
 		return true, nil
 	}
 
-	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-	nbs.waitForGC()
 
 	// check for dangling references in |nbs.mt|
-	if err = nbs.errorIfDangling(checker); err != nil {
+	if err = nbs.errorIfDangling(current, checker); err != nil {
+		if errors.Is(err, ErrDanglingRef) {
+			nbs.mt = nil
+		}
 		return false, err
 	}
 
@@ -1019,8 +1015,11 @@ func (nbs *NomsBlockStore) commit(ctx context.Context, current, last hash.Hash, 
 		}
 
 		if cnt > preflushChunkCount {
-			ts, err := nbs.tables.append(ctx, nbs.mt, nbs.stats)
+			ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.stats)
 			if err != nil {
+				if errors.Is(err, ErrDanglingRef) {
+					nbs.mt = nil
+				}
 				return false, err
 			}
 			nbs.tables, nbs.mt = ts, nil
@@ -1037,15 +1036,13 @@ func (nbs *NomsBlockStore) commit(ctx context.Context, current, last hash.Hash, 
 	}()
 
 	for {
-		if err := nbs.updateManifest(ctx, current, last); err == nil {
+		if err := nbs.updateManifest(ctx, current, last, checker); err == nil {
 			return true, nil
 		} else if err == errOptimisticLockFailedRoot || err == errLastRootMismatch {
 			return false, nil
 		} else if err != errOptimisticLockFailedTables {
 			return false, err
 		}
-
-		// I guess this thing infinitely retries without backoff in the case off errOptimisticLockFailedTables
 	}
 }
 
@@ -1056,7 +1053,7 @@ var (
 )
 
 // callers must acquire lock |nbs.mu|
-func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last hash.Hash) error {
+func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last hash.Hash, checker refCheck) error {
 	if nbs.upstream.root != last {
 		return errLastRootMismatch
 	}
@@ -1096,8 +1093,11 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		}
 
 		if cnt > 0 {
-			ts, err := nbs.tables.append(ctx, nbs.mt, nbs.stats)
+			ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.stats)
 			if err != nil {
+				if errors.Is(err, ErrDanglingRef) {
+					nbs.mt = nil
+				}
 				return err
 			}
 			nbs.tables, nbs.mt = ts, nil
@@ -1292,7 +1292,7 @@ func newTableFile(cs chunkSource, info tableSpec) tableFile {
 			if err != nil {
 				return nil, 0, err
 			}
-			return io.NopCloser(r), s, nil
+			return r, s, nil
 		},
 	}
 }
@@ -1405,6 +1405,10 @@ func (nbs *NomsBlockStore) AddTableFilesToManifest(ctx context.Context, fileIdTo
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
+	return nbs.pruneTableFiles(ctx, nbs.hasMany)
+}
+
+func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context, checker refCheck) (err error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	nbs.waitForGC()
@@ -1420,7 +1424,7 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 
 	for {
 		// flush all tables and update manifest
-		err = nbs.updateManifest(ctx, nbs.upstream.root, nbs.upstream.root)
+		err = nbs.updateManifest(ctx, nbs.upstream.root, nbs.upstream.root, checker)
 
 		if err == nil {
 			break
@@ -1628,11 +1632,15 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 
 // SetRootChunk changes the root chunk hash from the previous value to the new root.
 func (nbs *NomsBlockStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
+	return nbs.setRootChunk(ctx, root, previous, nbs.hasMany)
+}
+
+func (nbs *NomsBlockStore) setRootChunk(ctx context.Context, root, previous hash.Hash, checker refCheck) error {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	nbs.waitForGC()
 	for {
-		err := nbs.updateManifest(ctx, root, previous)
+		err := nbs.updateManifest(ctx, root, previous, checker)
 
 		if err == nil {
 			return nil

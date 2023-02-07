@@ -55,7 +55,7 @@ func tableFileExists(ctx context.Context, dir string, h addr) (bool, error) {
 func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint32, q MemoryQuotaProvider, fc *fdCache) (cs chunkSource, err error) {
 	path := filepath.Join(dir, h.String())
 
-	index, err := func() (ti onHeapTableIndex, err error) {
+	index, sz, err := func() (ti onHeapTableIndex, sz int64, err error) {
 
 		// Be careful with how |f| is used below. |RefFile| returns a cached
 		// os.File pointer so the code needs to use f in a concurrency-safe
@@ -82,7 +82,8 @@ func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint
 		}
 
 		idxSz := int64(indexSize(chunkCount) + footerSize)
-		indexOffset := fi.Size() - idxSz
+		sz = fi.Size()
+		indexOffset := sz - idxSz
 		r := io.NewSectionReader(f, indexOffset, idxSz)
 
 		var b []byte
@@ -122,7 +123,7 @@ func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint
 		return nil, errors.New("unexpected chunk count")
 	}
 
-	tr, err := newTableReader(index, &cacheReaderAt{path, fc}, fileBlockSize)
+	tr, err := newTableReader(index, &cacheReaderAt{path, fc, sz}, fileBlockSize)
 	if err != nil {
 		index.Close()
 		return nil, err
@@ -153,6 +154,11 @@ func (mmtr *fileTableReader) clone() (chunkSource, error) {
 type cacheReaderAt struct {
 	path string
 	fc   *fdCache
+	sz   int64
+}
+
+func (cra *cacheReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {
+	return io.NopCloser(io.LimitReader(&readerAdapter{cra, 0, ctx}, cra.sz)), nil
 }
 
 func (cra *cacheReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {

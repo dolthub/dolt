@@ -171,7 +171,7 @@ func (gcs *GenerationalNBS) errorIfDangling(ctx context.Context, addrs hash.Hash
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
 func (gcs *GenerationalNBS) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
-	return gcs.newGen.Put(ctx, c, getAddrs)
+	return gcs.newGen.putChunk(ctx, c, getAddrs, gcs.hasMany)
 }
 
 // Returns the NomsVersion with which this ChunkSource is compatible.
@@ -324,18 +324,18 @@ func (gcs *GenerationalNBS) AddTableFilesToManifest(ctx context.Context, fileIdT
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest of the new or old gen chunkstores
 func (gcs *GenerationalNBS) PruneTableFiles(ctx context.Context) error {
-	err := gcs.oldGen.PruneTableFiles(ctx)
+	err := gcs.oldGen.pruneTableFiles(ctx, gcs.hasMany)
 
 	if err != nil {
 		return err
 	}
 
-	return gcs.newGen.PruneTableFiles(ctx)
+	return gcs.newGen.pruneTableFiles(ctx, gcs.hasMany)
 }
 
 // SetRootChunk changes the root chunk hash from the previous value to the new root for the newgen cs
 func (gcs *GenerationalNBS) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
-	return gcs.newGen.SetRootChunk(ctx, root, previous)
+	return gcs.newGen.setRootChunk(ctx, root, previous, gcs.hasMany)
 }
 
 // SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.

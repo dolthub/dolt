@@ -208,15 +208,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, br
 			return errhand.BuildDError(fmt.Errorf("%w: '%s'", err, remoteRef.GetRemote()).Error()).Build()
 		}
 
-		src := refSpec.SrcRef(dbData.Rsr.CWBHeadRef())
-		dest := refSpec.DestRef(src)
-
-		return dbData.Rsw.UpdateBranch(src.GetPath(), env.BranchConfig{
-			Merge: ref.MarshalableRef{
-				Ref: dest,
-			},
-			Remote: remoteRef.GetRemote(),
-		})
+		return env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteRef.GetRemote(), dbData.Rsr.CWBHeadRef())
 	} else {
 		return fmt.Errorf("'%s' matched multiple (%v) remote tracking branches", branchName, len(remoteRefs))
 	}
