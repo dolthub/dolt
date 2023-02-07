@@ -1873,3 +1873,13 @@ s.close()
     [ $status -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
+
+@test "sql-server: binary literal is printed as hex string for utf8 charset result set" {
+    cd repo1
+    start_sql_server
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SET character_set_results = utf8; CREATE TABLE mapping(branch_id binary(16) PRIMARY KEY, user_id binary(16) NOT NULL, company_id binary(16) NOT NULL);"
+
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "EXPLAIN SELECT m.* FROM mapping m WHERE user_id = uuid_to_bin('1c4c4e33-8ad7-4421-8450-9d5182816ac3');"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0x1C4C4E338AD7442184509D5182816AC3" ]] || false
+}
