@@ -193,7 +193,7 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 
 	if !ok {
 		db, err = p.databaseForClone(ctx, name)
-		
+
 		if err != nil {
 			return nil, err
 		}
@@ -733,7 +733,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 	if isBranch {
 		// fetch the upstream head if this is a replicated db
 		if replicaDb, ok := srcDb.(ReadReplicaDatabase); ok {
-			// TODO move this out of analysis phase, should only happen at read time, when the transaction begins (like is 
+			// TODO move this out of analysis phase, should only happen at read time, when the transaction begins (like is
 			//  the case with a branch that already exists locally)
 			err := p.ensureReplicaHeadExists(ctx, resolvedRevSpec, replicaDb)
 			if err != nil {
@@ -760,7 +760,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 	if isTag {
 		// TODO: this should be an interface, not a struct
 		replicaDb, ok := srcDb.(ReadReplicaDatabase)
-		
+
 		if ok {
 			srcDb = replicaDb.Database
 		}
@@ -994,7 +994,7 @@ func (p DoltDatabaseProvider) ensureReplicaHeadExists(ctx *sql.Context, branch s
 	if !branchExists {
 		return db.CreateLocalBranchFromRemote(ctx, ref.NewBranchRef(branch))
 	}
-	
+
 	return nil
 }
 

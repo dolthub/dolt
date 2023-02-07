@@ -21,11 +21,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -219,13 +219,13 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 // CreateLocalBranchFromRemote pulls the given branch from the remote database and creates a local tracking branch for it.
 func (rrd ReadReplicaDatabase) CreateLocalBranchFromRemote(ctx *sql.Context, branchRef ref.BranchRef) error {
 	_, err := rrd.limiter.Run(ctx, "pullNewBranch", func() (any, error) {
-		// because several clients can queue up waiting to create the same local branch, double check to see if this 
+		// because several clients can queue up waiting to create the same local branch, double check to see if this
 		// work was already done and bail early if so
 		_, branchExists, err := rrd.ddb.HasBranch(ctx, branchRef.GetPath())
 		if err != nil {
 			return nil, err
 		}
-		
+
 		if branchExists {
 			return nil, nil
 		}
@@ -264,10 +264,10 @@ func (rrd ReadReplicaDatabase) CreateLocalBranchFromRemote(ctx *sql.Context, bra
 		if err != nil {
 			return nil, err
 		}
-		
+
 		return nil, err
 	})
-	
+
 	return err
 }
 
