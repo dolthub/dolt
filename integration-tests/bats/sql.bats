@@ -2779,3 +2779,10 @@ SQL
     run dolt sql -q 'INSERT INTO dts (`created_at`) VALUES ("0001-01-01 00:00:00");'
     [ "$status" -eq 0 ]
 }
+
+@test "sql-server: binary data is printed as hex string as default" {
+    dolt sql -q "CREATE TABLE mapping(branch_id binary(16) PRIMARY KEY, user_id binary(16) NOT NULL, company_id binary(16) NOT NULL);"
+    run dolt sql -q "EXPLAIN SELECT m.* FROM mapping m WHERE user_id = uuid_to_bin('1c4c4e33-8ad7-4421-8450-9d5182816ac3');"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0x1C4C4E338AD7442184509D5182816AC3" ]] || false
+}
