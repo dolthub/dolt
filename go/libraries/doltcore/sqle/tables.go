@@ -2110,7 +2110,7 @@ func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, s
 	if !ok {
 		return sql.ErrForeignKeyNotFound.New(fkName, t.tableName)
 	}
-	fkc.RemoveKeyByName(doltFk.Name)
+	fkc.RemoveKeyByName(doltFk.Name) // TODO: wtf why?
 	doltFk.TableName = sqlFk.Table
 	doltFk.ReferencedTableName = sqlFk.ParentTable
 	doltFk.UnresolvedFKDetails.TableColumns = sqlFk.Columns
@@ -2195,7 +2195,7 @@ func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, s
 			}
 			tableIndex = idxReturn.NewIndex
 			tbl = idxReturn.NewTable
-			root, err = root.PutTable(ctx, t.tableName, idxReturn.NewTable)
+			//root, err = root.PutTable(ctx, t.tableName, idxReturn.NewTable)
 			if sqlFk.IsSelfReferential() {
 				refTbl = idxReturn.NewTable
 			}
@@ -2242,7 +2242,7 @@ func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, s
 			}
 			refTbl = idxReturn.NewTable
 			refTableIndex = idxReturn.NewIndex
-			root, err = root.PutTable(ctx, sqlFk.ParentTable, idxReturn.NewTable)
+			//root, err = root.PutTable(ctx, sqlFk.ParentTable, idxReturn.NewTable)
 			if err != nil {
 				return err
 			}
