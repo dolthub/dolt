@@ -66,7 +66,7 @@ func TestQueries(t *testing.T) {
 }
 
 func TestSingleQuery(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 
 	harness := newDoltHarness(t)
 	harness.Setup(setup.SimpleSetup...)
@@ -93,15 +93,11 @@ func TestSingleQuery(t *testing.T) {
 
 	var test queries.QueryTest
 	test = queries.QueryTest{
-		Query: "explain SELECT a.* FROM mytable a, mytable b where a.i = a.s",
+		Query: `SELECT a.* FROM mytable a, mytable b where a.i in (2, 432, 7)`,
 		Expected: []sql.Row{
-			{"Exchange"},
-			{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-			{"     └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
-			{"         └─ IndexedTableAccess(dolt_history_t1)"},
-			{"             ├─ index: [dolt_history_t1.pk]"},
-			{"             ├─ filters: [{[3, 3]}]"},
-			{"             └─ columns: [pk c committer]"},
+			{2, "second row"},
+			{2, "second row"},
+			{2, "second row"},
 		},
 	}
 
