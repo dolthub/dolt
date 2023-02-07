@@ -93,7 +93,7 @@ func TestSingleQuery(t *testing.T) {
 
 	var test queries.QueryTest
 	test = queries.QueryTest{
-		Query: `SELECT a.* FROM mytable a, mytable b where a.i in (2, 432, 7)`,
+		Query: `show create table mytable`,
 		Expected: []sql.Row{
 			{2, "second row"},
 			{2, "second row"},
