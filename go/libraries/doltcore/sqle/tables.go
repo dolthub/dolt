@@ -1954,7 +1954,6 @@ func (t *AlterableDoltTable) createForeignKey(
 		colTags[i] = tableCol.Tag
 	}
 
-
 	var refTbl *doltdb.Table
 	var refSch schema.Schema
 	if sqlFk.IsSelfReferential() {
