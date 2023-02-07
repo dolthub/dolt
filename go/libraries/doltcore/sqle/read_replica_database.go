@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -215,8 +216,59 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 	return nil
 }
 
-func (rrd ReadReplicaDatabase) RebaseSourceDb(ctx *sql.Context) error {
-	return rrd.srcDB.Rebase(ctx)
+// CreateLocalBranchFromRemote pulls the given branch from the remote database and creates a local tracking branch for it.
+func (rrd ReadReplicaDatabase) CreateLocalBranchFromRemote(ctx *sql.Context, branchRef ref.BranchRef) error {
+	_, err := rrd.limiter.Run(ctx, "pullNewBranch", func() (any, error) {
+		// because several clients can queue up waiting to create the same local branch, double check to see if this 
+		// work was already done and bail early if so
+		_, branchExists, err := rrd.ddb.HasBranch(ctx, branchRef.GetPath())
+		if err != nil {
+			return nil, err
+		}
+		
+		if branchExists {
+			return nil, nil
+		}
+
+		cm, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, branchRef, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+		if err != nil {
+			return nil, err
+		}
+
+		cmHash, err := cm.HashOf()
+		if err != nil {
+			return nil, err
+		}
+
+		// create refs/heads/branch dataset
+		err = rrd.ddb.NewBranchAtCommit(ctx, branchRef, cm)
+		if err != nil {
+			return nil, err
+		}
+
+		dSess := dsess.DSessFromSess(ctx.Session)
+		currentBranchRef, err := dSess.CWBHeadRef(ctx, rrd.name)
+		if err != nil {
+			return nil, err
+		}
+
+		err = rrd.srcDB.Rebase(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		err = pullBranches(ctx, rrd, []doltdb.RefWithHash{{
+			Ref:  branchRef,
+			Hash: cmHash,
+		}}, nil, currentBranchRef, pullBehavior_fastForward)
+		if err != nil {
+			return nil, err
+		}
+		
+		return nil, err
+	})
+	
+	return err
 }
 
 type pullBehavior bool
