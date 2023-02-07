@@ -1,9 +1,5 @@
-const mysql = require("mysql2/promise");
-
-const args = process.argv.slice(2);
-const user = args[0];
-const port = args[1];
-const dbName = args[2];
+import mysql from "mysql2/promise";
+import { getConfig } from "./helpers";
 
 async function createTable() {
   const conn = await getConnection();
@@ -86,7 +82,7 @@ async function insertAuthor(name) {
 
 async function validateCommits(name) {
   const conn = await getConnection();
-  var results;
+  let results;
   try {
     results = await conn.query(
       `select count(*) as c from dolt_log where message like 'created author%'`
@@ -109,12 +105,7 @@ async function validateCommits(name) {
 }
 
 async function getConnection() {
-  const connection = await mysql.createConnection({
-    host: "127.0.0.1",
-    port: port,
-    user: user,
-    database: dbName,
-  });
+  const connection = await mysql.createConnection(getConfig());
   return connection;
 }
 
