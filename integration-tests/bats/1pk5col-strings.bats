@@ -86,6 +86,7 @@ teardown() {
     [[ ! "$output" =~ "|||||" ]] || false
 }
 
+
 @test "1pk5col-strings: semicolons in quoted sql statements" {
     run dolt sql -q "insert into test (pk,c1) values ('test', 'this; should; work')"
     [ "$status" -eq 0 ]
