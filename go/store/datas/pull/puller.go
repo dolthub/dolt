@@ -57,7 +57,6 @@ type FilledWriters struct {
 // CmpChnkAndRefs holds a CompressedChunk and all of it's references
 type CmpChnkAndRefs struct {
 	cmpChnk nbs.CompressedChunk
-	refs    map[hash.Hash]bool
 }
 
 type WalkAddrs func(chunks.Chunk, func(hash.Hash, bool) error) error
@@ -69,7 +68,6 @@ type Puller struct {
 	srcChunkStore nbs.NBSCompressedChunkStore
 	sinkDBCS      chunks.ChunkStore
 	hashes        hash.HashSet
-	downloaded    hash.HashSet
 
 	wr            *nbs.CmpChunkTableWriter
 	tablefileSema *semaphore.Weighted
@@ -142,7 +140,6 @@ func NewPuller(
 		srcChunkStore: srcChunkStore,
 		sinkDBCS:      sinkCS,
 		hashes:        hash.NewHashSet(hashes...),
-		downloaded:    hash.HashSet{},
 		tablefileSema: semaphore.NewWeighted(outstandingTableFiles),
 		tempDir:       tempDir,
 		wr:            wr,
@@ -314,7 +311,7 @@ func (p *Puller) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile
 	// we can add bytes on to our bufferedSendBytes when
 	// we have to retry a table file write.
 	var localUploaded uint64
-	return p.sinkDBCS.(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, tmpTblFile.contentHash, func() (io.ReadCloser, uint64, error) {
+	return p.sinkDBCS.(chunks.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, tmpTblFile.contentHash, func() (io.ReadCloser, uint64, error) {
 		rc, err := tmpTblFile.read.Reader()
 		if err != nil {
 			return nil, 0, err
@@ -376,7 +373,7 @@ LOOP:
 		}
 	}
 
-	return p.sinkDBCS.(nbs.TableFileStore).AddTableFilesToManifest(ctx, fileIdToNumChunks)
+	return p.sinkDBCS.(chunks.TableFileStore).AddTableFilesToManifest(ctx, fileIdToNumChunks)
 }
 
 // Pull executes the sync operation
@@ -386,10 +383,6 @@ func (p *Puller) Pull(ctx context.Context) error {
 		defer c()
 	}
 
-	leaves := make(hash.HashSet)
-	absent := make(hash.HashSet)
-	absent.InsertAll(p.hashes)
-
 	eg, ctx := errgroup.WithContext(ctx)
 
 	completedTables := make(chan FilledWriters, 8)
@@ -398,24 +391,43 @@ func (p *Puller) Pull(ctx context.Context) error {
 		return p.processCompletedTables(ctx, completedTables)
 	})
 
-	eg.Go(func() error {
-		if err := p.tablefileSema.Acquire(ctx, 1); err != nil {
+	eg.Go(func() (err error) {
+		if err = p.tablefileSema.Acquire(ctx, 1); err != nil {
 			return err
 		}
-		for len(absent) > 0 {
-			limitToNewChunks(absent, p.downloaded)
 
-			var err error
-			absent, err = p.sinkDBCS.HasMany(ctx, absent)
-			if err != nil {
-				return err
+		const batchSize = 64 * 1024
+		// refs are added to |visited| on first sight
+		visited := p.hashes
+		// |absent| are visited, un-batched refs
+		absent := p.hashes.Copy()
+		// |batches| are visited, un-fetched refs
+		batches := make([]hash.HashSet, 0, 64)
+
+		for absent.Size() > 0 || len(batches) > 0 {
+			if absent.Size() >= batchSize {
+				var bb []hash.HashSet
+				absent, bb = batchNovel(absent, batchSize)
+				batches = append(batches, bb...)
+			}
+			if len(batches) == 0 {
+				batches = append(batches, absent)
+				absent = make(hash.HashSet)
 			}
 
-			if len(absent) > 0 {
-				leaves, absent, err = p.getCmp(ctx, leaves, absent, completedTables)
-				if err != nil {
-					return err
-				}
+			b := batches[len(batches)-1]
+			batches = batches[:len(batches)-1]
+
+			b, err = p.sinkDBCS.HasMany(ctx, b)
+			if err != nil {
+				return err
+			} else if b.Size() == 0 {
+				continue
+			}
+
+			err = p.getCmp(ctx, b, absent, visited, completedTables)
+			if err != nil {
+				return err
 			}
 		}
 
@@ -433,22 +445,21 @@ func (p *Puller) Pull(ctx context.Context) error {
 	return eg.Wait()
 }
 
-func limitToNewChunks(absent hash.HashSet, downloaded hash.HashSet) {
-	smaller := absent
-	longer := downloaded
-	if len(absent) > len(downloaded) {
-		smaller = downloaded
-		longer = absent
-	}
-
-	for k := range smaller {
-		if longer.Has(k) {
-			absent.Remove(k)
+// batchNovel returns a slice of |batch| size HashSets and partial |remainder| HashSet.
+func batchNovel(absent hash.HashSet, batch int) (remainder hash.HashSet, batches []hash.HashSet) {
+	curr := make(hash.HashSet, batch)
+	for h := range absent {
+		curr.Insert(h)
+		if curr.Size() >= batch {
+			batches = append(batches, curr)
+			curr = make(hash.HashSet, batch)
 		}
 	}
+	remainder = curr
+	return
 }
 
-func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, completedTables chan FilledWriters) (hash.HashSet, hash.HashSet, error) {
+func (p *Puller) getCmp(ctx context.Context, batch, absent, visited hash.HashSet, completedTables chan FilledWriters) error {
 	found := make(chan nbs.CompressedChunk, 4096)
 	processed := make(chan CmpChnkAndRefs, 4096)
 
@@ -478,31 +489,26 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 				if !ok {
 					break LOOP
 				}
-				p.downloaded.Insert(cmpChnk.H)
-				if leaves.Has(cmpChnk.H) {
-					select {
-					case processed <- CmpChnkAndRefs{cmpChnk: cmpChnk}:
-					case <-ctx.Done():
-						return ctx.Err()
+
+				chnk, err := cmpChnk.ToChunk()
+				if err != nil {
+					return err
+				}
+				err = p.waf(chnk, func(h hash.Hash, _ bool) error {
+					if !visited.Has(h) {
+						// first sight of |h|
+						visited.Insert(h)
+						absent.Insert(h)
 					}
-				} else {
-					chnk, err := cmpChnk.ToChunk()
-					if err != nil {
-						return err
-					}
-					refs := make(map[hash.Hash]bool)
-					err = p.waf(chnk, func(h hash.Hash, isleaf bool) error {
-						refs[h] = isleaf
-						return nil
-					})
-					if err != nil {
-						return err
-					}
-					select {
-					case processed <- CmpChnkAndRefs{cmpChnk: cmpChnk, refs: refs}:
-					case <-ctx.Done():
-						return ctx.Err()
-					}
+					return nil
+				})
+				if err != nil {
+					return err
+				}
+				select {
+				case processed <- CmpChnkAndRefs{cmpChnk: cmpChnk}:
+				case <-ctx.Done():
+					return ctx.Err()
 				}
 			case <-ctx.Done():
 				return ctx.Err()
@@ -512,10 +518,6 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 		close(processed)
 		return nil
 	})
-
-	batchSize := len(batch)
-	nextLeaves := make(hash.HashSet, batchSize)
-	nextLevel := make(hash.HashSet, batchSize)
 
 	eg.Go(func() error {
 		var seen int
@@ -552,12 +554,8 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 					}
 				}
 
-				for h, isleaf := range cmpAndRef.refs {
-					nextLevel.Insert(h)
-					if isleaf {
-						nextLeaves.Insert(h)
-					}
-				}
+				cmpAndRef.cmpChnk.FullCompressedChunk = nil
+				cmpAndRef.cmpChnk.CompressedData = nil
 			case <-ctx.Done():
 				return ctx.Err()
 			}
@@ -570,7 +568,7 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 
 	err := eg.Wait()
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
-	return nextLeaves, nextLevel, nil
+	return nil
 }

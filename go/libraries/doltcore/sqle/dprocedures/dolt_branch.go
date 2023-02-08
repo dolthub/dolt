@@ -257,26 +257,77 @@ func loadConfig(ctx *sql.Context) *env.DoltCliConfig {
 }
 
 func createNewBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults) error {
-	var branchName string
+	if apr.NArg() == 0 || apr.NArg() > 2 {
+		return InvalidArgErr
+	}
+
+	var branchName = apr.Arg(0)
 	var startPt = "HEAD"
-	if apr.NArg() == 1 {
-		branchName = apr.Arg(0)
-	} else if apr.NArg() == 2 {
-		branchName = apr.Arg(0)
+	if len(branchName) == 0 {
+		return EmptyBranchNameErr
+	}
+	if apr.NArg() == 2 {
 		startPt = apr.Arg(1)
 		if len(startPt) == 0 {
 			return InvalidArgErr
 		}
 	}
 
-	if len(branchName) == 0 {
-		return EmptyBranchNameErr
+	var remoteName, remoteBranch string
+	var refSpec ref.RefSpec
+	var err error
+	trackVal, setTrackUpstream := apr.GetValue(cli.TrackFlag)
+	if setTrackUpstream {
+		if trackVal == "inherit" {
+			return fmt.Errorf("--track='inherit' is not supported yet")
+		} else if trackVal == "direct" && apr.NArg() != 2 {
+			return InvalidArgErr
+		}
+
+		if apr.NArg() == 2 {
+			// branchName and startPt are already set
+			remoteName, remoteBranch = actions.ParseRemoteBranchName(startPt)
+			refSpec, err = ref.ParseRefSpecForRemote(remoteName, remoteBranch)
+			if err != nil {
+				return err
+			}
+		} else {
+			// if track option is defined with no value,
+			// the track value can either be starting point name OR branch name
+			startPt = trackVal
+			remoteName, remoteBranch = actions.ParseRemoteBranchName(startPt)
+			refSpec, err = ref.ParseRefSpecForRemote(remoteName, remoteBranch)
+			if err != nil {
+				branchName = trackVal
+				startPt = apr.Arg(0)
+				remoteName, remoteBranch = actions.ParseRemoteBranchName(startPt)
+				refSpec, err = ref.ParseRefSpecForRemote(remoteName, remoteBranch)
+				if err != nil {
+					return err
+				}
+			}
+		}
 	}
 
-	if err := branch_control.CanCreateBranch(ctx, branchName); err != nil {
+	err = branch_control.CanCreateBranch(ctx, branchName)
+	if err != nil {
 		return err
 	}
-	return actions.CreateBranchWithStartPt(ctx, dbData, branchName, startPt, apr.Contains(cli.ForceFlag))
+
+	err = actions.CreateBranchWithStartPt(ctx, dbData, branchName, startPt, apr.Contains(cli.ForceFlag))
+	if err != nil {
+		return err
+	}
+
+	if setTrackUpstream {
+		// at this point new branch is created
+		err = env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteName, ref.NewBranchRef(branchName))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func copyBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults) error {

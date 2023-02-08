@@ -140,6 +140,17 @@ func (c *SizeCache) Drop(key interface{}) {
 	}
 }
 
+func (c *SizeCache) Purge() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for key := range c.cache {
+		delete(c.cache, key)
+	}
+	c.totalSize = 0
+	c.lru = list.List{}
+}
+
 func (c *SizeCache) Size() uint64 {
 	return c.maxSize
 }

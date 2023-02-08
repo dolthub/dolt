@@ -333,8 +333,6 @@ func (ti onHeapTableIndex) lookupOrdinal(h *addr) (uint32, error) {
 // findPrefix returns the first position in |tr.prefixes| whose value == |prefix|.
 // Returns |tr.chunkCount| if absent
 func (ti onHeapTableIndex) findPrefix(prefix uint64) (idx uint32) {
-	query := make([]byte, addrPrefixSize)
-	binary.BigEndian.PutUint64(query, prefix)
 	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
 	// an extremely tight loop and inlining the code was a significant perf improvement.
 	idx, j := 0, ti.count
@@ -342,7 +340,8 @@ func (ti onHeapTableIndex) findPrefix(prefix uint64) (idx uint32) {
 		h := idx + (j-idx)/2 // avoid overflow when computing h
 		// i ≤ h < j
 		o := int64(prefixTupleSize * h)
-		if bytes.Compare(ti.prefixTuples[o:o+addrPrefixSize], query) < 0 {
+		tmp := binary.BigEndian.Uint64(ti.prefixTuples[o : o+addrPrefixSize])
+		if tmp < prefix {
 			idx = h + 1 // preserves f(i-1) == false
 		} else {
 			j = h // preserves f(j) == true

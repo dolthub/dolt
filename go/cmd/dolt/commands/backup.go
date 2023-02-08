@@ -202,7 +202,7 @@ func printBackups(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ver
 	}
 
 	for _, r := range backups {
-		if apr.Contains(verboseFlag) {
+		if apr.Contains(cli.VerboseFlag) {
 			paramStr := make([]byte, 0)
 			if len(r.Params) > 0 {
 				paramStr, _ = json.Marshal(r.Params)

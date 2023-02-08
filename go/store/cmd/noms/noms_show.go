@@ -126,6 +126,11 @@ func runShow(ctx context.Context, args []string) int {
 }
 
 func outputType(value types.Value) {
+	typeString := typeString(value)
+	fmt.Fprint(os.Stdout, typeString, " - ")
+}
+
+func typeString(value types.Value) string {
 	var typeString string
 	switch value := value.(type) {
 	case types.SerialMessage:
@@ -156,7 +161,7 @@ func outputType(value types.Value) {
 		util.CheckErrorNoUsage(err)
 		typeString = t.HumanReadableString()
 	}
-	fmt.Fprint(os.Stdout, typeString, " - ")
+	return typeString
 }
 
 func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) error {

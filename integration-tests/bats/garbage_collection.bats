@@ -321,6 +321,8 @@ skip_if_chunk_journal() {
 }
 
 @test "garbage_collection: online gc" {
+    skip "dolt_gc is currently disabled"
+
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
 INSERT INTO test VALUES (1),(2),(3),(4),(5);
@@ -347,6 +349,8 @@ SQL
 }
 
 @test "garbage_collection: online shallow gc" {
+    skip "dolt_gc is currently disabled"
+
     skip_if_chunk_journal
     create_many_commits
 

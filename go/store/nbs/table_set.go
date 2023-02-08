@@ -34,6 +34,14 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 )
 
+// Returned when a chunk with a reference to a non-existence chunk is
+// persisted into the ChunkStore. The sanity check is done when we
+// flush the memtable, which means that a ChunkStore interaction which
+// sees this error is not necessarily responsible for the dangling ref.
+// Regardless, all pending writes in the memtable are thrown away when
+// any chunk in the memtable has a dangling ref.
+var ErrDanglingRef = errors.New("dangling ref")
+
 const concurrentCompactions = 5
 
 func newTableSet(p tablePersister, q MemoryQuotaProvider) tableSet {
@@ -275,7 +283,15 @@ func (ts tableSet) Size() int {
 
 // append adds a memTable to an existing tableSet, compacting |mt| and
 // returning a new tableSet with newly compacted table added.
-func (ts tableSet) append(ctx context.Context, mt *memTable, stats *Stats) (tableSet, error) {
+func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, stats *Stats) (tableSet, error) {
+	sort.Sort(hasRecordByPrefix(mt.pendingRefs))
+	absent, err := checker(mt.pendingRefs)
+	if err != nil {
+		return tableSet{}, err
+	} else if absent.Size() > 0 {
+		return tableSet{}, fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
+	}
+
 	cs, err := ts.p.Persist(ctx, mt, ts, stats)
 	if err != nil {
 		return tableSet{}, err

@@ -22,6 +22,7 @@
 package nbs
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -51,6 +52,14 @@ type tableNotInDynamoErr struct {
 
 func (t tableNotInDynamoErr) Error() string {
 	return fmt.Sprintf("NBS table %s not present in DynamoDB table %s", t.nbs, t.dynamo)
+}
+
+func (dtra *dynamoTableReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {
+	data, err := dtra.ddb.ReadTable(ctx, dtra.h, &Stats{})
+	if err != nil {
+		return nil, err
+	}
+	return io.NopCloser(bytes.NewReader(data)), nil
 }
 
 func (dtra *dynamoTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {

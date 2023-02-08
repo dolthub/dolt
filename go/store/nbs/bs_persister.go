@@ -233,6 +233,11 @@ type bsTableReaderAt struct {
 	bs  blobstore.Blobstore
 }
 
+func (bsTRA *bsTableReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {
+	rc, _, err := bsTRA.bs.Get(ctx, bsTRA.key, blobstore.AllRange)
+	return rc, err
+}
+
 // ReadAtWithStats is the bsTableReaderAt implementation of the tableReaderAt interface
 func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (int, error) {
 	br := blobstore.NewBlobRange(off, int64(len(p)))

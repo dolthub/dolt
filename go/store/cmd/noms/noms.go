@@ -47,6 +47,7 @@ var commands = []*util.Command{
 	nomsVersion,
 	nomsManifest,
 	nomsCat,
+	nomsWalk,
 }
 
 var kingpinCommands = []util.KingpinCommand{
@@ -211,6 +212,13 @@ See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spell
 	show.Flag("stats", "If true, reports statistics related to the value").Bool()
 	show.Flag("tz", "display formatted date comments in specified timezone, must be: local or utc").Enum("local", "utc")
 	show.Arg("object", "a noms object").Required().String()
+
+	// walk
+	walk := noms.Command("walk", `Walks references contained in an object.
+See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the object argument.
+`)
+	walk.Arg("object", "a noms object").String()
+	walk.Flag("quiet", "If true, prints only dangling refs, not the paths of all refs").Bool()
 
 	// version
 	noms.Command("version", "Print the noms version")
