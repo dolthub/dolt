@@ -380,41 +380,60 @@ func pullBranches(
 	_, err := rrd.limiter.Run(ctx, "-all", func() (any, error) {
 		err := rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, remoteHashes, nil)
 
+REFS:
 		for _, remoteRef := range remoteRefs {
-			localRef, localRefExists := localRefsByPath[remoteRef.Ref.GetPath()]
-			switch {
-			case err != nil:
-			case localRefExists:
-				// TODO: this should work for workspaces too but doesn't, only branches
-				if localRef.Ref.GetType() == ref.BranchRefType {
-					if localRef.Hash != remoteRef.Hash {
-						if behavior == pullBehavior_forcePull {
-							err = rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
-							if err != nil {
-								return nil, err
-							}
-						} else {
-							err = rrd.ddb.FastForwardToHash(ctx, remoteRef.Ref, remoteRef.Hash)
-							if err != nil {
-								return nil, err
+			// loop on optimistic lock failures
+			for {
+				localRef, localRefExists := localRefsByPath[remoteRef.Ref.GetPath()]
+				switch {
+				case err != nil:
+				case localRefExists:
+					// TODO: this should work for workspaces too but doesn't, only branches
+					if localRef.Ref.GetType() == ref.BranchRefType {
+						if localRef.Hash != remoteRef.Hash {
+							if behavior == pullBehavior_forcePull {
+								err = rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
+								if !errors.Is(err, datas.ErrOptimisticLockFailed) {
+									return nil, err
+								}
+							} else {
+								err = rrd.ddb.FastForwardToHash(ctx, remoteRef.Ref, remoteRef.Hash)
+								if !errors.Is(err, datas.ErrOptimisticLockFailed) {
+									return nil, err
+								}
 							}
 						}
 					}
-				}
-			default:
-				switch remoteRef.Ref.GetType() {
-				case ref.BranchRefType:
-					err = rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
-					if err != nil {
-						return nil, err
-					}
-				case ref.TagRefType:
-					err = rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
-					if err != nil {
-						return nil, err
-					}
+					continue REFS
 				default:
-					ctx.GetLogger().Warnf("skipping replication for unhandled remote ref %s", remoteRef.Ref.String())
+					switch remoteRef.Ref.GetType() {
+					case ref.BranchRefType:
+						// If a local branch isn't present for the remote branch, create a new branch for it. We need to use 
+						// NewBranchAtCommit so that the branch has its associated working set created at the same time. 
+						spec, err := doltdb.NewCommitSpec(remoteRef.Hash.String())
+						if err != nil {
+							return nil, err
+						}
+
+						cm, err := rrd.ddb.Resolve(ctx, spec, nil)
+						if err != nil {
+							return nil, err
+						}
+
+						err = rrd.ddb.NewBranchAtCommit(ctx, remoteRef.Ref, cm)
+						if !errors.Is(err, datas.ErrOptimisticLockFailed) {
+							return nil, err
+						}
+					case ref.TagRefType:
+						err = rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
+						if !errors.Is(err, datas.ErrOptimisticLockFailed) {
+							return nil, err
+						}
+					default:
+						ctx.GetLogger().Warnf("skipping replication for unhandled remote ref %s", remoteRef.Ref.String())
+					}
+					
+					continue REFS
 				}
 			}
 		}

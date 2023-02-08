@@ -186,11 +186,13 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 		return wrapForStandby(db, standby), nil
 	}
 
+	// Revision databases aren't tracked in the map, just instantiated on demand
 	db, _, ok, err = p.databaseForRevision(ctx, name)
 	if err != nil {
 		return nil, err
 	}
 
+	// A final check: if the database doesn't exist and this is a read replica, attempt to clone it from the remote
 	if !ok {
 		db, err = p.databaseForClone(ctx, name)
 
@@ -203,7 +205,6 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 		}
 	}
 
-	// Don't track revision databases, just instantiate them on demand
 	return wrapForStandby(db, standby), nil
 }
 
@@ -725,7 +726,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		return nil, dsess.InitialDbState{}, false, err
 	}
 
-	caseSensitiveBranchName, isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec, p.remoteDialer)
+	caseSensitiveBranchName, isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec)
 	if err != nil {
 		return nil, dsess.InitialDbState{}, false, err
 	}
@@ -752,7 +753,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		return db, init, true, nil
 	}
 
-	isTag, err := isTag(ctx, srcDb, resolvedRevSpec, p.remoteDialer)
+	isTag, err := isTag(ctx, srcDb, resolvedRevSpec)
 	if err != nil {
 		return nil, dsess.InitialDbState{}, false, err
 	}
@@ -999,7 +1000,7 @@ func (p DoltDatabaseProvider) ensureReplicaHeadExists(ctx *sql.Context, branch s
 }
 
 // isBranch returns whether a branch with the given name is in scope for the database given
-func isBranch(ctx context.Context, db SqlDatabase, branchName string, dialer dbfactory.GRPCDialProvider) (string, bool, error) {
+func isBranch(ctx context.Context, db SqlDatabase, branchName string) (string, bool, error) {
 	var ddbs []*doltdb.DoltDB
 
 	if rdb, ok := db.(ReadReplicaDatabase); ok {
@@ -1018,7 +1019,7 @@ func isBranch(ctx context.Context, db SqlDatabase, branchName string, dialer dbf
 		return brName, true, nil
 	}
 
-	brName, branchExists, err = isRemoteBranch(ctx, db, ddbs, branchName)
+	brName, branchExists, err = isRemoteBranch(ctx, ddbs, branchName)
 	if err != nil {
 		return "", false, err
 	}
@@ -1044,21 +1045,15 @@ func isLocalBranch(ctx context.Context, ddbs []*doltdb.DoltDB, branchName string
 	return "", false, nil
 }
 
-// isRemoteBranch is called when the branch in connection string is not available as a local branch, so it searches
-// for a remote tracking branch. If there is only one match, it creates a new local branch from the remote tracking
-// branch and sets its upstream to it.
-func isRemoteBranch(ctx context.Context, srcDB SqlDatabase, ddbs []*doltdb.DoltDB, branchName string) (string, bool, error) {
+// isRemoteBranch returns whether the given branch name is a remote branch on any of the databases provided.
+func isRemoteBranch(ctx context.Context, ddbs []*doltdb.DoltDB, branchName string) (string, bool, error) {
 	for _, ddb := range ddbs {
-		bn, branchExists, remoteRef, err := ddb.HasRemoteTrackingBranch(ctx, branchName)
+		bn, branchExists, _, err := ddb.HasRemoteTrackingBranch(ctx, branchName)
 		if err != nil {
 			return "", false, err
 		}
 
 		if branchExists {
-			err = createLocalBranchFromRemoteTrackingBranch(ctx, srcDB.DbData(), ddb, branchName, remoteRef)
-			if err != nil {
-				return "", false, err
-			}
 			return bn, true, nil
 		}
 	}
@@ -1066,36 +1061,8 @@ func isRemoteBranch(ctx context.Context, srcDB SqlDatabase, ddbs []*doltdb.DoltD
 	return "", false, nil
 }
 
-// createLocalBranchFromRemoteTrackingBranch creates a new local branch from given remote tracking branch
-// and sets its upstream to it.
-func createLocalBranchFromRemoteTrackingBranch(ctx context.Context, dbData env.DbData, ddb *doltdb.DoltDB, branchName string, remoteRef ref.RemoteRef) error {
-	startPt := remoteRef.GetPath()
-	err := actions.CreateBranchOnDB(ctx, ddb, branchName, startPt, false, remoteRef)
-	if err != nil {
-		return err
-	}
-
-	// at this point the branch is created on db
-	branchRef := ref.NewBranchRef(branchName)
-	remote := remoteRef.GetRemote()
-	refSpec, err := ref.ParseRefSpecForRemote(remote, remoteRef.GetBranch())
-	if err != nil {
-		return fmt.Errorf("%w: '%s'", err, remote)
-	}
-
-	src := refSpec.SrcRef(branchRef)
-	dest := refSpec.DestRef(src)
-
-	return dbData.Rsw.UpdateBranch(branchRef.GetPath(), env.BranchConfig{
-		Merge: ref.MarshalableRef{
-			Ref: dest,
-		},
-		Remote: remote,
-	})
-}
-
 // isTag returns whether a tag with the given name is in scope for the database given
-func isTag(ctx context.Context, db SqlDatabase, tagName string, dialer dbfactory.GRPCDialProvider) (bool, error) {
+func isTag(ctx context.Context, db SqlDatabase, tagName string) (bool, error) {
 	var ddbs []*doltdb.DoltDB
 
 	if rdb, ok := db.(ReadReplicaDatabase); ok {
