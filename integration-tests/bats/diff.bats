@@ -449,6 +449,21 @@ EOF
     [[ ! "$output" =~ "+ | 0" ]] || false
 }
 
+@test "diff: with foreign key checks disabled" {
+    dolt sql <<SQL
+set foreign_key_checks=0;
+create table child (j int primary key, foreign key (j) references parent (i));
+create table parent (i int primary key);
+SQL
+    dolt add -A
+    dolt commit -m "init commit"
+    dolt sql -q "delete from parent where i = 0"
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'resolved foreign key' ]] || false
+}
+
 @test "diff: with index and foreign key changes" {
     dolt sql <<SQL
 CREATE TABLE parent (
