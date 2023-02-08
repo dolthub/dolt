@@ -132,5 +132,5 @@ jobs:
           BATS_TEST_RETRIES: "3"
         run: |
           if [ -n "$DOLT_FMT" ]; then export DOLT_DEFAULT_BIN_FORMAT="$DOLT_FMT"; fi
-          bats --tap .
+          bats --tap --jobs 8 .
         working-directory: ./integration-tests/bats
