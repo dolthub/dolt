@@ -378,48 +378,48 @@ func pullBranches(
 	// back changes which were applied from another thread.
 
 	_, err := rrd.limiter.Run(ctx, "-all", func() (any, error) {
-		err := rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, remoteHashes, nil)
+		pullErr := rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, remoteHashes, nil)
 
 REFS: // every successful pass through the loop below must end with CONTINUE REFS to get out of the retry loop 
 		for _, remoteRef := range remoteRefs {
 			trackingRef := ref.NewRemoteRef(rrd.remote.Name, remoteRef.Ref.GetPath())
+			localRef, localRefExists := localRefsByPath[remoteRef.Ref.GetPath()]
 
 			// loop on optimistic lock failures
 OPTIMISTIC_RETRY:			
 			for {
-				localRef, localRefExists := localRefsByPath[remoteRef.Ref.GetPath()]
-				switch {
-				case err != nil:
-				case localRefExists:
+				if pullErr != nil || localRefExists {
+					pullErr = nil
+					
 					// TODO: this should work for workspaces too but doesn't, only branches
 					if localRef.Ref.GetType() == ref.BranchRefType {
 						if localRef.Hash != remoteRef.Hash {
 							if behavior == pullBehavior_forcePull {
-								err = rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
-								if errors.Is(err, datas.ErrOptimisticLockFailed) {
+								pullErr = rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
+								if errors.Is(pullErr, datas.ErrOptimisticLockFailed) {
 									continue OPTIMISTIC_RETRY
-								} else if err != nil {
-									return nil, err
+								} else if pullErr != nil {
+									return nil, pullErr
 								}
-								
-								err  = rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
-								if errors.Is(err, datas.ErrOptimisticLockFailed) {
+
+								pullErr = rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
+								if errors.Is(pullErr, datas.ErrOptimisticLockFailed) {
 									continue OPTIMISTIC_RETRY
-								} else if err != nil {
-									return nil, err
+								} else if pullErr != nil {
+									return nil, pullErr
 								}
 							} else {
-								err = rrd.ddb.FastForwardToHash(ctx, remoteRef.Ref, remoteRef.Hash)
-								if errors.Is(err, datas.ErrOptimisticLockFailed) {
+								pullErr = rrd.ddb.FastForwardToHash(ctx, remoteRef.Ref, remoteRef.Hash)
+								if errors.Is(pullErr, datas.ErrOptimisticLockFailed) {
 									continue OPTIMISTIC_RETRY
-								} else if err != nil {
-									return nil, err
+								} else if pullErr != nil {
+									return nil, pullErr
 								}
 							}
 						}
 					}
 					continue REFS
-				default:
+				} else {
 					switch remoteRef.Ref.GetType() {
 					case ref.BranchRefType:
 						ctx.GetLogger().Tracef("creating local branch %s", remoteRef.Ref.GetPath())
@@ -433,6 +433,17 @@ OPTIMISTIC_RETRY:
 						}
 
 						cm, err := rrd.ddb.Resolve(ctx, spec, nil)
+						if err != nil {
+							return nil, err
+						}
+
+						// Establish upstream tracking fore this new branch
+						err = rrd.DbData().Rsw.UpdateBranch(remoteRef.Ref.GetPath(), env.BranchConfig{
+							Merge: ref.MarshalableRef{
+								Ref: trackingRef,
+							},
+							Remote: rrd.remote.Name,
+						})
 						if err != nil {
 							return nil, err
 						}
@@ -454,12 +465,12 @@ OPTIMISTIC_RETRY:
 						
 						continue REFS
 					case ref.TagRefType:
-						err = rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
-						if err == nil {
+						pullErr = rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
+						if pullErr == nil {
 							continue REFS
 						}
-						if !errors.Is(err, datas.ErrOptimisticLockFailed) {
-							return nil, err
+						if !errors.Is(pullErr, datas.ErrOptimisticLockFailed) {
+							return nil, pullErr
 						}
 					default:
 						ctx.GetLogger().Warnf("skipping replication for unhandled remote ref %s", remoteRef.Ref.String())
