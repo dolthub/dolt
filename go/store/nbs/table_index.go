@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"github.com/bits-and-blooms/bloom/v3"
 	"io"
 	"sync/atomic"
 
@@ -195,7 +194,8 @@ type onHeapTableIndex struct {
 	// it is sorted by addr prefix, the ordinal value
 	// can be used to lookup offset and addr suffix
 	prefixTuples []byte
-	bloom        *bloom.BloomFilter
+	//bloom        *bloom.BloomFilter
+	bloom uint64
 
 	// the offsets arrays contains packed uint64s
 	offsets1 []byte
@@ -254,17 +254,20 @@ func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, to
 	refCnt := new(int32)
 	*refCnt = 1
 
-	bloomFilter := bloom.NewWithEstimates(uint(count), 0.1)
-	for i := uint32(0); i < count; i++ {
-		prefix := tuples[i*prefixTupleSize:i*prefixTupleSize+addrPrefixSize]
-		bloomFilter.Add(prefix)
-	}
+	//var bloomFilter *bloom.BloomFilter
+	//if count > 3 {
+	//	bloomFilter = bloom.NewWithEstimates(uint(count), 0.05)
+	//	for i := uint32(0); i < count; i++ {
+	//		prefix := tuples[i*prefixTupleSize:i*prefixTupleSize+addrPrefixSize]
+	//		bloomFilter.Add(prefix)
+	//	}
+	//}
 
 	return onHeapTableIndex{
 		refCnt:         refCnt,
 		q:              q,
 		prefixTuples:   tuples,
-		bloom:          bloomFilter,
+		//bloom:          bloom,
 		offsets1:       offsetsBuff1,
 		offsets2:       offsetsBuff2,
 		suffixes:       suffixes,
@@ -324,9 +327,10 @@ func (ti onHeapTableIndex) lookup(h *addr) (indexEntry, bool, error) {
 // lookupOrdinal returns the ordinal of |h| if present. Returns |ti.count|
 // if absent.
 func (ti onHeapTableIndex) lookupOrdinal(h *addr) (uint32, error) {
-	if !ti.bloom.Test(h[:addrPrefixSize]) {
-		return ti.count, nil
-	}
+	//if ti.bloom != nil && !ti.bloom.Test(h[:addrPrefixSize]) {
+	//	return ti.count, nil
+	//}
+	//logrus.Println(ti.count)
 
 	prefix := h.Prefix()
 	for idx := ti.findPrefix(prefix); idx < ti.count && ti.prefixAt(idx) == prefix; idx++ {
@@ -349,7 +353,6 @@ func (ti onHeapTableIndex) findPrefix(prefix uint64) (idx uint32) {
 	// an extremely tight loop and inlining the code was a significant perf improvement.
 	idx, j := 0, ti.count
 	for idx < j {
-		// h := uint32(uint64(idx+j) >> 1) // TODO: better?
 		h := idx + (j-idx)/2 // avoid overflow when computing h
 		// i ≤ h < j
 		o := int64(prefixTupleSize * h)
