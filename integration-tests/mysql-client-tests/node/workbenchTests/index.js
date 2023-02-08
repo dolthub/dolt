@@ -14,6 +14,12 @@ export default async function runWorkbenchTests(database) {
   await runTests(database, logTests);
   await runTests(database, mergeTests);
   await runTests(database, tableTests);
+  // TODO:
+  // Workspaces
+  // Diffs
+  // Docs
+  // Views
+  // Tags
 }
 
 async function runTests(database, tests) {
@@ -35,8 +41,6 @@ async function runTests(database, tests) {
             throw new Error("Query failed");
           } else {
             console.log("Query succeeded:", test.q);
-            // console.log("RES", resultStr);
-            // console.log("EXP", expected);
           }
         })
         .catch((err) => {
