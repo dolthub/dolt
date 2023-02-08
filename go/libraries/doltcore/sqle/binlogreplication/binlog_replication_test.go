@@ -63,15 +63,17 @@ func teardown(t *testing.T) {
 	// Output server logs on failure for easier debugging
 	if t.Failed() {
 		if oldDoltLogFilePath != "" {
-			fmt.Printf("Dolt server log from %s:\n", oldDoltLogFilePath)
+			fmt.Printf("\nDolt server log from %s:\n", oldDoltLogFilePath)
 			printFile(oldDoltLogFilePath)
 		}
 
-		fmt.Printf("Dolt server log from %s:\n", doltLogFilePath)
+		fmt.Printf("\nDolt server log from %s:\n", doltLogFilePath)
 		printFile(doltLogFilePath)
-		fmt.Println()
-		fmt.Printf("MySQL server log from %s:\n", mysqlLogFilePath)
+		fmt.Printf("\nMySQL server log from %s:\n", mysqlLogFilePath)
 		printFile(mysqlLogFilePath)
+	} else {
+		// clean up temp files on clean test runs
+		defer os.RemoveAll(testDir)
 	}
 
 	if toxiClient != nil {
@@ -80,9 +82,6 @@ func teardown(t *testing.T) {
 			value.Delete()
 		}
 	}
-
-	// clean up temp files
-	//defer os.RemoveAll(testDir)
 }
 
 // TestBinlogReplicationSanityCheck performs the simplest possible binlog replication test. It starts up
@@ -780,6 +779,7 @@ func printFile(path string) {
 		}
 		fmt.Print(s)
 	}
+	fmt.Println()
 }
 
 // assertRepoStateFileExists asserts that the repo_state.json file is present for the specified
