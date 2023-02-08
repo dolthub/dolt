@@ -1,4 +1,4 @@
-import mysql from "mysql";
+import mysql from "mysql2";
 
 export class Database {
   constructor(config) {
@@ -14,6 +14,7 @@ export class Database {
       });
     });
   }
+
   close() {
     this.connection.end((err) => {
       if (err) {
