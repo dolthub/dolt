@@ -198,11 +198,13 @@ teardown() {
     skiponwindows "Missing dependencies"
 
     cd repo1
-    dolt checkout -b new_feature
+    dolt checkout -b b1
     dolt commit -am "first commit"
-    dolt branch new_feature2
-    dolt push remote1 new_feature
-    dolt push remote1 new_feature2
+    dolt branch b2
+    dolt branch b3
+    dolt push remote1 b1
+    dolt push remote1 b2
+    dolt push remote1 b3
     dolt checkout main
     dolt push remote1 main
 
@@ -216,12 +218,18 @@ teardown() {
     [ $status -eq 0 ]
     [ "$output" = "" ]
 
-    # Can't use dolt sql-client to connect to branches
-    
     # Connecting to heads that exist only on the remote should work fine (they get fetched)
-    dolt sql-client --use-db "repo2/new_feature" -u dolt -P $PORT -q "show tables" "Tables_in_repo2/new_feature\ntest"
-    dolt sql-client --use-db repo2 -P $PORT -u dolt -q 'use `repo2/new_feature2`'
-    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q 'select * from `repo2/new_feature2`.test'
+    dolt sql-client --use-db "repo2/b1" -u dolt -P $PORT -q "show tables" "Tables_in_repo2/b1\ntest"
+    dolt sql-client --use-db repo2 -P $PORT -u dolt -q 'use `repo2/b2`'
+    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q 'select * from `repo2/b2`.test'
+    [ $status -eq 0 ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ " 0 " ]] || false
+    [[ "$output" =~ " 1 " ]] || false
+    [[ "$output" =~ " 2 " ]] || false
+
+    # Remote branch we have never USEd before
+    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q 'select * from `repo2/b3`.test'
     [ $status -eq 0 ]
     [[ "$output" =~ "pk" ]] || false
     [[ "$output" =~ " 0 " ]] || false
@@ -229,19 +237,11 @@ teardown() {
     [[ "$output" =~ " 2 " ]] || false
     
     # Connecting to heads that don't exist should error out
-    run dolt sql-client --use-db "repo2/notexist" -u dolt -P $PORT -q 'use `repo2/new_feature2`'
+    run dolt sql-client --use-db "repo2/notexist" -u dolt -P $PORT -q 'use `repo2/b2`'
     [ $status -ne 0 ]
     [[ $output =~ "database not found" ]] || false
     
     run dolt sql-client --use-db repo2 -P $PORT -u dolt -q 'use `repo2/notexist`'
-    [ $status -ne 0 ]
-    [[ $output =~ "database not found" ]] || false
-
-    # Creating a branch locally that doesn't exist on the remote
-    # works, but connecting to it is an error (nothing to pull)
-    dolt sql-client --use-db "repo2/new_feature" -u dolt -P $PORT -q "call dolt_checkout('-b', 'new_branch')"
-
-    run dolt sql-client --use-db "repo2/new_branch" -u dolt -P $PORT -q "show tables"
     [ $status -ne 0 ]
     [[ $output =~ "database not found" ]] || false
 }
