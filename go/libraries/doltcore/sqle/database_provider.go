@@ -987,16 +987,7 @@ func (p DoltDatabaseProvider) IsRevisionDatabase(ctx *sql.Context, dbName string
 // ensureReplicaHeadExists tries to pull the latest version of a remote branch. Will fail if the branch
 // does not exist on the ReadReplicaDatabase's remote.
 func (p DoltDatabaseProvider) ensureReplicaHeadExists(ctx *sql.Context, branch string, db ReadReplicaDatabase) error {
-	_, branchExists, err := db.ddb.HasBranch(ctx, branch)
-	if err != nil {
-		return err
-	}
-
-	if !branchExists {
-		return db.CreateLocalBranchFromRemote(ctx, ref.NewBranchRef(branch))
-	}
-
-	return nil
+	return db.CreateLocalBranchFromRemote(ctx, ref.NewBranchRef(branch))
 }
 
 // isBranch returns whether a branch with the given name is in scope for the database given
