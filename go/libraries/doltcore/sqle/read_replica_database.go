@@ -380,9 +380,12 @@ func pullBranches(
 	_, err := rrd.limiter.Run(ctx, "-all", func() (any, error) {
 		err := rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, remoteHashes, nil)
 
-REFS:
+REFS: // every successful pass through the loop below must end with CONTINUE REFS to get out of the retry loop 
 		for _, remoteRef := range remoteRefs {
+			trackingRef := ref.NewRemoteRef(rrd.remote.Name, remoteRef.Ref.GetPath())
+
 			// loop on optimistic lock failures
+OPTIMISTIC_RETRY:			
 			for {
 				localRef, localRefExists := localRefsByPath[remoteRef.Ref.GetPath()]
 				switch {
@@ -393,18 +396,23 @@ REFS:
 						if localRef.Hash != remoteRef.Hash {
 							if behavior == pullBehavior_forcePull {
 								err = rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
-								if err == nil {
-									continue REFS
+								if errors.Is(err, datas.ErrOptimisticLockFailed) {
+									continue OPTIMISTIC_RETRY
+								} else if err != nil {
+									return nil, err
 								}
-								if !errors.Is(err, datas.ErrOptimisticLockFailed) {
+								
+								err  = rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
+								if errors.Is(err, datas.ErrOptimisticLockFailed) {
+									continue OPTIMISTIC_RETRY
+								} else if err != nil {
 									return nil, err
 								}
 							} else {
 								err = rrd.ddb.FastForwardToHash(ctx, remoteRef.Ref, remoteRef.Hash)
-								if err == nil {
-									continue REFS
-								}
-								if !errors.Is(err, datas.ErrOptimisticLockFailed) {
+								if errors.Is(err, datas.ErrOptimisticLockFailed) {
+									continue OPTIMISTIC_RETRY
+								} else if err != nil {
 									return nil, err
 								}
 							}
@@ -430,12 +438,21 @@ REFS:
 						}
 
 						err = rrd.ddb.NewBranchAtCommit(ctx, remoteRef.Ref, cm)
-						if err == nil {
-							continue REFS
-						}
-						if !errors.Is(err, datas.ErrOptimisticLockFailed) {
+						err  = rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
+						if errors.Is(err, datas.ErrOptimisticLockFailed) {
+							continue OPTIMISTIC_RETRY
+						} else if err != nil {
 							return nil, err
 						}
+
+						err  = rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
+						if errors.Is(err, datas.ErrOptimisticLockFailed) {
+							continue OPTIMISTIC_RETRY
+						} else if err != nil {
+							return nil, err
+						}
+						
+						continue REFS
 					case ref.TagRefType:
 						err = rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
 						if err == nil {
