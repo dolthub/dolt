@@ -18,12 +18,13 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/bits-and-blooms/bloom/v3"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"io"
 	"os"
 	"testing"
+
+	"github.com/bits-and-blooms/bloom/v3"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseTableIndex(t *testing.T) {
@@ -93,7 +94,7 @@ func prefixIdx(ti onHeapTableIndex, prefix uint64) (idx uint32) {
 		h := idx + (j-idx)/2 // avoid overflow when computing h
 		// i ≤ h < j
 		o := int64(prefixTupleSize * h)
-		if binary.BigEndian.Uint64(ti.prefixTuples[o : o+addrPrefixSize]) < prefix {
+		if binary.BigEndian.Uint64(ti.prefixTuples[o:o+addrPrefixSize]) < prefix {
 			idx = h + 1 // preserves f(i-1) == false
 		} else {
 			j = h // preserves f(j) == true
@@ -123,7 +124,7 @@ func BenchmarkFindPrefix2(b *testing.B) {
 	b.Run("benchmark findPrefix with binary search", func(b *testing.B) {
 		var ord uint32
 		for i := 0; i < b.N; i++ {
-			ord = idx.findPrefix(prefixes[i % len(prefixes)])
+			ord = idx.findPrefix(prefixes[i%len(prefixes)])
 		}
 		assert.True(b, ord < idx.count)
 	})
@@ -144,7 +145,7 @@ func BenchmarkFindPrefix2(b *testing.B) {
 	b.Run("benchmark findPrefix with hash map", func(b *testing.B) {
 		var ord uint32
 		for i := 0; i < b.N; i++ {
-			ord = idx.findPrefix2(prefixes[i % len(prefixes)])
+			ord = idx.findPrefix2(prefixes[i%len(prefixes)])
 		}
 		assert.True(b, ord < idx.count)
 	})
@@ -162,7 +163,7 @@ func BenchmarkFindPrefix2(b *testing.B) {
 	b.Run("benchmark findPrefix with bloom filter", func(b *testing.B) {
 		var ord uint32
 		for i := 0; i < b.N; i++ {
-			ord = idx.findPrefix3(prefixes[i % len(prefixes)])
+			ord = idx.findPrefix3(prefixes[i%len(prefixes)])
 		}
 		assert.True(b, ord < idx.count)
 	})

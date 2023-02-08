@@ -19,9 +19,10 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"github.com/bits-and-blooms/bloom/v3"
 	"io"
 	"sync/atomic"
+
+	"github.com/bits-and-blooms/bloom/v3"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -195,8 +196,8 @@ type onHeapTableIndex struct {
 	// it is sorted by addr prefix, the ordinal value
 	// can be used to lookup offset and addr suffix
 	prefixTuples []byte
-	prefixMap map[uint64]uint32
-	bloomFilter *bloom.BloomFilter
+	prefixMap    map[uint64]uint32
+	bloomFilter  *bloom.BloomFilter
 
 	// the offsets arrays contains packed uint64s
 	offsets1 []byte
