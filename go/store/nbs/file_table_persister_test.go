@@ -139,7 +139,7 @@ func TestFSTablePersisterPersist(t *testing.T) {
 func persistTableData(p tablePersister, chunx ...[]byte) (src chunkSource, err error) {
 	mt := newMemTable(testMemTableSize)
 	for _, c := range chunx {
-		if !mt.addChunk(computeAddr(c), c) {
+		if mt.addChunk(computeAddr(c), c) == chunkNotAdded {
 			return nil, fmt.Errorf("memTable too full to add %s", computeAddr(c))
 		}
 	}
@@ -152,8 +152,8 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 	existingTable := newMemTable(testMemTableSize)
 
 	for _, c := range testChunks {
-		assert.True(mt.addChunk(computeAddr(c), c))
-		assert.True(existingTable.addChunk(computeAddr(c), c))
+		assert.Equal(mt.addChunk(computeAddr(c), c), chunkAdded)
+		assert.Equal(existingTable.addChunk(computeAddr(c), c), chunkAdded)
 	}
 
 	dir := makeTempDir(t)

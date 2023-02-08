@@ -90,7 +90,7 @@ func TestMemTableAddHasGetChunk(t *testing.T) {
 	}
 
 	for _, c := range chunks {
-		assert.True(mt.addChunk(computeAddr(c), c))
+		assert.Equal(mt.addChunk(computeAddr(c), c), chunkAdded)
 	}
 
 	assertChunksInReader(chunks, mt, assert)
@@ -115,9 +115,9 @@ func TestMemTableAddOverflowChunk(t *testing.T) {
 	{
 		bigAddr := computeAddr(big)
 		mt := newMemTable(memTableSize)
-		assert.True(mt.addChunk(bigAddr, big))
+		assert.Equal(mt.addChunk(bigAddr, big), chunkAdded)
 		assert.True(mt.has(bigAddr))
-		assert.False(mt.addChunk(computeAddr(little), little))
+		assert.Equal(mt.addChunk(computeAddr(little), little), chunkNotAdded)
 		assert.False(mt.has(computeAddr(little)))
 	}
 
@@ -125,12 +125,12 @@ func TestMemTableAddOverflowChunk(t *testing.T) {
 		big := big[:memTableSize-1]
 		bigAddr := computeAddr(big)
 		mt := newMemTable(memTableSize)
-		assert.True(mt.addChunk(bigAddr, big))
+		assert.Equal(mt.addChunk(bigAddr, big), chunkAdded)
 		assert.True(mt.has(bigAddr))
-		assert.True(mt.addChunk(computeAddr(little), little))
+		assert.Equal(mt.addChunk(computeAddr(little), little), chunkAdded)
 		assert.True(mt.has(computeAddr(little)))
 		other := []byte("o")
-		assert.False(mt.addChunk(computeAddr(other), other))
+		assert.Equal(mt.addChunk(computeAddr(other), other), chunkNotAdded)
 		assert.False(mt.has(computeAddr(other)))
 	}
 }
@@ -147,7 +147,7 @@ func TestMemTableWrite(t *testing.T) {
 	}
 
 	for _, c := range chunks {
-		assert.True(mt.addChunk(computeAddr(c), c))
+		assert.Equal(mt.addChunk(computeAddr(c), c), chunkAdded)
 	}
 
 	td1, _, err := buildTable(chunks[1:2])
@@ -207,7 +207,7 @@ func TestMemTableSnappyWriteOutOfLine(t *testing.T) {
 	}
 
 	for _, c := range chunks {
-		assert.True(mt.addChunk(computeAddr(c), c))
+		assert.Equal(mt.addChunk(computeAddr(c), c), chunkAdded)
 	}
 	mt.snapper = &outOfLineSnappy{[]bool{false, true, false}} // chunks[1] should trigger a panic
 
