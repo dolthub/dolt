@@ -1,6 +1,6 @@
 import { getArgs } from "../helpers.js";
 
-const args = getArgs();
+const { dbName } = getArgs();
 
 export const tableTests = [
   {
@@ -74,7 +74,7 @@ export const tableTests = [
   FROM information_schema.statistics 
   WHERE table_schema=:tableSchema AND table_name=:tableName AND index_name!="PRIMARY" 
   GROUP BY index_name;`,
-    p: { tableSchema: `${args.dbName}/main`, tableName: "test" },
+    p: { tableSchema: `${dbName}/main`, tableName: "test" },
     res: [
       {
         TABLE_NAME: "test",
@@ -116,25 +116,25 @@ export const tableTests = [
     q: `SHOW FULL TABLES AS OF :refName WHERE table_type = 'BASE TABLE'`,
     p: { refName: "main" },
     res: [
-      { "Tables_in_mysql_client/main": "test", Table_type: "BASE TABLE" },
-      { "Tables_in_mysql_client/main": "test_info", Table_type: "BASE TABLE" },
+      { [`Tables_in_${dbName}/main`]: "test", Table_type: "BASE TABLE" },
+      { [`Tables_in_${dbName}/main`]: "test_info", Table_type: "BASE TABLE" },
     ],
   },
   {
     q: `SELECT * FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE table_name=:tableName AND table_schema=:tableSchema AND referenced_table_schema IS NOT NULL`,
-    p: { tableName: "test_info", tableSchema: `${args.dbName}/main` },
+    p: { tableName: "test_info", tableSchema: `${dbName}/main` },
     res: [
       {
         CONSTRAINT_CATALOG: "def",
-        CONSTRAINT_SCHEMA: "mysql_client/main",
+        CONSTRAINT_SCHEMA: `${dbName}/main`,
         CONSTRAINT_NAME: "s7utamh8",
         TABLE_CATALOG: "def",
-        TABLE_SCHEMA: "mysql_client/main",
+        TABLE_SCHEMA: `${dbName}/main`,
         TABLE_NAME: "test_info",
         COLUMN_NAME: "test_pk",
         ORDINAL_POSITION: 1,
         POSITION_IN_UNIQUE_CONSTRAINT: 1,
-        REFERENCED_TABLE_SCHEMA: "mysql_client/main",
+        REFERENCED_TABLE_SCHEMA: `${dbName}/main`,
         REFERENCED_TABLE_NAME: "test",
         REFERENCED_COLUMN_NAME: "pk",
       },

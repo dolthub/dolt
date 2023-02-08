@@ -1,11 +1,11 @@
 import { getArgs } from "../helpers.js";
 
-const args = getArgs();
+const { dbName } = getArgs();
 
 export const databaseTests = [
   {
     q: `USE ::dbName`,
-    p: { dbName: `${args.dbName}/main` },
+    p: { dbName: `${dbName}/main` },
     res: {
       fieldCount: 0,
       affectedRows: 0,
@@ -20,8 +20,8 @@ export const databaseTests = [
     res: [
       { Database: "information_schema" },
       { Database: "mysql" },
-      { Database: "mysql_client" },
-      { Database: "mysql_client/main" },
+      { Database: `${dbName}` },
+      { Database: `${dbName}/main` },
     ],
   },
   {
@@ -41,8 +41,8 @@ export const databaseTests = [
     res: [
       { Database: "information_schema" },
       { Database: "mysql" },
-      { Database: "mysql_client" },
-      { Database: "mysql_client/main" },
+      { Database: `${dbName}` },
+      { Database: `${dbName}/main` },
       { Database: "new_db" },
     ],
   },
