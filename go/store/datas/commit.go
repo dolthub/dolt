@@ -445,6 +445,9 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 			return nil, errors.New("GetCommitParents: provided value is not a commit.")
 		}
 		addrs, err := types.SerialCommitParentAddrs(vr.Format(), sm)
+		if err != nil {
+			return nil, err
+		}
 		vals, err := vr.ReadManyValues(ctx, addrs)
 		if err != nil {
 			return nil, err
@@ -485,6 +488,9 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 			refs = append(refs, v.(types.Ref))
 			return nil
 		})
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		ps, ok, err = c.MaybeGet(parentsField)
 		if err != nil {
@@ -496,6 +502,9 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 				refs = append(refs, v.(types.Ref))
 				return nil
 			})
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	hashes := make([]hash.Hash, len(refs))
