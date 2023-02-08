@@ -22,6 +22,8 @@ import (
 	"io"
 	"sync/atomic"
 
+	"github.com/bits-and-blooms/bloom/v3"
+
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/hash"
 )
