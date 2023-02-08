@@ -16,13 +16,14 @@ package nbs
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
+	"github.com/bits-and-blooms/bloom/v3"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"io"
 	"os"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestParseTableIndex(t *testing.T) {
@@ -52,7 +53,7 @@ func TestParseTableIndex(t *testing.T) {
 	}
 }
 
-func BenchmarkFindPrefix(b *testing.B) {
+func ABenchmarkFindPrefix(b *testing.B) {
 	ctx := context.Background()
 	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
 	require.NoError(b, err)
@@ -87,17 +88,84 @@ func BenchmarkFindPrefix(b *testing.B) {
 func prefixIdx(ti onHeapTableIndex, prefix uint64) (idx uint32) {
 	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
 	// an extremely tight loop and inlining the code was a significant perf improvement.
-	idx, j := 0, ti.chunkCount()
+	idx, j := 0, ti.count
 	for idx < j {
 		h := idx + (j-idx)/2 // avoid overflow when computing h
 		// i ≤ h < j
-		if ti.prefixAt(h) < prefix {
+		o := int64(prefixTupleSize * h)
+		if binary.BigEndian.Uint64(ti.prefixTuples[o : o+addrPrefixSize]) < prefix {
 			idx = h + 1 // preserves f(i-1) == false
 		} else {
 			j = h // preserves f(j) == true
 		}
 	}
 	return
+}
+
+func BenchmarkFindPrefix2(b *testing.B) {
+	ctx := context.Background()
+	// create chunks
+	var chunks [][]byte
+	for i := 0; i < 100000; i++ {
+		chunks = append(chunks, randBuf(20))
+	}
+
+	// build table index
+	td, _, err := buildTable(chunks)
+	mem := &UnlimitedQuotaProvider{}
+	idx, err := parseTableIndexByCopy(ctx, td, mem)
+	require.NoError(b, err)
+
+	// get prefixes
+	prefixes, err := idx.prefixes()
+	require.NoError(b, err)
+
+	b.Run("benchmark findPrefix with binary search", func(b *testing.B) {
+		var ord uint32
+		for i := 0; i < b.N; i++ {
+			ord = idx.findPrefix(prefixes[i % len(prefixes)])
+		}
+		assert.True(b, ord < idx.count)
+	})
+
+	b.Run("benchmark allocating hash map", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			prefixMap := map[uint64]uint32{}
+			for i := uint32(0); i < idx.count; i++ {
+				prefix := binary.BigEndian.Uint64(idx.prefixTuples[i*prefixTupleSize : i*prefixTupleSize+addrPrefixSize])
+				if _, ok := prefixMap[prefix]; !ok {
+					prefixMap[prefix] = i
+				}
+			}
+			idx.prefixMap = prefixMap
+		}
+	})
+
+	b.Run("benchmark findPrefix with hash map", func(b *testing.B) {
+		var ord uint32
+		for i := 0; i < b.N; i++ {
+			ord = idx.findPrefix2(prefixes[i % len(prefixes)])
+		}
+		assert.True(b, ord < idx.count)
+	})
+
+	b.Run("benchmark allocating bloom filter", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			filter := bloom.NewWithEstimates(uint(idx.count), 0.01)
+			for i := uint32(0); i < idx.count; i++ {
+				filter.Add(idx.prefixTuples[i*prefixTupleSize : i*prefixTupleSize+addrPrefixSize])
+			}
+			idx.bloomFilter = filter
+		}
+	})
+
+	b.Run("benchmark findPrefix with bloom filter", func(b *testing.B) {
+		var ord uint32
+		for i := 0; i < b.N; i++ {
+			ord = idx.findPrefix3(prefixes[i % len(prefixes)])
+		}
+		assert.True(b, ord < idx.count)
+	})
 }
 
 func TestOnHeapTableIndex_ResolveShortHash(t *testing.T) {

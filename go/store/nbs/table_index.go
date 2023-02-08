@@ -19,10 +19,9 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"github.com/bits-and-blooms/bloom/v3"
 	"io"
 	"sync/atomic"
-
-	"github.com/bits-and-blooms/bloom/v3"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -196,8 +195,8 @@ type onHeapTableIndex struct {
 	// it is sorted by addr prefix, the ordinal value
 	// can be used to lookup offset and addr suffix
 	prefixTuples []byte
-	//bloom        *bloom.BloomFilter
-	bloom uint64
+	prefixMap map[uint64]uint32
+	bloomFilter *bloom.BloomFilter
 
 	// the offsets arrays contains packed uint64s
 	offsets1 []byte
@@ -256,20 +255,10 @@ func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, to
 	refCnt := new(int32)
 	*refCnt = 1
 
-	//var bloomFilter *bloom.BloomFilter
-	//if count > 3 {
-	//	bloomFilter = bloom.NewWithEstimates(uint(count), 0.05)
-	//	for i := uint32(0); i < count; i++ {
-	//		prefix := tuples[i*prefixTupleSize:i*prefixTupleSize+addrPrefixSize]
-	//		bloomFilter.Add(prefix)
-	//	}
-	//}
-
 	return onHeapTableIndex{
 		refCnt:         refCnt,
 		q:              q,
 		prefixTuples:   tuples,
-		//bloom:          bloom,
 		offsets1:       offsetsBuff1,
 		offsets2:       offsetsBuff2,
 		suffixes:       suffixes,
@@ -353,6 +342,37 @@ func (ti onHeapTableIndex) lookupOrdinal(h *addr) (uint32, error) {
 func (ti onHeapTableIndex) findPrefix(prefix uint64) (idx uint32) {
 	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
 	// an extremely tight loop and inlining the code was a significant perf improvement.
+	idx, j := 0, ti.count
+	for idx < j {
+		h := idx + (j-idx)/2 // avoid overflow when computing h
+		// i ≤ h < j
+		o := int64(prefixTupleSize * h)
+		tmp := binary.BigEndian.Uint64(ti.prefixTuples[o : o+addrPrefixSize])
+		if tmp < prefix {
+			idx = h + 1 // preserves f(i-1) == false
+		} else {
+			j = h // preserves f(j) == true
+		}
+	}
+	return
+}
+
+func (ti onHeapTableIndex) findPrefix2(prefix uint64) (idx uint32) {
+	if ord, ok := ti.prefixMap[prefix]; ok {
+		return ord
+	}
+	return ti.count
+}
+
+func (ti onHeapTableIndex) findPrefix3(prefix uint64) (idx uint32) {
+	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
+	// an extremely tight loop and inlining the code was a significant perf improvement.
+	prefixBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(prefixBytes, prefix)
+	if !ti.bloomFilter.Test(prefixBytes) {
+		return ti.count
+	}
+
 	idx, j := 0, ti.count
 	for idx < j {
 		h := idx + (j-idx)/2 // avoid overflow when computing h
