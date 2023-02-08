@@ -639,7 +639,7 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs 
 	if addChunkRes == chunkAdded {
 		nbs.mt.addChildRefs(addrs)
 	}
-	return true, nil
+	return addChunkRes == chunkAdded || addChunkRes == chunkExists, nil
 }
 
 // refCheck checks that no dangling references are being committed.
