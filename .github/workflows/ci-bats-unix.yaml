@@ -123,6 +123,13 @@ jobs:
           mvn clean install -DskipTests
           runtime_jar="$(pwd)"/target/parquet-cli-1.12.3-runtime.jar
           echo "runtime_jar=$runtime_jar" >> $GITHUB_OUTPUT
+      - name: Install gnu parallel
+        working-directory: ./.ci_bin
+        run: |
+          curl -OL https://ftp.gnu.org/gnu/parallel/parallel-20230122.tar.bz2
+          tar xjf parallel-20230122.tar.bz2
+          cd parallel-20230122
+          ./configure && make
       - name: Check expect
         run: expect -v
       - name: Test all Unix
