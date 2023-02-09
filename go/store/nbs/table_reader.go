@@ -153,6 +153,17 @@ func newTableReader(index tableIndex, r tableReaderAt, blockSize uint64) (tableR
 	if err != nil {
 		return tableReader{}, err
 	}
+
+	if ReaderMap {
+
+
+
+	}
+
+	if ReaderBloom {
+
+	}
+
 	return tableReader{
 		prefixes:  p,
 		idx:       index,

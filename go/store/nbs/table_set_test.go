@@ -228,24 +228,24 @@ func TestTableSetClosesOpenedChunkSourcesOnErr(t *testing.T) {
 // TODO: small, medium, large chunks
 
 func BenchmarkTableSetGet(b *testing.B) {
-	// create chunks
-	var chunks [][]byte
-	var chunkAddrs []addr
+	numMemTbls := 100
 	numChunks := 20000
-	for i := 0; i < numChunks; i++ {
-		chunk := randBuf(20)
-		chunks = append(chunks, chunk)
-		chunkAddrs = append(chunkAddrs, computeAddr(chunk))
-	}
+	memTbls := make([]*memTable, numMemTbls)
+	for i := 0; i < numMemTbls; i++ {
+		chunks := make([][]byte, numChunks)
+		chunkAddrs := make([]addr, numChunks)
+		for j := 0; j < numChunks; j++ {
+			chunk := randBuf(20)
+			chunks[j] = chunk
+			chunkAddrs[j] = computeAddr(chunk)
+		}
 
-	var memTbls []*memTable
-	for i := 0; i < 100; i++ {
 		mt := newMemTable(uint64(20 * numChunks))
 		for j := range chunks {
 			ok := mt.addChunk(chunkAddrs[j], chunks[j])
 			assert.True(b, ok)
 		}
-		memTbls = append(memTbls, mt)
+		memTbls[i] = mt
 	}
 
 	ctx := context.Background()
@@ -253,7 +253,7 @@ func BenchmarkTableSetGet(b *testing.B) {
 	stats := &Stats{}
 
 	var err error
-	b.Run("benchmark table set get with binary search", func(b *testing.B) {
+	b.Run("benchmark init tableSet with binary search", func(b *testing.B) {
 		HeapMap, HeapBloom = false, false
 		for i := 0; i < b.N; i++ {
 			ts := newFakeTableSet(memProv)
@@ -261,14 +261,10 @@ func BenchmarkTableSetGet(b *testing.B) {
 				ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
 				require.NoError(b, err)
 			}
-			for _, h := range chunkAddrs {
-				_, err = ts.get(ctx, h, stats)
-				require.NoError(b, err)
-			}
 		}
 	})
 
-	b.Run("benchmark table set get with heap", func(b *testing.B) {
+	b.Run("benchmark init tableSet get with heap", func(b *testing.B) {
 		HeapMap, HeapBloom = true, false
 		for i := 0; i < b.N; i++ {
 			ts := newFakeTableSet(memProv)
@@ -276,14 +272,10 @@ func BenchmarkTableSetGet(b *testing.B) {
 				ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
 				require.NoError(b, err)
 			}
-			for _, h := range chunkAddrs {
-				_, err = ts.get(ctx, h, stats)
-				require.NoError(b, err)
-			}
 		}
 	})
 
-	b.Run("benchmark table set get with bloom", func(b *testing.B) {
+	b.Run("benchmark init tableSet get with bloom", func(b *testing.B) {
 		HeapFP = 0.01
 		HeapMap, HeapBloom = false, true
 		for i := 0; i < b.N; i++ {
@@ -292,10 +284,44 @@ func BenchmarkTableSetGet(b *testing.B) {
 				ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
 				require.NoError(b, err)
 			}
-			for _, h := range chunkAddrs {
-				_, err = ts.get(ctx, h, stats)
-				require.NoError(b, err)
-			}
+		}
+	})
+
+	h := addr{}
+	b.Run("benchmark tableSet get with binary search", func(b *testing.B) {
+		HeapMap, HeapBloom = false, false
+		ts := newFakeTableSet(memProv)
+		for _, mt := range memTbls {
+			ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
+			require.NoError(b, err)
+		}
+		for i := 0; i < b.N; i++ {
+			_, err = ts.get(ctx, h, stats)
+		}
+	})
+
+	b.Run("benchmark tableSet get with hash", func(b *testing.B) {
+		HeapMap, HeapBloom = true, false
+		ts := newFakeTableSet(memProv)
+		for _, mt := range memTbls {
+			ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
+			require.NoError(b, err)
+		}
+		for i := 0; i < b.N; i++ {
+			_, err = ts.get(ctx, h, stats)
+		}
+	})
+
+	b.Run("benchmark tableSet get with bloom", func(b *testing.B) {
+		HeapFP = 0.01
+		HeapMap, HeapBloom = false, true
+		ts := newFakeTableSet(memProv)
+		for _, mt := range memTbls {
+			ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
+			require.NoError(b, err)
+		}
+		for i := 0; i < b.N; i++ {
+			_, err = ts.get(ctx, h, stats)
 		}
 	})
 }
