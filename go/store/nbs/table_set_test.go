@@ -228,7 +228,9 @@ func TestTableSetClosesOpenedChunkSourcesOnErr(t *testing.T) {
 // TODO: small, medium, large chunks
 
 func BenchmarkTableSetGet(b *testing.B) {
-	numMemTbls := 100
+	h := addr{}
+	once := true
+	numMemTbls := 10
 	numChunks := 20000
 	memTbls := make([]*memTable, numMemTbls)
 	for i := 0; i < numMemTbls; i++ {
@@ -242,6 +244,11 @@ func BenchmarkTableSetGet(b *testing.B) {
 
 		mt := newMemTable(uint64(20 * numChunks))
 		for j := range chunks {
+			if once {
+				h = chunkAddrs[j]
+				once = false
+			}
+
 			ok := mt.addChunk(chunkAddrs[j], chunks[j])
 			assert.True(b, ok)
 		}
@@ -274,7 +281,6 @@ func BenchmarkTableSetGet(b *testing.B) {
 		}
 	})
 
-	h := addr{}
 	b.Run("benchmark tableSet get with binary search", func(b *testing.B) {
 		HeapMap, HeapBloom = false, false
 		b.ResetTimer()
