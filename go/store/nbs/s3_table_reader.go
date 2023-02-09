@@ -60,6 +60,10 @@ type s3svc interface {
 	PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput, opts ...request.Option) (*s3.PutObjectOutput, error)
 }
 
+func (s3tra *s3TableReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {
+	return s3tra.s3.Reader(ctx, s3tra.h)
+}
+
 func (s3tra *s3TableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
 	return s3tra.s3.ReadAt(ctx, s3tra.h, p, off, stats)
 }
@@ -77,6 +81,10 @@ func (s3or *s3ObjectReader) key(k string) string {
 		return s3or.ns + "/" + k
 	}
 	return k
+}
+
+func (s3or *s3ObjectReader) Reader(ctx context.Context, name addr) (io.ReadCloser, error) {
+	return s3or.reader(ctx, name)
 }
 
 func (s3or *s3ObjectReader) ReadAt(ctx context.Context, name addr, p []byte, off int64, stats *Stats) (n int, err error) {
@@ -141,6 +149,18 @@ func (s3or *s3ObjectReader) ReadFromEnd(ctx context.Context, name addr, p []byte
 		return int(totalN), sz, nil
 	}
 	return s3or.readRange(ctx, name, p, fmt.Sprintf("%s=-%d", s3RangePrefix, len(p)))
+}
+
+func (s3or *s3ObjectReader) reader(ctx context.Context, name addr) (io.ReadCloser, error) {
+	input := &s3.GetObjectInput{
+		Bucket: aws.String(s3or.bucket),
+		Key:    aws.String(s3or.key(name.String())),
+	}
+	result, err := s3or.s3.GetObjectWithContext(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	return result.Body, nil
 }
 
 func (s3or *s3ObjectReader) readRange(ctx context.Context, name addr, p []byte, rangeHeader string) (n int, sz uint64, err error) {

@@ -70,8 +70,8 @@ func (ecs emptyChunkSource) index() (tableIndex, error) {
 	return onHeapTableIndex{}, nil
 }
 
-func (ecs emptyChunkSource) reader(context.Context) (io.Reader, uint64, error) {
-	return &bytes.Buffer{}, 0, nil
+func (ecs emptyChunkSource) reader(context.Context) (io.ReadCloser, uint64, error) {
+	return io.NopCloser(&bytes.Buffer{}), 0, nil
 }
 
 func (ecs emptyChunkSource) getRecordRanges(lookups []getRecord) (map[hash.Hash]Range, error) {

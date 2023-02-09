@@ -2779,3 +2779,17 @@ SQL
     run dolt sql -q 'INSERT INTO dts (`created_at`) VALUES ("0001-01-01 00:00:00");'
     [ "$status" -eq 0 ]
 }
+
+@test "sql: multi statement query returns accurate timing" {
+  dolt sql -q "CREATE TABLE t(a int);"
+  dolt sql -q "INSERT INTO t VALUES (1);"
+  dolt sql -q "CREATE TABLE t1(b int);"
+  run dolt sql <<SQL
+insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(1) UNION SELECT 1));
+insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(2) UNION SELECT 1));
+insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(3) UNION SELECT 1));
+SQL
+[[ "$output" =~ "Query OK, 1 row affected (1".*" sec)" ]] || false
+[[ "$output" =~ "Query OK, 1 row affected (2".*" sec)" ]] || false
+[[ "$output" =~ "Query OK, 1 row affected (3".*" sec)" ]] || false
+}

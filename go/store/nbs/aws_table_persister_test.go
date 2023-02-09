@@ -45,7 +45,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 
 	mt := newMemTable(testMemTableSize)
 	for _, c := range testChunks {
-		assert.True(t, mt.addChunk(computeAddr(c), c))
+		assert.Equal(t, mt.addChunk(computeAddr(c), c), chunkAdded)
 	}
 
 	t.Run("PersistToS3", func(t *testing.T) {
@@ -89,8 +89,8 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				existingTable := newMemTable(testMemTableSize)
 
 				for _, c := range testChunks {
-					assert.True(mt.addChunk(computeAddr(c), c))
-					assert.True(existingTable.addChunk(computeAddr(c), c))
+					assert.Equal(mt.addChunk(computeAddr(c), c), chunkAdded)
+					assert.Equal(existingTable.addChunk(computeAddr(c), c), chunkAdded)
 				}
 
 				s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)

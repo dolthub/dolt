@@ -34,8 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
-var branchForceFlagDesc = "Reset {{.LessThan}}branchname{{.GreaterThan}} to {{.LessThan}}startpoint{{.GreaterThan}}, even if {{.LessThan}}branchname{{.GreaterThan}} exists already. Without {{.EmphasisLeft}}-f{{.EmphasisRight}}, {{.EmphasisLeft}}dolt branch{{.EmphasisRight}} refuses to change an existing branch. In combination with {{.EmphasisLeft}}-d{{.EmphasisRight}} (or {{.EmphasisLeft}}--delete{{.EmphasisRight}}), allow deleting the branch irrespective of its merged status. In combination with -m (or {{.EmphasisLeft}}--move{{.EmphasisRight}}), allow renaming the branch even if the new branch name already exists, the same applies for {{.EmphasisLeft}}-c{{.EmphasisRight}} (or {{.EmphasisLeft}}--copy{{.EmphasisRight}})."
-
 var branchDocs = cli.CommandDocumentationContent{
 	ShortDesc: `List, create, or delete branches`,
 	LongDesc: `If {{.EmphasisLeft}}--list{{.EmphasisRight}} is given, or if there are no non-option arguments, existing branches are listed. The current branch will be highlighted with an asterisk. With no options, only local branches are listed. With {{.EmphasisLeft}}-r{{.EmphasisRight}}, only remote branches are listed. With {{.EmphasisLeft}}-a{{.EmphasisRight}} both local and remote branches are listed. {{.EmphasisLeft}}-v{{.EmphasisRight}} causes the hash of the commit that the branches are at to be printed as well.
@@ -60,15 +58,7 @@ With a {{.EmphasisLeft}}-d{{.EmphasisRight}}, {{.LessThan}}branchname{{.GreaterT
 
 const (
 	listFlag        = "list"
-	forceFlag       = "force"
-	copyFlag        = "copy"
-	moveFlag        = "move"
-	deleteFlag      = "delete"
-	deleteForceFlag = "D"
-	verboseFlag     = cli.VerboseFlag
-	allFlag         = "all"
 	datasetsFlag    = "datasets"
-	remoteFlag      = "remote"
 	showCurrentFlag = "show-current"
 )
 
@@ -92,20 +82,14 @@ func (cmd BranchCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd BranchCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := cli.CreateBranchArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"start-point", "A commit that a new branch should point at."})
 	ap.SupportsFlag(listFlag, "", "List branches")
-	ap.SupportsFlag(forceFlag, "f", branchForceFlagDesc)
-	ap.SupportsFlag(copyFlag, "c", "Create a copy of a branch.")
-	ap.SupportsFlag(moveFlag, "m", "Move/rename a branch")
-	ap.SupportsFlag(deleteFlag, "d", "Delete a branch. The branch must be fully merged in its upstream branch.")
-	ap.SupportsFlag(deleteForceFlag, "", "Shortcut for {{.EmphasisLeft}}--delete --force{{.EmphasisRight}}.")
-	ap.SupportsFlag(verboseFlag, "v", "When in list mode, show the hash and commit subject line for each head")
-	ap.SupportsFlag(allFlag, "a", "When in list mode, shows remote tracked branches")
+	ap.SupportsFlag(cli.VerboseFlag, "v", "When in list mode, show the hash and commit subject line for each head")
+	ap.SupportsFlag(cli.AllFlag, "a", "When in list mode, shows remote tracked branches")
 	ap.SupportsFlag(datasetsFlag, "", "List all datasets in the database")
-	ap.SupportsFlag(remoteFlag, "r", "When in list mode, show only remote tracked branches. When with -d, delete a remote tracking branch.")
+	ap.SupportsFlag(cli.RemoteParam, "r", "When in list mode, show only remote tracked branches. When with -d, delete a remote tracking branch.")
 	ap.SupportsFlag(showCurrentFlag, "", "Print the name of the current branch")
-	ap.SupportsString(cli.TrackFlag, "t", "", "When creating a new branch, set up 'upstream' configuration.")
 	return ap
 }
 
@@ -121,13 +105,13 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	switch {
-	case apr.Contains(moveFlag):
+	case apr.Contains(cli.MoveFlag):
 		return moveBranch(ctx, dEnv, apr, usage)
-	case apr.Contains(copyFlag):
+	case apr.Contains(cli.CopyFlag):
 		return copyBranch(ctx, dEnv, apr, usage)
-	case apr.Contains(deleteFlag):
-		return deleteBranches(ctx, dEnv, apr, usage, apr.Contains(forceFlag))
-	case apr.Contains(deleteForceFlag):
+	case apr.Contains(cli.DeleteFlag):
+		return deleteBranches(ctx, dEnv, apr, usage, apr.Contains(cli.ForceFlag))
+	case apr.Contains(cli.DeleteForceFlag):
 		return deleteBranches(ctx, dEnv, apr, usage, true)
 	case apr.Contains(listFlag):
 		return printBranches(ctx, dEnv, apr, usage)
@@ -145,9 +129,9 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.UsagePrinter) int {
 	branchSet := set.NewStrSet(apr.Args)
 
-	verbose := apr.Contains(verboseFlag)
+	verbose := apr.Contains(cli.VerboseFlag)
 	printRemote := apr.Contains(cli.RemoteParam)
-	printAll := apr.Contains(allFlag)
+	printAll := apr.Contains(cli.AllFlag)
 
 	branches, err := dEnv.DoltDB.GetHeadRefs(ctx)
 
@@ -186,7 +170,6 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		} else if branch.GetType() == ref.RemoteRefType {
 			branchName = "  " + color.RedString("remotes/"+branch.GetPath())
 			branchLen += len("remotes/")
-
 		}
 
 		if verbose {
@@ -260,7 +243,7 @@ func moveBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 		return 1
 	}
 
-	force := apr.Contains(forceFlag)
+	force := apr.Contains(cli.ForceFlag)
 	src := apr.Arg(0)
 	dest := apr.Arg(1)
 	err := actions.RenameBranch(ctx, dEnv.DbData(), src, apr.Arg(1), dEnv, force)
@@ -290,7 +273,7 @@ func copyBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 		return 1
 	}
 
-	force := apr.Contains(forceFlag)
+	force := apr.Contains(cli.ForceFlag)
 	src := apr.Arg(0)
 	dest := apr.Arg(1)
 	err := actions.CopyBranch(ctx, dEnv, src, dest, force)
@@ -323,7 +306,7 @@ func deleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPa
 
 		err := actions.DeleteBranch(ctx, dEnv.DbData(), brName, actions.DeleteOptions{
 			Force:  force,
-			Remote: apr.Contains(remoteFlag),
+			Remote: apr.Contains(cli.RemoteParam),
 		}, dEnv)
 
 		if err != nil {
@@ -366,26 +349,38 @@ func createBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		} else if trackVal == "direct" && apr.NArg() != 2 {
 			return HandleVErrAndExitCode(errhand.BuildDError("invalid arguments").Build(), usage)
 		}
-		if apr.NArg() == 2 {
-			newBranch = apr.Arg(0)
-			startPt = apr.Arg(1)
-		} else {
-			// if track option is defined with no value, the branch name is taken as track value
-			newBranch = trackVal
-			startPt = apr.Arg(0)
-		}
-		remote, remoteBranch = ParseRemoteBranchName(startPt)
+
 		remotes, err := dEnv.RepoStateReader().GetRemotes()
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usage)
 		}
-		_, remoteOk := remotes[remote]
-		if !remoteOk {
-			return HandleVErrAndExitCode(errhand.BuildDError("'%s' is not a valid remote ref and a branch '%s' cannot be created from it", startPt, newBranch).Build(), usage)
+
+		if apr.NArg() == 2 {
+			// branchName and startPt are already set
+			remote, remoteBranch = actions.ParseRemoteBranchName(startPt)
+			_, remoteOk := remotes[remote]
+			if !remoteOk {
+				return HandleVErrAndExitCode(errhand.BuildDError("'%s' is not a valid remote ref and a branch '%s' cannot be created from it", startPt, newBranch).Build(), usage)
+			}
+		} else {
+			// if track option is defined with no value,
+			// the track value can either be starting point name OR branch name
+			startPt = trackVal
+			remote, remoteBranch = actions.ParseRemoteBranchName(startPt)
+			_, remoteOk := remotes[remote]
+			if !remoteOk {
+				newBranch = trackVal
+				startPt = apr.Arg(0)
+				remote, remoteBranch = actions.ParseRemoteBranchName(startPt)
+				_, remoteOk = remotes[remote]
+				if !remoteOk {
+					return HandleVErrAndExitCode(errhand.BuildDError("'%s' is not a valid remote ref and a branch '%s' cannot be created from it", startPt, newBranch).Build(), usage)
+				}
+			}
 		}
 	}
 
-	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, apr.Contains(forceFlag))
+	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, apr.Contains(cli.ForceFlag))
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usage)
 	}

@@ -129,7 +129,9 @@ var mergeAbortDetails = `Abort the current conflict resolution process, and try 
 If there were uncommitted working set changes present when the merge started, {{.EmphasisLeft}}dolt merge --abort{{.EmphasisRight}} will be unable to reconstruct these changes. It is therefore recommended to always commit or stash your changes before running dolt merge.
 `
 
-// Creates the argparser shared dolt commit cli and DOLT_COMMIT.
+var branchForceFlagDesc = "Reset {{.LessThan}}branchname{{.GreaterThan}} to {{.LessThan}}startpoint{{.GreaterThan}}, even if {{.LessThan}}branchname{{.GreaterThan}} exists already. Without {{.EmphasisLeft}}-f{{.EmphasisRight}}, {{.EmphasisLeft}}dolt branch{{.EmphasisRight}} refuses to change an existing branch. In combination with {{.EmphasisLeft}}-d{{.EmphasisRight}} (or {{.EmphasisLeft}}--delete{{.EmphasisRight}}), allow deleting the branch irrespective of its merged status. In combination with -m (or {{.EmphasisLeft}}--move{{.EmphasisRight}}), allow renaming the branch even if the new branch name already exists, the same applies for {{.EmphasisLeft}}-c{{.EmphasisRight}} (or {{.EmphasisLeft}}--copy{{.EmphasisRight}})."
+
+// CreateCommitArgParser creates the argparser shared dolt commit cli and DOLT_COMMIT.
 func CreateCommitArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
@@ -174,7 +176,7 @@ func CreatePushArgParser() *argparser.ArgParser {
 func CreateAddArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."})
-	ap.SupportsFlag("all", "A", "Stages any and all changes (adds, deletes, and modifications).")
+	ap.SupportsFlag(AllFlag, "A", "Stages any and all changes (adds, deletes, and modifications).")
 	return ap
 }
 
@@ -228,7 +230,6 @@ func CreateCherryPickArgParser() *argparser.ArgParser {
 
 func CreateFetchArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(ForceFlag, "f", "Update refs to remote branches with the current state of the remote, overwriting any conflicting history.")
 	return ap
 }
 
@@ -256,11 +257,12 @@ func CreatePullArgParser() *argparser.ArgParser {
 
 func CreateBranchArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
+	ap.SupportsFlag(ForceFlag, "f", branchForceFlagDesc)
 	ap.SupportsFlag(CopyFlag, "c", "Create a copy of a branch.")
 	ap.SupportsFlag(MoveFlag, "m", "Move/rename a branch")
 	ap.SupportsFlag(DeleteFlag, "d", "Delete a branch. The branch must be fully merged in its upstream branch.")
 	ap.SupportsFlag(DeleteForceFlag, "", "Shortcut for {{.EmphasisLeft}}--delete --force{{.EmphasisRight}}.")
+	ap.SupportsString(TrackFlag, "t", "", "When creating a new branch, set up 'upstream' configuration.")
 
 	return ap
 }
