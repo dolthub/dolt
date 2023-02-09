@@ -59,8 +59,6 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	for _, cmpChnk := range found {
 		err = tw.AddCmpChunk(cmpChnk)
 		require.NoError(t, err)
-		err = tw.AddCmpChunk(cmpChnk)
-		assert.Equal(t, err, ErrChunkAlreadyWritten)
 	}
 
 	id, err := tw.Finish()

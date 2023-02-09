@@ -174,7 +174,8 @@ func planConjoin(sources []sourceWithSize, stats *Stats) (plan compactionPlan, e
 
 		// Add all the prefix tuples from this index to the list of all prefixIndexRecs, modifying the ordinals such that all entries from the 1st item in sources come after those in the 0th and so on.
 		for j, prefix := range prefixes {
-			rec := prefixIndexRec{prefix: prefix, order: ordinalOffset + ordinals[j]}
+			rec := prefixIndexRec{order: ordinalOffset + ordinals[j]}
+			binary.BigEndian.PutUint64(rec.addr[:], prefix)
 			prefixIndexRecs = append(prefixIndexRecs, rec)
 		}
 
@@ -226,7 +227,7 @@ func planConjoin(sources []sourceWithSize, stats *Stats) (plan compactionPlan, e
 	sort.Sort(prefixIndexRecs)
 	var pfxPos uint64
 	for _, pi := range prefixIndexRecs {
-		binary.BigEndian.PutUint64(plan.mergedIndex[pfxPos:], pi.prefix)
+		binary.BigEndian.PutUint64(plan.mergedIndex[pfxPos:], pi.addr.Prefix())
 		pfxPos += addrPrefixSize
 		binary.BigEndian.PutUint32(plan.mergedIndex[pfxPos:], pi.order)
 		pfxPos += ordinalSize

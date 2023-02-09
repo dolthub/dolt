@@ -17,6 +17,7 @@ package nbs
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -92,13 +93,28 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, tfp tableFilePersister
 		}, nil
 	}
 
+	// Attempt to rename the file to the destination if we are working with a fsTablePersister...
+	if fstp, ok := tfp.(*fsTablePersister); ok {
+		path := filepath.Join(fstp.dir, filename)
+		err := gcc.writer.FlushToFile(path)
+		if err == nil {
+			return []tableSpec{
+				{
+					name:       addr,
+					chunkCount: uint32(gcc.writer.ChunkCount()),
+				},
+			}, nil
+		}
+	}
+
+	// Otherwise, write the file through CopyTableFile.
+
 	r, err := gcc.writer.Reader()
 	if err != nil {
 		return nil, err
 	}
 	sz := gcc.writer.ContentLength()
 
-	// Otherwise, write the file.
 	err = tfp.CopyTableFile(ctx, r, filename, sz, uint32(gcc.writer.ChunkCount()))
 	if err != nil {
 		return nil, err

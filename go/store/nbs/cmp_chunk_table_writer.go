@@ -24,8 +24,6 @@ import (
 	"sort"
 
 	"github.com/golang/snappy"
-
-	nomshash "github.com/dolthub/dolt/go/store/hash"
 )
 
 const defaultTableSinkBlockSize = 2 * 1024 * 1024
@@ -37,16 +35,13 @@ var ErrNotFinished = errors.New("not finished")
 // ErrAlreadyFinished is an error returned if Finish is called more than once on a CmpChunkTableWriter
 var ErrAlreadyFinished = errors.New("already Finished")
 
-var ErrChunkAlreadyWritten = errors.New("chunk already written")
-
 // CmpChunkTableWriter writes CompressedChunks to a table file
 type CmpChunkTableWriter struct {
 	sink                  *HashingByteSink
 	totalCompressedData   uint64
 	totalUncompressedData uint64
-	prefixes              prefixIndexSlice // TODO: This is in danger of exploding memory
+	prefixes              prefixIndexSlice
 	blockAddr             *addr
-	chunkHashes           nomshash.HashSet
 	path                  string
 }
 
@@ -57,7 +52,7 @@ func NewCmpChunkTableWriter(tempDir string) (*CmpChunkTableWriter, error) {
 		return nil, err
 	}
 
-	return &CmpChunkTableWriter{NewHashingByteSink(s), 0, 0, nil, nil, nomshash.NewHashSet(), s.path}, nil
+	return &CmpChunkTableWriter{NewHashingByteSink(s), 0, 0, nil, nil, s.path}, nil
 }
 
 func (tw *CmpChunkTableWriter) ChunkCount() int {
@@ -80,11 +75,6 @@ func (tw *CmpChunkTableWriter) AddCmpChunk(c CompressedChunk) error {
 		panic("NBS blocks cannot be zero length")
 	}
 
-	if tw.chunkHashes.Has(c.H) {
-		return ErrChunkAlreadyWritten
-	}
-
-	tw.chunkHashes.Insert(c.H)
 	uncmpLen, err := snappy.DecodedLen(c.CompressedData)
 
 	if err != nil {
@@ -101,11 +91,9 @@ func (tw *CmpChunkTableWriter) AddCmpChunk(c CompressedChunk) error {
 	tw.totalCompressedData += uint64(len(c.CompressedData))
 	tw.totalUncompressedData += uint64(uncmpLen)
 
-	a := addr(c.H)
 	// Stored in insertion order
 	tw.prefixes = append(tw.prefixes, prefixIndexRec{
-		a.Prefix(),
-		a[addrPrefixSize:],
+		addr(c.H),
 		uint32(len(tw.prefixes)),
 		uint32(fullLen),
 	})
@@ -190,7 +178,7 @@ func (tw *CmpChunkTableWriter) writeIndex() (hash.Hash, error) {
 
 	var pos uint64
 	for _, pi := range tw.prefixes {
-		binary.BigEndian.PutUint64(pfxScratch[:], pi.prefix)
+		binary.BigEndian.PutUint64(pfxScratch[:], pi.addr.Prefix())
 
 		// hash prefix
 		n := uint64(copy(buff[pos:], pfxScratch[:]))
@@ -210,7 +198,7 @@ func (tw *CmpChunkTableWriter) writeIndex() (hash.Hash, error) {
 
 		// hash suffix
 		offset = suffixesOffset + uint64(pi.order)*addrSuffixSize
-		n = uint64(copy(buff[offset:], pi.suffix))
+		n = uint64(copy(buff[offset:], pi.addr.Suffix()))
 
 		if n != addrSuffixSize {
 			return nil, errors.New("failed to copy all bytes")
