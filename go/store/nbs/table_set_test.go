@@ -224,3 +224,79 @@ func TestTableSetClosesOpenedChunkSourcesOnErr(t *testing.T) {
 	assert.NoError(t, ts2.close())
 	assert.Equal(t, 0, int(q.Usage()))
 }
+
+
+// TODO: small, medium, large chunks
+
+func BenchmarkTableSetGet(b *testing.B) {
+	// create chunks
+	var chunks [][]byte
+	var chunkAddrs []addr
+	numChunks := 20000
+	for i := 0; i < numChunks; i++ {
+		chunk := randBuf(20)
+		chunks = append(chunks, chunk)
+		chunkAddrs = append(chunkAddrs, computeAddr(chunk))
+	}
+
+	var memTbls []*memTable
+	for i := 0; i < 100; i++ {
+		mt := newMemTable(uint64(20 * numChunks))
+		for j := range chunks {
+			ok := mt.addChunk(chunkAddrs[j], chunks[j])
+			assert.True(b, ok)
+		}
+		memTbls = append(memTbls, mt)
+	}
+
+	ctx := context.Background()
+	memProv := &UnlimitedQuotaProvider{}
+	stats := &Stats{}
+
+	var err error
+	b.Run("benchmark table set get with binary search", func(b *testing.B) {
+		HeapMap, HeapBloom = false, false
+		for i := 0; i < b.N; i++ {
+			ts := newFakeTableSet(memProv)
+			for _, mt := range memTbls {
+				ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
+				require.NoError(b, err)
+			}
+			for _, h := range chunkAddrs {
+				_, err = ts.get(ctx, h, stats)
+				require.NoError(b, err)
+			}
+		}
+	})
+
+	b.Run("benchmark table set get with heap", func(b *testing.B) {
+		HeapMap, HeapBloom = true, false
+		for i := 0; i < b.N; i++ {
+			ts := newFakeTableSet(memProv)
+			for _, mt := range memTbls {
+				ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
+				require.NoError(b, err)
+			}
+			for _, h := range chunkAddrs {
+				_, err = ts.get(ctx, h, stats)
+				require.NoError(b, err)
+			}
+		}
+	})
+
+	b.Run("benchmark table set get with bloom", func(b *testing.B) {
+		HeapFP = 0.01
+		HeapMap, HeapBloom = false, true
+		for i := 0; i < b.N; i++ {
+			ts := newFakeTableSet(memProv)
+			for _, mt := range memTbls {
+				ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
+				require.NoError(b, err)
+			}
+			for _, h := range chunkAddrs {
+				_, err = ts.get(ctx, h, stats)
+				require.NoError(b, err)
+			}
+		}
+	})
+}
