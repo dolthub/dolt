@@ -406,7 +406,9 @@ OPTIMISTIC_RETRY:
 					switch remoteRef.Ref.GetType() {
 					case ref.BranchRefType:
 						err := rrd.createNewBranchFromRemote(ctx, remoteRef, trackingRef)
-						if err != nil {
+						if errors.Is(err, datas.ErrOptimisticLockFailed) {
+							continue OPTIMISTIC_RETRY
+						} else if err != nil {
 							return nil, err
 						}
 
