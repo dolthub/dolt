@@ -79,6 +79,8 @@ type tableIndex interface {
 	// clone returns a |tableIndex| with the same contents which can be
 	// |Close|d independently.
 	clone() (tableIndex, error)
+
+	//AllocateHeap()
 }
 
 func ReadTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData uint64, err error) {
@@ -575,6 +577,11 @@ func (ti onHeapTableIndex) clone() (tableIndex, error) {
 		panic("Clone() called after last Close(). This index is no longer valid.")
 	}
 	return ti, nil
+}
+
+func (ti onHeapTableIndex) AllocateHeap() {
+	ti.prefixMap = make(map[uint64]uint32, ti.count)
+	ti.prefixes()
 }
 
 func (ti onHeapTableIndex) ResolveShortHash(short []byte) ([]string, error) {

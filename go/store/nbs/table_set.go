@@ -468,6 +468,14 @@ func (ts tableSet) toSpecs() ([]tableSpec, error) {
 	return tableSpecs, nil
 }
 
+
+func (ts tableSet) AllocateHash() {
+	for _, chunk := range ts.novel {
+		idx, _ := chunk.index()
+		idx
+	}
+}
+
 func tableSetCalcReads(ts tableSet, reqs []getRecord, blockSize uint64) (reads int, split, remaining bool, err error) {
 	all := copyChunkSourceSet(ts.upstream)
 	for a, cs := range ts.novel {

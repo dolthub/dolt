@@ -255,8 +255,9 @@ func BenchmarkTableSetGet(b *testing.B) {
 	var err error
 	b.Run("benchmark init tableSet with binary search", func(b *testing.B) {
 		HeapMap, HeapBloom = false, false
+		ts := newFakeTableSet(memProv)
+		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			ts := newFakeTableSet(memProv)
 			for _, mt := range memTbls {
 				ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
 				require.NoError(b, err)
@@ -266,8 +267,9 @@ func BenchmarkTableSetGet(b *testing.B) {
 
 	b.Run("benchmark init tableSet get with heap", func(b *testing.B) {
 		HeapMap, HeapBloom = true, false
+		ts := newFakeTableSet(memProv)
+		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			ts := newFakeTableSet(memProv)
 			for _, mt := range memTbls {
 				ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
 				require.NoError(b, err)
@@ -275,11 +277,13 @@ func BenchmarkTableSetGet(b *testing.B) {
 		}
 	})
 
+
 	b.Run("benchmark init tableSet get with bloom", func(b *testing.B) {
 		HeapFP = 0.01
 		HeapMap, HeapBloom = false, true
+		ts := newFakeTableSet(memProv)
+		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			ts := newFakeTableSet(memProv)
 			for _, mt := range memTbls {
 				ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
 				require.NoError(b, err)
@@ -295,8 +299,10 @@ func BenchmarkTableSetGet(b *testing.B) {
 			ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
 			require.NoError(b, err)
 		}
+		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_, err = ts.get(ctx, h, stats)
+			require.NoError(b, err)
 		}
 	})
 
@@ -307,8 +313,10 @@ func BenchmarkTableSetGet(b *testing.B) {
 			ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
 			require.NoError(b, err)
 		}
+		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_, err = ts.get(ctx, h, stats)
+			require.NoError(b, err)
 		}
 	})
 
@@ -320,8 +328,10 @@ func BenchmarkTableSetGet(b *testing.B) {
 			ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
 			require.NoError(b, err)
 		}
+		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_, err = ts.get(ctx, h, stats)
+			require.NoError(b, err)
 		}
 	})
 }
