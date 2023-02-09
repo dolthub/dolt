@@ -225,7 +225,6 @@ func TestTableSetClosesOpenedChunkSourcesOnErr(t *testing.T) {
 	assert.Equal(t, 0, int(q.Usage()))
 }
 
-
 // TODO: small, medium, large chunks
 
 func BenchmarkTableSetGet(b *testing.B) {
