@@ -244,7 +244,7 @@ func BenchmarkTableSetGet(b *testing.B) {
 
 		mt := newMemTable(uint64(20 * numChunks))
 		for j := range chunks {
-			if once  == 0 {
+			if once == 0 {
 				h = chunkAddrs[j]
 			}
 			once -= 1
