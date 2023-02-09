@@ -23,6 +23,8 @@ import (
 	"sync/atomic"
 
 	"github.com/bits-and-blooms/bloom/v3"
+	bloom2 "github.com/devopsfaith/bloomfilter"
+	basebloom "github.com/devopsfaith/bloomfilter/bloomfilter"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -35,8 +37,8 @@ var (
 
 // TODO: Delete these
 // THIS WAS THE EASIEST WAY
-var HeapMap, HeapBloom, ReaderMap, ReaderBloom bool
-var HeapFP, ReaderFP float64
+var HeapMap, HeapBloom, HeapBloom2 bool
+var HeapFP float64
 
 type tableIndex interface {
 	// entrySuffixMatches returns true if the entry at index |idx| matches
@@ -83,6 +85,7 @@ type tableIndex interface {
 	// TODO: delete these
 	AllocateHash()
 	AllocateBloom()
+	AllocateBloom2()
 }
 
 func ReadTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData uint64, err error) {
@@ -207,6 +210,7 @@ type onHeapTableIndex struct {
 	prefixTuples []byte
 	prefixMap    map[uint64]uint32
 	bloomFilter  *bloom.BloomFilter
+	bloomFilter2 *basebloom.Bloomfilter
 
 	// the offsets arrays contains packed uint64s
 	offsets1 []byte
@@ -283,12 +287,23 @@ func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, to
 		}
 	}
 
+	var bloomFilter2 *basebloom.Bloomfilter
+	if HeapBloom2 {
+		cfg := bloom2.EmptyConfig
+		cfg.HashName = bloom2.HASHER_OPTIMAL
+		bloomFilter2 = basebloom.New(cfg)
+		for i := uint32(0); i < count; i++ {
+			bloomFilter2.Add(tuples[i*prefixTupleSize : i*prefixTupleSize+addrPrefixSize])
+		}
+	}
+
 	return onHeapTableIndex{
 		refCnt:         refCnt,
 		q:              q,
 		prefixTuples:   tuples,
 		prefixMap:      prefixMap,
 		bloomFilter:    bloomFilter,
+		bloomFilter2:   bloomFilter2,
 		offsets1:       offsetsBuff1,
 		offsets2:       offsetsBuff2,
 		suffixes:       suffixes,
@@ -348,13 +363,8 @@ func (ti onHeapTableIndex) lookup(h *addr) (indexEntry, bool, error) {
 // lookupOrdinal returns the ordinal of |h| if present. Returns |ti.count|
 // if absent.
 func (ti onHeapTableIndex) lookupOrdinal(h *addr) (uint32, error) {
-	//if ti.bloom != nil && !ti.bloom.Test(h[:addrPrefixSize]) {
-	//	return ti.count, nil
-	//}
-	//logrus.Println(ti.count)
-
 	prefix := h.Prefix()
-	for idx := ti.findPrefix(prefix); idx < ti.count && ti.prefixAt(idx) == prefix; idx++ {
+	for idx := ti.findPrefix(h[:addrPrefixSize]); idx < ti.count && ti.prefixAt(idx) == prefix; idx++ {
 		m, err := ti.entrySuffixMatches(idx, h)
 		if err != nil {
 			return ti.count, err
@@ -369,25 +379,27 @@ func (ti onHeapTableIndex) lookupOrdinal(h *addr) (uint32, error) {
 
 // findPrefix returns the first position in |tr.prefixes| whose value == |prefix|.
 // Returns |tr.chunkCount| if absent
-func (ti onHeapTableIndex) findPrefix(prefix uint64) (idx uint32) {
+func (ti onHeapTableIndex) findPrefix(prefix []byte) (idx uint32) {
+	pInt := binary.BigEndian.Uint64(prefix)
 	if HeapMap {
-		if ti.prefixMap == nil {
-			panic("wtf1111")
-		}
-
-		if ord, ok := ti.prefixMap[prefix]; ok {
+		if ord, ok := ti.prefixMap[pInt]; ok {
 			return ord
 		}
 		return ti.count
 	}
 
 	if HeapBloom {
-		if ti.bloomFilter == nil {
-			panic("wtf222")
+		//prefixBytes := make([]byte, 8)
+		//binary.BigEndian.PutUint64(prefixBytes, prefix)
+		if !ti.bloomFilter.Test(prefix) {
+			return ti.count
 		}
-		prefixBytes := make([]byte, 8)
-		binary.BigEndian.PutUint64(prefixBytes, prefix)
-		if !ti.bloomFilter.Test(prefixBytes) {
+	}
+
+	if HeapBloom2 {
+		//prefixBytes := make([]byte, 8)
+		//binary.BigEndian.PutUint64(prefixBytes, prefix)
+		if !ti.bloomFilter2.Check(prefix) {
 			return ti.count
 		}
 	}
@@ -400,7 +412,7 @@ func (ti onHeapTableIndex) findPrefix(prefix uint64) (idx uint32) {
 		// i ≤ h < j
 		o := int64(prefixTupleSize * h)
 		tmp := binary.BigEndian.Uint64(ti.prefixTuples[o : o+addrPrefixSize])
-		if tmp < prefix {
+		if tmp < pInt {
 			idx = h + 1 // preserves f(i-1) == false
 		} else {
 			j = h // preserves f(j) == true
@@ -605,6 +617,15 @@ func (ti onHeapTableIndex) AllocateBloom() {
 	}
 }
 
+func (ti onHeapTableIndex) AllocateBloom2() {
+	cfg := bloom2.EmptyConfig
+	cfg.HashName = bloom2.HASHER_OPTIMAL
+	ti.bloomFilter2 = basebloom.New(cfg)
+	for i := uint32(0); i < ti.count; i++ {
+		ti.bloomFilter2.Add(ti.prefixTuples[i*prefixTupleSize : i*prefixTupleSize+addrPrefixSize])
+	}
+}
+
 func (ti onHeapTableIndex) ResolveShortHash(short []byte) ([]string, error) {
 	// Convert to string
 	shortHash := string(short)
@@ -619,7 +640,7 @@ func (ti onHeapTableIndex) ResolveShortHash(short []byte) ([]string, error) {
 		sPrefix := ti.padStringAndDecode(shortHash, "0")
 
 		// Binary Search for prefix
-		pIdxL = ti.findPrefix(sPrefix)
+		pIdxL = ti.findPrefix([]byte{}) // TODO
 
 		// Prefix doesn't exist
 		if pIdxL == ti.count {

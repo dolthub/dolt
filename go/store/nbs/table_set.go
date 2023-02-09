@@ -490,6 +490,17 @@ func (ts tableSet) AllocateBloom() {
 	}
 }
 
+func (ts tableSet) AllocateBloom2() {
+	for _, chunk := range ts.novel {
+		idx, _ := chunk.index()
+		idx.AllocateBloom2()
+	}
+	for _, chunk := range ts.upstream {
+		idx, _ := chunk.index()
+		idx.AllocateBloom2()
+	}
+}
+
 func tableSetCalcReads(ts tableSet, reqs []getRecord, blockSize uint64) (reads int, split, remaining bool, err error) {
 	all := copyChunkSourceSet(ts.upstream)
 	for a, cs := range ts.novel {

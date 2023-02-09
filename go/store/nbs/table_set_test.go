@@ -229,8 +229,8 @@ func TestTableSetClosesOpenedChunkSourcesOnErr(t *testing.T) {
 
 func BenchmarkTableSetGet(b *testing.B) {
 	h := addr{}
-	once := true
-	numMemTbls := 10
+	once := -1
+	numMemTbls := 100
 	numChunks := 20000
 	memTbls := make([]*memTable, numMemTbls)
 	for i := 0; i < numMemTbls; i++ {
@@ -244,10 +244,10 @@ func BenchmarkTableSetGet(b *testing.B) {
 
 		mt := newMemTable(uint64(20 * numChunks))
 		for j := range chunks {
-			if once {
+			if once  == 0 {
 				h = chunkAddrs[j]
-				once = false
 			}
+			once -= 1
 
 			ok := mt.addChunk(chunkAddrs[j], chunks[j])
 			assert.True(b, ok)
@@ -259,29 +259,36 @@ func BenchmarkTableSetGet(b *testing.B) {
 	ctx := context.Background()
 	memProv := &UnlimitedQuotaProvider{}
 	stats := &Stats{}
-	HeapMap, HeapBloom, HeapFP = true, true, 0.01
+	HeapMap, HeapBloom, HeapBloom2, HeapFP = true, true, true, 0.01
 	ts := newFakeTableSet(memProv)
 	for _, mt := range memTbls {
 		ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
 		require.NoError(b, err)
 	}
 
-	b.Run("benchmark tableSet AllocateHash", func(b *testing.B) {
+	b.Run("AllocateHash", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			ts.AllocateHash()
 		}
 	})
 
-	b.Run("benchmark tableSet AllocateBloom", func(b *testing.B) {
+	b.Run("AllocateBloom", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			ts.AllocateBloom()
 		}
 	})
 
-	b.Run("benchmark tableSet get with binary search", func(b *testing.B) {
-		HeapMap, HeapBloom = false, false
+	b.Run("AllocateBloom2", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			ts.AllocateBloom2()
+		}
+	})
+
+	b.Run("get with binary search", func(b *testing.B) {
+		HeapMap, HeapBloom, HeapBloom2 = false, false, false
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_, err = ts.get(ctx, h, stats)
@@ -289,8 +296,8 @@ func BenchmarkTableSetGet(b *testing.B) {
 		}
 	})
 
-	b.Run("benchmark tableSet get with hash", func(b *testing.B) {
-		HeapMap, HeapBloom = true, false
+	b.Run("get with hash", func(b *testing.B) {
+		HeapMap, HeapBloom, HeapBloom2 = true, false, false
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_, err = ts.get(ctx, h, stats)
@@ -298,8 +305,17 @@ func BenchmarkTableSetGet(b *testing.B) {
 		}
 	})
 
-	b.Run("benchmark tableSet get with bloom", func(b *testing.B) {
-		HeapMap, HeapBloom = false, true
+	b.Run("get with bloom", func(b *testing.B) {
+		HeapMap, HeapBloom, HeapBloom2 = false, true, false
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err = ts.get(ctx, h, stats)
+			require.NoError(b, err)
+		}
+	})
+
+	b.Run("get with bloom2", func(b *testing.B) {
+		HeapMap, HeapBloom, HeapBloom2 = false, false, true
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_, err = ts.get(ctx, h, stats)

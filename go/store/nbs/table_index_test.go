@@ -53,36 +53,36 @@ func TestParseTableIndex(t *testing.T) {
 	}
 }
 
-func ABenchmarkFindPrefix(b *testing.B) {
-	ctx := context.Background()
-	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
-	require.NoError(b, err)
-	defer f.Close()
-	bs, err := io.ReadAll(f)
-	require.NoError(b, err)
-	idx, err := parseTableIndexByCopy(ctx, bs, &UnlimitedQuotaProvider{})
-	require.NoError(b, err)
-	defer idx.Close()
-	assert.Equal(b, uint32(596), idx.chunkCount())
-
-	prefixes, err := idx.prefixes()
-	require.NoError(b, err)
-
-	b.Run("benchmark prefixIdx()", func(b *testing.B) {
-		var ord uint32
-		for i := 0; i < b.N; i++ {
-			ord = prefixIdx(idx, prefixes[uint(i)&uint(512)])
-		}
-		assert.True(b, ord < 596)
-	})
-	b.Run("benchmark findPrefix", func(b *testing.B) {
-		var ord uint32
-		for i := 0; i < b.N; i++ {
-			ord = idx.findPrefix(prefixes[uint(i)&uint(512)])
-		}
-		assert.True(b, ord < 596)
-	})
-}
+//func ABenchmarkFindPrefix(b *testing.B) {
+//	ctx := context.Background()
+//	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
+//	require.NoError(b, err)
+//	defer f.Close()
+//	bs, err := io.ReadAll(f)
+//	require.NoError(b, err)
+//	idx, err := parseTableIndexByCopy(ctx, bs, &UnlimitedQuotaProvider{})
+//	require.NoError(b, err)
+//	defer idx.Close()
+//	assert.Equal(b, uint32(596), idx.chunkCount())
+//
+//	prefixes, err := idx.prefixes()
+//	require.NoError(b, err)
+//
+//	b.Run("benchmark prefixIdx()", func(b *testing.B) {
+//		var ord uint32
+//		for i := 0; i < b.N; i++ {
+//			ord = prefixIdx(idx, prefixes[uint(i)&uint(512)])
+//		}
+//		assert.True(b, ord < 596)
+//	})
+//	b.Run("benchmark findPrefix", func(b *testing.B) {
+//		var ord uint32
+//		for i := 0; i < b.N; i++ {
+//			ord = idx.findPrefix(prefixes[uint(i)&uint(512)])
+//		}
+//		assert.True(b, ord < 596)
+//	})
+//}
 
 // previous implementation for findIndex().
 func prefixIdx(ti onHeapTableIndex, prefix uint64) (idx uint32) {
