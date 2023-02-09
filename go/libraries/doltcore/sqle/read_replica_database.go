@@ -393,76 +393,34 @@ OPTIMISTIC_RETRY:
 					
 					// TODO: this should work for workspaces too but doesn't, only branches
 					if localRef.Ref.GetType() == ref.BranchRefType {
-						if localRef.Hash != remoteRef.Hash {
-							if behavior == pullBehavior_forcePull {
-								err := rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
-								if errors.Is(err, datas.ErrOptimisticLockFailed) {
-									continue OPTIMISTIC_RETRY
-								} else if err != nil {
-									return nil, err
-								}
-
-								err = rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
-								if errors.Is(err, datas.ErrOptimisticLockFailed) {
-									continue OPTIMISTIC_RETRY
-								} else if err != nil {
-									return nil, err
-								}
-							} else {
-								err := rrd.ddb.FastForwardToHash(ctx, remoteRef.Ref, remoteRef.Hash)
-								if errors.Is(err, datas.ErrOptimisticLockFailed) {
-									continue OPTIMISTIC_RETRY
-								} else if err != nil {
-									return nil, err
-								}
-							}
+						err := rrd.pullLocalBranch(ctx, localRef, remoteRef, trackingRef, behavior)
+						if errors.Is(err, datas.ErrOptimisticLockFailed) {
+							continue OPTIMISTIC_RETRY
+						} else if err != nil {
+							return nil, err
 						}
 					}
+					
 					continue REFS
 				} else {
 					switch remoteRef.Ref.GetType() {
 					case ref.BranchRefType:
-						ctx.GetLogger().Tracef("creating local branch %s", remoteRef.Ref.GetPath())
-
-						// If a local branch isn't present for the remote branch, create a new branch for it. We need to use 
-						// NewBranchAtCommit so that the branch has its associated working set created at the same time. Creating 
-						// branch refs without associate working sets causes errors in other places.
-						spec, err := doltdb.NewCommitSpec(remoteRef.Hash.String())
+						err := rrd.createNewBranchFromRemote(ctx, remoteRef, trackingRef)
 						if err != nil {
-							return nil, err
-						}
-
-						cm, err := rrd.ddb.Resolve(ctx, spec, nil)
-						if err != nil {
-							return nil, err
-						}
-						
-						err = rrd.ddb.NewBranchAtCommit(ctx, remoteRef.Ref, cm)
-						err  = rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
-						if errors.Is(err, datas.ErrOptimisticLockFailed) {
-							continue OPTIMISTIC_RETRY
-						} else if err != nil {
-							return nil, err
-						}
-
-						err  = rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
-						if errors.Is(err, datas.ErrOptimisticLockFailed) {
-							continue OPTIMISTIC_RETRY
-						} else if err != nil {
 							return nil, err
 						}
 
 						// TODO: Establish upstream tracking for this new branch
-						
 						continue REFS
 					case ref.TagRefType:
 						err := rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
-						if err == nil {
-							continue REFS
-						}
-						if !errors.Is(err, datas.ErrOptimisticLockFailed) {
+						if errors.Is(err, datas.ErrOptimisticLockFailed) {
+							continue OPTIMISTIC_RETRY
+						} else if err != nil {
 							return nil, err
 						}
+						
+						continue REFS
 					default:
 						ctx.GetLogger().Warnf("skipping replication for unhandled remote ref %s", remoteRef.Ref.String())
 						continue REFS
@@ -475,8 +433,55 @@ OPTIMISTIC_RETRY:
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return remoteRefsByPath, nil
+}
+
+func (rrd ReadReplicaDatabase) createNewBranchFromRemote(ctx *sql.Context, remoteRef doltdb.RefWithHash, trackingRef ref.RemoteRef) error {
+	ctx.GetLogger().Tracef("creating local branch %s", remoteRef.Ref.GetPath())
+
+	// If a local branch isn't present for the remote branch, create a new branch for it. We need to use 
+	// NewBranchAtCommit so that the branch has its associated working set created at the same time. Creating 
+	// branch refs without associate working sets causes errors in other places.
+	spec, err := doltdb.NewCommitSpec(remoteRef.Hash.String())
+	if err != nil {
+		return err
+	}
+
+	cm, err := rrd.ddb.Resolve(ctx, spec, nil)
+	if err != nil {
+		return err
+	}
+
+	err = rrd.ddb.NewBranchAtCommit(ctx, remoteRef.Ref, cm)
+	err = rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
+	if err != nil {
+		return err
+	}
+
+	return rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
+}
+
+func (rrd ReadReplicaDatabase) pullLocalBranch(ctx *sql.Context, localRef doltdb.RefWithHash, remoteRef doltdb.RefWithHash, trackingRef ref.RemoteRef, behavior pullBehavior) error {
+		if localRef.Hash != remoteRef.Hash {
+			if behavior == pullBehavior_forcePull {
+				err := rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
+				if err != nil {
+					return err
+				}
+			} else {
+				err := rrd.ddb.FastForwardToHash(ctx, remoteRef.Ref, remoteRef.Hash)
+				if err != nil {
+					return err
+				}
+			}
+			
+			err := rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
+			if err != nil {
+				return err
+			}
+		}
+	return nil
 }
 
 func getReplicationRefs(ctx *sql.Context, rrd ReadReplicaDatabase) (
