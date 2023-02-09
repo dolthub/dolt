@@ -82,6 +82,8 @@ teardown() {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
     dolt config --local --add sqlserver.global.dolt_async_replication 1
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+
     start_sql_server repo1
 
     dolt sql-client --use-db repo1 -P $PORT -u dolt -q "CALL DOLT_COMMIT('-am', 'Step 1');"
@@ -91,7 +93,8 @@ teardown() {
 
     cd ../repo2
     dolt pull remote1
-    dolt sql -q "select * from test" -r csv
+    
+    run dolt sql -q "select * from test" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "pk" ]]
     [[ "${lines[1]}" =~ "0" ]]
