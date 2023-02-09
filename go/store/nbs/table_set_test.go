@@ -248,57 +248,35 @@ func BenchmarkTableSetGet(b *testing.B) {
 		memTbls[i] = mt
 	}
 
+	var err error
 	ctx := context.Background()
 	memProv := &UnlimitedQuotaProvider{}
 	stats := &Stats{}
+	HeapMap, HeapBloom, HeapFP = true, true, 0.01
+	ts := newFakeTableSet(memProv)
+	for _, mt := range memTbls {
+		ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
+		require.NoError(b, err)
+	}
 
-	var err error
-	b.Run("benchmark init tableSet with binary search", func(b *testing.B) {
-		HeapMap, HeapBloom = false, false
-		ts := newFakeTableSet(memProv)
+	b.Run("benchmark tableSet AllocateHash", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			for _, mt := range memTbls {
-				ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
-				require.NoError(b, err)
-			}
-		}
-	})
-
-	b.Run("benchmark init tableSet get with heap", func(b *testing.B) {
-		HeapMap, HeapBloom = true, false
-		ts := newFakeTableSet(memProv)
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			for _, mt := range memTbls {
-				ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
-				require.NoError(b, err)
-			}
+			ts.AllocateHash()
 		}
 	})
 
 
-	b.Run("benchmark init tableSet get with bloom", func(b *testing.B) {
-		HeapFP = 0.01
-		HeapMap, HeapBloom = false, true
-		ts := newFakeTableSet(memProv)
+	b.Run("benchmark tableSet AllocateBloom", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			for _, mt := range memTbls {
-				ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
-				require.NoError(b, err)
-			}
+			ts.AllocateBloom()
 		}
 	})
 
 	h := addr{}
 	b.Run("benchmark tableSet get with binary search", func(b *testing.B) {
 		HeapMap, HeapBloom = false, false
-		ts := newFakeTableSet(memProv)
-		for _, mt := range memTbls {
-			ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
-			require.NoError(b, err)
-		}
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_, err = ts.get(ctx, h, stats)
@@ -308,11 +286,6 @@ func BenchmarkTableSetGet(b *testing.B) {
 
 	b.Run("benchmark tableSet get with hash", func(b *testing.B) {
 		HeapMap, HeapBloom = true, false
-		ts := newFakeTableSet(memProv)
-		for _, mt := range memTbls {
-			ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
-			require.NoError(b, err)
-		}
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_, err = ts.get(ctx, h, stats)
@@ -321,13 +294,7 @@ func BenchmarkTableSetGet(b *testing.B) {
 	})
 
 	b.Run("benchmark tableSet get with bloom", func(b *testing.B) {
-		HeapFP = 0.01
 		HeapMap, HeapBloom = false, true
-		ts := newFakeTableSet(memProv)
-		for _, mt := range memTbls {
-			ts, err = ts.append(ctx, mt, hasManyHasAll, stats)
-			require.NoError(b, err)
-		}
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_, err = ts.get(ctx, h, stats)

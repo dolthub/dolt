@@ -472,7 +472,22 @@ func (ts tableSet) toSpecs() ([]tableSpec, error) {
 func (ts tableSet) AllocateHash() {
 	for _, chunk := range ts.novel {
 		idx, _ := chunk.index()
-		idx
+		idx.AllocateHash()
+	}
+	for _, chunk := range ts.upstream {
+		idx, _ := chunk.index()
+		idx.AllocateHash()
+	}
+}
+
+func (ts tableSet) AllocateBloom() {
+	for _, chunk := range ts.novel {
+		idx, _ := chunk.index()
+		idx.AllocateBloom()
+	}
+	for _, chunk := range ts.upstream {
+		idx, _ := chunk.index()
+		idx.AllocateBloom()
 	}
 }
 

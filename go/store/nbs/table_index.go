@@ -80,7 +80,9 @@ type tableIndex interface {
 	// |Close|d independently.
 	clone() (tableIndex, error)
 
-	//AllocateHeap()
+	// TODO: delete these
+	AllocateHash()
+	AllocateBloom()
 }
 
 func ReadTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData uint64, err error) {
@@ -369,6 +371,10 @@ func (ti onHeapTableIndex) lookupOrdinal(h *addr) (uint32, error) {
 // Returns |tr.chunkCount| if absent
 func (ti onHeapTableIndex) findPrefix(prefix uint64) (idx uint32) {
 	if HeapMap {
+		if ti.prefixMap == nil {
+			panic("wtf1111")
+		}
+
 		if ord, ok := ti.prefixMap[prefix]; ok {
 			return ord
 		}
@@ -376,6 +382,9 @@ func (ti onHeapTableIndex) findPrefix(prefix uint64) (idx uint32) {
 	}
 
 	if HeapBloom {
+		if ti.bloomFilter == nil {
+			panic("wtf222")
+		}
 		prefixBytes := make([]byte, 8)
 		binary.BigEndian.PutUint64(prefixBytes, prefix)
 		if !ti.bloomFilter.Test(prefixBytes) {
@@ -579,9 +588,21 @@ func (ti onHeapTableIndex) clone() (tableIndex, error) {
 	return ti, nil
 }
 
-func (ti onHeapTableIndex) AllocateHeap() {
+func (ti onHeapTableIndex) AllocateHash() {
 	ti.prefixMap = make(map[uint64]uint32, ti.count)
-	ti.prefixes()
+	for i := uint32(0); i < ti.count; i++ {
+		prefix := binary.BigEndian.Uint64(ti.prefixTuples[i*prefixTupleSize : i*prefixTupleSize+addrPrefixSize])
+		if _, ok := ti.prefixMap[prefix]; !ok {
+			ti.prefixMap[prefix] = i
+		}
+	}
+}
+
+func (ti onHeapTableIndex) AllocateBloom() {
+	ti.bloomFilter = bloom.NewWithEstimates(uint(ti.count), HeapFP)
+	for i := uint32(0); i < ti.count; i++ {
+		ti.bloomFilter.Add(ti.prefixTuples[i*prefixTupleSize : i*prefixTupleSize+addrPrefixSize])
+	}
 }
 
 func (ti onHeapTableIndex) ResolveShortHash(short []byte) ([]string, error) {
