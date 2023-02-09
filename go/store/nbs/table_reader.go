@@ -156,8 +156,6 @@ func newTableReader(index tableIndex, r tableReaderAt, blockSize uint64) (tableR
 
 	if ReaderMap {
 
-
-
 	}
 
 	if ReaderBloom {
