@@ -519,6 +519,28 @@ SQL
     [[ "$output" =~ "remotes/remote1/b2" ]] || false    
 }
 
+@test "replication: connect to a branch not on the remote" {
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt sql -q "create table t1 (a int primary key);"
+    dolt commit -Am "new table"
+    dolt branch b1
+    dolt push origin b1
+
+    cd ../repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+
+    run dolt sql -q 'USE `repo1/B1`; show tables;' -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "t1" ]] || false
+
+    run dolt sql -q 'USE `repo1/notfound`;' -r csv
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "database not found" ]] || false
+}
+
 @test "replication: push feature head" {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
