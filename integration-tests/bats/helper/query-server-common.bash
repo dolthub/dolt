@@ -112,15 +112,13 @@ stop_sql_server() {
 
     wait=$1
     if [ ! -z "$SERVER_PID" ]; then
-      serverpidinuse=$(lsof -i -P -n | grep LISTEN | grep $SERVER_PID | wc -l)
-      if [ $serverpidinuse -gt 0 ]; then
-        kill $SERVER_PID
+        # ignore failures of kill command in the case the server is already dead
+        run kill $SERVER_PID
         if [ $wait ]; then
             while ps -p $SERVER_PID > /dev/null; do
                 sleep .1;
             done
         fi;
-      fi
     fi
     SERVER_PID=
 }
