@@ -8,6 +8,10 @@ export const mergeTests = [
     matcher: mergeBaseMatcher,
   },
   {
+    q: `SELECT * FROM dolt_status`,
+    res: [],
+  },
+  {
     q: `CALL DOLT_MERGE(:branchName, "--no-ff", "-m", :commitMsg)`,
     p: { branchName: "mybranch", commitMsg: "Merge mybranch into main" },
     res: [{ fast_forward: 1, conflicts: 0 }],
