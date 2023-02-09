@@ -91,7 +91,7 @@ teardown() {
 
     cd ../repo2
     dolt pull remote1
-    run dolt sql -q "select * from test" -r csv
+    dolt sql -q "select * from test" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "pk" ]]
     [[ "${lines[1]}" =~ "0" ]]
@@ -398,6 +398,9 @@ teardown() {
     run dolt branch
     [[ ! "$output" =~ "feature" ]] || false
 
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+
     start_sql_server repo2
 
     # No data on main
@@ -410,11 +413,6 @@ teardown() {
     [[ "$output" =~ "feature" ]] || false
     [[ ! "$output" =~ "main" ]] || false
 
-    # connecting to remote branch that does not exist creates new local branch and sets upstream
-    run dolt sql-client --use-db repo2/feature -P $PORT -u dolt -q "call dolt_commit('--allow-empty', '-m', 'empty'); call dolt_push()"
-    [ $status -eq 0 ]
-    [[ ! "$output" =~ "the current branch has no upstream branch" ]] || false
-
     run dolt sql-client --use-db repo2/feature -P $PORT -u dolt -q "show tables"
     [ $status -eq 0 ]
     [[ "$output" =~ "Tables_in_repo2/feature" ]] || false
@@ -422,12 +420,43 @@ teardown() {
 
     run dolt branch
     [[ "$output" =~ "feature" ]] || false
+}
+
+@test "remotes-sql-server: connect to remote branch pushed after server starts" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+    dolt checkout -b feature
+    dolt commit -am "first commit"
+    dolt push remote1 feature
+    dolt checkout main
+    dolt push remote1 main
+
+    cd ../repo2
+    dolt fetch
+    run dolt branch
+    [[ ! "$output" =~ "feature" ]] || false
+
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+
+    start_sql_server repo2
 
     cd ../repo1
-    dolt checkout feature
-    dolt pull remote1 feature
-    run dolt log -n 1 --oneline
-    [[ "$output" =~ "empty" ]] || false
+    dolt branch newbranch
+    dolt push remote1 newbranch
+
+    run dolt sql-client --use-db repo2/feature -P $PORT -u dolt -q "select active_branch()"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "feature" ]] || false
+
+    run dolt sql-client --use-db repo2/newbranch -P $PORT -u dolt -q "select active_branch()"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "newbranch" ]] || false
+
+    run dolt branch
+    [[ "$output" =~ "feature" ]] || false
+    [[ "$output" =~ "newbranch" ]] || false
 }
 
 @test "remotes-sql-server: connect to remote tracking branch fails if there are multiple remotes" {
