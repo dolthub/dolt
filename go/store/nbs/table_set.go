@@ -468,7 +468,6 @@ func (ts tableSet) toSpecs() ([]tableSpec, error) {
 	return tableSpecs, nil
 }
 
-
 func (ts tableSet) AllocateHash() {
 	for _, chunk := range ts.novel {
 		idx, _ := chunk.index()

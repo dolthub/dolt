@@ -266,7 +266,6 @@ func BenchmarkTableSetGet(b *testing.B) {
 		}
 	})
 
-
 	b.Run("benchmark tableSet AllocateBloom", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
