@@ -173,6 +173,8 @@ github.com/dolthub/vitess v0.0.0-20230201234433-864c7d109df8 h1:h1DBe5+9JIArCVsB
 github.com/dolthub/vitess v0.0.0-20230201234433-864c7d109df8/go.mod h1:oVFIBdqMFEkt4Xz2fzFJBNtzKhDEjwdCF0dzde39iKs=
 github.com/dolthub/vitess v0.0.0-20230209195411-9248a7f7c06d h1:1HWBukN05wz4xec9e83lvAGgSATsFoaGQVjNi9NaYVk=
 github.com/dolthub/vitess v0.0.0-20230209195411-9248a7f7c06d/go.mod h1:oVFIBdqMFEkt4Xz2fzFJBNtzKhDEjwdCF0dzde39iKs=
+github.com/dolthub/vitess v0.0.0-20230209214529-fd78db2affd0 h1:PlkFhCBROHO64e1NF4jd8pCprrvg3osw/Grk06nJivQ=
+github.com/dolthub/vitess v0.0.0-20230209214529-fd78db2affd0/go.mod h1:oVFIBdqMFEkt4Xz2fzFJBNtzKhDEjwdCF0dzde39iKs=
 github.com/dustin/go-humanize v0.0.0-20171111073723-bb3d318650d4/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/dustin/go-humanize v1.0.0 h1:VSnTsYCnlFHaM2/igO1h6X3HA71jcobQuxemgkq4zYo=
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
