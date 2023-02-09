@@ -10,6 +10,10 @@ export const branchTests = [
     res: [{ status: 0 }],
   },
   {
+    q: `CALL DOLT_CLEAN('mysqldump_table', 'warehouse')`,
+    res: [{ status: 0 }],
+  },
+  {
     q: `USE ::dbName`,
     p: { dbName: `${args.dbName}/mybranch` },
     res: {
