@@ -23,8 +23,11 @@ to see what we're building next.
 ## What's it for?
 
 Lots of things! Dolt is a generally useful tool with countless
-applications. But if you want some ideas, [here's how people are using
-it so far](https://www.dolthub.com/blog/2022-07-11-dolt-case-studies/).
+applications. Here are some ideas:
+
+* [Version Control your MySQL or MariaDB dumps](https://www.dolthub.com/blog/2023-02-06-dolt-backups/)
+* [Version Control for Video Game Assets](https://www.dolthub.com/blog/2023-02-08-dolt-for-gamedev/)
+* [What our customers our doing with Dolt](https://www.dolthub.com/blog/2022-07-11-dolt-case-studies/)
 
 # Dolt CLI
 
