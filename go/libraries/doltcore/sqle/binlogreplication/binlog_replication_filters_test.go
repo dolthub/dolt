@@ -28,9 +28,10 @@ func TestBinlogReplicationFilters_ignoreTablesOnly(t *testing.T) {
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
 
-	// Ignore replication events for db01.t2 (also tests that the first filter setting is overwritten by the second)
+	// Ignore replication events for db01.t2. Also tests that the first filter setting is overwritten by
+	// the second and that db and that db and table names are case-insensitive.
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_IGNORE_TABLE=(db01.t1);")
-	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_IGNORE_TABLE=(db01.t2);")
+	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_IGNORE_TABLE=(DB01.T2);")
 
 	// Assert that status shows replication filters
 	status := showReplicaStatus(t)
@@ -78,9 +79,10 @@ func TestBinlogReplicationFilters_doTablesOnly(t *testing.T) {
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
 
-	// Do replication events for db01.t1 (also tests that the first filter setting is overwritten by the second)
+	// Do replication events for db01.t1. Also tests that the first filter setting is overwritten by
+	// the second and that db and that db and table names are case-insensitive.
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(db01.t2);")
-	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(db01.t1);")
+	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(DB01.T1);")
 
 	// Assert that status shows replication filters
 	status := showReplicaStatus(t)

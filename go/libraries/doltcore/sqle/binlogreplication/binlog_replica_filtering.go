@@ -16,6 +16,7 @@ package binlogreplication
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -57,11 +58,13 @@ func (fc *filterConfiguration) setDoTables(urts []sql.UnresolvedTable) error {
 	fc.doTables = make(map[string]map[string]struct{})
 
 	for _, urt := range urts {
-		if fc.doTables[urt.Database()] == nil {
-			fc.doTables[urt.Database()] = make(map[string]struct{})
+		table := strings.ToLower(urt.Name())
+		db := strings.ToLower(urt.Database())
+		if fc.doTables[db] == nil {
+			fc.doTables[db] = make(map[string]struct{})
 		}
-		tableMap := fc.doTables[urt.Database()]
-		tableMap[urt.Name()] = struct{}{}
+		tableMap := fc.doTables[db]
+		tableMap[table] = struct{}{}
 	}
 	return nil
 }
@@ -82,11 +85,13 @@ func (fc *filterConfiguration) setIgnoreTables(urts []sql.UnresolvedTable) error
 	fc.ignoreTables = make(map[string]map[string]struct{})
 
 	for _, urt := range urts {
-		if fc.ignoreTables[urt.Database()] == nil {
-			fc.ignoreTables[urt.Database()] = make(map[string]struct{})
+		table := strings.ToLower(urt.Name())
+		db := strings.ToLower(urt.Database())
+		if fc.ignoreTables[db] == nil {
+			fc.ignoreTables[db] = make(map[string]struct{})
 		}
-		tableMap := fc.ignoreTables[urt.Database()]
-		tableMap[urt.Name()] = struct{}{}
+		tableMap := fc.ignoreTables[db]
+		tableMap[table] = struct{}{}
 	}
 	return nil
 }
@@ -98,6 +103,9 @@ func (fc *filterConfiguration) isTableFilteredOut(tableMap *mysql.TableMap) bool
 		return false
 	}
 
+	table := strings.ToLower(tableMap.Name)
+	db := strings.ToLower(tableMap.Database)
+
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 
@@ -106,8 +114,8 @@ func (fc *filterConfiguration) isTableFilteredOut(tableMap *mysql.TableMap) bool
 	// If a table appears in both doTable and ignoreTables, it is ignored.
 	// https://dev.mysql.com/doc/refman/8.0/en/replication-rules-table-options.html
 	if len(fc.doTables) > 0 {
-		if doTables, ok := fc.doTables[tableMap.Database]; ok {
-			if _, ok := doTables[tableMap.Name]; !ok {
+		if doTables, ok := fc.doTables[db]; ok {
+			if _, ok := doTables[table]; !ok {
 				logger.Tracef("skipping table %s.%s (not in doTables) ", tableMap.Database, tableMap.Name)
 				return true
 			}
@@ -115,8 +123,8 @@ func (fc *filterConfiguration) isTableFilteredOut(tableMap *mysql.TableMap) bool
 	}
 
 	if len(fc.ignoreTables) > 0 {
-		if ignoredTables, ok := fc.ignoreTables[tableMap.Database]; ok {
-			if _, ok := ignoredTables[tableMap.Name]; ok {
+		if ignoredTables, ok := fc.ignoreTables[db]; ok {
+			if _, ok := ignoredTables[table]; ok {
 				// If this table is being ignored, don't process any further
 				logger.Tracef("skipping table %s.%s (in ignoreTables)", tableMap.Database, tableMap.Name)
 				return true
