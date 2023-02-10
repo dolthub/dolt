@@ -583,7 +583,6 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 		"--no-defaults",
 		"--user="+username,
 		"--datadir="+dataDir,
-		"--default-authentication-plugin=mysql_native_password",
 		"--gtid-mode=ON",
 		"--enforce-gtid-consistency=ON",
 		fmt.Sprintf("--port=%v", mySqlPort),
