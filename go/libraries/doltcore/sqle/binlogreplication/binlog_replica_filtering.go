@@ -98,7 +98,7 @@ func (fc *filterConfiguration) setIgnoreTables(urts []sql.UnresolvedTable) error
 
 // isTableFilteredOut returns true if the table identified by |tableMap| has been filtered out on this replica and
 // should not have any updates applied from binlog messages.
-func (fc *filterConfiguration) isTableFilteredOut(tableMap *mysql.TableMap) bool {
+func (fc *filterConfiguration) isTableFilteredOut(ctx *sql.Context, tableMap *mysql.TableMap) bool {
 	if fc == nil {
 		return false
 	}
@@ -116,7 +116,7 @@ func (fc *filterConfiguration) isTableFilteredOut(tableMap *mysql.TableMap) bool
 	if len(fc.doTables) > 0 {
 		if doTables, ok := fc.doTables[db]; ok {
 			if _, ok := doTables[table]; !ok {
-				logger.Tracef("skipping table %s.%s (not in doTables) ", tableMap.Database, tableMap.Name)
+				ctx.GetLogger().Tracef("skipping table %s.%s (not in doTables) ", tableMap.Database, tableMap.Name)
 				return true
 			}
 		}
@@ -126,7 +126,7 @@ func (fc *filterConfiguration) isTableFilteredOut(tableMap *mysql.TableMap) bool
 		if ignoredTables, ok := fc.ignoreTables[db]; ok {
 			if _, ok := ignoredTables[table]; ok {
 				// If this table is being ignored, don't process any further
-				logger.Tracef("skipping table %s.%s (in ignoreTables)", tableMap.Database, tableMap.Name)
+				ctx.GetLogger().Tracef("skipping table %s.%s (in ignoreTables)", tableMap.Database, tableMap.Name)
 				return true
 			}
 		}

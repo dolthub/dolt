@@ -20,16 +20,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 )
 
 var DoltBinlogReplicaController = newDoltBinlogReplicaController()
-
-var logger = logrus.StandardLogger()
 
 // ErrServerNotConfiguredAsReplica is returned when replication is started without enough configuration provided.
 var ErrServerNotConfiguredAsReplica = fmt.Errorf(
@@ -92,7 +88,7 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 		return fmt.Errorf("no execution context set for the replica controller")
 	}
 
-	logger.Info("starting binlog replication...")
+	ctx.GetLogger().Info("starting binlog replication...")
 	d.applier.Go(d.ctx)
 	return nil
 }
