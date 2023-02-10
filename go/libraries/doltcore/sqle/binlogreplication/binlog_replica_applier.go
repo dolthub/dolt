@@ -30,7 +30,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/sqltypes"
-	"github.com/dolthub/vitess/go/vt/proto/query"
+	vquery "github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -206,6 +206,7 @@ func (a *binlogReplicaApplier) startReplicationEventStream(ctx *sql.Context, con
 			// with a "+" prefix. For now, just ignore the "+" prefix if we see it.
 			// https://dev.mysql.com/doc/refman/8.0/en/replication-options-gtids.html#sysvar_gtid_purged
 			if strings.HasPrefix(gtidPurged, "+") {
+				logger.Warnf("Ignoring unsupported '+' prefix on @@GTID_PURGED value")
 				gtidPurged = gtidPurged[1:]
 			}
 
@@ -341,11 +342,6 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 		// avoid issues with correctness, at the cost of being slightly less efficient
 		commitToAllDatabases = true
 
-		// TODO: Trying another theory that perhaps setting ctx when we aren't actually using
-		//       that database yet messed up repo_state.json creation...
-		if strings.HasPrefix(strings.ToLower(query.SQL), "create database") == false {
-			ctx.SetCurrentDatabase(query.Database)
-		}
 		executeQueryWithEngine(ctx, engine, query.SQL)
 		createCommit = strings.ToLower(query.SQL) != "begin"
 
@@ -809,7 +805,7 @@ func parseRow(ctx *sql.Context, tableMap *mysql.TableMap, schema sql.Schema, col
 		var value sqltypes.Value
 		var err error
 		if nullValuesBitmap.Bit(i) {
-			value, err = sqltypes.NewValue(query.Type_NULL_TYPE, nil)
+			value, err = sqltypes.NewValue(vquery.Type_NULL_TYPE, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -837,14 +833,14 @@ func parseRow(ctx *sql.Context, tableMap *mysql.TableMap, schema sql.Schema, col
 // type, but it doesn't indicate if an integer type is signed or unsigned, so we have to look at the column type in the
 // replica's schema and then choose any signed/unsigned query.Type to pass into mysql.CellValue to instruct it whether
 // to treat a value as signed or unsigned – the actual type does not matter, only the signed/unsigned property.
-func getSignedType(column *sql.Column) query.Type {
+func getSignedType(column *sql.Column) vquery.Type {
 	switch column.Type.Type() {
-	case query.Type_UINT8, query.Type_UINT16, query.Type_UINT24, query.Type_UINT32, query.Type_UINT64:
+	case vquery.Type_UINT8, vquery.Type_UINT16, vquery.Type_UINT24, vquery.Type_UINT32, vquery.Type_UINT64:
 		// For any unsigned integer value, we just need to return any unsigned numeric type to signal to Vitess to treat
 		// the value as unsigned. The actual type returned doesn't matter – only the signed/unsigned property is used.
-		return query.Type_UINT64
+		return vquery.Type_UINT64
 	default:
-		return query.Type_INT64
+		return vquery.Type_INT64
 	}
 }
 
@@ -887,7 +883,7 @@ func convertSqlTypesValue(ctx *sql.Context, value sqltypes.Value, column *sql.Co
 // expression syntax into a raw JSON string value that we can pass to the storage layer. If Vitess kept around the
 // raw string representation and returned it from value.ToString, this logic would not be necessary.
 func convertVitessJsonExpressionString(ctx *sql.Context, value sqltypes.Value) (interface{}, error) {
-	if value.Type() != query.Type_EXPRESSION {
+	if value.Type() != vquery.Type_EXPRESSION {
 		return nil, fmt.Errorf("invalid sqltypes.Value specified; expected a Value instance with an Expression type")
 	}
 
