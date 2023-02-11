@@ -85,6 +85,7 @@ enum ClientEventType {
     FILTER_BRANCH = 53;
     DUMP = 54;
     CHERRY_PICK = 55;
+    STASH = 56;
 }
 
 enum MetricID {
