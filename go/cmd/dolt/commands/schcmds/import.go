@@ -231,7 +231,7 @@ func getSchemaImportArgs(ctx context.Context, apr *argparser.ArgParseResults, dE
 		}
 
 		if rowCnt > 0 {
-			return nil, errhand.BuildDError("This operation will delete all row data. If this is your intent, " +
+			return nil, errhand.BuildDError("This operation will delete all row data. If this is your intent, "+
 				"run dolt sql -q 'delete from %s' to delete all row data, then re-run this command.", tblName).Build()
 		}
 	}
