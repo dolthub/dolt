@@ -572,12 +572,18 @@ func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durab
 	return ret, nil
 }
 
-func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, iranges ...sql.Range) ([]prolly.Range, error) {
+func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, ranges ...sql.Range) ([]prolly.Range, error) {
 	//todo(max): it is important that *doltIndexLookup maintains a reference
 	// to empty sqlRanges, otherwise the analyzer will dismiss the index and
 	// chose a less optimal lookup index. This is a GMS concern, so GMS should
 	// really not rely on the integrator to maintain this tenuous relationship.
-	ranges, err := pruneEmptyRanges(iranges)
+	var err error
+	if !di.spatial {
+		ranges, err = pruneEmptyRanges(ranges)
+		if err != nil {
+			return nil, err
+		}
+	}
 	pranges, err := di.prollyRangesFromSqlRanges(ctx, ns, ranges, di.keyBld)
 	if err != nil {
 		return nil, err
@@ -924,9 +930,12 @@ func (di *doltIndex) trimRangeCutValue(to int, keyPart interface{}) interface{} 
 }
 
 func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.NodeStore, ranges []sql.Range, tb *val.TupleBuilder) ([]prolly.Range, error) {
-	ranges, err := pruneEmptyRanges(ranges)
-	if err != nil {
-		return nil, err
+	var err error
+	if !di.spatial {
+		ranges, err = pruneEmptyRanges(ranges)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	pranges := make([]prolly.Range, len(ranges))
