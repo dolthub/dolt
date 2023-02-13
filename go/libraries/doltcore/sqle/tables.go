@@ -363,6 +363,7 @@ func (t *DoltTable) Collation() sql.CollationID {
 }
 
 func (t *DoltTable) sqlSchema() sql.PrimaryKeySchema {
+	// TODO: this should consider projections
 	if len(t.sqlSch.Schema) > 0 {
 		return t.sqlSch
 	}
@@ -961,8 +962,10 @@ func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 		return &nt
 	}
 	
-	nt.projectedCols = make([]uint64, len(colNames))
-	nt.projectedSchema = make(sql.Schema, len(colNames))
+	// In the case of the history table, some columns may not exist, so the projected schema may be smaller than the
+	// requested column list in that case.
+	nt.projectedCols = make([]uint64, 0)
+	nt.projectedSchema = make(sql.Schema, 0)
 	cols := t.sch.GetAllCols()
 	sch := t.Schema()
 	for i := range colNames {
@@ -976,9 +979,10 @@ func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 			// filling the gaps with nil values.
 			continue
 		}
-		nt.projectedCols[i] = col.Tag
-		nt.projectedSchema[i] = sch[sch.IndexOfColName(lowerName)]
+		nt.projectedCols = append(nt.projectedCols, col.Tag)
+		nt.projectedSchema = append(nt.projectedSchema, sch[sch.IndexOfColName(lowerName)])
 	}
+	
 	return &nt
 }
 

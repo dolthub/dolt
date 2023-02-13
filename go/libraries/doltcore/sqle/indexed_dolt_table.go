@@ -81,7 +81,6 @@ func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition)
 		return nil, err
 	}
 	
-	// TODO:  table.projectedCols has a 0 tag in it because it got skipped during projection building, not sure why
 	if idt.lb == nil || !canCache || idt.lb.Key() != key {
 		idt.lb, err = index.NewLookupBuilder(ctx, idt.table, idt.idx, key, idt.table.projectedCols, idt.table.sqlSch, idt.isDoltFormat)
 		if err != nil {

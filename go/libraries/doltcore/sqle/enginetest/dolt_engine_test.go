@@ -95,9 +95,15 @@ func TestSingleQuery(t *testing.T) {
 	test = queries.QueryTest{
 		Query: `show create table mytable`,
 		Expected: []sql.Row{
-			{2, "second row"},
-			{2, "second row"},
-			{2, "second row"},
+			{ "mytable",
+				"CREATE TABLE `mytable` (\n" +
+				"  `i` bigint NOT NULL,\n" +
+				"  `s` varchar(20) NOT NULL COMMENT 'column s',\n" +
+				"  PRIMARY KEY (`i`),\n" +
+				"  KEY `idx_si` (`s`,`i`),\n" +
+				"  KEY `mytable_i_s` (`i`,`s`),\n" +
+				"  UNIQUE KEY `mytable_s` (`s`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 		},
 	}
 
@@ -106,30 +112,33 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "trigger before update, with indexed update",
+			Name: "primary key table: non-pk column type changes",
 			SetUpScript: []string{
-				"create table a (x int primary key, y int, unique key (y))",
-				"create table b (z int primary key)",
-				"insert into a values (1,3), (10,20)",
-				"create trigger insert_b before update on a for each row insert into b values (old.x * 10)",
-				"update a set x = x + 1 where y = 20",
+				"create table t (pk int primary key, c1 int, c2 varchar(20));",
+				"call dolt_add('.')",
+				"insert into t values (1, 2, '3'), (4, 5, '6');",
+				"set @Commit1 = '';",
+				"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
+				"alter table t modify column c2 int;",
+				"set @Commit2 = '';",
+				"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'changed type of c2');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "select x, y from a order by 1",
-					Expected: []sql.Row{
-						{1, 3},
-						{11, 20},
-					},
+					Query:    "select count(*) from dolt_history_t;",
+					Expected: []sql.Row{{4}},
+				},
+				// Can't represent the old schema in the current one, so it gets nil valued
+				{
+					Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit1 order by pk;",
+					Expected: []sql.Row{{1, nil}, {4, nil}},
 				},
 				{
-					Query: "select z from b",
-					Expected: []sql.Row{
-						{100},
-					},
+					Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
+					Expected: []sql.Row{{1, 3}, {4, 6}},
 				},
 			},
 		},
