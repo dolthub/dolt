@@ -115,30 +115,24 @@ func TestSingleScript(t *testing.T) {
 	// t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "primary key table: non-pk column type changes",
+			Name: "dolt_history table filter correctness",
 			SetUpScript: []string{
-				"create table t (pk int primary key, c1 int, c2 varchar(20));",
-				"call dolt_add('.')",
-				"insert into t values (1, 2, '3'), (4, 5, '6');",
-				"set @Commit1 = '';",
-				"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
-				"alter table t modify column c2 int;",
-				"set @Commit2 = '';",
-				"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'changed type of c2');",
+				"create table xy (x int primary key, y int);",
+				"call dolt_add('.');",
+				"call dolt_commit('-m', 'creating table');",
+				"insert into xy values (0, 1);",
+				"call dolt_commit('-am', 'add data');",
+				"insert into xy values (2, 3);",
+				"call dolt_commit('-am', 'add data');",
+				"insert into xy values (4, 5);",
+				"call dolt_commit('-am', 'add data');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "select count(*) from dolt_history_t;",
-					Expected: []sql.Row{{4}},
-				},
-				// Can't represent the old schema in the current one, so it gets nil valued
-				{
-					Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit1 order by pk;",
-					Expected: []sql.Row{{1, nil}, {4, nil}},
-				},
-				{
-					Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
-					Expected: []sql.Row{{1, 3}, {4, 6}},
+					Query: "select count(*) from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1)",
+					Expected: []sql.Row{
+						{2},
+					},
 				},
 			},
 		},
