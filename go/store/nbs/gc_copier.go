@@ -17,7 +17,6 @@ package nbs
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 )
 
@@ -94,9 +93,8 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, tfp tableFilePersister
 	}
 
 	// Attempt to rename the file to the destination if we are working with a fsTablePersister...
-	if fstp, ok := tfp.(*fsTablePersister); ok {
-		path := filepath.Join(fstp.dir, filename)
-		err := gcc.writer.FlushToFile(path)
+	if mover, ok := tfp.(movingTableFilePersister); ok {
+		err = mover.TryMoveCmpChunkTableWriter(ctx, filename, gcc.writer)
 		if err == nil {
 			return []tableSpec{
 				{
@@ -108,7 +106,6 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, tfp tableFilePersister
 	}
 
 	// Otherwise, write the file through CopyTableFile.
-
 	r, err := gcc.writer.Reader()
 	if err != nil {
 		return nil, err
