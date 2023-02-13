@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -925,7 +926,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 
 	pranges := make([]prolly.Range, len(ranges))
 
-	// TODO: incorporate this code with the bottom block later
+	// TODO: no clue if this is a good prolly range...
 	if di.spatial {
 		// should be exactly one range
 		rng := ranges[0][0]
@@ -935,25 +936,37 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		if err = PutField(ctx, ns, tb, 0, lower); err != nil {
 			return nil, err
 		}
+		minPoint, ok := lower.(sqltypes.Point)
+		if !ok {
+			panic("somehow received a not point in spatial index range")
+		}
+		minCell := ZCell(minPoint)
+		minVal := append([]byte{0}, minCell.ZValue[:]...) // give lowest level
 		field.Lo = prolly.Bound{
 			Binding: true,
 			Inclusive: true,
+			Value: minVal,
 		}
-		tup := tb.BuildPermissive(sharePool)
-		field.Lo.Value = tup.GetField(0)
-
-		if err = PutField(ctx, ns, tb, 1, upper); err != nil {
-			return nil, err
+		maxPoint, ok := upper.(sqltypes.Point)
+		if !ok {
+			panic("somehow received a not point in spatial index range")
 		}
+		maxCell := ZCell(maxPoint)
+		maxVal := append([]byte{64}, maxCell.ZValue[:]...) // give highest level
 		field.Hi = prolly.Bound{
 			Binding: true,
 			Inclusive: true,
+			Value: maxVal,
 		}
+		// TODO: wtf is this for?
 		tup := tb.BuildPermissive(sharePool)
+		if err = PutField(ctx, ns, tb, 0, lower); err != nil {
+			return nil, err
+		}
 		pranges[0] = prolly.Range{
 			Fields: []prolly.RangeField{field},
-			Desc:   di.keyBld.Desc,
-			Tup:    tup,
+			Desc:   di.keyBld.Desc, // likely this is wrong
+			Tup:    tup, // likely this is also wrong
 		}
 		return pranges, nil
 	} else {

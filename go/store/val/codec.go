@@ -635,7 +635,7 @@ type Cell struct {
 
 func compareCell(l, r Cell) int {
 	if l.Level != r.Level {
-		return int(l.Level - r.Level)
+		return int(l.Level) - int(r.Level)
 	}
 	return bytes.Compare(l.ZValue[:], r.ZValue[:])
 }
