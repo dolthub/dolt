@@ -19,15 +19,13 @@ import (
 	"io"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema) (prollyIndexWriter, error) {
@@ -312,16 +310,8 @@ func (m prollySecondaryIndexWriter) trimKeyPart(to int, keyPart interface{}) int
 func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		var key interface{}
-		if m.spatial {
-			_, ok := sqlRow[from].(types.GeometryValue)
-			if !ok {
-				panic("impossible") // TODO: make error
-			}
-		} else {
-			key = m.trimKeyPart(to, sqlRow[from])
-		}
-		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, key); err != nil {
+		keyPart := m.trimKeyPart(to, sqlRow[from])
+		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
 			return nil, err
 		}
 	}

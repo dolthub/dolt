@@ -118,6 +118,8 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 		}
 	case val.CommitAddrEnc:
 		v, ok = td.GetCommitAddr(i, tup)
+	case val.CellEnc:
+		v, ok = td.GetCell(i, tup)
 	default:
 		panic("unknown val.encoding")
 	}
