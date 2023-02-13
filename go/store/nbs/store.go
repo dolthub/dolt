@@ -623,8 +623,8 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs 
 	}
 	a := addr(ch.Hash())
 
-	ok := nbs.mt.addChunk(a, ch.Data())
-	if !ok {
+	addChunkRes := nbs.mt.addChunk(a, ch.Data())
+	if addChunkRes == chunkNotAdded {
 		ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.stats)
 		if err != nil {
 			if errors.Is(err, ErrDanglingRef) {
@@ -634,12 +634,12 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs 
 		}
 		nbs.tables = ts
 		nbs.mt = newMemTable(nbs.mtSize)
-		ok = nbs.mt.addChunk(a, ch.Data())
+		addChunkRes = nbs.mt.addChunk(a, ch.Data())
 	}
-	if ok {
+	if addChunkRes == chunkAdded {
 		nbs.mt.addChildRefs(addrs)
 	}
-	return ok, nil
+	return addChunkRes == chunkAdded || addChunkRes == chunkExists, nil
 }
 
 // refCheck checks that no dangling references are being committed.

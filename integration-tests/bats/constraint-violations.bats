@@ -2861,3 +2861,15 @@ SQL
     [[ $output =~ "Automatic merge failed; 1 table(s) are unmerged." ]]
 }
 
+@test "constraint-violations: altering FKs over PKs does not create bad index" {
+    dolt sql <<SQL
+set foreign_key_checks=0;
+create table child (j int primary key, foreign key (j) references parent (i));
+create table parent (i int primary key);
+set foreign_key_checks=1;
+delete from parent where i = 0;
+SQL
+
+    run dolt index ls
+    [[ "$output" =~ "No indexes in the working set" ]] || false
+}

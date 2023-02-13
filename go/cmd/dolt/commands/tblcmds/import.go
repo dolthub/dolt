@@ -68,6 +68,20 @@ const (
 	disableFkChecks   = "disable-fk-checks"
 )
 
+var jsonInputFileHelp = "The expected JSON input file format is:" + `
+
+	{ "rows":
+		[
+			{
+				"column_name":"value"
+				...
+			}, ...
+		]
+	}
+
+where column_name is the name of a column of the table being imported and value is the data for that column in the table.
+`
+
 var importDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Imports data into a dolt table`,
 	LongDesc: `If {{.EmphasisLeft}}--create-table | -c{{.EmphasisRight}} is given the operation will create {{.LessThan}}table{{.GreaterThan}} and import the contents of file into it.  If a table already exists at this location then the operation will fail, unless the {{.EmphasisLeft}}--force | -f{{.EmphasisRight}} flag is provided. The force flag forces the existing table to be overwritten.
@@ -85,6 +99,8 @@ If the schema for the existing table does not match the schema for the new file,
 A mapping file can be used to map fields between the file being imported and the table being written to. This can be used when creating a new table, or updating or replacing an existing table.
 
 ` + schcmds.MappingFileHelp +
+		`
+` + jsonInputFileHelp +
 		`
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimiter`,
 

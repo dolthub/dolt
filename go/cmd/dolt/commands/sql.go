@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/abiosoft/readline"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -819,6 +820,8 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 			}
 		}
 
+		// store start time for query
+		ctx.SetQueryTime(time.Now())
 		sqlSch, rowIter, err := processParsedQuery(ctx, query, se, sqlStatement)
 		if err != nil {
 			handleError(scanner.statementStartLine, query, err)
