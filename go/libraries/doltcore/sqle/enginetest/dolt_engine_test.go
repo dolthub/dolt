@@ -447,6 +447,22 @@ func TestJoinOps(t *testing.T) {
 	enginetest.TestJoinOps(t, newDoltHarness(t))
 }
 
+func TestJoinPlanningPrepared(t *testing.T) {
+	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
+		t.Skip("DOLT_LD keyless indexes are not sorted")
+	}
+
+	enginetest.TestJoinPlanningPrepared(t, newDoltHarness(t))
+}
+
+func TestJoinPlanning(t *testing.T) {
+	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
+		t.Skip("DOLT_LD keyless indexes are not sorted")
+	}
+
+	enginetest.TestJoinPlanning(t, newDoltHarness(t))
+}
+
 func TestJoinOpsPrepared(t *testing.T) {
 	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
