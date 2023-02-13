@@ -2058,6 +2058,18 @@ SQL
     [[ "$output" =~ "Everything up-to-date." ]] || false
 }
 
+@test "remotes: call dolt_checkout with --track and no arg returns error" {
+    run dolt sql -q "call dolt_checkout('--track')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no value for option" ]] || false
+}
+
+@test "remotes: call dolt_checkout with local branch name" {
+    run dolt sql -q "call dolt_checkout('--track', 'newbranch')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "invalid ref spec" ]] || false
+}
+
 @test "remotes: dolt checkout -b newbranch --track origin/feature checks out new local branch 'newbranch' with upstream set" {
     mkdir remote
     mkdir repo1
