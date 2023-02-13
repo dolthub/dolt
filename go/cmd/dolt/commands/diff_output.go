@@ -247,8 +247,8 @@ func (t tabularDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.R
 		cli.Println(textdiff.LineDiff(fromCreateStmt, toCreateStmt))
 	}
 
-	if len(td.FromFks) > 0 || len(td.ToFks) > 0 {
-		for _, fk := range td.FromFks {
+	for _, fk := range td.ToFks {
+		if len(fk.ReferencedTableColumns) > 0 {
 			cli.Println(fmt.Sprintf("resolved foreign key `%s` on table `%s`", fk.Name, fk.TableName))
 		}
 	}
