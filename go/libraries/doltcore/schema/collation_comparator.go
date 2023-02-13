@@ -115,6 +115,33 @@ func collationCompare(typ val.Type, collation sql.CollationID, left, right []byt
 }
 
 func compareCollatedStrings(collation sql.CollationID, left, right []byte) int {
+	i := 0
+	for i < len(left) && i < len(right) {
+		if left[i] != right[i] {
+			break
+		}
+		i++
+	}
+	if i >= len(left) || i >= len(right) {
+		if len(left) < len(right) {
+			return -1
+		} else if len(left) > len(right) {
+			return 1
+		} else {
+			return 0
+		}
+	}
+
+	li := i
+	for ; li >= 0 && !utf8.RuneStart(left[li]); li-- {
+	}
+	left = left[li:]
+
+	ri := i
+	for ; ri >= 0 && !utf8.RuneStart(right[ri]); ri-- {
+	}
+	right = right[ri:]
+
 	getRuneWeight := collation.Sorter()
 	for len(left) > 0 && len(right) > 0 {
 		// Binary strings aren't handled through this function, so it is safe to use the utf8 functions
@@ -130,12 +157,14 @@ func compareCollatedStrings(collation sql.CollationID, left, right []byte) int {
 				return 0
 			}
 		}
-		leftWeight := getRuneWeight(leftRune)
-		rightWeight := getRuneWeight(rightRune)
-		if leftWeight < rightWeight {
-			return -1
-		} else if leftWeight > rightWeight {
-			return 1
+		if leftRune != rightRune {
+			leftWeight := getRuneWeight(leftRune)
+			rightWeight := getRuneWeight(rightRune)
+			if leftWeight < rightWeight {
+				return -1
+			} else if leftWeight > rightWeight {
+				return 1
+			}
 		}
 		left = left[leftRead:]
 		right = right[rightRead:]

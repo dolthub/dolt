@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 
@@ -154,7 +153,7 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Ar
 		} else if trackVal == "inherit" {
 			return errhand.VerboseErrorFromError(fmt.Errorf("--track='inherit' is not supported yet"))
 		}
-		remoteName, remoteBranchName = ParseRemoteBranchName(startPt)
+		remoteName, remoteBranchName = actions.ParseRemoteBranchName(startPt)
 		remotes, err := dEnv.RepoStateReader().GetRemotes()
 		if err != nil {
 			return errhand.BuildDError(err.Error()).Build()
@@ -191,7 +190,7 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Ar
 		if err != nil {
 			return nil
 		}
-		remoteName, remoteBranchName = ParseRemoteBranchName(startPt)
+		remoteName, remoteBranchName = actions.ParseRemoteBranchName(startPt)
 		_, remoteOk := remotes[remoteName]
 		if !remoteOk {
 			return nil
@@ -326,15 +325,7 @@ func SetRemoteUpstreamForBranchRef(dEnv *env.DoltEnv, remote, remoteBranch strin
 		return errhand.BuildDError(fmt.Errorf("%w: '%s'", err, remote).Error()).Build()
 	}
 
-	src := refSpec.SrcRef(branchRef)
-	dest := refSpec.DestRef(src)
-
-	err = dEnv.RepoStateWriter().UpdateBranch(branchRef.GetPath(), env.BranchConfig{
-		Merge: ref.MarshalableRef{
-			Ref: dest,
-		},
-		Remote: remote,
-	})
+	err = env.SetRemoteUpstreamForRefSpec(dEnv.RepoStateWriter(), refSpec, remote, branchRef)
 	if err != nil {
 		return errhand.BuildDError(err.Error()).Build()
 	}
@@ -347,13 +338,4 @@ func unreadableRootToVErr(err error) errhand.VerboseError {
 	rt := doltdb.GetUnreachableRootType(err)
 	bdr := errhand.BuildDError("error: unable to read the %s", rt.String())
 	return bdr.AddCause(doltdb.GetUnreachableRootCause(err)).Build()
-}
-
-func ParseRemoteBranchName(startPt string) (string, string) {
-	startPt = strings.TrimPrefix(startPt, "remotes/")
-	names := strings.Split(startPt, "/")
-	if len(names) < 2 {
-		return "", ""
-	}
-	return names[0], strings.Join(names[1:], "/")
 }

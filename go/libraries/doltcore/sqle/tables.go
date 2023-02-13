@@ -2127,7 +2127,6 @@ func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, s
 	doltFk.UnresolvedFKDetails.TableColumns = sqlFk.Columns
 	doltFk.UnresolvedFKDetails.ReferencedTableColumns = sqlFk.ParentColumns
 
-	// TODO: why isn't it if either is Unresolved? possible that we want to do nothing if both unresolved?
 	if !doltFk.IsResolved() || !sqlFk.IsResolved {
 		tbl, _, ok, err := root.GetTableInsensitive(ctx, t.tableName)
 		if err != nil {

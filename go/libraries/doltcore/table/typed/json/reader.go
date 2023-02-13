@@ -111,7 +111,12 @@ func (r *JSONReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 		return nil, io.EOF
 	}
 
-	return r.convToSqlRow(metaRow.Value.(map[string]interface{}))
+	mapVal, ok := metaRow.Value.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected JSON format received, expected format: { \"rows\": [ json_row_objects... ] } ")
+	}
+
+	return r.convToSqlRow(mapVal)
 }
 
 func (r *JSONReader) convToSqlRow(rowMap map[string]interface{}) (sql.Row, error) {

@@ -432,6 +432,8 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		dt, found = dtables.NewTableOfTablesConstraintViolations(ctx, root), true
 	case doltdb.BranchesTableName:
 		dt, found = dtables.NewBranchesTable(ctx, db.ddb), true
+	case doltdb.RemoteBranchesTableName:
+		dt, found = dtables.NewRemoteBranchesTable(ctx, db.ddb), true
 	case doltdb.RemotesTableName:
 		dt, found = dtables.NewRemotesTable(ctx, db.ddb), true
 	case doltdb.CommitsTableName:

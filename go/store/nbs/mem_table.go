@@ -33,6 +33,14 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+type addChunkResult int
+
+const (
+	chunkExists addChunkResult = iota
+	chunkAdded
+	chunkNotAdded
+)
+
 func WriteChunks(chunks []chunks.Chunk) (string, []byte, error) {
 	var size uint64
 	for _, chunk := range chunks {
@@ -46,7 +54,8 @@ func WriteChunks(chunks []chunks.Chunk) (string, []byte, error) {
 
 func writeChunksToMT(mt *memTable, chunks []chunks.Chunk) (string, []byte, error) {
 	for _, chunk := range chunks {
-		if !mt.addChunk(addr(chunk.Hash()), chunk.Data()) {
+		res := mt.addChunk(addr(chunk.Hash()), chunk.Data())
+		if res == chunkNotAdded {
 			return "", nil, errors.New("didn't create this memory table with enough space to add all the chunks")
 		}
 	}
@@ -78,17 +87,19 @@ func newMemTable(memTableSize uint64) *memTable {
 	return &memTable{chunks: map[addr][]byte{}, maxData: memTableSize}
 }
 
-func (mt *memTable) addChunk(h addr, data []byte) bool {
+func (mt *memTable) addChunk(h addr, data []byte) addChunkResult {
 	if len(data) == 0 {
 		panic("NBS blocks cannot be zero length")
 	}
 	if _, ok := mt.chunks[h]; ok {
-		return true
+		return chunkExists
 	}
+
 	dataLen := uint64(len(data))
 	if mt.totalData+dataLen > mt.maxData {
-		return false
+		return chunkNotAdded
 	}
+
 	mt.totalData += dataLen
 	mt.chunks[h] = data
 	mt.order = append(mt.order, hasRecord{
@@ -97,7 +108,7 @@ func (mt *memTable) addChunk(h addr, data []byte) bool {
 		len(mt.order),
 		false,
 	})
-	return true
+	return chunkAdded
 }
 
 func (mt *memTable) addChildRefs(addrs hash.HashSet) {
