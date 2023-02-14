@@ -80,6 +80,7 @@ func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition)
 	if err != nil {
 		return nil, err
 	}
+
 	if idt.lb == nil || !canCache || idt.lb.Key() != key {
 		idt.lb, err = index.NewLookupBuilder(ctx, idt.table, idt.idx, key, idt.table.projectedCols, idt.table.sqlSch, idt.isDoltFormat)
 		if err != nil {
@@ -180,6 +181,10 @@ func (t *WritableIndexedDoltTable) WithProjections(colNames []string) sql.Table 
 
 // Projections implements sql.ProjectedTable
 func (t *WritableIndexedDoltTable) Projections() []string {
+	if t.projectedCols == nil {
+		return nil
+	}
+
 	names := make([]string, len(t.projectedCols))
 	cols := t.sch.GetAllCols()
 	for i := range t.projectedCols {

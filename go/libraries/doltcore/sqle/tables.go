@@ -351,7 +351,7 @@ func (t *DoltTable) Format() *types.NomsBinFormat {
 
 // Schema returns the schema for this table.
 func (t *DoltTable) Schema() sql.Schema {
-	if len(t.projectedSchema) > 0 {
+	if t.projectedSchema != nil {
 		return t.projectedSchema
 	}
 	return t.sqlSchema().Schema
@@ -363,6 +363,7 @@ func (t *DoltTable) Collation() sql.CollationID {
 }
 
 func (t *DoltTable) sqlSchema() sql.PrimaryKeySchema {
+	// TODO: this should consider projections
 	if len(t.sqlSch.Schema) > 0 {
 		return t.sqlSch
 	}
@@ -930,6 +931,11 @@ func (t DoltTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
 
 // Projections implements sql.ProjectedTable
 func (t *DoltTable) Projections() []string {
+	// The semantics of nil v. empty are important for this inteface, they display differently in explain plans
+	if t.projectedCols == nil {
+		return nil
+	}
+
 	names := make([]string, len(t.projectedCols))
 	cols := t.sch.GetAllCols()
 	for i := range t.projectedCols {
@@ -949,8 +955,17 @@ func (t *DoltTable) ProjectedTags() []uint64 {
 // WithProjections implements sql.ProjectedTable
 func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 	nt := *t
-	nt.projectedCols = make([]uint64, 0, len(colNames))
-	nt.projectedSchema = make(sql.Schema, 0, len(colNames))
+
+	if colNames == nil {
+		nt.projectedCols = nil
+		nt.projectedSchema = nil
+		return &nt
+	}
+
+	// In the case of the history table, some columns may not exist, so the projected schema may be smaller than the
+	// requested column list in that case.
+	nt.projectedCols = make([]uint64, 0)
+	nt.projectedSchema = make(sql.Schema, 0)
 	cols := t.sch.GetAllCols()
 	sch := t.Schema()
 	for i := range colNames {
@@ -967,6 +982,7 @@ func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 		nt.projectedCols = append(nt.projectedCols, col.Tag)
 		nt.projectedSchema = append(nt.projectedSchema, sch[sch.IndexOfColName(lowerName)])
 	}
+
 	return &nt
 }
 

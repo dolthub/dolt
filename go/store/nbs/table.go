@@ -166,8 +166,8 @@ func (a addr) Prefix() uint64 {
 	return binary.BigEndian.Uint64(a[:])
 }
 
-func (a addr) Checksum() uint32 {
-	return binary.BigEndian.Uint32(a[addrSize-checksumSize:])
+func (a addr) Suffix() []byte {
+	return a[addrPrefixSize:]
 }
 
 func parseAddr(str string) (addr, error) {

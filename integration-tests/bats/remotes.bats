@@ -2020,6 +2020,56 @@ SQL
     [[ "$output" =~ "Everything up-to-date." ]] || false
 }
 
+@test "remotes: call dolt_checkout track flag sets upstream" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt sql -q "CREATE TABLE a (pk int)"
+    dolt commit -Am "add table a"
+    dolt push --set-upstream origin main
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    dolt branch
+    [[ ! "$output" =~ "other" ]] || false
+
+    run dolt sql << SQL
+    call dolt_checkout('--track', 'origin/other');
+    select active_branch();
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "other" ]] || false
+
+    run dolt checkout other
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [[ "$output" =~ "Your branch is up to date with 'origin/other'." ]] || false
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+}
+
+@test "remotes: call dolt_checkout with --track and no arg returns error" {
+    run dolt sql -q "call dolt_checkout('--track')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no value for option" ]] || false
+}
+
+@test "remotes: call dolt_checkout with local branch name" {
+    run dolt sql -q "call dolt_checkout('--track', 'newbranch')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "invalid ref spec" ]] || false
+}
+
 @test "remotes: dolt checkout -b newbranch --track origin/feature checks out new local branch 'newbranch' with upstream set" {
     mkdir remote
     mkdir repo1
