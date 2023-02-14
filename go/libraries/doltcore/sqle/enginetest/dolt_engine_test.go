@@ -66,7 +66,7 @@ func TestQueries(t *testing.T) {
 }
 
 func TestSingleQuery(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 
 	harness := newDoltHarness(t)
 	harness.Setup(setup.SimpleSetup...)
@@ -112,7 +112,7 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
 			Name: "dolt_history table filter correctness",
