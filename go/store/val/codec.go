@@ -637,7 +637,15 @@ func compareCell(l, r Cell) int {
 	if l.Level != r.Level {
 		return int(l.Level) - int(r.Level)
 	}
-	return bytes.Compare(l.ZValue[:], r.ZValue[:])
+	lvl := 0
+	if l.Level < r.Level {
+		lvl = int(l.Level)
+	} else {
+		lvl = int(r.Level)
+	}
+	lvl = (64 - lvl)/4
+
+	return bytes.Compare(l.ZValue[:lvl], r.ZValue[:lvl])
 }
 
 func readCell(val []byte) (res Cell) {

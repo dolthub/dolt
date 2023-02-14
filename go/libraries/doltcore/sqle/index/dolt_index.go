@@ -954,6 +954,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		if !ok {
 			panic("somehow received a not point in spatial index range")
 		}
+		// TODO: we either need to change lookup or put level at the end
 		minCell := ZCell(minPoint)
 		minVal := append([]byte{0}, minCell.ZValue[:]...) // give lowest level
 		field.Lo = prolly.Bound{
@@ -966,7 +967,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 			panic("somehow received a not point in spatial index range")
 		}
 		maxCell := ZCell(maxPoint)
-		maxVal := append([]byte{64}, maxCell.ZValue[:]...) // give highest level
+		maxVal := append([]byte{0}, maxCell.ZValue[:]...) // give highest level
 		field.Hi = prolly.Bound{
 			Binding: true,
 			Inclusive: true,
