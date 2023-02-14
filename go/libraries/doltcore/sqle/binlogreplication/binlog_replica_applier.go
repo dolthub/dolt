@@ -554,6 +554,12 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 		ctx.GetLogger().Debugf(" - New Rows (table: %s)", tableMap.Name)
 	}
 
+	foreignKeyChecksDisabled := tableMap.Flags&rowFlag_noForeignKeyChecks > 0
+	writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database, foreignKeyChecksDisabled)
+	if err != nil {
+		return err
+	}
+
 	for _, row := range rows.Rows {
 		var identityRow, dataRow sql.Row
 		if len(row.Identify) > 0 {
@@ -572,12 +578,6 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 			ctx.GetLogger().Debugf("     - Data: %v ", sql.FormatRow(dataRow))
 		}
 
-		foreignKeyChecksDisabled := tableMap.Flags&rowFlag_noForeignKeyChecks > 0
-		writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database, foreignKeyChecksDisabled)
-		if err != nil {
-			return err
-		}
-
 		switch {
 		case event.IsDeleteRows():
 			err = tableWriter.Delete(ctx, identityRow)
@@ -590,10 +590,11 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 			return err
 		}
 
-		err = closeWriteSession(ctx, engine, tableMap.Database, writeSession)
-		if err != nil {
-			return err
-		}
+	}
+
+	err = closeWriteSession(ctx, engine, tableMap.Database, writeSession)
+	if err != nil {
+		return err
 	}
 
 	return nil
