@@ -17,6 +17,7 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -59,12 +60,23 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	for _, cmpChnk := range found {
 		err = tw.AddCmpChunk(cmpChnk)
 		require.NoError(t, err)
-		err = tw.AddCmpChunk(cmpChnk)
-		assert.Equal(t, err, ErrChunkAlreadyWritten)
 	}
 
 	id, err := tw.Finish()
 	require.NoError(t, err)
+
+	t.Run("ErrDuplicateChunkWritten", func(t *testing.T) {
+		tw, err := NewCmpChunkTableWriter("")
+		require.NoError(t, err)
+		for _, cmpChnk := range found {
+			err = tw.AddCmpChunk(cmpChnk)
+			require.NoError(t, err)
+			err = tw.AddCmpChunk(cmpChnk)
+			require.NoError(t, err)
+		}
+		_, err = tw.Finish()
+		require.Error(t, err, ErrDuplicateChunkWritten)
+	})
 
 	assert.Equal(t, expectedId, id)
 
@@ -79,6 +91,37 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	compareContentsOfTables(t, ctx, hashes, tr, outputTR)
+}
+
+func TestContainsDuplicates(t *testing.T) {
+	t.Run("Empty", func(t *testing.T) {
+		require.False(t, containsDuplicates(prefixIndexSlice{}))
+	})
+	t.Run("ManyUniqueMatchingPrefixes", func(t *testing.T) {
+		var recs prefixIndexSlice
+		for i := 0; i < 256; i++ {
+			var rec prefixIndexRec
+			rec.addr[19] = byte(i)
+			recs = append(recs, rec)
+		}
+		sort.Sort(recs)
+		require.False(t, containsDuplicates(recs))
+	})
+	t.Run("OneDuplicate", func(t *testing.T) {
+		var recs prefixIndexSlice
+		for i := 0; i < 256; i++ {
+			var rec prefixIndexRec
+			rec.addr[19] = byte(i)
+			recs = append(recs, rec)
+		}
+		{
+			var rec prefixIndexRec
+			rec.addr[19] = byte(128)
+			recs = append(recs, rec)
+		}
+		sort.Sort(recs)
+		require.True(t, containsDuplicates(recs))
+	})
 }
 
 func compareContentsOfTables(t *testing.T, ctx context.Context, hashes hash.HashSet, expectedRd, actualRd tableReader) {
