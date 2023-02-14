@@ -935,7 +935,7 @@ func (t *DoltTable) Projections() []string {
 	if t.projectedCols == nil {
 		return nil
 	}
-	
+
 	names := make([]string, len(t.projectedCols))
 	cols := t.sch.GetAllCols()
 	for i := range t.projectedCols {
@@ -955,13 +955,13 @@ func (t *DoltTable) ProjectedTags() []uint64 {
 // WithProjections implements sql.ProjectedTable
 func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 	nt := *t
-	
+
 	if colNames == nil {
 		nt.projectedCols = nil
 		nt.projectedSchema = nil
 		return &nt
 	}
-	
+
 	// In the case of the history table, some columns may not exist, so the projected schema may be smaller than the
 	// requested column list in that case.
 	nt.projectedCols = make([]uint64, 0)
@@ -982,7 +982,7 @@ func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 		nt.projectedCols = append(nt.projectedCols, col.Tag)
 		nt.projectedSchema = append(nt.projectedSchema, sch[sch.IndexOfColName(lowerName)])
 	}
-	
+
 	return &nt
 }
 

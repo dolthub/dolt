@@ -315,7 +315,7 @@ func (ht *HistoryTable) Projections() []string {
 	if ht.projectedCols == nil {
 		return nil
 	}
-	
+
 	names := make([]string, len(ht.projectedCols))
 	cols := ht.doltTable.sch.GetAllCols()
 	for i := range ht.projectedCols {
@@ -507,7 +507,7 @@ func newRowItrForTableAtCommit(ctx *sql.Context, table *DoltTable, h hash.Hash, 
 			return nil, err
 		}
 	}
-	
+
 	converter := rowConverter(table.Schema(), targetSchema, h, meta, projections)
 	return &historyIter{
 		table:           histTable,
