@@ -56,8 +56,6 @@ type binlogReplicaApplier struct {
 	format              mysql.BinlogFormat
 	tableMapsById       map[uint64]*mysql.TableMap
 	stopReplicationChan chan struct{}
-	// modifiedDatabases holds the set of databases that have had data changes and are pending commit
-	modifiedDatabases map[string]struct{}
 	// currentGtid is the current GTID being processed, but not yet committed
 	currentGtid mysql.GTID
 	// replicationSourceUuid holds the UUID of the source server
@@ -71,7 +69,6 @@ func newBinlogReplicaApplier(filters *filterConfiguration) *binlogReplicaApplier
 	return &binlogReplicaApplier{
 		tableMapsById:       make(map[uint64]*mysql.TableMap),
 		stopReplicationChan: make(chan struct{}),
-		modifiedDatabases:   make(map[string]struct{}),
 		filters:             filters,
 	}
 }
@@ -461,13 +458,13 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 	}
 
 	if createCommit {
-		databasesToCommit := keys(a.modifiedDatabases)
+		var databasesToCommit []string
 		if commitToAllDatabases {
 			databasesToCommit = getAllUserDatabaseNames(ctx, engine)
-		}
-		for _, database := range databasesToCommit {
-			executeQueryWithEngine(ctx, engine, "use `"+database+"`;")
-			executeQueryWithEngine(ctx, engine, "commit;")
+			for _, database := range databasesToCommit {
+				executeQueryWithEngine(ctx, engine, "use `"+database+"`;")
+				executeQueryWithEngine(ctx, engine, "commit;")
+			}
 		}
 
 		// Record the last GTID processed after the commit
@@ -488,10 +485,6 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			executeQueryWithEngine(ctx, engine,
 				fmt.Sprintf("call dolt_commit('-Am', 'Dolt binlog replica commit: GTID %s');", a.currentGtid))
 		}
-
-		// Clear the modified database metadata for the next commit
-		a.modifiedDatabases = make(map[string]struct{})
-		commitToAllDatabases = false
 	}
 
 	return nil
@@ -520,7 +513,6 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 	if a.filters.isTableFilteredOut(ctx, tableMap) {
 		return nil
 	}
-	a.modifiedDatabases[tableMap.Database] = struct{}{}
 
 	rows, err := event.Rows(a.format, tableMap)
 	if err != nil {
