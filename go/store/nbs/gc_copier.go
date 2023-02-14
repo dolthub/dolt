@@ -92,13 +92,26 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, tfp tableFilePersister
 		}, nil
 	}
 
+	// Attempt to rename the file to the destination if we are working with a fsTablePersister...
+	if mover, ok := tfp.(movingTableFilePersister); ok {
+		err = mover.TryMoveCmpChunkTableWriter(ctx, filename, gcc.writer)
+		if err == nil {
+			return []tableSpec{
+				{
+					name:       addr,
+					chunkCount: uint32(gcc.writer.ChunkCount()),
+				},
+			}, nil
+		}
+	}
+
+	// Otherwise, write the file through CopyTableFile.
 	r, err := gcc.writer.Reader()
 	if err != nil {
 		return nil, err
 	}
 	sz := gcc.writer.ContentLength()
 
-	// Otherwise, write the file.
 	err = tfp.CopyTableFile(ctx, r, filename, sz, uint32(gcc.writer.ChunkCount()))
 	if err != nil {
 		return nil, err

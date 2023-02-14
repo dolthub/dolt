@@ -69,39 +69,41 @@ func TestSingleQuery(t *testing.T) {
 	t.Skip()
 
 	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData, setup.MytableData)
+	harness.Setup(setup.SimpleSetup...)
 	engine, err := harness.NewEngine(t)
 	if err != nil {
 		panic(err)
 	}
 
 	setupQueries := []string{
-		"create table t1 (pk int primary key, c int);",
-		"insert into t1 values (1,2), (3,4)",
-		"call dolt_add('.')",
-		"set @Commit1 = dolt_commit('-am', 'initial table');",
-		"insert into t1 values (5,6), (7,8)",
-		"set @Commit2 = dolt_commit('-am', 'two more rows');",
+		// "create table t1 (pk int primary key, c int);",
+		// "insert into t1 values (1,2), (3,4)",
+		// "call dolt_add('.')",
+		// "set @Commit1 = dolt_commit('-am', 'initial table');",
+		// "insert into t1 values (5,6), (7,8)",
+		// "set @Commit2 = dolt_commit('-am', 'two more rows');",
 	}
 
 	for _, q := range setupQueries {
 		enginetest.RunQuery(t, engine, harness, q)
 	}
 
-	//engine.Analyzer.Debug = true
-	//engine.Analyzer.Verbose = true
+	engine.Analyzer.Debug = true
+	engine.Analyzer.Verbose = true
 
 	var test queries.QueryTest
 	test = queries.QueryTest{
-		Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
+		Query: `show create table mytable`,
 		Expected: []sql.Row{
-			{"Exchange"},
-			{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-			{"     └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
-			{"         └─ IndexedTableAccess(dolt_history_t1)"},
-			{"             ├─ index: [dolt_history_t1.pk]"},
-			{"             ├─ filters: [{[3, 3]}]"},
-			{"             └─ columns: [pk c committer]"},
+			{"mytable",
+				"CREATE TABLE `mytable` (\n" +
+					"  `i` bigint NOT NULL,\n" +
+					"  `s` varchar(20) NOT NULL COMMENT 'column s',\n" +
+					"  PRIMARY KEY (`i`),\n" +
+					"  KEY `idx_si` (`s`,`i`),\n" +
+					"  KEY `mytable_i_s` (`i`,`s`),\n" +
+					"  UNIQUE KEY `mytable_s` (`s`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 		},
 	}
 
@@ -113,26 +115,23 @@ func TestSingleScript(t *testing.T) {
 	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "trigger before update, with indexed update",
+			Name: "dolt_history table filter correctness",
 			SetUpScript: []string{
-				"create table a (x int primary key, y int, unique key (y))",
-				"create table b (z int primary key)",
-				"insert into a values (1,3), (10,20)",
-				"create trigger insert_b before update on a for each row insert into b values (old.x * 10)",
-				"update a set x = x + 1 where y = 20",
+				"create table xy (x int primary key, y int);",
+				"call dolt_add('.');",
+				"call dolt_commit('-m', 'creating table');",
+				"insert into xy values (0, 1);",
+				"call dolt_commit('-am', 'add data');",
+				"insert into xy values (2, 3);",
+				"call dolt_commit('-am', 'add data');",
+				"insert into xy values (4, 5);",
+				"call dolt_commit('-am', 'add data');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "select x, y from a order by 1",
+					Query: "select count(*) from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1)",
 					Expected: []sql.Row{
-						{1, 3},
-						{11, 20},
-					},
-				},
-				{
-					Query: "select z from b",
-					Expected: []sql.Row{
-						{100},
+						{2},
 					},
 				},
 			},
