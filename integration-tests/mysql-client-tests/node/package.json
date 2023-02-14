@@ -3,13 +3,14 @@
   "version": "1.0.0",
   "description": "A simple node command line utility to show how to connect a node application to a Dolt database using the MySQL connector.",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "knex": "^1.0.7",
+    "knex": "^2.4.0",
     "mysql": "^2.18.1",
     "mysql2": "^2.3.3",
     "wtfnode": "^0.9.1"

@@ -57,7 +57,7 @@ func NewRemoteRef(remote, branch string) RemoteRef {
 	return RemoteRef{remote, branch}
 }
 
-// NewRemoteRefFromPathString creates a DoltRef from a string in the format origin/main, or remotes/origin/main, or
+// NewRemoteRefFromPathStr creates a DoltRef from a string in the format origin/main, or remotes/origin/main, or
 // refs/remotes/origin/main
 func NewRemoteRefFromPathStr(remoteAndPath string) (DoltRef, error) {
 	if IsRef(remoteAndPath) {

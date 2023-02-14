@@ -554,3 +554,17 @@ func GetDefaultBranch(dEnv *DoltEnv, branches []ref.DoltRef) string {
 
 	return branches[0].GetPath()
 }
+
+// SetRemoteUpstreamForRefSpec set upstream for given RefSpec, remote name and branch ref. It uses given RepoStateWriter
+// to persist upstream tracking branch information.
+func SetRemoteUpstreamForRefSpec(rsw RepoStateWriter, refSpec ref.RefSpec, remote string, branchRef ref.DoltRef) error {
+	src := refSpec.SrcRef(branchRef)
+	dest := refSpec.DestRef(src)
+
+	return rsw.UpdateBranch(branchRef.GetPath(), BranchConfig{
+		Merge: ref.MarshalableRef{
+			Ref: dest,
+		},
+		Remote: remote,
+	})
+}

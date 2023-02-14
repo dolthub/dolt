@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -493,4 +494,33 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 func HandleInitRemoteStorageClientErr(name, url string, err error) error {
 	var detail = fmt.Sprintf("the remote: %s '%s' could not be accessed", name, url)
 	return fmt.Errorf("%w; %s; %s", ErrFailedToGetRemoteDb, detail, err.Error())
+}
+
+// ParseRemoteBranchName takes remote branch ref name, parses it and returns remote branch name.
+// For example, it parses the input string 'origin/john/mybranch' and returns remote name 'origin' and branch name 'john/mybranch'.
+func ParseRemoteBranchName(startPt string) (string, string) {
+	startPt = strings.TrimPrefix(startPt, "remotes/")
+	names := strings.SplitN(startPt, "/", 2)
+	if len(names) < 2 {
+		return "", ""
+	}
+	return names[0], names[1]
+}
+
+// GetRemoteBranchRef returns a remote ref with matching name for a branch for each remote.
+func GetRemoteBranchRef(ctx context.Context, ddb *doltdb.DoltDB, name string) ([]ref.RemoteRef, error) {
+	remoteRefFilter := map[ref.RefType]struct{}{ref.RemoteRefType: {}}
+	refs, err := ddb.GetRefsOfType(ctx, remoteRefFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	var remoteRef []ref.RemoteRef
+	for _, rf := range refs {
+		if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetBranch() == name {
+			remoteRef = append(remoteRef, remRef)
+		}
+	}
+
+	return remoteRef, nil
 }

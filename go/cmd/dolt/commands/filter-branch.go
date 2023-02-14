@@ -84,9 +84,9 @@ func (cmd FilterBranchCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd FilterBranchCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(verboseFlag, "v", "logs more information")
+	ap.SupportsFlag(cli.VerboseFlag, "v", "logs more information")
 	ap.SupportsFlag(branchesFlag, "b", "filter all branches")
-	ap.SupportsFlag(allFlag, "a", "filter all branches and tags")
+	ap.SupportsFlag(cli.AllFlag, "a", "filter all branches and tags")
 	return ap
 }
 
@@ -112,7 +112,7 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	}
 
 	query := apr.Arg(0)
-	verbose := apr.Contains(verboseFlag)
+	verbose := apr.Contains(cli.VerboseFlag)
 	notFound := make(missingTbls)
 
 	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (*doltdb.RootValue, error) {
@@ -160,7 +160,7 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	switch {
 	case apr.Contains(branchesFlag):
 		err = rebase.AllBranches(ctx, dEnv, replay, nerf)
-	case apr.Contains(allFlag):
+	case apr.Contains(cli.AllFlag):
 		err = rebase.AllBranchesAndTags(ctx, dEnv, replay, nerf)
 	default:
 		err = rebase.CurrentBranch(ctx, dEnv, replay, nerf)

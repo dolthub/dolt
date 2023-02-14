@@ -1217,6 +1217,28 @@ SQL
     [ "$status" -eq 0 ]
 }
 
+@test "remotes: fetch after force push" {
+    mkdir remote clone1
+    cd clone1
+    dolt init
+    dolt sql -q "create table t (pk int primary key);"
+    dolt commit -Am "commit1"
+
+    dolt remote add origin file://../remote
+    dolt push origin main
+
+    cd ..
+    dolt clone file://./remote clone2
+
+    cd clone1
+    dolt commit --amend -m "commit1 edited"
+    dolt push origin main -f
+
+    cd ../clone2
+    run dolt fetch
+    [ "$status" -eq 0 ]
+}
+
 @test "remotes: force fetch from main" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push --set-upstream test-remote main
@@ -1256,11 +1278,9 @@ SQL
     dolt fetch
     dolt push -f origin main
     cd ../../
-    run dolt fetch test-remote
-    [ "$status" -ne 0 ]
     run dolt pull
     [ "$status" -ne 0 ]
-    run dolt fetch -f test-remote
+    run dolt fetch test-remote
     [ "$status" -eq 0 ]
     run dolt pull --no-edit
     [ "$status" -eq 0 ]
@@ -2102,6 +2122,76 @@ SQL
     run dolt branch --track=direct feature3 origin/other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "branch 'feature3' set up to track 'origin/other'" ]] || false
+}
+
+@test "remotes: call dolt_branch track flag sets upstream" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt sql -q "CREATE TABLE a (pk int)"
+    dolt commit -Am "add table a"
+    dolt push --set-upstream origin main
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    dolt branch
+    [[ ! "$output" =~ "other" ]] || false
+
+    dolt sql -q "CALL DOLT_BRANCH('--track','other','origin/other');"
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+
+    run dolt checkout other
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [[ "$output" =~ "Your branch is up to date with 'origin/other'." ]] || false
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+
+    # NOTE: this command fails with git, requiring `--track=direct`, when both branch name and starting point name are defined, but Dolt allows both formats.
+    dolt sql -q "CALL DOLT_BRANCH('feature','--track','direct','origin/other');"
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch other" ]] || false
+
+    dolt commit --allow-empty -m "new commit to other"
+    dolt push
+
+    run dolt checkout feature
+    [ "$status" -eq 0 ]
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Fast-forward" ]] || false
+
+    run dolt branch feature1 --track origin/other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "branch 'feature1' set up to track 'origin/other'" ]] || false
+
+    dolt sql -q "CALL DOLT_BRANCH('--track','direct','feature2','origin/other');"
+    run dolt checkout feature2
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [[ "$output" =~ "Your branch is up to date with 'origin/other'." ]] || false
+
+    dolt sql -q "CALL DOLT_BRANCH('--track=direct','feature3','origin/other');"
+    run dolt checkout feature3
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [[ "$output" =~ "Your branch is up to date with 'origin/other'." ]] || false
 }
 
 @test "remotes: dolt_clone failure cleanup" {
