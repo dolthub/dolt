@@ -626,37 +626,23 @@ func stringFromBytes(b []byte) string {
 }
 
 // Cell is a representation of a subregion for Spatial Indexes
-// Level encodes the size of the region
-// ZValue is the z-value encoding of the minimum point of the bbox of a geometry
-type Cell struct {
-	Level  byte
-	ZValue [16]byte
-}
+// The first byte encodes the level, which is the size of the region
+// The highest level (the square covering all values floats) is 64
+// The lowest level (a point) is 0
+// The next 16 bytes is the z-value encoding of the minimum point of that subregion
+type Cell [17]byte
 
 func compareCell(l, r Cell) int {
-	if l.Level != r.Level {
-		return int(l.Level) - int(r.Level)
-	}
-	lvl := 0
-	if l.Level < r.Level {
-		lvl = int(l.Level)
-	} else {
-		lvl = int(r.Level)
-	}
-	lvl = (64 - lvl)/4
-
-	return bytes.Compare(l.ZValue[:lvl], r.ZValue[:lvl])
+	return bytes.Compare(l[:],r[:])
 }
 
 func readCell(val []byte) (res Cell) {
 	expectSize(val, cellSize)
-	res.Level = val[0]
-	copy(res.ZValue[:], val[1:])
+	copy(res[:], val[:])
 	return
 }
 
 func writeCell(buf []byte, v Cell) {
 	expectSize(buf, cellSize)
-	buf[0] = v.Level
-	copy(buf[1:], v.ZValue[:])
+	copy(buf[:], v[:])
 }
