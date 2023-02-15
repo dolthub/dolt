@@ -451,7 +451,7 @@ func TestJoinPlanningPrepared(t *testing.T) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
 	}
 
-	enginetest.TestJoinPlanningPrepared(t, newDoltHarness(t))
+	enginetest.TestJoinPlanningPrepared(t, newDoltHarness(t).WithParallelism(1))
 }
 
 func TestJoinPlanning(t *testing.T) {
@@ -459,7 +459,7 @@ func TestJoinPlanning(t *testing.T) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
 	}
 
-	enginetest.TestJoinPlanning(t, newDoltHarness(t))
+	enginetest.TestJoinPlanning(t, newDoltHarness(t).WithParallelism(1))
 }
 
 func TestJoinOpsPrepared(t *testing.T) {
