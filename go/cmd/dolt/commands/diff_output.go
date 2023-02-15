@@ -249,7 +249,7 @@ func (t tabularDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.R
 
 	resolvedFromFks := map[string]struct{}{}
 	for _, fk := range td.FromFks {
-		if len(fk.TableColumns) > 0 {
+		if len(fk.ReferencedTableColumns) > 0 {
 			resolvedFromFks[fk.Name] = struct{}{}
 		}
 	}
@@ -258,7 +258,7 @@ func (t tabularDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.R
 		if _, ok := resolvedFromFks[fk.Name]; ok {
 			continue
 		}
-		if len(fk.TableColumns) > 0 {
+		if len(fk.ReferencedTableColumns) > 0 {
 			cli.Println(fmt.Sprintf("resolved foreign key `%s` on table `%s`", fk.Name, fk.TableName))
 		}
 	}

@@ -523,7 +523,8 @@ SQL
     dolt add -A
     dolt commit -m "init commit"
     dolt sql -q "alter table child drop foreign key fk"
-    dolt sql -q "alter table child add constraint fk foreign key (j) references parent (i)"
+    dolt sql -q "alter table child rename column j to k"
+    dolt sql -q "alter table child add constraint fk foreign key (k) references parent (i)"
 
     run dolt diff
     [ "$status" -eq 0 ]
