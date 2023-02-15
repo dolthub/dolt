@@ -24,13 +24,9 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var errDoltSchemasTableFormat = fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
@@ -60,17 +56,6 @@ func mustCreateStringType(baseType query.Type, length int64, collation sql.Colla
 	return ti
 }
 
-// old dolt_schemas columns, only used for migration
-var schemasTableColsWithId = schema.NewColCollection(
-	mustNewColWithTypeInfo(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, typeinfo.StringDefaultType, false, "", false, ""),
-	mustNewColWithTypeInfo(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, typeinfo.StringDefaultType, false, "", false, ""),
-	mustNewColWithTypeInfo(doltdb.SchemasTablesFragmentCol, schema.DoltSchemasFragmentTag, typeinfo.StringDefaultType, false, "", false, ""),
-	mustNewColWithTypeInfo(doltdb.SchemasTablesIdCol, schema.DoltSchemasIdTag, typeinfo.Int64Type, true, "", false, "", schema.NotNullConstraint{}),
-	mustNewColWithTypeInfo(doltdb.SchemasTablesExtraCol, schema.DoltSchemasExtraTag, typeinfo.JSONType, false, "", false, ""), 
-)
-
-var schemaTableWithIdColSchema = schema.MustSchemaFromCols(schemasTableColsWithId)
-
 // dolt_schemas columns
 var schemasTableCols = schema.NewColCollection(
 	mustNewColWithTypeInfo(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, typeinfo.CreateVarStringTypeFromSqlType(mustCreateStringType(query.Type_VARCHAR, 64, sql.Collation_utf8mb4_0900_ai_ci)), true, "", false, ""),
@@ -81,33 +66,10 @@ var schemasTableCols = schema.NewColCollection(
 
 var schemaTableSchema = schema.MustSchemaFromCols(schemasTableCols)
 var schemaTableKd = schemaTableSchema.GetKeyDescriptor()
-var schemaTabldVd = schemaTableSchema.GetValueDescriptor()
+var schemaTableVd = schemaTableSchema.GetValueDescriptor()
 
-
-// The fixed dolt schema for the `dolt_schemas` table.
 func SchemasTableSchema() schema.Schema {
-	typeCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, typeinfo.StringDefaultType, false, "", false, "")
-	if err != nil {
-		panic(err)
-	}
-	nameCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, typeinfo.StringDefaultType, false, "", false, "")
-	if err != nil {
-		panic(err)
-	}
-	fragmentCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesFragmentCol, schema.DoltSchemasFragmentTag, typeinfo.StringDefaultType, false, "", false, "")
-	if err != nil {
-		panic(err)
-	}
-	idCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesIdCol, schema.DoltSchemasIdTag, typeinfo.Int64Type, true, "", false, "", schema.NotNullConstraint{})
-	if err != nil {
-		panic(err)
-	}
-	extraCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesExtraCol, schema.DoltSchemasExtraTag, typeinfo.JSONType, false, "", false, "")
-	if err != nil {
-		panic(err)
-	}
-	colColl := schema.NewColCollection(typeCol, nameCol, fragmentCol, idCol, extraCol)
-	return schema.MustSchemaFromCols(colColl)
+	return schemaTableSchema
 }
 
 // GetOrCreateDoltSchemasTable returns the `dolt_schemas` table in `db`, creating it if it does not already exist.
@@ -116,203 +78,30 @@ func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 	if err != nil {
 		return nil, err
 	}
-	var rowsToAdd []sql.Row
+
 	if found {
-		schemasTable := tbl.(*WritableDoltTable)
-		// Old schemas table contains the `id` column.
-		if tbl.Schema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) {
-			root, err := db.GetRoot(ctx)
-			if err != nil {
-				return nil, err
-			}
-			root, rowsToAdd, err = migrateOldSchemasTableToNew(ctx, db, root, schemasTable)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return schemasTable, nil
-		}
+		return tbl.(*WritableDoltTable), nil
 	}
+
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return nil, err
 	}
-	// Create the schemas table as an empty table
-	err = db.createDoltTable(ctx, doltdb.SchemasTableName, root, SchemasTableSchema())
-	if err != nil {
-		return nil, err
-	}
-	tbl, found, err = db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
-	if err != nil {
-		return nil, err
-	}
-	if !found {
-		return nil, sql.ErrTableNotFound.New("dolt_schemas")
-	}
-	// Create a unique index on the old primary key columns (type, name)
-	t := (&AlterableDoltTable{*tbl.(*WritableDoltTable)})
-	err = t.CreateIndex(ctx, sql.IndexDef{
-		Name: doltdb.SchemasTablesIndexName,
-		Columns: []sql.IndexColumn{
-			{Name: doltdb.SchemasTablesTypeCol, Length: 0},
-			{Name: doltdb.SchemasTablesNameCol, Length: 0},
-		},
-		Constraint: sql.IndexConstraint_Unique,
-		Storage:    sql.IndexUsing_Default,
-	})
-	if err != nil {
-		return nil, err
-	}
-	// If there was an old schemas table that contained rows, then add that data here
-	tbl, found, err = db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
-	if err != nil {
-		return nil, err
-	}
-	if !found {
-		return nil, sql.ErrTableNotFound.New("dolt_schemas")
-	}
-	if len(rowsToAdd) != 0 {
-		err = func() (retErr error) {
-			inserter := tbl.(*WritableDoltTable).Inserter(ctx)
-			defer func() {
-				err := inserter.Close(ctx)
-				if retErr == nil {
-					retErr = err
-				}
-			}()
-			for _, sqlRow := range rowsToAdd {
-				err = inserter.Insert(ctx, sqlRow)
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		}()
-		if err != nil {
-			return nil, err
-		}
-	}
-	return tbl.(*WritableDoltTable), nil
-}
-
-func migrateOldSchemasTableToNew(
-	ctx *sql.Context,
-	db Database,
-	root *doltdb.RootValue,
-	schemasTable *WritableDoltTable,
-) (
-	*doltdb.RootValue,
-	[]sql.Row,
-	error,
-) {
-
-	table, err := schemasTable.DoltTable.DoltTable(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rowData, err := table.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Copy all of the old row data over minus the id column
-	var rowsToAdd []sql.Row
-	if types.IsFormat_DOLT(rowData.Format()) {
-		pm := durable.ProllyMapFromIndex(rowData)
-		iter, err := pm.IterAll(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		
-		for {
-			_, v, err := iter.Next(ctx)
-			if err != nil {
-				return nil, nil, err
-			}
-			
-			
-		}
-	} else {
-		nomsMap := durable.NomsMapFromIndex(rowData)
-		id := int64(1)
-		err = nomsMap.IterAll(ctx, func(key, val types.Value) error {
-			dRow, err := row.FromNoms(schemasTable.sch, key.(types.Tuple), val.(types.Tuple))
-			if err != nil {
-				return err
-			}
-			sqlRow, err := sqlutil.DoltRowToSqlRow(dRow, schemasTable.sch)
-			if err != nil {
-				return err
-			}
-			// append the new id to row, if missing
-			if !schemasTable.sqlSchema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) {
-				sqlRow = append(sqlRow, id)
-			}
-			// append the extra cols to row
-			sqlRow = append(sqlRow, nil)
-			rowsToAdd = append(rowsToAdd, sqlRow)
-			id++
-			return nil
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-	}
 	
-	err = db.DropTable(ctx, doltdb.SchemasTableName)
+	// Create new empty table
+	err = db.createDoltTable(ctx, doltdb.SchemasTableName, root, schemaTableSchema)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	root, err = db.GetRoot(ctx)
+	tbl, found, err = db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return root, rowsToAdd, nil
-}
-
-func nextSchemasTableIndex(ctx *sql.Context, root *doltdb.RootValue) (int64, error) {
-	tbl, _, err := root.GetTable(ctx, doltdb.SchemasTableName)
-	if err != nil {
-		return 0, err
+	if !found {
+		return nil, sql.ErrTableNotFound.New("dolt_schemas")
 	}
 
-	rows, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	empty, err := rows.Empty()
-	if err != nil {
-		return 0, err
-	}
-	if empty {
-		return 1, nil
-	}
-
-	if types.IsFormat_DOLT(tbl.Format()) {
-		p := durable.ProllyMapFromIndex(rows)
-		key := p.LastKey(ctx)
-		kd, _ := p.Descriptors()
-
-		i, _ := kd.GetInt64(0, key)
-		return i + 1, nil
-	} else {
-		m := durable.NomsMapFromIndex(rows)
-		keyTpl, _, err := m.Last(ctx)
-		if err != nil {
-			return 0, err
-		}
-		if keyTpl == nil {
-			return 1, nil
-		}
-
-		key, err := keyTpl.(types.Tuple).Get(1)
-		if err != nil {
-			return 0, err
-		}
-		return int64(key.(types.Int)) + 1, nil
-	}
+	return tbl.(*WritableDoltTable), nil
 }
 
 // fragFromSchemasTable returns the row with the given schema fragment if it exists.

@@ -1281,25 +1281,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 	if exists {
 		return existingErr
 	}
-
-	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, _, err := sess.LookupDbState(ctx, db.Name())
-	if err != nil {
-		return err
-	}
-	ts := dbState.WriteSession
-
-	ws, err := ts.Flush(ctx)
-	if err != nil {
-		return err
-	}
-
-	// If rows exist, then grab the highest id and add 1 to get the new id
-	idx, err := nextSchemasTableIndex(ctx, ws.WorkingRoot())
-	if err != nil {
-		return err
-	}
-
+	
 	// Insert the new row into the db
 	inserter := tbl.Inserter(ctx)
 	defer func() {
@@ -1316,7 +1298,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 	if err != nil {
 		return err
 	}
-	return inserter.Insert(ctx, sql.Row{fragType, name, definition, idx, extraJSON})
+	return inserter.Insert(ctx, sql.Row{fragType, name, definition, extraJSON})
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {
