@@ -153,32 +153,31 @@ teardown() {
     dolt push rem1 b1
     dolt branch -d b1
     
-    run dolt sql -q "select * from dolt_branches"
+    run dolt sql -q "select name, latest_commit_message from dolt_branches"
     [ $status -eq 0 ]
     [[ "$output" =~ main.*Initialize\ data\ repository ]] || false
     [[ "$output" =~ create-table-branch.*Added\ test\ table ]] || false
-    echo "dolt_branches output: $output \n"
     [[ ! "$output" =~ b1 ]] || false
 
-    run dolt sql -q "select * from dolt_remote_branches"
+    run dolt sql -q "select name, latest_commit_message from dolt_remote_branches"
     [ $status -eq 0 ]
     [[ ! "$output" =~ main.*Initialize\ data\ repository ]] || false
     [[ ! "$output" =~ create-table-branch.*Added\ test\ table ]] || false
     [[ "$output" =~ "remotes/rem1/b1" ]] || false
     
-    run dolt sql -q "select * from dolt_remote_branches where latest_commit_message ='Initialize data repository'"
+    run dolt sql -q "select name from dolt_remote_branches where latest_commit_message ='Initialize data repository'"
     [ $status -eq 0 ]
     [[ ! "$output" =~ "main" ]] || false
     [[ ! "$output" =~ "create-table-branch" ]] || false
     [[ ! "$output" =~ "remotes/rem1/b1" ]] || false
     
-    run dolt sql -q "select * from dolt_remote_branches where latest_commit_message ='Added test table'"
+    run dolt sql -q "select name from dolt_remote_branches where latest_commit_message ='Added test table'"
     [ $status -eq 0 ]
     [[ ! "$output" =~ "main" ]] || false
     [[ ! "$output" =~ "create-table-branch" ]] || false
     [[ "$output" =~ "remotes/rem1/b1" ]] || false
 
-    run dolt sql -q "select * from dolt_branches union select * from dolt_remote_branches"
+    run dolt sql -q "select name from dolt_branches union select name from dolt_remote_branches"
     [[ "$output" =~ "main" ]] || false
     [[ "$output" =~ "create-table-branch" ]] || false
     [[ "$output" =~ "remotes/rem1/b1" ]] || false
