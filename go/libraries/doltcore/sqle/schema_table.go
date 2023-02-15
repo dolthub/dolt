@@ -167,6 +167,12 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 		return nil, err
 	}
 
+	// The dolt_schemas table has undergone various changes over time and multiple possible schemas for it exist, so we 
+	// need to get the column indexes from the current schema
+	nameIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesNameCol)
+	fragmentIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesFragmentCol)
+	extraIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesExtraCol)
+	
 	var frags []schemaFragment
 	for {
 		sqlRow, err := iter.Next(ctx)
@@ -177,34 +183,34 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 			return nil, err
 		}
 
-		if sqlRow[0] != fragType {
+		if sqlRow[fragmentIdx] != fragType {
 			continue
 		}
 
-		// For tables that haven't been converted yet or are filled with nil, use 1 as the trigger creation time
-		if len(sqlRow) < 5 || sqlRow[4] == nil {
+		// For older tables, use 1 as the trigger creation time
+		if sqlRow[extraIdx] == nil {
 			frags = append(frags, schemaFragment{
-				name:     sqlRow[1].(string),
-				fragment: sqlRow[2].(string),
+				name:     sqlRow[nameIdx].(string),
+				fragment: sqlRow[fragmentIdx].(string),
 				created:  time.Unix(1, 0).UTC(), // TablePlus editor thinks 0 is out of range
 			})
 			continue
 		}
 
 		// Extract Created Time from JSON column
-		createdTime, err := getCreatedTime(ctx, sqlRow)
+		createdTime, err := getCreatedTime(ctx, sqlRow[extraIdx].(gmstypes.JSONValue))
 
 		frags = append(frags, schemaFragment{
-			name:     sqlRow[1].(string),
-			fragment: sqlRow[2].(string),
+			name:     sqlRow[nameIdx].(string),
+			fragment: sqlRow[fragmentIdx].(string),
 			created:  time.Unix(createdTime, 0).UTC(),
 		})
 	}
 	return frags, nil
 }
 
-func getCreatedTime(ctx *sql.Context, row sql.Row) (int64, error) {
-	doc, err := row[4].(gmstypes.JSONValue).Unmarshall(ctx)
+func getCreatedTime(ctx *sql.Context, extraCol gmstypes.JSONValue) (int64, error) {
+	doc, err := extraCol.Unmarshall(ctx)
 	if err != nil {
 		return 0, err
 	}
