@@ -64,10 +64,6 @@ var schemasTableCols = schema.NewColCollection(
 
 var schemaTableSchema = schema.MustSchemaFromCols(schemasTableCols)
 
-func SchemasTableSchema() schema.Schema {
-	return schemaTableSchema
-}
-
 // GetOrCreateDoltSchemasTable returns the `dolt_schemas` table in `db`, creating it if it does not already exist.
 func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *WritableDoltTable, retErr error) {
 	tbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)

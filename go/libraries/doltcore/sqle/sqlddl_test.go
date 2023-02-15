@@ -807,15 +807,15 @@ func TestAlterSystemTables(t *testing.T) {
 		err := CreateEmptyTestTable(dEnv, "dolt_docs", doltdb.DocsSchema)
 		require.NoError(t, err)
 
-		err = CreateEmptyTestTable(dEnv, doltdb.SchemasTableName, SchemasTableSchema())
+		err = CreateEmptyTestTable(dEnv, doltdb.SchemasTableName, schemaTableSchema)
 		require.NoError(t, err)
 
 		CreateTestTable(t, dEnv, "dolt_docs", doltdb.DocsSchema,
 			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')")
 		CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
 			"INSERT INTO dolt_query_catalog VALUES ('abc123', 1, 'example', 'select 2+2 from dual', 'description')")
-		CreateTestTable(t, dEnv, doltdb.SchemasTableName, SchemasTableSchema(),
-			"INSERT INTO dolt_schemas (type, name, fragment, id) VALUES ('view', 'name', 'create view name as select 2+2 from dual', 1)")
+		CreateTestTable(t, dEnv, doltdb.SchemasTableName, schemaTableSchema,
+			"INSERT INTO dolt_schemas (type, name, fragment) VALUES ('view', 'name', 'create view name as select 2+2 from dual')")
 	}
 
 	t.Run("Create", func(t *testing.T) {
