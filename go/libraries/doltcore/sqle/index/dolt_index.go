@@ -953,7 +953,7 @@ func (di *doltIndex) prollySpatialRanges(ctx context.Context, ns tree.NodeStore,
 	zMin := ZValue(minPoint)
 	zMax := ZValue(maxPoint)
 
-	// TODO: optimization: only make ranges up to max
+	// TODO: level pruning
 	// TODO: add constants
 	pranges := make([]prolly.Range, 65)
 
