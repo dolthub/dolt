@@ -17,6 +17,7 @@ package sqle
 import (
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -26,10 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
-
-var errDoltSchemasTableFormat = fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
 
 const (
 	viewFragment    = "view"
@@ -65,8 +63,6 @@ var schemasTableCols = schema.NewColCollection(
 )
 
 var schemaTableSchema = schema.MustSchemaFromCols(schemasTableCols)
-var schemaTableKd = schemaTableSchema.GetKeyDescriptor()
-var schemaTableVd = schemaTableSchema.GetValueDescriptor()
 
 func SchemasTableSchema() schema.Schema {
 	return schemaTableSchema
@@ -105,54 +101,43 @@ func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 }
 
 // fragFromSchemasTable returns the row with the given schema fragment if it exists.
-func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType string, name string) (sql.Row, bool, error) {
-	// indexes, err := tbl.GetIndexes(ctx)
-	// if err != nil {
-	// 	return nil, false, err
-	// }
-	var fragNameIndex sql.Index
-	// TODO: replace with primary key lookup
-	// for _, index := range indexes {
-	// 	if index.ID() == doltdb.SchemasTablesIndexName {
-	// 		fragNameIndex = index
-	// 		break
-	// 	}
-	// }
-	// if fragNameIndex == nil {
-	// 	return nil, false, noSchemaIndexDefined
-	// }
+func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType string, name string) (r sql.Row, found bool, rerr error) {
+	fragType, name = strings.ToLower(fragType), strings.ToLower(name)
 
-	exprs := fragNameIndex.Expressions()
-	lookup, err := sql.NewIndexBuilder(fragNameIndex).Equals(ctx, exprs[0], fragType).Equals(ctx, exprs[1], name).Build(ctx)
+	// This performs a full table scan in the worst case, but it's only used when adding or dropping a trigger or view
+	iter, err := SqlTableToRowIter(ctx, tbl.DoltTable, nil)
 	if err != nil {
 		return nil, false, err
 	}
 
-	iter, err := index.RowIterForIndexLookup(ctx, tbl.DoltTable, lookup, tbl.sqlSch, nil)
-	if err != nil {
-		return nil, false, err
-	}
-
-	defer func() {
-		if cerr := iter.Close(ctx); cerr != nil {
-			err = cerr
+	defer func(iter sql.RowIter, ctx *sql.Context) {
+		err := iter.Close(ctx)
+		if err != nil && rerr == nil {
+			rerr = err
 		}
-	}()
-
-	// todo(andy): use filtered reader?
+	}(iter, ctx)
+	
+	// The dolt_schemas table has undergone various changes over time and multiple possible schemas for it exist, so we 
+	// need to get the column indexes from the current schema
+	nameIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesNameCol)
+	typeIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesTypeCol)
+	
 	for {
 		sqlRow, err := iter.Next(ctx)
 		if err == io.EOF {
-			return nil, false, nil
+			break
 		}
 		if err != nil {
 			return nil, false, err
 		}
-		if sqlRow[0] != fragType || sqlRow[1] != name {
-			continue
+
+		// These columns are case insensitive, make sure to do a case-insensitive comparison
+		if strings.ToLower(sqlRow[typeIdx].(string)) == fragType && strings.ToLower(sqlRow[nameIdx].(string)) == name {
+			return sqlRow, true, nil
 		}
-		return sqlRow, true, nil
 	}
+	
+	return nil, false, nil
 }
 
 type schemaFragment struct {
@@ -161,7 +146,7 @@ type schemaFragment struct {
 	created  time.Time
 }
 
-func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType string) ([]schemaFragment, error) {
+func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType string) (sf []schemaFragment, rerr error) {
 	iter, err := SqlTableToRowIter(ctx, tbl.DoltTable, nil)
 	if err != nil {
 		return nil, err
@@ -170,8 +155,16 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 	// The dolt_schemas table has undergone various changes over time and multiple possible schemas for it exist, so we 
 	// need to get the column indexes from the current schema
 	nameIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesNameCol)
+	typeIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesTypeCol)
 	fragmentIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesFragmentCol)
 	extraIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesExtraCol)
+
+	defer func(iter sql.RowIter, ctx *sql.Context) {
+		err := iter.Close(ctx)
+		if err != nil && rerr == nil {
+			rerr = err
+		}
+	}(iter, ctx)
 	
 	var frags []schemaFragment
 	for {
@@ -183,12 +176,12 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 			return nil, err
 		}
 
-		if sqlRow[fragmentIdx] != fragType {
+		if sqlRow[typeIdx] != fragType {
 			continue
 		}
 
 		// For older tables, use 1 as the trigger creation time
-		if sqlRow[extraIdx] == nil {
+		if extraIdx < 0 || sqlRow[extraIdx] == nil {
 			frags = append(frags, schemaFragment{
 				name:     sqlRow[nameIdx].(string),
 				fragment: sqlRow[fragmentIdx].(string),
@@ -206,6 +199,7 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 			created:  time.Unix(createdTime, 0).UTC(),
 		})
 	}
+	
 	return frags, nil
 }
 
