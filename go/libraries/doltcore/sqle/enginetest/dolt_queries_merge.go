@@ -1001,13 +1001,12 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('other');",
-				Expected: []sql.Row{{0, 1}},
+				Expected: []sql.Row{{0, 0}},
 			},
-			// todo: merge triggers correctly
-			//{
-			//	Query:    "select count(*) from dolt_schemas where type = 'trigger';",
-			//	Expected: []sql.Row{{4}},
-			//},
+			{
+				Query:    "select count(*) from dolt_schemas where type = 'trigger';",
+				Expected: []sql.Row{{4}},
+			},
 		},
 	},
 	{
