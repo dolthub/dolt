@@ -152,7 +152,6 @@ func ZSort(points []types.Point) []types.Point {
 	return points
 }
 
-
 // ZCell converts the GeometryValue into a Cell
 // Note: there is an inefficiency here where small polygons may be placed into a level that's significantly larger
 // TODO: we could probably improve performance here by not using custom structs

@@ -633,7 +633,7 @@ func stringFromBytes(b []byte) string {
 type Cell [17]byte
 
 func compareCell(l, r Cell) int {
-	return bytes.Compare(l[:],r[:])
+	return bytes.Compare(l[:], r[:])
 }
 
 func readCell(val []byte) (res Cell) {

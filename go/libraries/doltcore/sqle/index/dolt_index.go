@@ -19,11 +19,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -720,7 +720,6 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
 		return false
 	}
 
-
 	var idxCols *schema.ColCollection
 	if types.IsFormat_DOLT(di.Format()) {
 		// prolly indexes can cover an index lookup using
@@ -971,17 +970,17 @@ func (di *doltIndex) prollySpatialRanges(ctx context.Context, ns tree.NodeStore,
 		field := prolly.RangeField{
 			Exact: false,
 			Lo: prolly.Bound{
-				Binding: true,
+				Binding:   true,
 				Inclusive: true,
-				Value: minVal,
+				Value:     minVal,
 			},
 			Hi: prolly.Bound{
-				Binding: true,
+				Binding:   true,
 				Inclusive: true,
-				Value: maxVal,
+				Value:     maxVal,
 			},
 		}
-		pranges[lvl] = prolly.Range {
+		pranges[lvl] = prolly.Range{
 			Fields: []prolly.RangeField{field},
 			Desc:   di.keyBld.Desc,
 			Tup:    tup,
@@ -991,7 +990,7 @@ func (di *doltIndex) prollySpatialRanges(ctx context.Context, ns tree.NodeStore,
 	// generate ranges for level 32 - 63
 	for lvl := 0; lvl < 32; lvl++ {
 		minVal, maxVal := make([]byte, 17), make([]byte, 17)
-		minVal[0], maxVal[0] = byte(lvl + 32), byte(lvl + 32)
+		minVal[0], maxVal[0] = byte(lvl+32), byte(lvl+32)
 		shamt := lvl << 1
 		zMin[0] = (zMin[0] >> shamt) << shamt
 		zMax[0] = (zMax[0] >> shamt) << shamt
@@ -1002,17 +1001,17 @@ func (di *doltIndex) prollySpatialRanges(ctx context.Context, ns tree.NodeStore,
 		field := prolly.RangeField{
 			Exact: false,
 			Lo: prolly.Bound{
-				Binding: true,
+				Binding:   true,
 				Inclusive: true,
-				Value: minVal,
+				Value:     minVal,
 			},
 			Hi: prolly.Bound{
-				Binding: true,
+				Binding:   true,
 				Inclusive: true,
-				Value: maxVal,
+				Value:     maxVal,
 			},
 		}
-		pranges[lvl + 32] = prolly.Range {
+		pranges[lvl+32] = prolly.Range{
 			Fields: []prolly.RangeField{field},
 			Desc:   di.keyBld.Desc,
 			Tup:    tup,
@@ -1025,17 +1024,17 @@ func (di *doltIndex) prollySpatialRanges(ctx context.Context, ns tree.NodeStore,
 	field := prolly.RangeField{
 		Exact: false,
 		Lo: prolly.Bound{
-			Binding: true,
+			Binding:   true,
 			Inclusive: true,
-			Value: val,
+			Value:     val,
 		},
 		Hi: prolly.Bound{
-			Binding: true,
+			Binding:   true,
 			Inclusive: true,
-			Value: val,
+			Value:     val,
 		},
 	}
-	pranges[64] = prolly.Range {
+	pranges[64] = prolly.Range{
 		Fields: []prolly.RangeField{field},
 		Desc:   di.keyBld.Desc,
 		Tup:    tup,
