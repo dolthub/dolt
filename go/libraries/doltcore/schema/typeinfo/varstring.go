@@ -52,6 +52,10 @@ var (
 	StringDefaultType = &varStringType{gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 16383)}
 )
 
+func CreateVarStringTypeFromSqlType(stringType sql.StringType) TypeInfo {
+	return &varStringType{stringType}
+}
+
 func CreateVarStringTypeFromParams(params map[string]string) (TypeInfo, error) {
 	var length int64
 	var collation sql.CollationID
