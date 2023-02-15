@@ -467,6 +467,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 	}
+	
 	if found {
 		return dt, found, nil
 	}
@@ -732,7 +733,7 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	if doltdb.IsReadOnlySystemTable(tableName) {
+	if doltdb.IsNonDroppableSystemTable(tableName) {
 		return ErrSystemTableAlter.New(tableName)
 	}
 

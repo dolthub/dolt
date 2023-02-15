@@ -35,12 +35,48 @@ SQL
     run dolt sql -q "select name from dolt_schemas" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ 'four' ]] || false
+
     run dolt sql -q "drop table dolt_schemas"
-    skip "dropping dolt_schemas is currently unprotected"
     [ "$status" -ne 0 ]
     run dolt sql -q "select name from dolt_schemas" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ 'four' ]] || false
+}
+
+@test "create-views: can't alter dolt_schemas" {
+    run dolt sql -q "create view four as select 2+2 as res from dual;"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "select name from dolt_schemas" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ 'four' ]] || false
+
+    run dolt sql -q "alter table dolt_schemas add column newcol int"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "cannot be altered" ]] || false
+    
+    run dolt sql -q "select name from dolt_schemas" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ 'four' ]] || false
+}
+
+@test "create-views: drop and create same view" {
+    dolt sql -q "create view four as select 2+2 as res from dual;"
+    dolt sql -q "create view six as select 3+3 as res from dual;"
+    
+    run dolt sql -q "select name from dolt_schemas order by name" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ 'four' ]] || false
+    [[ "${lines[2]}" =~ 'six' ]] || false
+
+    dolt commit -Am "new views"
+    dolt sql -q "drop view four"
+
+    run dolt sql -q "create view four as select 2+2 as res from dual;"
+    [ "$status" -eq 0 ]
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
 }
 
 @test "create-views: join two views" {
