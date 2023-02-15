@@ -96,7 +96,7 @@ func migrateWorkingSet(ctx context.Context, menv Environment, brRef ref.BranchRe
 	return new.UpdateWorkingSet(ctx, wsRef, newWs, hash.Hash{}, oldWs.Meta())
 }
 
-func migrateCommit(ctx context.Context, menv Environment, oldCm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
+func migrateCommit(ctx context.Context, menv Environment, oldCm *doltdb.Commit, new *doltdb.DoltDB, prog *progress) error {
 	oldHash, err := oldCm.HashOf()
 	if err != nil {
 		return err
@@ -204,7 +204,7 @@ func migrateCommit(ctx context.Context, menv Environment, oldCm *doltdb.Commit, 
 	return nil
 }
 
-func migrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
+func migrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog *progress) error {
 	oldHash, err := cm.HashOf()
 	if err != nil {
 		return err
@@ -244,7 +244,7 @@ func migrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltD
 	return prog.Put(ctx, oldHash, newHash)
 }
 
-func migrateCommitOptions(ctx context.Context, oldCm *doltdb.Commit, prog Progress) (datas.CommitOptions, error) {
+func migrateCommitOptions(ctx context.Context, oldCm *doltdb.Commit, prog *progress) (datas.CommitOptions, error) {
 	parents, err := oldCm.ParentHashes(ctx)
 	if err != nil {
 		return datas.CommitOptions{}, err
