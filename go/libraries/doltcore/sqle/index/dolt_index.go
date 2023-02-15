@@ -16,6 +16,7 @@ package index
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -949,35 +950,95 @@ func (di *doltIndex) prollySpatialRanges(ctx context.Context, ns tree.NodeStore,
 		panic("somehow received a not point in spatial index range")
 	}
 
-	minCell := ZCell(minPoint)
-	maxCell := ZCell(maxPoint)
+	zMin := ZValue(minPoint)
+	zMax := ZValue(maxPoint)
 
-	pranges := make([]prolly.Range, 64)
-	for i := range pranges {
-		// create bbox
-		field := prolly.RangeField{}
+	// TODO: optimization: only make ranges up to max
+	// TODO: add constants
+	pranges := make([]prolly.Range, 65)
 
-		field.Lo = prolly.Bound{
-			Binding: true,
-			Inclusive: true,
-			Value: make([]byte, 17),
+	// generate ranges for levels 0 - 31
+	for lvl := 0; lvl < 32; lvl++ {
+		minVal, maxVal := make([]byte, 17), make([]byte, 17)
+		minVal[0], maxVal[0] = byte(lvl), byte(lvl)
+		shamt := lvl << 1
+		zMin[1] = (zMin[1] >> shamt) << shamt
+		zMax[1] = (zMax[1] >> shamt) << shamt
+		binary.BigEndian.PutUint64(minVal[1:], zMin[0])
+		binary.BigEndian.PutUint64(minVal[9:], zMin[1])
+		binary.BigEndian.PutUint64(maxVal[1:], zMax[0])
+		binary.BigEndian.PutUint64(maxVal[9:], zMax[1])
+		field := prolly.RangeField{
+			Exact: false,
+			Lo: prolly.Bound{
+				Binding: true,
+				Inclusive: true,
+				Value: minVal,
+			},
+			Hi: prolly.Bound{
+				Binding: true,
+				Inclusive: true,
+				Value: maxVal,
+			},
 		}
-		copy(field.Lo.Value, minCell[:])
-		field.Lo.Value[0] = byte(i)
-
-		field.Hi = prolly.Bound{
-			Binding: true,
-			Inclusive: true,
-			Value: make([]byte, 17),
-		}
-		copy(field.Hi.Value, maxCell[:])
-		field.Hi.Value[0] = byte(i)
-
-		pranges[i] = prolly.Range{
+		pranges[lvl] = prolly.Range {
 			Fields: []prolly.RangeField{field},
 			Desc:   di.keyBld.Desc,
 			Tup:    tup,
 		}
+	}
+
+	// generate ranges for level 32 - 63
+	for lvl := 0; lvl < 32; lvl++ {
+		minVal, maxVal := make([]byte, 17), make([]byte, 17)
+		minVal[0], maxVal[0] = byte(lvl + 32), byte(lvl + 32)
+		shamt := lvl << 1
+		zMin[0] = (zMin[0] >> shamt) << shamt
+		zMax[0] = (zMax[0] >> shamt) << shamt
+		binary.BigEndian.PutUint64(minVal[1:], zMin[0])
+		binary.BigEndian.PutUint64(minVal[9:], 0)
+		binary.BigEndian.PutUint64(maxVal[1:], zMax[0])
+		binary.BigEndian.PutUint64(maxVal[9:], 0)
+		field := prolly.RangeField{
+			Exact: false,
+			Lo: prolly.Bound{
+				Binding: true,
+				Inclusive: true,
+				Value: minVal,
+			},
+			Hi: prolly.Bound{
+				Binding: true,
+				Inclusive: true,
+				Value: maxVal,
+			},
+		}
+		pranges[lvl + 32] = prolly.Range {
+			Fields: []prolly.RangeField{field},
+			Desc:   di.keyBld.Desc,
+			Tup:    tup,
+		}
+	}
+
+	// generate range for level 64
+	val := make([]byte, 17)
+	val[0] = 64
+	field := prolly.RangeField{
+		Exact: false,
+		Lo: prolly.Bound{
+			Binding: true,
+			Inclusive: true,
+			Value: val,
+		},
+		Hi: prolly.Bound{
+			Binding: true,
+			Inclusive: true,
+			Value: val,
+		},
+	}
+	pranges[64] = prolly.Range {
+		Fields: []prolly.RangeField{field},
+		Desc:   di.keyBld.Desc,
+		Tup:    tup,
 	}
 
 	return pranges, nil
