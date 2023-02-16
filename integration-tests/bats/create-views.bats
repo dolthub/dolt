@@ -79,6 +79,51 @@ SQL
     [ "${#lines[@]}" -eq 0 ]
 }
 
+@test "create-views: drop all views" {
+    dolt sql -q "create view four as select 2+2 as res from dual;"
+    dolt sql -q "create view six as select 3+3 as res from dual;"
+    
+    run dolt sql -q "select name from dolt_schemas order by name" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ 'four' ]] || false
+    [[ "${lines[2]}" =~ 'six' ]] || false
+
+    dolt commit -Am "new views"
+    dolt sql -q "drop view four"
+
+    run dolt ls --all
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_schemas" ]]
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_schemas" ]]
+
+    dolt commit -Am "dropped a view"
+    dolt sql -q "drop view six"
+
+    # Dropping all views should result in the dolt_schemas table deleting itself
+    run dolt ls --all
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_schemas" ]]
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "deleted table" ]]
+
+    dolt commit -Am "no views left"
+
+    # Creating and then dropping a bunch of views should produce no diff
+    dolt sql -q "create view four as select 2+2 as res from dual;"
+    dolt sql -q "create view six as select 3+3 as res from dual;"
+    dolt sql -q "drop view four"
+    dolt sql -q "drop view six"
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]    
+}
+
 @test "create-views: join two views" {
     run dolt sql <<SQL
 create view four as select 2+2 as res from dual;

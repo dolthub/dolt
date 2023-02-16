@@ -103,11 +103,7 @@ func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 	return tbl.(*WritableDoltTable), nil
 }
 
-func migrateOldSchemasTableToNew(
-		ctx *sql.Context,
-		db Database,
-		schemasTable *WritableDoltTable,
-) (newTable *WritableDoltTable, rerr error) {
+func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *WritableDoltTable) (newTable *WritableDoltTable, rerr error) {
 	// Copy all of the old data over and add an index column and an extra column
 	iter, err := SqlTableToRowIter(ctx, schemasTable.DoltTable, nil)
 	if err != nil {

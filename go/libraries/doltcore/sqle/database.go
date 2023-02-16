@@ -1312,6 +1312,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
+
 	stbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
@@ -1319,7 +1320,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 	if !found {
 		return missingErr
 	}
-
+	
 	tbl := stbl.(*WritableDoltTable)
 	row, exists, err := fragFromSchemasTable(ctx, tbl, fragType, name)
 	if err != nil {
@@ -1334,7 +1335,46 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 		return err
 	}
 
-	return deleter.Close(ctx)
+	err = deleter.Close(ctx)
+	if err != nil {
+		return err
+	}
+	
+	// If the dolt schemas table is now empty, drop it entirely. This is necessary to prevent the creation and 
+	// immediate dropping of views or triggers, when none previously existed, from changing the database state.
+	return db.dropTableIfEmpty(ctx, doltdb.SchemasTableName)
+}
+
+// dropTableIfEmpty drops the table named if it exists and has at least one row.
+func (db Database) dropTableIfEmpty(ctx *sql.Context, tableName string) error {
+	stbl, found, err := db.GetTableInsensitive(ctx, tableName)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return nil
+	}
+
+	table, err := stbl.(*WritableDoltTable).DoltTable.DoltTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	rows, err := table.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+
+	numRows, err := rows.Count()
+	if err != nil {
+		return err
+	}
+
+	if numRows == 0 {
+		return db.dropTable(ctx, tableName)
+	}
+
+	return nil
 }
 
 // GetAllTemporaryTables returns all temporary tables
