@@ -66,8 +66,9 @@ func IsReadOnlySystemTable(name string) bool {
 	return HasDoltPrefix(name) && !set.NewStrSet(writeableSystemTables).Contains(name)
 }
 
-// IsNonDroppableSystemTable returns whether the table name given is a system table that cannot be dropped.
-func IsNonDroppableSystemTable(name string) bool {
+// IsNonAlterableSystemTable returns whether the table name given is a system table that cannot be dropped or altered 
+// by the user.
+func IsNonAlterableSystemTable(name string) bool {
 	return IsReadOnlySystemTable(name) || strings.ToLower(name) == SchemasTableName
 }
 

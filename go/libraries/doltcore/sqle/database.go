@@ -733,7 +733,7 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	if doltdb.IsNonDroppableSystemTable(tableName) {
+	if doltdb.IsNonAlterableSystemTable(tableName) {
 		return ErrSystemTableAlter.New(tableName)
 	}
 
@@ -1031,7 +1031,7 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 		return err
 	}
 
-	if doltdb.IsReadOnlySystemTable(oldName) {
+	if doltdb.IsNonAlterableSystemTable(oldName) {
 		return ErrSystemTableAlter.New(oldName)
 	}
 
