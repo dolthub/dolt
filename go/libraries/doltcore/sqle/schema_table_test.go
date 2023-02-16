@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -151,11 +152,13 @@ func TestSchemaTableMigrationV1(t *testing.T) {
 			jsonDoc, ok := row[3].(gmstypes.JSONDocument)
 			if ok {
 				row[3], err = jsonDoc.ToString(nil)
+				row[3] = strings.ReplaceAll(row[3].(string), " ", "") // remove spaces
 			}
 
 			nomsJson, ok := row[3].(json.NomsJSON)
 			if ok {
 				row[3], err = nomsJson.ToString(ctx)
+				row[3] = strings.ReplaceAll(row[3].(string), " ", "") // remove spaces
 			}
 
 			require.NoError(t, err)
