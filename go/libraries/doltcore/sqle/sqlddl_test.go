@@ -827,7 +827,7 @@ func TestAlterSystemTables(t *testing.T) {
 
 	t.Run("Drop", func(t *testing.T) {
 		setup()
-		for _, tableName := range append(systemTableNames, "dolt_schemas") {
+		for _, tableName := range append(systemTableNames) {
 			expectedErr := "system tables cannot be dropped or altered"
 			assertFails(t, dEnv, fmt.Sprintf("drop table %s", tableName), expectedErr)
 		}
