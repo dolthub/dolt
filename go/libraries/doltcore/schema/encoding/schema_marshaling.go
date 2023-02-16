@@ -151,7 +151,7 @@ type encodedIndex struct {
 	Tags            []uint64 `noms:"tags" json:"tags"`
 	Comment         string   `noms:"comment" json:"comment"`
 	Unique          bool     `noms:"unique" json:"unique"`
-	Spatial         bool     `noms:"spatial" json:"spatial"`
+	Spatial         bool     `noms:"spatial,omitempty" json:"spatial,omitempty"`
 	IsSystemDefined bool     `noms:"hidden,omitempty" json:"hidden,omitempty"` // Was previously named Hidden, do not change noms name
 	PrefixLengths   []uint16 `noms:"prefixLengths,omitempty" json:"prefixLengths,omitempty"`
 }
