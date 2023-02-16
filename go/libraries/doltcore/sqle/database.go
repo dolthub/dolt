@@ -467,7 +467,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 	}
-	
+
 	if found {
 		return dt, found, nil
 	}
@@ -1287,7 +1287,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 	if exists {
 		return existingErr
 	}
-	
+
 	// Insert the new row into the db
 	inserter := tbl.Inserter(ctx)
 	defer func() {
@@ -1304,7 +1304,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 	if err != nil {
 		return err
 	}
-	
+
 	return inserter.Insert(ctx, sql.Row{fragType, name, definition, extraJSON})
 }
 
@@ -1320,7 +1320,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 	if !found {
 		return missingErr
 	}
-	
+
 	tbl := stbl.(*WritableDoltTable)
 	row, exists, err := fragFromSchemasTable(ctx, tbl, fragType, name)
 	if err != nil {
@@ -1339,8 +1339,8 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 	if err != nil {
 		return err
 	}
-	
-	// If the dolt schemas table is now empty, drop it entirely. This is necessary to prevent the creation and 
+
+	// If the dolt schemas table is now empty, drop it entirely. This is necessary to prevent the creation and
 	// immediate dropping of views or triggers, when none previously existed, from changing the database state.
 	return db.dropTableIfEmpty(ctx, doltdb.SchemasTableName)
 }

@@ -80,7 +80,7 @@ type projected interface {
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
 	tableName    string
-	 sqlSch       sql.PrimaryKeySchema
+	sqlSch       sql.PrimaryKeySchema
 	db           SqlDatabase
 	lockedToRoot *doltdb.RootValue
 	nbf          *types.NomsBinFormat

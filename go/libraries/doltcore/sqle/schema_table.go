@@ -39,7 +39,7 @@ type Extra struct {
 }
 
 func mustNewColWithTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, defaultVal string, autoIncrement bool, comment string, constraints ...schema.ColConstraint) schema.Column {
-	col, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo,partOfPK, defaultVal, autoIncrement, comment, constraints...)
+	col, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, defaultVal, autoIncrement, comment, constraints...)
 	if err != nil {
 		panic(err)
 	}
@@ -86,7 +86,7 @@ func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Create new empty table
 	err = db.createDoltTable(ctx, doltdb.SchemasTableName, root, schemaTableSchema)
 	if err != nil {
@@ -110,7 +110,7 @@ func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *Wr
 		return nil, err
 	}
 
-	// The dolt_schemas table has undergone various changes over time and multiple possible schemas for it exist, so we 
+	// The dolt_schemas table has undergone various changes over time and multiple possible schemas for it exist, so we
 	// need to get the column indexes from the current schema
 	nameIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesNameCol)
 	typeIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesTypeCol)
@@ -133,7 +133,7 @@ func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *Wr
 		if err != nil {
 			return nil, err
 		}
-		
+
 		newRow := make(sql.Row, schemasTableCols.Size())
 		newRow[0] = sqlRow[typeIdx]
 		newRow[1] = sqlRow[nameIdx]
@@ -154,12 +154,12 @@ func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *Wr
 	if err != nil {
 		return nil, err
 	}
-	
+
 	err = db.createDoltTable(ctx, doltdb.SchemasTableName, root, schemaTableSchema)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	tbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
@@ -175,12 +175,12 @@ func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *Wr
 			return nil, err
 		}
 	}
-	
+
 	err = inserter.Close(ctx)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return tbl.(*WritableDoltTable), nil
 }
 
@@ -200,12 +200,12 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 			rerr = err
 		}
 	}(iter, ctx)
-	
-	// The dolt_schemas table has undergone various changes over time and multiple possible schemas for it exist, so we 
+
+	// The dolt_schemas table has undergone various changes over time and multiple possible schemas for it exist, so we
 	// need to get the column indexes from the current schema
 	nameIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesNameCol)
 	typeIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesTypeCol)
-	
+
 	for {
 		sqlRow, err := iter.Next(ctx)
 		if err == io.EOF {
@@ -220,7 +220,7 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 			return sqlRow, true, nil
 		}
 	}
-	
+
 	return nil, false, nil
 }
 
@@ -236,7 +236,7 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 		return nil, err
 	}
 
-	// The dolt_schemas table has undergone various changes over time and multiple possible schemas for it exist, so we 
+	// The dolt_schemas table has undergone various changes over time and multiple possible schemas for it exist, so we
 	// need to get the column indexes from the current schema
 	nameIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesNameCol)
 	typeIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesTypeCol)
@@ -249,7 +249,7 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 			rerr = err
 		}
 	}(iter, ctx)
-	
+
 	var frags []schemaFragment
 	for {
 		sqlRow, err := iter.Next(ctx)
@@ -283,7 +283,7 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 			created:  time.Unix(createdTime, 0).UTC(),
 		})
 	}
-	
+
 	return frags, nil
 }
 

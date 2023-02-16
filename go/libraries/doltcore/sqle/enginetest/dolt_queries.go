@@ -751,11 +751,11 @@ var DoltScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "CREATE VIEW VIEW1 AS SELECT v2 FROM viewtest",
+				Query:       "CREATE VIEW VIEW1 AS SELECT v2 FROM viewtest",
 				ExpectedErr: sql.ErrExistingView,
 			},
 			{
-				Query: "drop view view1",
+				Query:            "drop view view1",
 				SkipResultsCheck: true,
 			},
 			{
@@ -765,7 +765,7 @@ var DoltScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "CREATE VIEW VIEW1 AS SELECT v1 FROM viewtest",
+				Query:            "CREATE VIEW VIEW1 AS SELECT v1 FROM viewtest",
 				SkipResultsCheck: true,
 			},
 			{
