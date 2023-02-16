@@ -26,6 +26,11 @@ Lots of things! Dolt is a generally useful tool with countless
 applications. But if you want some ideas, [here's how people are using
 it so far](https://www.dolthub.com/blog/2022-07-11-dolt-case-studies/).
 
+Dolt can be [set up as a replica of your existing MySQL or MariaDB](https://www.dolthub.com/blog/2023-02-17-binlog-replication-preview/)
+database using standard MySQL binlog replication. Every write becomes
+a Dolt commit. This is a great way to get the version control benefits 
+of Dolt and keep an existing MySQL or MariaDB database. 
+
 # Dolt CLI
 
 The `dolt` CLI has the same commands as `git`, with some extras.
