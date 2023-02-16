@@ -19,7 +19,6 @@ import (
 	"io"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
@@ -28,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
@@ -157,7 +157,7 @@ func TestSchemaTableMigrationV1(t *testing.T) {
 			if ok {
 				row[3], err = nomsJson.ToString(ctx)
 			}
-			
+
 			require.NoError(t, err)
 		}
 
