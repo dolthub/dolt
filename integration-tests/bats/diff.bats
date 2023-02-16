@@ -531,6 +531,27 @@ SQL
     [[ ! "$output" =~ 'resolved foreign key' ]] || false
 }
 
+@test "diff: existing foreign key that was not resolved is modified" {
+    dolt sql <<SQL
+set foreign_key_checks=0;
+create table parent (i int primary key);
+create table child (j int primary key, constraint fk foreign key (j) references parent (i));
+SQL
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ 'resolved foreign key' ]] || false
+
+    dolt add -A
+    dolt commit -m "init commit"
+    dolt sql -q "alter table child drop foreign key fk"
+    dolt sql -q "alter table child rename column j to k"
+    dolt sql -q "alter table child add constraint fk foreign key (k) references parent (i)"
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'resolved foreign key' ]] || false
+}
+
 @test "diff: existing foreign key is resolved" {
     dolt sql <<SQL
 set foreign_key_checks=0;
