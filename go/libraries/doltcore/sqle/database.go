@@ -737,6 +737,11 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return ErrSystemTableAlter.New(tableName)
 	}
 
+	return db.dropTable(ctx, tableName)
+}
+
+// dropTable drops the table with the name given, without any business logic checks
+func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 	ds := dsess.DSessFromSess(ctx.Session)
 	if _, ok := ds.GetTemporaryTable(ctx, db.Name(), tableName); ok {
 		ds.DropTemporaryTable(ctx, db.Name(), tableName)

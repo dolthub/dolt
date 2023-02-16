@@ -76,11 +76,7 @@ func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 		schemasTable := tbl.(*WritableDoltTable)
 		// Old schemas table contains the `id` column or is missing an `extra` column.
 		if tbl.Schema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) || !tbl.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) {
-			root, err := db.GetRoot(ctx)
-			if err != nil {
-				return nil, err
-			}
-			return migrateOldSchemasTableToNew(ctx, db, root, schemasTable)
+			return migrateOldSchemasTableToNew(ctx, db, schemasTable)
 		} else {
 			return schemasTable, nil
 		}
@@ -110,7 +106,6 @@ func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 func migrateOldSchemasTableToNew(
 		ctx *sql.Context,
 		db Database,
-		root *doltdb.RootValue,
 		schemasTable *WritableDoltTable,
 ) (newTable *WritableDoltTable, rerr error) {
 	// Copy all of the old data over and add an index column and an extra column
@@ -154,11 +149,16 @@ func migrateOldSchemasTableToNew(
 		newRows = append(newRows, newRow)
 	}
 
-	err = db.DropTable(ctx, doltdb.SchemasTableName)
+	err = db.dropTable(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
 	}
 
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	
 	err = db.createDoltTable(ctx, doltdb.SchemasTableName, root, schemaTableSchema)
 	if err != nil {
 		return nil, err
