@@ -220,14 +220,14 @@ func (wr *journalWriter) ProcessJournal(ctx context.Context) (last hash.Hash, cs
 	}
 	wr.off, err = processRecords(ctx, wr.file, func(o int64, r journalRec) error {
 		switch r.kind {
-		case chunkRecKind:
+		case chunkJournalRecKind:
 			src.lookups.put(r.address, recLookup{
 				journalOff: o,
 				recordLen:  r.length,
 				payloadOff: r.payloadOffset(),
 			})
 			src.uncompressedSz += r.uncompressedPayloadSize()
-		case rootHashRecKind:
+		case rootHashJournalRecKind:
 			last = hash.Hash(r.address)
 		default:
 			return fmt.Errorf("unknown journal record kind (%d)", r.kind)
