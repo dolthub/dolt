@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"testing"
 
@@ -144,16 +143,19 @@ func TestSchemaTableMigrationV1(t *testing.T) {
 		}
 
 		require.NoError(t, err)
+		// convert the JSONDocument to a string for comparison
+		if row[3] != nil {
+			row[3], err = row[3].(gmstypes.JSONDocument).ToString(nil)
+			require.NoError(t, err)
+		}
+		
 		rows = append(rows, row)
 	}
 
 	require.NoError(t, iter.Close(ctx))
 
-	var expectedJsonDoc any
-	require.NoError(t, json.Unmarshal([]byte(`{"extra": "data"}`), &expectedJsonDoc))
-
 	expectedRows := []sql.Row{
-		{"view", "view1", "SELECT v1 FROM test;", gmstypes.JSONDocument{Val: expectedJsonDoc}},
+		{"view", "view1", "SELECT v1 FROM test;", `{"extra":"data"}`},
 		{"view", "view2", "SELECT v2 FROM test;", nil},
 	}
 
