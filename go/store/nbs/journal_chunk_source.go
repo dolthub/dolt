@@ -45,7 +45,7 @@ func rangeFromLookup(l recLookup) Range {
 	return Range{
 		// see journalRec for serialization format
 		Offset: uint64(l.journalOff) + uint64(l.payloadOff),
-		Length: l.recordLen - (l.payloadOff + recChecksumSz),
+		Length: l.recordLen - (l.payloadOff + journalRecChecksumSz),
 	}
 }
 
