@@ -19,6 +19,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
@@ -145,7 +146,17 @@ func TestSchemaTableMigrationV1(t *testing.T) {
 		require.NoError(t, err)
 		// convert the JSONDocument to a string for comparison
 		if row[3] != nil {
-			row[3], err = row[3].(gmstypes.JSONDocument).ToString(nil)
+			// Annoying difference in representation between storage versions here
+			jsonDoc, ok := row[3].(gmstypes.JSONDocument)
+			if ok {
+				row[3], err = jsonDoc.ToString(nil)
+			}
+
+			nomsJson, ok := row[3].(json.NomsJSON)
+			if ok {
+				row[3], err = nomsJson.ToString(ctx)
+			}
+			
 			require.NoError(t, err)
 		}
 
