@@ -141,8 +141,10 @@ func validateIndexConsistency(
 	def schema.Index,
 	primary, secondary prolly.Map,
 ) error {
-	// TODO: fix this later
-	if len(def.PrefixLengths()) > 0 {
+	// TODO: the descriptors in the primary key are different
+	// than the ones in the secondary key; this test assumes
+	// they're the same
+	if len(def.PrefixLengths()) > 0 || def.IsSpatial() {
 		return nil
 	}
 

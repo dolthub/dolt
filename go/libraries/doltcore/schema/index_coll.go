@@ -21,14 +21,14 @@ import (
 	"strings"
 )
 
+// EnableSpatialIndex enables the creation and use of spatial indexes
+var EnableSpatialIndex = false
+
 func init() {
 	if v := os.Getenv("DOLT_ENABLE_SPATIAL_INDEX"); v != "" {
 		EnableSpatialIndex = true
 	}
 }
-
-// EnableSpatialIndex enables the creation and use of spatial indexes
-var EnableSpatialIndex = false
 
 type IndexCollection interface {
 	// AddIndex adds the given index, overwriting any current indexes with the same name or columns.
