@@ -112,54 +112,26 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	schema.EnableSpatialIndex = true
+	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "show table with spatial indexes",
+			Name: "dolt_history table filter correctness",
 			SetUpScript: []string{
-				"create table geom(" +
-					"p point not null srid 0," +
-					"l linestring not null srid 0," +
-					"py polygon not null srid 0," +
-					"mp multipoint not null srid 0," +
-					"ml multilinestring not null srid 0," +
-					"mpy multipolygon not null srid 0," +
-					"gc geometrycollection not null srid 0," +
-					"g geometry not null srid 0)",
-				"alter table geom add spatial index (p)",
-				"alter table geom add spatial index (l)",
-				"alter table geom add spatial index (py)",
-				"alter table geom add spatial index (mp)",
-				"alter table geom add spatial index (ml)",
-				"alter table geom add spatial index (mpy)",
-				"alter table geom add spatial index (gc)",
-				"alter table geom add spatial index (g)",
+				"create table xy (x int primary key, y int);",
+				"call dolt_add('.');",
+				"call dolt_commit('-m', 'creating table');",
+				"insert into xy values (0, 1);",
+				"call dolt_commit('-am', 'add data');",
+				"insert into xy values (2, 3);",
+				"call dolt_commit('-am', 'add data');",
+				"insert into xy values (4, 5);",
+				"call dolt_commit('-am', 'add data');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "show create table geom",
+					Query: "select count(*) from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1)",
 					Expected: []sql.Row{
-						{
-							"geom",
-							"CREATE TABLE `geom` (\n" +
-								"  `p` point NOT NULL SRID 0,\n" +
-								"  `l` linestring NOT NULL SRID 0,\n" +
-								"  `py` polygon NOT NULL SRID 0,\n" +
-								"  `mp` multipoint NOT NULL SRID 0,\n" +
-								"  `ml` multilinestring NOT NULL SRID 0,\n" +
-								"  `mpy` multipolygon NOT NULL SRID 0,\n" +
-								"  `gc` geometrycollection NOT NULL SRID 0,\n" +
-								"  `g` geometry NOT NULL SRID 0,\n" +
-								"  SPATIAL KEY `g` (`g`),\n" +
-								"  SPATIAL KEY `gc` (`gc`),\n" +
-								"  SPATIAL KEY `l` (`l`),\n" +
-								"  SPATIAL KEY `ml` (`ml`),\n" +
-								"  SPATIAL KEY `mp` (`mp`),\n" +
-								"  SPATIAL KEY `mpy` (`mpy`),\n" +
-								"  SPATIAL KEY `p` (`p`),\n" +
-								"  SPATIAL KEY `py` (`py`)\n" +
-								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
-						},
+						{2},
 					},
 				},
 			},
@@ -170,36 +142,6 @@ func TestSingleScript(t *testing.T) {
 	for _, test := range scripts {
 		enginetest.TestScript(t, harness, test)
 	}
-	//t.Skip()
-	//var scripts = []queries.ScriptTest{
-	//	{
-	//		Name: "dolt_history table filter correctness",
-	//		SetUpScript: []string{
-	//			"create table xy (x int primary key, y int);",
-	//			"call dolt_add('.');",
-	//			"call dolt_commit('-m', 'creating table');",
-	//			"insert into xy values (0, 1);",
-	//			"call dolt_commit('-am', 'add data');",
-	//			"insert into xy values (2, 3);",
-	//			"call dolt_commit('-am', 'add data');",
-	//			"insert into xy values (4, 5);",
-	//			"call dolt_commit('-am', 'add data');",
-	//		},
-	//		Assertions: []queries.ScriptTestAssertion{
-	//			{
-	//				Query: "select count(*) from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1)",
-	//				Expected: []sql.Row{
-	//					{2},
-	//				},
-	//			},
-	//		},
-	//	},
-	//}
-	//
-	//harness := newDoltHarness(t)
-	//for _, test := range scripts {
-	//	enginetest.TestScript(t, harness, test)
-	//}
 }
 
 func TestSingleQueryPrepared(t *testing.T) {

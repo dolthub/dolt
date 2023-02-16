@@ -630,7 +630,7 @@ func stringFromBytes(b []byte) string {
 // The highest level (the square covering all values floats) is 64
 // The lowest level (a point) is 0
 // The next 16 bytes is the z-value encoding of the minimum point of that subregion
-type Cell [17]byte
+type Cell [cellSize]byte
 
 func compareCell(l, r Cell) int {
 	return bytes.Compare(l[:], r[:])

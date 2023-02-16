@@ -952,8 +952,6 @@ func (di *doltIndex) prollySpatialRanges(ctx context.Context, ns tree.NodeStore,
 	zMin := ZValue(minPoint)
 	zMax := ZValue(maxPoint)
 
-	// TODO: level pruning
-	// TODO: add constants
 	pranges := make([]prolly.Range, 65)
 
 	// generate ranges for levels 0 - 31
@@ -1052,9 +1050,6 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		}
 	}
 
-	// TODO: find root of index and get last key
-	// TODO: make at most 64 prolly ranges
-	// TODO: no clue if this is a good prolly range...
 	if di.spatial {
 		return di.prollySpatialRanges(ctx, ns, ranges, tb)
 	}

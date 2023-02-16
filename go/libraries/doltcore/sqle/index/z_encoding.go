@@ -155,7 +155,6 @@ func ZSort(points []types.Point) []types.Point {
 // ZCell converts the GeometryValue into a Cell
 // Note: there is an inefficiency here where small polygons may be placed into a level that's significantly larger
 // TODO: we could probably improve performance here by not using custom structs
-// TODO: use cellSize instead of 17
 func ZCell(v types.GeometryValue) val.Cell {
 	bbox := spatial.FindBBox(v)
 	zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
@@ -182,11 +181,11 @@ func ZCell(v types.GeometryValue) val.Cell {
 }
 
 // ZAddr converts the GeometryValue into a key: (level, min_z_val)
-func ZAddr(v types.GeometryValue) [17]byte {
+func ZAddr(v types.GeometryValue) val.Cell {
 	bbox := spatial.FindBBox(v)
 	zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
 	zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
-	addr := [17]byte{}
+	addr := val.Cell{}
 	binary.BigEndian.PutUint64(addr[1:], zMin[0])
 	binary.BigEndian.PutUint64(addr[9:], zMin[1])
 	if res := zMin[0] ^ zMax[0]; res != 0 {
