@@ -467,6 +467,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 	}
+
 	if found {
 		return dt, found, nil
 	}
@@ -732,10 +733,15 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	if doltdb.IsReadOnlySystemTable(tableName) {
+	if doltdb.IsNonAlterableSystemTable(tableName) {
 		return ErrSystemTableAlter.New(tableName)
 	}
 
+	return db.dropTable(ctx, tableName)
+}
+
+// dropTable drops the table with the name given, without any business logic checks
+func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 	ds := dsess.DSessFromSess(ctx.Session)
 	if _, ok := ds.GetTemporaryTable(ctx, db.Name(), tableName); ok {
 		ds.DropTemporaryTable(ctx, db.Name(), tableName)
@@ -1025,7 +1031,7 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 		return err
 	}
 
-	if doltdb.IsReadOnlySystemTable(oldName) {
+	if doltdb.IsNonAlterableSystemTable(oldName) {
 		return ErrSystemTableAlter.New(oldName)
 	}
 
@@ -1269,7 +1275,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
+	tbl, err := getOrCreateDoltSchemasTable(ctx, db)
 	if err != nil {
 		return err
 	}
@@ -1280,24 +1286,6 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 	}
 	if exists {
 		return existingErr
-	}
-
-	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, _, err := sess.LookupDbState(ctx, db.Name())
-	if err != nil {
-		return err
-	}
-	ts := dbState.WriteSession
-
-	ws, err := ts.Flush(ctx)
-	if err != nil {
-		return err
-	}
-
-	// If rows exist, then grab the highest id and add 1 to get the new id
-	idx, err := nextSchemasTableIndex(ctx, ws.WorkingRoot())
-	if err != nil {
-		return err
 	}
 
 	// Insert the new row into the db
@@ -1316,13 +1304,15 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 	if err != nil {
 		return err
 	}
-	return inserter.Insert(ctx, sql.Row{fragType, name, definition, idx, extraJSON})
+
+	return inserter.Insert(ctx, sql.Row{fragType, name, definition, extraJSON})
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
+
 	stbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
@@ -1345,7 +1335,46 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 		return err
 	}
 
-	return deleter.Close(ctx)
+	err = deleter.Close(ctx)
+	if err != nil {
+		return err
+	}
+
+	// If the dolt schemas table is now empty, drop it entirely. This is necessary to prevent the creation and
+	// immediate dropping of views or triggers, when none previously existed, from changing the database state.
+	return db.dropTableIfEmpty(ctx, doltdb.SchemasTableName)
+}
+
+// dropTableIfEmpty drops the table named if it exists and has at least one row.
+func (db Database) dropTableIfEmpty(ctx *sql.Context, tableName string) error {
+	stbl, found, err := db.GetTableInsensitive(ctx, tableName)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return nil
+	}
+
+	table, err := stbl.(*WritableDoltTable).DoltTable.DoltTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	rows, err := table.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+
+	numRows, err := rows.Count()
+	if err != nil {
+		return err
+	}
+
+	if numRows == 0 {
+		return db.dropTable(ctx, tableName)
+	}
+
+	return nil
 }
 
 // GetAllTemporaryTables returns all temporary tables
