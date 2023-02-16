@@ -416,9 +416,12 @@ func TestSpatialDelete(t *testing.T) {
 	enginetest.TestSpatialDelete(t, newDoltHarness(t))
 }
 
-func TestSpatialIndexPlans(t *testing.T) {
-	schema.EnableSpatialIndex = true
-	enginetest.TestSpatialIndexPlans(t, newDoltHarness(t))
+func TestSpatialScripts(t *testing.T) {
+	enginetest.TestSpatialScripts(t, newDoltHarness(t))
+}
+
+func TestSpatialScriptsPrepared(t *testing.T) {
+	enginetest.TestSpatialScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestSpatialIndexScripts(t *testing.T) {
@@ -426,8 +429,19 @@ func TestSpatialIndexScripts(t *testing.T) {
 	enginetest.TestSpatialIndexScripts(t, newDoltHarness(t))
 }
 
-func TestSpatialScripts(t *testing.T) {
-	enginetest.TestSpatialScripts(t, newDoltHarness(t))
+func TestSpatialIndexScriptsPrepared(t *testing.T) {
+	schema.EnableSpatialIndex = true
+	enginetest.TestSpatialIndexScriptsPrepared(t, newDoltHarness(t))
+}
+
+func TestSpatialIndexPlans(t *testing.T) {
+	schema.EnableSpatialIndex = true
+	enginetest.TestSpatialIndexPlans(t, newDoltHarness(t))
+}
+
+func TestSpatialIndexPlansPrepared(t *testing.T) {
+	schema.EnableSpatialIndex = true
+	enginetest.TestSpatialIndexPlansPrepared(t, newDoltHarness(t))
 }
 
 func TestTruncate(t *testing.T) {
