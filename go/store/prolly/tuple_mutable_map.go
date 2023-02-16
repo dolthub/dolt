@@ -129,8 +129,8 @@ func (mut *MutableMap) Checkpoint(context.Context) error {
 // Revert discards writes made since the last checkpoint.
 func (mut *MutableMap) Revert(context.Context) {
 	// if we've accumulated a large number of writes
-	// since we check-pointed, our stash may
-	// be stashed in a separate tree.MutableMap
+	// since we check-pointed, our last checkpoint
+	// may be stashed in a separate tree.MutableMap
 	if mut.stash != nil {
 		mut.tuples = *mut.stash
 		return
@@ -140,7 +140,7 @@ func (mut *MutableMap) Revert(context.Context) {
 
 func (mut *MutableMap) flushPending(ctx context.Context) error {
 	stash := mut.stash
-	// if our in-memory edit set contains a stash, we
+	// if our in-memory edit set contains a checkpoint, we
 	// must stash a copy of |mut.tuples| we can revert to.
 	if mut.tuples.Edits.HasCheckpoint() {
 		cp := mut.tuples.Copy()
