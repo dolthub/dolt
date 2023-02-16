@@ -63,10 +63,6 @@ func (mut *MutableMap) Map(ctx context.Context) (Map, error) {
 }
 
 func (mut *MutableMap) flushWithSerializer(ctx context.Context, s message.Serializer) (Map, error) {
-	if err := mut.Checkpoint(ctx); err != nil {
-		return Map{}, err
-	}
-
 	sm := mut.tuples.StaticMap
 	fn := tree.ApplyMutations[val.Tuple, val.TupleDesc, message.Serializer]
 

@@ -155,9 +155,9 @@ func (m ArtifactMap) Pool() pool.BuffPool {
 	return m.tuples.NodeStore.Pool()
 }
 
-func (m ArtifactMap) Editor() ArtifactsEditor {
+func (m ArtifactMap) Editor() *ArtifactsEditor {
 	artKD, artVD := m.Descriptors()
-	return ArtifactsEditor{
+	return &ArtifactsEditor{
 		srcKeyDesc: m.srcKeyDesc,
 		mut: MutableMap{
 			tuples:  m.tuples.Mutate(),
@@ -316,7 +316,7 @@ type ArtifactsEditor struct {
 	pool         pool.BuffPool
 }
 
-func (wr ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, artType ArtifactType, meta []byte) error {
+func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, artType ArtifactType, meta []byte) error {
 	for i := 0; i < srcKey.Count(); i++ {
 		wr.artKB.PutRaw(i, srcKey.GetField(i))
 	}
@@ -344,7 +344,7 @@ func (e *ErrMergeArtifactCollision) Error() string {
 // the given will be inserted. Returns true if a violation was replaced. If an
 // existing violation exists but has a different |meta.VInfo| value then
 // ErrMergeArtifactCollision is a returned.
-func (wr ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, artType ArtifactType, meta ConstraintViolationMeta) error {
+func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, artType ArtifactType, meta ConstraintViolationMeta) error {
 	itr, err := wr.mut.IterRange(ctx, PrefixRange(srcKey, wr.srcKeyDesc))
 	if err != nil {
 		return err
@@ -406,11 +406,11 @@ func (wr ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey
 	return nil
 }
 
-func (wr ArtifactsEditor) Delete(ctx context.Context, key val.Tuple) error {
+func (wr *ArtifactsEditor) Delete(ctx context.Context, key val.Tuple) error {
 	return wr.mut.Delete(ctx, key)
 }
 
-func (wr ArtifactsEditor) Flush(ctx context.Context) (ArtifactMap, error) {
+func (wr *ArtifactsEditor) Flush(ctx context.Context) (ArtifactMap, error) {
 	s := message.NewMergeArtifactSerializer(wr.artKB.Desc, wr.NodeStore().Pool())
 
 	m, err := wr.mut.flushWithSerializer(ctx, s)
@@ -426,7 +426,7 @@ func (wr ArtifactsEditor) Flush(ctx context.Context) (ArtifactMap, error) {
 	}, nil
 }
 
-func (wr ArtifactsEditor) NodeStore() tree.NodeStore {
+func (wr *ArtifactsEditor) NodeStore() tree.NodeStore {
 	return wr.mut.NodeStore()
 }
 
