@@ -123,7 +123,8 @@ func TestSchemaTableMigrationV1(t *testing.T) {
 	require.True(t, found)
 
 	inserter := sqlTbl.(*WritableDoltTable).Inserter(ctx)
-	err = inserter.Insert(ctx, sql.Row{"view", "view1", "SELECT v1 FROM test;", 1, `{"extra": "data"}`})
+	// JSON string has no spaces because our various JSON libraries don't agree on how to marshall it
+	err = inserter.Insert(ctx, sql.Row{"view", "view1", "SELECT v1 FROM test;", 1, `{"extra":"data"}`})
 	require.NoError(t, err)
 	err = inserter.Insert(ctx, sql.Row{"view", "view2", "SELECT v2 FROM test;", 2, nil})
 	require.NoError(t, err)
