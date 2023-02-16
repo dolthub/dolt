@@ -148,7 +148,7 @@ func TestSchemaTableMigrationV1(t *testing.T) {
 			row[3], err = row[3].(gmstypes.JSONDocument).ToString(nil)
 			require.NoError(t, err)
 		}
-		
+
 		rows = append(rows, row)
 	}
 
