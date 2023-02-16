@@ -16,6 +16,7 @@ package index_test
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -1584,68 +1585,85 @@ func TestLexFloat(t *testing.T) {
 	})
 }
 
-func TestZValue(t *testing.T) {
+func TestZValues(t *testing.T) {
+	tests := []struct{
+		p types.Point
+		e string
+	}{
+		{
+			p: types.Point{X: -5000, Y: -5000},
+			e: "0fff30f03f3fffffffffffffffffffff",
+		},
+		{
+			p: types.Point{X: -1, Y: -1},
+			e: "300000ffffffffffffffffffffffffff",
+		},
+		{
+			p: types.Point{X: -1, Y: 0},
+			e: "90000055555555555555555555555555",
+		},
+		{
+			p: types.Point{X: -1, Y: 1},
+			e: "9aaaaa55555555555555555555555555",
+		},
+		{
+			p: types.Point{X: 0, Y: -1},
+			e: "600000aaaaaaaaaaaaaaaaaaaaaaaaaa",
+		},
+		{
+			p: types.Point{X: 1, Y: -1},
+			e: "655555aaaaaaaaaaaaaaaaaaaaaaaaaa",
+		},
+		{
+			p: types.Point{X: 0, Y: 0},
+			e: "c0000000000000000000000000000000",
+		},
+		{
+			p: types.Point{X: 1, Y: 0},
+			e: "c5555500000000000000000000000000",
+		},
+		{
+			p: types.Point{X: 0, Y: 1},
+			e: "caaaaa00000000000000000000000000",
+		},
+		{
+			p: types.Point{X: 1, Y: 1},
+			e: "cfffff00000000000000000000000000",
+		},
+		{
+			p: types.Point{X: 2, Y: 2},
+			e: "f0000000000000000000000000000000",
+		},
+		{
+			p: types.Point{X: 50000, Y: 50000},
+			e: "f000fcc03ccc00000000000000000000",
+		},
+	}
+
 	t.Run("test z-values", func(t *testing.T) {
-		z := index.ZValue(types.Point{X: -5000, Y: -5000})
-		assert.Equal(t, "0fff30f03f3fffffffffffffffffffff", hex.EncodeToString(z[:]))
-
-		z = index.ZValue(types.Point{X: -1, Y: -1})
-		assert.Equal(t, "300000ffffffffffffffffffffffffff", hex.EncodeToString(z[:]))
-
-		z = index.ZValue(types.Point{X: -1, Y: 0})
-		assert.Equal(t, "600000aaaaaaaaaaaaaaaaaaaaaaaaaa", hex.EncodeToString(z[:]))
-
-		z = index.ZValue(types.Point{X: -1, Y: 1})
-		assert.Equal(t, "655555aaaaaaaaaaaaaaaaaaaaaaaaaa", hex.EncodeToString(z[:]))
-
-		z = index.ZValue(types.Point{X: 0, Y: -1})
-		assert.Equal(t, "90000055555555555555555555555555", hex.EncodeToString(z[:]))
-
-		z = index.ZValue(types.Point{X: 1, Y: -1})
-		assert.Equal(t, "9aaaaa55555555555555555555555555", hex.EncodeToString(z[:]))
-
-		z = index.ZValue(types.Point{X: 0, Y: 0})
-		assert.Equal(t, "c0000000000000000000000000000000", hex.EncodeToString(z[:]))
-
-		z = index.ZValue(types.Point{X: 1, Y: 0})
-		assert.Equal(t, "caaaaa00000000000000000000000000", hex.EncodeToString(z[:]))
-
-		z = index.ZValue(types.Point{X: 0, Y: 1})
-		assert.Equal(t, "c5555500000000000000000000000000", hex.EncodeToString(z[:]))
-
-		z = index.ZValue(types.Point{X: 1, Y: 1})
-		assert.Equal(t, "cfffff00000000000000000000000000", hex.EncodeToString(z[:]))
-
-		z = index.ZValue(types.Point{X: 2, Y: 2})
-		assert.Equal(t, "f0000000000000000000000000000000", hex.EncodeToString(z[:]))
-
-		z = index.ZValue(types.Point{X: 50000, Y: 50000})
-		assert.Equal(t, "f000fcc03ccc00000000000000000000", hex.EncodeToString(z[:]))
+		for _, test := range tests {
+			z := index.ZValue(test.p)
+			assert.Equal(t, test.e, fmt.Sprintf("%016x%016x", z[0], z[1]))
+		}
 	})
 
 	t.Run("test un-z-values", func(t *testing.T) {
-		v, _ := hex.DecodeString("c0000000000000000000000000000000")
-		z := [16]byte{}
-		for i, v := range v {
-			z[i] = v
+		for _, test := range tests {
+			v, _ := hex.DecodeString(test.e)
+			z := [2]uint64{}
+			z[0] = binary.BigEndian.Uint64(v[:8])
+			z[1] = binary.BigEndian.Uint64(v[8:])
+			assert.Equal(t, test.p, index.UnZValue(z))
 		}
-		assert.Equal(t, types.Point{X: 0, Y: 0}, index.UnZValue(z))
-
-		v, _ = hex.DecodeString("daaaaa00000000000000000000000000")
-		z = [16]byte{}
-		for i, v := range v {
-			z[i] = v
-		}
-		assert.Equal(t, types.Point{X: 1, Y: 2}, index.UnZValue(z))
 	})
 
 	t.Run("test sorting points by z-value", func(t *testing.T) {
 		sortedPoints := []types.Point{
 			{X: -5000, Y: -5000},
 			{X: -1, Y: -1},
+			{X: 1, Y: -1},
 			{X: -1, Y: 0},
 			{X: -1, Y: 1},
-			{X: 1, Y: -1},
 			{X: 0, Y: 0},
 			{X: 1, Y: 0},
 			{X: 1, Y: 1},
