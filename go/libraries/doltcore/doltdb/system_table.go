@@ -236,13 +236,13 @@ const (
 	SchemasTablesTypeCol = "type"
 	// SchemasTablesNameCol The name of the column that stores the name of a schema fragment in the dolt_schemas table
 	SchemasTablesNameCol = "name"
-	// SchemasTablesFragmentCol The name of the column that stores the SQL fragment of a schema element in the 
+	// SchemasTablesFragmentCol The name of the column that stores the SQL fragment of a schema element in the
 	// dolt_schemas table
 	SchemasTablesFragmentCol = "fragment"
 	// SchemasTablesExtraCol The name of the column that stores extra information about a schema element in the
 	// dolt_schemas table
 	SchemasTablesExtraCol = "extra"
-	// 
+	//
 	SchemasTablesIndexName = "fragment_name"
 )
 

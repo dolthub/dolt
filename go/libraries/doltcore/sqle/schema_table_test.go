@@ -53,7 +53,7 @@ func TestSchemaTableMigrationOriginal(t *testing.T) {
 		{Name: doltdb.SchemasTablesFragmentCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
 	}), sql.Collation_Default)
 	require.NoError(t, err)
-	
+
 	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	require.NoError(t, err)
 	require.True(t, found)
@@ -71,24 +71,24 @@ func TestSchemaTableMigrationOriginal(t *testing.T) {
 
 	iter, err := SqlTableToRowIter(ctx, tbl.DoltTable, nil)
 	require.NoError(t, err)
-	
+
 	var rows []sql.Row
 	for {
 		row, err := iter.Next(ctx)
 		if err == io.EOF {
 			break
 		}
-		
+
 		require.NoError(t, err)
 		rows = append(rows, row)
 	}
-	
+
 	require.NoError(t, iter.Close(ctx))
 	expectedRows := []sql.Row{
 		{"view", "view1", "SELECT v1 FROM test;", nil},
 		{"view", "view2", "SELECT v2 FROM test;", nil},
 	}
-	
+
 	assert.Equal(t, expectedRows, rows)
 }
 
@@ -109,7 +109,7 @@ func TestSchemaTableMigrationV1(t *testing.T) {
 	ctx.SetCurrentDatabase(db.Name())
 
 	// original schema of dolt_schemas table with the ID column
-	err = db.createSqlTable(ctx, doltdb.SchemasTableName, sql.NewPrimaryKeySchema(sql.Schema{ 
+	err = db.createSqlTable(ctx, doltdb.SchemasTableName, sql.NewPrimaryKeySchema(sql.Schema{
 		{Name: doltdb.SchemasTablesTypeCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
 		{Name: doltdb.SchemasTablesNameCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
 		{Name: doltdb.SchemasTablesFragmentCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
@@ -148,10 +148,10 @@ func TestSchemaTableMigrationV1(t *testing.T) {
 	}
 
 	require.NoError(t, iter.Close(ctx))
-	
+
 	var expectedJsonDoc any
 	require.NoError(t, json.Unmarshal([]byte(`{"extra": "data"}`), &expectedJsonDoc))
-	
+
 	expectedRows := []sql.Row{
 		{"view", "view1", "SELECT v1 FROM test;", gmstypes.JSONDocument{Val: expectedJsonDoc}},
 		{"view", "view2", "SELECT v2 FROM test;", nil},
