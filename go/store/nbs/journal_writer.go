@@ -218,7 +218,7 @@ func (wr *journalWriter) ProcessJournal(ctx context.Context) (last hash.Hash, cs
 		address: journalAddr,
 		lookups: newLookupMap(),
 	}
-	wr.off, err = processRecords(ctx, wr.file, func(o int64, r journalRec) error {
+	wr.off, err = processJournalRecords(ctx, wr.file, func(o int64, r journalRec) error {
 		switch r.kind {
 		case chunkJournalRecKind:
 			src.lookups.put(r.address, recLookup{
