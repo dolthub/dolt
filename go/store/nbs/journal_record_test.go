@@ -28,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func TestRoundTripRecords(t *testing.T) {
+func TestRoundTripJournalRecords(t *testing.T) {
 	t.Run("chunk record", func(t *testing.T) {
 		for i := 0; i < 64; i++ {
 			rec, buf := makeChunkRecord()
@@ -57,16 +57,18 @@ func TestRoundTripRecords(t *testing.T) {
 	})
 }
 
-func TestUnknownTag(t *testing.T) {
+func TestUnknownJournalRecordTag(t *testing.T) {
 	// test behavior encountering unknown tag
-	buf := makeUnknownTagRecord()
+	buf := makeUnknownTagJournalRecord()
+	// checksum is ok
 	ok := validateJournalRecord(buf)
 	assert.True(t, ok)
+	// reading record fails
 	_, err := readJournalRecord(buf)
 	assert.Error(t, err)
 }
 
-func TestProcessRecords(t *testing.T) {
+func TestProcessJournalRecords(t *testing.T) {
 	const cnt = 1024
 	ctx := context.Background()
 	records := make([]journalRec, cnt)
@@ -104,7 +106,7 @@ func TestProcessRecords(t *testing.T) {
 
 	i, sum = 0, 0
 	// write a bogus record to the end and process again
-	writeCorruptRecord(journal[off:])
+	writeCorruptJournalRecord(journal[off:])
 	n, err = processJournalRecords(ctx, bytes.NewReader(journal), check)
 	assert.Equal(t, cnt, i)
 	assert.Equal(t, int(off), int(n))
@@ -193,7 +195,7 @@ func makeRootHashRecord() (journalRec, []byte) {
 	return r, buf
 }
 
-func makeUnknownTagRecord() (buf []byte) {
+func makeUnknownTagJournalRecord() (buf []byte) {
 	const fakeTag journalRecTag = 111
 	_, buf = makeRootHashRecord()
 	// overwrite recKind
@@ -204,7 +206,7 @@ func makeUnknownTagRecord() (buf []byte) {
 	return
 }
 
-func writeCorruptRecord(buf []byte) (n uint32) {
+func writeCorruptJournalRecord(buf []byte) (n uint32) {
 	n = uint32(rootHashRecordSize())
 	// fill with random data
 	rand.Read(buf[:n])
