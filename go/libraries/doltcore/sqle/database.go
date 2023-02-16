@@ -1270,7 +1270,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
+	tbl, err := getOrCreateDoltSchemasTable(ctx, db)
 	if err != nil {
 		return err
 	}
@@ -1299,6 +1299,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 	if err != nil {
 		return err
 	}
+	
 	return inserter.Insert(ctx, sql.Row{fragType, name, definition, extraJSON})
 }
 

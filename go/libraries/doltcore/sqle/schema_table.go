@@ -64,15 +64,26 @@ var schemasTableCols = schema.NewColCollection(
 
 var schemaTableSchema = schema.MustSchemaFromCols(schemasTableCols)
 
-// GetOrCreateDoltSchemasTable returns the `dolt_schemas` table in `db`, creating it if it does not already exist.
-func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *WritableDoltTable, retErr error) {
+// getOrCreateDoltSchemasTable returns the `dolt_schemas` table in `db`, creating it if it does not already exist.
+// Also migrates data to the correct format if necessary.
+func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *WritableDoltTable, retErr error) {
 	tbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
 	}
 
 	if found {
-		return tbl.(*WritableDoltTable), nil
+		schemasTable := tbl.(*WritableDoltTable)
+		// Old schemas table contains the `id` column or is missing an `extra` column.
+		if tbl.Schema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) || !tbl.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) {
+			root, err := db.GetRoot(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return migrateOldSchemasTableToNew(ctx, db, root, schemasTable)
+		} else {
+			return schemasTable, nil
+		}
 	}
 
 	root, err := db.GetRoot(ctx)
@@ -93,6 +104,87 @@ func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 		return nil, sql.ErrTableNotFound.New("dolt_schemas")
 	}
 
+	return tbl.(*WritableDoltTable), nil
+}
+
+func migrateOldSchemasTableToNew(
+		ctx *sql.Context,
+		db Database,
+		root *doltdb.RootValue,
+		schemasTable *WritableDoltTable,
+) (newTable *WritableDoltTable, rerr error) {
+	// Copy all of the old data over and add an index column and an extra column
+	iter, err := SqlTableToRowIter(ctx, schemasTable.DoltTable, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// The dolt_schemas table has undergone various changes over time and multiple possible schemas for it exist, so we 
+	// need to get the column indexes from the current schema
+	nameIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesNameCol)
+	typeIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesTypeCol)
+	fragmentIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesFragmentCol)
+	extraIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesExtraCol)
+
+	defer func(iter sql.RowIter, ctx *sql.Context) {
+		err := iter.Close(ctx)
+		if err != nil && rerr == nil {
+			rerr = err
+		}
+	}(iter, ctx)
+
+	var newRows []sql.Row
+	for {
+		sqlRow, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		
+		newRow := make(sql.Row, schemasTableCols.Size())
+		newRow[0] = sqlRow[typeIdx]
+		newRow[1] = sqlRow[nameIdx]
+		newRow[2] = sqlRow[fragmentIdx]
+		if extraIdx >= 0 {
+			newRow[3] = sqlRow[extraIdx]
+		}
+
+		newRows = append(newRows, newRow)
+	}
+
+	err = db.DropTable(ctx, doltdb.SchemasTableName)
+	if err != nil {
+		return nil, err
+	}
+
+	err = db.createDoltTable(ctx, doltdb.SchemasTableName, root, schemaTableSchema)
+	if err != nil {
+		return nil, err
+	}
+	
+	tbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, sql.ErrTableNotFound.New("dolt_schemas")
+	}
+
+	inserter := tbl.(*WritableDoltTable).Inserter(ctx)
+	for _, row := range newRows {
+		err = inserter.Insert(ctx, row)
+		if err != nil {
+			return nil, err
+		}
+	}
+	
+	err = inserter.Close(ctx)
+	if err != nil {
+		return nil, err
+	}
+	
 	return tbl.(*WritableDoltTable), nil
 }
 

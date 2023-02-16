@@ -33,9 +33,6 @@ import (
 )
 
 func TestSchemaTableRecreationOlder(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // schema table migrations predate NBF __DOLT__
-	}
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
@@ -88,7 +85,7 @@ func TestSchemaTableRecreationOlder(t *testing.T) {
 		return nil
 	})
 
-	tbl, err := GetOrCreateDoltSchemasTable(ctx, db) // removes the old table and recreates it with the new schema
+	tbl, err := getOrCreateDoltSchemasTable(ctx, db) // removes the old table and recreates it with the new schema
 	require.NoError(t, err)
 
 	table, err = tbl.DoltTable.DoltTable(ctx)
@@ -118,9 +115,6 @@ func TestSchemaTableRecreationOlder(t *testing.T) {
 }
 
 func TestSchemaTableRecreation(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // schema table migrations predate NBF __DOLT__
-	}
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
@@ -175,7 +169,7 @@ func TestSchemaTableRecreation(t *testing.T) {
 		return nil
 	})
 
-	tbl, err := GetOrCreateDoltSchemasTable(ctx, db) // removes the old table and recreates it with the new schema
+	tbl, err := getOrCreateDoltSchemasTable(ctx, db) // removes the old table and recreates it with the new schema
 	require.NoError(t, err)
 
 	table, err = tbl.DoltTable.DoltTable(ctx)
