@@ -253,6 +253,11 @@ teardown() {
     rm -rf ./.dolt
     dolt init
 
+    # We should not have literally dumped the dolt_schemas table, but equivalent DDL statements
+    run grep dolt_schemas doltdump.sql
+    [ "$status" -ne 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+    
     run dolt sql < doltdump.sql
     [ "$status" -eq 0 ]
 
