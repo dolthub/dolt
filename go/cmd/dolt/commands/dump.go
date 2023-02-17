@@ -294,7 +294,9 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, db sqle.SqlDa
 
 	for {
 		row, err := iter.Next(sqlCtx)
-		if err != nil {
+		if err == io.EOF {
+			break
+		} else if err != nil {
 			return err
 		}
 
