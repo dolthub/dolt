@@ -223,29 +223,10 @@ func dumpSchemaElements(ctx context.Context, dEnv *env.DoltEnv, path string) err
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	
-	err = dumpViews(ctx, engine, writer)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-	
-	err = dumpTriggers(ctx, engine, writer)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
 
-	err = dumpProcedures(ctx, engine, writer)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-	
-	return nil
-}
-
-func dumpProcedures(ctx context.Context, engine *engine.SqlEngine, writer io.WriteCloser) (rerr error) {
 	sqlCtx, err := engine.NewContext(ctx)
 	if err != nil {
-		return err
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	dbs := engine.GetUnderlyingEngine().Analyzer.Catalog.AllDatabases(sqlCtx)
@@ -257,12 +238,37 @@ func dumpProcedures(ctx context.Context, engine *engine.SqlEngine, writer io.Wri
 		}
 
 		db = doltDb
+		break
 	}
-
+	
 	if db == nil {
-		return fmt.Errorf("unable to find dolt database")
+		return errhand.BuildDError("error: failed to get database").Build()
+	}
+	
+	err = dumpViews(sqlCtx, engine, db, writer)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+	
+	err = dumpTriggers(sqlCtx, engine, db, writer)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
 	}
 
+	err = dumpProcedures(sqlCtx, engine, db, writer)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	err = writer.Close()
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+	
+	return nil
+}
+
+func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, db sqle.SqlDatabase, writer io.WriteCloser) (rerr error) {
 	_, ok, err := db.GetTableInsensitive(sqlCtx, doltdb.ProceduresTableName)
 	if err != nil {
 		return err
@@ -272,14 +278,12 @@ func dumpProcedures(ctx context.Context, engine *engine.SqlEngine, writer io.Wri
 		return nil
 	}
 
-	sch, iter, err := engine.Query(sqlCtx, "select * from "+doltdb.SchemasTableName)
+	sch, iter, err := engine.Query(sqlCtx, "select * from "+doltdb.ProceduresTableName)
 	if err != nil {
 		return err
 	}
 
-	typeColIdx := sch.IndexOfColName(doltdb.SchemasTablesTypeCol)
-	fragColIdx := sch.IndexOfColName(doltdb.SchemasTablesFragmentCol)
-	nameColIdx := sch.IndexOfColName(doltdb.SchemasTablesNameCol)
+	stmtColIdx := sch.IndexOfColName(doltdb.ProceduresTableCreateStmtCol)
 
 	defer func(iter sql.RowIter, context *sql.Context) {
 		err := iter.Close(context)
@@ -294,54 +298,16 @@ func dumpProcedures(ctx context.Context, engine *engine.SqlEngine, writer io.Wri
 			return err
 		}
 
-		if row[typeColIdx] != "view" {
-			continue
-		}
-
-		// We used to store just the SELECT part of a view, but now we store the entire CREATE VIEW statement
-		cv, err := parse.Parse(sqlCtx, row[fragColIdx].(string))
+		err = iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[stmtColIdx]))
 		if err != nil {
 			return err
-		}
-
-		_, ok := cv.(*plan.CreateView)
-		if ok {
-			err := iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[fragColIdx]))
-			if err != nil {
-				return err
-			}
-		} else {
-			err := iohelp.WriteLine(writer, fmt.Sprintf("CREATE VIEW %s AS %s;", row[nameColIdx], row[fragColIdx]))
-			if err != nil {
-				return err
-			}
 		}
 	}
 
 	return nil
 }
 
-func dumpTriggers(ctx context.Context, engine *engine.SqlEngine, writer io.WriteCloser) (rerr error) {
-	sqlCtx, err := engine.NewContext(ctx)
-	if err != nil {
-		return err
-	}
-
-	dbs := engine.GetUnderlyingEngine().Analyzer.Catalog.AllDatabases(sqlCtx)
-	var db sqle.SqlDatabase
-	for _, d := range dbs {
-		doltDb, ok := d.(sqle.SqlDatabase)
-		if !ok {
-			continue
-		}
-
-		db = doltDb
-	}
-
-	if db == nil {
-		return fmt.Errorf("unable to find dolt database")
-	}
-
+func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, db sqle.SqlDatabase, writer io.WriteCloser) (rerr error) {
 	_, ok, err := db.GetTableInsensitive(sqlCtx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
@@ -387,28 +353,8 @@ func dumpTriggers(ctx context.Context, engine *engine.SqlEngine, writer io.Write
 	return nil
 }
 
-func dumpViews(ctx context.Context, engine *engine.SqlEngine, writer io.WriteCloser) (rerr error) {
-	sqlCtx, err := engine.NewContext(ctx)
-	if err != nil {
-		return err
-	}
-	
-	dbs := engine.GetUnderlyingEngine().Analyzer.Catalog.AllDatabases(sqlCtx)
-	var db sqle.SqlDatabase
-	for _, d := range dbs {
-		doltDb, ok := d.(sqle.SqlDatabase)
-		if !ok {
-			continue
-		}
-
-		db = doltDb
-	}
-	
-	if db == nil {
-		return fmt.Errorf("unable to find dolt database")
-	}
-
-	_, ok, err := db.GetTableInsensitive(sqlCtx, doltdb.SchemasTableName)
+func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, db sqle.SqlDatabase, writer io.WriteCloser) (rerr error) {
+	_, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}
@@ -417,7 +363,7 @@ func dumpViews(ctx context.Context, engine *engine.SqlEngine, writer io.WriteClo
 		return nil
 	}
 
-	sch, iter, err := engine.Query(sqlCtx, "select * from "+doltdb.SchemasTableName)
+	sch, iter, err := engine.Query(ctx, "select * from "+doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}
@@ -431,10 +377,10 @@ func dumpViews(ctx context.Context, engine *engine.SqlEngine, writer io.WriteClo
 		if rerr == nil && err != nil {
 			rerr = err
 		}
-	}(iter, sqlCtx)
+	}(iter, ctx)
 
 	for {
-		row, err := iter.Next(sqlCtx)
+		row, err := iter.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -446,7 +392,7 @@ func dumpViews(ctx context.Context, engine *engine.SqlEngine, writer io.WriteClo
 		}
 
 		// We used to store just the SELECT part of a view, but now we store the entire CREATE VIEW statement
-		cv, err := parse.Parse(sqlCtx, row[fragColIdx].(string))
+		cv, err := parse.Parse(ctx, row[fragColIdx].(string))
 		if err != nil {
 			return err
 		}
