@@ -79,7 +79,7 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 
 	return &journalWriter{
 		buf:     make([]byte, 0, journalWriterBuffSize),
-		lookups: make(map[addr]recLookup),
+		lookups: make(map[addr]Range),
 		file:    f,
 		path:    path,
 	}, true, nil
@@ -119,7 +119,7 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 
 	return &journalWriter{
 		buf:     make([]byte, 0, journalWriterBuffSize),
-		lookups: make(map[addr]recLookup),
+		lookups: make(map[addr]Range),
 		file:    f,
 		path:    path,
 	}, nil
@@ -127,7 +127,7 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 
 type journalWriter struct {
 	buf     []byte
-	lookups map[addr]recLookup
+	lookups map[addr]Range
 	file    *os.File
 	off     int64
 	uncmpSz uint64
@@ -145,10 +145,9 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 	wr.off, err = processJournalRecords(ctx, wr.file, func(o int64, r journalRec) error {
 		switch r.kind {
 		case chunkJournalRecKind:
-			wr.lookups[r.address] = recLookup{
-				journalOff: o,
-				recordLen:  r.length,
-				payloadOff: r.payloadOffset(),
+			wr.lookups[r.address] = Range{
+				Offset: uint64(o) + uint64(r.payloadOffset()),
+				Length: uint32(len(r.payload)),
 			}
 			wr.uncmpSz += r.uncompressedPayloadSize()
 		case rootHashJournalRecKind:
@@ -176,25 +175,16 @@ func (wr *journalWriter) hasAddr(h addr) (ok bool) {
 func (wr *journalWriter) getCompressedChunk(h addr) (CompressedChunk, error) {
 	wr.lock.RLock()
 	defer wr.lock.RUnlock()
-	l, ok := wr.lookups[h]
+	r, ok := wr.lookups[h]
 	if !ok {
 		return CompressedChunk{}, nil
 	}
 
-	buf := make([]byte, l.recordLen)
-	if _, err := wr.readAt(buf, l.journalOff); err != nil {
+	buf := make([]byte, r.Length)
+	if _, err := wr.readAt(buf, int64(r.Offset)); err != nil {
 		return CompressedChunk{}, nil
 	}
-
-	rec, err := readJournalRecord(buf)
-	if err != nil {
-		return CompressedChunk{}, err
-	} else if h != rec.address {
-		err = fmt.Errorf("chunk record hash does not match (%s != %s)",
-			h.String(), rec.address.String())
-		return CompressedChunk{}, err
-	}
-	return NewCompressedChunk(hash.Hash(h), rec.payload)
+	return NewCompressedChunk(hash.Hash(h), buf)
 }
 
 // getRange returns a Range for the chunk with addr |h|.
@@ -206,11 +196,7 @@ func (wr *journalWriter) getRange(h addr) (rng Range, ok bool, err error) {
 	}
 	wr.lock.RLock()
 	defer wr.lock.RUnlock()
-	var l recLookup
-	l, ok = wr.lookups[h]
-	if ok {
-		rng = rangeFromLookup(l)
-	}
+	rng, ok = wr.lookups[h]
 	return
 }
 
@@ -218,18 +204,17 @@ func (wr *journalWriter) getRange(h addr) (rng Range, ok bool, err error) {
 func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
-	l, o := chunkRecordSize(cc)
-	rec := recLookup{
-		journalOff: wr.offset(),
-		recordLen:  l,
-		payloadOff: o,
+	recordLen, payloadOff := chunkRecordSize(cc)
+	rng := Range{
+		Offset: uint64(wr.offset()) + uint64(payloadOff),
+		Length: uint32(len(cc.FullCompressedChunk)),
 	}
-	buf, err := wr.getBytes(int(rec.recordLen))
+	buf, err := wr.getBytes(int(recordLen))
 	if err != nil {
 		return err
 	}
 	_ = writeChunkRecord(buf, cc)
-	wr.lookups[addr(cc.H)] = rec
+	wr.lookups[addr(cc.H)] = rng
 	return nil
 }
 
