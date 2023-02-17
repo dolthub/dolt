@@ -22,20 +22,20 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport"
@@ -193,7 +193,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				return HandleVErrAndExitCode(err, usage)
 			}
 		}
-		
+
 		err = dumpSchemaElements(ctx, dEnv, fPath)
 		if err != nil {
 			return HandleVErrAndExitCode(err, usage)
@@ -240,16 +240,16 @@ func dumpSchemaElements(ctx context.Context, dEnv *env.DoltEnv, path string) err
 		db = doltDb
 		break
 	}
-	
+
 	if db == nil {
 		return errhand.BuildDError("error: failed to get database").Build()
 	}
-	
+
 	err = dumpViews(sqlCtx, engine, db, writer)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	
+
 	err = dumpTriggers(sqlCtx, engine, db, writer)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -264,7 +264,7 @@ func dumpSchemaElements(ctx context.Context, dEnv *env.DoltEnv, path string) err
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	
+
 	return nil
 }
 
@@ -351,7 +351,7 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, db sqle.SqlData
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
