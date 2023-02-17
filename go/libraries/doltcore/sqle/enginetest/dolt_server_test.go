@@ -31,6 +31,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
 // DoltBranchMultiSessionScriptTests contain tests that need to be run in a multi-session server environment
@@ -310,9 +311,10 @@ func TestDoltMultiSessionBehavior(t *testing.T) {
 func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			sc, serverConfig := startServer(t, true, "", "")
+			dEnv, sc, serverConfig := startServer(t, true, "", "")
 			err := sc.WaitForStart()
 			require.NoError(t, err)
+			defer dEnv.DoltDB.Close()
 
 			conn1, sess1 := newConnection(t, serverConfig)
 			conn2, sess2 := newConnection(t, serverConfig)
@@ -418,7 +420,7 @@ func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
 }
 
 // startServer will start sql-server with given host, unix socket file path and whether to use specific port, which is defined randomly.
-func startServer(t *testing.T, withPort bool, host string, unixSocketPath string) (*sqlserver.ServerController, sqlserver.ServerConfig) {
+func startServer(t *testing.T, withPort bool, host string, unixSocketPath string) (*env.DoltEnv, *sqlserver.ServerController, sqlserver.ServerConfig) {
 	dEnv := dtestutils.CreateTestEnv()
 	serverConfig := sqlserver.DefaultServerConfig()
 
@@ -441,7 +443,7 @@ func startServer(t *testing.T, withPort bool, host string, unixSocketPath string
 	err := sc.WaitForStart()
 	require.NoError(t, err)
 
-	return sc, serverConfig
+	return dEnv, sc, serverConfig
 }
 
 // newConnection takes sqlserver.serverConfig and opens a connection, and will return that connection with a new session
@@ -460,8 +462,9 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 	const defaultUnixSocketPath = "/tmp/mysql.sock"
 
 	// Running unix socket server
-	sc, serverConfig := startServer(t, false, "", defaultUnixSocketPath)
+	dEnv, sc, serverConfig := startServer(t, false, "", defaultUnixSocketPath)
 	sc.WaitForStart()
+	defer dEnv.DoltDB.Close()
 	require.True(t, strings.Contains(sqlserver.ConnectionString(serverConfig, "dolt"), "unix"))
 
 	// default unix socket connection works
@@ -507,8 +510,9 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 	require.NoFileExists(t, defaultUnixSocketPath)
 
 	// Running TCP socket server
-	tcpSc, tcpServerConfig := startServer(t, true, "0.0.0.0", "")
+	dEnv, tcpSc, tcpServerConfig := startServer(t, true, "0.0.0.0", "")
 	tcpSc.WaitForStart()
+	defer dEnv.DoltDB.Close()
 	require.False(t, strings.Contains(sqlserver.ConnectionString(tcpServerConfig, "dolt"), "unix"))
 
 	t.Run("host and port specified, there should not be unix socket created", func(t *testing.T) {

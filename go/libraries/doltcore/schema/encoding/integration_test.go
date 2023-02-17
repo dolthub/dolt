@@ -53,7 +53,9 @@ func testSchemaSerialization(t *testing.T, sch schema.Schema) {
 
 func parseSchemaString(t *testing.T, s string) schema.Schema {
 	ctx := context.Background()
-	root, err := dtestutils.CreateTestEnv().WorkingRoot(ctx)
+	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
+	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 	_, sch, err := sqlutil.ParseCreateTableStatement(ctx, root, s)
 	require.NoError(t, err)

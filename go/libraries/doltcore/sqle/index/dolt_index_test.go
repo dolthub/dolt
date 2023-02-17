@@ -183,7 +183,8 @@ var (
 )
 
 func TestDoltIndexEqual(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	ddb, ctx, root, indexMap := doltIndexSetup(t)
+	defer ddb.Close()
 
 	tests := []doltIndexTestCase{
 		{
@@ -305,7 +306,8 @@ func TestDoltIndexEqual(t *testing.T) {
 }
 
 func TestDoltIndexGreaterThan(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	ddb, ctx, root, indexMap := doltIndexSetup(t)
+	defer ddb.Close()
 
 	tests := []struct {
 		indexName    string
@@ -446,7 +448,8 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 }
 
 func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	ddb, ctx, root, indexMap := doltIndexSetup(t)
+	defer ddb.Close()
 
 	tests := []struct {
 		indexName    string
@@ -583,7 +586,8 @@ func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
 }
 
 func TestDoltIndexLessThan(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	ddb, ctx, root, indexMap := doltIndexSetup(t)
+	defer ddb.Close()
 
 	tests := []struct {
 		indexName    string
@@ -729,7 +733,8 @@ func TestDoltIndexLessThan(t *testing.T) {
 }
 
 func TestDoltIndexLessThanOrEqual(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	ddb, ctx, root, indexMap := doltIndexSetup(t)
+	defer ddb.Close()
 
 	tests := []struct {
 		indexName    string
@@ -876,7 +881,8 @@ func TestDoltIndexLessThanOrEqual(t *testing.T) {
 }
 
 func TestDoltIndexBetween(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	ddb, ctx, root, indexMap := doltIndexSetup(t)
+	defer ddb.Close()
 
 	tests := []doltIndexBetweenTestCase{
 		{
@@ -1329,7 +1335,7 @@ func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys 
 	requireUnorderedRowsEqual(t, pkSch.Schema, convertSqlRowToInt64(expectedRows), readRows)
 }
 
-func doltIndexSetup(t *testing.T) (*sql.Context, *doltdb.RootValue, map[string]index.DoltIndex) {
+func doltIndexSetup(t *testing.T) (*doltdb.DoltDB, *sql.Context, *doltdb.RootValue, map[string]index.DoltIndex) {
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(ctx)
@@ -1402,7 +1408,7 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 		}
 	}
 
-	return ctx, root, indexMap
+	return dEnv.DoltDB, ctx, root, indexMap
 }
 
 func NewTestSQLCtx(ctx context.Context) *sql.Context {

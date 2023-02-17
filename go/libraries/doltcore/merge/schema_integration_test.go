@@ -557,6 +557,7 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	}
 
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 
 	for _, c := range setupCommon {
@@ -600,6 +601,7 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 	}
 
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 	for _, c := range setupCommon {
 		c.exec(t, ctx, dEnv)
@@ -654,6 +656,7 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 
 func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 	for _, c := range setupForeignKeyTests {
 		c.exec(t, ctx, dEnv)

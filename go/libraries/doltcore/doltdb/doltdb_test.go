@@ -184,6 +184,7 @@ func TestEmptyInMemoryRepoCreation(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to load db")
 	}
+	defer ddb.Close()
 
 	err = ddb.WriteEmptyRepo(context.Background(), "master", "Bill Billerson", "bigbillieb@fake.horse")
 

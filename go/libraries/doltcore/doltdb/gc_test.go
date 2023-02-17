@@ -114,7 +114,8 @@ type client struct {
 
 func testConcurrentGC(t *testing.T, test concurrentGCtest) {
 	ctx := context.Background()
-	eng := setupSqlEngine(t, ctx)
+	eng, dEnv := setupSqlEngine(t, ctx)
+	defer dEnv.DoltDB.Close()
 	err := runWithSqlSession(ctx, eng, func(sctx *sql.Context, eng *engine.SqlEngine) error {
 		for _, q := range test.setup {
 			if err := execQuery(sctx, eng, q); err != nil {
@@ -212,8 +213,8 @@ const (
 	testDB = "dolt"
 )
 
-func setupSqlEngine(t *testing.T, ctx context.Context) (eng *engine.SqlEngine) {
-	dEnv := dtestutils.CreateTestEnv()
+func setupSqlEngine(t *testing.T, ctx context.Context) (eng *engine.SqlEngine, dEnv *env.DoltEnv) {
+	dEnv = dtestutils.CreateTestEnv()
 	mrEnv, err := env.MultiEnvForDirectory(
 		ctx,
 		dEnv.Config.WriteableConfig(),
@@ -325,6 +326,7 @@ var gcSetupCommon = []testCommand{
 func testGarbageCollection(t *testing.T, test gcTest) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 
 	for _, c := range gcSetupCommon {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)

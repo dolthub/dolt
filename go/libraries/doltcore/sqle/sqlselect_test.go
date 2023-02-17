@@ -1346,6 +1346,7 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 
 	dEnv, err := CreateTestDatabase()
 	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
