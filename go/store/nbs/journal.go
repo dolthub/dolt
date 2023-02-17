@@ -104,7 +104,7 @@ func (j *chunkJournal) openJournal(ctx context.Context) (err error) {
 			return err
 		}
 
-		_, err = j.wr.ProcessJournal(ctx)
+		_, err = j.wr.bootstrapJournal(ctx)
 		if err != nil {
 			return err
 		}
@@ -116,7 +116,7 @@ func (j *chunkJournal) openJournal(ctx context.Context) (err error) {
 		}
 		if ok {
 			// write the current root hash to the journal file
-			if err = j.wr.WriteRootHash(contents.root); err != nil {
+			if err = j.wr.writeRootHash(contents.root); err != nil {
 				return
 			}
 			j.contents = contents
@@ -132,7 +132,7 @@ func (j *chunkJournal) openJournal(ctx context.Context) (err error) {
 	}
 
 	// parse existing journal file
-	root, err := j.wr.ProcessJournal(ctx)
+	root, err := j.wr.bootstrapJournal(ctx)
 	if err != nil {
 		return err
 	}
@@ -176,7 +176,7 @@ func (j *chunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkRea
 			continue
 		}
 		c := chunks.NewChunkWithHash(hash.Hash(*record.a), mt.chunks[*record.a])
-		err := j.wr.WriteChunk(ChunkToCompressedChunk(c))
+		err := j.wr.writeCompressedChunk(ChunkToCompressedChunk(c))
 		if err != nil {
 			return nil, err
 		}
@@ -258,7 +258,7 @@ func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 		}
 	}
 
-	if err := j.wr.WriteRootHash(next.root); err != nil {
+	if err := j.wr.writeRootHash(next.root); err != nil {
 		return manifestContents{}, err
 	}
 	j.contents = next

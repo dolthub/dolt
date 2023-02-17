@@ -59,12 +59,12 @@ type journalChunkSource struct {
 var _ chunkSource = journalChunkSource{}
 
 func (s journalChunkSource) has(h addr) (bool, error) {
-	return s.journal.has(h), nil
+	return s.journal.hasAddr(h), nil
 }
 
 func (s journalChunkSource) hasMany(addrs []hasRecord) (missing bool, err error) {
 	for i := range addrs {
-		ok := s.journal.has(*addrs[i].a)
+		ok := s.journal.hasAddr(*addrs[i].a)
 		if ok {
 			addrs[i].has = true
 		} else {
@@ -75,11 +75,11 @@ func (s journalChunkSource) hasMany(addrs []hasRecord) (missing bool, err error)
 }
 
 func (s journalChunkSource) getCompressed(_ context.Context, h addr, _ *Stats) (CompressedChunk, error) {
-	return s.journal.getCompressed(h)
+	return s.journal.getCompressedChunk(h)
 }
 
 func (s journalChunkSource) get(_ context.Context, h addr, _ *Stats) ([]byte, error) {
-	cc, err := s.journal.getCompressed(h)
+	cc, err := s.journal.getCompressedChunk(h)
 	if err != nil {
 		return nil, err
 	} else if cc.IsEmpty() {
@@ -139,7 +139,7 @@ func (s journalChunkSource) hash() addr {
 
 // reader implements chunkSource.
 func (s journalChunkSource) reader(context.Context) (io.ReadCloser, uint64, error) {
-	rdr, sz, err := s.journal.Snapshot()
+	rdr, sz, err := s.journal.snapshot()
 	return io.NopCloser(rdr), uint64(sz), err
 }
 
@@ -164,7 +164,7 @@ func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash
 // size implements chunkSource.
 // size returns the total size of the chunkSource: chunks, index, and footer
 func (s journalChunkSource) currentSize() uint64 {
-	return uint64(s.journal.CurrentSize())
+	return uint64(s.journal.currentSize())
 }
 
 // index implements chunkSource.
@@ -177,6 +177,7 @@ func (s journalChunkSource) clone() (chunkSource, error) {
 }
 
 func (s journalChunkSource) close() error {
+	// |s.journal| closed via chunkJournal
 	return nil
 }
 
