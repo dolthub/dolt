@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"sync"
 
 	"golang.org/x/sync/errgroup"
 
@@ -49,59 +48,23 @@ func rangeFromLookup(l recLookup) Range {
 	}
 }
 
-// lookupMap is a thread-safe collection of recLookups.
-type lookupMap struct {
-	data map[addr]recLookup
-	lock *sync.RWMutex
-}
-
-func newLookupMap() lookupMap {
-	return lookupMap{
-		data: make(map[addr]recLookup),
-		lock: new(sync.RWMutex),
-	}
-}
-
-func (m lookupMap) get(a addr) (l recLookup, ok bool) {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
-	l, ok = m.data[a]
-	return
-}
-
-func (m lookupMap) put(a addr, l recLookup) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	m.data[a] = l
-	return
-}
-
-func (m lookupMap) count() int {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
-	return len(m.data)
-}
-
 // journalChunkSource is a chunkSource that reads chunks
 // from a chunkJournal. Unlike other NBS chunkSources,
 // it is not immutable and its set of chunks grows as
 // more commits are made to the chunkJournal.
 type journalChunkSource struct {
-	address        addr
-	journal        *journalWriter
-	lookups        lookupMap
-	uncompressedSz uint64
+	journal *journalWriter
 }
 
 var _ chunkSource = journalChunkSource{}
 
 func (s journalChunkSource) has(h addr) (bool, error) {
-	return s.journal.has(h, s.lookups), nil
+	return s.journal.has(h), nil
 }
 
 func (s journalChunkSource) hasMany(addrs []hasRecord) (missing bool, err error) {
 	for i := range addrs {
-		ok := s.journal.has(*addrs[i].a, s.lookups)
+		ok := s.journal.has(*addrs[i].a)
 		if ok {
 			addrs[i].has = true
 		} else {
@@ -112,11 +75,11 @@ func (s journalChunkSource) hasMany(addrs []hasRecord) (missing bool, err error)
 }
 
 func (s journalChunkSource) getCompressed(_ context.Context, h addr, _ *Stats) (CompressedChunk, error) {
-	return s.journal.getCompressed(h, s.lookups)
+	return s.journal.getCompressed(h)
 }
 
 func (s journalChunkSource) get(_ context.Context, h addr, _ *Stats) ([]byte, error) {
-	cc, err := s.journal.getCompressed(h, s.lookups)
+	cc, err := s.journal.getCompressed(h)
 	if err != nil {
 		return nil, err
 	} else if cc.IsEmpty() {
@@ -163,15 +126,15 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, _ *errgroup.G
 }
 
 func (s journalChunkSource) count() (uint32, error) {
-	return uint32(s.lookups.count()), nil
+	return s.journal.recordCount(), nil
 }
 
 func (s journalChunkSource) uncompressedLen() (uint64, error) {
-	return s.uncompressedSz, nil
+	return s.journal.uncompressedSize(), nil
 }
 
 func (s journalChunkSource) hash() addr {
-	return s.address
+	return journalAddr
 }
 
 // reader implements chunkSource.
@@ -186,7 +149,7 @@ func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash
 		if req.found {
 			continue
 		}
-		rng, ok := s.journal.getRange(*req.a, s.lookups)
+		rng, ok := s.journal.getRange(*req.a)
 		if !ok {
 			continue
 		}

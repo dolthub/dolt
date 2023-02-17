@@ -195,15 +195,14 @@ func TestJournalWriterWriteChunk(t *testing.T) {
 	require.NoError(t, err)
 
 	data := randomCompressedChunks()
-	lookups := make(map[addr]recLookup)
 
 	for a, cc := range data {
-		l, err := j.WriteChunk(cc)
+		err = j.WriteChunk(cc)
 		require.NoError(t, err)
-		lookups[a] = l
+		l := j.lookups[a]
 		validateLookup(t, j, l, cc)
 	}
-	for a, l := range lookups {
+	for a, l := range j.lookups {
 		validateLookup(t, j, l, data[a])
 	}
 	require.NoError(t, j.Close())
@@ -217,22 +216,22 @@ func TestJournalWriterBootstrap(t *testing.T) {
 	require.NoError(t, err)
 
 	data := randomCompressedChunks()
-	lookups := make(map[addr]recLookup)
-	for a, cc := range data {
-		l, err := j.WriteChunk(cc)
+	for _, cc := range data {
+		err = j.WriteChunk(cc)
 		require.NoError(t, err)
-		lookups[a] = l
 	}
 	assert.NoError(t, j.Close())
 
 	j, _, err = openJournalWriter(ctx, path)
 	require.NoError(t, err)
-	_, source, err := j.ProcessJournal(ctx)
+	_, err = j.ProcessJournal(ctx)
 	require.NoError(t, err)
 
-	for a, l := range lookups {
+	for a, l := range j.lookups {
 		validateLookup(t, j, l, data[a])
 	}
+
+	source := journalChunkSource{journal: j}
 	for a, cc := range data {
 		buf, err := source.get(ctx, a, nil)
 		require.NoError(t, err)
@@ -259,7 +258,7 @@ func TestJournalWriterSyncClose(t *testing.T) {
 	j, err := createJournalWriter(ctx, newTestFilePath(t))
 	require.NotNil(t, j)
 	require.NoError(t, err)
-	_, _, err = j.ProcessJournal(ctx)
+	_, err = j.ProcessJournal(ctx)
 	require.NoError(t, err)
 
 	// close triggers flush

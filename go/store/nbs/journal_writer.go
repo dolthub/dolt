@@ -78,9 +78,10 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 	}
 
 	return &journalWriter{
-		buf:  make([]byte, 0, journalWriterBuffSize),
-		file: f,
-		path: path,
+		buf:     make([]byte, 0, journalWriterBuffSize),
+		lookups: make(map[addr]recLookup),
+		file:    f,
+		path:    path,
 	}, true, nil
 }
 
@@ -117,9 +118,10 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 	}
 
 	return &journalWriter{
-		buf:  make([]byte, 0, journalWriterBuffSize),
-		file: f,
-		path: path,
+		buf:     make([]byte, 0, journalWriterBuffSize),
+		lookups: make(map[addr]recLookup),
+		file:    f,
+		path:    path,
 	}, nil
 }
 
@@ -134,11 +136,13 @@ type snapshotReader interface {
 }
 
 type journalWriter struct {
-	buf  []byte
-	file *os.File
-	off  int64
-	path string
-	lock sync.RWMutex
+	buf     []byte
+	lookups map[addr]recLookup
+	file    *os.File
+	off     int64
+	uncmpSz uint64
+	path    string
+	lock    sync.RWMutex
 }
 
 var _ io.WriteCloser = &journalWriter{}
@@ -190,6 +194,7 @@ func (wr *journalWriter) CurrentSize() int64 {
 	return wr.off
 }
 
+// todo: remove, this method is only used for testing
 func (wr *journalWriter) Write(p []byte) (n int, err error) {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
@@ -210,23 +215,18 @@ func (wr *journalWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
-func (wr *journalWriter) ProcessJournal(ctx context.Context) (last hash.Hash, cs journalChunkSource, err error) {
+func (wr *journalWriter) ProcessJournal(ctx context.Context) (last hash.Hash, err error) {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
-	src := journalChunkSource{
-		journal: wr,
-		address: journalAddr,
-		lookups: newLookupMap(),
-	}
 	wr.off, err = processJournalRecords(ctx, wr.file, func(o int64, r journalRec) error {
 		switch r.kind {
 		case chunkJournalRecKind:
-			src.lookups.put(r.address, recLookup{
+			wr.lookups[r.address] = recLookup{
 				journalOff: o,
 				recordLen:  r.length,
 				payloadOff: r.payloadOffset(),
-			})
-			src.uncompressedSz += r.uncompressedPayloadSize()
+			}
+			wr.uncmpSz += r.uncompressedPayloadSize()
 		case rootHashJournalRecKind:
 			last = hash.Hash(r.address)
 		default:
@@ -235,13 +235,12 @@ func (wr *journalWriter) ProcessJournal(ctx context.Context) (last hash.Hash, cs
 		return nil
 	})
 	if err != nil {
-		return hash.Hash{}, journalChunkSource{}, err
+		return hash.Hash{}, err
 	}
-	cs = src
 	return
 }
 
-func (wr *journalWriter) WriteChunk(cc CompressedChunk) (recLookup, error) {
+func (wr *journalWriter) WriteChunk(cc CompressedChunk) error {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
 	l, o := chunkRecordSize(cc)
@@ -252,10 +251,11 @@ func (wr *journalWriter) WriteChunk(cc CompressedChunk) (recLookup, error) {
 	}
 	buf, err := wr.getBytes(int(rec.recordLen))
 	if err != nil {
-		return recLookup{}, err
+		return err
 	}
 	_ = writeChunkRecord(buf, cc)
-	return rec, nil
+	wr.lookups[addr(cc.H)] = rec
+	return nil
 }
 
 func (wr *journalWriter) WriteRootHash(root hash.Hash) error {
@@ -317,22 +317,28 @@ func (wr *journalWriter) flush() (err error) {
 	return
 }
 
-func (wr *journalWriter) has(h addr, lookups lookupMap) (ok bool) {
-	_, ok = lookups.get(h)
+func (wr *journalWriter) has(h addr) (ok bool) {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
+	_, ok = wr.lookups[h]
 	return
 }
 
-func (wr *journalWriter) getRange(h addr, lookups lookupMap) (rng Range, ok bool) {
+func (wr *journalWriter) getRange(h addr) (rng Range, ok bool) {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
 	var l recLookup
-	l, ok = lookups.get(h)
+	l, ok = wr.lookups[h]
 	if ok {
 		rng = rangeFromLookup(l)
 	}
 	return
 }
 
-func (wr *journalWriter) getCompressed(h addr, lookups lookupMap) (CompressedChunk, error) {
-	l, ok := lookups.get(h)
+func (wr *journalWriter) getCompressed(h addr) (CompressedChunk, error) {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
+	l, ok := wr.lookups[h]
 	if !ok {
 		return CompressedChunk{}, nil
 	}
@@ -351,4 +357,16 @@ func (wr *journalWriter) getCompressed(h addr, lookups lookupMap) (CompressedChu
 		return CompressedChunk{}, err
 	}
 	return NewCompressedChunk(hash.Hash(h), rec.payload)
+}
+
+func (wr *journalWriter) recordCount() uint32 {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
+	return uint32(len(wr.lookups))
+}
+
+func (wr *journalWriter) uncompressedSize() uint64 {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
+	return wr.uncmpSz
 }
