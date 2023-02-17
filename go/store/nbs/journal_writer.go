@@ -317,6 +317,18 @@ func (wr *journalWriter) flush() (err error) {
 	return
 }
 
+func (wr *journalWriter) maybeFlush() (err error) {
+	wr.lock.RLock()
+	empty := len(wr.buf) == 0
+	wr.lock.RUnlock()
+	if empty {
+		return
+	}
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
+	return wr.flush()
+}
+
 func (wr *journalWriter) has(h addr) (ok bool) {
 	wr.lock.RLock()
 	defer wr.lock.RUnlock()
@@ -324,7 +336,12 @@ func (wr *journalWriter) has(h addr) (ok bool) {
 	return
 }
 
-func (wr *journalWriter) getRange(h addr) (rng Range, ok bool) {
+func (wr *journalWriter) getRange(h addr) (rng Range, ok bool, err error) {
+	// callers will use |rng| to read directly from the
+	// journal file, so we must flush here
+	if err = wr.maybeFlush(); err != nil {
+		return
+	}
 	wr.lock.RLock()
 	defer wr.lock.RUnlock()
 	var l recLookup

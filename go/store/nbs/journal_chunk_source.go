@@ -149,8 +149,10 @@ func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash
 		if req.found {
 			continue
 		}
-		rng, ok := s.journal.getRange(*req.a)
-		if !ok {
+		rng, ok, err := s.journal.getRange(*req.a)
+		if err != nil {
+			return nil, err
+		} else if !ok {
 			continue
 		}
 		req.found = true // update |requests|
