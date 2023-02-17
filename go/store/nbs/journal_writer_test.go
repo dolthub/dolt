@@ -191,12 +191,12 @@ func TestJournalWriterWriteCompressedChunk(t *testing.T) {
 	for a, cc := range data {
 		err = j.writeCompressedChunk(cc)
 		require.NoError(t, err)
-		l := j.lookups[a]
-		validateLookup(t, j, l, cc)
+		r, _ := j.index.get(a)
+		validateLookup(t, j, r, cc)
 	}
-	for a, l := range j.lookups {
-		validateLookup(t, j, l, data[a])
-	}
+	j.index.iter(func(a addr, r Range) {
+		validateLookup(t, j, r, data[a])
+	})
 	require.NoError(t, j.Close())
 }
 
@@ -219,9 +219,9 @@ func TestJournalWriterBootstrap(t *testing.T) {
 	_, err = j.bootstrapJournal(ctx)
 	require.NoError(t, err)
 
-	for a, l := range j.lookups {
-		validateLookup(t, j, l, data[a])
-	}
+	j.index.iter(func(a addr, r Range) {
+		validateLookup(t, j, r, data[a])
+	})
 
 	source := journalChunkSource{journal: j}
 	for a, cc := range data {

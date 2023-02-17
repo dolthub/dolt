@@ -34,6 +34,8 @@ const (
 	journalWriterBuffSize = 1024 * 1024
 
 	chunkJournalAddr = "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"
+
+	journalIndexThreshold = 64 * 1024
 )
 
 var (
@@ -78,10 +80,10 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 	}
 
 	return &journalWriter{
-		buf:     make([]byte, 0, journalWriterBuffSize),
-		lookups: make(map[addr]Range),
-		file:    f,
-		path:    path,
+		buf:   make([]byte, 0, journalWriterBuffSize),
+		index: newRangeIndex(),
+		file:  f,
+		path:  path,
 	}, true, nil
 }
 
@@ -118,17 +120,17 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 	}
 
 	return &journalWriter{
-		buf:     make([]byte, 0, journalWriterBuffSize),
-		lookups: make(map[addr]Range),
-		file:    f,
-		path:    path,
+		buf:   make([]byte, 0, journalWriterBuffSize),
+		index: newRangeIndex(),
+		file:  f,
+		path:  path,
 	}, nil
 }
 
 type journalWriter struct {
 	buf     []byte
-	lookups map[addr]Range
 	file    *os.File
+	index   rangeIndex
 	off     int64
 	uncmpSz uint64
 	path    string
@@ -145,10 +147,10 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 	wr.off, err = processJournalRecords(ctx, wr.file, func(o int64, r journalRec) error {
 		switch r.kind {
 		case chunkJournalRecKind:
-			wr.lookups[r.address] = Range{
+			wr.index.put(r.address, Range{
 				Offset: uint64(o) + uint64(r.payloadOffset()),
 				Length: uint32(len(r.payload)),
-			}
+			})
 			wr.uncmpSz += r.uncompressedPayloadSize()
 		case rootHashJournalRecKind:
 			last = hash.Hash(r.address)
@@ -167,7 +169,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 func (wr *journalWriter) hasAddr(h addr) (ok bool) {
 	wr.lock.RLock()
 	defer wr.lock.RUnlock()
-	_, ok = wr.lookups[h]
+	_, ok = wr.index.get(h)
 	return
 }
 
@@ -175,7 +177,7 @@ func (wr *journalWriter) hasAddr(h addr) (ok bool) {
 func (wr *journalWriter) getCompressedChunk(h addr) (CompressedChunk, error) {
 	wr.lock.RLock()
 	defer wr.lock.RUnlock()
-	r, ok := wr.lookups[h]
+	r, ok := wr.index.get(h)
 	if !ok {
 		return CompressedChunk{}, nil
 	}
@@ -196,7 +198,7 @@ func (wr *journalWriter) getRange(h addr) (rng Range, ok bool, err error) {
 	}
 	wr.lock.RLock()
 	defer wr.lock.RUnlock()
-	rng, ok = wr.lookups[h]
+	rng, ok = wr.index.get(h)
 	return
 }
 
@@ -214,7 +216,7 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 		return err
 	}
 	_ = writeChunkRecord(buf, cc)
-	wr.lookups[addr(cc.H)] = rng
+	wr.index.put(addr(cc.H), rng)
 	return nil
 }
 
@@ -222,7 +224,9 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 func (wr *journalWriter) writeRootHash(root hash.Hash) error {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
-	buf, err := wr.getBytes(rootHashRecordSize())
+
+	sz := rootHashRecordSize()
+	buf, err := wr.getBytes(sz)
 	if err != nil {
 		return err
 	}
@@ -231,7 +235,15 @@ func (wr *journalWriter) writeRootHash(root hash.Hash) error {
 	if err = wr.flush(); err != nil {
 		return err
 	}
-	return wr.file.Sync()
+	if err = wr.file.Sync(); err != nil {
+		return err
+	}
+
+	if wr.index.atCapacity() {
+		// pass pre-commit journal offset
+		err = wr.index.persistNovel(root, wr.offset()-int64(sz))
+	}
+	return err
 }
 
 // readAt reads len(p) bytes from the journal at offset |off|.
@@ -336,7 +348,7 @@ func (wr *journalWriter) uncompressedSize() uint64 {
 func (wr *journalWriter) recordCount() uint32 {
 	wr.lock.RLock()
 	defer wr.lock.RUnlock()
-	return uint32(len(wr.lookups))
+	return wr.index.count()
 }
 
 func (wr *journalWriter) Close() (err error) {
@@ -352,4 +364,55 @@ func (wr *journalWriter) Close() (err error) {
 		err = cerr
 	}
 	return
+}
+
+type rangeIndex struct {
+	novel  map[addr]Range
+	cached map[addr]Range
+	f      *os.File
+}
+
+func newRangeIndex() rangeIndex {
+	return rangeIndex{
+		novel:  make(map[addr]Range),
+		cached: make(map[addr]Range),
+	}
+}
+
+func (idx rangeIndex) get(a addr) (rng Range, ok bool) {
+	rng, ok = idx.novel[a]
+	if !ok {
+		rng, ok = idx.cached[a]
+	}
+	return
+}
+
+func (idx rangeIndex) put(a addr, rng Range) {
+	idx.novel[a] = rng
+}
+
+func (idx rangeIndex) iter(cb func(addr, Range)) {
+	for a, r := range idx.novel {
+		cb(a, r)
+	}
+	for a, r := range idx.cached {
+		cb(a, r)
+	}
+}
+
+func (idx rangeIndex) count() uint32 {
+	return uint32(len(idx.novel) + len(idx.cached))
+}
+
+func (idx rangeIndex) atCapacity() bool {
+	return len(idx.novel) > journalIndexThreshold
+}
+
+func (idx rangeIndex) persistNovel(root hash.Hash, off int64) error {
+	for a, r := range idx.novel {
+		idx.cached[a] = r
+	}
+	idx.novel = make(map[addr]Range)
+	// todo: actually persist index
+	return nil
 }
