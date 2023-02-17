@@ -88,7 +88,7 @@ func (m lookupMap) count() int {
 // more commits are made to the chunkJournal.
 type journalChunkSource struct {
 	address        addr
-	journal        snapshotReader
+	journal        *journalWriter
 	lookups        lookupMap
 	uncompressedSz uint64
 }
@@ -96,14 +96,13 @@ type journalChunkSource struct {
 var _ chunkSource = journalChunkSource{}
 
 func (s journalChunkSource) has(h addr) (bool, error) {
-	_, ok := s.lookups.get(h)
-	return ok, nil
+	return s.journal.has(h, s.lookups), nil
 }
 
 func (s journalChunkSource) hasMany(addrs []hasRecord) (missing bool, err error) {
 	for i := range addrs {
-		a := addrs[i].a
-		if _, ok := s.lookups.get(*a); ok {
+		ok := s.journal.has(*addrs[i].a, s.lookups)
+		if ok {
 			addrs[i].has = true
 		} else {
 			missing = true
@@ -113,28 +112,11 @@ func (s journalChunkSource) hasMany(addrs []hasRecord) (missing bool, err error)
 }
 
 func (s journalChunkSource) getCompressed(_ context.Context, h addr, _ *Stats) (CompressedChunk, error) {
-	l, ok := s.lookups.get(h)
-	if !ok {
-		return CompressedChunk{}, nil
-	}
-
-	buf := make([]byte, l.recordLen)
-	if _, err := s.journal.ReadAt(buf, l.journalOff); err != nil {
-		return CompressedChunk{}, nil
-	}
-
-	rec, err := readJournalRecord(buf)
-	if err != nil {
-		return CompressedChunk{}, err
-	} else if h != rec.address {
-		return CompressedChunk{}, fmt.Errorf("chunk record hash does not match lookup hash (%s != %s)",
-			h.String(), rec.address.String())
-	}
-	return NewCompressedChunk(hash.Hash(h), rec.payload)
+	return s.journal.getCompressed(h, s.lookups)
 }
 
-func (s journalChunkSource) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
-	cc, err := s.getCompressed(ctx, h, stats)
+func (s journalChunkSource) get(_ context.Context, h addr, _ *Stats) ([]byte, error) {
+	cc, err := s.journal.getCompressed(h, s.lookups)
 	if err != nil {
 		return nil, err
 	} else if cc.IsEmpty() {
@@ -204,12 +186,12 @@ func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash
 		if req.found {
 			continue
 		}
-		l, ok := s.lookups.get(*req.a)
+		rng, ok := s.journal.getRange(*req.a, s.lookups)
 		if !ok {
 			continue
 		}
 		req.found = true // update |requests|
-		ranges[hash.Hash(*req.a)] = rangeFromLookup(l)
+		ranges[hash.Hash(*req.a)] = rng
 	}
 	return ranges, nil
 }

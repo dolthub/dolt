@@ -316,3 +316,39 @@ func (wr *journalWriter) flush() (err error) {
 	wr.buf = wr.buf[:0]
 	return
 }
+
+func (wr *journalWriter) has(h addr, lookups lookupMap) (ok bool) {
+	_, ok = lookups.get(h)
+	return
+}
+
+func (wr *journalWriter) getRange(h addr, lookups lookupMap) (rng Range, ok bool) {
+	var l recLookup
+	l, ok = lookups.get(h)
+	if ok {
+		rng = rangeFromLookup(l)
+	}
+	return
+}
+
+func (wr *journalWriter) getCompressed(h addr, lookups lookupMap) (CompressedChunk, error) {
+	l, ok := lookups.get(h)
+	if !ok {
+		return CompressedChunk{}, nil
+	}
+
+	buf := make([]byte, l.recordLen)
+	if _, err := wr.ReadAt(buf, l.journalOff); err != nil {
+		return CompressedChunk{}, nil
+	}
+
+	rec, err := readJournalRecord(buf)
+	if err != nil {
+		return CompressedChunk{}, err
+	} else if h != rec.address {
+		err = fmt.Errorf("chunk record hash does not match (%s != %s)",
+			h.String(), rec.address.String())
+		return CompressedChunk{}, err
+	}
+	return NewCompressedChunk(hash.Hash(h), rec.payload)
+}
