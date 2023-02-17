@@ -86,29 +86,34 @@ func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint
 		indexOffset := sz - idxSz
 		r := io.NewSectionReader(f, indexOffset, idxSz)
 
+		if int64(int(idxSz)) != idxSz {
+			err = fmt.Errorf("table file %s/%s is too large to read on this platform. index size %d > max int.", dir, h.String(), idxSz)
+			return
+		}
+
 		var b []byte
-		b, err = q.AcquireQuotaBytes(ctx, uint64(idxSz))
+		b, err = q.AcquireQuotaBytes(ctx, int(idxSz))
 		if err != nil {
 			return
 		}
 
 		_, err = io.ReadFull(r, b)
 		if err != nil {
-			q.ReleaseQuotaBytes(b)
+			q.ReleaseQuotaBytes(len(b))
 			return
 		}
 
 		defer func() {
 			unrefErr := fc.UnrefFile(path)
-
-			if unrefErr != nil {
+			if unrefErr != nil && err == nil {
+				q.ReleaseQuotaBytes(len(b))
 				err = unrefErr
 			}
 		}()
 
 		ti, err = parseTableIndex(ctx, b, q)
 		if err != nil {
-			q.ReleaseQuotaBytes(b)
+			q.ReleaseQuotaBytes(len(b))
 			return
 		}
 

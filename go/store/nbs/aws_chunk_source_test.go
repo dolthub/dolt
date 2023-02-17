@@ -67,6 +67,7 @@ func TestAWSChunkSource(t *testing.T) {
 		t.Run("Has Chunks", func(t *testing.T) {
 			src := makeSrc(len(chunks) + 1)
 			assertChunksInReader(chunks, src, assert.New(t))
+			src.close()
 		})
 	})
 
@@ -76,6 +77,7 @@ func TestAWSChunkSource(t *testing.T) {
 		t.Run("Has Chunks", func(t *testing.T) {
 			src := makeSrc(len(chunks) - 1)
 			assertChunksInReader(chunks, src, assert.New(t))
+			src.close()
 		})
 	})
 }

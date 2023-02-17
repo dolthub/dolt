@@ -58,10 +58,12 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 
 				src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 				require.NoError(t, err)
+				defer src.close()
 
 				if assert.True(mustUint32(src.count()) > 0) {
 					if r, err := s3svc.readerForTableWithNamespace(ctx, ns, src.hash()); assert.NotNil(r) && assert.NoError(err) {
 						assertChunksInReader(testChunks, r, assert)
+						r.close()
 					}
 				}
 			})
@@ -75,9 +77,11 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 
 				src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 				require.NoError(t, err)
+				defer src.close()
 				if assert.True(mustUint32(src.count()) > 0) {
 					if r, err := s3svc.readerForTableWithNamespace(ctx, ns, src.hash()); assert.NotNil(r) && assert.NoError(err) {
 						assertChunksInReader(testChunks, r, assert)
+						r.close()
 					}
 				}
 			})
@@ -99,6 +103,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 
 				src, err := s3p.Persist(context.Background(), mt, existingTable, &Stats{})
 				require.NoError(t, err)
+				defer src.close()
 				assert.True(mustUint32(src.count()) == 0)
 
 				_, present := s3svc.data[src.hash().String()]
@@ -268,6 +273,11 @@ func TestAWSTablePersisterDividePlan(t *testing.T) {
 	tooBig := bytesToChunkSource(t, bigUns...)
 
 	sources := chunkSources{justRight, tooBig, tooSmall}
+	defer func() {
+		for _, s := range sources {
+			s.close()
+		}
+	}()
 	plan, err := planRangeCopyConjoin(sources, &Stats{})
 	require.NoError(t, err)
 	copies, manuals, _, err := dividePlan(context.Background(), plan, minPartSize, maxPartSize)
@@ -349,6 +359,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 		ti, err := src.index()
 		require.NoError(t, err)
 		smallChunkTotal += calcChunkRangeSize(ti)
+		ti.Close()
 	}
 
 	t.Run("Small", func(t *testing.T) {
@@ -372,10 +383,15 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			sources := makeSources(s3p, chunks)
 			src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 			require.NoError(t, err)
+			defer src.close()
+			for _, s := range sources {
+				s.close()
+			}
 
 			if assert.True(mustUint32(src.count()) > 0) {
 				if r, err := s3svc.readerForTable(ctx, src.hash()); assert.NotNil(r) && assert.NoError(err) {
 					assertChunksInReader(chunks, r, assert)
+					r.close()
 				}
 			}
 		})
@@ -388,10 +404,15 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			sources := makeSources(s3p, smallChunks)
 			src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 			require.NoError(t, err)
+			defer src.close()
+			for _, s := range sources {
+				s.close()
+			}
 
 			if assert.True(mustUint32(src.count()) > 0) {
 				if r, err := s3svc.readerForTable(ctx, src.hash()); assert.NotNil(r) && assert.NoError(err) {
 					assertChunksInReader(smallChunks, r, assert)
+					r.close()
 				}
 			}
 		})
@@ -424,11 +445,16 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 		}
 		src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 		require.NoError(t, err)
+		defer src.close()
+		for _, s := range sources {
+			s.close()
+		}
 
 		if assert.True(mustUint32(src.count()) > 0) {
 			if r, err := s3svc.readerForTable(ctx, src.hash()); assert.NotNil(r) && assert.NoError(err) {
 				assertChunksInReader(bigUns1, r, assert)
 				assertChunksInReader(bigUns2, r, assert)
+				r.close()
 			}
 		}
 	})
@@ -460,11 +486,16 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 		src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 		require.NoError(t, err)
+		defer src.close()
+		for _, s := range sources {
+			s.close()
+		}
 
 		if assert.True(mustUint32(src.count()) > 0) {
 			if r, err := s3svc.readerForTable(ctx, src.hash()); assert.NotNil(r) && assert.NoError(err) {
 				assertChunksInReader(bigUns1, r, assert)
 				assertChunksInReader(medChunks, r, assert)
+				r.close()
 			}
 		}
 	})
@@ -510,12 +541,17 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 		src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 		require.NoError(t, err)
+		defer src.close()
+		for _, s := range sources {
+			s.close()
+		}
 
 		if assert.True(mustUint32(src.count()) > 0) {
 			if r, err := s3svc.readerForTable(ctx, src.hash()); assert.NotNil(r) && assert.NoError(err) {
 				assertChunksInReader(smallChunks, r, assert)
 				assertChunksInReader(bigUns1, r, assert)
 				assertChunksInReader(medChunks, r, assert)
+				r.close()
 			}
 		}
 	})

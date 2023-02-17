@@ -56,5 +56,6 @@ func TestMmapTableReader(t *testing.T) {
 
 	trc, err := newFileTableReader(ctx, dir, h, uint32(len(chunks)), &UnlimitedQuotaProvider{}, fc)
 	require.NoError(t, err)
+	defer trc.close()
 	assertChunksInReader(chunks, trc, assert)
 }

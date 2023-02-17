@@ -156,6 +156,7 @@ func TestMemTableWrite(t *testing.T) {
 	require.NoError(t, err)
 	tr1, err := newTableReader(ti1, tableReaderAtFromBytes(td1), fileBlockSize)
 	require.NoError(t, err)
+	defer tr1.close()
 	assert.True(tr1.has(computeAddr(chunks[1])))
 
 	td2, _, err := buildTable(chunks[2:])
@@ -164,6 +165,7 @@ func TestMemTableWrite(t *testing.T) {
 	require.NoError(t, err)
 	tr2, err := newTableReader(ti2, tableReaderAtFromBytes(td2), fileBlockSize)
 	require.NoError(t, err)
+	defer tr2.close()
 	assert.True(tr2.has(computeAddr(chunks[2])))
 
 	_, data, count, err := mt.write(chunkReaderGroup{tr1, tr2}, &Stats{})
@@ -174,6 +176,7 @@ func TestMemTableWrite(t *testing.T) {
 	require.NoError(t, err)
 	outReader, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
 	require.NoError(t, err)
+	defer outReader.close()
 	assert.True(outReader.has(computeAddr(chunks[0])))
 	assert.False(outReader.has(computeAddr(chunks[1])))
 	assert.False(outReader.has(computeAddr(chunks[2])))

@@ -98,14 +98,14 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 func loadTableIndex(ctx context.Context, stats *Stats, cnt uint32, q MemoryQuotaProvider, loadIndexBytes func(p []byte) error) (tableIndex, error) {
 	idxSz := int(indexSize(cnt) + footerSize)
 	offsetSz := int((cnt - (cnt / 2)) * offsetSize)
-	buf, err := q.AcquireQuotaBytes(ctx, uint64(idxSz+offsetSz))
+	buf, err := q.AcquireQuotaBytes(ctx, idxSz+offsetSz)
 	if err != nil {
 		return nil, err
 	}
 
 	t1 := time.Now()
 	if err := loadIndexBytes(buf[:idxSz]); err != nil {
-		q.ReleaseQuotaBytes(buf)
+		q.ReleaseQuotaBytes(len(buf))
 		return nil, err
 	}
 	stats.IndexReadLatency.SampleTimeSince(t1)
@@ -113,7 +113,7 @@ func loadTableIndex(ctx context.Context, stats *Stats, cnt uint32, q MemoryQuota
 
 	idx, err := parseTableIndexWithOffsetBuff(buf[:idxSz], buf[idxSz:], q)
 	if err != nil {
-		q.ReleaseQuotaBytes(buf)
+		q.ReleaseQuotaBytes(len(buf))
 	}
 	return idx, err
 }
