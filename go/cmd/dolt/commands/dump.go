@@ -242,36 +242,28 @@ func dumpSchemaElements(ctx context.Context, dEnv *env.DoltEnv, path string) err
 	return nil
 }
 
-func dumpProcedures(ctx context.Context, dEnv *engine.SqlEngine, writer io.WriteCloser) error {
-	return nil	
-}
-
-func dumpTriggers(ctx context.Context, dEnv *engine.SqlEngine, writer io.WriteCloser) error {
-	return nil
-}
-
-func dumpViews(ctx context.Context, engine *engine.SqlEngine, writer io.WriteCloser) (rerr error) {
+func dumpProcedures(ctx context.Context, engine *engine.SqlEngine, writer io.WriteCloser) (rerr error) {
 	sqlCtx, err := engine.NewContext(ctx)
 	if err != nil {
 		return err
 	}
-	
+
 	dbs := engine.GetUnderlyingEngine().Analyzer.Catalog.AllDatabases(sqlCtx)
 	var db sqle.SqlDatabase
-	for _, db := range dbs {
-		doltDb, ok := db.(sqle.SqlDatabase)
+	for _, d := range dbs {
+		doltDb, ok := d.(sqle.SqlDatabase)
 		if !ok {
 			continue
 		}
 
 		db = doltDb
 	}
-	
+
 	if db == nil {
 		return fmt.Errorf("unable to find dolt database")
 	}
 
-	_, ok, err := db.GetTableInsensitive(sqlCtx, doltdb.SchemasTableName)
+	_, ok, err := db.GetTableInsensitive(sqlCtx, doltdb.ProceduresTableName)
 	if err != nil {
 		return err
 	}
@@ -314,12 +306,159 @@ func dumpViews(ctx context.Context, engine *engine.SqlEngine, writer io.WriteClo
 
 		_, ok := cv.(*plan.CreateView)
 		if ok {
-			err := iohelp.WriteLine(writer, fmt.Sprintf("%s", row[fragColIdx]))
+			err := iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[fragColIdx]))
 			if err != nil {
 				return err
 			}
 		} else {
-			err := iohelp.WriteLine(writer, fmt.Sprintf("CREATE VIEW %s AS %s", row[nameColIdx], row[fragColIdx]))
+			err := iohelp.WriteLine(writer, fmt.Sprintf("CREATE VIEW %s AS %s;", row[nameColIdx], row[fragColIdx]))
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func dumpTriggers(ctx context.Context, engine *engine.SqlEngine, writer io.WriteCloser) (rerr error) {
+	sqlCtx, err := engine.NewContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	dbs := engine.GetUnderlyingEngine().Analyzer.Catalog.AllDatabases(sqlCtx)
+	var db sqle.SqlDatabase
+	for _, d := range dbs {
+		doltDb, ok := d.(sqle.SqlDatabase)
+		if !ok {
+			continue
+		}
+
+		db = doltDb
+	}
+
+	if db == nil {
+		return fmt.Errorf("unable to find dolt database")
+	}
+
+	_, ok, err := db.GetTableInsensitive(sqlCtx, doltdb.SchemasTableName)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return nil
+	}
+
+	sch, iter, err := engine.Query(sqlCtx, "select * from "+doltdb.SchemasTableName)
+	if err != nil {
+		return err
+	}
+
+	typeColIdx := sch.IndexOfColName(doltdb.SchemasTablesTypeCol)
+	fragColIdx := sch.IndexOfColName(doltdb.SchemasTablesFragmentCol)
+
+	defer func(iter sql.RowIter, context *sql.Context) {
+		err := iter.Close(context)
+		if rerr == nil && err != nil {
+			rerr = err
+		}
+	}(iter, sqlCtx)
+
+	for {
+		row, err := iter.Next(sqlCtx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		if row[typeColIdx] != "trigger" {
+			continue
+		}
+
+		err = iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[fragColIdx]))
+		if err != nil {
+			return err
+		}
+	}
+	
+	return nil
+}
+
+func dumpViews(ctx context.Context, engine *engine.SqlEngine, writer io.WriteCloser) (rerr error) {
+	sqlCtx, err := engine.NewContext(ctx)
+	if err != nil {
+		return err
+	}
+	
+	dbs := engine.GetUnderlyingEngine().Analyzer.Catalog.AllDatabases(sqlCtx)
+	var db sqle.SqlDatabase
+	for _, d := range dbs {
+		doltDb, ok := d.(sqle.SqlDatabase)
+		if !ok {
+			continue
+		}
+
+		db = doltDb
+	}
+	
+	if db == nil {
+		return fmt.Errorf("unable to find dolt database")
+	}
+
+	_, ok, err := db.GetTableInsensitive(sqlCtx, doltdb.SchemasTableName)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return nil
+	}
+
+	sch, iter, err := engine.Query(sqlCtx, "select * from "+doltdb.SchemasTableName)
+	if err != nil {
+		return err
+	}
+
+	typeColIdx := sch.IndexOfColName(doltdb.SchemasTablesTypeCol)
+	fragColIdx := sch.IndexOfColName(doltdb.SchemasTablesFragmentCol)
+	nameColIdx := sch.IndexOfColName(doltdb.SchemasTablesNameCol)
+
+	defer func(iter sql.RowIter, context *sql.Context) {
+		err := iter.Close(context)
+		if rerr == nil && err != nil {
+			rerr = err
+		}
+	}(iter, sqlCtx)
+
+	for {
+		row, err := iter.Next(sqlCtx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		if row[typeColIdx] != "view" {
+			continue
+		}
+
+		// We used to store just the SELECT part of a view, but now we store the entire CREATE VIEW statement
+		cv, err := parse.Parse(sqlCtx, row[fragColIdx].(string))
+		if err != nil {
+			return err
+		}
+
+		_, ok := cv.(*plan.CreateView)
+		if ok {
+			err := iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[fragColIdx]))
+			if err != nil {
+				return err
+			}
+		} else {
+			err := iohelp.WriteLine(writer, fmt.Sprintf("CREATE VIEW %s AS %s;", row[nameColIdx], row[fragColIdx]))
 			if err != nil {
 				return err
 			}
