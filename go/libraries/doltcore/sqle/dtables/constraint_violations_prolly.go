@@ -217,7 +217,7 @@ type prollyCVDeleter struct {
 	kd   val.TupleDesc
 	kb   *val.TupleBuilder
 	pool pool.BuffPool
-	ed   prolly.ArtifactsEditor
+	ed   *prolly.ArtifactsEditor
 	cvt  *prollyConstraintViolationsTable
 }
 

@@ -164,6 +164,7 @@ type datasFactory func(context.Context) (types.ValueReadWriter, datas.Database)
 func testPuller(t *testing.T, makeDB datasFactory) {
 	ctx := context.Background()
 	vs, db := makeDB(ctx)
+	defer db.Close()
 
 	deltas := []struct {
 		name       string
@@ -325,6 +326,7 @@ func testPuller(t *testing.T, makeDB datasFactory) {
 			}()
 
 			sinkvs, sinkdb := makeDB(ctx)
+			defer sinkdb.Close()
 
 			tmpDir := filepath.Join(os.TempDir(), uuid.New().String())
 			err = os.MkdirAll(tmpDir, os.ModePerm)
@@ -351,7 +353,6 @@ func testPuller(t *testing.T, makeDB datasFactory) {
 			eq, err := pullerAddrEquality(ctx, rootAddr, sinkRootAddr, vs, sinkvs)
 			require.NoError(t, err)
 			assert.True(t, eq)
-
 		})
 	}
 }

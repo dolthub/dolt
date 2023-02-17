@@ -539,7 +539,7 @@ type prollyConflictDeleter struct {
 	kd, vd         val.TupleDesc
 	kB, vB         *val.TupleBuilder
 	pool           pool.BuffPool
-	ed             prolly.ArtifactsEditor
+	ed             *prolly.ArtifactsEditor
 	ct             ProllyConflictsTable
 	rs             RootSetter
 	ourDiffTypeIdx int

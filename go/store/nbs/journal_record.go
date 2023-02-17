@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 )
 
-// journalRec is a record in a chunk journal. It's serialization format uses
+// journalRec is a record in a chunk journal. Its serialization format uses
 // uint8 tag prefixes to identify fields and allow for format evolution.
 //
 // There are two kinds of journalRecs: chunk records and root hash records.
@@ -43,7 +43,7 @@ import (
 // offset. See recLookup for more detail.
 type journalRec struct {
 	length   uint32
-	kind     recKind
+	kind     journalRecKind
 	address  addr
 	payload  []byte
 	checksum uint32
@@ -52,7 +52,7 @@ type journalRec struct {
 // payloadOffset returns the journalOffset of the payload within the record
 // assuming only the checksum field follows the payload.
 func (r journalRec) payloadOffset() uint32 {
-	return r.length - uint32(len(r.payload)+recChecksumSz)
+	return r.length - uint32(len(r.payload)+journalRecChecksumSz)
 }
 
 // uncompressedPayloadSize returns the uncompressed size of the payload.
@@ -63,76 +63,76 @@ func (r journalRec) uncompressedPayloadSize() (sz uint64) {
 	return
 }
 
-type recKind uint8
+type journalRecKind uint8
 
 const (
-	unknownKind     recKind = 0
-	rootHashRecKind recKind = 1
-	chunkRecKind    recKind = 2
+	unknownJournalRecKind  journalRecKind = 0
+	rootHashJournalRecKind journalRecKind = 1
+	chunkJournalRecKind    journalRecKind = 2
 )
 
-type recTag uint8
+type journalRecTag uint8
 
 const (
-	unknownTag recTag = 0
-	kindTag    recTag = 1
-	addrTag    recTag = 2
-	payloadTag recTag = 3
+	unknownJournalRecTag journalRecTag = 0
+	kindJournalRecTag    journalRecTag = 1
+	addrJournalRecTag    journalRecTag = 2
+	payloadJournalRecTag journalRecTag = 3
 )
 
 const (
-	recTagSz      = 1
-	recLenSz      = 4
-	recKindSz     = 1
-	recAddrSz     = 20
-	recChecksumSz = 4
+	journalRecTagSz      = 1
+	journalRecLenSz      = 4
+	journalRecKindSz     = 1
+	journalRecAddrSz     = 20
+	journalRecChecksumSz = 4
 
 	// todo(andy): less arbitrary
-	recMaxSz = 128 * 1024
+	journalRecMaxSz = 128 * 1024
 )
 
 func chunkRecordSize(c CompressedChunk) (recordSz, payloadOff uint32) {
-	recordSz += recLenSz
-	recordSz += recTagSz + recKindSz
-	recordSz += recTagSz + recAddrSz
-	recordSz += recTagSz // payload tag
+	recordSz += journalRecLenSz
+	recordSz += journalRecTagSz + journalRecKindSz
+	recordSz += journalRecTagSz + journalRecAddrSz
+	recordSz += journalRecTagSz // payload tag
 	payloadOff = recordSz
 	recordSz += uint32(len(c.FullCompressedChunk))
-	recordSz += recChecksumSz
+	recordSz += journalRecChecksumSz
 	return
 }
 
 func rootHashRecordSize() (recordSz int) {
-	recordSz += recLenSz
-	recordSz += recTagSz + recKindSz
-	recordSz += recTagSz + recAddrSz
-	recordSz += recChecksumSz
+	recordSz += journalRecLenSz
+	recordSz += journalRecTagSz + journalRecKindSz
+	recordSz += journalRecTagSz + journalRecAddrSz
+	recordSz += journalRecChecksumSz
 	return
 }
 
 func writeChunkRecord(buf []byte, c CompressedChunk) (n uint32) {
 	// length
 	l, _ := chunkRecordSize(c)
-	writeUint(buf[:recLenSz], l)
-	n += recLenSz
+	writeUint(buf[:journalRecLenSz], l)
+	n += journalRecLenSz
 	// kind
-	buf[n] = byte(kindTag)
-	n += recTagSz
-	buf[n] = byte(chunkRecKind)
-	n += recKindSz
+	buf[n] = byte(kindJournalRecTag)
+	n += journalRecTagSz
+	buf[n] = byte(chunkJournalRecKind)
+	n += journalRecKindSz
 	// address
-	buf[n] = byte(addrTag)
-	n += recTagSz
+	buf[n] = byte(addrJournalRecTag)
+	n += journalRecTagSz
 	copy(buf[n:], c.H[:])
-	n += recAddrSz
+	n += journalRecAddrSz
 	// payload
-	buf[n] = byte(payloadTag)
-	n += recTagSz
+	buf[n] = byte(payloadJournalRecTag)
+	n += journalRecTagSz
 	copy(buf[n:], c.FullCompressedChunk)
 	n += uint32(len(c.FullCompressedChunk))
 	// checksum
 	writeUint(buf[n:], crc(buf[:n]))
-	n += recChecksumSz
+	n += journalRecChecksumSz
 	d.PanicIfFalse(l == n)
 	return
 }
@@ -140,62 +140,62 @@ func writeChunkRecord(buf []byte, c CompressedChunk) (n uint32) {
 func writeRootHashRecord(buf []byte, root addr) (n uint32) {
 	// length
 	l := rootHashRecordSize()
-	writeUint(buf[:recLenSz], uint32(l))
-	n += recLenSz
+	writeUint(buf[:journalRecLenSz], uint32(l))
+	n += journalRecLenSz
 	// kind
-	buf[n] = byte(kindTag)
-	n += recTagSz
-	buf[n] = byte(rootHashRecKind)
-	n += recKindSz
+	buf[n] = byte(kindJournalRecTag)
+	n += journalRecTagSz
+	buf[n] = byte(rootHashJournalRecKind)
+	n += journalRecKindSz
 	// address
-	buf[n] = byte(addrTag)
-	n += recTagSz
+	buf[n] = byte(addrJournalRecTag)
+	n += journalRecTagSz
 	copy(buf[n:], root[:])
-	n += recAddrSz
+	n += journalRecAddrSz
 	// empty payload
 	// checksum
 	writeUint(buf[n:], crc(buf[:n]))
-	n += recChecksumSz
+	n += journalRecChecksumSz
 	return
 }
 
 func readJournalRecord(buf []byte) (rec journalRec, err error) {
 	rec.length = readUint(buf)
-	buf = buf[recLenSz:]
-	for len(buf) > recChecksumSz {
-		tag := recTag(buf[0])
-		buf = buf[recTagSz:]
+	buf = buf[journalRecLenSz:]
+	for len(buf) > journalRecChecksumSz {
+		tag := journalRecTag(buf[0])
+		buf = buf[journalRecTagSz:]
 		switch tag {
-		case kindTag:
-			rec.kind = recKind(buf[0])
-			buf = buf[recKindSz:]
-		case addrTag:
+		case kindJournalRecTag:
+			rec.kind = journalRecKind(buf[0])
+			buf = buf[journalRecKindSz:]
+		case addrJournalRecTag:
 			copy(rec.address[:], buf)
-			buf = buf[recAddrSz:]
-		case payloadTag:
-			sz := len(buf) - recChecksumSz
+			buf = buf[journalRecAddrSz:]
+		case payloadJournalRecTag:
+			sz := len(buf) - journalRecChecksumSz
 			rec.payload = buf[:sz]
 			buf = buf[sz:]
-		case unknownTag:
+		case unknownJournalRecTag:
 			fallthrough
 		default:
 			err = fmt.Errorf("unknown record field tag: %d", tag)
 			return
 		}
 	}
-	rec.checksum = readUint(buf[:recChecksumSz])
+	rec.checksum = readUint(buf[:journalRecChecksumSz])
 	return
 }
 
 func validateJournalRecord(buf []byte) (ok bool) {
-	if len(buf) > (recLenSz + recChecksumSz) {
-		off := len(buf) - recChecksumSz
+	if len(buf) > (journalRecLenSz + journalRecChecksumSz) {
+		off := len(buf) - journalRecChecksumSz
 		ok = crc(buf[:off]) == readUint(buf[off:])
 	}
 	return
 }
 
-func processRecords(ctx context.Context, r io.ReadSeeker, cb func(o int64, r journalRec) error) (int64, error) {
+func processJournalRecords(ctx context.Context, r io.ReadSeeker, cb func(o int64, r journalRec) error) (int64, error) {
 	var (
 		buf []byte
 		off int64
@@ -210,7 +210,7 @@ func processRecords(ctx context.Context, r io.ReadSeeker, cb func(o int64, r jou
 		}
 
 		l := readUint(buf)
-		if l > recMaxSz {
+		if l > journalRecMaxSz {
 			break
 		} else if buf, err = rdr.Peek(int(l)); err != nil {
 			break

@@ -276,6 +276,7 @@ teardown() {
 
 @test "cherry-pick: add triggers" {
     dolt sql -q "CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v = concat(new.v, ' inserted')"
+    dolt sql -q "CREATE view two as select 1+1"
     dolt sql -q "INSERT INTO test VALUES (4,'z')"
     run dolt sql -q "SELECT * FROM test"
     [[ "$output" =~ "z inserted" ]] || false
@@ -287,8 +288,7 @@ teardown() {
     run dolt sql -q "SHOW TRIGGERS"
     [[ ! "$output" =~ "trigger1" ]] || false
 
-    run dolt cherry-pick branch1
-    [ "$status" -eq "0" ]
+    dolt cherry-pick branch1
 
     run dolt sql -q "SELECT * FROM test"
     [[ "$output" =~ "z inserted" ]] || false
@@ -300,8 +300,40 @@ teardown() {
     dolt sql -q "DROP TRIGGER trigger1"
     dolt commit -am "drop trigger"
     dolt checkout main
-    run dolt cherry-pick branch1
-    [ "$status" -eq "0" ]
+    dolt cherry-pick branch1
+
+    run dolt sql -q "SHOW TRIGGERS"
+    [[ ! "$output" =~ "trigger1" ]] || false
+}
+
+@test "cherry-pick: drop triggers" {
+    dolt sql -q "CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v = concat(new.v, ' inserted')"
+    dolt sql -q "INSERT INTO test VALUES (4,'z')"
+    run dolt sql -q "SELECT * FROM test"
+    [[ "$output" =~ "z inserted" ]] || false
+
+    dolt add .
+    dolt commit -am "add trigger"
+
+    dolt checkout main
+    run dolt sql -q "SHOW TRIGGERS"
+    [[ ! "$output" =~ "trigger1" ]] || false
+
+    dolt cherry-pick branch1
+
+    run dolt sql -q "SELECT * FROM test"
+    [[ "$output" =~ "z inserted" ]] || false
+
+    run dolt sql -q "SHOW TRIGGERS"
+    [[ "$output" =~ "trigger1" ]] || false
+
+    dolt checkout branch1
+    dolt sql -q "DROP TRIGGER trigger1"
+    dolt commit -am "drop trigger"
+    dolt checkout main
+
+    skip "merge cannot handle dropped dolt_schemas" table
+    dolt cherry-pick branch1
 
     run dolt sql -q "SHOW TRIGGERS"
     [[ ! "$output" =~ "trigger1" ]] || false

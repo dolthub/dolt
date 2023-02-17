@@ -19,7 +19,11 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
+	"os"
+	"runtime"
+	"runtime/debug"
 	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -30,6 +34,25 @@ var (
 	ErrWrongBufferSize = errors.New("buffer length and/or capacity incorrect for chunkCount specified in footer")
 	ErrWrongCopySize   = errors.New("could not copy enough bytes")
 )
+
+// By setting the environment variable DOLT_ASSERT_TABLE_FILES_CLOSED to any
+// non-empty string, dolt will run some sanity checks on table file lifecycle
+// management. In particular, dolt will install a GC finalizer on the table
+// file index buffer to assert that it has been properly closed at the time
+// that it gets garbage collected.
+//
+// This is mostly intended for developers. It isa recommended mode in tests and
+// can make sense in other contexts as well. At the time of this writing---
+// (2023/02, aaron@)---lifecycle management in tests in particular is not good
+// enough to globally enable this.
+
+var TableIndexAssertClosedWithGCFinalizer bool
+
+func init() {
+	if os.Getenv("DOLT_ASSERT_TABLE_FILES_CLOSED") != "" {
+		TableIndexAssertClosedWithGCFinalizer = true
+	}
+}
 
 type tableIndex interface {
 	// entrySuffixMatches returns true if the entry at index |idx| matches
@@ -109,13 +132,13 @@ func parseTableIndex(ctx context.Context, buff []byte, q MemoryQuotaProvider) (o
 
 	chunks2 := chunkCount / 2
 	chunks1 := chunkCount - chunks2
-	offsetsBuff1, err := q.AcquireQuotaBytes(ctx, uint64(chunks1*offsetSize))
+	offsetsBuff1, err := q.AcquireQuotaBytes(ctx, int(chunks1*offsetSize))
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
 	idx, err := newOnHeapTableIndex(buff, offsetsBuff1, chunkCount, totalUncompressedData, q)
 	if err != nil {
-		q.ReleaseQuotaBytes(offsetsBuff1)
+		q.ReleaseQuotaBytes(len(offsetsBuff1))
 	}
 	return idx, err
 }
@@ -150,28 +173,32 @@ func readTableIndexByCopy(ctx context.Context, rd io.ReadSeeker, q MemoryQuotaPr
 		return onHeapTableIndex{}, err
 	}
 
-	buff, err := q.AcquireQuotaBytes(ctx, uint64(idxSz))
+	if int64(int(idxSz)) != idxSz {
+		return onHeapTableIndex{}, fmt.Errorf("table file index is too large to read on this platform. index size %d > max int.", idxSz)
+	}
+
+	buff, err := q.AcquireQuotaBytes(ctx, int(idxSz))
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
 
 	_, err = io.ReadFull(rd, buff)
 	if err != nil {
-		q.ReleaseQuotaBytes(buff)
+		q.ReleaseQuotaBytes(len(buff))
 		return onHeapTableIndex{}, err
 	}
 
 	chunks1 := chunkCount - (chunkCount / 2)
-	offsets1Buff, err := q.AcquireQuotaBytes(ctx, uint64(chunks1*offsetSize))
+	offsets1Buff, err := q.AcquireQuotaBytes(ctx, int(chunks1*offsetSize))
 	if err != nil {
-		q.ReleaseQuotaBytes(buff)
+		q.ReleaseQuotaBytes(len(buff))
 		return onHeapTableIndex{}, err
 	}
 
 	idx, err := newOnHeapTableIndex(buff, offsets1Buff, chunkCount, totalUncompressedData, q)
 	if err != nil {
-		q.ReleaseQuotaBytes(buff)
-		q.ReleaseQuotaBytes(offsets1Buff)
+		q.ReleaseQuotaBytes(len(buff))
+		q.ReleaseQuotaBytes(len(offsets1Buff))
 	}
 	return idx, err
 }
@@ -251,6 +278,12 @@ func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, to
 
 	refCnt := new(int32)
 	*refCnt = 1
+	if TableIndexAssertClosedWithGCFinalizer {
+		stack := string(debug.Stack())
+		runtime.SetFinalizer(refCnt, func(i *int32) {
+			panic(fmt.Sprintf("OnHeapTableIndex not closed:\n%s", stack))
+		})
+	}
 
 	return onHeapTableIndex{
 		refCnt:         refCnt,
@@ -506,19 +539,11 @@ func (ti onHeapTableIndex) Close() error {
 		return nil
 	}
 
-	if err := ti.q.ReleaseQuotaBytes(ti.prefixTuples); err != nil {
-		return err
+	if TableIndexAssertClosedWithGCFinalizer {
+		runtime.SetFinalizer(ti.refCnt, nil)
 	}
-	if err := ti.q.ReleaseQuotaBytes(ti.offsets1); err != nil {
-		return err
-	}
-	if err := ti.q.ReleaseQuotaBytes(ti.offsets2); err != nil {
-		return err
-	}
-	if err := ti.q.ReleaseQuotaBytes(ti.suffixes); err != nil {
-		return err
-	}
-	return ti.q.ReleaseQuotaBytes(ti.footer)
+	ti.q.ReleaseQuotaBytes(len(ti.prefixTuples) + len(ti.offsets1) + len(ti.offsets2) + len(ti.suffixes) + len(ti.footer))
+	return nil
 }
 
 func (ti onHeapTableIndex) clone() (tableIndex, error) {

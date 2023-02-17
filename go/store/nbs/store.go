@@ -1625,9 +1625,9 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 	if err != nil {
 		return err
 	}
+	oldTables := nbs.tables
 	nbs.tables, nbs.upstream = ts, upstream
-
-	return nil
+	return oldTables.close()
 }
 
 // SetRootChunk changes the root chunk hash from the previous value to the new root.

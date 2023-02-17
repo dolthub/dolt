@@ -289,6 +289,7 @@ SQL
 
 @test "sql-cherry-pick: add triggers" {
     dolt sql -q "CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v = concat(new.v, ' inserted')"
+    dolt sql -q "CREATE view two as select 1+1"
     dolt sql -q "INSERT INTO test VALUES (4,'z')"
     run dolt sql -q "SELECT * FROM test"
     [[ "$output" =~ "z inserted" ]] || false
