@@ -239,14 +239,18 @@ func TestHref(t *testing.T) {
 
 	sp, _ := ForDatabase("aws://table/foo/bar/baz")
 	assert.Equal("aws://table/foo/bar/baz", sp.Href())
+	sp.Close()
 	sp, _ = ForDataset("aws://[table:bucket]/foo/bar/baz::myds")
 	assert.Equal("aws://[table:bucket]/foo/bar/baz", sp.Href())
+	sp.Close()
 	sp, _ = ForPath("aws://[table:bucket]/foo/bar/baz::myds.my.path")
 	assert.Equal("aws://[table:bucket]/foo/bar/baz", sp.Href())
+	sp.Close()
 
 	sp, err := ForPath("mem::myds.my.path")
 	assert.NoError(err)
 	assert.Equal("", sp.Href())
+	sp.Close()
 }
 
 func TestForDatabase(t *testing.T) {
@@ -323,8 +327,9 @@ func TestForDataset(t *testing.T) {
 
 	validDatasetNames := []string{"a", "Z", "0", "/", "-", "_"}
 	for _, s := range validDatasetNames {
-		_, err := ForDataset("mem::" + s)
+		spec, err := ForDataset("mem::" + s)
 		assert.NoError(t, err)
+		spec.Close()
 	}
 
 	tmpDir, err := os.MkdirTemp("", "spec_test")
@@ -416,6 +421,8 @@ func TestMultipleSpecsSameNBS(t *testing.T) {
 
 	assert.NoError(err1)
 	assert.NoError(err2)
+	defer spec1.Close()
+	defer spec2.Close()
 
 	s := types.String("hello")
 	db := spec1.GetDatabase(context.Background())
@@ -479,6 +486,7 @@ func TestExternalProtocol(t *testing.T) {
 
 	sp, err := ForDataset("test:foo::bar")
 	assert.NoError(err)
+	defer sp.Close()
 	assert.Equal("test", sp.Protocol)
 	assert.Equal("foo", sp.DatabaseName)
 

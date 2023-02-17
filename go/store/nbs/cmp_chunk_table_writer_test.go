@@ -40,6 +40,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 	require.NoError(t, err)
+	defer tr.close()
 
 	hashes := make(hash.HashSet)
 	for _, chnk := range testMDChunks {
@@ -89,6 +90,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	require.NoError(t, err)
 	outputTR, err := newTableReader(outputTI, tableReaderAtFromBytes(buff), fileBlockSize)
 	require.NoError(t, err)
+	defer outputTR.close()
 
 	compareContentsOfTables(t, ctx, hashes, tr, outputTR)
 }
