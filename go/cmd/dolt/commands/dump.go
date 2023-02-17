@@ -17,10 +17,16 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/parse"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -141,22 +147,6 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(vErr, usage)
 	}
 
-	// Look for schemas and procedures table, and add to tblNames only for sql dumps
-	if !schemaOnly && (resFormat == emptyFileExt || resFormat == sqlFileExt) {
-		sysTblNames, err := doltdb.GetSystemTableNames(ctx, root)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-		for _, tblName := range sysTblNames {
-			switch tblName {
-			case doltdb.SchemasTableName:
-				tblNames = append(tblNames, doltdb.SchemasTableName)
-			case doltdb.ProceduresTableName:
-				tblNames = append(tblNames, doltdb.ProceduresTableName)
-			}
-		}
-	}
-
 	switch resFormat {
 	case emptyFileExt, sqlFileExt:
 		var defaultName string
@@ -203,6 +193,11 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				return HandleVErrAndExitCode(err, usage)
 			}
 		}
+		
+		err = dumpSchemaElements(ctx, dEnv, fPath)
+		if err != nil {
+			return HandleVErrAndExitCode(err, usage)
+		}
 	case csvFileExt, jsonFileExt, parquetFileExt:
 		err = dumpNonSqlTables(ctx, root, dEnv, force, tblNames, resFormat, outputFileOrDirName, false)
 		if err != nil {
@@ -215,6 +210,123 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	cli.PrintErrln(color.CyanString("Successfully exported data."))
 
 	return 0
+}
+
+// dumpSchemaElements writes the non-table schema elements (views, triggers, procedures) to the file path given
+func dumpSchemaElements(ctx context.Context, dEnv *env.DoltEnv, path string) errhand.VerboseError {
+	writer, err := dEnv.FS.OpenForWriteAppend(path, os.ModePerm)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	engine, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+	
+	err = dumpViews(ctx, engine, writer)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+	
+	err = dumpTriggers(ctx, engine, writer)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	err = dumpProcedures(ctx, engine, writer)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+	
+	return nil
+}
+
+func dumpProcedures(ctx context.Context, dEnv *engine.SqlEngine, writer io.WriteCloser) error {
+	return nil	
+}
+
+func dumpTriggers(ctx context.Context, dEnv *engine.SqlEngine, writer io.WriteCloser) error {
+	return nil
+}
+
+func dumpViews(ctx context.Context, engine *engine.SqlEngine, writer io.WriteCloser) (rerr error) {
+	sqlCtx, err := engine.NewContext(ctx)
+	if err != nil {
+		return err
+	}
+	
+	dbs := engine.GetUnderlyingEngine().Analyzer.Catalog.AllDatabases(sqlCtx)
+	var db sqle.SqlDatabase
+	for _, db := range dbs {
+		doltDb, ok := db.(sqle.SqlDatabase)
+		if !ok {
+			continue
+		}
+
+		db = doltDb
+	}
+	
+	if db == nil {
+		return fmt.Errorf("unable to find dolt database")
+	}
+
+	_, ok, err := db.GetTableInsensitive(sqlCtx, doltdb.SchemasTableName)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return nil
+	}
+
+	sch, iter, err := engine.Query(sqlCtx, "select * from "+doltdb.SchemasTableName)
+	if err != nil {
+		return err
+	}
+
+	typeColIdx := sch.IndexOfColName(doltdb.SchemasTablesTypeCol)
+	fragColIdx := sch.IndexOfColName(doltdb.SchemasTablesFragmentCol)
+	nameColIdx := sch.IndexOfColName(doltdb.SchemasTablesNameCol)
+
+	defer func(iter sql.RowIter, context *sql.Context) {
+		err := iter.Close(context)
+		if rerr == nil && err != nil {
+			rerr = err
+		}
+	}(iter, sqlCtx)
+
+	for {
+		row, err := iter.Next(sqlCtx)
+		if err != nil {
+			return err
+		}
+
+		if row[typeColIdx] != "view" {
+			continue
+		}
+
+		// We used to store just the SELECT part of a view, but now we store the entire CREATE VIEW statement
+		cv, err := parse.Parse(sqlCtx, row[fragColIdx].(string))
+		if err != nil {
+			return err
+		}
+
+		_, ok := cv.(*plan.CreateView)
+		if ok {
+			err := iohelp.WriteLine(writer, fmt.Sprintf("%s", row[fragColIdx]))
+			if err != nil {
+				return err
+			}
+		} else {
+			err := iohelp.WriteLine(writer, fmt.Sprintf("CREATE VIEW %s AS %s", row[nameColIdx], row[fragColIdx]))
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 type dumpOptions struct {
