@@ -107,7 +107,7 @@ func mergeProllySecondaryIndexes(
 	leftSet, rightSet durable.IndexSet,
 	finalSch schema.Schema,
 	finalRows durable.Index,
-	artifacts prolly.ArtifactsEditor,
+	artifacts *prolly.ArtifactsEditor,
 ) (durable.IndexSet, error) {
 
 	ancSet, err := tm.ancTbl.GetIndexSet(ctx)
@@ -197,7 +197,7 @@ func mergeProllySecondaryIndexes(
 	return mergedIndexSet, nil
 }
 
-func buildIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, postMergeSchema schema.Schema, index schema.Index, m prolly.Map, artEditor prolly.ArtifactsEditor, theirRootIsh doltdb.Rootish, tblName string) (durable.Index, error) {
+func buildIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, postMergeSchema schema.Schema, index schema.Index, m prolly.Map, artEditor *prolly.ArtifactsEditor, theirRootIsh doltdb.Rootish, tblName string) (durable.Index, error) {
 	if index.IsUnique() {
 		meta, err := makeUniqViolMeta(postMergeSchema, index)
 		if err != nil {

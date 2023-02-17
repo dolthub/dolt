@@ -212,7 +212,7 @@ type foreignKeyViolationWriter struct {
 	currTbl *doltdb.Table
 
 	// prolly
-	artEditor     prolly.ArtifactsEditor
+	artEditor     *prolly.ArtifactsEditor
 	kd            val.TupleDesc
 	cInfoJsonData []byte
 

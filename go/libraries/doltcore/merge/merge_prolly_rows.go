@@ -377,7 +377,7 @@ func (m *valueMerger) processColumn(i int, left, right, base val.Tuple) ([]byte,
 }
 
 type conflictProcessor interface {
-	process(ctx context.Context, conflictChan chan confVals, artEditor prolly.ArtifactsEditor) error
+	process(ctx context.Context, conflictChan chan confVals, artEditor *prolly.ArtifactsEditor) error
 }
 
 func makeConflictProcessor(ctx context.Context, tm TableMerger) (conflictProcessor, error) {
@@ -434,7 +434,7 @@ func newInsertingProcessor(theirRootIsh, baseRootIsh doltdb.Rootish) (*inserting
 	return &p, nil
 }
 
-func (p *insertingProcessor) process(ctx context.Context, conflictChan chan confVals, artEditor prolly.ArtifactsEditor) error {
+func (p *insertingProcessor) process(ctx context.Context, conflictChan chan confVals, artEditor *prolly.ArtifactsEditor) error {
 	for {
 		select {
 		case conflict, ok := <-conflictChan:
@@ -453,7 +453,7 @@ func (p *insertingProcessor) process(ctx context.Context, conflictChan chan conf
 
 type abortingProcessor struct{}
 
-func (p abortingProcessor) process(ctx context.Context, conflictChan chan confVals, artEditor prolly.ArtifactsEditor) error {
+func (p abortingProcessor) process(ctx context.Context, conflictChan chan confVals, _ *prolly.ArtifactsEditor) error {
 	select {
 	case _, ok := <-conflictChan:
 		if !ok {
