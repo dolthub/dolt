@@ -45,8 +45,8 @@ var _ sql.FilteredTable = (*UnscopedDiffTable)(nil)
 // UnscopedDiffTable is a sql.Table implementation of a system table that shows which tables have
 // changed in each commit, across all branches.
 type UnscopedDiffTable struct {
-	ddb              *doltdb.DoltDB
 	dbName           string
+	ddb              *doltdb.DoltDB
 	head             *doltdb.Commit
 	partitionFilters []sql.Expression
 	commitCheck      doltdb.CommitFilter
@@ -61,8 +61,8 @@ type tableChange struct {
 }
 
 // NewUnscopedDiffTable creates an UnscopedDiffTable
-func NewUnscopedDiffTable(_ *sql.Context, ddb *doltdb.DoltDB, dbName string, head *doltdb.Commit) sql.Table {
-	return &UnscopedDiffTable{ddb: ddb, dbName: dbName, head: head}
+func NewUnscopedDiffTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
+	return &UnscopedDiffTable{dbName: dbName, ddb: ddb, head: head}
 }
 
 // Filters returns the list of filters that are applied to this table.
