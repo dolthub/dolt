@@ -135,7 +135,7 @@ func makeChunkRecord() (journalRec, []byte) {
 	var n int
 	buf := make([]byte, sz)
 	// length
-	writeUint(buf[n:], uint32(len(buf)))
+	writeUint32(buf[n:], uint32(len(buf)))
 	n += journalRecLenSz
 	// kind
 	buf[n] = byte(kindJournalRecTag)
@@ -154,7 +154,7 @@ func makeChunkRecord() (journalRec, []byte) {
 	n += len(payload)
 	// checksum
 	c := crc(buf[:len(buf)-journalRecChecksumSz])
-	writeUint(buf[len(buf)-journalRecChecksumSz:], c)
+	writeUint32(buf[len(buf)-journalRecChecksumSz:], c)
 
 	r := journalRec{
 		length:   uint32(len(buf)),
@@ -171,7 +171,7 @@ func makeRootHashRecord() (journalRec, []byte) {
 	var n int
 	buf := make([]byte, rootHashRecordSize())
 	// length
-	writeUint(buf[n:], uint32(len(buf)))
+	writeUint32(buf[n:], uint32(len(buf)))
 	n += journalRecLenSz
 	// kind
 	buf[n] = byte(kindJournalRecTag)
@@ -185,7 +185,7 @@ func makeRootHashRecord() (journalRec, []byte) {
 	n += journalRecAddrSz
 	// checksum
 	c := crc(buf[:len(buf)-journalRecChecksumSz])
-	writeUint(buf[len(buf)-journalRecChecksumSz:], c)
+	writeUint32(buf[len(buf)-journalRecChecksumSz:], c)
 	r := journalRec{
 		length:   uint32(len(buf)),
 		kind:     rootHashJournalRecKind,
@@ -202,7 +202,7 @@ func makeUnknownTagJournalRecord() (buf []byte) {
 	buf[journalRecLenSz] = byte(fakeTag)
 	// redo checksum
 	c := crc(buf[:len(buf)-journalRecChecksumSz])
-	writeUint(buf[len(buf)-journalRecChecksumSz:], c)
+	writeUint32(buf[len(buf)-journalRecChecksumSz:], c)
 	return
 }
 
@@ -211,7 +211,7 @@ func writeCorruptJournalRecord(buf []byte) (n uint32) {
 	// fill with random data
 	rand.Read(buf[:n])
 	// write a valid size, kind
-	writeUint(buf, n)
+	writeUint32(buf, n)
 	buf[journalRecLenSz] = byte(rootHashJournalRecKind)
 	return
 }

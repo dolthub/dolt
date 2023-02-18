@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func TestRoundTripIndexRecords(t *testing.T) {
@@ -32,7 +33,7 @@ func TestRoundTripIndexRecords(t *testing.T) {
 			rec, buf := makeTableIndexRecord()
 			assert.Equal(t, rec.length, uint32(len(buf)))
 			b := make([]byte, rec.length)
-			n := writeTableIndexRecord(b, mustPayload(rec))
+			n := writeTableIndexRecord(b, rec.lastRoot, rec.start, rec.stop, mustPayload(rec))
 			assert.Equal(t, n, rec.length)
 			assert.Equal(t, buf, b)
 			r, err := readTableIndexRecord(buf)
@@ -63,7 +64,7 @@ func TestProcessIndexRecords(t *testing.T) {
 	var off uint32
 	for i := range records {
 		r, b := makeTableIndexRecord()
-		off += writeTableIndexRecord(index[off:], mustPayload(r))
+		off += writeTableIndexRecord(index[off:], r.lastRoot, r.start, r.stop, mustPayload(r))
 		records[i], buffers[i] = r, b
 	}
 
@@ -94,28 +95,55 @@ func TestProcessIndexRecords(t *testing.T) {
 func makeTableIndexRecord() (indexRec, []byte) {
 	payload := randBuf(100)
 	sz := tableIndexRecordSize(payload)
+	lastRoot := hash.Of([]byte("fake commit"))
+	start, stop := uint64(12345), uint64(23456)
 
 	var n int
 	buf := make([]byte, sz)
+
 	// length
-	writeUint(buf[n:], uint32(len(buf)))
+	writeUint32(buf[n:], uint32(len(buf)))
 	n += indexRecLenSz
+
+	// last root
+	buf[n] = byte(lastRootIndexRecTag)
+	n += indexRecTagSz
+	copy(buf[n:], lastRoot[:])
+	n += len(lastRoot[:])
+
+	// start offset
+	buf[n] = byte(startOffsetIndexRecTag)
+	n += indexRecTagSz
+	writeUint64(buf[n:], start)
+	n += indexRecOffsetSz
+
+	// stop offset
+	buf[n] = byte(stopOffsetIndexRecTag)
+	n += indexRecTagSz
+	writeUint64(buf[n:], stop)
+	n += indexRecOffsetSz
+
 	// kind
 	buf[n] = byte(kindIndexRecTag)
 	n += indexRecTagSz
 	buf[n] = byte(tableIndexRecKind)
 	n += indexRecKindSz
+
 	// payload
 	buf[n] = byte(payloadIndexRecTag)
 	n += indexRecTagSz
 	copy(buf[n:], payload)
 	n += len(payload)
+
 	// checksum
 	c := crc(buf[:len(buf)-indexRecChecksumSz])
-	writeUint(buf[len(buf)-indexRecChecksumSz:], c)
+	writeUint32(buf[len(buf)-indexRecChecksumSz:], c)
 
 	r := indexRec{
 		length:   uint32(len(buf)),
+		lastRoot: lastRoot,
+		start:    start,
+		stop:     stop,
 		kind:     tableIndexRecKind,
 		payload:  payload,
 		checksum: c,
@@ -130,7 +158,7 @@ func makeUnknownTagIndexRecord() (buf []byte) {
 	buf[indexRecLenSz] = byte(fakeTag)
 	// redo checksum
 	c := crc(buf[:len(buf)-indexRecChecksumSz])
-	writeUint(buf[len(buf)-indexRecChecksumSz:], c)
+	writeUint32(buf[len(buf)-indexRecChecksumSz:], c)
 	return
 }
 
@@ -139,7 +167,7 @@ func writeCorruptIndexRecord(buf []byte) (n uint32) {
 	// fill with random data
 	rand.Read(buf[:n])
 	// write a valid size, kind
-	writeUint(buf, n)
+	writeUint32(buf, n)
 	buf[journalRecLenSz] = byte(tableIndexRecKind)
 	return
 }

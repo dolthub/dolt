@@ -21,6 +21,7 @@ import (
 	"io"
 
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // indexRec is a record in a chunk journal index file. Index records
@@ -30,9 +31,26 @@ import (
 // Like journalRec, its serialization format uses uint8 tag prefixes
 // to identify fields and allow for format evolution.
 type indexRec struct {
-	length   uint32
-	kind     indexRecKind
-	payload  []byte
+	// index record length
+	length uint32
+
+	// root hash of commit when this index record was written
+	lastRoot hash.Hash
+
+	// file offsets for the region of the journal file
+	// that |payload| indexes. stop points to a root hash
+	// record in the journal containing |lastRoot|.
+	// we expect a sequence of index records to cover
+	// contiguous regions of the journal file.
+	start, stop uint64
+
+	// index record kind
+	kind indexRecKind
+
+	// encoded chunk index
+	payload []byte
+
+	// index record crc32 checksum
 	checksum uint32
 }
 
@@ -46,20 +64,28 @@ const (
 type indexRecTag uint8
 
 const (
-	unknownIndexRecTag indexRecTag = 0
-	kindIndexRecTag    indexRecTag = 1
-	payloadIndexRecTag indexRecTag = 2
+	unknownIndexRecTag     indexRecTag = 0
+	lastRootIndexRecTag    indexRecTag = 1
+	startOffsetIndexRecTag indexRecTag = 2
+	stopOffsetIndexRecTag  indexRecTag = 3
+	kindIndexRecTag        indexRecTag = 4
+	payloadIndexRecTag     indexRecTag = 5
 )
 
 const (
 	indexRecTagSz      = 1
 	indexRecLenSz      = 4
 	indexRecKindSz     = 1
+	indexRecLastRootSz = 20
+	indexRecOffsetSz   = 8
 	indexRecChecksumSz = 4
 )
 
 func tableIndexRecordSize(idx []byte) (recordSz uint32) {
 	recordSz += indexRecLenSz
+	recordSz += indexRecTagSz + indexRecLastRootSz
+	recordSz += indexRecTagSz + indexRecOffsetSz
+	recordSz += indexRecTagSz + indexRecOffsetSz
 	recordSz += indexRecTagSz + indexRecKindSz
 	recordSz += indexRecTagSz // payload tag
 	recordSz += uint32(len(idx))
@@ -67,11 +93,26 @@ func tableIndexRecordSize(idx []byte) (recordSz uint32) {
 	return
 }
 
-func writeTableIndexRecord(buf []byte, idx []byte) (n uint32) {
+func writeTableIndexRecord(buf []byte, root hash.Hash, start, stop uint64, idx []byte) (n uint32) {
 	// length
 	l := tableIndexRecordSize(idx)
-	writeUint(buf[:indexRecLenSz], l)
+	writeUint32(buf[:indexRecLenSz], l)
 	n += indexRecLenSz
+	// last root
+	buf[n] = byte(lastRootIndexRecTag)
+	n += indexRecTagSz
+	copy(buf[n:], root[:])
+	n += indexRecLastRootSz
+	// start offset
+	buf[n] = byte(startOffsetIndexRecTag)
+	n += indexRecTagSz
+	writeUint64(buf[n:], start)
+	n += indexRecOffsetSz
+	// stop offset
+	buf[n] = byte(stopOffsetIndexRecTag)
+	n += indexRecTagSz
+	writeUint64(buf[n:], stop)
+	n += indexRecOffsetSz
 	// kind
 	buf[n] = byte(kindIndexRecTag)
 	n += indexRecTagSz
@@ -83,19 +124,28 @@ func writeTableIndexRecord(buf []byte, idx []byte) (n uint32) {
 	copy(buf[n:], idx)
 	n += uint32(len(idx))
 	// checksum
-	writeUint(buf[n:], crc(buf[:n]))
+	writeUint32(buf[n:], crc(buf[:n]))
 	n += indexRecChecksumSz
 	d.PanicIfFalse(l == n)
 	return
 }
 
 func readTableIndexRecord(buf []byte) (rec indexRec, err error) {
-	rec.length = readUint(buf)
+	rec.length = readUint32(buf)
 	buf = buf[indexRecLenSz:]
 	for len(buf) > indexRecChecksumSz {
 		tag := indexRecTag(buf[0])
 		buf = buf[indexRecTagSz:]
 		switch tag {
+		case lastRootIndexRecTag:
+			copy(rec.lastRoot[:], buf)
+			buf = buf[indexRecLastRootSz:]
+		case startOffsetIndexRecTag:
+			rec.start = readUint64(buf)
+			buf = buf[indexRecOffsetSz:]
+		case stopOffsetIndexRecTag:
+			rec.stop = readUint64(buf)
+			buf = buf[indexRecOffsetSz:]
 		case kindIndexRecTag:
 			rec.kind = indexRecKind(buf[0])
 			buf = buf[indexRecKindSz:]
@@ -110,14 +160,14 @@ func readTableIndexRecord(buf []byte) (rec indexRec, err error) {
 			return
 		}
 	}
-	rec.checksum = readUint(buf[:indexRecChecksumSz])
+	rec.checksum = readUint32(buf[:indexRecChecksumSz])
 	return
 }
 
 func validateIndexRecord(buf []byte) (ok bool) {
 	if len(buf) > (indexRecLenSz + indexRecChecksumSz) {
 		off := len(buf) - indexRecChecksumSz
-		ok = crc(buf[:off]) == readUint(buf[off:])
+		ok = crc(buf[:off]) == readUint32(buf[off:])
 	}
 	return
 }
@@ -129,6 +179,7 @@ func processIndexRecords(ctx context.Context, r io.ReadSeeker, sz int, cb func(o
 		err error
 	)
 
+	// |rdr| can buffer all of |r|
 	rdr := bufio.NewReaderSize(r, sz)
 	for {
 		// peek to read next record size
@@ -136,7 +187,7 @@ func processIndexRecords(ctx context.Context, r io.ReadSeeker, sz int, cb func(o
 			break
 		}
 
-		l := readUint(buf)
+		l := readUint32(buf)
 		if buf, err = rdr.Peek(int(l)); err != nil {
 			break
 		}
