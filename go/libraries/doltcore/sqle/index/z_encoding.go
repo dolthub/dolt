@@ -79,14 +79,6 @@ func InterleaveUInt64(x, y uint64) uint64 {
 	return x | (y << 1)
 }
 
-// ZValue takes a Point and interleaves the bits into a [2]uint64
-// It will put the bits in this order: x_0, y_0, x_1, y_1 ... x_63, Y_63
-func ZValue(p types.Point) (z [2]uint64) {
-	xLex, yLex := LexFloat(p.X), LexFloat(p.Y)
-	z[0], z[1] = InterleaveUInt64(xLex>>32, yLex>>32), InterleaveUInt64(xLex&0xFFFFFFFF, yLex&0xFFFFFFFF)
-	return
-}
-
 // UnInterleaveUint64 splits up the bits of the uint64 z into two uint64s
 // The first 32 bits of x and y must be 0.
 // Example:
@@ -135,6 +127,14 @@ func UnInterleaveUint64(z uint64) (x, y uint64) {
 	return
 }
 
+// ZValue takes a Point and interleaves the bits into a [2]uint64
+// It will put the bits in this order: x_0, y_0, x_1, y_1 ... x_63, Y_63
+func ZValue(p types.Point) (z [2]uint64) {
+	xLex, yLex := LexFloat(p.X), LexFloat(p.Y)
+	z[0], z[1] = InterleaveUInt64(xLex>>32, yLex>>32), InterleaveUInt64(xLex&0xFFFFFFFF, yLex&0xFFFFFFFF)
+	return
+}
+
 // UnZValue takes a [2]uint64 Z-Value and converts it back to a sql.Point
 func UnZValue(z [2]uint64) types.Point {
 	xl, yl := UnInterleaveUint64(z[0])
@@ -142,14 +142,6 @@ func UnZValue(z [2]uint64) types.Point {
 	xf := UnLexFloat((xl << 32) | xr)
 	yf := UnLexFloat((yl << 32) | yr)
 	return types.Point{X: xf, Y: yf}
-}
-
-func ZSort(points []types.Point) []types.Point {
-	sort.Slice(points, func(i, j int) bool {
-		zi, zj := ZValue(points[i]), ZValue(points[j])
-		return zi[0] < zj[0] || (zi[0] == zj[0] && zi[1] < zi[1])
-	})
-	return points
 }
 
 // ZCell converts the GeometryValue into a Cell
@@ -180,6 +172,15 @@ func ZCell(v types.GeometryValue) val.Cell {
 	return cell
 }
 
+// UnZCell converts the val.Cell into a types.Point
+// NOTE: this does not completely revert the conversion from types.GeometryValue
+func UnZCell(v val.Cell) types.Point {
+	var zVal [2]uint64
+	zVal[0] = binary.BigEndian.Uint64(v[1:])
+	zVal[1] = binary.BigEndian.Uint64(v[9:])
+	return UnZValue(zVal)
+}
+
 // ZAddr converts the GeometryValue into a key: (level, min_z_val)
 func ZAddr(v types.GeometryValue) val.Cell {
 	bbox := spatial.FindBBox(v)
@@ -196,8 +197,15 @@ func ZAddr(v types.GeometryValue) val.Cell {
 	return addr
 }
 
-// ZAddrSort converts the GeometryValue into a key: (min_z_val, level)
-// Note: there is an inefficiency here where small polygons may be placed into a level that's significantly larger
+func ZSort(points []types.Point) []types.Point {
+	sort.Slice(points, func(i, j int) bool {
+		zi, zj := ZValue(points[i]), ZValue(points[j])
+		return zi[0] < zj[0] || (zi[0] == zj[0] && zi[1] < zi[1])
+	})
+	return points
+}
+
+// ZAddrSort sorts the geometry values based off their ZAddrs
 func ZAddrSort(geoms []types.GeometryValue) []types.GeometryValue {
 	sort.Slice(geoms, func(i, j int) bool {
 		zi, zj := ZAddr(geoms[i]), ZAddr(geoms[j])
