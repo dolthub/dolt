@@ -84,7 +84,7 @@ const (
 	indexRecChecksumSz = 4
 )
 
-func tableIndexRecordSize(idx []byte) (recordSz uint32) {
+func journalIndexRecordSize(idx []byte) (recordSz uint32) {
 	recordSz += indexRecLenSz
 	recordSz += indexRecTagSz + indexRecLastRootSz
 	recordSz += indexRecTagSz + indexRecOffsetSz
@@ -96,9 +96,9 @@ func tableIndexRecordSize(idx []byte) (recordSz uint32) {
 	return
 }
 
-func writeTableIndexRecord(buf []byte, root hash.Hash, start, stop uint64, idx []byte) (n uint32) {
+func writeJournalIndexRecord(buf []byte, root hash.Hash, start, stop uint64, idx []byte) (n uint32) {
 	// length
-	l := tableIndexRecordSize(idx)
+	l := journalIndexRecordSize(idx)
 	writeUint32(buf[:indexRecLenSz], l)
 	n += indexRecLenSz
 	// last root
@@ -133,7 +133,7 @@ func writeTableIndexRecord(buf []byte, root hash.Hash, start, stop uint64, idx [
 	return
 }
 
-func readTableIndexRecord(buf []byte) (rec indexRec, err error) {
+func readJournalIndexRecord(buf []byte) (rec indexRec, err error) {
 	rec.length = readUint32(buf)
 	buf = buf[indexRecLenSz:]
 	for len(buf) > indexRecChecksumSz {
@@ -200,7 +200,7 @@ func processIndexRecords(ctx context.Context, r io.ReadSeeker, sz int, cb func(o
 		}
 
 		var rec indexRec
-		if rec, err = readTableIndexRecord(buf); err != nil {
+		if rec, err = readJournalIndexRecord(buf); err != nil {
 			break // failed to read valid record
 		}
 		if err = cb(off, rec); err != nil {

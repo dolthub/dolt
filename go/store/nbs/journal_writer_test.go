@@ -25,23 +25,24 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
-type operation struct {
-	kind   opKind
-	buf    []byte
-	readAt int64
-}
+func TestJournalWriterReadWrite(t *testing.T) {
+	type opKind byte
 
-type opKind byte
+	type operation struct {
+		kind   opKind
+		buf    []byte
+		readAt int64
+	}
 
-const (
-	readOp opKind = iota
-	writeOp
-	flushOp
-)
+	const (
+		readOp opKind = iota
+		writeOp
+		flushOp
+	)
 
-func TestJournalWriter(t *testing.T) {
 	tests := []struct {
 		name string
 		size int
@@ -144,14 +145,12 @@ func TestJournalWriter(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
-			j, err := createJournalWriter(ctx, newTestFilePath(t))
-			require.NotNil(t, j)
-			require.NoError(t, err)
+			j := newTestJournalWriter(t, newTestFilePath(t))
 			// set specific buffer size
 			j.buf = make([]byte, 0, test.size)
 
 			var off int64
+			var err error
 			for i, op := range test.ops {
 				switch op.kind {
 				case readOp:
@@ -180,21 +179,26 @@ func TestJournalWriter(t *testing.T) {
 	}
 }
 
-func TestJournalWriterWriteCompressedChunk(t *testing.T) {
+func newTestJournalWriter(t *testing.T, path string) *journalWriter {
 	ctx := context.Background()
-	j, err := createJournalWriter(ctx, newTestFilePath(t))
+	j, err := createJournalWriter(ctx, path)
 	require.NotNil(t, j)
 	require.NoError(t, err)
+	_, err = j.bootstrapJournal(ctx)
+	require.NoError(t, err)
+	return j
+}
 
-	data := randomCompressedChunks()
-
+func TestJournalWriterWriteCompressedChunk(t *testing.T) {
+	j := newTestJournalWriter(t, newTestFilePath(t))
+	data := randomCompressedChunks(1024)
 	for a, cc := range data {
-		err = j.writeCompressedChunk(cc)
+		err := j.writeCompressedChunk(cc)
 		require.NoError(t, err)
-		r, _ := j.index.get(a)
+		r, _ := j.ranges.get(a)
 		validateLookup(t, j, r, cc)
 	}
-	j.index.iter(func(a addr, r Range) {
+	j.ranges.iter(func(a addr, r Range) {
 		validateLookup(t, j, r, data[a])
 	})
 	require.NoError(t, j.Close())
@@ -203,23 +207,20 @@ func TestJournalWriterWriteCompressedChunk(t *testing.T) {
 func TestJournalWriterBootstrap(t *testing.T) {
 	ctx := context.Background()
 	path := newTestFilePath(t)
-	j, err := createJournalWriter(ctx, path)
-	require.NotNil(t, j)
-	require.NoError(t, err)
-
-	data := randomCompressedChunks()
+	j := newTestJournalWriter(t, path)
+	data := randomCompressedChunks(1024)
 	for _, cc := range data {
-		err = j.writeCompressedChunk(cc)
+		err := j.writeCompressedChunk(cc)
 		require.NoError(t, err)
 	}
 	assert.NoError(t, j.Close())
 
-	j, _, err = openJournalWriter(ctx, path)
+	j, _, err := openJournalWriter(ctx, path)
 	require.NoError(t, err)
 	_, err = j.bootstrapJournal(ctx)
 	require.NoError(t, err)
 
-	j.index.iter(func(a addr, r Range) {
+	j.ranges.iter(func(a addr, r Range) {
 		validateLookup(t, j, r, data[a])
 	})
 
@@ -235,22 +236,16 @@ func TestJournalWriterBootstrap(t *testing.T) {
 }
 
 func validateLookup(t *testing.T, j *journalWriter, r Range, cc CompressedChunk) {
-	//buf := make([]byte, r.Length)
-	//_, err := j.readAt(buf, int64(r.Offset))
-	//require.NoError(t, err)
-	//act, err := NewCompressedChunk(cc.H, buf)
-	//assert.NoError(t, err)
-	//assert.Equal(t, cc.FullCompressedChunk, act.FullCompressedChunk)
+	buf := make([]byte, r.Length)
+	_, err := j.readAt(buf, int64(r.Offset))
+	require.NoError(t, err)
+	act, err := NewCompressedChunk(cc.H, buf)
+	assert.NoError(t, err)
+	assert.Equal(t, cc.FullCompressedChunk, act.FullCompressedChunk)
 }
 
 func TestJournalWriterSyncClose(t *testing.T) {
-	ctx := context.Background()
-	j, err := createJournalWriter(ctx, newTestFilePath(t))
-	require.NotNil(t, j)
-	require.NoError(t, err)
-	_, err = j.bootstrapJournal(ctx)
-	require.NoError(t, err)
-
+	j := newTestJournalWriter(t, newTestFilePath(t))
 	// close triggers flush
 	p := []byte("sit")
 	buf, err := j.getBytes(len(p))
@@ -267,18 +262,86 @@ func newTestFilePath(t *testing.T) string {
 	return filepath.Join(t.TempDir(), name)
 }
 
-func randomCompressedChunks() (compressed map[addr]CompressedChunk) {
-	buf := make([]byte, 1024*1024)
-	rand.Read(buf)
+func TestJournalIndexBootstrap(t *testing.T) {
+	// potentially indexed region of a journal
+	type epoch struct {
+		records map[addr]CompressedChunk
+		last    hash.Hash
+	}
 
+	makeEpoch := func(cnt int) (e epoch) {
+		e.records = randomCompressedChunks(cnt)
+		for h := range e.records {
+			e.last = hash.Hash(h)
+			break
+		}
+		return
+	}
+
+	tests := []struct {
+		name   string
+		epochs []epoch
+		novel  epoch
+	}{
+		{
+			name:  "smoke test",
+			novel: makeEpoch(64),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			path := newTestFilePath(t)
+			j := newTestJournalWriter(t, path)
+			// setup
+			epochs := append(test.epochs, test.novel)
+			for _, e := range epochs {
+				for _, cc := range e.records {
+					assert.NoError(t, j.writeCompressedChunk(cc))
+					if rand.Int()%10 == 0 { // periodic commits
+						assert.NoError(t, j.writeRootHash(cc.H))
+					}
+				}
+				// commit known last root hash
+				assert.NoError(t, j.writeRootHash(e.last))
+				// todo: force indexing here
+			}
+
+			validate := func(p string, expected []epoch) {
+				journal, ok, err := openJournalWriter(ctx, p)
+				require.NoError(t, err)
+				require.True(t, ok)
+				last, err := journal.bootstrapJournal(ctx)
+				assert.NoError(t, err)
+				for _, e := range expected {
+					var act CompressedChunk
+					for a, exp := range e.records {
+						act, err = journal.getCompressedChunk(a)
+						assert.NoError(t, err)
+						assert.Equal(t, exp, act)
+					}
+				}
+				assert.Equal(t, expected[len(expected)-1].last, last)
+			}
+
+			validate(path, epochs)
+		})
+	}
+}
+
+func randomCompressedChunks(cnt int) (compressed map[addr]CompressedChunk) {
 	compressed = make(map[addr]CompressedChunk)
-	for {
+	var buf []byte
+	for i := 0; i < cnt; i++ {
 		k := rand.Intn(51) + 50
 		if k >= len(buf) {
-			return
+			buf = make([]byte, 64*1024)
+			rand.Read(buf)
 		}
 		c := chunks.NewChunk(buf[:k])
 		buf = buf[k:]
 		compressed[addr(c.Hash())] = ChunkToCompressedChunk(c)
 	}
+	return
 }

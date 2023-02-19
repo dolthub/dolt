@@ -33,10 +33,10 @@ func TestRoundTripIndexRecords(t *testing.T) {
 			rec, buf := makeTableIndexRecord()
 			assert.Equal(t, rec.length, uint32(len(buf)))
 			b := make([]byte, rec.length)
-			n := writeTableIndexRecord(b, rec.lastRoot, rec.start, rec.stop, mustPayload(rec))
+			n := writeJournalIndexRecord(b, rec.lastRoot, rec.start, rec.stop, mustPayload(rec))
 			assert.Equal(t, n, rec.length)
 			assert.Equal(t, buf, b)
-			r, err := readTableIndexRecord(buf)
+			r, err := readJournalIndexRecord(buf)
 			assert.NoError(t, err)
 			assert.Equal(t, rec, r)
 		}
@@ -50,7 +50,7 @@ func TestUnknownIndexRecordTag(t *testing.T) {
 	ok := validateIndexRecord(buf)
 	assert.True(t, ok)
 	// reading record fails
-	_, err := readTableIndexRecord(buf)
+	_, err := readJournalIndexRecord(buf)
 	assert.Error(t, err)
 }
 
@@ -64,7 +64,7 @@ func TestProcessIndexRecords(t *testing.T) {
 	var off uint32
 	for i := range records {
 		r, b := makeTableIndexRecord()
-		off += writeTableIndexRecord(index[off:], r.lastRoot, r.start, r.stop, mustPayload(r))
+		off += writeJournalIndexRecord(index[off:], r.lastRoot, r.start, r.stop, mustPayload(r))
 		records[i], buffers[i] = r, b
 	}
 
@@ -102,7 +102,7 @@ func TestRoundTripLookups(t *testing.T) {
 
 func makeTableIndexRecord() (indexRec, []byte) {
 	payload := randBuf(100)
-	sz := tableIndexRecordSize(payload)
+	sz := journalIndexRecordSize(payload)
 	lastRoot := hash.Of([]byte("fake commit"))
 	start, stop := uint64(12345), uint64(23456)
 
@@ -171,7 +171,7 @@ func makeUnknownTagIndexRecord() (buf []byte) {
 }
 
 func writeCorruptIndexRecord(buf []byte) (n uint32) {
-	n = tableIndexRecordSize(nil)
+	n = journalIndexRecordSize(nil)
 	// fill with random data
 	rand.Read(buf[:n])
 	// write a valid size, kind
