@@ -174,7 +174,7 @@ func ZCell(v types.GeometryValue) val.Cell {
 
 // UnZCell converts the val.Cell into a types.Point
 // NOTE: this does not completely revert the conversion from types.GeometryValue
-func UnZCell(v val.Cell) types.Point {
+func UnZCell(v []byte) types.Point {
 	var zVal [2]uint64
 	zVal[0] = binary.BigEndian.Uint64(v[1:])
 	zVal[1] = binary.BigEndian.Uint64(v[9:])

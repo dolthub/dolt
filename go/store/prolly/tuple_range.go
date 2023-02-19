@@ -15,10 +15,12 @@
 package prolly
 
 import (
+	"encoding/binary"
+	"github.com/dolthub/go-mysql-server/sql/types"
+	"math"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -55,6 +57,8 @@ type Range struct {
 	Fields []RangeField
 	Desc   val.TupleDesc
 	Tup    val.Tuple
+	cache bool
+	minPoint, maxPoint types.Point
 }
 
 // RangeField bounds one dimension of a Range.
@@ -133,6 +137,86 @@ func (r Range) belowStop(t val.Tuple) bool {
 	return true
 }
 
+// UnLexFloat maps the lexicographic uint64 representation of a float64 back into a float64
+// For negative int64s, we flip all the bits
+// For non-negative int64s, we flip the signed bit
+func UnLexFloat(b uint64) float64 {
+	if b>>63 == 1 {
+		b = b ^ (1 << 63)
+	} else {
+		b = ^b
+	}
+	return math.Float64frombits(b)
+}
+
+// UnInterleaveUint64 splits up the bits of the uint64 z into two uint64s
+// The first 32 bits of x and y must be 0.
+// Example:
+// abcd efgh ijkl mnop abcd efgh ijkl mnop abcd efgh ijkl mnop abcd efgh ijkl mnop 0x5555555555555555
+// 0b0d 0f0h 0j0l 0n0p 0b0d 0f0h 0j0l 0n0p 0b0d 0f0h 0j0l 0n0p 0b0d 0f0h 0j0l 0n0p x | x >> 1
+// 0bbd dffh hjjl lnnp pbbd dffh hjjl lnnp pbbd dffh hjjl lnnp pnbd dffh hjjl lnnp 0x3333333333333333
+// 00bd 00fh 00jl 00np 00bd 00fh 00jl 00np 00bd 00fh 00jl 00np 00bd 00fh 00jl 00np x | x >> 2
+// 0000 bdfh fhjl jlnp npbd bdfh fhjl jlnp npdb bdfh fhjl jlnp npdb bdfh fhjl jlnp 0x0F0F0F0F0F0F0F0F
+// 0000 bdfh 0000 jlnp 0000 bdfh 0000 jlnp 0000 bdfh 0000 jlnp 0000 bdfh 0000 jlnp x | x >> 4
+// 0000 bdfh bdfh jlnp jlnp bdfh bdfh jlnp jlnp bdfh bdfh jlnp jlnp bdfh bdfh jlnp 0x00FF00FF00FF00FF
+// 0000 0000 bdfh jlnp 0000 0000 bdfh jlnp 0000 0000 bdfh jlnp 0000 0000 bdfh jlnp x | x >> 8
+// 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp 0x0000FFFF0000FFFF
+// 0000 0000 0000 0000 bdfh jlnp bdfh jlnp 0000 0000 0000 0000 bdfh jlnp bdfh jlnp x | x >> 16
+// 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp 0x00000000FFFFFFFF
+// 0000 0000 0000 0000 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp
+func UnInterleaveUint64(z uint64) (x, y uint64) {
+	x, y = z, z>>1
+
+	x &= 0x5555555555555555
+	x |= x >> 1
+	y &= 0x5555555555555555
+	y |= y >> 1
+
+	x &= 0x3333333333333333
+	x |= x >> 2
+	y &= 0x3333333333333333
+	y |= y >> 2
+
+	x &= 0x0F0F0F0F0F0F0F0F
+	x |= x >> 4
+	y &= 0x0F0F0F0F0F0F0F0F
+	y |= y >> 4
+
+	x &= 0x00FF00FF00FF00FF
+	x |= x >> 8
+	y &= 0x00FF00FF00FF00FF
+	y |= y >> 8
+
+	x &= 0x0000FFFF0000FFFF
+	x |= x >> 16
+	y &= 0x0000FFFF0000FFFF
+	y |= y >> 16
+
+	x &= 0xFFFFFFFF
+	y &= 0xFFFFFFFF
+	return
+}
+
+// UnZValue takes a [2]uint64 Z-Value and converts it back to a sql.Point
+func UnZValue(z [2]uint64) types.Point {
+	xl, yl := UnInterleaveUint64(z[0])
+	xr, yr := UnInterleaveUint64(z[1])
+	xf := UnLexFloat((xl << 32) | xr)
+	yf := UnLexFloat((yl << 32) | yr)
+	return types.Point{X: xf, Y: yf}
+}
+
+// UnZCell converts the val.Cell into a types.Point
+// NOTE: this does not completely revert the conversion from types.GeometryValue
+func UnZCell(v []byte) types.Point {
+	var zVal [2]uint64
+	zVal[0] = binary.BigEndian.Uint64(v[1:])
+	zVal[1] = binary.BigEndian.Uint64(v[9:])
+	return UnZValue(zVal)
+}
+
+
+
 // Matches returns true if all of the filter predicates
 // for Range |r| are true for Tuple |t|.
 func (r Range) Matches(t val.Tuple) bool {
@@ -162,6 +246,22 @@ func (r Range) Matches(t val.Tuple) bool {
 			cmp := order.CompareValues(i, field, hi.Value, typ)
 			if cmp > 0 || (cmp == 0 && !hi.Inclusive) {
 				return false
+			}
+		}
+
+		// TODO: cache the bbox somewhere else so we don't have to unzip both everytime
+		// TODO: this makes worst case much better, but fast case slightly worse
+		if typ.Enc == val.CellEnc {
+			// TODO: write helper method
+			if !r.cache {
+				r.cache = true
+				r.minPoint = UnZCell(lo.Value) // cache this
+				r.maxPoint = UnZCell(hi.Value) // cache this
+			}
+			point := UnZCell(field)
+			if point.X < r.minPoint.X || r.maxPoint.X < point.X ||
+				point.Y < r.minPoint.Y || r.maxPoint.Y < point.Y {
+					return false
 			}
 		}
 	}

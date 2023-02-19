@@ -380,7 +380,16 @@ func treeIterFromRange(
 		return nil, err
 	}
 
-	return tree.OrderedTreeIterFromCursors[val.Tuple, val.Tuple](start, stop), nil
+	isSpatial := true
+	for _, typ := range rng.Desc.Types {
+		if typ.Enc != val.CellEnc {
+			isSpatial = false
+		}
+	}
+	iter := tree.OrderedTreeIterFromCursors[val.Tuple, val.Tuple](start, stop)
+	iter.IsSpatial = isSpatial
+
+	return iter, nil
 }
 
 func NewPointLookup(k, v val.Tuple) *pointLookup {
