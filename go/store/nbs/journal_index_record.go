@@ -16,9 +16,12 @@ package nbs
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
+	"sort"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -219,4 +222,42 @@ func processIndexRecords(ctx context.Context, r io.ReadSeeker, sz int, cb func(o
 		return 0, err
 	}
 	return off, nil
+}
+
+type lookup struct {
+	a addr
+	r Range
+}
+
+const lookupSize = addrSize + offsetSize + lengthSize
+
+// serializeLookups serializes |lookups| using the table file chunk index format.
+func serializeLookups(lookups []lookup) (index []byte) {
+	index = make([]byte, len(lookups)*lookupSize)
+	sort.Slice(lookups, func(i, j int) bool { // sort by addr
+		return bytes.Compare(lookups[i].a[:], lookups[j].a[:]) < 0
+	})
+	buf := index
+	for _, l := range lookups {
+		copy(buf, l.a[:])
+		buf = buf[addrSize:]
+		binary.BigEndian.PutUint64(buf, l.r.Offset)
+		buf = buf[offsetSize:]
+		binary.BigEndian.PutUint32(buf, l.r.Length)
+		buf = buf[lengthSize:]
+	}
+	return
+}
+
+func deserializeLookups(index []byte) (lookups []lookup) {
+	lookups = make([]lookup, len(index)/lookupSize)
+	for i := range lookups {
+		copy(lookups[i].a[:], index)
+		index = index[addrSize:]
+		lookups[i].r.Offset = binary.BigEndian.Uint64(index)
+		index = index[offsetSize:]
+		lookups[i].r.Length = binary.BigEndian.Uint32(index)
+		index = index[lengthSize:]
+	}
+	return
 }

@@ -92,6 +92,14 @@ func TestProcessIndexRecords(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestRoundTripLookups(t *testing.T) {
+	exp := makeLookups(128)
+	buf := serializeLookups(exp)
+	act := deserializeLookups(buf)
+	assert.Equal(t, exp, act)
+
+}
+
 func makeTableIndexRecord() (indexRec, []byte) {
 	payload := randBuf(100)
 	sz := tableIndexRecordSize(payload)
@@ -175,4 +183,20 @@ func writeCorruptIndexRecord(buf []byte) (n uint32) {
 func mustPayload(rec indexRec) []byte {
 	d.PanicIfFalse(rec.kind == tableIndexRecKind)
 	return rec.payload
+}
+
+func makeLookups(cnt int) (lookups []lookup) {
+	lookups = make([]lookup, cnt)
+	buf := make([]byte, cnt*addrSize)
+	rand.Read(buf)
+	var off uint64
+	for i := range lookups {
+		copy(lookups[i].a[:], buf)
+		buf = buf[addrSize:]
+		lookups[i].r.Offset = off
+		l := rand.Uint32() % 1024
+		lookups[i].r.Length = l
+		off += uint64(l)
+	}
+	return
 }
