@@ -242,7 +242,29 @@ teardown() {
     dolt sql -q "CREATE TRIGGER trigger3 AFTER INSERT ON a FOR EACH ROW FOLLOWS trigger2 INSERT INTO b VALUES (new.x * 2);"
     dolt sql -q "CREATE TRIGGER trigger4 AFTER INSERT ON a FOR EACH ROW PRECEDES trigger3 INSERT INTO b VALUES (new.x * 2);"
     dolt sql -q "CREATE PROCEDURE p1 (in x int) select x from dual"
+    dolt sql <<SQL
+delimiter //
+CREATE PROCEDURE dorepeat(p1 INT)
+       BEGIN
+          SET @x = 0;
+          REPEAT SET @x = @x + 1; UNTIL @x > p1 END REPEAT;
+       END
+//
+SQL
 
+    dolt sql <<SQL
+delimiter //
+CREATE PROCEDURE dorepeat2(p2 INT)
+       BEGIN
+          SET @x = 0;
+          REPEAT SET @x = @x + 1; UNTIL @x > p2 END REPEAT;
+       END
+//
+SQL
+
+    # decoy database in this directory to make sure we export the correct database's triggers etc.
+    dolt sql -q "create database aadecoy"
+    
     dolt add .
     dolt commit -m "create tables"
 
@@ -309,6 +331,14 @@ teardown() {
     run dolt sql -q "show create procedure p1"
     [ "$status" -eq 0 ]
     [[ "$output" =~ 'CREATE PROCEDURE p1 (in x int) select x' ]] || false
+
+    run dolt sql -q "show create procedure dorepeat"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'CREATE PROCEDURE dorepeat(p1' ]] || false
+
+    run dolt sql -q "show create procedure dorepeat2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'CREATE PROCEDURE dorepeat2(p2' ]] || false
 }
 
 @test "dump: SQL type - with keyless tables" {

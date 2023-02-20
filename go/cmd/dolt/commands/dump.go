@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport"
@@ -228,34 +227,23 @@ func dumpSchemaElements(ctx context.Context, dEnv *env.DoltEnv, path string) err
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-
-	dbs := engine.GetUnderlyingEngine().Analyzer.Catalog.AllDatabases(sqlCtx)
-	var db sqle.SqlDatabase
-	for _, d := range dbs {
-		doltDb, ok := d.(sqle.SqlDatabase)
-		if !ok {
-			continue
-		}
-
-		db = doltDb
-		break
+	
+	root, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
 	}
-
-	if db == nil {
-		return errhand.BuildDError("error: failed to get database").Build()
-	}
-
-	err = dumpViews(sqlCtx, engine, db, writer)
+	
+	err = dumpViews(sqlCtx, engine, root, writer)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = dumpTriggers(sqlCtx, engine, db, writer)
+	err = dumpTriggers(sqlCtx, engine, root, writer)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = dumpProcedures(sqlCtx, engine, db, writer)
+	err = dumpProcedures(sqlCtx, engine, root, writer)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -268,8 +256,8 @@ func dumpSchemaElements(ctx context.Context, dEnv *env.DoltEnv, path string) err
 	return nil
 }
 
-func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, db sqle.SqlDatabase, writer io.WriteCloser) (rerr error) {
-	_, ok, err := db.GetTableInsensitive(sqlCtx, doltdb.ProceduresTableName)
+func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValue, writer io.WriteCloser) (rerr error) {
+	_, _, ok, err := root.GetTableInsensitive(sqlCtx, doltdb.ProceduresTableName)
 	if err != nil {
 		return err
 	}
@@ -300,7 +288,17 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, db sqle.SqlDa
 			return err
 		}
 
+		err = iohelp.WriteLine(writer, fmt.Sprintf("delimiter END_PROCEDURE"))
+		if err != nil {
+			return err
+		}
+		
 		err = iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[stmtColIdx]))
+		if err != nil {
+			return err
+		}
+
+		err = iohelp.WriteLine(writer, fmt.Sprintf("END_PROCEDURE\ndelimiter ;"))
 		if err != nil {
 			return err
 		}
@@ -309,8 +307,8 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, db sqle.SqlDa
 	return nil
 }
 
-func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, db sqle.SqlDatabase, writer io.WriteCloser) (rerr error) {
-	_, ok, err := db.GetTableInsensitive(sqlCtx, doltdb.SchemasTableName)
+func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValue, writer io.WriteCloser) (rerr error) {
+	_, _, ok, err := root.GetTableInsensitive(sqlCtx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}
@@ -355,8 +353,8 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, db sqle.SqlData
 	return nil
 }
 
-func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, db sqle.SqlDatabase, writer io.WriteCloser) (rerr error) {
-	_, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValue, writer io.WriteCloser) (rerr error) {
+	_, _, ok, err := root.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}
