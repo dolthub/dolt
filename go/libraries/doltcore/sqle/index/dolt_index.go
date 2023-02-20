@@ -978,12 +978,16 @@ func (di *doltIndex) prollySpatialRanges(ctx context.Context, ns tree.NodeStore,
 				Value:     maxVal,
 			},
 		}
+		minV := PartialUnZCell(minVal)
+		maxV := PartialUnZCell(maxVal)
 		pranges[lvl] = prolly.Range{
 			Fields: []prolly.RangeField{field},
 			Desc:   di.keyBld.Desc,
 			Tup:    tup,
-			MinPoint: UnZCell(minVal),
-			MaxPoint: UnZCell(maxVal),
+			MinX:   minV[0],
+			MinY:   minV[1],
+			MaxX:   maxV[0],
+			MaxY:   maxV[1],
 		}
 	}
 
@@ -1011,12 +1015,16 @@ func (di *doltIndex) prollySpatialRanges(ctx context.Context, ns tree.NodeStore,
 				Value:     maxVal,
 			},
 		}
+		minV := PartialUnZCell(minVal)
+		maxV := PartialUnZCell(maxVal)
 		pranges[lvl+32] = prolly.Range{
 			Fields: []prolly.RangeField{field},
 			Desc:   di.keyBld.Desc,
 			Tup:    tup,
-			MinPoint: UnZCell(minVal),
-			MaxPoint: UnZCell(maxVal),
+			MinX:   minV[0],
+			MinY:   minV[1],
+			MaxX:   maxV[0],
+			MaxY:   maxV[1],
 		}
 	}
 

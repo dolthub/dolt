@@ -57,7 +57,7 @@ type Range struct {
 	Fields []RangeField
 	Desc   val.TupleDesc
 	Tup    val.Tuple
-	MinPoint, MaxPoint types.Point
+	MinX, MinY, MaxX, MaxY uint64
 }
 
 // RangeField bounds one dimension of a Range.
@@ -214,6 +214,22 @@ func UnZCell(v []byte) types.Point {
 	return UnZValue(zVal)
 }
 
+// PartialUnZValue takes a [2]uint64 Z-Value and converts it back to a sql.Point
+func PartialUnZValue(z [2]uint64) [2]uint64 {
+	xl, yl := UnInterleaveUint64(z[0])
+	xr, yr := UnInterleaveUint64(z[1])
+	return [2]uint64{(xl << 32) | xr, (yl << 32) | yr}
+}
+
+// PartialUnZCell converts the val.Cell into a types.Point
+// NOTE: this does not completely revert the conversion from types.GeometryValue
+func PartialUnZCell(v []byte) [2]uint64 {
+	var zVal [2]uint64
+	zVal[0] = binary.BigEndian.Uint64(v[1:])
+	zVal[1] = binary.BigEndian.Uint64(v[9:])
+	return PartialUnZValue(zVal)
+}
+
 // Matches returns true if all of the filter predicates
 // for Range |r| are true for Tuple |t|.
 func (r Range) Matches(t val.Tuple) bool {
@@ -222,7 +238,8 @@ func (r Range) Matches(t val.Tuple) bool {
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
-		if r.Fields[i].Exact || r.MinPoint == r.MaxPoint {
+		spatialExact := (r.MinX == r.MaxX) && (r.MinY == r.MaxY)
+		if r.Fields[i].Exact || spatialExact {
 			v := r.Fields[i].Lo.Value
 			if order.CompareValues(i, field, v, typ) == 0 {
 				continue
@@ -249,11 +266,12 @@ func (r Range) Matches(t val.Tuple) bool {
 		// TODO: cache the bbox somewhere else so we don't have to unzip both everytime
 		// TODO: this makes worst case much better, but fast case slightly worse
 		if typ.Enc == val.CellEnc {
-			// TODO: not necessary to unlex the floats (uint64 comparison is fine)
-			point := UnZCell(field)
-			if point.X < r.MinPoint.X || r.MaxPoint.X < point.X ||
-				point.Y < r.MinPoint.Y || r.MaxPoint.Y < point.Y {
-					return false
+			point := PartialUnZCell(field)
+			if  point[0] < r.MinX ||
+				point[0] > r.MaxX ||
+				point[1] < r.MinY ||
+				point[1] > r.MaxY {
+				return false
 			}
 		}
 	}
