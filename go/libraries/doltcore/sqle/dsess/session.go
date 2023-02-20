@@ -259,6 +259,10 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	// TODO: rather than a single database, we need to take a snapshot of all available databases that we use for the
 	//  duration of the transaction
 
+	// for db, state := range d.dbStates {
+	// 	state.
+	// }
+
 	dbName := ctx.GetTransactionDatabase()
 	// TODO: remove this hack when we have true multi-db transaction support
 	if isNoOpTransactionDatabase(dbName) {
@@ -444,18 +448,29 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 	}
 }
 
+// isDirty returns whether the working set for the database named is dirty
+// TODO: remove the dbname parameter, return a global dirty bit
+func (d *DoltSession) isDirty(ctx *sql.Context, dbName string) (bool, error) {
+	dbState, _, err := d.LookupDbState(ctx, dbName)
+	if err != nil {
+		return false, err
+	}
+
+	return dbState.dirty, nil	
+}
+
 // CommitWorkingSet commits the working set for the transaction given, without creating a new dolt commit.
 // Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
 func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error {
-	dbState, _, err := d.LookupDbState(ctx, dbName)
+	dirty, err := d.isDirty(ctx, dbName)
 	if err != nil {
 		return err
 	}
-
-	if !dbState.dirty {
+	
+	if !dirty {
 		return nil
 	}
-
+	
 	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 		ws, err := dtx.Commit(ctx, workingSet)
 		return ws, nil, err
@@ -603,15 +618,20 @@ func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 		return nil
 	}
 
-	dbState, ok, err := d.LookupDbState(ctx, dbName)
+	dirty, err := d.isDirty(ctx, dbName)
 	if err != nil {
 		return err
 	}
 
-	if !dbState.dirty {
+	if !dirty {
 		return nil
 	}
 
+	dbState, ok, err := d.LookupDbState(ctx, dbName)
+	if err != nil {
+		return err
+	}
+	
 	dtx, ok := tx.(*DoltTransaction)
 	if !ok {
 		return fmt.Errorf("expected a DoltTransaction")
@@ -900,6 +920,7 @@ func (d *DoltSession) SwitchWorkingSet(
 		return err
 	}
 
+	// TODO: should this be an error if any database in the transaction is dirty, or just this one?
 	if sessionState.dirty {
 		return ErrWorkingSetChanges.New()
 	}
@@ -1077,7 +1098,6 @@ func (d *DoltSession) HasDB(ctx *sql.Context, dbName string) bool {
 // AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
 // TODO: the session has a database provider, we shouldn't need to add databases to it explicitly, this should be
-//
 //	internal only
 func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	db := dbState.Db
