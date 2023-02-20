@@ -45,6 +45,7 @@ var _ sql.FilteredTable = (*UnscopedDiffTable)(nil)
 // UnscopedDiffTable is a sql.Table implementation of a system table that shows which tables have
 // changed in each commit, across all branches.
 type UnscopedDiffTable struct {
+	dbName           string
 	ddb              *doltdb.DoltDB
 	head             *doltdb.Commit
 	partitionFilters []sql.Expression
@@ -60,8 +61,8 @@ type tableChange struct {
 }
 
 // NewUnscopedDiffTable creates an UnscopedDiffTable
-func NewUnscopedDiffTable(_ *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
-	return &UnscopedDiffTable{ddb: ddb, head: head}
+func NewUnscopedDiffTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
+	return &UnscopedDiffTable{dbName: dbName, ddb: ddb, head: head}
 }
 
 // Filters returns the list of filters that are applied to this table.
@@ -192,9 +193,9 @@ func (dt *UnscopedDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.Index
 
 func (dt *UnscopedDiffTable) newWorkingSetRowItr(ctx *sql.Context) (sql.RowIter, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
-	roots, ok := sess.GetRoots(ctx, ctx.GetCurrentDatabase())
+	roots, ok := sess.GetRoots(ctx, dt.dbName)
 	if !ok {
-		return nil, fmt.Errorf("unable to lookup roots for database %s", ctx.GetCurrentDatabase())
+		return nil, fmt.Errorf("unable to lookup roots for database %s", dt.dbName)
 	}
 
 	staged, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
