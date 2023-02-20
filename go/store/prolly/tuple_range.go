@@ -215,8 +215,6 @@ func UnZCell(v []byte) types.Point {
 	return UnZValue(zVal)
 }
 
-
-
 // Matches returns true if all of the filter predicates
 // for Range |r| are true for Tuple |t|.
 func (r Range) Matches(t val.Tuple) bool {
