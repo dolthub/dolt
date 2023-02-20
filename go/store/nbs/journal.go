@@ -56,7 +56,6 @@ const (
 // both memTable persists and manifest updates to a single file.
 type chunkJournal struct {
 	wr   *journalWriter
-	src  journalChunkSource
 	path string
 
 	contents  manifestContents
@@ -105,7 +104,7 @@ func (j *chunkJournal) openJournal(ctx context.Context) (err error) {
 			return err
 		}
 
-		_, j.src, err = j.wr.ProcessJournal(ctx)
+		_, err = j.wr.bootstrapJournal(ctx)
 		if err != nil {
 			return err
 		}
@@ -117,7 +116,7 @@ func (j *chunkJournal) openJournal(ctx context.Context) (err error) {
 		}
 		if ok {
 			// write the current root hash to the journal file
-			if err = j.wr.WriteRootHash(contents.root); err != nil {
+			if err = j.wr.writeRootHash(contents.root); err != nil {
 				return
 			}
 			j.contents = contents
@@ -133,8 +132,7 @@ func (j *chunkJournal) openJournal(ctx context.Context) (err error) {
 	}
 
 	// parse existing journal file
-	var root hash.Hash
-	root, j.src, err = j.wr.ProcessJournal(ctx)
+	root, err := j.wr.bootstrapJournal(ctx)
 	if err != nil {
 		return err
 	}
@@ -178,15 +176,12 @@ func (j *chunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkRea
 			continue
 		}
 		c := chunks.NewChunkWithHash(hash.Hash(*record.a), mt.chunks[*record.a])
-		cc := ChunkToCompressedChunk(c)
-		lookup, err := j.wr.WriteChunk(cc)
+		err := j.wr.writeCompressedChunk(ChunkToCompressedChunk(c))
 		if err != nil {
 			return nil, err
 		}
-		j.src.lookups.put(*record.a, lookup)
-		j.src.uncompressedSz += uint64(c.Size())
 	}
-	return j.src, nil
+	return journalChunkSource{journal: j.wr}, nil
 }
 
 // ConjoinAll implements tablePersister.
@@ -200,7 +195,7 @@ func (j *chunkJournal) Open(ctx context.Context, name addr, chunkCount uint32, s
 		if err := j.maybeInit(ctx); err != nil {
 			return nil, err
 		}
-		return j.src, nil
+		return journalChunkSource{journal: j.wr}, nil
 	}
 	return j.persister.Open(ctx, name, chunkCount, stats)
 }
@@ -263,7 +258,7 @@ func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 		}
 	}
 
-	if err := j.wr.WriteRootHash(next.root); err != nil {
+	if err := j.wr.writeRootHash(next.root); err != nil {
 		return manifestContents{}, err
 	}
 	j.contents = next

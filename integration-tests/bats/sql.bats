@@ -2581,6 +2581,22 @@ SQL
     [[ "$output" =~ "3" ]] || false
 }
 
+@test "sql: dolt diff table respects qualified database" {
+    dolt sql -q "CREATE DATABASE db01; CREATE DATABASE db02;"
+    dolt sql -q "USE db01; CREATE TABLE t01(pk int primary key);"
+    run dolt sql -q "USE db01; SELECT * FROM dolt_diff;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t01" ]] || false
+
+    run dolt sql -q "USE db02; SELECT * FROM dolt_diff;"
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "t01" ]] || false
+
+    run dolt sql -q "USE db02; SELECT * FROM db01.dolt_diff;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t01" ]] || false
+}
+
 @test "sql: sql print on order by returns the correct result" {
     dolt sql -q "CREATE TABLE mytable(pk int primary key);"
     dolt sql -q "INSERT INTO mytable VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12),(13),(14),(15),(16),(17),(18),(19),(20)"

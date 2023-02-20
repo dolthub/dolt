@@ -304,7 +304,7 @@ func TestAWSTablePersisterDividePlan(t *testing.T) {
 	assert.Len(manuals, 1)
 	ti, err = tooSmall.index()
 	require.NoError(t, err)
-	assert.EqualValues(calcChunkRangeSize(ti), manuals[0].dstEnd-manuals[0].dstStart)
+	assert.EqualValues(calcChunkRangeSize(ti), manuals[0].end-manuals[0].start)
 }
 
 func TestAWSTablePersisterCalcPartSizes(t *testing.T) {
