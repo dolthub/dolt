@@ -68,6 +68,7 @@ func makeTestSrcs(t *testing.T, tableSizes []uint32, p tablePersister) (srcs chu
 		c, err := cs.clone()
 		require.NoError(t, err)
 		srcs = append(srcs, c)
+		cs.close()
 	}
 	return
 }
@@ -143,6 +144,14 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 		}
 
 		expectSrcs, actualSrcs := open(expect), open(actual)
+		defer func() {
+			for _, s := range expectSrcs {
+				s.close()
+			}
+			for _, s := range actualSrcs {
+				s.close()
+			}
+		}()
 
 		ctx := context.Background()
 		for _, src := range expectSrcs {
@@ -173,6 +182,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 		mt.addChunk(computeAddr(data), data)
 		src, err := p.Persist(context.Background(), mt, nil, &Stats{})
 		require.NoError(t, err)
+		defer src.close()
 		return tableSpec{src.hash(), mustUint32(src.count())}
 	}
 

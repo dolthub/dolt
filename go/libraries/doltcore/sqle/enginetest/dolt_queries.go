@@ -744,10 +744,35 @@ var DoltScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT type, name, fragment, id FROM dolt_schemas ORDER BY 1, 2",
+				Query: "SELECT type, name, fragment FROM dolt_schemas ORDER BY 1, 2",
 				Expected: []sql.Row{
-					{"view", "view1", "CREATE VIEW view1 AS SELECT v1 FROM viewtest", int64(1)},
-					{"view", "view2", "CREATE VIEW view2 AS SELECT v2 FROM viewtest", int64(2)},
+					{"view", "view1", "CREATE VIEW view1 AS SELECT v1 FROM viewtest"},
+					{"view", "view2", "CREATE VIEW view2 AS SELECT v2 FROM viewtest"},
+				},
+			},
+			{
+				Query:       "CREATE VIEW VIEW1 AS SELECT v2 FROM viewtest",
+				ExpectedErr: sql.ErrExistingView,
+			},
+			{
+				Query:            "drop view view1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "SELECT type, name, fragment FROM dolt_schemas ORDER BY 1, 2",
+				Expected: []sql.Row{
+					{"view", "view2", "CREATE VIEW view2 AS SELECT v2 FROM viewtest"},
+				},
+			},
+			{
+				Query:            "CREATE VIEW VIEW1 AS SELECT v1 FROM viewtest",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "SELECT type, name, fragment FROM dolt_schemas ORDER BY 1, 2",
+				Expected: []sql.Row{
+					{"view", "view1", "CREATE VIEW VIEW1 AS SELECT v1 FROM viewtest"},
+					{"view", "view2", "CREATE VIEW view2 AS SELECT v2 FROM viewtest"},
 				},
 			},
 		},

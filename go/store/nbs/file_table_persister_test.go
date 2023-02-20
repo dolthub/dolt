@@ -54,8 +54,9 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 			names = append(names, name)
 		}
 		for _, name := range names {
-			_, err := fts.Open(context.Background(), name, 1, nil)
+			tr, err := fts.Open(context.Background(), name, 1, nil)
 			require.NoError(t, err)
+			defer tr.close()
 		}
 	}()
 
@@ -63,6 +64,7 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 	for i, name := range names {
 		src, err := fts.Open(context.Background(), name, 1, nil)
 		require.NoError(t, err)
+		defer src.close()
 		h := computeAddr([]byte{byte(i)})
 		assert.True(src.has(h))
 	}
@@ -70,8 +72,9 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 	// Kick a table out of the cache
 	name, err := writeTableData(dir, []byte{0xff})
 	require.NoError(t, err)
-	_, err = fts.Open(context.Background(), name, 1, nil)
+	tr, err := fts.Open(context.Background(), name, 1, nil)
 	require.NoError(t, err)
+	defer tr.close()
 
 	present := fc.reportEntries()
 	// Since 0 refcount entries are evicted randomly, the only thing we can validate is that fc remains at its target size
@@ -125,6 +128,7 @@ func TestFSTablePersisterPersist(t *testing.T) {
 
 	src, err := persistTableData(fts, testChunks...)
 	require.NoError(t, err)
+	defer src.close()
 	if assert.True(mustUint32(src.count()) > 0) {
 		buff, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
 		require.NoError(t, err)
@@ -132,6 +136,7 @@ func TestFSTablePersisterPersist(t *testing.T) {
 		require.NoError(t, err)
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		require.NoError(t, err)
+		defer tr.close()
 		assertChunksInReader(testChunks, tr, assert)
 	}
 }
@@ -182,17 +187,20 @@ func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 	func() {
 		src, err := persistTableData(fts, testChunks...)
 		require.NoError(t, err)
+		defer src.close()
 		name = src.hash()
 	}()
 
 	// Table should still be cached
 	src, err := fts.Open(context.Background(), name, uint32(len(testChunks)), nil)
 	require.NoError(t, err)
+	defer src.close()
 	assertChunksInReader(testChunks, src, assert)
 
 	// Evict |name| from cache
-	_, err = persistTableData(fts, []byte{0xff})
+	tr, err := persistTableData(fts, []byte{0xff})
 	require.NoError(t, err)
+	defer tr.close()
 
 	present := fc.reportEntries()
 	// Since 0 refcount entries are evicted randomly, the only thing we can validate is that fc remains at its target size
@@ -223,9 +231,15 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 		sources[i], err = fts.Open(ctx, name, 2, nil)
 		require.NoError(t, err)
 	}
+	defer func() {
+		for _, s := range sources {
+			s.close()
+		}
+	}()
 
 	src, err := fts.ConjoinAll(ctx, sources, &Stats{})
 	require.NoError(t, err)
+	defer src.close()
 
 	if assert.True(mustUint32(src.count()) > 0) {
 		buff, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
@@ -234,6 +248,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 		require.NoError(t, err)
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		require.NoError(t, err)
+		defer tr.close()
 		assertChunksInReader(testChunks, tr, assert)
 	}
 
@@ -263,9 +278,15 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 		sources[i], err = fts.Persist(ctx, mt, nil, &Stats{})
 		require.NoError(t, err)
 	}
+	defer func() {
+		for _, s := range sources {
+			s.close()
+		}
+	}()
 
 	src, err := fts.ConjoinAll(ctx, sources, &Stats{})
 	require.NoError(t, err)
+	defer src.close()
 
 	if assert.True(mustUint32(src.count()) > 0) {
 		buff, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
@@ -274,6 +295,7 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 		require.NoError(t, err)
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		require.NoError(t, err)
+		defer tr.close()
 		assertChunksInReader(testChunks, tr, assert)
 		assert.EqualValues(reps*len(testChunks), mustUint32(tr.count()))
 	}

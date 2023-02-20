@@ -378,12 +378,12 @@ SQL
     dolt checkout main
     run dolt merge other --no-commit
     log_status_eq 0
-    [[ "$output" =~ "CONFLICT" ]] || false
-    run dolt conflicts resolve --theirs dolt_schemas
-    log_status_eq 0
+    [[ ! "$output" =~ "CONFLICT" ]] || false
+
     run dolt sql -q "select name from dolt_schemas" -r csv
     log_status_eq 0
     [[ "$output" =~ "c1c1" ]] || false
+    [[ "$output" =~ "pkpk" ]] || false
 }
 
 @test "merge: Add views on two branches, merge with stored procedure" {
@@ -398,12 +398,12 @@ SQL
     dolt checkout main
     run dolt merge other --no-commit
     log_status_eq 0
-    [[ "$output" =~ "CONFLICT" ]] || false
-    run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'dolt_schemas')"
-    log_status_eq 0
+    [[ ! "$output" =~ "CONFLICT" ]] || false
+    
     run dolt sql -q "select name from dolt_schemas" -r csv
     log_status_eq 0
     [[ "$output" =~ "c1c1" ]] || false
+    [[ "$output" =~ "pkpk" ]] || false
 }
 
 @test "merge: Add views on two branches, merge without conflicts" {

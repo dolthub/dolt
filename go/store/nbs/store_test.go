@@ -124,6 +124,7 @@ func TestNBSAsTableFileStore(t *testing.T) {
 
 func TestConcurrentPuts(t *testing.T) {
 	st, _, _ := makeTestLocalStore(t, 100)
+	defer st.Close()
 
 	errgrp, ctx := errgroup.WithContext(context.Background())
 
@@ -190,6 +191,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	maxTableFiles := 16
 	st, nomsDir, _ := makeTestLocalStore(t, maxTableFiles)
 	fileToData := populateLocalStore(t, st, numTableFiles)
+	defer st.Close()
 
 	// add a chunk and flush to trigger a conjoin
 	c := chunks.NewChunk([]byte("it's a boy!"))
@@ -272,6 +274,7 @@ func makeChunkSet(N, size int) (s map[hash.Hash]chunks.Chunk) {
 func TestNBSCopyGC(t *testing.T) {
 	ctx := context.Background()
 	st, _, _ := makeTestLocalStore(t, 8)
+	defer st.Close()
 
 	keepers := makeChunkSet(64, 64)
 	tossers := makeChunkSet(64, 64)

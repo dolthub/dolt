@@ -49,6 +49,9 @@ func TestTableSetPrepend(t *testing.T) {
 	assert := assert.New(t)
 	ts := newFakeTableSet(&UnlimitedQuotaProvider{})
 	specs, err := ts.toSpecs()
+	defer func() {
+		ts.close()
+	}()
 	require.NoError(t, err)
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
@@ -75,6 +78,9 @@ func TestTableSetPrepend(t *testing.T) {
 func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 	assert := assert.New(t)
 	ts := newFakeTableSet(&UnlimitedQuotaProvider{})
+	defer func() {
+		ts.close()
+	}()
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
@@ -101,6 +107,9 @@ func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 	assert := assert.New(t)
 	ts := newFakeTableSet(&UnlimitedQuotaProvider{})
+	defer func() {
+		ts.close()
+	}()
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
@@ -183,6 +192,9 @@ func TestTableSetRebase(t *testing.T) {
 func TestTableSetPhysicalLen(t *testing.T) {
 	assert := assert.New(t)
 	ts := newFakeTableSet(&UnlimitedQuotaProvider{})
+	defer func() {
+		ts.close()
+	}()
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)

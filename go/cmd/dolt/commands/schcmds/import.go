@@ -145,7 +145,7 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Name of the table to be created."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being used to infer the schema."})
 	ap.SupportsFlag(createFlag, "c", "Create a table with the schema inferred from the {{.LessThan}}file{{.GreaterThan}} provided.")
-	ap.SupportsFlag(updateFlag, "u", "Update a table to match the inferred schema of the {{.LessThan}}file{{.GreaterThan}} provided")
+	ap.SupportsFlag(updateFlag, "u", "Update a table to match the inferred schema of the {{.LessThan}}file{{.GreaterThan}} provided. All previous data will be lost.")
 	ap.SupportsFlag(replaceFlag, "r", "Replace a table with a new schema that has the inferred schema from the {{.LessThan}}file{{.GreaterThan}} provided. All previous data will be lost.")
 	ap.SupportsFlag(dryRunFlag, "", "Print the sql statement that would be run if executed without the flag.")
 	ap.SupportsFlag(keepTypesParam, "", "When a column already exists in the table, and it's also in the {{.LessThan}}file{{.GreaterThan}} provided, use the type from the table.")
@@ -217,6 +217,23 @@ func getSchemaImportArgs(ctx context.Context, apr *argparser.ArgParseResults, dE
 		return nil, errhand.BuildDError("error: failed to read from database.").AddCause(err).Build()
 	} else if tblExists && op == CreateOp {
 		return nil, errhand.BuildDError("error: failed to create table.").AddDetails("A table named '%s' already exists.", tblName).AddDetails("Use --replace or --update instead of --create.").Build()
+	}
+
+	if op != CreateOp {
+		rows, err := tbl.GetRowData(ctx)
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+
+		rowCnt, err := rows.Count()
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+
+		if rowCnt > 0 {
+			return nil, errhand.BuildDError("This operation will delete all row data. If this is your intent, "+
+				"run dolt sql -q 'delete from %s' to delete all row data, then re-run this command.", tblName).Build()
+		}
 	}
 
 	var existingSch schema.Schema = schema.EmptySchema

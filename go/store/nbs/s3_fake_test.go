@@ -78,12 +78,12 @@ func (m *fakeS3) readerForTable(ctx context.Context, name addr) (chunkReader, er
 	defer m.mu.Unlock()
 	if buff, present := m.data[name.String()]; present {
 		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
-
 		if err != nil {
 			return nil, err
 		}
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize)
 		if err != nil {
+			ti.Close()
 			return nil, err
 		}
 		return tr, nil

@@ -1298,19 +1298,12 @@ var systemTableSelectTests = []SelectTest{
 	},
 	{
 		Name: "select from dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemasTableSchema(),
-			`INSERT INTO dolt_schemas VALUES ('view', 'name', 'create view name as select 2+2 from dual', 1, NULL)`),
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, schemaTableSchema,
+			`INSERT INTO dolt_schemas VALUES ('view', 'name', 'create view name as select 2+2 from dual', NULL)`),
 		Query:          "select * from dolt_schemas",
-		ExpectedRows:   []sql.Row{{"view", "name", "create view name as select 2+2 from dual", int64(1), nil}},
-		ExpectedSchema: CompressSchema(SchemasTableSchema()),
+		ExpectedRows:   []sql.Row{{"view", "name", "create view name as select 2+2 from dual", nil}},
+		ExpectedSchema: CompressSchema(schemaTableSchema),
 	},
-}
-
-func CreateTestJSON() types.JSON {
-	vrw := types.NewMemoryValueStore()
-	extraJSON, _ := types.NewMap(nil, vrw, types.String("CreatedAt"), types.Float(1))
-	res, _ := types.NewJSONDoc(types.Format_Default, vrw, extraJSON)
-	return res
 }
 
 func TestSelectSystemTables(t *testing.T) {
