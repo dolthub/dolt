@@ -386,10 +386,6 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 		novel[t2.hash()] = t2
 	}
 
-	// newly opened tables are unowned, we must
-	// close them if the rebase operation fails
-	opened := make(chunkSourceSet, len(specs))
-
 	eg, ctx := errgroup.WithContext(ctx)
 	mu := new(sync.Mutex)
 	upstream := make(chunkSourceSet, len(specs))
@@ -414,15 +410,17 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 			}
 			mu.Lock()
 			upstream[cs.hash()] = cs
-			opened[cs.hash()] = cs
 			mu.Unlock()
 			return nil
 		})
 	}
 
 	if err := eg.Wait(); err != nil {
-		for _, cs := range opened {
-			// close any opened chunkSources
+		// close all the chunkSources we cloned or opened
+		for _, cs := range novel {
+			_ = cs.close()
+		}
+		for _, cs := range upstream {
 			_ = cs.close()
 		}
 		return tableSet{}, err
