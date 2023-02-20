@@ -57,8 +57,7 @@ type Range struct {
 	Fields []RangeField
 	Desc   val.TupleDesc
 	Tup    val.Tuple
-	cache bool
-	minPoint, maxPoint types.Point
+	MinPoint, MaxPoint types.Point
 }
 
 // RangeField bounds one dimension of a Range.
@@ -223,7 +222,7 @@ func (r Range) Matches(t val.Tuple) bool {
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
-		if r.Fields[i].Exact {
+		if r.Fields[i].Exact || r.MinPoint == r.MaxPoint {
 			v := r.Fields[i].Lo.Value
 			if order.CompareValues(i, field, v, typ) == 0 {
 				continue
@@ -250,15 +249,10 @@ func (r Range) Matches(t val.Tuple) bool {
 		// TODO: cache the bbox somewhere else so we don't have to unzip both everytime
 		// TODO: this makes worst case much better, but fast case slightly worse
 		if typ.Enc == val.CellEnc {
-			// TODO: write helper method
-			if !r.cache {
-				r.cache = true
-				r.minPoint = UnZCell(lo.Value) // cache this
-				r.maxPoint = UnZCell(hi.Value) // cache this
-			}
+			// TODO: not necessary to unlex the floats (uint64 comparison is fine)
 			point := UnZCell(field)
-			if point.X < r.minPoint.X || r.maxPoint.X < point.X ||
-				point.Y < r.minPoint.Y || r.maxPoint.Y < point.Y {
+			if point.X < r.MinPoint.X || r.MaxPoint.X < point.X ||
+				point.Y < r.MinPoint.Y || r.MaxPoint.Y < point.Y {
 					return false
 			}
 		}

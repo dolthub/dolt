@@ -16,6 +16,7 @@ package index
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math"
 	"math/rand"
 	"sort"
@@ -260,5 +261,24 @@ func TestZSort(t *testing.T) {
 			randomGeoms[i], randomGeoms[j] = randomGeoms[j], randomGeoms[i]
 		})
 		assert.Equal(t, sortedGeoms, ZAddrSort(randomGeoms))
+	})
+}
+
+func TestZCell(t *testing.T) {
+	t.Run("test z cell", func(t *testing.T) {
+		line := types.LineString{Points: []types.Point{
+			{X: 0.25, Y: 0.25},
+			{X: 0.25, Y: 0.50},
+			{X: 0.50, Y: 0.50},
+			{X: 0.50, Y: 0.25},
+			{X: 0.25, Y: 0.25},
+		}}
+		poly := types.Polygon{Lines: []types.LineString{line}}
+		z1 := ZValue(poly.Lines[0].Points[0])
+		z2 := ZValue(poly.Lines[0].Points[2])
+		t.Log(fmt.Sprintf("%016x%016x", z1[0], z1[1]))
+		t.Log(fmt.Sprintf("%016x%016x", z2[0], z2[1]))
+		z := ZCell(poly) // bbox: (2, 2), (2, 2)
+		assert.Equal(t, "3ec0000000000000000000000000000000", hex.EncodeToString(z[:]))
 	})
 }

@@ -982,6 +982,8 @@ func (di *doltIndex) prollySpatialRanges(ctx context.Context, ns tree.NodeStore,
 			Fields: []prolly.RangeField{field},
 			Desc:   di.keyBld.Desc,
 			Tup:    tup,
+			MinPoint: UnZCell(minVal),
+			MaxPoint: UnZCell(maxVal),
 		}
 	}
 
@@ -1013,6 +1015,8 @@ func (di *doltIndex) prollySpatialRanges(ctx context.Context, ns tree.NodeStore,
 			Fields: []prolly.RangeField{field},
 			Desc:   di.keyBld.Desc,
 			Tup:    tup,
+			MinPoint: UnZCell(minVal),
+			MaxPoint: UnZCell(maxVal),
 		}
 	}
 
