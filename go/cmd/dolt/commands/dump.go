@@ -227,12 +227,12 @@ func dumpSchemaElements(ctx context.Context, dEnv *env.DoltEnv, path string) err
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	
+
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	
+
 	err = dumpViews(sqlCtx, engine, root, writer)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -292,7 +292,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 		if err != nil {
 			return err
 		}
-		
+
 		err = iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[stmtColIdx]))
 		if err != nil {
 			return err
