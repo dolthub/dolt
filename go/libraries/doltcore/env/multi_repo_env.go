@@ -298,8 +298,7 @@ func MultiEnvForDirectory(
 
 	enforceSingleFormat(envSet)
 
-	// if the current directory database is in out set,
-	// add it first so it will be the current database
+	// if the current directory database is in our set, add it first so it will be the current database
 	var ok bool
 	if dEnv, ok = envSet[dbName]; ok {
 		mrEnv.AddEnv(dbName, dEnv)
