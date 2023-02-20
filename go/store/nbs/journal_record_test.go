@@ -99,7 +99,7 @@ func TestProcessJournalRecords(t *testing.T) {
 		return
 	}
 
-	n, err := processJournalRecords(ctx, bytes.NewReader(journal), check)
+	n, err := processJournalRecords(ctx, bytes.NewReader(journal), 0, check)
 	assert.Equal(t, cnt, i)
 	assert.Equal(t, int(off), int(n))
 	require.NoError(t, err)
@@ -107,7 +107,7 @@ func TestProcessJournalRecords(t *testing.T) {
 	i, sum = 0, 0
 	// write a bogus record to the end and process again
 	writeCorruptJournalRecord(journal[off:])
-	n, err = processJournalRecords(ctx, bytes.NewReader(journal), check)
+	n, err = processJournalRecords(ctx, bytes.NewReader(journal), 0, check)
 	assert.Equal(t, cnt, i)
 	assert.Equal(t, int(off), int(n))
 	require.NoError(t, err)

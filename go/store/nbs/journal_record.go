@@ -22,6 +22,7 @@ import (
 	"io"
 
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // journalRec is a record in a chunk journal. Its serialization format uses
@@ -195,12 +196,16 @@ func validateJournalRecord(buf []byte) (ok bool) {
 	return
 }
 
-func processJournalRecords(ctx context.Context, r io.ReadSeeker, cb func(o int64, r journalRec) error) (int64, error) {
+func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb func(o int64, r journalRec) error) (int64, error) {
 	var (
 		buf []byte
-		off int64
 		err error
 	)
+
+	// start processing records from |off|
+	if _, err = r.Seek(off, io.SeekStart); err != nil {
+		return 0, err
+	}
 
 	rdr := bufio.NewReaderSize(r, journalWriterBuffSize)
 	for {
@@ -243,6 +248,24 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, cb func(o int64
 		return 0, err
 	}
 	return off, nil
+}
+
+func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err error) {
+	buf := make([]byte, 1024) // assumes len(rec) < 1024
+	if _, err = journal.ReadAt(buf, offset); err != nil {
+		return
+	} else if !validateIndexRecord(buf) {
+		err = fmt.Errorf("failed to validate root hash record at %d", offset)
+		return
+	}
+	var rec journalRec
+	if rec, err = readJournalRecord(buf); err != nil {
+		return
+	} else if rec.kind != rootHashJournalRecKind {
+		err = fmt.Errorf("expected root hash record, got kind: %d", rec.kind)
+		return
+	}
+	return hash.Hash(rec.address), nil
 }
 
 func readUint32(buf []byte) uint32 {

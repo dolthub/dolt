@@ -41,11 +41,11 @@ type indexRec struct {
 	lastRoot hash.Hash
 
 	// file offsets for the region of the journal file
-	// that |payload| indexes. stop points to a root hash
+	// that |payload| indexes. end points to a root hash
 	// record in the journal containing |lastRoot|.
 	// we expect a sequence of index records to cover
 	// contiguous regions of the journal file.
-	start, stop uint64
+	start, end uint64
 
 	// index record kind
 	kind indexRecKind
@@ -147,7 +147,7 @@ func readJournalIndexRecord(buf []byte) (rec indexRec, err error) {
 			rec.start = readUint64(buf)
 			buf = buf[indexRecOffsetSz:]
 		case stopOffsetIndexRecTag:
-			rec.stop = readUint64(buf)
+			rec.end = readUint64(buf)
 			buf = buf[indexRecOffsetSz:]
 		case kindIndexRecTag:
 			rec.kind = indexRecKind(buf[0])
@@ -175,16 +175,19 @@ func validateIndexRecord(buf []byte) (ok bool) {
 	return
 }
 
-func processIndexRecords(ctx context.Context, r io.ReadSeeker, sz int, cb func(o int64, r indexRec) error) (int64, error) {
+// processIndexRecords reads a sequence of index records from |r| and passes them to the callback. While reading records
+// it makes some basic assertions that the sequence is well-formed and indexes a contiguous region for the journal file.
+func processIndexRecords(ctx context.Context, r io.ReadSeeker, sz int64, cb func(o int64, r indexRec) error) (err error) {
 	var (
-		buf []byte
-		off int64
-		err error
+		buf  []byte
+		off  int64
+		prev uint64
 	)
 
 	// |rdr| can buffer all of |r|
-	rdr := bufio.NewReaderSize(r, sz)
-	for {
+	rdr := bufio.NewReaderSize(r, int(sz))
+
+	for off < sz {
 		// peek to read next record size
 		if buf, err = rdr.Peek(uint32Size); err != nil {
 			break
@@ -195,17 +198,23 @@ func processIndexRecords(ctx context.Context, r io.ReadSeeker, sz int, cb func(o
 			break
 		}
 
+		// we do not zero-fill the journal index and expect
+		// only complete records that will checksum
 		if !validateIndexRecord(buf) {
-			break // stop if we can't validate |rec|
+			return fmt.Errorf("failed to checksum index record at %d", off)
 		}
 
 		var rec indexRec
 		if rec, err = readJournalIndexRecord(buf); err != nil {
-			break // failed to read valid record
+			return err
+		} else if rec.start != prev {
+			return fmt.Errorf("index records do not cover contiguous region (%d != %d)", rec.end, prev)
 		}
+
 		if err = cb(off, rec); err != nil {
-			break
+			return err
 		}
+		prev = rec.end
 
 		// advance |rdr| state by |l| bytes
 		if _, err = io.ReadFull(rdr, buf); err != nil {
@@ -213,15 +222,12 @@ func processIndexRecords(ctx context.Context, r io.ReadSeeker, sz int, cb func(o
 		}
 		off += int64(len(buf))
 	}
-	if err != nil && err != io.EOF {
-		return 0, err
+	if err == nil && off != sz {
+		err = fmt.Errorf("failed to process entire journal index (%d < %d)", off, sz)
+	} else if err == io.EOF {
+		err = nil
 	}
-	// reset the file pointer to end of the last
-	// successfully processed index record
-	if _, err = r.Seek(off, 0); err != nil {
-		return 0, err
-	}
-	return off, nil
+	return
 }
 
 type lookup struct {

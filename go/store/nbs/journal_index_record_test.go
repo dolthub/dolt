@@ -29,11 +29,14 @@ import (
 
 func TestRoundTripIndexRecords(t *testing.T) {
 	t.Run("table index record", func(t *testing.T) {
+		start := uint64(0)
 		for i := 0; i < 64; i++ {
-			rec, buf := makeTableIndexRecord()
+			end := start + (rand.Uint64() % 1024)
+			rec, buf := makeTableIndexRecord(start, end)
+			start = end
 			assert.Equal(t, rec.length, uint32(len(buf)))
 			b := make([]byte, rec.length)
-			n := writeJournalIndexRecord(b, rec.lastRoot, rec.start, rec.stop, mustPayload(rec))
+			n := writeJournalIndexRecord(b, rec.lastRoot, rec.start, rec.end, mustPayload(rec))
 			assert.Equal(t, n, rec.length)
 			assert.Equal(t, buf, b)
 			r, err := readJournalIndexRecord(buf)
@@ -62,11 +65,15 @@ func TestProcessIndexRecords(t *testing.T) {
 	index := make([]byte, cnt*1024)
 
 	var off uint32
+	var start uint64
 	for i := range records {
-		r, b := makeTableIndexRecord()
-		off += writeJournalIndexRecord(index[off:], r.lastRoot, r.start, r.stop, mustPayload(r))
+		end := start + (rand.Uint64() % 1024)
+		r, b := makeTableIndexRecord(start, end)
+		start = end
+		off += writeJournalIndexRecord(index[off:], r.lastRoot, r.start, r.end, mustPayload(r))
 		records[i], buffers[i] = r, b
 	}
+	index = index[:off]
 
 	var i, sum int
 	check := func(o int64, r indexRec) (_ error) {
@@ -78,18 +85,16 @@ func TestProcessIndexRecords(t *testing.T) {
 		return
 	}
 
-	n, err := processIndexRecords(ctx, bytes.NewReader(index), len(index), check)
+	err := processIndexRecords(ctx, bytes.NewReader(index), int64(len(index)), check)
 	assert.Equal(t, cnt, i)
-	assert.Equal(t, int(off), int(n))
 	require.NoError(t, err)
 
 	i, sum = 0, 0
 	// write a bogus record to the end and process again
-	writeCorruptIndexRecord(index[off:])
-	n, err = processIndexRecords(ctx, bytes.NewReader(index), len(index), check)
+	index = appendCorruptIndexRecord(index)
+	err = processIndexRecords(ctx, bytes.NewReader(index), int64(len(index)), check)
 	assert.Equal(t, cnt, i)
-	assert.Equal(t, int(off), int(n))
-	require.NoError(t, err)
+	assert.Error(t, err) // fails to checksum
 }
 
 func TestRoundTripLookups(t *testing.T) {
@@ -100,11 +105,10 @@ func TestRoundTripLookups(t *testing.T) {
 
 }
 
-func makeTableIndexRecord() (indexRec, []byte) {
+func makeTableIndexRecord(start, end uint64) (indexRec, []byte) {
 	payload := randBuf(100)
 	sz := journalIndexRecordSize(payload)
 	lastRoot := hash.Of([]byte("fake commit"))
-	start, stop := uint64(12345), uint64(23456)
 
 	var n int
 	buf := make([]byte, sz)
@@ -128,7 +132,7 @@ func makeTableIndexRecord() (indexRec, []byte) {
 	// stop offset
 	buf[n] = byte(stopOffsetIndexRecTag)
 	n += indexRecTagSz
-	writeUint64(buf[n:], stop)
+	writeUint64(buf[n:], end)
 	n += indexRecOffsetSz
 
 	// kind
@@ -151,7 +155,7 @@ func makeTableIndexRecord() (indexRec, []byte) {
 		length:   uint32(len(buf)),
 		lastRoot: lastRoot,
 		start:    start,
-		stop:     stop,
+		end:      end,
 		kind:     tableIndexRecKind,
 		payload:  payload,
 		checksum: c,
@@ -161,7 +165,7 @@ func makeTableIndexRecord() (indexRec, []byte) {
 
 func makeUnknownTagIndexRecord() (buf []byte) {
 	const fakeTag indexRecTag = 111
-	_, buf = makeTableIndexRecord()
+	_, buf = makeTableIndexRecord(0, 128)
 	// overwrite recKind
 	buf[indexRecLenSz] = byte(fakeTag)
 	// redo checksum
@@ -170,14 +174,13 @@ func makeUnknownTagIndexRecord() (buf []byte) {
 	return
 }
 
-func writeCorruptIndexRecord(buf []byte) (n uint32) {
-	n = journalIndexRecordSize(nil)
-	// fill with random data
-	rand.Read(buf[:n])
+func appendCorruptIndexRecord(buf []byte) []byte {
+	tail := make([]byte, journalIndexRecordSize(nil))
+	rand.Read(tail)
 	// write a valid size, kind
-	writeUint32(buf, n)
-	buf[journalRecLenSz] = byte(tableIndexRecKind)
-	return
+	writeUint32(tail, uint32(len(tail)))
+	tail[journalRecLenSz] = byte(tableIndexRecKind)
+	return append(buf, tail...)
 }
 
 func mustPayload(rec indexRec) []byte {

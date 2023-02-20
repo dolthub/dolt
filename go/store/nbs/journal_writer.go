@@ -131,12 +131,12 @@ type journalWriter struct {
 
 	journal *os.File
 	off     int64
+	indexed int64
 	path    string
 	uncmpSz uint64
 
 	ranges   rangeIndex
 	index    *os.File
-	prevEnd  int64
 	maxNovel int
 
 	lock sync.RWMutex
@@ -156,13 +156,59 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 	wr.ranges = newRangeIndex()
 
 	p := filepath.Join(filepath.Dir(wr.path), journalIndexFileName)
-	if wr.index, err = os.Create(p); err != nil {
+	var ok bool
+	ok, err = fileExists(p)
+	if err != nil {
+		return
+	} else if ok {
+		wr.index, err = os.OpenFile(p, os.O_RDWR, 0666)
+	} else {
+		wr.index, err = os.OpenFile(p, os.O_RDWR|os.O_CREATE, 0666)
+	}
+	if err != nil {
 		return
 	}
 
-	// todo: bootstrap index and skip ahead in journal
+	if ok {
+		var info os.FileInfo
+		if info, err = wr.index.Stat(); err != nil {
+			return hash.Hash{}, err
+		}
+		err = processIndexRecords(ctx, wr.index, info.Size(), func(o int64, r indexRec) (err error) {
+			switch r.kind {
+			case tableIndexRecKind:
+				// |r.stop| is expected to point to a root hash record in |wr.journal|
+				// containing a hash equal to |r.lastRoot|, validate this here
+				var h hash.Hash
+				if h, err = peekRootHashAt(wr.journal, int64(r.end)); err != nil {
+					return err
+				} else if h != r.lastRoot {
+					return fmt.Errorf("invalid index record hash (%s != %s)", h.String(), r.lastRoot.String())
+				}
+				// populate range hashmap
+				for _, l := range deserializeLookups(r.payload) {
+					wr.ranges.put(l.a, l.r)
+				}
+				// record a high-water-mark for the indexed portion of the journal
+				wr.indexed = int64(r.end)
+				// todo: uncompressed size
+			default:
+				return fmt.Errorf("unknown index record kind (%d)", r.kind)
+			}
+			return nil
+		})
+		if err != nil {
+			// todo: issue warning on corrupt index recovery
+			if err = wr.corruptIndexRecovery(ctx); err != nil {
+				return
+			}
+		}
+		wr.ranges.flatten()
+	}
 
-	wr.off, err = processJournalRecords(ctx, wr.journal, func(o int64, r journalRec) error {
+	// process the non-indexed portion of the journal starting at |wr.indexed|,
+	// at minimum the non-indexed portion will include a root hash record
+	wr.off, err = processJournalRecords(ctx, wr.journal, wr.indexed, func(o int64, r journalRec) error {
 		switch r.kind {
 		case chunkJournalRecKind:
 			wr.ranges.put(r.address, Range{
@@ -180,6 +226,25 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 	if err != nil {
 		return hash.Hash{}, err
 	}
+	return
+}
+
+// corruptIndexRecovery handles a corrupted or malformed journal index by deleting
+// the index file and restarting the journal bootstrapping process without an index.
+func (wr *journalWriter) corruptIndexRecovery(ctx context.Context) (err error) {
+	p := filepath.Join(filepath.Dir(wr.path), journalIndexFileName)
+	if err = wr.index.Close(); err != nil {
+		return
+	}
+	if err = os.Remove(p); err != nil {
+		return
+	}
+	if wr.index, err = os.OpenFile(p, os.O_RDWR|os.O_CREATE, 0666); err != nil {
+		return
+	}
+	// reset bootstrapping state
+	wr.off, wr.indexed, wr.uncmpSz = 0, 0, 0
+	wr.ranges = rangeIndex{}
 	return
 }
 
@@ -255,21 +320,21 @@ func (wr *journalWriter) writeRootHash(root hash.Hash) error {
 	}
 	if wr.ranges.novelCount() > wr.maxNovel {
 		o := wr.offset() - int64(n) // pre-commit journal offset
-		err = wr.writeIndexRecord(root, wr.prevEnd, o)
+		err = wr.writeIndexRecord(root, o)
 	}
 	return err
 }
 
-func (wr *journalWriter) writeIndexRecord(root hash.Hash, start, end int64) (err error) {
+func (wr *journalWriter) writeIndexRecord(root hash.Hash, end int64) (err error) {
 	payload := serializeLookups(wr.ranges.novelLookups())
 	buf := make([]byte, journalIndexRecordSize(payload))
-	writeJournalIndexRecord(buf, root, uint64(start), uint64(end), payload)
-	//
-	//if _, err = wr.index.Write(buf); err != nil {
-	//	return err
-	//}
+	writeJournalIndexRecord(buf, root, uint64(wr.indexed), uint64(end), payload)
+	if _, err = wr.index.Write(buf); err != nil {
+		return err
+	}
 	wr.ranges.flatten()
-	wr.prevEnd = end
+	// set a new high-water-mark for the indexed portion of the journal
+	wr.indexed = end
 	return
 }
 
@@ -444,8 +509,12 @@ func (idx rangeIndex) novelLookups() (lookups []lookup) {
 }
 
 func (idx rangeIndex) flatten() {
-	for a, r := range idx.novel {
-		idx.cached[a] = r
+	if len(idx.cached) == 0 {
+		idx.cached = idx.novel
+	} else {
+		for a, r := range idx.novel {
+			idx.cached[a] = r
+		}
 	}
 	idx.novel = make(map[addr]Range)
 }
