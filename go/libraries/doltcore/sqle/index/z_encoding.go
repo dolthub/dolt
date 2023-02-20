@@ -154,26 +154,26 @@ func ZSort(points []types.Point) []types.Point {
 
 // ZCell converts the GeometryValue into a Cell
 // Note: there is an inefficiency here where small polygons may be placed into a level that's significantly larger
-// TODO: we could probably improve performance here by not using custom structs
 func ZCell(v types.GeometryValue) val.Cell {
 	bbox := spatial.FindBBox(v)
 	zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
 	zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
 
-	// Level rounds up, and masking operates in pairs
+	// Level rounds up by adding 1 and dividing by two (same as a left shift by 1)
+	// Masking operates in pairs shifting pairs by shamt (shift amount)
 	cell := val.Cell{}
 	if res := zMin[0] ^ zMax[0]; res != 0 {
-		lvl := (bits.Len64(res) + 1) >> 1
-		shamt := lvl << 1
+		level := (bits.Len64(res) + 1) >> 1
+		shamt := level << 1
 		zVal := (zMin[0] >> shamt) << shamt
-		cell[0] = byte(lvl + 32)
+		cell[0] = byte(level + 32)
 		binary.BigEndian.PutUint64(cell[1:], zVal)
 		binary.BigEndian.PutUint64(cell[9:], 0)
 	} else {
-		lvl := (bits.Len64(zMin[1]^zMax[1]) + 1) >> 1
-		shamt := lvl << 1
+		level := (bits.Len64(zMin[1]^zMax[1]) + 1) >> 1
+		shamt := level << 1
 		zVal := (zMin[1] >> shamt) << shamt
-		cell[0] = byte(lvl)
+		cell[0] = byte(level)
 		binary.BigEndian.PutUint64(cell[1:], zMin[0])
 		binary.BigEndian.PutUint64(cell[9:], zVal)
 	}
