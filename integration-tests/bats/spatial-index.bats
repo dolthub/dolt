@@ -21,7 +21,7 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
-@test "spatial index: not supported in old format" {
+@test "spatial-index: not supported in old format" {
     rm -rf .dolt
     dolt init --old-format
     DOLT_ENABLE_SPATIAL_INDEX=1 run dolt sql -q "create table t (p point srid 0 not null, spatial index(p))"
