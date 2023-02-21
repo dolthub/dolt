@@ -2,6 +2,7 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
+    skip_nbf_not_dolt
     setup_common
 }
 
