@@ -184,6 +184,7 @@ type prollyKeylessSecondaryWriter struct {
 	mut           *prolly.MutableMap
 	primary       prollyKeylessWriter
 	unique        bool
+	spatial       bool
 	prefixLengths []uint16
 
 	keyBld    *val.TupleBuilder
