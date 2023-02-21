@@ -155,27 +155,16 @@ func NewSqlEngine(
 		}
 	}
 
-	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, mrEnv.Config(), bcController)
-	if err != nil {
-		return nil, err
-	}
-
 	// this is overwritten only for server sessions
 	for _, db := range dbs {
 		db.DbData().Ddb.SetCommitHookLogger(ctx, cli.CliOut)
 	}
-
-	// TODO: this should just be the session default like it is with MySQL
-	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, config.Autocommit)
-	if err != nil {
-		return nil, err
-	}
-
-	configureBinlogReplicaController(config, engine, sess)
+	
+	configureBinlogReplicaController(config, engine)
 
 	return &SqlEngine{
 		provider:       pro,
-		contextFactory: newSqlContext(sess, config.InitialDb),
+		contextFactory: newSqlContext(config.InitialDb),
 		dsessFactory:   newDoltSession(pro, mrEnv.Config(), config.Autocommit, bcController),
 		engine:         engine,
 		resultFormat:   format,
@@ -279,12 +268,12 @@ func (se *SqlEngine) Close() error {
 // configureBinlogReplicaController examines the specified |config| and if a binlog replica controller is provided,
 // it creates a new context from the specified |sess| for the replia's applier to use, and it configures the
 // binlog replica controller with the |engine|.
-func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engine, sess *dsess.DoltSession) error {
+func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engine) error {
 	if config.BinlogReplicaController == nil {
 		return nil
 	}
 
-	contextFactory := newSqlContext(sess, config.InitialDb)
+	contextFactory := newSqlContext(config.InitialDb)
 	newCtx, err := contextFactory(context.Background())
 	if err != nil {
 		return err
@@ -299,23 +288,14 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 	return nil
 }
 
-func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.Context) (*sql.Context, error) {
+func newSqlContext(initialDb string) func(ctx context.Context) (*sql.Context, error) {
 	return func(ctx context.Context) (*sql.Context, error) {
-		sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
-
-		// If the session was already updated with a database then continue using it in the new session. Otherwise
-		// use the initial one.
-		if sessionDB := sess.GetCurrentDatabase(); sessionDB != "" {
-			sqlCtx.SetCurrentDatabase(sessionDB)
-		} else {
-			sqlCtx.SetCurrentDatabase(initialDb)
-		}
-
+		sqlCtx := sql.NewContext(ctx)
+		sqlCtx.SetCurrentDatabase(initialDb)
 		return sqlCtx, nil
 	}
 }
 
-// TODO: this should not require autocommit, that should be handled by the session default
 func newDoltSession(
 	pro dsqle.DoltDatabaseProvider,
 	config config.ReadWriteConfig,
@@ -329,7 +309,6 @@ func newDoltSession(
 			return nil, err
 		}
 
-		// TODO: this should just be the session default like it is with MySQL
 		err = dsess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, autocommit)
 		if err != nil {
 			return nil, err
