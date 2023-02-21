@@ -57,7 +57,8 @@ type Range struct {
 	Fields []RangeField
 	Desc   val.TupleDesc
 	Tup    val.Tuple
-	MinX, MinY, MaxX, MaxY uint64
+	MinX0, MinX1, MinY0, MinY1 uint64
+	MaxX0, MaxX1, MaxY0, MaxY1 uint64
 }
 
 // RangeField bounds one dimension of a Range.
@@ -230,7 +231,7 @@ func PartialUnZCell(v []byte) [2]uint64 {
 	return PartialUnZValue(zVal)
 }
 
-// Matches returns true if all of the filter predicates
+// Matches returns true if all the filter predicates
 // for Range |r| are true for Tuple |t|.
 func (r Range) Matches(t val.Tuple) bool {
 	order := r.Desc.Comparator()
@@ -238,7 +239,10 @@ func (r Range) Matches(t val.Tuple) bool {
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
-		spatialExact := (r.MinX == r.MaxX) && (r.MinY == r.MaxY)
+		spatialExact := (r.MinX0 == r.MaxX0) &&
+						(r.MinX1 == r.MaxX1) &&
+						(r.MinY0 == r.MaxY0) &&
+						(r.MinY1 == r.MaxY1)
 		if r.Fields[i].Exact || spatialExact {
 			v := r.Fields[i].Lo.Value
 			if order.CompareValues(i, field, v, typ) == 0 {
@@ -263,14 +267,17 @@ func (r Range) Matches(t val.Tuple) bool {
 			}
 		}
 
-		// TODO: cache the bbox somewhere else so we don't have to unzip both everytime
-		// TODO: this makes worst case much better, but fast case slightly worse
 		if typ.Enc == val.CellEnc {
-			point := PartialUnZCell(field)
-			if  point[0] < r.MinX ||
-				point[0] > r.MaxX ||
-				point[1] < r.MinY ||
-				point[1] > r.MaxY {
+			p0 := binary.BigEndian.Uint64(field[1:])
+			p1 := binary.BigEndian.Uint64(field[9:])
+			px0 := p0 & 0x5555555555555555
+			px1 := p1 & 0x5555555555555555
+			py0 := p0 & 0xAAAAAAAAAAAAAAAA
+			py1 := p1 & 0xAAAAAAAAAAAAAAAA
+			if  px0 < r.MinX0 || px0 > r.MaxX0 ||
+				py0 < r.MinY0 || py0 > r.MaxY0 ||
+				px1 < r.MinX1 || px1 > r.MaxX1 ||
+				py1 < r.MinY1 || py1 > r.MaxY1 {
 				return false
 			}
 		}

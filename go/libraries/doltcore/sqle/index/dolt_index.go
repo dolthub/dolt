@@ -16,6 +16,7 @@ package index
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"sync/atomic"
@@ -963,9 +964,25 @@ func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, er
 				Value:     maxVal[:],
 			},
 		}
+		min0 := binary.BigEndian.Uint64(minVal[1:])
+		min1 := binary.BigEndian.Uint64(minVal[9:])
+		max0 := binary.BigEndian.Uint64(maxVal[1:])
+		max1 := binary.BigEndian.Uint64(maxVal[9:])
 		pranges[level] = prolly.Range{
 			Fields: []prolly.RangeField{field},
 			Desc:   di.keyBld.Desc,
+
+			MinX0: min0 & 0x5555555555555555,
+			MinX1: min1 & 0x5555555555555555,
+
+			MinY0: min0 & 0xAAAAAAAAAAAAAAAA,
+			MinY1: min1 & 0xAAAAAAAAAAAAAAAA,
+
+			MaxX0: max0 & 0x5555555555555555,
+			MaxX1: max1 & 0x5555555555555555,
+
+			MaxY0: max0 & 0xAAAAAAAAAAAAAAAA,
+			MaxY1: max1 & 0xAAAAAAAAAAAAAAAA,
 		}
 	}
 
