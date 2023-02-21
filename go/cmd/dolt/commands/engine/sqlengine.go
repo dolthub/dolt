@@ -86,6 +86,15 @@ func NewSqlEngine(
 		return nil, err
 	}
 
+	nbf := types.Format_Default
+	if len(dbs) > 0 {
+		nbf = dbs[0].DbData().Ddb.Format()
+	}
+	parallelism := runtime.GOMAXPROCS(0)
+	if types.IsFormat_DOLT(nbf) {
+		parallelism = 1
+	}
+
 	bThreads := sql.NewBackgroundThreads()
 	dbs, err = dsqle.ApplyReplicationConfig(ctx, bThreads, mrEnv, cli.CliOut, dbs...)
 	if err != nil {
@@ -132,11 +141,6 @@ func NewSqlEngine(
 	}
 
 	// Set up engine
-	parallelism := runtime.GOMAXPROCS(0)
-	if types.IsFormat_DOLT(pro.Format()) {
-		parallelism = 1
-	}
-
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
 		IsReadOnly:     config.IsReadOnly,
 		IsServerLocked: config.IsServerLocked,
