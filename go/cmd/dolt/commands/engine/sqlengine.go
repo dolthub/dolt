@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	gms "github.com/dolthub/go-mysql-server"
@@ -37,6 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
@@ -78,8 +80,6 @@ func NewSqlEngine(
 	if ok, _ := mrEnv.IsLocked(); ok {
 		config.IsServerLocked = true
 	}
-
-	parallelism := 1
 
 	dbs, locations, err := CollectDBs(ctx, mrEnv, config.Bulk)
 	if err != nil {
@@ -132,6 +132,11 @@ func NewSqlEngine(
 	}
 
 	// Set up engine
+	parallelism := runtime.GOMAXPROCS(0)
+	if types.IsFormat_DOLT(types.Format_Default) {
+		parallelism = 1
+	}
+
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
 		IsReadOnly:     config.IsReadOnly,
 		IsServerLocked: config.IsServerLocked,
