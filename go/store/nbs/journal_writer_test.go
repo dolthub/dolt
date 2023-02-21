@@ -146,7 +146,9 @@ func TestJournalWriterReadWrite(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			j := newTestJournalWriter(t, newTestFilePath(t))
+			path := newTestFilePath(t)
+			defer cleanupTestFiles(t, path)
+			j := newTestJournalWriter(t, path)
 			// set specific buffer size
 			j.buf = make([]byte, 0, test.size)
 
@@ -191,7 +193,9 @@ func newTestJournalWriter(t *testing.T, path string) *journalWriter {
 }
 
 func TestJournalWriterWriteCompressedChunk(t *testing.T) {
-	j := newTestJournalWriter(t, newTestFilePath(t))
+	path := newTestFilePath(t)
+	defer cleanupTestFiles(t, path)
+	j := newTestJournalWriter(t, path)
 	data := randomCompressedChunks(1024)
 	for a, cc := range data {
 		err := j.writeCompressedChunk(cc)
@@ -208,6 +212,7 @@ func TestJournalWriterWriteCompressedChunk(t *testing.T) {
 func TestJournalWriterBootstrap(t *testing.T) {
 	ctx := context.Background()
 	path := newTestFilePath(t)
+	defer cleanupTestFiles(t, path)
 	j := newTestJournalWriter(t, path)
 	data := randomCompressedChunks(1024)
 	for _, cc := range data {
@@ -246,7 +251,9 @@ func validateLookup(t *testing.T, j *journalWriter, r Range, cc CompressedChunk)
 }
 
 func TestJournalWriterSyncClose(t *testing.T) {
-	j := newTestJournalWriter(t, newTestFilePath(t))
+	path := newTestFilePath(t)
+	defer cleanupTestFiles(t, path)
+	j := newTestJournalWriter(t, path)
 	// close triggers flush
 	p := []byte("sit")
 	buf, err := j.getBytes(len(p))
@@ -261,6 +268,12 @@ func TestJournalWriterSyncClose(t *testing.T) {
 func newTestFilePath(t *testing.T) string {
 	name := fmt.Sprintf("journal%d.log", rand.Intn(65536))
 	return filepath.Join(t.TempDir(), name)
+}
+
+func cleanupTestFiles(t *testing.T, p string) {
+	p = filepath.Dir(p)
+	require.NoError(t, os.RemoveAll(p))
+	require.NoError(t, os.MkdirAll(p, 666))
 }
 
 func TestJournalIndexBootstrap(t *testing.T) {
@@ -313,6 +326,7 @@ func TestJournalIndexBootstrap(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			path := newTestFilePath(t)
+			defer cleanupTestFiles(t, path)
 			j := newTestJournalWriter(t, path)
 			// setup
 			epochs := append(test.epochs, test.novel)
