@@ -17,6 +17,7 @@ package encoding
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -349,6 +350,14 @@ func MarshalSchemaAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, sc
 		return nil, err
 	}
 
+	if vrw.Format().VersionString() != types.Format_DOLT.VersionString() {
+		for _, idx := range sch.Indexes().AllIndexes() {
+			if idx.IsSpatial() {
+				return nil, fmt.Errorf("spatial indexes are only supported in storage format __DOLT__")
+			}
+		}
+	}
+
 	if vrw.Format().UsesFlatbuffers() {
 		return SerializeSchema(ctx, vrw, sch)
 	}
@@ -421,6 +430,14 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 	sch, err := sd.decodeSchema()
 	if err != nil {
 		return nil, err
+	}
+
+	if nbf.VersionString() != types.Format_DOLT.VersionString() {
+		for _, idx := range sch.Indexes().AllIndexes() {
+			if idx.IsSpatial() {
+				return nil, fmt.Errorf("spatial indexes are only supported in storage format __DOLT__")
+			}
+		}
 	}
 
 	if sd.PkOrdinals == nil {
