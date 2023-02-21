@@ -17,7 +17,6 @@ package enginetest
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -29,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -181,7 +181,7 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 		for i := range mapping {
 			j := mapping.MapOrdinal(i)
 			// first field in |value| is cardinality
-			field := value.GetField(j+1)
+			field := value.GetField(j + 1)
 			if def.IsSpatial() {
 				geom, err := sqltypes.GeometryType{}.Convert(field[:len(field)-1])
 				if err != nil {
@@ -233,7 +233,7 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			if j < pkSize {
 				builder.PutRaw(i, key.GetField(j))
 			} else {
-				field := value.GetField(j-pkSize)
+				field := value.GetField(j - pkSize)
 				if def.IsSpatial() {
 					geom, err := sqltypes.GeometryType{}.Convert(field[:len(field)-1])
 					if err != nil {
