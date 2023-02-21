@@ -990,6 +990,13 @@ func (p DoltDatabaseProvider) ensureReplicaHeadExists(ctx *sql.Context, branch s
 	return db.CreateLocalBranchFromRemote(ctx, ref.NewBranchRef(branch))
 }
 
+func (p DoltDatabaseProvider) Format() *types.NomsBinFormat {
+	for _, db := range p.databases {
+		return db.DbData().Ddb.ValueReadWriter().Format()
+	}
+	return types.Format_Default
+}
+
 // isBranch returns whether a branch with the given name is in scope for the database given
 func isBranch(ctx context.Context, db SqlDatabase, branchName string) (string, bool, error) {
 	var ddbs []*doltdb.DoltDB

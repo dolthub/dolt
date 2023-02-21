@@ -133,7 +133,7 @@ func NewSqlEngine(
 
 	// Set up engine
 	parallelism := runtime.GOMAXPROCS(0)
-	if types.IsFormat_DOLT(types.Format_Default) {
+	if types.IsFormat_DOLT(pro.Format()) {
 		parallelism = 1
 	}
 
