@@ -10,13 +10,13 @@ teardown() {
     teardown_common
 }
 
-@test "spatial indexes disabled" {
+@test "spatial-index: spatial indexes disabled" {
     run dolt sql -q "create table t (p point srid 0 not null, spatial index(p))"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "only the following types of index constraints are supported" ]] || false
 }
 
-@test "spatial indexes enabled" {
+@test "spatial-index: spatial indexes enabled" {
     DOLT_ENABLE_SPATIAL_INDEX=1 run dolt sql -q "create table t (p point srid 0 not null, spatial index(p))"
     [ "$status" -eq 0 ]
 }
