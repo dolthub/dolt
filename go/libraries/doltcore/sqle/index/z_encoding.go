@@ -159,10 +159,10 @@ func ZMask(level byte, zVal [2]uint64) val.Cell {
 	if level < 32 {
 		shamt := level << 1
 		binary.BigEndian.PutUint64(cell[1:], zVal[0])
-		binary.BigEndian.PutUint64(cell[9:], (zVal[1] >> shamt) << shamt)
+		binary.BigEndian.PutUint64(cell[9:], (zVal[1]>>shamt)<<shamt)
 	} else {
 		shamt := (level - 32) << 1
-		binary.BigEndian.PutUint64(cell[1:], (zVal[0] >> shamt) << shamt)
+		binary.BigEndian.PutUint64(cell[1:], (zVal[0]>>shamt)<<shamt)
 	}
 	return cell
 }
@@ -177,7 +177,7 @@ func ZCell(v types.GeometryValue) val.Cell {
 	// Level rounds up by adding 1 and dividing by two (same as a left shift by 1)
 	var level byte
 	if zMin[0] != zMax[0] {
-		level = byte((bits.Len64(zMin[0]^zMax[0]) + 1) >> 1) + 32
+		level = byte((bits.Len64(zMin[0]^zMax[0])+1)>>1) + 32
 	} else {
 		level = byte((bits.Len64(zMin[1]^zMax[1]) + 1) >> 1)
 	}
