@@ -16,8 +16,6 @@ package prolly
 
 import (
 	"encoding/binary"
-	"github.com/dolthub/go-mysql-server/sql/types"
-	"math"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -65,6 +63,7 @@ type Range struct {
 type RangeField struct {
 	Lo, Hi Bound
 	Exact  bool // Lo.Value == Hi.Value
+	SpatialPointLookup bool
 }
 
 type Bound struct {
@@ -137,100 +136,6 @@ func (r Range) belowStop(t val.Tuple) bool {
 	return true
 }
 
-// UnLexFloat maps the lexicographic uint64 representation of a float64 back into a float64
-// For negative int64s, we flip all the bits
-// For non-negative int64s, we flip the signed bit
-func UnLexFloat(b uint64) float64 {
-	if b>>63 == 1 {
-		b = b ^ (1 << 63)
-	} else {
-		b = ^b
-	}
-	return math.Float64frombits(b)
-}
-
-// UnInterleaveUint64 splits up the bits of the uint64 z into two uint64s
-// The first 32 bits of x and y must be 0.
-// Example:
-// abcd efgh ijkl mnop abcd efgh ijkl mnop abcd efgh ijkl mnop abcd efgh ijkl mnop 0x5555555555555555
-// 0b0d 0f0h 0j0l 0n0p 0b0d 0f0h 0j0l 0n0p 0b0d 0f0h 0j0l 0n0p 0b0d 0f0h 0j0l 0n0p x | x >> 1
-// 0bbd dffh hjjl lnnp pbbd dffh hjjl lnnp pbbd dffh hjjl lnnp pnbd dffh hjjl lnnp 0x3333333333333333
-// 00bd 00fh 00jl 00np 00bd 00fh 00jl 00np 00bd 00fh 00jl 00np 00bd 00fh 00jl 00np x | x >> 2
-// 0000 bdfh fhjl jlnp npbd bdfh fhjl jlnp npdb bdfh fhjl jlnp npdb bdfh fhjl jlnp 0x0F0F0F0F0F0F0F0F
-// 0000 bdfh 0000 jlnp 0000 bdfh 0000 jlnp 0000 bdfh 0000 jlnp 0000 bdfh 0000 jlnp x | x >> 4
-// 0000 bdfh bdfh jlnp jlnp bdfh bdfh jlnp jlnp bdfh bdfh jlnp jlnp bdfh bdfh jlnp 0x00FF00FF00FF00FF
-// 0000 0000 bdfh jlnp 0000 0000 bdfh jlnp 0000 0000 bdfh jlnp 0000 0000 bdfh jlnp x | x >> 8
-// 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp 0x0000FFFF0000FFFF
-// 0000 0000 0000 0000 bdfh jlnp bdfh jlnp 0000 0000 0000 0000 bdfh jlnp bdfh jlnp x | x >> 16
-// 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp 0x00000000FFFFFFFF
-// 0000 0000 0000 0000 0000 0000 0000 0000 bdfh jlnp bdfh jlnp bdfh jlnp bdfh jlnp
-func UnInterleaveUint64(z uint64) (x, y uint64) {
-	x, y = z, z>>1
-
-	x &= 0x5555555555555555
-	x |= x >> 1
-	y &= 0x5555555555555555
-	y |= y >> 1
-
-	x &= 0x3333333333333333
-	x |= x >> 2
-	y &= 0x3333333333333333
-	y |= y >> 2
-
-	x &= 0x0F0F0F0F0F0F0F0F
-	x |= x >> 4
-	y &= 0x0F0F0F0F0F0F0F0F
-	y |= y >> 4
-
-	x &= 0x00FF00FF00FF00FF
-	x |= x >> 8
-	y &= 0x00FF00FF00FF00FF
-	y |= y >> 8
-
-	x &= 0x0000FFFF0000FFFF
-	x |= x >> 16
-	y &= 0x0000FFFF0000FFFF
-	y |= y >> 16
-
-	x &= 0xFFFFFFFF
-	y &= 0xFFFFFFFF
-	return
-}
-
-// UnZValue takes a [2]uint64 Z-Value and converts it back to a sql.Point
-func UnZValue(z [2]uint64) types.Point {
-	xl, yl := UnInterleaveUint64(z[0])
-	xr, yr := UnInterleaveUint64(z[1])
-	xf := UnLexFloat((xl << 32) | xr)
-	yf := UnLexFloat((yl << 32) | yr)
-	return types.Point{X: xf, Y: yf}
-}
-
-// UnZCell converts the val.Cell into a types.Point
-// NOTE: this does not completely revert the conversion from types.GeometryValue
-func UnZCell(v []byte) types.Point {
-	var zVal [2]uint64
-	zVal[0] = binary.BigEndian.Uint64(v[1:])
-	zVal[1] = binary.BigEndian.Uint64(v[9:])
-	return UnZValue(zVal)
-}
-
-// PartialUnZValue takes a [2]uint64 Z-Value and converts it back to a sql.Point
-func PartialUnZValue(z [2]uint64) [2]uint64 {
-	xl, yl := UnInterleaveUint64(z[0])
-	xr, yr := UnInterleaveUint64(z[1])
-	return [2]uint64{(xl << 32) | xr, (yl << 32) | yr}
-}
-
-// PartialUnZCell converts the val.Cell into a types.Point
-// NOTE: this does not completely revert the conversion from types.GeometryValue
-func PartialUnZCell(v []byte) [2]uint64 {
-	var zVal [2]uint64
-	zVal[0] = binary.BigEndian.Uint64(v[1:])
-	zVal[1] = binary.BigEndian.Uint64(v[9:])
-	return PartialUnZValue(zVal)
-}
-
 // Matches returns true if all the filter predicates
 // for Range |r| are true for Tuple |t|.
 func (r Range) Matches(t val.Tuple) bool {
@@ -239,11 +144,7 @@ func (r Range) Matches(t val.Tuple) bool {
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
-		spatialExact := (r.MinX0 == r.MaxX0) &&
-						(r.MinX1 == r.MaxX1) &&
-						(r.MinY0 == r.MaxY0) &&
-						(r.MinY1 == r.MaxY1)
-		if r.Fields[i].Exact || spatialExact {
+		if r.Fields[i].Exact || r.Fields[i].SpatialPointLookup {
 			v := r.Fields[i].Lo.Value
 			if order.CompareValues(i, field, v, typ) == 0 {
 				continue
@@ -269,15 +170,20 @@ func (r Range) Matches(t val.Tuple) bool {
 
 		if typ.Enc == val.CellEnc {
 			p0 := binary.BigEndian.Uint64(field[1:])
-			p1 := binary.BigEndian.Uint64(field[9:])
 			px0 := p0 & 0x5555555555555555
-			px1 := p1 & 0x5555555555555555
 			py0 := p0 & 0xAAAAAAAAAAAAAAAA
-			py1 := p1 & 0xAAAAAAAAAAAAAAAA
 			if  px0 < r.MinX0 || px0 > r.MaxX0 ||
-				py0 < r.MinY0 || py0 > r.MaxY0 ||
-				px1 < r.MinX1 || px1 > r.MaxX1 ||
-				py1 < r.MinY1 || py1 > r.MaxY1 {
+				py0 < r.MinY0 || py0 > r.MaxY0 {
+				return false
+			}
+
+			p1 := binary.BigEndian.Uint64(field[9:])
+			px1 := p1 & 0x5555555555555555
+			py1 := p1 & 0xAAAAAAAAAAAAAAAA
+			if  px0 == r.MinX0 && px1 < r.MinX1 ||
+				px0 == r.MaxX0 && px1 > r.MaxX1 ||
+				py0 == r.MinY0 && py1 < r.MinY1 ||
+				py0 == r.MaxY0 && py1 > r.MaxY1 {
 				return false
 			}
 		}

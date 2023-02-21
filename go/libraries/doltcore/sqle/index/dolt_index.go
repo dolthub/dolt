@@ -951,8 +951,13 @@ func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, er
 	for level := byte(0); level < byte(65); level++ {
 		minVal := ZMask(level, zMin)
 		maxVal := ZMask(level, zMax)
+		min0 := binary.BigEndian.Uint64(minVal[1:])
+		min1 := binary.BigEndian.Uint64(minVal[9:])
+		max0 := binary.BigEndian.Uint64(maxVal[1:])
+		max1 := binary.BigEndian.Uint64(maxVal[9:])
 		field := prolly.RangeField{
 			Exact: false,
+			SpatialPointLookup: (min0 == max0) && (min1 == max1),
 			Lo: prolly.Bound{
 				Binding:   true,
 				Inclusive: true,
@@ -964,10 +969,6 @@ func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, er
 				Value:     maxVal[:],
 			},
 		}
-		min0 := binary.BigEndian.Uint64(minVal[1:])
-		min1 := binary.BigEndian.Uint64(minVal[9:])
-		max0 := binary.BigEndian.Uint64(maxVal[1:])
-		max1 := binary.BigEndian.Uint64(maxVal[9:])
 		pranges[level] = prolly.Range{
 			Fields: []prolly.RangeField{field},
 			Desc:   di.keyBld.Desc,

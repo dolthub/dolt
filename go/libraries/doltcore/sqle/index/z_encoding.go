@@ -176,15 +176,6 @@ func ZCell(v types.GeometryValue) val.Cell {
 	return ZMask(level, zMin)
 }
 
-// UnZCell converts the val.Cell into a types.Point
-// NOTE: this does not completely revert the conversion from types.GeometryValue
-func UnZCell(v []byte) types.Point {
-	var zVal [2]uint64
-	zVal[0] = binary.BigEndian.Uint64(v[1:])
-	zVal[1] = binary.BigEndian.Uint64(v[9:])
-	return UnZValue(zVal)
-}
-
 // ZAddr converts the GeometryValue into a key: (level, min_z_val)
 func ZAddr(v types.GeometryValue) val.Cell {
 	bbox := spatial.FindBBox(v)
@@ -216,20 +207,4 @@ func ZAddrSort(geoms []types.GeometryValue) []types.GeometryValue {
 		return bytes.Compare(zi[:], zj[:]) < 0
 	})
 	return geoms
-}
-
-// PartialUnZValue takes a [2]uint64 Z-Value and converts it back to a sql.Point
-func PartialUnZValue(z [2]uint64) [2]uint64 {
-	xl, yl := UnInterleaveUint64(z[0])
-	xr, yr := UnInterleaveUint64(z[1])
-	return [2]uint64{(xl << 32) | xr, (yl << 32) | yr}
-}
-
-// PartialUnZCell converts the val.Cell into a types.Point
-// NOTE: this does not completely revert the conversion from types.GeometryValue
-func PartialUnZCell(v []byte) [2]uint64 {
-	var zVal [2]uint64
-	zVal[0] = binary.BigEndian.Uint64(v[1:])
-	zVal[1] = binary.BigEndian.Uint64(v[9:])
-	return PartialUnZValue(zVal)
 }
