@@ -205,6 +205,18 @@ func (r Range) IsPointLookup(desc val.TupleDesc) bool {
 
 func rangeStartSearchFn(rng Range) tree.SearchFn {
 	return func(nd tree.Node) int {
+		// TODO: if range.desc[0] is val.CellEnc, then we check if last key is less than low (maybe just check level)
+		if rng.Desc.Types[0].Enc == val.CellEnc {
+			order := rng.Desc.Comparator()
+			lastKey := val.Tuple(nd.GetKey(nd.Count()-1))
+			field := rng.Desc.GetField(0, lastKey)
+			cmp := order.CompareValues(0, field, rng.Fields[0].Lo.Value, rng.Desc.Types[0])
+			if cmp < 0 {
+				return nd.Count()
+			}
+		}
+
+		// TODO: this search always starts in the middle, which wastes iterations to find the start and end
 		// todo(andy): inline sort.Search()
 		return sort.Search(nd.Count(), func(i int) (in bool) {
 			// if |tup| ∈ |rng|, set |in| to true
@@ -217,6 +229,16 @@ func rangeStartSearchFn(rng Range) tree.SearchFn {
 
 func rangeStopSearchFn(rng Range) tree.SearchFn {
 	return func(nd tree.Node) (idx int) {
+		if rng.Desc.Types[0].Enc == val.CellEnc {
+			order := rng.Desc.Comparator()
+			firstKey := val.Tuple(nd.GetKey(0))
+			field := rng.Desc.GetField(0, firstKey)
+			cmp := order.CompareValues(0, field, rng.Fields[0].Hi.Value, rng.Desc.Types[0])
+			if cmp > 0 {
+				return 0
+			}
+		}
+
 		// todo(andy): inline sort.Search()
 		return sort.Search(nd.Count(), func(i int) (out bool) {
 			// if |tup| ∈ |rng|, set |out| to false
