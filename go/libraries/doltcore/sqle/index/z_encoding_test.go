@@ -265,20 +265,23 @@ func TestZSort(t *testing.T) {
 }
 
 func TestZCell(t *testing.T) {
-	t.Run("test z cell", func(t *testing.T) {
+	t.Run("test low level linestring", func(t *testing.T) {
 		line := types.LineString{Points: []types.Point{
-			{X: 0.25, Y: 0.25},
-			{X: 0.25, Y: 0.50},
-			{X: 0.50, Y: 0.50},
-			{X: 0.50, Y: 0.25},
-			{X: 0.25, Y: 0.25},
+			{X: 0, Y: 0},
+			{X: math.SmallestNonzeroFloat64, Y: math.SmallestNonzeroFloat64},
 		}}
 		poly := types.Polygon{Lines: []types.LineString{line}}
-		z1 := ZValue(poly.Lines[0].Points[0])
-		z2 := ZValue(poly.Lines[0].Points[2])
-		t.Log(fmt.Sprintf("%016x%016x", z1[0], z1[1]))
-		t.Log(fmt.Sprintf("%016x%016x", z2[0], z2[1]))
-		z := ZCell(poly) // bbox: (2, 2), (2, 2)
-		assert.Equal(t, "3ec0000000000000000000000000000000", hex.EncodeToString(z[:]))
+		z := ZCell(poly)
+		assert.Equal(t, "01c0000000000000000000000000000000", hex.EncodeToString(z[:]))
+	})
+
+	t.Run("test high level linestring", func(t *testing.T) {
+		line := types.LineString{Points: []types.Point{
+			{X: -1, Y: -1},
+			{X: 1, Y: 1},
+		}}
+		poly := types.Polygon{Lines: []types.LineString{line}}
+		z := ZCell(poly)
+		assert.Equal(t, "4000000000000000000000000000000000", hex.EncodeToString(z[:]))
 	})
 }

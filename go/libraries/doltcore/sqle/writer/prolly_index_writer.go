@@ -247,7 +247,6 @@ type prollySecondaryIndexWriter struct {
 	name          string
 	mut           *prolly.MutableMap
 	unique        bool
-	spatial       bool
 	prefixLengths []uint16
 
 	// number of indexed cols

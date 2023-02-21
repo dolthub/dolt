@@ -16,7 +16,6 @@ package index
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"sync/atomic"
@@ -929,125 +928,45 @@ func (di *doltIndex) trimRangeCutValue(to int, keyPart interface{}) interface{} 
 	return keyPart
 }
 
-func (di *doltIndex) prollySpatialRanges(ctx context.Context, ns tree.NodeStore, ranges []sql.Range, tb *val.TupleBuilder) ([]prolly.Range, error) {
+func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, error) {
 	// should be exactly one range
 	rng := ranges[0][0]
 	lower, upper := sql.GetRangeCutKey(rng.LowerBound), sql.GetRangeCutKey(rng.UpperBound)
 
-	// TODO: no clue what this is for
-	tup := tb.BuildPermissive(sharePool)
-	if err := PutField(ctx, ns, tb, 0, lower); err != nil {
-		return nil, err
-	}
-
 	minPoint, ok := lower.(sqltypes.Point)
 	if !ok {
-		panic("somehow received a not point in spatial index range")
+		return nil, fmt.Errorf("spatial index bounding box using non-point type")
 	}
 	maxPoint, ok := upper.(sqltypes.Point)
 	if !ok {
-		panic("somehow received a not point in spatial index range")
+		return nil, fmt.Errorf("spatial index bounding box using non-point type")
 	}
 
+	pranges := make([]prolly.Range, 65)
 	zMin := ZValue(minPoint)
 	zMax := ZValue(maxPoint)
 
-	pranges := make([]prolly.Range, 65)
-
-	// generate ranges for levels 0 - 31
-	for lvl := 0; lvl < 32; lvl++ {
-		minVal, maxVal := make([]byte, 17), make([]byte, 17)
-		minVal[0], maxVal[0] = byte(lvl), byte(lvl)
-		shamt := lvl << 1
-		zMin[1] = (zMin[1] >> shamt) << shamt
-		zMax[1] = (zMax[1] >> shamt) << shamt
-		binary.BigEndian.PutUint64(minVal[1:], zMin[0])
-		binary.BigEndian.PutUint64(minVal[9:], zMin[1])
-		binary.BigEndian.PutUint64(maxVal[1:], zMax[0])
-		binary.BigEndian.PutUint64(maxVal[9:], zMax[1])
+	// generate ranges for level 0 - 64
+	for level := byte(0); level < byte(65); level++ {
+		minVal := ZMask(level, zMin)
+		maxVal := ZMask(level, zMax)
 		field := prolly.RangeField{
 			Exact: false,
 			Lo: prolly.Bound{
 				Binding:   true,
 				Inclusive: true,
-				Value:     minVal,
+				Value:     minVal[:],
 			},
 			Hi: prolly.Bound{
 				Binding:   true,
 				Inclusive: true,
-				Value:     maxVal,
+				Value:     maxVal[:],
 			},
 		}
-		minV := PartialUnZCell(minVal)
-		maxV := PartialUnZCell(maxVal)
-		pranges[lvl] = prolly.Range{
+		pranges[level] = prolly.Range{
 			Fields: []prolly.RangeField{field},
 			Desc:   di.keyBld.Desc,
-			Tup:    tup,
-			MinX:   minV[0],
-			MinY:   minV[1],
-			MaxX:   maxV[0],
-			MaxY:   maxV[1],
 		}
-	}
-
-	// generate ranges for level 32 - 63
-	for lvl := 0; lvl < 32; lvl++ {
-		minVal, maxVal := make([]byte, 17), make([]byte, 17)
-		minVal[0], maxVal[0] = byte(lvl+32), byte(lvl+32)
-		shamt := lvl << 1
-		zMin[0] = (zMin[0] >> shamt) << shamt
-		zMax[0] = (zMax[0] >> shamt) << shamt
-		binary.BigEndian.PutUint64(minVal[1:], zMin[0])
-		binary.BigEndian.PutUint64(minVal[9:], 0)
-		binary.BigEndian.PutUint64(maxVal[1:], zMax[0])
-		binary.BigEndian.PutUint64(maxVal[9:], 0)
-		field := prolly.RangeField{
-			Exact: false,
-			Lo: prolly.Bound{
-				Binding:   true,
-				Inclusive: true,
-				Value:     minVal,
-			},
-			Hi: prolly.Bound{
-				Binding:   true,
-				Inclusive: true,
-				Value:     maxVal,
-			},
-		}
-		minV := PartialUnZCell(minVal)
-		maxV := PartialUnZCell(maxVal)
-		pranges[lvl+32] = prolly.Range{
-			Fields: []prolly.RangeField{field},
-			Desc:   di.keyBld.Desc,
-			Tup:    tup,
-			MinX:   minV[0],
-			MinY:   minV[1],
-			MaxX:   maxV[0],
-			MaxY:   maxV[1],
-		}
-	}
-
-	// generate range for level 64
-	val := make([]byte, 17)
-	val[0] = 64
-	field := prolly.RangeField{
-		Exact: false,
-		Lo: prolly.Bound{
-			Binding:   true,
-			Inclusive: true,
-			Value:     val,
-		},
-		Hi: prolly.Bound{
-			Binding:   true,
-			Inclusive: true,
-			Value:     val,
-		},
-	}
-	pranges[64] = prolly.Range{
-		Fields: []prolly.RangeField{field},
-		Desc:   di.keyBld.Desc,
-		Tup:    tup,
 	}
 
 	return pranges, nil
@@ -1063,7 +982,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 	}
 
 	if di.spatial {
-		return di.prollySpatialRanges(ctx, ns, ranges, tb)
+		return di.prollySpatialRanges(ranges)
 	}
 
 	pranges := make([]prolly.Range, len(ranges))
