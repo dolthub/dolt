@@ -81,7 +81,6 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 			name:          defName,
 			mut:           idxMap.Mutate(),
 			unique:        def.IsUnique(),
-			spatial:       def.IsSpatial(),
 			prefixLengths: def.PrefixLengths(),
 			idxCols:       def.Count(),
 			keyMap:        keyMap,
