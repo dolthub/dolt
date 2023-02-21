@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 
 	gms "github.com/dolthub/go-mysql-server"
@@ -80,7 +79,7 @@ func NewSqlEngine(
 		config.IsServerLocked = true
 	}
 
-	parallelism := runtime.GOMAXPROCS(0)
+	parallelism := 1
 
 	dbs, locations, err := CollectDBs(ctx, mrEnv, config.Bulk)
 	if err != nil {
