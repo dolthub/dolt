@@ -244,7 +244,7 @@ func (wr *journalWriter) corruptIndexRecovery(ctx context.Context) (err error) {
 	}
 	// reset bootstrapping state
 	wr.off, wr.indexed, wr.uncmpSz = 0, 0, 0
-	wr.ranges = rangeIndex{}
+	wr.ranges = newRangeIndex()
 	return
 }
 
@@ -302,12 +302,11 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 	return nil
 }
 
-// writeRootHash commits |root| to the journal and syncs the file to disk.
-func (wr *journalWriter) writeRootHash(root hash.Hash) error {
+// commitRootHash commits |root| to the journal and syncs the file to disk.
+func (wr *journalWriter) commitRootHash(root hash.Hash) error {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
-	sz := rootHashRecordSize()
-	buf, err := wr.getBytes(sz)
+	buf, err := wr.getBytes(rootHashRecordSize())
 	if err != nil {
 		return err
 	}
@@ -320,12 +319,12 @@ func (wr *journalWriter) writeRootHash(root hash.Hash) error {
 	}
 	if wr.ranges.novelCount() > wr.maxNovel {
 		o := wr.offset() - int64(n) // pre-commit journal offset
-		err = wr.writeIndexRecord(root, o)
+		err = wr.flushIndexRecord(root, o)
 	}
 	return err
 }
 
-func (wr *journalWriter) writeIndexRecord(root hash.Hash, end int64) (err error) {
+func (wr *journalWriter) flushIndexRecord(root hash.Hash, end int64) (err error) {
 	payload := serializeLookups(wr.ranges.novelLookups())
 	buf := make([]byte, journalIndexRecordSize(payload))
 	writeJournalIndexRecord(buf, root, uint64(wr.indexed), uint64(end), payload)
@@ -459,9 +458,8 @@ func (wr *journalWriter) Close() (err error) {
 }
 
 type rangeIndex struct {
-	novel    map[addr]Range
-	cached   map[addr]Range
-	maxNovel int
+	novel  map[addr]Range
+	cached map[addr]Range
 }
 
 func newRangeIndex() rangeIndex {

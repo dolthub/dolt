@@ -130,7 +130,7 @@ func makeTableIndexRecord(start, end uint64) (indexRec, []byte) {
 	n += indexRecOffsetSz
 
 	// stop offset
-	buf[n] = byte(stopOffsetIndexRecTag)
+	buf[n] = byte(endOffsetIndexRecTag)
 	n += indexRecTagSz
 	writeUint64(buf[n:], end)
 	n += indexRecOffsetSz

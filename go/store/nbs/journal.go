@@ -128,7 +128,7 @@ func (j *chunkJournal) bootstrapJournalWriter(ctx context.Context) (err error) {
 		}
 		if ok {
 			// write the current root hash to the journal file
-			if err = j.wr.writeRootHash(contents.root); err != nil {
+			if err = j.wr.commitRootHash(contents.root); err != nil {
 				return
 			}
 			j.contents = contents
@@ -270,7 +270,7 @@ func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 		}
 	}
 
-	if err := j.wr.writeRootHash(next.root); err != nil {
+	if err := j.wr.commitRootHash(next.root); err != nil {
 		return manifestContents{}, err
 	}
 	j.contents = next

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -269,8 +270,8 @@ func TestJournalIndexBootstrap(t *testing.T) {
 		last    hash.Hash
 	}
 
-	makeEpoch := func(cnt int) (e epoch) {
-		e.records = randomCompressedChunks(cnt)
+	makeEpoch := func() (e epoch) {
+		e.records = randomCompressedChunks(64)
 		for h := range e.records {
 			e.last = hash.Hash(h)
 			break
@@ -284,8 +285,27 @@ func TestJournalIndexBootstrap(t *testing.T) {
 		novel  epoch
 	}{
 		{
-			name:  "smoke test",
-			novel: makeEpoch(64),
+			name:   "smoke test",
+			epochs: []epoch{makeEpoch()},
+		},
+		{
+			name:   "non-indexed journal",
+			epochs: nil,
+			novel:  makeEpoch(),
+		},
+		{
+			name:   "partially indexed journal",
+			epochs: []epoch{makeEpoch()},
+			novel:  makeEpoch(),
+		},
+		{
+			name: "multiple index records",
+			epochs: []epoch{
+				makeEpoch(),
+				makeEpoch(),
+				makeEpoch(),
+			},
+			novel: makeEpoch(),
 		},
 	}
 
@@ -296,22 +316,28 @@ func TestJournalIndexBootstrap(t *testing.T) {
 			j := newTestJournalWriter(t, path)
 			// setup
 			epochs := append(test.epochs, test.novel)
-			for _, e := range epochs {
+			for i, e := range epochs {
 				for _, cc := range e.records {
 					assert.NoError(t, j.writeCompressedChunk(cc))
 					if rand.Int()%10 == 0 { // periodic commits
-						assert.NoError(t, j.writeRootHash(cc.H))
+						assert.NoError(t, j.commitRootHash(cc.H))
 					}
 				}
-				// commit known last root hash
-				assert.NoError(t, j.writeRootHash(e.last))
-				// todo: force indexing here
+				o := j.offset()                             // precommit offset
+				assert.NoError(t, j.commitRootHash(e.last)) // commit |e.last|
+				if i == len(epochs)-1 {
+					break // don't index |test.novel|
+				}
+				assert.NoError(t, j.flushIndexRecord(e.last, o)) // write index record
 			}
+			assert.NoError(t, j.Close())
 
-			validate := func(p string, expected []epoch) {
+			validateJournal := func(p string, expected []epoch) {
 				journal, ok, err := openJournalWriter(ctx, p)
 				require.NoError(t, err)
 				require.True(t, ok)
+				defer func() { assert.NoError(t, journal.Close()) }()
+				// bootstrap journal and validate chunk records
 				last, err := journal.bootstrapJournal(ctx)
 				assert.NoError(t, err)
 				for _, e := range expected {
@@ -324,8 +350,30 @@ func TestJournalIndexBootstrap(t *testing.T) {
 				}
 				assert.Equal(t, expected[len(expected)-1].last, last)
 			}
+			idxPath := filepath.Join(filepath.Dir(path), journalIndexFileName)
 
-			validate(path, epochs)
+			before, err := os.Stat(idxPath)
+			require.NoError(t, err)
+			if len(test.epochs) > 0 { // expect index
+				assert.True(t, before.Size() > 0)
+			} else {
+				assert.Equal(t, int64(0), before.Size())
+			}
+
+			// bootstrap journal using index
+			validateJournal(path, epochs)
+			// assert journal index unchanged
+			info, err := os.Stat(idxPath)
+			require.NoError(t, err)
+			assert.Equal(t, before.Size(), info.Size())
+
+			// bootstrap journal without index
+			corruptJournalIndex(t, idxPath)
+			validateJournal(path, epochs)
+			// assert corrupt index cleaned up
+			info, err = os.Stat(idxPath)
+			require.NoError(t, err)
+			assert.Equal(t, int64(0), info.Size())
 		})
 	}
 }
@@ -344,4 +392,15 @@ func randomCompressedChunks(cnt int) (compressed map[addr]CompressedChunk) {
 		compressed[addr(c.Hash())] = ChunkToCompressedChunk(c)
 	}
 	return
+}
+
+func corruptJournalIndex(t *testing.T, path string) {
+	f, err := os.OpenFile(path, os.O_RDWR, 0666)
+	require.NoError(t, err)
+	info, err := f.Stat()
+	require.NoError(t, err)
+	buf := make([]byte, 64)
+	rand.Read(buf)
+	_, err = f.WriteAt(buf, info.Size()/2)
+	require.NoError(t, err)
 }

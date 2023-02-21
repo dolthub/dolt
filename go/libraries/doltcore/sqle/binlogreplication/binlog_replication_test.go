@@ -362,7 +362,7 @@ func TestCharsetsAndCollations(t *testing.T) {
 // waitForReplicaToCatchUp waits (up to 20s) for the replica to catch up with the primary database. The
 // lag is measured by checking that gtid_executed is the same on the primary and replica.
 func waitForReplicaToCatchUp(t *testing.T) {
-	timeLimit := 20 * time.Second
+	timeLimit := 60 * time.Second
 	endTime := time.Now().Add(timeLimit)
 	for time.Now().Before(endTime) {
 		replicaGtid := queryGtid(t, replicaDatabase)

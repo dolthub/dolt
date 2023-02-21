@@ -70,7 +70,7 @@ const (
 	unknownIndexRecTag     indexRecTag = 0
 	lastRootIndexRecTag    indexRecTag = 1
 	startOffsetIndexRecTag indexRecTag = 2
-	stopOffsetIndexRecTag  indexRecTag = 3
+	endOffsetIndexRecTag   indexRecTag = 3
 	kindIndexRecTag        indexRecTag = 4
 	payloadIndexRecTag     indexRecTag = 5
 )
@@ -96,7 +96,7 @@ func journalIndexRecordSize(idx []byte) (recordSz uint32) {
 	return
 }
 
-func writeJournalIndexRecord(buf []byte, root hash.Hash, start, stop uint64, idx []byte) (n uint32) {
+func writeJournalIndexRecord(buf []byte, root hash.Hash, start, end uint64, idx []byte) (n uint32) {
 	// length
 	l := journalIndexRecordSize(idx)
 	writeUint32(buf[:indexRecLenSz], l)
@@ -111,10 +111,10 @@ func writeJournalIndexRecord(buf []byte, root hash.Hash, start, stop uint64, idx
 	n += indexRecTagSz
 	writeUint64(buf[n:], start)
 	n += indexRecOffsetSz
-	// stop offset
-	buf[n] = byte(stopOffsetIndexRecTag)
+	// end offset
+	buf[n] = byte(endOffsetIndexRecTag)
 	n += indexRecTagSz
-	writeUint64(buf[n:], stop)
+	writeUint64(buf[n:], end)
 	n += indexRecOffsetSz
 	// kind
 	buf[n] = byte(kindIndexRecTag)
@@ -146,7 +146,7 @@ func readJournalIndexRecord(buf []byte) (rec indexRec, err error) {
 		case startOffsetIndexRecTag:
 			rec.start = readUint64(buf)
 			buf = buf[indexRecOffsetSz:]
-		case stopOffsetIndexRecTag:
+		case endOffsetIndexRecTag:
 			rec.end = readUint64(buf)
 			buf = buf[indexRecOffsetSz:]
 		case kindIndexRecTag:
