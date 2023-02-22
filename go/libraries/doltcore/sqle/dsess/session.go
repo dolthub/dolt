@@ -92,11 +92,10 @@ func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
 func NewDoltSession(
-	ctx *sql.Context,
-	sqlSess *sql.BaseSession,
-	pro DoltDatabaseProvider,
-	conf config.ReadWriteConfig,
-	branchController *branch_control.Controller,
+		sqlSess *sql.BaseSession,
+		pro DoltDatabaseProvider,
+		conf config.ReadWriteConfig,
+		branchController *branch_control.Controller ,
 ) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")

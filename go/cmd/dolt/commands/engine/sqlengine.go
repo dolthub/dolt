@@ -49,7 +49,7 @@ type SqlEngine struct {
 	resultFormat   PrintResultFormat
 }
 
-type sessionFactory func(ctx *sql.Context, mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (*dsess.DoltSession, error)
+type sessionFactory func(mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (*dsess.DoltSession, error)
 type contextFactory func(ctx context.Context) (*sql.Context, error)
 
 type SqlEngineConfig struct {
@@ -164,8 +164,8 @@ func NewSqlEngine(
 
 	return &SqlEngine{
 		provider:       pro,
-		contextFactory: newSqlContext(config.InitialDb),
-		dsessFactory:   newDoltSession(pro, mrEnv.Config(), config.Autocommit, bcController),
+		contextFactory: newSqlContext(config.InitialDb, config.Autocommit),
+		dsessFactory:   newDoltSession(pro, mrEnv.Config(), bcController),
 		engine:         engine,
 		resultFormat:   format,
 	}, nil
@@ -192,17 +192,14 @@ func (se *SqlEngine) Databases(ctx *sql.Context) []dsqle.SqlDatabase {
 
 // NewContext converts a context.Context to a sql.Context.
 // TODO: investigate uses of this
+// TODO: this needs to take a session object and set it 
 func (se *SqlEngine) NewContext(ctx context.Context) (*sql.Context, error) {
 	return se.contextFactory(ctx)
 }
 
-func (se *SqlEngine) NewDoltSession(ctx context.Context, mysqlSess *sql.BaseSession) (*dsess.DoltSession, error) {
-	// TODO: this seems wasteful, we are creating a context for very little work here
-	sqlCtx, err := se.NewContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return se.dsessFactory(sqlCtx, mysqlSess, se.provider)
+// NewDoltSession creates a new DoltSession from a BaseSession
+func (se *SqlEngine) NewDoltSession(_ context.Context, mysqlSess *sql.BaseSession) (*dsess.DoltSession, error) {
+	return se.dsessFactory(mysqlSess, se.provider)
 }
 
 // GetResultFormat returns the printing format of the engine. The format isn't used by the engine internally, only
@@ -273,7 +270,7 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 		return nil
 	}
 
-	contextFactory := newSqlContext(config.InitialDb)
+	contextFactory := newSqlContext(config.InitialDb, false)
 	newCtx, err := contextFactory(context.Background())
 	if err != nil {
 		return err
@@ -288,32 +285,27 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 	return nil
 }
 
-func newSqlContext(initialDb string) func(ctx context.Context) (*sql.Context, error) {
+func newSqlContext(initialDb string, autocommit bool) func(ctx context.Context) (*sql.Context, error) {
 	return func(ctx context.Context) (*sql.Context, error) {
 		sqlCtx := sql.NewContext(ctx)
 		sqlCtx.SetCurrentDatabase(initialDb)
+
+		err := sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, autocommit)
+		if err != nil {
+			return nil, err
+		}
+
 		return sqlCtx, nil
 	}
 }
 
-func newDoltSession(
-	pro dsqle.DoltDatabaseProvider,
-	config config.ReadWriteConfig,
-	autocommit bool,
-	bc *branch_control.Controller,
-) sessionFactory {
-	return func(ctx *sql.Context, mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
-
-		dsess, err := dsess.NewDoltSession(sql.NewEmptyContext(), mysqlSess, pro, config, bc)
+func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig, bc *branch_control.Controller) sessionFactory {
+	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
+		dsess, err := dsess.NewDoltSession(mysqlSess, pro, config, bc)
 		if err != nil {
 			return nil, err
 		}
-
-		err = dsess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, autocommit)
-		if err != nil {
-			return nil, err
-		}
-
+		
 		return dsess, nil
 	}
 }

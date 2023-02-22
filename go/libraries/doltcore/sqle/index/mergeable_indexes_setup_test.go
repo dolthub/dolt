@@ -111,7 +111,7 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 	// Get an updated root to use for the rest of the test
 	ctx := sql.NewEmptyContext()
 	controller := branch_control.CreateDefaultController()
-	sess, err := dsess.NewDoltSession(ctx, ctx.Session.(*sql.BaseSession), pro, config.NewEmptyMapConfig(), controller)
+	sess, err := dsess.NewDoltSession(ctx.Session.(*sql.BaseSession), pro, config.NewEmptyMapConfig(), controller)
 	require.NoError(t, err)
 	roots, ok := sess.GetRoots(ctx, db.Name())
 	require.True(t, ok)
