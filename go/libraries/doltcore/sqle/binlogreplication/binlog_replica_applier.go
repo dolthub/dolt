@@ -339,6 +339,38 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 		// avoid issues with correctness, at the cost of being slightly less efficient
 		commitToAllDatabases = true
 
+		if query.Options&mysql.QFlagOptionAutoIsNull > 0 {
+			ctx.GetLogger().Tracef("Setting sql_auto_is_null ON")
+			ctx.SetSessionVariable(ctx, "sql_auto_is_null", 1)
+		} else {
+			ctx.GetLogger().Tracef("Setting sql_auto_is_null OFF")
+			ctx.SetSessionVariable(ctx, "sql_auto_is_null", 0)
+		}
+
+		if query.Options&mysql.QFlagOptionNotAutocommit > 0 {
+			ctx.GetLogger().Tracef("Setting autocommit=0")
+			ctx.SetSessionVariable(ctx, "autocommit", 0)
+		} else {
+			ctx.GetLogger().Tracef("Setting autocommit=1")
+			ctx.SetSessionVariable(ctx, "autocommit", 1)
+		}
+
+		if query.Options&mysql.QFlagOptionNoForeignKeyChecks > 0 {
+			ctx.GetLogger().Tracef("Setting foreign_key_checks=0")
+			ctx.SetSessionVariable(ctx, "foreign_key_checks", 0)
+		} else {
+			ctx.GetLogger().Tracef("Setting foreign_key_checks=1")
+			ctx.SetSessionVariable(ctx, "foreign_key_checks", 1)
+		}
+
+		if query.Options&mysql.QFlagOptionRelaxedUniqueChecks > 0 {
+			ctx.GetLogger().Tracef("Setting unique_checks=0")
+			ctx.SetSessionVariable(ctx, "unique_checks", 0)
+		} else {
+			ctx.GetLogger().Tracef("Setting unique_checks=1")
+			ctx.SetSessionVariable(ctx, "unique_checks", 1)
+		}
+
 		executeQueryWithEngine(ctx, engine, query.SQL)
 		createCommit = strings.ToLower(query.SQL) != "begin"
 
@@ -506,7 +538,7 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 	default:
 		return fmt.Errorf("unsupported event type: %v", event)
 	}
-	ctx.GetLogger().Debug("Received binlog event: %s", eventType)
+	ctx.GetLogger().Debugf("Received binlog event: %s", eventType)
 
 	tableId := event.TableID(a.format)
 	tableMap, ok := a.tableMapsById[tableId]
@@ -525,7 +557,7 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 
 	ctx.GetLogger().WithFields(logrus.Fields{
 		"flags": fmt.Sprintf("%x", rows.Flags),
-	}).Debug("Processing rows from %s event", eventType)
+	}).Debugf("Processing rows from %s event", eventType)
 
 	flags := rows.Flags
 	foreignKeyChecksDisabled := false
