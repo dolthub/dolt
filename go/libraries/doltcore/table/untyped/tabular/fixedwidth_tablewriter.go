@@ -41,10 +41,6 @@ type FixedWidthTableWriter struct {
 	numRowsWritten int
 	// Max print width for each column
 	printWidths []int
-	// Max runes per column
-	maxRunes []int
-	// formatter knows how to format columns in the rows given
-	formatter *FixedWidthFormatter
 	// Buffer of rows that have yet to be printed
 	rowBuffer []tableRow
 	// Schema for results
@@ -62,23 +58,14 @@ var _ table.SqlRowWriter = (*FixedWidthTableWriter)(nil)
 type tableRow struct {
 	columns []string
 	colors  []*color.Color
-}
-
-// applyColors rewrites the strings with the colors given
-func (r tableRow) applyColors(strs []string) {
-	for i, color := range r.colors {
-		if color == nil {
-			continue
-		}
-		strs[i] = color.Sprint(strs[i])
-	}
+	widths  []DisplayString
+	height  int
 }
 
 func NewFixedWidthTableWriter(schema sql.Schema, wr io.WriteCloser, numSamples int) *FixedWidthTableWriter {
 	bwr := bufio.NewWriterSize(wr, writeBufSize)
 	fwtw := FixedWidthTableWriter{
 		printWidths: make([]int, len(schema)),
-		maxRunes:    make([]int, len(schema)),
 		rowBuffer:   make([]tableRow, numSamples),
 		schema:      schema,
 		closer:      wr,
@@ -91,10 +78,8 @@ func NewFixedWidthTableWriter(schema sql.Schema, wr io.WriteCloser, numSamples i
 func (w *FixedWidthTableWriter) seedColumnWidthsWithColumnNames() {
 	for i := range w.schema {
 		colName := w.schema[i].Name
-		printWidth := StringWidth(colName)
-		numRunes := len([]rune(colName))
-		w.printWidths[i] = printWidth
-		w.maxRunes[i] = numRunes
+		stringWidth := StringWidth(colName)
+		w.printWidths[i] = stringWidth.TotalWidth
 	}
 }
 
@@ -139,30 +124,20 @@ func (w *FixedWidthTableWriter) WriteColoredRow(ctx context.Context, r sql.Row, 
 		return fmt.Errorf("different sizes for row and colors: got %d and %d", len(r), len(colors))
 	}
 
-	if w.numSamples < len(w.rowBuffer) {
-		strRow, err := w.sampleRow(r, colors)
-		if err != nil {
+	if w.numSamples >= len(w.rowBuffer) {
+		if err := w.flushSampleBuffer(); err != nil {
 			return err
 		}
-
-		w.rowBuffer[w.numSamples] = strRow
-		w.numSamples++
-	} else {
-		err := w.flushSampleBuffer()
-		if err != nil {
-			return err
-		}
-
-		row, err := w.rowToTableRow(r, colors)
-		if err != nil {
-			return err
-		}
-
-		err = w.writeRow(row)
-		if err != nil {
-			return err
-		}
+		// We immediately set to false as we're going to write more rows to the buffer
+		w.flushedSampleBuffer = false
 	}
+	strRow, err := w.sampleRow(r, colors)
+	if err != nil {
+		return err
+	}
+
+	w.rowBuffer[w.numSamples] = strRow
+	w.numSamples++
 
 	return nil
 }
@@ -171,6 +146,8 @@ func (w *FixedWidthTableWriter) sampleRow(r sql.Row, colors []*color.Color) (tab
 	row := tableRow{
 		columns: make([]string, len(r)),
 		colors:  colors,
+		widths:  make([]DisplayString, len(r)),
+		height:  1,
 	}
 
 	for i := range r {
@@ -179,18 +156,17 @@ func (w *FixedWidthTableWriter) sampleRow(r sql.Row, colors []*color.Color) (tab
 			return row, err
 		}
 
-		printWidth := StringWidth(str)
-		numRunes := len([]rune(str))
+		stringWidth := StringWidth(str)
 
-		if printWidth > w.printWidths[i] {
-			w.printWidths[i] = printWidth
-		}
-
-		if numRunes > w.maxRunes[i] {
-			w.maxRunes[i] = numRunes
+		if stringWidth.DisplayWidth > w.printWidths[i] {
+			w.printWidths[i] = stringWidth.DisplayWidth
 		}
 
 		row.columns[i] = str
+		row.widths[i] = stringWidth
+		if len(stringWidth.Lines) > row.height {
+			row.height = len(stringWidth.Lines)
+		}
 	}
 
 	return row, nil
@@ -201,13 +177,6 @@ func (w *FixedWidthTableWriter) flushSampleBuffer() error {
 		return nil
 	}
 
-	if w.formatter == nil {
-		// TODO: a better behavior might be to re-sample after the initial buffer runs out, and just let each buffer range
-		//  have its own local set of fixed widths
-		formatter := NewFixedWidthFormatter(PrintAllWhenTooLong, w.printWidths, w.maxRunes)
-		w.formatter = &formatter
-	}
-
 	for i := 0; i < w.numSamples; i++ {
 		err := w.writeRow(w.rowBuffer[i])
 		if err != nil {
@@ -216,7 +185,6 @@ func (w *FixedWidthTableWriter) flushSampleBuffer() error {
 	}
 
 	w.numSamples = 0
-	w.rowBuffer = nil
 	w.flushedSampleBuffer = true
 
 	return nil
@@ -237,19 +205,32 @@ func (w *FixedWidthTableWriter) writeRow(row tableRow) error {
 		}
 	}
 
-	formattedCols, err := w.formatter.Format(row.columns)
-	if err != nil {
-		return err
-	}
-
-	row.applyColors(formattedCols)
-
 	var rowStr strings.Builder
-	rowStr.WriteString("|")
-	for i := range formattedCols {
-		rowStr.WriteString(" ")
-		rowStr.WriteString(formattedCols[i])
-		rowStr.WriteString(" |")
+	for lineIndex := 0; lineIndex < row.height; lineIndex++ {
+		if lineIndex > 0 {
+			rowStr.WriteString("\n|")
+		} else {
+			rowStr.WriteString("|")
+		}
+		for i := range row.columns {
+			var subsetStr string
+			var paddingOffset int
+			width := &row.widths[i]
+			rowStr.WriteString(" ")
+			// If there is a line here, then we set the substring. If there is no line, then this column will end up as padding.
+			if lineIndex < len(width.Lines) {
+				line := &width.Lines[lineIndex]
+				subsetStr = row.columns[i][line.ByteStart:line.ByteEnd]
+				paddingOffset = line.Width
+				// Apply the color if we have one
+				if row.colors[i] != nil {
+					subsetStr = row.colors[i].Sprint(subsetStr)
+				}
+			}
+			// This prints the string, then pads the remainder of the space to the right
+			rowStr.WriteString(fmt.Sprintf("%s%*s", subsetStr, w.printWidths[i]-paddingOffset, ""))
+			rowStr.WriteString(" |")
+		}
 	}
 
 	w.numRowsWritten++
@@ -260,6 +241,8 @@ func (w *FixedWidthTableWriter) rowToTableRow(row sql.Row, colors []*color.Color
 	tRow := tableRow{
 		columns: make([]string, len(row)),
 		colors:  colors,
+		widths:  make([]DisplayString, len(row)),
+		height:  1,
 	}
 
 	var err error
@@ -267,6 +250,12 @@ func (w *FixedWidthTableWriter) rowToTableRow(row sql.Row, colors []*color.Color
 		tRow.columns[i], err = w.stringValue(i, row[i])
 		if err != nil {
 			return tableRow{}, err
+		}
+
+		stringWidth := StringWidth(tRow.columns[i])
+		tRow.widths[i] = stringWidth
+		if len(stringWidth.Lines) > tRow.height {
+			tRow.height = len(stringWidth.Lines)
 		}
 	}
 
@@ -284,16 +273,12 @@ func (w *FixedWidthTableWriter) writeHeader() error {
 		colNames[i] = w.schema[i].Name
 	}
 
-	formattedColNames, err := w.formatter.Format(colNames)
-	if err != nil {
-		return err
-	}
-
 	var colNameLine strings.Builder
 	colNameLine.WriteString("|")
-	for _, name := range formattedColNames {
+	for i, name := range colNames {
 		colNameLine.WriteString(" ")
-		colNameLine.WriteString(name)
+		width := StringWidth(name)
+		colNameLine.WriteString(fmt.Sprintf("%s%*s", name, w.printWidths[i]-width.TotalWidth, ""))
 		colNameLine.WriteString(" |")
 	}
 
@@ -306,22 +291,11 @@ func (w *FixedWidthTableWriter) writeHeader() error {
 }
 
 func (w *FixedWidthTableWriter) writeSeparator() error {
-	colNames := make([]string, len(w.schema))
-	for i := range w.schema {
-		colNames[i] = " "
-	}
-
-	formattedColNames, err := w.formatter.Format(colNames)
-	if err != nil {
-		return err
-	}
-
 	var separator strings.Builder
 	separator.WriteString("+")
-	for _, name := range formattedColNames {
+	for _, printWidth := range w.printWidths {
 		separator.WriteString("-")
-		strLen := StringWidth(name)
-		for i := 0; i < strLen; i++ {
+		for i := 0; i < printWidth; i++ {
 			separator.WriteString("-")
 		}
 		separator.WriteString("-+")

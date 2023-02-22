@@ -257,7 +257,7 @@ func (t *TempTable) IndexedAccess(_ sql.IndexLookup) sql.IndexedTable {
 }
 
 func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
-	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
+	if !schema.EnableSpatialIndex && idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
 		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
 	cols := make([]string, len(idx.Columns))
@@ -272,6 +272,7 @@ func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
 		cols,
 		allocatePrefixLengths(idx.Columns),
 		idx.Constraint == sql.IndexConstraint_Unique,
+		idx.Constraint == sql.IndexConstraint_Spatial,
 		true,
 		idx.Comment,
 		t.opts,

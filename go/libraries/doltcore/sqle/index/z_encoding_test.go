@@ -262,3 +262,25 @@ func TestZSort(t *testing.T) {
 		assert.Equal(t, sortedGeoms, ZAddrSort(randomGeoms))
 	})
 }
+
+func TestZCell(t *testing.T) {
+	t.Run("test low level linestring", func(t *testing.T) {
+		line := types.LineString{Points: []types.Point{
+			{X: 0, Y: 0},
+			{X: math.SmallestNonzeroFloat64, Y: math.SmallestNonzeroFloat64},
+		}}
+		poly := types.Polygon{Lines: []types.LineString{line}}
+		z := ZCell(poly)
+		assert.Equal(t, "01c0000000000000000000000000000000", hex.EncodeToString(z[:]))
+	})
+
+	t.Run("test high level linestring", func(t *testing.T) {
+		line := types.LineString{Points: []types.Point{
+			{X: -1, Y: -1},
+			{X: 1, Y: 1},
+		}}
+		poly := types.Polygon{Lines: []types.LineString{line}}
+		z := ZCell(poly)
+		assert.Equal(t, "4000000000000000000000000000000000", hex.EncodeToString(z[:]))
+	})
+}

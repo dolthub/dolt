@@ -129,7 +129,7 @@ func TestFixedWidthWriter(t *testing.T) {
 		assert.Equal(t, expectedTableString, stringWr.String())
 	})
 
-	t.Run("Sample size smaller than num rows, overflow", func(t *testing.T) {
+	t.Run("Sample size smaller than initial buffer, resets buffer", func(t *testing.T) {
 		var stringWr StringBuilderCloser
 		tableWr := NewFixedWidthTableWriter(sch, &stringWr, 2)
 
@@ -139,9 +139,9 @@ func TestFixedWidthWriter(t *testing.T) {
 +---------------+-----+------------------+
 | Michael Scott | 43  | Regional Manager |
 | Pam Beasley   | 25  | Secretary        |
-| Dwight Schrute | 29  | Assistant to the Regional Manager |
-| Jim Halpêrt   | NULL | NULL             |
-+---------------+-----+------------------+
+| Dwight Schrute | 29   | Assistant to the Regional Manager |
+| Jim Halpêrt    | NULL | NULL                              |
++----------------+------+-----------------------------------+
 `
 		// strip off the first newline, inserted for nice printing
 		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)

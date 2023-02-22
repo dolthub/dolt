@@ -795,8 +795,8 @@ func TestRenameTableStatements(t *testing.T) {
 }
 
 func TestAlterSystemTables(t *testing.T) {
-	systemTableNames := []string{"dolt_log", "dolt_history_people", "dolt_diff_people", "dolt_commit_diff_people"} // "dolt_docs",
-	reservedTableNames := []string{"dolt_schemas", "dolt_query_catalog"}
+	systemTableNames := []string{"dolt_log", "dolt_history_people", "dolt_diff_people", "dolt_commit_diff_people", "dolt_schemas"} // "dolt_docs",
+	reservedTableNames := []string{"dolt_query_catalog"}
 
 	var dEnv *env.DoltEnv
 	var err error
@@ -807,15 +807,15 @@ func TestAlterSystemTables(t *testing.T) {
 		err := CreateEmptyTestTable(dEnv, "dolt_docs", doltdb.DocsSchema)
 		require.NoError(t, err)
 
-		err = CreateEmptyTestTable(dEnv, doltdb.SchemasTableName, SchemasTableSchema())
+		err = CreateEmptyTestTable(dEnv, doltdb.SchemasTableName, schemaTableSchema)
 		require.NoError(t, err)
 
 		CreateTestTable(t, dEnv, "dolt_docs", doltdb.DocsSchema,
 			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')")
 		CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
 			"INSERT INTO dolt_query_catalog VALUES ('abc123', 1, 'example', 'select 2+2 from dual', 'description')")
-		CreateTestTable(t, dEnv, doltdb.SchemasTableName, SchemasTableSchema(),
-			"INSERT INTO dolt_schemas (type, name, fragment, id) VALUES ('view', 'name', 'create view name as select 2+2 from dual', 1)")
+		CreateTestTable(t, dEnv, doltdb.SchemasTableName, schemaTableSchema,
+			"INSERT INTO dolt_schemas (type, name, fragment) VALUES ('view', 'name', 'create view name as select 2+2 from dual')")
 	}
 
 	t.Run("Create", func(t *testing.T) {
@@ -825,15 +825,10 @@ func TestAlterSystemTables(t *testing.T) {
 		}
 	})
 
-	// The _history and _diff tables give not found errors right now because of https://github.com/dolthub/dolt/issues/373.
-	// We can remove the divergent failure logic when the issue is fixed.
 	t.Run("Drop", func(t *testing.T) {
 		setup()
-		for _, tableName := range systemTableNames {
-			expectedErr := "system table"
-			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
-				expectedErr = "system tables cannot be dropped or altered"
-			}
+		for _, tableName := range append(systemTableNames) {
+			expectedErr := "system tables cannot be dropped or altered"
 			assertFails(t, dEnv, fmt.Sprintf("drop table %s", tableName), expectedErr)
 		}
 		for _, tableName := range reservedTableNames {

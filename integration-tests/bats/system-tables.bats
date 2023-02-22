@@ -153,31 +153,31 @@ teardown() {
     dolt push rem1 b1
     dolt branch -d b1
     
-    run dolt sql -q "select * from dolt_branches"
+    run dolt sql -q "select name, latest_commit_message from dolt_branches"
     [ $status -eq 0 ]
     [[ "$output" =~ main.*Initialize\ data\ repository ]] || false
     [[ "$output" =~ create-table-branch.*Added\ test\ table ]] || false
     [[ ! "$output" =~ b1 ]] || false
 
-    run dolt sql -q "select * from dolt_remote_branches"
+    run dolt sql -q "select name, latest_commit_message from dolt_remote_branches"
     [ $status -eq 0 ]
     [[ ! "$output" =~ main.*Initialize\ data\ repository ]] || false
     [[ ! "$output" =~ create-table-branch.*Added\ test\ table ]] || false
     [[ "$output" =~ "remotes/rem1/b1" ]] || false
     
-    run dolt sql -q "select * from dolt_remote_branches where latest_commit_message ='Initialize data repository'"
+    run dolt sql -q "select name from dolt_remote_branches where latest_commit_message ='Initialize data repository'"
     [ $status -eq 0 ]
     [[ ! "$output" =~ "main" ]] || false
     [[ ! "$output" =~ "create-table-branch" ]] || false
     [[ ! "$output" =~ "remotes/rem1/b1" ]] || false
     
-    run dolt sql -q "select * from dolt_remote_branches where latest_commit_message ='Added test table'"
+    run dolt sql -q "select name from dolt_remote_branches where latest_commit_message ='Added test table'"
     [ $status -eq 0 ]
     [[ ! "$output" =~ "main" ]] || false
     [[ ! "$output" =~ "create-table-branch" ]] || false
     [[ "$output" =~ "remotes/rem1/b1" ]] || false
 
-    run dolt sql -q "select * from dolt_branches union select * from dolt_remote_branches"
+    run dolt sql -q "select name from dolt_branches union select name from dolt_remote_branches"
     [[ "$output" =~ "main" ]] || false
     [[ "$output" =~ "create-table-branch" ]] || false
     [[ "$output" =~ "remotes/rem1/b1" ]] || false
@@ -550,61 +550,6 @@ SQL
     [[ "$output" =~ "0,commit A" ]] || false
     [[ "$output" =~ "0,commit B" ]] || false
     [[ "$output" =~ "1,commit C" ]] || false
-}
-
-@test "system-tables: dolt_branches table should include remote refs as well" {
-    skip "This functionality needs to be implemented"
-
-    cd $BATS_TMPDIR
-    mkdir remotes-$$
-    mkdir remotes-$$/empty
-    echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
-    remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
-    remotesrv_pid=$!
-    cd dolt-repo-$$
-    mkdir "dolt-repo-clones"
-
-    # Create a remote with a test branch
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
-    run dolt push test-remote main
-    dolt checkout -b test-branch
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT,
-  PRIMARY KEY (pk)
-);
-SQL
-
-    dolt add test
-    dolt commit -m "test commit"
-    dolt push test-remote test-branch
-
-    # Clone the branch
-    cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/test-org/test-repo
-    [ "$status" -eq 0 ]
-
-    cd test-repo
-
-    # Assert we are on main
-    run dolt branch
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "main" ]] || false
-    [[ ! "$output" =~ "test-branch" ]] || false
-
-    # Validate that the dolt_branches table has the remote test-branch (this is the failing part)
-    run dolt sql -q "SELECT COUNT(*) from dolt_branches"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "2" ]] || false
-
-    run dolt sql -q "SELECT COUNT(*) from dolt_branches WHERE name='test-branch'"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "1" ]] || false
 }
 
 @test "system-tables: dolt_branches is read-only" {

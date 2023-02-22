@@ -20282,15 +20282,17 @@ func TestExplain(t *testing.T) {
 
 	expectedExplain := "Project\n" +
 		" ├─ columns: [d.Type, d.Symbol, d.Country, d.TradingDate, d.Open, d.High, d.Low, d.Close, d.Volume, d.OpenInt, t.Symbol, t.Name, t.Sector, t.IPOYear]\n" +
-		" └─ LookupJoin\n" +
-		"     ├─ (d.Symbol = t.Symbol)\n" +
+		" └─ MergeJoin\n" +
+		"     ├─ cmp: (t.Symbol = d.Symbol)\n" +
 		"     ├─ TableAlias(t)\n" +
-		"     │   └─ Table\n" +
-		"     │       ├─ name: symbols\n" +
+		"     │   └─ IndexedTableAccess(symbols)\n" +
+		"     │       ├─ index: [symbols.Symbol]\n" +
+		"     │       ├─ filters: [{[NULL, ∞)}]\n" +
 		"     │       └─ columns: [symbol name sector ipoyear]\n" +
 		"     └─ TableAlias(d)\n" +
 		"         └─ IndexedTableAccess(daily_summary)\n" +
 		"             ├─ index: [daily_summary.Symbol,daily_summary.Country,daily_summary.TradingDate]\n" +
+		"             ├─ filters: [{[NULL, ∞), [NULL, ∞), [NULL, ∞)}]\n" +
 		"             └─ columns: [type symbol country tradingdate open high low close volume openint]"
 
 	assert.Equal(t, expectedExplain, strings.Join(rowStrings, "\n"))

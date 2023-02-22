@@ -197,6 +197,13 @@ func conjoinTables(ctx context.Context, conjoinees []tableSpec, p tablePersister
 			return
 		})
 	}
+	defer func() {
+		for _, cs := range toConjoin {
+			if cs != nil {
+				cs.close()
+			}
+		}
+	}()
 	if err = eg.Wait(); err != nil {
 		return tableSpec{}, err
 	}
@@ -207,6 +214,7 @@ func conjoinTables(ctx context.Context, conjoinees []tableSpec, p tablePersister
 	if err != nil {
 		return tableSpec{}, err
 	}
+	defer conjoinedSrc.close()
 
 	stats.ConjoinLatency.SampleTimeSince(t1)
 	stats.TablesPerConjoin.SampleLen(len(toConjoin))

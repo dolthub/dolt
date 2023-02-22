@@ -500,7 +500,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "table with commit column should maintain its data in diff",
 		SetUpScript: []string{
-			"CREATE TABLE t (pk int PRIMARY KEY, commit varchar(20));",
+			"CREATE TABLE t (pk int PRIMARY KEY, commit_msg varchar(20));",
 			"CALL DOLT_ADD('.')",
 			"CALL dolt_commit('-am', 'creating table t');",
 			"INSERT INTO t VALUES (1, 'hi');",

@@ -16,6 +16,8 @@ package sqle
 
 import (
 	"context"
+	"io"
+	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -25,17 +27,12 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
-func TestSchemaTableRecreationOlder(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // schema table migrations predate NBF __DOLT__
-	}
+func TestSchemaTableMigrationOriginal(t *testing.T) {
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
@@ -51,15 +48,17 @@ func TestSchemaTableRecreationOlder(t *testing.T) {
 	require.NoError(t, err)
 	ctx.SetCurrentDatabase(db.Name())
 
-	err = db.createSqlTable(ctx, doltdb.SchemasTableName, sql.NewPrimaryKeySchema(sql.Schema{ // schema of dolt_schemas table before the change
+	err = db.createSqlTable(ctx, doltdb.SchemasTableName, sql.NewPrimaryKeySchema(sql.Schema{ // original schema of dolt_schemas table
 		{Name: doltdb.SchemasTablesTypeCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesNameCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesFragmentCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
 	}), sql.Collation_Default)
 	require.NoError(t, err)
+
 	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	require.NoError(t, err)
 	require.True(t, found)
+
 	inserter := sqlTbl.(*WritableDoltTable).Inserter(ctx)
 	err = inserter.Insert(ctx, sql.Row{"view", "view1", "SELECT v1 FROM test;"})
 	require.NoError(t, err)
@@ -68,59 +67,33 @@ func TestSchemaTableRecreationOlder(t *testing.T) {
 	err = inserter.Close(ctx)
 	require.NoError(t, err)
 
-	table, err := sqlTbl.(*WritableDoltTable).DoltTable.DoltTable(ctx)
+	tbl, err := getOrCreateDoltSchemasTable(ctx, db) // removes the old table and recreates it with the new schema
 	require.NoError(t, err)
 
-	rowData, err := table.GetNomsRowData(ctx)
+	iter, err := SqlTableToRowIter(ctx, tbl.DoltTable, nil)
 	require.NoError(t, err)
-	expectedVals := []sql.Row{
-		{"view", "view1", "SELECT v1 FROM test;"},
-		{"view", "view2", "SELECT v2 FROM test;"},
+
+	var rows []sql.Row
+	for {
+		row, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+
+		require.NoError(t, err)
+		rows = append(rows, row)
 	}
-	index := 0
-	_ = rowData.IterAll(ctx, func(keyTpl, valTpl types.Value) error {
-		dRow, err := row.FromNoms(sqlTbl.(*WritableDoltTable).sch, keyTpl.(types.Tuple), valTpl.(types.Tuple))
-		require.NoError(t, err)
-		sqlRow, err := sqlutil.DoltRowToSqlRow(dRow, sqlTbl.(*WritableDoltTable).sch)
-		require.NoError(t, err)
-		assert.Equal(t, expectedVals[index], sqlRow)
-		index++
-		return nil
-	})
 
-	tbl, err := GetOrCreateDoltSchemasTable(ctx, db) // removes the old table and recreates it with the new schema
-	require.NoError(t, err)
-
-	table, err = tbl.DoltTable.DoltTable(ctx)
-	require.NoError(t, err)
-
-	rowData, err = table.GetNomsRowData(ctx)
-	require.NoError(t, err)
-	expectedVals = []sql.Row{
-		{"view", "view1", "SELECT v1 FROM test;", int64(1), nil},
-		{"view", "view2", "SELECT v2 FROM test;", int64(2), nil},
+	require.NoError(t, iter.Close(ctx))
+	expectedRows := []sql.Row{
+		{"view", "view1", "SELECT v1 FROM test;", nil},
+		{"view", "view2", "SELECT v2 FROM test;", nil},
 	}
-	index = 0
-	_ = rowData.IterAll(ctx, func(keyTpl, valTpl types.Value) error {
-		dRow, err := row.FromNoms(tbl.sch, keyTpl.(types.Tuple), valTpl.(types.Tuple))
-		require.NoError(t, err)
-		sqlRow, err := sqlutil.DoltRowToSqlRow(dRow, tbl.sch)
-		require.NoError(t, err)
-		assert.Equal(t, expectedVals[index], sqlRow)
-		index++
-		return nil
-	})
 
-	indexes := tbl.sch.Indexes().AllIndexes()
-	require.Len(t, indexes, 1)
-	assert.Equal(t, true, indexes[0].IsUnique())
-	assert.Equal(t, doltdb.SchemasTablesIndexName, indexes[0].Name())
+	assert.Equal(t, expectedRows, rows)
 }
 
-func TestSchemaTableRecreation(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // schema table migrations predate NBF __DOLT__
-	}
+func TestSchemaTableMigrationV1(t *testing.T) {
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
@@ -136,70 +109,70 @@ func TestSchemaTableRecreation(t *testing.T) {
 	require.NoError(t, err)
 	ctx.SetCurrentDatabase(db.Name())
 
-	// This is the schema of dolt_schemas table after the change adding the ID column, but before adding the extra column
-	err = db.createSqlTable(ctx, doltdb.SchemasTableName, sql.NewPrimaryKeySchema(sql.Schema{ //
-		{Name: doltdb.SchemasTablesTypeCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
-		{Name: doltdb.SchemasTablesNameCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
+	// original schema of dolt_schemas table with the ID column
+	err = db.createSqlTable(ctx, doltdb.SchemasTableName, sql.NewPrimaryKeySchema(sql.Schema{
+		{Name: doltdb.SchemasTablesTypeCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
+		{Name: doltdb.SchemasTablesNameCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
 		{Name: doltdb.SchemasTablesFragmentCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
-		{Name: doltdb.SchemasTablesIdCol, Type: gmstypes.Int64, Source: doltdb.SchemasTableName, PrimaryKey: false},
+		{Name: doltdb.SchemasTablesIdCol, Type: gmstypes.Int64, Source: doltdb.SchemasTableName, PrimaryKey: true},
+		{Name: doltdb.SchemasTablesExtraCol, Type: gmstypes.JsonType{}, Source: doltdb.SchemasTableName, PrimaryKey: false, Nullable: true},
 	}), sql.Collation_Default)
 	require.NoError(t, err)
+
 	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	require.NoError(t, err)
 	require.True(t, found)
+
 	inserter := sqlTbl.(*WritableDoltTable).Inserter(ctx)
-	err = inserter.Insert(ctx, sql.Row{"view", "view1", "SELECT v1 FROM test;", int64(1)})
+	// JSON string has no spaces because our various JSON libraries don't agree on how to marshall it
+	err = inserter.Insert(ctx, sql.Row{"view", "view1", "SELECT v1 FROM test;", 1, `{"extra":"data"}`})
 	require.NoError(t, err)
-	err = inserter.Insert(ctx, sql.Row{"view", "view2", "SELECT v2 FROM test;", int64(2)})
+	err = inserter.Insert(ctx, sql.Row{"view", "view2", "SELECT v2 FROM test;", 2, nil})
 	require.NoError(t, err)
 	err = inserter.Close(ctx)
 	require.NoError(t, err)
 
-	table, err := sqlTbl.(*WritableDoltTable).DoltTable.DoltTable(ctx)
+	tbl, err := getOrCreateDoltSchemasTable(ctx, db) // removes the old table and recreates it with the new schema
 	require.NoError(t, err)
 
-	rowData, err := table.GetNomsRowData(ctx)
+	iter, err := SqlTableToRowIter(ctx, tbl.DoltTable, nil)
 	require.NoError(t, err)
-	expectedVals := []sql.Row{
-		{"view", "view1", "SELECT v1 FROM test;", int64(1)},
-		{"view", "view2", "SELECT v2 FROM test;", int64(2)},
+
+	var rows []sql.Row
+	for {
+		row, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+
+		require.NoError(t, err)
+		// convert the JSONDocument to a string for comparison
+		if row[3] != nil {
+			// Annoying difference in representation between storage versions here
+			jsonDoc, ok := row[3].(gmstypes.JSONDocument)
+			if ok {
+				row[3], err = jsonDoc.ToString(nil)
+				row[3] = strings.ReplaceAll(row[3].(string), " ", "") // remove spaces
+			}
+
+			nomsJson, ok := row[3].(json.NomsJSON)
+			if ok {
+				row[3], err = nomsJson.ToString(ctx)
+				row[3] = strings.ReplaceAll(row[3].(string), " ", "") // remove spaces
+			}
+
+			require.NoError(t, err)
+		}
+
+		rows = append(rows, row)
 	}
-	index := 0
-	_ = rowData.IterAll(ctx, func(keyTpl, valTpl types.Value) error {
-		dRow, err := row.FromNoms(sqlTbl.(*WritableDoltTable).sch, keyTpl.(types.Tuple), valTpl.(types.Tuple))
-		require.NoError(t, err)
-		sqlRow, err := sqlutil.DoltRowToSqlRow(dRow, sqlTbl.(*WritableDoltTable).sch)
-		require.NoError(t, err)
-		assert.Equal(t, expectedVals[index], sqlRow)
-		index++
-		return nil
-	})
 
-	tbl, err := GetOrCreateDoltSchemasTable(ctx, db) // removes the old table and recreates it with the new schema
-	require.NoError(t, err)
+	require.NoError(t, iter.Close(ctx))
 
-	table, err = tbl.DoltTable.DoltTable(ctx)
-	require.NoError(t, err)
-
-	rowData, err = table.GetNomsRowData(ctx)
-	require.NoError(t, err)
-	expectedVals = []sql.Row{
-		{"view", "view1", "SELECT v1 FROM test;", int64(1), nil},
-		{"view", "view2", "SELECT v2 FROM test;", int64(2), nil},
+	expectedRows := []sql.Row{
+		{"view", "view1", "SELECT v1 FROM test;", `{"extra":"data"}`},
+		{"view", "view2", "SELECT v2 FROM test;", nil},
 	}
-	index = 0
-	_ = rowData.IterAll(ctx, func(keyTpl, valTpl types.Value) error {
-		dRow, err := row.FromNoms(tbl.sch, keyTpl.(types.Tuple), valTpl.(types.Tuple))
-		require.NoError(t, err)
-		sqlRow, err := sqlutil.DoltRowToSqlRow(dRow, tbl.sch)
-		require.NoError(t, err)
-		assert.Equal(t, expectedVals[index], sqlRow)
-		index++
-		return nil
-	})
 
-	indexes := tbl.sch.Indexes().AllIndexes()
-	require.Len(t, indexes, 1)
-	assert.Equal(t, true, indexes[0].IsUnique())
-	assert.Equal(t, doltdb.SchemasTablesIndexName, indexes[0].Name())
+	assert.Equal(t, expectedRows, rows)
 }

@@ -243,6 +243,7 @@ type fmtIndex struct {
 
 	cols      []schema.Column
 	unique    bool
+	spatial   bool
 	generated bool
 	comment   string
 }
@@ -279,6 +280,11 @@ func (idx fmtIndex) Expressions() []string {
 // IsUnique implements sql.Index
 func (idx fmtIndex) IsUnique() bool {
 	return idx.unique
+}
+
+// IsSpatial implements sql.Index
+func (idx fmtIndex) IsSpatial() bool {
+	return idx.spatial
 }
 
 // Comment implements sql.Index

@@ -181,13 +181,13 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		case gmstypes.PolygonType{}.String():
 			return &polygonType{sqlType.(gmstypes.PolygonType)}, nil
 		case gmstypes.MultiPointType{}.String():
-			return &multipointType{}, nil
+			return &multipointType{sqlType.(gmstypes.MultiPointType)}, nil
 		case gmstypes.MultiLineStringType{}.String():
-			return &multilinestringType{}, nil
+			return &multilinestringType{sqlType.(gmstypes.MultiLineStringType)}, nil
 		case gmstypes.MultiPolygonType{}.String():
-			return &multipolygonType{}, nil
+			return &multipolygonType{sqlType.(gmstypes.MultiPolygonType)}, nil
 		case gmstypes.GeomCollType{}.String():
-			return &geomcollType{}, nil
+			return &geomcollType{sqlType.(gmstypes.GeomCollType)}, nil
 		case gmstypes.GeometryType{}.String():
 			return &geometryType{sqlGeometryType: sqlType.(gmstypes.GeometryType)}, nil
 		default:

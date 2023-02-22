@@ -66,6 +66,12 @@ func IsReadOnlySystemTable(name string) bool {
 	return HasDoltPrefix(name) && !set.NewStrSet(writeableSystemTables).Contains(name)
 }
 
+// IsNonAlterableSystemTable returns whether the table name given is a system table that cannot be dropped or altered
+// by the user.
+func IsNonAlterableSystemTable(name string) bool {
+	return IsReadOnlySystemTable(name) || strings.ToLower(name) == SchemasTableName
+}
+
 // GetNonSystemTableNames gets non-system table names
 func GetNonSystemTableNames(ctx context.Context, root *RootValue) ([]string, error) {
 	tn, err := root.GetTableNames(ctx)
@@ -224,17 +230,19 @@ const (
 	// SchemasTableName is the name of the dolt schema fragment table
 	SchemasTableName = "dolt_schemas"
 	// SchemasTablesIdCol is an incrementing integer that represents the insertion index.
+	// Deprecated: This column is no longer used and will be removed in a future release.
 	SchemasTablesIdCol = "id"
-	// Currently: `view` or `trigger`.
+	// SchemasTablesTypeCol is the name of the column that stores the type of a schema fragment  in the dolt_schemas table
 	SchemasTablesTypeCol = "type"
-	// The name of the database entity.
+	// SchemasTablesNameCol The name of the column that stores the name of a schema fragment in the dolt_schemas table
 	SchemasTablesNameCol = "name"
-	// The schema fragment associated with the database entity.
-	// For example, the SELECT statement for a CREATE VIEW.
+	// SchemasTablesFragmentCol The name of the column that stores the SQL fragment of a schema element in the
+	// dolt_schemas table
 	SchemasTablesFragmentCol = "fragment"
-	// The extra information for schema; currently contains creation time for triggers and views
+	// SchemasTablesExtraCol The name of the column that stores extra information about a schema element in the
+	// dolt_schemas table
 	SchemasTablesExtraCol = "extra"
-	// The name of the index that is on the table.
+	//
 	SchemasTablesIndexName = "fragment_name"
 )
 

@@ -84,6 +84,15 @@ func (mr *MultiRepoTestSetup) homeProv() (string, error) {
 	return mr.Home, nil
 }
 
+func (mr *MultiRepoTestSetup) Close() {
+	for _, db := range mr.DoltDBs {
+		err := db.Close()
+		if err != nil {
+			mr.Errhand(err)
+		}
+	}
+}
+
 func (mr *MultiRepoTestSetup) Cleanup(dbName string) {
 	os.RemoveAll(mr.Root)
 }

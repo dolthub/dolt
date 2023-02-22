@@ -96,7 +96,7 @@ func TestReadRecordRanges(t *testing.T) {
 	jcs, err := j.Persist(ctx, mt, emptyChunkSource{}, &Stats{})
 	require.NoError(t, err)
 
-	rdr, sz, err := jcs.(journalChunkSource).journal.Snapshot()
+	rdr, sz, err := jcs.(journalChunkSource).journal.snapshot()
 	require.NoError(t, err)
 
 	buf = make([]byte, sz)

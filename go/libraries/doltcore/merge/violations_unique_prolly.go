@@ -39,7 +39,7 @@ func addUniqIdxViols(
 	index schema.Index,
 	left, right, base prolly.Map,
 	m prolly.Map,
-	artEditor prolly.ArtifactsEditor,
+	artEditor *prolly.ArtifactsEditor,
 	theirRootIsh doltdb.Rootish,
 	tblName string) error {
 
@@ -153,7 +153,7 @@ func (m UniqCVMeta) PrettyPrint() string {
 	return jsonStr
 }
 
-func replaceUniqueKeyViolation(ctx context.Context, edt prolly.ArtifactsEditor, m prolly.Map, k val.Tuple, kd val.TupleDesc, theirRootIsh doltdb.Rootish, vInfo []byte, tblName string) error {
+func replaceUniqueKeyViolation(ctx context.Context, edt *prolly.ArtifactsEditor, m prolly.Map, k val.Tuple, kd val.TupleDesc, theirRootIsh doltdb.Rootish, vInfo []byte, tblName string) error {
 	var value val.Tuple
 	err := m.Get(ctx, k, func(_, v val.Tuple) error {
 		value = v
