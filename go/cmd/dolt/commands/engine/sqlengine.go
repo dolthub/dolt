@@ -168,7 +168,7 @@ func NewSqlEngine(
 		db.DbData().Ddb.SetCommitHookLogger(ctx, cli.CliOut)
 	}
 
-	sessionFactory := doltSessionFactory(pro, mrEnv.Config(), bcController)
+	sessionFactory := doltSessionFactory(pro, mrEnv.Config(), bcController, config.Autocommit)
 
 	if config.BinlogReplicaController != nil {
 		binLogSession, err := sessionFactory(sql.NewBaseSession(), pro)
@@ -184,7 +184,7 @@ func NewSqlEngine(
 
 	return &SqlEngine{
 		provider:       pro,
-		contextFactory: sqlContextFactory(config.InitialDb, config.Autocommit),
+		contextFactory: sqlContextFactory(config.InitialDb),
 		dsessFactory:   sessionFactory,
 		engine:         engine,
 		resultFormat:   format,
@@ -199,7 +199,7 @@ func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsqle.SqlDatabase) *
 	}
 }
 
-// Databases() returns a list of all databases in the engine
+// Databases returns a slice of all databases in the engine
 func (se *SqlEngine) Databases(ctx *sql.Context) []dsqle.SqlDatabase {
 	databases := se.provider.AllDatabases(ctx)
 	dbs := make([]dsqle.SqlDatabase, len(databases))
@@ -302,7 +302,7 @@ func (se *SqlEngine) Close() error {
 
 // configureBinlogReplicaController configures the binlog replication controller with the |engine|.
 func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engine, session *dsess.DoltSession) error {
-	contextFactory := sqlContextFactory(config.InitialDb, false)
+	contextFactory := sqlContextFactory(config.InitialDb)
 
 	executionCtx, err := contextFactory(context.Background(), session)
 	if err != nil {
@@ -320,24 +320,26 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 }
 
 // sqlContextFactory returns a contextFactory that creates a new sql.Context with the initial database provided
-func sqlContextFactory(initialDb string, autocommit bool) contextFactory {
+func sqlContextFactory(initialDb string) contextFactory {
 	return func(ctx context.Context, session sql.Session) (*sql.Context, error) {
 		sqlCtx := sql.NewContext(ctx, sql.WithSession(session))
 		sqlCtx.SetCurrentDatabase(initialDb)
-
-		err := sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, autocommit)
-		if err != nil {
-			return nil, err
-		}
 
 		return sqlCtx, nil
 	}
 }
 
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession
-func doltSessionFactory(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig, bc *branch_control.Controller) sessionFactory {
+func doltSessionFactory(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig, bc *branch_control.Controller, autocommit bool) sessionFactory {
 	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
 		dsess, err := dsess.NewDoltSession(mysqlSess, pro, config, bc)
+		if err != nil {
+			return nil, err
+		}
+
+		// nil ctx is actually fine in this context, not used in setting a session variable. Creating a new context isn't 
+		// free, and would be throwaway work, since we need to create a session before creating a sql.Context for user work.
+		err = dsess.SetSessionVariable(nil, sql.AutoCommitSessionVar, autocommit)
 		if err != nil {
 			return nil, err
 		}
