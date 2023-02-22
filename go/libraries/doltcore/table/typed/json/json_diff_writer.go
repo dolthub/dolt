@@ -127,6 +127,10 @@ func (j *JsonDiffWriter) WriteRow(
 	return nil
 }
 
+func (j *JsonDiffWriter) WriteCombinedRow(ctx context.Context, oldRow, newRow sql.Row, mode diff.Mode) error {
+	return fmt.Errorf("json format is unable to output diffs for combined rows")
+}
+
 func (j *JsonDiffWriter) Close(ctx context.Context) error {
 	err := iohelp.WriteAll(j.wr, []byte("]"))
 	if err != nil {
