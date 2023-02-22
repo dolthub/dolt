@@ -47,6 +47,7 @@ const (
 	SchemaOnlyDiff diffPart = 1 // 0b0001
 	DataOnlyDiff   diffPart = 2 // 0b0010
 	Stat           diffPart = 4 // 0b0100
+	Summary        diffPart = 8 // 0b0101
 
 	SchemaAndDataDiff = SchemaOnlyDiff | DataOnlyDiff
 
@@ -54,16 +55,17 @@ const (
 	SQLDiffOutput     diffOutput = 2
 	JsonDiffOutput    diffOutput = 3
 
-	DataFlag   = "data"
-	SchemaFlag = "schema"
-	StatFlag   = "stat"
-	whereParam = "where"
-	limitParam = "limit"
-	SQLFlag    = "sql"
-	CachedFlag = "cached"
-	SkinnyFlag = "skinny"
-	MergeBase  = "merge-base"
-	DiffMode   = "diff-mode"
+	DataFlag    = "data"
+	SchemaFlag  = "schema"
+	StatFlag    = "stat"
+	SummaryFlag = "summary"
+	whereParam  = "where"
+	limitParam  = "limit"
+	SQLFlag     = "sql"
+	CachedFlag  = "cached"
+	SkinnyFlag  = "skinny"
+	MergeBase   = "merge-base"
+	DiffMode    = "diff-mode"
 )
 
 var diffDocs = cli.CommandDocumentationContent{
@@ -139,6 +141,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
 	ap.SupportsFlag(StatFlag, "", "Show stats of data changes")
+	ap.SupportsFlag(SummaryFlag, "", "Show summary of data and schema changes")
 	ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular, sql, json. Defaults to tabular.")
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
@@ -173,9 +176,9 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.Contains(StatFlag) {
+	if apr.Contains(StatFlag) || apr.Contains(SummaryFlag) {
 		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) {
-			return errhand.BuildDError("invalid Arguments: --stat cannot be combined with --schema or --data").Build()
+			return errhand.BuildDError("invalid Arguments: --stat and --summary cannot be combined with --schema or --data").Build()
 		}
 	}
 
@@ -199,6 +202,8 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		dArgs.diffParts = SchemaOnlyDiff
 	} else if apr.Contains(StatFlag) {
 		dArgs.diffParts = Stat
+	} else if apr.Contains(SummaryFlag) {
+		dArgs.diffParts = Summary
 	}
 
 	dArgs.skinny = apr.Contains(SkinnyFlag)
@@ -522,9 +527,13 @@ func diffUserTable(
 		return errhand.BuildDError("error: both tables in tableDelta are nil").Build()
 	}
 
-	err := dw.BeginTable(ctx, td)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+	shouldSummary := dArgs.diffParts&Summary != 0
+
+	if !shouldSummary {
+		err := dw.BeginTable(ctx, td)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
 	}
 
 	fromSch, toSch, err := td.GetSchemas(ctx)
@@ -534,6 +543,18 @@ func diffUserTable(
 
 	if dArgs.diffParts&Stat != 0 {
 		return printDiffStat(ctx, td, fromSch.GetAllCols().Size(), toSch.GetAllCols().Size())
+	}
+
+	if shouldSummary {
+		dataChanged, verr := getDataHasChanged(ctx, engine, td, dArgs)
+		if verr != nil {
+			return verr
+		}
+		summ, err := td.GetSummary(ctx, dataChanged)
+		if err != nil {
+			return errhand.BuildDError("could not get table delta summary").AddCause(err).Build()
+		}
+		return printDiffSummary(ctx, summ)
 	}
 
 	if dArgs.diffParts&SchemaOnlyDiff != 0 {
@@ -663,6 +684,79 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 	return ddlStatements, nil
 }
 
+func getRowDiffIter(
+	ctx context.Context,
+	se *engine.SqlEngine,
+	td diff.TableDelta,
+	dArgs *diffArgs,
+	where string,
+	limit int,
+) (*sql.Context, sql.Schema, sql.RowIter, string, errhand.VerboseError) {
+	diffable := schema.ArePrimaryKeySetsDiffable(td.Format(), td.FromSch, td.ToSch)
+	canSqlDiff := !(td.ToSch == nil || (td.FromSch != nil && !schema.SchemasAreEqual(td.FromSch, td.ToSch)))
+
+	// can't diff
+	if !diffable {
+		// TODO: this messes up some structured output if the user didn't redirect it
+		cli.PrintErrf("Primary key sets differ between revisions for table %s, skipping data diff\n", td.ToName)
+		return nil, nil, nil, "", nil
+	} else if dArgs.diffOutput == SQLDiffOutput && !canSqlDiff {
+		// TODO: this is overly broad, we can absolutely do better
+		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff\n")
+		return nil, nil, nil, "", nil
+	}
+
+	// do the data diff
+	tableName := td.CurName()
+
+	columns := getColumnNamesString(td.FromSch, td.ToSch)
+	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", dArgs.fromRef, dArgs.toRef, tableName)
+
+	if len(where) > 0 {
+		query += " where " + where
+	}
+
+	if limit >= 0 {
+		query += " limit " + strconv.Itoa(limit)
+	}
+
+	sqlCtx, err := engine.NewLocalSqlContext(ctx, se)
+	if err != nil {
+		return nil, nil, nil, "", errhand.VerboseErrorFromError(err)
+	}
+
+	sch, rowIter, err := se.Query(sqlCtx, query)
+	if sql.ErrSyntaxError.Is(err) {
+		return nil, nil, nil, "", errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
+	} else if err != nil {
+		return nil, nil, nil, "", errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
+	}
+
+	return sqlCtx, sch, rowIter, query, nil
+}
+
+func getDataHasChanged(ctx context.Context,
+	se *engine.SqlEngine,
+	td diff.TableDelta,
+	dArgs *diffArgs,
+) (bool, errhand.VerboseError) {
+	sqlCtx, _, rowIter, _, verr := getRowDiffIter(ctx, se, td, dArgs, "", 1)
+	if verr != nil {
+		return false, verr
+	}
+
+	defer rowIter.Close(sqlCtx)
+
+	_, err := rowIter.Next(sqlCtx)
+	if err == io.EOF {
+		return false, nil
+	} else if err != nil {
+		return false, errhand.VerboseErrorFromError(err)
+	}
+
+	return true, nil
+}
+
 func diffRows(
 	ctx context.Context,
 	se *engine.SqlEngine,
@@ -670,9 +764,6 @@ func diffRows(
 	dArgs *diffArgs,
 	dw diffWriter,
 ) errhand.VerboseError {
-	diffable := schema.ArePrimaryKeySetsDiffable(td.Format(), td.FromSch, td.ToSch)
-	canSqlDiff := !(td.ToSch == nil || (td.FromSch != nil && !schema.SchemasAreEqual(td.FromSch, td.ToSch)))
-
 	var toSch, fromSch sql.Schema
 	if td.FromSch != nil {
 		pkSch, err := sqlutil.FromDoltSchema(td.FromName, td.FromSch)
@@ -698,25 +789,6 @@ func diffRows(
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	// can't diff
-	if !diffable {
-		// TODO: this messes up some structured output if the user didn't redirect it
-		cli.PrintErrf("Primary key sets differ between revisions for table %s, skipping data diff\n", td.ToName)
-		err := rowWriter.Close(ctx)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-		return nil
-	} else if dArgs.diffOutput == SQLDiffOutput && !canSqlDiff {
-		// TODO: this is overly broad, we can absolutely do better
-		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff\n")
-		err := rowWriter.Close(ctx)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-		return nil
-	}
-
 	// no data diff requested
 	if dArgs.diffParts&DataOnlyDiff == 0 {
 		err := rowWriter.Close(ctx)
@@ -726,33 +798,13 @@ func diffRows(
 		return nil
 	}
 
-	// do the data diff
-	tableName := td.ToName
-	if len(tableName) == 0 {
-		tableName = td.FromName
-	}
-
-	columns := getColumnNamesString(td.FromSch, td.ToSch)
-	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", dArgs.fromRef, dArgs.toRef, tableName)
-
-	if len(dArgs.where) > 0 {
-		query += " where " + dArgs.where
-	}
-
-	if dArgs.limit >= 0 {
-		query += " limit " + strconv.Itoa(dArgs.limit)
-	}
-
-	sqlCtx, err := engine.NewLocalSqlContext(ctx, se)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	sch, rowIter, err := se.Query(sqlCtx, query)
-	if sql.ErrSyntaxError.Is(err) {
-		return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
-	} else if err != nil {
-		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
+	sqlCtx, sch, rowIter, query, verr := getRowDiffIter(ctx, se, td, dArgs, dArgs.where, dArgs.limit)
+	if verr != nil {
+		err := rowWriter.Close(ctx)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		return verr
 	}
 
 	defer rowIter.Close(sqlCtx)

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -55,6 +56,13 @@ type TableDelta struct {
 	ToFks            []doltdb.ForeignKey
 	ToFksParentSch   map[string]schema.Schema
 	FromFksParentSch map[string]schema.Schema
+}
+
+type TableDeltaSummary struct {
+	DiffType         string
+	HasDataChanges   bool
+	HasSchemaChanges bool
+	TableName        string
 }
 
 // GetStagedUnstagedTableDeltas represents staged and unstaged changes as TableDelta slices.
@@ -280,6 +288,16 @@ func (td TableDelta) IsRename() bool {
 	return td.FromName != td.ToName
 }
 
+func (td TableDelta) Type() string {
+	if td.IsAdd() {
+		return "added"
+	}
+	if td.IsDrop() {
+		return "dropped"
+	}
+	return "modified"
+}
+
 // HasHashChanged returns true if the hash of the table content has changed between
 // the fromRoot and toRoot.
 func (td TableDelta) HasHashChanged() (bool, error) {
@@ -387,6 +405,20 @@ func (td TableDelta) IsKeyless(ctx context.Context) (bool, error) {
 	}
 }
 
+// GetSummary returns a summary of the table delta.
+func (td TableDelta) GetSummary(ctx context.Context, dataChanged bool) (*TableDeltaSummary, error) {
+	schemaChanged, err := td.HasSchemaChanged(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &TableDeltaSummary{
+		HasSchemaChanges: schemaChanged,
+		HasDataChanges:   dataChanged,
+		DiffType:         td.Type(),
+		TableName:        td.CurName(),
+	}, nil
+}
+
 // GetRowData returns the table's row data at the fromRoot and toRoot, or an empty map if the table did not exist.
 func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, err error) {
 	if td.FromTable == nil && td.ToTable == nil {
@@ -434,4 +466,21 @@ func fkSlicesAreEqual(from, to []doltdb.ForeignKey) bool {
 		}
 	}
 	return true
+}
+
+func getColumnNamesString(fromSch, toSch schema.Schema) string {
+	var cols []string
+	if fromSch != nil {
+		fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			cols = append(cols, fmt.Sprintf("`from_%s`", col.Name))
+			return false, nil
+		})
+	}
+	if toSch != nil {
+		toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			cols = append(cols, fmt.Sprintf("`to_%s`", col.Name))
+			return false, nil
+		})
+	}
+	return strings.Join(cols, ",")
 }

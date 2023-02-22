@@ -65,6 +65,27 @@ func newDiffWriter(diffOutput diffOutput) (diffWriter, error) {
 	}
 }
 
+func printDiffSummary(ctx context.Context, summ *diff.TableDeltaSummary) errhand.VerboseError {
+	bold := color.New(color.Bold)
+
+	fmtStr := fmt.Sprintf("%%s%%%ds\t| %%s", 35-len(summ.TableName))
+	line := fmt.Sprintf(fmtStr, bold.Sprintf(summ.TableName), "", getDiffTypeString(summ.DiffType))
+	line = fmt.Sprintf("%s | Data changed: %t | Schema changed: %t", line, summ.HasDataChanges, summ.HasSchemaChanges)
+
+	cli.Println(line)
+	return nil
+}
+
+func getDiffTypeString(t string) string {
+	if t == "added" {
+		return color.HiGreenString("added   ")
+	}
+	if t == "dropped" {
+		return color.HiRedString("dropped ")
+	}
+	return color.HiYellowString("modified")
+}
+
 func printDiffStat(ctx context.Context, td diff.TableDelta, oldColLen, newColLen int) errhand.VerboseError {
 	// todo: use errgroup.Group
 	ae := atomicerr.New()
