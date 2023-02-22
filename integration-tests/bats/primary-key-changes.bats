@@ -334,15 +334,15 @@ teardown() {
     [[ "$output" =~ '+  `val` int NOT NULL,' ]] || false
     [[ "$output" =~ '+  PRIMARY KEY (`pk`,`val`)' ]] || false
 
-    # Make sure there is not a data diff or summary diff
+    # Make sure there is not a data diff or stat diff
     dolt diff --data
     run dolt diff --data
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Primary key sets differ between revisions for table t, skipping data diff" ]] || false
 
-    run dolt diff --summary
+    run dolt diff --stat
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "failed to compute diff summary for table t: primary key set changed" ]] || false
+    [[ "$output" =~ "failed to compute diff stat for table t: primary key set changed" ]] || false
 
     dolt add .
 
