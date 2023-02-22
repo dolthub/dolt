@@ -223,7 +223,7 @@ func dumpSchemaElements(ctx context.Context, dEnv *env.DoltEnv, path string) err
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	sqlCtx, err := engine.NewContext(ctx)
+	sqlCtx, err := engine.NewLocalContext(ctx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
