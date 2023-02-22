@@ -43,8 +43,8 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "3" ]] || false
 
-    dolt checkout migrated_commits
-    run dolt sql -q "SELECT count(*) FROM mapping" -r csv
+    dolt checkout dolt_migrated_commits
+    run dolt sql -q "SELECT count(*) FROM dolt_commit_mapping" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "2" ]] || false
 }
@@ -67,14 +67,14 @@ SQL
     pushd db_one
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
-    dolt branch -D migrated_commits
+    dolt branch -D dolt_migrated_commits
     ONE=$(dolt branch -av)
     popd
 
     pushd db_two
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
-    dolt branch -D migrated_commits
+    dolt branch -D dolt_migrated_commits
     TWO=$(dolt branch -av)
     popd
 

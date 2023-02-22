@@ -78,7 +78,7 @@ func TestMigration(t *testing.T) {
 					expected: []sql.Row{{int64(2)}},
 				},
 				{
-					query:    "SELECT count(*) FROM `dolt/migrated_commits`.mapping",
+					query:    "SELECT count(*) FROM `dolt/dolt_migrated_commits`.dolt_commit_mapping",
 					expected: []sql.Row{{int64(2)}},
 				},
 			},
@@ -130,15 +130,15 @@ func TestMigration(t *testing.T) {
 					expected: []sql.Row{{int64(4)}},
 				},
 				{
-					query:    "SELECT count(*) FROM `dolt/migrated_commits`.mapping",
+					query:    "SELECT count(*) FROM `dolt/dolt_migrated_commits`.dolt_commit_mapping",
 					expected: []sql.Row{{int64(4)}},
 				},
 				{
-					query:    "SELECT count(*) FROM `dolt/migrated_commits`.mapping WHERE new_commit_hash IN (SELECT commit_hash FROM dolt_log)",
+					query:    "SELECT count(*) FROM `dolt/dolt_migrated_commits`.dolt_commit_mapping WHERE new_commit_hash IN (SELECT commit_hash FROM dolt_log)",
 					expected: []sql.Row{{int64(4)}},
 				},
 				{
-					query:    "SELECT count(*) FROM `dolt/migrated_commits`.mapping WHERE new_commit_hash NOT IN (SELECT commit_hash FROM dolt_log)",
+					query:    "SELECT count(*) FROM `dolt/dolt_migrated_commits`.dolt_commit_mapping WHERE new_commit_hash NOT IN (SELECT commit_hash FROM dolt_log)",
 					expected: []sql.Row{{int64(0)}},
 				},
 			},
