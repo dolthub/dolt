@@ -92,10 +92,10 @@ func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
 func NewDoltSession(
-		sqlSess *sql.BaseSession,
-		pro DoltDatabaseProvider,
-		conf config.ReadWriteConfig,
-		branchController *branch_control.Controller ,
+	sqlSess *sql.BaseSession,
+	pro DoltDatabaseProvider,
+	conf config.ReadWriteConfig,
+	branchController *branch_control.Controller,
 ) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")
@@ -455,7 +455,7 @@ func (d *DoltSession) isDirty(ctx *sql.Context, dbName string) (bool, error) {
 		return false, err
 	}
 
-	return dbState.dirty, nil	
+	return dbState.dirty, nil
 }
 
 // CommitWorkingSet commits the working set for the transaction given, without creating a new dolt commit.
@@ -465,11 +465,11 @@ func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.T
 	if err != nil {
 		return err
 	}
-	
+
 	if !dirty {
 		return nil
 	}
-	
+
 	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 		ws, err := dtx.Commit(ctx, workingSet)
 		return ws, nil, err
@@ -630,7 +630,7 @@ func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 	if err != nil {
 		return err
 	}
-	
+
 	dtx, ok := tx.(*DoltTransaction)
 	if !ok {
 		return fmt.Errorf("expected a DoltTransaction")
@@ -1097,6 +1097,7 @@ func (d *DoltSession) HasDB(ctx *sql.Context, dbName string) bool {
 // AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
 // TODO: the session has a database provider, we shouldn't need to add databases to it explicitly, this should be
+//
 //	internal only
 func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	db := dbState.Db

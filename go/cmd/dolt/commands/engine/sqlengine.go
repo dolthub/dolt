@@ -167,7 +167,7 @@ func NewSqlEngine(
 	for _, db := range dbs {
 		db.DbData().Ddb.SetCommitHookLogger(ctx, cli.CliOut)
 	}
-	
+
 	configureBinlogReplicaController(config, engine)
 
 	return &SqlEngine{
@@ -298,7 +298,7 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 	}
 
 	contextFactory := newSqlContext(config.InitialDb, false)
-	
+
 	// TODO: this needs the dolt session
 	newCtx, err := contextFactory(context.Background(), sql.NewBaseSession())
 	if err != nil {
@@ -334,7 +334,7 @@ func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfi
 		if err != nil {
 			return nil, err
 		}
-		
+
 		return dsess, nil
 	}
 }

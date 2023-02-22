@@ -902,7 +902,7 @@ func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, conti
 // be updated by any queries which were processed.
 func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv, config *engine.SqlEngineConfig) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
-	
+
 	sqlCtx, err := se.NewDefaultContext(ctx)
 	if err != nil {
 		return err
