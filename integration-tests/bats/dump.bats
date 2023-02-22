@@ -127,7 +127,7 @@ teardown() {
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
-    run dolt diff --summary main new_branch
+    run dolt diff --stat main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
@@ -158,7 +158,7 @@ teardown() {
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
-    run dolt diff --summary main new_branch
+    run dolt diff --stat main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
@@ -500,7 +500,7 @@ SQL
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
-    run dolt diff --summary main new_branch
+    run dolt diff --stat main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
@@ -526,7 +526,7 @@ SQL
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
-    run dolt diff --summary main new_branch
+    run dolt diff --stat main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
@@ -640,7 +640,7 @@ SQL
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
-    run dolt diff --summary main new_branch
+    run dolt diff --stat main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
@@ -665,7 +665,7 @@ SQL
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
-    run dolt diff --summary main new_branch
+    run dolt diff --stat main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
@@ -768,7 +768,7 @@ SQL
     dolt add .
     dolt commit --allow-empty -m "create tables from dump files"
 
-    run dolt diff --summary main new_branch
+    run dolt diff --stat main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
