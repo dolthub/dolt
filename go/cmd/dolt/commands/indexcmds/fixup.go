@@ -15,13 +15,17 @@
 package indexcmds
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	val2 "github.com/dolthub/dolt/go/store/val"
 	"io"
+	"sort"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -118,11 +122,15 @@ func (cmd FixupCmd) sweepSingle(ctx context.Context, working *doltdb.RootValue, 
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get schema for `%s`.", tableName).AddCause(err).Build(), nil)
 	}
-	index := tblSch.Indexes().GetByName(indexName)
-	if index == nil {
+	idx := tblSch.Indexes().GetByName(indexName)
+	if idx == nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("The index `%s` does not exist on table `%s`.", indexName, tableName).Build(), nil)
 	}
-	indexRowData, err := table.GetIndexRowData(ctx, index.Name())
+	if isPrimaryKey(idx) {
+		return 0
+	}
+
+	indexRowData, err := table.GetIndexRowData(ctx, idx.Name())
 
 	err = cmd.sweepIndex(ctx, tableName, indexName, table, indexRowData, dry)
 	if err != nil {
@@ -144,6 +152,9 @@ func (cmd FixupCmd) sweepAll(ctx context.Context, root *doltdb.RootValue, dry bo
 			return err
 		}
 		for _, idx := range sch.Indexes().AllIndexes() {
+			if isPrimaryKey(idx) {
+				continue
+			}
 			rowData, err := table.GetIndexRowData(ctx, idx.Name())
 			if err != nil {
 				return err
@@ -164,6 +175,13 @@ const (
 	ssFill
 	ssFlush
 )
+
+type keySet struct {
+	pri val2.Tuple
+	sec val2.Tuple
+}
+
+var fixupBatchSize = 10000
 
 func (cmd FixupCmd) sweepIndex(ctx context.Context, tableName, indexName string, t *doltdb.Table, idx durable.Index, dry bool) error {
 	secMap := durable.ProllyMapFromIndex(idx)
@@ -188,16 +206,18 @@ func (cmd FixupCmd) sweepIndex(ctx context.Context, tableName, indexName string,
 	priKb := val2.NewTupleBuilder(priKd)
 	pool := priMap.Pool()
 
-	batchSize := 5000
-	secKeys := make([]val2.Tuple, 0, batchSize)
-	priKeys := make([]val2.Tuple, 0, batchSize)
+	keys := make([]keySet, 0, fixupBatchSize)
 	var key val2.Tuple
 	nextState := ssFill
+	var cur *tree.Cursor
+
+	cli.Printf("starting to fixup '%s.%s'\n", tableName, indexName)
+
 	for {
 		switch nextState {
 		case ssFill:
 			nextState = ssFlush
-			for len(secKeys) < batchSize {
+			for len(keys) < fixupBatchSize {
 				key, _, err = iter.Next(ctx)
 				if errors.Is(err, io.EOF) {
 					break
@@ -210,40 +230,62 @@ func (cmd FixupCmd) sweepIndex(ctx context.Context, tableName, indexName string,
 					j := o + i
 					priKb.PutRaw(i, key.GetField(j))
 				}
-				priKeys = append(priKeys, priKb.Build(pool))
-				secKeys = append(secKeys, key)
+				keys = append(keys, keySet{pri: priKb.Build(pool), sec: key})
 			}
 		case ssFlush:
-			if len(secKeys) == 0 {
+			if len(keys) == 0 {
 				return nil
 			}
 			nextState = ssFill
-			for i, pri := range priKeys {
-				var value val2.Tuple
-				err = priMap.Get(ctx, pri, func(k, v val2.Tuple) error {
-					value = v
-					return nil
-				})
+			sort.Slice(keys, func(i, j int) bool {
+				return bytes.Compare(keys[i].pri, keys[j].pri) <= 0
+			})
+			for _, keyPair := range keys {
+				if cur == nil {
+					cur, err = tree.NewCursorAtKey(ctx, priMap.NodeStore(), priMap.Node(), keyPair.pri, priMap.Tuples().Order)
+				} else {
+					err = tree.Seek(ctx, cur, keyPair.pri, priKd)
+				}
 				if err != nil {
 					return err
 				}
-				if value == nil {
-					// this secondary key points to no valid primary key
+
+				if !cur.Valid() {
+					// this secondary key references no valid primary key
 					if dry {
-						cli.PrintErrf("dangling secondary key in '%s.%s': %s -> %s\n", tableName, indexName, secKd.Format(secKeys[i]), priKd.Format(pri))
+						cli.PrintErrf("dangling secondary key in '%s.%s': %s -> %s\n", tableName, indexName, secKd.Format(keyPair.sec), priKd.Format(keyPair.pri))
 						continue
 					}
-					err := mutSec.Delete(ctx, secKeys[i])
+					err := mutSec.Delete(ctx, keyPair.sec)
 					if err != nil {
 						return err
 					}
 				}
 			}
-			priKeys = priKeys[:0]
-			secKeys = secKeys[:0]
+			keys = keys[:0]
 		default:
 			panic(fmt.Sprintf("unknown value for sweep state %d", nextState))
 		}
 	}
 	return nil
+}
+
+func isPrimaryKey(idx schema.Index) bool {
+	if len(idx.PrimaryKeyTags()) != len(idx.IndexedColumnTags()) {
+		return false
+	}
+	pks := idx.PrimaryKeyTags()
+	for _, t := range idx.IndexedColumnTags() {
+		found := false
+		for _, pk := range pks {
+			if pk == t {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
