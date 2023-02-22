@@ -38,8 +38,8 @@ import (
 )
 
 const (
-	migratedCommitsBranch = "migrated_commits"
-	migratedCommitsTable  = "mapping"
+	MigratedCommitsBranch = "dolt_migrated_commits"
+	MigratedCommitsTable  = "dolt_commit_mapping"
 )
 
 var (
@@ -169,6 +169,8 @@ func (p *progress) Finalize(ctx context.Context) (prolly.Map, error) {
 	}
 
 	p.Log(ctx, "Wrote commit mapping!! [commit_mapping_ref: %s]", ref.TargetHash().String())
+	p.Log(ctx, "Commit mapping allow mapping pre-migration commit hashes to post-migration commit hashes, "+
+		"it is available on branch '%s' in table '%s'", MigratedCommitsBranch, MigratedCommitsTable)
 	return m, nil
 }
 
@@ -179,7 +181,7 @@ func persistMigratedCommitMapping(ctx context.Context, ddb *doltdb.DoltDB, mappi
 		return err
 	}
 
-	br := ref.NewBranchRef(migratedCommitsBranch)
+	br := ref.NewBranchRef(MigratedCommitsBranch)
 	err = ddb.NewBranchAtCommit(ctx, br, init)
 	if err != nil {
 		return err
@@ -239,7 +241,7 @@ func persistMigratedCommitMapping(ctx context.Context, ddb *doltdb.DoltDB, mappi
 		return err
 	}
 
-	root, err = root.PutTable(ctx, migratedCommitsTable, tbl)
+	root, err = root.PutTable(ctx, MigratedCommitsTable, tbl)
 	if err != nil {
 		return err
 	}
