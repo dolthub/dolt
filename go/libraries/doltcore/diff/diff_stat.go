@@ -200,20 +200,20 @@ func statWithReporter(ctx context.Context, ch chan DiffStatProgress, from, to ty
 }
 
 func reportPkChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD val.TupleDesc, change tree.Diff, ch chan<- DiffStatProgress) error {
-	var sum DiffStatProgress
+	var stat DiffStatProgress
 	switch change.Type {
 	case tree.AddedDiff:
-		sum.Adds++
+		stat.Adds++
 	case tree.RemovedDiff:
-		sum.Removes++
+		stat.Removes++
 	case tree.ModifiedDiff:
-		sum.CellChanges = prollyCountCellDiff(vMapping, fromD, toD, val.Tuple(change.From), val.Tuple(change.To))
-		sum.Changes++
+		stat.CellChanges = prollyCountCellDiff(vMapping, fromD, toD, val.Tuple(change.From), val.Tuple(change.To))
+		stat.Changes++
 	default:
 		return errors.New("unknown change type")
 	}
 	select {
-	case ch <- sum:
+	case ch <- stat:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -221,28 +221,28 @@ func reportPkChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, to
 }
 
 func reportKeylessChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD val.TupleDesc, change tree.Diff, ch chan<- DiffStatProgress) error {
-	var sum DiffStatProgress
+	var stat DiffStatProgress
 	var n, n2 uint64
 	switch change.Type {
 	case tree.AddedDiff:
 		n, _ = toD.GetUint64(0, val.Tuple(change.To))
-		sum.Adds += n
+		stat.Adds += n
 	case tree.RemovedDiff:
 		n, _ = fromD.GetUint64(0, val.Tuple(change.From))
-		sum.Removes += n
+		stat.Removes += n
 	case tree.ModifiedDiff:
 		n, _ = fromD.GetUint64(0, val.Tuple(change.From))
 		n2, _ = toD.GetUint64(0, val.Tuple(change.To))
 		if n < n2 {
-			sum.Adds += n2 - n
+			stat.Adds += n2 - n
 		} else {
-			sum.Removes += n - n2
+			stat.Removes += n - n2
 		}
 	default:
 		return errors.New("unknown change type")
 	}
 	select {
-	case ch <- sum:
+	case ch <- stat:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()

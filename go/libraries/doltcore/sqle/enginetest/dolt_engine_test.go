@@ -1236,10 +1236,10 @@ func TestDiffTableFunctionPrepared(t *testing.T) {
 	}
 }
 
-func TestDiffSummaryTableFunction(t *testing.T) {
+func TestDiffStatTableFunction(t *testing.T) {
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
-	for _, test := range DiffSummaryTableFunctionScriptTests {
+	for _, test := range DiffStatTableFunctionScriptTests {
 		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, test)
@@ -1247,10 +1247,10 @@ func TestDiffSummaryTableFunction(t *testing.T) {
 	}
 }
 
-func TestDiffSummaryTableFunctionPrepared(t *testing.T) {
+func TestDiffStatTableFunctionPrepared(t *testing.T) {
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
-	for _, test := range DiffSummaryTableFunctionScriptTests {
+	for _, test := range DiffStatTableFunctionScriptTests {
 		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, harness, test)
