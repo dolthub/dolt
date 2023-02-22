@@ -263,11 +263,15 @@ func TestForeignKeyChecks(t *testing.T) {
 	startSqlServers(t)
 	startReplication(t, mySqlPort)
 
-	// Insert a record with a foreign key check
-	primaryDatabase.MustExec("CREATE TABLE colors (name varchar(100) primary key);")
+	// Test that we can execute statement-based replication that requires foreign_key_checks
+	// being turned off (referenced table doesn't exist yet).
+	primaryDatabase.MustExec("SET foreign_key_checks = 0;")
 	primaryDatabase.MustExec("CREATE TABLE t1 (pk int primary key, color varchar(100), FOREIGN KEY (color) REFERENCES colors(name));")
-	primaryDatabase.MustExec("START TRANSACTION;")
+	primaryDatabase.MustExec("CREATE TABLE colors (name varchar(100) primary key);")
 	primaryDatabase.MustExec("SET foreign_key_checks = 1;")
+
+	// Insert a record with foreign key checks enabled
+	primaryDatabase.MustExec("START TRANSACTION;")
 	primaryDatabase.MustExec("INSERT INTO colors VALUES ('green'), ('red'), ('blue');")
 	primaryDatabase.MustExec("INSERT INTO t1 VALUES (1, 'red'), (2, 'green');")
 	primaryDatabase.MustExec("COMMIT;")
@@ -486,8 +490,8 @@ func stopDoltSqlServer(t *testing.T) {
 func startReplication(_ *testing.T, port int) {
 	replicaDatabase.MustExec("SET @@GLOBAL.server_id=123;")
 	replicaDatabase.MustExec(
-		fmt.Sprintf("change replication source to SOURCE_HOST='localhost', SOURCE_USER='root', "+
-			"SOURCE_PASSWORD='', SOURCE_PORT=%v;", port))
+		fmt.Sprintf("change replication source to SOURCE_HOST='localhost', SOURCE_USER='replicator', "+
+			"SOURCE_PASSWORD='password', SOURCE_PORT=%v;", port))
 
 	replicaDatabase.MustExec("start replica;")
 }
@@ -623,7 +627,6 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 	primaryDatabase = sqlx.MustOpen("mysql", dsn)
 
 	os.Chdir(originalCwd)
-
 	fmt.Printf("MySQL server started on port %v \n", mySqlPort)
 
 	return mySqlPort, cmd.Process, nil

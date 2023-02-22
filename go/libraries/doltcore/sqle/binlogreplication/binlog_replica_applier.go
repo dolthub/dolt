@@ -328,6 +328,8 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			"database": query.Database,
 			"charset":  query.Charset,
 			"query":    query.SQL,
+			"options":  fmt.Sprintf("0x%x", query.Options),
+			"sql_mode": fmt.Sprintf("0x%x", query.SqlMode),
 		}).Debug("Received binlog event: Query")
 
 		// When executing SQL statements sent from the primary, we can't be sure what database was modified unless we
@@ -493,16 +495,18 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 // processRowEvent processes a WriteRows, DeleteRows, or UpdateRows binlog event and returns an error if any problems
 // were encountered.
 func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.BinlogEvent, engine *gms.Engine) error {
+	var eventType string
 	switch {
 	case event.IsDeleteRows():
-		ctx.GetLogger().Debug("Received binlog event: DeleteRows")
+		eventType = "DeleteRows"
 	case event.IsWriteRows():
-		ctx.GetLogger().Debug("Received binlog event: WriteRows")
+		eventType = "WriteRows"
 	case event.IsUpdateRows():
-		ctx.GetLogger().Debug("Received binlog event: UpdateRows")
+		eventType = "UpdateRows"
 	default:
 		return fmt.Errorf("unsupported event type: %v", event)
 	}
+	ctx.GetLogger().Debug("Received binlog event: %s", eventType)
 
 	tableId := event.TableID(a.format)
 	tableMap, ok := a.tableMapsById[tableId]
@@ -519,16 +523,22 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 		return err
 	}
 
+	ctx.GetLogger().WithFields(logrus.Fields{
+		"flags": fmt.Sprintf("%x", rows.Flags),
+	}).Debug("Processing rows from %s event", eventType)
+
 	flags := rows.Flags
-	if flags&rowFlag_endOfStatement == rowFlag_endOfStatement {
+	foreignKeyChecksDisabled := false
+	if flags&rowFlag_endOfStatement > 0 {
 		// nothing to be done for end of statement; just clear the flag and move on
 		flags = flags &^ rowFlag_endOfStatement
 	}
-	if flags&rowFlag_noForeignKeyChecks == rowFlag_noForeignKeyChecks {
+	if flags&rowFlag_noForeignKeyChecks > 0 {
+		foreignKeyChecksDisabled = true
 		flags = flags &^ rowFlag_noForeignKeyChecks
 	}
 	if flags != 0 {
-		msg := fmt.Sprintf("unsupported binlog protocol message: DeleteRows event with unsupported flags '%x'", flags)
+		msg := fmt.Sprintf("unsupported binlog protocol message: row event with unsupported flags '%x'", flags)
 		ctx.GetLogger().Errorf(msg)
 		DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, msg)
 	}
@@ -543,10 +553,9 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 	case event.IsUpdateRows():
 		ctx.GetLogger().Debugf(" - Updated Rows (table: %s)", tableMap.Name)
 	case event.IsWriteRows():
-		ctx.GetLogger().Debugf(" - New Rows (table: %s)", tableMap.Name)
+		ctx.GetLogger().Debugf(" - Inserted Rows (table: %s)", tableMap.Name)
 	}
 
-	foreignKeyChecksDisabled := tableMap.Flags&rowFlag_noForeignKeyChecks > 0
 	writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database, foreignKeyChecksDisabled)
 	if err != nil {
 		return err
