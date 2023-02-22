@@ -2478,6 +2478,44 @@ SQL
     [ "${lines[0]}" = "current_user" ]
 }
 
+@test "sql: autocommit = off" {
+    dolt sql -q "create table t1 (a int);"
+    dolt commit -Am 'clean working set'
+
+    run dolt sql <<SQL
+set autocommit = off;
+insert into t1 values (3), (5);
+select * from t1;
+SQL
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "5" ]] || false
+
+    # no changes committed
+    run dolt sql -q "select count(*) from t1" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "0" ]] || false
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+
+    dolt sql <<SQL
+set autocommit = off;
+insert into t1 values (3), (5);
+commit;
+SQL
+
+    run dolt sql -q "select count(*) from t1" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -ne 0 ]
+}
+
 @test "sql: found_row works with update properly" {
     run dolt sql  <<SQL
 set autocommit = off;
