@@ -168,12 +168,24 @@ func NewSqlEngine(
 		db.DbData().Ddb.SetCommitHookLogger(ctx, cli.CliOut)
 	}
 
-	configureBinlogReplicaController(config, engine)
+	sessionFactory := doltSessionFactory(pro, mrEnv.Config(), bcController)
+
+	if config.BinlogReplicaController != nil {
+		binLogSession, err := sessionFactory(sql.NewBaseSession(), pro)
+		if err != nil {
+			return nil, err
+		}
+		
+		err = configureBinlogReplicaController(config, engine, binLogSession)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return &SqlEngine{
 		provider:       pro,
-		contextFactory: newSqlContext(config.InitialDb, config.Autocommit),
-		dsessFactory:   newDoltSession(pro, mrEnv.Config(), bcController),
+		contextFactory: sqlContextFactory(config.InitialDb, config.Autocommit),
+		dsessFactory:   sessionFactory,
 		engine:         engine,
 		resultFormat:   format,
 	}, nil
@@ -199,7 +211,6 @@ func (se *SqlEngine) Databases(ctx *sql.Context) []dsqle.SqlDatabase {
 }
 
 // NewContext returns a new sql.Context with the given session.
-// TODO: investigate uses of this
 func (se *SqlEngine) NewContext(ctx context.Context, session sql.Session) (*sql.Context, error) {
 	return se.contextFactory(ctx, session)
 }
@@ -289,32 +300,27 @@ func (se *SqlEngine) Close() error {
 	return nil
 }
 
-// configureBinlogReplicaController examines the specified |config| and if a binlog replica controller is provided,
-// it creates a new context from the specified |sess| for the replia's applier to use, and it configures the
-// binlog replica controller with the |engine|.
-func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engine) error {
-	if config.BinlogReplicaController == nil {
-		return nil
-	}
+// configureBinlogReplicaController configures the binlog replication controller with the |engine|.
+func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engine, session *dsess.DoltSession) error {
+	contextFactory := sqlContextFactory(config.InitialDb, false)
 
-	contextFactory := newSqlContext(config.InitialDb, false)
-
-	// TODO: this needs the dolt session
-	newCtx, err := contextFactory(context.Background(), sql.NewBaseSession())
+	executionCtx, err := contextFactory(context.Background(), session)
 	if err != nil {
 		return err
 	}
-	newCtx.SetClient(sql.Client{
+	executionCtx.SetClient(sql.Client{
 		User:    "root",
 		Address: "localhost",
 	})
-	dblr.DoltBinlogReplicaController.SetExecutionContext(newCtx)
+	
+	dblr.DoltBinlogReplicaController.SetExecutionContext(executionCtx)
 	engine.Analyzer.BinlogReplicaController = config.BinlogReplicaController
 
 	return nil
 }
 
-func newSqlContext(initialDb string, autocommit bool) contextFactory {
+// sqlContextFactory returns a contextFactory that creates a new sql.Context with the initial database provided
+func sqlContextFactory(initialDb string, autocommit bool) contextFactory {
 	return func(ctx context.Context, session sql.Session) (*sql.Context, error) {
 		sqlCtx := sql.NewContext(ctx, sql.WithSession(session))
 		sqlCtx.SetCurrentDatabase(initialDb)
@@ -328,7 +334,8 @@ func newSqlContext(initialDb string, autocommit bool) contextFactory {
 	}
 }
 
-func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig, bc *branch_control.Controller) sessionFactory {
+// doltSessionFactory returns a sessionFactory that creates a new DoltSession
+func doltSessionFactory(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig, bc *branch_control.Controller) sessionFactory {
 	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
 		dsess, err := dsess.NewDoltSession(mysqlSess, pro, config, bc)
 		if err != nil {
