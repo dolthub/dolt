@@ -137,7 +137,7 @@ func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, conten
 		err  error
 	)
 
-	sctx, err = eng.NewContext(ctx)
+	sctx, err = eng.NewDefaultContext(ctx)
 	if err != nil {
 		return err
 	}

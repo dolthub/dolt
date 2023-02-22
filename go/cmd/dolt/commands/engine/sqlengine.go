@@ -190,10 +190,30 @@ func (se *SqlEngine) Databases(ctx *sql.Context) []dsqle.SqlDatabase {
 	return nil
 }
 
-// NewContext converts a context.Context to a sql.Context.
+// NewContext returns a new sql.Context with the given session.
 // TODO: investigate uses of this
 func (se *SqlEngine) NewContext(ctx context.Context, session sql.Session) (*sql.Context, error) {
 	return se.contextFactory(ctx, session)
+}
+
+// NewDefaultContext returns a new sql.Context with a new default dolt session.
+func (se *SqlEngine) NewDefaultContext(ctx context.Context) (*sql.Context, error) {
+	session, err := se.NewDoltSession(ctx, sql.NewBaseSession())
+	if err != nil {
+		return nil, err
+	}
+	return se.contextFactory(ctx, session)
+}
+
+// NewLocalContext returns a new |sql.Context| with its client set to |root|
+func (se *SqlEngine) NewLocalContext(ctx context.Context) (*sql.Context, error) {
+	sqlCtx, err := se.NewDefaultContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	return sqlCtx, nil
 }
 
 // NewDoltSession creates a new DoltSession from a BaseSession
@@ -341,15 +361,4 @@ func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, err
 			Autocommit: false,
 		},
 	)
-}
-
-// NewLocalSqlContext returns a new |sql.Context| using the engine provided, with its client set to |root|
-func NewLocalSqlContext(ctx context.Context, se *SqlEngine) (*sql.Context, error) {
-	sqlCtx, err := se.NewContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
-	return sqlCtx, nil
 }

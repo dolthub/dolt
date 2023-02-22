@@ -179,7 +179,7 @@ func printConflicts(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootVal
 				return errhand.BuildDError("failed to fetch conflicts").AddCause(err).Build()
 			}
 
-			sqlCtx, err := engine.NewLocalSqlContext(ctx, eng)
+			sqlCtx, err := eng.NewLocalContext(ctx)
 			if err != nil {
 				return errhand.BuildDError("failed to fetch conflicts").AddCause(err).Build()
 			}

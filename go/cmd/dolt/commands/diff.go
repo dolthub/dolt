@@ -729,7 +729,7 @@ func diffRows(
 		query += " limit " + strconv.Itoa(dArgs.limit)
 	}
 
-	sqlCtx, err := engine.NewLocalSqlContext(ctx, se)
+	sqlCtx, err := se.NewLocalContext(ctx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}

@@ -125,9 +125,8 @@ func setupBenchmark(t *testing.B, dEnv *env.DoltEnv) (*sql.Context, *engine.SqlE
 	eng, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatNull, config)
 	require.NoError(t, err)
 
-	sqlCtx, err := eng.NewContext(ctx)
+	sqlCtx, err := eng.NewLocalContext(ctx)
 	require.NoError(t, err)
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	return sqlCtx, eng
 }

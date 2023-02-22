@@ -238,11 +238,6 @@ func setupSqlEngine(t *testing.T, ctx context.Context) (eng *engine.SqlEngine) {
 		panic(err)
 	}
 
-	sqlCtx, err := eng.NewContext(ctx)
-	require.NoError(t, err)
-	sqlCtx.Session.SetClient(sql.Client{
-		User: "root", Address: "%",
-	})
 	return
 }
 

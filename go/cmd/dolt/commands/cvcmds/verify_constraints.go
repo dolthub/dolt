@@ -162,7 +162,7 @@ func printViolationsForTable(ctx context.Context, tblName string, tbl *doltdb.Ta
 	colNames := strings.Join(sch.GetAllCols().GetColumnNames(), ", ")
 	query := fmt.Sprintf("SELECT violation_type, %s, violation_info from dolt_constraint_violations_%s", colNames, tblName)
 
-	sCtx, err := engine.NewLocalSqlContext(ctx, eng)
+	sCtx, err := eng.NewLocalContext(ctx)
 	if err != nil {
 		return errhand.BuildDError("Error making sql context").AddCause(err).Build()
 	}

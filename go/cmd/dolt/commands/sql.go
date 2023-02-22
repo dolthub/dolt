@@ -523,7 +523,7 @@ func execBatch(
 	}
 	defer se.Close()
 
-	sqlCtx, err := se.NewContext(ctx)
+	sqlCtx, err := se.NewDefaultContext(ctx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -571,7 +571,7 @@ func execMultiStatements(
 	}
 	defer se.Close()
 
-	sqlCtx, err := se.NewContext(ctx)
+	sqlCtx, err := se.NewDefaultContext(ctx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -606,7 +606,7 @@ func execQuery(
 	}
 	defer se.Close()
 
-	sqlCtx, err := se.NewContext(ctx)
+	sqlCtx, err := se.NewDefaultContext(ctx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -902,18 +902,11 @@ func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, conti
 // be updated by any queries which were processed.
 func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv, config *engine.SqlEngineConfig) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
-
-	bs := sql.NewBaseSession()
-	sess, err := se.NewDoltSession(ctx, bs)
-	if err != nil {
-		return err
-	}
 	
-	sqlCtx, err := se.NewContext(ctx, sql.WithSession(sess))
+	sqlCtx, err := se.NewDefaultContext(ctx)
 	if err != nil {
 		return err
 	}
-	sqlCtx.ses
 
 	// Add specified user as new superuser, if it doesn't already exist
 	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
@@ -1011,7 +1004,7 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 			subCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			sqlCtx, err = se.NewContext(subCtx)
+			sqlCtx, err = se.NewContext(subCtx, sqlCtx.Session)
 			if err != nil {
 				shell.Println(color.RedString(err.Error()))
 				return false

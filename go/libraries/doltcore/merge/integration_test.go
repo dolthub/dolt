@@ -340,11 +340,8 @@ func setupConcurrencyTest(t *testing.T, ctx context.Context) (dEnv *env.DoltEnv)
 	dEnv = dtu.CreateTestEnv()
 
 	eng := engineFromEnvironment(ctx, dEnv)
-	sqlCtx, err := eng.NewContext(ctx)
+	sqlCtx, err := eng.NewLocalContext(ctx)
 	require.NoError(t, err)
-	sqlCtx.Session.SetClient(sql.Client{
-		User: "root", Address: "%",
-	})
 
 	require.NoError(t, executeQuery(sqlCtx, eng, concurrentTable))
 	require.NoError(t, executeQuery(sqlCtx, eng, generateTestData()))

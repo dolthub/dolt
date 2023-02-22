@@ -123,7 +123,7 @@ func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, docName, a
 	}
 	query := fmt.Sprintf(readDocTemplate, asOf, docName)
 
-	sctx, err = eng.NewContext(ctx)
+	sctx, err = eng.NewDefaultContext(ctx)
 	if err != nil {
 		return "", err
 	}

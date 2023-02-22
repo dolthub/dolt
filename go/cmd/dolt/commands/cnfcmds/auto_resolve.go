@@ -129,7 +129,7 @@ func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 	if err != nil {
 		return err
 	}
-	sqlCtx, err := engine.NewLocalSqlContext(ctx, eng)
+	sqlCtx, err := eng.NewLocalContext(ctx)
 	if err != nil {
 		return err
 	}
