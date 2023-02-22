@@ -156,4 +156,44 @@ func TestFixedWidthWriter(t *testing.T) {
 
 		assert.Equal(t, expectedTableString, stringWr.String())
 	})
+
+	t.Run("Multiline string", func(t *testing.T) {
+		var stringWr StringBuilderCloser
+		tableWr := NewFixedWidthTableWriter(sch, &stringWr, 100)
+
+		var expectedTableString = `
++---------+------+-----------+
+| name    | age  | title     |
++---------+------+-----------+
+| Michael | 43   | Regional  |
+| Scott   |      | Manager   |
+| Pam     | 25   | Secretary |
+| Beasley |      |           |
+| Dwight  | 29   | Assistant |
+| Schrute |      | to        |
+|         |      | the       |
+|         |      | Regional  |
+|         |      | Manager   |
+| Jim     | NULL | NULL      |
+| Halpêrt |      |           |
++---------+------+-----------+
+`
+		// strip off the first newline, inserted for nice printing
+		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
+
+		for i := range ages {
+			name := strings.Replace(names[i].(string), " ", "\n", -1)
+			title := titles[i]
+			if title != nil {
+				title = strings.Replace(title.(string), " ", "\n", -1)
+			}
+			err := tableWr.WriteSqlRow(context.Background(), sql.Row{name, ages[i], title})
+			assert.NoError(t, err)
+		}
+
+		err := tableWr.Close(context.Background())
+		assert.NoError(t, err)
+
+		assert.Equal(t, expectedTableString, stringWr.String())
+	})
 }

@@ -40,6 +40,16 @@ const (
 	ModifiedNew
 )
 
+// Mode is an enum that represents the presentation of a diff
+type Mode int
+
+const (
+	ModeRow     Mode = 0
+	ModeLine    Mode = 1
+	ModeInPlace Mode = 2
+	ModeContext Mode = 3
+)
+
 type RowDiffer interface {
 	// Start starts the RowDiffer.
 	Start(ctx context.Context, from, to types.Map)
@@ -62,6 +72,9 @@ type SqlRowDiffWriter interface {
 	// WriteRow writes the diff row given, of the diff type provided. colDiffTypes is guaranteed to be the same length as
 	// the input row.
 	WriteRow(ctx context.Context, row sql.Row, diffType ChangeType, colDiffTypes []ChangeType) error
+
+	// WriteCombinedRow writes the diff of the rows given as a single, combined row.
+	WriteCombinedRow(ctx context.Context, oldRow, newRow sql.Row, mode Mode) error
 
 	// Close finalizes the work of this writer.
 	Close(ctx context.Context) error
