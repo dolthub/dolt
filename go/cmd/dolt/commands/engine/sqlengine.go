@@ -175,7 +175,7 @@ func NewSqlEngine(
 		if err != nil {
 			return nil, err
 		}
-		
+
 		err = configureBinlogReplicaController(config, engine, binLogSession)
 		if err != nil {
 			return nil, err
@@ -312,7 +312,7 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 		User:    "root",
 		Address: "localhost",
 	})
-	
+
 	dblr.DoltBinlogReplicaController.SetExecutionContext(executionCtx)
 	engine.Analyzer.BinlogReplicaController = config.BinlogReplicaController
 
