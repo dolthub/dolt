@@ -629,6 +629,9 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 	os.Chdir(originalCwd)
 	fmt.Printf("MySQL server started on port %v \n", mySqlPort)
 
+	primaryDatabase.MustExec("CREATE USER 'replicator'@'%' IDENTIFIED BY 'password';")
+	primaryDatabase.MustExec("GRANT ALL PRIVILEGES ON *.* TO 'replicator'@'%';")
+
 	return mySqlPort, cmd.Process, nil
 }
 
