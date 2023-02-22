@@ -2015,7 +2015,7 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "SELECT * from dolt_diff_summary('HEAD~', 'HEAD', 't');",
-				ExpectedErrStr: "failed to compute diff summary for table t: primary key set changed",
+				ExpectedErrStr: "failed to compute diff stat for table t: primary key set changed",
 			},
 		},
 	},

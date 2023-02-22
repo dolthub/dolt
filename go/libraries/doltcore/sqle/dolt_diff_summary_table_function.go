@@ -275,7 +275,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		return nil, err
 	}
 
-	// If tableNameExpr defined, return a single table diff summary result
+	// If tableNameExpr defined, return a single table diff stat result
 	if ds.tableNameExpr != nil {
 		delta := findMatchingDelta(deltas, tableName)
 		diffSum, hasDiff, err := getDiffSummaryNodeFromDelta(ctx, delta, fromRoot, toRoot, tableName)
@@ -352,7 +352,7 @@ func (ds *DiffSummaryTableFunction) evaluateArguments() (interface{}, interface{
 }
 
 // getDiffSummaryNodeFromDelta returns diffSummaryNode object and whether there is data diff or not. It gets tables
-// from roots and diff summary if there is a valid table exists in both fromRoot and toRoot.
+// from roots and diff stat if there is a valid table exists in both fromRoot and toRoot.
 func getDiffSummaryNodeFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRoot, toRoot *doltdb.RootValue, tableName string) (diffSummaryNode, bool, error) {
 	var oldColLen int
 	var newColLen int
@@ -399,20 +399,20 @@ func getDiffSummaryNodeFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRo
 	return diffSummaryNode{tableName, diffSum, oldColLen, newColLen, keyless}, hasDiff, nil
 }
 
-// getDiffSummary returns diff.DiffSummaryProgress object and whether there is a data diff or not.
-func getDiffSummary(ctx *sql.Context, td diff.TableDelta) (diff.DiffSummaryProgress, bool, bool, error) {
+// getDiffSummary returns diff.DiffStatProgress object and whether there is a data diff or not.
+func getDiffSummary(ctx *sql.Context, td diff.TableDelta) (diff.DiffStatProgress, bool, bool, error) {
 	// got this method from diff_output.go
 
-	ch := make(chan diff.DiffSummaryProgress)
+	ch := make(chan diff.DiffStatProgress)
 
 	grp, ctx2 := errgroup.WithContext(ctx)
 	grp.Go(func() error {
 		defer close(ch)
-		err := diff.SummaryForTableDelta(ctx2, ch, td)
+		err := diff.StatForTableDelta(ctx2, ch, td)
 		return err
 	})
 
-	acc := diff.DiffSummaryProgress{}
+	acc := diff.DiffStatProgress{}
 	var count int64
 	grp.Go(func() error {
 		for {
@@ -437,16 +437,16 @@ func getDiffSummary(ctx *sql.Context, td diff.TableDelta) (diff.DiffSummaryProgr
 	})
 
 	if err := grp.Wait(); err != nil {
-		return diff.DiffSummaryProgress{}, false, false, err
+		return diff.DiffStatProgress{}, false, false, err
 	}
 
 	keyless, err := td.IsKeyless(ctx)
 	if err != nil {
-		return diff.DiffSummaryProgress{}, false, keyless, err
+		return diff.DiffStatProgress{}, false, keyless, err
 	}
 
 	if (acc.Adds+acc.Removes+acc.Changes) == 0 && (acc.OldCellSize-acc.NewCellSize) == 0 {
-		return diff.DiffSummaryProgress{}, false, keyless, nil
+		return diff.DiffStatProgress{}, false, keyless, nil
 	}
 
 	return acc, true, keyless, nil
@@ -473,7 +473,7 @@ func (d *diffSummaryTableFunctionRowIter) incrementIndexes() {
 
 type diffSummaryNode struct {
 	tblName     string
-	diffSummary diff.DiffSummaryProgress
+	diffSummary diff.DiffStatProgress
 	oldColLen   int
 	newColLen   int
 	keyless     bool
@@ -503,10 +503,10 @@ func (d *diffSummaryTableFunctionRowIter) Close(context *sql.Context) error {
 	return nil
 }
 
-// getRowFromDiffSummary takes diff.DiffSummaryProgress and calculates the row_modified, cell_added, cell_deleted.
+// getRowFromDiffSummary takes diff.DiffStatProgress and calculates the row_modified, cell_added, cell_deleted.
 // If the number of cell change from old to new cell count does not equal to cell_added and/or cell_deleted, there
 // must be schema changes that affects cell_added and cell_deleted value addition to the row count * col length number.
-func getRowFromDiffSummary(tblName string, dsp diff.DiffSummaryProgress, newColLen, oldColLen int, keyless bool) sql.Row {
+func getRowFromDiffSummary(tblName string, dsp diff.DiffStatProgress, newColLen, oldColLen int, keyless bool) sql.Row {
 	// if table is keyless table, match current CLI command result
 	if keyless {
 		return sql.Row{
@@ -544,10 +544,10 @@ func getRowFromDiffSummary(tblName string, dsp diff.DiffSummaryProgress, newColL
 	}
 }
 
-// GetCellsAddedAndDeleted calculates cells added and deleted given diff.DiffSummaryProgress and toCommit table
+// GetCellsAddedAndDeleted calculates cells added and deleted given diff.DiffStatProgress and toCommit table
 // column length. We use rows added and deleted to calculate cells added and deleted, but it does not include
 // cells added and deleted from schema changes. Here we fill those in using total number of cells in each commit table.
-func GetCellsAddedAndDeleted(acc diff.DiffSummaryProgress, newColLen int) (uint64, uint64) {
+func GetCellsAddedAndDeleted(acc diff.DiffStatProgress, newColLen int) (uint64, uint64) {
 	var numCellInserts, numCellDeletes float64
 	rowToCellInserts := float64(acc.Adds) * float64(newColLen)
 	rowToCellDeletes := float64(acc.Removes) * float64(newColLen)
