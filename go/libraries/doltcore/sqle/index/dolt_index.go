@@ -943,6 +943,13 @@ func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, er
 		return nil, fmt.Errorf("spatial index bounding box using non-point type")
 	}
 
+	// TODO: definitely make this a helper method later
+
+
+	// TODO: check for point lookup here
+
+	// TODO: don't interleave until the very end
+
 	pranges := make([]prolly.Range, 65)
 	zMin := ZValue(minPoint)
 	zMax := ZValue(maxPoint)

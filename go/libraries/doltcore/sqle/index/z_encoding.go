@@ -208,3 +208,94 @@ func ZAddrSort(geoms []types.GeometryValue) []types.GeometryValue {
 	})
 	return geoms
 }
+
+
+// ZIsContinuous checks if the given z range is continuous
+// A continuous z range, doesn't leave the bounding box defined by zl (z low) and zh (z high)
+// 1. if zl == zh, we have a point lookup, which is always continuous
+// 2. if the suffix of zl = 00..0 and the suffix of zh = 11...1, it is continuous
+func ZIsContinuous(xl, yl, xh, yh uint64) bool {
+	// point lookup is continuous
+	if xl == xh && yl == yh {
+		return true
+	}
+	// get suffix lengths
+	xsl, ysl := bits.Len64(xl ^ xh), bits.Len64(yl ^ yh)
+
+	// TODO: this expects perfect square ranges, we can slightly reduce cuts if ysl == xsl - 1
+	// y takes precedence
+	var mask uint64
+	if ysl >= xsl {
+		mask = (1 << ysl) - 1
+	} else {
+		mask = (1 << xsl) - 1
+	}
+
+	if  xl & mask == 0 &&
+		yl & mask == 0 &&
+		xh & mask == mask &&
+		yl & mask == mask {
+		return true
+	}
+
+	return false
+}
+
+func zRangeHelper(xl, yl, xh, yh uint64) {
+	// point lookup is continuous
+	if xl == xh && yl == yh {
+
+	}
+
+	var zl, zh [2]uint64
+	zl[0], zl[1] = InterleaveUInt64(xl>>32, yl>>32), InterleaveUInt64(xl&0xFFFFFFFF, yl&0xFFFFFFFF)
+	zh[0], zh[1] = InterleaveUInt64(xh>>32, yh>>32), InterleaveUInt64(xh&0xFFFFFFFF, yh&0xFFFFFFFF)
+
+
+
+}
+
+
+// ZRanges takes bbox (2 types.Points) and returns ranges strictly within the bbox
+func ZRanges(minPoint, maxPoint types.Point) [][2]val.Cell {
+	if minPoint == maxPoint {
+		return [][2]val.Cell{{ZCell(minPoint), ZCell(maxPoint)}}
+	}
+
+	xl, yl := LexFloat(minPoint.X), LexFloat(minPoint.Y)
+	xh, yh := LexFloat(maxPoint.X), LexFloat(maxPoint.Y)
+
+	var zl, zh [2]uint64
+	zl[0], zl[1] = InterleaveUInt64(xl>>32, yl>>32), InterleaveUInt64(xl&0xFFFFFFFF, yl&0xFFFFFFFF)
+	zh[0], zh[1] = InterleaveUInt64(xh>>32, yh>>32), InterleaveUInt64(xh&0xFFFFFFFF, yh&0xFFFFFFFF)
+
+
+	// point lookup is continuous
+	if xl == xh && yl == yh {
+		return [][2]val.Cell{{ZCell(minPoint), ZCell(maxPoint)}}
+	}
+
+	// will never have 64 leading zeros
+	if zl[0] != zh[0] {
+		if zl[1] != 0 || zh[1] != math.MaxUint64 {
+			// not continuous
+		}
+		mask := math.MaxUint64 >> bits.LeadingZeros64(zl[0] ^ zh[0])
+		if (zl[0] & mask) != 0 || (zh[0] & mask) != mask {
+			// not continuous
+		}
+		// continuous
+		return [][2]val.Cell{{ZCell(minPoint), ZCell(maxPoint)}}
+	} else {
+		mask := math.MaxUint64 >> bits.LeadingZeros64(zl[1] ^ zh[1])
+		if (zl[1] & mask) != 0 || (zh[1] & mask) != mask {
+			// not continuous
+		}
+		// continuous
+		return [][2]val.Cell{{ZCell(minPoint), ZCell(maxPoint)}}
+	}
+
+	// split on z or y?
+
+	return nil
+}
