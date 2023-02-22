@@ -17,6 +17,7 @@ package encoding
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -151,6 +152,7 @@ type encodedIndex struct {
 	Tags            []uint64 `noms:"tags" json:"tags"`
 	Comment         string   `noms:"comment" json:"comment"`
 	Unique          bool     `noms:"unique" json:"unique"`
+	Spatial         bool     `noms:"spatial,omitempty" json:"spatial,omitempty"`
 	IsSystemDefined bool     `noms:"hidden,omitempty" json:"hidden,omitempty"` // Was previously named Hidden, do not change noms name
 	PrefixLengths   []uint16 `noms:"prefixLengths,omitempty" json:"prefixLengths,omitempty"`
 }
@@ -244,6 +246,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 			Tags:            index.IndexedColumnTags(),
 			Comment:         index.Comment(),
 			Unique:          index.IsUnique(),
+			Spatial:         index.IsSpatial(),
 			IsSystemDefined: !index.IsUserDefined(),
 			PrefixLengths:   index.PrefixLengths(),
 		}
@@ -307,6 +310,7 @@ func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) er
 			encodedIndex.PrefixLengths,
 			schema.IndexProperties{
 				IsUnique:      encodedIndex.Unique,
+				IsSpatial:     encodedIndex.Spatial,
 				IsUserDefined: !encodedIndex.IsSystemDefined,
 				Comment:       encodedIndex.Comment,
 			},
@@ -344,6 +348,14 @@ func MarshalSchemaAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, sc
 	err = schema.ValidateForInsert(sch.GetAllCols())
 	if err != nil {
 		return nil, err
+	}
+
+	if vrw.Format().VersionString() != types.Format_DOLT.VersionString() {
+		for _, idx := range sch.Indexes().AllIndexes() {
+			if idx.IsSpatial() {
+				return nil, fmt.Errorf("spatial indexes are only supported in storage format __DOLT__")
+			}
+		}
 	}
 
 	if vrw.Format().UsesFlatbuffers() {
@@ -418,6 +430,14 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 	sch, err := sd.decodeSchema()
 	if err != nil {
 		return nil, err
+	}
+
+	if nbf.VersionString() != types.Format_DOLT.VersionString() {
+		for _, idx := range sch.Indexes().AllIndexes() {
+			if idx.IsSpatial() {
+				return nil, fmt.Errorf("spatial indexes are only supported in storage format __DOLT__")
+			}
+		}
 	}
 
 	if sd.PkOrdinals == nil {

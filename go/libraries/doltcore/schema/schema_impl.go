@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -427,6 +428,11 @@ func (si *schemaImpl) GetKeyDescriptor() val.TupleDesc {
 		} else if queryType == query.Type_TEXT {
 			t = val.Type{
 				Enc:      val.Encoding(EncodingFromSqlType(query.Type_VARCHAR)),
+				Nullable: columnMissingNotNullConstraint(col),
+			}
+		} else if queryType == query.Type_GEOMETRY {
+			t = val.Type{
+				Enc:      val.Encoding(serial.EncodingCell),
 				Nullable: columnMissingNotNullConstraint(col),
 			}
 		} else {

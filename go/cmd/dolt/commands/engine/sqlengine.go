@@ -38,6 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
@@ -80,11 +81,18 @@ func NewSqlEngine(
 		config.IsServerLocked = true
 	}
 
-	parallelism := runtime.GOMAXPROCS(0)
-
 	dbs, locations, err := CollectDBs(ctx, mrEnv, config.Bulk)
 	if err != nil {
 		return nil, err
+	}
+
+	nbf := types.Format_Default
+	if len(dbs) > 0 {
+		nbf = dbs[0].DbData().Ddb.Format()
+	}
+	parallelism := runtime.GOMAXPROCS(0)
+	if types.IsFormat_DOLT(nbf) {
+		parallelism = 1
 	}
 
 	bThreads := sql.NewBackgroundThreads()

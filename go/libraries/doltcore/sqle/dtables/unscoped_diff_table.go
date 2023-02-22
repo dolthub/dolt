@@ -72,6 +72,7 @@ func (dt *UnscopedDiffTable) Filters() []sql.Expression {
 
 // HandledFilters returns the list of filters that will be handled by the table itself
 func (dt *UnscopedDiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
+	filters = append(filters, dt.partitionFilters...)
 	dt.partitionFilters = FilterFilters(filters, ColumnPredicate(filterColumnNameSet))
 	return dt.partitionFilters
 }

@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -355,6 +356,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		indexSch:                      idx.Schema(),
 		tableSch:                      sch,
 		unique:                        idx.IsUnique(),
+		spatial:                       idx.IsSpatial(),
 		isPk:                          false,
 		comment:                       idx.Comment(),
 		vrw:                           vrw,
@@ -483,6 +485,7 @@ type doltIndex struct {
 	indexSch schema.Schema
 	tableSch schema.Schema
 	unique   bool
+	spatial  bool
 	isPk     bool
 	comment  string
 	order    sql.IndexOrder
@@ -569,12 +572,18 @@ func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durab
 	return ret, nil
 }
 
-func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, iranges ...sql.Range) ([]prolly.Range, error) {
+func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, ranges ...sql.Range) ([]prolly.Range, error) {
 	//todo(max): it is important that *doltIndexLookup maintains a reference
 	// to empty sqlRanges, otherwise the analyzer will dismiss the index and
 	// chose a less optimal lookup index. This is a GMS concern, so GMS should
 	// really not rely on the integrator to maintain this tenuous relationship.
-	ranges, err := pruneEmptyRanges(iranges)
+	var err error
+	if !di.spatial {
+		ranges, err = pruneEmptyRanges(ranges)
+		if err != nil {
+			return nil, err
+		}
+	}
 	pranges, err := di.prollyRangesFromSqlRanges(ctx, ns, ranges, di.keyBld)
 	if err != nil {
 		return nil, err
@@ -706,6 +715,10 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
 		return false
 	}
 
+	if di.IsSpatial() {
+		return false
+	}
+
 	var idxCols *schema.ColCollection
 	if types.IsFormat_DOLT(di.Format()) {
 		// prolly indexes can cover an index lookup using
@@ -780,6 +793,11 @@ func (di *doltIndex) ID() string {
 // IsUnique implements sql.Index
 func (di *doltIndex) IsUnique() bool {
 	return di.unique
+}
+
+// IsSpatial implements sql.Index
+func (di *doltIndex) IsSpatial() bool {
+	return di.spatial
 }
 
 // IsPrimaryKey implements DoltIndex.
@@ -910,14 +928,64 @@ func (di *doltIndex) trimRangeCutValue(to int, keyPart interface{}) interface{} 
 	return keyPart
 }
 
+func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, error) {
+	// should be exactly one range
+	rng := ranges[0][0]
+	lower, upper := sql.GetRangeCutKey(rng.LowerBound), sql.GetRangeCutKey(rng.UpperBound)
+
+	minPoint, ok := lower.(sqltypes.Point)
+	if !ok {
+		return nil, fmt.Errorf("spatial index bounding box using non-point type")
+	}
+	maxPoint, ok := upper.(sqltypes.Point)
+	if !ok {
+		return nil, fmt.Errorf("spatial index bounding box using non-point type")
+	}
+
+	pranges := make([]prolly.Range, 65)
+	zMin := ZValue(minPoint)
+	zMax := ZValue(maxPoint)
+
+	// generate ranges for level 0 - 64
+	for level := byte(0); level < byte(65); level++ {
+		minVal := ZMask(level, zMin)
+		maxVal := ZMask(level, zMax)
+		field := prolly.RangeField{
+			Exact: false,
+			Lo: prolly.Bound{
+				Binding:   true,
+				Inclusive: true,
+				Value:     minVal[:],
+			},
+			Hi: prolly.Bound{
+				Binding:   true,
+				Inclusive: true,
+				Value:     maxVal[:],
+			},
+		}
+		pranges[level] = prolly.Range{
+			Fields: []prolly.RangeField{field},
+			Desc:   di.keyBld.Desc,
+		}
+	}
+
+	return pranges, nil
+}
+
 func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.NodeStore, ranges []sql.Range, tb *val.TupleBuilder) ([]prolly.Range, error) {
-	ranges, err := pruneEmptyRanges(ranges)
-	if err != nil {
-		return nil, err
+	var err error
+	if !di.spatial {
+		ranges, err = pruneEmptyRanges(ranges)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if di.spatial {
+		return di.prollySpatialRanges(ranges)
 	}
 
 	pranges := make([]prolly.Range, len(ranges))
-
 	for k, rng := range ranges {
 		fields := make([]prolly.RangeField, len(rng))
 		for j, expr := range rng {

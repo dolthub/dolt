@@ -119,6 +119,7 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 			mut:           m.Mutate(),
 			primary:       primary,
 			unique:        def.IsUnique(),
+			spatial:       def.IsSpatial(),
 			prefixLengths: def.PrefixLengths(),
 			keyBld:        val.NewTupleBuilder(keyDesc),
 			prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count())),

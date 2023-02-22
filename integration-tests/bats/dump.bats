@@ -242,7 +242,29 @@ teardown() {
     dolt sql -q "CREATE TRIGGER trigger3 AFTER INSERT ON a FOR EACH ROW FOLLOWS trigger2 INSERT INTO b VALUES (new.x * 2);"
     dolt sql -q "CREATE TRIGGER trigger4 AFTER INSERT ON a FOR EACH ROW PRECEDES trigger3 INSERT INTO b VALUES (new.x * 2);"
     dolt sql -q "CREATE PROCEDURE p1 (in x int) select x from dual"
+    dolt sql <<SQL
+delimiter //
+CREATE PROCEDURE dorepeat(p1 INT)
+       BEGIN
+          SET @x = 0;
+          REPEAT SET @x = @x + 1; UNTIL @x > p1 END REPEAT;
+       END
+//
+SQL
 
+    dolt sql <<SQL
+delimiter //
+CREATE PROCEDURE dorepeat2(p2 INT)
+       BEGIN
+          SET @x = 0;
+          REPEAT SET @x = @x + 1; UNTIL @x > p2 END REPEAT;
+       END
+//
+SQL
+
+    # decoy database in this directory to make sure we export the correct database's triggers etc.
+    dolt sql -q "create database aadecoy"
+    
     dolt add .
     dolt commit -m "create tables"
 
@@ -253,6 +275,11 @@ teardown() {
     rm -rf ./.dolt
     dolt init
 
+    # We should not have literally dumped the dolt_schemas table, but equivalent DDL statements
+    run grep dolt_schemas doltdump.sql
+    [ "$status" -ne 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+    
     run dolt sql < doltdump.sql
     [ "$status" -eq 0 ]
 
@@ -279,31 +306,39 @@ teardown() {
 
     run dolt sql -q "show create view view1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE VIEW `view1` AS select v1 from test' ]] || false
+    [[ "$output" =~ 'AS SELECT v1 FROM test' ]] || false
 
     run dolt sql -q "show create view view2"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE VIEW `view2` AS select y from b' ]] || false
+    [[ "$output" =~ 'AS SELECT y FROM b' ]] || false
 
     run dolt sql -q "show create trigger trigger1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE TRIGGER `trigger1` before insert on test for each row set new.v1 = -new.v1' ]] || false
+    [[ "$output" =~ 'BEFORE INSERT ON test FOR EACH ROW SET new.v1 = -new.v1' ]] || false
 
     run dolt sql -q "show create trigger trigger2"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE TRIGGER `trigger2` after insert on a for each row insert into b values (new.x * 2)' ]] || false
+    [[ "$output" =~ 'AFTER INSERT ON a FOR EACH ROW INSERT INTO b VALUES (new.x * 2)' ]] || false
 
     run dolt sql -q "show create trigger trigger3"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE TRIGGER `trigger3` after insert on a for each row follows trigger2 insert into b values (new.x * 2)' ]] || false
+    [[ "$output" =~ 'AFTER INSERT ON a FOR EACH ROW FOLLOWS trigger2 INSERT INTO b VALUES (new.x * 2)' ]] || false
 
     run dolt sql -q "show create trigger trigger4"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE TRIGGER `trigger4` after insert on a for each row precedes trigger3 insert into b values (new.x * 2)' ]] || false
+    [[ "$output" =~ 'AFTER INSERT ON a FOR EACH ROW PRECEDES trigger3 INSERT INTO b VALUES (new.x * 2)' ]] || false
 
     run dolt sql -q "show create procedure p1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE PROCEDURE `p1` (in x int) select x' ]] || false
+    [[ "$output" =~ 'CREATE PROCEDURE p1 (in x int) select x' ]] || false
+
+    run dolt sql -q "show create procedure dorepeat"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'CREATE PROCEDURE dorepeat(p1' ]] || false
+
+    run dolt sql -q "show create procedure dorepeat2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'CREATE PROCEDURE dorepeat2(p2' ]] || false
 }
 
 @test "dump: SQL type - with keyless tables" {
