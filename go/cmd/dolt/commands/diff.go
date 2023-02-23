@@ -585,7 +585,7 @@ func diffRows(
 	// can't diff
 	if !diffable {
 		// TODO: this messes up some structured output if the user didn't redirect it
-		cli.PrintErrf("Primary key sets differ between revisions for table %s, skipping data diff\n", td.ToName)
+		cli.PrintErrf("Primary key sets differ between revisions for table '%s', skipping data diff\n", td.ToName)
 		err := rowWriter.Close(ctx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
@@ -593,7 +593,7 @@ func diffRows(
 		return nil
 	} else if dArgs.diffOutput == SQLDiffOutput && !canSqlDiff {
 		// TODO: this is overly broad, we can absolutely do better
-		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff\n")
+		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff for table '%s'\n", td.ToName)
 		err := rowWriter.Close(ctx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)

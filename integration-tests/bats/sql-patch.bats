@@ -66,12 +66,12 @@ SQL
 
     run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
-    diff_output=$output
+    diff_output=${lines[0]}
 
-    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')" -r csv
+    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
     [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "statement" ]] || false
-    [[ "$output" =~ "$diff_output" ]] || false
+    [[ "${lines[1]}" =~ "statement" ]] || false
+    [[ "${lines[3]}" =~ "$diff_output" ]] || false
 }
 
 @test "sql-patch: output reconciles DELETE query" {
@@ -420,4 +420,51 @@ SQL
     [[ "${lines[6]}" =~ "$diff_output_3" ]] || false
     [[ "${lines[7]}" =~ "$diff_output_4" ]] || false
     [[ "${lines[8]}" =~ "$diff_output_5" ]] || false
+}
+
+@test "sql-patch: any error causing no data diff is shown as warnings." {
+        dolt sql <<SQL
+CREATE TABLE parent (
+    id int PRIMARY KEY,
+    id_ext int,
+    v1 int,
+    v2 text COMMENT 'tag:1',
+    INDEX v1 (v1)
+);
+CREATE TABLE child (
+    id int primary key,
+    v1 int
+);
+SQL
+    dolt commit -Am "add tables"
+    dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_named FOREIGN KEY (v1) REFERENCES parent(v1);"
+    dolt sql -q "insert into parent values (0, 1, 2, NULL);"
+    dolt sql -q "ALTER TABLE parent DROP PRIMARY KEY"
+    dolt sql -q "ALTER TABLE parent ADD PRIMARY KEY(id, id_ext);"
+
+    run dolt diff -r sql child
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Incompatible schema change, skipping data diff for table 'child'" ]] || false
+    diff_output_0=${lines[0]}
+    diff_output_1=${lines[1]}
+
+    run dolt sql -q "CALL DOLT_PATCH('child'); SHOW WARNINGS;"
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "statement" ]] || false
+    [[ "${lines[3]}" =~ "$diff_output_0" ]] || false
+    [[ "${lines[4]}" =~ "$diff_output_1" ]] || false
+    [[ "$output" =~ "Incompatible schema change, skipping data diff for table 'child'" ]] || false
+
+    run dolt diff -r sql parent
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Primary key sets differ between revisions for table 'parent', skipping data diff" ]] || false
+    diff_output_0=${lines[0]}
+    diff_output_1=${lines[1]}
+
+    run dolt sql -q "CALL DOLT_PATCH('parent'); SHOW WARNINGS;"
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "statement" ]] || false
+    [[ "${lines[3]}" =~ "$diff_output_0" ]] || false
+    [[ "${lines[4]}" =~ "$diff_output_1" ]] || false
+    [[ "$output" =~ "Primary key sets differ between revisions for table 'parent', skipping data diff" ]] || false
 }

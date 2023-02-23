@@ -137,7 +137,7 @@ func canGetDataDiff(ctx *sql.Context, td diff.TableDelta) bool {
 		ctx.Session.Warn(&sql.Warning{
 			Level:   "Warning",
 			Code:    mysql.ERNotSupportedYet,
-			Message: fmt.Sprintf("Primary key sets differ between revisions for table %s, skipping data diff", td.ToName),
+			Message: fmt.Sprintf("Primary key sets differ between revisions for table '%s', skipping data diff", td.ToName),
 		})
 		return false
 	}
@@ -147,7 +147,7 @@ func canGetDataDiff(ctx *sql.Context, td diff.TableDelta) bool {
 		ctx.Session.Warn(&sql.Warning{
 			Level:   "Warning",
 			Code:    mysql.ERNotSupportedYet,
-			Message: fmt.Sprintf("Incompatible schema change, skipping data diff for table %s", td.ToName),
+			Message: fmt.Sprintf("Incompatible schema change, skipping data diff for table '%s'", td.ToName),
 		})
 		return false
 	}
