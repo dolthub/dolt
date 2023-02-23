@@ -15,14 +15,11 @@
 package index
 
 import (
-	"bytes"
 	"encoding/binary"
-	"math"
-	"math/bits"
-	"sort"
-
 	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"math"
+	"math/bits"
 
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -179,15 +176,6 @@ func ZCell(v types.GeometryValue) val.Cell {
 		level = byte((bits.Len64(zMin[1]^zMax[1]) + 1) >> 1)
 	}
 	return ZMask(level, zMin)
-}
-
-// ZCellSort sorts the geometry values based off their ZCell
-func ZCellSort(geoms []types.GeometryValue) []types.GeometryValue {
-	sort.Slice(geoms, func(i, j int) bool {
-		zi, zj := ZCell(geoms[i]), ZCell(geoms[j])
-		return bytes.Compare(zi[:], zj[:]) < 0
-	})
-	return geoms
 }
 
 // ZRange is a pair of two ZVals

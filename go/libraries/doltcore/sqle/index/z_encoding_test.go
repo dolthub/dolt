@@ -15,6 +15,7 @@
 package index
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -113,7 +114,7 @@ func TestLexFloat(t *testing.T) {
 	})
 }
 
-func TestZValues(t *testing.T) {
+func TestZValue(t *testing.T) {
 	tests := []struct {
 		p types.Point
 		e string
@@ -186,23 +187,47 @@ func TestZValues(t *testing.T) {
 	})
 
 	t.Run("test sorting points by z-value", func(t *testing.T) {
-		sortedPoints := []types.GeometryValue{
-			types.Point{X: -5000, Y: -5000},
-			types.Point{X: -1, Y: -1},
-			types.Point{X: 1, Y: -1},
-			types.Point{X: -1, Y: 0},
-			types.Point{X: -1, Y: 1},
-			types.Point{X: 0, Y: 0},
-			types.Point{X: 1, Y: 0},
-			types.Point{X: 1, Y: 1},
-			types.Point{X: 2, Y: 2},
-			types.Point{X: 100, Y: 100},
+		sortedPoints := []types.Point{
+			{X: -5000, Y: -5000},
+			{X: -1, Y: -1},
+			{X: 1, Y: -1},
+			{X: -1, Y: 0},
+			{X: -1, Y: 1},
+			{X: 0, Y: 0},
+			{X: 1, Y: 0},
+			{X: 1, Y: 1},
+			{X: 2, Y: 2},
+			{X: 100, Y: 100},
 		}
-		randPoints := append([]types.GeometryValue{}, sortedPoints...)
+		randPoints := append([]types.Point{}, sortedPoints...)
 		rand.Shuffle(len(randPoints), func(i, j int) {
 			randPoints[i], randPoints[j] = randPoints[j], randPoints[i]
 		})
-		assert.Equal(t, sortedPoints, ZCellSort(randPoints))
+		sort.Slice(randPoints, func(i, j int) bool {
+			z1 := ZValue(randPoints[i])
+			z2 := ZValue(randPoints[j])
+			if z1[0] != z2[0] {
+				return z1[0] < z2[0]
+			}
+			return z1[1] < z2[1]
+		})
+		assert.Equal(t, sortedPoints, randPoints)
+	})
+
+	t.Run("test sorting many points by z-value", func(t *testing.T) {
+		randPoints := append([]types.Point{}, ps...)
+		rand.Shuffle(len(randPoints), func(i, j int) {
+			randPoints[i], randPoints[j] = randPoints[j], randPoints[i]
+		})
+		sort.Slice(randPoints, func(i, j int) bool {
+			z1 := ZValue(randPoints[i])
+			z2 := ZValue(randPoints[j])
+			if z1[0] != z2[0] {
+				return z1[0] < z2[0]
+			}
+			return z1[1] < z2[1]
+		})
+		assert.Equal(t, ps, randPoints)
 	})
 }
 
@@ -252,46 +277,39 @@ func TestZCell(t *testing.T) {
 		z := ZCell(poly)
 		assert.Equal(t, "4000000000000000000000000000000000", hex.EncodeToString(z[:]))
 	})
-}
 
-func TestZSort(t *testing.T) {
-	p1 := types.LineString{Points: []types.Point{ps[24], ps[24]}}
-	p2 := types.LineString{Points: []types.Point{ps[16], ps[19]}}
-	p3 := types.LineString{Points: []types.Point{ps[0], ps[3]}}
-	p4 := types.LineString{Points: []types.Point{ps[19], ps[24]}}
-	p5 := types.LineString{Points: []types.Point{ps[3], ps[19]}}
-
-	t.Run("test z-addr p1", func(t *testing.T) {
-		z := ZCell(p1) // bbox: (2, 2), (2, 2)
-		assert.Equal(t, "00f0000000000000000000000000000000", hex.EncodeToString(z[:]))
-	})
-
-	t.Run("test z-addr p2", func(t *testing.T) {
-		z := ZCell(p2) // bbox: (0, 0), (1, 1)
-		assert.Equal(t, "3ec0000000000000000000000000000000", hex.EncodeToString(z[:]))
-	})
-
-	t.Run("test z-addr p3", func(t *testing.T) {
-		z := ZCell(p3) // bbox: (-2, -2), (-1, -1)
-		assert.Equal(t, "3f00000000000000000000000000000000", hex.EncodeToString(z[:]))
-	})
-
-	t.Run("test z-addr p4", func(t *testing.T) {
-		z := ZCell(p4) // bbox: (1, 1), (2, 2)
-		assert.Equal(t, "3fc0000000000000000000000000000000", hex.EncodeToString(z[:]))
-	})
-
-	t.Run("test z-addr p5", func(t *testing.T) {
-		z := ZCell(p5) // bbox: (-1, -1), (1, 1)
-		assert.Equal(t, "4000000000000000000000000000000000", hex.EncodeToString(z[:]))
-	})
-
-	t.Run("test z-addr sorting", func(t *testing.T) {
-		sortedGeoms := []types.GeometryValue{p1, p2, p3, p4, p5}
-		randomGeoms := append([]types.GeometryValue{}, sortedGeoms...)
-		rand.Shuffle(len(randomGeoms), func(i, j int) {
-			randomGeoms[i], randomGeoms[j] = randomGeoms[j], randomGeoms[i]
+	t.Run("test sorting many points by z-cell", func(t *testing.T) {
+		sortedGeoms :=  make([]types.GeometryValue, len(ps))
+		for i, p := range ps {
+			sortedGeoms[i] = p
+		}
+		randGeoms := append([]types.GeometryValue{}, sortedGeoms...)
+		rand.Shuffle(len(randGeoms), func(i, j int) {
+			randGeoms[i], randGeoms[j] = randGeoms[j], randGeoms[i]
 		})
-		assert.Equal(t, sortedGeoms, ZCellSort(randomGeoms))
+		sort.Slice(randGeoms, func(i, j int) bool {
+			zi, zj := ZCell(randGeoms[i]), ZCell(randGeoms[j])
+			return bytes.Compare(zi[:], zj[:]) < 0
+		})
+		assert.Equal(t, sortedGeoms, randGeoms)
+	})
+
+	t.Run("test sorting linestring by z-cell", func(t *testing.T) {
+		sortedLines := []types.GeometryValue{
+			types.LineString{Points: []types.Point{ps[24], ps[24]}},
+			types.LineString{Points: []types.Point{ps[16], ps[19]}},
+			types.LineString{Points: []types.Point{ps[0], ps[3]}},
+			types.LineString{Points: []types.Point{ps[19], ps[24]}},
+			types.LineString{Points: []types.Point{ps[3], ps[19]}},
+		}
+		randPoints := append([]types.GeometryValue{}, sortedLines...)
+		rand.Shuffle(len(randPoints), func(i, j int) {
+			randPoints[i], randPoints[j] = randPoints[j], randPoints[i]
+		})
+		sort.Slice(randPoints, func(i, j int) bool {
+			zi, zj := ZCell(randPoints[i]), ZCell(randPoints[j])
+			return bytes.Compare(zi[:], zj[:]) < 0
+		})
+		assert.Equal(t, sortedLines, randPoints)
 	})
 }
