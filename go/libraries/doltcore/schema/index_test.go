@@ -551,3 +551,29 @@ func (ixc *indexCollectionImpl) clear(_ *testing.T) {
 		ixc.colTagToIndex[key] = nil
 	}
 }
+
+func TestIndexIsPrimaryKey(t *testing.T) {
+	colColl := NewColCollection(
+		NewColumn("pk1", 1, types.IntKind, true, NotNullConstraint{}),
+		NewColumn("pk2", 2, types.IntKind, true, NotNullConstraint{}),
+		NewColumn("v1", 3, types.IntKind, false),
+		NewColumn("v2", 4, types.UintKind, false),
+		NewColumn("v3", 5, types.StringKind, false),
+	)
+	pkColl := NewColCollection(
+		NewColumn("pk1", 1, types.IntKind, true, NotNullConstraint{}),
+		NewColumn("pk2", 2, types.IntKind, true, NotNullConstraint{}),
+	)
+	indexColl := NewIndexCollection(colColl, pkColl).(*indexCollectionImpl)
+
+	indexColl.AddIndex(&indexImpl{
+		name: "idx_z",
+		tags: []uint64{3},
+	})
+
+	pk := indexColl.GetByName("PRIMARY")
+	require.True(t, IsPrimaryKey(pk))
+
+	idx := indexColl.GetByName("idx_z")
+	require.True(t, IsPrimaryKey(idx))
+}

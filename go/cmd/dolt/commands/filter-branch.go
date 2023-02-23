@@ -43,8 +43,9 @@ import (
 )
 
 const (
-	dbName       = "filterDB"
-	branchesFlag = "branches"
+	dbName          = "filterDB"
+	branchesFlag    = "branches"
+	disableFkChecks = "disable-fk-checks"
 )
 
 var filterBranchDocs = cli.CommandDocumentationContent{
@@ -87,6 +88,8 @@ func (cmd FilterBranchCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(cli.VerboseFlag, "v", "logs more information")
 	ap.SupportsFlag(branchesFlag, "b", "filter all branches")
 	ap.SupportsFlag(cli.AllFlag, "a", "filter all branches and tags")
+	ap.SupportsFlag(disableFkChecks, "", "disable foreign key checks")
+
 	return ap
 }
 
@@ -113,6 +116,7 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 
 	query := apr.Arg(0)
 	verbose := apr.Contains(cli.VerboseFlag)
+	disableFks := apr.Contains(disableFkChecks)
 	notFound := make(missingTbls)
 
 	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (*doltdb.RootValue, error) {
@@ -134,7 +138,7 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 			}
 		}
 
-		root, err := processFilterQuery(ctx, dEnv, commit, query, notFound)
+		root, err := processFilterQuery(ctx, dEnv, commit, query, notFound, disableFks)
 		if err != nil {
 			return nil, err
 		}
@@ -194,7 +198,7 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 	return rebase.StopAtCommit(cm), nil
 }
 
-func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit, query string, mt missingTbls) (*doltdb.RootValue, error) {
+func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit, query string, mt missingTbls, disableFks bool) (*doltdb.RootValue, error) {
 	root, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
@@ -208,6 +212,13 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 	rh, err := root.HashOf()
 	if err != nil {
 		return nil, err
+	}
+
+	if disableFks {
+		_, _, err = eng.Query(sqlCtx, fmt.Sprintf("SET FOREIGN_KEY_CHECKS = 0"))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	sqlStatement, err := sqlparser.Parse(query)

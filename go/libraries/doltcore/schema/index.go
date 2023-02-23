@@ -262,3 +262,26 @@ func (ix *indexImpl) copy() *indexImpl {
 	}
 	return &newIx
 }
+
+func IsPrimaryKey(idx Index) bool {
+	if idx == nil {
+		return false
+	}
+	if len(idx.PrimaryKeyTags()) != len(idx.IndexedColumnTags()) {
+		return false
+	}
+	pks := idx.PrimaryKeyTags()
+	for _, t := range idx.IndexedColumnTags() {
+		found := false
+		for _, pk := range pks {
+			if pk == t {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}

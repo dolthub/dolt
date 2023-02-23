@@ -325,6 +325,7 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 				return true, err
 			}
 		}
+		// TODO
 		if !ok || !schema.SchemasAreEqual(sch, parentSch) {
 			// provide empty table to diff against
 			oldParentTbl, err = doltdb.NewEmptyTable(ctx, oldParent.VRW(), oldParent.NodeStore(), sch)

@@ -30,6 +30,7 @@ var Commands = cli.NewHiddenSubCommandHandler("index", "Internal debugging comma
 	LsCmd{},
 	RebuildCmd{},
 	FixupCmd{},
+	VerifyCmd{},
 })
 
 func HandleErr(verr errhand.VerboseError, usage cli.UsagePrinter) int {
