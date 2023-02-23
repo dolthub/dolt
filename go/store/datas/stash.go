@@ -17,8 +17,9 @@ package datas
 import (
 	"context"
 	"errors"
-	flatbuffers "github.com/google/flatbuffers/go"
 	"strings"
+
+	flatbuffers "github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"

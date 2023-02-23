@@ -18,14 +18,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	flatbuffers "github.com/google/flatbuffers/go"
 	"strconv"
 
-	"github.com/dolthub/dolt/go/gen/fb/serial"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
+	flatbuffers "github.com/google/flatbuffers/go"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 

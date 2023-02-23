@@ -17,6 +17,9 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -26,8 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
-	"strconv"
-	"strings"
 )
 
 var stashDocs = cli.CommandDocumentationContent{
