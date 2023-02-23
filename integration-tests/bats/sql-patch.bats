@@ -30,7 +30,7 @@ SQL
     dolt checkout -b newbranch
     dolt sql -q 'INSERT INTO test (pk, c1, c2, c3, c4, c5) VALUES (2, 11, 0, 0, 0, 0)'
     dolt add test
-    dolt commit -m "Added three rows"
+    dolt commit -m "Added a third row"
 
     run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
