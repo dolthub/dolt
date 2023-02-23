@@ -109,6 +109,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	dumpDocsCommand,
 	dumpZshCommand,
 	docscmds.Commands,
+	commands.StashCmd{},
 })
 
 func init() {
