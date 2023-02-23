@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -35,7 +36,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
@@ -252,6 +255,10 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		_, ok, err = dArgs.toRoot.GetTable(ctx, tableName)
 		if err != nil {
 			return nil, err
+		}
+		if ok {
+			dArgs.tableSet.Add(tableName)
+			continue
 		}
 		if !ok {
 			return nil, fmt.Errorf("table %s does not exist in either revision", tableName)
@@ -472,6 +479,46 @@ func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.
 	return root, true
 }
 
+func printDiffSummary(ctx context.Context, tds []diff.TableDelta, engine *engine.SqlEngine, dArgs *diffArgs) errhand.VerboseError {
+	sqlSch := sql.Schema{
+		&sql.Column{Name: "Table name", Type: types.Text, Nullable: false},
+		&sql.Column{Name: "Diff Type", Type: types.Text, Nullable: false},
+		&sql.Column{Name: "Data changes", Type: types.Boolean, Nullable: false},
+		&sql.Column{Name: "Schema changes", Type: types.Boolean, Nullable: false},
+	}
+
+	cliWR := iohelp.NopWrCloser(cli.OutStream)
+	wr := tabular.NewFixedWidthTableWriter(sqlSch, cliWR, 100)
+	defer wr.Close(ctx)
+
+	for _, td := range tds {
+		if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
+			continue
+		}
+
+		if td.FromTable == nil && td.ToTable == nil {
+			return errhand.BuildDError("error: both tables in tableDelta are nil").Build()
+		}
+
+		dataChanged, verr := getDataHasChanged(ctx, engine, td, dArgs)
+		if verr != nil {
+			return verr
+		}
+
+		summ, err := td.GetSummary(ctx, dataChanged)
+		if err != nil {
+			return errhand.BuildDError("could not get table delta summary").AddCause(err).Build()
+		}
+
+		err = wr.WriteSqlRow(ctx, sql.Row{td.CurName(), summ.DiffType, dataChanged, summ.HasSchemaChanges})
+		if err != nil {
+			return errhand.BuildDError("could not write table delta summary").AddCause(err).Build()
+		}
+	}
+
+	return nil
+}
+
 func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) errhand.VerboseError {
 	var err error
 
@@ -488,6 +535,10 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 	sort.Slice(tableDeltas, func(i, j int) bool {
 		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
 	})
+
+	if dArgs.diffParts&Summary != 0 {
+		return printDiffSummary(ctx, tableDeltas, engine, dArgs)
+	}
 
 	dw, err := newDiffWriter(dArgs.diffOutput)
 	if err != nil {
@@ -527,13 +578,9 @@ func diffUserTable(
 		return errhand.BuildDError("error: both tables in tableDelta are nil").Build()
 	}
 
-	shouldSummary := dArgs.diffParts&Summary != 0
-
-	if !shouldSummary {
-		err := dw.BeginTable(ctx, td)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
+	err := dw.BeginTable(ctx, td)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	fromSch, toSch, err := td.GetSchemas(ctx)
@@ -543,18 +590,6 @@ func diffUserTable(
 
 	if dArgs.diffParts&Stat != 0 {
 		return printDiffStat(ctx, td, fromSch.GetAllCols().Size(), toSch.GetAllCols().Size())
-	}
-
-	if shouldSummary {
-		dataChanged, verr := getDataHasChanged(ctx, engine, td, dArgs)
-		if verr != nil {
-			return verr
-		}
-		summ, err := td.GetSummary(ctx, dataChanged)
-		if err != nil {
-			return errhand.BuildDError("could not get table delta summary").AddCause(err).Build()
-		}
-		return printDiffSummary(ctx, summ)
 	}
 
 	if dArgs.diffParts&SchemaOnlyDiff != 0 {
