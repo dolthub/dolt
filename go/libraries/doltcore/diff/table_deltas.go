@@ -17,20 +17,19 @@ package diff
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-
 	"sort"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -551,13 +550,13 @@ func getNonCreateNonDropTableSqlSchemaDiff(td TableDelta, toSchemas map[string]s
 	return ddlStatements, nil
 }
 
-func getCreateTableStmt(tblName string, sch schema.Schema, pkSchema sql.PrimaryKeySchema, fks []doltdb.ForeignKey, fksParentSch map[string]schema.Schema) (string, error){
+func getCreateTableStmt(tblName string, sch schema.Schema, pkSchema sql.PrimaryKeySchema, fks []doltdb.ForeignKey, fksParentSch map[string]schema.Schema) (string, error) {
 	sqlSch := pkSchema.Schema
 	colStmts := make([]string, len(sqlSch))
 
 	// Statement creation parts for each column
 	for i, col := range sch.GetAllCols().GetColumns() {
-		colStmts[i] = sqlfmt.FmtCol(2,0,0, col)
+		colStmts[i] = sqlfmt.FmtCol(2, 0, 0, col)
 	}
 
 	primaryKeyCols := sch.GetPKCols().GetColumnNames()
@@ -625,7 +624,7 @@ func isPrimaryKeyIndex(index schema.Index, sch schema.Schema) bool {
 		return false
 	}
 
-	for _, c := range index.ColumnNames(){
+	for _, c := range index.ColumnNames() {
 		if _, ok := pkMap[c]; !ok {
 			return false
 		}
