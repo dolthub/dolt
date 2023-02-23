@@ -19,10 +19,10 @@ import (
 	"github.com/rivo/uniseg"
 )
 
-// DisplayString contains all of the information needed to properly display a multiline string in tabular mode.
-type DisplayString struct {
-	TotalWidth   int
-	DisplayWidth int
+// FixedWidthString contains all of the information needed to properly display a multiline string in tabular mode.
+type FixedWidthString struct {
+	TotalWidth   int // The combined display width of every line
+	DisplayWidth int // The display width of the longest line
 	Lines        []DisplayLine
 }
 
@@ -33,11 +33,11 @@ type DisplayLine struct {
 	ByteEnd   int // ByteEnd is the ending offset of the original string that this line represents (excludes newline).
 }
 
-// StringWidth returns the number of horizontal cells needed to print the given text. It splits the text into its
+// NewFixedWidthString returns the number of horizontal cells needed to print the given text. It splits the text into its
 // grapheme clusters, calculates each cluster's width, and adds them up to a total.
-func StringWidth(text string) DisplayString {
+func NewFixedWidthString(text string) FixedWidthString {
 	// An empty string will still have a single line, it will just be empty.
-	displayString := DisplayString{
+	displayString := FixedWidthString{
 		TotalWidth:   0,
 		DisplayWidth: 0,
 		Lines:        []DisplayLine{{0, 0, 0}},
@@ -78,4 +78,26 @@ func StringWidth(text string) DisplayString {
 		displayString.DisplayWidth = line.Width
 	}
 	return displayString
+}
+
+// NewFixedWidthStrings returns a FixedWidthString slice from the given string slice.
+func NewFixedWidthStrings(text []string) []FixedWidthString {
+	widths := make([]FixedWidthString, len(text))
+	for i := range text {
+		widths[i] = NewFixedWidthString(text[i])
+	}
+	return widths
+}
+
+// ColoredStringWidth calculates the FixedWidthString for text that has been colored. Text colors interfere with the
+// display width calculation, as they're considered displayable characters. This works by calculating the relevant
+// information from the colored and uncolored text variants to return the correct FixedWidthString.
+func ColoredStringWidth(coloredText string, uncoloredText string) FixedWidthString {
+	colored := NewFixedWidthString(coloredText)
+	uncolored := NewFixedWidthString(uncoloredText)
+	for i := range colored.Lines {
+		uncolored.Lines[i].ByteStart = colored.Lines[i].ByteStart
+		uncolored.Lines[i].ByteEnd = colored.Lines[i].ByteEnd
+	}
+	return uncolored
 }

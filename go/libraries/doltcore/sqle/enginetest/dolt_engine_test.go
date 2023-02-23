@@ -26,7 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -48,7 +48,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 84
+const SkipPreparedsCount = 83
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -191,49 +191,24 @@ func TestSingleQueryPrepared(t *testing.T) {
 
 func TestSingleScriptPrepared(t *testing.T) {
 	t.Skip()
-	s := []setup.SetupScript{
-		{
-			"create table test (pk int primary key, c1 int)",
-			"call dolt_add('.')",
-			"insert into test values (0,0), (1,1);",
-			"set @Commit1 = dolt_commit('-am', 'creating table');",
-			"call dolt_branch('-c', 'main', 'newb')",
-			"alter table test add column c2 int;",
-			"set @Commit2 = dolt_commit('-am', 'alter table');",
+	var script = queries.ScriptTest{
+		Name: "table with commit column should maintain its data in diff",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, commit varchar(20));",
+			"CALL DOLT_ADD('.');",
+			"CALL dolt_commit('-am', 'creating table t');",
+			"INSERT INTO t VALUES (1, '123456');",
+			"CALL dolt_commit('-am', 'insert data');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT to_pk, char_length(to_commit), from_pk, char_length(from_commit), diff_type from dolt_diff_t;",
+				Expected: []sql.Row{{1, 32, nil, 32, "added"}},
+			},
 		},
 	}
-	tt := queries.QueryTest{
-		Query: "select * from test as of 'HEAD~2' where pk=?",
-		Bindings: map[string]sql.Expression{
-			"v1": expression.NewLiteral(0, gmstypes.Int8),
-		},
-		Expected: []sql.Row{{0, 0}},
-	}
-
 	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData, s)
-
-	e, err := harness.NewEngine(t)
-	defer e.Close()
-	require.NoError(t, err)
-	ctx := harness.NewContext()
-
-	//e.Analyzer.Debug = true
-	//e.Analyzer.Verbose = true
-
-	// full impl
-	pre1, sch1, rows1 := enginetest.MustQueryWithPreBindings(ctx, e, tt.Query, tt.Bindings)
-	fmt.Println(pre1, sch1, rows1)
-
-	// inline bindings
-	sch2, rows2 := enginetest.MustQueryWithBindings(ctx, e, tt.Query, tt.Bindings)
-	fmt.Println(sch2, rows2)
-
-	// no bindings
-	//sch3, rows3 := enginetest.MustQuery(ctx, e, rawQuery)
-	//fmt.Println(sch3, rows3)
-
-	enginetest.TestQueryWithContext(t, ctx, e, harness, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings)
+	enginetest.TestScriptPrepared(t, harness, script)
 }
 
 func TestVersionedQueries(t *testing.T) {
@@ -360,6 +335,34 @@ func TestSpatialDelete(t *testing.T) {
 
 func TestSpatialScripts(t *testing.T) {
 	enginetest.TestSpatialScripts(t, newDoltHarness(t))
+}
+
+func TestSpatialScriptsPrepared(t *testing.T) {
+	enginetest.TestSpatialScriptsPrepared(t, newDoltHarness(t))
+}
+
+func TestSpatialIndexScripts(t *testing.T) {
+	skipOldFormat(t)
+	schema.EnableSpatialIndex = true
+	enginetest.TestSpatialIndexScripts(t, newDoltHarness(t))
+}
+
+func TestSpatialIndexScriptsPrepared(t *testing.T) {
+	skipOldFormat(t)
+	schema.EnableSpatialIndex = true
+	enginetest.TestSpatialIndexScriptsPrepared(t, newDoltHarness(t))
+}
+
+func TestSpatialIndexPlans(t *testing.T) {
+	skipOldFormat(t)
+	schema.EnableSpatialIndex = true
+	enginetest.TestSpatialIndexPlans(t, newDoltHarness(t))
+}
+
+func TestSpatialIndexPlansPrepared(t *testing.T) {
+	skipOldFormat(t)
+	schema.EnableSpatialIndex = true
+	enginetest.TestSpatialIndexPlansPrepared(t, newDoltHarness(t))
 }
 
 func TestTruncate(t *testing.T) {
@@ -1233,10 +1236,10 @@ func TestDiffTableFunctionPrepared(t *testing.T) {
 	}
 }
 
-func TestDiffSummaryTableFunction(t *testing.T) {
+func TestDiffStatTableFunction(t *testing.T) {
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
-	for _, test := range DiffSummaryTableFunctionScriptTests {
+	for _, test := range DiffStatTableFunctionScriptTests {
 		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, test)
@@ -1244,10 +1247,10 @@ func TestDiffSummaryTableFunction(t *testing.T) {
 	}
 }
 
-func TestDiffSummaryTableFunctionPrepared(t *testing.T) {
+func TestDiffStatTableFunctionPrepared(t *testing.T) {
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
-	for _, test := range DiffSummaryTableFunctionScriptTests {
+	for _, test := range DiffStatTableFunctionScriptTests {
 		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, harness, test)
@@ -1349,6 +1352,13 @@ func mustNewEngine(t *testing.T, h enginetest.Harness) *gms.Engine {
 	return e
 }
 
+var biasedCosters = []analyzer.Coster{
+	analyzer.NewInnerBiasedCoster(),
+	analyzer.NewLookupBiasedCoster(),
+	analyzer.NewHashBiasedCoster(),
+	analyzer.NewMergeBiasedCoster(),
+}
+
 func TestSystemTableIndexes(t *testing.T) {
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip("only new format support system table indexing")
@@ -1359,23 +1369,27 @@ func TestSystemTableIndexes(t *testing.T) {
 		harness.SkipSetupCommit()
 		e := mustNewEngine(t, harness)
 		defer e.Close()
+		e.Analyzer.Coster = analyzer.NewMergeBiasedCoster()
 
 		ctx := enginetest.NewContext(harness)
 		for _, q := range stt.setup {
 			enginetest.RunQuery(t, e, harness, q)
 		}
 
-		for _, tt := range stt.queries {
-			t.Run(fmt.Sprintf("%s: %s", stt.name, tt.query), func(t *testing.T) {
-				if tt.skip {
-					t.Skip()
-				}
+		for i, c := range []string{"inner", "lookup", "hash", "merge"} {
+			e.Analyzer.Coster = biasedCosters[i]
+			for _, tt := range stt.queries {
+				t.Run(fmt.Sprintf("%s(%s): %s", stt.name, c, tt.query), func(t *testing.T) {
+					if tt.skip {
+						t.Skip()
+					}
 
-				ctx = ctx.WithQuery(tt.query)
-				if tt.exp != nil {
-					enginetest.TestQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil)
-				}
-			})
+					ctx = ctx.WithQuery(tt.query)
+					if tt.exp != nil {
+						enginetest.TestQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil)
+					}
+				})
+			}
 		}
 	}
 }

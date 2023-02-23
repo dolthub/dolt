@@ -17,7 +17,13 @@ package migrate
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/datas"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -31,37 +37,34 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type ChunkMapping interface {
-	Has(ctx context.Context, addr hash.Hash) (bool, error)
-	Get(ctx context.Context, addr hash.Hash) (hash.Hash, error)
-	Put(ctx context.Context, old, new hash.Hash) error
-	Close(ctx context.Context) error
-}
+const (
+	MigratedCommitsBranch = "dolt_migrated_commits"
+	MigratedCommitsTable  = "dolt_commit_mapping"
+)
 
-type CommitStack interface {
-	Push(ctx context.Context, cm *doltdb.Commit) error
-	Pop(ctx context.Context) (*doltdb.Commit, error)
-}
+var (
+	mappingSchema, _ = schema.SchemaFromCols(schema.NewColCollection(
+		schema.NewColumn("old_commit_hash", 0, types.StringKind, true),
+		schema.NewColumn("new_commit_hash", 1, types.StringKind, false),
+	))
+	desc = val.NewTupleDescriptor(val.Type{Enc: val.StringEnc, Nullable: false})
+)
 
-type Progress interface {
-	ChunkMapping
-	CommitStack
+// progress maintains the state of migration.
+type progress struct {
+	stack []*doltdb.Commit
 
-	Log(ctx context.Context, format string, args ...any)
-	Close(ctx context.Context) error
-}
-
-// A memory stack with a persisted commit mapping.
-type memoryStackProgress struct {
-	stack    []*doltdb.Commit
+	// mapping tracks migrated commits
+	// it maps old commit hash to new hash
 	mapping  *prolly.MutableMap
 	kb, vb   *val.TupleBuilder
 	buffPool pool.BuffPool
-	vs       *types.ValueStore
-	cs       chunks.ChunkStore
+
+	vs *types.ValueStore
+	cs chunks.ChunkStore
 }
 
-func newProgress(ctx context.Context, cs chunks.ChunkStore) (Progress, error) {
+func newProgress(ctx context.Context, cs chunks.ChunkStore) (*progress, error) {
 	kd := val.NewTupleDescriptor(val.Type{
 		Enc:      val.ByteStringEnc,
 		Nullable: false,
@@ -83,7 +86,7 @@ func newProgress(ctx context.Context, cs chunks.ChunkStore) (Progress, error) {
 	kb := val.NewTupleBuilder(kd)
 	vb := val.NewTupleBuilder(vd)
 
-	return &memoryStackProgress{
+	return &progress{
 		stack:    make([]*doltdb.Commit, 0, 128),
 		mapping:  mut,
 		kb:       kb,
@@ -94,18 +97,18 @@ func newProgress(ctx context.Context, cs chunks.ChunkStore) (Progress, error) {
 	}, nil
 }
 
-func (mem *memoryStackProgress) Has(ctx context.Context, addr hash.Hash) (ok bool, err error) {
-	mem.kb.PutByteString(0, addr[:])
-	k := mem.kb.Build(mem.buffPool)
-	return mem.mapping.Has(ctx, k)
+func (p *progress) Has(ctx context.Context, addr hash.Hash) (ok bool, err error) {
+	p.kb.PutByteString(0, addr[:])
+	k := p.kb.Build(p.buffPool)
+	return p.mapping.Has(ctx, k)
 }
 
-func (mem *memoryStackProgress) Get(ctx context.Context, old hash.Hash) (new hash.Hash, err error) {
-	mem.kb.PutByteString(0, old[:])
-	k := mem.kb.Build(mem.buffPool)
-	err = mem.mapping.Get(ctx, k, func(_, v val.Tuple) error {
+func (p *progress) Get(ctx context.Context, old hash.Hash) (new hash.Hash, err error) {
+	p.kb.PutByteString(0, old[:])
+	k := p.kb.Build(p.buffPool)
+	err = p.mapping.Get(ctx, k, func(_, v val.Tuple) error {
 		if len(v) > 0 {
-			n, ok := mem.vb.Desc.GetBytes(0, v)
+			n, ok := p.vb.Desc.GetBytes(0, v)
 			if !ok {
 				return fmt.Errorf("failed to get string address from commit mapping value")
 			}
@@ -116,56 +119,185 @@ func (mem *memoryStackProgress) Get(ctx context.Context, old hash.Hash) (new has
 	return
 }
 
-func (mem *memoryStackProgress) Put(ctx context.Context, old, new hash.Hash) (err error) {
-	mem.kb.PutByteString(0, old[:])
-	k := mem.kb.Build(mem.buffPool)
-	mem.vb.PutByteString(0, new[:])
-	v := mem.vb.Build(mem.buffPool)
-	err = mem.mapping.Put(ctx, k, v)
+func (p *progress) Put(ctx context.Context, old, new hash.Hash) (err error) {
+	p.kb.PutByteString(0, old[:])
+	k := p.kb.Build(p.buffPool)
+	p.vb.PutByteString(0, new[:])
+	v := p.vb.Build(p.buffPool)
+	err = p.mapping.Put(ctx, k, v)
 	return
 }
 
-func (mem *memoryStackProgress) Push(ctx context.Context, cm *doltdb.Commit) (err error) {
-	mem.stack = append(mem.stack, cm)
+func (p *progress) Push(ctx context.Context, cm *doltdb.Commit) (err error) {
+	p.stack = append(p.stack, cm)
 	return
 }
 
-func (mem *memoryStackProgress) Pop(ctx context.Context) (cm *doltdb.Commit, err error) {
-	if len(mem.stack) == 0 {
+func (p *progress) Pop(ctx context.Context) (cm *doltdb.Commit, err error) {
+	if len(p.stack) == 0 {
 		return nil, nil
 	}
-	top := len(mem.stack) - 1
-	cm = mem.stack[top]
-	mem.stack = mem.stack[:top]
+	top := len(p.stack) - 1
+	cm = p.stack[top]
+	p.stack = p.stack[:top]
 	return
 }
 
-func (mem *memoryStackProgress) Log(ctx context.Context, format string, args ...any) {
+func (p *progress) Log(ctx context.Context, format string, args ...any) {
 	cli.Println(time.Now().UTC().String() + " " + fmt.Sprintf(format, args...))
 }
 
-func (mem *memoryStackProgress) Close(ctx context.Context) error {
-	m, err := mem.mapping.Map(ctx)
+func (p *progress) Finalize(ctx context.Context) (prolly.Map, error) {
+	m, err := p.mapping.Map(ctx)
 	if err != nil {
-		return err
+		return prolly.Map{}, err
 	}
 	v := shim.ValueFromMap(m)
-	ref, err := mem.vs.WriteValue(ctx, v)
+	ref, err := p.vs.WriteValue(ctx, v)
 	if err != nil {
-		return err
+		return prolly.Map{}, err
 	}
-	last, err := mem.vs.Root(ctx)
+	last, err := p.vs.Root(ctx)
 	if err != nil {
-		return err
+		return prolly.Map{}, err
 	}
-	ok, err := mem.vs.Commit(ctx, last, last)
+	ok, err := p.vs.Commit(ctx, last, last)
 	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("failed to commit, manifest swapped out beneath us")
+		return prolly.Map{}, err
+	} else if !ok {
+		return prolly.Map{}, fmt.Errorf("failed to commit, manifest swapped out beneath us")
 	}
 
-	mem.Log(ctx, "Wrote commit mapping!! [commit_mapping_ref: %s]", ref.TargetHash().String())
-	return nil
+	p.Log(ctx, "Wrote commit mapping!! [commit_mapping_ref: %s]", ref.TargetHash().String())
+	p.Log(ctx, "Commit mapping allow mapping pre-migration commit hashes to post-migration commit hashes, "+
+		"it is available on branch '%s' in table '%s'", MigratedCommitsBranch, MigratedCommitsTable)
+	return m, nil
+}
+
+func persistMigratedCommitMapping(ctx context.Context, ddb *doltdb.DoltDB, mapping prolly.Map) error {
+	// create a new branch to persist the migrated commit mapping
+	init, err := ddb.ResolveCommitRef(ctx, ref.NewInternalRef(doltdb.CreationBranch))
+	if err != nil {
+		return err
+	}
+
+	br := ref.NewBranchRef(MigratedCommitsBranch)
+	err = ddb.NewBranchAtCommit(ctx, br, init)
+	if err != nil {
+		return err
+	}
+
+	ns, vrw := ddb.NodeStore(), ddb.ValueReadWriter()
+	m, err := prolly.NewMapFromTuples(ctx, ns, desc, desc)
+	if err != nil {
+		return err
+	}
+
+	rows := m.Mutate()
+	bld := val.NewTupleBuilder(desc)
+
+	// convert |mapping| values from hash.Hash to string
+	iter, err := mapping.IterAll(ctx)
+	if err != nil {
+		return err
+	}
+
+	var k, v val.Tuple
+	kd, vd := mapping.Descriptors()
+	for {
+		k, v, err = iter.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		o, _ := kd.GetBytes(0, k)
+		bld.PutString(0, hash.New(o).String())
+		key := bld.Build(ddb.NodeStore().Pool())
+
+		n, _ := vd.GetBytes(0, v)
+		bld.PutString(0, hash.New(n).String())
+		value := bld.Build(ddb.NodeStore().Pool())
+
+		if err = rows.Put(ctx, key, value); err != nil {
+			return err
+		}
+	}
+
+	m, err = rows.Map(ctx)
+	if err != nil {
+		return err
+	}
+	idx := durable.IndexFromProllyMap(m)
+
+	tbl, err := doltdb.NewTable(ctx, vrw, ns, mappingSchema, idx, nil, nil)
+	if err != nil {
+		return err
+	}
+
+	root, err := init.GetRootValue(ctx)
+	if err != nil {
+		return err
+	}
+
+	root, err = root.PutTable(ctx, MigratedCommitsTable, tbl)
+	if err != nil {
+		return err
+	}
+
+	return commitRoot(ctx, ddb, br, root, init)
+}
+
+func commitRoot(
+	ctx context.Context,
+	ddb *doltdb.DoltDB,
+	br ref.BranchRef,
+	root *doltdb.RootValue,
+	parent *doltdb.Commit,
+) error {
+	roots := doltdb.Roots{
+		Head:    root,
+		Working: root,
+		Staged:  root,
+	}
+	parents := []*doltdb.Commit{parent}
+
+	meta, err := parent.GetCommitMeta(ctx)
+	if err != nil {
+		return err
+	}
+
+	meta, err = datas.NewCommitMeta(meta.Name, meta.Email, meta.Description)
+	if err != nil {
+		return err
+	}
+
+	pcm, err := ddb.NewPendingCommit(ctx, roots, parents, meta)
+	if err != nil {
+		return err
+	}
+
+	wsr, err := ref.WorkingSetRefForHead(br)
+	if err != nil {
+		return err
+	}
+
+	ws, err := ddb.ResolveWorkingSet(ctx, wsr)
+	if err != nil {
+		return err
+	}
+
+	prev, err := ws.HashOf()
+	if err != nil {
+		return err
+	}
+	ws = ws.WithWorkingRoot(root).WithStagedRoot(root)
+
+	_, err = ddb.CommitWithWorkingSet(ctx, br, wsr, pcm, ws, prev, &datas.WorkingSetMeta{
+		Name:      meta.Name,
+		Email:     meta.Email,
+		Timestamp: uint64(time.Now().Unix()),
+	})
+	return err
 }

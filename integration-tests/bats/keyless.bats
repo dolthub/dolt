@@ -204,14 +204,14 @@ SQL
     [[ "${#lines[@]}" = "13" ]] || false
 }
 
-@test "keyless: diff --summary" {
+@test "keyless: diff --stat" {
 
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 0;
 INSERT INTO keyless VALUES (8,8);
 UPDATE keyless SET c1 = 9 WHERE c0 = 1;
 SQL
-    run dolt diff --summary
+    run dolt diff --stat
     [ $status -eq 0 ]
     [[ "$output" =~ "3 Rows Added" ]] || false
     [[ "$output" =~ "3 Rows Deleted" ]] || false

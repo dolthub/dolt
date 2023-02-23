@@ -41,11 +41,12 @@ import (
 
 type diffOutput int
 type diffPart int
+type diffMode int
 
 const (
 	SchemaOnlyDiff diffPart = 1 // 0b0001
 	DataOnlyDiff   diffPart = 2 // 0b0010
-	Summary        diffPart = 4 // 0b0100
+	Stat           diffPart = 4 // 0b0100
 
 	SchemaAndDataDiff = SchemaOnlyDiff | DataOnlyDiff
 
@@ -53,15 +54,16 @@ const (
 	SQLDiffOutput     diffOutput = 2
 	JsonDiffOutput    diffOutput = 3
 
-	DataFlag    = "data"
-	SchemaFlag  = "schema"
-	SummaryFlag = "summary"
-	whereParam  = "where"
-	limitParam  = "limit"
-	SQLFlag     = "sql"
-	CachedFlag  = "cached"
-	SkinnyFlag  = "skinny"
-	MergeBase   = "merge-base"
+	DataFlag   = "data"
+	SchemaFlag = "schema"
+	StatFlag   = "stat"
+	whereParam = "where"
+	limitParam = "limit"
+	SQLFlag    = "sql"
+	CachedFlag = "cached"
+	SkinnyFlag = "skinny"
+	MergeBase  = "merge-base"
+	DiffMode   = "diff-mode"
 )
 
 var diffDocs = cli.CommandDocumentationContent{
@@ -87,6 +89,8 @@ Show changes between the working and staged tables, changes between the working 
 The diffs displayed can be limited to show the first N by providing the parameter {{.EmphasisLeft}}--limit N{{.EmphasisRight}} where {{.EmphasisLeft}}N{{.EmphasisRight}} is the number of diffs to display.
 
 To filter which data rows are displayed, use {{.EmphasisLeft}}--where <SQL expression>{{.EmphasisRight}}. Table column names in the filter expression must be prefixed with {{.EmphasisLeft}}from_{{.EmphasisRight}} or {{.EmphasisLeft}}to_{{.EmphasisRight}}, e.g. {{.EmphasisLeft}}to_COLUMN_NAME > 100{{.EmphasisRight}} or {{.EmphasisLeft}}from_COLUMN_NAME + to_COLUMN_NAME = 0{{.EmphasisRight}}.
+
+The {{.EmphasisLeft}}--diff-mode{{.EmphasisRight}} argument controls how modified rows are presented when the format output is set to {{.EmphasisLeft}}tabular{{.EmphasisRight}}. When set to {{.EmphasisLeft}}row{{.EmphasisRight}}, modified rows are presented as old and new rows. When set to {{.EmphasisLeft}}line{{.EmphasisRight}}, modified rows are presented as a single row, and changes are presented using "+" and "-" within the column. When set to {{.EmphasisLeft}}in-place{{.EmphasisRight}}, modified rows are presented as a single row, and changes are presented side-by-side with a color distinction (requires a color-enabled terminal). When set to {{.EmphasisLeft}}context{{.EmphasisRight}}, rows that contain at least one column that spans multiple lines uses {{.EmphasisLeft}}line{{.EmphasisRight}}, while all other rows use {{.EmphasisLeft}}row{{.EmphasisRight}}. The default value is {{.EmphasisLeft}}context{{.EmphasisRight}}.
 `,
 	Synopsis: []string{
 		`[options] [{{.LessThan}}commit{{.GreaterThan}}] [{{.LessThan}}tables{{.GreaterThan}}...]`,
@@ -97,6 +101,7 @@ To filter which data rows are displayed, use {{.EmphasisLeft}}--where <SQL expre
 type diffArgs struct {
 	diffParts  diffPart
 	diffOutput diffOutput
+	diffMode   diff.Mode
 	fromRoot   *doltdb.RootValue
 	toRoot     *doltdb.RootValue
 	fromRef    string
@@ -133,13 +138,14 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
-	ap.SupportsFlag(SummaryFlag, "", "Show summary of data changes")
+	ap.SupportsFlag(StatFlag, "", "Show stats of data changes")
 	ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular, sql, json. Defaults to tabular.")
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
 	ap.SupportsFlag(CachedFlag, "c", "Show only the unstaged data changes.")
 	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
 	ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
+	ap.SupportsString(DiffMode, "", "diff mode", "Determines how to display modified rows with tabular output. Valid values are row, line, in-place, context. Defaults to context.")
 	return ap
 }
 
@@ -167,9 +173,9 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.Contains(SummaryFlag) {
+	if apr.Contains(StatFlag) {
 		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) {
-			return errhand.BuildDError("invalid Arguments: --summary cannot be combined with --schema or --data").Build()
+			return errhand.BuildDError("invalid Arguments: --stat cannot be combined with --schema or --data").Build()
 		}
 	}
 
@@ -191,8 +197,8 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		dArgs.diffParts = DataOnlyDiff
 	} else if apr.Contains(SchemaFlag) && !apr.Contains(DataFlag) {
 		dArgs.diffParts = SchemaOnlyDiff
-	} else if apr.Contains(SummaryFlag) {
-		dArgs.diffParts = Summary
+	} else if apr.Contains(StatFlag) {
+		dArgs.diffParts = Stat
 	}
 
 	dArgs.skinny = apr.Contains(SkinnyFlag)
@@ -201,6 +207,16 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	switch strings.ToLower(f) {
 	case "tabular":
 		dArgs.diffOutput = TabularDiffOutput
+		switch strings.ToLower(apr.GetValueOrDefault(DiffMode, "context")) {
+		case "row":
+			dArgs.diffMode = diff.ModeRow
+		case "line":
+			dArgs.diffMode = diff.ModeLine
+		case "in-place":
+			dArgs.diffMode = diff.ModeInPlace
+		case "context":
+			dArgs.diffMode = diff.ModeContext
+		}
 	case "sql":
 		dArgs.diffOutput = SQLDiffOutput
 	case "json":
@@ -516,8 +532,8 @@ func diffUserTable(
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
 
-	if dArgs.diffParts&Summary != 0 {
-		return printDiffSummary(ctx, td, fromSch.GetAllCols().Size(), toSch.GetAllCols().Size())
+	if dArgs.diffParts&Stat != 0 {
+		return printDiffStat(ctx, td, fromSch.GetAllCols().Size(), toSch.GetAllCols().Size())
 	}
 
 	if dArgs.diffParts&SchemaOnlyDiff != 0 {
@@ -654,8 +670,6 @@ func diffRows(
 	dArgs *diffArgs,
 	dw diffWriter,
 ) errhand.VerboseError {
-	from, to := dArgs.fromRef, dArgs.toRef
-
 	diffable := schema.ArePrimaryKeySetsDiffable(td.Format(), td.FromSch, td.ToSch)
 	canSqlDiff := !(td.ToSch == nil || (td.FromSch != nil && !schema.SchemasAreEqual(td.FromSch, td.ToSch)))
 
@@ -719,7 +733,7 @@ func diffRows(
 	}
 
 	columns := getColumnNamesString(td.FromSch, td.ToSch)
-	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", from, to, tableName)
+	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", dArgs.fromRef, dArgs.toRef, tableName)
 
 	if len(dArgs.where) > 0 {
 		query += " where " + dArgs.where
@@ -782,7 +796,7 @@ func diffRows(
 		}
 	}
 
-	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, rowWriter, modifiedColNames, dArgs.skinny)
+	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, rowWriter, modifiedColNames, dArgs)
 	if err != nil {
 		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}
@@ -827,7 +841,7 @@ func writeDiffResults(
 	iter sql.RowIter,
 	writer diff.SqlRowDiffWriter,
 	modifiedColNames map[string]bool,
-	filterChangedCols bool,
+	dArgs *diffArgs,
 ) error {
 	ds, err := newDiffSplitter(diffQuerySch, targetSch)
 	if err != nil {
@@ -847,7 +861,7 @@ func writeDiffResults(
 			return err
 		}
 
-		if filterChangedCols {
+		if dArgs.skinny {
 			var filteredOldRow, filteredNewRow rowDiff
 			for i, changeType := range newRow.colDiffs {
 				if (changeType == diff.Added|diff.Removed) || modifiedColNames[targetSch[i].Name] {
@@ -869,17 +883,21 @@ func writeDiffResults(
 			newRow = filteredNewRow
 		}
 
-		if oldRow.row != nil {
-			err := writer.WriteRow(ctx, oldRow.row, oldRow.rowDiff, oldRow.colDiffs)
-			if err != nil {
+		// We are guaranteed to have "ModeRow" for writers that do not support combined rows
+		if dArgs.diffMode != diff.ModeRow && oldRow.rowDiff == diff.ModifiedOld && newRow.rowDiff == diff.ModifiedNew {
+			if err = writer.WriteCombinedRow(ctx, oldRow.row, newRow.row, dArgs.diffMode); err != nil {
 				return err
 			}
-		}
-
-		if newRow.row != nil {
-			err := writer.WriteRow(ctx, newRow.row, newRow.rowDiff, newRow.colDiffs)
-			if err != nil {
-				return err
+		} else {
+			if oldRow.row != nil {
+				if err = writer.WriteRow(ctx, oldRow.row, oldRow.rowDiff, oldRow.colDiffs); err != nil {
+					return err
+				}
+			}
+			if newRow.row != nil {
+				if err = writer.WriteRow(ctx, newRow.row, newRow.rowDiff, newRow.colDiffs); err != nil {
+					return err
+				}
 			}
 		}
 	}

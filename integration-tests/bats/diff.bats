@@ -22,6 +22,176 @@ teardown() {
     teardown_common
 }
 
+@test "diff: row, line, in-place, context diff modes" {
+    # We're not using the test table, so we might as well delete it
+    dolt sql <<SQL
+DROP TABLE test;
+CREATE TABLE tbl (PK BIGINT PRIMARY KEY);
+INSERT INTO tbl VALUES (1), (2), (3);
+DELIMITER //
+CREATE PROCEDURE modify1() BEGIN
+DECLARE a INT DEFAULT 1;
+SELECT a
+  AS RESULT;
+END//
+CREATE PROCEDURE modify2() SELECT 42;//
+CREATE PROCEDURE remove() BEGIN
+SELECT 8;
+END//
+SQL
+    dolt add -A
+    dolt commit -m "First commit"
+    dolt branch original
+
+    dolt sql <<SQL
+DELETE FROM tbl WHERE pk = 2;
+INSERT INTO tbl VALUES (4);
+DROP PROCEDURE modify1;
+DROP PROCEDURE modify2;
+DROP PROCEDURE remove;
+DELIMITER //
+CREATE PROCEDURE modify1() BEGIN
+SELECT 2
+  AS RESULTING
+  FROM DUAL;
+END//
+CREATE PROCEDURE modify2() SELECT 43;//
+CREATE PROCEDURE adding() BEGIN
+SELECT 9;
+END//
+SQL
+    dolt add -A
+    dolt commit -m "Second commit"
+
+    # Look at the row diff
+    run dolt diff original --diff-mode=row
+    [ "$status" -eq 0 ]
+    # Verify that standard diffs are still working
+    [[ "$output" =~ "|   | PK |" ]] || false
+    [[ "$output" =~ "+---+----+" ]] || false
+    [[ "$output" =~ "| - | 2  |" ]] || false
+    [[ "$output" =~ "| + | 4  |" ]] || false
+    # Check the overall stored procedure diff (excluding dates since they're variable)
+    [[ "$output" =~ "+---+---------+--------------------------------------+" ]] || false
+    [[ "$output" =~ "|   | name    | create_stmt                          |" ]] || false
+    [[ "$output" =~ "+---+---------+--------------------------------------+" ]] || false
+    [[ "$output" =~ "| + | adding  | CREATE PROCEDURE adding() BEGIN      |" ]] || false
+    [[ "$output" =~ "|   |         | SELECT 9;                            |" ]] || false
+    [[ "$output" =~ "|   |         | END                                  |" ]] || false
+    [[ "$output" =~ "| < | modify1 | CREATE PROCEDURE modify1() BEGIN     |" ]] || false
+    [[ "$output" =~ "|   |         | DECLARE a INT DEFAULT 1;             |" ]] || false
+    [[ "$output" =~ "|   |         | SELECT a                             |" ]] || false
+    [[ "$output" =~ "|   |         |   AS RESULT;                         |" ]] || false
+    [[ "$output" =~ "|   |         | END                                  |" ]] || false
+    [[ "$output" =~ "| > | modify1 | CREATE PROCEDURE modify1() BEGIN     |" ]] || false
+    [[ "$output" =~ "|   |         | SELECT 2                             |" ]] || false
+    [[ "$output" =~ "|   |         |   AS RESULTING                       |" ]] || false
+    [[ "$output" =~ "|   |         |   FROM DUAL;                         |" ]] || false
+    [[ "$output" =~ "|   |         | END                                  |" ]] || false
+    [[ "$output" =~ "| < | modify2 | CREATE PROCEDURE modify2() SELECT 42 |" ]] || false
+    [[ "$output" =~ "| > | modify2 | CREATE PROCEDURE modify2() SELECT 43 |" ]] || false
+    [[ "$output" =~ "| - | remove  | CREATE PROCEDURE remove() BEGIN      |" ]] || false
+    [[ "$output" =~ "|   |         | SELECT 8;                            |" ]] || false
+    [[ "$output" =~ "|   |         | END                                  |" ]] || false
+    [[ "$output" =~ "+---+---------+--------------------------------------+" ]] || false
+
+    # Look at the line-by-line diff
+    run dolt diff original --diff-mode=line
+    [ "$status" -eq 0 ]
+    # Verify that standard diffs are still working
+    [[ "$output" =~ "|   | PK |" ]] || false
+    [[ "$output" =~ "+---+----+" ]] || false
+    [[ "$output" =~ "| - | 2  |" ]] || false
+    [[ "$output" =~ "| + | 4  |" ]] || false
+    # Check the overall stored procedure diff (excluding dates since they're variable)
+    [[ "$output" =~ "+---+---------+---------------------------------------+" ]] || false
+    [[ "$output" =~ "|   | name    | create_stmt                           |" ]] || false
+    [[ "$output" =~ "+---+---------+---------------------------------------+" ]] || false
+    [[ "$output" =~ "| + | adding  | CREATE PROCEDURE adding() BEGIN       |" ]] || false
+    [[ "$output" =~ "|   |         | SELECT 9;                             |" ]] || false
+    [[ "$output" =~ "|   |         | END                                   |" ]] || false
+    [[ "$output" =~ "| * | modify1 |  CREATE PROCEDURE modify1() BEGIN     |" ]] || false
+    [[ "$output" =~ "|   |         | -DECLARE a INT DEFAULT 1;             |" ]] || false
+    [[ "$output" =~ "|   |         | -SELECT a                             |" ]] || false
+    [[ "$output" =~ "|   |         | -  AS RESULT;                         |" ]] || false
+    [[ "$output" =~ "|   |         | +SELECT 2                             |" ]] || false
+    [[ "$output" =~ "|   |         | +  AS RESULTING                       |" ]] || false
+    [[ "$output" =~ "|   |         | +  FROM DUAL;                         |" ]] || false
+    [[ "$output" =~ "|   |         |  END                                  |" ]] || false
+    [[ "$output" =~ "| * | modify2 | -CREATE PROCEDURE modify2() SELECT 42 |" ]] || false
+    [[ "$output" =~ "|   |         | +CREATE PROCEDURE modify2() SELECT 43 |" ]] || false
+    [[ "$output" =~ "| - | remove  | CREATE PROCEDURE remove() BEGIN       |" ]] || false
+    [[ "$output" =~ "|   |         | SELECT 8;                             |" ]] || false
+    [[ "$output" =~ "|   |         | END                                   |" ]] || false
+    [[ "$output" =~ "+---+---------+---------------------------------------+" ]] || false
+
+   # Look at the in-place diff
+    run dolt diff original --diff-mode=in-place
+    [ "$status" -eq 0 ]
+    # Verify that standard diffs are still working
+    [[ "$output" =~ "|   | PK |" ]] || false
+    [[ "$output" =~ "+---+----+" ]] || false
+    [[ "$output" =~ "| - | 2  |" ]] || false
+    [[ "$output" =~ "| + | 4  |" ]] || false
+    # Check the overall stored procedure diff (excluding dates since they're variable)
+    [[ "$output" =~ "+---+---------+---------------------------------------+" ]] || false
+    [[ "$output" =~ "|   | name    | create_stmt                           |" ]] || false
+    [[ "$output" =~ "+---+---------+---------------------------------------+" ]] || false
+    [[ "$output" =~ "| + | adding  | CREATE PROCEDURE adding() BEGIN       |" ]] || false
+    [[ "$output" =~ "|   |         | SELECT 9;                             |" ]] || false
+    [[ "$output" =~ "|   |         | END                                   |" ]] || false
+    [[ "$output" =~ "| * | modify1 | CREATE PROCEDURE modify1() BEGIN      |" ]] || false
+    [[ "$output" =~ "|   |         | DECLARE a INT DEFAULT 1;              |" ]] || false
+    [[ "$output" =~ "|   |         | SELECT a2                             |" ]] || false
+    [[ "$output" =~ "|   |         |   AS RESULTING                        |" ]] || false
+    [[ "$output" =~ "|   |         |   FROM DUAL;                          |" ]] || false
+    [[ "$output" =~ "|   |         | END                                   |" ]] || false
+    [[ "$output" =~ "| * | modify2 | CREATE PROCEDURE modify2() SELECT 423 |" ]] || false
+    [[ "$output" =~ "| - | remove  | CREATE PROCEDURE remove() BEGIN       |" ]] || false
+    [[ "$output" =~ "|   |         | SELECT 8;                             |" ]] || false
+    [[ "$output" =~ "|   |         | END                                   |" ]] || false
+    [[ "$output" =~ "+---+---------+---------------------------------------+" ]] || false
+
+    # Look at the context diff
+    run dolt diff original --diff-mode=context
+    [ "$status" -eq 0 ]
+    # Verify that standard diffs are still working
+    [[ "$output" =~ "|   | PK |" ]] || false
+    [[ "$output" =~ "+---+----+" ]] || false
+    [[ "$output" =~ "| - | 2  |" ]] || false
+    [[ "$output" =~ "| + | 4  |" ]] || false
+    # Check the overall stored procedure diff (excluding dates since they're variable)
+    [[ "$output" =~ "+---+---------+--------------------------------------+" ]] || false
+    [[ "$output" =~ "|   | name    | create_stmt                          |" ]] || false
+    [[ "$output" =~ "+---+---------+--------------------------------------+" ]] || false
+    [[ "$output" =~ "| + | adding  | CREATE PROCEDURE adding() BEGIN      |" ]] || false
+    [[ "$output" =~ "|   |         | SELECT 9;                            |" ]] || false
+    [[ "$output" =~ "|   |         | END                                  |" ]] || false
+    [[ "$output" =~ "| * | modify1 |  CREATE PROCEDURE modify1() BEGIN    |" ]] || false
+    [[ "$output" =~ "|   |         | -DECLARE a INT DEFAULT 1;            |" ]] || false
+    [[ "$output" =~ "|   |         | -SELECT a                            |" ]] || false
+    [[ "$output" =~ "|   |         | -  AS RESULT;                        |" ]] || false
+    [[ "$output" =~ "|   |         | +SELECT 2                            |" ]] || false
+    [[ "$output" =~ "|   |         | +  AS RESULTING                      |" ]] || false
+    [[ "$output" =~ "|   |         | +  FROM DUAL;                        |" ]] || false
+    [[ "$output" =~ "|   |         |  END                                 |" ]] || false
+    [[ "$output" =~ "| < | modify2 | CREATE PROCEDURE modify2() SELECT 42 |" ]] || false
+    [[ "$output" =~ "| > | modify2 | CREATE PROCEDURE modify2() SELECT 43 |" ]] || false
+    [[ "$output" =~ "| - | remove  | CREATE PROCEDURE remove() BEGIN      |" ]] || false
+    [[ "$output" =~ "|   |         | SELECT 8;                            |" ]] || false
+    [[ "$output" =~ "|   |         | END                                  |" ]] || false
+    [[ "$output" =~ "+---+---------+--------------------------------------+" ]] || false
+
+    # Ensure that the context diff is the default
+    run dolt diff original
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| * | modify1 |  CREATE PROCEDURE modify1() BEGIN    |" ]] || false
+    [[ "$output" =~ "|   |         | -SELECT a                            |" ]] || false
+    [[ "$output" =~ "|   |         | +SELECT 2                            |" ]] || false
+    [[ "$output" =~ "| < | modify2 | CREATE PROCEDURE modify2() SELECT 42 |" ]] || false
+    [[ "$output" =~ "| > | modify2 | CREATE PROCEDURE modify2() SELECT 43 |" ]] || false
+}
+
 @test "diff: clean working set" {
     dolt add .
     dolt commit -m table
@@ -152,7 +322,7 @@ teardown() {
     [[ ! "$output" =~ "- | 1" ]] || false
     [[ "$output" =~ "+ | 2" ]] || false
 
-    run dolt diff --merge-base branch1 
+    run dolt diff --merge-base branch1
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "- | 1" ]] || false
     [[ "$output" =~ "+ | 2" ]] || false
@@ -192,8 +362,8 @@ teardown() {
     [[ "$output" =~ "+ | 1" ]] || false
     [[ ! "$output" =~ "- | 2" ]] || false
 
-    # Dots work with --summary
-    run dolt diff main..branch1 --summary
+    # Dots work with --stat
+    run dolt diff main..branch1 --stat
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1 Row Unmodified (50.00%)" ]] || false
     [[ "$output" =~ "1 Row Added (50.00%)" ]] || false
@@ -204,7 +374,7 @@ teardown() {
     [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
     [[ "$output" =~ "(2 Row Entries vs 2 Row Entries)" ]] || false
 
-    run dolt diff main...branch1 --summary
+    run dolt diff main...branch1 --stat
     echo $output
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1 Row Unmodified (100.00%)" ]] || false
@@ -604,7 +774,7 @@ SQL
     [[ "$output" =~ '+  KEY `c2` (`c2`)' ]] || false
 }
 
-@test "diff: summary comparing working table to last commit" {
+@test "diff: stat comparing working table to last commit" {
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
@@ -612,8 +782,8 @@ SQL
     dolt sql -q "insert into test values (2, 11, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (3, 11, 0, 0, 0, 0)"
 
-    dolt diff --summary
-    run dolt diff --summary
+    dolt diff --stat
+    run dolt diff --stat
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2 Rows Unmodified (100.00%)" ]] || false
     [[ "$output" =~ "2 Rows Added (100.00%)" ]] || false
@@ -627,7 +797,7 @@ SQL
     dolt add test
     dolt commit -m "added two rows"
     dolt sql -q "replace into test values (0, 11, 0, 0, 0, 6)"
-    run dolt diff --summary
+    run dolt diff --stat
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3 Rows Unmodified (75.00%)" ]] || false
     [[ "$output" =~ "0 Rows Added (0.00%)" ]] || false
@@ -641,7 +811,7 @@ SQL
     dolt add test
     dolt commit -m "modified first row"
     dolt sql -q "delete from test where pk = 0"
-    run dolt diff --summary
+    run dolt diff --stat
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3 Rows Unmodified (75.00%)" ]] || false
     [[ "$output" =~ "0 Rows Added (0.00%)" ]] || false
@@ -653,14 +823,14 @@ SQL
     [[ "$output" =~ "(4 Row Entries vs 3 Row Entries)" ]] || false
 }
 
-@test "diff: summary comparing row with a deleted cell and an added cell" {
+@test "diff: stat comparing row with a deleted cell and an added cell" {
     dolt add test
     dolt commit -m "create table"
     dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
     dolt add test
     dolt commit -m "put row"
     dolt sql -q "replace into test (pk, c1, c3, c4, c5) values (0, 1, 3, 4, 5)"
-    run dolt diff --summary
+    run dolt diff --stat
     [ "$status" -eq 0 ]
     [[ "$output" =~ "0 Rows Unmodified (0.00%)" ]] || false
     [[ "$output" =~ "0 Rows Added (0.00%)" ]] || false
@@ -673,7 +843,7 @@ SQL
     dolt add test
     dolt commit -m "row modified"
     dolt sql -q "replace into test values (0, 1, 2, 3, 4, 5)"
-    run dolt diff --summary
+    run dolt diff --stat
     [ "$status" -eq 0 ]
     [[ "$output" =~ "0 Rows Unmodified (0.00%)" ]] || false
     [[ "$output" =~ "0 Rows Added (0.00%)" ]] || false
@@ -685,7 +855,7 @@ SQL
     [[ "$output" =~ "(1 Row Entry vs 1 Row Entry)" ]] || false
 }
 
-@test "diff: summary comparing two branches" {
+@test "diff: stat comparing two branches" {
     dolt checkout -b firstbranch
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
@@ -694,7 +864,7 @@ SQL
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "Added another row"
-    run dolt diff --summary firstbranch newbranch
+    run dolt diff --stat firstbranch newbranch
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1 Row Unmodified (100.00%)" ]] || false
     [[ "$output" =~ "1 Row Added (100.00%)" ]] || false
@@ -704,7 +874,7 @@ SQL
     [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
     [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
     [[ "$output" =~ "(1 Row Entry vs 2 Row Entries)" ]] || false
-    run dolt diff --summary firstbranch..newbranch
+    run dolt diff --stat firstbranch..newbranch
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1 Row Unmodified (100.00%)" ]] || false
     [[ "$output" =~ "1 Row Added (100.00%)" ]] || false
@@ -716,7 +886,7 @@ SQL
     [[ "$output" =~ "(1 Row Entry vs 2 Row Entries)" ]] || false
 }
 
-@test "diff: summary shows correct changes after schema change" {
+@test "diff: stat shows correct changes after schema change" {
     
     cat <<DELIM > employees.csv
 "id","first name","last name","title","start date","end date"
@@ -731,8 +901,8 @@ DELIM
     dolt sql -q "alter table employees add city longtext"
     dolt sql -q "insert into employees values (3, 'taylor', 'bantle', 'software engineer', '', '', 'Santa Monica')"
 
-    dolt diff --summary
-    run dolt diff --summary
+    dolt diff --stat
+    run dolt diff --stat
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3 Rows Unmodified (100.00%)" ]] || false
     [[ "$output" =~ "1 Row Added (33.33%)" ]] || false
@@ -745,8 +915,8 @@ DELIM
 
     dolt sql -q "replace into employees values (0, 'tim', 'sehn', 'ceo', '2 years ago', '', 'Santa Monica')"
     
-    dolt diff --summary
-    run dolt diff --summary
+    dolt diff --stat
+    run dolt diff --stat
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2 Rows Unmodified (66.67%)" ]] || false
     [[ "$output" =~ "1 Row Added (33.33%)" ]] || false
@@ -758,7 +928,7 @@ DELIM
     [[ "$output" =~ "(3 Row Entries vs 4 Row Entries)" ]] || false
 }
 
-@test "diff: summary gets summaries for all tables with changes" {
+@test "diff: stat gets summaries for all tables with changes" {
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt sql <<SQL
@@ -777,7 +947,7 @@ SQL
     dolt commit -m "test tables created"
     dolt sql -q "insert into test values (2, 11, 0, 0, 0, 0)"
     dolt sql -q "insert into employees values (1, 'brian', 'hendriks', 'founder', '', '')"
-    run dolt diff --summary
+    run dolt diff --stat
     [ "$status" -eq 0 ]
     [[ "$output" =~ "diff --dolt a/test b/test" ]] || false
     [[ "$output" =~ "--- a/test @" ]] || false
@@ -877,14 +1047,14 @@ SQL
     [[ "$output" =~ "where pk=4" ]] || false
 }
 
-@test "diff: diff summary incorrect primary key set change regression test" {
+@test "diff: diff stat incorrect primary key set change regression test" {
     dolt sql -q "create table testdrop (col1 varchar(20), id int primary key, col2 varchar(20))"
     dolt add .
     dolt sql -q "insert into testdrop values ('test1', 1, 'test2')"
     dolt commit -am "Add testdrop table"
 
     dolt sql -q "alter table testdrop drop column col1"
-    run dolt diff --summary
+    run dolt diff --stat
     [ $status -eq 0 ]
     [[ $output =~ "1 Row Modified (100.00%)" ]]
 }
@@ -1534,7 +1704,7 @@ EOF
     [ $status -eq 0 ]
     [[ ! "$output" =~ "| 1" ]] || false
 
-    run dolt diff --summary
+    run dolt diff --stat
     [ $status -eq 0 ]
     [[ ! "$output" =~ "1 Row Modified" ]] || false
 }

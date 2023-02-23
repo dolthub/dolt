@@ -77,6 +77,10 @@ func TestMigration(t *testing.T) {
 					query:    "SELECT count(*) FROM dolt_log",
 					expected: []sql.Row{{int64(2)}},
 				},
+				{
+					query:    "SELECT count(*) FROM `dolt/dolt_migrated_commits`.dolt_commit_mapping",
+					expected: []sql.Row{{int64(2)}},
+				},
 			},
 		},
 		{
@@ -106,6 +110,36 @@ func TestMigration(t *testing.T) {
 						{"c0", "int", "YES", "", "NULL", ""},
 						{"c1", "varbinary(16383)", "YES", "MUL", "NULL", ""},
 					},
+				},
+			},
+		},
+		{
+			name: "create more commits",
+			setup: []string{
+				"CREATE TABLE test (pk int primary key)",
+				"INSERT INTO test VALUES (1),(2),(3)",
+				"CALL dolt_commit('-Am', 'new table')",
+				"INSERT INTO test VALUES (4)",
+				"CALL dolt_commit('-am', 'added row 4')",
+				"INSERT INTO test VALUES (5)",
+				"CALL dolt_commit('-am', 'added row 5')",
+			},
+			asserts: []assertion{
+				{
+					query:    "SELECT count(*) FROM dolt_log",
+					expected: []sql.Row{{int64(4)}},
+				},
+				{
+					query:    "SELECT count(*) FROM `dolt/dolt_migrated_commits`.dolt_commit_mapping",
+					expected: []sql.Row{{int64(4)}},
+				},
+				{
+					query:    "SELECT count(*) FROM `dolt/dolt_migrated_commits`.dolt_commit_mapping WHERE new_commit_hash IN (SELECT commit_hash FROM dolt_log)",
+					expected: []sql.Row{{int64(4)}},
+				},
+				{
+					query:    "SELECT count(*) FROM `dolt/dolt_migrated_commits`.dolt_commit_mapping WHERE new_commit_hash NOT IN (SELECT commit_hash FROM dolt_log)",
+					expected: []sql.Row{{int64(0)}},
 				},
 			},
 		},
