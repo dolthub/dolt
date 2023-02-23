@@ -315,7 +315,7 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 	// Get all remote branches
 	remotes, err := dEnv.DoltDB.GetRemotesWithHashes(ctx)
 	if err != nil {
-		cli.PrintErrln(color.RedString("Fatal error: cannot get Remotes information."))
+		cli.PrintErrln(color.HiRedString("Fatal error: cannot get Remotes information."))
 		return 1
 	}
 	for _, r := range remotes {

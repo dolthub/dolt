@@ -50,7 +50,7 @@ const (
 	SchemaOnlyDiff diffPart = 1 // 0b0001
 	DataOnlyDiff   diffPart = 2 // 0b0010
 	Stat           diffPart = 4 // 0b0100
-	Summary        diffPart = 8 // 0b0101
+	Summary        diffPart = 8 // 0b1000
 
 	SchemaAndDataDiff = SchemaOnlyDiff | DataOnlyDiff
 

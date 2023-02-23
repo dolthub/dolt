@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -466,21 +465,4 @@ func fkSlicesAreEqual(from, to []doltdb.ForeignKey) bool {
 		}
 	}
 	return true
-}
-
-func getColumnNamesString(fromSch, toSch schema.Schema) string {
-	var cols []string
-	if fromSch != nil {
-		fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			cols = append(cols, fmt.Sprintf("`from_%s`", col.Name))
-			return false, nil
-		})
-	}
-	if toSch != nil {
-		toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			cols = append(cols, fmt.Sprintf("`to_%s`", col.Name))
-			return false, nil
-		})
-	}
-	return strings.Join(cols, ",")
 }
