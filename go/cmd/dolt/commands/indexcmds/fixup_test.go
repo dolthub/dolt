@@ -2,6 +2,7 @@ package indexcmds
 
 import (
 	"context"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"

@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -27,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	val2 "github.com/dolthub/dolt/go/store/val"
-	"io"
 )
 
 var verifyDocs = &cli.CommandDocumentation{
