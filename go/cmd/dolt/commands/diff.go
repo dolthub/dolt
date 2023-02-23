@@ -719,14 +719,11 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 	return ddlStatements, nil
 }
 
-func getRowDiffIter(
-	ctx context.Context,
+func getDataHasChanged(ctx context.Context,
 	se *engine.SqlEngine,
 	td diff.TableDelta,
 	dArgs *diffArgs,
-	where string,
-	limit int,
-) (*sql.Context, sql.Schema, sql.RowIter, string, errhand.VerboseError) {
+) (bool, errhand.VerboseError) {
 	diffable := schema.ArePrimaryKeySetsDiffable(td.Format(), td.FromSch, td.ToSch)
 	canSqlDiff := !(td.ToSch == nil || (td.FromSch != nil && !schema.SchemasAreEqual(td.FromSch, td.ToSch)))
 
@@ -734,55 +731,33 @@ func getRowDiffIter(
 	if !diffable {
 		// TODO: this messes up some structured output if the user didn't redirect it
 		cli.PrintErrf("Primary key sets differ between revisions for table %s, skipping data diff\n", td.ToName)
-		return nil, nil, nil, "", nil
+		return false, nil
 	} else if dArgs.diffOutput == SQLDiffOutput && !canSqlDiff {
 		// TODO: this is overly broad, we can absolutely do better
 		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff\n")
-		return nil, nil, nil, "", nil
+		return false, nil
 	}
 
-	// do the data diff
 	tableName := td.CurName()
 
 	columns := getColumnNamesString(td.FromSch, td.ToSch)
-	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", dArgs.fromRef, dArgs.toRef, tableName)
-
-	if len(where) > 0 {
-		query += " where " + where
-	}
-
-	if limit >= 0 {
-		query += " limit " + strconv.Itoa(limit)
-	}
+	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s') limit 1", columns, "diff_type", dArgs.fromRef, dArgs.toRef, tableName)
 
 	sqlCtx, err := engine.NewLocalSqlContext(ctx, se)
 	if err != nil {
-		return nil, nil, nil, "", errhand.VerboseErrorFromError(err)
+		return false, errhand.VerboseErrorFromError(err)
 	}
 
-	sch, rowIter, err := se.Query(sqlCtx, query)
+	_, rowIter, err := se.Query(sqlCtx, query)
 	if sql.ErrSyntaxError.Is(err) {
-		return nil, nil, nil, "", errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
+		return false, errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
 	} else if err != nil {
-		return nil, nil, nil, "", errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
-	}
-
-	return sqlCtx, sch, rowIter, query, nil
-}
-
-func getDataHasChanged(ctx context.Context,
-	se *engine.SqlEngine,
-	td diff.TableDelta,
-	dArgs *diffArgs,
-) (bool, errhand.VerboseError) {
-	sqlCtx, _, rowIter, _, verr := getRowDiffIter(ctx, se, td, dArgs, "", 1)
-	if verr != nil {
-		return false, verr
+		return false, errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}
 
 	defer rowIter.Close(sqlCtx)
 
-	_, err := rowIter.Next(sqlCtx)
+	_, err = rowIter.Next(sqlCtx)
 	if err == io.EOF {
 		return false, nil
 	} else if err != nil {
@@ -799,6 +774,9 @@ func diffRows(
 	dArgs *diffArgs,
 	dw diffWriter,
 ) errhand.VerboseError {
+	diffable := schema.ArePrimaryKeySetsDiffable(td.Format(), td.FromSch, td.ToSch)
+	canSqlDiff := !(td.ToSch == nil || (td.FromSch != nil && !schema.SchemasAreEqual(td.FromSch, td.ToSch)))
+
 	var toSch, fromSch sql.Schema
 	if td.FromSch != nil {
 		pkSch, err := sqlutil.FromDoltSchema(td.FromName, td.FromSch)
@@ -807,7 +785,6 @@ func diffRows(
 		}
 		fromSch = pkSch.Schema
 	}
-
 	if td.ToSch != nil {
 		pkSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
 		if err != nil {
@@ -815,13 +792,30 @@ func diffRows(
 		}
 		toSch = pkSch.Schema
 	}
-
 	unionSch := unionSchemas(fromSch, toSch)
-
 	// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
 	rowWriter, err := dw.RowWriter(ctx, td, unionSch)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
+	}
+
+	// can't diff
+	if !diffable {
+		// TODO: this messes up some structured output if the user didn't redirect it
+		cli.PrintErrf("Primary key sets differ between revisions for table %s, skipping data diff\n", td.ToName)
+		err := rowWriter.Close(ctx)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		return nil
+	} else if dArgs.diffOutput == SQLDiffOutput && !canSqlDiff {
+		// TODO: this is overly broad, we can absolutely do better
+		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff\n")
+		err := rowWriter.Close(ctx)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		return nil
 	}
 
 	// no data diff requested
@@ -833,25 +827,43 @@ func diffRows(
 		return nil
 	}
 
-	sqlCtx, sch, rowIter, query, verr := getRowDiffIter(ctx, se, td, dArgs, dArgs.where, dArgs.limit)
-	if verr != nil {
-		err := rowWriter.Close(ctx)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-		return verr
+	// do the data diff
+	tableName := td.ToName
+	if len(tableName) == 0 {
+		tableName = td.FromName
+	}
+
+	columns := getColumnNamesString(td.FromSch, td.ToSch)
+	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", dArgs.fromRef, dArgs.toRef, tableName)
+
+	if len(dArgs.where) > 0 {
+		query += " where " + dArgs.where
+	}
+
+	if dArgs.limit >= 0 {
+		query += " limit " + strconv.Itoa(dArgs.limit)
+	}
+
+	sqlCtx, err := engine.NewLocalSqlContext(ctx, se)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	sch, rowIter, err := se.Query(sqlCtx, query)
+	if sql.ErrSyntaxError.Is(err) {
+		return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
+	} else if err != nil {
+		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}
 
 	defer rowIter.Close(sqlCtx)
 	defer rowWriter.Close(ctx)
-
 	var modifiedColNames map[string]bool
 	if dArgs.skinny {
 		modifiedColNames, err = getModifiedCols(sqlCtx, rowIter, unionSch, sch)
 		if err != nil {
 			return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 		}
-
 		// instantiate a new schema that only contains the columns with changes
 		var filteredUnionSch sql.Schema
 		for _, s := range unionSch {
@@ -861,14 +873,12 @@ func diffRows(
 				}
 			}
 		}
-
 		// instantiate a new RowWriter with the new schema that only contains the columns with changes
 		rowWriter, err = dw.RowWriter(ctx, td, filteredUnionSch)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
 		defer rowWriter.Close(ctx)
-
 		// reset the row iterator
 		err = rowIter.Close(sqlCtx)
 		if err != nil {
@@ -882,12 +892,10 @@ func diffRows(
 			return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 		}
 	}
-
 	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, rowWriter, modifiedColNames, dArgs)
 	if err != nil {
 		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}
-
 	return nil
 }
 
