@@ -20,51 +20,51 @@ import (
 	flatbuffers "github.com/google/flatbuffers/go"
 )
 
-type StoreRoot struct {
+type StashList struct {
 	_tab flatbuffers.Table
 }
 
-func InitStoreRootRoot(o *StoreRoot, buf []byte, offset flatbuffers.UOffsetT) error {
+func InitStashListRoot(o *StashList, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
 	o.Init(buf, n+offset)
-	if StoreRootNumFields < o.Table().NumFields() {
+	if StashListNumFields < o.Table().NumFields() {
 		return flatbuffers.ErrTableHasUnknownFields
 	}
 	return nil
 }
 
-func TryGetRootAsStoreRoot(buf []byte, offset flatbuffers.UOffsetT) (*StoreRoot, error) {
-	x := &StoreRoot{}
-	return x, InitStoreRootRoot(x, buf, offset)
+func TryGetRootAsStashList(buf []byte, offset flatbuffers.UOffsetT) (*StashList, error) {
+	x := &StashList{}
+	return x, InitStashListRoot(x, buf, offset)
 }
 
-func GetRootAsStoreRoot(buf []byte, offset flatbuffers.UOffsetT) *StoreRoot {
-	x := &StoreRoot{}
-	InitStoreRootRoot(x, buf, offset)
+func GetRootAsStashList(buf []byte, offset flatbuffers.UOffsetT) *StashList {
+	x := &StashList{}
+	InitStashListRoot(x, buf, offset)
 	return x
 }
 
-func TryGetSizePrefixedRootAsStoreRoot(buf []byte, offset flatbuffers.UOffsetT) (*StoreRoot, error) {
-	x := &StoreRoot{}
-	return x, InitStoreRootRoot(x, buf, offset+flatbuffers.SizeUint32)
+func TryGetSizePrefixedRootAsStashList(buf []byte, offset flatbuffers.UOffsetT) (*StashList, error) {
+	x := &StashList{}
+	return x, InitStashListRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsStoreRoot(buf []byte, offset flatbuffers.UOffsetT) *StoreRoot {
-	x := &StoreRoot{}
-	InitStoreRootRoot(x, buf, offset+flatbuffers.SizeUint32)
+func GetSizePrefixedRootAsStashList(buf []byte, offset flatbuffers.UOffsetT) *StashList {
+	x := &StashList{}
+	InitStashListRoot(x, buf, offset+flatbuffers.SizeUint32)
 	return x
 }
 
-func (rcv *StoreRoot) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *StashList) Init(buf []byte, i flatbuffers.UOffsetT) {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
 }
 
-func (rcv *StoreRoot) Table() flatbuffers.Table {
+func (rcv *StashList) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *StoreRoot) AddressMap(j int) byte {
+func (rcv *StashList) AddressMap(j int) byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -73,7 +73,7 @@ func (rcv *StoreRoot) AddressMap(j int) byte {
 	return 0
 }
 
-func (rcv *StoreRoot) AddressMapLength() int {
+func (rcv *StashList) AddressMapLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -81,7 +81,7 @@ func (rcv *StoreRoot) AddressMapLength() int {
 	return 0
 }
 
-func (rcv *StoreRoot) AddressMapBytes() []byte {
+func (rcv *StashList) AddressMapBytes() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -89,7 +89,7 @@ func (rcv *StoreRoot) AddressMapBytes() []byte {
 	return nil
 }
 
-func (rcv *StoreRoot) MutateAddressMap(j int, n byte) bool {
+func (rcv *StashList) MutateAddressMap(j int, n byte) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -98,17 +98,17 @@ func (rcv *StoreRoot) MutateAddressMap(j int, n byte) bool {
 	return false
 }
 
-const StoreRootNumFields = 1
+const StashListNumFields = 1
 
-func StoreRootStart(builder *flatbuffers.Builder) {
-	builder.StartObject(StoreRootNumFields)
+func StashListStart(builder *flatbuffers.Builder) {
+	builder.StartObject(StashListNumFields)
 }
-func StoreRootAddAddressMap(builder *flatbuffers.Builder, addressMap flatbuffers.UOffsetT) {
+func StashListAddAddressMap(builder *flatbuffers.Builder, addressMap flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(addressMap), 0)
 }
-func StoreRootStartAddressMapVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+func StashListStartAddressMapVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
 }
-func StoreRootEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+func StashListEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
