@@ -184,9 +184,7 @@ func processIndexRecords(ctx context.Context, r io.ReadSeeker, sz int64, cb func
 		prev uint64
 	)
 
-	// |rdr| can buffer all of |r|
-	rdr := bufio.NewReaderSize(r, int(sz))
-
+	rdr := bufio.NewReader(r)
 	for off < sz {
 		// peek to read next record size
 		if buf, err = rdr.Peek(uint32Size); err != nil {
@@ -194,7 +192,13 @@ func processIndexRecords(ctx context.Context, r io.ReadSeeker, sz int64, cb func
 		}
 
 		l := readUint32(buf)
-		if buf, err = rdr.Peek(int(l)); err != nil {
+		if int64(l) > sz {
+			return fmt.Errorf("invalid record size %d for index file of size %d", l, sz)
+		}
+		if len(buf) < int(l) {
+			buf = make([]byte, l)
+		}
+		if _, err = io.ReadFull(rdr, buf); err != nil {
 			break
 		}
 
@@ -215,11 +219,6 @@ func processIndexRecords(ctx context.Context, r io.ReadSeeker, sz int64, cb func
 			return err
 		}
 		prev = rec.end
-
-		// advance |rdr| state by |l| bytes
-		if _, err = io.ReadFull(rdr, buf); err != nil {
-			break
-		}
 		off += int64(len(buf))
 	}
 	if err == nil && off != sz {

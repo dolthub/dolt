@@ -255,7 +255,12 @@ func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err erro
 	if _, err = journal.ReadAt(buf, offset); err != nil {
 		return
 	}
-	buf = buf[:readUint32(buf)]
+	sz := readUint32(buf)
+	if sz > journalRecMaxSz {
+		err = fmt.Errorf("invalid root hash record size at %d", offset)
+		return
+	}
+	buf = buf[:sz]
 	if !validateIndexRecord(buf) {
 		err = fmt.Errorf("failed to validate root hash record at %d", offset)
 		return

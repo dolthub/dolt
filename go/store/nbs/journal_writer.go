@@ -177,7 +177,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 		err = processIndexRecords(ctx, wr.index, info.Size(), func(o int64, r indexRec) (err error) {
 			switch r.kind {
 			case tableIndexRecKind:
-				// |r.stop| is expected to point to a root hash record in |wr.journal|
+				// |r.end| is expected to point to a root hash record in |wr.journal|
 				// containing a hash equal to |r.lastRoot|, validate this here
 				var h hash.Hash
 				if h, err = peekRootHashAt(wr.journal, int64(r.end)); err != nil {
