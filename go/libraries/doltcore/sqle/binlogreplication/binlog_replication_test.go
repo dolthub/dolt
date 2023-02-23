@@ -592,7 +592,6 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 		fmt.Sprintf("--port=%v", mySqlPort),
 		"--server-id=11223344",
 		fmt.Sprintf("--socket=mysql-%v.sock", mySqlPort),
-		"--binlog-checksum=NONE",
 		"--general_log_file="+dir+"general_log",
 		"--log-bin="+dir+"log_bin",
 		"--slow_query_log_file="+dir+"slow_query_log",
