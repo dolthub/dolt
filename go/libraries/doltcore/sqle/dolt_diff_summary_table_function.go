@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
@@ -251,24 +252,28 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		return nil, err
 	}
 
-	// If tableNameExpr defined, return a single table diff stat result
+	// If tableNameExpr defined, return a single table diff summary result
 	if ds.tableNameExpr != nil {
 		delta := findMatchingDelta(deltas, tableName)
 
-		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails)
+		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, true)
 		if err != nil {
 			return nil, err
 		}
+
 		summs := []*diff.TableDeltaSummary{}
 		if summ != nil {
+			// Old name of renamed table can be matched, use provided name in result
+			summ.TableName = tableName
 			summs = []*diff.TableDeltaSummary{summ}
 		}
+
 		return NewDiffSummaryTableFunctionRowIter(summs), nil
 	}
 
 	var diffSummaries []*diff.TableDeltaSummary
 	for _, delta := range deltas {
-		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails)
+		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, false)
 		if err != nil {
 			return nil, err
 		}
@@ -280,8 +285,17 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	return NewDiffSummaryTableFunctionRowIter(diffSummaries), nil
 }
 
-func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb SqlDatabase, fromDetails, toDetails *refDetails) (*diff.TableDeltaSummary, error) {
+func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb SqlDatabase, fromDetails, toDetails *refDetails, shouldErrorOnPKChange bool) (*diff.TableDeltaSummary, error) {
 	if delta.FromTable == nil && delta.ToTable == nil {
+		return nil, nil
+	}
+
+	if !schema.ArePrimaryKeySetsDiffable(delta.Format(), delta.FromSch, delta.ToSch) {
+		if shouldErrorOnPKChange {
+			return nil, fmt.Errorf("failed to compute diff summary for table %s: %w", delta.CurName(), diff.ErrPrimaryKeySetChanged)
+		}
+
+		ctx.Warn(dtables.PrimaryKeyChangeWarningCode, fmt.Sprintf(dtables.PrimaryKeyChangeWarning, fromDetails.hashStr, toDetails.hashStr))
 		return nil, nil
 	}
 
