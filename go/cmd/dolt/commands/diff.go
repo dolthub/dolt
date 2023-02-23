@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	textdiff "github.com/andreyvit/diff"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -293,14 +294,14 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 	}
 
 	dArgs.fromRoot = stagedRoot
-	dArgs.fromRef = "STAGED"
+	dArgs.fromRef = doltdb.Staged
 	dArgs.toRoot = workingRoot
-	dArgs.toRef = "WORKING"
+	dArgs.toRef = doltdb.Working
 	if isCached {
 		dArgs.fromRoot = headRoot
 		dArgs.fromRef = "HEAD"
 		dArgs.toRoot = stagedRoot
-		dArgs.toRef = "STAGED"
+		dArgs.toRef = doltdb.Staged
 	}
 
 	if len(args) == 0 {
@@ -526,9 +527,20 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 	}
 
 	for _, td := range tableDeltas {
-		verr := diffUserTable(sqlCtx, td, sqlEng, dArgs, dw)
-		if verr != nil {
-			return verr
+		if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
+			continue
+		}
+		if strings.ToLower(td.ToName) != doltdb.SchemasTableName {
+			verr := diffUserTable(sqlCtx, td, sqlEng, dArgs, dw)
+			if verr != nil {
+				return verr
+			}
+		} else {
+			// dolt_schemas table is treated as a special case. diff the rows of the table, and print fragments as DDL
+			verr := diffDoltSchemasTable(sqlCtx, td, sqlEng, dArgs, dw)
+			if verr != nil {
+				return verr
+			}
 		}
 	}
 
@@ -547,10 +559,6 @@ func diffUserTable(
 	dArgs *diffArgs,
 	dw diffWriter,
 ) errhand.VerboseError {
-	if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
-		return nil
-	}
-
 	fromTable := td.FromTable
 	toTable := td.ToTable
 
@@ -588,6 +596,50 @@ func diffUserTable(
 	verr := diffRows(ctx, sqlEng, td, dArgs, dw)
 	if verr != nil {
 		return verr
+	}
+
+	return nil
+}
+
+func diffDoltSchemasTable(
+	sqlCtx *sql.Context,
+	td diff.TableDelta,
+	sqlEng *engine.SqlEngine,
+	dArgs *diffArgs,
+	dw diffWriter,
+) errhand.VerboseError {
+	err := dw.BeginTable(sqlCtx, td)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	query := fmt.Sprintf("select from_fragment,to_fragment from dolt_diff('%s','%s','%s')", dArgs.fromRef, dArgs.toRef, doltdb.SchemasTableName)
+
+	_, rowIter, err := sqlEng.Query(sqlCtx, query)
+	if err != nil {
+		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
+	}
+
+	defer rowIter.Close(sqlCtx)
+	for {
+		r, err := rowIter.Next(sqlCtx)
+		if err == io.EOF {
+			return nil
+		} else if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+
+		from := ""
+		if r[0] != nil {
+			from = fmt.Sprintf("%v;", r[0])
+		}
+		to := ""
+		if r[1] != nil {
+			to = fmt.Sprintf("%v;", r[1])
+		}
+		if from != to {
+			cli.Println(textdiff.LineDiff(from, to))
+		}
 	}
 
 	return nil
