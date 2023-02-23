@@ -320,10 +320,7 @@ func (dArgs *diffArgs) getDiffArgs(ctx *sql.Context, dbData env.DbData, doltDB *
 	}
 	args := apr.Args
 
-	fromRoot, ok, err := actions.MaybeResolve(ctx, dbData.Rsr, doltDB, args[0])
-	if err != nil {
-		return nil, err
-	}
+	fromRoot, ok := actions.MaybeResolve(ctx, dbData.Rsr, doltDB, args[0])
 	if !ok {
 		// `dolt diff [...tables]`
 		return args, nil
@@ -337,10 +334,7 @@ func (dArgs *diffArgs) getDiffArgs(ctx *sql.Context, dbData env.DbData, doltDB *
 		return args, nil
 	}
 
-	toRoot, ok, err := actions.MaybeResolve(ctx, dbData.Rsr, doltDB, args[1])
-	if err != nil {
-		return nil, err
-	}
+	toRoot, ok := actions.MaybeResolve(ctx, dbData.Rsr, doltDB, args[1])
 	if !ok {
 		return args[1:], nil
 	}

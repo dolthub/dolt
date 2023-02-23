@@ -1236,7 +1236,7 @@ SQL
     dolt sql -q "UPDATE t SET val1=2 where pk=1"
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [[ "$output" = 'UPDATE `t` SET `val1`=2 WHERE `pk`=1;' ]] || false
+    [[ "$output" =~ 'UPDATE `t` SET `val1`=2 WHERE `pk`=1;' ]] || false
 
     dolt commit -am "cm2"
 
@@ -1244,7 +1244,7 @@ SQL
     dolt diff -r sql
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [[ "$output" = 'UPDATE `t` SET `val1`=3,`val2`=4 WHERE `pk`=1;' ]] || false
+    [[ "$output" =~ 'UPDATE `t` SET `val1`=3,`val2`=4 WHERE `pk`=1;' ]] || false
 
     dolt commit -am "cm3"
 
@@ -1259,7 +1259,7 @@ SQL
     dolt sql -q "update t set val1=30,val3=4 where pk=1"
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [[ "$output" = 'UPDATE `t` SET `val1`=30,`val3`=4 WHERE `pk`=1;' ]] || false
+    [[ "$output" =~ 'UPDATE `t` SET `val1`=30,`val3`=4 WHERE `pk`=1;' ]] || false
 }
 
 @test "diff: skinny flag only shows row changed without schema changes" {

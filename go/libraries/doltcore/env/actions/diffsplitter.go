@@ -165,22 +165,23 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (RowDiff, RowDiff, error)
 	return oldRow, newRow, nil
 }
 
-func MaybeResolve(ctx context.Context, rsr env.RepoStateReader, doltDB *doltdb.DoltDB, spec string) (*doltdb.RootValue, bool, error) {
+// todo: distinguish between non-existent CommitSpec and other errors, don't assume non-existent
+func MaybeResolve(ctx context.Context, rsr env.RepoStateReader, doltDB *doltdb.DoltDB, spec string) (*doltdb.RootValue, bool) {
 	cs, err := doltdb.NewCommitSpec(spec)
 	if err != nil {
 		// it's non-existent CommitSpec
-		return nil, false, nil
+		return nil, false
 	}
 
 	cm, err := doltDB.Resolve(ctx, cs, rsr.CWBHeadRef())
 	if err != nil {
-		return nil, false, err
+		return nil, false
 	}
 
 	root, err := cm.GetRootValue(ctx)
 	if err != nil {
-		return nil, false, err
+		return nil, false
 	}
 
-	return root, true, nil
+	return root, true
 }

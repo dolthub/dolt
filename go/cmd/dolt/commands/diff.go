@@ -313,11 +313,7 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 	}
 
 	// treat the first arg as a ref spec
-	fromRoot, ok, err := actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, args[0])
-	if err != nil {
-		return nil, err
-	}
-
+	fromRoot, ok := actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, args[0])
 	// if it doesn't resolve, treat it as a table name
 	if !ok {
 		// `dolt diff table`
@@ -341,11 +337,7 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 		return nil, nil
 	}
 
-	toRoot, ok, err := actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, args[1])
-	if err != nil {
-		return nil, err
-	}
-
+	toRoot, ok := actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, args[1])
 	if !ok {
 		// `dolt diff from_commit [...tables]`
 		if useMergeBase {
@@ -374,15 +366,12 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 // applyMergeBase applies the merge base of two revisions to the |from| root
 // values.
 func (dArgs *diffArgs) applyMergeBase(ctx context.Context, dEnv *env.DoltEnv, leftStr, rightStr string) error {
-	mergeBaseStr, verr := getMergeBaseFromStrings(ctx, dEnv, leftStr, rightStr)
-	if verr != nil {
-		return verr
-	}
-
-	fromRoot, ok, err := actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, mergeBaseStr)
+	mergeBaseStr, err := getMergeBaseFromStrings(ctx, dEnv, leftStr, rightStr)
 	if err != nil {
 		return err
 	}
+
+	fromRoot, ok := actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, mergeBaseStr)
 	if !ok {
 		return fmt.Errorf("merge base invalid %s", mergeBaseStr)
 	}
@@ -401,7 +390,6 @@ func (dArgs *diffArgs) applyDotRevisions(ctx context.Context, dEnv *env.DoltEnv,
 		refs := strings.Split(args[0], "...")
 		var toRoot *doltdb.RootValue
 		ok := true
-		var err error
 
 		if len(refs[0]) > 0 {
 			right := refs[1]
@@ -417,9 +405,7 @@ func (dArgs *diffArgs) applyDotRevisions(ctx context.Context, dEnv *env.DoltEnv,
 		}
 
 		if len(refs[1]) > 0 {
-			if toRoot, ok, err = actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, refs[1]); err != nil {
-				return err
-			} else if !ok {
+			if toRoot, ok = actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, refs[1]); !ok {
 				return fmt.Errorf("to ref in three dot diff must be valid ref: %s", refs[1])
 			}
 			dArgs.toRoot = toRoot
@@ -435,12 +421,9 @@ func (dArgs *diffArgs) applyDotRevisions(ctx context.Context, dEnv *env.DoltEnv,
 		var fromRoot *doltdb.RootValue
 		var toRoot *doltdb.RootValue
 		ok := true
-		var err error
 
 		if len(refs[0]) > 0 {
-			if fromRoot, ok, err = actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, refs[0]); err != nil {
-				return err
-			} else if !ok {
+			if fromRoot, ok = actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, refs[0]); !ok {
 				return fmt.Errorf("from ref in two dot diff must be valid ref: %s", refs[0])
 			}
 			dArgs.fromRoot = fromRoot
@@ -448,9 +431,7 @@ func (dArgs *diffArgs) applyDotRevisions(ctx context.Context, dEnv *env.DoltEnv,
 		}
 
 		if len(refs[1]) > 0 {
-			if toRoot, ok, err = actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, refs[1]); err != nil {
-				return err
-			} else if !ok {
+			if toRoot, ok = actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, refs[1]); !ok {
 				return fmt.Errorf("to ref in two dot diff must be valid ref: %s", refs[1])
 			}
 			dArgs.toRoot = toRoot
