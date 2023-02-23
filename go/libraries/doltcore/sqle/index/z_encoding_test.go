@@ -15,6 +15,7 @@
 package index
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"math"
@@ -112,159 +113,126 @@ func TestLexFloat(t *testing.T) {
 	})
 }
 
-func TestZValue(t *testing.T) {
+func TestZValues(t *testing.T) {
+	tests := []struct {
+		p types.Point
+		e string
+	}{
+		{
+			p: types.Point{X: -5000, Y: -5000},
+			e: "0fff30f03f3fffffffffffffffffffff",
+		},
+		{
+			p: types.Point{X: -1, Y: -1},
+			e: "300000ffffffffffffffffffffffffff",
+		},
+		{
+			p: types.Point{X: -1, Y: 0},
+			e: "90000055555555555555555555555555",
+		},
+		{
+			p: types.Point{X: -1, Y: 1},
+			e: "9aaaaa55555555555555555555555555",
+		},
+		{
+			p: types.Point{X: 0, Y: -1},
+			e: "600000aaaaaaaaaaaaaaaaaaaaaaaaaa",
+		},
+		{
+			p: types.Point{X: 1, Y: -1},
+			e: "655555aaaaaaaaaaaaaaaaaaaaaaaaaa",
+		},
+		{
+			p: types.Point{X: 0, Y: 0},
+			e: "c0000000000000000000000000000000",
+		},
+		{
+			p: types.Point{X: 1, Y: 0},
+			e: "c5555500000000000000000000000000",
+		},
+		{
+			p: types.Point{X: 0, Y: 1},
+			e: "caaaaa00000000000000000000000000",
+		},
+		{
+			p: types.Point{X: 1, Y: 1},
+			e: "cfffff00000000000000000000000000",
+		},
+		{
+			p: types.Point{X: 2, Y: 2},
+			e: "f0000000000000000000000000000000",
+		},
+		{
+			p: types.Point{X: 50000, Y: 50000},
+			e: "f000fcc03ccc00000000000000000000",
+		},
+	}
+
 	t.Run("test z-values", func(t *testing.T) {
-		z := ZValue(types.Point{X: -5000, Y: -5000})
-		assert.Equal(t, [2]uint64{0x0fff30f03f3fffff, 0xffffffffffffffff}, z)
-
-		z = ZValue(types.Point{X: -1, Y: -1})
-		assert.Equal(t, [2]uint64{0x300000ffffffffff, 0xffffffffffffffff}, z)
-
-		z = ZValue(types.Point{X: -1, Y: 0})
-		assert.Equal(t, [2]uint64{0x9000005555555555, 0x5555555555555555}, z)
-
-		z = ZValue(types.Point{X: -1, Y: 1})
-		assert.Equal(t, [2]uint64{0x9aaaaa5555555555, 0x5555555555555555}, z)
-
-		z = ZValue(types.Point{X: 0, Y: -1})
-		assert.Equal(t, [2]uint64{0x600000aaaaaaaaaa, 0xaaaaaaaaaaaaaaaa}, z)
-
-		z = ZValue(types.Point{X: 1, Y: -1})
-		assert.Equal(t, [2]uint64{0x655555aaaaaaaaaa, 0xaaaaaaaaaaaaaaaa}, z)
-
-		z = ZValue(types.Point{X: 0, Y: 0})
-		assert.Equal(t, [2]uint64{0xc000000000000000, 0x000000000000000}, z)
-
-		z = ZValue(types.Point{X: 1, Y: 0})
-		assert.Equal(t, [2]uint64{0xc555550000000000, 0x000000000000000}, z)
-
-		z = ZValue(types.Point{X: 0, Y: 1})
-		assert.Equal(t, [2]uint64{0xcaaaaa0000000000, 0x000000000000000}, z)
-
-		z = ZValue(types.Point{X: 1, Y: 1})
-		assert.Equal(t, [2]uint64{0xcfffff0000000000, 0x000000000000000}, z)
-
-		z = ZValue(types.Point{X: 2, Y: 2})
-		assert.Equal(t, [2]uint64{0xf000000000000000, 0x000000000000000}, z)
-
-		z = ZValue(types.Point{X: 50000, Y: 50000})
-		assert.Equal(t, [2]uint64{0xf000fcc03ccc0000, 0x000000000000000}, z)
+		for _, test := range tests {
+			z := ZValue(test.p)
+			assert.Equal(t, test.e, fmt.Sprintf("%016x%016x", z[0], z[1]))
+		}
 	})
 
 	t.Run("test un-z-values", func(t *testing.T) {
-		z := [2]uint64{0xc000000000000000, 0x000000000000000}
-		assert.Equal(t, types.Point{X: 0, Y: 0}, UnZValue(z))
-		z = [2]uint64{0xdaaaaa0000000000, 0x000000000000000}
-		assert.Equal(t, types.Point{X: 2, Y: 1}, UnZValue(z))
+		for _, test := range tests {
+			v, _ := hex.DecodeString(test.e)
+			z := [2]uint64{}
+			z[0] = binary.BigEndian.Uint64(v[:8])
+			z[1] = binary.BigEndian.Uint64(v[8:])
+			assert.Equal(t, test.p, UnZValue(z))
+		}
 	})
 
 	t.Run("test sorting points by z-value", func(t *testing.T) {
-		sortedPoints := []types.Point{
-			{X: -2, Y: -2},
-			{X: -1, Y: -2},
-			{X: -2, Y: -1},
-			{X: -1, Y: -1},
-			{X: 0, Y: -2},
-			{X: 1, Y: -2},
-			{X: 2, Y: -2},
-			{X: 0, Y: -1},
-			{X: 1, Y: -1},
-			{X: 2, Y: -1},
-			{X: -2, Y: 0},
-			{X: -2, Y: 1},
-			{X: -1, Y: 0},
-			{X: -1, Y: 1},
-			{X: -2, Y: 2},
-			{X: -1, Y: 2},
-			{X: 0, Y: 0},
-			{X: 1, Y: 0},
-			{X: 0, Y: 1},
-			{X: 1, Y: 1},
-			{X: 2, Y: 0},
-			{X: 2, Y: 1},
-			{X: 0, Y: 2},
-			{X: 1, Y: 2},
-			{X: 2, Y: 2},
+		sortedPoints := []types.GeometryValue{
+			types.Point{X: -5000, Y: -5000},
+			types.Point{X: -1, Y: -1},
+			types.Point{X: 1, Y: -1},
+			types.Point{X: -1, Y: 0},
+			types.Point{X: -1, Y: 1},
+			types.Point{X: 0, Y: 0},
+			types.Point{X: 1, Y: 0},
+			types.Point{X: 1, Y: 1},
+			types.Point{X: 2, Y: 2},
+			types.Point{X: 100, Y: 100},
 		}
-		randPoints := append([]types.Point{}, sortedPoints...)
+		randPoints := append([]types.GeometryValue{}, sortedPoints...)
 		rand.Shuffle(len(randPoints), func(i, j int) {
 			randPoints[i], randPoints[j] = randPoints[j], randPoints[i]
 		})
-		assert.Equal(t, sortedPoints, ZSort(randPoints))
+		assert.Equal(t, sortedPoints, ZCellSort(randPoints))
 	})
 }
 
-func TestZAddr(t *testing.T) {
-	t.Run("test points z-addrs", func(t *testing.T) {
+func TestZCell(t *testing.T) {
+	t.Run("test points ZCell", func(t *testing.T) {
 		p := types.Point{X: 1, Y: 2}
-		res := ZAddr(p)
+		res := ZCell(p)
 		assert.Equal(t, "00e5555500000000000000000000000000", hex.EncodeToString(res[:]))
 	})
 
-	t.Run("test linestring z-addrs", func(t *testing.T) {
+	t.Run("test linestring ZCell", func(t *testing.T) {
 		a := types.Point{X: 1, Y: 1}
 		b := types.Point{X: 2, Y: 2}
 		c := types.Point{X: 3, Y: 3}
 		l := types.LineString{Points: []types.Point{a, b, c}}
-		res := ZAddr(l)
-		assert.Equal(t, "3fcfffff00000000000000000000000000", hex.EncodeToString(res[:]))
+		res := ZCell(l)
+		assert.Equal(t, "3fc0000000000000000000000000000000", hex.EncodeToString(res[:]))
 	})
 
-	t.Run("test polygon z-addrs", func(t *testing.T) {
+	t.Run("test polygon ZCell", func(t *testing.T) {
 		a := types.Point{X: -1, Y: 1}
 		b := types.Point{X: 1, Y: 1}
 		c := types.Point{X: 1, Y: -1}
 		d := types.Point{X: -1, Y: -1}
 		l := types.LineString{Points: []types.Point{a, b, c, d, a}}
 		p := types.Polygon{Lines: []types.LineString{l}}
-		res := ZAddr(p)
-		assert.Equal(t, "40300000ffffffffffffffffffffffffff", hex.EncodeToString(res[:]))
-	})
-}
-
-func TestZSort(t *testing.T) {
-	p1 := types.LineString{Points: []types.Point{ps[24], ps[24]}}
-	p2 := types.LineString{Points: []types.Point{ps[16], ps[19]}}
-	p3 := types.LineString{Points: []types.Point{ps[0], ps[3]}}
-	p4 := types.LineString{Points: []types.Point{ps[19], ps[24]}}
-	p5 := types.LineString{Points: []types.Point{ps[3], ps[19]}}
-
-	t.Run("test z-addr p1", func(t *testing.T) {
-		z := ZAddr(p1) // bbox: (2, 2), (2, 2)
-		assert.Equal(t, "00f0000000000000000000000000000000", hex.EncodeToString(z[:]))
+		res := ZCell(p)
+		assert.Equal(t, "4000000000000000000000000000000000", hex.EncodeToString(res[:]))
 	})
 
-	t.Run("test z-addr p2", func(t *testing.T) {
-		z := ZAddr(p2) // bbox: (0, 0), (1, 1)
-		assert.Equal(t, "3ec0000000000000000000000000000000", hex.EncodeToString(z[:]))
-	})
-
-	t.Run("test z-addr p3", func(t *testing.T) {
-		z := ZAddr(p3) // bbox: (-2, -2), (-1, -1)
-		assert.Equal(t, "3f0fffffffffffffffffffffffffffffff", hex.EncodeToString(z[:]))
-	})
-
-	t.Run("test z-addr p4", func(t *testing.T) {
-		z := ZAddr(p4) // bbox: (1, 1), (2, 2)
-		assert.Equal(t, "3fcfffff00000000000000000000000000", hex.EncodeToString(z[:]))
-	})
-
-	t.Run("test z-addr p5", func(t *testing.T) {
-		z := ZAddr(p5) // bbox: (-1, -1), (1, 1)
-		assert.Equal(t, "40300000ffffffffffffffffffffffffff", hex.EncodeToString(z[:]))
-	})
-
-	t.Run("test z-addr sorting", func(t *testing.T) {
-		sortedGeoms := []types.GeometryValue{p1, p2, p3, p4, p5}
-		randomGeoms := append([]types.GeometryValue{}, sortedGeoms...)
-		rand.Shuffle(len(randomGeoms), func(i, j int) {
-			randomGeoms[i], randomGeoms[j] = randomGeoms[j], randomGeoms[i]
-		})
-		assert.Equal(t, sortedGeoms, ZAddrSort(randomGeoms))
-	})
-}
-
-func TestZCell(t *testing.T) {
 	t.Run("test low level linestring", func(t *testing.T) {
 		line := types.LineString{Points: []types.Point{
 			{X: 0, Y: 0},
@@ -283,5 +251,47 @@ func TestZCell(t *testing.T) {
 		poly := types.Polygon{Lines: []types.LineString{line}}
 		z := ZCell(poly)
 		assert.Equal(t, "4000000000000000000000000000000000", hex.EncodeToString(z[:]))
+	})
+}
+
+func TestZSort(t *testing.T) {
+	p1 := types.LineString{Points: []types.Point{ps[24], ps[24]}}
+	p2 := types.LineString{Points: []types.Point{ps[16], ps[19]}}
+	p3 := types.LineString{Points: []types.Point{ps[0], ps[3]}}
+	p4 := types.LineString{Points: []types.Point{ps[19], ps[24]}}
+	p5 := types.LineString{Points: []types.Point{ps[3], ps[19]}}
+
+	t.Run("test z-addr p1", func(t *testing.T) {
+		z := ZCell(p1) // bbox: (2, 2), (2, 2)
+		assert.Equal(t, "00f0000000000000000000000000000000", hex.EncodeToString(z[:]))
+	})
+
+	t.Run("test z-addr p2", func(t *testing.T) {
+		z := ZCell(p2) // bbox: (0, 0), (1, 1)
+		assert.Equal(t, "3ec0000000000000000000000000000000", hex.EncodeToString(z[:]))
+	})
+
+	t.Run("test z-addr p3", func(t *testing.T) {
+		z := ZCell(p3) // bbox: (-2, -2), (-1, -1)
+		assert.Equal(t, "3f00000000000000000000000000000000", hex.EncodeToString(z[:]))
+	})
+
+	t.Run("test z-addr p4", func(t *testing.T) {
+		z := ZCell(p4) // bbox: (1, 1), (2, 2)
+		assert.Equal(t, "3fc0000000000000000000000000000000", hex.EncodeToString(z[:]))
+	})
+
+	t.Run("test z-addr p5", func(t *testing.T) {
+		z := ZCell(p5) // bbox: (-1, -1), (1, 1)
+		assert.Equal(t, "4000000000000000000000000000000000", hex.EncodeToString(z[:]))
+	})
+
+	t.Run("test z-addr sorting", func(t *testing.T) {
+		sortedGeoms := []types.GeometryValue{p1, p2, p3, p4, p5}
+		randomGeoms := append([]types.GeometryValue{}, sortedGeoms...)
+		rand.Shuffle(len(randomGeoms), func(i, j int) {
+			randomGeoms[i], randomGeoms[j] = randomGeoms[j], randomGeoms[i]
+		})
+		assert.Equal(t, sortedGeoms, ZCellSort(randomGeoms))
 	})
 }

@@ -181,34 +181,10 @@ func ZCell(v types.GeometryValue) val.Cell {
 	return ZMask(level, zMin)
 }
 
-// ZAddr converts the GeometryValue into a val.Cell (level, z-value)
-func ZAddr(v types.GeometryValue) val.Cell {
-	bbox := spatial.FindBBox(v)
-	zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
-	zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
-	addr := val.Cell{}
-	binary.BigEndian.PutUint64(addr[1:], zMin[0])
-	binary.BigEndian.PutUint64(addr[9:], zMin[1])
-	if res := zMin[0] ^ zMax[0]; res != 0 {
-		addr[0] = byte(64 - bits.LeadingZeros64(res)/2)
-	} else {
-		addr[0] = byte(32 - bits.LeadingZeros64(zMin[1]^zMax[1])/2)
-	}
-	return addr
-}
-
-func ZSort(points []types.Point) []types.Point {
-	sort.Slice(points, func(i, j int) bool {
-		zi, zj := ZValue(points[i]), ZValue(points[j])
-		return zi[0] < zj[0] || (zi[0] == zj[0] && zi[1] < zi[1])
-	})
-	return points
-}
-
-// ZAddrSort sorts the geometry values based off their ZAddrs
-func ZAddrSort(geoms []types.GeometryValue) []types.GeometryValue {
+// ZCellSort sorts the geometry values based off their ZCell
+func ZCellSort(geoms []types.GeometryValue) []types.GeometryValue {
 	sort.Slice(geoms, func(i, j int) bool {
-		zi, zj := ZAddr(geoms[i]), ZAddr(geoms[j])
+		zi, zj := ZCell(geoms[i]), ZCell(geoms[j])
 		return bytes.Compare(zi[:], zj[:]) < 0
 	})
 	return geoms
