@@ -19,13 +19,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"sort"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	val2 "github.com/dolthub/dolt/go/store/val"
-	"io"
-	"sort"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
