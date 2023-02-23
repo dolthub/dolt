@@ -16,7 +16,6 @@ package index
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"sync/atomic"
@@ -943,58 +942,67 @@ func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, er
 		return nil, fmt.Errorf("spatial index bounding box using non-point type")
 	}
 
-	// TODO: definitely make this a helper method later
+	// TODO: saves a couple steps if point query, might not be worth extra code
+	if minPoint == maxPoint {
+		pRanges := make([]prolly.Range, 65)
+		zMin := ZValue(minPoint)
+		for level := byte(0); level < byte(65); level++ {
+			minCell := ZMask(level, zMin)
+			field := prolly.RangeField{
+				Exact: false,
+				SpatialPointLookup: true,
+				Lo: prolly.Bound{
+					Binding:   true,
+					Inclusive: true,
+					Value:     minCell[:],
+				},
+				Hi: prolly.Bound{
+					Binding:   true,
+					Inclusive: true,
+					Value:     minCell[:],
+				},
+			}
+			pRanges[level] = prolly.Range{
+				Fields: []prolly.RangeField{field},
+				Desc:   di.keyBld.Desc,
+			}
+		}
+		return pRanges, nil
+	}
 
-
-	// TODO: check for point lookup here
-
-	// TODO: don't interleave until the very end
-
-	pranges := make([]prolly.Range, 65)
+	var pRanges []prolly.Range
 	zMin := ZValue(minPoint)
 	zMax := ZValue(maxPoint)
-
-	// generate ranges for level 0 - 64
-	for level := byte(0); level < byte(65); level++ {
-		minVal := ZMask(level, zMin)
-		maxVal := ZMask(level, zMax)
-		min0 := binary.BigEndian.Uint64(minVal[1:])
-		min1 := binary.BigEndian.Uint64(minVal[9:])
-		max0 := binary.BigEndian.Uint64(maxVal[1:])
-		max1 := binary.BigEndian.Uint64(maxVal[9:])
-		field := prolly.RangeField{
-			Exact: false,
-			SpatialPointLookup: (min0 == max0) && (min1 == max1),
-			Lo: prolly.Bound{
-				Binding:   true,
-				Inclusive: true,
-				Value:     minVal[:],
-			},
-			Hi: prolly.Bound{
-				Binding:   true,
-				Inclusive: true,
-				Value:     maxVal[:],
-			},
-		}
-		pranges[level] = prolly.Range{
-			Fields: []prolly.RangeField{field},
-			Desc:   di.keyBld.Desc,
-
-			MinX0: min0 & 0x5555555555555555,
-			MinX1: min1 & 0x5555555555555555,
-
-			MinY0: min0 & 0xAAAAAAAAAAAAAAAA,
-			MinY1: min1 & 0xAAAAAAAAAAAAAAAA,
-
-			MaxX0: max0 & 0x5555555555555555,
-			MaxX1: max1 & 0x5555555555555555,
-
-			MaxY0: max0 & 0xAAAAAAAAAAAAAAAA,
-			MaxY1: max1 & 0xAAAAAAAAAAAAAAAA,
+	zRanges := SplitZRanges(ZRange{zMin, zMax})
+	for level := byte(0); level < 65; level++ {
+		// TODO: remerge for each level? it's possible certain ranges are the same
+		// For example, at highest level, we'll just look at origin point multiple times
+		for _, zRange := range zRanges {
+			minCell := ZMask(level, zRange[0])
+			maxCell := ZMask(level, zRange[1])
+			field := prolly.RangeField{
+				Exact: false,
+				SpatialPointLookup: minCell == maxCell,
+				Lo: prolly.Bound{
+					Binding:   true,
+					Inclusive: true,
+					Value:     minCell[:],
+				},
+				Hi: prolly.Bound{
+					Binding:   true,
+					Inclusive: true,
+					Value:     maxCell[:],
+				},
+			}
+			pRange := prolly.Range{
+				Fields: []prolly.RangeField{field},
+				Desc:   di.keyBld.Desc,
+			}
+			pRanges = append(pRanges, pRange)
 		}
 	}
 
-	return pranges, nil
+	return pRanges, nil
 }
 
 func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.NodeStore, ranges []sql.Range, tb *val.TupleBuilder) ([]prolly.Range, error) {

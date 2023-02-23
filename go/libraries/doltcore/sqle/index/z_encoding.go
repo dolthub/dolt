@@ -127,15 +127,20 @@ func UnInterleaveUint64(z uint64) (x, y uint64) {
 	return
 }
 
-// ZValue takes a Point and interleaves the bits into a [2]uint64
+// ZVal consists of uint64 x and y with bits their interleaved
+// ZVal[0] contains the upper 64 bits of x and y interleaved
+// ZVal[1] contains the lower 64 bits of x and y interleaved
+type ZVal = [2]uint64
+
+// ZValue takes a Point, Lexes the x and y values, and interleaves the bits into a [2]uint64
 // It will put the bits in this order: x_0, y_0, x_1, y_1 ... x_63, Y_63
-func ZValue(p types.Point) (z [2]uint64) {
+func ZValue(p types.Point) (z ZVal) {
 	xLex, yLex := LexFloat(p.X), LexFloat(p.Y)
 	z[0], z[1] = InterleaveUInt64(xLex>>32, yLex>>32), InterleaveUInt64(xLex&0xFFFFFFFF, yLex&0xFFFFFFFF)
 	return
 }
 
-// UnZValue takes a [2]uint64 Z-Value and converts it back to a sql.Point
+// UnZValue takes a ZVal and converts it back to a sql.Point
 func UnZValue(z [2]uint64) types.Point {
 	xl, yl := UnInterleaveUint64(z[0])
 	xr, yr := UnInterleaveUint64(z[1])
@@ -145,7 +150,7 @@ func UnZValue(z [2]uint64) types.Point {
 }
 
 // ZMask masks in pairs by shifting based off of level (shift amount)
-func ZMask(level byte, zVal [2]uint64) val.Cell {
+func ZMask(level byte, zVal ZVal) val.Cell {
 	cell := val.Cell{}
 	cell[0] = level
 	if level < 32 {
@@ -176,7 +181,7 @@ func ZCell(v types.GeometryValue) val.Cell {
 	return ZMask(level, zMin)
 }
 
-// ZAddr converts the GeometryValue into a key: (level, min_z_val)
+// ZAddr converts the GeometryValue into a val.Cell (level, z-value)
 func ZAddr(v types.GeometryValue) val.Cell {
 	bbox := spatial.FindBBox(v)
 	zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
@@ -209,117 +214,70 @@ func ZAddrSort(geoms []types.GeometryValue) []types.GeometryValue {
 	return geoms
 }
 
-// TODO: add a map cache to reduce some of the interleaving maybe?
+// ZRange is a pair of two ZVals
+// ZRange[0] is the lower bound (z-min)
+// ZRange[1] is the upper bound (z-max)
+type ZRange = [2]ZVal
 
-func UnInterleaveZValue(z ZVal) [2]uint64 {
-	x0, y0 := UnInterleaveUint64(z[0])
-	x1, y1 := UnInterleaveUint64(z[1])
-	return [2]uint64{(x0 << 32) | x1, (y0 << 32) | y1}
-}
-
-type ZVal = [2]uint64 // uint64 x and y with bits interleaved
-type ZRng = [2]ZVal   // two z-values: z-min and z-max
-
-func SplitZRanges(zrng ZRng) []ZRng {
+// SplitZRanges takes a ZRange and splits it into continuous ZRanges within the bounding box
+// A ZRange is continuous if
+// 1. it is a point (the lower and upper bounds are equal)
+// 2. the ranges are within a cell (the suffixes of the bounds range from 00...0 to 11...1)
+func SplitZRanges(zRange ZRange) []ZRange {
 	// point lookup is continuous
-	if zrng[0] == zrng[1] {
-		return []ZRng{zrng}
+	if zRange[0] == zRange[1] {
+		return []ZRange{zRange}
 	}
 
-	var preLen int // this will never be 64
-	zl, zh := zrng[0], zrng[1]
-	zrngl, zrngr := zrng, zrng
+	var prefixLength int // this will never be 64
+	zl, zh := zRange[0], zRange[1]
+	zRangeL, zRangeR := zRange, zRange
 	if zl[0] != zh[0] {
-		preLen = bits.LeadingZeros64(zl[0] ^ zh[0])
-		sufLen := 63 - preLen
-		mask := uint64(math.MaxUint64 >> preLen)
+		prefixLength = bits.LeadingZeros64(zl[0] ^ zh[0])
+		suffixLength := 63 - prefixLength
+		mask := uint64(math.MaxUint64 >> prefixLength)
 		if zl[1] == 0 && zh[1] == math.MaxUint64 && (zl[0] & mask) == 0 && (zh[0] & mask) == mask {
-			return []ZRng{zrng}
+			return []ZRange{zRange}
 		}
 
 		// upper bound for left range; set 0 fill with 1s
-		zrngl[1][0] |= 0xAAAAAAAAAAAAAAAA >> preLen       // set suffix to all 1s
-		zrngl[1][0] &= ^(1 << sufLen)                     // set first suffix bit to 0
-		zrngl[1][1] |= 0xAAAAAAAAAAAAAAAA >> (preLen % 2) // set suffix to all 1s
+		zRangeL[1][0] |= 0xAAAAAAAAAAAAAAAA >> prefixLength       // set suffix to all 1s
+		zRangeL[1][0] &= ^(1 << suffixLength)                     // set first suffix bit to 0
+		zRangeL[1][1] |= 0xAAAAAAAAAAAAAAAA >> (prefixLength % 2) // set suffix to all 1s
 
 		// lower bound for right range; set 1 fill with 0s
-		zrngr[0][0] &= 0x5555555555555555 >> preLen       // set suffix to all 0s
-		zrngr[0][0] |= 1 << sufLen                        // set first suffix bit to 1
-		zrngr[0][1] &= 0xAAAAAAAAAAAAAAAA >> (preLen % 2) // set suffix to all 0s
+		zRangeR[0][0] &= 0x5555555555555555 >> prefixLength       // set suffix to all 0s
+		zRangeR[0][0] |= 1 << suffixLength                        // set first suffix bit to 1
+		zRangeR[0][1] &= 0xAAAAAAAAAAAAAAAA >> (prefixLength % 2) // set suffix to all 0s
 
 	} else {
-		preLen = bits.LeadingZeros64(zl[1] ^ zh[1])
-		sufLen := 63 - preLen
-		mask := uint64(math.MaxUint64 >> preLen)
+		prefixLength = bits.LeadingZeros64(zl[1] ^ zh[1])
+		suffixLength := 63 - prefixLength
+		mask := uint64(math.MaxUint64 >> prefixLength)
 		if (zl[1] & mask) == 0 && (zh[1] & mask) == mask {
-			return []ZRng{zrng}
+			return []ZRange{zRange}
 		}
 
 		// upper bound for left range; set 0 fill with 1s
-		zrngl[1][1] |= 0xAAAAAAAAAAAAAAAA >> preLen // set suffix to all 1s
-		zrngl[1][1] &= ^(1 << sufLen)               // set at prefix to 0
+		zRangeL[1][1] |= 0xAAAAAAAAAAAAAAAA >> prefixLength // set suffix to all 1s
+		zRangeL[1][1] &= ^(1 << suffixLength)               // set at prefix to 0
 
 		// lower bound for right range; set 1 fill with 0s
-		zrngr[0][1] &= 0x5555555555555555 >> preLen // set suffix to all 0s
-		zrngr[0][1] |= 1 << sufLen                  // set at prefix to 1
+		zRangeR[0][1] &= 0x5555555555555555 >> prefixLength // set suffix to all 0s
+		zRangeR[0][1] |= 1 << suffixLength                  // set at prefix to 1
 	}
 
 	// recurse on left and right ranges
-	zrngsl := SplitZRanges(zrngl)
-	zrngsr := SplitZRanges(zrngr)
+	zRangesL := SplitZRanges(zRangeL)
+	zRangesR := SplitZRanges(zRangeR)
 
 	// if last range's upperbound in left is next to first range's lowerbound in right, they can be merged
-	rngl, rngr := zrngsl[len(zrngsl)-1], zrngsr[0]
-	if rngr[0][0] == rngl[1][0] && rngr[0][1] - rngl[1][1] == 1 {
-		zrngsl[len(zrngsl)-1][1] = rngr[1] // replace the left's last upperbound with right's first upperbound
-		zrngsr = zrngsr[1:]                // drop right's first range
+	lastZRangeL, firstZRangeR := zRangesL[len(zRangesL)-1], zRangesR[0]
+	if firstZRangeR[0][0] == lastZRangeL[1][0] && firstZRangeR[0][1] - lastZRangeL[1][1] == 1 {
+		zRangesL[len(zRangesL)-1][1] = firstZRangeR[1] // replace the left's last upperbound with right's first upperbound
+		zRangesR = zRangesR[1:]                        // drop right's first range
 	}
 
 	// merge ranges
-	return append(zrngsl, zrngsr...)
-}
-
-
-// ZRanges takes bbox (2 types.Points) and returns ranges strictly within the bbox
-func ZRanges(minPoint, maxPoint types.Point) [][2]val.Cell {
-	if minPoint == maxPoint {
-		return [][2]val.Cell{{ZCell(minPoint), ZCell(maxPoint)}}
-	}
-
-	xl, yl := LexFloat(minPoint.X), LexFloat(minPoint.Y)
-	xh, yh := LexFloat(maxPoint.X), LexFloat(maxPoint.Y)
-
-	var zl, zh [2]uint64
-	zl[0], zl[1] = InterleaveUInt64(xl>>32, yl>>32), InterleaveUInt64(xl&0xFFFFFFFF, yl&0xFFFFFFFF)
-	zh[0], zh[1] = InterleaveUInt64(xh>>32, yh>>32), InterleaveUInt64(xh&0xFFFFFFFF, yh&0xFFFFFFFF)
-
-
-	// point lookup is continuous
-	if xl == xh && yl == yh {
-		return [][2]val.Cell{{ZCell(minPoint), ZCell(maxPoint)}}
-	}
-
-	// will never have 64 leading zeros
-	if zl[0] != zh[0] {
-		if zl[1] != 0 || zh[1] != math.MaxUint64 {
-			// not continuous
-		}
-		mask := uint64(math.MaxUint64 >> bits.LeadingZeros64(zl[0] ^ zh[0]))
-		if (zl[0] & mask) != 0 || (zh[0] & mask) != mask {
-			// not continuous
-		}
-		// continuous
-		return [][2]val.Cell{{ZCell(minPoint), ZCell(maxPoint)}}
-	} else {
-		mask := uint64(math.MaxUint64 >> bits.LeadingZeros64(zl[1] ^ zh[1]))
-		if (zl[1] & mask) != 0 || (zh[1] & mask) != mask {
-			// not continuous
-		}
-		// continuous
-		return [][2]val.Cell{{ZCell(minPoint), ZCell(maxPoint)}}
-	}
-
-	// split on x or y?
-
-	return nil
+	return append(zRangesL, zRangesR...)
 }
