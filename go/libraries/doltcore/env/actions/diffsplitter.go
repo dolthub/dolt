@@ -15,12 +15,15 @@
 package actions
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
 type DiffSplitter struct {
@@ -160,4 +163,24 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (RowDiff, RowDiff, error)
 	}
 
 	return oldRow, newRow, nil
+}
+
+func MaybeResolve(ctx context.Context, rsr env.RepoStateReader, doltDB *doltdb.DoltDB, spec string) (*doltdb.RootValue, bool, error) {
+	cs, err := doltdb.NewCommitSpec(spec)
+	if err != nil {
+		// it's non-existent CommitSpec
+		return nil, false, nil
+	}
+
+	cm, err := doltDB.Resolve(ctx, cs, rsr.CWBHeadRef())
+	if err != nil {
+		return nil, false, err
+	}
+
+	root, err := cm.GetRootValue(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return root, true, nil
 }

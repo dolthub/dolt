@@ -632,3 +632,30 @@ func isPrimaryKeyIndex(index schema.Index, sch schema.Schema) bool {
 
 	return true
 }
+
+func GetDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowDiffType ChangeType, colDiffTypes []ChangeType) (string, error) {
+	if len(row) != len(colDiffTypes) {
+		return "", fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
+	}
+
+	switch rowDiffType {
+	case Added:
+		return sqlfmt.SqlRowAsInsertStmt(row, tableName, sch)
+	case Removed:
+		return sqlfmt.SqlRowAsDeleteStmt(row, tableName, sch, 0)
+	case ModifiedNew:
+		updatedCols := set.NewEmptyStrSet()
+		for i, diffType := range colDiffTypes {
+			if diffType != None {
+				updatedCols.Add(sch.GetAllCols().GetByIndex(i).Name)
+			}
+		}
+
+		return sqlfmt.SqlRowAsUpdateStmt(row, tableName, sch, updatedCols)
+	case ModifiedOld:
+		// do nothing, we only issue UPDATE for ModifiedNew
+		return "", nil
+	default:
+		return "", fmt.Errorf("unexpected row diff type: %v", rowDiffType)
+	}
+}

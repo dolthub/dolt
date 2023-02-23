@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/vitess/go/mysql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -34,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -107,7 +107,7 @@ func doDoltPatch(ctx *sql.Context, args []string) ([]string, error) {
 		}
 		finalRes = append(finalRes, ddlStatements...)
 
-		if canGetDataDiff(td) {
+		if canGetDataDiff(ctx, td) {
 			res, err := diffUserTable(ctx, dbData, td, fromRef, toRef)
 			if err != nil {
 				return nil, err
@@ -128,87 +128,70 @@ func getSchemaDiff(ctx *sql.Context, toRoot *doltdb.RootValue, td diff.TableDelt
 	return diff.SqlSchemaDiff(ctx, td, toSchemas)
 }
 
-// TODO: maybe add warning to let user know why no data diff was returned
-func canGetDataDiff(td diff.TableDelta) bool {
+func canGetDataDiff(ctx *sql.Context, td diff.TableDelta) bool {
 	if td.IsDrop() {
 		return false // don't output DELETE FROM statements after DROP TABLE
 	}
 	// not diffable
 	if !schema.ArePrimaryKeySetsDiffable(td.Format(), td.FromSch, td.ToSch) {
-		// cli.PrintErrf("Primary key sets differ between revisions for table %s, skipping data diff\n", td.ToName)
+		ctx.Session.Warn(&sql.Warning{
+			Level:   "Warning",
+			Code:    mysql.ERNotSupportedYet,
+			Message: fmt.Sprintf("Primary key sets differ between revisions for table %s, skipping data diff", td.ToName),
+		})
 		return false
 	}
 	// cannot sql diff
 	if td.ToSch == nil || (td.FromSch != nil && !schema.SchemasAreEqual(td.FromSch, td.ToSch)) {
-		// TODO: this is overly broad, we can absolutely do better
-		//fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff\n")
+		// TODO(8/24/22 Zach): this is overly broad, we can absolutely do better
+		ctx.Session.Warn(&sql.Warning{
+			Level:   "Warning",
+			Code:    mysql.ERNotSupportedYet,
+			Message: fmt.Sprintf("Incompatible schema change, skipping data diff for table %s", td.ToName),
+		})
 		return false
 	}
 	return true
 }
 
 func diffUserTable(ctx *sql.Context, dbData env.DbData, td diff.TableDelta, fromRef, toRef string) ([]string, error) {
-	// ToTable cannot be nil at this point
-	var targetName = td.ToName
-	var targetSch = td.ToSch
-	var format = td.ToTable.Format()
+	// ToTable is used as target table as cannot be nil at this point
+	diffSch, projections, ri, err := getDiffQuery(ctx, dbData, td, fromRef, toRef)
+	if err != nil {
+		return nil, err
+	}
+
+	targetPkSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
+	if err != nil {
+		return nil, err
+	}
+
+	return getDiffResults(ctx, diffSch, targetPkSch.Schema, projections, ri, td.ToName, td.ToSch)
+}
+
+// getDiffQuery returns diff schema for specified columns and array of sql.Expression as projection to be used
+// on diff table function row iter. This function attempts to imitate running a query
+// fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columnsWithDiff, "diff_type", fromRef, toRef, tableName)
+// on sql engine, which returns the schema and rowIter of the final data diff result.
+func getDiffQuery(ctx *sql.Context, dbData env.DbData, td diff.TableDelta, fromRef, toRef string) (sql.Schema, []sql.Expression, sql.RowIter, error) {
+	diffTableSchema, j, err := dtables.GetDiffTableSchemaAndJoiner(td.ToTable.Format(), td.FromSch, td.ToSch)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	diffPKSch, err := sqlutil.FromDoltSchema("", diffTableSchema)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	columnsWithDiff := getColumnNamesWithDiff(td.FromSch, td.ToSch)
+	diffSqlSch, projections := getDiffSqlSchema(diffPKSch.Schema, columnsWithDiff)
 
-	diffTableSchema, j, err := dtables.GetDiffTableSchemaAndJoiner(format, td.FromSch, td.ToSch)
-	if err != nil {
-		return nil, err
-	}
-	diffSqlSch, err := sqlutil.FromDoltSchema("", diffTableSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	diffQuerySch, projections := getDiffSch(diffSqlSch.Schema, columnsWithDiff)
-	// This part is equivalent of running this query:
-	// fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columnsWithDiff, "diff_type", fromRef, toRef, tableName)
-	// TODO: using arbitrary time since we do not care about the commit time
+	// using arbitrary time since we do not care about the commit time in the result
 	now := time.Now()
 	dp := dtables.NewDiffPartition(td.ToTable, td.FromTable, toRef, fromRef, (*types.Timestamp)(&now), (*types.Timestamp)(&now), td.ToSch, td.FromSch)
 	ri := dtables.NewDiffTableFunctionRowIterForSinglePartition(*dp, dbData.Ddb, j)
 
-	targetPkSch, err := sqlutil.FromDoltSchema(targetName, targetSch)
-	if err != nil {
-		return nil, err
-	}
-
-	return getDiffResults(ctx, diffQuerySch, targetPkSch.Schema, ri, targetName, targetSch, projections)
-}
-
-func getDiffSch(diffTableSch sql.Schema, columns []string) (sql.Schema, []sql.Expression) {
-	type column struct {
-		sqlCol *sql.Column
-		idx    int
-	}
-
-	columns = append(columns, "diff_type")
-	colMap := make(map[string]*column)
-	for _, c := range columns {
-		colMap[c] = nil
-	}
-
-	var cols = make([]*sql.Column, len(columns))
-	var getFieldCols = make([]sql.Expression, len(columns))
-
-	for i, c := range diffTableSch {
-		if _, ok := colMap[c.Name]; ok {
-			colMap[c.Name] = &column{c, i}
-		}
-	}
-
-	// TODO: given diff sch contains to, from ordering, whereas columns names are ordered from, to
-	for i, c := range columns {
-		col := colMap[c].sqlCol
-		cols[i] = col
-		getFieldCols[i] = expression.NewGetField(colMap[c].idx, col.Type, col.Name, col.Nullable)
-	}
-
-	return cols, getFieldCols
+	return diffSqlSch, projections, ri, nil
 }
 
 func getColumnNamesWithDiff(fromSch, toSch schema.Schema) []string {
@@ -229,7 +212,39 @@ func getColumnNamesWithDiff(fromSch, toSch schema.Schema) []string {
 	return cols
 }
 
-func getDiffResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema, iter sql.RowIter, tn string, tsch schema.Schema, projections []sql.Expression) ([]string, error) {
+// getDiffSqlSchema returns the schema of columns with data diff and "diff_type". This is used for diff splitter.
+// When extracting the diff schema, the ordering must follow the ordering of given columns
+func getDiffSqlSchema(diffTableSch sql.Schema, columns []string) (sql.Schema, []sql.Expression) {
+	type column struct {
+		sqlCol *sql.Column
+		idx    int
+	}
+
+	columns = append(columns, "diff_type")
+	colMap := make(map[string]*column)
+	for _, c := range columns {
+		colMap[c] = nil
+	}
+
+	var cols = make([]*sql.Column, len(columns))
+	var getFieldCols = make([]sql.Expression, len(columns))
+
+	for i, c := range diffTableSch {
+		if _, ok := colMap[c.Name]; ok {
+			colMap[c.Name] = &column{c, i}
+		}
+	}
+
+	for i, c := range columns {
+		col := colMap[c].sqlCol
+		cols[i] = col
+		getFieldCols[i] = expression.NewGetField(colMap[c].idx, col.Type, col.Name, col.Nullable)
+	}
+
+	return cols, getFieldCols
+}
+
+func getDiffResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema, projections []sql.Expression, iter sql.RowIter, tn string, tsch schema.Schema) ([]string, error) {
 	ds, err := actions.NewDiffSplitter(diffQuerySch, targetSch)
 	if err != nil {
 		return nil, err
@@ -256,14 +271,14 @@ func getDiffResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema, iter s
 
 		var stmt string
 		if oldRow.Row != nil {
-			stmt, err = writeRow(tn, tsch, oldRow.Row, oldRow.RowDiff, oldRow.ColDiffs)
+			stmt, err = diff.GetDataDiffStatement(tn, tsch, oldRow.Row, oldRow.RowDiff, oldRow.ColDiffs)
 			if err != nil {
 				return nil, err
 			}
 		}
 
 		if newRow.Row != nil {
-			stmt, err = writeRow(tn, tsch, newRow.Row, newRow.RowDiff, newRow.ColDiffs)
+			stmt, err = diff.GetDataDiffStatement(tn, tsch, newRow.Row, newRow.RowDiff, newRow.ColDiffs)
 			if err != nil {
 				return nil, err
 			}
@@ -305,7 +320,7 @@ func (dArgs *diffArgs) getDiffArgs(ctx *sql.Context, dbData env.DbData, doltDB *
 	}
 	args := apr.Args
 
-	fromRoot, ok, err := maybeResolve(ctx, dbData, doltDB, args[0])
+	fromRoot, ok, err := actions.MaybeResolve(ctx, dbData.Rsr, doltDB, args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +337,7 @@ func (dArgs *diffArgs) getDiffArgs(ctx *sql.Context, dbData env.DbData, doltDB *
 		return args, nil
 	}
 
-	toRoot, ok, err := maybeResolve(ctx, dbData, doltDB, args[1])
+	toRoot, ok, err := actions.MaybeResolve(ctx, dbData.Rsr, doltDB, args[1])
 	if err != nil {
 		return nil, err
 	}
@@ -420,33 +435,6 @@ func (p *patchRowIter) incrementIndexes() {
 	if p.idx >= p.stmtLen {
 		p.idx = 0
 		p.stmts = nil
-	}
-}
-
-func writeRow(tableName string, sch schema.Schema, row sql.Row, rowDiffType diff.ChangeType, colDiffTypes []diff.ChangeType) (string, error) {
-	if len(row) != len(colDiffTypes) {
-		return "", fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
-	}
-
-	switch rowDiffType {
-	case diff.Added:
-		return sqlfmt.SqlRowAsInsertStmt(row, tableName, sch)
-	case diff.Removed:
-		return sqlfmt.SqlRowAsDeleteStmt(row, tableName, sch, 0)
-	case diff.ModifiedNew:
-		updatedCols := set.NewEmptyStrSet()
-		for i, diffType := range colDiffTypes {
-			if diffType != diff.None {
-				updatedCols.Add(sch.GetAllCols().GetByIndex(i).Name)
-			}
-		}
-
-		return sqlfmt.SqlRowAsUpdateStmt(row, tableName, sch, updatedCols)
-	case diff.ModifiedOld:
-		// do nothing, we only issue UPDATE for ModifiedNew
-		return "", nil
-	default:
-		return "", fmt.Errorf("unexpected row diff type: %v", rowDiffType)
 	}
 }
 
