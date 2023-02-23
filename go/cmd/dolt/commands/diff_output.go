@@ -349,7 +349,7 @@ func (j *jsonDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.Roo
 		return errhand.BuildDError("could not read schemas from toRoot").AddCause(err).Build()
 	}
 
-	stmts, err := sqlSchemaDiff(ctx, td, toSchemas)
+	stmts, err := diff.SqlSchemaDiff(ctx, td, toSchemas)
 	if err != nil {
 		return err
 	}

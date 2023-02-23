@@ -310,6 +310,11 @@ func CreateLogArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreatePatchArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	return ap
+}
+
 func CreateGCArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(ShallowFlag, "s", "perform a fast, but incomplete garbage collection pass")

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package commands
+package actions
 
 import (
 	"testing"
@@ -26,7 +26,7 @@ import (
 )
 
 type splitRow struct {
-	old, new rowDiff
+	old, new RowDiff
 }
 
 func TestDiffSplitter(t *testing.T) {
@@ -60,30 +60,30 @@ func TestDiffSplitter(t *testing.T) {
 			expectedRows: []splitRow{
 				{
 					old: emptyRowDiff(2),
-					new: rowDiff{
-						row:      sql.Row{1, 2},
-						rowDiff:  diff.Added,
-						colDiffs: []diff.ChangeType{diff.Added, diff.Added},
+					new: RowDiff{
+						Row:      sql.Row{1, 2},
+						RowDiff:  diff.Added,
+						ColDiffs: []diff.ChangeType{diff.Added, diff.Added},
 					},
 				},
 				{
-					old: rowDiff{
-						row:      sql.Row{3, 4},
-						rowDiff:  diff.Removed,
-						colDiffs: []diff.ChangeType{diff.Removed, diff.Removed},
+					old: RowDiff{
+						Row:      sql.Row{3, 4},
+						RowDiff:  diff.Removed,
+						ColDiffs: []diff.ChangeType{diff.Removed, diff.Removed},
 					},
 					new: emptyRowDiff(2),
 				},
 				{
-					old: rowDiff{
-						row:      sql.Row{5, 6},
-						rowDiff:  diff.ModifiedOld,
-						colDiffs: []diff.ChangeType{diff.None, diff.ModifiedOld},
+					old: RowDiff{
+						Row:      sql.Row{5, 6},
+						RowDiff:  diff.ModifiedOld,
+						ColDiffs: []diff.ChangeType{diff.None, diff.ModifiedOld},
 					},
-					new: rowDiff{
-						row:      sql.Row{5, 100},
-						rowDiff:  diff.ModifiedNew,
-						colDiffs: []diff.ChangeType{diff.None, diff.ModifiedNew},
+					new: RowDiff{
+						Row:      sql.Row{5, 100},
+						RowDiff:  diff.ModifiedNew,
+						ColDiffs: []diff.ChangeType{diff.None, diff.ModifiedNew},
 					},
 				},
 			},
@@ -110,30 +110,30 @@ func TestDiffSplitter(t *testing.T) {
 			expectedRows: []splitRow{
 				{
 					old: emptyRowDiff(3),
-					new: rowDiff{
-						row:      sql.Row{nil, 1, 2},
-						rowDiff:  diff.Added,
-						colDiffs: []diff.ChangeType{diff.None, diff.Added, diff.Added},
+					new: RowDiff{
+						Row:      sql.Row{nil, 1, 2},
+						RowDiff:  diff.Added,
+						ColDiffs: []diff.ChangeType{diff.None, diff.Added, diff.Added},
 					},
 				},
 				{
-					old: rowDiff{
-						row:      sql.Row{3, 4, nil},
-						rowDiff:  diff.Removed,
-						colDiffs: []diff.ChangeType{diff.Removed, diff.Removed, diff.None},
+					old: RowDiff{
+						Row:      sql.Row{3, 4, nil},
+						RowDiff:  diff.Removed,
+						ColDiffs: []diff.ChangeType{diff.Removed, diff.Removed, diff.None},
 					},
 					new: emptyRowDiff(3),
 				},
 				{
-					old: rowDiff{
-						row:      sql.Row{5, 6, nil},
-						rowDiff:  diff.ModifiedOld,
-						colDiffs: []diff.ChangeType{diff.ModifiedOld, diff.None, diff.None},
+					old: RowDiff{
+						Row:      sql.Row{5, 6, nil},
+						RowDiff:  diff.ModifiedOld,
+						ColDiffs: []diff.ChangeType{diff.ModifiedOld, diff.None, diff.None},
 					},
-					new: rowDiff{
-						row:      sql.Row{nil, 6, 100},
-						rowDiff:  diff.ModifiedNew,
-						colDiffs: []diff.ChangeType{diff.None, diff.None, diff.ModifiedNew},
+					new: RowDiff{
+						Row:      sql.Row{nil, 6, 100},
+						RowDiff:  diff.ModifiedNew,
+						ColDiffs: []diff.ChangeType{diff.None, diff.None, diff.ModifiedNew},
 					},
 				},
 			},
@@ -156,18 +156,18 @@ func TestDiffSplitter(t *testing.T) {
 			expectedRows: []splitRow{
 				{
 					old: emptyRowDiff(2),
-					new: rowDiff{
-						row:      sql.Row{1, 2},
-						rowDiff:  diff.Added,
-						colDiffs: []diff.ChangeType{diff.Added, diff.Added},
+					new: RowDiff{
+						Row:      sql.Row{1, 2},
+						RowDiff:  diff.Added,
+						ColDiffs: []diff.ChangeType{diff.Added, diff.Added},
 					},
 				},
 				{
 					old: emptyRowDiff(2),
-					new: rowDiff{
-						row:      sql.Row{3, 4},
-						rowDiff:  diff.Added,
-						colDiffs: []diff.ChangeType{diff.Added, diff.Added},
+					new: RowDiff{
+						Row:      sql.Row{3, 4},
+						RowDiff:  diff.Added,
+						ColDiffs: []diff.ChangeType{diff.Added, diff.Added},
 					},
 				},
 			},
@@ -190,18 +190,18 @@ func TestDiffSplitter(t *testing.T) {
 			expectedRows: []splitRow{
 				{
 					new: emptyRowDiff(2),
-					old: rowDiff{
-						row:      sql.Row{1, 2},
-						rowDiff:  diff.Removed,
-						colDiffs: []diff.ChangeType{diff.Removed, diff.Removed},
+					old: RowDiff{
+						Row:      sql.Row{1, 2},
+						RowDiff:  diff.Removed,
+						ColDiffs: []diff.ChangeType{diff.Removed, diff.Removed},
 					},
 				},
 				{
 					new: emptyRowDiff(2),
-					old: rowDiff{
-						row:      sql.Row{3, 4},
-						rowDiff:  diff.Removed,
-						colDiffs: []diff.ChangeType{diff.Removed, diff.Removed},
+					old: RowDiff{
+						Row:      sql.Row{3, 4},
+						RowDiff:  diff.Removed,
+						ColDiffs: []diff.ChangeType{diff.Removed, diff.Removed},
 					},
 				},
 			},
@@ -210,12 +210,12 @@ func TestDiffSplitter(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			ds, err := newDiffSplitter(tc.diffQuerySch, tc.tableSch)
+			ds, err := NewDiffSplitter(tc.diffQuerySch, tc.tableSch)
 			require.NoError(t, err)
 
 			var splitRows []splitRow
 			for _, row := range tc.diffQueryRows {
-				old, new, err := ds.splitDiffResultRow(row)
+				old, new, err := ds.SplitDiffResultRow(row)
 				require.NoError(t, err)
 				splitRows = append(splitRows, splitRow{old, new})
 			}
@@ -225,9 +225,9 @@ func TestDiffSplitter(t *testing.T) {
 	}
 }
 
-func emptyRowDiff(columns int) rowDiff {
-	return rowDiff{
-		colDiffs: make([]diff.ChangeType, columns),
+func emptyRowDiff(columns int) RowDiff {
+	return RowDiff{
+		ColDiffs: make([]diff.ChangeType, columns),
 	}
 }
 

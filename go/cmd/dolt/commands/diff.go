@@ -31,9 +31,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -558,9 +557,9 @@ func diffUserTable(
 }
 
 func writeSqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string]schema.Schema) errhand.VerboseError {
-	ddlStatements, err := sqlSchemaDiff(ctx, td, toSchemas)
+	ddlStatements, err := diff.SqlSchemaDiff(ctx, td, toSchemas)
 	if err != nil {
-		return err
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	for _, stmt := range ddlStatements {
@@ -568,99 +567,6 @@ func writeSqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[s
 	}
 
 	return nil
-}
-
-// sqlSchemaDiff returns a slice of DDL statements that will transform the schema in the from delta to the schema in
-// the to delta.
-// TODO: this doesn't handle constraints or triggers
-// TODO: this should live in the diff package
-func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string]schema.Schema) ([]string, errhand.VerboseError) {
-	fromSch, toSch, err := td.GetSchemas(ctx)
-	if err != nil {
-		return nil, errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
-	}
-
-	var ddlStatements []string
-
-	if td.IsDrop() {
-		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(td.FromName))
-	} else if td.IsAdd() {
-		sqlDb := sqle.NewSingleTableDatabase(td.ToName, toSch, td.ToFks, td.ToFksParentSch)
-		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
-		stmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, td.ToName)
-		if err != nil {
-			return nil, errhand.VerboseErrorFromError(err)
-		}
-		ddlStatements = append(ddlStatements, stmt)
-	} else {
-		if td.FromName != td.ToName {
-			ddlStatements = append(ddlStatements, sqlfmt.RenameTableStmt(td.FromName, td.ToName))
-		}
-
-		eq := schema.SchemasAreEqual(fromSch, toSch)
-		if eq && !td.HasFKChanges() {
-			return ddlStatements, nil
-		}
-
-		colDiffs, unionTags := diff.DiffSchColumns(fromSch, toSch)
-		for _, tag := range unionTags {
-			cd := colDiffs[tag]
-			switch cd.DiffType {
-			case diff.SchDiffNone:
-			case diff.SchDiffAdded:
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.FmtCol(0, 0, 0, *cd.New)))
-			case diff.SchDiffRemoved:
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
-			case diff.SchDiffModified:
-				// Ignore any primary key set changes here
-				if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
-					continue
-				}
-				if cd.Old.Name != cd.New.Name {
-					ddlStatements = append(ddlStatements, sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
-				}
-			}
-		}
-
-		// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
-		if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropPks(td.ToName))
-			if toSch.GetPKCols().Size() > 0 {
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddPrimaryKeys(td.ToName, toSch.GetPKCols()))
-			}
-		}
-
-		for _, idxDiff := range diff.DiffSchIndexes(fromSch, toSch) {
-			switch idxDiff.DiffType {
-			case diff.SchDiffNone:
-			case diff.SchDiffAdded:
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
-			case diff.SchDiffRemoved:
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
-			case diff.SchDiffModified:
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
-			}
-		}
-
-		for _, fkDiff := range diff.DiffForeignKeys(td.FromFks, td.ToFks) {
-			switch fkDiff.DiffType {
-			case diff.SchDiffNone:
-			case diff.SchDiffAdded:
-				parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
-			case diff.SchDiffRemoved:
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
-			case diff.SchDiffModified:
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
-
-				parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
-			}
-		}
-	}
-
-	return ddlStatements, nil
 }
 
 func diffRows(
@@ -843,7 +749,7 @@ func writeDiffResults(
 	modifiedColNames map[string]bool,
 	dArgs *diffArgs,
 ) error {
-	ds, err := newDiffSplitter(diffQuerySch, targetSch)
+	ds, err := actions.NewDiffSplitter(diffQuerySch, targetSch)
 	if err != nil {
 		return err
 	}
@@ -856,25 +762,25 @@ func writeDiffResults(
 			return err
 		}
 
-		oldRow, newRow, err := ds.splitDiffResultRow(r)
+		oldRow, newRow, err := ds.SplitDiffResultRow(r)
 		if err != nil {
 			return err
 		}
 
 		if dArgs.skinny {
-			var filteredOldRow, filteredNewRow rowDiff
-			for i, changeType := range newRow.colDiffs {
+			var filteredOldRow, filteredNewRow actions.RowDiff
+			for i, changeType := range newRow.ColDiffs {
 				if (changeType == diff.Added|diff.Removed) || modifiedColNames[targetSch[i].Name] {
-					if i < len(oldRow.row) {
-						filteredOldRow.row = append(filteredOldRow.row, oldRow.row[i])
-						filteredOldRow.colDiffs = append(filteredOldRow.colDiffs, oldRow.colDiffs[i])
-						filteredOldRow.rowDiff = oldRow.rowDiff
+					if i < len(oldRow.Row) {
+						filteredOldRow.Row = append(filteredOldRow.Row, oldRow.Row[i])
+						filteredOldRow.ColDiffs = append(filteredOldRow.ColDiffs, oldRow.ColDiffs[i])
+						filteredOldRow.RowDiff = oldRow.RowDiff
 					}
 
-					if i < len(newRow.row) {
-						filteredNewRow.row = append(filteredNewRow.row, newRow.row[i])
-						filteredNewRow.colDiffs = append(filteredNewRow.colDiffs, newRow.colDiffs[i])
-						filteredNewRow.rowDiff = newRow.rowDiff
+					if i < len(newRow.Row) {
+						filteredNewRow.Row = append(filteredNewRow.Row, newRow.Row[i])
+						filteredNewRow.ColDiffs = append(filteredNewRow.ColDiffs, newRow.ColDiffs[i])
+						filteredNewRow.RowDiff = newRow.RowDiff
 					}
 				}
 			}
@@ -884,18 +790,18 @@ func writeDiffResults(
 		}
 
 		// We are guaranteed to have "ModeRow" for writers that do not support combined rows
-		if dArgs.diffMode != diff.ModeRow && oldRow.rowDiff == diff.ModifiedOld && newRow.rowDiff == diff.ModifiedNew {
-			if err = writer.WriteCombinedRow(ctx, oldRow.row, newRow.row, dArgs.diffMode); err != nil {
+		if dArgs.diffMode != diff.ModeRow && oldRow.RowDiff == diff.ModifiedOld && newRow.RowDiff == diff.ModifiedNew {
+			if err = writer.WriteCombinedRow(ctx, oldRow.Row, newRow.Row, dArgs.diffMode); err != nil {
 				return err
 			}
 		} else {
-			if oldRow.row != nil {
-				if err = writer.WriteRow(ctx, oldRow.row, oldRow.rowDiff, oldRow.colDiffs); err != nil {
+			if oldRow.Row != nil {
+				if err = writer.WriteRow(ctx, oldRow.Row, oldRow.RowDiff, oldRow.ColDiffs); err != nil {
 					return err
 				}
 			}
-			if newRow.row != nil {
-				if err = writer.WriteRow(ctx, newRow.row, newRow.rowDiff, newRow.colDiffs); err != nil {
+			if newRow.Row != nil {
+				if err = writer.WriteRow(ctx, newRow.Row, newRow.RowDiff, newRow.ColDiffs); err != nil {
 					return err
 				}
 			}
@@ -920,23 +826,23 @@ func getModifiedCols(
 			break
 		}
 
-		ds, err := newDiffSplitter(diffQuerySch, unionSch)
+		ds, err := actions.NewDiffSplitter(diffQuerySch, unionSch)
 		if err != nil {
 			return modifiedColNames, err
 		}
 
-		oldRow, newRow, err := ds.splitDiffResultRow(r)
+		oldRow, newRow, err := ds.SplitDiffResultRow(r)
 		if err != nil {
 			return modifiedColNames, err
 		}
 
-		for i, changeType := range newRow.colDiffs {
+		for i, changeType := range newRow.ColDiffs {
 			if changeType != diff.None || unionSch[i].PrimaryKey {
 				modifiedColNames[unionSch[i].Name] = true
 			}
 		}
 
-		for i, changeType := range oldRow.colDiffs {
+		for i, changeType := range oldRow.ColDiffs {
 			if changeType != diff.None || unionSch[i].PrimaryKey {
 				modifiedColNames[unionSch[i].Name] = true
 			}

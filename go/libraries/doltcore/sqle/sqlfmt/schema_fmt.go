@@ -51,6 +51,8 @@ func FmtColWithNameAndType(indent, nameWidth, typeWidth int, colName, typeStr st
 		colStr += " AUTO_INCREMENT"
 	}
 
+	// TODO: get SRID value for geometry type column
+
 	if col.Default != "" {
 		colStr += " DEFAULT " + col.Default
 	}
@@ -76,10 +78,14 @@ func FmtColPrimaryKey(indent int, colStr string, newline bool) string {
 
 func FmtIndex(index schema.Index) string {
 	sb := strings.Builder{}
+	sb.WriteString("  ")
 	if index.IsUnique() {
 		sb.WriteString("UNIQUE ")
 	}
-	sb.WriteString("INDEX ")
+	if index.IsSpatial() {
+		sb.WriteString("SPATIAL ")
+	}
+	sb.WriteString("KEY ")
 	sb.WriteString(QuoteIdentifier(index.Name()))
 	sb.WriteString(" (")
 	for i, indexColName := range index.ColumnNames() {
@@ -98,9 +104,7 @@ func FmtIndex(index schema.Index) string {
 
 func FmtForeignKey(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
 	sb := strings.Builder{}
-	sb.WriteString("CONSTRAINT ")
-	sb.WriteString(QuoteIdentifier(fk.Name))
-	sb.WriteString(" FOREIGN KEY (")
+	sb.WriteString(fmt.Sprintf("  CONSTRAINT %s FOREIGN KEY (", QuoteIdentifier(fk.Name)))
 	if fk.IsResolved() {
 		for i, tag := range fk.TableColumns {
 			if i != 0 {
@@ -117,7 +121,7 @@ func FmtForeignKey(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
 			sb.WriteString(QuoteIdentifier(col))
 		}
 	}
-	sb.WriteString(")\n    REFERENCES ")
+	sb.WriteString(") REFERENCES ")
 	sb.WriteString(QuoteIdentifier(fk.ReferencedTableName))
 	sb.WriteString(" (")
 	if fk.IsResolved() {

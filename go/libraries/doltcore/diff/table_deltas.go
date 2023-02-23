@@ -17,14 +17,20 @@ package diff
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+
 	"sort"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -433,5 +439,197 @@ func fkSlicesAreEqual(from, to []doltdb.ForeignKey) bool {
 			return false
 		}
 	}
+	return true
+}
+
+// SqlSchemaDiff returns a slice of DDL statements that will transform the schema in the from delta to the schema in
+// the to delta.
+// TODO: this doesn't handle constraints or triggers
+func SqlSchemaDiff(ctx context.Context, td TableDelta, toSchemas map[string]schema.Schema) ([]string, error) {
+	fromSch, toSch, err := td.GetSchemas(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("cannot retrieve schema for table %s, cause: %s", td.ToName, err.Error())
+	}
+
+	var ddlStatements []string
+	if td.IsDrop() {
+		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(td.FromName))
+	} else if td.IsAdd() {
+		toPkSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
+		if err != nil {
+			return nil, err
+		}
+		stmt, err := getCreateTableStmt(td.ToName, td.ToSch, toPkSch, td.ToFks, td.ToFksParentSch)
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+		ddlStatements = append(ddlStatements, stmt)
+	} else {
+		stmts, err := getNonCreateNonDropTableSqlSchemaDiff(td, toSchemas, fromSch, toSch)
+		if err != nil {
+			return nil, err
+		}
+		ddlStatements = append(ddlStatements, stmts...)
+	}
+
+	return ddlStatements, nil
+}
+
+func getNonCreateNonDropTableSqlSchemaDiff(td TableDelta, toSchemas map[string]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
+	if td.IsAdd() || td.IsDrop() {
+		// use add and drop specific methods
+		return nil, nil
+	}
+
+	var ddlStatements []string
+	if td.FromName != td.ToName {
+		ddlStatements = append(ddlStatements, sqlfmt.RenameTableStmt(td.FromName, td.ToName))
+	}
+
+	eq := schema.SchemasAreEqual(fromSch, toSch)
+	if eq && !td.HasFKChanges() {
+		return ddlStatements, nil
+	}
+
+	colDiffs, unionTags := DiffSchColumns(fromSch, toSch)
+	for _, tag := range unionTags {
+		cd := colDiffs[tag]
+		switch cd.DiffType {
+		case SchDiffNone:
+		case SchDiffAdded:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.FmtCol(0, 0, 0, *cd.New)))
+		case SchDiffRemoved:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
+		case SchDiffModified:
+			// Ignore any primary key set changes here
+			if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
+				continue
+			}
+			if cd.Old.Name != cd.New.Name {
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
+			}
+		}
+	}
+
+	// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
+	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
+		ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropPks(td.ToName))
+		if toSch.GetPKCols().Size() > 0 {
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddPrimaryKeys(td.ToName, toSch.GetPKCols()))
+		}
+	}
+
+	for _, idxDiff := range DiffSchIndexes(fromSch, toSch) {
+		switch idxDiff.DiffType {
+		case SchDiffNone:
+		case SchDiffAdded:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+		case SchDiffRemoved:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
+		case SchDiffModified:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+		}
+	}
+
+	for _, fkDiff := range DiffForeignKeys(td.FromFks, td.ToFks) {
+		switch fkDiff.DiffType {
+		case SchDiffNone:
+		case SchDiffAdded:
+			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+		case SchDiffRemoved:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
+		case SchDiffModified:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
+
+			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+		}
+	}
+
+	return ddlStatements, nil
+}
+
+func getCreateTableStmt(tblName string, sch schema.Schema, pkSchema sql.PrimaryKeySchema, fks []doltdb.ForeignKey, fksParentSch map[string]schema.Schema) (string, error){
+	sqlSch := pkSchema.Schema
+	colStmts := make([]string, len(sqlSch))
+
+	// Statement creation parts for each column
+	for i, col := range sch.GetAllCols().GetColumns() {
+		colStmts[i] = sqlfmt.FmtCol(2,0,0, col)
+	}
+
+	primaryKeyCols := sch.GetPKCols().GetColumnNames()
+	if len(primaryKeyCols) > 0 {
+		primaryKey := sqlfmt.FmtColPrimaryKey(1, strings.Join(quoteIdentifiers(primaryKeyCols), ","), false)
+		colStmts = append(colStmts, primaryKey)
+	}
+
+	indexes := sch.Indexes().AllIndexes()
+	for _, index := range indexes {
+		// The primary key may or may not be declared as an index by the table. Don't print it twice if it's here.
+		if isPrimaryKeyIndex(index, sch) {
+			continue
+		}
+
+		colStmts = append(colStmts, sqlfmt.FmtIndex(index))
+	}
+
+	// need foreign key
+	for _, fk := range fks {
+		colStmts = append(colStmts, sqlfmt.FmtForeignKey(fk, sch, fksParentSch[fk.ReferencedTableName]))
+	}
+
+	checks := sch.Checks().AllChecks()
+	for _, check := range checks {
+		fmted := fmt.Sprintf("  CONSTRAINT %s CHECK (%s)", sqlfmt.QuoteIdentifier(check.Name()), check.Expression())
+
+		if !check.Enforced() {
+			fmted += " /*!80016 NOT ENFORCED */"
+		}
+
+		colStmts = append(colStmts, fmted)
+	}
+
+	coll := sql.CollationID(sch.GetCollation())
+	return fmt.Sprintf(
+		"CREATE TABLE %s (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s;",
+		sqlfmt.QuoteIdentifier(tblName),
+		strings.Join(colStmts, ",\n"),
+		coll.CharacterSet().Name(),
+		coll.Name(),
+	), nil
+}
+
+// quoteIdentifiers wraps each of the specified identifiers in backticks, escapes all occurrences of backticks in
+// the identifier, and returns a slice of the quoted identifiers.
+func quoteIdentifiers(ids []string) []string {
+	quoted := make([]string, len(ids))
+	for i, id := range ids {
+		quoted[i] = sqlfmt.QuoteIdentifier(id)
+	}
+	return quoted
+}
+
+// isPrimaryKeyIndex returns whether the index given matches the table's primary key columns. Order is not considered.
+func isPrimaryKeyIndex(index schema.Index, sch schema.Schema) bool {
+	var pks = sch.GetPKCols().GetColumns()
+	var pkMap = make(map[string]struct{})
+	for _, c := range pks {
+		pkMap[c.Name] = struct{}{}
+	}
+
+	indexCols := index.ColumnNames()
+	if len(indexCols) != len(pks) {
+		return false
+	}
+
+	for _, c := range index.ColumnNames(){
+		if _, ok := pkMap[c]; !ok {
+			return false
+		}
+	}
+
 	return true
 }
