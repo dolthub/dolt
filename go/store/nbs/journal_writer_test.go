@@ -16,7 +16,6 @@ package nbs
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -147,7 +146,6 @@ func TestJournalWriterReadWrite(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			path := newTestFilePath(t)
-			defer cleanupTestFiles(t, path)
 			j := newTestJournalWriter(t, path)
 			// set specific buffer size
 			j.buf = make([]byte, 0, test.size)
@@ -177,7 +175,6 @@ func TestJournalWriterReadWrite(t *testing.T) {
 				}
 				assert.Equal(t, off, j.offset())
 			}
-			assert.NoError(t, j.Close())
 		})
 	}
 }
@@ -185,8 +182,8 @@ func TestJournalWriterReadWrite(t *testing.T) {
 func newTestJournalWriter(t *testing.T, path string) *journalWriter {
 	ctx := context.Background()
 	j, err := createJournalWriter(ctx, path)
-	require.NotNil(t, j)
 	require.NoError(t, err)
+	require.NotNil(t, j)
 	_, err = j.bootstrapJournal(ctx)
 	require.NoError(t, err)
 	return j
@@ -194,7 +191,6 @@ func newTestJournalWriter(t *testing.T, path string) *journalWriter {
 
 func TestJournalWriterWriteCompressedChunk(t *testing.T) {
 	path := newTestFilePath(t)
-	defer cleanupTestFiles(t, path)
 	j := newTestJournalWriter(t, path)
 	data := randomCompressedChunks(1024)
 	for a, cc := range data {
@@ -206,20 +202,20 @@ func TestJournalWriterWriteCompressedChunk(t *testing.T) {
 	j.ranges.iter(func(a addr, r Range) {
 		validateLookup(t, j, r, data[a])
 	})
-	require.NoError(t, j.Close())
 }
 
 func TestJournalWriterBootstrap(t *testing.T) {
 	ctx := context.Background()
 	path := newTestFilePath(t)
-	defer cleanupTestFiles(t, path)
 	j := newTestJournalWriter(t, path)
 	data := randomCompressedChunks(1024)
+	var last hash.Hash
 	for _, cc := range data {
 		err := j.writeCompressedChunk(cc)
 		require.NoError(t, err)
+		last = cc.Hash()
 	}
-	assert.NoError(t, j.Close())
+	require.NoError(t, j.commitRootHash(last))
 
 	j, _, err := openJournalWriter(ctx, path)
 	require.NoError(t, err)
@@ -238,7 +234,6 @@ func TestJournalWriterBootstrap(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, ch.Data(), buf)
 	}
-	require.NoError(t, j.Close())
 }
 
 func validateLookup(t *testing.T, j *journalWriter, r Range, cc CompressedChunk) {
@@ -252,28 +247,20 @@ func validateLookup(t *testing.T, j *journalWriter, r Range, cc CompressedChunk)
 
 func TestJournalWriterSyncClose(t *testing.T) {
 	path := newTestFilePath(t)
-	defer cleanupTestFiles(t, path)
 	j := newTestJournalWriter(t, path)
-	// close triggers flush
 	p := []byte("sit")
 	buf, err := j.getBytes(len(p))
 	require.NoError(t, err)
 	copy(buf, p)
-	err = j.Close()
-	require.NoError(t, err)
+	j.flush()
 	assert.Equal(t, 0, len(j.buf))
 	assert.Equal(t, 3, int(j.off))
 }
 
 func newTestFilePath(t *testing.T) string {
-	name := fmt.Sprintf("journal%d.log", rand.Intn(65536))
-	return filepath.Join(t.TempDir(), name)
-}
-
-func cleanupTestFiles(t *testing.T, p string) {
-	p = filepath.Dir(p)
-	require.NoError(t, os.RemoveAll(p))
-	require.NoError(t, os.MkdirAll(p, 666))
+	path, err := os.MkdirTemp("", "")
+	require.NoError(t, err)
+	return filepath.Join(path, "journal.log")
 }
 
 func TestJournalIndexBootstrap(t *testing.T) {
@@ -326,7 +313,6 @@ func TestJournalIndexBootstrap(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			path := newTestFilePath(t)
-			defer cleanupTestFiles(t, path)
 			j := newTestJournalWriter(t, path)
 			// setup
 			epochs := append(test.epochs, test.novel)
@@ -344,13 +330,11 @@ func TestJournalIndexBootstrap(t *testing.T) {
 				}
 				assert.NoError(t, j.flushIndexRecord(e.last, o)) // write index record
 			}
-			assert.NoError(t, j.Close())
 
 			validateJournal := func(p string, expected []epoch) {
 				journal, ok, err := openJournalWriter(ctx, p)
 				require.NoError(t, err)
 				require.True(t, ok)
-				defer func() { assert.NoError(t, journal.Close()) }()
 				// bootstrap journal and validate chunk records
 				last, err := journal.bootstrapJournal(ctx)
 				assert.NoError(t, err)
