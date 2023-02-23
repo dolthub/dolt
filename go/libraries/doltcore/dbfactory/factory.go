@@ -117,3 +117,7 @@ func PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, par
 
 	return fmt.Errorf("unknown url scheme: '%s'", url.Scheme)
 }
+
+func RegisterFactory(name string, factory DBFactory) {
+	DBFactories[name] = factory
+}
