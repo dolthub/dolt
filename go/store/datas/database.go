@@ -83,6 +83,10 @@ type Database interface {
 	// `opts.Meta`.
 	Tag(ctx context.Context, ds Dataset, commitAddr hash.Hash, opts TagOptions) (Dataset, error)
 
+	Stash(ctx context.Context, ds Dataset, stashRootRef types.Ref, headCommitAddr hash.Hash, meta *StashMeta) (Dataset, error)
+
+	PopStash(ctx context.Context, ds Dataset, idx int) (Dataset, error)
+
 	// UpdateWorkingSet updates the dataset given, setting its value to a new
 	// working set value object with the ref and meta given. If the dataset given
 	// already had a value, it must match the hash given or this method returns

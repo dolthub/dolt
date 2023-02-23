@@ -544,6 +544,68 @@ func (db *database) doTag(ctx context.Context, datasetID string, tagAddr hash.Ha
 	})
 }
 
+func (db *database) Stash(ctx context.Context, ds Dataset, stashRootRef types.Ref, headCommitAddr hash.Hash, meta *StashMeta) (Dataset, error) {
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
+		var rootHash hash.Hash
+		if ds.HasHead() {
+			rootHash = ds.head.Addr()
+		}
+
+		// this function updates stashes list ds head
+		addr, err := pushStash(ctx, db, rootHash, stashRootRef, headCommitAddr, meta)
+		if err != nil {
+			return err
+		}
+
+		// this will create or update the dataset for stashes address map
+		return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
+			// TODO: this is for old format, so this should not happen?
+			return datasets, nil
+		}, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+			ae := am.Editor()
+			err := ae.Update(ctx, ds.ID(), addr)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			return ae.Flush(ctx)
+		})
+	},
+	)
+}
+
+func (db *database) PopStash(ctx context.Context, ds Dataset, idx int) (Dataset, error) {
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
+		// there should be existing stashes list dataset when popping stash
+		if !ds.HasHead() {
+			return errors.New("No stash entries found.")
+		}
+
+		val, err := db.ReadValue(ctx, ds.head.Addr())
+		if err != nil {
+			return err
+		}
+
+		addr, err := removeStashAtIdx(ctx, db, db.nodeStore(), val, idx)
+		if err != nil {
+			return err
+		}
+
+		// this will update the dataset for stashes address map
+		return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
+			// TODO: this is for old format, so this should not happen?
+			return datasets, nil
+		}, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+			ae := am.Editor()
+			err := ae.Update(ctx, ds.ID(), addr)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			return ae.Flush(ctx)
+		})
+	},
+	)
+}
+
 func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet WorkingSetSpec, prevHash hash.Hash) (Dataset, error) {
 	return db.doHeadUpdate(
 		ctx,

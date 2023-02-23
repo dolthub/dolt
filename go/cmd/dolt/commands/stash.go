@@ -16,12 +16,18 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas"
+	"strconv"
+	"strings"
 )
 
 var stashDocs = cli.CommandDocumentationContent{
@@ -70,36 +76,158 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 
 	// TODO: these needs to be subcommands NOT flag options...
-	var verr errhand.VerboseError
+	var err error
 	switch {
 	case apr.Contains(cli.ListFlag):
-		verr = listStashes(ctx, dEnv)
+		err = listStashes(ctx, dEnv)
 	case apr.Contains(cli.PopFlag):
-		verr = popStash(ctx, dEnv)
+		idx := 0
+		val, has := apr.GetValue(cli.PopFlag)
+		if has && val != "" {
+			idx, err = strconv.Atoi(val)
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			}
+		}
+		err = popStash(ctx, dEnv, idx)
 	case apr.Contains(cli.ClearFlag):
-		verr = clearStashes(ctx, dEnv)
+		err = clearStashes(ctx, dEnv)
 	default:
-		verr = stashChanges(ctx, dEnv)
+		err = stashChanges(ctx, dEnv)
 	}
-	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	return 0
 }
 
-func listStashes(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseError {
+func listStashes(ctx context.Context, dEnv *env.DoltEnv) error {
+	stashes, err := dEnv.DoltDB.GetStashes(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, stash := range stashes {
+		commitHash, err := stash.HeadCommit.HashOf()
+		if err != nil {
+			return err
+		}
+		ch := commitHash.String()
+		s := fmt.Sprintf("%s: WIP on %s: %s %s", stash.Name, stash.BranchName, ch, stash.Description)
+		cli.Println(s)
+	}
 	return nil
 }
 
-func popStash(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseError {
+func popStash(ctx context.Context, dEnv *env.DoltEnv, idx int) error {
+	headRoot, err := dEnv.HeadRoot(ctx)
+	if err != nil {
+		return err
+	}
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return err
+	}
+	//stagedRoot, err := dEnv.StagedRoot(ctx)
+	//if err != nil {
+	//	return errhand.VerboseErrorFromError(err)
+	//}
+	headHash, err := headRoot.HashOf()
+	if err != nil {
+		return err
+	}
+	workingHash, err := workingRoot.HashOf()
+	if err != nil {
+		return err
+	}
+	//stagedHash, err := stagedRoot.HashOf()
+	//if err != nil {
+	//	return err
+	//}
+
+	if headHash.Equal(workingHash) {
+		// TODO: could you update working set with the stash root?
+	}
+
+	mergedRoot, err := popStashAtIdx(ctx, dEnv, workingRoot, idx)
+	if err != nil {
+		return err
+	}
+
+	// TODO: to reset the working set, is setting it to head sufficient?
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(mergedRoot))
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func clearStashes(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseError {
+func popStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, workingRoot *doltdb.RootValue, idx int) (*doltdb.RootValue, error) {
+	stashRoot, headCommit, err := dEnv.DoltDB.GetStashAtIdx(ctx, idx)
+	if err != nil {
+		return nil, err
+	}
+
+	hch, err := headCommit.HashOf()
+	if err != nil {
+		return nil, err
+	}
+	headSpec, err := doltdb.NewCommitSpec(hch.String())
+	if err != nil {
+		return nil, err
+	}
+	parentCm, err := dEnv.DoltDB.Resolve(ctx, headSpec, dEnv.RepoStateReader().CWBHeadRef())
+	if err != nil {
+		return nil, err
+	}
+	parentRoot, err := parentCm.GetRootValue(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil, err
+	}
+
+	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: tmpDir}
+	mo := merge.MergeOpts{IsCherryPick: true}
+	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, workingRoot, stashRoot, parentRoot, stashRoot, parentCm, opts, mo)
+	if err != nil {
+		return nil, err
+	}
+
+	var tablesWithConflict []string
+	for tbl, stats := range mergeStats {
+		if stats.Conflicts > 0 {
+			tablesWithConflict = append(tablesWithConflict, tbl)
+		}
+	}
+
+	if len(tablesWithConflict) > 0 {
+		tblNames := strings.Join(tablesWithConflict, "', '")
+		return nil, fmt.Errorf("conflicts in table {'%s'}", tblNames)
+	}
+
+	err = dEnv.DoltDB.RemoveStashAtIdx(ctx, idx)
+	if err != nil {
+		return nil, err
+	}
+
+	return mergedRoot, nil
+}
+
+func clearStashes(ctx context.Context, dEnv *env.DoltEnv) error {
 	return nil
 }
 
-func stashChanges(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseError {
+func stashChanges(ctx context.Context, dEnv *env.DoltEnv) error {
 	// check for clean working state
 	headRoot, err := dEnv.HeadRoot(ctx)
 	if err != nil {
@@ -107,35 +235,58 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseError {
 	}
 	workingRoot, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		return err
 	}
 	stagedRoot, err := dEnv.StagedRoot(ctx)
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		return err
 	}
 	headHash, err := headRoot.HashOf()
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		return err
 	}
 	workingHash, err := workingRoot.HashOf()
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		return err
 	}
 	stagedHash, err := stagedRoot.HashOf()
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		return err
 	}
 
 	if headHash.Equal(workingHash) && headHash.Equal(stagedHash) {
-		return errhand.BuildDError("No local changes to save").Build()
+		return fmt.Errorf("No local changes to save")
 	}
 
-	curBranch := dEnv.RepoStateReader().CWBHeadRef().String()
+	curHeadRef := dEnv.RepoStateReader().CWBHeadRef()
+	curBranch := curHeadRef.String()
 	cms, err := doltdb.NewCommitSpec(curBranch)
-	commit, err := dEnv.DoltDB.Resolve(ctx, cms, dEnv.RepoStateReader().CWBHeadRef())
+	if err != nil {
+		return err
+	}
+	commit, err := dEnv.DoltDB.Resolve(ctx, cms, curHeadRef)
+	if err != nil {
+		return err
+	}
 	cmm, err := commit.GetCommitMeta(ctx)
+	if err != nil {
+		return err
+	}
 
-	if cmm == nil {
+	err = dEnv.DoltDB.AddStash(ctx, commit, workingRoot, datas.NewStashMeta(curBranch, cmm.Description))
+	if err != nil {
+		return err
+	}
+
+	// TODO: to reset the working set, is setting it to head sufficient?
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(headRoot))
+	if err != nil {
+		return err
 	}
 
 	return nil

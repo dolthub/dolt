@@ -1392,3 +1392,64 @@ func (ddb *DoltDB) GetBranchesByRootHash(ctx context.Context, rootHash hash.Hash
 
 	return refs, nil
 }
+
+func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, working *RootValue, meta *datas.StashMeta) error {
+	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
+	if err != nil {
+		return err
+	}
+
+	headCommitAddr, err := head.HashOf()
+	if err != nil {
+		return err
+	}
+
+	r, workingRoot, err := ddb.writeRootValue(ctx, working)
+	if err != nil {
+		return err
+	}
+
+	// TODO: do I need to set it?
+	working = r
+
+	stashesDS, err = ddb.db.Stash(ctx, stashesDS, workingRoot, headCommitAddr, meta)
+	return err
+}
+
+func (ddb *DoltDB) RemoveStashAtIdx(ctx context.Context, idx int) error {
+	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
+	if err != nil {
+		return err
+	}
+
+	stashesDS, err = ddb.db.PopStash(ctx, stashesDS, idx)
+	return err
+}
+
+// GetStashes returns stash commit, head commit and stash meta at given idx of stash list?
+func (ddb *DoltDB) GetStashes(ctx context.Context) ([]*Stash, error) {
+	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
+	if err != nil {
+		return nil, err
+	}
+
+	if !stashesDS.HasHead() {
+		return []*Stash{}, nil
+	}
+
+	return getStashList(ctx, stashesDS, ddb.vrw, ddb.NodeStore())
+
+}
+
+func (ddb *DoltDB) GetStashAtIdx(ctx context.Context, idx int) (*RootValue, *Commit, error) {
+	ds, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !ds.HasHead() {
+		return nil, nil, errors.New("No stash entries found.")
+	}
+
+	return getStashAtIdx(ctx, ds, ddb.vrw, ddb.NodeStore(), idx)
+}
