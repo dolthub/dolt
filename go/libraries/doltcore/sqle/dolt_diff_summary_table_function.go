@@ -304,41 +304,12 @@ func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb SqlDatab
 		return nil, nil
 	}
 
-	hasDataChanges, err := deltaHasDataChanges(ctx, delta, sqledb, fromDetails, toDetails)
-	if err != nil {
-		return nil, err
-	}
-
-	summ, err := delta.GetSummary(ctx, hasDataChanges)
+	summ, err := delta.GetSummary(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	return summ, nil
-}
-
-func deltaHasDataChanges(ctx *sql.Context, delta diff.TableDelta, sqledb SqlDatabase, fromDetails, toDetails *refDetails) (bool, error) {
-	ddb := sqledb.DbData().Ddb
-	dp := dtables.NewDiffPartition(delta.ToTable, delta.FromTable, toDetails.hashStr, fromDetails.hashStr, toDetails.commitTime, fromDetails.commitTime, delta.ToSch, delta.FromSch)
-
-	_, j, err := dtables.GetDiffTableSchemaAndJoiner(delta.Format(), delta.FromSch, delta.ToSch)
-	if err != nil {
-		return false, err
-	}
-
-	rowIter, err := dp.GetRowIter(ctx, ddb, j, sql.IndexLookup{})
-	if err != nil {
-		return false, err
-	}
-
-	_, err = rowIter.Next(ctx)
-	if err == io.EOF {
-		return false, nil
-	} else if err != nil {
-		return false, err
-	}
-
-	return true, nil
 }
 
 // evaluateArguments returns fromCommitVal, toCommitVal, dotCommitVal, and tableName.
@@ -425,9 +396,9 @@ func (d *diffSummaryTableFunctionRowIter) Close(context *sql.Context) error {
 
 func getRowFromSummary(ds *diff.TableDeltaSummary) sql.Row {
 	return sql.Row{
-		ds.TableName,        // table_name
-		ds.DiffType,         // diff_type
-		ds.HasDataChanges,   // has_data_changes
-		ds.HasSchemaChanges, // has_schema_changes
+		ds.TableName,    // table_name
+		ds.DiffType,     // diff_type
+		ds.DataChange,   // data_change
+		ds.SchemaChange, // schema_change
 	}
 }

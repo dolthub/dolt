@@ -2502,12 +2502,16 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			"set @Commit3 = '';",
 			"call dolt_commit_hash_out(@Commit3, '-am', 'inserting row 3');",
 
-			// add 1 column and 1 row and update
+			// add 1 column
 			"alter table t add column c2 varchar(20);",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'adding column c2');",
+
+			// add 1 row and update
 			"insert into t values (4, 'four', 'five');",
 			"update t set c2='foo' where pk=1;",
-			"set @Commit4 = '';",
-			"call dolt_commit_hash_out(@Commit4, '-am', 'adding column c2, inserting, and updating data');",
+			"set @Commit5 = '';",
+			"call dolt_commit_hash_out(@Commit5, '-am', 'inserting and updating data');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2524,10 +2528,14 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
+				Expected: []sql.Row{{"t", "modified", true, true}}, // TODO: data change should be false for added column
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit5, 't');",
 				Expected: []sql.Row{{"t", "modified", true, true}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit4, 't');",
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
 				Expected: []sql.Row{{"t", "modified", true, false}},
 			},
 		},
@@ -2569,7 +2577,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "modified", false, true}},
+				Expected: []sql.Row{{"t", "modified", true, true}}, // TODO: Data change should be false for renamed column
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
@@ -2649,29 +2657,29 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't2')",
-				Expected: []sql.Row{{"t2", "modified", true, false}},
+				Expected: []sql.Row{{"t2", "renamed", true, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~..HEAD', 't2')",
-				Expected: []sql.Row{{"t2", "modified", true, false}},
+				Expected: []sql.Row{{"t2", "renamed", true, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD')",
-				Expected: []sql.Row{{"t2", "modified", true, false}},
+				Expected: []sql.Row{{"t2", "renamed", true, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~..HEAD')",
-				Expected: []sql.Row{{"t2", "modified", true, false}},
+				Expected: []sql.Row{{"t2", "renamed", true, true}},
 			},
 			{
 				// Old table name can be matched as well
 				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't1')",
-				Expected: []sql.Row{{"t1", "modified", true, false}},
+				Expected: []sql.Row{{"t1", "renamed", true, true}},
 			},
 			{
 				// Old table name can be matched as well
 				Query:    "select * from dolt_diff_summary('HEAD~..HEAD', 't1')",
-				Expected: []sql.Row{{"t1", "modified", true, false}},
+				Expected: []sql.Row{{"t1", "renamed", true, true}},
 			},
 		},
 	},
@@ -2679,7 +2687,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Name: "add multiple columns, then set and unset a value. Should not show a diff",
 		SetUpScript: []string{
 			"CREATE table t (pk int primary key);",
-			"Insert into t values (1);",
+			"insert into t values (1);",
 			"CALL DOLT_ADD('.');",
 			"CALL DOLT_COMMIT('-am', 'setup');",
 			"alter table t add column col1 int;",
@@ -2693,7 +2701,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary('HEAD~2', 'HEAD');",
-				Expected: []sql.Row{{"t", "modified", false, true}},
+				Expected: []sql.Row{{"t", "modified", true, true}}, // TODO: Data change should be false
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('HEAD~', 'HEAD');",

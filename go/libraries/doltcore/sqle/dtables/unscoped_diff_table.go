@@ -52,14 +52,6 @@ type UnscopedDiffTable struct {
 	commitCheck      doltdb.CommitFilter
 }
 
-// tableChange is an internal data structure used to hold the results of processing
-// a diff.TableDelta structure into the output data for this system table.
-type tableChange struct {
-	tableName    string
-	dataChange   bool
-	schemaChange bool
-}
-
 // NewUnscopedDiffTable creates an UnscopedDiffTable
 func NewUnscopedDiffTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	return &UnscopedDiffTable{dbName: dbName, ddb: ddb, head: head}
