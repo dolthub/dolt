@@ -2528,7 +2528,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{{"t", "modified", true, true}}, // TODO: data change should be false for added column
+				Expected: []sql.Row{{"t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit5, 't');",
