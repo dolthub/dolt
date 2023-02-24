@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -59,7 +58,6 @@ const (
 	whereParam  = "where"
 	limitParam  = "limit"
 	SQLFlag     = "sql"
-	CachedFlag  = "cached"
 	SkinnyFlag  = "skinny"
 	MergeBase   = "merge-base"
 	DiffMode    = "diff-mode"
@@ -141,7 +139,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular, sql, json. Defaults to tabular.")
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
-	ap.SupportsFlag(CachedFlag, "c", "Show only the unstaged data changes.")
+	ap.SupportsFlag(cli.CachedFlag, "c", "Show only the unstaged data changes.")
 	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
 	ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
 	ap.SupportsString(DiffMode, "", "diff mode", "Determines how to display modified rows with tabular output. Valid values are row, line, in-place, context. Defaults to context.")
@@ -225,7 +223,7 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	dArgs.limit, _ = apr.GetInt(limitParam)
 	dArgs.where = apr.GetValueOrDefault(whereParam, "")
 
-	tableNames, err := dArgs.applyDiffRoots(ctx, dEnv, apr.Args, apr.Contains(CachedFlag), apr.Contains(MergeBase))
+	tableNames, err := dArgs.applyDiffRoots(ctx, dEnv, apr.Args, apr.Contains(cli.CachedFlag), apr.Contains(MergeBase))
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +311,7 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 	}
 
 	// treat the first arg as a ref spec
-	fromRoot, ok := actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, args[0])
+	fromRoot, ok := diff.MaybeResolveRoot(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, args[0])
 	// if it doesn't resolve, treat it as a table name
 	if !ok {
 		// `dolt diff table`
@@ -337,7 +335,7 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 		return nil, nil
 	}
 
-	toRoot, ok := actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, args[1])
+	toRoot, ok := diff.MaybeResolveRoot(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, args[1])
 	if !ok {
 		// `dolt diff from_commit [...tables]`
 		if useMergeBase {
@@ -371,7 +369,7 @@ func (dArgs *diffArgs) applyMergeBase(ctx context.Context, dEnv *env.DoltEnv, le
 		return err
 	}
 
-	fromRoot, ok := actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, mergeBaseStr)
+	fromRoot, ok := diff.MaybeResolveRoot(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, mergeBaseStr)
 	if !ok {
 		return fmt.Errorf("merge base invalid %s", mergeBaseStr)
 	}
@@ -405,7 +403,7 @@ func (dArgs *diffArgs) applyDotRevisions(ctx context.Context, dEnv *env.DoltEnv,
 		}
 
 		if len(refs[1]) > 0 {
-			if toRoot, ok = actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, refs[1]); !ok {
+			if toRoot, ok = diff.MaybeResolveRoot(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, refs[1]); !ok {
 				return fmt.Errorf("to ref in three dot diff must be valid ref: %s", refs[1])
 			}
 			dArgs.toRoot = toRoot
@@ -423,7 +421,7 @@ func (dArgs *diffArgs) applyDotRevisions(ctx context.Context, dEnv *env.DoltEnv,
 		ok := true
 
 		if len(refs[0]) > 0 {
-			if fromRoot, ok = actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, refs[0]); !ok {
+			if fromRoot, ok = diff.MaybeResolveRoot(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, refs[0]); !ok {
 				return fmt.Errorf("from ref in two dot diff must be valid ref: %s", refs[0])
 			}
 			dArgs.fromRoot = fromRoot
@@ -431,7 +429,7 @@ func (dArgs *diffArgs) applyDotRevisions(ctx context.Context, dEnv *env.DoltEnv,
 		}
 
 		if len(refs[1]) > 0 {
-			if toRoot, ok = actions.MaybeResolve(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, refs[1]); !ok {
+			if toRoot, ok = diff.MaybeResolveRoot(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, refs[1]); !ok {
 				return fmt.Errorf("to ref in two dot diff must be valid ref: %s", refs[1])
 			}
 			dArgs.toRoot = toRoot
@@ -727,7 +725,7 @@ func writeDiffResults(
 	modifiedColNames map[string]bool,
 	dArgs *diffArgs,
 ) error {
-	ds, err := actions.NewDiffSplitter(diffQuerySch, targetSch)
+	ds, err := diff.NewDiffSplitter(diffQuerySch, targetSch)
 	if err != nil {
 		return err
 	}
@@ -746,7 +744,7 @@ func writeDiffResults(
 		}
 
 		if dArgs.skinny {
-			var filteredOldRow, filteredNewRow actions.RowDiff
+			var filteredOldRow, filteredNewRow diff.RowDiff
 			for i, changeType := range newRow.ColDiffs {
 				if (changeType == diff.Added|diff.Removed) || modifiedColNames[targetSch[i].Name] {
 					if i < len(oldRow.Row) {
@@ -804,7 +802,7 @@ func getModifiedCols(
 			break
 		}
 
-		ds, err := actions.NewDiffSplitter(diffQuerySch, unionSch)
+		ds, err := diff.NewDiffSplitter(diffQuerySch, unionSch)
 		if err != nil {
 			return modifiedColNames, err
 		}

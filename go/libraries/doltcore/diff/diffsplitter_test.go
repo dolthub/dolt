@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package actions
+package diff
 
 import (
 	"testing"
@@ -21,8 +21,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 )
 
 type splitRow struct {
@@ -62,28 +60,28 @@ func TestDiffSplitter(t *testing.T) {
 					old: emptyRowDiff(2),
 					new: RowDiff{
 						Row:      sql.Row{1, 2},
-						RowDiff:  diff.Added,
-						ColDiffs: []diff.ChangeType{diff.Added, diff.Added},
+						RowDiff:  Added,
+						ColDiffs: []ChangeType{Added, Added},
 					},
 				},
 				{
 					old: RowDiff{
 						Row:      sql.Row{3, 4},
-						RowDiff:  diff.Removed,
-						ColDiffs: []diff.ChangeType{diff.Removed, diff.Removed},
+						RowDiff:  Removed,
+						ColDiffs: []ChangeType{Removed, Removed},
 					},
 					new: emptyRowDiff(2),
 				},
 				{
 					old: RowDiff{
 						Row:      sql.Row{5, 6},
-						RowDiff:  diff.ModifiedOld,
-						ColDiffs: []diff.ChangeType{diff.None, diff.ModifiedOld},
+						RowDiff:  ModifiedOld,
+						ColDiffs: []ChangeType{None, ModifiedOld},
 					},
 					new: RowDiff{
 						Row:      sql.Row{5, 100},
-						RowDiff:  diff.ModifiedNew,
-						ColDiffs: []diff.ChangeType{diff.None, diff.ModifiedNew},
+						RowDiff:  ModifiedNew,
+						ColDiffs: []ChangeType{None, ModifiedNew},
 					},
 				},
 			},
@@ -112,28 +110,28 @@ func TestDiffSplitter(t *testing.T) {
 					old: emptyRowDiff(3),
 					new: RowDiff{
 						Row:      sql.Row{nil, 1, 2},
-						RowDiff:  diff.Added,
-						ColDiffs: []diff.ChangeType{diff.None, diff.Added, diff.Added},
+						RowDiff:  Added,
+						ColDiffs: []ChangeType{None, Added, Added},
 					},
 				},
 				{
 					old: RowDiff{
 						Row:      sql.Row{3, 4, nil},
-						RowDiff:  diff.Removed,
-						ColDiffs: []diff.ChangeType{diff.Removed, diff.Removed, diff.None},
+						RowDiff:  Removed,
+						ColDiffs: []ChangeType{Removed, Removed, None},
 					},
 					new: emptyRowDiff(3),
 				},
 				{
 					old: RowDiff{
 						Row:      sql.Row{5, 6, nil},
-						RowDiff:  diff.ModifiedOld,
-						ColDiffs: []diff.ChangeType{diff.ModifiedOld, diff.None, diff.None},
+						RowDiff:  ModifiedOld,
+						ColDiffs: []ChangeType{ModifiedOld, None, None},
 					},
 					new: RowDiff{
 						Row:      sql.Row{nil, 6, 100},
-						RowDiff:  diff.ModifiedNew,
-						ColDiffs: []diff.ChangeType{diff.None, diff.None, diff.ModifiedNew},
+						RowDiff:  ModifiedNew,
+						ColDiffs: []ChangeType{None, None, ModifiedNew},
 					},
 				},
 			},
@@ -158,16 +156,16 @@ func TestDiffSplitter(t *testing.T) {
 					old: emptyRowDiff(2),
 					new: RowDiff{
 						Row:      sql.Row{1, 2},
-						RowDiff:  diff.Added,
-						ColDiffs: []diff.ChangeType{diff.Added, diff.Added},
+						RowDiff:  Added,
+						ColDiffs: []ChangeType{Added, Added},
 					},
 				},
 				{
 					old: emptyRowDiff(2),
 					new: RowDiff{
 						Row:      sql.Row{3, 4},
-						RowDiff:  diff.Added,
-						ColDiffs: []diff.ChangeType{diff.Added, diff.Added},
+						RowDiff:  Added,
+						ColDiffs: []ChangeType{Added, Added},
 					},
 				},
 			},
@@ -192,16 +190,16 @@ func TestDiffSplitter(t *testing.T) {
 					new: emptyRowDiff(2),
 					old: RowDiff{
 						Row:      sql.Row{1, 2},
-						RowDiff:  diff.Removed,
-						ColDiffs: []diff.ChangeType{diff.Removed, diff.Removed},
+						RowDiff:  Removed,
+						ColDiffs: []ChangeType{Removed, Removed},
 					},
 				},
 				{
 					new: emptyRowDiff(2),
 					old: RowDiff{
 						Row:      sql.Row{3, 4},
-						RowDiff:  diff.Removed,
-						ColDiffs: []diff.ChangeType{diff.Removed, diff.Removed},
+						RowDiff:  Removed,
+						ColDiffs: []ChangeType{Removed, Removed},
 					},
 				},
 			},
@@ -227,7 +225,7 @@ func TestDiffSplitter(t *testing.T) {
 
 func emptyRowDiff(columns int) RowDiff {
 	return RowDiff{
-		ColDiffs: make([]diff.ChangeType, columns),
+		ColDiffs: make([]ChangeType, columns),
 	}
 }
 

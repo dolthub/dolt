@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package actions
+package diff
 
 import (
 	"context"
@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
@@ -37,8 +36,8 @@ type DiffSplitter struct {
 
 type RowDiff struct {
 	Row      sql.Row
-	RowDiff  diff.ChangeType
-	ColDiffs []diff.ChangeType
+	RowDiff  ChangeType
+	ColDiffs []ChangeType
 }
 
 // NewDiffSplitter returns a splitter that knows how to split unified diff query rows with the schema given into
@@ -92,7 +91,7 @@ func NewDiffSplitter(diffQuerySch sql.Schema, targetSch sql.Schema) (*DiffSplitt
 
 func newRowDiff(size int) RowDiff {
 	return RowDiff{
-		ColDiffs: make([]diff.ChangeType, size),
+		ColDiffs: make([]ChangeType, size),
 	}
 }
 
@@ -111,9 +110,9 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (RowDiff, RowDiff, error)
 	if diffTypeStr == "removed" || diffTypeStr == "modified" {
 		oldRow.Row = make(sql.Row, len(ds.targetSch))
 		if diffTypeStr == "modified" {
-			oldRow.RowDiff = diff.ModifiedOld
+			oldRow.RowDiff = ModifiedOld
 		} else {
-			oldRow.RowDiff = diff.Removed
+			oldRow.RowDiff = Removed
 		}
 
 		for i := 0; i < ds.fromLen; i++ {
@@ -126,13 +125,13 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (RowDiff, RowDiff, error)
 					if n, err := cmp(row[i], row[fromToIndex]); err != nil {
 						return RowDiff{}, RowDiff{}, err
 					} else if n != 0 {
-						oldRow.ColDiffs[ds.queryToTarget[i]] = diff.ModifiedOld
+						oldRow.ColDiffs[ds.queryToTarget[i]] = ModifiedOld
 					}
 				} else {
-					oldRow.ColDiffs[ds.queryToTarget[i]] = diff.ModifiedOld
+					oldRow.ColDiffs[ds.queryToTarget[i]] = ModifiedOld
 				}
 			} else {
-				oldRow.ColDiffs[ds.queryToTarget[i]] = diff.Removed
+				oldRow.ColDiffs[ds.queryToTarget[i]] = Removed
 			}
 		}
 	}
@@ -140,9 +139,9 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (RowDiff, RowDiff, error)
 	if diffTypeStr == "added" || diffTypeStr == "modified" {
 		newRow.Row = make(sql.Row, len(ds.targetSch))
 		if diffTypeStr == "modified" {
-			newRow.RowDiff = diff.ModifiedNew
+			newRow.RowDiff = ModifiedNew
 		} else {
-			newRow.RowDiff = diff.Added
+			newRow.RowDiff = Added
 		}
 
 		for i := ds.fromLen; i < len(ds.diffQuerySch)-1; i++ {
@@ -154,10 +153,10 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (RowDiff, RowDiff, error)
 				if n, err := cmp(row[i], row[ds.toFrom[i]]); err != nil {
 					return RowDiff{}, RowDiff{}, err
 				} else if n != 0 {
-					newRow.ColDiffs[ds.queryToTarget[i]] = diff.ModifiedNew
+					newRow.ColDiffs[ds.queryToTarget[i]] = ModifiedNew
 				}
 			} else {
-				newRow.ColDiffs[ds.queryToTarget[i]] = diff.Added
+				newRow.ColDiffs[ds.queryToTarget[i]] = Added
 			}
 		}
 	}
@@ -165,8 +164,9 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (RowDiff, RowDiff, error)
 	return oldRow, newRow, nil
 }
 
+// MaybeResolveRoot returns a root value and true if the a commit exists for given spec string; nil and false if it does not exist.
 // todo: distinguish between non-existent CommitSpec and other errors, don't assume non-existent
-func MaybeResolve(ctx context.Context, rsr env.RepoStateReader, doltDB *doltdb.DoltDB, spec string) (*doltdb.RootValue, bool) {
+func MaybeResolveRoot(ctx context.Context, rsr env.RepoStateReader, doltDB *doltdb.DoltDB, spec string) (*doltdb.RootValue, bool) {
 	cs, err := doltdb.NewCommitSpec(spec)
 	if err != nil {
 		// it's non-existent CommitSpec

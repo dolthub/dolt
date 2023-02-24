@@ -59,6 +59,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	//	{Name: "dgc", Schema: int64Schema("status"), Function: doltGC},
 
 	{Name: "dmerge", Schema: int64Schema("fast_forward", "conflicts"), Function: doltMerge},
+	{Name: "dpatch", Schema: stringSchema("statement"), Function: doltPatch},
 	{Name: "dpull", Schema: int64Schema("fast_forward", "conflicts"), Function: doltPull},
 	{Name: "dpush", Schema: int64Schema("success"), Function: doltPush},
 	{Name: "dremote", Schema: int64Schema("status"), Function: doltRemote},

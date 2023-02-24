@@ -77,6 +77,12 @@ func FmtColPrimaryKey(indent int, colStr string, newline bool) string {
 }
 
 func FmtIndex(index schema.Index) string {
+	return FmtIndexOrKey(index, "index")
+}
+
+// FmtIndexOrKey takes index and either 'index' or 'key' as input.
+// `INDEX` is used for `CREATE INDEX` statements, and `KEY` is used for `CREATE TABLE` statements.
+func FmtIndexOrKey(index schema.Index, indexOrKey string) string {
 	sb := strings.Builder{}
 	sb.WriteString("  ")
 	if index.IsUnique() {
@@ -85,7 +91,12 @@ func FmtIndex(index schema.Index) string {
 	if index.IsSpatial() {
 		sb.WriteString("SPATIAL ")
 	}
-	sb.WriteString("KEY ")
+	if strings.ToLower(indexOrKey) == "index" {
+		sb.WriteString("INDEX ")
+	} else {
+		sb.WriteString("KEY ")
+	}
+
 	sb.WriteString(QuoteIdentifier(index.Name()))
 	sb.WriteString(" (")
 	for i, indexColName := range index.ColumnNames() {

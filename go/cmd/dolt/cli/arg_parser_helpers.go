@@ -113,6 +113,7 @@ const (
 	DecorateFlag     = "decorate"
 	OneLineFlag      = "oneline"
 	ShallowFlag      = "shallow"
+	CachedFlag       = "cached"
 )
 
 const (
@@ -312,6 +313,7 @@ func CreateLogArgParser() *argparser.ArgParser {
 
 func CreatePatchArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
+	ap.SupportsFlag(CachedFlag, "c", "Show only the unstaged data changes.")
 	return ap
 }
 

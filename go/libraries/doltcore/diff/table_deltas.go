@@ -572,7 +572,8 @@ func getCreateTableStmt(tblName string, sch schema.Schema, pkSchema sql.PrimaryK
 			continue
 		}
 
-		colStmts = append(colStmts, sqlfmt.FmtIndex(index))
+		// keyword, 'KEY', is used instead of 'INDEX' for CREATE TABLE statement
+		colStmts = append(colStmts, sqlfmt.FmtIndexOrKey(index, "key"))
 	}
 
 	// need foreign key

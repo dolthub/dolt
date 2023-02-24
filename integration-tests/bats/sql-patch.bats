@@ -25,7 +25,7 @@ CREATE TABLE test (
 SQL
     dolt table import -u test `batshelper 1pk5col-ints.csv`
     dolt add test
-    dolt commit -m "Added one initial row"
+    dolt commit -m "Added two initial row"
 
     dolt checkout -b newbranch
     dolt sql -q 'INSERT INTO test (pk, c1, c2, c3, c4, c5) VALUES (2, 11, 0, 0, 0, 0)'
@@ -64,14 +64,7 @@ SQL
     dolt add test
     dolt commit -m "modified first row"
 
-    run dolt diff -r sql firstbranch newbranch
-    [ "$status" -eq 0 ]
-    diff_output=${lines[0]}
-
-    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
-    [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "statement" ]] || false
-    [[ "${lines[3]}" =~ "$diff_output" ]] || false
+    match_diff_and_patch_results firstbranch newbranch
 }
 
 @test "sql-patch: output reconciles DELETE query" {
@@ -96,14 +89,7 @@ SQL
     dolt add test
     dolt commit -m "deleted first row"
 
-    run dolt diff -r sql firstbranch newbranch
-    [ "$status" -eq 0 ]
-    diff_output=$output
-
-    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')" -r csv
-    [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "statement" ]] || false
-    [[ "$output" =~ "$diff_output" ]] || false
+    match_diff_and_patch_results firstbranch newbranch
 }
 
 @test "sql-patch: output reconciles change to PRIMARY KEY field in row " {
@@ -128,16 +114,7 @@ SQL
     dolt add test
     dolt commit -m "modified first row"
 
-    run dolt diff -r sql firstbranch newbranch
-    [ "$status" -eq 0 ]
-    diff_output_0=${lines[0]}
-    diff_output_1=${lines[1]}
-
-    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
-    [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "statement" ]] || false
-    [[ "${lines[3]}" =~ "$diff_output_0" ]] || false
-    [[ "${lines[4]}" =~ "$diff_output_1" ]] || false
+    match_diff_and_patch_results firstbranch newbranch
 }
 
 @test "sql-patch: output reconciles RENAME, DROP and ADD column" {
@@ -164,18 +141,7 @@ SQL
     dolt add .
     dolt commit -m "renamed column"
 
-    run dolt diff -r sql firstbranch newbranch
-    [ "$status" -eq 0 ]
-    diff_output_0=${lines[0]}
-    diff_output_1=${lines[1]}
-    diff_output_2=${lines[2]}
-
-    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
-    [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "statement" ]] || false
-    [[ "${lines[3]}" =~ "$diff_output_0" ]] || false
-    [[ "${lines[4]}" =~ "$diff_output_1" ]] || false
-    [[ "${lines[5]}" =~ "$diff_output_2" ]] || false
+    match_diff_and_patch_results firstbranch newbranch
 }
 
 @test "sql-patch: reconciles CREATE TABLE with row INSERTS" {
@@ -192,26 +158,7 @@ SQL
     dolt sql -q 'insert into test values (2,2)'
     dolt commit -Am "created new table"
 
-    run dolt diff -r sql firstbranch newbranch
-    [ "$status" -eq 0 ]
-    diff_output_0=${lines[0]}
-    diff_output_1=${lines[1]}
-    diff_output_2=${lines[2]}
-    diff_output_3=${lines[3]}
-    diff_output_4=${lines[4]}
-    diff_output_5=${lines[5]}
-    diff_output_6=${lines[6]}
-
-    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
-    [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "statement" ]] || false
-    [[ "${lines[3]}" =~ "$diff_output_0" ]] || false
-    [[ "${lines[4]}" =~ "$diff_output_1" ]] || false
-    [[ "${lines[5]}" =~ "$diff_output_2" ]] || false
-    [[ "${lines[6]}" =~ "$diff_output_3" ]] || false
-    [[ "${lines[7]}" =~ "$diff_output_4" ]] || false
-    [[ "${lines[8]}" =~ "$diff_output_5" ]] || false
-    [[ "${lines[9]}" =~ "$diff_output_6" ]] || false
+    match_diff_and_patch_results firstbranch newbranch
 }
 
 @test "sql-patch: reconciles DROP TABLE" {
@@ -233,14 +180,10 @@ SQL
     dolt add .
     dolt commit -m "removed table"
 
-    run dolt diff -r sql firstbranch newbranch
-    [ "$status" -eq 0 ]
-    diff_output_0=${lines[0]}
+    match_diff_and_patch_results firstbranch newbranch
 
     run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "statement" ]] || false
-    [[ "${lines[3]}" =~ "$diff_output_0" ]] || false
     [[ ! "$output" =~ "DELETE FROM" ]] || false
 }
 
@@ -270,20 +213,7 @@ SQL
     dolt add .
     dolt commit -m "renamed table and added data"
 
-    run dolt diff -r sql firstbranch newbranch
-    [ "$status" -eq 0 ]
-    diff_output_0=${lines[0]}
-    diff_output_1=${lines[1]}
-    diff_output_2=${lines[2]}
-    diff_output_3=${lines[3]}
-
-    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
-    [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "statement" ]] || false
-    [[ "${lines[3]}" =~ "$diff_output_0" ]] || false
-    [[ "${lines[4]}" =~ "$diff_output_1" ]] || false
-    [[ "${lines[5]}" =~ "$diff_output_2" ]] || false
-    [[ "${lines[6]}" =~ "$diff_output_3" ]] || false
+    match_diff_and_patch_results firstbranch newbranch
 }
 
 @test "sql-patch: diff sql recreates tables with all types" {
@@ -305,32 +235,7 @@ SQL
     dolt add .
     dolt commit -m "created new table"
 
-    run dolt diff -r sql firstbranch newbranch
-    [ "$status" -eq 0 ]
-    diff_output_0=${lines[0]}
-    diff_output_1=${lines[1]}
-    diff_output_2=${lines[2]}
-    diff_output_3=${lines[3]}
-    diff_output_4=${lines[4]}
-    diff_output_5=${lines[5]}
-    diff_output_6=${lines[6]}
-    diff_output_7=${lines[7]}
-    diff_output_8=${lines[8]}
-    diff_output_9=${lines[9]}
-
-    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
-    [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "statement" ]] || false
-    [[ "${lines[3]}" =~ "$diff_output_0" ]] || false
-    [[ "${lines[4]}" =~ "$diff_output_1" ]] || false
-    [[ "${lines[5]}" =~ "$diff_output_2" ]] || false
-    [[ "${lines[6]}" =~ "$diff_output_3" ]] || false
-    [[ "${lines[7]}" =~ "$diff_output_4" ]] || false
-    [[ "${lines[8]}" =~ "$diff_output_5" ]] || false
-    [[ "${lines[9]}" =~ "$diff_output_6" ]] || false
-    [[ "${lines[10]}" =~ "$diff_output_7" ]] || false
-    [[ "${lines[11]}" =~ "$diff_output_8" ]] || false
-    [[ "${lines[12]}" =~ "$diff_output_9" ]] || false
+    match_diff_and_patch_results firstbranch newbranch
 }
 
 @test "sql-patch: reconciles multi PRIMARY KEY and FOREIGN KEY" {
@@ -352,44 +257,7 @@ SQL
     dolt sql -q "ALTER TABLE parent DROP PRIMARY KEY"
     dolt sql -q "ALTER TABLE parent ADD PRIMARY KEY(id, id_ext);"
 
-    run dolt diff -r sql
-    [ "$status" -eq 0 ]
-    diff_output_0=${lines[0]}
-    diff_output_1=${lines[1]}
-    diff_output_2=${lines[2]}
-    diff_output_3=${lines[3]}
-    diff_output_4=${lines[4]}
-    diff_output_5=${lines[5]}
-    diff_output_6=${lines[6]}
-    diff_output_7=${lines[7]}
-    diff_output_8=${lines[8]}
-    diff_output_9=${lines[9]}
-    diff_output_10=${lines[10]}
-    diff_output_11=${lines[11]}
-    diff_output_12=${lines[12]}
-    diff_output_13=${lines[13]}
-    diff_output_14=${lines[14]}
-    diff_output_15=${lines[15]}
-
-    run dolt sql -q "CALL DOLT_PATCH()"
-    [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "statement" ]] || false
-    [[ "${lines[3]}" =~ "$diff_output_0" ]] || false
-    [[ "${lines[4]}" =~ "$diff_output_1" ]] || false
-    [[ "${lines[5]}" =~ "$diff_output_2" ]] || false
-    [[ "${lines[6]}" =~ "$diff_output_3" ]] || false
-    [[ "${lines[7]}" =~ "$diff_output_4" ]] || false
-    [[ "${lines[8]}" =~ "$diff_output_5" ]] || false
-    [[ "${lines[9]}" =~ "$diff_output_6" ]] || false
-    [[ "${lines[10]}" =~ "$diff_output_7" ]] || false
-    [[ "${lines[11]}" =~ "$diff_output_8" ]] || false
-    [[ "${lines[12]}" =~ "$diff_output_9" ]] || false
-    [[ "${lines[13]}" =~ "$diff_output_10" ]] || false
-    [[ "${lines[14]}" =~ "$diff_output_11" ]] || false
-    [[ "${lines[15]}" =~ "$diff_output_12" ]] || false
-    [[ "${lines[16]}" =~ "$diff_output_13" ]] || false
-    [[ "${lines[17]}" =~ "$diff_output_14" ]] || false
-    [[ "${lines[18]}" =~ "$diff_output_15" ]] || false
+    match_diff_and_patch_results
 }
 
 @test "sql-patch: reconciles CHECK CONSTRAINTS" {
@@ -402,24 +270,7 @@ create table foo (
 );
 SQL
 
-    run dolt diff -r sql
-    [ "$status" -eq 0 ]
-    diff_output_0=${lines[0]}
-    diff_output_1=${lines[1]}
-    diff_output_2=${lines[2]}
-    diff_output_3=${lines[3]}
-    diff_output_4=${lines[4]}
-    diff_output_5=${lines[5]}
-
-    run dolt sql -q "CALL DOLT_PATCH()"
-    [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "statement" ]] || false
-    [[ "${lines[3]}" =~ "$diff_output_0" ]] || false
-    [[ "${lines[4]}" =~ "$diff_output_1" ]] || false
-    [[ "${lines[5]}" =~ "$diff_output_2" ]] || false
-    [[ "${lines[6]}" =~ "$diff_output_3" ]] || false
-    [[ "${lines[7]}" =~ "$diff_output_4" ]] || false
-    [[ "${lines[8]}" =~ "$diff_output_5" ]] || false
+    match_diff_and_patch_results
 }
 
 @test "sql-patch: any error causing no data diff is shown as warnings." {
@@ -467,4 +318,31 @@ SQL
     [[ "${lines[3]}" =~ "$diff_output_0" ]] || false
     [[ "${lines[4]}" =~ "$diff_output_1" ]] || false
     [[ "$output" =~ "Primary key sets differ between revisions for table 'parent', skipping data diff" ]] || false
+}
+
+# either no arguments or give two commit revisions
+match_diff_and_patch_results() {
+    if [ -z "$1" ] && [ -z "$2" ]; then
+        run dolt diff -r sql
+    else
+        run dolt diff -r sql $1 $2
+    fi
+    [ "$status" -eq 0 ]
+    diff_array=( "${lines[@]}" )
+
+    if [ -z "$1" ] && [ -z "$2" ]; then
+        run dolt sql -q "CALL DOLT_PATCH()"
+    else
+        run dolt sql -q "CALL DOLT_PATCH('$1','$2')"
+    fi
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "statement" ]] || false
+    patch_array=( "${lines[@]:3}" )
+
+    # do not include the last element of patch_array, which will be the closing line for tabular output
+    # this also removes the last element of diff_array, which can be an error message.
+    for i in "${!patch_array[@]:0:2}"; do
+        # printf "%s ---- %s\n" "${diff_array[i]}" "${patch_array[i]}"
+        [[ "${patch_array[i]}" =~ "${diff_array[i]}" ]] || false
+    done
 }

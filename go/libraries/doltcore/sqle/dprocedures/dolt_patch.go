@@ -15,6 +15,7 @@
 package dprocedures
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sort"
@@ -31,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -76,12 +76,13 @@ func doDoltPatch(ctx *sql.Context, args []string) ([]string, error) {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	dArgs, err := parseArgs(ctx, dbData, doltDB, roots, apr, false)
+	fromRef, fromRoot, toRef, toRoot, tables := parseRevisionsAndTablesArgs(ctx, dbData, doltDB, roots, apr)
+	tableSet, err := validateTablesAndGetTablesSet(ctx, fromRoot, toRoot, tables)
 	if err != nil {
 		return nil, err
 	}
 
-	tableDeltas, err := diff.GetTableDeltas(ctx, dArgs.fromRoot, dArgs.toRoot)
+	tableDeltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
 	if err != nil {
 		return nil, errhand.BuildDError("error: unable to diff tables").AddCause(err).Build()
 	}
@@ -90,25 +91,23 @@ func doDoltPatch(ctx *sql.Context, args []string) ([]string, error) {
 		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
 	})
 
-	fromRef, toRef := dArgs.fromRef, dArgs.toRef
-
 	var finalRes []string
 	for _, td := range tableDeltas {
-		if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
+		if !tableSet.Contains(td.FromName) && !tableSet.Contains(td.ToName) {
 			continue
 		}
 		if td.FromTable == nil && td.ToTable == nil {
 			return nil, errhand.BuildDError("error: both tables in tableDelta are nil").Build()
 		}
 
-		ddlStatements, err := getSchemaDiff(ctx, dArgs.toRoot, td)
+		ddlStatements, err := getSchemaSqlPatch(ctx, toRoot, td)
 		if err != nil {
 			return nil, err
 		}
 		finalRes = append(finalRes, ddlStatements...)
 
 		if canGetDataDiff(ctx, td) {
-			res, err := diffUserTable(ctx, dbData, td, fromRef, toRef)
+			res, err := getUserTableSqlPatch(ctx, dbData, td, fromRef, toRef)
 			if err != nil {
 				return nil, err
 			}
@@ -119,7 +118,7 @@ func doDoltPatch(ctx *sql.Context, args []string) ([]string, error) {
 	return finalRes, nil
 }
 
-func getSchemaDiff(ctx *sql.Context, toRoot *doltdb.RootValue, td diff.TableDelta) ([]string, error) {
+func getSchemaSqlPatch(ctx *sql.Context, toRoot *doltdb.RootValue, td diff.TableDelta) ([]string, error) {
 	toSchemas, err := toRoot.GetAllSchemas(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("could not read schemas from toRoot, cause: %s", err.Error())
@@ -154,7 +153,7 @@ func canGetDataDiff(ctx *sql.Context, td diff.TableDelta) bool {
 	return true
 }
 
-func diffUserTable(ctx *sql.Context, dbData env.DbData, td diff.TableDelta, fromRef, toRef string) ([]string, error) {
+func getUserTableSqlPatch(ctx *sql.Context, dbData env.DbData, td diff.TableDelta, fromRef, toRef string) ([]string, error) {
 	// ToTable is used as target table as cannot be nil at this point
 	diffSch, projections, ri, err := getDiffQuery(ctx, dbData, td, fromRef, toRef)
 	if err != nil {
@@ -245,7 +244,7 @@ func getDiffSqlSchema(diffTableSch sql.Schema, columns []string) (sql.Schema, []
 }
 
 func getDiffResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema, projections []sql.Expression, iter sql.RowIter, tn string, tsch schema.Schema) ([]string, error) {
-	ds, err := actions.NewDiffSplitter(diffQuerySch, targetSch)
+	ds, err := diff.NewDiffSplitter(diffQuerySch, targetSch)
 	if err != nil {
 		return nil, err
 	}
@@ -290,94 +289,80 @@ func getDiffResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema, projec
 	}
 }
 
-type diffArgs struct {
-	fromRoot *doltdb.RootValue
-	toRoot   *doltdb.RootValue
-	fromRef  string
-	toRef    string
-	tableSet *set.StrSet
-}
+// parseRevisionsAndTablesArgs checks given arguments whether each refers to a revision or a table name.
+// It returns from revision name, from root values, to revision name, to root values and potential table names.
+func parseRevisionsAndTablesArgs(ctx *sql.Context, dbData env.DbData, doltDB *doltdb.DoltDB, roots doltdb.Roots, apr *argparser.ArgParseResults) (string, *doltdb.RootValue, string, *doltdb.RootValue, []string) {
+	var fromRef, toRef string
+	var fromRoot, toRoot *doltdb.RootValue
 
-func (dArgs *diffArgs) getDiffArgs(ctx *sql.Context, dbData env.DbData, doltDB *doltdb.DoltDB, roots doltdb.Roots, apr *argparser.ArgParseResults, isCached bool) ([]string, error) {
-	headRoot := roots.Head
-	stagedRoot := roots.Staged
-	workingRoot := roots.Working
-
-	dArgs.fromRoot = stagedRoot
-	dArgs.fromRef = "STAGED"
-	dArgs.toRoot = workingRoot
-	dArgs.toRef = "WORKING"
-	if isCached {
-		dArgs.fromRoot = headRoot
-		dArgs.fromRef = "HEAD"
-		dArgs.toRoot = stagedRoot
-		dArgs.toRef = "STAGED"
+	fromRoot = roots.Staged
+	fromRef = "STAGED"
+	toRoot = roots.Working
+	toRef = "WORKING"
+	if apr.Contains(cli.CachedFlag) {
+		fromRoot = roots.Head
+		fromRef = "HEAD"
+		toRoot = roots.Staged
+		toRef = "STAGED"
 	}
 
 	// `dolt diff`
 	if apr.NArg() == 0 {
-		return nil, nil
+		return fromRef, fromRoot, toRef, toRoot, apr.Args
 	}
-	args := apr.Args
 
-	fromRoot, ok := actions.MaybeResolve(ctx, dbData.Rsr, doltDB, args[0])
+	from, ok := diff.MaybeResolveRoot(ctx, dbData.Rsr, doltDB, apr.Args[0])
 	if !ok {
 		// `dolt diff [...tables]`
-		return args, nil
+		return fromRef, fromRoot, toRef, toRoot, apr.Args
 	}
 
-	dArgs.fromRoot = fromRoot
-	dArgs.fromRef = args[0]
+	fromRoot = from
+	fromRef = apr.Args[0]
 
-	// `dolt diff from_commit`
 	if apr.NArg() == 1 {
-		return args, nil
+		// `dolt diff from_commit`
+		return fromRef, fromRoot, toRef, toRoot, apr.Args[1:]
 	}
 
-	toRoot, ok := actions.MaybeResolve(ctx, dbData.Rsr, doltDB, args[1])
+	to, ok := diff.MaybeResolveRoot(ctx, dbData.Rsr, doltDB, apr.Args[1])
 	if !ok {
-		return args[1:], nil
+		// `dolt diff from_commit [...tables]`
+		return fromRef, fromRoot, toRef, toRoot, apr.Args[1:]
 	}
 
-	dArgs.toRoot = toRoot
-	dArgs.toRef = args[1]
+	toRoot = to
+	toRef = apr.Args[1]
 
 	// `dolt diff from_commit to_commit [...tables]`
-	return args[2:], nil
+	return fromRef, fromRoot, toRef, toRoot, apr.Args[2:]
 }
 
-func parseArgs(ctx *sql.Context, dbData env.DbData, doltDB *doltdb.DoltDB, roots doltdb.Roots, apr *argparser.ArgParseResults, isCached bool) (*diffArgs, error) {
-	var dArgs = &diffArgs{}
-	var ok bool
-	var err error
-
-	tables, err := dArgs.getDiffArgs(ctx, dbData, doltDB, roots, apr, false)
-	if err != nil {
-		return nil, err
-	}
-
-	dArgs.tableSet = set.NewStrSet(nil)
+// validateTablesAndGetTablesSet takes array of table names or an empty array and returns the table names
+// in string set type. If the array is empty, it returns union of table names on from and to roots.
+func validateTablesAndGetTablesSet(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, tables []string) (*set.StrSet, error) {
+	tableSet := set.NewStrSet(nil)
 
 	// if no tables or docs were specified as args, diff all tables and docs
 	if len(tables) == 0 {
-		utn, err := doltdb.UnionTableNames(ctx, dArgs.fromRoot, dArgs.toRoot)
+		utn, err := doltdb.UnionTableNames(ctx, fromRoot, toRoot)
 		if err != nil {
 			return nil, err
 		}
-		dArgs.tableSet.Add(utn...)
+		tableSet.Add(utn...)
 	} else {
 		for _, tableName := range tables {
 			// verify table args exist in at least one root
-			_, ok, err = dArgs.fromRoot.GetTable(ctx, tableName)
+			_, ok, err := fromRoot.GetTable(ctx, tableName)
 			if err != nil {
 				return nil, err
 			}
 			if ok {
-				dArgs.tableSet.Add(tableName)
+				tableSet.Add(tableName)
 				continue
 			}
 
-			_, ok, err = dArgs.toRoot.GetTable(ctx, tableName)
+			_, ok, err = toRoot.GetTable(ctx, tableName)
 			if err != nil {
 				return nil, err
 			}
@@ -387,28 +372,29 @@ func parseArgs(ctx *sql.Context, dbData env.DbData, doltDB *doltdb.DoltDB, roots
 		}
 	}
 
-	return dArgs, nil
+	return tableSet, nil
 }
 
 var _ sql.RowIter = (*patchRowIter)(nil)
 
 type patchRowIter struct {
-	stmts   []string
-	stmtLen int
-	idx     int
+	stmts []string
+	idx   int
 }
 
 func newPatchRowIter(stmts []string) sql.RowIter {
 	return &patchRowIter{
-		stmts:   stmts,
-		stmtLen: len(stmts),
-		idx:     0,
+		stmts: stmts,
+		idx:   0,
 	}
 }
 
 func (p *patchRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	defer p.incrementIndexes()
-	if p.idx >= p.stmtLen {
+	defer func() {
+		p.idx++
+	}()
+
+	if p.idx >= len(p.stmts) {
 		return nil, io.EOF
 	}
 
@@ -421,33 +407,7 @@ func (p *patchRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 func (p *patchRowIter) Close(_ *sql.Context) error {
+	p.stmts = nil
+	p.idx = 0
 	return nil
-}
-
-func (p *patchRowIter) incrementIndexes() {
-	p.idx++
-	if p.idx >= p.stmtLen {
-		p.idx = 0
-		p.stmts = nil
-	}
-}
-
-func maybeResolve(ctx *sql.Context, dbData env.DbData, doltDB *doltdb.DoltDB, spec string) (*doltdb.RootValue, bool, error) {
-	cs, err := doltdb.NewCommitSpec(spec)
-	if err != nil {
-		// it's non-existent CommitSpec
-		return nil, false, nil
-	}
-
-	cm, err := doltDB.Resolve(ctx, cs, dbData.Rsr.CWBHeadRef())
-	if err != nil {
-		return nil, false, err
-	}
-
-	root, err := cm.GetRootValue(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-
-	return root, true, nil
 }
