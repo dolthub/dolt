@@ -229,17 +229,13 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 	return
 }
 
-// corruptIndexRecovery handles a corrupted or malformed journal index by deleting
+// corruptIndexRecovery handles a corrupted or malformed journal index by truncating
 // the index file and restarting the journal bootstrapping process without an index.
 func (wr *journalWriter) corruptIndexRecovery(ctx context.Context) (err error) {
-	p := filepath.Join(filepath.Dir(wr.path), journalIndexFileName)
-	if err = wr.index.Close(); err != nil {
+	if _, err = wr.index.Seek(0, io.SeekStart); err != nil {
 		return
 	}
-	if err = os.Remove(p); err != nil {
-		return
-	}
-	if wr.index, err = os.OpenFile(p, os.O_RDWR|os.O_CREATE, 0666); err != nil {
+	if err = wr.index.Truncate(0); err != nil {
 		return
 	}
 	// reset bootstrapping state
