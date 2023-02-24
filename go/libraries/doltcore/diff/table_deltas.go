@@ -609,7 +609,8 @@ func getCreateTableStmt(tblName string, sch schema.Schema, pkSchema sql.PrimaryK
 	}
 
 	coll := sql.CollationID(sch.GetCollation())
-	return plan.CreateTableFmt(tblName, colStmts, coll.CharacterSet().Name(), coll.Name()), nil
+	createTableStmt := plan.CreateTableFmt(tblName, colStmts, coll.CharacterSet().Name(), coll.Name())
+	return fmt.Sprintf("%s;", createTableStmt), nil
 }
 
 // isPrimaryKeyIndex returns whether the index given matches the table's primary key columns. Order is not considered.
