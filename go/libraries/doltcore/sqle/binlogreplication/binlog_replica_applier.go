@@ -228,6 +228,20 @@ func (a *binlogReplicaApplier) startReplicationEventStream(ctx *sql.Context, con
 
 	a.currentPosition = position
 
+	// Clear out the format description in case we're reconnecting, so that we don't use the old format description
+	// to interpret any event messages before we receive the new format description from the new stream.
+	a.format = mysql.BinlogFormat{}
+
+	// If the source server has binlog checksums enabled (@@global.binlog_checksum), then the replica MUST
+	// set @master_binlog_checksum to handshake with the server to acknowledge that it knows that checksums
+	// are in use. Without this step, the server will just send back error messages saying that the replica
+	// does not support the binlog checksum algorithm in use on the primary.
+	// For more details, see: https://dev.mysql.com/worklog/task/?id=2540
+	_, err = conn.ExecuteFetch("set @master_binlog_checksum=@@global.binlog_checksum;", 0, false)
+	if err != nil {
+		return err
+	}
+
 	return conn.SendBinlogDumpCommand(serverId, *position)
 }
 
@@ -271,10 +285,6 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 							return err
 						}
 						continue
-					} else if strings.Contains(sqlError.Message, "can not handle replication events with the checksum") {
-						// Ignore any errors about checksums
-						ctx.GetLogger().Debug("ignoring binlog checksum error message")
-						continue
 					}
 				}
 
@@ -283,6 +293,19 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 				DoltBinlogReplicaController.setIoError(mysql.ERUnknownError, err.Error())
 
 				continue
+			}
+
+			// We don't support checksum validation, so we must strip off any checksum data if present, otherwise
+			// it could get interpreted as part of the data fields and corrupt the fields we pull out. There is not
+			// a future-proof guarantee on the checksum size, so we can't strip a checksum until we've seen the
+			// Format binlog event that definitively tells us if checksums are enabled and what algorithm they use.
+			if a.format.IsZero() == false {
+				event, _, err = event.StripChecksum(a.format)
+				if err != nil {
+					msg := fmt.Sprintf("unable to strip checksum from binlog event: '%v'", err.Error())
+					ctx.GetLogger().Error(msg)
+					DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, msg)
+				}
 			}
 
 			err = a.processBinlogEvent(ctx, engine, event)
@@ -328,6 +351,8 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			"database": query.Database,
 			"charset":  query.Charset,
 			"query":    query.SQL,
+			"options":  fmt.Sprintf("0x%x", query.Options),
+			"sql_mode": fmt.Sprintf("0x%x", query.SqlMode),
 		}).Debug("Received binlog event: Query")
 
 		// When executing SQL statements sent from the primary, we can't be sure what database was modified unless we
@@ -336,6 +361,39 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 		// database that was modified, so instead, we commit to all databases when we see a Query binlog event to
 		// avoid issues with correctness, at the cost of being slightly less efficient
 		commitToAllDatabases = true
+
+		if query.Options&mysql.QFlagOptionAutoIsNull > 0 {
+			ctx.GetLogger().Tracef("Setting sql_auto_is_null ON")
+			ctx.SetSessionVariable(ctx, "sql_auto_is_null", 1)
+		} else {
+			ctx.GetLogger().Tracef("Setting sql_auto_is_null OFF")
+			ctx.SetSessionVariable(ctx, "sql_auto_is_null", 0)
+		}
+
+		if query.Options&mysql.QFlagOptionNotAutocommit > 0 {
+			ctx.GetLogger().Tracef("Setting autocommit=0")
+			ctx.SetSessionVariable(ctx, "autocommit", 0)
+		} else {
+			ctx.GetLogger().Tracef("Setting autocommit=1")
+			ctx.SetSessionVariable(ctx, "autocommit", 1)
+		}
+
+		if query.Options&mysql.QFlagOptionNoForeignKeyChecks > 0 {
+			ctx.GetLogger().Tracef("Setting foreign_key_checks=0")
+			ctx.SetSessionVariable(ctx, "foreign_key_checks", 0)
+		} else {
+			ctx.GetLogger().Tracef("Setting foreign_key_checks=1")
+			ctx.SetSessionVariable(ctx, "foreign_key_checks", 1)
+		}
+
+		// NOTE: unique_checks is not currently honored by Dolt
+		if query.Options&mysql.QFlagOptionRelaxedUniqueChecks > 0 {
+			ctx.GetLogger().Tracef("Setting unique_checks=0")
+			ctx.SetSessionVariable(ctx, "unique_checks", 0)
+		} else {
+			ctx.GetLogger().Tracef("Setting unique_checks=1")
+			ctx.SetSessionVariable(ctx, "unique_checks", 1)
+		}
 
 		executeQueryWithEngine(ctx, engine, query.SQL)
 		createCommit = strings.ToLower(query.SQL) != "begin"
@@ -493,16 +551,18 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 // processRowEvent processes a WriteRows, DeleteRows, or UpdateRows binlog event and returns an error if any problems
 // were encountered.
 func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.BinlogEvent, engine *gms.Engine) error {
+	var eventType string
 	switch {
 	case event.IsDeleteRows():
-		ctx.GetLogger().Debug("Received binlog event: DeleteRows")
+		eventType = "DeleteRows"
 	case event.IsWriteRows():
-		ctx.GetLogger().Debug("Received binlog event: WriteRows")
+		eventType = "WriteRows"
 	case event.IsUpdateRows():
-		ctx.GetLogger().Debug("Received binlog event: UpdateRows")
+		eventType = "UpdateRows"
 	default:
 		return fmt.Errorf("unsupported event type: %v", event)
 	}
+	ctx.GetLogger().Debugf("Received binlog event: %s", eventType)
 
 	tableId := event.TableID(a.format)
 	tableMap, ok := a.tableMapsById[tableId]
@@ -519,16 +579,22 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 		return err
 	}
 
+	ctx.GetLogger().WithFields(logrus.Fields{
+		"flags": fmt.Sprintf("%x", rows.Flags),
+	}).Debugf("Processing rows from %s event", eventType)
+
 	flags := rows.Flags
-	if flags&rowFlag_endOfStatement == rowFlag_endOfStatement {
+	foreignKeyChecksDisabled := false
+	if flags&rowFlag_endOfStatement > 0 {
 		// nothing to be done for end of statement; just clear the flag and move on
 		flags = flags &^ rowFlag_endOfStatement
 	}
-	if flags&rowFlag_noForeignKeyChecks == rowFlag_noForeignKeyChecks {
+	if flags&rowFlag_noForeignKeyChecks > 0 {
+		foreignKeyChecksDisabled = true
 		flags = flags &^ rowFlag_noForeignKeyChecks
 	}
 	if flags != 0 {
-		msg := fmt.Sprintf("unsupported binlog protocol message: DeleteRows event with unsupported flags '%x'", flags)
+		msg := fmt.Sprintf("unsupported binlog protocol message: row event with unsupported flags '%x'", flags)
 		ctx.GetLogger().Errorf(msg)
 		DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, msg)
 	}
@@ -543,10 +609,9 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 	case event.IsUpdateRows():
 		ctx.GetLogger().Debugf(" - Updated Rows (table: %s)", tableMap.Name)
 	case event.IsWriteRows():
-		ctx.GetLogger().Debugf(" - New Rows (table: %s)", tableMap.Name)
+		ctx.GetLogger().Debugf(" - Inserted Rows (table: %s)", tableMap.Name)
 	}
 
-	foreignKeyChecksDisabled := tableMap.Flags&rowFlag_noForeignKeyChecks > 0
 	writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database, foreignKeyChecksDisabled)
 	if err != nil {
 		return err
