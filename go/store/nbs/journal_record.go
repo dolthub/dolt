@@ -22,6 +22,7 @@ import (
 	"io"
 
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // journalRec is a record in a chunk journal. Its serialization format uses
@@ -113,7 +114,7 @@ func rootHashRecordSize() (recordSz int) {
 func writeChunkRecord(buf []byte, c CompressedChunk) (n uint32) {
 	// length
 	l, _ := chunkRecordSize(c)
-	writeUint(buf[:journalRecLenSz], l)
+	writeUint32(buf[:journalRecLenSz], l)
 	n += journalRecLenSz
 	// kind
 	buf[n] = byte(kindJournalRecTag)
@@ -131,7 +132,7 @@ func writeChunkRecord(buf []byte, c CompressedChunk) (n uint32) {
 	copy(buf[n:], c.FullCompressedChunk)
 	n += uint32(len(c.FullCompressedChunk))
 	// checksum
-	writeUint(buf[n:], crc(buf[:n]))
+	writeUint32(buf[n:], crc(buf[:n]))
 	n += journalRecChecksumSz
 	d.PanicIfFalse(l == n)
 	return
@@ -140,7 +141,7 @@ func writeChunkRecord(buf []byte, c CompressedChunk) (n uint32) {
 func writeRootHashRecord(buf []byte, root addr) (n uint32) {
 	// length
 	l := rootHashRecordSize()
-	writeUint(buf[:journalRecLenSz], uint32(l))
+	writeUint32(buf[:journalRecLenSz], uint32(l))
 	n += journalRecLenSz
 	// kind
 	buf[n] = byte(kindJournalRecTag)
@@ -154,13 +155,13 @@ func writeRootHashRecord(buf []byte, root addr) (n uint32) {
 	n += journalRecAddrSz
 	// empty payload
 	// checksum
-	writeUint(buf[n:], crc(buf[:n]))
+	writeUint32(buf[n:], crc(buf[:n]))
 	n += journalRecChecksumSz
 	return
 }
 
 func readJournalRecord(buf []byte) (rec journalRec, err error) {
-	rec.length = readUint(buf)
+	rec.length = readUint32(buf)
 	buf = buf[journalRecLenSz:]
 	for len(buf) > journalRecChecksumSz {
 		tag := journalRecTag(buf[0])
@@ -183,24 +184,28 @@ func readJournalRecord(buf []byte) (rec journalRec, err error) {
 			return
 		}
 	}
-	rec.checksum = readUint(buf[:journalRecChecksumSz])
+	rec.checksum = readUint32(buf[:journalRecChecksumSz])
 	return
 }
 
 func validateJournalRecord(buf []byte) (ok bool) {
 	if len(buf) > (journalRecLenSz + journalRecChecksumSz) {
 		off := len(buf) - journalRecChecksumSz
-		ok = crc(buf[:off]) == readUint(buf[off:])
+		ok = crc(buf[:off]) == readUint32(buf[off:])
 	}
 	return
 }
 
-func processJournalRecords(ctx context.Context, r io.ReadSeeker, cb func(o int64, r journalRec) error) (int64, error) {
+func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb func(o int64, r journalRec) error) (int64, error) {
 	var (
 		buf []byte
-		off int64
 		err error
 	)
+
+	// start processing records from |off|
+	if _, err = r.Seek(off, io.SeekStart); err != nil {
+		return 0, err
+	}
 
 	rdr := bufio.NewReaderSize(r, journalWriterBuffSize)
 	for {
@@ -209,7 +214,7 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, cb func(o int64
 			break
 		}
 
-		l := readUint(buf)
+		l := readUint32(buf)
 		if l > journalRecMaxSz {
 			break
 		} else if buf, err = rdr.Peek(int(l)); err != nil {
@@ -245,10 +250,43 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, cb func(o int64
 	return off, nil
 }
 
-func readUint(buf []byte) uint32 {
+func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err error) {
+	buf := make([]byte, 1024) // assumes len(rec) < 1024
+	if _, err = journal.ReadAt(buf, offset); err != nil {
+		return
+	}
+	sz := readUint32(buf)
+	if sz > journalRecMaxSz {
+		err = fmt.Errorf("invalid root hash record size at %d", offset)
+		return
+	}
+	buf = buf[:sz]
+	if !validateIndexRecord(buf) {
+		err = fmt.Errorf("failed to validate root hash record at %d", offset)
+		return
+	}
+	var rec journalRec
+	if rec, err = readJournalRecord(buf); err != nil {
+		return
+	} else if rec.kind != rootHashJournalRecKind {
+		err = fmt.Errorf("expected root hash record, got kind: %d", rec.kind)
+		return
+	}
+	return hash.Hash(rec.address), nil
+}
+
+func readUint32(buf []byte) uint32 {
 	return binary.BigEndian.Uint32(buf)
 }
 
-func writeUint(buf []byte, u uint32) {
+func writeUint32(buf []byte, u uint32) {
 	binary.BigEndian.PutUint32(buf, u)
+}
+
+func readUint64(buf []byte) uint64 {
+	return binary.BigEndian.Uint64(buf)
+}
+
+func writeUint64(buf []byte, u uint64) {
+	binary.BigEndian.PutUint64(buf, u)
 }
