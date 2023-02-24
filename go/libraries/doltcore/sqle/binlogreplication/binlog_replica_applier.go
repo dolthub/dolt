@@ -386,6 +386,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			ctx.SetSessionVariable(ctx, "foreign_key_checks", 1)
 		}
 
+		// NOTE: unique_checks is not currently honored by Dolt
 		if query.Options&mysql.QFlagOptionRelaxedUniqueChecks > 0 {
 			ctx.GetLogger().Tracef("Setting unique_checks=0")
 			ctx.SetSessionVariable(ctx, "unique_checks", 0)

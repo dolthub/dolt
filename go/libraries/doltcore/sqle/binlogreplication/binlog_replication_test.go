@@ -491,7 +491,7 @@ func startReplication(_ *testing.T, port int) {
 	replicaDatabase.MustExec("SET @@GLOBAL.server_id=123;")
 	replicaDatabase.MustExec(
 		fmt.Sprintf("change replication source to SOURCE_HOST='localhost', SOURCE_USER='replicator', "+
-			"SOURCE_PASSWORD='password', SOURCE_PORT=%v;", port))
+			"SOURCE_PASSWORD='Zqr8_blrGm1!', SOURCE_PORT=%v;", port))
 
 	replicaDatabase.MustExec("start replica;")
 }
@@ -628,8 +628,8 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 	os.Chdir(originalCwd)
 	fmt.Printf("MySQL server started on port %v \n", mySqlPort)
 
-	primaryDatabase.MustExec("CREATE USER 'replicator'@'%' IDENTIFIED BY 'password';")
-	primaryDatabase.MustExec("GRANT ALL PRIVILEGES ON *.* TO 'replicator'@'%';")
+	primaryDatabase.MustExec("CREATE USER 'replicator'@'%' IDENTIFIED BY 'Zqr8_blrGm1!';")
+	primaryDatabase.MustExec("GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';")
 
 	return mySqlPort, cmd.Process, nil
 }
