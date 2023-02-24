@@ -949,7 +949,7 @@ func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, er
 		for level := byte(0); level < byte(65); level++ {
 			minCell := ZMask(level, zMin)
 			field := prolly.RangeField{
-				Exact: false,
+				Exact:              false,
 				SpatialPointLookup: true,
 				Lo: prolly.Bound{
 					Binding:   true,
@@ -981,7 +981,7 @@ func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, er
 			minCell := ZMask(level, zRange[0])
 			maxCell := ZMask(level, zRange[1])
 			field := prolly.RangeField{
-				Exact: false,
+				Exact:              false,
 				SpatialPointLookup: minCell == maxCell,
 				Lo: prolly.Bound{
 					Binding:   true,

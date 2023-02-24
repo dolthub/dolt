@@ -16,10 +16,11 @@ package index
 
 import (
 	"encoding/binary"
-	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"math"
 	"math/bits"
+
+	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -200,7 +201,7 @@ func SplitZRanges(zRange ZRange) []ZRange {
 		prefixLength = bits.LeadingZeros64(zl[0] ^ zh[0])
 		suffixLength := 64 - prefixLength
 		mask := uint64(math.MaxUint64 >> prefixLength)
-		if zl[1] == 0 && zh[1] == math.MaxUint64 && (zl[0] & mask) == 0 && (zh[0] & mask) == mask {
+		if zl[1] == 0 && zh[1] == math.MaxUint64 && (zl[0]&mask) == 0 && (zh[0]&mask) == mask {
 			return []ZRange{zRange}
 		}
 
@@ -210,7 +211,7 @@ func SplitZRanges(zRange ZRange) []ZRange {
 		zRangeL[1][1] |= 0xAAAAAAAAAAAAAAAA >> (prefixLength % 2) // set suffix to all 1s
 
 		// lower bound for right range; set 1 fill with 0s
-		suffixMask := uint64(math.MaxUint64 << suffixLength) | (0x5555555555555555 >> prefixLength)
+		suffixMask := uint64(math.MaxUint64<<suffixLength) | (0x5555555555555555 >> prefixLength)
 		zRangeR[0][0] &= suffixMask                               // set suffix to all 0s
 		zRangeR[0][0] |= 1 << (suffixLength - 1)                  // set first suffix bit to 1
 		zRangeR[0][1] &= 0xAAAAAAAAAAAAAAAA >> (prefixLength % 2) // set suffix to all 0s
@@ -219,7 +220,7 @@ func SplitZRanges(zRange ZRange) []ZRange {
 		prefixLength = bits.LeadingZeros64(zl[1] ^ zh[1])
 		suffixLength := 64 - prefixLength
 		mask := uint64(math.MaxUint64 >> prefixLength)
-		if (zl[1] & mask) == 0 && (zh[1] & mask) == mask {
+		if (zl[1]&mask) == 0 && (zh[1]&mask) == mask {
 			return []ZRange{zRange}
 		}
 
@@ -228,7 +229,7 @@ func SplitZRanges(zRange ZRange) []ZRange {
 		zRangeL[1][1] &= ^(1 << (suffixLength - 1))         // set at prefix to 0
 
 		// lower bound for right range; set 1 fill with 0s
-		suffixMask := uint64(math.MaxUint64 << suffixLength) | (0x5555555555555555 >> prefixLength)
+		suffixMask := uint64(math.MaxUint64<<suffixLength) | (0x5555555555555555 >> prefixLength)
 		zRangeR[0][1] &= suffixMask              // set suffix to all 0s
 		zRangeR[0][1] |= 1 << (suffixLength - 1) // set at prefix to 1
 	}
@@ -239,7 +240,7 @@ func SplitZRanges(zRange ZRange) []ZRange {
 
 	// if last range's upperbound in left is next to first range's lowerbound in right, they can be merged
 	lastZRangeL, firstZRangeR := zRangesL[len(zRangesL)-1], zRangesR[0]
-	if firstZRangeR[0][0] == lastZRangeL[1][0] && firstZRangeR[0][1] - lastZRangeL[1][1] == 1 {
+	if firstZRangeR[0][0] == lastZRangeL[1][0] && firstZRangeR[0][1]-lastZRangeL[1][1] == 1 {
 		zRangesL[len(zRangesL)-1][1] = firstZRangeR[1] // replace the left's last upperbound with right's first upperbound
 		zRangesR = zRangesR[1:]                        // drop right's first range
 	}

@@ -279,7 +279,7 @@ func TestZCell(t *testing.T) {
 	})
 
 	t.Run("test sorting many points by z-cell", func(t *testing.T) {
-		sortedGeoms :=  make([]types.GeometryValue, len(ps))
+		sortedGeoms := make([]types.GeometryValue, len(ps))
 		for i, p := range ps {
 			sortedGeoms[i] = p
 		}
@@ -316,23 +316,23 @@ func TestZCell(t *testing.T) {
 
 func TestSplitZRanges(t *testing.T) {
 	zvals := []ZVal{
-		{0,0},  // (0, 0)
-		{0,1},  // (1, 0)
-		{0,2},  // (0, 1)
-		{0,3},  // (1, 1)
-		{0,4},  // (2, 0)
-		{0,5},  // (3, 0)
-		{0,6},  // (2, 1)
-		{0,7},  // (3, 1)
-		{0,8},  // (0, 2)
-		{0,9},  // (1, 2)
-		{0,10}, // (0, 3)
-		{0,11}, // (1, 3)
-		{0,12}, // (2, 2)
-		{0,13}, // (3, 2)
-		{0,14}, // (2, 3)
-		{0,15}, // (3, 3)
-		{0,16}, // (4, 0)
+		{0, 0},  // (0, 0)
+		{0, 1},  // (1, 0)
+		{0, 2},  // (0, 1)
+		{0, 3},  // (1, 1)
+		{0, 4},  // (2, 0)
+		{0, 5},  // (3, 0)
+		{0, 6},  // (2, 1)
+		{0, 7},  // (3, 1)
+		{0, 8},  // (0, 2)
+		{0, 9},  // (1, 2)
+		{0, 10}, // (0, 3)
+		{0, 11}, // (1, 3)
+		{0, 12}, // (2, 2)
+		{0, 13}, // (3, 2)
+		{0, 14}, // (2, 3)
+		{0, 15}, // (3, 3)
+		{0, 16}, // (4, 0)
 	}
 
 	t.Run("split point z-range", func(t *testing.T) {
@@ -376,46 +376,46 @@ func TestSplitZRanges(t *testing.T) {
 	})
 
 	t.Run("split x-axis bbox", func(t *testing.T) {
-		zRange := ZRange{{0,0}, {0,16}} // (0, 0) -> (4, 0)
+		zRange := ZRange{{0, 0}, {0, 16}} // (0, 0) -> (4, 0)
 		zRanges := SplitZRanges(zRange)
 		assert.Equal(t, []ZRange{{zvals[0], zvals[1]}, {zvals[4], zvals[5]}, {zvals[16], zvals[16]}}, zRanges)
 	})
 
 	t.Run("split y-axis bbox", func(t *testing.T) {
-		zRange := ZRange{{0,0}, {0,32}} // (0, 0) -> (0, 2)
+		zRange := ZRange{{0, 0}, {0, 32}} // (0, 0) -> (0, 2)
 		zRanges := SplitZRanges(zRange)
 		res := []ZRange{
-			{{0,0}, {0,0}},
-			{{0,2}, {0,2}},
-			{{0,8}, {0,8}},
-			{{0,10}, {0,10}},
-			{{0,32}, {0,32}},
+			{{0, 0}, {0, 0}},
+			{{0, 2}, {0, 2}},
+			{{0, 8}, {0, 8}},
+			{{0, 10}, {0, 10}},
+			{{0, 32}, {0, 32}},
 		}
 		assert.Equal(t, res, zRanges)
 	})
 
 	t.Run("split x-axis bbox", func(t *testing.T) {
 		t.Skip("this takes way too long")
-		zRange := ZRange{{0,0}, {0,uint64(1 << 16)}} // (0, 0) -> (4, 0)
+		zRange := ZRange{{0, 0}, {0, uint64(1 << 16)}} // (0, 0) -> (4, 0)
 		zRanges := SplitZRanges(zRange)
 		assert.Equal(t, []ZRange{{zvals[0], zvals[1]}, {zvals[4], zvals[5]}, {zvals[16], zvals[16]}}, zRanges)
 	})
 
 	t.Run("split x-axis bbox", func(t *testing.T) {
-		zRange := ZRange{{0,0x0B}, {0,0x25}} // (1, 3) -> (3, 4)
+		zRange := ZRange{{0, 0x0B}, {0, 0x25}} // (1, 3) -> (3, 4)
 		zRanges := SplitZRanges(zRange)
 		res := []ZRange{
-			{{0, 0x0B},{0, 0x0B}},
-			{{0, 0x0E},{0, 0x0F}},
-			{{0, 0x21},{0, 0x21}},
-			{{0, 0x24},{0, 0x25}},
+			{{0, 0x0B}, {0, 0x0B}},
+			{{0, 0x0E}, {0, 0x0F}},
+			{{0, 0x21}, {0, 0x21}},
+			{{0, 0x24}, {0, 0x25}},
 		}
 		assert.Equal(t, res, zRanges)
 	})
 
 	t.Run("split large ranges x-axis bbox", func(t *testing.T) {
 		t.Skip("this also takes really long")
-		zRange := ZRange{{0,0}, {2,0}} // (0, 0) -> (4, 0)
+		zRange := ZRange{{0, 0}, {2, 0}} // (0, 0) -> (4, 0)
 		zRanges := SplitZRanges(zRange)
 		assert.Equal(t, []ZRange{{zvals[0], zvals[1]}, {zvals[4], zvals[5]}, {zvals[16], zvals[16]}}, zRanges)
 	})

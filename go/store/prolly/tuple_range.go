@@ -52,17 +52,17 @@ func PrefixRange(prefix val.Tuple, desc val.TupleDesc) Range {
 // Non-matching Tuples can be filtered from physical partitions
 // by using RangeFields as logical predicates (see filteredIter).
 type Range struct {
-	Fields []RangeField
-	Desc   val.TupleDesc
-	Tup    val.Tuple
+	Fields                     []RangeField
+	Desc                       val.TupleDesc
+	Tup                        val.Tuple
 	MinX0, MinX1, MinY0, MinY1 uint64
 	MaxX0, MaxX1, MaxY0, MaxY1 uint64
 }
 
 // RangeField bounds one dimension of a Range.
 type RangeField struct {
-	Lo, Hi Bound
-	Exact  bool // Lo.Value == Hi.Value
+	Lo, Hi             Bound
+	Exact              bool // Lo.Value == Hi.Value
 	SpatialPointLookup bool
 }
 
@@ -172,7 +172,7 @@ func (r Range) Matches(t val.Tuple) bool {
 			p0 := binary.BigEndian.Uint64(field[1:])
 			px0 := p0 & 0x5555555555555555
 			py0 := p0 & 0xAAAAAAAAAAAAAAAA
-			if  px0 < r.MinX0 || px0 > r.MaxX0 ||
+			if px0 < r.MinX0 || px0 > r.MaxX0 ||
 				py0 < r.MinY0 || py0 > r.MaxY0 {
 				return false
 			}
@@ -180,7 +180,7 @@ func (r Range) Matches(t val.Tuple) bool {
 			p1 := binary.BigEndian.Uint64(field[9:])
 			px1 := p1 & 0x5555555555555555
 			py1 := p1 & 0xAAAAAAAAAAAAAAAA
-			if  px0 == r.MinX0 && px1 < r.MinX1 ||
+			if px0 == r.MinX0 && px1 < r.MinX1 ||
 				px0 == r.MaxX0 && px1 > r.MaxX1 ||
 				py0 == r.MinY0 && py1 < r.MinY1 ||
 				py0 == r.MaxY0 && py1 > r.MaxY1 {
