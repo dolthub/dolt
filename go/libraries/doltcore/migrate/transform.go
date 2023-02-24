@@ -414,6 +414,7 @@ func migrateTable(ctx context.Context, newSch schema.Schema, oldParentTbl, oldTb
 
 	var newRows durable.Index
 	var newSet durable.IndexSet
+	originalCtx := ctx
 	eg, ctx := errgroup.WithContext(ctx)
 
 	eg.Go(func() error {
@@ -433,13 +434,13 @@ func migrateTable(ctx context.Context, newSch schema.Schema, oldParentTbl, oldTb
 		return nil, err
 	}
 
-	ai, err := oldTbl.GetAutoIncrementValue(ctx)
+	ai, err := oldTbl.GetAutoIncrementValue(originalCtx)
 	if err != nil {
 		return nil, err
 	}
 	autoInc := types.Uint(ai)
 
-	return doltdb.NewTable(ctx, vrw, ns, newSch, newRows, newSet, autoInc)
+	return doltdb.NewTable(originalCtx, vrw, ns, newSch, newRows, newSet, autoInc)
 }
 
 func migrateSchema(ctx context.Context, tableName string, existing schema.Schema) (schema.Schema, error) {
