@@ -28,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func TestRoundTripRecords(t *testing.T) {
+func TestRoundTripJournalRecords(t *testing.T) {
 	t.Run("chunk record", func(t *testing.T) {
 		for i := 0; i < 64; i++ {
 			rec, buf := makeChunkRecord()
@@ -57,16 +57,18 @@ func TestRoundTripRecords(t *testing.T) {
 	})
 }
 
-func TestUnknownTag(t *testing.T) {
+func TestUnknownJournalRecordTag(t *testing.T) {
 	// test behavior encountering unknown tag
-	buf := makeUnknownTagRecord()
+	buf := makeUnknownTagJournalRecord()
+	// checksum is ok
 	ok := validateJournalRecord(buf)
 	assert.True(t, ok)
+	// reading record fails
 	_, err := readJournalRecord(buf)
 	assert.Error(t, err)
 }
 
-func TestProcessRecords(t *testing.T) {
+func TestProcessJournalRecords(t *testing.T) {
 	const cnt = 1024
 	ctx := context.Background()
 	records := make([]journalRec, cnt)
@@ -97,15 +99,15 @@ func TestProcessRecords(t *testing.T) {
 		return
 	}
 
-	n, err := processJournalRecords(ctx, bytes.NewReader(journal), check)
+	n, err := processJournalRecords(ctx, bytes.NewReader(journal), 0, check)
 	assert.Equal(t, cnt, i)
 	assert.Equal(t, int(off), int(n))
 	require.NoError(t, err)
 
 	i, sum = 0, 0
 	// write a bogus record to the end and process again
-	writeCorruptRecord(journal[off:])
-	n, err = processJournalRecords(ctx, bytes.NewReader(journal), check)
+	writeCorruptJournalRecord(journal[off:])
+	n, err = processJournalRecords(ctx, bytes.NewReader(journal), 0, check)
 	assert.Equal(t, cnt, i)
 	assert.Equal(t, int(off), int(n))
 	require.NoError(t, err)
@@ -133,7 +135,7 @@ func makeChunkRecord() (journalRec, []byte) {
 	var n int
 	buf := make([]byte, sz)
 	// length
-	writeUint(buf[n:], uint32(len(buf)))
+	writeUint32(buf[n:], uint32(len(buf)))
 	n += journalRecLenSz
 	// kind
 	buf[n] = byte(kindJournalRecTag)
@@ -152,7 +154,7 @@ func makeChunkRecord() (journalRec, []byte) {
 	n += len(payload)
 	// checksum
 	c := crc(buf[:len(buf)-journalRecChecksumSz])
-	writeUint(buf[len(buf)-journalRecChecksumSz:], c)
+	writeUint32(buf[len(buf)-journalRecChecksumSz:], c)
 
 	r := journalRec{
 		length:   uint32(len(buf)),
@@ -169,7 +171,7 @@ func makeRootHashRecord() (journalRec, []byte) {
 	var n int
 	buf := make([]byte, rootHashRecordSize())
 	// length
-	writeUint(buf[n:], uint32(len(buf)))
+	writeUint32(buf[n:], uint32(len(buf)))
 	n += journalRecLenSz
 	// kind
 	buf[n] = byte(kindJournalRecTag)
@@ -183,7 +185,7 @@ func makeRootHashRecord() (journalRec, []byte) {
 	n += journalRecAddrSz
 	// checksum
 	c := crc(buf[:len(buf)-journalRecChecksumSz])
-	writeUint(buf[len(buf)-journalRecChecksumSz:], c)
+	writeUint32(buf[len(buf)-journalRecChecksumSz:], c)
 	r := journalRec{
 		length:   uint32(len(buf)),
 		kind:     rootHashJournalRecKind,
@@ -193,23 +195,23 @@ func makeRootHashRecord() (journalRec, []byte) {
 	return r, buf
 }
 
-func makeUnknownTagRecord() (buf []byte) {
+func makeUnknownTagJournalRecord() (buf []byte) {
 	const fakeTag journalRecTag = 111
 	_, buf = makeRootHashRecord()
 	// overwrite recKind
 	buf[journalRecLenSz] = byte(fakeTag)
 	// redo checksum
 	c := crc(buf[:len(buf)-journalRecChecksumSz])
-	writeUint(buf[len(buf)-journalRecChecksumSz:], c)
+	writeUint32(buf[len(buf)-journalRecChecksumSz:], c)
 	return
 }
 
-func writeCorruptRecord(buf []byte) (n uint32) {
+func writeCorruptJournalRecord(buf []byte) (n uint32) {
 	n = uint32(rootHashRecordSize())
 	// fill with random data
 	rand.Read(buf[:n])
 	// write a valid size, kind
-	writeUint(buf, n)
+	writeUint32(buf, n)
 	buf[journalRecLenSz] = byte(rootHashJournalRecKind)
 	return
 }
