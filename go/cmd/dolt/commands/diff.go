@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -35,7 +36,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
@@ -47,6 +50,7 @@ const (
 	SchemaOnlyDiff diffPart = 1 // 0b0001
 	DataOnlyDiff   diffPart = 2 // 0b0010
 	Stat           diffPart = 4 // 0b0100
+	Summary        diffPart = 8 // 0b1000
 
 	SchemaAndDataDiff = SchemaOnlyDiff | DataOnlyDiff
 
@@ -54,16 +58,17 @@ const (
 	SQLDiffOutput     diffOutput = 2
 	JsonDiffOutput    diffOutput = 3
 
-	DataFlag   = "data"
-	SchemaFlag = "schema"
-	StatFlag   = "stat"
-	whereParam = "where"
-	limitParam = "limit"
-	SQLFlag    = "sql"
-	CachedFlag = "cached"
-	SkinnyFlag = "skinny"
-	MergeBase  = "merge-base"
-	DiffMode   = "diff-mode"
+	DataFlag    = "data"
+	SchemaFlag  = "schema"
+	StatFlag    = "stat"
+	SummaryFlag = "summary"
+	whereParam  = "where"
+	limitParam  = "limit"
+	SQLFlag     = "sql"
+	CachedFlag  = "cached"
+	SkinnyFlag  = "skinny"
+	MergeBase   = "merge-base"
+	DiffMode    = "diff-mode"
 )
 
 var diffDocs = cli.CommandDocumentationContent{
@@ -139,6 +144,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
 	ap.SupportsFlag(StatFlag, "", "Show stats of data changes")
+	ap.SupportsFlag(SummaryFlag, "", "Show summary of data and schema changes")
 	ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular, sql, json. Defaults to tabular.")
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
@@ -173,9 +179,9 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.Contains(StatFlag) {
+	if apr.Contains(StatFlag) || apr.Contains(SummaryFlag) {
 		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) {
-			return errhand.BuildDError("invalid Arguments: --stat cannot be combined with --schema or --data").Build()
+			return errhand.BuildDError("invalid Arguments: --stat and --summary cannot be combined with --schema or --data").Build()
 		}
 	}
 
@@ -199,6 +205,8 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		dArgs.diffParts = SchemaOnlyDiff
 	} else if apr.Contains(StatFlag) {
 		dArgs.diffParts = Stat
+	} else if apr.Contains(SummaryFlag) {
+		dArgs.diffParts = Summary
 	}
 
 	dArgs.skinny = apr.Contains(SkinnyFlag)
@@ -247,6 +255,10 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		_, ok, err = dArgs.toRoot.GetTable(ctx, tableName)
 		if err != nil {
 			return nil, err
+		}
+		if ok {
+			dArgs.tableSet.Add(tableName)
+			continue
 		}
 		if !ok {
 			return nil, fmt.Errorf("table %s does not exist in either revision", tableName)
@@ -467,6 +479,41 @@ func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.
 	return root, true
 }
 
+var diffSummarySchema = sql.Schema{
+	&sql.Column{Name: "Table name", Type: types.Text, Nullable: false},
+	&sql.Column{Name: "Diff type", Type: types.Text, Nullable: false},
+	&sql.Column{Name: "Data change", Type: types.Boolean, Nullable: false},
+	&sql.Column{Name: "Schema change", Type: types.Boolean, Nullable: false},
+}
+
+func printDiffSummary(ctx context.Context, tds []diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
+	cliWR := iohelp.NopWrCloser(cli.OutStream)
+	wr := tabular.NewFixedWidthTableWriter(diffSummarySchema, cliWR, 100)
+	defer wr.Close(ctx)
+
+	for _, td := range tds {
+		if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
+			continue
+		}
+
+		if td.FromTable == nil && td.ToTable == nil {
+			return errhand.BuildDError("error: both tables in tableDelta are nil").Build()
+		}
+
+		summ, err := td.GetSummary(ctx)
+		if err != nil {
+			return errhand.BuildDError("could not get table delta summary").AddCause(err).Build()
+		}
+
+		err = wr.WriteSqlRow(ctx, sql.Row{td.CurName(), summ.DiffType, summ.DataChange, summ.SchemaChange})
+		if err != nil {
+			return errhand.BuildDError("could not write table delta summary").AddCause(err).Build()
+		}
+	}
+
+	return nil
+}
+
 func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) errhand.VerboseError {
 	var err error
 
@@ -483,6 +530,10 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 	sort.Slice(tableDeltas, func(i, j int) bool {
 		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
 	})
+
+	if dArgs.diffParts&Summary != 0 {
+		return printDiffSummary(ctx, tableDeltas, dArgs)
+	}
 
 	dw, err := newDiffWriter(dArgs.diffOutput)
 	if err != nil {
@@ -681,7 +732,6 @@ func diffRows(
 		}
 		fromSch = pkSch.Schema
 	}
-
 	if td.ToSch != nil {
 		pkSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
 		if err != nil {
