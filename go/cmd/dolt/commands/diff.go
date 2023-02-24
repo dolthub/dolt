@@ -479,16 +479,16 @@ func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.
 	return root, true
 }
 
-func printDiffSummary(ctx context.Context, tds []diff.TableDelta, ddb *doltdb.DoltDB, dArgs *diffArgs) errhand.VerboseError {
-	sqlSch := sql.Schema{
-		&sql.Column{Name: "Table name", Type: types.Text, Nullable: false},
-		&sql.Column{Name: "Diff Type", Type: types.Text, Nullable: false},
-		&sql.Column{Name: "Data changes", Type: types.Boolean, Nullable: false},
-		&sql.Column{Name: "Schema changes", Type: types.Boolean, Nullable: false},
-	}
+var diffSummarySchema = sql.Schema{
+	&sql.Column{Name: "Table name", Type: types.Text, Nullable: false},
+	&sql.Column{Name: "Diff Type", Type: types.Text, Nullable: false},
+	&sql.Column{Name: "Data change", Type: types.Boolean, Nullable: false},
+	&sql.Column{Name: "Schema change", Type: types.Boolean, Nullable: false},
+}
 
+func printDiffSummary(ctx context.Context, tds []diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
 	cliWR := iohelp.NopWrCloser(cli.OutStream)
-	wr := tabular.NewFixedWidthTableWriter(sqlSch, cliWR, 100)
+	wr := tabular.NewFixedWidthTableWriter(diffSummarySchema, cliWR, 100)
 	defer wr.Close(ctx)
 
 	for _, td := range tds {
@@ -532,7 +532,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 	})
 
 	if dArgs.diffParts&Summary != 0 {
-		return printDiffSummary(ctx, tableDeltas, dEnv.DoltDB, dArgs)
+		return printDiffSummary(ctx, tableDeltas, dArgs)
 	}
 
 	dw, err := newDiffWriter(dArgs.diffOutput)
@@ -739,7 +739,9 @@ func diffRows(
 		}
 		toSch = pkSch.Schema
 	}
+
 	unionSch := unionSchemas(fromSch, toSch)
+
 	// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
 	rowWriter, err := dw.RowWriter(ctx, td, unionSch)
 	if err != nil {
@@ -805,12 +807,14 @@ func diffRows(
 
 	defer rowIter.Close(sqlCtx)
 	defer rowWriter.Close(ctx)
+
 	var modifiedColNames map[string]bool
 	if dArgs.skinny {
 		modifiedColNames, err = getModifiedCols(sqlCtx, rowIter, unionSch, sch)
 		if err != nil {
 			return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 		}
+
 		// instantiate a new schema that only contains the columns with changes
 		var filteredUnionSch sql.Schema
 		for _, s := range unionSch {
@@ -820,12 +824,14 @@ func diffRows(
 				}
 			}
 		}
+
 		// instantiate a new RowWriter with the new schema that only contains the columns with changes
 		rowWriter, err = dw.RowWriter(ctx, td, filteredUnionSch)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
 		defer rowWriter.Close(ctx)
+
 		// reset the row iterator
 		err = rowIter.Close(sqlCtx)
 		if err != nil {
@@ -839,10 +845,12 @@ func diffRows(
 			return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 		}
 	}
+
 	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, rowWriter, modifiedColNames, dArgs)
 	if err != nil {
 		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}
+
 	return nil
 }
 

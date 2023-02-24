@@ -287,19 +287,6 @@ func (td TableDelta) IsRename() bool {
 	return td.FromName != td.ToName
 }
 
-func (td TableDelta) TypeString() string {
-	if td.IsAdd() {
-		return "added"
-	}
-	if td.IsDrop() {
-		return "dropped"
-	}
-	if td.IsRename() {
-		return "renamed"
-	}
-	return "modified"
-}
-
 // HasHashChanged returns true if the hash of the table content has changed between
 // the fromRoot and toRoot.
 func (td TableDelta) HasHashChanged() (bool, error) {
