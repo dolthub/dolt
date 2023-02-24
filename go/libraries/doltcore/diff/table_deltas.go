@@ -58,10 +58,10 @@ type TableDelta struct {
 }
 
 type TableDeltaSummary struct {
-	DiffType         string
-	HasDataChanges   bool
-	HasSchemaChanges bool
-	TableName        string
+	DiffType     string
+	DataChange   bool
+	SchemaChange bool
+	TableName    string
 }
 
 // GetStagedUnstagedTableDeltas represents staged and unstaged changes as TableDelta slices.
@@ -287,12 +287,15 @@ func (td TableDelta) IsRename() bool {
 	return td.FromName != td.ToName
 }
 
-func (td TableDelta) Type() string {
+func (td TableDelta) TypeString() string {
 	if td.IsAdd() {
 		return "added"
 	}
 	if td.IsDrop() {
 		return "dropped"
+	}
+	if td.IsRename() {
+		return "renamed"
 	}
 	return "modified"
 }
@@ -404,17 +407,78 @@ func (td TableDelta) IsKeyless(ctx context.Context) (bool, error) {
 	}
 }
 
+// isTableDataEmpty return true if the table does not contain any data
+func isTableDataEmpty(ctx context.Context, table *doltdb.Table) (bool, error) {
+	rowData, err := table.GetRowData(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return rowData.Empty()
+}
+
 // GetSummary returns a summary of the table delta.
-func (td TableDelta) GetSummary(ctx context.Context, dataChanged bool) (*TableDeltaSummary, error) {
+func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error) {
+	// Dropping a table is always a schema change, and also a data change if the table contained data
+	if td.IsDrop() {
+		isEmpty, err := isTableDataEmpty(ctx, td.FromTable)
+		if err != nil {
+			return nil, err
+		}
+
+		return &TableDeltaSummary{
+			TableName:    td.FromName,
+			DataChange:   !isEmpty,
+			SchemaChange: true,
+			DiffType:     "dropped",
+		}, nil
+	}
+
+	// Renaming a table is always a schema change, and also a data change if the table data differs
+	if td.IsRename() {
+		dataChanged, err := td.HasHashChanged()
+		if err != nil {
+			return nil, err
+		}
+
+		return &TableDeltaSummary{
+			TableName:    td.ToName,
+			DataChange:   dataChanged,
+			SchemaChange: true,
+			DiffType:     "renamed",
+		}, nil
+	}
+
+	// Creating a table is always a schema change, and also a data change if data was inserted
+	if td.IsAdd() {
+		isEmpty, err := isTableDataEmpty(ctx, td.ToTable)
+		if err != nil {
+			return nil, err
+		}
+
+		return &TableDeltaSummary{
+			TableName:    td.ToName,
+			DataChange:   !isEmpty,
+			SchemaChange: true,
+			DiffType:     "added",
+		}, nil
+	}
+
+	dataChanged, err := td.HasHashChanged()
+	if err != nil {
+		return nil, err
+	}
+
 	schemaChanged, err := td.HasSchemaChanged(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	return &TableDeltaSummary{
-		HasSchemaChanges: schemaChanged,
-		HasDataChanges:   dataChanged,
-		DiffType:         td.Type(),
-		TableName:        td.CurName(),
+		TableName:    td.ToName,
+		DataChange:   dataChanged,
+		SchemaChange: schemaChanged,
+		DiffType:     "modified",
 	}, nil
 }
 
