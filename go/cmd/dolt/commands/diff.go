@@ -481,7 +481,7 @@ func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.
 
 var diffSummarySchema = sql.Schema{
 	&sql.Column{Name: "Table name", Type: types.Text, Nullable: false},
-	&sql.Column{Name: "Diff Type", Type: types.Text, Nullable: false},
+	&sql.Column{Name: "Diff type", Type: types.Text, Nullable: false},
 	&sql.Column{Name: "Data change", Type: types.Boolean, Nullable: false},
 	&sql.Column{Name: "Schema change", Type: types.Boolean, Nullable: false},
 }
