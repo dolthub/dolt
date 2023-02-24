@@ -80,11 +80,6 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 	}
 
 	for newKey != nil {
-		select {
-		case <-ctx.Done():
-			return Node{}, context.Canceled
-		default:
-		}
 
 		// move |cur| to the NextMutation mutation point
 		err = Seek(ctx, cur, K(newKey), order)

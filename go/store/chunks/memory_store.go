@@ -68,6 +68,9 @@ func (ms *MemoryStorage) NewViewWithDefaultFormat() ChunkStore {
 // Get retrieves the Chunk with the Hash h, returning EmptyChunk if it's not
 // present.
 func (ms *MemoryStorage) Get(ctx context.Context, h hash.Hash) (Chunk, error) {
+	if err := ctx.Err(); err != nil {
+		return Chunk{}, err
+	}
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	if c, ok := ms.data[h]; ok {
@@ -207,6 +210,9 @@ func (ms *MemoryStoreView) errorIfDangling(ctx context.Context, addrs hash.HashS
 }
 
 func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	addrs, err := getAddrs(ctx, c)
 	if err != nil {
 		return err
