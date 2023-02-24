@@ -17,6 +17,7 @@ package sqle
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -42,8 +43,8 @@ type DiffSummaryTableFunction struct {
 var diffSummaryTableSchema = sql.Schema{
 	&sql.Column{Name: "table_name", Type: types.LongText, Nullable: false},
 	&sql.Column{Name: "diff_type", Type: types.Text, Nullable: false},
-	&sql.Column{Name: "has_data_changes", Type: types.Boolean, Nullable: false},
-	&sql.Column{Name: "has_schema_changes", Type: types.Boolean, Nullable: false},
+	&sql.Column{Name: "data_change", Type: types.Boolean, Nullable: false},
+	&sql.Column{Name: "schema_change", Type: types.Boolean, Nullable: false},
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -251,6 +252,10 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	if err != nil {
 		return nil, err
 	}
+
+	sort.Slice(deltas, func(i, j int) bool {
+		return strings.Compare(deltas[i].ToName, deltas[j].ToName) < 0
+	})
 
 	// If tableNameExpr defined, return a single table diff summary result
 	if ds.tableNameExpr != nil {
