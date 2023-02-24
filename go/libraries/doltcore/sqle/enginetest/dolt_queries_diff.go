@@ -2701,7 +2701,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary('HEAD~2', 'HEAD');",
-				Expected: []sql.Row{{"t", "modified", true, true}}, // TODO: Data change should be false
+				Expected: []sql.Row{{"t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('HEAD~', 'HEAD');",
