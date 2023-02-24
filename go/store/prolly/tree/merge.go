@@ -157,6 +157,11 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 	}
 
 	for lok && rok {
+		select {
+		case <-ctx.Done():
+			return MergeStats{}, context.Canceled
+		default:
+		}
 		cmp := l.order.Compare(K(left.Key), K(right.Key))
 
 		switch {

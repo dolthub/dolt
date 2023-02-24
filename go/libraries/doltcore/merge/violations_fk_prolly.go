@@ -52,6 +52,11 @@ func prollyParentFkConstraintViolations(
 	primaryKD, _ := childPriIdx.Descriptors()
 
 	err := prolly.DiffMaps(ctx, preParentRowData, postParentRowData, func(ctx context.Context, diff tree.Diff) error {
+		select {
+		case <-ctx.Done():
+			return context.Canceled
+		default:
+		}
 		switch diff.Type {
 		case tree.RemovedDiff, tree.ModifiedDiff:
 			partialKey, hadNulls := makePartialKey(partialKB, foreignKey.ReferencedTableColumns, postParent.Index, postParent.Schema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentRowData.Pool())
@@ -110,6 +115,11 @@ func prollyChildPriDiffFkConstraintViolations(
 	partialKB := val.NewTupleBuilder(partialDesc)
 
 	err := prolly.DiffMaps(ctx, preChildRowData, postChildRowData, func(ctx context.Context, diff tree.Diff) error {
+		select {
+		case <-ctx.Done():
+			return context.Canceled
+		default:
+		}
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
 			k, v := val.Tuple(diff.Key), val.Tuple(diff.To)
@@ -159,6 +169,11 @@ func prollyChildSecDiffFkConstraintViolations(
 
 	var parentSecIdxCur *tree.Cursor
 	err := prolly.DiffMaps(ctx, preChildSecIdx, postChildSecIdx, func(ctx context.Context, diff tree.Diff) error {
+		select {
+		case <-ctx.Done():
+			return context.Canceled
+		default:
+		}
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
 			k := val.Tuple(diff.Key)
