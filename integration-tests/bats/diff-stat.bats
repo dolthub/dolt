@@ -43,8 +43,8 @@ teardown() {
 
     run dolt diff --summary
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| Table name | Diff Type | Data changes | Schema changes |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true         | false          |" ]] || false
+    [[ "$output" =~ "| Table name | Diff Type | Data change | Schema change |" ]] || false
+    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
 
     dolt add test
     dolt commit -m "added two rows"
@@ -64,8 +64,8 @@ teardown() {
     run dolt diff --summary
     [ "$status" -eq 0 ]
     echo "$output"
-    [[ "$output" =~ "| Table name | Diff Type | Data changes | Schema changes |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true         | false          |" ]] || false
+    [[ "$output" =~ "| Table name | Diff Type | Data change | Schema change |" ]] || false
+    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
 
     dolt add test
     dolt commit -m "modified first row"
@@ -85,15 +85,15 @@ teardown() {
     run dolt diff --summary
     [ "$status" -eq 0 ]
     echo "$output"
-    [[ "$output" =~ "| Table name | Diff Type | Data changes | Schema changes |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true         | false          |" ]] || false
+    [[ "$output" =~ "| Table name | Diff Type | Data change | Schema change |" ]] || false
+    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
 }
 
 @test "diff-stat: stat/summary comparing row with a deleted cell and an added cell" {
     run dolt diff --summary
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| Table name | Diff Type | Data changes | Schema changes |" ]] || false
-    [[ "$output" =~ "| test       | added     | false        | true           |" ]] || false
+    [[ "$output" =~ "| Table name | Diff Type | Data change | Schema change |" ]] || false
+    [[ "$output" =~ "| test       | added     | false       | true          |" ]] || false
 
     dolt add test
     dolt commit -m "create table"
@@ -116,8 +116,8 @@ teardown() {
 
     run dolt diff --summary
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| Table name | Diff Type | Data changes | Schema changes |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true         | false          |" ]] || false
+    [[ "$output" =~ "| Table name | Diff Type | Data change | Schema change |" ]] || false
+    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
 
     dolt add test
     dolt commit -m "row modified"
@@ -135,8 +135,8 @@ teardown() {
 
     run dolt diff --summary
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| Table name | Diff Type | Data changes | Schema changes |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true         | false          |" ]] || false
+    [[ "$output" =~ "| Table name | Diff Type | Data change | Schema change |" ]] || false
+    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
 }
 
 @test "diff-stat: stat/summary comparing two branches" {
@@ -162,8 +162,8 @@ teardown() {
 
     run dolt diff --summary firstbranch newbranch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| Table name | Diff Type | Data changes | Schema changes |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true         | false          |" ]] || false
+    [[ "$output" =~ "| Table name | Diff Type | Data change | Schema change |" ]] || false
+    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
 
     run dolt diff --stat firstbranch..newbranch
     [ "$status" -eq 0 ]
@@ -178,8 +178,8 @@ teardown() {
 
     run dolt diff --summary firstbranch..newbranch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| Table name | Diff Type | Data changes | Schema changes |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true         | false          |" ]] || false
+    [[ "$output" =~ "| Table name | Diff Type | Data change | Schema change |" ]] || false
+    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
 }
 
 @test "diff-stat: stat/summary shows correct changes after schema change" {
@@ -210,8 +210,8 @@ DELIM
 
     run dolt diff --summary 
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| Table name | Diff Type | Data changes | Schema changes |" ]] || false
-    [[ "$output" =~ "| employees  | modified  | true         | true           |" ]] || false
+    [[ "$output" =~ "| Table name | Diff Type | Data change | Schema change |" ]] || false
+    [[ "$output" =~ "| employees  | modified  | true        | true          |" ]] || false
 
     dolt sql -q "replace into employees values (0, 'tim', 'sehn', 'ceo', '2 years ago', '', 'Santa Monica')"
     
@@ -229,8 +229,8 @@ DELIM
 
     run dolt diff --summary 
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| Table name | Diff Type | Data changes | Schema changes |" ]] || false
-    [[ "$output" =~ "| employees  | modified  | true         | true           |" ]] || false
+    [[ "$output" =~ "| Table name | Diff Type | Data change | Schema change |" ]] || false
+    [[ "$output" =~ "| employees  | modified  | true        | true          |" ]] || false
 }
 
 @test "diff-stat: stat/summary gets summaries for all tables with changes" {
@@ -264,9 +264,9 @@ SQL
 
     run dolt diff --summary 
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| Table name | Diff Type | Data changes | Schema changes |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true         | false          |" ]] || false
-    [[ "$output" =~ "| employees  | modified  | true         | false          |" ]] || false
+    [[ "$output" =~ "| Table name | Diff Type | Data change | Schema change |" ]] || false
+    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
+    [[ "$output" =~ "| employees  | modified  | true        | false         |" ]] || false
 
     run dolt diff --stat employees
     [ "$status" -eq 0 ]
@@ -276,8 +276,8 @@ SQL
 
     run dolt diff --summary employees
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| Table name | Diff Type | Data changes | Schema changes |" ]] || false
-    [[ "$output" =~ "| employees  | modified  | true         | false          |" ]] || false
+    [[ "$output" =~ "| Table name | Diff Type | Data change | Schema change |" ]] || false
+    [[ "$output" =~ "| employees  | modified  | true        | false         |" ]] || false
 }
 
 @test "diff-stat: two and three dot diff stat/summary" {
@@ -307,8 +307,8 @@ SQL
 
     run dolt diff main..branch1 --summary 
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| Table name | Diff Type | Data changes | Schema changes |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true         | false          |" ]] || false
+    [[ "$output" =~ "| Table name | Diff Type | Data change | Schema change |" ]] || false
+    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
 
     run dolt diff main...branch1 --stat
     echo $output
@@ -324,8 +324,8 @@ SQL
 
     run dolt diff main...branch1 --summary 
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| Table name | Diff Type | Data changes | Schema changes |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true         | false          |" ]] || false
+    [[ "$output" =~ "| Table name | Diff Type | Data change | Schema change |" ]] || false
+    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
 }
 
 @test "diff-stat: diff stat incorrect primary key set change regression test" {
