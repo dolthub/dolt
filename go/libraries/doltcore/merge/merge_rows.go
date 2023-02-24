@@ -486,10 +486,10 @@ func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltd
 	}
 
 	ae := atomicerr.New()
-	ch := make(chan diff.DiffSummaryProgress)
+	ch := make(chan diff.DiffStatProgress)
 	go func() {
 		defer close(ch)
-		err := diff.Summary(ctx, ch, rows, mergeRows, sch, mergeSch)
+		err := diff.Stat(ctx, ch, rows, mergeRows, sch, mergeSch)
 
 		ae.SetIfError(err)
 	}()
