@@ -241,20 +241,20 @@ func (d *doltDiffWorkingSetRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, io.EOF
 	}
 
-	change, err := processTableDelta(ctx, tableDelta)
+	change, err := tableDelta.GetSummary(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	sqlRow := sql.NewRow(
 		changeSet,
-		change.tableName,
+		change.TableName,
 		nil, // committer
 		nil, // email
 		nil, // date
 		nil, // message
-		change.dataChange,
-		change.schemaChange,
+		change.DataChange,
+		change.SchemaChange,
 	)
 
 	return sqlRow, nil
@@ -288,7 +288,7 @@ type doltDiffCommitHistoryRowItr struct {
 	commits         []*doltdb.Commit
 	meta            *datas.CommitMeta
 	hash            hash.Hash
-	tableChanges    []tableChange
+	tableChanges    []diff.TableDeltaSummary
 	tableChangesIdx int
 }
 
@@ -358,13 +358,13 @@ func (itr *doltDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, error) 
 
 	return sql.NewRow(
 		h.String(),
-		tableChange.tableName,
+		tableChange.TableName,
 		meta.Name,
 		meta.Email,
 		meta.Time(),
 		meta.Description,
-		tableChange.dataChange,
-		tableChange.schemaChange,
+		tableChange.DataChange,
+		tableChange.SchemaChange,
 	), nil
 }
 
@@ -399,7 +399,7 @@ func (itr *doltDiffCommitHistoryRowItr) loadTableChanges(ctx context.Context, co
 
 // calculateTableChanges calculates the tables that changed in the specified commit, by comparing that
 // commit with its immediate ancestor commit.
-func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Context, commit *doltdb.Commit) ([]tableChange, error) {
+func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Context, commit *doltdb.Commit) ([]diff.TableDeltaSummary, error) {
 	if len(commit.DatasParents()) == 0 {
 		return nil, nil
 	}
@@ -424,9 +424,9 @@ func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Contex
 		return nil, err
 	}
 
-	tableChanges := make([]tableChange, len(deltas))
+	tableChanges := make([]diff.TableDeltaSummary, len(deltas))
 	for i := 0; i < len(deltas); i++ {
-		change, err := processTableDelta(itr.ctx, deltas[i])
+		change, err := deltas[i].GetSummary(itr.ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -440,68 +440,6 @@ func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Contex
 	}
 
 	return tableChanges, nil
-}
-
-// processTableDelta processes the specified TableDelta to determine what kind of change it was (i.e. table drop,
-// table rename, table create, or data update) and returns a tableChange struct representing the change.
-func processTableDelta(ctx *sql.Context, delta diff.TableDelta) (*tableChange, error) {
-	// Dropping a table is always a schema change, and also a data change if the table contained data
-	if delta.IsDrop() {
-		isEmpty, err := isTableDataEmpty(ctx, delta.FromTable)
-		if err != nil {
-			return nil, err
-		}
-
-		return &tableChange{
-			tableName:    delta.FromName,
-			dataChange:   !isEmpty,
-			schemaChange: true,
-		}, nil
-	}
-
-	// Renaming a table is always a schema change, and also a data change if the table data differs
-	if delta.IsRename() {
-		dataChanged, err := delta.HasHashChanged()
-		if err != nil {
-			return nil, err
-		}
-
-		return &tableChange{
-			tableName:    delta.ToName,
-			dataChange:   dataChanged,
-			schemaChange: true,
-		}, nil
-	}
-
-	// Creating a table is always a schema change, and also a data change if data was inserted
-	if delta.IsAdd() {
-		isEmpty, err := isTableDataEmpty(ctx, delta.ToTable)
-		if err != nil {
-			return nil, err
-		}
-
-		return &tableChange{
-			tableName:    delta.ToName,
-			dataChange:   !isEmpty,
-			schemaChange: true,
-		}, nil
-	}
-
-	dataChanged, err := delta.HasHashChanged()
-	if err != nil {
-		return nil, err
-	}
-
-	schemaChanged, err := delta.HasSchemaChanged(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &tableChange{
-		tableName:    delta.ToName,
-		dataChange:   dataChanged,
-		schemaChange: schemaChanged,
-	}, nil
 }
 
 // Close closes the iterator.
