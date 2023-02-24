@@ -1054,12 +1054,6 @@ func TestDoltTag(t *testing.T) {
 	}
 }
 
-func TestDoltPatch(t *testing.T) {
-	for _, script := range DoltPatchScripts {
-		enginetest.TestScript(t, newDoltHarness(t), script)
-	}
-}
-
 func TestDoltRemote(t *testing.T) {
 	for _, script := range DoltRemoteTestScripts {
 		enginetest.TestScript(t, newDoltHarness(t), script)
