@@ -187,7 +187,13 @@ type ZRange = [2]ZVal
 // A ZRange is continuous if
 // 1. it is a point (the lower and upper bounds are equal)
 // 2. the ranges are within a cell (the suffixes of the bounds range from 00...0 to 11...1)
-func SplitZRanges(zRange ZRange) []ZRange {
+// TODO: check validity of bbox to prevent inf recursion?
+func SplitZRanges(zRange ZRange, depth int) []ZRange {
+	// prevent too much splitting
+	if depth == 0 {
+		return []ZRange{zRange}
+	}
+
 	// point lookup is continuous
 	if zRange[0] == zRange[1] {
 		return []ZRange{zRange}
@@ -234,8 +240,8 @@ func SplitZRanges(zRange ZRange) []ZRange {
 	}
 
 	// recurse on left and right ranges
-	zRangesL := SplitZRanges(zRangeL)
-	zRangesR := SplitZRanges(zRangeR)
+	zRangesL := SplitZRanges(zRangeL, depth - 1)
+	zRangesR := SplitZRanges(zRangeR, depth - 1)
 
 	// if last range's upperbound in left is next to first range's lowerbound in right, they can be merged
 	lastZRangeL, firstZRangeR := zRangesL[len(zRangesL)-1], zRangesR[0]
