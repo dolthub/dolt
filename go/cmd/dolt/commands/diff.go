@@ -46,7 +46,7 @@ type diffMode int
 const (
 	SchemaOnlyDiff diffPart = 1 // 0b0001
 	DataOnlyDiff   diffPart = 2 // 0b0010
-	Summary        diffPart = 4 // 0b0100
+	Stat           diffPart = 4 // 0b0100
 
 	SchemaAndDataDiff = SchemaOnlyDiff | DataOnlyDiff
 
@@ -54,16 +54,16 @@ const (
 	SQLDiffOutput     diffOutput = 2
 	JsonDiffOutput    diffOutput = 3
 
-	DataFlag    = "data"
-	SchemaFlag  = "schema"
-	SummaryFlag = "summary"
-	whereParam  = "where"
-	limitParam  = "limit"
-	SQLFlag     = "sql"
-	CachedFlag  = "cached"
-	SkinnyFlag  = "skinny"
-	MergeBase   = "merge-base"
-	DiffMode    = "diff-mode"
+	DataFlag   = "data"
+	SchemaFlag = "schema"
+	StatFlag   = "stat"
+	whereParam = "where"
+	limitParam = "limit"
+	SQLFlag    = "sql"
+	CachedFlag = "cached"
+	SkinnyFlag = "skinny"
+	MergeBase  = "merge-base"
+	DiffMode   = "diff-mode"
 )
 
 var diffDocs = cli.CommandDocumentationContent{
@@ -138,7 +138,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
-	ap.SupportsFlag(SummaryFlag, "", "Show summary of data changes")
+	ap.SupportsFlag(StatFlag, "", "Show stats of data changes")
 	ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular, sql, json. Defaults to tabular.")
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
@@ -173,9 +173,9 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.Contains(SummaryFlag) {
+	if apr.Contains(StatFlag) {
 		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) {
-			return errhand.BuildDError("invalid Arguments: --summary cannot be combined with --schema or --data").Build()
+			return errhand.BuildDError("invalid Arguments: --stat cannot be combined with --schema or --data").Build()
 		}
 	}
 
@@ -197,8 +197,8 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		dArgs.diffParts = DataOnlyDiff
 	} else if apr.Contains(SchemaFlag) && !apr.Contains(DataFlag) {
 		dArgs.diffParts = SchemaOnlyDiff
-	} else if apr.Contains(SummaryFlag) {
-		dArgs.diffParts = Summary
+	} else if apr.Contains(StatFlag) {
+		dArgs.diffParts = Stat
 	}
 
 	dArgs.skinny = apr.Contains(SkinnyFlag)
@@ -532,8 +532,8 @@ func diffUserTable(
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
 
-	if dArgs.diffParts&Summary != 0 {
-		return printDiffSummary(ctx, td, fromSch.GetAllCols().Size(), toSch.GetAllCols().Size())
+	if dArgs.diffParts&Stat != 0 {
+		return printDiffStat(ctx, td, fromSch.GetAllCols().Size(), toSch.GetAllCols().Size())
 	}
 
 	if dArgs.diffParts&SchemaOnlyDiff != 0 {
