@@ -1407,7 +1407,7 @@ SQL
     [ $status -eq 0 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
     [ "${lines[1]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk);' ]
-    [ "${lines[2]}" = 'Primary key sets differ between revisions for table 't', skipping data diff' ]
+    [ "${lines[2]}" = "Primary key sets differ between revisions for table 't', skipping data diff" ]
 
     dolt commit -am "cm6"
 
@@ -1419,7 +1419,7 @@ SQL
     [ "${lines[0]}" = 'ALTER TABLE `t` ADD `pk2` int;' ]
     [ "${lines[1]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
     [ "${lines[2]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk,val);' ]
-    [ "${lines[3]}" = 'Primary key sets differ between revisions for table 't', skipping data diff' ]
+    [ "${lines[3]}" = "Primary key sets differ between revisions for table 't', skipping data diff" ]
 }
 
 @test "diff: adding and removing primary key" {
@@ -1436,13 +1436,13 @@ SQL
     [ $status -eq 0 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
     [ "${lines[1]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk);' ]
-    [ "${lines[2]}" = 'Primary key sets differ between revisions for table 't', skipping data diff' ]
+    [ "${lines[2]}" = "Primary key sets differ between revisions for table 't', skipping data diff" ]
 
     dolt diff
     run dolt diff
     [ $status -eq 0 ]
     [[ "$output" =~ '+  PRIMARY KEY (`pk`)' ]] || false
-    [[ "$output" =~ 'Primary key sets differ between revisions for table 't', skipping data diff' ]] || false
+    [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
     
 
     dolt commit -am 'added primary key'
@@ -1453,13 +1453,13 @@ SQL
     run dolt diff -r sql
     [ $status -eq 0 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
-    [[ "$output" =~ 'Primary key sets differ between revisions for table 't', skipping data diff' ]] || false
+    [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
 
     dolt diff
     run dolt diff
     [ $status -eq 0 ]
     [[ "$output" =~ '-  PRIMARY KEY (`pk`)' ]] || false
-    [[ "$output" =~ 'Primary key sets differ between revisions for table 't', skipping data diff' ]] || false
+    [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
 }
 
 @test "diff: created and dropped tables include schema and data changes in results" {

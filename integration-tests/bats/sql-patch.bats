@@ -32,14 +32,12 @@ SQL
     dolt add test
     dolt commit -m "Added a third row"
 
-    run dolt diff -r sql firstbranch newbranch
+    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
     [ "$status" -eq 0 ]
-    diff_output=$output
+    # 3 lines for tabular lines and 1 for header and 1 for output statement
+    [ "${#lines[@]}" -eq 5 ]
 
-    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')" -r csv
-    [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "statement" ]] || false
-    [[ "$output" =~ "$diff_output" ]] || false
+    match_diff_and_patch_results firstbranch newbranch
 }
 
 @test "sql-patch: output reconciles UPDATE query" {
@@ -63,6 +61,10 @@ SQL
     dolt sql -q 'UPDATE test SET c1=11, c5=6 WHERE pk=0'
     dolt add test
     dolt commit -m "modified first row"
+
+    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
 
     match_diff_and_patch_results firstbranch newbranch
 }
@@ -89,6 +91,10 @@ SQL
     dolt add test
     dolt commit -m "deleted first row"
 
+    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+
     match_diff_and_patch_results firstbranch newbranch
 }
 
@@ -113,6 +119,11 @@ SQL
     dolt sql -q 'UPDATE test SET pk=2 WHERE pk=1'
     dolt add test
     dolt commit -m "modified first row"
+
+    dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
+    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
 
     match_diff_and_patch_results firstbranch newbranch
 }
@@ -141,6 +152,11 @@ SQL
     dolt add .
     dolt commit -m "renamed column"
 
+    dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
+    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 7 ]
+
     match_diff_and_patch_results firstbranch newbranch
 }
 
@@ -157,6 +173,11 @@ SQL
     dolt sql -q 'insert into test values (1,1)'
     dolt sql -q 'insert into test values (2,2)'
     dolt commit -Am "created new table"
+
+    dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
+    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 11 ]
 
     match_diff_and_patch_results firstbranch newbranch
 }
@@ -180,11 +201,13 @@ SQL
     dolt add .
     dolt commit -m "removed table"
 
-    match_diff_and_patch_results firstbranch newbranch
-
+    dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
     run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
     [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
     [[ ! "$output" =~ "DELETE FROM" ]] || false
+
+    match_diff_and_patch_results firstbranch newbranch
 }
 
 @test "sql-patch: reconciles RENAME TABLE with schema changes" {
@@ -213,6 +236,11 @@ SQL
     dolt add .
     dolt commit -m "renamed table and added data"
 
+    dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
+    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 8 ]
+
     match_diff_and_patch_results firstbranch newbranch
 }
 
@@ -235,6 +263,11 @@ SQL
     dolt add .
     dolt commit -m "created new table"
 
+    dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
+    run dolt sql -q "CALL DOLT_PATCH('firstbranch','newbranch')"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 14 ]
+
     match_diff_and_patch_results firstbranch newbranch
 }
 
@@ -254,8 +287,13 @@ CREATE TABLE child (
 SQL
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_named FOREIGN KEY (v1) REFERENCES parent(v1);"
     dolt sql -q "insert into parent values (0, 1, 2, NULL);"
-    dolt sql -q "ALTER TABLE parent DROP PRIMARY KEY"
+    dolt sql -q "ALTER TABLE parent DROP PRIMARY KEY;"
     dolt sql -q "ALTER TABLE parent ADD PRIMARY KEY(id, id_ext);"
+
+    dolt sql -q "CALL DOLT_PATCH()"
+    run dolt sql -q "CALL DOLT_PATCH()"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 20 ]
 
     match_diff_and_patch_results
 }
@@ -269,6 +307,11 @@ create table foo (
     PRIMARY KEY (pk)
 );
 SQL
+
+    dolt sql -q "CALL DOLT_PATCH()"
+    run dolt sql -q "CALL DOLT_PATCH()"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 10 ]
 
     match_diff_and_patch_results
 }

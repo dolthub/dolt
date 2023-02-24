@@ -746,6 +746,12 @@ func TestCallAsOf(t *testing.T) {
 	}
 }
 
+func TestDoltPatch(t *testing.T) {
+	for _, script := range DoltPatchScripts {
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+}
+
 func TestLargeJsonObjects(t *testing.T) {
 	SkipByDefaultInCI(t)
 	harness := newDoltHarness(t)

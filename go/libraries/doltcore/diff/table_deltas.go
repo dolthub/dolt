@@ -17,10 +17,9 @@ package diff
 import (
 	"context"
 	"fmt"
-	"sort"
-	"strings"
-
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/plan"
+	"sort"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -550,18 +549,44 @@ func getNonCreateNonDropTableSqlSchemaDiff(td TableDelta, toSchemas map[string]s
 	return ddlStatements, nil
 }
 
+func GetDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowDiffType ChangeType, colDiffTypes []ChangeType) (string, error) {
+	if len(row) != len(colDiffTypes) {
+		return "", fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
+	}
+
+	switch rowDiffType {
+	case Added:
+		return sqlfmt.SqlRowAsInsertStmt(row, tableName, sch)
+	case Removed:
+		return sqlfmt.SqlRowAsDeleteStmt(row, tableName, sch, 0)
+	case ModifiedNew:
+		updatedCols := set.NewEmptyStrSet()
+		for i, diffType := range colDiffTypes {
+			if diffType != None {
+				updatedCols.Add(sch.GetAllCols().GetByIndex(i).Name)
+			}
+		}
+		return sqlfmt.SqlRowAsUpdateStmt(row, tableName, sch, updatedCols)
+	case ModifiedOld:
+		// do nothing, we only issue UPDATE for ModifiedNew
+		return "", nil
+	default:
+		return "", fmt.Errorf("unexpected row diff type: %v", rowDiffType)
+	}
+}
+
 func getCreateTableStmt(tblName string, sch schema.Schema, pkSchema sql.PrimaryKeySchema, fks []doltdb.ForeignKey, fksParentSch map[string]schema.Schema) (string, error) {
 	sqlSch := pkSchema.Schema
 	colStmts := make([]string, len(sqlSch))
 
 	// Statement creation parts for each column
 	for i, col := range sch.GetAllCols().GetColumns() {
-		colStmts[i] = sqlfmt.FmtCol(2, 0, 0, col)
+		colStmts[i] = plan.FmtCreateTableColumn(col.Name, col.TypeInfo.ToSqlType(), col.IsNullable(), col.AutoIncrement, col.Default != "", col.Default, col.Comment)
 	}
 
 	primaryKeyCols := sch.GetPKCols().GetColumnNames()
 	if len(primaryKeyCols) > 0 {
-		primaryKey := sqlfmt.FmtColPrimaryKey(1, strings.Join(quoteIdentifiers(primaryKeyCols), ","), false)
+		primaryKey := plan.FmtCreateTablePrimaryKey(primaryKeyCols)
 		colStmts = append(colStmts, primaryKey)
 	}
 
@@ -571,45 +596,19 @@ func getCreateTableStmt(tblName string, sch schema.Schema, pkSchema sql.PrimaryK
 		if isPrimaryKeyIndex(index, sch) {
 			continue
 		}
-
-		// keyword, 'KEY', is used instead of 'INDEX' for CREATE TABLE statement
-		colStmts = append(colStmts, sqlfmt.FmtIndexOrKey(index, "key"))
+		colStmts = append(colStmts, plan.FmtCreateTableIndex(index.IsUnique(), index.IsSpatial(), index.Name(), index.ColumnNames(), index.Comment()))
 	}
 
-	// need foreign key
 	for _, fk := range fks {
-		colStmts = append(colStmts, sqlfmt.FmtForeignKey(fk, sch, fksParentSch[fk.ReferencedTableName]))
+		colStmts = append(colStmts, fmtForeignKey(fk, sch, fksParentSch[fk.ReferencedTableName]))
 	}
 
-	checks := sch.Checks().AllChecks()
-	for _, check := range checks {
-		fmted := fmt.Sprintf("  CONSTRAINT %s CHECK (%s)", sqlfmt.QuoteIdentifier(check.Name()), check.Expression())
-
-		if !check.Enforced() {
-			fmted += " /*!80016 NOT ENFORCED */"
-		}
-
-		colStmts = append(colStmts, fmted)
+	for _, check := range sch.Checks().AllChecks() {
+		colStmts = append(colStmts, plan.FmtCreateTableCheckConstraint(check.Name(), check.Expression(), check.Enforced()))
 	}
 
 	coll := sql.CollationID(sch.GetCollation())
-	return fmt.Sprintf(
-		"CREATE TABLE %s (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s;",
-		sqlfmt.QuoteIdentifier(tblName),
-		strings.Join(colStmts, ",\n"),
-		coll.CharacterSet().Name(),
-		coll.Name(),
-	), nil
-}
-
-// quoteIdentifiers wraps each of the specified identifiers in backticks, escapes all occurrences of backticks in
-// the identifier, and returns a slice of the quoted identifiers.
-func quoteIdentifiers(ids []string) []string {
-	quoted := make([]string, len(ids))
-	for i, id := range ids {
-		quoted[i] = sqlfmt.QuoteIdentifier(id)
-	}
-	return quoted
+	return plan.CreateTableFmt(tblName, colStmts, coll.CharacterSet().Name(), coll.Name()), nil
 }
 
 // isPrimaryKeyIndex returns whether the index given matches the table's primary key columns. Order is not considered.
@@ -634,29 +633,38 @@ func isPrimaryKeyIndex(index schema.Index, sch schema.Schema) bool {
 	return true
 }
 
-func GetDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowDiffType ChangeType, colDiffTypes []ChangeType) (string, error) {
-	if len(row) != len(colDiffTypes) {
-		return "", fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
-	}
-
-	switch rowDiffType {
-	case Added:
-		return sqlfmt.SqlRowAsInsertStmt(row, tableName, sch)
-	case Removed:
-		return sqlfmt.SqlRowAsDeleteStmt(row, tableName, sch, 0)
-	case ModifiedNew:
-		updatedCols := set.NewEmptyStrSet()
-		for i, diffType := range colDiffTypes {
-			if diffType != None {
-				updatedCols.Add(sch.GetAllCols().GetByIndex(i).Name)
-			}
+func fmtForeignKey(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
+	var fkCols []string
+	if fk.IsResolved() {
+		for _, tag := range fk.TableColumns {
+			c, _ := sch.GetAllCols().GetByTag(tag)
+			fkCols = append(fkCols, c.Name)
 		}
-
-		return sqlfmt.SqlRowAsUpdateStmt(row, tableName, sch, updatedCols)
-	case ModifiedOld:
-		// do nothing, we only issue UPDATE for ModifiedNew
-		return "", nil
-	default:
-		return "", fmt.Errorf("unexpected row diff type: %v", rowDiffType)
+	} else {
+		for _, col := range fk.UnresolvedFKDetails.TableColumns {
+			fkCols = append(fkCols, col)
+		}
 	}
+
+	var parentCols []string
+	if fk.IsResolved() {
+		for _, tag := range fk.ReferencedTableColumns {
+			c, _ := parentSch.GetAllCols().GetByTag(tag)
+			parentCols = append(parentCols, c.Name)
+		}
+	} else {
+		for _, col := range fk.UnresolvedFKDetails.ReferencedTableColumns {
+			parentCols = append(parentCols, col)
+		}
+	}
+
+	onDelete := ""
+	if fk.OnDelete != doltdb.ForeignKeyReferentialAction_DefaultAction {
+		onDelete = fk.OnDelete.String()
+	}
+	onUpdate := ""
+	if fk.OnUpdate != doltdb.ForeignKeyReferentialAction_DefaultAction {
+		onUpdate = fk.OnUpdate.String()
+	}
+	return plan.FmtCreateTableForiegnKey(fk.Name, fkCols, fk.ReferencedTableName, parentCols, onDelete, onUpdate)
 }
