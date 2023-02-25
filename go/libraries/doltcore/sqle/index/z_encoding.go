@@ -241,8 +241,8 @@ func SplitZRanges(zRange ZRange, depth int) []ZRange {
 	}
 
 	// recurse on left and right ranges
-	zRangesL := SplitZRanges(zRangeL, depth - 1)
-	zRangesR := SplitZRanges(zRangeR, depth - 1)
+	zRangesL := SplitZRanges(zRangeL, depth-1)
+	zRangesR := SplitZRanges(zRangeR, depth-1)
 
 	// if last range's upperbound in left is next to first range's lowerbound in right, they can be merged
 	lastZRangeL, firstZRangeR := zRangesL[len(zRangesL)-1], zRangesR[0]

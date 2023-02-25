@@ -19,12 +19,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
 	"math"
 	"math/rand"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
 
 	"github.com/dolthub/go-mysql-server/sql/types"
 	assert "github.com/stretchr/testify/require"
@@ -379,13 +380,13 @@ func TestSplitZRanges(t *testing.T) {
 	})
 
 	t.Run("split x-axis bbox", func(t *testing.T) {
-		zRange := ZRange{{0,0}, {0,16}} // (0, 0) -> (4, 0)
+		zRange := ZRange{{0, 0}, {0, 16}} // (0, 0) -> (4, 0)
 		zRanges := SplitZRanges(zRange, depth)
 		assert.Equal(t, []ZRange{{zvals[0], zvals[1]}, {zvals[4], zvals[5]}, {zvals[16], zvals[16]}}, zRanges)
 	})
 
 	t.Run("split y-axis bbox", func(t *testing.T) {
-		zRange := ZRange{{0,0}, {0,32}} // (0, 0) -> (0, 2)
+		zRange := ZRange{{0, 0}, {0, 32}} // (0, 0) -> (0, 2)
 		zRanges := SplitZRanges(zRange, depth)
 		res := []ZRange{
 			{{0, 0}, {0, 0}},
@@ -399,7 +400,7 @@ func TestSplitZRanges(t *testing.T) {
 
 	t.Run("split x-axis bbox", func(t *testing.T) {
 		t.Skip("this takes way too long")
-		zRange := ZRange{{0,0}, {0,uint64(1 << 43)}} // (0, 0) -> (4, 0)
+		zRange := ZRange{{0, 0}, {0, uint64(1 << 43)}} // (0, 0) -> (4, 0)
 		start := time.Now()
 		zRanges := SplitZRanges(zRange, depth)
 		t.Log(time.Since(start))
@@ -409,7 +410,7 @@ func TestSplitZRanges(t *testing.T) {
 	})
 
 	t.Run("split x-axis bbox", func(t *testing.T) {
-		zRange := ZRange{{0,0x0B}, {0,0x25}} // (1, 3) -> (3, 4)
+		zRange := ZRange{{0, 0x0B}, {0, 0x25}} // (1, 3) -> (3, 4)
 		zRanges := SplitZRanges(zRange, depth)
 		res := []ZRange{
 			{{0, 0x0B}, {0, 0x0B}},
@@ -421,19 +422,19 @@ func TestSplitZRanges(t *testing.T) {
 	})
 
 	t.Run("split large ranges x-axis bbox", func(t *testing.T) {
-		zRange := ZRange{{0,0}, {2,0}} // (0, 0) -> (4, 0)
+		zRange := ZRange{{0, 0}, {2, 0}} // (0, 0) -> (4, 0)
 		zRanges := SplitZRanges(zRange, depth)
 		assert.Equal(t, []ZRange{{zvals[0], zvals[1]}, {zvals[4], zvals[5]}, {zvals[16], zvals[16]}}, zRanges)
 	})
 
 	t.Run("split large ranges x-axis bbox", func(t *testing.T) {
 		poly := types.Polygon{Lines: []types.LineString{{Points: []types.Point{
-				{X: 0, Y: 0},
-				{X: 10, Y: 0},
-				{X: 10, Y: 10},
-				{X: 0, Y: 10},
-				{X: 10, Y: 10},
-			}},
+			{X: 0, Y: 0},
+			{X: 10, Y: 0},
+			{X: 10, Y: 10},
+			{X: 0, Y: 10},
+			{X: 10, Y: 10},
+		}},
 		}}
 		bbox := spatial.FindBBox(poly)
 		zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
