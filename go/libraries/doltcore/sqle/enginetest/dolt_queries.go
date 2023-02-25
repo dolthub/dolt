@@ -818,17 +818,17 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
-				// Without access to the database, dolt_diff_summary should fail with a database access error
+				// Without access to the database, dolt_diff_stat should fail with a database access error
 				User:        "tester",
 				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_diff_summary('main~', 'main', 'test');",
+				Query:       "SELECT * FROM dolt_diff_stat('main~', 'main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
-				// Without access to the database, dolt_diff_summary with dots should fail with a database access error
+				// Without access to the database, dolt_diff_stat with dots should fail with a database access error
 				User:        "tester",
 				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_diff_summary('main~..main', 'test');",
+				Query:       "SELECT * FROM dolt_diff_stat('main~..main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
@@ -874,31 +874,31 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
-				// With access to the db, but not the table, dolt_diff_summary should fail
+				// With access to the db, but not the table, dolt_diff_stat should fail
 				User:        "tester",
 				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_diff_summary('main~', 'main', 'test2');",
+				Query:       "SELECT * FROM dolt_diff_stat('main~', 'main', 'test2');",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
-				// With access to the db, but not the table, dolt_diff_summary with dots should fail
+				// With access to the db, but not the table, dolt_diff_stat with dots should fail
 				User:        "tester",
 				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_diff_summary('main~...main', 'test2');",
+				Query:       "SELECT * FROM dolt_diff_stat('main~...main', 'test2');",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
-				// With access to the db, dolt_diff_summary should fail for all tables if no access any of tables
+				// With access to the db, dolt_diff_stat should fail for all tables if no access any of tables
 				User:        "tester",
 				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_diff_summary('main~', 'main');",
+				Query:       "SELECT * FROM dolt_diff_stat('main~', 'main');",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
-				// With access to the db, dolt_diff_summary with dots should fail for all tables if no access any of tables
+				// With access to the db, dolt_diff_stat with dots should fail for all tables if no access any of tables
 				User:        "tester",
 				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_diff_summary('main~...main');",
+				Query:       "SELECT * FROM dolt_diff_stat('main~...main');",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
@@ -944,17 +944,17 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
-				// After granting access to the entire db, dolt_diff_summary should work
+				// After granting access to the entire db, dolt_diff_stat should work
 				User:     "tester",
 				Host:     "localhost",
-				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('main~', 'main');",
+				Query:    "SELECT COUNT(*) FROM dolt_diff_stat('main~', 'main');",
 				Expected: []sql.Row{{1}},
 			},
 			{
-				// After granting access to the entire db, dolt_diff_summary with dots should work
+				// After granting access to the entire db, dolt_diff_stat with dots should work
 				User:     "tester",
 				Host:     "localhost",
-				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('main~...main');",
+				Query:    "SELECT COUNT(*) FROM dolt_diff_stat('main~...main');",
 				Expected: []sql.Row{{1}},
 			},
 			{
@@ -986,10 +986,10 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
-				// After revoking access, dolt_diff_summary should fail
+				// After revoking access, dolt_diff_stat should fail
 				User:        "tester",
 				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_diff_summary('main~', 'main', 'test');",
+				Query:       "SELECT * FROM dolt_diff_stat('main~', 'main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{

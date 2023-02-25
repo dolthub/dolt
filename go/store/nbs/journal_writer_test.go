@@ -16,33 +16,33 @@ package nbs
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
+	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/hash"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
-type operation struct {
-	kind   opKind
-	buf    []byte
-	readAt int64
-}
+func TestJournalWriterReadWrite(t *testing.T) {
+	type opKind byte
 
-type opKind byte
+	type operation struct {
+		kind   opKind
+		buf    []byte
+		readAt int64
+	}
 
-const (
-	readOp opKind = iota
-	writeOp
-	flushOp
-)
+	const (
+		readOp opKind = iota
+		writeOp
+		flushOp
+	)
 
-func TestJournalWriter(t *testing.T) {
 	tests := []struct {
 		name string
 		size int
@@ -145,14 +145,13 @@ func TestJournalWriter(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
-			j, err := createJournalWriter(ctx, newTestFilePath(t))
-			require.NotNil(t, j)
-			require.NoError(t, err)
+			path := newTestFilePath(t)
+			j := newTestJournalWriter(t, path)
 			// set specific buffer size
 			j.buf = make([]byte, 0, test.size)
 
 			var off int64
+			var err error
 			for i, op := range test.ops {
 				switch op.kind {
 				case readOp:
@@ -176,53 +175,56 @@ func TestJournalWriter(t *testing.T) {
 				}
 				assert.Equal(t, off, j.offset())
 			}
-			assert.NoError(t, j.Close())
 		})
 	}
 }
 
-func TestJournalWriterWriteCompressedChunk(t *testing.T) {
+func newTestJournalWriter(t *testing.T, path string) *journalWriter {
 	ctx := context.Background()
-	j, err := createJournalWriter(ctx, newTestFilePath(t))
-	require.NotNil(t, j)
+	j, err := createJournalWriter(ctx, path)
 	require.NoError(t, err)
+	require.NotNil(t, j)
+	_, err = j.bootstrapJournal(ctx)
+	require.NoError(t, err)
+	return j
+}
 
-	data := randomCompressedChunks()
-
+func TestJournalWriterWriteCompressedChunk(t *testing.T) {
+	path := newTestFilePath(t)
+	j := newTestJournalWriter(t, path)
+	data := randomCompressedChunks(1024)
 	for a, cc := range data {
-		err = j.writeCompressedChunk(cc)
+		err := j.writeCompressedChunk(cc)
 		require.NoError(t, err)
-		l := j.lookups[a]
-		validateLookup(t, j, l, cc)
+		r, _ := j.ranges.get(a)
+		validateLookup(t, j, r, cc)
 	}
-	for a, l := range j.lookups {
-		validateLookup(t, j, l, data[a])
-	}
-	require.NoError(t, j.Close())
+	j.ranges.iter(func(a addr, r Range) {
+		validateLookup(t, j, r, data[a])
+	})
 }
 
 func TestJournalWriterBootstrap(t *testing.T) {
 	ctx := context.Background()
 	path := newTestFilePath(t)
-	j, err := createJournalWriter(ctx, path)
-	require.NotNil(t, j)
-	require.NoError(t, err)
-
-	data := randomCompressedChunks()
+	j := newTestJournalWriter(t, path)
+	data := randomCompressedChunks(1024)
+	var last hash.Hash
 	for _, cc := range data {
-		err = j.writeCompressedChunk(cc)
+		err := j.writeCompressedChunk(cc)
 		require.NoError(t, err)
+		last = cc.Hash()
 	}
-	assert.NoError(t, j.Close())
+	require.NoError(t, j.commitRootHash(last))
 
-	j, _, err = openJournalWriter(ctx, path)
+	j, _, err := openJournalWriter(ctx, path)
 	require.NoError(t, err)
 	_, err = j.bootstrapJournal(ctx)
 	require.NoError(t, err)
 
-	for a, l := range j.lookups {
-		validateLookup(t, j, l, data[a])
-	}
+	j.ranges.iter(func(a addr, r Range) {
+		validateLookup(t, j, r, data[a])
+	})
 
 	source := journalChunkSource{journal: j}
 	for a, cc := range data {
@@ -232,56 +234,171 @@ func TestJournalWriterBootstrap(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, ch.Data(), buf)
 	}
-	require.NoError(t, j.Close())
 }
 
-func validateLookup(t *testing.T, j *journalWriter, l recLookup, cc CompressedChunk) {
-	b := make([]byte, l.recordLen)
-	n, err := j.readAt(b, l.journalOff)
+func validateLookup(t *testing.T, j *journalWriter, r Range, cc CompressedChunk) {
+	buf := make([]byte, r.Length)
+	_, err := j.readAt(buf, int64(r.Offset))
 	require.NoError(t, err)
-	assert.Equal(t, int(l.recordLen), n)
-	rec, err := readJournalRecord(b)
-	require.NoError(t, err)
-	assert.Equal(t, hash.Hash(rec.address), cc.Hash())
-	assert.Equal(t, rec.payload, cc.FullCompressedChunk)
+	act, err := NewCompressedChunk(cc.H, buf)
+	assert.NoError(t, err)
+	assert.Equal(t, cc.FullCompressedChunk, act.FullCompressedChunk)
 }
 
 func TestJournalWriterSyncClose(t *testing.T) {
-	ctx := context.Background()
-	j, err := createJournalWriter(ctx, newTestFilePath(t))
-	require.NotNil(t, j)
-	require.NoError(t, err)
-	_, err = j.bootstrapJournal(ctx)
-	require.NoError(t, err)
-
-	// close triggers flush
+	path := newTestFilePath(t)
+	j := newTestJournalWriter(t, path)
 	p := []byte("sit")
 	buf, err := j.getBytes(len(p))
 	require.NoError(t, err)
 	copy(buf, p)
-	err = j.Close()
-	require.NoError(t, err)
+	j.flush()
 	assert.Equal(t, 0, len(j.buf))
 	assert.Equal(t, 3, int(j.off))
 }
 
 func newTestFilePath(t *testing.T) string {
-	name := fmt.Sprintf("journal%d.log", rand.Intn(65536))
-	return filepath.Join(t.TempDir(), name)
+	path, err := os.MkdirTemp("", "")
+	require.NoError(t, err)
+	return filepath.Join(path, "journal.log")
 }
 
-func randomCompressedChunks() (compressed map[addr]CompressedChunk) {
-	buf := make([]byte, 1024*1024)
-	rand.Read(buf)
+func TestJournalIndexBootstrap(t *testing.T) {
+	// potentially indexed region of a journal
+	type epoch struct {
+		records map[addr]CompressedChunk
+		last    hash.Hash
+	}
 
+	makeEpoch := func() (e epoch) {
+		e.records = randomCompressedChunks(64)
+		for h := range e.records {
+			e.last = hash.Hash(h)
+			break
+		}
+		return
+	}
+
+	tests := []struct {
+		name   string
+		epochs []epoch
+		novel  epoch
+	}{
+		{
+			name:   "smoke test",
+			epochs: []epoch{makeEpoch()},
+		},
+		{
+			name:   "non-indexed journal",
+			epochs: nil,
+			novel:  makeEpoch(),
+		},
+		{
+			name:   "partially indexed journal",
+			epochs: []epoch{makeEpoch()},
+			novel:  makeEpoch(),
+		},
+		{
+			name: "multiple index records",
+			epochs: []epoch{
+				makeEpoch(),
+				makeEpoch(),
+				makeEpoch(),
+			},
+			novel: makeEpoch(),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			path := newTestFilePath(t)
+			j := newTestJournalWriter(t, path)
+			// setup
+			epochs := append(test.epochs, test.novel)
+			for i, e := range epochs {
+				for _, cc := range e.records {
+					assert.NoError(t, j.writeCompressedChunk(cc))
+					if rand.Int()%10 == 0 { // periodic commits
+						assert.NoError(t, j.commitRootHash(cc.H))
+					}
+				}
+				o := j.offset()                             // precommit offset
+				assert.NoError(t, j.commitRootHash(e.last)) // commit |e.last|
+				if i == len(epochs)-1 {
+					break // don't index |test.novel|
+				}
+				assert.NoError(t, j.flushIndexRecord(e.last, o)) // write index record
+			}
+
+			validateJournal := func(p string, expected []epoch) {
+				journal, ok, err := openJournalWriter(ctx, p)
+				require.NoError(t, err)
+				require.True(t, ok)
+				// bootstrap journal and validate chunk records
+				last, err := journal.bootstrapJournal(ctx)
+				assert.NoError(t, err)
+				for _, e := range expected {
+					var act CompressedChunk
+					for a, exp := range e.records {
+						act, err = journal.getCompressedChunk(a)
+						assert.NoError(t, err)
+						assert.Equal(t, exp, act)
+					}
+				}
+				assert.Equal(t, expected[len(expected)-1].last, last)
+			}
+			idxPath := filepath.Join(filepath.Dir(path), journalIndexFileName)
+
+			before, err := os.Stat(idxPath)
+			require.NoError(t, err)
+			if len(test.epochs) > 0 { // expect index
+				assert.True(t, before.Size() > 0)
+			} else {
+				assert.Equal(t, int64(0), before.Size())
+			}
+
+			// bootstrap journal using index
+			validateJournal(path, epochs)
+			// assert journal index unchanged
+			info, err := os.Stat(idxPath)
+			require.NoError(t, err)
+			assert.Equal(t, before.Size(), info.Size())
+
+			// bootstrap journal without index
+			corruptJournalIndex(t, idxPath)
+			validateJournal(path, epochs)
+			// assert corrupt index cleaned up
+			info, err = os.Stat(idxPath)
+			require.NoError(t, err)
+			assert.Equal(t, int64(0), info.Size())
+		})
+	}
+}
+
+func randomCompressedChunks(cnt int) (compressed map[addr]CompressedChunk) {
 	compressed = make(map[addr]CompressedChunk)
-	for {
+	var buf []byte
+	for i := 0; i < cnt; i++ {
 		k := rand.Intn(51) + 50
 		if k >= len(buf) {
-			return
+			buf = make([]byte, 64*1024)
+			rand.Read(buf)
 		}
 		c := chunks.NewChunk(buf[:k])
 		buf = buf[k:]
 		compressed[addr(c.Hash())] = ChunkToCompressedChunk(c)
 	}
+	return
+}
+
+func corruptJournalIndex(t *testing.T, path string) {
+	f, err := os.OpenFile(path, os.O_RDWR, 0666)
+	require.NoError(t, err)
+	info, err := f.Stat()
+	require.NoError(t, err)
+	buf := make([]byte, 64)
+	rand.Read(buf)
+	_, err = f.WriteAt(buf, info.Size()/2)
+	require.NoError(t, err)
 }

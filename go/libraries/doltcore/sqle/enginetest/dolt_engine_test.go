@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -1235,10 +1236,10 @@ func TestDiffTableFunctionPrepared(t *testing.T) {
 	}
 }
 
-func TestDiffSummaryTableFunction(t *testing.T) {
+func TestDiffStatTableFunction(t *testing.T) {
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
-	for _, test := range DiffSummaryTableFunctionScriptTests {
+	for _, test := range DiffStatTableFunctionScriptTests {
 		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, test)
@@ -1246,10 +1247,10 @@ func TestDiffSummaryTableFunction(t *testing.T) {
 	}
 }
 
-func TestDiffSummaryTableFunctionPrepared(t *testing.T) {
+func TestDiffStatTableFunctionPrepared(t *testing.T) {
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
-	for _, test := range DiffSummaryTableFunctionScriptTests {
+	for _, test := range DiffStatTableFunctionScriptTests {
 		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, harness, test)
@@ -1351,6 +1352,13 @@ func mustNewEngine(t *testing.T, h enginetest.Harness) *gms.Engine {
 	return e
 }
 
+var biasedCosters = []analyzer.Coster{
+	analyzer.NewInnerBiasedCoster(),
+	analyzer.NewLookupBiasedCoster(),
+	analyzer.NewHashBiasedCoster(),
+	analyzer.NewMergeBiasedCoster(),
+}
+
 func TestSystemTableIndexes(t *testing.T) {
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip("only new format support system table indexing")
@@ -1361,23 +1369,27 @@ func TestSystemTableIndexes(t *testing.T) {
 		harness.SkipSetupCommit()
 		e := mustNewEngine(t, harness)
 		defer e.Close()
+		e.Analyzer.Coster = analyzer.NewMergeBiasedCoster()
 
 		ctx := enginetest.NewContext(harness)
 		for _, q := range stt.setup {
 			enginetest.RunQuery(t, e, harness, q)
 		}
 
-		for _, tt := range stt.queries {
-			t.Run(fmt.Sprintf("%s: %s", stt.name, tt.query), func(t *testing.T) {
-				if tt.skip {
-					t.Skip()
-				}
+		for i, c := range []string{"inner", "lookup", "hash", "merge"} {
+			e.Analyzer.Coster = biasedCosters[i]
+			for _, tt := range stt.queries {
+				t.Run(fmt.Sprintf("%s(%s): %s", stt.name, c, tt.query), func(t *testing.T) {
+					if tt.skip {
+						t.Skip()
+					}
 
-				ctx = ctx.WithQuery(tt.query)
-				if tt.exp != nil {
-					enginetest.TestQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil)
-				}
-			})
+					ctx = ctx.WithQuery(tt.query)
+					if tt.exp != nil {
+						enginetest.TestQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil)
+					}
+				})
+			}
 		}
 	}
 }

@@ -137,7 +137,6 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/diff/patch.go", NomsPath: "go/diff/patch.go", HadCopyrightNotice: true},
 	{Path: "store/diff/patch_test.go", NomsPath: "go/diff/patch_test.go", HadCopyrightNotice: true},
 	{Path: "store/diff/print_diff.go", NomsPath: "go/diff/print_diff.go", HadCopyrightNotice: true},
-	{Path: "store/diff/summary.go", NomsPath: "go/diff/summary.go", HadCopyrightNotice: true},
 	{Path: "store/hash/base32.go", NomsPath: "go/hash/base32.go", HadCopyrightNotice: true},
 	{Path: "store/hash/base32_test.go", NomsPath: "go/hash/base32_test.go", HadCopyrightNotice: true},
 	{Path: "store/hash/hash.go", NomsPath: "go/hash/hash.go", HadCopyrightNotice: true},

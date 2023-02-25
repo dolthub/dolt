@@ -114,6 +114,9 @@ func (ts tableSet) hasMany(addrs []hasRecord) (bool, error) {
 }
 
 func (ts tableSet) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	f := func(css chunkSourceSet) ([]byte, error) {
 		for _, haver := range css {
 			data, err := haver.get(ctx, h, stats)

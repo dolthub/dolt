@@ -152,7 +152,7 @@ SQL
 
     dolt sql -q "select * from t1"
     dolt sql -q "select count(*) from dolt_diff('HEAD~', 'HEAD', 't1')"
-    dolt sql -q "select count(*) from dolt_diff_summary('HEAD', 'HEAD~', 't1')"
+    dolt sql -q "select count(*) from dolt_diff_stat('HEAD', 'HEAD~', 't1')"
     dolt sql -q "select count(*) from dolt_log()"
 }
 

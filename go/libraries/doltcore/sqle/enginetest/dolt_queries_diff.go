@@ -1345,7 +1345,7 @@ inner join t on to_pk = t.pk;`,
 	},
 }
 
-var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
+var DiffStatTableFunctionScriptTests = []queries.ScriptTest{
 	{
 		Name: "invalid arguments",
 		SetUpScript: []string{
@@ -1360,71 +1360,71 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "SELECT * from dolt_diff_summary();",
+				Query:       "SELECT * from dolt_diff_stat();",
 				ExpectedErr: sql.ErrInvalidArgumentNumber,
 			},
 			{
-				Query:       "SELECT * from dolt_diff_summary('t');",
+				Query:       "SELECT * from dolt_diff_stat('t');",
 				ExpectedErr: sql.ErrInvalidArgumentNumber,
 			},
 			{
-				Query:       "SELECT * from dolt_diff_summary('t', @Commit1, @Commit2, 'extra');",
+				Query:       "SELECT * from dolt_diff_stat('t', @Commit1, @Commit2, 'extra');",
 				ExpectedErr: sql.ErrInvalidArgumentNumber,
 			},
 			{
-				Query:       "SELECT * from dolt_diff_summary(null, null, null);",
+				Query:       "SELECT * from dolt_diff_stat(null, null, null);",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
-				Query:       "SELECT * from dolt_diff_summary(123, @Commit1, @Commit2);",
+				Query:       "SELECT * from dolt_diff_stat(123, @Commit1, @Commit2);",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
-				Query:       "SELECT * from dolt_diff_summary('t', 123, @Commit2);",
+				Query:       "SELECT * from dolt_diff_stat('t', 123, @Commit2);",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
-				Query:       "SELECT * from dolt_diff_summary('t', @Commit1, 123);",
+				Query:       "SELECT * from dolt_diff_stat('t', @Commit1, 123);",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
-				Query:          "SELECT * from dolt_diff_summary('fake-branch', @Commit2, 't');",
+				Query:          "SELECT * from dolt_diff_stat('fake-branch', @Commit2, 't');",
 				ExpectedErrStr: "branch not found: fake-branch",
 			},
 			{
-				Query:          "SELECT * from dolt_diff_summary('fake-branch..main', 't');",
+				Query:          "SELECT * from dolt_diff_stat('fake-branch..main', 't');",
 				ExpectedErrStr: "branch not found: fake-branch",
 			},
 			{
-				Query:          "SELECT * from dolt_diff_summary(@Commit1, 'fake-branch', 't');",
+				Query:          "SELECT * from dolt_diff_stat(@Commit1, 'fake-branch', 't');",
 				ExpectedErrStr: "branch not found: fake-branch",
 			},
 			{
-				Query:          "SELECT * from dolt_diff_summary('main..fake-branch', 't');",
+				Query:          "SELECT * from dolt_diff_stat('main..fake-branch', 't');",
 				ExpectedErrStr: "branch not found: fake-branch",
 			},
 			{
-				Query:       "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 'doesnotexist');",
+				Query:       "SELECT * from dolt_diff_stat(@Commit1, @Commit2, 'doesnotexist');",
 				ExpectedErr: sql.ErrTableNotFound,
 			},
 			{
-				Query:       "SELECT * from dolt_diff_summary('main^..main', 'doesnotexist');",
+				Query:       "SELECT * from dolt_diff_stat('main^..main', 'doesnotexist');",
 				ExpectedErr: sql.ErrTableNotFound,
 			},
 			{
-				Query:       "SELECT * from dolt_diff_summary(@Commit1, concat('fake', '-', 'branch'), 't');",
+				Query:       "SELECT * from dolt_diff_stat(@Commit1, concat('fake', '-', 'branch'), 't');",
 				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
 			},
 			{
-				Query:       "SELECT * from dolt_diff_summary(hashof('main'), @Commit2, 't');",
+				Query:       "SELECT * from dolt_diff_stat(hashof('main'), @Commit2, 't');",
 				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
 			},
 			{
-				Query:       "SELECT * from dolt_diff_summary(@Commit1, @Commit2, LOWER('T'));",
+				Query:       "SELECT * from dolt_diff_stat(@Commit1, @Commit2, LOWER('T'));",
 				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
 			},
 			{
-				Query:       "SELECT * from dolt_diff_summary('main..main~', LOWER('T'));",
+				Query:       "SELECT * from dolt_diff_stat('main..main~', LOWER('T'));",
 				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
 			},
 		},
@@ -1461,39 +1461,39 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// table is added, no data diff, result is empty
-				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit2, 't');",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit2, @Commit3, 't');",
 				Expected: []sql.Row{{"t", 0, 1, 0, 0, 3, 0, 0, 0, 1, 0, 3}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit3, @Commit4, 't');",
 				Expected: []sql.Row{{"t", 0, 2, 0, 1, 6, 0, 2, 1, 3, 3, 9}},
 			},
 			{
 				// change from and to commits
-				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit3, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit4, @Commit3, 't');",
 				Expected: []sql.Row{{"t", 0, 0, 2, 1, 0, 6, 2, 3, 1, 9, 3}},
 			},
 			{
 				// table is dropped
-				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit5, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit4, @Commit5, 't');",
 				Expected: []sql.Row{{"t", 0, 0, 3, 0, 0, 9, 0, 3, 0, 9, 0}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit4, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit4, 't');",
 				Expected: []sql.Row{{"t", 0, 3, 0, 0, 9, 0, 0, 0, 3, 0, 9}},
 			},
 			{
-				Query:       "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
+				Query:       "SELECT * from dolt_diff_stat(@Commit1, @Commit5, 't');",
 				ExpectedErr: sql.ErrTableNotFound,
 			},
 			{
 				Query: `
 SELECT *
-from dolt_diff_summary(@Commit3, @Commit4, 't') 
+from dolt_diff_stat(@Commit3, @Commit4, 't') 
 inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 				Expected: []sql.Row{},
 			},
@@ -1531,37 +1531,37 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// table is added, no data diff, result is empty
-				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit2, 't');",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit2, @Commit3, 't');",
 				Expected: []sql.Row{{"t", nil, 1, 0, nil, nil, nil, nil, nil, nil, nil, nil}},
 			},
 			{
 				// TODO : (correct result is commented out)
 				//      update row for keyless table deletes the row and insert the new row
 				// 		this causes row added = 3 and row deleted = 1
-				Query: "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
+				Query: "SELECT * from dolt_diff_stat(@Commit3, @Commit4, 't');",
 				//Expected:         []sql.Row{{"t", nil, 2, 0, nil, nil, nil, nil, nil, nil, nil, nil}},
 				Expected: []sql.Row{{"t", nil, 3, 1, nil, nil, nil, nil, nil, nil, nil, nil}},
 			},
 			{
-				Query: "SELECT * from dolt_diff_summary(@Commit4, @Commit3, 't');",
+				Query: "SELECT * from dolt_diff_stat(@Commit4, @Commit3, 't');",
 				//Expected:         []sql.Row{{"t", nil, 0, 2, nil, nil, nil, nil, nil, nil, nil, nil}},
 				Expected: []sql.Row{{"t", nil, 1, 3, nil, nil, nil, nil, nil, nil, nil, nil}},
 			},
 			{
 				// table is dropped
-				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit5, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit4, @Commit5, 't');",
 				Expected: []sql.Row{{"t", nil, 0, 3, nil, nil, nil, nil, nil, nil, nil, nil}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit4, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit4, 't');",
 				Expected: []sql.Row{{"t", nil, 3, 0, nil, nil, nil, nil, nil, nil, nil, nil}},
 			},
 			{
-				Query:       "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
+				Query:       "SELECT * from dolt_diff_stat(@Commit1, @Commit5, 't');",
 				ExpectedErr: sql.ErrTableNotFound,
 			},
 		},
@@ -1603,27 +1603,27 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit0, @Commit1);",
+				Query:    "SELECT * from dolt_diff_stat(@Commit0, @Commit1);",
 				Expected: []sql.Row{{"t", 0, 1, 0, 0, 3, 0, 0, 0, 1, 0, 3}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2);",
+				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit2);",
 				Expected: []sql.Row{{"t2", 0, 1, 0, 0, 3, 0, 0, 0, 1, 0, 3}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3);",
+				Query:    "SELECT * from dolt_diff_stat(@Commit2, @Commit3);",
 				Expected: []sql.Row{{"t", 0, 3, 0, 1, 9, 0, 2, 1, 4, 3, 12}, {"t2", 1, 1, 0, 0, 3, 0, 0, 1, 2, 3, 6}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4);",
+				Query:    "SELECT * from dolt_diff_stat(@Commit3, @Commit4);",
 				Expected: []sql.Row{{"t", 3, 0, 1, 0, 0, 3, 0, 4, 3, 12, 9}, {"t2", 1, 0, 0, 1, 0, 0, 1, 2, 2, 6, 6}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit2);",
+				Query:    "SELECT * from dolt_diff_stat(@Commit4, @Commit2);",
 				Expected: []sql.Row{{"t", 0, 0, 2, 1, 0, 6, 2, 3, 1, 9, 3}, {"t2", 0, 0, 1, 1, 0, 3, 1, 2, 1, 6, 3}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit3, 'WORKING');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit3, 'WORKING');",
 				Expected: []sql.Row{{"t", 3, 0, 1, 0, 0, 3, 0, 4, 3, 12, 9}, {"t2", 1, 0, 0, 1, 0, 0, 1, 2, 2, 6, 6}},
 			},
 		},
@@ -1645,31 +1645,31 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit1, 'WORKING', 't')",
+				Query:    "SELECT * from dolt_diff_stat(@Commit1, 'WORKING', 't')",
 				Expected: []sql.Row{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('STAGED', 'WORKING', 't')",
+				Query:    "SELECT * from dolt_diff_stat('STAGED', 'WORKING', 't')",
 				Expected: []sql.Row{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('STAGED..WORKING', 't')",
+				Query:    "SELECT * from dolt_diff_stat('STAGED..WORKING', 't')",
 				Expected: []sql.Row{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('WORKING', 'STAGED', 't')",
+				Query:    "SELECT * from dolt_diff_stat('WORKING', 'STAGED', 't')",
 				Expected: []sql.Row{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('WORKING', 'WORKING', 't')",
+				Query:    "SELECT * from dolt_diff_stat('WORKING', 'WORKING', 't')",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('WORKING..WORKING', 't')",
+				Query:    "SELECT * from dolt_diff_stat('WORKING..WORKING', 't')",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('STAGED', 'STAGED', 't')",
+				Query:    "SELECT * from dolt_diff_stat('STAGED', 'STAGED', 't')",
 				Expected: []sql.Row{},
 			},
 			{
@@ -1677,11 +1677,11 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('WORKING', 'STAGED', 't')",
+				Query:    "SELECT * from dolt_diff_stat('WORKING', 'STAGED', 't')",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('HEAD', 'STAGED', 't')",
+				Query:    "SELECT * from dolt_diff_stat('HEAD', 'STAGED', 't')",
 				Expected: []sql.Row{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
 			},
 		},
@@ -1723,74 +1723,74 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT * from dolt_diff_summary('main', 'branch1', 't');",
+				Query:    "SELECT * from dolt_diff_stat('main', 'branch1', 't');",
 				Expected: []sql.Row{{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('main..branch1', 't');",
+				Query:    "SELECT * from dolt_diff_stat('main..branch1', 't');",
 				Expected: []sql.Row{{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2}},
 			},
 			{
-				Query: "SELECT * from dolt_diff_summary('main', 'branch1');",
+				Query: "SELECT * from dolt_diff_stat('main', 'branch1');",
 				Expected: []sql.Row{
 					{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2},
 					{"newtable", 0, 0, 2, 0, 0, 2, 0, 2, 0, 2, 0},
 				},
 			},
 			{
-				Query: "SELECT * from dolt_diff_summary('main..branch1');",
+				Query: "SELECT * from dolt_diff_stat('main..branch1');",
 				Expected: []sql.Row{
 					{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2},
 					{"newtable", 0, 0, 2, 0, 0, 2, 0, 2, 0, 2, 0},
 				},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('branch1', 'main', 't');",
+				Query:    "SELECT * from dolt_diff_stat('branch1', 'main', 't');",
 				Expected: []sql.Row{{"t", 0, 1, 0, 1, 4, 0, 1, 1, 2, 2, 6}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('branch1..main', 't');",
+				Query:    "SELECT * from dolt_diff_stat('branch1..main', 't');",
 				Expected: []sql.Row{{"t", 0, 1, 0, 1, 4, 0, 1, 1, 2, 2, 6}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('main~2', 'branch1', 't');",
+				Query:    "SELECT * from dolt_diff_stat('main~2', 'branch1', 't');",
 				Expected: []sql.Row{{"t", 0, 1, 1, 0, 2, 3, 0, 1, 1, 3, 2}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('main~2..branch1', 't');",
+				Query:    "SELECT * from dolt_diff_stat('main~2..branch1', 't');",
 				Expected: []sql.Row{{"t", 0, 1, 1, 0, 2, 3, 0, 1, 1, 3, 2}},
 			},
 
 			// Three dot
 			{
-				Query:    "SELECT * from dolt_diff_summary('main...branch1', 't');",
+				Query:    "SELECT * from dolt_diff_stat('main...branch1', 't');",
 				Expected: []sql.Row{{"t", 0, 1, 1, 0, 2, 3, 0, 1, 1, 3, 2}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('main...branch1');",
+				Query:    "SELECT * from dolt_diff_stat('main...branch1');",
 				Expected: []sql.Row{{"t", 0, 1, 1, 0, 2, 3, 0, 1, 1, 3, 2}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('branch1...main', 't');",
+				Query:    "SELECT * from dolt_diff_stat('branch1...main', 't');",
 				Expected: []sql.Row{{"t", 1, 1, 0, 0, 3, 0, 0, 1, 2, 3, 6}},
 			},
 			{
-				Query: "SELECT * from dolt_diff_summary('branch1...main');",
+				Query: "SELECT * from dolt_diff_stat('branch1...main');",
 				Expected: []sql.Row{
 					{"t", 1, 1, 0, 0, 3, 0, 0, 1, 2, 3, 6},
 					{"newtable", 0, 2, 0, 0, 2, 0, 0, 0, 2, 0, 2},
 				},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('branch1...main^');",
+				Query:    "SELECT * from dolt_diff_stat('branch1...main^');",
 				Expected: []sql.Row{{"t", 1, 1, 0, 0, 3, 0, 0, 1, 2, 3, 6}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('branch1...main', 'newtable');",
+				Query:    "SELECT * from dolt_diff_stat('branch1...main', 'newtable');",
 				Expected: []sql.Row{{"newtable", 0, 2, 0, 0, 2, 0, 0, 0, 2, 0, 2}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('main...main', 'newtable');",
+				Query:    "SELECT * from dolt_diff_stat('main...main', 'newtable');",
 				Expected: []sql.Row{},
 			},
 		},
@@ -1823,23 +1823,23 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit2, 't');",
 				Expected: []sql.Row{{"t", 0, 0, 0, 2, 0, 2, 0, 2, 2, 6, 4}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit2, @Commit3, 't');",
 				Expected: []sql.Row{{"t", 2, 1, 0, 0, 2, 0, 0, 2, 3, 4, 6}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit3, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit3, 't');",
 				Expected: []sql.Row{{"t", 0, 1, 0, 2, 2, 2, 0, 2, 3, 6, 6}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit3, @Commit4, 't');",
 				Expected: []sql.Row{{"t", 2, 1, 0, 1, 6, 0, 1, 3, 4, 6, 12}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit4, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit4, 't');",
 				Expected: []sql.Row{{"t", 0, 2, 0, 2, 6, 0, 2, 2, 4, 6, 12}},
 			},
 		},
@@ -1872,23 +1872,23 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit2, 't');",
 				Expected: []sql.Row{{"t", 0, 2, 0, 0, 6, 0, 0, 0, 2, 0, 6}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit2, @Commit3, 't');",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit3, @Commit4, 't');",
 				Expected: []sql.Row{{"t", 1, 1, 0, 1, 3, 0, 1, 2, 3, 6, 9}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit5, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit4, @Commit5, 't');",
 				Expected: []sql.Row{{"t", 3, 1, 0, 0, 3, 0, 0, 3, 4, 9, 12}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
+				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit5, 't');",
 				Expected: []sql.Row{{"t", 0, 4, 0, 0, 12, 0, 0, 0, 4, 0, 12}},
 			},
 		},
@@ -1900,11 +1900,11 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "select * from dolt_diff_summary('HEAD', 'WORKING')",
+				Query:    "select * from dolt_diff_stat('HEAD', 'WORKING')",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "select * from dolt_diff_summary('WORKING', 'HEAD')",
+				Query:    "select * from dolt_diff_stat('WORKING', 'HEAD')",
 				Expected: []sql.Row{},
 			},
 			{
@@ -1912,11 +1912,11 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "select * from dolt_diff_summary('HEAD', 'WORKING', 't1')",
+				Query:    "select * from dolt_diff_stat('HEAD', 'WORKING', 't1')",
 				Expected: []sql.Row{{"t1", 0, 1, 0, 0, 2, 0, 0, 0, 1, 0, 2}},
 			},
 			{
-				Query:    "select * from dolt_diff_summary('WORKING', 'HEAD', 't1')",
+				Query:    "select * from dolt_diff_stat('WORKING', 'HEAD', 't1')",
 				Expected: []sql.Row{{"t1", 0, 0, 1, 0, 0, 2, 0, 1, 0, 2, 0}},
 			},
 		},
@@ -1933,11 +1933,11 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't1')",
+				Query:    "select * from dolt_diff_stat('HEAD~', 'HEAD', 't1')",
 				Expected: []sql.Row{{"t1", 0, 0, 1, 0, 0, 2, 0, 1, 0, 2, 0}},
 			},
 			{
-				Query:    "select * from dolt_diff_summary('HEAD', 'HEAD~', 't1')",
+				Query:    "select * from dolt_diff_stat('HEAD', 'HEAD~', 't1')",
 				Expected: []sql.Row{{"t1", 0, 1, 0, 0, 2, 0, 0, 0, 1, 0, 2}},
 			},
 		},
@@ -1956,21 +1956,21 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't2')",
+				Query:    "select * from dolt_diff_stat('HEAD~', 'HEAD', 't2')",
 				Expected: []sql.Row{{"t2", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
 			},
 			{
-				Query:    "select * from dolt_diff_summary('HEAD~..HEAD', 't2')",
+				Query:    "select * from dolt_diff_stat('HEAD~..HEAD', 't2')",
 				Expected: []sql.Row{{"t2", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
 			},
 			{
 				// Old table name can be matched as well
-				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't1')",
+				Query:    "select * from dolt_diff_stat('HEAD~', 'HEAD', 't1')",
 				Expected: []sql.Row{{"t1", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
 			},
 			{
 				// Old table name can be matched as well
-				Query:    "select * from dolt_diff_summary('HEAD~..HEAD', 't1')",
+				Query:    "select * from dolt_diff_stat('HEAD~..HEAD', 't1')",
 				Expected: []sql.Row{{"t1", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
 			},
 		},
@@ -1992,17 +1992,17 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT * from dolt_diff_summary('HEAD~2', 'HEAD');",
+				Query:    "SELECT * from dolt_diff_stat('HEAD~2', 'HEAD');",
 				Expected: []sql.Row{{"t", 1, 0, 0, 0, 2, 0, 0, 1, 1, 1, 3}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('HEAD~', 'HEAD');",
+				Query:    "SELECT * from dolt_diff_stat('HEAD~', 'HEAD');",
 				Expected: []sql.Row{},
 			},
 		},
 	},
 	{
-		Name: "pk set change should throw an error for 3 argument dolt_diff_summary",
+		Name: "pk set change should throw an error for 3 argument dolt_diff_stat",
 		SetUpScript: []string{
 			"CREATE table t (pk int primary key);",
 			"INSERT INTO t values (1);",
@@ -2014,13 +2014,13 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "SELECT * from dolt_diff_summary('HEAD~', 'HEAD', 't');",
-				ExpectedErrStr: "failed to compute diff summary for table t: primary key set changed",
+				Query:          "SELECT * from dolt_diff_stat('HEAD~', 'HEAD', 't');",
+				ExpectedErrStr: "failed to compute diff stat for table t: primary key set changed",
 			},
 		},
 	},
 	{
-		Name: "pk set change should report warning for 2 argument dolt_diff_summary",
+		Name: "pk set change should report warning for 2 argument dolt_diff_stat",
 		SetUpScript: []string{
 			"CREATE table t (pk int primary key);",
 			"INSERT INTO t values (1);",
@@ -2035,7 +2035,7 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT * from dolt_diff_summary('HEAD~', 'HEAD')",
+				Query: "SELECT * from dolt_diff_stat('HEAD~', 'HEAD')",
 				Expected: []sql.Row{
 					{"t", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 					{"t2", 1, 3, 0, 0, 3, 0, 0, 1, 4, 1, 4},

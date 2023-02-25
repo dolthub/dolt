@@ -615,6 +615,9 @@ func (nbs *NomsBlockStore) putChunk(ctx context.Context, c chunks.Chunk, getAddr
 }
 
 func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs hash.HashSet, checker refCheck) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	nbs.waitForGC()

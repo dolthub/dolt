@@ -35,12 +35,6 @@ type Map struct {
 	valDesc val.TupleDesc
 }
 
-type DiffSummary struct {
-	Adds, Removes        uint64
-	Changes, CellChanges uint64
-	NewSize, OldSize     uint64
-}
-
 // NewMap creates an empty prolly Tree Map
 func NewMap(node tree.Node, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc) Map {
 	tuples := tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
