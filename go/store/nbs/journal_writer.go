@@ -310,9 +310,9 @@ func (wr *journalWriter) commitRootHash(root hash.Hash) error {
 	if err = wr.flush(); err != nil {
 		return err
 	}
-	//if err = wr.journal.Sync(); err != nil {
-	//	return err
-	//}
+	if err = wr.journal.Sync(); err != nil {
+		return err
+	}
 	if wr.ranges.novelCount() > wr.maxNovel {
 		o := wr.offset() - int64(n) // pre-commit journal offset
 		err = wr.flushIndexRecord(root, o)
@@ -444,9 +444,9 @@ func (wr *journalWriter) Close() (err error) {
 	if err = wr.flush(); err != nil {
 		return err
 	}
-	//if cerr := wr.journal.Sync(); cerr != nil {
-	//	err = cerr
-	//}
+	if cerr := wr.journal.Sync(); cerr != nil {
+		err = cerr
+	}
 	if cerr := wr.journal.Close(); cerr != nil {
 		err = cerr
 	}
