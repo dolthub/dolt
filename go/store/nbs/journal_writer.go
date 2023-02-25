@@ -310,9 +310,9 @@ func (wr *journalWriter) commitRootHash(root hash.Hash) error {
 	if err = wr.flush(); err != nil {
 		return err
 	}
-	if err = wr.journal.Sync(); err != nil {
-		return err
-	}
+	//if err = wr.journal.Sync(); err != nil {
+	//	return err
+	//}
 	if wr.ranges.novelCount() > wr.maxNovel {
 		o := wr.offset() - int64(n) // pre-commit journal offset
 		err = wr.flushIndexRecord(root, o)
@@ -444,9 +444,9 @@ func (wr *journalWriter) Close() (err error) {
 	if err = wr.flush(); err != nil {
 		return err
 	}
-	if cerr := wr.journal.Sync(); cerr != nil {
-		err = cerr
-	}
+	//if cerr := wr.journal.Sync(); cerr != nil {
+	//	err = cerr
+	//}
 	if cerr := wr.journal.Close(); cerr != nil {
 		err = cerr
 	}
@@ -503,12 +503,8 @@ func (idx rangeIndex) novelLookups() (lookups []lookup) {
 }
 
 func (idx rangeIndex) flatten() {
-	if len(idx.cached) == 0 {
-		idx.cached = idx.novel
-	} else {
-		for a, r := range idx.novel {
-			idx.cached[a] = r
-		}
+	for a, r := range idx.novel {
+		idx.cached[a] = r
+		delete(idx.novel, a)
 	}
-	idx.novel = make(map[addr]Range)
 }
