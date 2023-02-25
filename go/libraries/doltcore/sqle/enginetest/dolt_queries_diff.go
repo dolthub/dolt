@@ -2047,6 +2047,713 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 	},
 }
 
+var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
+	{
+		Name: "invalid arguments",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.')",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting into t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "SELECT * from dolt_diff_summary();",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_diff_summary('t');",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_diff_summary('t', @Commit1, @Commit2, 'extra');",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_diff_summary(null, null, null);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_diff_summary(123, @Commit1, @Commit2);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_diff_summary('t', 123, @Commit2);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_diff_summary('t', @Commit1, 123);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:          "SELECT * from dolt_diff_summary('fake-branch', @Commit2, 't');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:          "SELECT * from dolt_diff_summary('fake-branch..main', 't');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:          "SELECT * from dolt_diff_summary(@Commit1, 'fake-branch', 't');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:          "SELECT * from dolt_diff_summary('main..fake-branch', 't');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:       "SELECT * from dolt_diff_summary(@Commit1, concat('fake', '-', 'branch'), 't');",
+				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT * from dolt_diff_summary(hashof('main'), @Commit2, 't');",
+				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT * from dolt_diff_summary(@Commit1, @Commit2, LOWER('T'));",
+				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+			},
+		},
+	},
+	{
+		Name: "basic case with single table",
+		SetUpScript: []string{
+			"set @Commit0 = HashOf('HEAD');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '--allow-empty', '-m', 'creating table t');",
+
+			// create table t only
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.')",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'creating table t');",
+
+			// insert 1 row into t
+			"insert into t values(1, 'one', 'two');",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'inserting 1 into table t');",
+
+			// insert 2 rows into t and update two cells
+			"insert into t values(2, 'two', 'three'), (3, 'three', 'four');",
+			"update t set c1='uno', c2='dos' where pk=1;",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'inserting 2 into table t');",
+
+			// drop table t only
+			"drop table t;",
+			"set @Commit5 = '';",
+			"call dolt_commit_hash_out(@Commit5, '-am', 'drop table t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// table does not exist, empty result
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 'doesnotexist');",
+				Expected: []sql.Row{},
+			},
+			{
+				// table is added, no data changes
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
+				Expected: []sql.Row{{"t", "added", false, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+			{
+				// change from and to commits
+				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit3, 't');",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+			{
+				// table is dropped
+				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit5, 't');",
+				Expected: []sql.Row{{"t", "dropped", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit4, 't');",
+				Expected: []sql.Row{{"t", "added", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "basic case with single keyless table",
+		SetUpScript: []string{
+			"set @Commit0 = HashOf('HEAD');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '--allow-empty', '-m', 'creating table t');",
+
+			// create table t only
+			"create table t (id int, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.')",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'creating table t');",
+
+			// insert 1 row into t
+			"insert into t values(1, 'one', 'two');",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'inserting 1 into table t');",
+
+			// insert 2 rows into t and update two cells
+			"insert into t values(2, 'two', 'three'), (3, 'three', 'four');",
+			"update t set c1='uno', c2='dos' where id=1;",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'inserting 2 into table t');",
+
+			// drop table t only
+			"drop table t;",
+			"set @Commit5 = '';",
+			"call dolt_commit_hash_out(@Commit5, '-am', 'drop table t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// table is added, no data diff, result is empty
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
+				Expected: []sql.Row{{"t", "added", false, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit3, 't');",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+			{
+				// table is dropped
+				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit5, 't');",
+				Expected: []sql.Row{{"t", "dropped", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit4, 't');",
+				Expected: []sql.Row{{"t", "added", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "basic case with multiple tables",
+		SetUpScript: []string{
+			"set @Commit0 = HashOf('HEAD');",
+
+			// add table t with 1 row
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"insert into t values(1, 'one', 'two');",
+			"call dolt_add('.')",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'inserting into table t');",
+
+			// add table t2 with 1 row
+			"create table t2 (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"insert into t2 values(100, 'hundred', 'hundert');",
+			"call dolt_add('.')",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting into table t2');",
+
+			// changes on both tables
+			"insert into t values(2, 'two', 'three'), (3, 'three', 'four'), (4, 'four', 'five');",
+			"update t set c1='uno', c2='dos' where pk=1;",
+			"insert into t2 values(101, 'hundred one', 'one');",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'inserting into table t');",
+
+			// changes on both tables
+			"delete from t where c2 = 'four';",
+			"update t2 set c2='zero' where pk=100;",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'inserting into table t');",
+
+			// create keyless table
+			"create table keyless (id int);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit0, @Commit1);",
+				Expected: []sql.Row{{"t", "added", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2);",
+				Expected: []sql.Row{{"t2", "added", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3);",
+				Expected: []sql.Row{{"t", "modified", true, false}, {"t2", "modified", true, false}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4);",
+				Expected: []sql.Row{{"t", "modified", true, false}, {"t2", "modified", true, false}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit0, @Commit4);",
+				Expected: []sql.Row{{"t", "added", true, true}, {"t2", "added", true, true}},
+			},
+			{
+				Query: "SELECT * from dolt_diff_summary(@Commit4, @Commit2);",
+
+				Expected: []sql.Row{{"t", "modified", true, false}, {"t2", "modified", true, false}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit3, 'WORKING');",
+				Expected: []sql.Row{{"t", "modified", true, false}, {"t2", "modified", true, false}, {"keyless", "added", false, true}},
+			},
+		},
+	},
+	{
+		Name: "WORKING and STAGED",
+		SetUpScript: []string{
+			"set @Commit0 = HashOf('HEAD');",
+
+			"create table t (pk int primary key, c1 text, c2 text);",
+			"call dolt_add('.')",
+			"insert into t values (1, 'one', 'two'), (2, 'three', 'four');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'inserting two rows into table t');",
+
+			"insert into t values (3, 'five', 'six');",
+			"delete from t where pk = 2",
+			"update t set c2 = '100' where pk = 1",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, 'WORKING', 't')",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('STAGED', 'WORKING', 't')",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('STAGED..WORKING', 't')",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('WORKING', 'STAGED', 't')",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('WORKING', 'WORKING', 't')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('WORKING..WORKING', 't')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('STAGED', 'STAGED', 't')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "call dolt_add('.')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('WORKING', 'STAGED', 't')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('HEAD', 'STAGED', 't')",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+		},
+	},
+	{
+		Name: "diff with branch refs",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.')",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting row 1 into t in main');",
+
+			"CALL DOLT_checkout('-b', 'branch1');",
+			"alter table t drop column c2;",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'dropping column c2 in branch1');",
+
+			"delete from t where pk=1;",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'deleting row 1 in branch1');",
+
+			"insert into t values (2, 'two');",
+			"set @Commit5 = '';",
+			"call dolt_commit_hash_out(@Commit5, '-am', 'inserting row 2 in branch1');",
+
+			"CALL DOLT_checkout('main');",
+			"insert into t values (2, 'two', 'three');",
+			"set @Commit6 = '';",
+			"call dolt_commit_hash_out(@Commit6, '-am', 'inserting row 2 in main');",
+
+			"create table newtable (pk int primary key);",
+			"insert into newtable values (1), (2);",
+			"set @Commit7 = '';",
+			"call dolt_commit_hash_out(@Commit7, '-Am', 'new table newtable');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_diff_summary('main', 'branch1', 't');",
+				Expected: []sql.Row{{"t", "modified", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('main..branch1', 't');",
+				Expected: []sql.Row{{"t", "modified", true, true}},
+			},
+			{
+				Query: "SELECT * from dolt_diff_summary('main', 'branch1');",
+				Expected: []sql.Row{
+					{"t", "modified", true, true},
+					{"newtable", "dropped", true, true},
+				},
+			},
+			{
+				Query: "SELECT * from dolt_diff_summary('main..branch1');",
+				Expected: []sql.Row{
+					{"t", "modified", true, true},
+					{"newtable", "dropped", true, true},
+				},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('branch1', 'main', 't');",
+				Expected: []sql.Row{{"t", "modified", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('branch1..main', 't');",
+				Expected: []sql.Row{{"t", "modified", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('main~2', 'branch1', 't');",
+				Expected: []sql.Row{{"t", "modified", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('main~2..branch1', 't');",
+				Expected: []sql.Row{{"t", "modified", true, true}},
+			},
+
+			// Three dot
+			{
+				Query:    "SELECT * from dolt_diff_summary('main...branch1', 't');",
+				Expected: []sql.Row{{"t", "modified", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('main...branch1');",
+				Expected: []sql.Row{{"t", "modified", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('branch1...main', 't');",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+			{
+				Query: "SELECT * from dolt_diff_summary('branch1...main');",
+				Expected: []sql.Row{
+					{"t", "modified", true, false},
+					{"newtable", "added", true, true},
+				},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('branch1...main^');",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('branch1...main', 'newtable');",
+				Expected: []sql.Row{{"newtable", "added", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('main...main', 'newtable');",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "schema modification: drop and add column",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.');",
+			"insert into t values (1, 'one', 'two'), (2, 'two', 'three');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'inserting row 1, 2 into t');",
+
+			// drop 1 column
+			"alter table t drop column c2;",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'dropping column c2');",
+
+			// add 1 row
+			"insert into t values (3, 'three');",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'inserting row 3');",
+
+			// add 1 column
+			"alter table t add column c2 varchar(20);",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'adding column c2');",
+
+			// add 1 row and update
+			"insert into t values (4, 'four', 'five');",
+			"update t set c2='foo' where pk=1;",
+			"set @Commit5 = '';",
+			"call dolt_commit_hash_out(@Commit5, '-am', 'inserting and updating data');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
+				Expected: []sql.Row{{"t", "modified", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit3, 't');",
+				Expected: []sql.Row{{"t", "modified", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
+				Expected: []sql.Row{{"t", "modified", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit5, 't');",
+				Expected: []sql.Row{{"t", "modified", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+		},
+	},
+	{
+		Name: "schema modification: rename columns",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 int);",
+			"call dolt_add('.')",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
+
+			// add rows
+			"insert into t values(1, 'one', -1), (2, 'two', -2);",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting into t');",
+
+			// rename column
+			"alter table t rename column c2 to c3;",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'renaming column c2 to c3');",
+
+			// add row and update
+			"insert into t values (3, 'three', -3);",
+			"update t set c3=1 where pk=1;",
+			"set @Commit4 = '';",
+			"call dolt_commit_hash_out(@Commit4, '-am', 'inserting and updating data');",
+
+			// rename column and add row
+			"alter table t rename column c3 to c2;",
+			"insert into t values (4, 'four', -4);",
+			"set @Commit5 = '';",
+			"call dolt_commit_hash_out(@Commit5, '-am', 'renaming column c3 to c2, and inserting data');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
+				Expected: []sql.Row{{"t", "modified", true, true}}, // TODO: Data change should be false for renamed column
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit5, 't');",
+				Expected: []sql.Row{{"t", "modified", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
+				Expected: []sql.Row{{"t", "modified", true, false}},
+			},
+		},
+	},
+	{
+		Name: "new table",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_diff_summary('HEAD', 'WORKING')",
+				Expected: []sql.Row{{"t1", "added", false, true}},
+			},
+			{
+				Query:    "select * from dolt_diff_summary('WORKING', 'HEAD')",
+				Expected: []sql.Row{{"t1", "dropped", false, true}},
+			},
+			{
+				Query:            "insert into t1 values (1,2)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from dolt_diff_summary('HEAD', 'WORKING', 't1')",
+				Expected: []sql.Row{{"t1", "added", true, true}},
+			},
+			{
+				Query:    "select * from dolt_diff_summary('WORKING', 'HEAD', 't1')",
+				Expected: []sql.Row{{"t1", "dropped", true, true}},
+			},
+		},
+	},
+	{
+		Name: "dropped table",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int)",
+			"call dolt_add('.')",
+			"insert into t1 values (1,2)",
+			"call dolt_commit('-am', 'new table')",
+			"drop table t1",
+			"call dolt_commit('-am', 'dropped table')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't1')",
+				Expected: []sql.Row{{"t1", "dropped", true, true}},
+			},
+			{
+				Query:    "select * from dolt_diff_summary('HEAD', 'HEAD~', 't1')",
+				Expected: []sql.Row{{"t1", "added", true, true}},
+			},
+		},
+	},
+	{
+		Name: "renamed table",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int)",
+			"call dolt_add('.')",
+			"insert into t1 values (1,2)",
+			"call dolt_commit('-am', 'new table')",
+			"alter table t1 rename to t2",
+			"call dolt_add('.')",
+			"insert into t2 values (3,4)",
+			"call dolt_commit('-am', 'renamed table')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't2')",
+				Expected: []sql.Row{{"t2", "renamed", true, true}},
+			},
+			{
+				Query:    "select * from dolt_diff_summary('HEAD~..HEAD', 't2')",
+				Expected: []sql.Row{{"t2", "renamed", true, true}},
+			},
+			{
+				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD')",
+				Expected: []sql.Row{{"t2", "renamed", true, true}},
+			},
+			{
+				Query:    "select * from dolt_diff_summary('HEAD~..HEAD')",
+				Expected: []sql.Row{{"t2", "renamed", true, true}},
+			},
+			{
+				// Old table name can be matched as well
+				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't1')",
+				Expected: []sql.Row{{"t1", "renamed", true, true}},
+			},
+			{
+				// Old table name can be matched as well
+				Query:    "select * from dolt_diff_summary('HEAD~..HEAD', 't1')",
+				Expected: []sql.Row{{"t1", "renamed", true, true}},
+			},
+		},
+	},
+	{
+		Name: "add multiple columns, then set and unset a value. Should not show a diff",
+		SetUpScript: []string{
+			"CREATE table t (pk int primary key);",
+			"insert into t values (1);",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+			"alter table t add column col1 int;",
+			"alter table t add column col2 int;",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-am', 'add columns');",
+			"UPDATE t set col1 = 1 where pk = 1;",
+			"UPDATE t set col1 = null where pk = 1;",
+			"CALL DOLT_COMMIT('--allow-empty', '-am', 'fix short tuple');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_diff_summary('HEAD~2', 'HEAD');",
+				Expected: []sql.Row{{"t", "modified", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('HEAD~', 'HEAD');",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "pk set change should throw an error for 3 argument dolt_diff_summary",
+		SetUpScript: []string{
+			"CREATE table t (pk int primary key);",
+			"INSERT INTO t values (1);",
+			"CALL DOLT_COMMIT('-Am', 'table with row');",
+			"ALTER TABLE t ADD col1 int not null default 0;",
+			"ALTER TABLE t drop primary key;",
+			"ALTER TABLE t add primary key (pk, col1);",
+			"CALL DOLT_COMMIT('-am', 'add secondary column with primary key');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "SELECT * from dolt_diff_summary('HEAD~', 'HEAD', 't');",
+				ExpectedErrStr: "failed to compute diff summary for table t: primary key set changed",
+			},
+		},
+	},
+	{
+		Name: "pk set change should report warning for 2 argument dolt_diff_summary",
+		SetUpScript: []string{
+			"CREATE table t (pk int primary key);",
+			"INSERT INTO t values (1);",
+			"CREATE table t2 (pk int primary key);",
+			"INSERT INTO t2 values (2);",
+			"CALL DOLT_COMMIT('-Am', 'multiple tables');",
+			"ALTER TABLE t ADD col1 int not null default 0;",
+			"ALTER TABLE t drop primary key;",
+			"ALTER TABLE t add primary key (pk, col1);",
+			"INSERT INTO t2 values (3), (4), (5);",
+			"CALL DOLT_COMMIT('-am', 'add secondary column with primary key to t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * from dolt_diff_summary('HEAD~', 'HEAD')",
+				Expected: []sql.Row{
+					{"t2", "modified", true, false},
+				},
+				ExpectedWarning:       dtables.PrimaryKeyChangeWarningCode,
+				ExpectedWarningsCount: 1,
+			},
+		},
+	},
+}
+
 var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "working set changes",
