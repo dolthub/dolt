@@ -15,7 +15,6 @@
 package prolly
 
 import (
-	"encoding/binary"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -55,8 +54,6 @@ type Range struct {
 	Fields                     []RangeField
 	Desc                       val.TupleDesc
 	Tup                        val.Tuple
-	MinX0, MinX1, MinY0, MinY1 uint64
-	MaxX0, MaxX1, MaxY0, MaxY1 uint64
 }
 
 // RangeField bounds one dimension of a Range.
@@ -164,26 +161,6 @@ func (r Range) Matches(t val.Tuple) bool {
 		if hi.Binding {
 			cmp := order.CompareValues(i, field, hi.Value, typ)
 			if cmp > 0 || (cmp == 0 && !hi.Inclusive) {
-				return false
-			}
-		}
-
-		if typ.Enc == val.CellEnc {
-			p0 := binary.BigEndian.Uint64(field[1:])
-			px0 := p0 & 0x5555555555555555
-			py0 := p0 & 0xAAAAAAAAAAAAAAAA
-			if px0 < r.MinX0 || px0 > r.MaxX0 ||
-				py0 < r.MinY0 || py0 > r.MaxY0 {
-				return false
-			}
-
-			p1 := binary.BigEndian.Uint64(field[9:])
-			px1 := p1 & 0x5555555555555555
-			py1 := p1 & 0xAAAAAAAAAAAAAAAA
-			if px0 == r.MinX0 && px1 < r.MinX1 ||
-				px0 == r.MaxX0 && px1 > r.MaxX1 ||
-				py0 == r.MinY0 && py1 < r.MinY1 ||
-				py0 == r.MaxY0 && py1 > r.MaxY1 {
 				return false
 			}
 		}
