@@ -131,6 +131,8 @@ func (ir indexResult) Length() uint32 {
 type tableReaderAt interface {
 	ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error)
 	Reader(ctx context.Context) (io.ReadCloser, error)
+	Close() error
+	clone() (tableReaderAt, error)
 }
 
 // tableReader implements get & has queries against a single nbs table. goroutine safe.
@@ -663,7 +665,12 @@ func (tr tableReader) currentSize() uint64 {
 }
 
 func (tr tableReader) close() error {
-	return tr.idx.Close()
+	err := tr.idx.Close()
+	if err != nil {
+		tr.r.Close()
+		return err
+	}
+	return tr.r.Close()
 }
 
 func (tr tableReader) clone() (tableReader, error) {
@@ -671,22 +678,15 @@ func (tr tableReader) clone() (tableReader, error) {
 	if err != nil {
 		return tableReader{}, err
 	}
+	r, err := tr.r.clone()
+	if err != nil {
+		idx.Close()
+		return tableReader{}, err
+	}
 	return tableReader{
 		prefixes:  tr.prefixes,
 		idx:       idx,
-		r:         tr.r,
+		r:         r,
 		blockSize: tr.blockSize,
 	}, nil
-}
-
-type readerAdapter struct {
-	rat tableReaderAt
-	off int64
-	ctx context.Context
-}
-
-func (ra *readerAdapter) Read(p []byte) (n int, err error) {
-	n, err = ra.rat.ReadAtWithStats(ra.ctx, p, ra.off, &Stats{})
-	ra.off += int64(n)
-	return
 }

@@ -54,6 +54,14 @@ func (t tableNotInDynamoErr) Error() string {
 	return fmt.Sprintf("NBS table %s not present in DynamoDB table %s", t.nbs, t.dynamo)
 }
 
+func (dtra *dynamoTableReaderAt) Close() error {
+	return nil
+}
+
+func (dtra *dynamoTableReaderAt) clone() (tableReaderAt, error) {
+	return dtra, nil
+}
+
 func (dtra *dynamoTableReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {
 	data, err := dtra.ddb.ReadTable(ctx, dtra.h, &Stats{})
 	if err != nil {

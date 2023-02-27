@@ -234,6 +234,14 @@ type bsTableReaderAt struct {
 	bs  blobstore.Blobstore
 }
 
+func (bsTRA *bsTableReaderAt) Close() error {
+	return nil
+}
+
+func (bsTRA *bsTableReaderAt) clone() (tableReaderAt, error) {
+	return bsTRA, nil
+}
+
 func (bsTRA *bsTableReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {
 	rc, _, err := bsTRA.bs.Get(ctx, bsTRA.key, blobstore.AllRange)
 	return rc, err

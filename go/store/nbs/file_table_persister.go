@@ -33,20 +33,17 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
-	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const tempTablePrefix = "nbs_table_"
 
-func newFSTablePersister(dir string, fc *fdCache, q MemoryQuotaProvider) tablePersister {
-	d.PanicIfTrue(fc == nil)
-	return &fsTablePersister{dir, fc, q}
+func newFSTablePersister(dir string, q MemoryQuotaProvider) tablePersister {
+	return &fsTablePersister{dir, q}
 }
 
 type fsTablePersister struct {
 	dir string
-	fc  *fdCache
 	q   MemoryQuotaProvider
 }
 
@@ -54,7 +51,7 @@ var _ tablePersister = &fsTablePersister{}
 var _ tableFilePersister = &fsTablePersister{}
 
 func (ftp *fsTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, ftp.fc)
+	return newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q)
 }
 
 func (ftp *fsTablePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
@@ -154,11 +151,6 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 	}
 
 	newName := filepath.Join(ftp.dir, name.String())
-	err = ftp.fc.ShrinkCache()
-
-	if err != nil {
-		return nil, err
-	}
 
 	err = file.Rename(tempName, newName)
 
@@ -247,12 +239,6 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manif
 	ss := contents.getSpecSet()
 
 	fileInfos, err := os.ReadDir(ftp.dir)
-
-	if err != nil {
-		return err
-	}
-
-	err = ftp.fc.ShrinkCache()
 
 	if err != nil {
 		return err
