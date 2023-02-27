@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import random
 
@@ -14,7 +15,7 @@ adds = int(sys.argv[4])
 
 if __name__=="__main__":
     if not os.path.exists(table_dir):
-        os.rmdir(table_dir)
+        shutil.rmtree(table_dir, ignore_errors=True)
         os.makedirs(table_dir)
 
     ys = [i for i in range(rows+adds)]

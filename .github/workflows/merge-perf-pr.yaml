@@ -1,4 +1,4 @@
-name: Run Systab Benchmark on Pull Requests
+name: Run Merge Benchmark on Pull Requests
 
 on:
   pull_request:
@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [validate-commentor, check-comments]
     if: ${{ needs.check-comments.outputs.benchmark == 'true' }}
-    name: Trigger Benchmark Systab Workflow
+    name: Trigger Benchmark Merge Workflow
     steps:
       - uses: dolthub/pull-request-comment-branch@v3
         id: comment-branch

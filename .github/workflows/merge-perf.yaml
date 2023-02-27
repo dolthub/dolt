@@ -1,4 +1,4 @@
-name: Systab Benchmarks
+name: Merge Benchmarks
 on:
   repository_dispatch:
     types: [ benchmark-merge ]
@@ -42,22 +42,22 @@ jobs:
 
     - name: Run bench
       id: bench
-      working-directory: $GITHUB_WORKSPACE
       run: |
-        DATADIR=$GITHUB_WORKSPACE/data
+        gw=$GITHUB_WORKSPACE
+        DATADIR=$gw/data
         TABLE_NUM=2
         ROW_NUM=1000000
         ADD_NUM=60000
         python ${{ env.SCRIPT_DIR }}/data.py $DATADIR $TABLE_NUM $ROW_NUM $ADD_NUM
 
-        TMPDIR=$GITHUB_WORKSPACE/tmp
+        TMPDIR=$gw/tmp
         ./${{ env.SCRIPT_DIR}}/setup.sh $TMPDIR $DATADIR
 
-        TIMES=$GITHUB_WORKSPACE/time.log
+        TIMES=$gw/time.log
         cd $TMPDIR
         time dolt merge main &>$TIMES
 
-        RESULTS=$GITHUB_WORKSPACE/results.sql
+        RESULTS=$gw/results.sql
 
         echo "time test"
         time -f "%E" sleep 1
@@ -80,10 +80,10 @@ jobs:
         summaryq="select avg(latency) as avg from ${{ env.RESULT_TABLE_NAME }}"
 
         out="$gw/results.csv"
-        dolt_dir="$gw/systab-perf"
+        dolt_dir="$gw/merge-perf"
 
-        dolt config --global --add user.email "systab-perf@dolthub.com"
-        dolt config --global --add user.name "systab-perf"
+        dolt config --global --add user.email "merge-perf@dolthub.com"
+        dolt config --global --add user.name "merge-perf"
 
         echo '${{ secrets.DOLTHUB_IMPORT_PERF_CREDS_VALUE }}' | dolt creds import
         dolt clone ${{ env.DOLTHUB_DB }} "$dolt_dir"
@@ -180,8 +180,8 @@ jobs:
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
         issue: ${{ github.event.client_payload.issue_id }}
-        message-failure: systab benchmark failed
-        message-cancelled: systab benchmark cancelled
+        message-failure: merge benchmark failed
+        message-cancelled: merge benchmark cancelled
         allow-repeats: true
         message: |
           @${{ github.event.client_payload.actor }} __DOLT__
