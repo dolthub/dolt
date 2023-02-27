@@ -33,7 +33,7 @@ import (
 
 type fileTableReader struct {
 	tableReader
-	h  addr
+	h addr
 }
 
 const (
