@@ -145,7 +145,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 		}
 	}()
 
-	src, err := fts.ConjoinAll(ctx, sources, &Stats{})
+	src, _, err := fts.ConjoinAll(ctx, sources, &Stats{})
 	require.NoError(t, err)
 	defer src.close()
 
@@ -186,7 +186,7 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 		}
 	}()
 
-	src, err := fts.ConjoinAll(ctx, sources, &Stats{})
+	src, _, err := fts.ConjoinAll(ctx, sources, &Stats{})
 	require.NoError(t, err)
 	defer src.close()
 
