@@ -35,49 +35,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFSTableCacheOnOpen(t *testing.T) {
-	assert := assert.New(t)
-	dir := makeTempDir(t)
-	defer file.RemoveAll(dir)
-
-	names := []addr{}
-	cacheSize := 2
-	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{})
-
-	// Create some tables manually, load them into the cache
-	func() {
-		for i := 0; i < cacheSize; i++ {
-			name, err := writeTableData(dir, []byte{byte(i)})
-			require.NoError(t, err)
-			names = append(names, name)
-		}
-		for _, name := range names {
-			tr, err := fts.Open(context.Background(), name, 1, nil)
-			require.NoError(t, err)
-			defer tr.close()
-		}
-	}()
-
-	// Tables should still be cached and on disk
-	for i, name := range names {
-		src, err := fts.Open(context.Background(), name, 1, nil)
-		require.NoError(t, err)
-		defer src.close()
-		h := computeAddr([]byte{byte(i)})
-		assert.True(src.has(h))
-	}
-
-	// Kick a table out of the cache
-	name, err := writeTableData(dir, []byte{0xff})
-	require.NoError(t, err)
-	tr, err := fts.Open(context.Background(), name, 1, nil)
-	require.NoError(t, err)
-	defer tr.close()
-
-	err = removeTables(dir, names...)
-	require.NoError(t, err)
-}
-
 func makeTempDir(t *testing.T) string {
 	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
@@ -161,35 +118,6 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 
 	_, err = os.Stat(filepath.Join(dir, src.hash().String()))
 	assert.True(os.IsNotExist(err), "%v", err)
-}
-
-func TestFSTablePersisterCacheOnPersist(t *testing.T) {
-	assert := assert.New(t)
-	dir := makeTempDir(t)
-	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{})
-	defer file.RemoveAll(dir)
-
-	var name addr
-	func() {
-		src, err := persistTableData(fts, testChunks...)
-		require.NoError(t, err)
-		defer src.close()
-		name = src.hash()
-	}()
-
-	// Table should still be cached
-	src, err := fts.Open(context.Background(), name, uint32(len(testChunks)), nil)
-	require.NoError(t, err)
-	defer src.close()
-	assertChunksInReader(testChunks, src, assert)
-
-	// Evict |name| from cache
-	tr, err := persistTableData(fts, []byte{0xff})
-	require.NoError(t, err)
-	defer tr.close()
-
-	err = removeTables(dir, name)
-	require.NoError(t, err)
 }
 
 func TestFSTablePersisterConjoinAll(t *testing.T) {
