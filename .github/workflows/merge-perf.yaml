@@ -104,12 +104,12 @@ jobs:
         dolt push -f origin $branch
 
         # generate report
-        dolt sql -r csv < "$query" > "$out"
+        dolt sql -r csv -q "$query" > "$out"
 
         cat "$out"
         echo "::set-output name=report_path::$out"
 
-        avg=$(dolt sql -r csv < "$summaryq" | tail -1)
+        avg=$(dolt sql -r csv -q "$summaryq" | tail -1)
         echo "::set-output name=avg::$avg"
 
     - name: Format Results
