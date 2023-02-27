@@ -400,11 +400,13 @@ match_diff_and_patch_results() {
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "statement" ]] || false
     patch_array=( "${lines[@]:3}" )
+    # to iterate over only the row values; remove one additional line for the last tabular closure line
+    idx=$(( ${#patch_array[@]} - 2 ))
 
     # do not include the last element of patch_array, which will be the closing line for tabular output
     # this also removes the last element of diff_array, which can be an error message.
-    for i in "${!patch_array[@]:0:2}"; do
-        # printf "%s ---- %s\n" "${diff_array[i]}" "${patch_array[i]}"
+    for i in $(seq 0 $idx); do
+        # printf "%s ---- %s\n" "${patch_array[i]}" "${diff_array[i]}"
         [[ "${patch_array[i]}" =~ "${diff_array[i]}" ]] || false
     done
 }
