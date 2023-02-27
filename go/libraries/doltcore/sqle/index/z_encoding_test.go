@@ -23,10 +23,8 @@ import (
 	"math/rand"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
-
 	"github.com/dolthub/go-mysql-server/sql/types"
 	assert "github.com/stretchr/testify/require"
 )
@@ -398,15 +396,38 @@ func TestSplitZRanges(t *testing.T) {
 		assert.Equal(t, res, zRanges)
 	})
 
-	t.Run("split x-axis bbox", func(t *testing.T) {
-		t.Skip("this takes way too long")
-		zRange := ZRange{{0, 0}, {0, uint64(1 << 43)}} // (0, 0) -> (4, 0)
-		start := time.Now()
+	t.Run("split medium x-axis bbox", func(t *testing.T) {
+		zRange := ZRange{{0, 0}, {0, uint64(1 << 42)}} // (0, 0) -> (2^21, 0)
 		zRanges := SplitZRanges(zRange, depth)
-		t.Log(time.Since(start))
-		t.Log(len(zRanges))
+		res := []ZRange{
+			{{0x0, 0x00000000000}, {0x0, 0x00555555555}},
+			{{0x0, 0x01000000000}, {0x0, 0x01555555555}},
+			{{0x0, 0x04000000000}, {0x0, 0x04555555555}},
+			{{0x0, 0x05000000000}, {0x0, 0x05555555555}},
+			{{0x0, 0x10000000000}, {0x0, 0x10555555555}},
+			{{0x0, 0x11000000000}, {0x0, 0x11555555555}},
+			{{0x0, 0x14000000000}, {0x0, 0x14555555555}},
+			{{0x0, 0x15000000000}, {0x0, 0x15555555555}},
+			{{0x0, 0x40000000000}, {0x0, 0x40000000000}},
+		}
+		assert.Equal(t, res, zRanges)
+	})
 
-		//assert.Equal(t, []ZRange{{zvals[0], zvals[1]}, {zvals[4], zvals[5]}, {zvals[16], zvals[16]}}, zRanges)
+	t.Run("split medium y-axis bbox", func(t *testing.T) {
+		zRange := ZRange{{0, 0}, {0, uint64(1 << 43)}} // (0, 0) -> (0, 2^21)
+		zRanges := SplitZRanges(zRange, depth)
+		res := []ZRange{
+			{{0x0, 0x00000000000}, {0x0, 0x00aaaaaaaaa}},
+			{{0x0, 0x02000000000}, {0x0, 0x02aaaaaaaaa}},
+			{{0x0, 0x08000000000}, {0x0, 0x08aaaaaaaaa}},
+			{{0x0, 0x0a000000000}, {0x0, 0x0aaaaaaaaaa}},
+			{{0x0, 0x20000000000}, {0x0, 0x20aaaaaaaaa}},
+			{{0x0, 0x22000000000}, {0x0, 0x22aaaaaaaaa}},
+			{{0x0, 0x28000000000}, {0x0, 0x28aaaaaaaaa}},
+			{{0x0, 0x2a000000000}, {0x0, 0x2aaaaaaaaaa}},
+			{{0x0, 0x80000000000}, {0x0, 0x80000000000}},
+		}
+		assert.Equal(t, res, zRanges)
 	})
 
 	t.Run("split x-axis bbox", func(t *testing.T) {
@@ -421,31 +442,68 @@ func TestSplitZRanges(t *testing.T) {
 		assert.Equal(t, res, zRanges)
 	})
 
-	t.Run("split large ranges x-axis bbox", func(t *testing.T) {
-		zRange := ZRange{{0, 0}, {2, 0}} // (0, 0) -> (4, 0)
+	t.Run("split large x-axis bbox", func(t *testing.T) {
+		zRange := ZRange{{0, 0}, {1, 0}} // (0, 0) -> (2^33, 0)
 		zRanges := SplitZRanges(zRange, depth)
-		assert.Equal(t, []ZRange{{zvals[0], zvals[1]}, {zvals[4], zvals[5]}, {zvals[16], zvals[16]}}, zRanges)
+		res := []ZRange{
+			{{0x0, 0x0000000000000000}, {0x0, 0x0155555555555555}},
+			{{0x0, 0x0400000000000000}, {0x0, 0x0555555555555555}},
+			{{0x0, 0x1000000000000000}, {0x0, 0x1155555555555555}},
+			{{0x0, 0x1400000000000000}, {0x0, 0x1555555555555555}},
+			{{0x0, 0x4000000000000000}, {0x0, 0x4155555555555555}},
+			{{0x0, 0x4400000000000000}, {0x0, 0x4555555555555555}},
+			{{0x0, 0x5000000000000000}, {0x0, 0x5155555555555555}},
+			{{0x0, 0x5400000000000000}, {0x0, 0x5555555555555555}},
+			{{0x1, 0x0000000000000000}, {0x1, 0x0000000000000000}},
+		}
+		assert.Equal(t, res, zRanges)
 	})
 
-	t.Run("split large ranges x-axis bbox", func(t *testing.T) {
+	t.Run("split large y-axis bbox", func(t *testing.T) {
+		zRange := ZRange{{0, 0}, {2, 0}} // (0, 0) -> (0, 2^66)
+		zRanges := SplitZRanges(zRange, depth)
+		res := []ZRange{
+			{{0x0, 0x0000000000000000}, {0x0, 0x02aaaaaaaaaaaaaa}},
+			{{0x0, 0x0800000000000000}, {0x0, 0x0aaaaaaaaaaaaaaa}},
+			{{0x0, 0x2000000000000000}, {0x0, 0x22aaaaaaaaaaaaaa}},
+			{{0x0, 0x2800000000000000}, {0x0, 0x2aaaaaaaaaaaaaaa}},
+			{{0x0, 0x8000000000000000}, {0x0, 0x82aaaaaaaaaaaaaa}},
+			{{0x0, 0x8800000000000000}, {0x0, 0x8aaaaaaaaaaaaaaa}},
+			{{0x0, 0xa000000000000000}, {0x0, 0xa2aaaaaaaaaaaaaa}},
+			{{0x0, 0xa800000000000000}, {0x0, 0xaaaaaaaaaaaaaaaa}},
+			{{0x2, 0x0000000000000000}, {0x2, 0x0000000000000000}},
+		}
+		assert.Equal(t, res, zRanges)
+	})
+
+	t.Run("split a small selection range", func(t *testing.T) {
 		poly := types.Polygon{Lines: []types.LineString{{Points: []types.Point{
 			{X: 0, Y: 0},
 			{X: 10, Y: 0},
 			{X: 10, Y: 10},
 			{X: 0, Y: 10},
 			{X: 10, Y: 10},
-		}},
-		}}
+		}}}}
 		bbox := spatial.FindBBox(poly)
 		zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
 		zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
 		zRange := ZRange{zMin, zMax}
-		t.Log(fmt.Sprintf("%X", zRange))
-		//start := time.Now()
-		//zRanges := SplitZRanges(zRange)
-		//t.Log(time.Since(start))
-		//t.Log(len(zRanges))
-
-		//assert.Equal(t, []ZRange{{zvals[0], zvals[1]}, {zvals[4], zvals[5]}, {zvals[16], zvals[16]}}, zRanges)
+		zRanges := SplitZRanges(zRange, depth)
+		res := []ZRange{
+			{{0xc000000000000000, 0x0}, {0xcfffffffffffffff, 0xffffffffffffffff}},
+			{{0xd000000000000000, 0x0}, {0xd0aaaebaaaaaaaaa, 0xaaaaaaaaaaaaaaaa}},
+			{{0xd200000000000000, 0x0}, {0xd2aaaebaaaaaaaaa, 0xaaaaaaaaaaaaaaaa}},
+			{{0xd800000000000000, 0x0}, {0xd8aaaebaaaaaaaaa, 0xaaaaaaaaaaaaaaaa}},
+			{{0xda00000000000000, 0x0}, {0xdaaaaebaaaaaaaaa, 0xaaaaaaaaaaaaaaaa}},
+			{{0xe000000000000000, 0x0}, {0xe0555d7555555555, 0x5555555555555555}},
+			{{0xe100000000000000, 0x0}, {0xe1555d7555555555, 0x5555555555555555}},
+			{{0xe400000000000000, 0x0}, {0xe4555d7555555555, 0x5555555555555555}},
+			{{0xe500000000000000, 0x0}, {0xe5555d7555555555, 0x5555555555555555}},
+			{{0xf000000000000000, 0x0}, {0xf00003ffffffffff, 0xffffffffffffffff}},
+			{{0xf000040000000000, 0x0}, {0xf00006baaaaaaaaa, 0xaaaaaaaaaaaaaaaa}},
+			{{0xf000080000000000, 0x0}, {0xf000097555555555, 0x5555555555555555}},
+			{{0xf0000c0000000000, 0x0}, {0xf0000c3000000000, 0x0000000000000000}},
+		}
+		assert.Equal(t, res, zRanges)
 	})
 }
