@@ -93,7 +93,7 @@ jobs:
           dolt checkout $branch
         fi
 
-        dolt sql -q "drop table if exists sysbench_results"
+        dolt sql -q "drop table if exists ${{ env.RESULT_TABLE_NAME }}"
 
         # load results
         dolt sql < "$in"
