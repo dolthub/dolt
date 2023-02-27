@@ -16,8 +16,11 @@ dolt init
 
 dolt sql < $DATA/create.sql
 
-for $t in $(ls "$DATA/table_*"); do
-    dolt table import --disable-fk-checks -u "table${t}" "$DATA/$t"
+i=0
+for t in $(ls $DATA/ | grep "table"); do
+    echo $t
+    dolt table import --disable-fk-checks -u "table${i}" "$DATA/$t"
+    ((i++))
 done
 
 dolt commit -Am "add tables"
