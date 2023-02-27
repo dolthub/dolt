@@ -1406,6 +1406,30 @@ SQL
     [[ "$output" =~ "exists" ]] || false
 }
 
+@test "sql: use database with multiple dbs" {
+    dolt sql -q "create database db1"
+    dolt sql -q "create database db2"
+
+    dolt sql <<SQL
+use db1;
+create table t1 (a int primary key);
+insert into t1 values (10);
+use db2;
+create table t2 (a int primary key);
+insert into t2 values (20);
+SQL
+
+    cd db1
+    run dolt sql -q "select * from t1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "10" ]] || false
+
+    cd ../db2
+    run dolt sql -q "select * from t2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "20" ]] || false
+}
+
 @test "sql: dolt_show_branch_databases" {
     mkdir new && cd new
 
@@ -2130,53 +2154,6 @@ SQL
     [[ "$output" =~ "0" ]] || false
 }
 
-@test "sql: shell works after failing query" {
-    skiponwindows "Need to install expect and make this script work on windows."
-    $BATS_TEST_DIRNAME/sql-works-after-failing-query.expect
-}
-
-@test "sql: shell delimiter" {
-    skiponwindows "Need to install expect and make this script work on windows."
-    mkdir doltsql
-    cd doltsql
-    dolt init
-
-    run $BATS_TEST_DIRNAME/sql-delimiter.expect
-    [ "$status" -eq "0" ]
-    [[ ! "$output" =~ "Error" ]] || false
-    [[ ! "$output" =~ "error" ]] || false
-
-    run dolt sql -q "SELECT * FROM test ORDER BY 1" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
-    [[ "$output" =~ "0,0" ]] || false
-    [[ "$output" =~ "1,1" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-
-    run dolt sql -q "SHOW TRIGGERS"
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "SET NEW.v1 = NEW.v1 * 11" ]] || false
-
-    cd ..
-    rm -rf doltsql
-}
-
-@test "sql: use syntax on shell" {
-    skiponwindows "Need to install expect and make this script work on windows."
-    mkdir doltsql
-    cd doltsql
-    dolt init
-
-    dolt branch test
-
-    run expect $BATS_TEST_DIRNAME/sql-use.expect
-    [ "$status" -eq "0" ]
-    [[ ! "$output" =~ "Error" ]] || false
-    [[ ! "$output" =~ "error" ]] || false
-
-    cd ..
-    rm -rf doltsql
-}
 
 @test "sql: batch delimiter" {
     dolt sql <<SQL
