@@ -457,9 +457,6 @@ type OrderedTreeIter[K, V ~[]byte] struct {
 	// current tuple location
 	curr *Cursor
 
-	// TODO: maybe not here?
-	IsSpatial bool
-
 	// the function called to moved |curr| forward in the direction of iteration.
 	step func(context.Context) error
 	// should return |true| if the passed in cursor is past the iteration's stopping point.

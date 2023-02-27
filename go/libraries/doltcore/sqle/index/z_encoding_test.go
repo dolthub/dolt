@@ -315,72 +315,72 @@ func TestZCell(t *testing.T) {
 	})
 }
 
-func TestSplitZRanges(t *testing.T) {
-	zvals := []ZVal{
-		{0, 0},  // (0, 0)
-		{0, 1},  // (1, 0)
-		{0, 2},  // (0, 1)
-		{0, 3},  // (1, 1)
-		{0, 4},  // (2, 0)
-		{0, 5},  // (3, 0)
-		{0, 6},  // (2, 1)
-		{0, 7},  // (3, 1)
-		{0, 8},  // (0, 2)
-		{0, 9},  // (1, 2)
-		{0, 10}, // (0, 3)
-		{0, 11}, // (1, 3)
-		{0, 12}, // (2, 2)
-		{0, 13}, // (3, 2)
-		{0, 14}, // (2, 3)
-		{0, 15}, // (3, 3)
-		{0, 16}, // (4, 0)
-	}
-	depth := 4
+var testZVals = []ZVal{
+	{0, 0},  // (0, 0)
+	{0, 1},  // (1, 0)
+	{0, 2},  // (0, 1)
+	{0, 3},  // (1, 1)
+	{0, 4},  // (2, 0)
+	{0, 5},  // (3, 0)
+	{0, 6},  // (2, 1)
+	{0, 7},  // (3, 1)
+	{0, 8},  // (0, 2)
+	{0, 9},  // (1, 2)
+	{0, 10}, // (0, 3)
+	{0, 11}, // (1, 3)
+	{0, 12}, // (2, 2)
+	{0, 13}, // (3, 2)
+	{0, 14}, // (2, 3)
+	{0, 15}, // (3, 3)
+	{0, 16}, // (4, 0)
+}
 
+func TestSplitZRanges(t *testing.T) {
+	depth := 4
 	t.Run("split point z-range", func(t *testing.T) {
-		zRange := ZRange{zvals[0], zvals[0]} // (0, 0) -> (0, 0)
+		zRange := ZRange{testZVals[0], testZVals[0]} // (0, 0) -> (0, 0)
 		zRanges := SplitZRanges(zRange, depth)
 		assert.Equal(t, []ZRange{zRange}, zRanges)
 
-		zRange = ZRange{zvals[1], zvals[1]} // (1, 0) -> (1, 0)
+		zRange = ZRange{testZVals[1], testZVals[1]} // (1, 0) -> (1, 0)
 		zRanges = SplitZRanges(zRange, depth)
 		assert.Equal(t, []ZRange{zRange}, zRanges)
 
-		zRange = ZRange{zvals[2], zvals[2]} // (0, 1) -> (0, 1)
+		zRange = ZRange{testZVals[2], testZVals[2]} // (0, 1) -> (0, 1)
 		zRanges = SplitZRanges(zRange, depth)
 		assert.Equal(t, []ZRange{zRange}, zRanges)
 
-		zRange = ZRange{zvals[3], zvals[3]} // (1, 1) -> (1, 1)
+		zRange = ZRange{testZVals[3], testZVals[3]} // (1, 1) -> (1, 1)
 		zRanges = SplitZRanges(zRange, depth)
 		assert.Equal(t, []ZRange{zRange}, zRanges)
 	})
 
 	t.Run("split continuous z-ranges", func(t *testing.T) {
-		zRange := ZRange{zvals[0], zvals[1]} // (0, 0) -> (1, 0)
+		zRange := ZRange{testZVals[0], testZVals[1]} // (0, 0) -> (1, 0)
 		zRanges := SplitZRanges(zRange, depth)
 		assert.Equal(t, []ZRange{zRange}, zRanges)
 
-		zRange = ZRange{zvals[0], zvals[3]} // (0, 0) -> (1, 1)
+		zRange = ZRange{testZVals[0], testZVals[3]} // (0, 0) -> (1, 1)
 		zRanges = SplitZRanges(zRange, depth)
 		assert.Equal(t, []ZRange{zRange}, zRanges)
 	})
 
 	t.Run("split small non-continuous z-ranges", func(t *testing.T) {
-		zRange := ZRange{zvals[0], zvals[2]} // (0, 0) -> (0, 1)
+		zRange := ZRange{testZVals[0], testZVals[2]} // (0, 0) -> (0, 1)
 		zRanges := SplitZRanges(zRange, depth)
-		assert.Equal(t, []ZRange{{zvals[0], zvals[0]}, {zvals[2], zvals[2]}}, zRanges)
+		assert.Equal(t, []ZRange{{testZVals[0], testZVals[0]}, {testZVals[2], testZVals[2]}}, zRanges)
 	})
 
 	t.Run("split small non-continuous z-range that should have a merge", func(t *testing.T) {
-		zRange := ZRange{zvals[0], zvals[6]} // (0, 0) -> (2, 1)
+		zRange := ZRange{testZVals[0], testZVals[6]} // (0, 0) -> (2, 1)
 		zRanges := SplitZRanges(zRange, depth)
-		assert.Equal(t, []ZRange{{zvals[0], zvals[4]}, {zvals[6], zvals[6]}}, zRanges)
+		assert.Equal(t, []ZRange{{testZVals[0], testZVals[4]}, {testZVals[6], testZVals[6]}}, zRanges)
 	})
 
 	t.Run("split x-axis bbox", func(t *testing.T) {
 		zRange := ZRange{{0, 0}, {0, 16}} // (0, 0) -> (4, 0)
 		zRanges := SplitZRanges(zRange, depth)
-		assert.Equal(t, []ZRange{{zvals[0], zvals[1]}, {zvals[4], zvals[5]}, {zvals[16], zvals[16]}}, zRanges)
+		assert.Equal(t, []ZRange{{testZVals[0], testZVals[1]}, {testZVals[4], testZVals[5]}, {testZVals[16], testZVals[16]}}, zRanges)
 	})
 
 	t.Run("split y-axis bbox", func(t *testing.T) {
@@ -505,5 +505,100 @@ func TestSplitZRanges(t *testing.T) {
 			{{0xf0000c0000000000, 0x0}, {0xf0000c3000000000, 0x0000000000000000}},
 		}
 		assert.Equal(t, res, zRanges)
+	})
+}
+
+func BenchmarkSplitZRanges(b *testing.B) {
+	b.Run("small continuous", func(b *testing.B) {
+		zRange := ZRange{testZVals[0], testZVals[3]} // (0, 0) -> (1, 1)
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			zRanges := SplitZRanges(zRange, 4)
+			assert.Equal(b, 1, len(zRanges))
+		}
+	})
+
+	b.Run("large range, depth 2", func(b *testing.B) {
+		zRange := ZRange{{0, 0}, {1, 0}} // (0, 0) -> (2^33, 0)
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			zRanges := SplitZRanges(zRange, 2)
+			assert.Equal(b, 3, len(zRanges))
+		}
+	})
+
+	b.Run("large range, depth 4", func(b *testing.B) {
+		zRange := ZRange{{0, 0}, {1, 0}} // (0, 0) -> (2^33, 0)
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			zRanges := SplitZRanges(zRange, 4)
+			assert.Equal(b, 9, len(zRanges))
+		}
+	})
+
+	b.Run("large range, depth 16", func(b *testing.B) {
+		zRange := ZRange{{0, 0}, {1, 0}} // (0, 0) -> (2^33, 0)
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			zRanges := SplitZRanges(zRange, 16)
+			assert.Equal(b, 32769, len(zRanges))
+		}
+	})
+
+	b.Run("typical range, depth 2", func(b *testing.B) {
+		poly := types.Polygon{Lines: []types.LineString{{Points: []types.Point{
+			{X: 0, Y: 0},
+			{X: 10, Y: 0},
+			{X: 10, Y: 10},
+			{X: 0, Y: 10},
+			{X: 10, Y: 10},
+		}}}}
+		bbox := spatial.FindBBox(poly)
+		zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
+		zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
+		zRange := ZRange{zMin, zMax}
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			zRanges := SplitZRanges(zRange, 2)
+			assert.Equal(b, 4, len(zRanges))
+		}
+	})
+
+	b.Run("typical range, depth 4", func(b *testing.B) {
+		poly := types.Polygon{Lines: []types.LineString{{Points: []types.Point{
+			{X: 0, Y: 0},
+			{X: 10, Y: 0},
+			{X: 10, Y: 10},
+			{X: 0, Y: 10},
+			{X: 10, Y: 10},
+		}}}}
+		bbox := spatial.FindBBox(poly)
+		zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
+		zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
+		zRange := ZRange{zMin, zMax}
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			zRanges := SplitZRanges(zRange, 4)
+			assert.Equal(b, 13, len(zRanges))
+		}
+	})
+
+	b.Run("typical range, depth 16", func(b *testing.B) {
+		poly := types.Polygon{Lines: []types.LineString{{Points: []types.Point{
+			{X: 0, Y: 0},
+			{X: 10, Y: 0},
+			{X: 10, Y: 10},
+			{X: 0, Y: 10},
+			{X: 10, Y: 10},
+		}}}}
+		bbox := spatial.FindBBox(poly)
+		zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
+		zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
+		zRange := ZRange{zMin, zMax}
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			zRanges := SplitZRanges(zRange, 16)
+			assert.Equal(b, 21264, len(zRanges))
+		}
 	})
 }
