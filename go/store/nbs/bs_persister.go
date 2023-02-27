@@ -166,7 +166,7 @@ func (bsp *blobstorePersister) Exists(ctx context.Context, name addr, chunkCount
 	return bsp.bs.Exists(ctx, name.String())
 }
 
-func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents manifestContents, t time.Time) error {
+func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, keeper func() []addr, t time.Time) error {
 	return nil
 }
 
