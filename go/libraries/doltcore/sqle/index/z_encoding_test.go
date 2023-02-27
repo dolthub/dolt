@@ -512,37 +512,41 @@ func BenchmarkSplitZRanges(b *testing.B) {
 	b.Run("small continuous", func(b *testing.B) {
 		zRange := ZRange{testZVals[0], testZVals[3]} // (0, 0) -> (1, 1)
 		b.ResetTimer()
+		var zRanges []ZRange
 		for n := 0; n < b.N; n++ {
-			zRanges := SplitZRanges(zRange, 4)
-			assert.Equal(b, 1, len(zRanges))
+			zRanges = SplitZRanges(zRange, 4)
 		}
+		assert.Equal(b, 1, len(zRanges))
 	})
 
 	b.Run("large range, depth 2", func(b *testing.B) {
 		zRange := ZRange{{0, 0}, {1, 0}} // (0, 0) -> (2^33, 0)
 		b.ResetTimer()
+		var zRanges []ZRange
 		for n := 0; n < b.N; n++ {
-			zRanges := SplitZRanges(zRange, 2)
-			assert.Equal(b, 3, len(zRanges))
+			zRanges = SplitZRanges(zRange, 2)
 		}
+		assert.Equal(b, 3, len(zRanges))
 	})
 
 	b.Run("large range, depth 4", func(b *testing.B) {
 		zRange := ZRange{{0, 0}, {1, 0}} // (0, 0) -> (2^33, 0)
 		b.ResetTimer()
+		var zRanges []ZRange
 		for n := 0; n < b.N; n++ {
-			zRanges := SplitZRanges(zRange, 4)
-			assert.Equal(b, 9, len(zRanges))
+			zRanges = SplitZRanges(zRange, 4)
 		}
+		assert.Equal(b, 9, len(zRanges))
 	})
 
 	b.Run("large range, depth 16", func(b *testing.B) {
 		zRange := ZRange{{0, 0}, {1, 0}} // (0, 0) -> (2^33, 0)
 		b.ResetTimer()
+		var zRanges []ZRange
 		for n := 0; n < b.N; n++ {
-			zRanges := SplitZRanges(zRange, 16)
-			assert.Equal(b, 32769, len(zRanges))
+			zRanges = SplitZRanges(zRange, 16)
 		}
+		assert.Equal(b, 32769, len(zRanges))
 	})
 
 	b.Run("typical range, depth 2", func(b *testing.B) {
@@ -557,11 +561,12 @@ func BenchmarkSplitZRanges(b *testing.B) {
 		zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
 		zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
 		zRange := ZRange{zMin, zMax}
+		var zRanges []ZRange
 		b.ResetTimer()
 		for n := 0; n < b.N; n++ {
-			zRanges := SplitZRanges(zRange, 2)
-			assert.Equal(b, 4, len(zRanges))
+			zRanges = SplitZRanges(zRange, 2)
 		}
+		assert.Equal(b, 4, len(zRanges))
 	})
 
 	b.Run("typical range, depth 4", func(b *testing.B) {
@@ -576,11 +581,12 @@ func BenchmarkSplitZRanges(b *testing.B) {
 		zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
 		zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
 		zRange := ZRange{zMin, zMax}
+		var zRanges []ZRange
 		b.ResetTimer()
 		for n := 0; n < b.N; n++ {
-			zRanges := SplitZRanges(zRange, 4)
-			assert.Equal(b, 13, len(zRanges))
+			zRanges = SplitZRanges(zRange, 4)
 		}
+		assert.Equal(b, 13, len(zRanges))
 	})
 
 	b.Run("typical range, depth 16", func(b *testing.B) {
@@ -595,10 +601,11 @@ func BenchmarkSplitZRanges(b *testing.B) {
 		zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
 		zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
 		zRange := ZRange{zMin, zMax}
+		var zRanges []ZRange
 		b.ResetTimer()
 		for n := 0; n < b.N; n++ {
-			zRanges := SplitZRanges(zRange, 16)
-			assert.Equal(b, 21264, len(zRanges))
+			zRanges = SplitZRanges(zRange, 16)
 		}
+		assert.Equal(b, 21264, len(zRanges))
 	})
 }
