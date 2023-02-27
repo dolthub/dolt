@@ -1,19 +1,25 @@
+import os
+import sys
 import random
 
 if len(sys.argv) != 5:
     print("usage: python3 data.py <output-dir> <table-num> <row-num> <add-num>")
     sys.exit(1)
 
-table_dir=sys.argv[1]
-tables = sys.argv[2]
-rows = sys.argv[3]
+table_dir = sys.argv[1]
+tables = int(sys.argv[2])
+rows = int(sys.argv[3])
 
-adds = sys.argv[4]
-
-ys = [i for i in range(rows+adds)]
-random.shuffle(ys)
+adds = int(sys.argv[4])
 
 if __name__=="__main__":
+    if not os.path.exists(table_dir):
+        os.rmdir(table_dir)
+        os.makedirs(table_dir)
+
+    ys = [i for i in range(rows+adds)]
+    random.shuffle(ys)
+
     with open(f"{table_dir}/create.sql", "+w") as f:
         for i in range(tables):
             if i == 0:
