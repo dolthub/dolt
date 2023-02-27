@@ -43,6 +43,9 @@ jobs:
     - name: Run bench
       id: bench
       run: |
+        dolt config --global --add user.email "merge-perf@dolthub.com"
+        dolt config --global --add user.name "merge-perf"
+
         gw=$GITHUB_WORKSPACE
         DATADIR=$gw/data
         TABLE_NUM=2
