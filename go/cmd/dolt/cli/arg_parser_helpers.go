@@ -313,7 +313,7 @@ func CreateLogArgParser() *argparser.ArgParser {
 
 func CreatePatchArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(CachedFlag, "c", "Show only the unstaged data changes.")
+	ap.SupportsFlag(CachedFlag, "c", "Show only the staged data changes.")
 	return ap
 }
 

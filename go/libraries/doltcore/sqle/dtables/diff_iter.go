@@ -499,7 +499,7 @@ type diffPartitionRowIter struct {
 	currentRowIter   *sql.RowIter
 }
 
-func NewDiffTableFunctionRowIterForSinglePartition(partition sql.Partition, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) *diffPartitionRowIter {
+func NewDiffPartitionRowIter(partition sql.Partition, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) *diffPartitionRowIter {
 	return &diffPartitionRowIter{
 		currentPartition: &partition,
 		ddb:              ddb,

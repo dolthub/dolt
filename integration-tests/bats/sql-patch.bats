@@ -10,6 +10,25 @@ teardown() {
     teardown_common
 }
 
+@test "sql-patch: --cached flag shows staged changes" {
+    dolt sql <<SQL
+CREATE TABLE test (id INT PRIMARY KEY, col1 TEXT);
+SQL
+    dolt add test
+
+    run dolt sql -q "CALL DOLT_PATCH('--cached')"
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "+-------------------------------------------------------------------+" ]
+    [ "${lines[1]}" = "| statement                                                         |" ]
+    [ "${lines[2]}" = "+-------------------------------------------------------------------+" ]
+    [ "${lines[3]}" = "| CREATE TABLE \`test\` (                                             |" ]
+    [ "${lines[4]}" = "|   \`id\` int NOT NULL,                                              |" ]
+    [ "${lines[5]}" = "|   \`col1\` text,                                                    |" ]
+    [ "${lines[6]}" = "|   PRIMARY KEY (\`id\`)                                              |" ]
+    [ "${lines[7]}" = "| ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |" ]
+    [ "${lines[8]}" = "+-------------------------------------------------------------------+" ]
+}
+
 @test "sql-patch: output reconciles INSERT query" {
     dolt checkout -b firstbranch
     dolt sql <<SQL

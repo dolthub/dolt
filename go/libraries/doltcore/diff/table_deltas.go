@@ -660,6 +660,11 @@ func GetDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowD
 	}
 }
 
+// getCreateTableStmt returns CREATE TABLE statement for given table. This function was made to share the same
+// 'create table' statement logic as GMS. We initially were running `SHOW CREATE TABLE` query to get the statement;
+// however, it cannot be done for cases that need this statement in sql shell mode. Dolt uses its own Schema and
+// Column and other object types which are not directly compatible with GMS, so we try to use as much shared logic
+// as possible with GMS to get 'create table' statement in Dolt.
 func getCreateTableStmt(tblName string, sch schema.Schema, pkSchema sql.PrimaryKeySchema, fks []doltdb.ForeignKey, fksParentSch map[string]schema.Schema) (string, error) {
 	sqlSch := pkSchema.Schema
 	colStmts := make([]string, len(sqlSch))

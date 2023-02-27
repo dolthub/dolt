@@ -188,7 +188,7 @@ func getDiffQuery(ctx *sql.Context, dbData env.DbData, td diff.TableDelta, fromR
 	// using arbitrary time since we do not care about the commit time in the result
 	now := time.Now()
 	dp := dtables.NewDiffPartition(td.ToTable, td.FromTable, toRef, fromRef, (*types.Timestamp)(&now), (*types.Timestamp)(&now), td.ToSch, td.FromSch)
-	ri := dtables.NewDiffTableFunctionRowIterForSinglePartition(*dp, dbData.Ddb, j)
+	ri := dtables.NewDiffPartitionRowIter(*dp, dbData.Ddb, j)
 
 	return diffSqlSch, projections, ri, nil
 }
