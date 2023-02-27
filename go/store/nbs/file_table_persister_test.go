@@ -42,9 +42,7 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 
 	names := []addr{}
 	cacheSize := 2
-	fc := newFDCache(cacheSize)
-	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, &UnlimitedQuotaProvider{})
+	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{})
 
 	// Create some tables manually, load them into the cache
 	func() {
@@ -76,12 +74,6 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 	require.NoError(t, err)
 	defer tr.close()
 
-	present := fc.reportEntries()
-	// Since 0 refcount entries are evicted randomly, the only thing we can validate is that fc remains at its target size
-	assert.Len(present, cacheSize)
-
-	err = fc.ShrinkCache()
-	require.NoError(t, err)
 	err = removeTables(dir, names...)
 	require.NoError(t, err)
 }
@@ -122,9 +114,7 @@ func TestFSTablePersisterPersist(t *testing.T) {
 	assert := assert.New(t)
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
-	fc := newFDCache(defaultMaxTables)
-	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, &UnlimitedQuotaProvider{})
+	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{})
 
 	src, err := persistTableData(fts, testChunks...)
 	require.NoError(t, err)
@@ -163,9 +153,7 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
-	fc := newFDCache(defaultMaxTables)
-	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, &UnlimitedQuotaProvider{})
+	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{})
 
 	src, err := fts.Persist(context.Background(), mt, existingTable, &Stats{})
 	require.NoError(t, err)
@@ -178,9 +166,7 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 	assert := assert.New(t)
 	dir := makeTempDir(t)
-	fc := newFDCache(1)
-	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, &UnlimitedQuotaProvider{})
+	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{})
 	defer file.RemoveAll(dir)
 
 	var name addr
@@ -202,10 +188,6 @@ func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 	require.NoError(t, err)
 	defer tr.close()
 
-	present := fc.reportEntries()
-	// Since 0 refcount entries are evicted randomly, the only thing we can validate is that fc remains at its target size
-	assert.Len(present, 1)
-
 	err = removeTables(dir, name)
 	require.NoError(t, err)
 }
@@ -218,9 +200,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
-	fc := newFDCache(len(sources))
-	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, &UnlimitedQuotaProvider{})
+	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{})
 
 	for i, c := range testChunks {
 		randChunk := make([]byte, (i+1)*13)
@@ -251,10 +231,6 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 		defer tr.close()
 		assertChunksInReader(testChunks, tr, assert)
 	}
-
-	present := fc.reportEntries()
-	// Since 0 refcount entries are evicted randomly, the only thing we can validate is that fc remains at its target size
-	assert.Len(present, len(sources))
 }
 
 func TestFSTablePersisterConjoinAllDups(t *testing.T) {
@@ -262,9 +238,7 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 	assert := assert.New(t)
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
-	fc := newFDCache(defaultMaxTables)
-	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, &UnlimitedQuotaProvider{})
+	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{})
 
 	reps := 3
 	sources := make(chunkSources, reps)

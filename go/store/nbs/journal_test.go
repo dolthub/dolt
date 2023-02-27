@@ -36,7 +36,7 @@ func makeTestChunkJournal(t *testing.T) *chunkJournal {
 	m, err := getFileManifest(ctx, dir, syncFlush)
 	require.NoError(t, err)
 	q := NewUnlimitedMemQuotaProvider()
-	p := newFSTablePersister(dir, globalFDCache, q)
+	p := newFSTablePersister(dir, q)
 	nbf := types.Format_Default.VersionString()
 	j, err := newChunkJournal(ctx, nbf, dir, m, p.(*fsTablePersister))
 	require.NoError(t, err)
