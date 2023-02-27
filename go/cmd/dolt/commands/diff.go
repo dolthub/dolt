@@ -501,12 +501,12 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 		return errhand.BuildDError("error: unable to diff tables").AddCause(err).Build()
 	}
 
-	engine, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	sqlEng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	sqlCtx, err := engine.NewLocalContext(ctx)
+	sqlCtx, err := sqlEng.NewLocalContext(ctx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -526,7 +526,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 	}
 
 	for _, td := range tableDeltas {
-		verr := diffUserTable(sqlCtx, td, engine, dArgs, dw)
+		verr := diffUserTable(sqlCtx, td, sqlEng, dArgs, dw)
 		if verr != nil {
 			return verr
 		}
@@ -543,7 +543,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 func diffUserTable(
 	ctx *sql.Context,
 	td diff.TableDelta,
-	engine *engine.SqlEngine,
+	sqlEng *engine.SqlEngine,
 	dArgs *diffArgs,
 	dw diffWriter,
 ) errhand.VerboseError {
@@ -585,7 +585,7 @@ func diffUserTable(
 		fromSch = toSch
 	}
 
-	verr := diffRows(ctx, engine, td, dArgs, dw)
+	verr := diffRows(ctx, sqlEng, td, dArgs, dw)
 	if verr != nil {
 		return verr
 	}
@@ -608,7 +608,7 @@ func writeSqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[s
 
 func diffRows(
 	ctx *sql.Context,
-	se *engine.SqlEngine,
+	sqlEng *engine.SqlEngine,
 	td diff.TableDelta,
 	dArgs *diffArgs,
 	dw diffWriter,
@@ -685,7 +685,7 @@ func diffRows(
 		query += " limit " + strconv.Itoa(dArgs.limit)
 	}
 
-	sch, rowIter, err := se.Query(ctx, query)
+	sch, rowIter, err := sqlEng.Query(ctx, query)
 	if sql.ErrSyntaxError.Is(err) {
 		return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
 	} else if err != nil {
@@ -724,7 +724,7 @@ func diffRows(
 		if err != nil {
 			return errhand.BuildDError("Error closing row iterator:\n%s", query).AddCause(err).Build()
 		}
-		_, rowIter, err = se.Query(ctx, query)
+		_, rowIter, err = sqlEng.Query(ctx, query)
 		defer rowIter.Close(ctx)
 		if sql.ErrSyntaxError.Is(err) {
 			return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
