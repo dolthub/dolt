@@ -507,39 +507,3 @@ func TestSplitZRanges(t *testing.T) {
 		assert.Equal(t, res, zRanges)
 	})
 }
-
-func TestTmp(t *testing.T) {
-	t.Run("split point z-range", func(t *testing.T) {
-		poly := types.Polygon{Lines: []types.LineString{{Points: []types.Point{
-			{X: 1, Y: 1},
-			{X: 1, Y: -1},
-			{X: -1, Y: -1},
-			{X: -1, Y: 1},
-			{X: 1, Y: 1},
-		}}}}
-		t.Log("points:")
-		t.Log(fmt.Sprintf("%x", ZValue(poly.Lines[0].Points[0])))
-		t.Log(fmt.Sprintf("%x", ZValue(poly.Lines[0].Points[1])))
-		t.Log(fmt.Sprintf("%x", ZValue(poly.Lines[0].Points[2])))
-		t.Log(fmt.Sprintf("%x", ZValue(poly.Lines[0].Points[3])))
-
-		t.Log("missing point:")
-		t.Log(fmt.Sprintf("%x", ZValue(types.Point{X: -1, Y: 0})))
-
-		bbox := spatial.FindBBox(poly)
-		zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
-		zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
-		zRange := ZRange{zMin, zMax}
-		t.Log("original range")
-		t.Log(fmt.Sprintf("from: %v, to: %v", UnZValue(zMin), UnZValue(zMax)))
-		t.Log(fmt.Sprintf("%x", zRange))
-
-		t.Log("split range")
-		zRanges := SplitZRanges(zRange, 1)
-		for _, zRange := range zRanges {
-			t.Log(fmt.Sprintf("from: %v, to: %v", UnZValue(zRange[0]), UnZValue(zRange[1])))
-			t.Log(fmt.Sprintf("%x", zRange))
-		}
-		t.Log(fmt.Sprintf("%x", zRanges))
-	})
-}
