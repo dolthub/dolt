@@ -58,11 +58,11 @@ jobs:
 
         TIMES=$gw/time.log
         cd $TMPDIR
-        latency=$(python3 -c "import time, os; start = time.time(); os.system('dolt merge main'); end = time.time(); print(end - start)")
+        latency=$(python3 -c "import time, subprocess; start = time.time(); res=subprocess.run(['dolt', 'merge', 'main'], capture_output=True); output = res.stdout + res.stderr if res.returncode != 0 else  time.time() -start;  print(output); exit(res.returncode)")
 
         RESULTS=$gw/results.sql
         echo "CREATE TABLE ${{env.RESULT_TABLE_NAME }} (name varchar(50) primary key, table_cnt int, run_cnt int, add_cnt int, conflict_cnt int, fks bool, latency float);" >> $RESULTS
-        echo "INSERT INTO ${{ env.RESULT_TABLE_NAME }} values ('1m rows, 100k conflicts', 2, $NUM_ROWS, $NUM_ADDS, $NUM_ADDS, true, $latency);" >> $RESULTS
+        echo "INSERT INTO ${{ env.RESULT_TABLE_NAME }} values ('1m rows, 100k conflicts', 2, $ROW_NUM, $ADD_NUM, $ADD_NUM, true, $latency);" >> $RESULTS
 
         echo "::set-output name=result_path::$RESULTS"
 
