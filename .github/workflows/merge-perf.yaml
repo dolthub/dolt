@@ -99,7 +99,7 @@ jobs:
         dolt sql < "$in"
 
         # push results to dolthub
-        dolt add sysbench_results
+        dolt add ${{ env.RESULT_TABLE_NAME }}
         dolt commit -m "CI commit"
         dolt push -f origin $branch
 
