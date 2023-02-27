@@ -40,15 +40,12 @@ jobs:
       working-directory: ./go
       run: go install ./cmd/dolt
 
-    - name: Dolt config
-      id: config
+    - name: Run bench
+      id: bench
       run: |
         dolt config --global --add user.email "merge-perf@dolthub.com"
         dolt config --global --add user.name "merge-perf"
 
-    - name: Run bench
-      id: bench
-      run: |
         gw=$GITHUB_WORKSPACE
         DATADIR=$gw/data
         TABLE_NUM=2
@@ -87,6 +84,9 @@ jobs:
 
         out="$gw/results.csv"
         dolt_dir="$gw/merge-perf"
+
+        dolt config --global --add user.email "merge-perf@dolthub.com"
+        dolt config --global --add user.name "merge-perf"
 
         echo '${{ secrets.DOLTHUB_IMPORT_PERF_CREDS_VALUE }}' | dolt creds import
         dolt clone ${{ env.DOLTHUB_DB }} "$dolt_dir"
