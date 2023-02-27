@@ -528,12 +528,12 @@ func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver c
 	return chunkSourceAdapter{cs, name}, nil
 }
 
-func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
+func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
 	name, data, chunkCount, err := compactSourcesToBuffer(sources)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	} else if chunkCount == 0 {
-		return emptyChunkSource{}, nil
+		return emptyChunkSource{}, func() {}, nil
 	}
 
 	ftp.mu.Lock()
@@ -542,14 +542,14 @@ func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSourc
 
 	ti, err := parseTableIndexByCopy(ctx, data, ftp.q)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	cs, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return chunkSourceAdapter{cs, name}, nil
+	return chunkSourceAdapter{cs, name}, func() {}, nil
 }
 
 func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunkCount uint32, err error) {
