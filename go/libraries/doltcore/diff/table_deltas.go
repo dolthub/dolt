@@ -20,7 +20,6 @@ import (
 	"sort"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/plan"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -542,7 +541,7 @@ func SqlSchemaDiff(ctx context.Context, td TableDelta, toSchemas map[string]sche
 		if err != nil {
 			return nil, err
 		}
-		stmt, err := getCreateTableStmt(td.ToName, td.ToSch, toPkSch, td.ToFks, td.ToFksParentSch)
+		stmt, err := generateCreateTableStatement(td.ToName, td.ToSch, toPkSch, td.ToFks, td.ToFksParentSch)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
@@ -660,23 +659,23 @@ func GetDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowD
 	}
 }
 
-// getCreateTableStmt returns CREATE TABLE statement for given table. This function was made to share the same
+// generateCreateTableStatement returns CREATE TABLE statement for given table. This function was made to share the same
 // 'create table' statement logic as GMS. We initially were running `SHOW CREATE TABLE` query to get the statement;
 // however, it cannot be done for cases that need this statement in sql shell mode. Dolt uses its own Schema and
 // Column and other object types which are not directly compatible with GMS, so we try to use as much shared logic
 // as possible with GMS to get 'create table' statement in Dolt.
-func getCreateTableStmt(tblName string, sch schema.Schema, pkSchema sql.PrimaryKeySchema, fks []doltdb.ForeignKey, fksParentSch map[string]schema.Schema) (string, error) {
+func generateCreateTableStatement(tblName string, sch schema.Schema, pkSchema sql.PrimaryKeySchema, fks []doltdb.ForeignKey, fksParentSch map[string]schema.Schema) (string, error) {
 	sqlSch := pkSchema.Schema
 	colStmts := make([]string, len(sqlSch))
 
 	// Statement creation parts for each column
 	for i, col := range sch.GetAllCols().GetColumns() {
-		colStmts[i] = plan.FmtCreateTableColumn(col.Name, col.TypeInfo.ToSqlType(), col.IsNullable(), col.AutoIncrement, col.Default != "", col.Default, col.Comment)
+		colStmts[i] = sql.GenerateCreateTableColumnDefinition(col.Name, col.TypeInfo.ToSqlType(), col.IsNullable(), col.AutoIncrement, col.Default != "", col.Default, col.Comment)
 	}
 
 	primaryKeyCols := sch.GetPKCols().GetColumnNames()
 	if len(primaryKeyCols) > 0 {
-		primaryKey := plan.FmtCreateTablePrimaryKey(primaryKeyCols)
+		primaryKey := sql.GenerateCreateTablePrimaryKeyDefinition(primaryKeyCols)
 		colStmts = append(colStmts, primaryKey)
 	}
 
@@ -686,19 +685,19 @@ func getCreateTableStmt(tblName string, sch schema.Schema, pkSchema sql.PrimaryK
 		if isPrimaryKeyIndex(index, sch) {
 			continue
 		}
-		colStmts = append(colStmts, plan.FmtCreateTableIndex(index.IsUnique(), index.IsSpatial(), index.Name(), index.ColumnNames(), index.Comment()))
+		colStmts = append(colStmts, sql.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.Name(), index.ColumnNames(), index.Comment()))
 	}
 
 	for _, fk := range fks {
-		colStmts = append(colStmts, fmtForeignKey(fk, sch, fksParentSch[fk.ReferencedTableName]))
+		colStmts = append(colStmts, generateForeignKeyDefinition(fk, sch, fksParentSch[fk.ReferencedTableName]))
 	}
 
 	for _, check := range sch.Checks().AllChecks() {
-		colStmts = append(colStmts, plan.FmtCreateTableCheckConstraint(check.Name(), check.Expression(), check.Enforced()))
+		colStmts = append(colStmts, sql.GenerateCreateTableCheckConstraintClause(check.Name(), check.Expression(), check.Enforced()))
 	}
 
 	coll := sql.CollationID(sch.GetCollation())
-	createTableStmt := plan.CreateTableFmt(tblName, colStmts, coll.CharacterSet().Name(), coll.Name())
+	createTableStmt := sql.GenerateCreateTableStatement(tblName, colStmts, coll.CharacterSet().Name(), coll.Name())
 	return fmt.Sprintf("%s;", createTableStmt), nil
 }
 
@@ -724,7 +723,7 @@ func isPrimaryKeyIndex(index schema.Index, sch schema.Schema) bool {
 	return true
 }
 
-func fmtForeignKey(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
+func generateForeignKeyDefinition(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
 	var fkCols []string
 	if fk.IsResolved() {
 		for _, tag := range fk.TableColumns {
@@ -757,5 +756,5 @@ func fmtForeignKey(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
 	if fk.OnUpdate != doltdb.ForeignKeyReferentialAction_DefaultAction {
 		onUpdate = fk.OnUpdate.String()
 	}
-	return plan.FmtCreateTableForiegnKey(fk.Name, fkCols, fk.ReferencedTableName, parentCols, onDelete, onUpdate)
+	return sql.GenerateCreateTableForiegnKeyDefinition(fk.Name, fkCols, fk.ReferencedTableName, parentCols, onDelete, onUpdate)
 }
