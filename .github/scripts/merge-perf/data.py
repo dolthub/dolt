@@ -14,7 +14,9 @@ adds = int(sys.argv[4])
 
 if __name__=="__main__":
     if not os.path.exists(table_dir):
-        os.rmdir(table_dir)
+        try:
+            os.rmdir(table_dir)
+        except:
         os.makedirs(table_dir)
 
     ys = [i for i in range(rows+adds)]
