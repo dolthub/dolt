@@ -58,14 +58,9 @@ jobs:
 
         TIMES=$gw/time.log
         cd $TMPDIR
-        time dolt merge main &>$TIMES
+        latency=$(python3 -c "import time, os; start = time.time(); os.system('dolt merge main'); end = time.time(); print(end - start)")
 
         RESULTS=$gw/results.sql
-
-        seconds=$(sed -E 's/real\s+0m([0-9]*\.[0-9]*)s/\1/' < $TIMES)
-        minutes=$(sed -E  's/real\s+([0-9]*)m[0-9]*\.[0-9]*s/\1/' < $TIMES)
-        latency=$(python -c "print($minutes+($seconds/60.0))")
-
         echo "CREATE TABLE ${{env.RESULT_TABLE_NAME }} (name varchar(20) primary key, tables int, rows int, adds int, conflicts int, fks bool, latency float);" >> $RESULTS
         echo "INSERT INTO ${{ env.RESULT_TABLE_NAME }} values ('1m rows, 100k conflicts', 2, $NUM_ROWS, $NUM_ADDS, $NUM_ADDS, true, $latency);" >> $RESULTS
 
