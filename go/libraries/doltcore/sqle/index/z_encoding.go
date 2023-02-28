@@ -189,7 +189,7 @@ type ZRange = [2]ZVal
 // 2. appending zRange to acc
 func mergeZRanges(acc []ZRange, zRange ZRange) []ZRange {
 	n := len(acc) - 1
-	if n >= 0 && acc[n][1][0] == zRange[0][0] && zRange[0][1] - acc[n][1][1] == 1 {
+	if n >= 0 && acc[n][1][0] == zRange[0][0] && zRange[0][1]-acc[n][1][1] == 1 {
 		acc[n][1] = zRange[1]
 		return acc
 	}
@@ -199,7 +199,7 @@ func mergeZRanges(acc []ZRange, zRange ZRange) []ZRange {
 // splitZRanges is a helper function to SplitZRanges
 func splitZRanges(zRange ZRange, depth int, acc []ZRange) []ZRange {
 	// prevent too much splitting and point lookup is continuous
-	if depth == 0 || zRange[0] == zRange[1]{
+	if depth == 0 || zRange[0] == zRange[1] {
 		return mergeZRanges(acc, zRange)
 	}
 
