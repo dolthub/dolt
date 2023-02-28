@@ -238,9 +238,6 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	for _, tf := range sources {
 		assert.True(t, preGC.Contains(tf.FileID()))
 	}
-	for _, fileName := range absent {
-		assert.False(t, preGC.Contains(fileName))
-	}
 	for _, fileName := range toDelete {
 		assert.True(t, preGC.Contains(fileName))
 	}
@@ -250,7 +247,10 @@ func TestNBSPruneTableFiles(t *testing.T) {
 
 	postGC := currTableFiles(nomsDir)
 	for _, tf := range sources {
-		assert.True(t, preGC.Contains(tf.FileID()))
+		assert.True(t, postGC.Contains(tf.FileID()))
+	}
+	for _, fileName := range absent {
+		assert.False(t, postGC.Contains(fileName))
 	}
 	for _, fileName := range toDelete {
 		assert.False(t, postGC.Contains(fileName))

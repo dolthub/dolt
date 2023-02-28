@@ -170,21 +170,18 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 
 	reps := 3
 	sources := make(chunkSources, reps)
-	for i := 0; i < reps; i++ {
-		mt := newMemTable(1 << 10)
-		for _, c := range testChunks {
-			mt.addChunk(computeAddr(c), c)
-		}
-
-		var err error
-		sources[i], err = fts.Persist(ctx, mt, nil, &Stats{})
-		require.NoError(t, err)
+	mt := newMemTable(1 << 10)
+	for _, c := range testChunks {
+		mt.addChunk(computeAddr(c), c)
 	}
-	defer func() {
-		for _, s := range sources {
-			s.close()
-		}
-	}()
+
+	var err error
+	sources[0], err = fts.Persist(ctx, mt, nil, &Stats{})
+	require.NoError(t, err)
+	sources[1], err = sources[0].clone()
+	require.NoError(t, err)
+	sources[2], err = sources[0].clone()
+	require.NoError(t, err)
 
 	src, _, err := fts.ConjoinAll(ctx, sources, &Stats{})
 	require.NoError(t, err)
