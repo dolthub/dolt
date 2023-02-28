@@ -114,7 +114,7 @@ func readDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName, fileName strin
 		return err
 	}
 
-	eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	eng, _, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return err
 	}

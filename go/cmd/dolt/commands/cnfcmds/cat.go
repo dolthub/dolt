@@ -140,7 +140,7 @@ func printConflicts(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootVal
 		}
 	}
 
-	eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	eng, _, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}

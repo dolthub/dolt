@@ -119,7 +119,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 
 	if tablesWithViolations.Size() > 0 {
 		cli.PrintErrln("All constraints are not satisfied.")
-		eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+		eng, _, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 		if err != nil {
 			return commands.HandleVErrAndExitCode(errhand.BuildDError("Failed to build sql engine.").AddCause(err).Build(), nil)
 		}

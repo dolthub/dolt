@@ -125,7 +125,7 @@ func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 		return err
 	}
 
-	eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	eng, _, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return err
 	}

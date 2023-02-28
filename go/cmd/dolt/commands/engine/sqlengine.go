@@ -345,14 +345,15 @@ func doltSessionFactory(pro dsqle.DoltDatabaseProvider, config config.ReadWriteC
 	}
 }
 
-// NewSqlEngineForEnv returns a SqlEngine configured for the environment provided, with a single root user
-func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, error) {
+// NewSqlEngineForEnv returns a SqlEngine configured for the environment provided, with a single root user.
+// Returns the new engine, the first database name, and any error that occurred.
+func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, string, error) {
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return NewSqlEngine(
+	engine, err := NewSqlEngine(
 		ctx,
 		mrEnv,
 		FormatCsv,
@@ -361,4 +362,6 @@ func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, err
 			ServerHost: "localhost",
 		},
 	)
+	
+	return engine, mrEnv.GetFirstDatabase(), err
 }

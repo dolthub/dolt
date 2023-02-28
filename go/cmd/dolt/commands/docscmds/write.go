@@ -88,7 +88,7 @@ func (cmd PrintCmd) Exec(ctx context.Context, commandStr string, args []string, 
 }
 
 func writeDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName string) error {
-	eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	eng, _, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return err
 	}
