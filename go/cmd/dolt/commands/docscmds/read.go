@@ -114,12 +114,12 @@ func readDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName, fileName strin
 		return err
 	}
 
-	eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return err
 	}
 
-	err = writeDocToTable(ctx, eng, docName, string(update))
+	err = writeDocToTable(ctx, eng, dbName, docName, string(update))
 	if err != nil {
 		return err
 	}
@@ -131,16 +131,18 @@ const (
 	writeDocTemplate = `REPLACE INTO dolt_docs VALUES ("%s", "%s")`
 )
 
-func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, content string) error {
+func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, dbName, docName, content string) error {
 	var (
 		sctx *sql.Context
 		err  error
 	)
 
-	sctx, err = eng.NewContext(ctx)
+	sctx, err = eng.NewDefaultContext(ctx)
 	if err != nil {
 		return err
 	}
+
+	sctx.SetCurrentDatabase(dbName)
 
 	err = sctx.Session.SetSessionVariable(sctx, sql.AutoCommitSessionVar, 1)
 	if err != nil {

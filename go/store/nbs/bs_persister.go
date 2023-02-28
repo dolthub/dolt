@@ -78,7 +78,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 }
 
 // ConjoinAll implements tablePersister.
-func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
+func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
 	var sized []sourceWithSize
 	for _, src := range sources {
 		sized = append(sized, sourceWithSize{src, src.currentSize()})
@@ -86,7 +86,7 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 
 	plan, err := planConjoin(sized, stats)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	address := nameFromSuffixes(plan.suffixes())
 	name := address.String()
@@ -101,24 +101,25 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 	for _, src := range plan.sources.sws {
 		sub, err := bsp.getRecordsSubObject(ctx, src.source)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		conjoinees = append(conjoinees, sub)
 	}
 
 	// first concatenate all the sub-objects to create a composite sub-object
 	if _, err = bsp.bs.Concatenate(ctx, name+tableRecordsExt, conjoinees); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err = blobstore.PutBytes(ctx, bsp.bs, name+tableTailExt, plan.mergedIndex); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// then concatenate into a final blob
 	if _, err = bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt}); err != nil {
-		return emptyChunkSource{}, err
+		return emptyChunkSource{}, nil, err
 	}
 
-	return newBSChunkSource(ctx, bsp.bs, address, plan.chunkCount, bsp.q, stats)
+	cs, err := newBSChunkSource(ctx, bsp.bs, address, plan.chunkCount, bsp.q, stats)
+	return cs, func() {}, err
 }
 
 func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunkSource) (name string, err error) {
@@ -231,6 +232,14 @@ func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.ReadClose
 type bsTableReaderAt struct {
 	key string
 	bs  blobstore.Blobstore
+}
+
+func (bsTRA *bsTableReaderAt) Close() error {
+	return nil
+}
+
+func (bsTRA *bsTableReaderAt) clone() (tableReaderAt, error) {
+	return bsTRA, nil
 }
 
 func (bsTRA *bsTableReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {

@@ -226,23 +226,14 @@ func setupSqlEngine(t *testing.T, ctx context.Context) (eng *engine.SqlEngine) {
 	}
 
 	eng, err = engine.NewSqlEngine(ctx, mrEnv, engine.FormatNull, &engine.SqlEngineConfig{
-		InitialDb:    testDB,
-		IsReadOnly:   false,
-		PrivFilePath: "",
-		ServerUser:   "root",
-		ServerPass:   "",
-		ServerHost:   "localhost",
-		Autocommit:   true,
+		ServerUser: "root",
+		ServerHost: "localhost",
+		Autocommit: true,
 	})
 	if err != nil {
 		panic(err)
 	}
 
-	sqlCtx, err := eng.NewContext(ctx)
-	require.NoError(t, err)
-	sqlCtx.Session.SetClient(sql.Client{
-		User: "root", Address: "%",
-	})
 	return
 }
 
