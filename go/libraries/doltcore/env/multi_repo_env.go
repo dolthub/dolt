@@ -44,6 +44,11 @@ type EnvNameAndPath struct {
 	Path string
 }
 
+type NamedEnv struct {
+	name string
+	env  *DoltEnv
+}
+
 // MultiRepoEnv is a type used to store multiple environments which can be retrieved by name
 type MultiRepoEnv struct {
 	envs           []NamedEnv
@@ -52,9 +57,144 @@ type MultiRepoEnv struct {
 	ignoreLockFile bool
 }
 
-type NamedEnv struct {
-	name string
-	env  *DoltEnv
+// MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given. The doltEnv from the
+// invoking context is included. If it's non-nil and valid, it will be included in the returned MultiRepoEnv, and will
+// be the first database in all iterations.
+func MultiEnvForDirectory(
+	ctx context.Context,
+	config config.ReadWriteConfig,
+	fs filesys.Filesys,
+	version string,
+	ignoreLockFile bool,
+	dEnv *DoltEnv,
+) (*MultiRepoEnv, error) {
+	mrEnv := &MultiRepoEnv{
+		envs:           make([]NamedEnv, 0),
+		fs:             fs,
+		cfg:            config,
+		ignoreLockFile: ignoreLockFile,
+	}
+
+	// Load current fs and put into mr env
+	var dbName string
+	if _, ok := fs.(*filesys.InMemFS); ok {
+		dbName = "dolt"
+	} else {
+		path, err := fs.Abs("")
+		if err != nil {
+			return nil, err
+		}
+		envName := getRepoRootDir(path, string(os.PathSeparator))
+		dbName = dirToDBName(envName)
+	}
+
+	envSet := map[string]*DoltEnv{}
+	if dEnv.Valid() {
+		envSet[dbName] = dEnv
+	}
+
+	// If there are other directories in the directory, try to load them as additional databases
+	fs.Iter(".", false, func(path string, size int64, isDir bool) (stop bool) {
+		if !isDir {
+			return false
+		}
+
+		dir := filepath.Base(path)
+
+		newFs, err := fs.WithWorkingDir(dir)
+		if err != nil {
+			return false
+		}
+
+		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, dEnv.Version)
+		if newEnv.Valid() {
+			envSet[dirToDBName(dir)] = newEnv
+		}
+		return false
+	})
+
+	enforceSingleFormat(envSet)
+
+	// if the current directory database is in our set, add it first so it will be the current database
+	var ok bool
+	if dEnv, ok = envSet[dbName]; ok {
+		mrEnv.addEnv(dbName, dEnv)
+		delete(envSet, dbName)
+	}
+
+	for dbName, dEnv = range envSet {
+		mrEnv.addEnv(dbName, dEnv)
+	}
+
+	return mrEnv, nil
+}
+
+// MultiEnvForPaths takes a variable list of EnvNameAndPath objects loads each of the environments, and returns a new
+// MultiRepoEnv
+func MultiEnvForPaths(
+	ctx context.Context,
+	hdp HomeDirProvider,
+	cfg config.ReadWriteConfig,
+	fs filesys.Filesys,
+	version string,
+	ignoreLockFile bool,
+	envNamesAndPaths ...EnvNameAndPath,
+) (*MultiRepoEnv, error) {
+	nameToPath := make(map[string]string)
+	for _, nameAndPath := range envNamesAndPaths {
+		existingPath, ok := nameToPath[nameAndPath.Name]
+
+		if ok {
+			if existingPath == nameAndPath.Path {
+				continue
+			}
+
+			return nil, fmt.Errorf("databases at paths '%s' and '%s' both attempted to load with the name '%s'", existingPath, nameAndPath.Path, nameAndPath.Name)
+		}
+
+		nameToPath[nameAndPath.Name] = nameAndPath.Path
+	}
+
+	mrEnv := &MultiRepoEnv{
+		envs:           make([]NamedEnv, 0),
+		fs:             fs,
+		cfg:            cfg,
+		ignoreLockFile: ignoreLockFile,
+	}
+
+	envSet := map[string]*DoltEnv{}
+	for name, path := range nameToPath {
+		absPath, err := fs.Abs(path)
+
+		if err != nil {
+			return nil, err
+		}
+
+		fsForEnv, err := filesys.LocalFilesysWithWorkingDir(absPath)
+
+		if err != nil {
+			return nil, err
+		}
+
+		urlStr := earl.FileUrlFromPath(filepath.Join(absPath, dbfactory.DoltDataDir), os.PathSeparator)
+		dEnv := Load(ctx, hdp, fsForEnv, urlStr, version)
+
+		if dEnv.RSLoadErr != nil {
+			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.RSLoadErr.Error())
+		} else if dEnv.DBLoadError != nil {
+			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.DBLoadError.Error())
+		} else if dEnv.CfgLoadErr != nil {
+			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.CfgLoadErr.Error())
+		}
+		envSet[name] = dEnv
+	}
+
+	enforceSingleFormat(envSet)
+	for dbName, dEnv := range envSet {
+		mrEnv.addEnv(dbName, dEnv)
+	}
+
+	return mrEnv, nil
 }
 
 func (mrEnv *MultiRepoEnv) FileSystem() filesys.Filesys {
@@ -72,28 +212,12 @@ func (mrEnv *MultiRepoEnv) Config() config.ReadWriteConfig {
 	return mrEnv.cfg
 }
 
-// TODO: un export
-// AddEnv adds an environment to the MultiRepoEnv by name
-func (mrEnv *MultiRepoEnv) AddEnv(name string, dEnv *DoltEnv) {
+// addEnv adds an environment to the MultiRepoEnv by name
+func (mrEnv *MultiRepoEnv) addEnv(name string, dEnv *DoltEnv) {
 	mrEnv.envs = append(mrEnv.envs, NamedEnv{
 		name: name,
 		env:  dEnv,
 	})
-}
-
-// AddOrReplaceEnvs adds the specified DoltEnv to this MultiRepoEnv, replacing
-// any existing environment in the MultiRepoEnv with the same name.
-func (mrEnv *MultiRepoEnv) AddOrReplaceEnv(name string, dEnv *DoltEnv) {
-	// TODO: Modeling NamedEnvs as a map could probably simplify this file
-	newNamedEnvs := make([]NamedEnv, 0, len(mrEnv.envs))
-	for _, namedEnv := range mrEnv.envs {
-		if namedEnv.name != name {
-			newNamedEnvs = append(newNamedEnvs, namedEnv)
-		}
-	}
-	newNamedEnvs = append(newNamedEnvs, NamedEnv{name: name, env: dEnv})
-
-	mrEnv.envs = newNamedEnvs
 }
 
 // GetEnv returns the env with the name given, or nil if no such env exists
@@ -126,26 +250,16 @@ func (mrEnv *MultiRepoEnv) Iter(cb func(name string, dEnv *DoltEnv) (stop bool, 
 	return nil
 }
 
-// GetWorkingRoots returns a map with entries for each environment name with a value equal to the working root
-// for that environment
-func (mrEnv *MultiRepoEnv) GetWorkingRoots(ctx context.Context) (map[string]*doltdb.RootValue, error) {
-	roots := make(map[string]*doltdb.RootValue)
-	err := mrEnv.Iter(func(name string, dEnv *DoltEnv) (stop bool, err error) {
-		root, err := dEnv.WorkingRoot(ctx)
-
-		if err != nil {
-			return true, err
-		}
-
-		roots[name] = root
-		return false, nil
+// GetFirstDatabase returns the name of the first database in the MultiRepoEnv. This will be the database in the
+// current working directory if applicable, or the first database alphabetically otherwise.
+func (mrEnv *MultiRepoEnv) GetFirstDatabase() string {
+	var currentDb string
+	_ = mrEnv.Iter(func(name string, _ *DoltEnv) (stop bool, err error) {
+		currentDb = name
+		return true, nil
 	})
 
-	if err != nil {
-		return nil, err
-	}
-
-	return roots, err
+	return currentDb
 }
 
 // IsLocked returns true if any env is locked
@@ -236,149 +350,6 @@ func getRepoRootDir(path, pathSeparator string) string {
 	return name
 }
 
-// MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given
-func MultiEnvForDirectory(
-	ctx context.Context,
-	config config.ReadWriteConfig,
-	fs filesys.Filesys,
-	version string,
-	ignoreLockFile bool,
-	oldDEnv *DoltEnv, // TODO: eventually get rid of this
-) (*MultiRepoEnv, error) {
-	mrEnv := &MultiRepoEnv{
-		envs:           make([]NamedEnv, 0),
-		fs:             fs,
-		cfg:            config,
-		ignoreLockFile: ignoreLockFile,
-	}
-
-	// Load current fs and put into mr env
-	var dEnv *DoltEnv
-	var dbName string
-	// Only directly copy the oldDEnv for in-memory filesystems; something is wrong with loading them
-	if _, ok := fs.(*filesys.InMemFS); ok {
-		dbName = "dolt"
-		dEnv = oldDEnv
-	} else {
-		path, err := fs.Abs("")
-		if err != nil {
-			return nil, err
-		}
-		envName := getRepoRootDir(path, string(os.PathSeparator))
-		dbName = dirToDBName(envName)
-		dEnv = oldDEnv
-		// TODO: idk how or why, but this breaks docs.bats
-		//dEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
-	}
-
-	envSet := map[string]*DoltEnv{}
-	if dEnv.Valid() {
-		envSet[dbName] = dEnv
-	}
-
-	// If there are other directories in the directory, try to load them as additional databases
-	fs.Iter(".", false, func(path string, size int64, isDir bool) (stop bool) {
-		if !isDir {
-			return false
-		}
-
-		dir := filepath.Base(path)
-
-		newFs, err := fs.WithWorkingDir(dir)
-		if err != nil {
-			return false
-		}
-
-		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, dEnv.Version)
-		if newEnv.Valid() {
-			envSet[dirToDBName(dir)] = newEnv
-		}
-		return false
-	})
-
-	enforceSingleFormat(envSet)
-
-	// if the current directory database is in our set, add it first so it will be the current database
-	var ok bool
-	if dEnv, ok = envSet[dbName]; ok {
-		mrEnv.AddEnv(dbName, dEnv)
-		delete(envSet, dbName)
-	}
-	for dbName, dEnv = range envSet {
-		mrEnv.AddEnv(dbName, dEnv)
-	}
-
-	return mrEnv, nil
-}
-
-// MultiEnvForPaths takes a variable list of EnvNameAndPath objects loads each of the environments, and returns a new
-// MultiRepoEnv
-func MultiEnvForPaths(
-	ctx context.Context,
-	hdp HomeDirProvider,
-	cfg config.ReadWriteConfig,
-	fs filesys.Filesys,
-	version string,
-	ignoreLockFile bool,
-	envNamesAndPaths ...EnvNameAndPath,
-) (*MultiRepoEnv, error) {
-	nameToPath := make(map[string]string)
-	for _, nameAndPath := range envNamesAndPaths {
-		existingPath, ok := nameToPath[nameAndPath.Name]
-
-		if ok {
-			if existingPath == nameAndPath.Path {
-				continue
-			}
-
-			return nil, fmt.Errorf("databases at paths '%s' and '%s' both attempted to load with the name '%s'", existingPath, nameAndPath.Path, nameAndPath.Name)
-		}
-
-		nameToPath[nameAndPath.Name] = nameAndPath.Path
-	}
-
-	mrEnv := &MultiRepoEnv{
-		envs:           make([]NamedEnv, 0),
-		fs:             fs,
-		cfg:            cfg,
-		ignoreLockFile: ignoreLockFile,
-	}
-
-	envSet := map[string]*DoltEnv{}
-	for name, path := range nameToPath {
-		absPath, err := fs.Abs(path)
-
-		if err != nil {
-			return nil, err
-		}
-
-		fsForEnv, err := filesys.LocalFilesysWithWorkingDir(absPath)
-
-		if err != nil {
-			return nil, err
-		}
-
-		urlStr := earl.FileUrlFromPath(filepath.Join(absPath, dbfactory.DoltDataDir), os.PathSeparator)
-		dEnv := Load(ctx, hdp, fsForEnv, urlStr, version)
-
-		if dEnv.RSLoadErr != nil {
-			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.RSLoadErr.Error())
-		} else if dEnv.DBLoadError != nil {
-			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.DBLoadError.Error())
-		} else if dEnv.CfgLoadErr != nil {
-			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.CfgLoadErr.Error())
-		}
-		envSet[name] = dEnv
-	}
-
-	enforceSingleFormat(envSet)
-	for dbName, dEnv := range envSet {
-		mrEnv.AddEnv(dbName, dEnv)
-	}
-
-	return mrEnv, nil
-}
-
 // enforceSingleFormat enforces that constraint that all databases in
 // a multi-database environment have the same NomsBinFormat.
 // Databases are removed from the MultiRepoEnv to ensure this is true.
@@ -407,29 +378,6 @@ func enforceSingleFormat(envSet map[string]*DoltEnv) {
 			delete(envSet, name)
 		}
 	}
-}
-
-func DBNamesAndPathsFromDir(fs filesys.Filesys, path string) ([]EnvNameAndPath, error) {
-	var envNamesAndPaths []EnvNameAndPath
-	err := fs.Iter(path, false, func(path string, size int64, isDir bool) (stop bool) {
-		if isDir {
-			dirName := filepath.Base(path)
-			if dirName[0] == '.' {
-				return false
-			}
-
-			name := dirToDBName(dirName)
-			envNamesAndPaths = append(envNamesAndPaths, EnvNameAndPath{Name: name, Path: path})
-		}
-
-		return false
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return envNamesAndPaths, nil
 }
 
 func dirToDBName(dirName string) string {

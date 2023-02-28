@@ -85,17 +85,17 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 func diffDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName string) error {
-	eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return err
 	}
 
-	working, err := readDocFromTable(ctx, eng, docName)
+	working, err := readDocFromTable(ctx, eng, dbName, docName)
 	if err != nil {
 		return err
 	}
 
-	head, err := readDocFromTableAsOf(ctx, eng, docName, "HEAD")
+	head, err := readDocFromTableAsOf(ctx, eng, dbName, docName, "HEAD")
 	if err != nil {
 		return err
 	}

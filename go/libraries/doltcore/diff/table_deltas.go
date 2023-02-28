@@ -451,6 +451,8 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 		}, nil
 	}
 
+	// TODO: Renamed columns without a data change are not accounted for here,
+	// `dataChanged` is true when it should be false
 	dataChanged, err := td.HasHashChanged()
 	if err != nil {
 		return nil, err

@@ -52,3 +52,14 @@ jobs:
               "commit_to_branch": "nightly",
               "actor": "${{ github.actor }}"
             }
+      - uses: peter-evans/repository-dispatch@v2.0.0
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: benchmark-merge
+          client-payload: |
+            {
+              "email_recipient": "${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}",
+              "version": "${{ github.sha }}",
+              "commit_to_branch": "nightly",
+              "actor": "${{ github.actor }}"
+            }

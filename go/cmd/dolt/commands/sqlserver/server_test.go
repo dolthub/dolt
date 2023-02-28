@@ -446,12 +446,12 @@ func TestReadReplica(t *testing.T) {
 	readReplicaDbName := multiSetup.DbNames[0]
 	sourceDbName := multiSetup.DbNames[1]
 
-	localCfg, ok := multiSetup.MrEnv.GetEnv(readReplicaDbName).Config.GetConfig(env.LocalConfig)
+	localCfg, ok := multiSetup.GetEnv(readReplicaDbName).Config.GetConfig(env.LocalConfig)
 	if !ok {
 		t.Fatal("local config does not exist")
 	}
 	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{dsess.ReadReplicaRemote: "remote1", dsess.ReplicateHeads: "main,feature"})
-	dsess.InitPersistedSystemVars(multiSetup.MrEnv.GetEnv(readReplicaDbName))
+	dsess.InitPersistedSystemVars(multiSetup.GetEnv(readReplicaDbName))
 
 	// start server as read replica
 	sc := NewServerController()
@@ -463,7 +463,7 @@ func TestReadReplica(t *testing.T) {
 	func() {
 		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
 		go func() {
-			_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, multiSetup.MrEnv.GetEnv(readReplicaDbName))
+			_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, multiSetup.GetEnv(readReplicaDbName))
 		}()
 		err = sc.WaitForStart()
 		require.NoError(t, err)

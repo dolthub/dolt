@@ -68,14 +68,11 @@ const (
 var (
 	cacheOnce           = sync.Once{}
 	makeManifestManager func(manifest) manifestManager
-	globalFDCache       *fdCache
 )
 
 var tracer = otel.Tracer("github.com/dolthub/dolt/go/store/nbs")
 
 func makeGlobalCaches() {
-	globalFDCache = newFDCache(defaultMaxTables)
-
 	manifestCache := newManifestCache(defaultManifestCacheSize)
 	manifestLocks := newManifestLocks()
 	makeManifestManager = func(m manifest) manifestManager { return manifestManager{m, manifestCache, manifestLocks} }
@@ -479,7 +476,7 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 	if err != nil {
 		return nil, err
 	}
-	p := newFSTablePersister(dir, globalFDCache, q)
+	p := newFSTablePersister(dir, q)
 	c := conjoinStrategy(inlineConjoiner{maxTables})
 
 	return newNomsBlockStore(ctx, nbfVerStr, makeManifestManager(m), p, q, c, memTableSize)
@@ -495,7 +492,7 @@ func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQ
 	if err != nil {
 		return nil, err
 	}
-	p := newFSTablePersister(dir, globalFDCache, q)
+	p := newFSTablePersister(dir, q)
 
 	journal, err := newChunkJournal(ctx, nbfVers, dir, m, p.(*fsTablePersister))
 	if err != nil {

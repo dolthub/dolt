@@ -1,41 +1,62 @@
-#!/usr/bin/expect
+#!/usr/bin/expect 
 
-set timeout 1000
+set timeout 3
 spawn dolt sql
 
+# This script uses undefined variables in the failure case so that
+# error output includes the line of the failed test expectation
+
 expect {
-  "doltsql> " { send "use `doltsql/test`;\r"; }
-  timeout { exit 1; }
+    "*doltsql> " { send -- "use `doltsql/test`;\r"; }
+    timeout { puts "$TESTFAILURE"; }
 }
 
 expect {
-  "doltsql/test> " { send "show tables;\r"; }
-  timeout { exit 1; }
+    "*doltsql/test> " { send -- "show tables;\r"; }
+    timeout { puts "$TESTFAILURE"; }
 }
 
 expect {
-  "doltsql/test> " { send "use information_schema;\r"; }
-  timeout { exit 1; }
+    "*doltsql/test> " { send -- "use information_schema;\r"; }
+    timeout { puts "$TESTFAILURE"; }
 }
 
 expect {
-  "information_schema> " { send "show tables;\r"; }
-  timeout { exit 1; }
+    "*information_schema> " { send -- "show tables;\r"; }
+    timeout { puts "$TESTFAILURE"; }
 }
 
 expect {
-  "information_schema> " { send "CREATE DATABASE mydb ;\r"; }
-  timeout { exit 1; }
+    "*information_schema> " { send -- "CREATE DATABASE mydb;\r"; }
+    timeout { puts "$TESTFAILURE"; }
 }
 
 expect {
-  "information_schema> " { send "use mydb ;\r"; }
-  timeout { exit 1; }
+    "*information_schema> " { send -- "use db1;\r"; }
+    timeout { puts "$TESTFAILURE"; }
 }
 
-# TODO: The failed keyword seems to be triggering the connection_control_failed_login_attempts info_schema table. Not clear why the output
-# of this table is comming all the way down to this command.
 expect {
-  "mydb> " { send "exit ;\r"; }
-   timeout { exit 1; }
+    -re "|.*db1.*|\r.*db1> " { send -- "select database();\r"; }
+    timeout { puts "$TESTFAILURE"; }
+}
+
+expect {
+    "*db1>" { send -- "use db2;\r"; }
+    timeout { puts "$TESTFAILURE"; }
+}
+
+expect {
+    "*db2> " { send -- "select database();\r"; }
+    timeout { puts "$TESTFAILURE"; }
+}
+
+expect {
+    -re "|.*db2.*|.*\rdb2>" { send -- "use mydb;\r"; }
+    timeout { puts "$TESTFAILURE"; }
+}
+
+expect {
+    "mydb> " { send -- "exit ;\r"; }
+    timeout { puts "$TESTFAILURE"; }
 }
