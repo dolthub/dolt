@@ -895,6 +895,8 @@ func runShell(sqlCtx *sql.Context, se *engine.SqlEngine) error {
 		}
 	})
 
+	initialCtx := sqlCtx.Context
+
 	shell.Uninterpreted(func(c *ishell.Context) {
 		query := c.Args[0]
 		if len(strings.TrimSpace(query)) == 0 {
@@ -926,9 +928,7 @@ func runShell(sqlCtx *sql.Context, se *engine.SqlEngine) error {
 		var nextPrompt string
 		var sqlSch sql.Schema
 		var rowIter sql.RowIter
-
-		initialCtx := sqlCtx.Context
-
+		
 		cont := func() bool {
 			subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -979,8 +979,15 @@ func newCompleter(
 	ctx *sql.Context,
 	se *engine.SqlEngine,
 ) (completer *sqlCompleter, rerr error) {
+	subCtx, stop := signal.NotifyContext(ctx.Context, os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	_, iter, err := se.Query(ctx, "select table_schema, table_name, column_name from information_schema.columns;")
+	sqlCtx, err := se.NewContext(subCtx, ctx.Session)
+	if err != nil {
+		return nil, err
+	}
+	
+	_, iter, err := se.Query(sqlCtx, "select table_schema, table_name, column_name from information_schema.columns;")
 	if err != nil {
 		return nil, err
 	}
@@ -990,12 +997,12 @@ func newCompleter(
 		if err != nil && rerr == nil {
 			rerr = err
 		}
-	}(iter, ctx)
+	}(iter, sqlCtx)
 
 	identifiers := make(map[string]struct{})
 	var columnNames []string
 	for {
-		r, err := iter.Next(ctx)
+		r, err := iter.Next(sqlCtx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
