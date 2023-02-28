@@ -54,13 +54,13 @@ type fsTablePersister struct {
 	// added to this map. The file delete loop will never delete anything which
 	// appears in this map. Files should be added to this map before they are
 	// written.
-	toKeep   map[string]struct{}
+	toKeep map[string]struct{}
 	// Any temp files we are currently writing are always present in this map.
 	// The logic should be taken before we generate the new temp file, and the
 	// new temp file should be added to this map. Care should be taken to always
 	// remove the entry from this map when we are done processing the temp file
 	// or else this map will grow without bound.
-	curTmps  map[string]struct{}
+	curTmps map[string]struct{}
 }
 
 var _ tablePersister = &fsTablePersister{}

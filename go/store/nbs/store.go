@@ -1414,7 +1414,7 @@ func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context, checker refCheck
 	return nbs.p.PruneTableFiles(ctx, func() []addr {
 		nbs.mu.Lock()
 		defer nbs.mu.Unlock()
-		keepers := make([]addr, 0, len(nbs.tables.novel) + len(nbs.tables.upstream))
+		keepers := make([]addr, 0, len(nbs.tables.novel)+len(nbs.tables.upstream))
 		for a, _ := range nbs.tables.novel {
 			keepers = append(keepers, a)
 		}
