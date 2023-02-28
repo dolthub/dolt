@@ -49,15 +49,14 @@ jobs:
     - name: Run bench
       id: bench
       run: |
-        dolt config --global --add user.email "merge-perf@dolthub.com"
-        dolt config --global --add user.name "merge-perf"
-
         gw=$GITHUB_WORKSPACE
         DATADIR=$gw/data
 
+        # initialize results sql import
         RESULTS=$gw/results.sql
         echo "CREATE TABLE ${{env.RESULT_TABLE_NAME }} (name varchar(50) primary key, table_cnt int, run_cnt int, add_cnt int, delete_cnt int, update_cnt int, conflict_cnt int, fks bool, latency float);" >> $RESULTS
 
+        # parameters for testing
         ROW_NUM=1000000
         TABLE_NUM=2
         names=('adds_only' 'deletes_only' 'updates_only' 'adds_updates_deletes')
@@ -67,14 +66,21 @@ jobs:
 
         for i in {0..3}; do
             echo "${names[$i]}, ${adds[$i]}, ${deletes[$i]}, ${updates[$i]}"
+
+            # data.py creates files for import
             python ${{ env.SCRIPT_DIR }}/data.py $DATADIR $TABLE_NUM $ROW_NUM ${adds[$i]} ${deletes[$i]} ${updates[$i]}
 
+            # setup.sh runs the import and commit process for a set of data files
             TMPDIR=$gw/tmp
             ./${{ env.SCRIPT_DIR}}/setup.sh $TMPDIR $DATADIR
 
+            # small python script times merge, we suppres errcodes but print error messages
             cd $TMPDIR
-            latency=$(python3 -c "import time, subprocess; start = time.time(); res=subprocess.run(['dolt', 'merge', '--squash', 'main'], capture_output=True); output = res.stdout + res.stderr if res.returncode != 0 else  time.time() -start;  print(output); exit(res.returncode)")
+            python3 -c "import time, subprocess, sys; start = time.time(); res=subprocess.run(['dolt', 'merge', '--squash', 'main'], capture_output=True); err = res.stdout + res.stderr if res.returncode != 0 else ''; latency = time.time() -start; print(latency); sys.stderr.write(str(err))" 1> lat.log 2>err.log
+            latency=$(cat lat.log)
+            echo err.log
 
+            # count conflicts in first table
             conflicts=$(dolt sql -r csv -q "select count(*) from dolt_conflicts_table0;" | tail -1)
 
             echo "INSERT INTO ${{ env.RESULT_TABLE_NAME }} values ("${names[$i]}", $TABLE_NUM, $ROW_NUM, ${adds[$i]}, ${deletes[$i]}, ${updates[$i]}, $conflicts, true, $latency);" >> $RESULTS
