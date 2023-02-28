@@ -198,7 +198,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		username = user
 	}
 
-	mrEnv, verr := getMultiRepoEnv(ctx, apr, dEnv, cmd)
+	mrEnv, verr := getMultiRepoEnv(ctx, apr, dEnv)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
@@ -272,22 +272,16 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	defer se.Close()
-
-	var workingRoot *doltdb.RootValue
-	if dEnv != nil && dEnv.Valid() {
-		workingRoot, err = dEnv.WorkingRoot(ctx)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-	}
-
-	// TODO: are these paths appropriately guarded when workingRoot may be nil?
+	
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
-		return queryMode(sqlCtx, se, dEnv, workingRoot, apr, query, usage)
+		if apr.Contains(saveFlag) {
+			return execSaveQuery(sqlCtx, dEnv, se, apr, query, usage)
+		}
+		return queryMode(sqlCtx, se, apr, query, usage)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		return savedQueryMode(sqlCtx, se, workingRoot, savedQueryName, usage)
+		return executeSavedQuery(sqlCtx, se, dEnv, savedQueryName, usage)
 	} else if apr.Contains(listSavedFlag) {
-		return listSavedQueriesMode(sqlCtx, se, workingRoot, usage)
+		return listSavedQueries(sqlCtx, se, dEnv, usage)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		isTty := false
@@ -327,7 +321,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 			}
 		} else if runInBatchMode {
-			verr := execBatch(sqlCtx, continueOnError, se, input)
+			verr = execBatch(sqlCtx, se, input, continueOnError)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
@@ -399,13 +393,17 @@ func newEngine(
 	return se, sqlCtx, nil
 }
 
-func listSavedQueriesMode(
-	ctx *sql.Context,
-	se *engine.SqlEngine,
-	initialRoot *doltdb.RootValue,
-	usage cli.UsagePrinter,
-) int {
-	hasQC, err := initialRoot.HasTable(ctx, doltdb.DoltQueryCatalogTableName)
+func listSavedQueries(ctx *sql.Context, se *engine.SqlEngine, dEnv *env.DoltEnv, usage cli.UsagePrinter, ) int {
+	if !dEnv.Valid() {
+		return HandleVErrAndExitCode(errhand.BuildDError("error: --%s must be used in a dolt database directory.", listSavedFlag).Build(), usage)
+	}
+
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	hasQC, err := workingRoot.HasTable(ctx, doltdb.DoltQueryCatalogTableName)
 
 	if err != nil {
 		verr := errhand.BuildDError("error: Failed to read from repository.").AddCause(err).Build()
@@ -420,14 +418,17 @@ func listSavedQueriesMode(
 	return HandleVErrAndExitCode(execQuery(ctx, se, query), usage)
 }
 
-func savedQueryMode(
-	ctx *sql.Context,
-	se *engine.SqlEngine,
-	initialRoot *doltdb.RootValue,
-	savedQueryName string,
-	usage cli.UsagePrinter,
-) int {
-	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoot, savedQueryName)
+func executeSavedQuery(ctx *sql.Context, se *engine.SqlEngine, dEnv *env.DoltEnv, savedQueryName string, usage cli.UsagePrinter, ) int {
+	if !dEnv.Valid() {
+		return HandleVErrAndExitCode(errhand.BuildDError("error: --%s must be used in a dolt database directory.", executeFlag).Build(), usage)
+	}
+	
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	sq, err := dtables.RetrieveFromQueryCatalog(ctx, workingRoot, savedQueryName)
 
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -438,45 +439,22 @@ func savedQueryMode(
 }
 
 func queryMode(
-	ctx *sql.Context,
-	se *engine.SqlEngine,
-	dEnv *env.DoltEnv,
-	initialRoot *doltdb.RootValue,
-	apr *argparser.ArgParseResults,
-	query string,
-	usage cli.UsagePrinter,
+		ctx *sql.Context,
+		se *engine.SqlEngine,
+		apr *argparser.ArgParseResults,
+		query string,
+		usage cli.UsagePrinter,
 ) int {
 
-	// query mode has 3 sub modes:
+	// query mode has 2 sub modes:
 	// If --batch is provided, run with batch optimizations
-	// If --save is provided, run a single query and save it
 	// Otherwise, attempt to parse and execute multiple queries separated by ';'
 	batchMode := apr.Contains(BatchFlag)
-	saveName := apr.GetValueOrDefault(saveFlag, "")
-
 	_, continueOnError := apr.GetValue(continueFlag)
 
-	if saveName != "" {
-		verr := execQuery(ctx, se, query)
-		if verr != nil {
-			return HandleVErrAndExitCode(verr, usage)
-		}
-
-		if saveName != "" {
-			saveMessage := apr.GetValueOrDefault(messageFlag, "")
-			newRoot, verr := saveQuery(ctx, initialRoot, query, saveName, saveMessage)
-			if verr != nil {
-				return HandleVErrAndExitCode(verr, usage)
-			}
-
-			err := dEnv.UpdateWorkingRoot(ctx, newRoot)
-			if err != nil {
-				return HandleVErrAndExitCode(errhand.BuildDError("error: failed to update working root").AddCause(err).Build(), usage)
-			}
-		}
-	} else if batchMode {
+	if batchMode {
 		batchInput := strings.NewReader(query)
-		verr := execBatch(ctx, continueOnError, se, batchInput)
+		verr := execBatch(ctx, se, batchInput, continueOnError)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
@@ -491,8 +469,39 @@ func queryMode(
 	return 0
 }
 
+func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, se *engine.SqlEngine, apr *argparser.ArgParseResults, query string, usage cli.UsagePrinter) int {
+	if !dEnv.Valid() {
+		return HandleVErrAndExitCode(errhand.BuildDError("error: --%s must be used in a dolt database directory.", saveFlag).Build(), usage)
+	}
+	
+	saveName := apr.GetValueOrDefault(saveFlag, "")
+	
+	verr := execQuery(ctx, se, query)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to get working root").AddCause(err).Build(), usage)
+	}
+	
+	saveMessage := apr.GetValueOrDefault(messageFlag, "")
+	newRoot, verr := saveQuery(ctx, workingRoot, query, saveName, saveMessage)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	err = dEnv.UpdateWorkingRoot(ctx, newRoot)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to update working root").AddCause(err).Build(), usage)
+	}
+	
+	return 0
+}
+
 // getMultiRepoEnv returns an appropriate MultiRepoEnv for this invocation of the command
-func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, cmd SqlCmd) (*env.MultiRepoEnv, errhand.VerboseError) {
+func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (*env.MultiRepoEnv, errhand.VerboseError) {
 	var err error
 	fs := dEnv.FS
 
@@ -515,10 +524,10 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 }
 
 func execBatch(
-	sqlCtx *sql.Context,
-	continueOnErr bool,
-	se *engine.SqlEngine,
-	batchInput io.Reader,
+		sqlCtx *sql.Context,
+		se *engine.SqlEngine,
+		batchInput io.Reader,
+		continueOnErr bool,
 ) errhand.VerboseError {
 	// In batch mode, we need to set a couple flags on the session to prevent constant flushes to disk
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
