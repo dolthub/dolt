@@ -272,9 +272,12 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	var workingRoot *doltdb.RootValue
+	if dEnv != nil && dEnv.Valid() {
+		workingRoot, err = dEnv.WorkingRoot(ctx)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
 	}
 
 	// TODO: are these paths appropriately guarded when initalDbRoot may be nil? 
