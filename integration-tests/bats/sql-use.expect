@@ -4,7 +4,7 @@ set timeout 3
 spawn dolt sql
 
 # This script uses undefined variables in the failure case so that
-# errors output includes the line of the failed test expectation
+# error output includes the line of the failed test expectation
 
 expect {
     "*doltsql> " { send -- "use `doltsql/test`;\r"; }
@@ -37,12 +37,12 @@ expect {
 }
 
 expect {
-    "*db1> " { send -- "select database();\r"; }
+    -re "|.*db1.*|\r.*db1> " { send -- "select database();\r"; }
     timeout { puts "$TESTFAILURE"; }
 }
 
 expect {
-    "|*db1*|*db1>" { send -- "use db2;\r"; }
+    "*db1>" { send -- "use db2;\r"; }
     timeout { puts "$TESTFAILURE"; }
 }
 
@@ -52,7 +52,7 @@ expect {
 }
 
 expect {
-    "|.*db2.*|.*\rdb2>" { send -- "use mydb;\r"; }
+    -re "|.*db2.*|.*\rdb2>" { send -- "use mydb;\r"; }
     timeout { puts "$TESTFAILURE"; }
 }
 
