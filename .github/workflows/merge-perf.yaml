@@ -40,29 +40,41 @@ jobs:
       working-directory: ./go
       run: go install ./cmd/dolt
 
-    - name: Run bench
-      id: bench
+    - name: Config dolt
+      id: config
       run: |
         dolt config --global --add user.email "merge-perf@dolthub.com"
         dolt config --global --add user.name "merge-perf"
 
+    - name: Run bench
+      id: bench
+      run: |
         gw=$GITHUB_WORKSPACE
         DATADIR=$gw/data
-        TABLE_NUM=2
-        ROW_NUM=1000000
-        ADD_NUM=60000
-        python ${{ env.SCRIPT_DIR }}/data.py $DATADIR $TABLE_NUM $ROW_NUM $ADD_NUM
-
-        TMPDIR=$gw/tmp
-        ./${{ env.SCRIPT_DIR}}/setup.sh $TMPDIR $DATADIR
-
-        TIMES=$gw/time.log
-        cd $TMPDIR
-        latency=$(python3 -c "import time, subprocess; start = time.time(); res=subprocess.run(['dolt', 'merge', 'main'], capture_output=True); output = res.stdout + res.stderr if res.returncode != 0 else  time.time() -start;  print(output); exit(res.returncode)")
 
         RESULTS=$gw/results.sql
-        echo "CREATE TABLE ${{env.RESULT_TABLE_NAME }} (name varchar(50) primary key, table_cnt int, run_cnt int, add_cnt int, conflict_cnt int, fks bool, latency float);" >> $RESULTS
-        echo "INSERT INTO ${{ env.RESULT_TABLE_NAME }} values ('1m rows, 100k conflicts', 2, $ROW_NUM, $ADD_NUM, $ADD_NUM, true, $latency);" >> $RESULTS
+        echo "CREATE TABLE ${{env.RESULT_TABLE_NAME }} (name varchar(50) primary key, table_cnt int, run_cnt int, add_cnt int, delete_cnt int, update_cnt int, conflict_cnt int, fks bool, latency float);" >> $RESULTS
+
+        TABLE_NUM=2
+        names=('adds_only' 'deletes_only' 'updates_only' 'adds_updates_deletes')
+        adds=(60000 0 0 60000)
+        deletes=(0 60000 0 60000)
+        updates=(0 0 60000 60000)
+
+        for i in {0..3}; do
+            echo "${names[$i]}, ${adds[$i]}, ${deletes[$i]}, ${updates[$i]}"
+            python ${{ env.SCRIPT_DIR }}/data.py $DATADIR $TABLE_NUM $ROW_NUM ${adds[$i]} ${deletes[$i]} ${updates[$i]}
+
+            TMPDIR=$gw/tmp
+            ./${{ env.SCRIPT_DIR}}/setup.sh $TMPDIR $DATADIR
+
+            cd $TMPDIR
+            latency=$(python3 -c "import time, subprocess; start = time.time(); res=subprocess.run(['dolt', 'merge', '--no-edit', 'main'], capture_output=True); output = res.stdout + res.stderr if res.returncode != 0 else  time.time() -start;  print(output); exit(res.returncode)")
+
+            conflicts=$(dolt sql -r csv -q "select count(*) from dolt_conflicts_table0;" | tail -1)
+
+            echo "INSERT INTO ${{ env.RESULT_TABLE_NAME }} values ("${names[$i]}", $TABLE_NUM, $ROW_NUM, ${adds[$i]}, ${deletes[$i]}, ${updates[$i]}, $conflicts, true, $latency);" >> $RESULTS
+        one
 
         echo "::set-output name=result_path::$RESULTS"
 
@@ -71,7 +83,7 @@ jobs:
       run: |
         gw=$GITHUB_WORKSPACE
         in="${{ steps.bench.outputs.result_path }}"
-        query="select name, round(latency, 2) as latency from ${{ env.RESULT_TABLE_NAME }}"
+        query="select name, add_cnt, delete_cnt, update_cnt, round(latency, 2) as latency from ${{ env.RESULT_TABLE_NAME }}"
         summaryq="select round(avg(latency), 2) as avg from ${{ env.RESULT_TABLE_NAME }}"
 
         out="$gw/results.csv"
