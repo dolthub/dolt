@@ -88,12 +88,6 @@ func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 		return emptyChunkSource{}, err
 	}
 
-	ftp.removeMu.Lock()
-	if ftp.toKeep != nil {
-		ftp.toKeep[filepath.Join(ftp.dir, name.String())] = struct{}{}
-	}
-	ftp.removeMu.Unlock()
-
 	return ftp.persistTable(ctx, name, data, chunkCount, stats)
 }
 
@@ -102,12 +96,6 @@ func (ftp *fsTablePersister) Path() string {
 }
 
 func (ftp *fsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, fileSz uint64, chunkCount uint32) error {
-	ftp.removeMu.Lock()
-	if ftp.toKeep != nil {
-		ftp.toKeep[filepath.Join(ftp.dir, fileId)] = struct{}{}
-	}
-	ftp.removeMu.Unlock()
-
 	tn, f, err := func() (n string, cleanup func(), err error) {
 		defer func() {
 			cerr := r.Close()
@@ -152,16 +140,21 @@ func (ftp *fsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser,
 	}
 
 	path := filepath.Join(ftp.dir, fileId)
+	ftp.removeMu.Lock()
+	if ftp.toKeep != nil {
+		ftp.toKeep[path] = struct{}{}
+	}
+	defer ftp.removeMu.Unlock()
 	return file.Rename(tn, path)
 }
 
 func (ftp *fsTablePersister) TryMoveCmpChunkTableWriter(ctx context.Context, filename string, w *CmpChunkTableWriter) error {
+	path := filepath.Join(ftp.dir, filename)
 	ftp.removeMu.Lock()
 	if ftp.toKeep != nil {
-		ftp.toKeep[filepath.Join(ftp.dir, filename)] = struct{}{}
+		ftp.toKeep[path] = struct{}{}
 	}
-	ftp.removeMu.Unlock()
-	path := filepath.Join(ftp.dir, filename)
+	defer ftp.removeMu.Unlock()
 	return w.FlushToFile(path)
 }
 
@@ -207,9 +200,12 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 	}
 
 	newName := filepath.Join(ftp.dir, name.String())
-
+	ftp.removeMu.Lock()
+	if ftp.toKeep != nil {
+		ftp.toKeep[newName] = struct{}{}
+	}
 	err = file.Rename(tempName, newName)
-
+	ftp.removeMu.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -228,11 +224,6 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	}
 
 	name := nameFromSuffixes(plan.suffixes())
-	ftp.removeMu.Lock()
-	if ftp.toKeep != nil {
-		ftp.toKeep[filepath.Join(ftp.dir, name.String())] = struct{}{}
-	}
-	ftp.removeMu.Unlock()
 	tempName, f, err := func() (tempName string, cleanup func(), ferr error) {
 		ftp.removeMu.Lock()
 		var temp *os.File
@@ -290,10 +281,16 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 		return nil, nil, err
 	}
 
-	err = file.Rename(tempName, filepath.Join(ftp.dir, name.String()))
+	path := filepath.Join(ftp.dir, name.String())
+	ftp.removeMu.Lock()
+	if ftp.toKeep != nil {
+		ftp.toKeep[path] = struct{}{}
+	}
+	err = file.Rename(tempName, path)
 	if err != nil {
 		return nil, nil, err
 	}
+	ftp.removeMu.Unlock()
 
 	cs, err := ftp.Open(ctx, name, plan.chunkCount, stats)
 	if err != nil {
