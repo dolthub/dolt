@@ -111,12 +111,12 @@ func (ftp *fsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser,
 			ftp.removeMu.Unlock()
 			return "", func() {}, err
 		}
-		ftp.curTmps[temp.Name()] = struct{}{}
+		ftp.curTmps[filepath.Clean(temp.Name())] = struct{}{}
 		ftp.removeMu.Unlock()
 
 		cleanup = func() {
 			ftp.removeMu.Lock()
-			delete(ftp.curTmps, temp.Name())
+			delete(ftp.curTmps, filepath.Clean(temp.Name()))
 			ftp.removeMu.Unlock()
 		}
 
@@ -142,7 +142,7 @@ func (ftp *fsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser,
 	path := filepath.Join(ftp.dir, fileId)
 	ftp.removeMu.Lock()
 	if ftp.toKeep != nil {
-		ftp.toKeep[path] = struct{}{}
+		ftp.toKeep[filepath.Clean(path)] = struct{}{}
 	}
 	defer ftp.removeMu.Unlock()
 	return file.Rename(tn, path)
@@ -152,7 +152,7 @@ func (ftp *fsTablePersister) TryMoveCmpChunkTableWriter(ctx context.Context, fil
 	path := filepath.Join(ftp.dir, filename)
 	ftp.removeMu.Lock()
 	if ftp.toKeep != nil {
-		ftp.toKeep[path] = struct{}{}
+		ftp.toKeep[filepath.Clean(path)] = struct{}{}
 	}
 	defer ftp.removeMu.Unlock()
 	return w.FlushToFile(path)
@@ -171,12 +171,12 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 			ftp.removeMu.Unlock()
 			return "", func() {}, ferr
 		}
-		ftp.curTmps[temp.Name()] = struct{}{}
+		ftp.curTmps[filepath.Clean(temp.Name())] = struct{}{}
 		ftp.removeMu.Unlock()
 
 		cleanup = func() {
 			ftp.removeMu.Lock()
-			delete(ftp.curTmps, temp.Name())
+			delete(ftp.curTmps, filepath.Clean(temp.Name()))
 			ftp.removeMu.Unlock()
 		}
 
@@ -202,7 +202,7 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 	newName := filepath.Join(ftp.dir, name.String())
 	ftp.removeMu.Lock()
 	if ftp.toKeep != nil {
-		ftp.toKeep[newName] = struct{}{}
+		ftp.toKeep[filepath.Clean(newName)] = struct{}{}
 	}
 	err = file.Rename(tempName, newName)
 	ftp.removeMu.Unlock()
@@ -232,12 +232,12 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 			ftp.removeMu.Unlock()
 			return "", func() {}, ferr
 		}
-		ftp.curTmps[temp.Name()] = struct{}{}
+		ftp.curTmps[filepath.Clean(temp.Name())] = struct{}{}
 		ftp.removeMu.Unlock()
 
 		cleanup = func() {
 			ftp.removeMu.Lock()
-			delete(ftp.curTmps, temp.Name())
+			delete(ftp.curTmps, filepath.Clean(temp.Name()))
 			ftp.removeMu.Unlock()
 		}
 
@@ -284,7 +284,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	path := filepath.Join(ftp.dir, name.String())
 	ftp.removeMu.Lock()
 	if ftp.toKeep != nil {
-		ftp.toKeep[path] = struct{}{}
+		ftp.toKeep[filepath.Clean(path)] = struct{}{}
 	}
 	err = file.Rename(tempName, path)
 	if err != nil {
@@ -320,7 +320,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, keeper func() 
 
 	toKeep := make(map[string]struct{})
 	for _, k := range keeper() {
-		toKeep[filepath.Join(ftp.dir, k.String())] = struct{}{}
+		toKeep[filepath.Clean(filepath.Join(ftp.dir, k.String()))] = struct{}{}
 	}
 
 	ftp.removeMu.Lock()
@@ -376,7 +376,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, keeper func() 
 
 	for _, p := range unfilteredTempFiles {
 		ftp.removeMu.Lock()
-		if _, ok := ftp.curTmps[p]; !ok {
+		if _, ok := ftp.curTmps[filepath.Clean(p)]; !ok {
 			err := file.Remove(p)
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				ea.add(p, err)
@@ -387,7 +387,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, keeper func() 
 
 	for _, p := range unfilteredTableFiles {
 		ftp.removeMu.Lock()
-		if _, ok := ftp.toKeep[p]; !ok {
+		if _, ok := ftp.toKeep[filepath.Clean(p)]; !ok {
 			err := file.Remove(p)
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				ea.add(p, err)
