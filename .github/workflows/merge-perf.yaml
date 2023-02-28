@@ -86,7 +86,7 @@ jobs:
             # count conflicts in first table
             conflicts=$(dolt sql -r csv -q "select count(*) from dolt_conflicts_table0;" | tail -1)
 
-            echo "INSERT INTO ${{ env.RESULT_TABLE_NAME }} values ("${names[$i]}", $TABLE_NUM, $ROW_NUM, ${adds[$i]}, ${deletes[$i]}, ${updates[$i]}, $conflicts, true, $latency);" >> $RESULTS
+            echo "INSERT INTO ${{ env.RESULT_TABLE_NAME }} values ('"${names[$i]}"', $TABLE_NUM, $ROW_NUM, ${adds[$i]}, ${deletes[$i]}, ${updates[$i]}, $conflicts, true, $latency);" >> $RESULTS
         done
         echo "result_path=$RESULTS" >> $GITHUB_OUTPUT
 
