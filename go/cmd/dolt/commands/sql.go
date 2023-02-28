@@ -272,7 +272,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	defer se.Close()
-	
+
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		if apr.Contains(saveFlag) {
 			return execSaveQuery(sqlCtx, dEnv, se, apr, query, usage)
@@ -345,7 +345,7 @@ func newEngine(
 	username string,
 	mrEnv *env.MultiRepoEnv,
 ) (*engine.SqlEngine, *sql.Context, error) {
-	
+
 	format := engine.FormatTabular
 	if formatSr, ok := apr.GetValue(FormatFlag); ok {
 		var verr errhand.VerboseError
@@ -393,7 +393,7 @@ func newEngine(
 	return se, sqlCtx, nil
 }
 
-func listSavedQueries(ctx *sql.Context, se *engine.SqlEngine, dEnv *env.DoltEnv, usage cli.UsagePrinter, ) int {
+func listSavedQueries(ctx *sql.Context, se *engine.SqlEngine, dEnv *env.DoltEnv, usage cli.UsagePrinter) int {
 	if !dEnv.Valid() {
 		return HandleVErrAndExitCode(errhand.BuildDError("error: --%s must be used in a dolt database directory.", listSavedFlag).Build(), usage)
 	}
@@ -418,11 +418,11 @@ func listSavedQueries(ctx *sql.Context, se *engine.SqlEngine, dEnv *env.DoltEnv,
 	return HandleVErrAndExitCode(execQuery(ctx, se, query), usage)
 }
 
-func executeSavedQuery(ctx *sql.Context, se *engine.SqlEngine, dEnv *env.DoltEnv, savedQueryName string, usage cli.UsagePrinter, ) int {
+func executeSavedQuery(ctx *sql.Context, se *engine.SqlEngine, dEnv *env.DoltEnv, savedQueryName string, usage cli.UsagePrinter) int {
 	if !dEnv.Valid() {
 		return HandleVErrAndExitCode(errhand.BuildDError("error: --%s must be used in a dolt database directory.", executeFlag).Build(), usage)
 	}
-	
+
 	workingRoot, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -439,11 +439,11 @@ func executeSavedQuery(ctx *sql.Context, se *engine.SqlEngine, dEnv *env.DoltEnv
 }
 
 func queryMode(
-		ctx *sql.Context,
-		se *engine.SqlEngine,
-		apr *argparser.ArgParseResults,
-		query string,
-		usage cli.UsagePrinter,
+	ctx *sql.Context,
+	se *engine.SqlEngine,
+	apr *argparser.ArgParseResults,
+	query string,
+	usage cli.UsagePrinter,
 ) int {
 
 	// query mode has 2 sub modes:
@@ -473,9 +473,9 @@ func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, se *engine.SqlEngine, ap
 	if !dEnv.Valid() {
 		return HandleVErrAndExitCode(errhand.BuildDError("error: --%s must be used in a dolt database directory.", saveFlag).Build(), usage)
 	}
-	
+
 	saveName := apr.GetValueOrDefault(saveFlag, "")
-	
+
 	verr := execQuery(ctx, se, query)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
@@ -485,7 +485,7 @@ func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, se *engine.SqlEngine, ap
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to get working root").AddCause(err).Build(), usage)
 	}
-	
+
 	saveMessage := apr.GetValueOrDefault(messageFlag, "")
 	newRoot, verr := saveQuery(ctx, workingRoot, query, saveName, saveMessage)
 	if verr != nil {
@@ -496,7 +496,7 @@ func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, se *engine.SqlEngine, ap
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to update working root").AddCause(err).Build(), usage)
 	}
-	
+
 	return 0
 }
 
@@ -524,10 +524,10 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 }
 
 func execBatch(
-		sqlCtx *sql.Context,
-		se *engine.SqlEngine,
-		batchInput io.Reader,
-		continueOnErr bool,
+	sqlCtx *sql.Context,
+	se *engine.SqlEngine,
+	batchInput io.Reader,
+	continueOnErr bool,
 ) errhand.VerboseError {
 	// In batch mode, we need to set a couple flags on the session to prevent constant flushes to disk
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
@@ -917,7 +917,7 @@ func execShell(sqlCtx *sql.Context, se *engine.SqlEngine) error {
 		var nextPrompt string
 		var sqlSch sql.Schema
 		var rowIter sql.RowIter
-		
+
 		cont := func() bool {
 			subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -975,7 +975,7 @@ func newCompleter(
 	if err != nil {
 		return nil, err
 	}
-	
+
 	_, iter, err := se.Query(sqlCtx, "select table_schema, table_name, column_name from information_schema.columns;")
 	if err != nil {
 		return nil, err
