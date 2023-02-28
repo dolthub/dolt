@@ -351,7 +351,7 @@ func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, err
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return NewSqlEngine(
 		ctx,
 		mrEnv,

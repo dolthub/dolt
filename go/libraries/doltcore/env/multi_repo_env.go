@@ -126,7 +126,7 @@ func (mrEnv *MultiRepoEnv) Iter(cb func(name string, dEnv *DoltEnv) (stop bool, 
 	return nil
 }
 
-// GetFirstDatabase returns the name of the first database in the MultiRepoEnv. This will be the database in the 
+// GetFirstDatabase returns the name of the first database in the MultiRepoEnv. This will be the database in the
 // current working directory if applicable, or the first database alphabetically otherwise.
 func (mrEnv *MultiRepoEnv) GetFirstDatabase() string {
 	var currentDb string
@@ -134,7 +134,7 @@ func (mrEnv *MultiRepoEnv) GetFirstDatabase() string {
 		currentDb = name
 		return true, nil
 	})
-	
+
 	return currentDb
 }
 

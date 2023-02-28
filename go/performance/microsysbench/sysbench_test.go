@@ -111,8 +111,8 @@ func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 func setupBenchmark(t *testing.B, dEnv *env.DoltEnv) (*sql.Context, *engine.SqlEngine) {
 	ctx := context.Background()
 	config := &engine.SqlEngineConfig{
-		ServerUser:   "root",
-		Autocommit:   true,
+		ServerUser: "root",
+		Autocommit: true,
 	}
 
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)

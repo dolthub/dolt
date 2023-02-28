@@ -280,7 +280,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	// TODO: are these paths appropriately guarded when initalDbRoot may be nil? 
+	// TODO: are these paths appropriately guarded when initalDbRoot may be nil?
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		return queryMode(sqlCtx, se, dEnv, workingRoot, apr, query, usage)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
@@ -342,13 +342,13 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 }
 
 func newEngine(
-		ctx context.Context,
-		apr *argparser.ArgParseResults,
-		cfgDirPath string,
-		privsFp string,
-		branchControlFilePath string,
-		username string,
-		mrEnv *env.MultiRepoEnv,
+	ctx context.Context,
+	apr *argparser.ArgParseResults,
+	cfgDirPath string,
+	privsFp string,
+	branchControlFilePath string,
+	username string,
+	mrEnv *env.MultiRepoEnv,
 ) (*engine.SqlEngine, *sql.Context, error) {
 	format := engine.FormatTabular
 	if formatSr, ok := apr.GetValue(FormatFlag); ok {
@@ -395,10 +395,10 @@ func newEngine(
 }
 
 func listSavedQueriesMode(
-		ctx *sql.Context,
-		se *engine.SqlEngine,
-		initialRoot *doltdb.RootValue,
-		usage cli.UsagePrinter,
+	ctx *sql.Context,
+	se *engine.SqlEngine,
+	initialRoot *doltdb.RootValue,
+	usage cli.UsagePrinter,
 ) int {
 	hasQC, err := initialRoot.HasTable(ctx, doltdb.DoltQueryCatalogTableName)
 
@@ -416,11 +416,11 @@ func listSavedQueriesMode(
 }
 
 func savedQueryMode(
-		ctx *sql.Context,
-		se *engine.SqlEngine,
-		initialRoot *doltdb.RootValue,
-		savedQueryName string,
-		usage cli.UsagePrinter,
+	ctx *sql.Context,
+	se *engine.SqlEngine,
+	initialRoot *doltdb.RootValue,
+	savedQueryName string,
+	usage cli.UsagePrinter,
 ) int {
 	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoot, savedQueryName)
 
@@ -433,13 +433,13 @@ func savedQueryMode(
 }
 
 func queryMode(
-		ctx *sql.Context,
-		se *engine.SqlEngine,
-		dEnv *env.DoltEnv,
-		initialRoot *doltdb.RootValue,
-		apr *argparser.ArgParseResults,
-		query string,
-		usage cli.UsagePrinter,
+	ctx *sql.Context,
+	se *engine.SqlEngine,
+	dEnv *env.DoltEnv,
+	initialRoot *doltdb.RootValue,
+	apr *argparser.ArgParseResults,
+	query string,
+	usage cli.UsagePrinter,
 ) int {
 
 	// query mode has 3 sub modes:
@@ -463,7 +463,7 @@ func queryMode(
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
-			
+
 			err := dEnv.UpdateWorkingRoot(ctx, newRoot)
 			if err != nil {
 				return HandleVErrAndExitCode(errhand.BuildDError("error: failed to update working root").AddCause(err).Build(), usage)
@@ -731,7 +731,7 @@ func saveQuery(ctx *sql.Context, root *doltdb.RootValue, query string, name stri
 	if err != nil {
 		return nil, errhand.BuildDError("Couldn't save query").AddCause(err).Build()
 	}
-	
+
 	return newRoot, nil
 }
 
@@ -924,7 +924,7 @@ func runShell(sqlCtx *sql.Context, se *engine.SqlEngine) error {
 		var rowIter sql.RowIter
 
 		initialCtx := sqlCtx
-		
+
 		cont := func() bool {
 			subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -970,24 +970,24 @@ func runShell(sqlCtx *sql.Context, se *engine.SqlEngine) error {
 }
 
 // Returns a new auto completer with table names, column names, and SQL keywords.
-// TODO: update the completer on DDL, branch change, etc. 
+// TODO: update the completer on DDL, branch change, etc.
 func newCompleter(
-		ctx *sql.Context,
-		se *engine.SqlEngine,
+	ctx *sql.Context,
+	se *engine.SqlEngine,
 ) (completer *sqlCompleter, rerr error) {
-	
+
 	_, iter, err := se.Query(ctx, "select table_schema, table_name, column_name from information_schema.columns;")
 	if err != nil {
-		return nil, err 
+		return nil, err
 	}
-	
+
 	defer func(iter sql.RowIter, context *sql.Context) {
 		err := iter.Close(context)
 		if err != nil && rerr == nil {
 			rerr = err
 		}
 	}(iter, ctx)
-	
+
 	identifiers := make(map[string]struct{})
 	var columnNames []string
 	for {
@@ -997,20 +997,20 @@ func newCompleter(
 		} else if err != nil {
 			return nil, err
 		}
-		
+
 		identifiers[r[0].(string)] = struct{}{}
 		identifiers[r[1].(string)] = struct{}{}
 		identifiers[r[2].(string)] = struct{}{}
 		columnNames = append(columnNames, r[2].(string))
 	}
-	
-	var completionWords []string 
+
+	var completionWords []string
 	for k := range identifiers {
 		completionWords = append(completionWords, k)
 	}
-	
+
 	completionWords = append(completionWords, dsqle.CommonKeywords...)
-	
+
 	return &sqlCompleter{
 		allWords:    completionWords,
 		columnNames: columnNames,

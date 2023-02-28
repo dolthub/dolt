@@ -72,12 +72,12 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Simplest path would have our import path be a layer over load data
 	config := &engine.SqlEngineConfig{
-		ServerUser:   "root",
-		Autocommit:   false, // We set autocommit == false to ensure to improve performance. Bulk import should not commit on each row.
-		Bulk:         true,
+		ServerUser: "root",
+		Autocommit: false, // We set autocommit == false to ensure to improve performance. Bulk import should not commit on each row.
+		Bulk:       true,
 	}
 	se, err := engine.NewSqlEngine(
 		ctx,
@@ -91,7 +91,7 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	defer se.Close()
 
 	dbName := mrEnv.GetFirstDatabase()
-	
+
 	if se.GetUnderlyingEngine().IsReadOnly {
 		// SqlEngineTableWriter does not respect read only mode
 		return nil, analyzer.ErrReadOnlyDatabase.New(dbName)
