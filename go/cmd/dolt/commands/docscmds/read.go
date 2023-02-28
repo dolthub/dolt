@@ -141,7 +141,7 @@ func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, dbName, docName
 	if err != nil {
 		return err
 	}
-	
+
 	sctx.SetCurrentDatabase(dbName)
 
 	err = sctx.Session.SetSessionVariable(sctx, sql.AutoCommitSessionVar, 1)

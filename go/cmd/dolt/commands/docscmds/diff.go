@@ -18,6 +18,7 @@ import (
 	"context"
 
 	textdiff "github.com/andreyvit/diff"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"

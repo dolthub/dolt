@@ -364,7 +364,7 @@ func engineFromEnvironment(ctx context.Context, dEnv *env.DoltEnv) (dbName strin
 	if err != nil {
 		panic(err)
 	}
-	
+
 	return mrEnv.GetFirstDatabase(), eng
 }
 

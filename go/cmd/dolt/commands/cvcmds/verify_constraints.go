@@ -167,7 +167,7 @@ func printViolationsForTable(ctx context.Context, dbName, tblName string, tbl *d
 		return errhand.BuildDError("Error making sql context").AddCause(err).Build()
 	}
 	sCtx.SetCurrentDatabase(dbName)
-	
+
 	sqlSch, sqlItr, err := eng.Query(sCtx, query)
 	if err != nil {
 		return errhand.BuildDError("Error querying constraint violations").AddCause(err).Build()
