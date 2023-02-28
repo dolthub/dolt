@@ -403,7 +403,15 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
 		serverConfig.withLogLevel(LogLevel(strings.ToLower(logLevel)))
 	}
-	
+
+	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
+		serverConfig.withDataDir(dataDir)
+	}
+
+	if dataDir, ok := apr.GetValue(commands.DataDirFlag); ok {
+		serverConfig.withDataDir(dataDir)
+	}
+
 	if queryParallelism, ok := apr.GetInt(queryParallelismFlag); ok {
 		serverConfig.withQueryParallelism(queryParallelism)
 	}
