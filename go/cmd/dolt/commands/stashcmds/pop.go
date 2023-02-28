@@ -17,6 +17,9 @@ package stashcmds
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -26,8 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"strconv"
-	"strings"
 )
 
 var stashPopDocs = cli.CommandDocumentationContent{
