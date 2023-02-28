@@ -190,14 +190,25 @@ type ZRange = [2]ZVal
 // 2. the ranges are within a cell (the suffixes of the bounds range from 00...0 to 11...1)
 // TODO: check validity of bbox to prevent inf recursion?
 func SplitZRanges(zRange ZRange, depth int) []ZRange {
-	// prevent too much splitting
-	if depth == 0 {
-		return []ZRange{zRange}
-	}
+	return splitZRanges(zRange, depth, make([]ZRange, 0, 128))
+}
 
-	// point lookup is continuous
-	if zRange[0] == zRange[1] {
-		return []ZRange{zRange}
+// mergeZRanges combines the slice of ZRanges acc with zRange
+// It checks if the last ZRange in acc overlaps with zRange
+func mergeZRanges(acc []ZRange, zRange ZRange) []ZRange {
+	n := len(acc) - 1
+	if n >= 0 && acc[n][1][0] == zRange[0][0] && zRange[0][1] - acc[n][1][1] == 1 {
+		acc[n][1] = zRange[1]
+		return acc
+	}
+	return append(acc, zRange)
+}
+
+// splitZRanges is a helper function to SplitZRanges
+func splitZRanges(zRange ZRange, depth int, acc []ZRange) []ZRange {
+	// prevent too much splitting and point lookup is continuous
+	if depth == 0 || zRange[0] == zRange[1]{
+		return mergeZRanges(acc, zRange)
 	}
 
 	var prefixLength int // this will never be 64
@@ -208,7 +219,7 @@ func SplitZRanges(zRange ZRange, depth int) []ZRange {
 		suffixLength := 64 - prefixLength
 		mask := uint64(math.MaxUint64 >> prefixLength)
 		if zl[1] == 0 && zh[1] == math.MaxUint64 && (zl[0]&mask) == 0 && (zh[0]&mask) == mask {
-			return []ZRange{zRange}
+			return mergeZRanges(acc, zRange)
 		}
 
 		// upper bound for left range; set 0 fill with 1s
@@ -226,7 +237,7 @@ func SplitZRanges(zRange ZRange, depth int) []ZRange {
 		suffixLength := 64 - prefixLength
 		mask := uint64(math.MaxUint64 >> prefixLength)
 		if (zl[1]&mask) == 0 && (zh[1]&mask) == mask {
-			return []ZRange{zRange}
+			return mergeZRanges(acc, zRange)
 		}
 
 		// upper bound for left range; set 0 fill with 1s
@@ -240,16 +251,8 @@ func SplitZRanges(zRange ZRange, depth int) []ZRange {
 	}
 
 	// recurse on left and right ranges
-	zRangesL := SplitZRanges(zRangeL, depth-1)
-	zRangesR := SplitZRanges(zRangeR, depth-1)
-
-	// if last range's upperbound in left is next to first range's lowerbound in right, they can be merged
-	lastZRangeL, firstZRangeR := zRangesL[len(zRangesL)-1], zRangesR[0]
-	if firstZRangeR[0][0] == lastZRangeL[1][0] && firstZRangeR[0][1]-lastZRangeL[1][1] == 1 {
-		zRangesL[len(zRangesL)-1][1] = firstZRangeR[1] // replace the left's last upperbound with right's first upperbound
-		zRangesR = zRangesR[1:]                        // drop right's first range
-	}
-
-	// merge ranges
-	return append(zRangesL, zRangesR...)
+	depth -= 1
+	acc = splitZRanges(zRangeL, depth, acc)
+	acc = splitZRanges(zRangeR, depth, acc)
+	return acc
 }
