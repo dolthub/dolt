@@ -476,13 +476,13 @@ func TestSplitZRanges(t *testing.T) {
 		assert.Equal(t, res, zRanges)
 	})
 
-	t.Run("split a small selection range", func(t *testing.T) {
+	t.Run("split seattle bbox range", func(t *testing.T) {
 		poly := types.Polygon{Lines: []types.LineString{{Points: []types.Point{
-			{X: 0, Y: 0},
-			{X: 10, Y: 0},
-			{X: 10, Y: 10},
-			{X: 0, Y: 10},
-			{X: 10, Y: 10},
+			{X: -122.48, Y: 47.41},
+			{X: -122.48, Y: 47.79},
+			{X: -122.16, Y: 47.79},
+			{X: -122.16, Y: 47.41},
+			{X: -122.48, Y: 47.41},
 		}}}}
 		bbox := spatial.FindBBox(poly)
 		zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
@@ -490,19 +490,22 @@ func TestSplitZRanges(t *testing.T) {
 		zRange := ZRange{zMin, zMax}
 		zRanges := SplitZRanges(zRange, depth)
 		res := []ZRange{
-			{{0xc000000000000000, 0x0}, {0xcfffffffffffffff, 0xffffffffffffffff}},
-			{{0xd000000000000000, 0x0}, {0xd0aaaebaaaaaaaaa, 0xaaaaaaaaaaaaaaaa}},
-			{{0xd200000000000000, 0x0}, {0xd2aaaebaaaaaaaaa, 0xaaaaaaaaaaaaaaaa}},
-			{{0xd800000000000000, 0x0}, {0xd8aaaebaaaaaaaaa, 0xaaaaaaaaaaaaaaaa}},
-			{{0xda00000000000000, 0x0}, {0xdaaaaebaaaaaaaaa, 0xaaaaaaaaaaaaaaaa}},
-			{{0xe000000000000000, 0x0}, {0xe0555d7555555555, 0x5555555555555555}},
-			{{0xe100000000000000, 0x0}, {0xe1555d7555555555, 0x5555555555555555}},
-			{{0xe400000000000000, 0x0}, {0xe4555d7555555555, 0x5555555555555555}},
-			{{0xe500000000000000, 0x0}, {0xe5555d7555555555, 0x5555555555555555}},
-			{{0xf000000000000000, 0x0}, {0xf00003ffffffffff, 0xffffffffffffffff}},
-			{{0xf000040000000000, 0x0}, {0xf00006baaaaaaaaa, 0xaaaaaaaaaaaaaaaa}},
-			{{0xf000080000000000, 0x0}, {0xf000097555555555, 0x5555555555555555}},
-			{{0xf0000c0000000000, 0x0}, {0xf0000c3000000000, 0x0000000000000000}},
+			{{0xa555642b9e213a9d, 0xec56213a9dec5620}, {0xa555642b9e3fffff, 0xffffffffffffffff}},
+			{{0xa555642b9e602a88, 0xa802202a88a80220}, {0xa555642b9e7fffff, 0xffffffffffffffff}},
+			{{0xa555642b9e811015, 0x4454011015445400}, {0xa555642b9ebfffff, 0xffffffffffffffff}},
+			{{0xa555642b9ec00000, 0x0000000000000000}, {0xa555642b9effffff, 0xffffffffffffffff}},
+			{{0xa555642b9f202a88, 0xa802202a88a80220}, {0xa555642b9f2fffff, 0xffffffffffffffff}},
+			{{0xa555642b9f302a88, 0xa802202a88a80220}, {0xa555642b9f3bfaae, 0xeaffbbfaaeeaffbb}},
+			{{0xa555642b9f800000, 0x0000000000000000}, {0xa555642b9f9bfaae, 0xeaffbbfaaeeaffbb}},
+			{{0xa555642b9fa00000, 0x0000000000000000}, {0xa555642b9fbbfaae, 0xeaffbbfaaeeaffbb}},
+			{{0xa555642bb4011015, 0x4454011015445400}, {0xa555642bb4ffffff, 0xffffffffffffffff}},
+			{{0xa555642bb5000000, 0x0000000000000000}, {0xa555642bb5bbfaae, 0xeaffbbfaaeeaffbb}},
+			{{0xa555642bb6011015, 0x4454011015445400}, {0xa555642bb6ffffff, 0xffffffffffffffff}},
+			{{0xa555642bb7000000, 0x0000000000000000}, {0xa555642bb7bbfaae, 0xeaffbbfaaeeaffbb}},
+			{{0xa555642bbc011015, 0x4454011015445400}, {0xa555642bbc3757fd, 0xdfd57757fddfd577}},
+			{{0xa555642bbc400000, 0x0000000000000000}, {0xa555642bbc7757fd, 0xdfd57757fddfd577}},
+			{{0xa555642bbd000000, 0x0000000000000000}, {0xa555642bbd1bfaae, 0xeaffbbfaaeeaffbb}},
+			{{0xa555642bbd200000, 0x0000000000000000}, {0xa555642bbd3352ac, 0xcad53352accad533}},
 		}
 		assert.Equal(t, res, zRanges)
 	})

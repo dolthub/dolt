@@ -221,7 +221,6 @@ func SplitZRanges(zRange ZRange, depth int) []ZRange {
 		zRangeR[0][0] &= suffixMask                               // set suffix to all 0s
 		zRangeR[0][0] |= 1 << (suffixLength - 1)                  // set first suffix bit to 1
 		zRangeR[0][1] &= 0x5555555555555555 << (prefixLength % 2) // set suffix to all 0s
-
 	} else {
 		prefixLength = bits.LeadingZeros64(zl[1] ^ zh[1])
 		suffixLength := 64 - prefixLength
