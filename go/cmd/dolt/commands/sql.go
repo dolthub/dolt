@@ -973,7 +973,7 @@ func newCompleter(
 		se *engine.SqlEngine,
 ) (completer *sqlCompleter, rerr error) {
 	
-	_, iter, err := se.Query(ctx, "select table_schema, table_name, column_name from columns;")
+	_, iter, err := se.Query(ctx, "select table_schema, table_name, column_name from information_schema.columns;")
 	if err != nil {
 		return nil, err 
 	}
@@ -985,7 +985,7 @@ func newCompleter(
 		}
 	}(iter, ctx)
 	
-	var identifiers map[string]struct{}
+	identifiers := make(map[string]struct{})
 	var columnNames []string
 	for {
 		r, err := iter.Next(ctx)
@@ -1007,7 +1007,7 @@ func newCompleter(
 	}
 	
 	completionWords = append(completionWords, dsqle.CommonKeywords...)
-
+	
 	return &sqlCompleter{
 		allWords:    completionWords,
 		columnNames: columnNames,
