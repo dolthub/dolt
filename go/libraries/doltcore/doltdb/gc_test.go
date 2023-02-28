@@ -226,9 +226,9 @@ func setupSqlEngine(t *testing.T, ctx context.Context) (eng *engine.SqlEngine) {
 	}
 
 	eng, err = engine.NewSqlEngine(ctx, mrEnv, engine.FormatNull, &engine.SqlEngineConfig{
-		ServerUser:   "root",
-		ServerHost:   "localhost",
-		Autocommit:   true,
+		ServerUser: "root",
+		ServerHost: "localhost",
+		Autocommit: true,
 	})
 	if err != nil {
 		panic(err)

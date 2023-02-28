@@ -44,10 +44,9 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 		return nil, err
 	}
 
-
 	config := &engine.SqlEngineConfig{
-		ServerUser:   "root",
-		Autocommit:   true,
+		ServerUser: "root",
+		Autocommit: true,
 	}
 	se, err := engine.NewSqlEngine(
 		ctx,

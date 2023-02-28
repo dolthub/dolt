@@ -355,10 +355,10 @@ func engineFromEnvironment(ctx context.Context, dEnv *env.DoltEnv) (eng *engine.
 	}
 
 	eng, err = engine.NewSqlEngine(ctx, mrEnv, engine.FormatNull, &engine.SqlEngineConfig{
-		IsReadOnly:   false,
-		ServerUser:   "root",
-		ServerHost:   "localhost",
-		Autocommit:   true,
+		IsReadOnly: false,
+		ServerUser: "root",
+		ServerHost: "localhost",
+		Autocommit: true,
 	})
 	if err != nil {
 		panic(err)
