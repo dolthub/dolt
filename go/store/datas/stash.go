@@ -27,11 +27,7 @@ import (
 )
 
 const (
-	stashMetaField  = "stash_meta"
-	stashRootField  = "stash_root"
-	headCommitField = "head_commit"
-	stashName       = "Stash"
-	stashListName   = "StashList"
+	stashListName = "StashList"
 )
 
 func newStashForValue(ctx context.Context, db *database, stashRef types.Ref, headAddr hash.Hash, meta *StashMeta) (hash.Hash, types.Ref, error) {

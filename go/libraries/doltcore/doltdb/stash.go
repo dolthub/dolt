@@ -84,6 +84,9 @@ func getStashAtIdx(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWri
 	}
 
 	stashHash, err := datas.GetStashAtIdx(ctx, ns, v, idx)
+	if err != nil {
+		return nil, nil, err
+	}
 	stashVal, err := vrw.ReadValue(ctx, stashHash)
 	if err != nil {
 		return nil, nil, err

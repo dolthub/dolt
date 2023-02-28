@@ -39,10 +39,6 @@ func (s *StashList) AddressMap() prolly.AddressMap {
 	return s.am
 }
 
-func (s *StashList) CurIdx() int {
-	return s.lastIdx
-}
-
 func (s *StashList) Addr() hash.Hash {
 	return s.addr
 }
@@ -52,33 +48,24 @@ type stashHead struct {
 	addr hash.Hash
 }
 
-// TODO: idx could also be string?
+// addStash returns hash address of updated stash list map after adding the new stash using given hash address of the new stash.
 func (s *StashList) addStash(ctx context.Context, db *database, stashAddr hash.Hash) (hash.Hash, error) {
 	stashID := strconv.Itoa(s.lastIdx + 1)
 
-	// update/add stashID and stash to the stash map
-	ae := s.am.Editor()
-	err := ae.Update(ctx, stashID, stashAddr)
-	if err != nil {
-		return hash.Hash{}, err
-	}
-	s.am, err = ae.Flush(ctx)
+	ame := s.am.Editor()
+	err := ame.Add(ctx, stashID, stashAddr)
 	if err != nil {
 		return hash.Hash{}, err
 	}
 
-	// update stash map data and reset the stash map's hash
-	data := stashlist_flatbuffer(s.am)
-	r, err := db.WriteValue(ctx, types.SerialMessage(data))
+	s.am, err = ame.Flush(ctx)
 	if err != nil {
 		return hash.Hash{}, err
 	}
-	s.addr = r.TargetHash()
-
-	return s.addr, nil
+	return s.updateStashListMap(ctx, db)
 }
 
-// this should not happen by itself, it should happen always after getStash is called and merge is successful
+// removeStashAtIdx returns hash address of updated stash list map after removing the stash at given index of the stash list.
 func (s *StashList) removeStashAtIdx(ctx context.Context, db *database, idx int) (hash.Hash, error) {
 	amCount, err := s.am.Count()
 	if err != nil {
@@ -98,23 +85,16 @@ func (s *StashList) removeStashAtIdx(ctx context.Context, db *database, idx int)
 	if err != nil {
 		return hash.Hash{}, err
 	}
+
 	s.am, err = ame.Flush(ctx)
 	if err != nil {
 		return hash.Hash{}, err
 	}
-
-	// update stash map data and reset the stash map's hash
-	data := stashlist_flatbuffer(s.am)
-	r, err := db.WriteValue(ctx, types.SerialMessage(data))
-	if err != nil {
-		return hash.Hash{}, err
-	}
-	s.addr = r.TargetHash()
-
-	return s.addr, nil
+	return s.updateStashListMap(ctx, db)
 }
 
-// this should not happen by itself, it should happen always after getStash is successful
+// getAllStashes returns array of stashHead object which contains the key and hash address for a stash stored in the stash list map.
+// This function returns the array in the order of the latest to the oldest stash.
 func (s *StashList) getAllStashes(ctx context.Context) ([]*stashHead, error) {
 	amCount, err := s.am.Count()
 	if err != nil {
@@ -125,6 +105,42 @@ func (s *StashList) getAllStashes(ctx context.Context) ([]*stashHead, error) {
 	}
 
 	return getStashListOrdered(ctx, s.am, amCount), nil
+}
+
+func (s *StashList) clearAllStashes(ctx context.Context, db *database) (hash.Hash, error) {
+	amCount, err := s.am.Count()
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	if amCount == 0 {
+		return s.addr, nil
+	}
+
+	ame := s.am.Editor()
+	err = s.am.IterAll(ctx, func(key string, addr hash.Hash) error {
+		return ame.Delete(ctx, key)
+	})
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	s.am, err = ame.Flush(ctx)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	return s.updateStashListMap(ctx, db)
+}
+
+func (s *StashList) updateStashListMap(ctx context.Context, db *database) (hash.Hash, error) {
+	// update stash map data and reset the stash map's hash
+	data := stashlist_flatbuffer(s.am)
+	r, err := db.WriteValue(ctx, types.SerialMessage(data))
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	s.addr = r.TargetHash()
+
+	return s.addr, nil
 }
 
 func (s *StashList) getStashAtIdx(ctx context.Context, idx int) (hash.Hash, error) {
@@ -142,6 +158,37 @@ func (s *StashList) getStashAtIdx(ctx context.Context, idx int) (hash.Hash, erro
 	}
 
 	return stash.addr, nil
+}
+
+// GetStashAtIdx returns hash address of stash at given index in the stash list.
+func GetStashAtIdx(ctx context.Context, ns tree.NodeStore, val types.Value, idx int) (hash.Hash, error) {
+	stashList, err := getExistingStashList(ctx, ns, val)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	return stashList.getStashAtIdx(ctx, idx)
+}
+
+// GetHashListFromStashList returns array of hash addresses of stashes from the stash list.
+func GetHashListFromStashList(ctx context.Context, ns tree.NodeStore, val types.Value) ([]hash.Hash, error) {
+	stashList, err := getExistingStashList(ctx, ns, val)
+	if err != nil {
+		return nil, err
+	}
+
+	stashes, err := stashList.getAllStashes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var stashHashList = make([]hash.Hash, len(stashes))
+
+	for i, si := range stashes {
+		stashHashList[i] = si.addr
+	}
+
+	return stashHashList, nil
 }
 
 // loadStashList returns StashList object that contains the AddressMap that contains all stashes. This method creates
@@ -173,6 +220,7 @@ func loadStashList(ctx context.Context, db *database, rootHash hash.Hash) (*Stas
 	return getExistingStashList(ctx, db.nodeStore(), val)
 }
 
+// getExistingStashList returns stash list expecting that a stash list exists at given nodeStore and value.
 func getExistingStashList(ctx context.Context, ns tree.NodeStore, val types.Value) (*StashList, error) {
 	am, err := parse_stashlist([]byte(val.(types.SerialMessage)), ns)
 	if err != nil {
@@ -184,13 +232,15 @@ func getExistingStashList(ctx context.Context, ns tree.NodeStore, val types.Valu
 		return nil, err
 	}
 
-	// get the last stash
-	stash, err := getNthStash(ctx, am, amCount, amCount-1)
-	if err != nil {
-		return nil, err
+	if amCount == 0 {
+		return &StashList{am, am.Node().HashOf(), -1}, nil
 	}
 
-	return &StashList{am, am.Node().HashOf(), stash.key}, nil
+	// the latest entry will be the first element in the ordered list
+	stashes := getStashListOrdered(ctx, am, amCount)
+	lastIdx := stashes[0].key
+
+	return &StashList{am, am.Node().HashOf(), lastIdx}, nil
 }
 
 // pushStash takes root hash to the stash list and components needed to create new stash to store in the stash list
@@ -223,19 +273,28 @@ func removeStashAtIdx(ctx context.Context, db *database, ns tree.NodeStore, val 
 	return stashList.removeStashAtIdx(ctx, db, idx)
 }
 
+func clearAllStashes(ctx context.Context, db *database, ns tree.NodeStore, val types.Value) (hash.Hash, error) {
+	stashList, err := getExistingStashList(ctx, ns, val)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	return stashList.clearAllStashes(ctx, db)
+}
+
 // getStashListOrdered returns ordered stash list using given address map and number of elements in the map.
 // The ordering is back iterated on the current map, which gives the last added stash as the first element in the list.
 func getStashListOrdered(ctx context.Context, am prolly.AddressMap, count int) []*stashHead {
 	var stashList = make([]*stashHead, count)
-	var i = 0
-	// TODO CHECK: is this ordered?
+	// fill the array backwards
+	var idx = count - 1
 	_ = am.IterAll(ctx, func(key string, addr hash.Hash) error {
 		j, err := strconv.Atoi(key)
 		if err != nil {
 			return err
 		}
-		stashList[i] = &stashHead{j, addr}
-		i++
+		stashList[idx] = &stashHead{j, addr}
+		idx--
 		return nil
 	})
 
@@ -252,40 +311,6 @@ func getNthStash(ctx context.Context, am prolly.AddressMap, count, idx int) (*st
 	}
 
 	return nil, errors.New(fmt.Sprintf("could not find the stash element at postion %v", idx))
-}
-
-func GetStashAtIdx(ctx context.Context, ns tree.NodeStore, val types.Value, idx int) (hash.Hash, error) {
-	stashList, err := getExistingStashList(ctx, ns, val)
-	if err != nil {
-		return hash.Hash{}, err
-	}
-
-	return stashList.getStashAtIdx(ctx, idx)
-}
-
-func GetHashListFromStashList(ctx context.Context, ns tree.NodeStore, val types.Value) ([]hash.Hash, error) {
-	stashList, err := getExistingStashList(ctx, ns, val)
-	if err != nil {
-		return nil, err
-	}
-
-	stashes, err := stashList.getAllStashes(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	//// order it highest to lowest (newest to oldest)
-	//sort.Slice(stashes, func(i, j int) bool {
-	//	return stashes[i].key > stashes[j].key
-	//})
-
-	var stashHashList = make([]hash.Hash, len(stashes))
-
-	for i, si := range stashes {
-		stashHashList[i] = si.addr
-	}
-
-	return stashHashList, nil
 }
 
 func stashlist_flatbuffer(am prolly.AddressMap) serial.Message {

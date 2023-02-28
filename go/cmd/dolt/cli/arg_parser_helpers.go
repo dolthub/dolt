@@ -231,14 +231,6 @@ func CreateCherryPickArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func CreateStashArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(ListFlag, "", "List the stash entries that you currently have.")
-	ap.SupportsOptionalString(PopFlag, "", "stash", "Remove a single stashed state from the stash list and apply it on top of the current working tree state.")
-	ap.SupportsFlag(ClearFlag, "", "Remove all the stash entries. Note that those entries may be impossible to recover.")
-	return ap
-}
-
 func CreateFetchArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	return ap

@@ -18,6 +18,7 @@ import (
 	"context"
 	crand "crypto/rand"
 	"encoding/binary"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/stashcmds"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -109,7 +110,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	dumpDocsCommand,
 	dumpZshCommand,
 	docscmds.Commands,
-	commands.StashCmd{},
+	stashcmds.StashSubCommands,
 })
 
 func init() {

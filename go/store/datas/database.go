@@ -85,7 +85,9 @@ type Database interface {
 
 	Stash(ctx context.Context, ds Dataset, stashRootRef types.Ref, headCommitAddr hash.Hash, meta *StashMeta) (Dataset, error)
 
-	PopStash(ctx context.Context, ds Dataset, idx int) (Dataset, error)
+	DropStash(ctx context.Context, ds Dataset, idx int) (Dataset, error)
+
+	ClearStashes(ctx context.Context, ds Dataset) (Dataset, error)
 
 	// UpdateWorkingSet updates the dataset given, setting its value to a new
 	// working set value object with the ref and meta given. If the dataset given

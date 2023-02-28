@@ -573,7 +573,7 @@ func (db *database) Stash(ctx context.Context, ds Dataset, stashRootRef types.Re
 	)
 }
 
-func (db *database) PopStash(ctx context.Context, ds Dataset, idx int) (Dataset, error) {
+func (db *database) DropStash(ctx context.Context, ds Dataset, idx int) (Dataset, error) {
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
 		// there should be existing stashes list dataset when popping stash
 		if !ds.HasHead() {
@@ -586,6 +586,39 @@ func (db *database) PopStash(ctx context.Context, ds Dataset, idx int) (Dataset,
 		}
 
 		addr, err := removeStashAtIdx(ctx, db, db.nodeStore(), val, idx)
+		if err != nil {
+			return err
+		}
+
+		// this will update the dataset for stashes address map
+		return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
+			// TODO: this is for old format, so this should not happen?
+			return datasets, nil
+		}, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+			ae := am.Editor()
+			err := ae.Update(ctx, ds.ID(), addr)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			return ae.Flush(ctx)
+		})
+	},
+	)
+}
+
+func (db *database) ClearStashes(ctx context.Context, ds Dataset) (Dataset, error) {
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
+		// there should be existing stashes list dataset when popping stash
+		if !ds.HasHead() {
+			return nil
+		}
+
+		val, err := db.ReadValue(ctx, ds.head.Addr())
+		if err != nil {
+			return err
+		}
+
+		addr, err := clearAllStashes(ctx, db, db.nodeStore(), val)
 		if err != nil {
 			return err
 		}

@@ -1422,7 +1422,21 @@ func (ddb *DoltDB) RemoveStashAtIdx(ctx context.Context, idx int) error {
 		return err
 	}
 
-	stashesDS, err = ddb.db.PopStash(ctx, stashesDS, idx)
+	stashesDS, err = ddb.db.DropStash(ctx, stashesDS, idx)
+	return err
+}
+
+func (ddb *DoltDB) RemoveAllStashes(ctx context.Context) error {
+	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
+	if err != nil {
+		return err
+	}
+
+	if !stashesDS.HasHead() {
+		return nil
+	}
+
+	stashesDS, err = ddb.db.ClearStashes(ctx, stashesDS)
 	return err
 }
 
@@ -1438,7 +1452,6 @@ func (ddb *DoltDB) GetStashes(ctx context.Context) ([]*Stash, error) {
 	}
 
 	return getStashList(ctx, stashesDS, ddb.vrw, ddb.NodeStore())
-
 }
 
 func (ddb *DoltDB) GetStashAtIdx(ctx context.Context, idx int) (*RootValue, *Commit, error) {
