@@ -35,5 +35,3 @@ dolt reset --hard head~1
 dolt sql < $DATA/branch.sql
 
 dolt commit -Am "new branch"
-
-dolt merge --no-edit main
