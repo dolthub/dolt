@@ -334,7 +334,7 @@ func doltSessionFactory(pro dsqle.DoltDatabaseProvider, config config.ReadWriteC
 			return nil, err
 		}
 
-		// nil ctx is actually fine in this context, not used in setting a session variable. Creating a new context isn't 
+		// nil ctx is actually fine in this context, not used in setting a session variable. Creating a new context isn't
 		// free, and would be throwaway work, since we need to create a session before creating a sql.Context for user work.
 		err = dsess.SetSessionVariable(nil, sql.AutoCommitSessionVar, autocommit)
 		if err != nil {
