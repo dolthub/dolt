@@ -295,13 +295,37 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		Autocommit:         true,
 	}
 
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		format,
+		config,
+	)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	defer se.Close()
+
+	sqlCtx, err := se.NewDefaultContext(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	// Add specified user as new superuser, if it doesn't already exist
+	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
+		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
+	}
+
+	// Set client to specified user
+	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
+
 	// TODO: are these paths appropriately guarded when initalDbRoot may be nil? 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
-		return queryMode(ctx, mrEnv, initialDb, initialDbRoot, apr, query, format, usage, config)
+		return queryMode(sqlCtx, se, dEnv, initialDbRoot, apr, query, usage)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		return savedQueryMode(ctx, mrEnv, initialDbRoot, savedQueryName, format, usage, config)
+		return savedQueryMode(sqlCtx, se, initialDbRoot, savedQueryName, usage)
 	} else if apr.Contains(listSavedFlag) {
-		return listSavedQueriesMode(ctx, mrEnv, initialDbRoot, format, usage, config)
+		return listSavedQueriesMode(sqlCtx, se, initialDbRoot, usage)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		isTty := false
@@ -341,12 +365,12 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else if runInBatchMode {
-			verr := execBatch(ctx, continueOnError, mrEnv, input, format, config)
+			verr := execBatch(sqlCtx, continueOnError, se, input)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else {
-			verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, config)
+			verr := execMultiStatements(sqlCtx, continueOnError, se, input)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
@@ -356,7 +380,12 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	return 0
 }
 
-func listSavedQueriesMode(ctx context.Context, mrEnv *env.MultiRepoEnv, initialRoot *doltdb.RootValue, format engine.PrintResultFormat, usage cli.UsagePrinter, config *engine.SqlEngineConfig, ) int {
+func listSavedQueriesMode(
+		ctx *sql.Context,
+		se *engine.SqlEngine,
+		initialRoot *doltdb.RootValue,
+		usage cli.UsagePrinter,
+) int {
 	hasQC, err := initialRoot.HasTable(ctx, doltdb.DoltQueryCatalogTableName)
 
 	if err != nil {
@@ -369,10 +398,16 @@ func listSavedQueriesMode(ctx context.Context, mrEnv *env.MultiRepoEnv, initialR
 	}
 
 	query := "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
-	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, query, format, config), usage)
+	return HandleVErrAndExitCode(execQuery(ctx, se, query), usage)
 }
 
-func savedQueryMode(ctx context.Context, mrEnv *env.MultiRepoEnv, initialRoot *doltdb.RootValue, savedQueryName string, format engine.PrintResultFormat, usage cli.UsagePrinter, config *engine.SqlEngineConfig, ) int {
+func savedQueryMode(
+		ctx *sql.Context,
+		se *engine.SqlEngine,
+		initialRoot *doltdb.RootValue,
+		savedQueryName string,
+		usage cli.UsagePrinter,
+) int {
 	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoot, savedQueryName)
 
 	if err != nil {
@@ -380,19 +415,17 @@ func savedQueryMode(ctx context.Context, mrEnv *env.MultiRepoEnv, initialRoot *d
 	}
 
 	cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, sq.Query, format, config), usage)
+	return HandleVErrAndExitCode(execQuery(ctx, se, sq.Query), usage)
 }
 
 func queryMode(
-		ctx context.Context,
-		mrEnv *env.MultiRepoEnv,
-		initialDb string,
+		ctx *sql.Context,
+		se *engine.SqlEngine,
+		dEnv *env.DoltEnv,
 		initialRoot *doltdb.RootValue,
 		apr *argparser.ArgParseResults,
 		query string,
-		format engine.PrintResultFormat,
 		usage cli.UsagePrinter,
-		config *engine.SqlEngineConfig ,
 ) int {
 
 	// query mode has 3 sub modes:
@@ -405,7 +438,7 @@ func queryMode(
 	_, continueOnError := apr.GetValue(continueFlag)
 
 	if saveName != "" {
-		verr := execQuery(ctx, mrEnv, query, format, config)
+		verr := execQuery(ctx, se, query)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
@@ -416,21 +449,21 @@ func queryMode(
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
-
-			verr = UpdateWorkingWithVErr(mrEnv.GetEnv(initialDb), newRoot)
-			if verr != nil {
-				return HandleVErrAndExitCode(verr, usage)
+			
+			err := dEnv.UpdateWorkingRoot(ctx, newRoot)
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.BuildDError("error: failed to update working root").AddCause(err).Build(), usage)
 			}
 		}
 	} else if batchMode {
 		batchInput := strings.NewReader(query)
-		verr := execBatch(ctx, continueOnError, mrEnv, batchInput, format, config)
+		verr := execBatch(ctx, continueOnError, se, batchInput)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
 	} else {
 		input := strings.NewReader(query)
-		verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, config)
+		verr := execMultiStatements(ctx, continueOnError, se, input)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
@@ -487,40 +520,14 @@ func execShell(
 }
 
 func execBatch(
-	ctx context.Context,
+	sqlCtx *sql.Context,
 	continueOnErr bool,
-	mrEnv *env.MultiRepoEnv,
+	se *engine.SqlEngine,
 	batchInput io.Reader,
-	format engine.PrintResultFormat,
-	config *engine.SqlEngineConfig,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(
-		ctx,
-		mrEnv,
-		format,
-		config,
-	)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-	defer se.Close()
-
-	sqlCtx, err := se.NewDefaultContext(ctx)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	// Add specified user as new superuser, if it doesn't already exist
-	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
-		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
-	}
-
-	// Set client to specified user
-	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
-
 	// In batch mode, we need to set a couple flags on the session to prevent constant flushes to disk
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
-	err = runBatchMode(sqlCtx, se, batchInput, continueOnErr)
+	err := runBatchMode(sqlCtx, se, batchInput, continueOnErr)
 	if err != nil {
 		// If we encounter an error, attempt to flush what we have so far to disk before exiting
 		flushErr := flushBatchedEdits(sqlCtx, se)
@@ -535,71 +542,20 @@ func execBatch(
 }
 
 func execMultiStatements(
-	ctx context.Context,
+	sqlCtx *sql.Context,
 	continueOnErr bool,
-	mrEnv *env.MultiRepoEnv,
+	se *engine.SqlEngine,
 	batchInput io.Reader,
-	format engine.PrintResultFormat,
-	config *engine.SqlEngineConfig,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(
-		ctx,
-		mrEnv,
-		format,
-		config,
-	)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-	defer se.Close()
-
-	sqlCtx, err := se.NewDefaultContext(ctx)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	// Add specified user as new superuser, if it doesn't already exist
-	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
-		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
-	}
-
-	// Set client to specified user
-	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
-
-	err = runMultiStatementMode(sqlCtx, se, batchInput, continueOnErr)
+	err := runMultiStatementMode(sqlCtx, se, batchInput, continueOnErr)
 	return errhand.VerboseErrorFromError(err)
 }
 
 func execQuery(
-	ctx context.Context,
-	mrEnv *env.MultiRepoEnv,
+	sqlCtx *sql.Context,
+	se *engine.SqlEngine,
 	query string,
-	format engine.PrintResultFormat,
-	config *engine.SqlEngineConfig,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(
-		ctx,
-		mrEnv,
-		format,
-		config,
-	)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-	defer se.Close()
-
-	sqlCtx, err := se.NewDefaultContext(ctx)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	// Add specified user as new superuser, if it doesn't already exist
-	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
-		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
-	}
-
-	// Set client to specified user
-	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
 	sqlSch, rowIter, err := processQuery(sqlCtx, query, se)
 	if err != nil {
@@ -769,12 +725,12 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 }
 
 // Saves the query given to the catalog with the name and message given.
-func saveQuery(ctx context.Context, root *doltdb.RootValue, query string, name string, message string) (*doltdb.RootValue, errhand.VerboseError) {
+func saveQuery(ctx *sql.Context, root *doltdb.RootValue, query string, name string, message string) (*doltdb.RootValue, errhand.VerboseError) {
 	_, newRoot, err := dtables.NewQueryCatalogEntryWithNameAsID(ctx, root, name, query, message)
 	if err != nil {
 		return nil, errhand.BuildDError("Couldn't save query").AddCause(err).Build()
 	}
-
+	
 	return newRoot, nil
 }
 
