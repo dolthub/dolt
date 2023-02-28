@@ -1,4 +1,4 @@
-<img height="100" src="./docs/Dolt-Logo@3x.svg"/>
+<img height="100" src="./images/Dolt-Logo@3x.svg"/>
 
 # Dolt is Git for Data!
 
@@ -25,6 +25,11 @@ to see what we're building next.
 Lots of things! Dolt is a generally useful tool with countless
 applications. But if you want some ideas, [here's how people are using
 it so far](https://www.dolthub.com/blog/2022-07-11-dolt-case-studies/).
+
+Dolt can be [set up as a replica of your existing MySQL or MariaDB](https://www.dolthub.com/blog/2023-02-17-binlog-replication-preview/)
+database using standard MySQL binlog replication. Every write becomes
+a Dolt commit. This is a great way to get the version control benefits 
+of Dolt and keep an existing MySQL or MariaDB database. 
 
 # Dolt CLI
 
@@ -521,11 +526,11 @@ Hate the command line? Let's use [Tableplus](https://tableplus.com/) to make som
 
 Now, to connect you must select MySQL as the connection type. Then enter a name for your connection, `getting_started` as your database, and `root` as your user.
 
-![Tableplus Connection](./docs/getting-started-tp-connect.png)
+![Tableplus Connection](./images/getting-started-tp-connect.png)
 
 Click connect and you'll be presented with a familiar database workbench GUI.
 
-![Tableplus](./docs/getting-started-tp.png)
+![Tableplus](./images/getting-started-tp.png)
 
 ## Make changes on a branch
 
@@ -544,7 +549,7 @@ call dolt_commit('-am', 'Modifications on a branch');
 
 Here's the result in Tableplus.
 
-![New Updates](./docs/getting-started-new-updates.png)
+![New Updates](./images/getting-started-new-updates.png)
 
 Back in my terminal, I cannot see the table modifications made in Tableplus because they happened on a different branch than the one I have checked out in my session. 
 

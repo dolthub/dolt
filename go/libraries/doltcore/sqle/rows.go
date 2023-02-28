@@ -150,7 +150,7 @@ func getTagToResColIdx(ctx context.Context, tbl *doltdb.Table, projectedCols []u
 	allCols := sch.GetAllCols().GetColumns()
 	tagToSqlColIdx := make(map[uint64]int)
 
-	if len(projectedCols) > 0 {
+	if projectedCols != nil {
 		outCols := make([]schema.Column, len(projectedCols))
 		for i := range projectedCols {
 			t := projectedCols[i]

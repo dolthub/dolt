@@ -207,12 +207,12 @@ var systemTableDeleteTests = []DeleteTest{
 	},
 	{
 		Name: "delete dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemasTableSchema(),
-			"INSERT INTO dolt_schemas (type, name, fragment, id) VALUES ('view', 'name', 'create view name as select 2+2 from dual', 1)"),
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, schemaTableSchema,
+			"INSERT INTO dolt_schemas (type, name, fragment) VALUES ('view', 'name', 'create view name as select 2+2 from dual')"),
 		DeleteQuery:    "delete from dolt_schemas",
 		SelectQuery:    "select * from dolt_schemas",
 		ExpectedRows:   ToSqlRows(dtables.DoltQueryCatalogSchema),
-		ExpectedSchema: SchemasTableSchema(),
+		ExpectedSchema: schemaTableSchema,
 	},
 }
 

@@ -320,6 +320,7 @@ func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 
 	interloper, err := suite.factory(context.Background(), suite.dir)
 	suite.NoError(err)
+	defer interloper.Close()
 	err = interloper.Put(context.Background(), c1, noopGetAddrs)
 	suite.NoError(err)
 	h, err := interloper.Root(context.Background())
@@ -369,6 +370,7 @@ func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
 
 	interloper, err := suite.factory(context.Background(), suite.dir)
 	suite.NoError(err)
+	defer interloper.Close()
 	err = interloper.Put(context.Background(), c1, noopGetAddrs)
 	suite.NoError(err)
 	root, err := interloper.Root(context.Background())
@@ -408,6 +410,7 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 
 	interloper, err := suite.factory(context.Background(), suite.dir)
 	suite.NoError(err)
+	defer interloper.Close()
 	err = interloper.Put(context.Background(), c1, noopGetAddrs)
 	suite.NoError(err)
 	h, err := interloper.Root(context.Background())

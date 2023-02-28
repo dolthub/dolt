@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -58,7 +59,8 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 
-	if (apr.Contains(cli.CheckoutCoBranch) && apr.NArg() > 1) || (!apr.Contains(cli.CheckoutCoBranch) && apr.NArg() == 0) {
+	branchOrTrack := apr.Contains(cli.CheckoutCoBranch) || apr.Contains(cli.TrackFlag)
+	if (branchOrTrack && apr.NArg() > 1) || (!branchOrTrack && apr.NArg() == 0) {
 		return 1, errors.New("Improper usage.")
 	}
 
@@ -69,20 +71,13 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	if newBranch, newBranchOk := apr.GetValue(cli.CheckoutCoBranch); newBranchOk {
-		if len(newBranch) == 0 {
-			err = errors.New("error: cannot checkout empty string")
-		} else if len(apr.Args) > 0 {
-			err = checkoutNewBranch(ctx, dbName, dbData, newBranch, apr.Arg(0))
-		} else {
-			err = checkoutNewBranch(ctx, dbName, dbData, newBranch, "")
-		}
-
+	if branchOrTrack {
+		err = checkoutNewBranch(ctx, dbName, dbData, apr)
 		if err != nil {
 			return 1, err
+		} else {
+			return 0, nil
 		}
-
-		return 0, nil
 	}
 
 	name := apr.Arg(0)
@@ -125,7 +120,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 
 	err = checkoutTables(ctx, roots, dbName, args)
 	if err != nil && apr.NArg() == 1 {
-		err = checkoutRemoteBranch(ctx, dbName, dbData, name)
+		err = checkoutRemoteBranch(ctx, dbName, dbData, name, apr)
 	}
 
 	if err != nil {
@@ -188,7 +183,7 @@ func getRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, st
 
 // checkoutRemoteBranch checks out a remote branch creating a new local branch with the same name as the remote branch
 // and set its upstream. The upstream persists out of sql session.
-func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, branchName string) error {
+func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, branchName string, apr *argparser.ArgParseResults) error {
 	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
 	if err != nil {
 		return errors.New("fatal: unable to read from data repository")
@@ -198,7 +193,11 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, br
 		return fmt.Errorf("error: could not find %s", branchName)
 	} else if len(remoteRefs) == 1 {
 		remoteRef := remoteRefs[0]
-		err := checkoutNewBranch(ctx, dbName, dbData, branchName, remoteRef.String())
+		err := actions.CreateBranchWithStartPt(ctx, dbData, branchName, remoteRef.String(), false)
+		if err != nil {
+			return err
+		}
+		err = checkoutBranch(ctx, dbName, branchName)
 		if err != nil {
 			return err
 		}
@@ -214,21 +213,66 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, br
 	}
 }
 
-func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, branchName, startPt string) error {
-	if len(branchName) == 0 {
-		return ErrEmptyBranchName
+func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *argparser.ArgParseResults) error {
+	var newBranchName string
+	var remoteName, remoteBranchName string
+	var startPt = "head"
+	var refSpec ref.RefSpec
+	var err error
+
+	if apr.NArg() == 1 {
+		startPt = apr.Arg(0)
 	}
 
-	if startPt == "" {
-		startPt = "head"
+	trackVal, setTrackUpstream := apr.GetValue(cli.TrackFlag)
+	if setTrackUpstream {
+		if trackVal == "inherit" {
+			return fmt.Errorf("--track='inherit' is not supported yet")
+		} else if trackVal != "direct" {
+			startPt = trackVal
+		}
+		remoteName, remoteBranchName = actions.ParseRemoteBranchName(startPt)
+		refSpec, err = ref.ParseRefSpecForRemote(remoteName, remoteBranchName)
+		if err != nil {
+			return err
+		}
+		newBranchName = remoteBranchName
 	}
 
-	err := actions.CreateBranchWithStartPt(ctx, dbData, branchName, startPt, false)
+	if newBranch, ok := apr.GetValue(cli.CheckoutCoBranch); ok {
+		if len(newBranch) == 0 {
+			return ErrEmptyBranchName
+		}
+		newBranchName = newBranch
+	}
+
+	err = actions.CreateBranchWithStartPt(ctx, dbData, newBranchName, startPt, false)
+	if err != nil {
+		return err
+	}
+	err = checkoutBranch(ctx, dbName, newBranchName)
 	if err != nil {
 		return err
 	}
 
-	return checkoutBranch(ctx, dbName, branchName)
+	if setTrackUpstream {
+		err = env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteName, ref.NewBranchRef(remoteBranchName))
+		if err != nil {
+			return err
+		}
+	} else if autoSetupMerge, err := loadConfig(ctx).GetString("branch.autosetupmerge"); err != nil || autoSetupMerge != "false" {
+		remoteName, remoteBranchName = actions.ParseRemoteBranchName(startPt)
+		refSpec, err = ref.ParseRefSpecForRemote(remoteName, remoteBranchName)
+		if err != nil {
+			return nil
+		}
+		err = env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteName, ref.NewBranchRef(remoteBranchName))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func checkoutBranch(ctx *sql.Context, dbName string, branchName string) error {

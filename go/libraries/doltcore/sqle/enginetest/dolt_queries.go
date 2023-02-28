@@ -744,11 +744,82 @@ var DoltScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT type, name, fragment, id FROM dolt_schemas ORDER BY 1, 2",
+				Query: "SELECT type, name, fragment FROM dolt_schemas ORDER BY 1, 2",
 				Expected: []sql.Row{
-					{"view", "view1", "CREATE VIEW view1 AS SELECT v1 FROM viewtest", int64(1)},
-					{"view", "view2", "CREATE VIEW view2 AS SELECT v2 FROM viewtest", int64(2)},
+					{"view", "view1", "CREATE VIEW view1 AS SELECT v1 FROM viewtest"},
+					{"view", "view2", "CREATE VIEW view2 AS SELECT v2 FROM viewtest"},
 				},
+			},
+			{
+				Query:       "CREATE VIEW VIEW1 AS SELECT v2 FROM viewtest",
+				ExpectedErr: sql.ErrExistingView,
+			},
+			{
+				Query:            "drop view view1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "SELECT type, name, fragment FROM dolt_schemas ORDER BY 1, 2",
+				Expected: []sql.Row{
+					{"view", "view2", "CREATE VIEW view2 AS SELECT v2 FROM viewtest"},
+				},
+			},
+			{
+				Query:            "CREATE VIEW VIEW1 AS SELECT v1 FROM viewtest",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "SELECT type, name, fragment FROM dolt_schemas ORDER BY 1, 2",
+				Expected: []sql.Row{
+					{"view", "view1", "CREATE VIEW VIEW1 AS SELECT v1 FROM viewtest"},
+					{"view", "view2", "CREATE VIEW view2 AS SELECT v2 FROM viewtest"},
+				},
+			},
+		},
+	},
+	{
+		Name: "test hashof",
+		SetUpScript: []string{
+			"CREATE TABLE hashof_test (pk int primary key, c1 int)",
+			"INSERT INTO hashof_test values (1,1), (2,2), (3,3)",
+			"CALL DOLT_ADD('hashof_test')",
+			"CALL DOLT_COMMIT('-a', '-m', 'first commit')",
+			"SET @Commit1 = (SELECT commit_hash FROM DOLT_LOG() LIMIT 1)",
+			"INSERT INTO hashof_test values (4,4), (5,5), (6,6)",
+			"CALL DOLT_COMMIT('-a', '-m', 'second commit')",
+			"SET @Commit2 = (SELECT commit_hash from DOLT_LOG() LIMIT 1)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT (hashof(@Commit1) = hashof(@Commit2))",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query: "SELECT (hashof(@Commit1) = hashof('HEAD~1'))",
+				Expected: []sql.Row{
+					{true},
+				},
+			},
+			{
+				Query: "SELECT (hashof(@Commit2) = hashof('HEAD'))",
+				Expected: []sql.Row{
+					{true},
+				},
+			},
+			{
+				Query: "SELECT (hashof(@Commit2) = hashof('main'))",
+				Expected: []sql.Row{
+					{true},
+				},
+			},
+			{
+				Query:          "SELECT hashof('non_branch')",
+				ExpectedErrStr: "invalid ref spec",
+			},
+			{
+				// Test that a short commit is invalid. This may change in the future.
+				Query:          "SELECT hashof(left(@Commit2,30))",
+				ExpectedErrStr: "invalid ref spec",
 			},
 		},
 	},
@@ -790,6 +861,20 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff('main~..main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// Without access to the database, dolt_diff_stat should fail with a database access error
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff_stat('main~', 'main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// Without access to the database, dolt_diff_stat with dots should fail with a database access error
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff_stat('main~..main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
@@ -846,6 +931,34 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff('main~..main', 'test2');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				// With access to the db, but not the table, dolt_diff_stat should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff_stat('main~', 'main', 'test2');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				// With access to the db, but not the table, dolt_diff_stat with dots should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff_stat('main~...main', 'test2');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				// With access to the db, dolt_diff_stat should fail for all tables if no access any of tables
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff_stat('main~', 'main');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				// With access to the db, dolt_diff_stat with dots should fail for all tables if no access any of tables
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff_stat('main~...main');",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
@@ -919,6 +1032,20 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
+				// After granting access to the entire db, dolt_diff_stat should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_diff_stat('main~', 'main');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				// After granting access to the entire db, dolt_diff_stat with dots should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_diff_stat('main~...main');",
+				Expected: []sql.Row{{1}},
+			},
+			{
 				// After granting access to the entire db, dolt_diff_summary should work
 				User:     "tester",
 				Host:     "localhost",
@@ -958,6 +1085,13 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff('main~...main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// After revoking access, dolt_diff_stat should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff_stat('main~', 'main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{

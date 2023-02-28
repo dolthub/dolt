@@ -62,6 +62,7 @@ func runRoot(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
 	cs, err := cfg.GetChunkStore(ctx, args[0])
 	util.CheckErrorNoUsage(err)
+	defer cs.Close()
 
 	currRoot, err := cs.Root(ctx)
 

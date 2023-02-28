@@ -43,6 +43,8 @@ type Index interface {
 	IndexedColumnTags() []uint64
 	// IsUnique returns whether the given index has the UNIQUE constraint.
 	IsUnique() bool
+	// IsSpatial returns whether the given index has the SPATIAL constraint.
+	IsSpatial() bool
 	// IsUserDefined returns whether the given index was created by a user or automatically generated.
 	IsUserDefined() bool
 	// Name returns the name of the index.
@@ -66,6 +68,7 @@ type indexImpl struct {
 	allTags       []uint64
 	indexColl     *indexCollectionImpl
 	isUnique      bool
+	isSpatial     bool
 	isUserDefined bool
 	comment       string
 	prefixLengths []uint16
@@ -83,6 +86,7 @@ func NewIndex(name string, tags, allTags []uint64, indexColl IndexCollection, pr
 		allTags:       allTags,
 		indexColl:     indexCollImpl,
 		isUnique:      props.IsUnique,
+		isSpatial:     props.IsSpatial,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
 	}
@@ -165,6 +169,11 @@ func (ix *indexImpl) IndexedColumnTags() []uint64 {
 // IsUnique implements Index.
 func (ix *indexImpl) IsUnique() bool {
 	return ix.isUnique
+}
+
+// IsSpatial implements Index.
+func (ix *indexImpl) IsSpatial() bool {
+	return ix.isSpatial
 }
 
 // IsUserDefined implements Index.

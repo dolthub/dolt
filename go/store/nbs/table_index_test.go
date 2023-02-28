@@ -129,6 +129,7 @@ func TestResolveOneHash(t *testing.T) {
 	td, _, err := buildTable(chunks)
 	tIdx, err := parseTableIndexByCopy(ctx, td, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
+	defer tIdx.Close()
 
 	// get hashes out
 	hashes := make([]string, len(chunks))
@@ -161,6 +162,7 @@ func TestResolveFewHash(t *testing.T) {
 	td, _, err := buildTable(chunks)
 	tIdx, err := parseTableIndexByCopy(ctx, td, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
+	defer tIdx.Close()
 
 	// get hashes out
 	hashes := make([]string, len(chunks))
@@ -194,6 +196,7 @@ func TestAmbiguousShortHash(t *testing.T) {
 	td, _, err := buildFakeChunkTable(chunks)
 	idx, err := parseTableIndexByCopy(ctx, td, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
+	defer idx.Close()
 
 	tests := []struct {
 		pre string

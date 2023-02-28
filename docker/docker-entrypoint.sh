@@ -73,7 +73,7 @@ get_config_file_path_if_exists() {
 }
 
 # taken from https://github.com/docker-library/mysql/blob/master/8.0/docker-entrypoint.sh
-# this function will run files found in /docker-entrypoint-initdb.d directory AFTER server is started
+# this function will run files found in /docker-entrypoint-initdb.d directory BEFORE server is started
 # usage: docker_process_init_files [file [file [...]]]
 #    ie: docker_process_init_files /always-initdb.d/*
 # process initializer files, based on file extensions
@@ -142,7 +142,7 @@ _main() {
         fi
 
         if [[ ! -f $INIT_COMPLETED ]]; then
-            # run any file provided in /docker-entrypoint-initdb.d directory after the server starts
+            # run any file provided in /docker-entrypoint-initdb.d directory before the server starts
             docker_process_init_files /docker-entrypoint-initdb.d/*
             touch $INIT_COMPLETED
         fi

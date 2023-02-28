@@ -995,20 +995,18 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL dolt_checkout('other')",
 			"CREATE TRIGGER trigger3 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 100",
 			"CREATE TRIGGER trigger4 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 1000",
-			"UPDATE dolt_schemas SET id = id + 1 WHERE name = 'trigger4'",
 			"CALL dolt_commit('-am', 'created triggers 3 & 4 on other');",
 			"CALL dolt_checkout('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('other');",
-				Expected: []sql.Row{{0, 1}},
+				Expected: []sql.Row{{0, 0}},
 			},
-			// todo: merge triggers correctly
-			//{
-			//	Query:    "select count(*) from dolt_schemas where type = 'trigger';",
-			//	Expected: []sql.Row{{4}},
-			//},
+			{
+				Query:    "select count(*) from dolt_schemas where type = 'trigger';",
+				Expected: []sql.Row{{4}},
+			},
 		},
 	},
 	{

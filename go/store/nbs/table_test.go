@@ -83,6 +83,7 @@ func TestSimple(t *testing.T) {
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
+	defer tr.close()
 
 	assertChunksInReader(chunks, tr, assert)
 
@@ -131,6 +132,7 @@ func TestHasMany(t *testing.T) {
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
+	defer tr.close()
 
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	hasAddrs := []hasRecord{
@@ -183,6 +185,7 @@ func TestHasManySequentialPrefix(t *testing.T) {
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 	require.NoError(t, err)
+	defer tr.close()
 
 	hasAddrs := make([]hasRecord, 2)
 	// Leave out the first address
@@ -237,6 +240,7 @@ func BenchmarkHasMany(b *testing.B) {
 	require.NoError(b, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(b, err)
+	defer tr.close()
 
 	b.ResetTimer()
 	b.Run("dense has many", func(b *testing.B) {
@@ -277,6 +281,7 @@ func TestGetMany(t *testing.T) {
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
+	defer tr.close()
 
 	addrs := addrSlice{computeAddr(data[0]), computeAddr(data[1]), computeAddr(data[2])}
 	getBatch := []getRecord{
@@ -312,6 +317,7 @@ func TestCalcReads(t *testing.T) {
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), 0)
 	require.NoError(t, err)
+	defer tr.close()
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	getBatch := []getRecord{
 		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:addrPrefixSize]), false},
@@ -350,6 +356,7 @@ func TestExtract(t *testing.T) {
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
+	defer tr.close()
 
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 
@@ -390,6 +397,7 @@ func Test65k(t *testing.T) {
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
+	defer tr.close()
 
 	for i := 0; i < count; i++ {
 		data := dataFn(i)
@@ -444,6 +452,7 @@ func doTestNGetMany(t *testing.T, count int) {
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
+	defer tr.close()
 
 	getBatch := make([]getRecord, len(data))
 	for i := 0; i < count; i++ {

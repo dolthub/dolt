@@ -28,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func TestRoundTripRecords(t *testing.T) {
+func TestRoundTripJournalRecords(t *testing.T) {
 	t.Run("chunk record", func(t *testing.T) {
 		for i := 0; i < 64; i++ {
 			rec, buf := makeChunkRecord()
@@ -57,16 +57,18 @@ func TestRoundTripRecords(t *testing.T) {
 	})
 }
 
-func TestUnknownTag(t *testing.T) {
+func TestUnknownJournalRecordTag(t *testing.T) {
 	// test behavior encountering unknown tag
-	buf := makeUnknownTagRecord()
+	buf := makeUnknownTagJournalRecord()
+	// checksum is ok
 	ok := validateJournalRecord(buf)
 	assert.True(t, ok)
+	// reading record fails
 	_, err := readJournalRecord(buf)
 	assert.Error(t, err)
 }
 
-func TestProcessRecords(t *testing.T) {
+func TestProcessJournalRecords(t *testing.T) {
 	const cnt = 1024
 	ctx := context.Background()
 	records := make([]journalRec, cnt)
@@ -97,15 +99,15 @@ func TestProcessRecords(t *testing.T) {
 		return
 	}
 
-	n, err := processRecords(ctx, bytes.NewReader(journal), check)
+	n, err := processJournalRecords(ctx, bytes.NewReader(journal), 0, check)
 	assert.Equal(t, cnt, i)
 	assert.Equal(t, int(off), int(n))
 	require.NoError(t, err)
 
 	i, sum = 0, 0
 	// write a bogus record to the end and process again
-	writeCorruptRecord(journal[off:])
-	n, err = processRecords(ctx, bytes.NewReader(journal), check)
+	writeCorruptJournalRecord(journal[off:])
+	n, err = processJournalRecords(ctx, bytes.NewReader(journal), 0, check)
 	assert.Equal(t, cnt, i)
 	assert.Equal(t, int(off), int(n))
 	require.NoError(t, err)
@@ -133,30 +135,30 @@ func makeChunkRecord() (journalRec, []byte) {
 	var n int
 	buf := make([]byte, sz)
 	// length
-	writeUint(buf[n:], uint32(len(buf)))
-	n += recLenSz
+	writeUint32(buf[n:], uint32(len(buf)))
+	n += journalRecLenSz
 	// kind
-	buf[n] = byte(kindTag)
-	n += recTagSz
-	buf[n] = byte(chunkRecKind)
-	n += recKindSz
+	buf[n] = byte(kindJournalRecTag)
+	n += journalRecTagSz
+	buf[n] = byte(chunkJournalRecKind)
+	n += journalRecKindSz
 	// address
-	buf[n] = byte(addrTag)
-	n += recTagSz
+	buf[n] = byte(addrJournalRecTag)
+	n += journalRecTagSz
 	copy(buf[n:], cc.H[:])
-	n += recAddrSz
+	n += journalRecAddrSz
 	// payload
-	buf[n] = byte(payloadTag)
-	n += recTagSz
+	buf[n] = byte(payloadJournalRecTag)
+	n += journalRecTagSz
 	copy(buf[n:], payload)
 	n += len(payload)
 	// checksum
-	c := crc(buf[:len(buf)-recChecksumSz])
-	writeUint(buf[len(buf)-recChecksumSz:], c)
+	c := crc(buf[:len(buf)-journalRecChecksumSz])
+	writeUint32(buf[len(buf)-journalRecChecksumSz:], c)
 
 	r := journalRec{
 		length:   uint32(len(buf)),
-		kind:     chunkRecKind,
+		kind:     chunkJournalRecKind,
 		address:  addr(cc.H),
 		payload:  payload,
 		checksum: c,
@@ -169,53 +171,53 @@ func makeRootHashRecord() (journalRec, []byte) {
 	var n int
 	buf := make([]byte, rootHashRecordSize())
 	// length
-	writeUint(buf[n:], uint32(len(buf)))
-	n += recLenSz
+	writeUint32(buf[n:], uint32(len(buf)))
+	n += journalRecLenSz
 	// kind
-	buf[n] = byte(kindTag)
-	n += recTagSz
-	buf[n] = byte(rootHashRecKind)
-	n += recKindSz
+	buf[n] = byte(kindJournalRecTag)
+	n += journalRecTagSz
+	buf[n] = byte(rootHashJournalRecKind)
+	n += journalRecKindSz
 	// address
-	buf[n] = byte(addrTag)
-	n += recTagSz
+	buf[n] = byte(addrJournalRecTag)
+	n += journalRecTagSz
 	copy(buf[n:], a[:])
-	n += recAddrSz
+	n += journalRecAddrSz
 	// checksum
-	c := crc(buf[:len(buf)-recChecksumSz])
-	writeUint(buf[len(buf)-recChecksumSz:], c)
+	c := crc(buf[:len(buf)-journalRecChecksumSz])
+	writeUint32(buf[len(buf)-journalRecChecksumSz:], c)
 	r := journalRec{
 		length:   uint32(len(buf)),
-		kind:     rootHashRecKind,
+		kind:     rootHashJournalRecKind,
 		address:  a,
 		checksum: c,
 	}
 	return r, buf
 }
 
-func makeUnknownTagRecord() (buf []byte) {
-	const fakeTag recTag = 111
+func makeUnknownTagJournalRecord() (buf []byte) {
+	const fakeTag journalRecTag = 111
 	_, buf = makeRootHashRecord()
 	// overwrite recKind
-	buf[recLenSz] = byte(fakeTag)
+	buf[journalRecLenSz] = byte(fakeTag)
 	// redo checksum
-	c := crc(buf[:len(buf)-recChecksumSz])
-	writeUint(buf[len(buf)-recChecksumSz:], c)
+	c := crc(buf[:len(buf)-journalRecChecksumSz])
+	writeUint32(buf[len(buf)-journalRecChecksumSz:], c)
 	return
 }
 
-func writeCorruptRecord(buf []byte) (n uint32) {
+func writeCorruptJournalRecord(buf []byte) (n uint32) {
 	n = uint32(rootHashRecordSize())
 	// fill with random data
 	rand.Read(buf[:n])
 	// write a valid size, kind
-	writeUint(buf, n)
-	buf[recLenSz] = byte(rootHashRecKind)
+	writeUint32(buf, n)
+	buf[journalRecLenSz] = byte(rootHashJournalRecKind)
 	return
 }
 
 func mustCompressedChunk(rec journalRec) CompressedChunk {
-	d.PanicIfFalse(rec.kind == chunkRecKind)
+	d.PanicIfFalse(rec.kind == chunkJournalRecKind)
 	cc, err := NewCompressedChunk(hash.Hash(rec.address), rec.payload)
 	d.PanicIfError(err)
 	return cc

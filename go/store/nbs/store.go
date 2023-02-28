@@ -615,6 +615,9 @@ func (nbs *NomsBlockStore) putChunk(ctx context.Context, c chunks.Chunk, getAddr
 }
 
 func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs hash.HashSet, checker refCheck) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	nbs.waitForGC()
@@ -1527,14 +1530,14 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 }
 
 func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-chan []hash.Hash, dest *NomsBlockStore) ([]tableSpec, error) {
-	gcc, err := newGarbageCollectionCopier()
-	if err != nil {
-		return nil, err
-	}
-
 	tfp, ok := dest.p.(tableFilePersister)
 	if !ok {
 		return nil, fmt.Errorf("NBS does not support copying garbage collection")
+	}
+
+	gcc, err := newGarbageCollectionCopier()
+	if err != nil {
+		return nil, err
 	}
 
 LOOP:
@@ -1625,9 +1628,9 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 	if err != nil {
 		return err
 	}
+	oldTables := nbs.tables
 	nbs.tables, nbs.upstream = ts, upstream
-
-	return nil
+	return oldTables.close()
 }
 
 // SetRootChunk changes the root chunk hash from the previous value to the new root.

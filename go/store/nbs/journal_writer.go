@@ -34,6 +34,9 @@ const (
 	journalWriterBuffSize = 1024 * 1024
 
 	chunkJournalAddr = "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"
+
+	journalIndexFileName        = "journal.idx"
+	journalIndexDefaultMaxNovel = 64 * 1024
 )
 
 var (
@@ -44,7 +47,7 @@ func isJournalAddr(a addr) bool {
 	return a == journalAddr
 }
 
-func journalFileExists(path string) (bool, error) {
+func fileExists(path string) (bool, error) {
 	var err error
 	if path, err = filepath.Abs(path); err != nil {
 		return false, err
@@ -54,7 +57,7 @@ func journalFileExists(path string) (bool, error) {
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	} else if info.IsDir() {
-		return true, fmt.Errorf("expected file %s found directory", chunkJournalName)
+		return true, fmt.Errorf("expected file %s, found directory", path)
 	}
 	return true, nil
 }
@@ -78,9 +81,9 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 	}
 
 	return &journalWriter{
-		buf:  make([]byte, 0, journalWriterBuffSize),
-		file: f,
-		path: path,
+		buf:     make([]byte, 0, journalWriterBuffSize),
+		journal: f,
+		path:    path,
 	}, true, nil
 }
 
@@ -117,34 +120,221 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 	}
 
 	return &journalWriter{
-		buf:  make([]byte, 0, journalWriterBuffSize),
-		file: f,
-		path: path,
+		buf:     make([]byte, 0, journalWriterBuffSize),
+		journal: f,
+		path:    path,
 	}, nil
 }
 
-type snapshotReader interface {
-	io.ReaderAt
-	// Snapshot returns an io.Reader that provides a consistent view
-	// of the current state of the snapshotReader.
-	Snapshot() (io.Reader, int64, error)
-
-	// currentSize returns the current size.
-	CurrentSize() int64
-}
-
 type journalWriter struct {
-	buf  []byte
-	file *os.File
-	off  int64
-	path string
+	buf []byte
+
+	journal *os.File
+	off     int64
+	indexed int64
+	path    string
+	uncmpSz uint64
+
+	ranges   rangeIndex
+	index    *os.File
+	maxNovel int
+
 	lock sync.RWMutex
 }
 
-var _ io.WriteCloser = &journalWriter{}
-var _ snapshotReader = &journalWriter{}
+var _ io.Closer = &journalWriter{}
 
-func (wr *journalWriter) ReadAt(p []byte, off int64) (n int, err error) {
+// bootstrapJournal reads the journal file collecting a recLookup for each record and
+// returning the latest committed root hash.
+func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, err error) {
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
+
+	if wr.maxNovel == 0 {
+		wr.maxNovel = journalIndexDefaultMaxNovel
+	}
+	wr.ranges = newRangeIndex()
+
+	p := filepath.Join(filepath.Dir(wr.path), journalIndexFileName)
+	var ok bool
+	ok, err = fileExists(p)
+	if err != nil {
+		return
+	} else if ok {
+		wr.index, err = os.OpenFile(p, os.O_RDWR, 0666)
+	} else {
+		wr.index, err = os.OpenFile(p, os.O_RDWR|os.O_CREATE, 0666)
+	}
+	if err != nil {
+		return
+	}
+
+	if ok {
+		var info os.FileInfo
+		if info, err = wr.index.Stat(); err != nil {
+			return hash.Hash{}, err
+		}
+		err = processIndexRecords(ctx, wr.index, info.Size(), func(o int64, r indexRec) (err error) {
+			switch r.kind {
+			case tableIndexRecKind:
+				// |r.end| is expected to point to a root hash record in |wr.journal|
+				// containing a hash equal to |r.lastRoot|, validate this here
+				var h hash.Hash
+				if h, err = peekRootHashAt(wr.journal, int64(r.end)); err != nil {
+					return err
+				} else if h != r.lastRoot {
+					return fmt.Errorf("invalid index record hash (%s != %s)", h.String(), r.lastRoot.String())
+				}
+				// populate range hashmap
+				for _, l := range deserializeLookups(r.payload) {
+					wr.ranges.put(l.a, l.r)
+				}
+				// record a high-water-mark for the indexed portion of the journal
+				wr.indexed = int64(r.end)
+				// todo: uncompressed size
+			default:
+				return fmt.Errorf("unknown index record kind (%d)", r.kind)
+			}
+			return nil
+		})
+		if err != nil {
+			// todo: issue warning on corrupt index recovery
+			if err = wr.corruptIndexRecovery(ctx); err != nil {
+				return
+			}
+		}
+		wr.ranges.flatten()
+	}
+
+	// process the non-indexed portion of the journal starting at |wr.indexed|,
+	// at minimum the non-indexed portion will include a root hash record
+	wr.off, err = processJournalRecords(ctx, wr.journal, wr.indexed, func(o int64, r journalRec) error {
+		switch r.kind {
+		case chunkJournalRecKind:
+			wr.ranges.put(r.address, Range{
+				Offset: uint64(o) + uint64(r.payloadOffset()),
+				Length: uint32(len(r.payload)),
+			})
+			wr.uncmpSz += r.uncompressedPayloadSize()
+		case rootHashJournalRecKind:
+			last = hash.Hash(r.address)
+		default:
+			return fmt.Errorf("unknown journal record kind (%d)", r.kind)
+		}
+		return nil
+	})
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	return
+}
+
+// corruptIndexRecovery handles a corrupted or malformed journal index by truncating
+// the index file and restarting the journal bootstrapping process without an index.
+func (wr *journalWriter) corruptIndexRecovery(ctx context.Context) (err error) {
+	if _, err = wr.index.Seek(0, io.SeekStart); err != nil {
+		return
+	}
+	if err = wr.index.Truncate(0); err != nil {
+		return
+	}
+	// reset bootstrapping state
+	wr.off, wr.indexed, wr.uncmpSz = 0, 0, 0
+	wr.ranges = newRangeIndex()
+	return
+}
+
+// hasAddr returns true if the journal contains a chunk with addr |h|.
+func (wr *journalWriter) hasAddr(h addr) (ok bool) {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
+	_, ok = wr.ranges.get(h)
+	return
+}
+
+// getCompressedChunk reads the CompressedChunks with addr |h|.
+func (wr *journalWriter) getCompressedChunk(h addr) (CompressedChunk, error) {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
+	r, ok := wr.ranges.get(h)
+	if !ok {
+		return CompressedChunk{}, nil
+	}
+	buf := make([]byte, r.Length)
+	if _, err := wr.readAt(buf, int64(r.Offset)); err != nil {
+		return CompressedChunk{}, nil
+	}
+	return NewCompressedChunk(hash.Hash(h), buf)
+}
+
+// getRange returns a Range for the chunk with addr |h|.
+func (wr *journalWriter) getRange(h addr) (rng Range, ok bool, err error) {
+	// callers will use |rng| to read directly from the
+	// journal file, so we must flush here
+	if err = wr.maybeFlush(); err != nil {
+		return
+	}
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
+	rng, ok = wr.ranges.get(h)
+	return
+}
+
+// writeCompressedChunk writes |cc| to the journal.
+func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
+	recordLen, payloadOff := chunkRecordSize(cc)
+	rng := Range{
+		Offset: uint64(wr.offset()) + uint64(payloadOff),
+		Length: uint32(len(cc.FullCompressedChunk)),
+	}
+	buf, err := wr.getBytes(int(recordLen))
+	if err != nil {
+		return err
+	}
+	_ = writeChunkRecord(buf, cc)
+	wr.ranges.put(addr(cc.H), rng)
+	return nil
+}
+
+// commitRootHash commits |root| to the journal and syncs the file to disk.
+func (wr *journalWriter) commitRootHash(root hash.Hash) error {
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
+	buf, err := wr.getBytes(rootHashRecordSize())
+	if err != nil {
+		return err
+	}
+	n := writeRootHashRecord(buf, addr(root))
+	if err = wr.flush(); err != nil {
+		return err
+	}
+	if err = wr.journal.Sync(); err != nil {
+		return err
+	}
+	if wr.ranges.novelCount() > wr.maxNovel {
+		o := wr.offset() - int64(n) // pre-commit journal offset
+		err = wr.flushIndexRecord(root, o)
+	}
+	return err
+}
+
+func (wr *journalWriter) flushIndexRecord(root hash.Hash, end int64) (err error) {
+	payload := serializeLookups(wr.ranges.novelLookups())
+	buf := make([]byte, journalIndexRecordSize(payload))
+	writeJournalIndexRecord(buf, root, uint64(wr.indexed), uint64(end), payload)
+	if _, err = wr.index.Write(buf); err != nil {
+		return err
+	}
+	wr.ranges.flatten()
+	// set a new high-water-mark for the indexed portion of the journal
+	wr.indexed = end
+	return
+}
+
+// readAt reads len(p) bytes from the journal at offset |off|.
+func (wr *journalWriter) readAt(p []byte, off int64) (n int, err error) {
 	wr.lock.RLock()
 	defer wr.lock.RUnlock()
 	var bp []byte
@@ -156,7 +346,7 @@ func (wr *journalWriter) ReadAt(p []byte, off int64) (n int, err error) {
 			bp = p[fread:]
 			p = p[:fread]
 		}
-		if n, err = wr.file.ReadAt(p, off); err != nil {
+		if n, err = wr.journal.ReadAt(p, off); err != nil {
 			return 0, err
 		}
 		off = 0
@@ -169,129 +359,7 @@ func (wr *journalWriter) ReadAt(p []byte, off int64) (n int, err error) {
 	return
 }
 
-func (wr *journalWriter) Snapshot() (io.Reader, int64, error) {
-	wr.lock.Lock()
-	defer wr.lock.Unlock()
-	if err := wr.flush(); err != nil {
-		return nil, 0, err
-	}
-	// open a new file descriptor with an
-	// independent lifecycle from |wr.file|
-	f, err := os.Open(wr.path)
-	if err != nil {
-		return nil, 0, err
-	}
-	return io.LimitReader(f, wr.off), wr.off, nil
-}
-
-func (wr *journalWriter) CurrentSize() int64 {
-	wr.lock.RLock()
-	defer wr.lock.RUnlock()
-	return wr.off
-}
-
-func (wr *journalWriter) Write(p []byte) (n int, err error) {
-	wr.lock.Lock()
-	defer wr.lock.Unlock()
-	if len(p) > len(wr.buf) {
-		// write directly to |wr.file|
-		if err = wr.flush(); err != nil {
-			return 0, err
-		}
-		n, err = wr.file.WriteAt(p, wr.off)
-		wr.off += int64(n)
-		return
-	}
-	var buf []byte
-	if buf, err = wr.getBytes(len(p)); err != nil {
-		return 0, err
-	}
-	n = copy(buf, p)
-	return
-}
-
-func (wr *journalWriter) ProcessJournal(ctx context.Context) (last hash.Hash, cs journalChunkSource, err error) {
-	wr.lock.Lock()
-	defer wr.lock.Unlock()
-	src := journalChunkSource{
-		journal: wr,
-		address: journalAddr,
-		lookups: newLookupMap(),
-	}
-	wr.off, err = processRecords(ctx, wr.file, func(o int64, r journalRec) error {
-		switch r.kind {
-		case chunkRecKind:
-			src.lookups.put(r.address, recLookup{
-				journalOff: o,
-				recordLen:  r.length,
-				payloadOff: r.payloadOffset(),
-			})
-			src.uncompressedSz += r.uncompressedPayloadSize()
-		case rootHashRecKind:
-			last = hash.Hash(r.address)
-		default:
-			return fmt.Errorf("unknown journal record kind (%d)", r.kind)
-		}
-		return nil
-	})
-	if err != nil {
-		return hash.Hash{}, journalChunkSource{}, err
-	}
-	cs = src
-	return
-}
-
-func (wr *journalWriter) WriteChunk(cc CompressedChunk) (recLookup, error) {
-	wr.lock.Lock()
-	defer wr.lock.Unlock()
-	l, o := chunkRecordSize(cc)
-	rec := recLookup{
-		journalOff: wr.offset(),
-		recordLen:  l,
-		payloadOff: o,
-	}
-	buf, err := wr.getBytes(int(rec.recordLen))
-	if err != nil {
-		return recLookup{}, err
-	}
-	_ = writeChunkRecord(buf, cc)
-	return rec, nil
-}
-
-func (wr *journalWriter) WriteRootHash(root hash.Hash) error {
-	wr.lock.Lock()
-	defer wr.lock.Unlock()
-	buf, err := wr.getBytes(rootHashRecordSize())
-	if err != nil {
-		return err
-	}
-	_ = writeRootHashRecord(buf, addr(root))
-
-	if err = wr.flush(); err != nil {
-		return err
-	}
-	return wr.file.Sync()
-}
-
-func (wr *journalWriter) Close() (err error) {
-	wr.lock.Lock()
-	defer wr.lock.Unlock()
-	if err = wr.flush(); err != nil {
-		return err
-	}
-	if cerr := wr.file.Sync(); cerr != nil {
-		err = cerr
-	}
-	if cerr := wr.file.Close(); cerr != nil {
-		err = cerr
-	}
-	return
-}
-
-func (wr *journalWriter) offset() int64 {
-	return wr.off + int64(len(wr.buf))
-}
-
+// getBytes returns a buffer for writers to copy data into.
 func (wr *journalWriter) getBytes(n int) (buf []byte, err error) {
 	c, l := cap(wr.buf), len(wr.buf)
 	if n > c {
@@ -308,11 +376,139 @@ func (wr *journalWriter) getBytes(n int) (buf []byte, err error) {
 	return
 }
 
+// flush writes buffered data into the journal file.
 func (wr *journalWriter) flush() (err error) {
-	if _, err = wr.file.WriteAt(wr.buf, wr.off); err != nil {
+	if _, err = wr.journal.WriteAt(wr.buf, wr.off); err != nil {
 		return err
 	}
 	wr.off += int64(len(wr.buf))
 	wr.buf = wr.buf[:0]
 	return
+}
+
+// maybeFlush flushes buffered data, if any exists.
+func (wr *journalWriter) maybeFlush() (err error) {
+	wr.lock.RLock()
+	empty := len(wr.buf) == 0
+	wr.lock.RUnlock()
+	if empty {
+		return
+	}
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
+	return wr.flush()
+}
+
+// snapshot returns an io.Reader with a consistent view of
+// the current state of the journal file.
+func (wr *journalWriter) snapshot() (io.Reader, int64, error) {
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
+	if err := wr.flush(); err != nil {
+		return nil, 0, err
+	}
+	// open a new file descriptor with an
+	// independent lifecycle from |wr.file|
+	f, err := os.Open(wr.path)
+	if err != nil {
+		return nil, 0, err
+	}
+	return io.LimitReader(f, wr.off), wr.off, nil
+}
+
+func (wr *journalWriter) offset() int64 {
+	return wr.off + int64(len(wr.buf))
+}
+
+func (wr *journalWriter) currentSize() int64 {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
+	return wr.offset()
+}
+
+func (wr *journalWriter) uncompressedSize() uint64 {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
+	return wr.uncmpSz
+}
+
+func (wr *journalWriter) recordCount() uint32 {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
+	return wr.ranges.count()
+}
+
+func (wr *journalWriter) Close() (err error) {
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
+	if err = wr.flush(); err != nil {
+		return err
+	}
+	if cerr := wr.journal.Sync(); cerr != nil {
+		err = cerr
+	}
+	if cerr := wr.journal.Close(); cerr != nil {
+		err = cerr
+	}
+	return
+}
+
+type rangeIndex struct {
+	novel  map[addr]Range
+	cached map[addr]Range
+}
+
+func newRangeIndex() rangeIndex {
+	return rangeIndex{
+		novel:  make(map[addr]Range),
+		cached: make(map[addr]Range),
+	}
+}
+
+func (idx rangeIndex) get(a addr) (rng Range, ok bool) {
+	rng, ok = idx.novel[a]
+	if !ok {
+		rng, ok = idx.cached[a]
+	}
+	return
+}
+
+func (idx rangeIndex) put(a addr, rng Range) {
+	idx.novel[a] = rng
+}
+
+func (idx rangeIndex) iter(cb func(addr, Range)) {
+	for a, r := range idx.novel {
+		cb(a, r)
+	}
+	for a, r := range idx.cached {
+		cb(a, r)
+	}
+}
+
+func (idx rangeIndex) count() uint32 {
+	return uint32(len(idx.novel) + len(idx.cached))
+}
+
+func (idx rangeIndex) novelCount() int {
+	return len(idx.novel)
+}
+
+func (idx rangeIndex) novelLookups() (lookups []lookup) {
+	lookups = make([]lookup, 0, len(idx.novel))
+	for a, r := range idx.novel {
+		lookups = append(lookups, lookup{a: a, r: r})
+	}
+	return
+}
+
+func (idx rangeIndex) flatten() {
+	if len(idx.cached) == 0 {
+		idx.cached = idx.novel
+	} else {
+		for a, r := range idx.novel {
+			idx.cached[a] = r
+		}
+	}
+	idx.novel = make(map[addr]Range)
 }

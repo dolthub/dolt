@@ -39,6 +39,8 @@ type SqlDiffWriter struct {
 	autocommitOff        bool
 }
 
+var _ diff.SqlRowDiffWriter = SqlDiffWriter{}
+
 func NewSqlDiffWriter(tableName string, schema schema.Schema, wr io.WriteCloser) *SqlDiffWriter {
 	return &SqlDiffWriter{
 		tableName:       tableName,
@@ -93,6 +95,10 @@ func (w SqlDiffWriter) WriteRow(
 	default:
 		return fmt.Errorf("unexpected row diff type: %v", rowDiffType)
 	}
+}
+
+func (w SqlDiffWriter) WriteCombinedRow(ctx context.Context, oldRow, newRow sql.Row, mode diff.Mode) error {
+	return fmt.Errorf("sql format is unable to output diffs for combined rows")
 }
 
 func (w SqlDiffWriter) Close(ctx context.Context) error {

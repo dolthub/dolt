@@ -65,18 +65,18 @@ func newDiffWriter(diffOutput diffOutput) (diffWriter, error) {
 	}
 }
 
-func printDiffSummary(ctx context.Context, td diff.TableDelta, oldColLen, newColLen int) errhand.VerboseError {
+func printDiffStat(ctx context.Context, td diff.TableDelta, oldColLen, newColLen int) errhand.VerboseError {
 	// todo: use errgroup.Group
 	ae := atomicerr.New()
-	ch := make(chan diff.DiffSummaryProgress)
+	ch := make(chan diff.DiffStatProgress)
 	go func() {
 		defer close(ch)
-		err := diff.SummaryForTableDelta(ctx, ch, td)
+		err := diff.StatForTableDelta(ctx, ch, td)
 
 		ae.SetIfError(err)
 	}()
 
-	acc := diff.DiffSummaryProgress{}
+	acc := diff.DiffStatProgress{}
 	var count int64
 	var pos int
 	eP := cli.NewEphemeralPrinter()
@@ -119,15 +119,15 @@ func printDiffSummary(ctx context.Context, td diff.TableDelta, oldColLen, newCol
 	}
 
 	if keyless {
-		printKeylessSummary(acc)
+		printKeylessStat(acc)
 	} else {
-		printSummary(acc, oldColLen, newColLen)
+		printStat(acc, oldColLen, newColLen)
 	}
 
 	return nil
 }
 
-func printSummary(acc diff.DiffSummaryProgress, oldColLen, newColLen int) {
+func printStat(acc diff.DiffStatProgress, oldColLen, newColLen int) {
 	numCellInserts, numCellDeletes := sqle.GetCellsAddedAndDeleted(acc, newColLen)
 	rowsUnmodified := uint64(acc.OldRowSize - acc.Changes - acc.Removes)
 	unmodified := pluralize("Row Unmodified", "Rows Unmodified", rowsUnmodified)
@@ -161,7 +161,7 @@ func printSummary(acc diff.DiffSummaryProgress, oldColLen, newColLen int) {
 	cli.Printf("(%s vs %s)\n\n", oldValues, newValues)
 }
 
-func printKeylessSummary(acc diff.DiffSummaryProgress) {
+func printKeylessStat(acc diff.DiffStatProgress) {
 	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
 	deletions := pluralize("Row Deleted", "Rows Deleted", acc.Removes)
 
@@ -245,6 +245,22 @@ func (t tabularDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.R
 
 	if fromCreateStmt != toCreateStmt {
 		cli.Println(textdiff.LineDiff(fromCreateStmt, toCreateStmt))
+	}
+
+	resolvedFromFks := map[string]struct{}{}
+	for _, fk := range td.FromFks {
+		if len(fk.ReferencedTableColumns) > 0 {
+			resolvedFromFks[fk.Name] = struct{}{}
+		}
+	}
+
+	for _, fk := range td.ToFks {
+		if _, ok := resolvedFromFks[fk.Name]; ok {
+			continue
+		}
+		if len(fk.ReferencedTableColumns) > 0 {
+			cli.Println(fmt.Sprintf("resolved foreign key `%s` on table `%s`", fk.Name, fk.TableName))
+		}
 	}
 
 	return nil

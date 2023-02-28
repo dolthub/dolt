@@ -40,7 +40,7 @@ type tableWriter struct {
 	pos                   uint64
 	totalCompressedData   uint64
 	totalUncompressedData uint64
-	prefixes              prefixIndexSlice // TODO: This is in danger of exploding memory
+	prefixes              prefixIndexSlice
 	blockHash             hash.Hash
 
 	snapper snappyEncoder
@@ -115,8 +115,7 @@ func (tw *tableWriter) addChunk(h addr, data []byte) bool {
 
 	// Stored in insertion order
 	tw.prefixes = append(tw.prefixes, prefixIndexRec{
-		h.Prefix(),
-		h[addrPrefixSize:],
+		h,
 		uint32(len(tw.prefixes)),
 		uint32(checksumSize + dataLength),
 	})
@@ -141,15 +140,14 @@ func (tw *tableWriter) finish() (uncompressedLength uint64, blockAddr addr, err 
 }
 
 type prefixIndexRec struct {
-	prefix      uint64
-	suffix      []byte
+	addr        addr
 	order, size uint32
 }
 
 type prefixIndexSlice []prefixIndexRec
 
 func (hs prefixIndexSlice) Len() int           { return len(hs) }
-func (hs prefixIndexSlice) Less(i, j int) bool { return hs[i].prefix < hs[j].prefix }
+func (hs prefixIndexSlice) Less(i, j int) bool { return hs[i].addr.Prefix() < hs[j].addr.Prefix() }
 func (hs prefixIndexSlice) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 
 func (tw *tableWriter) writeIndex() error {
@@ -161,7 +159,7 @@ func (tw *tableWriter) writeIndex() error {
 	lengthsOffset := tw.pos + lengthsOffset(numRecords)   // skip prefix and ordinal for each record
 	suffixesOffset := tw.pos + suffixesOffset(numRecords) // skip size for each record
 	for _, pi := range tw.prefixes {
-		binary.BigEndian.PutUint64(pfxScratch[:], pi.prefix)
+		binary.BigEndian.PutUint64(pfxScratch[:], pi.addr.Prefix())
 
 		// hash prefix
 		n := uint64(copy(tw.buff[tw.pos:], pfxScratch[:]))
@@ -181,7 +179,7 @@ func (tw *tableWriter) writeIndex() error {
 
 		// hash suffix
 		offset = suffixesOffset + uint64(pi.order)*addrSuffixSize
-		n = uint64(copy(tw.buff[offset:], pi.suffix))
+		n = uint64(copy(tw.buff[offset:], pi.addr.Suffix()))
 
 		if n != addrSuffixSize {
 			return errors.New("failed to copy all bytes")
