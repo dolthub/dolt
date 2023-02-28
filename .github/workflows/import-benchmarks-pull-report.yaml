@@ -65,7 +65,7 @@ jobs:
             {
               "version": "${{ steps.comment-branch.outputs.head_sha }}",
               "run_file": "ci.yaml",
-              "summary": "summary.yaml",
+              "summary": "summary.sql",
               "report": "three_way_compare.sql",
               "commit_to_branch": "${{ steps.comment-branch.outputs.head_sha }}",
               "actor": "${{ github.actor }}",
