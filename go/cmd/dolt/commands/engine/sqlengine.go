@@ -362,6 +362,6 @@ func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, str
 			ServerHost: "localhost",
 		},
 	)
-	
+
 	return engine, mrEnv.GetFirstDatabase(), err
 }

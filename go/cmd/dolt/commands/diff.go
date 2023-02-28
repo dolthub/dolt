@@ -748,7 +748,7 @@ func diffRows(
 	if dArgs.limit >= 0 {
 		query += " limit " + strconv.Itoa(dArgs.limit)
 	}
-	
+
 	sch, rowIter, err := se.Query(ctx, query)
 	if sql.ErrSyntaxError.Is(err) {
 		return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
