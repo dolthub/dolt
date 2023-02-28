@@ -69,7 +69,7 @@ jobs:
             ./${{ env.SCRIPT_DIR}}/setup.sh $TMPDIR $DATADIR
 
             cd $TMPDIR
-            latency=$(python3 -c "import time, subprocess; start = time.time(); res=subprocess.run(['dolt', 'merge', '--no-edit', 'main'], capture_output=True); output = res.stdout + res.stderr if res.returncode != 0 else  time.time() -start;  print(output); exit(res.returncode)")
+            latency=$(python3 -c "import time, subprocess; start = time.time(); res=subprocess.run(['dolt', 'merge', '--squash', 'main'], capture_output=True); output = res.stdout + res.stderr if res.returncode != 0 else  time.time() -start;  print(output); exit(res.returncode)")
 
             conflicts=$(dolt sql -r csv -q "select count(*) from dolt_conflicts_table0;" | tail -1)
 
