@@ -271,6 +271,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+	defer se.Close()
 
 	var workingRoot *doltdb.RootValue
 	if dEnv != nil && dEnv.Valid() {
@@ -350,6 +351,7 @@ func newEngine(
 	username string,
 	mrEnv *env.MultiRepoEnv,
 ) (*engine.SqlEngine, *sql.Context, error) {
+	
 	format := engine.FormatTabular
 	if formatSr, ok := apr.GetValue(FormatFlag); ok {
 		var verr errhand.VerboseError
