@@ -119,7 +119,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 
 	if tablesWithViolations.Size() > 0 {
 		cli.PrintErrln("All constraints are not satisfied.")
-		eng, _, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+		eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 		if err != nil {
 			return commands.HandleVErrAndExitCode(errhand.BuildDError("Failed to build sql engine.").AddCause(err).Build(), nil)
 		}
@@ -134,7 +134,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 			}
 			cli.Println("")
 			cli.Println(doltdb.DoltConstViolTablePrefix + tableName)
-			dErr := printViolationsForTable(ctx, tableName, tbl, eng)
+			dErr := printViolationsForTable(ctx, dbName, tableName, tbl, eng)
 			if dErr != nil {
 				return commands.HandleVErrAndExitCode(dErr, nil)
 			}
@@ -153,7 +153,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 	return 0
 }
 
-func printViolationsForTable(ctx context.Context, tblName string, tbl *doltdb.Table, eng *engine.SqlEngine) errhand.VerboseError {
+func printViolationsForTable(ctx context.Context, dbName, tblName string, tbl *doltdb.Table, eng *engine.SqlEngine) errhand.VerboseError {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return errhand.BuildDError("Error loading table schema").AddCause(err).Build()
@@ -166,6 +166,8 @@ func printViolationsForTable(ctx context.Context, tblName string, tbl *doltdb.Ta
 	if err != nil {
 		return errhand.BuildDError("Error making sql context").AddCause(err).Build()
 	}
+	sCtx.SetCurrentDatabase(dbName)
+	
 	sqlSch, sqlItr, err := eng.Query(sCtx, query)
 	if err != nil {
 		return errhand.BuildDError("Error querying constraint violations").AddCause(err).Build()
