@@ -1,0 +1,183 @@
+name: Merge Benchmarks
+on:
+  repository_dispatch:
+    types: [ benchmark-merge ]
+env:
+  SCRIPT_DIR: '.github/scripts/merge-perf'
+  RESULT_TABLE_NAME: 'merge_perf_results'
+  DOLTHUB_DB: 'import-perf/merge-perf'
+jobs:
+  bench:
+    name: Benchmark
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: true
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go 1.x
+      id: go
+      uses: actions/setup-go@v3
+      with:
+        go-version: ^1.19
+
+    - name: Setup Python 3.x
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+
+    - name: Dolt version
+      id: version
+      run: |
+        version=${{ github.event.client_payload.version }}
+
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.client_payload.version }}
+
+    - name: Install dolt
+      working-directory: ./go
+      run: go install ./cmd/dolt
+
+    - name: Run bench
+      id: bench
+      run: |
+        dolt config --global --add user.email "merge-perf@dolthub.com"
+        dolt config --global --add user.name "merge-perf"
+
+        gw=$GITHUB_WORKSPACE
+        DATADIR=$gw/data
+        TABLE_NUM=2
+        ROW_NUM=1000000
+        ADD_NUM=60000
+        python ${{ env.SCRIPT_DIR }}/data.py $DATADIR $TABLE_NUM $ROW_NUM $ADD_NUM
+
+        TMPDIR=$gw/tmp
+        ./${{ env.SCRIPT_DIR}}/setup.sh $TMPDIR $DATADIR
+
+        TIMES=$gw/time.log
+        cd $TMPDIR
+        latency=$(python3 -c "import time, subprocess; start = time.time(); res=subprocess.run(['dolt', 'merge', 'main'], capture_output=True); output = res.stdout + res.stderr if res.returncode != 0 else  time.time() -start;  print(output); exit(res.returncode)")
+
+        RESULTS=$gw/results.sql
+        echo "CREATE TABLE ${{env.RESULT_TABLE_NAME }} (name varchar(50) primary key, table_cnt int, run_cnt int, add_cnt int, conflict_cnt int, fks bool, latency float);" >> $RESULTS
+        echo "INSERT INTO ${{ env.RESULT_TABLE_NAME }} values ('1m rows, 100k conflicts', 2, $ROW_NUM, $ADD_NUM, $ADD_NUM, true, $latency);" >> $RESULTS
+
+        echo "::set-output name=result_path::$RESULTS"
+
+    - name: Report
+      id: report
+      run: |
+        gw=$GITHUB_WORKSPACE
+        in="${{ steps.bench.outputs.result_path }}"
+        query="select name, round(latency, 2) as latency from ${{ env.RESULT_TABLE_NAME }}"
+        summaryq="select round(avg(latency), 2) as avg from ${{ env.RESULT_TABLE_NAME }}"
+
+        out="$gw/results.csv"
+        dolt_dir="$gw/merge-perf"
+
+        dolt config --global --add user.email "merge-perf@dolthub.com"
+        dolt config --global --add user.name "merge-perf"
+
+        echo '${{ secrets.DOLTHUB_IMPORT_PERF_CREDS_VALUE }}' | dolt creds import
+        dolt clone ${{ env.DOLTHUB_DB }} "$dolt_dir"
+
+        cd "$dolt_dir"
+
+        branch="${{ github.event.client_payload.commit_to_branch }}"
+        # checkout branch
+        if [ -z $(dolt sql -q "select 1 from dolt_branches where name = '$branch';") ]; then
+          dolt checkout -b $branch
+        else
+          dolt checkout $branch
+        fi
+
+        dolt sql -q "drop table if exists ${{ env.RESULT_TABLE_NAME }}"
+
+        # load results
+        dolt sql < "$in"
+
+        # push results to dolthub
+        dolt add ${{ env.RESULT_TABLE_NAME }}
+        dolt commit -m "CI commit"
+        dolt push -f origin $branch
+
+        # generate report
+        dolt sql -r csv -q "$query" > "$out"
+
+        cat "$out"
+        echo "::set-output name=report_path::$out"
+
+        avg=$(dolt sql -r csv -q "$summaryq" | tail -1)
+        echo "::set-output name=avg::$avg"
+
+    - name: Format Results
+      id: html
+      if: ${{ github.event.client_payload.email_recipient }} != ""
+      run: |
+        gw="$GITHUB_WORKSPACE"
+        in="${{ steps.report.outputs.report_path }}"
+        out="$gw/results.html"
+
+        echo "<table>" > "$out"
+        print_header=true
+        while read line; do
+          if "$print_header"; then
+            echo "  <tr><th>${line//,/</th><th>}</th></tr>" >> "$out"
+            print_header=false
+            continue
+          fi
+          echo "  <tr><td>${line//,/</td><td>}</td></tr>" >> "$out"
+        done < "$in"
+        echo "</table>" >> "$out"
+
+        avg="${{ steps.report.outputs.avg }}"
+        echo "<table><tr><th>Average</th></tr><tr><td>$avg</tr></td></table>" >> "$out"
+
+        cat "$out"
+        echo "::set-output name=html::$(echo $out)"
+
+    - name: Configure AWS Credentials
+      if: ${{ github.event.client_payload.email_recipient }} != ""
+      uses: aws-actions/configure-aws-credentials@v1-node16
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-west-2
+
+    - name: Send Email
+      uses: ./.github/actions/ses-email-action
+      if: ${{ github.event.client_payload.email_recipient }} != ""
+      with:
+        region: us-west-2
+        toAddresses: '["${{ github.event.client_payload.email_recipient }}"]'
+        subject: 'System Table Performance Benchmarks: ${{ github.event.client_payload.version }}'
+        bodyPath: ${{ steps.html.outputs.html }}
+        template: 'SysbenchTemplate'
+
+    - name: Read CSV
+      if: ${{ github.event.client_payload.issue_id }} != ""
+      id: csv
+      uses: juliangruber/read-file-action@v1
+      with:
+        path: "${{ steps.report.outputs.report_path }}"
+
+    - name: Create MD
+      if: ${{ github.event.client_payload.issue_id }} != ""
+      uses: petems/csv-to-md-table-action@master
+      id: md
+      with:
+        csvinput: ${{ steps.csv.outputs.content }}
+
+    - uses: mshick/add-pr-comment@v2
+      if: ${{ github.event.client_payload.issue_id }} != ""
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        issue: ${{ github.event.client_payload.issue_id }}
+        message-failure: merge benchmark failed
+        message-cancelled: merge benchmark cancelled
+        allow-repeats: true
+        message: |
+          @${{ github.event.client_payload.actor }} __DOLT__
+          ${{ steps.md.outputs.markdown-table }}
