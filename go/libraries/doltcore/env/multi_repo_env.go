@@ -384,29 +384,6 @@ func enforceSingleFormat(envSet map[string]*DoltEnv) {
 	}
 }
 
-func DBNamesAndPathsFromDir(fs filesys.Filesys, path string) ([]EnvNameAndPath, error) {
-	var envNamesAndPaths []EnvNameAndPath
-	err := fs.Iter(path, false, func(path string, size int64, isDir bool) (stop bool) {
-		if isDir {
-			dirName := filepath.Base(path)
-			if dirName[0] == '.' {
-				return false
-			}
-
-			name := dirToDBName(dirName)
-			envNamesAndPaths = append(envNamesAndPaths, EnvNameAndPath{Name: name, Path: path})
-		}
-
-		return false
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return envNamesAndPaths, nil
-}
-
 func dirToDBName(dirName string) string {
 	dbName := strings.TrimSpace(dirName)
 	dbName = strings.Map(func(r rune) rune {
