@@ -104,6 +104,7 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 	}
 
 	var resetCmds []setup.SetupScript
+	resetCmds = append(resetCmds, setup.SetupScript{"SET foreign_key_checks=0;"})
 	for i := range dbs {
 		db := dbs[i]
 		resetCmds = append(resetCmds, setup.SetupScript{fmt.Sprintf("use %s", db)})
@@ -138,6 +139,7 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 		resetCmds = append(resetCmds, setup.SetupScript{"call dreset('--hard', 'head')"})
 	}
 
+	resetCmds = append(resetCmds, setup.SetupScript{"SET foreign_key_checks=1;"})
 	resetCmds = append(resetCmds, setup.SetupScript{"use mydb"})
 	return resetCmds
 }

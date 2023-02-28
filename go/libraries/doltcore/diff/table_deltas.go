@@ -57,6 +57,13 @@ type TableDelta struct {
 	FromFksParentSch map[string]schema.Schema
 }
 
+type TableDeltaSummary struct {
+	DiffType     string
+	DataChange   bool
+	SchemaChange bool
+	TableName    string
+}
+
 // GetStagedUnstagedTableDeltas represents staged and unstaged changes as TableDelta slices.
 func GetStagedUnstagedTableDeltas(ctx context.Context, roots doltdb.Roots) (staged, unstaged []TableDelta, err error) {
 	staged, err = GetTableDeltas(ctx, roots.Head, roots.Staged)
@@ -385,6 +392,83 @@ func (td TableDelta) IsKeyless(ctx context.Context) (bool, error) {
 			return false, fmt.Errorf("mismatched keyless and keyed schemas for table %s", td.CurName())
 		}
 	}
+}
+
+// isTableDataEmpty return true if the table does not contain any data
+func isTableDataEmpty(ctx context.Context, table *doltdb.Table) (bool, error) {
+	rowData, err := table.GetRowData(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return rowData.Empty()
+}
+
+// GetSummary returns a summary of the table delta.
+func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error) {
+	// Dropping a table is always a schema change, and also a data change if the table contained data
+	if td.IsDrop() {
+		isEmpty, err := isTableDataEmpty(ctx, td.FromTable)
+		if err != nil {
+			return nil, err
+		}
+
+		return &TableDeltaSummary{
+			TableName:    td.FromName,
+			DataChange:   !isEmpty,
+			SchemaChange: true,
+			DiffType:     "dropped",
+		}, nil
+	}
+
+	// Renaming a table is always a schema change, and also a data change if the table data differs
+	if td.IsRename() {
+		dataChanged, err := td.HasHashChanged()
+		if err != nil {
+			return nil, err
+		}
+
+		return &TableDeltaSummary{
+			TableName:    td.ToName,
+			DataChange:   dataChanged,
+			SchemaChange: true,
+			DiffType:     "renamed",
+		}, nil
+	}
+
+	// Creating a table is always a schema change, and also a data change if data was inserted
+	if td.IsAdd() {
+		isEmpty, err := isTableDataEmpty(ctx, td.ToTable)
+		if err != nil {
+			return nil, err
+		}
+
+		return &TableDeltaSummary{
+			TableName:    td.ToName,
+			DataChange:   !isEmpty,
+			SchemaChange: true,
+			DiffType:     "added",
+		}, nil
+	}
+
+	// TODO: Renamed columns without a data change are not accounted for here,
+	// `dataChanged` is true when it should be false
+	dataChanged, err := td.HasHashChanged()
+	if err != nil {
+		return nil, err
+	}
+
+	schemaChanged, err := td.HasSchemaChanged(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TableDeltaSummary{
+		TableName:    td.ToName,
+		DataChange:   dataChanged,
+		SchemaChange: schemaChanged,
+		DiffType:     "modified",
+	}, nil
 }
 
 // GetRowData returns the table's row data at the fromRoot and toRoot, or an empty map if the table did not exist.

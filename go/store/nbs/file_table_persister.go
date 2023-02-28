@@ -33,20 +33,17 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
-	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const tempTablePrefix = "nbs_table_"
 
-func newFSTablePersister(dir string, fc *fdCache, q MemoryQuotaProvider) tablePersister {
-	d.PanicIfTrue(fc == nil)
-	return &fsTablePersister{dir, fc, q}
+func newFSTablePersister(dir string, q MemoryQuotaProvider) tablePersister {
+	return &fsTablePersister{dir, q}
 }
 
 type fsTablePersister struct {
 	dir string
-	fc  *fdCache
 	q   MemoryQuotaProvider
 }
 
@@ -54,7 +51,7 @@ var _ tablePersister = &fsTablePersister{}
 var _ tableFilePersister = &fsTablePersister{}
 
 func (ftp *fsTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, ftp.fc)
+	return newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q)
 }
 
 func (ftp *fsTablePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
@@ -154,11 +151,6 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 	}
 
 	newName := filepath.Join(ftp.dir, name.String())
-	err = ftp.fc.ShrinkCache()
-
-	if err != nil {
-		return nil, err
-	}
 
 	err = file.Rename(tempName, newName)
 
@@ -169,15 +161,14 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 	return ftp.Open(ctx, name, chunkCount, stats)
 }
 
-func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
+func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
 	plan, err := planRangeCopyConjoin(sources, stats)
-
 	if err != nil {
-		return emptyChunkSource{}, err
+		return emptyChunkSource{}, nil, err
 	}
 
 	if plan.chunkCount == 0 {
-		return emptyChunkSource{}, nil
+		return emptyChunkSource{}, nil, nil
 	}
 
 	name := nameFromSuffixes(plan.suffixes())
@@ -224,30 +215,30 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 
 		return temp.Name(), nil
 	}()
-
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	err = file.Rename(tempName, filepath.Join(ftp.dir, name.String()))
-
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return ftp.Open(ctx, name, plan.chunkCount, stats)
+	cs, err := ftp.Open(ctx, name, plan.chunkCount, stats)
+	if err != nil {
+		return nil, nil, err
+	}
+	return cs, func() {
+		for _, s := range sources {
+			file.Remove(filepath.Join(ftp.dir, s.hash().String()))
+		}
+	}, nil
 }
 
 func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error {
 	ss := contents.getSpecSet()
 
 	fileInfos, err := os.ReadDir(ftp.dir)
-
-	if err != nil {
-		return err
-	}
-
-	err = ftp.fc.ShrinkCache()
 
 	if err != nil {
 		return err
