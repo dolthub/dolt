@@ -2157,29 +2157,29 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				// table is added, no data changes
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{{"t", "added", false, true}},
+				Expected: []sql.Row{{"", "t", "added", false, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
 				// change from and to commits
 				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
 				// table is dropped
 				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit5, 't');",
-				Expected: []sql.Row{{"t", "dropped", true, true}},
+				Expected: []sql.Row{{"t", "", "dropped", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit4, 't');",
-				Expected: []sql.Row{{"t", "added", true, true}},
+				Expected: []sql.Row{{"", "t", "added", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
@@ -2220,28 +2220,28 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				// table is added, no data diff, result is empty
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{{"t", "added", false, true}},
+				Expected: []sql.Row{{"", "t", "added", false, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
 				// table is dropped
 				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit5, 't');",
-				Expected: []sql.Row{{"t", "dropped", true, true}},
+				Expected: []sql.Row{{"t", "", "dropped", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit4, 't');",
-				Expected: []sql.Row{{"t", "added", true, true}},
+				Expected: []sql.Row{{"", "t", "added", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
@@ -2287,32 +2287,47 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit0, @Commit1);",
-				Expected: []sql.Row{{"t", "added", true, true}},
+				Expected: []sql.Row{{"", "t", "added", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2);",
-				Expected: []sql.Row{{"t2", "added", true, true}},
+				Expected: []sql.Row{{"", "t2", "added", true, true}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3);",
-				Expected: []sql.Row{{"t", "modified", true, false}, {"t2", "modified", true, false}},
+				Query: "SELECT * from dolt_diff_summary(@Commit2, @Commit3);",
+				Expected: []sql.Row{
+					{"t", "t", "modified", true, false},
+					{"t2", "t2", "modified", true, false},
+				},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4);",
-				Expected: []sql.Row{{"t", "modified", true, false}, {"t2", "modified", true, false}},
+				Query: "SELECT * from dolt_diff_summary(@Commit3, @Commit4);",
+				Expected: []sql.Row{
+					{"t", "t", "modified", true, false},
+					{"t2", "t2", "modified", true, false},
+				},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit0, @Commit4);",
-				Expected: []sql.Row{{"t", "added", true, true}, {"t2", "added", true, true}},
+				Query: "SELECT * from dolt_diff_summary(@Commit0, @Commit4);",
+				Expected: []sql.Row{
+					{"", "t", "added", true, true},
+					{"", "t2", "added", true, true},
+				},
 			},
 			{
 				Query: "SELECT * from dolt_diff_summary(@Commit4, @Commit2);",
 
-				Expected: []sql.Row{{"t", "modified", true, false}, {"t2", "modified", true, false}},
+				Expected: []sql.Row{
+					{"t", "t", "modified", true, false},
+					{"t2", "t2", "modified", true, false},
+				},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary(@Commit3, 'WORKING');",
-				Expected: []sql.Row{{"t", "modified", true, false}, {"t2", "modified", true, false}, {"keyless", "added", false, true}},
+				Query: "SELECT * from dolt_diff_summary(@Commit3, 'WORKING');",
+				Expected: []sql.Row{
+					{"t", "t", "modified", true, false},
+					{"t2", "t2", "modified", true, false},
+					{"", "keyless", "added", false, true}},
 			},
 		},
 	},
@@ -2334,19 +2349,19 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, 'WORKING', 't')",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('STAGED', 'WORKING', 't')",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('STAGED..WORKING', 't')",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('WORKING', 'STAGED', 't')",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('WORKING', 'WORKING', 't')",
@@ -2370,7 +2385,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('HEAD', 'STAGED', 't')",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 		},
 	},
@@ -2412,70 +2427,70 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary('main', 'branch1', 't');",
-				Expected: []sql.Row{{"t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('main..branch1', 't');",
-				Expected: []sql.Row{{"t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query: "SELECT * from dolt_diff_summary('main', 'branch1');",
 				Expected: []sql.Row{
-					{"t", "modified", true, true},
-					{"newtable", "dropped", true, true},
+					{"t", "t", "modified", true, true},
+					{"newtable", "", "dropped", true, true},
 				},
 			},
 			{
 				Query: "SELECT * from dolt_diff_summary('main..branch1');",
 				Expected: []sql.Row{
-					{"t", "modified", true, true},
-					{"newtable", "dropped", true, true},
+					{"t", "t", "modified", true, true},
+					{"newtable", "", "dropped", true, true},
 				},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('branch1', 'main', 't');",
-				Expected: []sql.Row{{"t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('branch1..main', 't');",
-				Expected: []sql.Row{{"t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('main~2', 'branch1', 't');",
-				Expected: []sql.Row{{"t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('main~2..branch1', 't');",
-				Expected: []sql.Row{{"t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", true, true}},
 			},
 
 			// Three dot
 			{
 				Query:    "SELECT * from dolt_diff_summary('main...branch1', 't');",
-				Expected: []sql.Row{{"t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('main...branch1');",
-				Expected: []sql.Row{{"t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('branch1...main', 't');",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query: "SELECT * from dolt_diff_summary('branch1...main');",
 				Expected: []sql.Row{
-					{"t", "modified", true, false},
-					{"newtable", "added", true, true},
+					{"t", "t", "modified", true, false},
+					{"", "newtable", "added", true, true},
 				},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('branch1...main^');",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('branch1...main', 'newtable');",
-				Expected: []sql.Row{{"newtable", "added", true, true}},
+				Expected: []sql.Row{{"", "newtable", "added", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('main...main', 'newtable');",
@@ -2516,27 +2531,27 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{{"t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{{"t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit5, 't');",
-				Expected: []sql.Row{{"t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 		},
 	},
@@ -2573,26 +2588,27 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "modified", true, true}}, // TODO: Data change should be false for renamed column
+				Expected: []sql.Row{{"t", "t", "modified", true, true}}, // TODO: Data change should be false for renamed column
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit5, 't');",
-				Expected: []sql.Row{{"t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
-				Expected: []sql.Row{{"t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 		},
 	},
+
 	{
 		Name: "new table",
 		SetUpScript: []string{
@@ -2601,11 +2617,11 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_diff_summary('HEAD', 'WORKING')",
-				Expected: []sql.Row{{"t1", "added", false, true}},
+				Expected: []sql.Row{{"", "t1", "added", false, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('WORKING', 'HEAD')",
-				Expected: []sql.Row{{"t1", "dropped", false, true}},
+				Expected: []sql.Row{{"t1", "", "dropped", false, true}},
 			},
 			{
 				Query:            "insert into t1 values (1,2)",
@@ -2613,14 +2629,15 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD', 'WORKING', 't1')",
-				Expected: []sql.Row{{"t1", "added", true, true}},
+				Expected: []sql.Row{{"", "t1", "added", true, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('WORKING', 'HEAD', 't1')",
-				Expected: []sql.Row{{"t1", "dropped", true, true}},
+				Expected: []sql.Row{{"t1", "", "dropped", true, true}},
 			},
 		},
 	},
+
 	{
 		Name: "dropped table",
 		SetUpScript: []string{
@@ -2634,14 +2651,15 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't1')",
-				Expected: []sql.Row{{"t1", "dropped", true, true}},
+				Expected: []sql.Row{{"t1", "", "dropped", true, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD', 'HEAD~', 't1')",
-				Expected: []sql.Row{{"t1", "added", true, true}},
+				Expected: []sql.Row{{"", "t1", "added", true, true}},
 			},
 		},
 	},
+
 	{
 		Name: "renamed table",
 		SetUpScript: []string{
@@ -2657,32 +2675,33 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't2')",
-				Expected: []sql.Row{{"t2", "renamed", true, true}},
+				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~..HEAD', 't2')",
-				Expected: []sql.Row{{"t2", "renamed", true, true}},
+				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD')",
-				Expected: []sql.Row{{"t2", "renamed", true, true}},
+				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~..HEAD')",
-				Expected: []sql.Row{{"t2", "renamed", true, true}},
+				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
 			},
 			{
 				// Old table name can be matched as well
 				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't1')",
-				Expected: []sql.Row{{"t1", "renamed", true, true}},
+				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
 			},
 			{
 				// Old table name can be matched as well
 				Query:    "select * from dolt_diff_summary('HEAD~..HEAD', 't1')",
-				Expected: []sql.Row{{"t1", "renamed", true, true}},
+				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
 			},
 		},
 	},
+
 	{
 		Name: "add multiple columns, then set and unset a value. Should not show a diff",
 		SetUpScript: []string{
@@ -2701,7 +2720,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary('HEAD~2', 'HEAD');",
-				Expected: []sql.Row{{"t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('HEAD~', 'HEAD');",
@@ -2745,7 +2764,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * from dolt_diff_summary('HEAD~', 'HEAD')",
 				Expected: []sql.Row{
-					{"t2", "modified", true, false},
+					{"t2", "t2", "modified", true, false},
 				},
 				ExpectedWarning:       dtables.PrimaryKeyChangeWarningCode,
 				ExpectedWarningsCount: 1,
