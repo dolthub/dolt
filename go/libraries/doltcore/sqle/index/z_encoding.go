@@ -184,17 +184,9 @@ func ZCell(v types.GeometryValue) val.Cell {
 // ZRange[1] is the upper bound (z-max)
 type ZRange = [2]ZVal
 
-// SplitZRanges takes a ZRange and splits it into continuous ZRanges within the bounding box
-// A ZRange is continuous if
-// 1. it is a point (the lower and upper bounds are equal)
-// 2. the ranges are within a cell (the suffixes of the bounds range from 00...0 to 11...1)
-// TODO: check validity of bbox to prevent inf recursion?
-func SplitZRanges(zRange ZRange, depth int) []ZRange {
-	return splitZRanges(zRange, depth, make([]ZRange, 0, 128))
-}
-
-// mergeZRanges combines the slice of ZRanges acc with zRange
-// It checks if the last ZRange in acc overlaps with zRange
+// mergeZRanges combines the z-ranges in acc with zRange by either
+// 1. combining the last ZRange in acc with zRange if the ranges are next to each other or
+// 2. appending zRange to acc
 func mergeZRanges(acc []ZRange, zRange ZRange) []ZRange {
 	n := len(acc) - 1
 	if n >= 0 && acc[n][1][0] == zRange[0][0] && zRange[0][1] - acc[n][1][1] == 1 {
@@ -255,4 +247,13 @@ func splitZRanges(zRange ZRange, depth int, acc []ZRange) []ZRange {
 	acc = splitZRanges(zRangeL, depth, acc)
 	acc = splitZRanges(zRangeR, depth, acc)
 	return acc
+}
+
+// SplitZRanges takes a ZRange and splits it into continuous ZRanges within the bounding box
+// A ZRange is continuous if
+// 1. it is a point (the lower and upper bounds are equal)
+// 2. the ranges are within a cell (the suffixes of the bounds range from 00...0 to 11...1)
+// TODO: check validity of bbox to prevent inf recursion?
+func SplitZRanges(zRange ZRange, depth int) []ZRange {
+	return splitZRanges(zRange, depth, make([]ZRange, 0, 128))
 }

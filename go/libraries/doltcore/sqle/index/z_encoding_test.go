@@ -592,6 +592,26 @@ func BenchmarkSplitZRanges(b *testing.B) {
 		assert.Equal(b, 13, len(zRanges))
 	})
 
+	b.Run("typical range, depth 8", func(b *testing.B) {
+		poly := types.Polygon{Lines: []types.LineString{{Points: []types.Point{
+			{X: 0, Y: 0},
+			{X: 10, Y: 0},
+			{X: 10, Y: 10},
+			{X: 0, Y: 10},
+			{X: 10, Y: 10},
+		}}}}
+		bbox := spatial.FindBBox(poly)
+		zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
+		zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
+		zRange := ZRange{zMin, zMax}
+		var zRanges []ZRange
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			zRanges = SplitZRanges(zRange, 16)
+		}
+		assert.Equal(b, 21264, len(zRanges))
+	})
+
 	b.Run("typical range, depth 16", func(b *testing.B) {
 		poly := types.Polygon{Lines: []types.LineString{{Points: []types.Point{
 			{X: 0, Y: 0},
