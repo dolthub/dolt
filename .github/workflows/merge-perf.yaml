@@ -57,9 +57,9 @@ jobs:
         echo "CREATE TABLE ${{env.RESULT_TABLE_NAME }} (name varchar(50) primary key, table_cnt int, run_cnt int, add_cnt int, delete_cnt int, update_cnt int, conflict_cnt int, fks bool, latency float);" >> $RESULTS
 
         # parameters for testing
-        ROW_NUM=10000
+        ROW_NUM=1000000
         TABLE_NUM=2
-        EDIT_CNT=600
+        EDIT_CNT=60000
         names=('adds_only' 'deletes_only' 'updates_only' 'adds_updates_deletes')
         adds=($EDIT_CNT 0 0 $EDIT_CNT)
         deletes=(0 $EDIT_CNT 0 $EDIT_CNT)
