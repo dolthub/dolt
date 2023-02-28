@@ -45,7 +45,6 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -921,11 +920,13 @@ func runShell(sqlCtx *sql.Context, se *engine.SqlEngine) error {
 		var sqlSch sql.Schema
 		var rowIter sql.RowIter
 
+		initialCtx := sqlCtx
+		
 		cont := func() bool {
-			subCtx, stop := signal.NotifyContext(sqlCtx, os.Interrupt, syscall.SIGTERM)
+			subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			sqlCtx, err = se.NewContext(subCtx, sqlCtx.Session)
+			sqlCtx, err = se.NewContext(subCtx, initialCtx.Session)
 			if err != nil {
 				shell.Println(color.RedString(err.Error()))
 				return false
@@ -966,52 +967,45 @@ func runShell(sqlCtx *sql.Context, se *engine.SqlEngine) error {
 }
 
 // Returns a new auto completer with table names, column names, and SQL keywords.
+// TODO: update the completer on DDL, branch change, etc. 
 func newCompleter(
-		ctx context.Context,
+		ctx *sql.Context,
 		se *engine.SqlEngine,
-) (*sqlCompleter, error) {
-	// TODO: change the sqlCompleter based on the current database and change it when the database changes.
-	se.Query(ctx, "select ", nil
+) (completer *sqlCompleter, rerr error) {
 	
-	var completionWords []string
-
-	root, err := dEnv.WorkingRoot(ctx)
+	_, iter, err := se.Query(ctx, "select table_schema, table_name, column_name from columns;")
 	if err != nil {
-		return &sqlCompleter{}, nil
+		return nil, err 
 	}
-
-	tableNames, err := root.GetTableNames(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	completionWords = append(completionWords, tableNames...)
+	
+	defer func(iter sql.RowIter, context *sql.Context) {
+		err := iter.Close(context)
+		if err != nil && rerr == nil {
+			rerr = err
+		}
+	}(iter, ctx)
+	
+	var identifiers map[string]struct{}
 	var columnNames []string
-	for _, tableName := range tableNames {
-		tbl, _, err := root.GetTable(ctx, tableName)
-
-		if err != nil {
+	for {
+		r, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
 			return nil, err
 		}
-
-		sch, err := tbl.GetSchema(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-
-		err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			completionWords = append(completionWords, col.Name)
-			columnNames = append(columnNames, col.Name)
-			return false, nil
-		})
-
-		if err != nil {
-			return nil, err
-		}
+		
+		identifiers[r[0].(string)] = struct{}{}
+		identifiers[r[1].(string)] = struct{}{}
+		identifiers[r[2].(string)] = struct{}{}
+		columnNames = append(columnNames, r[2].(string))
 	}
-
+	
+	var completionWords []string 
+	for k := range identifiers {
+		completionWords = append(completionWords, k)
+	}
+	
 	completionWords = append(completionWords, dsqle.CommonKeywords...)
 
 	return &sqlCompleter{
