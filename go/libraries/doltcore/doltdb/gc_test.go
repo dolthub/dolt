@@ -226,11 +226,7 @@ func setupSqlEngine(t *testing.T, ctx context.Context) (eng *engine.SqlEngine) {
 	}
 
 	eng, err = engine.NewSqlEngine(ctx, mrEnv, engine.FormatNull, &engine.SqlEngineConfig{
-		InitialDb:    testDB,
-		IsReadOnly:   false,
-		PrivFilePath: "",
 		ServerUser:   "root",
-		ServerPass:   "",
 		ServerHost:   "localhost",
 		Autocommit:   true,
 	})

@@ -184,7 +184,7 @@ func NewSqlEngine(
 
 	return &SqlEngine{
 		provider:       pro,
-		contextFactory: sqlContextFactory(config.InitialDb),
+		contextFactory: sqlContextFactory(),
 		dsessFactory:   sessionFactory,
 		engine:         engine,
 		resultFormat:   format,
@@ -302,7 +302,7 @@ func (se *SqlEngine) Close() error {
 
 // configureBinlogReplicaController configures the binlog replication controller with the |engine|.
 func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engine, session *dsess.DoltSession) error {
-	contextFactory := sqlContextFactory(config.InitialDb)
+	contextFactory := sqlContextFactory()
 
 	executionCtx, err := contextFactory(context.Background(), session)
 	if err != nil {
@@ -320,11 +320,9 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 }
 
 // sqlContextFactory returns a contextFactory that creates a new sql.Context with the initial database provided
-func sqlContextFactory(initialDb string) contextFactory {
+func sqlContextFactory() contextFactory {
 	return func(ctx context.Context, session sql.Session) (*sql.Context, error) {
 		sqlCtx := sql.NewContext(ctx, sql.WithSession(session))
-		sqlCtx.SetCurrentDatabase(initialDb)
-
 		return sqlCtx, nil
 	}
 }

@@ -45,6 +45,7 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 	}
 
 	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
+	// TODO: instantiate an engine here from the mrv directly
 	var dbName string
 	mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
 		dbName = name

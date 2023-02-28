@@ -355,11 +355,8 @@ func engineFromEnvironment(ctx context.Context, dEnv *env.DoltEnv) (eng *engine.
 	}
 
 	eng, err = engine.NewSqlEngine(ctx, mrEnv, engine.FormatNull, &engine.SqlEngineConfig{
-		InitialDb:    "dolt",
 		IsReadOnly:   false,
-		PrivFilePath: "",
 		ServerUser:   "root",
-		ServerPass:   "",
 		ServerHost:   "localhost",
 		Autocommit:   true,
 	})

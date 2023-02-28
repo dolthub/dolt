@@ -74,6 +74,7 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	}
 
 	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
+	// TODO: instantiate an engine here from MRV
 	var dbName string
 	mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
 		dbName = name

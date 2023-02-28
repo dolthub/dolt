@@ -141,7 +141,6 @@ func Serve(
 
 	// Create SQL Engine with users
 	config := &engine.SqlEngineConfig{
-		InitialDb:               "",
 		IsReadOnly:              serverConfig.ReadOnly(),
 		PrivFilePath:            serverConfig.PrivilegeFilePath(),
 		BranchCtrlFilePath:      serverConfig.BranchControlFilePath(),

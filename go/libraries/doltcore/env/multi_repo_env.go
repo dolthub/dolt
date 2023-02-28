@@ -22,6 +22,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -146,6 +147,18 @@ func (mrEnv *MultiRepoEnv) GetWorkingRoots(ctx context.Context) (map[string]*dol
 	}
 
 	return roots, err
+}
+
+// GetFirstDatabase returns the name of the first database in the MultiRepoEnv. This will be the database in the 
+// current working directory if applicable, or the first database alphabetically otherwise.
+func (mrEnv *MultiRepoEnv) GetFirstDatabase() string {
+	var currentDb string
+	_ = mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
+		currentDb = name
+		return true, nil
+	})
+	
+	return currentDb
 }
 
 // IsLocked returns true if any env is locked

@@ -274,6 +274,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
+	// TODO: instantiate an engine here instead
 	var currentDb string
 	mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
 		currentDb = name
