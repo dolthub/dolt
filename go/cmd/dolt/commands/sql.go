@@ -268,64 +268,23 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	initialDb := mrEnv.GetFirstDatabase()
-	var initialDbRoot *doltdb.RootValue
-	if initialDb != "" {
-		initialDbRoot, err = mrEnv.GetEnv(initialDb).WorkingRoot(ctx)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-	}
-	
-	format := engine.FormatTabular
-	if formatSr, ok := apr.GetValue(FormatFlag); ok {
-		var verr errhand.VerboseError
-		format, verr = GetResultFormat(formatSr)
-		if verr != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
-		}
-	}
-
-	config := &engine.SqlEngineConfig{
-		DoltCfgDirPath:     cfgDirPath,
-		PrivFilePath:       privsFp,
-		BranchCtrlFilePath: branchControlFilePath,
-		ServerUser:         username,
-		ServerHost:         DefaultHost,
-		Autocommit:         true,
-	}
-
-	se, err := engine.NewSqlEngine(
-		ctx,
-		mrEnv,
-		format,
-		config,
-	)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	defer se.Close()
-
-	sqlCtx, err := se.NewDefaultContext(ctx)
+	se, sqlCtx, err := newEngine(ctx, apr, cfgDirPath, privsFp, branchControlFilePath, username, mrEnv)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	// Add specified user as new superuser, if it doesn't already exist
-	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
-		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-
-	// Set client to specified user
-	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
 
 	// TODO: are these paths appropriately guarded when initalDbRoot may be nil? 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
-		return queryMode(sqlCtx, se, dEnv, initialDbRoot, apr, query, usage)
+		return queryMode(sqlCtx, se, dEnv, workingRoot, apr, query, usage)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		return savedQueryMode(sqlCtx, se, initialDbRoot, savedQueryName, usage)
+		return savedQueryMode(sqlCtx, se, workingRoot, savedQueryName, usage)
 	} else if apr.Contains(listSavedFlag) {
-		return listSavedQueriesMode(sqlCtx, se, initialDbRoot, usage)
+		return listSavedQueriesMode(sqlCtx, se, workingRoot, usage)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		isTty := false
@@ -360,7 +319,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if isTty {
-			verr := execShell(ctx, mrEnv, format, config)
+			verr := execShell(sqlCtx, se)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
@@ -378,6 +337,59 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	return 0
+}
+
+func newEngine(
+		ctx context.Context,
+		apr *argparser.ArgParseResults,
+		cfgDirPath string,
+		privsFp string,
+		branchControlFilePath string,
+		username string,
+		mrEnv *env.MultiRepoEnv,
+) (*engine.SqlEngine, *sql.Context, error) {
+	format := engine.FormatTabular
+	if formatSr, ok := apr.GetValue(FormatFlag); ok {
+		var verr errhand.VerboseError
+		format, verr = GetResultFormat(formatSr)
+		if verr != nil {
+			return nil, nil, verr
+		}
+	}
+
+	config := &engine.SqlEngineConfig{
+		DoltCfgDirPath:     cfgDirPath,
+		PrivFilePath:       privsFp,
+		BranchCtrlFilePath: branchControlFilePath,
+		ServerUser:         username,
+		ServerHost:         DefaultHost,
+		Autocommit:         true,
+	}
+
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		format,
+		config,
+	)
+
+	sqlCtx, err := se.NewDefaultContext(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Whether we're running in shell mode or some other mode, sql commands from the command line always have a current
+	// database set when you begin using them.
+	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
+
+	// Add specified user as new superuser, if it doesn't already exist
+	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
+		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
+	}
+
+	// Set client to specified user
+	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
+	return se, sqlCtx, nil
 }
 
 func listSavedQueriesMode(
@@ -496,23 +508,10 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 }
 
 func execShell(
-	ctx context.Context,
-	mrEnv *env.MultiRepoEnv,
-	format engine.PrintResultFormat,
-	config *engine.SqlEngineConfig,
+	ctx *sql.Context,
+	se *engine.SqlEngine,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(
-		ctx,
-		mrEnv,
-		format,
-		config,
-	)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-	defer se.Close()
-
-	err = runShell(ctx, se, mrEnv, config)
+	err := runShell(ctx, se)
 	if err != nil {
 		return errhand.BuildDError(err.Error()).Build()
 	}
@@ -838,24 +837,8 @@ func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, conti
 
 // runShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
 // be updated by any queries which were processed.
-func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv, config *engine.SqlEngineConfig) error {
+func runShell(sqlCtx *sql.Context, se *engine.SqlEngine) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
-
-	sqlCtx, err := se.NewDefaultContext(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Add specified user as new superuser, if it doesn't already exist
-	if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
-		se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
-	}
-
-	// Add root client
-	sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
-
-	currentDB := sqlCtx.Session.GetCurrentDatabase()
-	currEnv := mrEnv.GetEnv(currentDB)
 
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
 	initialPrompt := fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
@@ -885,7 +868,7 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 	shell := ishell.NewUninterpreted(&shellConf)
 	shell.SetMultiPrompt(initialMultilinePrompt)
 	// TODO: update completer on create / drop / alter statements
-	completer, err := newCompleter(ctx, currEnv)
+	completer, err := newCompleter(sqlCtx, se)
 	if err != nil {
 		return err
 	}
@@ -939,7 +922,7 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 		var rowIter sql.RowIter
 
 		cont := func() bool {
-			subCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+			subCtx, stop := signal.NotifyContext(sqlCtx, os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
 			sqlCtx, err = se.NewContext(subCtx, sqlCtx.Session)
@@ -983,12 +966,13 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 }
 
 // Returns a new auto completer with table names, column names, and SQL keywords.
-func newCompleter(ctx context.Context, dEnv *env.DoltEnv) (*sqlCompleter, error) {
+func newCompleter(
+		ctx context.Context,
+		se *engine.SqlEngine,
+) (*sqlCompleter, error) {
 	// TODO: change the sqlCompleter based on the current database and change it when the database changes.
-	if dEnv == nil {
-		return &sqlCompleter{}, nil
-	}
-
+	se.Query(ctx, "select ", nil
+	
 	var completionWords []string
 
 	root, err := dEnv.WorkingRoot(ctx)
