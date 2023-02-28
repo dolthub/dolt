@@ -281,7 +281,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	// TODO: are these paths appropriately guarded when initalDbRoot may be nil?
+	// TODO: are these paths appropriately guarded when workingRoot may be nil?
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		return queryMode(sqlCtx, se, dEnv, workingRoot, apr, query, usage)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
@@ -322,9 +322,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if isTty {
-			verr := execShell(sqlCtx, se)
-			if verr != nil {
-				return HandleVErrAndExitCode(verr, usage)
+			err := execShell(sqlCtx, se)
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 			}
 		} else if runInBatchMode {
 			verr := execBatch(sqlCtx, continueOnError, se, input)
@@ -332,9 +332,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else {
-			verr := execMultiStatements(sqlCtx, continueOnError, se, input)
-			if verr != nil {
-				return HandleVErrAndExitCode(verr, usage)
+			err := execMultiStatements(sqlCtx, se, input, continueOnError)
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 			}
 		}
 	}
@@ -482,9 +482,9 @@ func queryMode(
 		}
 	} else {
 		input := strings.NewReader(query)
-		verr := execMultiStatements(ctx, continueOnError, se, input)
-		if verr != nil {
-			return HandleVErrAndExitCode(verr, usage)
+		err := execMultiStatements(ctx, se, input, continueOnError)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 	}
 
@@ -514,17 +514,6 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 	return mrEnv, nil
 }
 
-func execShell(
-	ctx *sql.Context,
-	se *engine.SqlEngine,
-) errhand.VerboseError {
-	err := runShell(ctx, se)
-	if err != nil {
-		return errhand.BuildDError(err.Error()).Build()
-	}
-	return nil
-}
-
 func execBatch(
 	sqlCtx *sql.Context,
 	continueOnErr bool,
@@ -545,16 +534,6 @@ func execBatch(
 	}
 
 	return nil
-}
-
-func execMultiStatements(
-	sqlCtx *sql.Context,
-	continueOnErr bool,
-	se *engine.SqlEngine,
-	batchInput io.Reader,
-) errhand.VerboseError {
-	err := runMultiStatementMode(sqlCtx, se, batchInput, continueOnErr)
-	return errhand.VerboseErrorFromError(err)
 }
 
 func execQuery(
@@ -740,8 +719,8 @@ func saveQuery(ctx *sql.Context, root *doltdb.RootValue, query string, name stri
 	return newRoot, nil
 }
 
-// runMultiStatementMode allows for the execution of more than one query, but it doesn't attempt any batch optimizations
-func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, continueOnErr bool) error {
+// execMultiStatements runs all the queries in the input reader without any batch optimizations
+func execMultiStatements(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, continueOnErr bool) error {
 	scanner := NewSqlStatementScanner(input)
 	var query string
 	for scanner.Scan() {
@@ -844,8 +823,7 @@ func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, conti
 
 // runShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
 // be updated by any queries which were processed.
-// TODO: this should now be execShell
-func runShell(sqlCtx *sql.Context, se *engine.SqlEngine) error {
+func execShell(sqlCtx *sql.Context, se *engine.SqlEngine) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
