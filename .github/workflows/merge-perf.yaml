@@ -58,6 +58,7 @@ jobs:
         RESULTS=$gw/results.sql
         echo "CREATE TABLE ${{env.RESULT_TABLE_NAME }} (name varchar(50) primary key, table_cnt int, run_cnt int, add_cnt int, delete_cnt int, update_cnt int, conflict_cnt int, fks bool, latency float);" >> $RESULTS
 
+        ROW_NUM=1000000
         TABLE_NUM=2
         names=('adds_only' 'deletes_only' 'updates_only' 'adds_updates_deletes')
         adds=(60000 0 0 60000)
