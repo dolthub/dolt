@@ -31,6 +31,17 @@ var DoltBinlogReplicaController = newDoltBinlogReplicaController()
 var ErrServerNotConfiguredAsReplica = fmt.Errorf(
 	"server is not configured as a replica; fix with CHANGE REPLICATION SOURCE TO")
 
+// ErrEmptyHostname is returned when replication is started without a hostname configured.
+var ErrEmptyHostname = fmt.Errorf("fatal error: Invalid (empty) hostname when attempting to connect " +
+	"to the source server. Connection attempt terminated")
+
+// ErrEmptyUsername is returned when replication is started without a username configured.
+var ErrEmptyUsername = fmt.Errorf("fatal error: Invalid (empty) username when attempting to connect " +
+	"to the source server. Connection attempt terminated")
+
+// ErrReplicationStopped is an internal error that is not returned to users, and signals that STOP REPLICA was called.
+var ErrReplicationStopped = fmt.Errorf("replication stop requested")
+
 // doltBinlogReplicaController implements the BinlogReplicaController interface for a Dolt database in order to
 // provide support for a Dolt server to be a replica of a MySQL primary.
 //
@@ -52,6 +63,8 @@ func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 		mu:      &sync.Mutex{},
 		filters: newFilterConfiguration(),
 	}
+	controller.status.ConnectRetry = 60
+	controller.status.SourceRetryCount = 86400
 	controller.status.AutoPosition = true
 	controller.status.ReplicaIoRunning = binlogreplication.ReplicaIoNotRunning
 	controller.status.ReplicaSqlRunning = binlogreplication.ReplicaSqlNotRunning
@@ -61,6 +74,16 @@ func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 
 // StartReplica implements the BinlogReplicaController interface.
 func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	// START REPLICA may be called multiple times, but if replication is already running,
+	// it will log a warning and not start up new threads.
+	if d.applier.IsRunning() {
+		ctx.Warn(3083, "Replication thread(s) for channel '' are already running.")
+		return nil
+	}
+
 	if false {
 		// TODO: If the database is already configured for Dolt replication/clustering, then error out.
 		//       Add a (BATS?) test to cover this case
@@ -82,6 +105,12 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 		return err
 	} else if configuration == nil {
 		return ErrServerNotConfiguredAsReplica
+	} else if configuration.Host == "" {
+		DoltBinlogReplicaController.setIoError(ERFatalReplicaError, ErrEmptyHostname.Error())
+		return ErrEmptyHostname
+	} else if configuration.User == "" {
+		DoltBinlogReplicaController.setIoError(ERFatalReplicaError, ErrEmptyUsername.Error())
+		return ErrEmptyUsername
 	}
 
 	if d.ctx == nil {
@@ -101,14 +130,18 @@ func (d *doltBinlogReplicaController) SetExecutionContext(ctx *sql.Context) {
 }
 
 // StopReplica implements the BinlogReplicaController interface.
-func (d *doltBinlogReplicaController) StopReplica(_ *sql.Context) error {
+func (d *doltBinlogReplicaController) StopReplica(ctx *sql.Context) error {
+	if d.applier.IsRunning() == false {
+		ctx.Warn(3084, "Replication thread(s) for channel '' are already stopped.")
+		return nil
+	}
+
 	d.applier.stopReplicationChan <- struct{}{}
 
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.status.ReplicaIoRunning = binlogreplication.ReplicaIoNotRunning
-	d.status.ReplicaSqlRunning = binlogreplication.ReplicaSqlNotRunning
+	d.updateStatus(func(status *binlogreplication.ReplicaStatus) {
+		status.ReplicaIoRunning = binlogreplication.ReplicaIoNotRunning
+		status.ReplicaSqlRunning = binlogreplication.ReplicaSqlNotRunning
+	})
 
 	return nil
 }
@@ -231,6 +264,11 @@ func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlo
 	copy.ReplicateDoTables = d.filters.getDoTables()
 	copy.ReplicateIgnoreTables = d.filters.getIgnoreTables()
 
+	if d.applier.currentPosition != nil {
+		copy.ExecutedGtidSet = d.applier.currentPosition.GTIDSet.String()
+		copy.RetrievedGtidSet = copy.ExecutedGtidSet
+	}
+
 	return &copy, nil
 }
 
@@ -239,8 +277,7 @@ func (d *doltBinlogReplicaController) ResetReplica(ctx *sql.Context, resetAll bo
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if d.status.ReplicaIoRunning != binlogreplication.ReplicaIoNotRunning ||
-		d.status.ReplicaSqlRunning != binlogreplication.ReplicaSqlNotRunning {
+	if d.applier.IsRunning() {
 		return fmt.Errorf("unable to reset replica while replication is running; stop replication and try again")
 	}
 

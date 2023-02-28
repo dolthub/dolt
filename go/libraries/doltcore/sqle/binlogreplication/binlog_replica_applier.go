@@ -19,6 +19,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	gms "github.com/dolthub/go-mysql-server"
@@ -63,6 +64,7 @@ type binlogReplicaApplier struct {
 	// currentPosition records which GTIDs have been successfully executed
 	currentPosition *mysql.Position
 	filters         *filterConfiguration
+	running         atomic.Bool
 }
 
 func newBinlogReplicaApplier(filters *filterConfiguration) *binlogReplicaApplier {
@@ -87,7 +89,9 @@ const rowFlag_rowsAreComplete = 0x0008
 // Go spawns a new goroutine to run the applier's binlog event handler.
 func (a *binlogReplicaApplier) Go(ctx *sql.Context) {
 	go func() {
+		a.running.Store(true)
 		err := a.replicaBinlogEventHandler(ctx)
+		a.running.Store(false)
 		if err != nil {
 			ctx.GetLogger().Errorf("unexpected error of type %T: '%v'", err, err.Error())
 			DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, err.Error())
@@ -97,16 +101,6 @@ func (a *binlogReplicaApplier) Go(ctx *sql.Context) {
 
 // connectAndStartReplicationEventStream connects to the configured MySQL replication source, including pausing
 // and retrying if errors are encountered.
-//
-// NOTE: Our fork of Vitess currently only supports mysql_native_password auth. The latest code in the main
-//
-//	Vitess repo supports the current MySQL default auth plugin, caching_sha2_password.
-//	https://dev.mysql.com/blog-archive/upgrading-to-mysql-8-0-default-authentication-plugin-considerations/
-//	To work around this limitation, add the following to your /etc/my.cnf:
-//	    [mysqld]
-//	    default-authentication-plugin=mysql_native_password
-//	or start mysqld with:
-//	    --default-authentication-plugin=mysql_native_password
 func (a *binlogReplicaApplier) connectAndStartReplicationEventStream(ctx *sql.Context) (*mysql.Conn, error) {
 	var maxConnectionAttempts uint64
 	var connectRetryDelay uint32
@@ -131,15 +125,11 @@ func (a *binlogReplicaApplier) connectAndStartReplicationEventStream(ctx *sql.Co
 		}
 
 		if replicaSourceInfo.Host == "" {
-			err = fmt.Errorf("fatal error: Invalid (empty) hostname when attempting to connect " +
-				"to the source server. Connection attempt terminated")
-			DoltBinlogReplicaController.setIoError(ERFatalReplicaError, err.Error())
-			return nil, err
+			DoltBinlogReplicaController.setIoError(ERFatalReplicaError, ErrEmptyHostname.Error())
+			return nil, ErrEmptyHostname
 		} else if replicaSourceInfo.User == "" {
-			err = fmt.Errorf("fatal error: Invalid (empty) username when attempting to connect " +
-				"to the source server. Connection attempt terminated")
-			DoltBinlogReplicaController.setIoError(ERFatalReplicaError, err.Error())
-			return nil, err
+			DoltBinlogReplicaController.setIoError(ERFatalReplicaError, ErrEmptyUsername.Error())
+			return nil, ErrEmptyUsername
 		}
 
 		connParams := mysql.ConnParams{
@@ -151,10 +141,24 @@ func (a *binlogReplicaApplier) connectAndStartReplicationEventStream(ctx *sql.Co
 		}
 
 		conn, err = mysql.Connect(ctx, &connParams)
-		if err != nil && connectionAttempts >= maxConnectionAttempts {
-			return nil, err
-		} else if err != nil {
-			time.Sleep(time.Duration(connectRetryDelay) * time.Second)
+		if err != nil {
+			if connectionAttempts >= maxConnectionAttempts {
+				ctx.GetLogger().Errorf("Exceeded max connection attempts (%d) to source server", maxConnectionAttempts)
+				return nil, err
+			}
+			// If there was an error connecting (and we haven't used up all our retry attempts), listen for a
+			// STOP REPLICA signal or for the retry delay timer to fire. We need to use select here so that we don't
+			// block on our retry backoff and ignore the STOP REPLICA signal for a long time.
+			for {
+				select {
+				case <-a.stopReplicationChan:
+					ctx.GetLogger().Debugf("Received stop replication signal while trying to connect")
+					return nil, ErrReplicationStopped
+				case <-time.After(time.Duration(connectRetryDelay) * time.Second):
+					// Nothing to do here if our timer completes; just fall through
+					break
+				}
+			}
 		} else {
 			break
 		}
@@ -254,65 +258,68 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 	}
 	engine := server.Engine
 
-	conn, err := a.connectAndStartReplicationEventStream(ctx)
-	if err != nil {
-		return err
-	}
+	var conn *mysql.Conn
+	var eventProducer *binlogEventProducer
+	var binlogEventChan = make(chan mysql.BinlogEvent)
+	var binlogErrorChan = make(chan error)
 
 	// Process binlog events
 	for {
-		select {
-		case <-a.stopReplicationChan:
-			ctx.GetLogger().Trace("received signal to stop replication routine")
-			return nil
-		default:
-			event, err := conn.ReadBinlogEvent()
+		if conn == nil {
+			ctx.GetLogger().Debug("no binlog connection to source, attempting to establish one")
+			if eventProducer != nil {
+				eventProducer.Stop()
+			}
+
+			var err error
+			conn, err = a.connectAndStartReplicationEventStream(ctx)
 			if err != nil {
-				if sqlError, isSqlError := err.(*mysql.SQLError); isSqlError {
-					if sqlError.Message == io.EOF.Error() {
-						ctx.GetLogger().Trace("No more binlog messages; retrying in 1s...")
-						time.Sleep(1 * time.Second)
-						continue
-					} else if strings.HasPrefix(sqlError.Message, io.ErrUnexpectedEOF.Error()) {
-						DoltBinlogReplicaController.updateStatus(func(status *binlogreplication.ReplicaStatus) {
-							status.LastIoError = io.ErrUnexpectedEOF.Error()
-							status.LastIoErrNumber = ERNetReadError
-							currentTime := time.Now()
-							status.LastIoErrorTimestamp = &currentTime
-						})
-						conn, err = a.connectAndStartReplicationEventStream(ctx)
-						if err != nil {
-							return err
-						}
-						continue
-					}
+				if err == ErrReplicationStopped {
+					return nil
+				} else {
+					return err
 				}
-
-				// otherwise, log the error if it's something we don't expect and continue
-				ctx.GetLogger().Errorf("unexpected error of type %T: '%v'", err, err.Error())
-				DoltBinlogReplicaController.setIoError(mysql.ERUnknownError, err.Error())
-
-				continue
+			} else {
+				eventProducer = newBinlogEventProducer(conn, binlogEventChan, binlogErrorChan)
+				eventProducer.Go(ctx)
 			}
+		}
 
-			// We don't support checksum validation, so we must strip off any checksum data if present, otherwise
-			// it could get interpreted as part of the data fields and corrupt the fields we pull out. There is not
-			// a future-proof guarantee on the checksum size, so we can't strip a checksum until we've seen the
-			// Format binlog event that definitively tells us if checksums are enabled and what algorithm they use.
-			if a.format.IsZero() == false {
-				event, _, err = event.StripChecksum(a.format)
-				if err != nil {
-					msg := fmt.Sprintf("unable to strip checksum from binlog event: '%v'", err.Error())
-					ctx.GetLogger().Error(msg)
-					DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, msg)
-				}
-			}
-
-			err = a.processBinlogEvent(ctx, engine, event)
+		select {
+		case event := <-binlogEventChan:
+			err := a.processBinlogEvent(ctx, engine, event)
 			if err != nil {
 				ctx.GetLogger().Errorf("unexpected error of type %T: '%v'", err, err.Error())
 				DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, err.Error())
 			}
+
+		case err := <-binlogErrorChan:
+			if sqlError, isSqlError := err.(*mysql.SQLError); isSqlError {
+				if sqlError.Message == io.EOF.Error() {
+					ctx.GetLogger().Trace("No more binlog messages; retrying in 1s...")
+					time.Sleep(1 * time.Second)
+				} else if strings.HasPrefix(sqlError.Message, io.ErrUnexpectedEOF.Error()) {
+					DoltBinlogReplicaController.updateStatus(func(status *binlogreplication.ReplicaStatus) {
+						status.LastIoError = io.ErrUnexpectedEOF.Error()
+						status.LastIoErrNumber = ERNetReadError
+						currentTime := time.Now()
+						status.LastIoErrorTimestamp = &currentTime
+					})
+					eventProducer.Stop()
+					eventProducer = nil
+					conn.Close()
+					conn = nil
+				}
+			} else {
+				// otherwise, log the error if it's something we don't expect and continue
+				ctx.GetLogger().Errorf("unexpected error of type %T: '%v'", err, err.Error())
+				DoltBinlogReplicaController.setIoError(mysql.ERUnknownError, err.Error())
+			}
+
+		case <-a.stopReplicationChan:
+			ctx.GetLogger().Trace("received stop replication signal")
+			eventProducer.Stop()
+			return nil
 		}
 	}
 }
@@ -323,6 +330,20 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 	var err error
 	createCommit := false
 	commitToAllDatabases := false
+
+	// We don't support checksum validation, so we must strip off any checksum data if present, otherwise
+	// it could get interpreted as part of the data fields and corrupt the fields we pull out. There is not
+	// a future-proof guarantee on the checksum size, so we can't strip a checksum until we've seen the
+	// Format binlog event that definitively tells us if checksums are enabled and what algorithm they use.
+	if a.format.IsZero() == false {
+		var err error
+		event, _, err = event.StripChecksum(a.format)
+		if err != nil {
+			msg := fmt.Sprintf("unable to strip checksum from binlog event: '%v'", err.Error())
+			ctx.GetLogger().Error(msg)
+			DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, msg)
+		}
+	}
 
 	switch {
 	case event.IsRand():

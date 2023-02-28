@@ -178,9 +178,53 @@ func TestStartReplicaErrors(t *testing.T) {
 	require.NotEmpty(t, status["Last_IO_Error_Timestamp"])
 	require.NoError(t, rows.Close())
 
-	// START REPLICA doesn't return an error if replication is already running
+	// START REPLICA logs a warning if replication is already running
 	startReplication(t, mySqlPort)
 	replicaDatabase.MustExec("START REPLICA;")
+	assertWarning(t, replicaDatabase, 3083, "Replication thread(s) for channel '' are already running.")
+}
+
+// TestStopReplica tests that STOP REPLICA correctly stops the replication process, and that
+// warnings are logged when STOP REPLICA is invoked when replication is not running.
+func TestStopReplica(t *testing.T) {
+	defer teardown(t)
+	startSqlServers(t)
+
+	// STOP REPLICA logs a warning if replication is not running
+	replicaDatabase.MustExec("STOP REPLICA;")
+	assertWarning(t, replicaDatabase, 3084, "Replication thread(s) for channel '' are already stopped.")
+
+	// Start replication with bad connection params
+	replicaDatabase.MustExec("SET @@GLOBAL.server_id=52;")
+	replicaDatabase.MustExec("CHANGE REPLICATION SOURCE TO SOURCE_HOST='doesnotexist', SOURCE_PORT=111, SOURCE_USER='nobody';")
+	replicaDatabase.MustExec("START REPLICA;")
+	time.Sleep(200 * time.Millisecond)
+	status := showReplicaStatus(t)
+	require.Equal(t, "Connecting", status["Replica_IO_Running"])
+	require.Equal(t, "Yes", status["Replica_SQL_Running"])
+
+	// STOP REPLICA works when replication cannot establish a connection
+	replicaDatabase.MustExec("STOP REPLICA;")
+	status = showReplicaStatus(t)
+	require.Equal(t, "No", status["Replica_IO_Running"])
+	require.Equal(t, "No", status["Replica_SQL_Running"])
+
+	// START REPLICA and verify status
+	startReplication(t, mySqlPort)
+	time.Sleep(100 * time.Millisecond)
+	status = showReplicaStatus(t)
+	require.True(t, status["Replica_IO_Running"] == "Connecting" || status["Replica_IO_Running"] == "Yes")
+	require.Equal(t, "Yes", status["Replica_SQL_Running"])
+
+	// STOP REPLICA stops replication when it is running and connected to the source
+	replicaDatabase.MustExec("STOP REPLICA;")
+	status = showReplicaStatus(t)
+	require.Equal(t, "No", status["Replica_IO_Running"])
+	require.Equal(t, "No", status["Replica_SQL_Running"])
+
+	// STOP REPLICA logs a warning if replication is not running
+	replicaDatabase.MustExec("STOP REPLICA;")
+	assertWarning(t, replicaDatabase, 3084, "Replication thread(s) for channel '' are already stopped.")
 }
 
 // TestDoltCommits tests that Dolt commits are created and use correct transaction boundaries.
@@ -413,6 +457,18 @@ func waitForReplicaToReachGtid(t *testing.T, target int) {
 	}
 
 	t.Fatal("replica did not reach target GTID within " + timeLimit.String())
+}
+
+// assertWarning asserts that the specified |database| has a warning with |code| and |message|,
+// otherwise it will fail the current test.
+func assertWarning(t *testing.T, database *sqlx.DB, code int, message string) {
+	rows, err := database.Queryx("SHOW WARNINGS;")
+	require.NoError(t, err)
+	warning := convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, strconv.Itoa(code), warning["Code"])
+	require.Equal(t, message, warning["Message"])
+	require.False(t, rows.Next())
+	require.NoError(t, rows.Close())
 }
 
 func queryGtid(t *testing.T, database *sqlx.DB) string {
