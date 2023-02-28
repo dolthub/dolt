@@ -374,6 +374,9 @@ func newEngine(
 		format,
 		config,
 	)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	sqlCtx, err := se.NewDefaultContext(ctx)
 	if err != nil {
