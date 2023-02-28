@@ -86,6 +86,10 @@ enum ClientEventType {
     DUMP = 54;
     CHERRY_PICK = 55;
     STASH = 56;
+    STASH_CLEAR = 57;
+    STASH_DROP = 58;
+    STASH_LIST = 59;
+    STASH_POP = 60;
 }
 
 enum MetricID {
