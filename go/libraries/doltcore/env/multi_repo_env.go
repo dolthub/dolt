@@ -72,28 +72,12 @@ func (mrEnv *MultiRepoEnv) Config() config.ReadWriteConfig {
 	return mrEnv.cfg
 }
 
-// TODO: un export
-// AddEnv adds an environment to the MultiRepoEnv by name
-func (mrEnv *MultiRepoEnv) AddEnv(name string, dEnv *DoltEnv) {
+// addEnv adds an environment to the MultiRepoEnv by name
+func (mrEnv *MultiRepoEnv) addEnv(name string, dEnv *DoltEnv) {
 	mrEnv.envs = append(mrEnv.envs, NamedEnv{
 		name: name,
 		env:  dEnv,
 	})
-}
-
-// AddOrReplaceEnvs adds the specified DoltEnv to this MultiRepoEnv, replacing
-// any existing environment in the MultiRepoEnv with the same name.
-func (mrEnv *MultiRepoEnv) AddOrReplaceEnv(name string, dEnv *DoltEnv) {
-	// TODO: Modeling NamedEnvs as a map could probably simplify this file
-	newNamedEnvs := make([]NamedEnv, 0, len(mrEnv.envs))
-	for _, namedEnv := range mrEnv.envs {
-		if namedEnv.name != name {
-			newNamedEnvs = append(newNamedEnvs, namedEnv)
-		}
-	}
-	newNamedEnvs = append(newNamedEnvs, NamedEnv{name: name, env: dEnv})
-
-	mrEnv.envs = newNamedEnvs
 }
 
 // GetEnv returns the env with the name given, or nil if no such env exists
@@ -291,11 +275,11 @@ func MultiEnvForDirectory(
 	// if the current directory database is in our set, add it first so it will be the current database
 	var ok bool
 	if dEnv, ok = envSet[dbName]; ok {
-		mrEnv.AddEnv(dbName, dEnv)
+		mrEnv.addEnv(dbName, dEnv)
 		delete(envSet, dbName)
 	}
 	for dbName, dEnv = range envSet {
-		mrEnv.AddEnv(dbName, dEnv)
+		mrEnv.addEnv(dbName, dEnv)
 	}
 
 	return mrEnv, nil
@@ -363,7 +347,7 @@ func MultiEnvForPaths(
 
 	enforceSingleFormat(envSet)
 	for dbName, dEnv := range envSet {
-		mrEnv.AddEnv(dbName, dEnv)
+		mrEnv.addEnv(dbName, dEnv)
 	}
 
 	return mrEnv, nil
