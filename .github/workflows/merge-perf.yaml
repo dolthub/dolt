@@ -49,8 +49,8 @@ jobs:
         gw=$GITHUB_WORKSPACE
         DATADIR=$gw/data
         TABLE_NUM=2
-        ROW_NUM=1000
-        ADD_NUM=60
+        ROW_NUM=1000000
+        ADD_NUM=60000
         python ${{ env.SCRIPT_DIR }}/data.py $DATADIR $TABLE_NUM $ROW_NUM $ADD_NUM
 
         TMPDIR=$gw/tmp
