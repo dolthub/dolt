@@ -57,14 +57,16 @@ type MultiRepoEnv struct {
 	ignoreLockFile bool
 }
 
-// MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given
+// MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given. The doltEnv from the
+// invoking context is included. If it's non-nil and valid, it will be included in the returned MultiRepoEnv, and will 
+// be the first database in all iterations.  
 func MultiEnvForDirectory(
 		ctx context.Context,
 		config config.ReadWriteConfig,
 		fs filesys.Filesys,
 		version string,
 		ignoreLockFile bool,
-		oldDEnv *DoltEnv, // TODO: eventually get rid of this
+		dEnv *DoltEnv,
 ) (*MultiRepoEnv, error) {
 	mrEnv := &MultiRepoEnv{
 		envs:           make([]NamedEnv, 0),
@@ -74,12 +76,9 @@ func MultiEnvForDirectory(
 	}
 
 	// Load current fs and put into mr env
-	var dEnv *DoltEnv
 	var dbName string
-	// Only directly copy the oldDEnv for in-memory filesystems; something is wrong with loading them
 	if _, ok := fs.(*filesys.InMemFS); ok {
 		dbName = "dolt"
-		dEnv = oldDEnv
 	} else {
 		path, err := fs.Abs("")
 		if err != nil {
@@ -87,9 +86,6 @@ func MultiEnvForDirectory(
 		}
 		envName := getRepoRootDir(path, string(os.PathSeparator))
 		dbName = dirToDBName(envName)
-		dEnv = oldDEnv
-		// TODO: idk how or why, but this breaks docs.bats
-		//dEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
 	}
 
 	envSet := map[string]*DoltEnv{}
@@ -125,6 +121,7 @@ func MultiEnvForDirectory(
 		mrEnv.addEnv(dbName, dEnv)
 		delete(envSet, dbName)
 	}
+	
 	for dbName, dEnv = range envSet {
 		mrEnv.addEnv(dbName, dEnv)
 	}

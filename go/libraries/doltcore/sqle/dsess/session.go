@@ -258,10 +258,6 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	// TODO: rather than a single database, we need to take a snapshot of all available databases that we use for the
 	//  duration of the transaction
 
-	// for db, state := range d.dbStates {
-	// 	state.
-	// }
-
 	dbName := ctx.GetTransactionDatabase()
 	// TODO: remove this hack when we have true multi-db transaction support
 	if isNoOpTransactionDatabase(dbName) {
