@@ -54,7 +54,6 @@ type sessionFactory func(mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (
 type contextFactory func(ctx context.Context, session sql.Session) (*sql.Context, error)
 
 type SqlEngineConfig struct {
-	InitialDb               string
 	IsReadOnly              bool
 	IsServerLocked          bool
 	DoltCfgDirPath          string
@@ -352,28 +351,14 @@ func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, err
 	if err != nil {
 		return nil, err
 	}
-
-	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
-	var dbName string
-	err = mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
-		dbName = name
-		return true, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
+	
 	return NewSqlEngine(
 		ctx,
 		mrEnv,
 		FormatCsv,
 		&SqlEngineConfig{
-			InitialDb:  dbName,
-			IsReadOnly: false,
 			ServerUser: "root",
-			ServerPass: "",
 			ServerHost: "localhost",
-			Autocommit: false,
 		},
 	)
 }

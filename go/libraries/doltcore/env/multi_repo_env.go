@@ -22,7 +22,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -127,33 +126,11 @@ func (mrEnv *MultiRepoEnv) Iter(cb func(name string, dEnv *DoltEnv) (stop bool, 
 	return nil
 }
 
-// GetWorkingRoots returns a map with entries for each environment name with a value equal to the working root
-// for that environment
-func (mrEnv *MultiRepoEnv) GetWorkingRoots(ctx context.Context) (map[string]*doltdb.RootValue, error) {
-	roots := make(map[string]*doltdb.RootValue)
-	err := mrEnv.Iter(func(name string, dEnv *DoltEnv) (stop bool, err error) {
-		root, err := dEnv.WorkingRoot(ctx)
-
-		if err != nil {
-			return true, err
-		}
-
-		roots[name] = root
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return roots, err
-}
-
 // GetFirstDatabase returns the name of the first database in the MultiRepoEnv. This will be the database in the 
 // current working directory if applicable, or the first database alphabetically otherwise.
 func (mrEnv *MultiRepoEnv) GetFirstDatabase() string {
 	var currentDb string
-	_ = mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
+	_ = mrEnv.Iter(func(name string, _ *DoltEnv) (stop bool, err error) {
 		currentDb = name
 		return true, nil
 	})

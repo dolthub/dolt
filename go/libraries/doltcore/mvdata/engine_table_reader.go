@@ -44,20 +44,9 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 		return nil, err
 	}
 
-	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
-	// TODO: instantiate an engine here from the mrv directly
-	var dbName string
-	mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
-		dbName = name
-		return true, nil
-	})
 
 	config := &engine.SqlEngineConfig{
-		InitialDb:    dbName,
-		IsReadOnly:   false,
-		PrivFilePath: "",
 		ServerUser:   "root",
-		ServerPass:   "",
 		Autocommit:   true,
 	}
 	se, err := engine.NewSqlEngine(
@@ -74,6 +63,7 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 	if err != nil {
 		return nil, err
 	}
+	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
 
 	sch, iter, err := se.Query(sqlCtx, fmt.Sprintf("SELECT * FROM `%s`", tableName))
 	if err != nil {

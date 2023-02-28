@@ -72,22 +72,10 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	if err != nil {
 		return nil, err
 	}
-
-	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
-	// TODO: instantiate an engine here from MRV
-	var dbName string
-	mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
-		dbName = name
-		return true, nil
-	})
-
+	
 	// Simplest path would have our import path be a layer over load data
 	config := &engine.SqlEngineConfig{
-		InitialDb:    dbName,
-		IsReadOnly:   false,
-		PrivFilePath: "",
 		ServerUser:   "root",
-		ServerPass:   "",
 		Autocommit:   false, // We set autocommit == false to ensure to improve performance. Bulk import should not commit on each row.
 		Bulk:         true,
 	}
@@ -102,6 +90,8 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	}
 	defer se.Close()
 
+	dbName := mrEnv.GetFirstDatabase()
+	
 	if se.GetUnderlyingEngine().IsReadOnly {
 		// SqlEngineTableWriter does not respect read only mode
 		return nil, analyzer.ErrReadOnlyDatabase.New(dbName)
@@ -111,6 +101,7 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	if err != nil {
 		return nil, err
 	}
+	sqlCtx.SetCurrentDatabase(dbName)
 
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 

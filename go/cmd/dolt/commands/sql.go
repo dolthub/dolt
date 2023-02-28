@@ -268,19 +268,15 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	initialRoots, err := mrEnv.GetWorkingRoots(ctx)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	initialDb := mrEnv.GetFirstDatabase()
+	var initialDbRoot *doltdb.RootValue
+	if initialDb != "" {
+		initialDbRoot, err = mrEnv.GetEnv(initialDb).WorkingRoot(ctx)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
 	}
-
-	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
-	// TODO: instantiate an engine here instead
-	var currentDb string
-	mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
-		currentDb = name
-		return true, nil
-	})
-
+	
 	format := engine.FormatTabular
 	if formatSr, ok := apr.GetValue(FormatFlag); ok {
 		var verr errhand.VerboseError
@@ -291,8 +287,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	config := &engine.SqlEngineConfig{
-		InitialDb:          currentDb,
-		IsReadOnly:         false,
 		DoltCfgDirPath:     cfgDirPath,
 		PrivFilePath:       privsFp,
 		BranchCtrlFilePath: branchControlFilePath,
@@ -301,12 +295,13 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		Autocommit:         true,
 	}
 
+	// TODO: are these paths appropriately guarded when initalDbRoot may be nil? 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
-		return queryMode(ctx, mrEnv, initialRoots, apr, query, format, usage, config)
+		return queryMode(ctx, mrEnv, initialDb, initialDbRoot, apr, query, format, usage, config)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		return savedQueryMode(ctx, mrEnv, initialRoots, savedQueryName, format, usage, config)
+		return savedQueryMode(ctx, mrEnv, initialDbRoot, savedQueryName, format, usage, config)
 	} else if apr.Contains(listSavedFlag) {
-		return listSavedQueriesMode(ctx, mrEnv, initialRoots, format, usage, config)
+		return listSavedQueriesMode(ctx, mrEnv, initialDbRoot, format, usage, config)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		isTty := false
@@ -361,15 +356,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	return 0
 }
 
-func listSavedQueriesMode(
-	ctx context.Context,
-	mrEnv *env.MultiRepoEnv,
-	initialRoots map[string]*doltdb.RootValue,
-	format engine.PrintResultFormat,
-	usage cli.UsagePrinter,
-	config *engine.SqlEngineConfig,
-) int {
-	hasQC, err := initialRoots[config.InitialDb].HasTable(ctx, doltdb.DoltQueryCatalogTableName)
+func listSavedQueriesMode(ctx context.Context, mrEnv *env.MultiRepoEnv, initialRoot *doltdb.RootValue, format engine.PrintResultFormat, usage cli.UsagePrinter, config *engine.SqlEngineConfig, ) int {
+	hasQC, err := initialRoot.HasTable(ctx, doltdb.DoltQueryCatalogTableName)
 
 	if err != nil {
 		verr := errhand.BuildDError("error: Failed to read from repository.").AddCause(err).Build()
@@ -384,16 +372,8 @@ func listSavedQueriesMode(
 	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, query, format, config), usage)
 }
 
-func savedQueryMode(
-	ctx context.Context,
-	mrEnv *env.MultiRepoEnv,
-	initialRoots map[string]*doltdb.RootValue,
-	savedQueryName string,
-	format engine.PrintResultFormat,
-	usage cli.UsagePrinter,
-	config *engine.SqlEngineConfig,
-) int {
-	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoots[config.InitialDb], savedQueryName)
+func savedQueryMode(ctx context.Context, mrEnv *env.MultiRepoEnv, initialRoot *doltdb.RootValue, savedQueryName string, format engine.PrintResultFormat, usage cli.UsagePrinter, config *engine.SqlEngineConfig, ) int {
+	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoot, savedQueryName)
 
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -404,14 +384,15 @@ func savedQueryMode(
 }
 
 func queryMode(
-	ctx context.Context,
-	mrEnv *env.MultiRepoEnv,
-	initialRoots map[string]*doltdb.RootValue,
-	apr *argparser.ArgParseResults,
-	query string,
-	format engine.PrintResultFormat,
-	usage cli.UsagePrinter,
-	config *engine.SqlEngineConfig,
+		ctx context.Context,
+		mrEnv *env.MultiRepoEnv,
+		initialDb string,
+		initialRoot *doltdb.RootValue,
+		apr *argparser.ArgParseResults,
+		query string,
+		format engine.PrintResultFormat,
+		usage cli.UsagePrinter,
+		config *engine.SqlEngineConfig ,
 ) int {
 
 	// query mode has 3 sub modes:
@@ -431,12 +412,12 @@ func queryMode(
 
 		if saveName != "" {
 			saveMessage := apr.GetValueOrDefault(messageFlag, "")
-			newRoot, verr := saveQuery(ctx, initialRoots[config.InitialDb], query, saveName, saveMessage)
+			newRoot, verr := saveQuery(ctx, initialRoot, query, saveName, saveMessage)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 
-			verr = UpdateWorkingWithVErr(mrEnv.GetEnv(config.InitialDb), newRoot)
+			verr = UpdateWorkingWithVErr(mrEnv.GetEnv(initialDb), newRoot)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
