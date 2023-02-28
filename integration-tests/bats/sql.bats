@@ -2728,8 +2728,7 @@ SQL
 @test "sql: vertical query format in sql shell" {
     skiponwindows "Need to install expect and make this script work on windows."
 
-    run expect $BATS_TEST_DIRNAME/sql-vertical-format.expect
-    [ "$status" -eq 0 ]
+    expect $BATS_TEST_DIRNAME/sql-vertical-format.expect
 }
 
 @test "sql: --file param" {

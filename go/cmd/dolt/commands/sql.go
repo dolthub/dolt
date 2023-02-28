@@ -839,6 +839,7 @@ func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, conti
 
 // runShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
 // be updated by any queries which were processed.
+// TODO: this should now be execShell
 func runShell(sqlCtx *sql.Context, se *engine.SqlEngine) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 
@@ -923,13 +924,13 @@ func runShell(sqlCtx *sql.Context, se *engine.SqlEngine) error {
 		var sqlSch sql.Schema
 		var rowIter sql.RowIter
 
-		initialCtx := sqlCtx
+		initialCtx := sqlCtx.Context
 
 		cont := func() bool {
 			subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			sqlCtx, err = se.NewContext(subCtx, initialCtx.Session)
+			sqlCtx, err = se.NewContext(subCtx, sqlCtx.Session)
 			if err != nil {
 				shell.Println(color.RedString(err.Error()))
 				return false
