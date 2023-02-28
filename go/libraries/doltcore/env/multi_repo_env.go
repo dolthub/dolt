@@ -58,8 +58,8 @@ type MultiRepoEnv struct {
 }
 
 // MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given. The doltEnv from the
-// invoking context is included. If it's non-nil and valid, it will be included in the returned MultiRepoEnv, and will 
-// be the first database in all iterations.  
+// invoking context is included. If it's non-nil and valid, it will be included in the returned MultiRepoEnv, and will
+// be the first database in all iterations.
 func MultiEnvForDirectory(
 	ctx context.Context,
 	config config.ReadWriteConfig,
@@ -121,7 +121,7 @@ func MultiEnvForDirectory(
 		mrEnv.addEnv(dbName, dEnv)
 		delete(envSet, dbName)
 	}
-	
+
 	for dbName, dEnv = range envSet {
 		mrEnv.addEnv(dbName, dEnv)
 	}
