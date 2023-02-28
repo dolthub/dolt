@@ -64,7 +64,9 @@ jobs:
         deletes=(0 60000 0 60000)
         updates=(0 0 60000 60000)
 
+        wd=$(pwd)
         for i in {0..3}; do
+            cd $wd
             echo "${names[$i]}, ${adds[$i]}, ${deletes[$i]}, ${updates[$i]}"
 
             # data.py creates files for import
@@ -78,7 +80,7 @@ jobs:
             cd $TMPDIR
             python3 -c "import time, subprocess, sys; start = time.time(); res=subprocess.run(['dolt', 'merge', '--squash', 'main'], capture_output=True); err = res.stdout + res.stderr if res.returncode != 0 else ''; latency = time.time() -start; print(latency); sys.stderr.write(str(err))" 1> lat.log 2>err.log
             latency=$(cat lat.log)
-            echo err.log
+            cat err.log
 
             # count conflicts in first table
             conflicts=$(dolt sql -r csv -q "select count(*) from dolt_conflicts_table0;" | tail -1)
