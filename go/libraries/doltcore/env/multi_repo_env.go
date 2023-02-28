@@ -22,13 +22,13 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
@@ -59,12 +59,12 @@ type MultiRepoEnv struct {
 
 // MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given
 func MultiEnvForDirectory(
-		ctx context.Context,
-		config config.ReadWriteConfig,
-		fs filesys.Filesys,
-		version string,
-		ignoreLockFile bool,
-		oldDEnv *DoltEnv, // TODO: eventually get rid of this
+	ctx context.Context,
+	config config.ReadWriteConfig,
+	fs filesys.Filesys,
+	version string,
+	ignoreLockFile bool,
+	oldDEnv *DoltEnv, // TODO: eventually get rid of this
 ) (*MultiRepoEnv, error) {
 	mrEnv := &MultiRepoEnv{
 		envs:           make([]NamedEnv, 0),
@@ -135,13 +135,13 @@ func MultiEnvForDirectory(
 // MultiEnvForPaths takes a variable list of EnvNameAndPath objects loads each of the environments, and returns a new
 // MultiRepoEnv
 func MultiEnvForPaths(
-		ctx context.Context,
-		hdp HomeDirProvider,
-		cfg config.ReadWriteConfig,
-		fs filesys.Filesys,
-		version string,
-		ignoreLockFile bool,
-		envNamesAndPaths ...EnvNameAndPath,
+	ctx context.Context,
+	hdp HomeDirProvider,
+	cfg config.ReadWriteConfig,
+	fs filesys.Filesys,
+	version string,
+	ignoreLockFile bool,
+	envNamesAndPaths ...EnvNameAndPath,
 ) (*MultiRepoEnv, error) {
 	nameToPath := make(map[string]string)
 	for _, nameAndPath := range envNamesAndPaths {
@@ -199,7 +199,6 @@ func MultiEnvForPaths(
 
 	return mrEnv, nil
 }
-
 
 func (mrEnv *MultiRepoEnv) FileSystem() filesys.Filesys {
 	return mrEnv.fs
