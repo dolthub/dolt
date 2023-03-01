@@ -504,8 +504,12 @@ func printDiffSummary(ctx context.Context, tds []diff.TableDelta, dArgs *diffArg
 		if err != nil {
 			return errhand.BuildDError("could not get table delta summary").AddCause(err).Build()
 		}
+		tableName := summ.TableName
+		if summ.DiffType == "renamed" {
+			tableName = fmt.Sprintf("%s -> %s", summ.FromTableName, summ.ToTableName)
+		}
 
-		err = wr.WriteSqlRow(ctx, sql.Row{td.CurName(), summ.DiffType, summ.DataChange, summ.SchemaChange})
+		err = wr.WriteSqlRow(ctx, sql.Row{tableName, summ.DiffType, summ.DataChange, summ.SchemaChange})
 		if err != nil {
 			return errhand.BuildDError("could not write table delta summary").AddCause(err).Build()
 		}

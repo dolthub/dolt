@@ -218,8 +218,8 @@ func (j *chunkJournal) Exists(ctx context.Context, name addr, chunkCount uint32,
 }
 
 // PruneTableFiles implements tablePersister.
-func (j *chunkJournal) PruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error {
-	return j.persister.PruneTableFiles(ctx, contents, mtime)
+func (j *chunkJournal) PruneTableFiles(ctx context.Context, keeper func() []addr, mtime time.Time) error {
+	return j.persister.PruneTableFiles(ctx, keeper, mtime)
 }
 
 func (j *chunkJournal) Path() string {
