@@ -165,18 +165,12 @@ func TestStartReplicaErrors(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorContains(t, err, ErrServerNotConfiguredAsReplica.Error())
 
-	// For partial source configuration, START REPLICA doesn't throw an error, but an error will
-	// be populated in SHOW REPLICA STATUS after START REPLICA returns.
-	//START REPLICA doesn't return an error when replication source is only partially configured
+	// For an incomplete source configuration, throw an error as early as possible to make sure the user notices it.
 	replicaDatabase.MustExec("CHANGE REPLICATION SOURCE TO SOURCE_PORT=1234, SOURCE_HOST='localhost';")
-	replicaDatabase.MustExec("START REPLICA;")
-	rows, err := replicaDatabase.Queryx("SHOW REPLICA STATUS;")
-	require.NoError(t, err)
-	status := convertByteArraysToStrings(readNextRow(t, rows))
-	require.Equal(t, "13117", status["Last_IO_Errno"])
-	require.NotEmpty(t, status["Last_IO_Error"])
-	require.NotEmpty(t, status["Last_IO_Error_Timestamp"])
-	require.NoError(t, rows.Close())
+	rows, err := replicaDatabase.Queryx("START REPLICA;")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "Invalid (empty) username")
+	require.Nil(t, rows)
 
 	// START REPLICA logs a warning if replication is already running
 	startReplication(t, mySqlPort)
