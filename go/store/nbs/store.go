@@ -1579,11 +1579,11 @@ LOOP:
 			if err != nil {
 				return nil, err
 			}
-			if found != len(hashset) {
-				return nil, errors.New("dangling references requested during GC. GC not successful.")
-			}
 			if addErr != nil {
 				return nil, addErr
+			}
+			if found != len(hashset) {
+				return nil, fmt.Errorf("dangling references requested during GC. GC not successful. %v", hashset)
 			}
 		case <-ctx.Done():
 			return nil, ctx.Err()

@@ -812,10 +812,16 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 			return nil
 		}
 
+		oldGenRefs, err = oldGen.HasMany(ctx, oldGenRefs)
+		if err != nil {
+			return err
+		}
+
 		newGenRefs.Insert(root)
 
 		err = lvs.gc(ctx, oldGenRefs, oldGen.HasMany, newGen, oldGen, func() hash.HashSet {
-			newGenRefs.InsertAll(lvs.transitionToNewGenGC())
+			n := lvs.transitionToNewGenGC()
+			newGenRefs.InsertAll(n)
 			return make(hash.HashSet)
 		})
 		if err != nil {
@@ -987,6 +993,10 @@ func (lvs *ValueStore) gcProcessRefs(ctx context.Context,
 				next.Remove(h)
 			}
 		}
+		next, err = hashFilter(ctx, next)
+		if err != nil {
+			return err
+		}
 		err = process(next)
 		if err != nil {
 			return err
@@ -1001,6 +1011,10 @@ func (lvs *ValueStore) gcProcessRefs(ctx context.Context,
 		}
 	}
 	finalCopy = nil
+	final, err = hashFilter(ctx, final)
+	if err != nil {
+		return err
+	}
 	return process(final)
 }
 
