@@ -30,7 +30,8 @@ const (
 	stashListName = "StashList"
 )
 
-func newStashForValue(ctx context.Context, db *database, stashRef types.Ref, headAddr hash.Hash, meta *StashMeta) (hash.Hash, types.Ref, error) {
+// newStash creates a new stash object.
+func newStash(ctx context.Context, db *database, stashRef types.Ref, headAddr hash.Hash, meta *StashMeta) (hash.Hash, types.Ref, error) {
 	if db.Format().UsesFlatbuffers() {
 		headCommit, err := db.ReadValue(ctx, headAddr)
 		if err != nil {
@@ -67,6 +68,24 @@ func newStashForValue(ctx context.Context, db *database, stashRef types.Ref, hea
 	}
 }
 
+// GetStashData takes types.Value, which should be of type types.SerialMessage as stash is supported only for new format.
+// This function returns stashRoot address hash, head commit address hash and stash meta, which contains branch name
+// that stash was made on and head commit meta description.
+func GetStashData(val types.Value) (hash.Hash, hash.Hash, *StashMeta, error) {
+	bs := []byte(val.(types.SerialMessage))
+	var msg serial.Stash
+	err := serial.InitStashRoot(&msg, bs, serial.MessagePrefixSz)
+	if err != nil {
+		return hash.Hash{}, hash.Hash{}, nil, err
+	}
+
+	meta := NewStashMeta(string(msg.BranchName()), string(msg.Desc()))
+	stashRootAddr := hash.New(msg.StashRootAddrBytes())
+	headCommitAddr := hash.New(msg.HeadCommitAddrBytes())
+
+	return stashRootAddr, headCommitAddr, meta, err
+}
+
 func stash_flatbuffer(stash, head hash.Hash, meta *StashMeta) serial.Message {
 	builder := flatbuffers.NewBuilder(1024)
 	stashOff := builder.CreateByteVector(stash[:])
@@ -81,32 +100,6 @@ func stash_flatbuffer(stash, head hash.Hash, meta *StashMeta) serial.Message {
 	serial.StashAddDesc(builder, descOff)
 
 	return serial.FinishMessage(builder, serial.StashEnd(builder), []byte(serial.StashFileID))
-}
-
-func IsStashList(v types.Value) (bool, error) {
-	if s, ok := v.(types.Struct); ok {
-		// TODO: do we need this check, as stash is not supported for old format
-		return s.Name() == stashListName, nil
-	} else if sm, ok := v.(types.SerialMessage); ok {
-		return serial.GetFileID(sm) == serial.StashListFileID, nil
-	} else {
-		return false, nil
-	}
-}
-
-func GetStashData(val types.Value) (hash.Hash, hash.Hash, *StashMeta, error) {
-	bs := []byte(val.(types.SerialMessage))
-	var msg serial.Stash
-	err := serial.InitStashRoot(&msg, bs, serial.MessagePrefixSz)
-	if err != nil {
-		return hash.Hash{}, hash.Hash{}, nil, err
-	}
-
-	meta := NewStashMeta(string(msg.BranchName()), string(msg.Desc()))
-	sra := hash.New(msg.StashRootAddrBytes())
-	hca := hash.New(msg.HeadCommitAddrBytes())
-
-	return sra, hca, meta, err
 }
 
 // StashMeta contains all the metadata that is associated with a stash within a data repo.

@@ -554,8 +554,21 @@ func (db *database) Stash(ctx context.Context, ds Dataset, stashRootRef types.Re
 			rootHash = ds.head.Addr()
 		}
 
+		// new stash object
+		stashAddr, _, err := newStash(ctx, db, stashRootRef, headCommitAddr, meta)
+		if err != nil {
+			return err
+		}
+
+		// this either creates new map or loads current map rootHash is the head Addr of stashesRef
+		// stored in datasets reusing storeRoot implementation to get address map interface to use for stash
+		stashMap, err := loadStashList(ctx, db, rootHash)
+		if err != nil {
+			return err
+		}
+
 		// this function updates stashes list ds head
-		addr, err := pushStash(ctx, db, rootHash, stashRootRef, headCommitAddr, meta)
+		addr, err := stashMap.addStash(ctx, db, stashAddr)
 		if err != nil {
 			return err
 		}
@@ -590,7 +603,12 @@ func (db *database) DropStash(ctx context.Context, ds Dataset, idx int) (Dataset
 			return err
 		}
 
-		addr, err := removeStashAtIdx(ctx, db, db.nodeStore(), val, idx)
+		stashList, err := getExistingStashList(ctx, db.nodeStore(), val)
+		if err != nil {
+			return err
+		}
+
+		addr, err := stashList.removeStashAtIdx(ctx, db, idx)
 		if err != nil {
 			return err
 		}
@@ -625,7 +643,12 @@ func (db *database) ClearStashes(ctx context.Context, ds Dataset) (Dataset, erro
 			return err
 		}
 
-		addr, err := clearAllStashes(ctx, db, db.nodeStore(), val)
+		stashList, err := getExistingStashList(ctx, db.nodeStore(), val)
+		if err != nil {
+			return err
+		}
+
+		addr, err := stashList.clearAllStashes(ctx, db)
 		if err != nil {
 			return err
 		}

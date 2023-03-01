@@ -107,6 +107,7 @@ func (s *StashList) getAllStashes(ctx context.Context) ([]*stashHead, error) {
 	return getStashListOrdered(ctx, s.am, amCount), nil
 }
 
+// clearAllStashes returns address hash of updated stash list map after removing all stash entries in the stash list.
 func (s *StashList) clearAllStashes(ctx context.Context, db *database) (hash.Hash, error) {
 	amCount, err := s.am.Count()
 	if err != nil {
@@ -131,6 +132,7 @@ func (s *StashList) clearAllStashes(ctx context.Context, db *database) (hash.Has
 	return s.updateStashListMap(ctx, db)
 }
 
+// updateStashListMap returns address hash of updated stash list map.
 func (s *StashList) updateStashListMap(ctx context.Context, db *database) (hash.Hash, error) {
 	// update stash map data and reset the stash map's hash
 	data := stashlist_flatbuffer(s.am)
@@ -143,6 +145,7 @@ func (s *StashList) updateStashListMap(ctx context.Context, db *database) (hash.
 	return s.addr, nil
 }
 
+// getStashAtIdx returns a stash object address hash at given index from the stash list.
 func (s *StashList) getStashAtIdx(ctx context.Context, idx int) (hash.Hash, error) {
 	amCount, err := s.am.Count()
 	if err != nil {
@@ -158,6 +161,18 @@ func (s *StashList) getStashAtIdx(ctx context.Context, idx int) (hash.Hash, erro
 	}
 
 	return stash.addr, nil
+}
+
+// IsStashList determines whether the types.Value is a stash list object.
+func IsStashList(v types.Value) (bool, error) {
+	if s, ok := v.(types.Struct); ok {
+		// TODO: do we need this check, as stash is not supported for old format
+		return s.Name() == stashListName, nil
+	} else if sm, ok := v.(types.SerialMessage); ok {
+		return serial.GetFileID(sm) == serial.StashListFileID, nil
+	} else {
+		return false, nil
+	}
 }
 
 // GetStashAtIdx returns hash address of stash at given index in the stash list.
@@ -241,45 +256,6 @@ func getExistingStashList(ctx context.Context, ns tree.NodeStore, val types.Valu
 	lastIdx := stashes[0].key
 
 	return &StashList{am, am.Node().HashOf(), lastIdx}, nil
-}
-
-// pushStash takes root hash to the stash list and components needed to create new stash to store in the stash list
-// address map. This method uses loadStashList function that either creates the stash list if it does not exist already
-// or loads the existing stash list. This function returns the updated root hash value to the stash list address map.
-func pushStash(ctx context.Context, db *database, rootHash hash.Hash, stashRootRef types.Ref, headCommitAddr hash.Hash, meta *StashMeta) (hash.Hash, error) {
-	// create a new stash
-	stashAddr, _, err := newStashForValue(ctx, db, stashRootRef, headCommitAddr, meta)
-	if err != nil {
-		return hash.Hash{}, err
-	}
-
-	// this either creates new map or loads current map
-	// rootHash is the head Addr of stashesRef stored in datasets
-	// reusing storeRoot implementation to get address map interface to use for stash
-	stashMap, err := loadStashList(ctx, db, rootHash)
-	if err != nil {
-		return hash.Hash{}, err
-	}
-
-	return stashMap.addStash(ctx, db, stashAddr)
-}
-
-func removeStashAtIdx(ctx context.Context, db *database, ns tree.NodeStore, val types.Value, idx int) (hash.Hash, error) {
-	stashList, err := getExistingStashList(ctx, ns, val)
-	if err != nil {
-		return hash.Hash{}, err
-	}
-
-	return stashList.removeStashAtIdx(ctx, db, idx)
-}
-
-func clearAllStashes(ctx context.Context, db *database, ns tree.NodeStore, val types.Value) (hash.Hash, error) {
-	stashList, err := getExistingStashList(ctx, ns, val)
-	if err != nil {
-		return hash.Hash{}, err
-	}
-
-	return stashList.clearAllStashes(ctx, db)
 }
 
 // getStashListOrdered returns ordered stash list using given address map and number of elements in the map.
