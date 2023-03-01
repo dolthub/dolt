@@ -140,7 +140,7 @@ func printConflicts(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootVal
 		}
 	}
 
-	eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -179,10 +179,11 @@ func printConflicts(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootVal
 				return errhand.BuildDError("failed to fetch conflicts").AddCause(err).Build()
 			}
 
-			sqlCtx, err := engine.NewLocalSqlContext(ctx, eng)
+			sqlCtx, err := eng.NewLocalContext(ctx)
 			if err != nil {
 				return errhand.BuildDError("failed to fetch conflicts").AddCause(err).Build()
 			}
+			sqlCtx.SetCurrentDatabase(dbName)
 
 			confSqlSch, rowItr, err := eng.Query(sqlCtx, buildConflictQuery(baseSch, sch, mergeSch, tblName))
 			if err != nil {

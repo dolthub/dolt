@@ -23,10 +23,8 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
 type SqlDiffWriter struct {
@@ -39,6 +37,8 @@ type SqlDiffWriter struct {
 	autocommitOff        bool
 }
 
+var _ diff.SqlRowDiffWriter = SqlDiffWriter{}
+
 func NewSqlDiffWriter(tableName string, schema schema.Schema, wr io.WriteCloser) *SqlDiffWriter {
 	return &SqlDiffWriter{
 		tableName:       tableName,
@@ -48,51 +48,16 @@ func NewSqlDiffWriter(tableName string, schema schema.Schema, wr io.WriteCloser)
 	}
 }
 
-func (w SqlDiffWriter) WriteRow(
-	ctx context.Context,
-	row sql.Row,
-	rowDiffType diff.ChangeType,
-	colDiffTypes []diff.ChangeType,
-) error {
-	if len(row) != len(colDiffTypes) {
-		return fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
+func (w SqlDiffWriter) WriteRow(ctx context.Context, row sql.Row, rowDiffType diff.ChangeType, colDiffTypes []diff.ChangeType) error {
+	stmt, err := diff.GetDataDiffStatement(w.tableName, w.sch, row, rowDiffType, colDiffTypes)
+	if err != nil {
+		return err
 	}
+	return iohelp.WriteLine(w.writeCloser, stmt)
+}
 
-	switch rowDiffType {
-	case diff.Added:
-		stmt, err := sqlfmt.SqlRowAsInsertStmt(row, w.tableName, w.sch)
-		if err != nil {
-			return err
-		}
-
-		return iohelp.WriteLine(w.writeCloser, stmt)
-	case diff.Removed:
-		stmt, err := sqlfmt.SqlRowAsDeleteStmt(row, w.tableName, w.sch, 0)
-		if err != nil {
-			return err
-		}
-
-		return iohelp.WriteLine(w.writeCloser, stmt)
-	case diff.ModifiedNew:
-		updatedCols := set.NewEmptyStrSet()
-		for i, diffType := range colDiffTypes {
-			if diffType != diff.None {
-				updatedCols.Add(w.sch.GetAllCols().GetByIndex(i).Name)
-			}
-		}
-
-		stmt, err := sqlfmt.SqlRowAsUpdateStmt(row, w.tableName, w.sch, updatedCols)
-		if err != nil {
-			return err
-		}
-
-		return iohelp.WriteLine(w.writeCloser, stmt)
-	case diff.ModifiedOld:
-		// do nothing, we only issue UPDATE for ModifiedNew
-		return nil
-	default:
-		return fmt.Errorf("unexpected row diff type: %v", rowDiffType)
-	}
+func (w SqlDiffWriter) WriteCombinedRow(ctx context.Context, oldRow, newRow sql.Row, mode diff.Mode) error {
+	return fmt.Errorf("sql format is unable to output diffs for combined rows")
 }
 
 func (w SqlDiffWriter) Close(ctx context.Context) error {

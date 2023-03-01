@@ -34,6 +34,8 @@ import (
 
 var errCacheMiss = errors.New("index cache miss")
 
+type cleanupFunc func()
+
 // tablePersister allows interaction with persistent storage. It provides
 // primitives for pushing the contents of a memTable to persistent storage,
 // opening persistent tables for reading, and conjoining a number of existing
@@ -45,8 +47,10 @@ type tablePersister interface {
 	Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error)
 
 	// ConjoinAll conjoins all chunks in |sources| into a single, new
-	// chunkSource.
-	ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error)
+	// chunkSource. It returns a |cleanupFunc| which can be called to
+	// potentially release resources associated with the |sources| once
+	// they are no longer needed.
+	ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error)
 
 	// Open a table named |name|, containing |chunkCount| chunks.
 	Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error)
@@ -54,8 +58,10 @@ type tablePersister interface {
 	// Exists checks if a table named |name| exists.
 	Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error)
 
-	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
-	PruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error
+	// PruneTableFiles deletes table files which the persister would normally be responsible for and
+	// which are not in the included |keeper| set and have not be written or modified more recently
+	// than the provided |mtime|.
+	PruneTableFiles(ctx context.Context, keeper func() []addr, mtime time.Time) error
 
 	io.Closer
 }

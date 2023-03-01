@@ -45,23 +45,16 @@ var _ sql.FilteredTable = (*UnscopedDiffTable)(nil)
 // UnscopedDiffTable is a sql.Table implementation of a system table that shows which tables have
 // changed in each commit, across all branches.
 type UnscopedDiffTable struct {
+	dbName           string
 	ddb              *doltdb.DoltDB
 	head             *doltdb.Commit
 	partitionFilters []sql.Expression
 	commitCheck      doltdb.CommitFilter
 }
 
-// tableChange is an internal data structure used to hold the results of processing
-// a diff.TableDelta structure into the output data for this system table.
-type tableChange struct {
-	tableName    string
-	dataChange   bool
-	schemaChange bool
-}
-
 // NewUnscopedDiffTable creates an UnscopedDiffTable
-func NewUnscopedDiffTable(_ *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
-	return &UnscopedDiffTable{ddb: ddb, head: head}
+func NewUnscopedDiffTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
+	return &UnscopedDiffTable{dbName: dbName, ddb: ddb, head: head}
 }
 
 // Filters returns the list of filters that are applied to this table.
@@ -71,6 +64,7 @@ func (dt *UnscopedDiffTable) Filters() []sql.Expression {
 
 // HandledFilters returns the list of filters that will be handled by the table itself
 func (dt *UnscopedDiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
+	filters = append(filters, dt.partitionFilters...)
 	dt.partitionFilters = FilterFilters(filters, ColumnPredicate(filterColumnNameSet))
 	return dt.partitionFilters
 }
@@ -192,9 +186,9 @@ func (dt *UnscopedDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.Index
 
 func (dt *UnscopedDiffTable) newWorkingSetRowItr(ctx *sql.Context) (sql.RowIter, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
-	roots, ok := sess.GetRoots(ctx, ctx.GetCurrentDatabase())
+	roots, ok := sess.GetRoots(ctx, dt.dbName)
 	if !ok {
-		return nil, fmt.Errorf("unable to lookup roots for database %s", ctx.GetCurrentDatabase())
+		return nil, fmt.Errorf("unable to lookup roots for database %s", dt.dbName)
 	}
 
 	staged, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
@@ -239,20 +233,20 @@ func (d *doltDiffWorkingSetRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, io.EOF
 	}
 
-	change, err := processTableDelta(ctx, tableDelta)
+	change, err := tableDelta.GetSummary(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	sqlRow := sql.NewRow(
 		changeSet,
-		change.tableName,
+		change.TableName,
 		nil, // committer
 		nil, // email
 		nil, // date
 		nil, // message
-		change.dataChange,
-		change.schemaChange,
+		change.DataChange,
+		change.SchemaChange,
 	)
 
 	return sqlRow, nil
@@ -286,7 +280,7 @@ type doltDiffCommitHistoryRowItr struct {
 	commits         []*doltdb.Commit
 	meta            *datas.CommitMeta
 	hash            hash.Hash
-	tableChanges    []tableChange
+	tableChanges    []diff.TableDeltaSummary
 	tableChangesIdx int
 }
 
@@ -356,13 +350,13 @@ func (itr *doltDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, error) 
 
 	return sql.NewRow(
 		h.String(),
-		tableChange.tableName,
+		tableChange.TableName,
 		meta.Name,
 		meta.Email,
 		meta.Time(),
 		meta.Description,
-		tableChange.dataChange,
-		tableChange.schemaChange,
+		tableChange.DataChange,
+		tableChange.SchemaChange,
 	), nil
 }
 
@@ -397,7 +391,7 @@ func (itr *doltDiffCommitHistoryRowItr) loadTableChanges(ctx context.Context, co
 
 // calculateTableChanges calculates the tables that changed in the specified commit, by comparing that
 // commit with its immediate ancestor commit.
-func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Context, commit *doltdb.Commit) ([]tableChange, error) {
+func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Context, commit *doltdb.Commit) ([]diff.TableDeltaSummary, error) {
 	if len(commit.DatasParents()) == 0 {
 		return nil, nil
 	}
@@ -422,9 +416,9 @@ func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Contex
 		return nil, err
 	}
 
-	tableChanges := make([]tableChange, len(deltas))
+	tableChanges := make([]diff.TableDeltaSummary, len(deltas))
 	for i := 0; i < len(deltas); i++ {
-		change, err := processTableDelta(itr.ctx, deltas[i])
+		change, err := deltas[i].GetSummary(itr.ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -438,68 +432,6 @@ func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Contex
 	}
 
 	return tableChanges, nil
-}
-
-// processTableDelta processes the specified TableDelta to determine what kind of change it was (i.e. table drop,
-// table rename, table create, or data update) and returns a tableChange struct representing the change.
-func processTableDelta(ctx *sql.Context, delta diff.TableDelta) (*tableChange, error) {
-	// Dropping a table is always a schema change, and also a data change if the table contained data
-	if delta.IsDrop() {
-		isEmpty, err := isTableDataEmpty(ctx, delta.FromTable)
-		if err != nil {
-			return nil, err
-		}
-
-		return &tableChange{
-			tableName:    delta.FromName,
-			dataChange:   !isEmpty,
-			schemaChange: true,
-		}, nil
-	}
-
-	// Renaming a table is always a schema change, and also a data change if the table data differs
-	if delta.IsRename() {
-		dataChanged, err := delta.HasHashChanged()
-		if err != nil {
-			return nil, err
-		}
-
-		return &tableChange{
-			tableName:    delta.ToName,
-			dataChange:   dataChanged,
-			schemaChange: true,
-		}, nil
-	}
-
-	// Creating a table is always a schema change, and also a data change if data was inserted
-	if delta.IsAdd() {
-		isEmpty, err := isTableDataEmpty(ctx, delta.ToTable)
-		if err != nil {
-			return nil, err
-		}
-
-		return &tableChange{
-			tableName:    delta.ToName,
-			dataChange:   !isEmpty,
-			schemaChange: true,
-		}, nil
-	}
-
-	dataChanged, err := delta.HasHashChanged()
-	if err != nil {
-		return nil, err
-	}
-
-	schemaChanged, err := delta.HasSchemaChanged(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &tableChange{
-		tableName:    delta.ToName,
-		dataChange:   dataChanged,
-		schemaChange: schemaChanged,
-	}, nil
 }
 
 // Close closes the iterator.

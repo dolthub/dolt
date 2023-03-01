@@ -25,29 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-// recLookup contains journalRec lookup metadata.
-type recLookup struct {
-	// journalOff is the file offset of the journalRec.
-	journalOff int64
-
-	// recordLen is the length of the journalRec.
-	recordLen uint32
-
-	// payloadOff is the offset of the payload within the
-	// journalRec, it's used for converting to a Range.
-	payloadOff uint32
-}
-
-// rangeFromLookup converts a recLookup to a Range,
-// used when computing GetDownloadLocs.
-func rangeFromLookup(l recLookup) Range {
-	return Range{
-		// see journalRec for serialization format
-		Offset: uint64(l.journalOff) + uint64(l.payloadOff),
-		Length: l.recordLen - (l.payloadOff + journalRecChecksumSz),
-	}
-}
-
 // journalChunkSource is a chunkSource that reads chunks
 // from a chunkJournal. Unlike other NBS chunkSources,
 // it is not immutable and its set of chunks grows as
@@ -140,7 +117,7 @@ func (s journalChunkSource) hash() addr {
 // reader implements chunkSource.
 func (s journalChunkSource) reader(context.Context) (io.ReadCloser, uint64, error) {
 	rdr, sz, err := s.journal.snapshot()
-	return io.NopCloser(rdr), uint64(sz), err
+	return rdr, uint64(sz), err
 }
 
 func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error) {

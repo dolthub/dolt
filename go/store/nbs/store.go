@@ -68,14 +68,11 @@ const (
 var (
 	cacheOnce           = sync.Once{}
 	makeManifestManager func(manifest) manifestManager
-	globalFDCache       *fdCache
 )
 
 var tracer = otel.Tracer("github.com/dolthub/dolt/go/store/nbs")
 
 func makeGlobalCaches() {
-	globalFDCache = newFDCache(defaultMaxTables)
-
 	manifestCache := newManifestCache(defaultManifestCacheSize)
 	manifestLocks := newManifestLocks()
 	makeManifestManager = func(m manifest) manifestManager { return manifestManager{m, manifestCache, manifestLocks} }
@@ -169,6 +166,8 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	defer nbs.mu.Unlock()
 	nbs.waitForGC()
 
+	nbs.checkAllManifestUpdatesExist(ctx, updates)
+
 	nbs.mm.LockForUpdate()
 	defer func() {
 		unlockErr := nbs.mm.UnlockForUpdate()
@@ -215,11 +214,6 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 			}
 		}
 
-		err = nbs.tables.checkAllTablesExist(ctx, contents.specs, nbs.stats)
-		if err != nil {
-			return manifestContents{}, err
-		}
-
 		updatedContents, err = nbs.mm.Update(ctx, originalLock, contents, nbs.stats, nil)
 		if err != nil {
 			return manifestContents{}, err
@@ -250,6 +244,8 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	nbs.waitForGC()
+
+	nbs.checkAllManifestUpdatesExist(ctx, updates)
 
 	nbs.mm.LockForUpdate()
 	defer func() {
@@ -298,11 +294,6 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 			return manifestContents{}, err
 		}
 
-		err = nbs.tables.checkAllTablesExist(ctx, contents.specs, nbs.stats)
-		if err != nil {
-			return manifestContents{}, err
-		}
-
 		updatedContents, err = nbs.mm.Update(ctx, originalLock, contents, nbs.stats, nil)
 		if err != nil {
 			return manifestContents{}, err
@@ -326,6 +317,27 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 		return manifestContents{}, err
 	}
 	return updatedContents, nil
+}
+
+func (nbs *NomsBlockStore) checkAllManifestUpdatesExist(ctx context.Context, updates map[hash.Hash]uint32) error {
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.SetLimit(128)
+	for h, c := range updates {
+		h := h
+		c := c
+		eg.Go(func() error {
+			a := addr(h)
+			ok, err := nbs.p.Exists(ctx, a, c, nbs.stats)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return fmt.Errorf("missing table file referenced in UpdateManifest call: %v", a)
+			}
+			return nil
+		})
+	}
+	return eg.Wait()
 }
 
 func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSpecs []tableSpec, option ManifestAppendixOption) (manifestContents, error) {
@@ -480,7 +492,7 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 	if err != nil {
 		return nil, err
 	}
-	p := newFSTablePersister(dir, globalFDCache, q)
+	p := newFSTablePersister(dir, q)
 	c := conjoinStrategy(inlineConjoiner{maxTables})
 
 	return newNomsBlockStore(ctx, nbfVerStr, makeManifestManager(m), p, q, c, memTableSize)
@@ -496,7 +508,7 @@ func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQ
 	if err != nil {
 		return nil, err
 	}
-	p := newFSTablePersister(dir, globalFDCache, q)
+	p := newFSTablePersister(dir, q)
 
 	journal, err := newChunkJournal(ctx, nbfVers, dir, m, p.(*fsTablePersister))
 	if err != nil {
@@ -616,6 +628,9 @@ func (nbs *NomsBlockStore) putChunk(ctx context.Context, c chunks.Chunk, getAddr
 }
 
 func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs hash.HashSet, checker refCheck) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
@@ -1135,7 +1150,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	if nbs.c.conjoinRequired(nbs.tables) {
-		newUpstream, err := conjoin(ctx, nbs.c, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
+		newUpstream, cleanup, err := conjoin(ctx, nbs.c, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
 		if err != nil {
 			return err
 		}
@@ -1152,6 +1167,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		if err != nil {
 			return err
 		}
+		cleanup()
 		return errOptimisticLockFailedTables
 	}
 
@@ -1439,44 +1455,20 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 }
 
 func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context, checker refCheck) (err error) {
-	nbs.mu.Lock()
-	defer nbs.mu.Unlock()
-	nbs.waitForGC()
+	mtime := time.Now()
 
-	nbs.mm.LockForUpdate()
-	defer func() {
-		unlockErr := nbs.mm.UnlockForUpdate()
-
-		if err == nil {
-			err = unlockErr
+	return nbs.p.PruneTableFiles(ctx, func() []addr {
+		nbs.mu.Lock()
+		defer nbs.mu.Unlock()
+		keepers := make([]addr, 0, len(nbs.tables.novel)+len(nbs.tables.upstream))
+		for a, _ := range nbs.tables.novel {
+			keepers = append(keepers, a)
 		}
-	}()
-
-	for {
-		// flush all tables and update manifest
-		err = nbs.updateManifest(ctx, nbs.upstream.root, nbs.upstream.root, checker)
-
-		if err == nil {
-			break
-		} else if err == errOptimisticLockFailedTables {
-			continue
-		} else {
-			return err
+		for a, _ := range nbs.tables.upstream {
+			keepers = append(keepers, a)
 		}
-
-		// Same behavior as Commit
-		// infinitely retries without backoff in the case off errOptimisticLockFailedTables
-	}
-
-	ok, contents, t, err := nbs.mm.Fetch(ctx, &Stats{})
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return nil // no manifest exists
-	}
-
-	return nbs.p.PruneTableFiles(ctx, contents, t)
+		return keepers
+	}, mtime)
 }
 
 func (nbs *NomsBlockStore) BeginGC(keeper func(hash.Hash) error) error {

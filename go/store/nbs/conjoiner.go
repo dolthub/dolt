@@ -91,9 +91,10 @@ func (c noopConjoiner) chooseConjoinees(sources []tableSpec) (conjoinees, keeper
 // process actor has already landed a conjoin of its own. Callers must
 // handle this, likely by rebasing against upstream and re-evaluating the
 // situation.
-func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, error) {
+func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, cleanupFunc, error) {
 	var conjoined tableSpec
 	var conjoinees, keepers, appendixSpecs []tableSpec
+	var cleanup cleanupFunc
 
 	for {
 		if conjoinees == nil {
@@ -107,12 +108,12 @@ func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, 
 			var err error
 			conjoinees, keepers, err = s.chooseConjoinees(upstream.specs)
 			if err != nil {
-				return manifestContents{}, err
+				return manifestContents{}, nil, err
 			}
 
-			conjoined, err = conjoinTables(ctx, conjoinees, p, stats)
+			conjoined, cleanup, err = conjoinTables(ctx, conjoinees, p, stats)
 			if err != nil {
-				return manifestContents{}, err
+				return manifestContents{}, nil, err
 			}
 		}
 
@@ -136,25 +137,31 @@ func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, 
 		var err error
 		upstream, err = mm.Update(ctx, upstream.lock, newContents, stats, nil)
 		if err != nil {
-			return manifestContents{}, err
+			return manifestContents{}, nil, err
 		}
 
 		if newContents.lock == upstream.lock {
-			return upstream, nil
+			return upstream, cleanup, nil
 		}
 
-		// Optimistic lock failure. Someone else moved to the root, the set of tables, or both out from under us.
-		// If we can re-use the conjoin we already performed, we want to try again. Currently, we will only do so if ALL conjoinees are still present upstream. If we can't re-use...then someone else almost certainly landed a conjoin upstream. In this case, bail and let clients ask again if they think they still can't proceed.
+		// Optimistic lock failure. Someone else moved to the root, the
+		// set of tables, or both out from under us.  If we can re-use
+		// the conjoin we already performed, we want to try again.
+		// Currently, we will only do so if ALL conjoinees are still
+		// present upstream. If we can't re-use...then someone else
+		// almost certainly landed a conjoin upstream. In this case,
+		// bail and let clients ask again if they think they still
+		// can't proceed.
 
 		// If the appendix has changed we simply bail
 		// and let the client retry
 		if len(appendixSpecs) > 0 {
 			if len(upstream.appendix) != len(appendixSpecs) {
-				return upstream, nil
+				return upstream, func() {}, nil
 			}
 			for i := range upstream.appendix {
 				if upstream.appendix[i].name != appendixSpecs[i].name {
-					return upstream, nil
+					return upstream, func() {}, nil
 				}
 			}
 
@@ -171,7 +178,7 @@ func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, 
 		}
 		for _, c := range conjoinees {
 			if _, present := upstreamNames[c.name]; !present {
-				return upstream, nil // Bail!
+				return upstream, func() {}, nil // Bail!
 			}
 			conjoineeSet[c.name] = struct{}{}
 		}
@@ -186,7 +193,7 @@ func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, 
 	}
 }
 
-func conjoinTables(ctx context.Context, conjoinees []tableSpec, p tablePersister, stats *Stats) (conjoined tableSpec, err error) {
+func conjoinTables(ctx context.Context, conjoinees []tableSpec, p tablePersister, stats *Stats) (conjoined tableSpec, cleanup cleanupFunc, err error) {
 	eg, ectx := errgroup.WithContext(ctx)
 	toConjoin := make(chunkSources, len(conjoinees))
 
@@ -205,14 +212,14 @@ func conjoinTables(ctx context.Context, conjoinees []tableSpec, p tablePersister
 		}
 	}()
 	if err = eg.Wait(); err != nil {
-		return tableSpec{}, err
+		return tableSpec{}, nil, err
 	}
 
 	t1 := time.Now()
 
-	conjoinedSrc, err := p.ConjoinAll(ctx, toConjoin, stats)
+	conjoinedSrc, cleanup, err := p.ConjoinAll(ctx, toConjoin, stats)
 	if err != nil {
-		return tableSpec{}, err
+		return tableSpec{}, nil, err
 	}
 	defer conjoinedSrc.close()
 
@@ -221,7 +228,7 @@ func conjoinTables(ctx context.Context, conjoinees []tableSpec, p tablePersister
 
 	cnt, err := conjoinedSrc.count()
 	if err != nil {
-		return tableSpec{}, err
+		return tableSpec{}, nil, err
 	}
 
 	stats.ChunksPerConjoin.Sample(uint64(cnt))
@@ -229,9 +236,9 @@ func conjoinTables(ctx context.Context, conjoinees []tableSpec, p tablePersister
 	h := conjoinedSrc.hash()
 	cnt, err = conjoinedSrc.count()
 	if err != nil {
-		return tableSpec{}, err
+		return tableSpec{}, nil, err
 	}
-	return tableSpec{h, cnt}, nil
+	return tableSpec{h, cnt}, cleanup, nil
 }
 
 func toSpecs(srcs chunkSources) ([]tableSpec, error) {

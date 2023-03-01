@@ -51,6 +51,8 @@ func FmtColWithNameAndType(indent, nameWidth, typeWidth int, colName, typeStr st
 		colStr += " AUTO_INCREMENT"
 	}
 
+	// TODO: get SRID value for geometry type column
+
 	if col.Default != "" {
 		colStr += " DEFAULT " + col.Default
 	}
@@ -60,92 +62,6 @@ func FmtColWithNameAndType(indent, nameWidth, typeWidth int, colName, typeStr st
 	}
 
 	return colStr
-}
-
-// FmtColPrimaryKey creates a string representing a primary key constraint within a sql create table statement with a
-// given indent.
-func FmtColPrimaryKey(indent int, colStr string, newline bool) string {
-	st := "%%%ds PRIMARY KEY (%s)"
-	if newline {
-		st += "\n"
-	}
-
-	fmtStr := fmt.Sprintf(st, indent, colStr)
-	return fmt.Sprintf(fmtStr, "")
-}
-
-func FmtIndex(index schema.Index) string {
-	sb := strings.Builder{}
-	if index.IsUnique() {
-		sb.WriteString("UNIQUE ")
-	}
-	sb.WriteString("INDEX ")
-	sb.WriteString(QuoteIdentifier(index.Name()))
-	sb.WriteString(" (")
-	for i, indexColName := range index.ColumnNames() {
-		if i != 0 {
-			sb.WriteRune(',')
-		}
-		sb.WriteString(QuoteIdentifier(indexColName))
-	}
-	sb.WriteRune(')')
-	if len(index.Comment()) > 0 {
-		sb.WriteString(" COMMENT ")
-		sb.WriteString(QuoteComment(index.Comment()))
-	}
-	return sb.String()
-}
-
-func FmtForeignKey(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
-	sb := strings.Builder{}
-	sb.WriteString("CONSTRAINT ")
-	sb.WriteString(QuoteIdentifier(fk.Name))
-	sb.WriteString(" FOREIGN KEY (")
-	if fk.IsResolved() {
-		for i, tag := range fk.TableColumns {
-			if i != 0 {
-				sb.WriteRune(',')
-			}
-			c, _ := sch.GetAllCols().GetByTag(tag)
-			sb.WriteString(QuoteIdentifier(c.Name))
-		}
-	} else {
-		for i, col := range fk.UnresolvedFKDetails.TableColumns {
-			if i != 0 {
-				sb.WriteRune(',')
-			}
-			sb.WriteString(QuoteIdentifier(col))
-		}
-	}
-	sb.WriteString(")\n    REFERENCES ")
-	sb.WriteString(QuoteIdentifier(fk.ReferencedTableName))
-	sb.WriteString(" (")
-	if fk.IsResolved() {
-		for i, tag := range fk.ReferencedTableColumns {
-			if i != 0 {
-				sb.WriteRune(',')
-			}
-			c, _ := parentSch.GetAllCols().GetByTag(tag)
-			sb.WriteString(QuoteIdentifier(c.Name))
-		}
-	} else {
-		for i, col := range fk.UnresolvedFKDetails.ReferencedTableColumns {
-			if i != 0 {
-				sb.WriteRune(',')
-			}
-			sb.WriteString(QuoteIdentifier(col))
-		}
-	}
-	sb.WriteRune(')')
-	if fk.OnDelete != doltdb.ForeignKeyReferentialAction_DefaultAction {
-		sb.WriteString("\n    ON DELETE ")
-		sb.WriteString(fk.OnDelete.String())
-	}
-	if fk.OnUpdate != doltdb.ForeignKeyReferentialAction_DefaultAction {
-		sb.WriteString("\n    ON UPDATE ")
-		sb.WriteString(fk.OnUpdate.String())
-	}
-	return sb.String()
 }
 
 func DropTableStmt(tableName string) string {

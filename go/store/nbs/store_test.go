@@ -58,14 +58,14 @@ func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, no
 
 type fileToData map[string][]byte
 
-func populateLocalStore(t *testing.T, st *NomsBlockStore, numTableFiles int) fileToData {
+func writeLocalTableFiles(t *testing.T, st *NomsBlockStore, numTableFiles, seed int) (map[string]int, fileToData) {
 	ctx := context.Background()
 	fileToData := make(fileToData, numTableFiles)
-	fileIDToNumChunks := make(map[string]int)
+	fileIDToNumChunks := make(map[string]int, numTableFiles)
 	for i := 0; i < numTableFiles; i++ {
 		var chunkData [][]byte
 		for j := 0; j < i+1; j++ {
-			chunkData = append(chunkData, []byte(fmt.Sprintf("%d:%d", i, j)))
+			chunkData = append(chunkData, []byte(fmt.Sprintf("%d:%d:%d", i, j, seed)))
 		}
 		data, addr, err := buildTable(chunkData)
 		require.NoError(t, err)
@@ -77,9 +77,14 @@ func populateLocalStore(t *testing.T, st *NomsBlockStore, numTableFiles int) fil
 		})
 		require.NoError(t, err)
 	}
+	return fileIDToNumChunks, fileToData
+}
+
+func populateLocalStore(t *testing.T, st *NomsBlockStore, numTableFiles int) fileToData {
+	ctx := context.Background()
+	fileIDToNumChunks, fileToData := writeLocalTableFiles(t, st, numTableFiles, 0)
 	err := st.AddTableFilesToManifest(ctx, fileIDToNumChunks)
 	require.NoError(t, err)
-
 	return fileToData
 }
 
@@ -190,8 +195,10 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	numTableFiles := 64
 	maxTableFiles := 16
 	st, nomsDir, _ := makeTestLocalStore(t, maxTableFiles)
-	fileToData := populateLocalStore(t, st, numTableFiles)
 	defer st.Close()
+	fileToData := populateLocalStore(t, st, numTableFiles)
+
+	_, toDeleteToData := writeLocalTableFiles(t, st, numTableFiles, 32)
 
 	// add a chunk and flush to trigger a conjoin
 	c := chunks.NewChunk([]byte("it's a boy!"))
@@ -212,6 +219,9 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	// assert some input table files were conjoined
 	assert.NotEmpty(t, absent)
 
+	toDelete := tfSet.findAbsent(toDeleteToData)
+	assert.Len(t, toDelete, len(toDeleteToData))
+
 	currTableFiles := func(dirName string) *set.StrSet {
 		infos, err := os.ReadDir(dirName)
 		require.NoError(t, err)
@@ -228,7 +238,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	for _, tf := range sources {
 		assert.True(t, preGC.Contains(tf.FileID()))
 	}
-	for _, fileName := range absent {
+	for _, fileName := range toDelete {
 		assert.True(t, preGC.Contains(fileName))
 	}
 
@@ -237,9 +247,12 @@ func TestNBSPruneTableFiles(t *testing.T) {
 
 	postGC := currTableFiles(nomsDir)
 	for _, tf := range sources {
-		assert.True(t, preGC.Contains(tf.FileID()))
+		assert.True(t, postGC.Contains(tf.FileID()))
 	}
 	for _, fileName := range absent {
+		assert.False(t, postGC.Contains(fileName))
+	}
+	for _, fileName := range toDelete {
 		assert.False(t, postGC.Contains(fileName))
 	}
 	infos, err := os.ReadDir(nomsDir)

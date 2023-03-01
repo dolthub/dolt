@@ -165,6 +165,7 @@ func serializeClusteredIndex(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 	serial.IndexAddValueColumns(b, vo)
 	serial.IndexAddPrimaryKey(b, true)
 	serial.IndexAddUniqueKey(b, true)
+	serial.IndexAddSpatialKey(b, false)
 	serial.IndexAddSystemDefined(b, false)
 	return serial.IndexEnd(b)
 }
@@ -350,6 +351,7 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		serial.IndexAddUniqueKey(b, idx.IsUnique())
 		serial.IndexAddSystemDefined(b, !idx.IsUserDefined())
 		serial.IndexAddPrefixLengths(b, po)
+		serial.IndexAddSpatialKey(b, idx.IsSpatial())
 		offs[i] = serial.IndexEnd(b)
 	}
 
@@ -370,6 +372,7 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 		name := string(idx.Name())
 		props := schema.IndexProperties{
 			IsUnique:      idx.UniqueKey(),
+			IsSpatial:     idx.SpatialKey(),
 			IsUserDefined: !idx.SystemDefined(),
 			Comment:       string(idx.Comment()),
 		}

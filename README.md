@@ -1,4 +1,4 @@
-<img height="100" src="./docs/Dolt-Logo@3x.svg"/>
+<img height="100" src="./images/Dolt-Logo@3x.svg"/>
 
 # Dolt is Git for Data!
 
@@ -526,11 +526,11 @@ Hate the command line? Let's use [Tableplus](https://tableplus.com/) to make som
 
 Now, to connect you must select MySQL as the connection type. Then enter a name for your connection, `getting_started` as your database, and `root` as your user.
 
-![Tableplus Connection](./docs/getting-started-tp-connect.png)
+![Tableplus Connection](./images/getting-started-tp-connect.png)
 
 Click connect and you'll be presented with a familiar database workbench GUI.
 
-![Tableplus](./docs/getting-started-tp.png)
+![Tableplus](./images/getting-started-tp.png)
 
 ## Make changes on a branch
 
@@ -549,7 +549,7 @@ call dolt_commit('-am', 'Modifications on a branch');
 
 Here's the result in Tableplus.
 
-![New Updates](./docs/getting-started-new-updates.png)
+![New Updates](./images/getting-started-new-updates.png)
 
 Back in my terminal, I cannot see the table modifications made in Tableplus because they happened on a different branch than the one I have checked out in my session. 
 
