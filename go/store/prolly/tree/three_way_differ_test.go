@@ -256,7 +256,7 @@ func compareDiffs(t *testing.T, exp, cmp testDiff) {
 	}
 }
 
-func formatTestDiff(t *testing.T, d diff, keyDesc, valDesc val.TupleDesc) testDiff {
+func formatTestDiff(t *testing.T, d threeWayDiff, keyDesc, valDesc val.TupleDesc) testDiff {
 	key, ok := keyDesc.GetInt64(0, d.k)
 	require.True(t, ok)
 
