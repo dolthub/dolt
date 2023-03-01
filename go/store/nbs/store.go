@@ -1409,44 +1409,20 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 }
 
 func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context, checker refCheck) (err error) {
-	nbs.mu.Lock()
-	defer nbs.mu.Unlock()
-	nbs.waitForGC()
+	mtime := time.Now()
 
-	nbs.mm.LockForUpdate()
-	defer func() {
-		unlockErr := nbs.mm.UnlockForUpdate()
-
-		if err == nil {
-			err = unlockErr
+	return nbs.p.PruneTableFiles(ctx, func() []addr {
+		nbs.mu.Lock()
+		defer nbs.mu.Unlock()
+		keepers := make([]addr, 0, len(nbs.tables.novel)+len(nbs.tables.upstream))
+		for a, _ := range nbs.tables.novel {
+			keepers = append(keepers, a)
 		}
-	}()
-
-	for {
-		// flush all tables and update manifest
-		err = nbs.updateManifest(ctx, nbs.upstream.root, nbs.upstream.root, checker)
-
-		if err == nil {
-			break
-		} else if err == errOptimisticLockFailedTables {
-			continue
-		} else {
-			return err
+		for a, _ := range nbs.tables.upstream {
+			keepers = append(keepers, a)
 		}
-
-		// Same behavior as Commit
-		// infinitely retries without backoff in the case off errOptimisticLockFailedTables
-	}
-
-	ok, contents, t, err := nbs.mm.Fetch(ctx, &Stats{})
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return nil // no manifest exists
-	}
-
-	return nbs.p.PruneTableFiles(ctx, contents, t)
+		return keepers
+	}, mtime)
 }
 
 func (nbs *NomsBlockStore) setGCInProgress(inProgress bool) bool {

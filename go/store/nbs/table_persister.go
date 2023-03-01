@@ -58,8 +58,10 @@ type tablePersister interface {
 	// Exists checks if a table named |name| exists.
 	Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error)
 
-	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
-	PruneTableFiles(ctx context.Context, contents manifestContents, mtime time.Time) error
+	// PruneTableFiles deletes table files which the persister would normally be responsible for and
+	// which are not in the included |keeper| set and have not be written or modified more recently
+	// than the provided |mtime|.
+	PruneTableFiles(ctx context.Context, keeper func() []addr, mtime time.Time) error
 
 	io.Closer
 }
