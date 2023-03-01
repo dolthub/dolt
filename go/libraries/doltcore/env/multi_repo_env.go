@@ -106,7 +106,13 @@ func MultiEnvForDirectory(
 			return false
 		}
 
-		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, dEnv.Version)
+		// TODO: get rid of version altogether
+		version := ""
+		if dEnv != nil {
+			version = dEnv.Version
+		}
+
+		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, version)
 		if newEnv.Valid() {
 			envSet[dirToDBName(dir)] = newEnv
 		}
@@ -117,7 +123,7 @@ func MultiEnvForDirectory(
 
 	// if the current directory database is in our set, add it first so it will be the current database
 	var ok bool
-	if dEnv, ok = envSet[dbName]; ok {
+	if dEnv, ok = envSet[dbName]; ok && dEnv.Valid() {
 		mrEnv.addEnv(dbName, dEnv)
 		delete(envSet, dbName)
 	}
