@@ -22,6 +22,8 @@ teardown() {
     teardown_common
 }
 
+
+
 @test "diff-stat: stat/summary comparing working table to last commit" {
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
@@ -338,4 +340,39 @@ SQL
     run dolt diff --stat
     [ $status -eq 0 ]
     [[ $output =~ "1 Row Modified (100.00%)" ]]
+}
+
+@test "diff-stat: stat/summary for renamed table" {
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
+    dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
+    dolt add test
+    dolt commit -m "table created"
+
+    dolt sql -q "alter table test rename to test2"
+    run dolt diff --stat
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No data changes. See schema changes by using -s or --schema." ]] || false
+
+    run dolt diff --summary
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| Table name    | Diff type | Data change | Schema change |" ]] || false
+    [[ "$output" =~ "| test -> test2 | renamed   | false       | true          |" ]] || false
+
+    dolt sql -q "insert into test2 values (2, 2, 2, 2, 2, 2)"
+    run dolt diff --stat
+    [ "$status" -eq 0 ]
+    echo "$output"
+    [[ "$output" =~ "2 Rows Unmodified (100.00%)" ]] || false
+    [[ "$output" =~ "1 Row Added (50.00%)" ]] || false
+    [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
+    [[ "$output" =~ "0 Rows Modified (0.00%)" ]] || false
+    [[ "$output" =~ "6 Cells Added (50.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Deleted (0.00%)" ]] || false
+    [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
+    [[ "$output" =~ "(2 Row Entries vs 3 Row Entries)" ]] || false
+
+    run dolt diff --summary
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| Table name    | Diff type | Data change | Schema change |" ]] || false
+    [[ "$output" =~ "| test -> test2 | renamed   | true        | true          |" ]] || false
 }

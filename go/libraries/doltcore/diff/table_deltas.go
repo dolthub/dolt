@@ -62,10 +62,12 @@ type TableDelta struct {
 }
 
 type TableDeltaSummary struct {
-	DiffType     string
-	DataChange   bool
-	SchemaChange bool
-	TableName    string
+	DiffType      string
+	DataChange    bool
+	SchemaChange  bool
+	TableName     string
+	FromTableName string
+	ToTableName   string
 }
 
 // GetStagedUnstagedTableDeltas represents staged and unstaged changes as TableDelta slices.
@@ -418,10 +420,11 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 		}
 
 		return &TableDeltaSummary{
-			TableName:    td.FromName,
-			DataChange:   !isEmpty,
-			SchemaChange: true,
-			DiffType:     "dropped",
+			TableName:     td.FromName,
+			FromTableName: td.FromName,
+			DataChange:    !isEmpty,
+			SchemaChange:  true,
+			DiffType:      "dropped",
 		}, nil
 	}
 
@@ -433,10 +436,12 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 		}
 
 		return &TableDeltaSummary{
-			TableName:    td.ToName,
-			DataChange:   dataChanged,
-			SchemaChange: true,
-			DiffType:     "renamed",
+			TableName:     td.ToName,
+			FromTableName: td.FromName,
+			ToTableName:   td.ToName,
+			DataChange:    dataChanged,
+			SchemaChange:  true,
+			DiffType:      "renamed",
 		}, nil
 	}
 
@@ -449,6 +454,7 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 
 		return &TableDeltaSummary{
 			TableName:    td.ToName,
+			ToTableName:  td.ToName,
 			DataChange:   !isEmpty,
 			SchemaChange: true,
 			DiffType:     "added",
@@ -468,10 +474,12 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 	}
 
 	return &TableDeltaSummary{
-		TableName:    td.ToName,
-		DataChange:   dataChanged,
-		SchemaChange: schemaChanged,
-		DiffType:     "modified",
+		TableName:     td.FromName,
+		FromTableName: td.FromName,
+		ToTableName:   td.ToName,
+		DataChange:    dataChanged,
+		SchemaChange:  schemaChanged,
+		DiffType:      "modified",
 	}, nil
 }
 

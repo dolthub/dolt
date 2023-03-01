@@ -728,11 +728,11 @@ SQL
     dolt sql -q "create table t1 (a int primary key)"
     dolt sql -q "call dolt_add('.')"
     dolt sql -q "call dolt_commit('-am', 'cm')"
-    sleep 5
 
     cd ..
     dolt clone file://./rem1 repo2
     cd repo2
+    
     run dolt ls
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]

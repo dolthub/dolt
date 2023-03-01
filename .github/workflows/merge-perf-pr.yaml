@@ -1,4 +1,4 @@
-name: Run Import Benchmark on Pull Requests
+name: Run Merge Benchmark on Pull Requests
 
 on:
   pull_request:
@@ -31,7 +31,7 @@ jobs:
         uses: dolthub/pull-request-comment-trigger@master
         id: check
         with:
-          trigger: '#import-benchmark'
+          trigger: '#merge-benchmark'
           reaction: rocket
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [validate-commentor, check-comments]
     if: ${{ needs.check-comments.outputs.benchmark == 'true' }}
-    name: Trigger Benchmark Import Workflow
+    name: Trigger Benchmark Merge Workflow
     steps:
       - uses: dolthub/pull-request-comment-branch@v3
         id: comment-branch
@@ -60,13 +60,10 @@ jobs:
       - uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
-          event-type: benchmark-import
+          event-type: benchmark-merge
           client-payload: |
             {
               "version": "${{ steps.comment-branch.outputs.head_sha }}",
-              "run_file": "ci.yaml",
-              "summary": "summary.sql",
-              "report": "three_way_compare.sql",
               "commit_to_branch": "${{ steps.comment-branch.outputs.head_sha }}",
               "actor": "${{ github.actor }}",
               "issue_id": "${{ steps.get_pull_number.outputs.pull_number }}"

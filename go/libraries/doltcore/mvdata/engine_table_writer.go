@@ -73,22 +73,11 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 		return nil, err
 	}
 
-	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
-	var dbName string
-	mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
-		dbName = name
-		return true, nil
-	})
-
 	// Simplest path would have our import path be a layer over load data
 	config := &engine.SqlEngineConfig{
-		InitialDb:    dbName,
-		IsReadOnly:   false,
-		PrivFilePath: "",
-		ServerUser:   "root",
-		ServerPass:   "",
-		Autocommit:   false, // We set autocommit == false to ensure to improve performance. Bulk import should not commit on each row.
-		Bulk:         true,
+		ServerUser: "root",
+		Autocommit: false, // We set autocommit == false to ensure to improve performance. Bulk import should not commit on each row.
+		Bulk:       true,
 	}
 	se, err := engine.NewSqlEngine(
 		ctx,
@@ -101,18 +90,18 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	}
 	defer se.Close()
 
+	dbName := mrEnv.GetFirstDatabase()
+
 	if se.GetUnderlyingEngine().IsReadOnly {
 		// SqlEngineTableWriter does not respect read only mode
 		return nil, analyzer.ErrReadOnlyDatabase.New(dbName)
 	}
 
-	sqlCtx, err := se.NewContext(ctx)
+	sqlCtx, err := se.NewLocalContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	// Add root client
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	sqlCtx.SetCurrentDatabase(dbName)
 
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
