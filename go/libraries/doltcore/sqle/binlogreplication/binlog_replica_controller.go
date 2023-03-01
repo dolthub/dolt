@@ -52,7 +52,12 @@ type doltBinlogReplicaController struct {
 	filters *filterConfiguration
 	applier *binlogReplicaApplier
 	ctx     *sql.Context
-	mu      *sync.Mutex
+
+	// statusMutex blocks concurrent access to the ReplicaStatus struct
+	statusMutex *sync.Mutex
+
+	// operationMutex blocks concurrent access to the START/STOP/RESET REPLICA operations
+	operationMutex *sync.Mutex
 }
 
 var _ binlogreplication.BinlogReplicaController = (*doltBinlogReplicaController)(nil)
@@ -60,8 +65,9 @@ var _ binlogreplication.BinlogReplicaController = (*doltBinlogReplicaController)
 // newDoltBinlogReplicaController creates a new doltBinlogReplicaController instance.
 func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 	controller := doltBinlogReplicaController{
-		mu:      &sync.Mutex{},
-		filters: newFilterConfiguration(),
+		filters:        newFilterConfiguration(),
+		statusMutex:    &sync.Mutex{},
+		operationMutex: &sync.Mutex{},
 	}
 	controller.status.ConnectRetry = 60
 	controller.status.SourceRetryCount = 86400
@@ -74,8 +80,8 @@ func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 
 // StartReplica implements the BinlogReplicaController interface.
 func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.operationMutex.Lock()
+	defer d.operationMutex.Unlock()
 
 	// START REPLICA may be called multiple times, but if replication is already running,
 	// it will log a warning and not start up new threads.
@@ -251,8 +257,9 @@ func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlo
 		return nil, nil
 	}
 
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	// Lock to read status consistently
+	d.statusMutex.Lock()
+	defer d.statusMutex.Unlock()
 	var copy = d.status
 
 	copy.SourceUser = replicaSourceInfo.User
@@ -274,20 +281,22 @@ func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlo
 
 // ResetReplica implements the BinlogReplicaController interface
 func (d *doltBinlogReplicaController) ResetReplica(ctx *sql.Context, resetAll bool) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.operationMutex.Lock()
+	defer d.operationMutex.Unlock()
 
 	if d.applier.IsRunning() {
 		return fmt.Errorf("unable to reset replica while replication is running; stop replication and try again")
 	}
 
 	// Reset error status
-	d.status.LastIoErrNumber = 0
-	d.status.LastSqlErrNumber = 0
-	d.status.LastIoErrorTimestamp = nil
-	d.status.LastSqlErrorTimestamp = nil
-	d.status.LastSqlError = ""
-	d.status.LastIoError = ""
+	d.updateStatus(func(status *binlogreplication.ReplicaStatus) {
+		status.LastIoErrNumber = 0
+		status.LastSqlErrNumber = 0
+		status.LastIoErrorTimestamp = nil
+		status.LastSqlErrorTimestamp = nil
+		status.LastSqlError = ""
+		status.LastIoError = ""
+	})
 
 	if resetAll {
 		err := deleteReplicationConfiguration(ctx)
@@ -305,15 +314,15 @@ func (d *doltBinlogReplicaController) ResetReplica(ctx *sql.Context, resetAll bo
 // before the specified function |f| is called, and unlocks it after |f| is finished running. The current status is
 // passed into the callback function |f| and the caller can safely update or copy any fields they need.
 func (d *doltBinlogReplicaController) updateStatus(f func(status *binlogreplication.ReplicaStatus)) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.statusMutex.Lock()
+	defer d.statusMutex.Unlock()
 	f(&d.status)
 }
 
 // setIoError updates the current replication status with the specific |errno| and |message| to describe an IO error.
 func (d *doltBinlogReplicaController) setIoError(errno uint, message string) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.statusMutex.Lock()
+	defer d.statusMutex.Unlock()
 
 	// truncate the message to avoid errors when reporting replica status
 	if len(message) > 256 {
@@ -328,8 +337,8 @@ func (d *doltBinlogReplicaController) setIoError(errno uint, message string) {
 
 // setSqlError updates the current replication status with the specific |errno| and |message| to describe an SQL error.
 func (d *doltBinlogReplicaController) setSqlError(errno uint, message string) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.statusMutex.Lock()
+	defer d.statusMutex.Unlock()
 
 	// truncate the message to avoid errors when reporting replica status
 	if len(message) > 256 {
