@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -31,7 +32,7 @@ type Stash struct {
 	HeadCommit  *Commit
 }
 
-// getStashList returns Stash struct without stash root value, as it's not needed to list stashes?
+// getStashList returns array of Stash objects containing all stash entries in the stash list map.
 func getStashList(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWriter, ns tree.NodeStore) ([]*Stash, error) {
 	v, ok := ds.MaybeHead()
 	if !ok {
@@ -76,7 +77,17 @@ func getStashList(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWrit
 	return sl, nil
 }
 
-// getStashList returns stash root value and head commit of stash.
+// getStashList returns hash address only of the stash at given index.
+func getStashHashAtIdx(ctx context.Context, ds datas.Dataset, ns tree.NodeStore, idx int) (hash.Hash, error) {
+	v, ok := ds.MaybeHead()
+	if !ok {
+		return hash.Hash{}, errors.New("stashes not found")
+	}
+
+	return datas.GetStashAtIdx(ctx, ns, v, idx)
+}
+
+// getStashList returns stash root value and head commit of a stash entry at given index.
 func getStashAtIdx(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWriter, ns tree.NodeStore, idx int) (*RootValue, *Commit, error) {
 	v, ok := ds.MaybeHead()
 	if !ok {

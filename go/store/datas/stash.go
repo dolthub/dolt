@@ -109,13 +109,6 @@ func GetStashData(val types.Value) (hash.Hash, hash.Hash, *StashMeta, error) {
 	return sra, hca, meta, err
 }
 
-const (
-	stashMetaBranchNameKey = "branch_name"
-	stashMetaDescKey       = "desc"
-
-	stashMetaStName = "metadata"
-)
-
 // StashMeta contains all the metadata that is associated with a stash within a data repo.
 type StashMeta struct {
 	BranchName  string

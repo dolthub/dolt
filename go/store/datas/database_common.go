@@ -544,6 +544,9 @@ func (db *database) doTag(ctx context.Context, datasetID string, tagAddr hash.Ha
 	})
 }
 
+// Stash creates a new Stash message containing a RootValue and a Commit and stores in stashes Dataset,
+// which can be created if it does not exist. Otherwise, it updates the stashes Dataset as there can only
+// be one stashes Dataset.
 func (db *database) Stash(ctx context.Context, ds Dataset, stashRootRef types.Ref, headCommitAddr hash.Hash, meta *StashMeta) (Dataset, error) {
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
 		var rootHash hash.Hash
@@ -573,6 +576,8 @@ func (db *database) Stash(ctx context.Context, ds Dataset, stashRootRef types.Re
 	)
 }
 
+// DropStash removes a Stash message from stashes Dataset, which cannot be performed by Delete function.
+// This function removes a single stash only and does not get removed if there are no entries left.
 func (db *database) DropStash(ctx context.Context, ds Dataset, idx int) (Dataset, error) {
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
 		// there should be existing stashes list dataset when popping stash
@@ -606,6 +611,8 @@ func (db *database) DropStash(ctx context.Context, ds Dataset, idx int) (Dataset
 	)
 }
 
+// ClearStashes removes all Stash messages from stashes Dataset.
+// TODO: could we just delete the whole Dataset in this case?
 func (db *database) ClearStashes(ctx context.Context, ds Dataset) (Dataset, error) {
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
 		// there should be existing stashes list dataset when popping stash

@@ -27,8 +27,9 @@ import (
 
 var stashClearDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Remove all the stash entries.",
-	LongDesc:  ``,
-	Synopsis:  []string{},
+	LongDesc: `
+Removes all the stash entries from the current stash list.`,
+	Synopsis: []string{},
 }
 
 type StashClearCmd struct{}

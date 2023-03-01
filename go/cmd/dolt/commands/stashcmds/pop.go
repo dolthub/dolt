@@ -90,7 +90,8 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 		stashName = strings.TrimSuffix(strings.TrimPrefix(stashName, "stash@{"), "}")
 		idx, err = strconv.Atoi(stashName)
 		if err != nil {
-			return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			cli.Printf("error: %s is not a valid reference", stashName)
+			return 1
 		}
 	}
 
@@ -99,7 +100,7 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	mergedRoot, mergeStats, err := popStashAtIdx(ctx, dEnv, workingRoot, idx)
+	mergedRoot, mergeStats, err := getStashAtIdx(ctx, dEnv, workingRoot, idx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -123,21 +124,29 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return ret
 	}
 
-	if len(tablesWithConflict) == 0 {
-		err = removeStashAndUpdateWS(ctx, dEnv, idx, mergedRoot)
-		if err != nil {
-			commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-		//Dropped refs/stash@{0} (525f0a80bd3fb75199d919a056053144d4210520)
-		cli.Println(fmt.Sprintf("Dropped refs/stash@{%v} (%s)", idx, "some hash here"))
-		return 0
-	} else {
+	if len(tablesWithConflict) > 0 {
 		cli.Println(fmt.Sprintf("The stash entry is kept in case you need it again."))
 		return 1
 	}
+
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(mergedRoot))
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	err = dropStashAtIdx(ctx, dEnv, idx)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	return 0
 }
 
-func popStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, workingRoot *doltdb.RootValue, idx int) (*doltdb.RootValue, map[string]*merge.MergeStats, error) {
+func getStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, workingRoot *doltdb.RootValue, idx int) (*doltdb.RootValue, map[string]*merge.MergeStats, error) {
 	stashRoot, headCommit, err := dEnv.DoltDB.GetStashAtIdx(ctx, idx)
 	if err != nil {
 		return nil, nil, err
@@ -169,18 +178,4 @@ func popStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, workingRoot *doltdb.R
 	// reuse cherry-pick merge behavior such as no fast-forwarding and others - TODO: check on other behaviors
 	mo := merge.MergeOpts{IsCherryPick: true}
 	return merge.MergeRoots(ctx, workingRoot, stashRoot, parentRoot, stashRoot, parentCm, opts, mo)
-}
-
-func removeStashAndUpdateWS(ctx context.Context, dEnv *env.DoltEnv, idx int, mergedRoot *doltdb.RootValue) error {
-	err := dEnv.DoltDB.RemoveStashAtIdx(ctx, idx)
-	if err != nil {
-		return err
-	}
-
-	ws, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		return err
-	}
-
-	return dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(mergedRoot))
 }

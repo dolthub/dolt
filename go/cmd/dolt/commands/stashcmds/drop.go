@@ -16,6 +16,7 @@ package stashcmds
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -28,8 +29,9 @@ import (
 )
 
 var stashDropDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Remove a single stash entry from the list of stash entries.",
-	LongDesc:  ``,
+	ShortDesc: "Remove a single stash entry.",
+	LongDesc: `
+Removes a single stash entry at given index from the list of stash entries.`,
 	Synopsis: []string{
 		"{{.LessThan}}stash{{.GreaterThan}}",
 	},
@@ -44,7 +46,7 @@ func (cmd StashDropCmd) Name() string {
 
 // Description returns a description of the command
 func (cmd StashDropCmd) Description() string {
-	return "Remove a single stash entry from the list of stash entries."
+	return "Remove a single stash entry."
 }
 
 func (cmd StashDropCmd) Docs() *cli.CommandDocumentation {
@@ -71,21 +73,41 @@ func (cmd StashDropCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 
-	if apr.NArg() != 1 {
+	if apr.NArg() > 1 {
 		usage()
 		return 1
 	}
 
-	stashName := apr.Args[0]
-	stashName = strings.TrimSuffix(strings.TrimPrefix(stashName, "stash@{"), "}")
-	idx, err := strconv.Atoi(stashName)
-	if err != nil {
-		commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	var idx = 0
+	var err error
+	if apr.NArg() == 1 {
+		stashName := apr.Args[0]
+		stashName = strings.TrimSuffix(strings.TrimPrefix(stashName, "stash@{"), "}")
+		idx, err = strconv.Atoi(stashName)
+		if err != nil {
+			cli.Printf("error: %s is not a valid reference", stashName)
+			return 1
+		}
 	}
 
-	err = dEnv.DoltDB.RemoveStashAtIdx(ctx, idx)
+	err = dropStashAtIdx(ctx, dEnv, idx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	return 0
+}
+
+func dropStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, idx int) error {
+	stashHash, err := dEnv.DoltDB.GetStashHashAtIdx(ctx, idx)
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.DoltDB.RemoveStashAtIdx(ctx, idx)
+	if err != nil {
+		return err
+	}
+
+	cli.Println(fmt.Sprintf("Dropped refs/stash@{%v} (%s)", idx, stashHash.String()))
+	return nil
 }

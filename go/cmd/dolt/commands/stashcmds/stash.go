@@ -28,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
-var StashSubCommands = cli.NewSubCommandHandlerWithUnspecified("stash", "Stash the changes in a dirty working directory away.", false, StashCmd{}, []cli.Command{
+var StashCommands = cli.NewSubCommandHandlerWithUnspecified("stash", "Stash the changes in a dirty working directory away.", false, StashCmd{}, []cli.Command{
 	StashClearCmd{},
 	StashDropCmd{},
 	StashListCmd{},
@@ -98,7 +98,6 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 }
 
 func stashChanges(ctx context.Context, dEnv *env.DoltEnv) error {
-	// check for clean working state
 	headRoot, err := dEnv.HeadRoot(ctx)
 	if err != nil {
 		return err
@@ -128,28 +127,28 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv) error {
 		return fmt.Errorf("No local changes to save")
 	}
 
-	// TODO: what to do with staged changes?
+	// TODO: handle cases with staged changes?
 
 	curHeadRef := dEnv.RepoStateReader().CWBHeadRef()
-	curBranch := curHeadRef.String()
-	cms, err := doltdb.NewCommitSpec(curBranch)
+	curBranchName := curHeadRef.String()
+	commitSpec, err := doltdb.NewCommitSpec(curBranchName)
 	if err != nil {
 		return err
 	}
-	commit, err := dEnv.DoltDB.Resolve(ctx, cms, curHeadRef)
+	commit, err := dEnv.DoltDB.Resolve(ctx, commitSpec, curHeadRef)
 	if err != nil {
 		return err
 	}
-	cmh, err := commit.HashOf()
+	commitHash, err := commit.HashOf()
 	if err != nil {
 		return err
 	}
-	cmm, err := commit.GetCommitMeta(ctx)
+	commitMeta, err := commit.GetCommitMeta(ctx)
 	if err != nil {
 		return err
 	}
 
-	err = dEnv.DoltDB.AddStash(ctx, commit, workingRoot, datas.NewStashMeta(curBranch, cmm.Description))
+	err = dEnv.DoltDB.AddStash(ctx, commit, workingRoot, datas.NewStashMeta(curBranchName, commitMeta.Description))
 	if err != nil {
 		return err
 	}
@@ -158,13 +157,11 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv) error {
 	if err != nil {
 		return err
 	}
-
 	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(headRoot))
 	if err != nil {
 		return err
 	}
 
-	cli.Println(fmt.Sprintf("Saved working directory and index state WIP on %s: %s %s", curBranch, cmh.String(), cmm.Description))
-
+	cli.Println(fmt.Sprintf("Saved working directory and index state WIP on %s: %s %s", curBranchName, commitHash.String(), commitMeta.Description))
 	return nil
 }

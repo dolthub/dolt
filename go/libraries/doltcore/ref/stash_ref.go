@@ -18,7 +18,8 @@ import (
 	"strings"
 )
 
-const StashRefName = "0"
+// StashRefName is a dummy name, and there cannot be more than one stash ref.
+const StashRefName = "stashes"
 
 type StashRef struct {
 	stash string
