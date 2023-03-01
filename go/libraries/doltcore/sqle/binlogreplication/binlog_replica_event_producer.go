@@ -15,9 +15,10 @@
 package binlogreplication
 
 import (
+	"sync/atomic"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/mysql"
-	"sync/atomic"
 )
 
 // binlogEventProducer is responsible for reading binlog events from an established connection and sending them back to
