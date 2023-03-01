@@ -3,6 +3,10 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    # dolt stash is not supported for old format ("__LD_1__")
+    if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ]; then
+        skip "dolt stash is not supported for old format: __LD_1__"
+    fi
 
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))"
     dolt add .
