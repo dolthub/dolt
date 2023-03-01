@@ -505,7 +505,7 @@ func startSqlServers(t *testing.T) {
 		t.Skip("Skipping binlog replication integ tests in CI environment on Mac OS")
 	}
 
-	testDir = filepath.Join(os.TempDir(), t.Name()+"-"+time.Now().Format("12345"))
+	testDir = filepath.Join(os.TempDir(), fmt.Sprintf("%s-%v", t.Name(), time.Now().Unix()))
 	err := os.MkdirAll(testDir, 0777)
 
 	cmd := exec.Command("chmod", "777", testDir)
