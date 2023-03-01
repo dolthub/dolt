@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -169,7 +168,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 	ddb := sqledb.DbData().Ddb
 	dp := dtables.NewDiffPartition(dtf.tableDelta.ToTable, dtf.tableDelta.FromTable, toCommitStr, fromCommitStr, dtf.toDate, dtf.fromDate, dtf.tableDelta.ToSch, dtf.tableDelta.FromSch)
 
-	return NewDiffTableFunctionRowIterForSinglePartition(*dp, ddb, dtf.joiner), nil
+	return dtables.NewDiffPartitionRowIter(*dp, ddb, dtf.joiner), nil
 }
 
 // findMatchingDelta returns the best matching table delta for the table name
@@ -550,75 +549,4 @@ func (dtf *DiffTableFunction) String() string {
 // Name implements the sql.TableFunction interface
 func (dtf *DiffTableFunction) Name() string {
 	return "dolt_diff"
-}
-
-//------------------------------------
-// diffTableFunctionRowIter
-//------------------------------------
-
-var _ sql.RowIter = (*diffTableFunctionRowIter)(nil)
-
-type diffTableFunctionRowIter struct {
-	diffPartitions   *dtables.DiffPartitions
-	ddb              *doltdb.DoltDB
-	joiner           *rowconv.Joiner
-	currentPartition *sql.Partition
-	currentRowIter   *sql.RowIter
-}
-
-func NewDiffTableFunctionRowIter(partitions *dtables.DiffPartitions, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) *diffTableFunctionRowIter {
-	return &diffTableFunctionRowIter{
-		diffPartitions: partitions,
-		ddb:            ddb,
-		joiner:         joiner,
-	}
-}
-
-func NewDiffTableFunctionRowIterForSinglePartition(partition sql.Partition, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) *diffTableFunctionRowIter {
-	return &diffTableFunctionRowIter{
-		currentPartition: &partition,
-		ddb:              ddb,
-		joiner:           joiner,
-	}
-}
-
-func (itr *diffTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	for {
-		if itr.currentPartition == nil {
-			nextPartition, err := itr.diffPartitions.Next(ctx)
-			if err != nil {
-				return nil, err
-			}
-			itr.currentPartition = &nextPartition
-		}
-
-		if itr.currentRowIter == nil {
-			dp := (*itr.currentPartition).(dtables.DiffPartition)
-			rowIter, err := dp.GetRowIter(ctx, itr.ddb, itr.joiner, sql.IndexLookup{})
-			if err != nil {
-				return nil, err
-			}
-			itr.currentRowIter = &rowIter
-		}
-
-		row, err := (*itr.currentRowIter).Next(ctx)
-		if err == io.EOF {
-			itr.currentPartition = nil
-			itr.currentRowIter = nil
-
-			if itr.diffPartitions == nil {
-				return nil, err
-			}
-
-			continue
-		} else if err != nil {
-			return nil, err
-		} else {
-			return row, nil
-		}
-	}
-}
-
-func (itr *diffTableFunctionRowIter) Close(_ *sql.Context) error {
-	return nil
 }

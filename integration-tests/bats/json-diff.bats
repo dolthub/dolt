@@ -273,13 +273,13 @@ SQL
 
     run no_stdout dolt diff -r json
     [ $status -eq 0 ]
-    [ "$output" = 'Primary key sets differ between revisions for table t, skipping data diff' ]
+    [ "$output" = "Primary key sets differ between revisions for table 't', skipping data diff" ]
 
     dolt diff -r json
     run dolt diff -r json
     [ $status -eq 0 ]
     [[ "$output" =~ '{"tables":[{"name":"t","schema_diff":["ALTER TABLE `t` DROP PRIMARY KEY;","ALTER TABLE `t` ADD PRIMARY KEY (pk);"]' ]] || false
-    [[ "$output" =~ 'Primary key sets differ between revisions for table t, skipping data diff' ]] || false
+    [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
     
     dolt commit -am 'added primary key'
 
@@ -289,7 +289,7 @@ SQL
     run dolt diff -r json
     [ $status -eq 0 ]
     [[ "$output" =~ '{"tables":[{"name":"t","schema_diff":["ALTER TABLE `t` DROP PRIMARY KEY;"]' ]] || false
-    [[ "$output" =~ 'Primary key sets differ between revisions for table t, skipping data diff' ]] || false
+    [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
 }
 
 function no_stderr {

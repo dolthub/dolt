@@ -19,12 +19,16 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -526,4 +530,239 @@ func fkSlicesAreEqual(from, to []doltdb.ForeignKey) bool {
 		}
 	}
 	return true
+}
+
+// SqlSchemaDiff returns a slice of DDL statements that will transform the schema in the from delta to the schema in
+// the to delta.
+// TODO: this doesn't handle constraints or triggers
+func SqlSchemaDiff(ctx context.Context, td TableDelta, toSchemas map[string]schema.Schema) ([]string, error) {
+	fromSch, toSch, err := td.GetSchemas(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("cannot retrieve schema for table %s, cause: %s", td.ToName, err.Error())
+	}
+
+	var ddlStatements []string
+	if td.IsDrop() {
+		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(td.FromName))
+	} else if td.IsAdd() {
+		toPkSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
+		if err != nil {
+			return nil, err
+		}
+		stmt, err := generateCreateTableStatement(td.ToName, td.ToSch, toPkSch, td.ToFks, td.ToFksParentSch)
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+		ddlStatements = append(ddlStatements, stmt)
+	} else {
+		stmts, err := getNonCreateNonDropTableSqlSchemaDiff(td, toSchemas, fromSch, toSch)
+		if err != nil {
+			return nil, err
+		}
+		ddlStatements = append(ddlStatements, stmts...)
+	}
+
+	return ddlStatements, nil
+}
+
+func getNonCreateNonDropTableSqlSchemaDiff(td TableDelta, toSchemas map[string]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
+	if td.IsAdd() || td.IsDrop() {
+		// use add and drop specific methods
+		return nil, nil
+	}
+
+	var ddlStatements []string
+	if td.FromName != td.ToName {
+		ddlStatements = append(ddlStatements, sqlfmt.RenameTableStmt(td.FromName, td.ToName))
+	}
+
+	eq := schema.SchemasAreEqual(fromSch, toSch)
+	if eq && !td.HasFKChanges() {
+		return ddlStatements, nil
+	}
+
+	colDiffs, unionTags := DiffSchColumns(fromSch, toSch)
+	for _, tag := range unionTags {
+		cd := colDiffs[tag]
+		switch cd.DiffType {
+		case SchDiffNone:
+		case SchDiffAdded:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.FmtCol(0, 0, 0, *cd.New)))
+		case SchDiffRemoved:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
+		case SchDiffModified:
+			// Ignore any primary key set changes here
+			if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
+				continue
+			}
+			if cd.Old.Name != cd.New.Name {
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
+			}
+		}
+	}
+
+	// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
+	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
+		ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropPks(td.ToName))
+		if toSch.GetPKCols().Size() > 0 {
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddPrimaryKeys(td.ToName, toSch.GetPKCols()))
+		}
+	}
+
+	for _, idxDiff := range DiffSchIndexes(fromSch, toSch) {
+		switch idxDiff.DiffType {
+		case SchDiffNone:
+		case SchDiffAdded:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+		case SchDiffRemoved:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
+		case SchDiffModified:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+		}
+	}
+
+	for _, fkDiff := range DiffForeignKeys(td.FromFks, td.ToFks) {
+		switch fkDiff.DiffType {
+		case SchDiffNone:
+		case SchDiffAdded:
+			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+		case SchDiffRemoved:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
+		case SchDiffModified:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
+
+			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+		}
+	}
+
+	return ddlStatements, nil
+}
+
+func GetDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowDiffType ChangeType, colDiffTypes []ChangeType) (string, error) {
+	if len(row) != len(colDiffTypes) {
+		return "", fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
+	}
+
+	switch rowDiffType {
+	case Added:
+		return sqlfmt.SqlRowAsInsertStmt(row, tableName, sch)
+	case Removed:
+		return sqlfmt.SqlRowAsDeleteStmt(row, tableName, sch, 0)
+	case ModifiedNew:
+		updatedCols := set.NewEmptyStrSet()
+		for i, diffType := range colDiffTypes {
+			if diffType != None {
+				updatedCols.Add(sch.GetAllCols().GetByIndex(i).Name)
+			}
+		}
+		return sqlfmt.SqlRowAsUpdateStmt(row, tableName, sch, updatedCols)
+	case ModifiedOld:
+		// do nothing, we only issue UPDATE for ModifiedNew
+		return "", nil
+	default:
+		return "", fmt.Errorf("unexpected row diff type: %v", rowDiffType)
+	}
+}
+
+// generateCreateTableStatement returns CREATE TABLE statement for given table. This function was made to share the same
+// 'create table' statement logic as GMS. We initially were running `SHOW CREATE TABLE` query to get the statement;
+// however, it cannot be done for cases that need this statement in sql shell mode. Dolt uses its own Schema and
+// Column and other object types which are not directly compatible with GMS, so we try to use as much shared logic
+// as possible with GMS to get 'create table' statement in Dolt.
+func generateCreateTableStatement(tblName string, sch schema.Schema, pkSchema sql.PrimaryKeySchema, fks []doltdb.ForeignKey, fksParentSch map[string]schema.Schema) (string, error) {
+	sqlSch := pkSchema.Schema
+	colStmts := make([]string, len(sqlSch))
+
+	// Statement creation parts for each column
+	for i, col := range sch.GetAllCols().GetColumns() {
+		colStmts[i] = sql.GenerateCreateTableColumnDefinition(col.Name, col.TypeInfo.ToSqlType(), col.IsNullable(), col.AutoIncrement, col.Default != "", col.Default, col.Comment)
+	}
+
+	primaryKeyCols := sch.GetPKCols().GetColumnNames()
+	if len(primaryKeyCols) > 0 {
+		primaryKey := sql.GenerateCreateTablePrimaryKeyDefinition(primaryKeyCols)
+		colStmts = append(colStmts, primaryKey)
+	}
+
+	indexes := sch.Indexes().AllIndexes()
+	for _, index := range indexes {
+		// The primary key may or may not be declared as an index by the table. Don't print it twice if it's here.
+		if isPrimaryKeyIndex(index, sch) {
+			continue
+		}
+		colStmts = append(colStmts, sql.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.Name(), index.ColumnNames(), index.Comment()))
+	}
+
+	for _, fk := range fks {
+		colStmts = append(colStmts, generateForeignKeyDefinition(fk, sch, fksParentSch[fk.ReferencedTableName]))
+	}
+
+	for _, check := range sch.Checks().AllChecks() {
+		colStmts = append(colStmts, sql.GenerateCreateTableCheckConstraintClause(check.Name(), check.Expression(), check.Enforced()))
+	}
+
+	coll := sql.CollationID(sch.GetCollation())
+	createTableStmt := sql.GenerateCreateTableStatement(tblName, colStmts, coll.CharacterSet().Name(), coll.Name())
+	return fmt.Sprintf("%s;", createTableStmt), nil
+}
+
+// isPrimaryKeyIndex returns whether the index given matches the table's primary key columns. Order is not considered.
+func isPrimaryKeyIndex(index schema.Index, sch schema.Schema) bool {
+	var pks = sch.GetPKCols().GetColumns()
+	var pkMap = make(map[string]struct{})
+	for _, c := range pks {
+		pkMap[c.Name] = struct{}{}
+	}
+
+	indexCols := index.ColumnNames()
+	if len(indexCols) != len(pks) {
+		return false
+	}
+
+	for _, c := range index.ColumnNames() {
+		if _, ok := pkMap[c]; !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
+func generateForeignKeyDefinition(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
+	var fkCols []string
+	if fk.IsResolved() {
+		for _, tag := range fk.TableColumns {
+			c, _ := sch.GetAllCols().GetByTag(tag)
+			fkCols = append(fkCols, c.Name)
+		}
+	} else {
+		for _, col := range fk.UnresolvedFKDetails.TableColumns {
+			fkCols = append(fkCols, col)
+		}
+	}
+
+	var parentCols []string
+	if fk.IsResolved() {
+		for _, tag := range fk.ReferencedTableColumns {
+			c, _ := parentSch.GetAllCols().GetByTag(tag)
+			parentCols = append(parentCols, c.Name)
+		}
+	} else {
+		for _, col := range fk.UnresolvedFKDetails.ReferencedTableColumns {
+			parentCols = append(parentCols, col)
+		}
+	}
+
+	onDelete := ""
+	if fk.OnDelete != doltdb.ForeignKeyReferentialAction_DefaultAction {
+		onDelete = fk.OnDelete.String()
+	}
+	onUpdate := ""
+	if fk.OnUpdate != doltdb.ForeignKeyReferentialAction_DefaultAction {
+		onUpdate = fk.OnUpdate.String()
+	}
+	return sql.GenerateCreateTableForiegnKeyDefinition(fk.Name, fkCols, fk.ReferencedTableName, parentCols, onDelete, onUpdate)
 }
