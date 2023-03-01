@@ -19,8 +19,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/val"
 	"io"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 /*
