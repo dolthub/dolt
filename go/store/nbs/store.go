@@ -1120,7 +1120,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	if nbs.c.conjoinRequired(nbs.tables) {
-		newUpstream, err := conjoin(ctx, nbs.c, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
+		newUpstream, cleanup, err := conjoin(ctx, nbs.c, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
 		if err != nil {
 			return err
 		}
@@ -1137,6 +1137,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		if err != nil {
 			return err
 		}
+		cleanup()
 		return errOptimisticLockFailedTables
 	}
 

@@ -91,7 +91,7 @@ func (c noopConjoiner) chooseConjoinees(sources []tableSpec) (conjoinees, keeper
 // process actor has already landed a conjoin of its own. Callers must
 // handle this, likely by rebasing against upstream and re-evaluating the
 // situation.
-func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, error) {
+func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, cleanupFunc, error) {
 	var conjoined tableSpec
 	var conjoinees, keepers, appendixSpecs []tableSpec
 	var cleanup cleanupFunc
@@ -108,12 +108,12 @@ func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, 
 			var err error
 			conjoinees, keepers, err = s.chooseConjoinees(upstream.specs)
 			if err != nil {
-				return manifestContents{}, err
+				return manifestContents{}, nil, err
 			}
 
 			conjoined, cleanup, err = conjoinTables(ctx, conjoinees, p, stats)
 			if err != nil {
-				return manifestContents{}, err
+				return manifestContents{}, nil, err
 			}
 		}
 
@@ -137,12 +137,11 @@ func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, 
 		var err error
 		upstream, err = mm.Update(ctx, upstream.lock, newContents, stats, nil)
 		if err != nil {
-			return manifestContents{}, err
+			return manifestContents{}, nil, err
 		}
 
 		if newContents.lock == upstream.lock {
-			cleanup()
-			return upstream, nil
+			return upstream, cleanup, nil
 		}
 
 		// Optimistic lock failure. Someone else moved to the root, the
@@ -158,11 +157,11 @@ func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, 
 		// and let the client retry
 		if len(appendixSpecs) > 0 {
 			if len(upstream.appendix) != len(appendixSpecs) {
-				return upstream, nil
+				return upstream, func() {}, nil
 			}
 			for i := range upstream.appendix {
 				if upstream.appendix[i].name != appendixSpecs[i].name {
-					return upstream, nil
+					return upstream, func() {}, nil
 				}
 			}
 
@@ -179,7 +178,7 @@ func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, 
 		}
 		for _, c := range conjoinees {
 			if _, present := upstreamNames[c.name]; !present {
-				return upstream, nil // Bail!
+				return upstream, func() {}, nil // Bail!
 			}
 			conjoineeSet[c.name] = struct{}{}
 		}
