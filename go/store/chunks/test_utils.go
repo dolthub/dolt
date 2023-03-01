@@ -71,7 +71,7 @@ func (s *TestStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb) e
 	return s.ChunkStore.Put(ctx, c, getAddrs)
 }
 
-func (s *TestStoreView) BeginGC(keeper func(hash.Hash) error) error {
+func (s *TestStoreView) BeginGC(keeper func(hash.Hash) bool) error {
 	collector, ok := s.ChunkStore.(ChunkStoreGarbageCollector)
 	if !ok {
 		return ErrUnsupportedOperation

@@ -654,17 +654,17 @@ func (lvs *ValueStore) transitionToNoGC() {
 	lvs.gcCond.Broadcast()
 }
 
-func (lvs *ValueStore) gcAddChunk(h hash.Hash) error {
+func (lvs *ValueStore) gcAddChunk(h hash.Hash) bool {
 	lvs.gcMu.Lock()
 	defer lvs.gcMu.Unlock()
 	if lvs.gcState == gcState_NoGC {
 		panic("ValueStore gcAddChunk called while no GC is ongoing")
 	}
 	if lvs.gcState == gcState_Finalizing && lvs.gcOut == 0 {
-		return chunks.ErrAddChunkMustBlock
+		return true
 	}
 	lvs.gcNewAddrs.Insert(h)
-	return nil
+	return false
 }
 
 func (lvs *ValueStore) readAndResetNewGenToVisit() hash.HashSet {

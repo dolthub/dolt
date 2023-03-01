@@ -141,7 +141,7 @@ type MemoryStoreView struct {
 	mu         sync.RWMutex
 	isGC       bool
 	gcCond     *sync.Cond
-	keeperFunc func(hash.Hash) error
+	keeperFunc func(hash.Hash) bool
 
 	version string
 
@@ -234,12 +234,8 @@ func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb
 	defer ms.mu.Unlock()
 
 	if ms.keeperFunc != nil {
-		if err := ms.keeperFunc(c.Hash()); err != nil {
-			if errors.Is(err, ErrAddChunkMustBlock) {
-				ms.waitForGC()
-			} else {
-				return err
-			}
+		if ms.keeperFunc(c.Hash()) {
+			ms.waitForGC()
 		}
 	}
 
@@ -283,7 +279,7 @@ func (ms *MemoryStoreView) waitForGC() {
 	}
 }
 
-func (ms *MemoryStoreView) transitionToGC(keeperFunc func(hash.Hash) error) error {
+func (ms *MemoryStoreView) transitionToGC(keeperFunc func(hash.Hash) bool) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	if ms.isGC == true {
@@ -311,12 +307,8 @@ func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) 
 	defer ms.mu.Unlock()
 
 	if ms.keeperFunc != nil {
-		if err := ms.keeperFunc(current); err != nil {
-			if errors.Is(err, ErrAddChunkMustBlock) {
-				ms.waitForGC()
-			} else {
-				return false, err
-			}
+		if ms.keeperFunc(current) {
+			ms.waitForGC()
 		}
 	}
 
@@ -337,7 +329,7 @@ func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) 
 	return success, nil
 }
 
-func (ms *MemoryStoreView) BeginGC(keeper func(hash.Hash) error) error {
+func (ms *MemoryStoreView) BeginGC(keeper func(hash.Hash) bool) error {
 	return ms.transitionToGC(keeper)
 }
 

@@ -95,7 +95,7 @@ type NomsBlockStore struct {
 
 	cond         *sync.Cond
 	gcInProgress bool
-	keeperFunc   func(hash.Hash) error
+	keeperFunc   func(hash.Hash) bool
 
 	mtSize   uint64
 	putCount uint64
@@ -659,14 +659,9 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs 
 		if addChunkRes == chunkAdded {
 			nbs.mt.addChildRefs(addrs)
 			if nbs.keeperFunc != nil {
-				if err := nbs.keeperFunc(ch.Hash()); err != nil {
-					if errors.Is(err, chunks.ErrAddChunkMustBlock) {
-						retry = true
-						nbs.waitForGC()
-					} else {
-						// TODO: Shouldn't happen :-/.
-						return false, err
-					}
+				if nbs.keeperFunc(ch.Hash()) {
+					retry = true
+					nbs.waitForGC()
 				}
 			}
 		}
@@ -1029,12 +1024,8 @@ func (nbs *NomsBlockStore) commit(ctx context.Context, current, last hash.Hash, 
 	}
 
 	if nbs.keeperFunc != nil {
-		if err := nbs.keeperFunc(current); err != nil {
-			if errors.Is(err, chunks.ErrAddChunkMustBlock) {
-				nbs.waitForGC()
-			} else {
-				return false, err
-			}
+		if nbs.keeperFunc(current) {
+			nbs.waitForGC()
 		}
 	}
 
@@ -1471,7 +1462,7 @@ func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context, checker refCheck
 	}, mtime)
 }
 
-func (nbs *NomsBlockStore) BeginGC(keeper func(hash.Hash) error) error {
+func (nbs *NomsBlockStore) BeginGC(keeper func(hash.Hash) bool) error {
 	nbs.cond.L.Lock()
 	defer nbs.cond.L.Unlock()
 	if nbs.gcInProgress {

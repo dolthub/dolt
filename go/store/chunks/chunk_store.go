@@ -119,14 +119,14 @@ type ChunkStoreGarbageCollector interface {
 	// be called bracketed between a BeginGC and an EndGC call.
 	//
 	// If during processing the |addChunk| function returns the
-	// |ErrAddChunkMustBlock|, then the ChunkStore must block the write
-	// until |EndGC| is called. At that point, the ChunkStore is
-	// responsible for ensuring that the chunk which it was attempting to
-	// write makes it into chunk store.
+	// |true|, then the ChunkStore must block the write until |EndGC| is
+	// called. At that point, the ChunkStore is responsible for ensuring
+	// that the chunk which it was attempting to write makes it into chunk
+	// store.
 	//
 	// This function should not block indefinitely and should return an
 	// error if a GC is already in progress.
-	BeginGC(addChunk func(hash.Hash) error) error
+	BeginGC(addChunk func(hash.Hash) bool) error
 
 	// EndGC indicates that the GC is over. The previously provided
 	// addChunk function must not be called after this function function.

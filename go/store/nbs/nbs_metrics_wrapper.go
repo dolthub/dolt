@@ -71,7 +71,7 @@ func (nbsMW *NBSMetricWrapper) SupportedOperations() chunks.TableFileStoreOps {
 	return nbsMW.nbs.SupportedOperations()
 }
 
-func (nbsMW *NBSMetricWrapper) BeginGC(keeper func(hash.Hash) error) error {
+func (nbsMW *NBSMetricWrapper) BeginGC(keeper func(hash.Hash) bool) error {
 	return nbsMW.nbs.BeginGC(keeper)
 }
 
