@@ -518,6 +518,7 @@ func (mp manualPart) run(ctx context.Context, buff []byte) error {
 	if err != nil {
 		return err
 	}
+	defer reader.Close()
 	_, err = io.ReadFull(reader, buff[mp.start:mp.end])
 	return err
 }

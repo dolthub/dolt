@@ -165,6 +165,8 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	defer nbs.mu.Unlock()
 	nbs.waitForGC()
 
+	nbs.checkAllManifestUpdatesExist(ctx, updates)
+
 	nbs.mm.LockForUpdate()
 	defer func() {
 		unlockErr := nbs.mm.UnlockForUpdate()
@@ -211,11 +213,6 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 			}
 		}
 
-		err = nbs.tables.checkAllTablesExist(ctx, contents.specs, nbs.stats)
-		if err != nil {
-			return manifestContents{}, err
-		}
-
 		updatedContents, err = nbs.mm.Update(ctx, originalLock, contents, nbs.stats, nil)
 		if err != nil {
 			return manifestContents{}, err
@@ -246,6 +243,8 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	nbs.waitForGC()
+
+	nbs.checkAllManifestUpdatesExist(ctx, updates)
 
 	nbs.mm.LockForUpdate()
 	defer func() {
@@ -294,11 +293,6 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 			return manifestContents{}, err
 		}
 
-		err = nbs.tables.checkAllTablesExist(ctx, contents.specs, nbs.stats)
-		if err != nil {
-			return manifestContents{}, err
-		}
-
 		updatedContents, err = nbs.mm.Update(ctx, originalLock, contents, nbs.stats, nil)
 		if err != nil {
 			return manifestContents{}, err
@@ -322,6 +316,27 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 		return manifestContents{}, err
 	}
 	return updatedContents, nil
+}
+
+func (nbs *NomsBlockStore) checkAllManifestUpdatesExist(ctx context.Context, updates map[hash.Hash]uint32) error {
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.SetLimit(128)
+	for h, c := range updates {
+		h := h
+		c := c
+		eg.Go(func() error {
+			a := addr(h)
+			ok, err := nbs.p.Exists(ctx, a, c, nbs.stats)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return fmt.Errorf("missing table file referenced in UpdateManifest call: %v", a)
+			}
+			return nil
+		})
+	}
+	return eg.Wait()
 }
 
 func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSpecs []tableSpec, option ManifestAppendixOption) (manifestContents, error) {
@@ -1105,7 +1120,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	if nbs.c.conjoinRequired(nbs.tables) {
-		newUpstream, err := conjoin(ctx, nbs.c, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
+		newUpstream, cleanup, err := conjoin(ctx, nbs.c, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
 		if err != nil {
 			return err
 		}
@@ -1122,6 +1137,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		if err != nil {
 			return err
 		}
+		cleanup()
 		return errOptimisticLockFailedTables
 	}
 
