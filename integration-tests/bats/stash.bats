@@ -128,6 +128,40 @@ teardown() {
     [[ "$output" =~ "1,a" ]] || false
 }
 
+@test "stash: stashing multiple entries on different branches" {
+
+    dolt sql -q "INSERT INTO test VALUES (1, 'a')"
+    run dolt stash
+    [ "$status" -eq 0 ]
+
+    dolt checkout -b newbranch
+    dolt sql -q "INSERT INTO test VALUES (1, 'b')"
+    run dolt stash
+    [ "$status" -eq 0 ]
+
+    run dolt stash list
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "stash@{0}: WIP on refs/heads/newbranch:" ]] || false
+    [[ "$output" =~ "stash@{1}: WIP on refs/heads/main:" ]] || false
+}
+
+@test "stash: popping stash on different branch" {
+    dolt sql -q "INSERT INTO test VALUES (1, 'a')"
+    run dolt stash
+    [ "$status" -eq 0 ]
+
+    run dolt stash list
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "stash@{0}: WIP on refs/heads/main:" ]] || false
+
+    dolt checkout -b newbranch
+    run dolt stash pop
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [[ "$output" =~ "1,a" ]] || false
+}
+
 @test "stash: stash clear removes all entries in stash list" {
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     dolt stash
