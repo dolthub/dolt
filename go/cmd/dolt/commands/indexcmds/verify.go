@@ -27,13 +27,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
-	val2 "github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var verifyDocs = &cli.CommandDocumentation{
 	CommandStr: "verify",
-	ShortDesc:  `Remove out of order secondary index entries`,
+	ShortDesc:  `Detect out of order secondary index entries`,
 	LongDesc: IndexCmdWarning + `
 This command detects out of order secondary key references. {{.LessThan}}index{{.GreaterThan}}".`,
 	Synopsis: []string{
@@ -64,13 +63,13 @@ func (cmd VerifyCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table that the given index belongs to."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"index", "The name of the index that belongs to the given table."})
-	ap.SupportsFlag(cli.AllFlag, "", "Fixup every secondary index")
+	ap.SupportsFlag(cli.AllFlag, "", "Verify every secondary index")
 	return ap
 }
 
 func (cmd VerifyCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, catDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(verifyDocs)
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	all := apr.Contains(cli.AllFlag)
@@ -167,31 +166,19 @@ func (cmd VerifyCmd) verifyIndex(ctx context.Context, tableName, indexName strin
 		return err
 	}
 
-	var cur *tree.Cursor
-	var key val2.Tuple
-
+	var curr, prev val.Tuple
 	for {
-		key, _, err = iter.Next(ctx)
+		curr, _, err = iter.Next(ctx)
 		if errors.Is(err, io.EOF) {
-			err = nil
-			break
+			return nil
 		} else if err != nil {
 			return err
 		}
-
-		if cur == nil {
-			cur, err = tree.NewCursorAtKey(ctx, secMap.NodeStore(), secMap.Node(), key, secMap.Tuples().Order)
-		} else {
-			err = tree.Seek(ctx, cur, key, secKd)
+		// check for out of order keys
+		if prev != nil && secKd.Compare(curr, prev) <= 0 {
+			cli.PrintErrf("'%s.%s' entry is out of order: (%s <= %s)\n",
+				tableName, indexName, secKd.Format(curr), secKd.Format(curr))
 		}
-		ok, err := secMap.Has(ctx, key)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			cli.PrintErrf("'%s.%s' entry is out of order: %s\n", tableName, indexName, secKd.Format(key))
-		}
+		prev = curr
 	}
-
-	return nil
 }
