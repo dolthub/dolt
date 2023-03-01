@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/dolthub/dolt/go/store/types"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -159,6 +161,13 @@ func (cmd VerifyCmd) verifyAll(ctx context.Context, root *doltdb.RootValue) erro
 }
 
 func (cmd VerifyCmd) verifyIndex(ctx context.Context, tableName, indexName string, idx durable.Index) error {
+	if types.IsFormat_DOLT(idx.Format()) {
+		return cmd.verifyDoltIndex(ctx, tableName, indexName, idx)
+	}
+	return cmd.verifyNomsIndex(ctx, tableName, indexName, idx)
+}
+
+func (cmd VerifyCmd) verifyDoltIndex(ctx context.Context, tableName, indexName string, idx durable.Index) error {
 	secMap := durable.ProllyMapFromIndex(idx)
 	secKd, _ := secMap.Descriptors()
 	iter, err := secMap.IterAll(ctx)
@@ -177,8 +186,28 @@ func (cmd VerifyCmd) verifyIndex(ctx context.Context, tableName, indexName strin
 		// check for out of order keys
 		if prev != nil && secKd.Compare(curr, prev) <= 0 {
 			cli.PrintErrf("'%s.%s' entry is out of order: (%s <= %s)\n",
-				tableName, indexName, secKd.Format(curr), secKd.Format(curr))
+				tableName, indexName, secKd.Format(curr), secKd.Format(prev))
 		}
 		prev = curr
 	}
+}
+
+func (cmd VerifyCmd) verifyNomsIndex(ctx context.Context, tableName, indexName string, idx durable.Index) error {
+	secMap := durable.NomsMapFromIndex(idx)
+	nbf := secMap.Format()
+
+	var prev types.Value
+	return secMap.Iter(ctx, func(curr, _ types.Value) (stop bool, err error) {
+		if prev != nil {
+			var less bool
+			if less, err = prev.Less(nbf, curr); err != nil {
+				return
+			} else if !less {
+				cli.PrintErrf("'%s.%s' entry is out of order: (%s <= %s)\n",
+					tableName, indexName, curr.HumanReadableString(), prev.HumanReadableString())
+			}
+		}
+		prev = curr
+		return
+	})
 }
