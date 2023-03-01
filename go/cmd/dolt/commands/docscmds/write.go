@@ -88,12 +88,12 @@ func (cmd PrintCmd) Exec(ctx context.Context, commandStr string, args []string, 
 }
 
 func writeDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName string) error {
-	eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return err
 	}
 
-	doc, err := readDocFromTable(ctx, eng, docName)
+	doc, err := readDocFromTable(ctx, eng, dbName, docName)
 	if err != nil {
 		return err
 	}
@@ -107,11 +107,11 @@ const (
 		"FROM dolt_docs %s WHERE " + doltdb.DocPkColumnName + " = '%s'"
 )
 
-func readDocFromTable(ctx context.Context, eng *engine.SqlEngine, docName string) (string, error) {
-	return readDocFromTableAsOf(ctx, eng, docName, "")
+func readDocFromTable(ctx context.Context, eng *engine.SqlEngine, dbName, docName string) (string, error) {
+	return readDocFromTableAsOf(ctx, eng, dbName, docName, "")
 }
 
-func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, docName, asOf string) (doc string, err error) {
+func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, dbName, docName, asOf string) (doc string, err error) {
 	var (
 		sctx *sql.Context
 		iter sql.RowIter
@@ -123,11 +123,11 @@ func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, docName, a
 	}
 	query := fmt.Sprintf(readDocTemplate, asOf, docName)
 
-	sctx, err = eng.NewContext(ctx)
+	sctx, err = eng.NewLocalContext(ctx)
 	if err != nil {
 		return "", err
 	}
-	sctx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	sctx.SetCurrentDatabase(dbName)
 
 	_, iter, err = eng.Query(sctx, query)
 	if sql.ErrTableNotFound.Is(err) {

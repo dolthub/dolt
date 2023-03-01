@@ -937,14 +937,16 @@ func (p DoltDatabaseProvider) ExternalStoredProcedures(_ *sql.Context, name stri
 
 // TableFunction implements the sql.TableFunctionProvider interface
 func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.TableFunction, error) {
-	// currently, only one table function is supported, if we extend this, we should clean this up
-	// and store table functions in a map, similar to regular functions.
+	// TODO: Clean this up and store table functions in a map, similar to regular functions.
 	switch strings.ToLower(name) {
 	case "dolt_diff":
 		dtf := &DiffTableFunction{}
 		return dtf, nil
 	case "dolt_diff_stat":
 		dtf := &DiffStatTableFunction{}
+		return dtf, nil
+	case "dolt_diff_summary":
+		dtf := &DiffSummaryTableFunction{}
 		return dtf, nil
 	case "dolt_log":
 		dtf := &LogTableFunction{}

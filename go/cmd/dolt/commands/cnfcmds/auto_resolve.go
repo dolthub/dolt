@@ -125,14 +125,16 @@ func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 		return err
 	}
 
-	eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return err
 	}
-	sqlCtx, err := engine.NewLocalSqlContext(ctx, eng)
+
+	sqlCtx, err := eng.NewLocalContext(ctx)
 	if err != nil {
 		return err
 	}
+	sqlCtx.SetCurrentDatabase(dbName)
 
 	v, err := getFirstColumn(sqlCtx, eng, "SELECT @@DOLT_ALLOW_COMMIT_CONFLICTS;")
 	if err != nil {

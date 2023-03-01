@@ -381,7 +381,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 			chunks := smallChunks[:len(smallChunks)-1]
 			sources := makeSources(s3p, chunks)
-			src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
+			src, _, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 			require.NoError(t, err)
 			defer src.close()
 			for _, s := range sources {
@@ -402,7 +402,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			s3p := newPersister(s3svc, ddb)
 
 			sources := makeSources(s3p, smallChunks)
-			src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
+			src, _, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 			require.NoError(t, err)
 			defer src.close()
 			for _, s := range sources {
@@ -443,7 +443,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			sources[i], err = s3p.Persist(context.Background(), mt, nil, &Stats{})
 			require.NoError(t, err)
 		}
-		src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
+		src, _, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 		require.NoError(t, err)
 		defer src.close()
 		for _, s := range sources {
@@ -484,7 +484,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 		require.NoError(t, err)
 		sources := chunkSources{cs1, cs2}
 
-		src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
+		src, _, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 		require.NoError(t, err)
 		defer src.close()
 		for _, s := range sources {
@@ -539,7 +539,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 		require.NoError(t, err)
 		sources = append(sources, cs)
 
-		src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
+		src, _, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 		require.NoError(t, err)
 		defer src.close()
 		for _, s := range sources {

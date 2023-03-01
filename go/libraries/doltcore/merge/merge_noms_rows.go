@@ -60,6 +60,7 @@ func mergeNomsTableData(
 
 	changeChan, mergeChangeChan := make(chan types.ValueChanged, 32), make(chan types.ValueChanged, 32)
 
+	originalCtx := ctx
 	eg, ctx := errgroup.WithContext(ctx)
 
 	eg.Go(func() error {
@@ -197,7 +198,7 @@ func mergeNomsTableData(
 		return nil, types.EmptyMap, nil, err
 	}
 
-	mergedTable, err := tblEdit.Table(ctx)
+	mergedTable, err := tblEdit.Table(originalCtx)
 	if err != nil {
 		return nil, types.EmptyMap, nil, err
 	}
