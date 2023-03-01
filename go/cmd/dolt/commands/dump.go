@@ -218,15 +218,16 @@ func dumpSchemaElements(ctx context.Context, dEnv *env.DoltEnv, path string) err
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	engine, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	engine, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	sqlCtx, err := engine.NewContext(ctx)
+	sqlCtx, err := engine.NewLocalContext(ctx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+	sqlCtx.SetCurrentDatabase(dbName)
 
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {

@@ -504,8 +504,12 @@ func printDiffSummary(ctx context.Context, tds []diff.TableDelta, dArgs *diffArg
 		if err != nil {
 			return errhand.BuildDError("could not get table delta summary").AddCause(err).Build()
 		}
+		tableName := summ.TableName
+		if summ.DiffType == "renamed" {
+			tableName = fmt.Sprintf("%s -> %s", summ.FromTableName, summ.ToTableName)
+		}
 
-		err = wr.WriteSqlRow(ctx, sql.Row{td.CurName(), summ.DiffType, summ.DataChange, summ.SchemaChange})
+		err = wr.WriteSqlRow(ctx, sql.Row{tableName, summ.DiffType, summ.DataChange, summ.SchemaChange})
 		if err != nil {
 			return errhand.BuildDError("could not write table delta summary").AddCause(err).Build()
 		}
@@ -522,10 +526,16 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 		return errhand.BuildDError("error: unable to diff tables").AddCause(err).Build()
 	}
 
-	engine, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	engine, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
+	sqlCtx, err := engine.NewLocalContext(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+	sqlCtx.SetCurrentDatabase(dbName)
 
 	sort.Slice(tableDeltas, func(i, j int) bool {
 		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
@@ -541,7 +551,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 	}
 
 	for _, td := range tableDeltas {
-		verr := diffUserTable(ctx, td, engine, dArgs, dw)
+		verr := diffUserTable(sqlCtx, td, engine, dArgs, dw)
 		if verr != nil {
 			return verr
 		}
@@ -556,7 +566,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 }
 
 func diffUserTable(
-	ctx context.Context,
+	ctx *sql.Context,
 	td diff.TableDelta,
 	engine *engine.SqlEngine,
 	dArgs *diffArgs,
@@ -715,7 +725,7 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 }
 
 func diffRows(
-	ctx context.Context,
+	ctx *sql.Context,
 	se *engine.SqlEngine,
 	td diff.TableDelta,
 	dArgs *diffArgs,
@@ -793,24 +803,19 @@ func diffRows(
 		query += " limit " + strconv.Itoa(dArgs.limit)
 	}
 
-	sqlCtx, err := engine.NewLocalSqlContext(ctx, se)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	sch, rowIter, err := se.Query(sqlCtx, query)
+	sch, rowIter, err := se.Query(ctx, query)
 	if sql.ErrSyntaxError.Is(err) {
 		return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
 	} else if err != nil {
 		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}
 
-	defer rowIter.Close(sqlCtx)
+	defer rowIter.Close(ctx)
 	defer rowWriter.Close(ctx)
 
 	var modifiedColNames map[string]bool
 	if dArgs.skinny {
-		modifiedColNames, err = getModifiedCols(sqlCtx, rowIter, unionSch, sch)
+		modifiedColNames, err = getModifiedCols(ctx, rowIter, unionSch, sch)
 		if err != nil {
 			return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 		}
@@ -833,12 +838,12 @@ func diffRows(
 		defer rowWriter.Close(ctx)
 
 		// reset the row iterator
-		err = rowIter.Close(sqlCtx)
+		err = rowIter.Close(ctx)
 		if err != nil {
 			return errhand.BuildDError("Error closing row iterator:\n%s", query).AddCause(err).Build()
 		}
-		_, rowIter, err = se.Query(sqlCtx, query)
-		defer rowIter.Close(sqlCtx)
+		_, rowIter, err = se.Query(ctx, query)
+		defer rowIter.Close(ctx)
 		if sql.ErrSyntaxError.Is(err) {
 			return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
 		} else if err != nil {
@@ -846,7 +851,7 @@ func diffRows(
 		}
 	}
 
-	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, rowWriter, modifiedColNames, dArgs)
+	err = writeDiffResults(ctx, sch, unionSch, rowIter, rowWriter, modifiedColNames, dArgs)
 	if err != nil {
 		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}

@@ -43,7 +43,7 @@ import (
 )
 
 const (
-	dbName       = "filterDB"
+	filterDbName = "filterDB"
 	branchesFlag = "branches"
 )
 
@@ -256,7 +256,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 	}
 
 	sess := dsess.DSessFromSess(sqlCtx.Session)
-	ws, err := sess.WorkingSet(sqlCtx, dbName)
+	ws, err := sess.WorkingSet(sqlCtx, filterDbName)
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +274,7 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 		return nil, nil, err
 	}
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-	db, err := dsqle.NewDatabase(ctx, dbName, dEnv.DbData(), opts)
+	db, err := dsqle.NewDatabase(ctx, filterDbName, dEnv.DbData(), opts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -340,9 +340,9 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 		return nil, nil, err
 	}
 
-	sqlCtx.SetCurrentDatabase(dbName)
+	sqlCtx.SetCurrentDatabase(filterDbName)
 
-	se := engine.NewRebasedSqlEngine(sqle.New(azr, &sqle.Config{IsReadOnly: false}), map[string]dsqle.SqlDatabase{dbName: db})
+	se := engine.NewRebasedSqlEngine(sqle.New(azr, &sqle.Config{IsReadOnly: false}), map[string]dsqle.SqlDatabase{filterDbName: db})
 
 	return sqlCtx, se, nil
 }
