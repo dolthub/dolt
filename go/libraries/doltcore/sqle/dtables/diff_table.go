@@ -902,26 +902,31 @@ func GetDiffTableSchemaAndJoiner(format *types.NomsBinFormat, fromSch, toSch sch
 }
 
 // CalculateDiffSchema returns the schema for the dolt_diff table based on the schemas from the from and to tables.
-// Either may be nil, in which case it will be missing from the resulting schema.
+// Either may be nil, in which case the nil argument will use the schema of the non-nil argument
 func CalculateDiffSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
-
-	colCollection := schema.NewColCollection()
-	if fromSch != nil {
-		colCollection = fromSch.GetAllCols()
+	var toClmCol, fromClmCol *schema.ColCollection
+	if fromSch == nil && toSch == nil {
+		panic("non-nil argument required to CalculateDiffSchema")
+	} else if fromSch == nil {
+		fromClmCol = toSch.GetAllCols()
+		toClmCol = toSch.GetAllCols()
+	} else if toSch == nil {
+		toClmCol = fromSch.GetAllCols()
+		fromClmCol = fromSch.GetAllCols()
+	} else {
+		fromClmCol = fromSch.GetAllCols()
+		toClmCol = toSch.GetAllCols()
 	}
-	colCollection = colCollection.Append(
+
+	fromClmCol = fromClmCol.Append(
 		schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
 		schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
-	fromSch = schema.MustSchemaFromCols(colCollection)
+	fromSch = schema.MustSchemaFromCols(fromClmCol) // Overwriting input
 
-	colCollection = schema.NewColCollection()
-	if toSch != nil {
-		colCollection = toSch.GetAllCols()
-	}
-	colCollection = colCollection.Append(
+	toClmCol = toClmCol.Append(
 		schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
 		schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
-	toSch = schema.MustSchemaFromCols(colCollection)
+	toSch = schema.MustSchemaFromCols(toClmCol) // Overwriting input
 
 	cols := make([]schema.Column, toSch.GetAllCols().Size()+fromSch.GetAllCols().Size()+1)
 
