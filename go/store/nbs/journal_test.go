@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -33,6 +34,7 @@ func makeTestChunkJournal(t *testing.T) *chunkJournal {
 	ctx := context.Background()
 	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
+	t.Cleanup(func() { file.RemoveAll(dir) })
 	m, err := getFileManifest(ctx, dir, syncFlush)
 	require.NoError(t, err)
 	q := NewUnlimitedMemQuotaProvider()
@@ -40,6 +42,7 @@ func makeTestChunkJournal(t *testing.T) *chunkJournal {
 	nbf := types.Format_Default.VersionString()
 	j, err := newChunkJournal(ctx, nbf, dir, m, p.(*fsTablePersister))
 	require.NoError(t, err)
+	t.Cleanup(func() { j.Close() })
 	return j
 }
 
@@ -98,6 +101,7 @@ func TestReadRecordRanges(t *testing.T) {
 
 	rdr, sz, err := jcs.(journalChunkSource).journal.snapshot()
 	require.NoError(t, err)
+	defer rdr.Close()
 
 	buf = make([]byte, sz)
 	n, err := rdr.Read(buf)
