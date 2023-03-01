@@ -255,8 +255,8 @@ func (wr *journalWriter) hasAddr(h addr) (ok bool) {
 // getCompressedChunk reads the CompressedChunks with addr |h|.
 func (wr *journalWriter) getCompressedChunk(h addr) (CompressedChunk, error) {
 	wr.lock.RLock()
-	defer wr.lock.RUnlock()
 	r, ok := wr.ranges.get(h)
+	wr.lock.RUnlock()
 	if !ok {
 		return CompressedChunk{}, nil
 	}
