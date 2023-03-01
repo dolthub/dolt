@@ -34,6 +34,30 @@ teardown() {
     [[ "$output" =~ 'test,true,new table' ]] || false
 }
 
+@test "sql-status: status properly works with table rename" {
+    # Test is staged
+    dolt add test
+    run dolt sql -r csv -q "select * from dolt_status"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'test,true,new table' ]] || false
+
+    # Rename test to test2
+    run dolt sql -r csv -q "alter table test rename to test2"
+    [ "$status" -eq 0 ]
+
+    # Confirm table is now marked as renamed, test still staged
+    run dolt sql -r csv -q "select * from dolt_status"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'test,true,new table' ]] || false
+    [[ "$output" =~ 'test -> test2,false,renamed' ]] || false
+
+    # Confirm table is now marked as staged
+    dolt add test2
+    run dolt sql -r csv -q "select * from dolt_status"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'test2,true,new table' ]] || false
+}
+
 @test "sql-status: table that has staged and unstaged changes shows up twice" {
     # Stage one set of changes.
     dolt add test

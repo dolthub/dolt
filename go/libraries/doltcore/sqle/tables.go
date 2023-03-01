@@ -1358,6 +1358,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 				prefixLengths,
 				schema.IndexProperties{
 					IsUnique:      index.IsUnique(),
+					IsSpatial:     index.IsSpatial(),
 					IsUserDefined: index.IsUserDefined(),
 					Comment:       index.Comment(),
 				})
@@ -1799,7 +1800,7 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
+	if !schema.EnableSpatialIndex && idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
 		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
 
@@ -1820,6 +1821,7 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 		columns,
 		allocatePrefixLengths(idx.Columns),
 		idx.Constraint == sql.IndexConstraint_Unique,
+		idx.Constraint == sql.IndexConstraint_Spatial,
 		true,
 		idx.Comment,
 		t.opts,
@@ -2174,7 +2176,7 @@ func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, s
 
 // CreateIndexForForeignKey implements sql.ForeignKeyTable
 func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
-	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
+	if !schema.EnableSpatialIndex && idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
 		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
 	columns := make([]string, len(idx.Columns))
@@ -2194,6 +2196,7 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 		columns,
 		allocatePrefixLengths(idx.Columns),
 		idx.Constraint == sql.IndexConstraint_Unique,
+		idx.Constraint == sql.IndexConstraint_Spatial,
 		false,
 		"",
 		t.opts,

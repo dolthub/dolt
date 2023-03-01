@@ -118,6 +118,8 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 		}
 	case val.CommitAddrEnc:
 		v, ok = td.GetCommitAddr(i, tup)
+	case val.CellEnc:
+		v, ok = td.GetCell(i, tup)
 	default:
 		panic("unknown val.encoding")
 	}
@@ -188,7 +190,7 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 		if len(geo) > math.MaxUint16 {
 			return ErrValueExceededMaxFieldSize
 		}
-		tb.PutGeometry(i, serializeGeometry(v))
+		tb.PutGeometry(i, geo)
 	case val.JSONAddrEnc:
 		buf, err := convJson(v)
 		if err != nil {

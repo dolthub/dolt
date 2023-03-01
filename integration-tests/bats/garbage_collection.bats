@@ -304,6 +304,11 @@ skip_if_chunk_journal() {
     # leave data in the working set
     dolt sql -q "INSERT INTO test VALUES ($(($NUM_COMMITS+1))),($(($NUM_COMMITS+2))),($(($NUM_COMMITS+3)));"
 
+    # write a garbage file which looks like an old table file
+    for i in `seq 0 100`; do
+        dolt --help >> .dolt/noms/b0f6n6b1ej7a9ovalt0rr80bsentq807
+    done
+
     BEFORE=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
     run dolt gc --shallow
     [ "$status" -eq 0 ]

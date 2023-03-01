@@ -2,30 +2,36 @@
 
 set timeout 2
 spawn dolt sql
+
 expect {
   "doltsql> " { send "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT UNIQUE);\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }
+
 expect {
   "doltsql> " { send "INSERT INTO test VALUES (0,0);\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }
+
 expect {
   "doltsql> " { send "INSERT INTO test VALUES (1,0);\r"; }
   timeout { exit 1; }
   "UNIQUE" { exp_continue; }
   failed { exp_continue; }
 }
+
 expect {
   "doltsql> " { send "INSERT INTO test VALUES (1,1);\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }
+
 expect {
   "doltsql> " { send "INSERT INTO test VALUES (2,2);\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }
+
 expect eof

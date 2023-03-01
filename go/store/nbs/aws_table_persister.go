@@ -25,6 +25,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/url"
 	"sort"
@@ -334,27 +335,28 @@ func (s partsByPartNum) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
+func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
 	plan, err := planRangeCopyConjoin(sources, stats)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if plan.chunkCount == 0 {
-		return emptyChunkSource{}, nil
+		return emptyChunkSource{}, nil, nil
 	}
 	t1 := time.Now()
 	name := nameFromSuffixes(plan.suffixes())
 	err = s3p.executeCompactionPlan(ctx, plan, name.String())
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	verbose.Logger(ctx).Sugar().Debugf("Compacted table of %d Kb in %s", plan.totalCompressedData/1024, time.Since(t1))
 
 	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}, name}
-	return newReaderFromIndexData(ctx, s3p.q, plan.mergedIndex, name, tra, s3BlockSize)
+	cs, err := newReaderFromIndexData(ctx, s3p.q, plan.mergedIndex, name, tra, s3BlockSize)
+	return cs, func() {}, err
 }
 
 func (s3p awsTablePersister) executeCompactionPlan(ctx context.Context, plan compactionPlan, key string) error {
@@ -392,9 +394,9 @@ func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionP
 		readWg.Add(1)
 		go func(m manualPart) {
 			defer readWg.Done()
-			n, _ := m.srcR.Read(buff[m.dstStart:m.dstEnd])
-			if int64(n) < m.dstEnd-m.dstStart {
-				ae.SetIfError(errors.New("failed to read all the table data"))
+			err := m.run(ctx, buff)
+			if err != nil {
+				ae.SetIfError(fmt.Errorf("failed to read conjoin table data: %w", err))
 			}
 		}(man)
 	}
@@ -507,8 +509,17 @@ type copyPart struct {
 }
 
 type manualPart struct {
-	srcR             io.Reader
-	dstStart, dstEnd int64
+	src        chunkSource
+	start, end int64
+}
+
+func (mp manualPart) run(ctx context.Context, buff []byte) error {
+	reader, _, err := mp.src.reader(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = io.ReadFull(reader, buff[mp.start:mp.end])
+	return err
 }
 
 // dividePlan assumes that plan.sources (which is of type chunkSourcesByDescendingDataSize) is correctly sorted by descending data size.
@@ -545,12 +556,7 @@ func dividePlan(ctx context.Context, plan compactionPlan, minPartSize, maxPartSi
 	var offset int64
 	for ; i < len(plan.sources.sws); i++ {
 		sws := plan.sources.sws[i]
-		rdr, _, err := sws.source.reader(ctx)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
-		manuals = append(manuals, manualPart{rdr, offset, offset + int64(sws.dataLen)})
+		manuals = append(manuals, manualPart{sws.source, offset, offset + int64(sws.dataLen)})
 		offset += int64(sws.dataLen)
 		buffSize += sws.dataLen
 	}
@@ -607,7 +613,7 @@ func (s3p awsTablePersister) uploadPart(ctx context.Context, data []byte, key, u
 	return
 }
 
-func (s3p awsTablePersister) PruneTableFiles(ctx context.Context, contents manifestContents, t time.Time) error {
+func (s3p awsTablePersister) PruneTableFiles(ctx context.Context, keeper func() []addr, t time.Time) error {
 	return chunks.ErrUnsupportedOperation
 }
 

@@ -152,7 +152,7 @@ SQL
 
     dolt sql -q "select * from t1"
     dolt sql -q "select count(*) from dolt_diff('HEAD~', 'HEAD', 't1')"
-    dolt sql -q "select count(*) from dolt_diff_summary('HEAD', 'HEAD~', 't1')"
+    dolt sql -q "select count(*) from dolt_diff_stat('HEAD', 'HEAD~', 't1')"
     dolt sql -q "select count(*) from dolt_log()"
 }
 
@@ -728,11 +728,11 @@ SQL
     dolt sql -q "create table t1 (a int primary key)"
     dolt sql -q "call dolt_add('.')"
     dolt sql -q "call dolt_commit('-am', 'cm')"
-    sleep 5
 
     cd ..
     dolt clone file://./rem1 repo2
     cd repo2
+    
     run dolt ls
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]

@@ -425,7 +425,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 
-		dt, found = dtables.NewUnscopedDiffTable(ctx, db.ddb, head), true
+		dt, found = dtables.NewUnscopedDiffTable(ctx, db.name, db.ddb, head), true
 	case doltdb.TableOfTablesInConflictName:
 		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.name, db.ddb), true
 	case doltdb.TableOfTablesWithViolationsName:

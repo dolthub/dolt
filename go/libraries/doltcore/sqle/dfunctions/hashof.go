@@ -1,4 +1,4 @@
-// Copyright 2020 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const HashOfFuncName = "hashof"
@@ -80,12 +81,21 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	} else {
 		ref, err := ddb.GetRefByNameInsensitive(ctx, name)
 		if err != nil {
-			return nil, err
-		}
-
-		cm, err = ddb.ResolveCommitRef(ctx, ref)
-		if err != nil {
-			return nil, err
+			hsh, parsed := hash.MaybeParse(name)
+			if parsed {
+				orgErr := err
+				cm, err = ddb.ReadCommit(ctx, hsh)
+				if err != nil {
+					return nil, orgErr
+				}
+			} else {
+				return nil, err
+			}
+		} else {
+			cm, err = ddb.ResolveCommitRef(ctx, ref)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 

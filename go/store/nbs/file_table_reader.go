@@ -33,8 +33,7 @@ import (
 
 type fileTableReader struct {
 	tableReader
-	fc *fdCache
-	h  addr
+	h addr
 }
 
 const (
@@ -52,16 +51,15 @@ func tableFileExists(ctx context.Context, dir string, h addr) (bool, error) {
 	return err == nil, err
 }
 
-func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint32, q MemoryQuotaProvider, fc *fdCache) (cs chunkSource, err error) {
+func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint32, q MemoryQuotaProvider) (cs chunkSource, err error) {
 	path := filepath.Join(dir, h.String())
 
+	var f *os.File
 	index, sz, err := func() (ti onHeapTableIndex, sz int64, err error) {
-
 		// Be careful with how |f| is used below. |RefFile| returns a cached
 		// os.File pointer so the code needs to use f in a concurrency-safe
 		// manner. Moving the file offset is BAD.
-		var f *os.File
-		f, err = fc.RefFile(path)
+		f, err = os.Open(path)
 		if err != nil {
 			return
 		}
@@ -103,14 +101,6 @@ func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint
 			return
 		}
 
-		defer func() {
-			unrefErr := fc.UnrefFile(path)
-			if unrefErr != nil && err == nil {
-				q.ReleaseQuotaBytes(len(b))
-				err = unrefErr
-			}
-		}()
-
 		ti, err = parseTableIndex(ctx, b, q)
 		if err != nil {
 			q.ReleaseQuotaBytes(len(b))
@@ -120,72 +110,77 @@ func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint
 		return
 	}()
 	if err != nil {
+		if f != nil {
+			f.Close()
+		}
 		return nil, err
 	}
 
 	if chunkCount != index.chunkCount() {
 		index.Close()
+		f.Close()
 		return nil, errors.New("unexpected chunk count")
 	}
 
-	tr, err := newTableReader(index, &cacheReaderAt{path, fc, sz}, fileBlockSize)
+	tr, err := newTableReader(index, &fileReaderAt{f, path, sz}, fileBlockSize)
 	if err != nil {
 		index.Close()
+		f.Close()
 		return nil, err
 	}
 	return &fileTableReader{
 		tr,
-		fc,
 		h,
 	}, nil
 }
 
-func (mmtr *fileTableReader) hash() addr {
-	return mmtr.h
+func (ftr *fileTableReader) hash() addr {
+	return ftr.h
 }
 
-func (mmtr *fileTableReader) close() error {
-	return mmtr.tableReader.close()
+func (ftr *fileTableReader) Close() error {
+	return ftr.tableReader.close()
 }
 
-func (mmtr *fileTableReader) clone() (chunkSource, error) {
-	tr, err := mmtr.tableReader.clone()
+func (ftr *fileTableReader) clone() (chunkSource, error) {
+	tr, err := ftr.tableReader.clone()
 	if err != nil {
 		return &fileTableReader{}, err
 	}
-	return &fileTableReader{tr, mmtr.fc, mmtr.h}, nil
+	return &fileTableReader{tr, ftr.h}, nil
 }
 
-type cacheReaderAt struct {
+type fileReaderAt struct {
+	f    *os.File
 	path string
-	fc   *fdCache
 	sz   int64
 }
 
-func (cra *cacheReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {
-	return io.NopCloser(io.LimitReader(&readerAdapter{cra, 0, ctx}, cra.sz)), nil
+func (fra *fileReaderAt) clone() (tableReaderAt, error) {
+	f, err := os.Open(fra.path)
+	if err != nil {
+		return nil, err
+	}
+	return &fileReaderAt{
+		f,
+		fra.path,
+		fra.sz,
+	}, nil
 }
 
-func (cra *cacheReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
-	var r io.ReaderAt
+func (fra *fileReaderAt) Close() error {
+	return fra.f.Close()
+}
+
+func (fra *fileReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {
+	return os.Open(fra.path)
+}
+
+func (fra *fileReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
 	t1 := time.Now()
-
-	if r, err = cra.fc.RefFile(cra.path); err != nil {
-		return
-	}
-
 	defer func() {
 		stats.FileBytesPerRead.Sample(uint64(len(p)))
 		stats.FileReadLatency.SampleTimeSince(t1)
 	}()
-
-	defer func() {
-		unrefErr := cra.fc.UnrefFile(cra.path)
-
-		if err == nil {
-			err = unrefErr
-		}
-	}()
-
-	return r.ReadAt(p, off)
+	return fra.f.ReadAt(p, off)
 }

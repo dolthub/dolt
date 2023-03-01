@@ -111,12 +111,8 @@ func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 func setupBenchmark(t *testing.B, dEnv *env.DoltEnv) (*sql.Context, *engine.SqlEngine) {
 	ctx := context.Background()
 	config := &engine.SqlEngineConfig{
-		InitialDb:    "dolt",
-		IsReadOnly:   false,
-		PrivFilePath: "",
-		ServerUser:   "root",
-		ServerPass:   "",
-		Autocommit:   true,
+		ServerUser: "root",
+		Autocommit: true,
 	}
 
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
@@ -125,10 +121,10 @@ func setupBenchmark(t *testing.B, dEnv *env.DoltEnv) (*sql.Context, *engine.SqlE
 	eng, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatNull, config)
 	require.NoError(t, err)
 
-	sqlCtx, err := eng.NewContext(ctx)
+	sqlCtx, err := eng.NewLocalContext(ctx)
 	require.NoError(t, err)
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
+	sqlCtx.SetCurrentDatabase("dolt")
 	return sqlCtx, eng
 }
 

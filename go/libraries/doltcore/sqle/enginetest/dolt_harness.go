@@ -105,6 +105,7 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 	}
 
 	var resetCmds []setup.SetupScript
+	resetCmds = append(resetCmds, setup.SetupScript{"SET foreign_key_checks=0;"})
 	for i := range dbs {
 		db := dbs[i]
 		resetCmds = append(resetCmds, setup.SetupScript{fmt.Sprintf("use %s", db)})
@@ -139,6 +140,7 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 		resetCmds = append(resetCmds, setup.SetupScript{"call dreset('--hard', 'head')"})
 	}
 
+	resetCmds = append(resetCmds, setup.SetupScript{"SET foreign_key_checks=1;"})
 	resetCmds = append(resetCmds, setup.SetupScript{"use mydb"})
 	return resetCmds
 }
@@ -168,13 +170,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 		d.provider = doltProvider
 
 		var err error
-		d.session, err = dsess.NewDoltSession(
-			sql.NewEmptyContext(),
-			enginetest.NewBaseSession(),
-			doltProvider,
-			d.multiRepoEnv.Config(),
-			d.branchControl,
-		)
+		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), doltProvider, d.multiRepoEnv.Config(), d.branchControl)
 		require.NoError(t, err)
 
 		e, err := enginetest.NewEngine(t, d, d.provider, d.setupData)
@@ -270,13 +266,7 @@ func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession
 	localConfig := d.multiRepoEnv.Config()
 	pro := d.session.Provider()
 
-	dSession, err := dsess.NewDoltSession(
-		enginetest.NewContext(d),
-		sql.NewBaseSessionWithClientServer("address", client, 1),
-		pro.(dsess.DoltDatabaseProvider),
-		localConfig,
-		d.branchControl,
-	)
+	dSession, err := dsess.NewDoltSession(sql.NewBaseSessionWithClientServer("address", client, 1), pro.(dsess.DoltDatabaseProvider), localConfig, d.branchControl)
 	require.NoError(d.t, err)
 	return dSession
 }
@@ -306,13 +296,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.provider = doltProvider
 
 	var err error
-	d.session, err = dsess.NewDoltSession(
-		sql.NewEmptyContext(),
-		enginetest.NewBaseSession(),
-		doltProvider,
-		d.multiRepoEnv.Config(),
-		d.branchControl,
-	)
+	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), doltProvider, d.multiRepoEnv.Config(), d.branchControl)
 	require.NoError(d.t, err)
 
 	// TODO: the engine tests should do this for us
