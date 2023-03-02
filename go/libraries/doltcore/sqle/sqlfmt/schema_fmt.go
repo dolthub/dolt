@@ -23,8 +23,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
-// GenerateCreateTableColumnDefinition returns column definition for CREATE TABLE statement with indentation of 2 spaces
+// GenerateCreateTableColumnDefinition returns column definition for CREATE TABLE statement with no indentation
 func GenerateCreateTableColumnDefinition(col schema.Column) string {
+	colStr := sql.GenerateCreateTableColumnDefinition(col.Name, col.TypeInfo.ToSqlType(), col.IsNullable(), col.AutoIncrement, col.Default != "", col.Default, col.Comment)
+	return strings.TrimPrefix(colStr, "  ")
+}
+
+// GenerateCreateTableIndentedColumnDefinition returns column definition for CREATE TABLE statement with no indentation
+func GenerateCreateTableIndentedColumnDefinition(col schema.Column) string {
 	return sql.GenerateCreateTableColumnDefinition(col.Name, col.TypeInfo.ToSqlType(), col.IsNullable(), col.AutoIncrement, col.Default != "", col.Default, col.Comment)
 }
 
