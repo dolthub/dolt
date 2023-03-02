@@ -1338,32 +1338,14 @@ func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
-	exists, contents, err := nbs.mm.m.ParseIfExists(ctx, nbs.stats, nil)
-
-	if err != nil {
-		return uint64(0), err
-	}
-
-	if !exists {
-		return uint64(0), nil
-	}
-
-	css, err := nbs.chunkSourcesByAddr()
-	if err != nil {
-		return uint64(0), err
-	}
-
-	numSpecs := contents.NumTableSpecs()
-
 	size := uint64(0)
-	for i := 0; i < numSpecs; i++ {
-		info := contents.getSpec(i)
-		cs, ok := css[info.name]
-		if !ok {
-			return uint64(0), errors.New("manifest referenced table file for which there is no chunkSource.")
-		}
+	for _, cs := range nbs.tables.upstream {
 		size += cs.currentSize()
 	}
+	for _, cs := range nbs.tables.novel {
+		size += cs.currentSize()
+	}
+
 	return size, nil
 }
 

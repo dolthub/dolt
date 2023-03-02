@@ -46,6 +46,7 @@ func RunModifyTypeTests(t *testing.T, tests []ModifyTypeTest) {
 		if len(name) > 200 {
 			name = name[:200]
 		}
+		test := test
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			ctx := context.Background()

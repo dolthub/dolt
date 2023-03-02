@@ -587,7 +587,7 @@ func getNonCreateNonDropTableSqlSchemaDiff(td TableDelta, toSchemas map[string]s
 		switch cd.DiffType {
 		case SchDiffNone:
 		case SchDiffAdded:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.FmtCol(0, 0, 0, *cd.New)))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.GenerateCreateTableColumnDefinition(*cd.New)))
 		case SchDiffRemoved:
 			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
 		case SchDiffModified:
@@ -678,7 +678,7 @@ func generateCreateTableStatement(tblName string, sch schema.Schema, pkSchema sq
 
 	// Statement creation parts for each column
 	for i, col := range sch.GetAllCols().GetColumns() {
-		colStmts[i] = sql.GenerateCreateTableColumnDefinition(col.Name, col.TypeInfo.ToSqlType(), col.IsNullable(), col.AutoIncrement, col.Default != "", col.Default, col.Comment)
+		colStmts[i] = sqlfmt.GenerateCreateTableIndentedColumnDefinition(col)
 	}
 
 	primaryKeyCols := sch.GetPKCols().GetColumnNames()
@@ -693,15 +693,15 @@ func generateCreateTableStatement(tblName string, sch schema.Schema, pkSchema sq
 		if isPrimaryKeyIndex(index, sch) {
 			continue
 		}
-		colStmts = append(colStmts, sql.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.Name(), index.ColumnNames(), index.Comment()))
+		colStmts = append(colStmts, sqlfmt.GenerateCreateTableIndexDefinition(index))
 	}
 
 	for _, fk := range fks {
-		colStmts = append(colStmts, generateForeignKeyDefinition(fk, sch, fksParentSch[fk.ReferencedTableName]))
+		colStmts = append(colStmts, sqlfmt.GenerateCreateTableForeignKeyDefinition(fk, sch, fksParentSch[fk.ReferencedTableName]))
 	}
 
 	for _, check := range sch.Checks().AllChecks() {
-		colStmts = append(colStmts, sql.GenerateCreateTableCheckConstraintClause(check.Name(), check.Expression(), check.Enforced()))
+		colStmts = append(colStmts, sqlfmt.GenerateCreateTableCheckConstraintClause(check))
 	}
 
 	coll := sql.CollationID(sch.GetCollation())
@@ -729,40 +729,4 @@ func isPrimaryKeyIndex(index schema.Index, sch schema.Schema) bool {
 	}
 
 	return true
-}
-
-func generateForeignKeyDefinition(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
-	var fkCols []string
-	if fk.IsResolved() {
-		for _, tag := range fk.TableColumns {
-			c, _ := sch.GetAllCols().GetByTag(tag)
-			fkCols = append(fkCols, c.Name)
-		}
-	} else {
-		for _, col := range fk.UnresolvedFKDetails.TableColumns {
-			fkCols = append(fkCols, col)
-		}
-	}
-
-	var parentCols []string
-	if fk.IsResolved() {
-		for _, tag := range fk.ReferencedTableColumns {
-			c, _ := parentSch.GetAllCols().GetByTag(tag)
-			parentCols = append(parentCols, c.Name)
-		}
-	} else {
-		for _, col := range fk.UnresolvedFKDetails.ReferencedTableColumns {
-			parentCols = append(parentCols, col)
-		}
-	}
-
-	onDelete := ""
-	if fk.OnDelete != doltdb.ForeignKeyReferentialAction_DefaultAction {
-		onDelete = fk.OnDelete.String()
-	}
-	onUpdate := ""
-	if fk.OnUpdate != doltdb.ForeignKeyReferentialAction_DefaultAction {
-		onUpdate = fk.OnUpdate.String()
-	}
-	return sql.GenerateCreateTableForiegnKeyDefinition(fk.Name, fkCols, fk.ReferencedTableName, parentCols, onDelete, onUpdate)
 }
