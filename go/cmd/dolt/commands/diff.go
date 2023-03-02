@@ -622,20 +622,20 @@ func diffDoltSchemasTable(
 
 	defer rowIter.Close(sqlCtx)
 	for {
-		r, err := rowIter.Next(sqlCtx)
+		row, err := rowIter.Next(sqlCtx)
 		if err == io.EOF {
-			return nil
+			break
 		} else if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
 
 		from := ""
-		if r[0] != nil {
-			from = fmt.Sprintf("%v;", r[0])
+		if row[0] != nil {
+			from = fmt.Sprintf("%v;", row[0])
 		}
 		to := ""
-		if r[1] != nil {
-			to = fmt.Sprintf("%v;", r[1])
+		if row[1] != nil {
+			to = fmt.Sprintf("%v;", row[1])
 		}
 		if from != to {
 			cli.Println(textdiff.LineDiff(from, to))
