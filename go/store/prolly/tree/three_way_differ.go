@@ -24,6 +24,11 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+type DiffIter interface {
+	Next(context.Context) (ThreeWayDiff, error)
+	Close() error
+}
+
 // threeWayDiffer is an iterator that gives an increased level of granularity
 // of diffs between three root values. See diffOp for the classes of diffs.
 type threeWayDiffer[K ~[]byte, O Ordering[K]] struct {
@@ -33,15 +38,19 @@ type threeWayDiffer[K ~[]byte, O Ordering[K]] struct {
 	rDiff        Diff
 	lDone        bool
 	rDone        bool
+	keyless      bool
 }
 
-type resolveCb func(Diff, Diff) (Item, bool)
+//var _ DiffIter = (*threeWayDiffer[Item, val.TupleDesc])(nil)
+
+type resolveCb func(val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool)
 
 func NewThreeWayDiffer[K, V ~[]byte, O Ordering[K]](
 	ctx context.Context,
 	ns NodeStore,
 	left, right, base StaticMap[K, V, O],
 	resolveCb resolveCb,
+	keyless bool,
 	order O,
 ) (*threeWayDiffer[K, O], error) {
 	ld, err := DifferFromRoots[K](ctx, ns, ns, base.Root, left.Root, order)
@@ -58,6 +67,7 @@ func NewThreeWayDiffer[K, V ~[]byte, O Ordering[K]](
 		lIter:     ld,
 		rIter:     rd,
 		resolveCb: resolveCb,
+		keyless:   keyless,
 	}, nil
 }
 
@@ -74,9 +84,9 @@ const (
 	dsMatchFinalize
 )
 
-func (d *threeWayDiffer[K, O]) Next(ctx context.Context) (threeWayDiff, error) {
+func (d *threeWayDiffer[K, O]) Next(ctx context.Context) (ThreeWayDiff, error) {
 	var err error
-	var res threeWayDiff
+	var res ThreeWayDiff
 	nextState := dsInit
 	for {
 		// The regular flow will be:
@@ -96,7 +106,7 @@ func (d *threeWayDiffer[K, O]) Next(ctx context.Context) (threeWayDiff, error) {
 				if d.lDiff.Key == nil {
 					d.lDiff, err = d.lIter.Next(ctx)
 					if err != nil {
-						return threeWayDiff{}, err
+						return ThreeWayDiff{}, err
 					}
 				}
 			}
@@ -104,14 +114,14 @@ func (d *threeWayDiffer[K, O]) Next(ctx context.Context) (threeWayDiff, error) {
 				if d.rDiff.Key == nil {
 					d.rDiff, err = d.rIter.Next(ctx)
 					if err != nil {
-						return threeWayDiff{}, err
+						return ThreeWayDiff{}, err
 					}
 				}
 			}
 			nextState = dsDiffFinalize
 		case dsDiffFinalize:
 			if d.lDone && d.rDone {
-				return threeWayDiff{}, io.EOF
+				return ThreeWayDiff{}, io.EOF
 			} else if d.lDone {
 				nextState = dsNewRight
 			} else if d.rDone {
@@ -136,31 +146,31 @@ func (d *threeWayDiffer[K, O]) Next(ctx context.Context) (threeWayDiff, error) {
 			if errors.Is(err, io.EOF) {
 				d.lDone = true
 			} else if err != nil {
-				return threeWayDiff{}, err
+				return ThreeWayDiff{}, err
 			}
 			return res, nil
 		case dsNewRight:
-			res = d.newRightEdit(d.rDiff.Key, d.rDiff.To)
+			res = d.newRightEdit(d.rDiff.Key, d.rDiff.From, d.rDiff.To)
 			d.rDiff, err = d.rIter.Next(ctx)
 			if errors.Is(err, io.EOF) {
 				d.rDone = true
 			} else if err != nil {
-				return threeWayDiff{}, err
+				return ThreeWayDiff{}, err
 			}
 			return res, nil
 		case dsMatch:
 			if d.lDiff.To == nil && d.rDiff.To == nil {
 				res = d.newConvergentEdit(d.lDiff.Key, d.lDiff.To)
 			} else if d.lDiff.To == nil || d.rDiff.To == nil {
-				res = d.newDivergentDeleteConflict(d.lDiff.Key, d.lDiff.To, d.rDiff.To)
+				res = d.newDivergentDeleteConflict(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To)
 			} else if d.lDiff.Type == d.rDiff.Type && bytes.Equal(d.lDiff.To, d.rDiff.To) {
 				res = d.newConvergentEdit(d.lDiff.Key, d.lDiff.To)
 			} else {
-				resolved, ok := d.resolveCb(d.lDiff, d.rDiff)
+				resolved, ok := d.resolveCb(val.Tuple(d.lDiff.To), val.Tuple(d.rDiff.To), val.Tuple(d.lDiff.From))
 				if !ok {
-					res = d.newDivergentClashConflict(d.lDiff.Key, d.lDiff.To, d.rDiff.To)
+					res = d.newDivergentClashConflict(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To)
 				} else {
-					res = d.newDivergentResolved(d.lDiff.Key, d.lDiff.To, d.rDiff.To, resolved)
+					res = d.newDivergentResolved(d.lDiff.Key, d.lDiff.To, d.rDiff.To, Item(resolved))
 				}
 			}
 			nextState = dsMatchFinalize
@@ -169,14 +179,14 @@ func (d *threeWayDiffer[K, O]) Next(ctx context.Context) (threeWayDiff, error) {
 			if errors.Is(err, io.EOF) {
 				d.lDone = true
 			} else if err != nil {
-				return threeWayDiff{}, err
+				return ThreeWayDiff{}, err
 			}
 
 			d.rDiff, err = d.rIter.Next(ctx)
 			if errors.Is(err, io.EOF) {
 				d.rDone = true
 			} else if err != nil {
-				return threeWayDiff{}, err
+				return ThreeWayDiff{}, err
 			}
 
 			return res, nil
@@ -186,103 +196,133 @@ func (d *threeWayDiffer[K, O]) Next(ctx context.Context) (threeWayDiff, error) {
 	}
 }
 
+func (d *threeWayDiffer[K, O]) Close() error {
+	return nil
+}
+
 type diffOp uint8
 
 const (
-	dtLeftEdit diffOp = iota
-	dtRightEdit
-	dtLeftDelete
-	dtRightDelete
-	dtConvergentEdit
-	dtDivergentResolved
-	dtDivergentDeleteConflict
-	dtDivergentClashConflict
+	DiffOpLeftEdit diffOp = iota
+	DiffOpRightEdit
+	DiffOpLeftDelete
+	DiffOpRightDelete
+	DiffOpConvergentEdit
+	DiffOpDivergentResolved
+	DiffOpDivergentDeleteConflict
+	DiffOpDivergentClashConflict
 )
 
 func (o diffOp) String() string {
 	switch o {
-	case dtLeftEdit:
+	case DiffOpLeftEdit:
 		return "leftEdit"
-	case dtRightEdit:
+	case DiffOpRightEdit:
 		return "rightEdit"
-	case dtConvergentEdit:
+	case DiffOpConvergentEdit:
 		return "convergentEdit"
-	case dtDivergentResolved:
+	case DiffOpDivergentResolved:
 		return "divergentResolved"
-	case dtDivergentDeleteConflict:
+	case DiffOpDivergentDeleteConflict:
 		return "divergentDeleteConflict"
-	case dtDivergentClashConflict:
+	case DiffOpDivergentClashConflict:
 		return "divergentClashConflict"
 	default:
 		panic("unknown diff type")
 	}
 }
 
-// threeWayDiff is a generic object for encoding a three way diff.
-type threeWayDiff struct {
-	// op indicates the type of diff
-	op diffOp
+// ThreeWayDiff is a generic object for encoding a three way diff.
+type ThreeWayDiff struct {
+	// Op indicates the type of diff
+	Op diffOp
 	// a partial set of tuple values are set
 	// depending on the diffOp
-	k, l, r, m val.Tuple
+	Key, Base, Left, Right, Merged val.Tuple
 }
 
-func (d *threeWayDiffer[K, O]) newLeftEdit(key, left Item) threeWayDiff {
-	op := dtLeftEdit
+func (d *threeWayDiffer[K, O]) newLeftEdit(key, left Item) ThreeWayDiff {
+	op := DiffOpLeftEdit
 	if left == nil {
-		op = dtLeftDelete
+		op = DiffOpLeftDelete
 	}
-	return threeWayDiff{
-		op: op,
-		k:  val.Tuple(key),
-		l:  val.Tuple(left),
+	return ThreeWayDiff{
+		Op:   op,
+		Key:  val.Tuple(key),
+		Left: val.Tuple(left),
 	}
 }
 
-func (d *threeWayDiffer[K, O]) newRightEdit(key, right Item) threeWayDiff {
-	op := dtRightEdit
+func (d *threeWayDiffer[K, O]) newRightEdit(key, base, right Item) ThreeWayDiff {
+	op := DiffOpRightEdit
 	if right == nil {
-		op = dtRightDelete
+		op = DiffOpRightDelete
 	}
-	return threeWayDiff{
-		op: op,
-		k:  val.Tuple(key),
-		r:  val.Tuple(right),
-	}
-}
-
-func (d *threeWayDiffer[K, O]) newConvergentEdit(key, left Item) threeWayDiff {
-	return threeWayDiff{
-		op: dtConvergentEdit,
-		k:  val.Tuple(key),
-		l:  val.Tuple(left),
+	return ThreeWayDiff{
+		Op:    op,
+		Key:   val.Tuple(key),
+		Base:  val.Tuple(base),
+		Right: val.Tuple(right),
 	}
 }
 
-func (d *threeWayDiffer[K, O]) newDivergentResolved(key, left, right, merged Item) threeWayDiff {
-	return threeWayDiff{
-		op: dtDivergentResolved,
-		k:  val.Tuple(key),
-		l:  val.Tuple(left),
-		r:  val.Tuple(right),
-		m:  val.Tuple(merged),
+func (d *threeWayDiffer[K, O]) newConvergentEdit(key, left Item) ThreeWayDiff {
+	return ThreeWayDiff{
+		Op:   DiffOpConvergentEdit,
+		Key:  val.Tuple(key),
+		Left: val.Tuple(left),
 	}
 }
 
-func (d *threeWayDiffer[K, O]) newDivergentDeleteConflict(key, left, right Item) threeWayDiff {
-	return threeWayDiff{
-		op: dtDivergentDeleteConflict,
-		k:  val.Tuple(key),
-		l:  val.Tuple(left),
-		r:  val.Tuple(right),
+func (d *threeWayDiffer[K, O]) newDivergentResolved(key, left, right, merged Item) ThreeWayDiff {
+	return ThreeWayDiff{
+		Op:     DiffOpDivergentResolved,
+		Key:    val.Tuple(key),
+		Left:   val.Tuple(left),
+		Right:  val.Tuple(right),
+		Merged: val.Tuple(merged),
 	}
 }
 
-func (d *threeWayDiffer[K, O]) newDivergentClashConflict(key, left, right Item) threeWayDiff {
-	return threeWayDiff{
-		op: dtDivergentClashConflict,
-		k:  val.Tuple(key),
-		l:  val.Tuple(left),
-		r:  val.Tuple(right),
+func (d *threeWayDiffer[K, O]) newDivergentDeleteConflict(key, base, left, right Item) ThreeWayDiff {
+	return ThreeWayDiff{
+		Op:    DiffOpDivergentDeleteConflict,
+		Key:   val.Tuple(key),
+		Base:  val.Tuple(base),
+		Left:  val.Tuple(left),
+		Right: val.Tuple(right),
 	}
+}
+
+func (d *threeWayDiffer[K, O]) newDivergentClashConflict(key, base, left, right Item) ThreeWayDiff {
+	return ThreeWayDiff{
+		Op:    DiffOpDivergentClashConflict,
+		Key:   val.Tuple(key),
+		Base:  val.Tuple(base),
+		Left:  val.Tuple(left),
+		Right: val.Tuple(right),
+	}
+}
+
+type TeeDiffIter struct {
+	Cb   func(ThreeWayDiff) error
+	Iter DiffIter
+}
+
+var _ DiffIter = (*TeeDiffIter)(nil)
+
+func (i *TeeDiffIter) Next(ctx context.Context) (ThreeWayDiff, error) {
+	diff, err := i.Iter.Next(ctx)
+	if err != nil {
+		return ThreeWayDiff{}, err
+	}
+	err = i.Cb(diff)
+	if err != nil {
+		return ThreeWayDiff{}, err
+	}
+	return diff, nil
+}
+
+func (i *TeeDiffIter) Close() error {
+	return i.Iter.Close()
 }

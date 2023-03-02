@@ -51,10 +51,10 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}},
 			right: [][]int{{1, 1}, {2, 2}, {4, 4}},
 			exp: []testDiff{
-				{op: dtLeftEdit, k: 3},
-				{op: dtConvergentEdit, k: 4},
-				{op: dtLeftEdit, k: 5},
-				{op: dtLeftEdit, k: 6},
+				{op: DiffOpLeftEdit, k: 3},
+				{op: DiffOpConvergentEdit, k: 4},
+				{op: DiffOpLeftEdit, k: 5},
+				{op: DiffOpLeftEdit, k: 6},
 			},
 		},
 		{
@@ -63,10 +63,10 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1}, {2, 2}, {4, 4}},
 			right: [][]int{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}},
 			exp: []testDiff{
-				{op: dtRightEdit, k: 3},
-				{op: dtConvergentEdit, k: 4},
-				{op: dtRightEdit, k: 5},
-				{op: dtRightEdit, k: 6},
+				{op: DiffOpRightEdit, k: 3},
+				{op: DiffOpConvergentEdit, k: 4},
+				{op: DiffOpRightEdit, k: 5},
+				{op: DiffOpRightEdit, k: 6},
 			},
 		},
 		{
@@ -75,10 +75,10 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1}, {2, 2}},
 			right: [][]int{{1, 1}, {2, 2}, {3, 3}, {5, 5}, {6, 6}},
 			exp: []testDiff{
-				{op: dtLeftDelete, k: 3},
-				{op: dtConvergentEdit, k: 4},
-				{op: dtLeftDelete, k: 5},
-				{op: dtLeftDelete, k: 6},
+				{op: DiffOpLeftDelete, k: 3},
+				{op: DiffOpConvergentEdit, k: 4},
+				{op: DiffOpLeftDelete, k: 5},
+				{op: DiffOpLeftDelete, k: 6},
 			},
 		},
 		{
@@ -87,10 +87,10 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1}, {2, 2}, {3, 3}, {5, 5}, {6, 6}},
 			right: [][]int{{1, 1}, {2, 2}},
 			exp: []testDiff{
-				{op: dtRightDelete, k: 3},
-				{op: dtConvergentEdit, k: 4},
-				{op: dtRightDelete, k: 5},
-				{op: dtRightDelete, k: 6},
+				{op: DiffOpRightDelete, k: 3},
+				{op: DiffOpConvergentEdit, k: 4},
+				{op: DiffOpRightDelete, k: 5},
+				{op: DiffOpRightDelete, k: 6},
 			},
 		},
 		{
@@ -99,10 +99,10 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1}, {2, 3}, {3, 3}, {4, 5}, {5, 6}, {6, 7}},
 			right: [][]int{{1, 1}, {2, 2}, {3, 3}, {4, 5}, {5, 5}, {6, 6}},
 			exp: []testDiff{
-				{op: dtLeftEdit, k: 2},
-				{op: dtConvergentEdit, k: 4},
-				{op: dtLeftEdit, k: 5},
-				{op: dtLeftEdit, k: 6},
+				{op: DiffOpLeftEdit, k: 2},
+				{op: DiffOpConvergentEdit, k: 4},
+				{op: DiffOpLeftEdit, k: 5},
+				{op: DiffOpLeftEdit, k: 6},
 			},
 		},
 		{
@@ -111,10 +111,10 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1}, {2, 2}, {3, 3}, {4, 5}, {5, 5}, {6, 6}},
 			right: [][]int{{1, 1}, {2, 3}, {3, 3}, {4, 5}, {5, 6}, {6, 7}},
 			exp: []testDiff{
-				{op: dtRightEdit, k: 2},
-				{op: dtConvergentEdit, k: 4},
-				{op: dtRightEdit, k: 5},
-				{op: dtRightEdit, k: 6},
+				{op: DiffOpRightEdit, k: 2},
+				{op: DiffOpConvergentEdit, k: 4},
+				{op: DiffOpRightEdit, k: 5},
+				{op: DiffOpRightEdit, k: 6},
 			},
 		},
 		{
@@ -123,7 +123,7 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1}},
 			right: [][]int{{1, 1}, {2, 3}},
 			exp: []testDiff{
-				{op: dtDivergentDeleteConflict, k: 2},
+				{op: DiffOpDivergentDeleteConflict, k: 2},
 			},
 		},
 		{
@@ -132,9 +132,9 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}},
 			right: [][]int{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}},
 			exp: []testDiff{
-				{op: dtConvergentEdit, k: 2},
-				{op: dtConvergentEdit, k: 3},
-				{op: dtConvergentEdit, k: 5},
+				{op: DiffOpConvergentEdit, k: 2},
+				{op: DiffOpConvergentEdit, k: 3},
+				{op: DiffOpConvergentEdit, k: 5},
 			},
 		},
 		{
@@ -143,9 +143,9 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}},
 			right: [][]int{{1, 1}, {2, 3}, {3, 4}, {4, 4}, {5, 6}},
 			exp: []testDiff{
-				{op: dtDivergentClashConflict, k: 2},
-				{op: dtDivergentClashConflict, k: 3},
-				{op: dtDivergentClashConflict, k: 5},
+				{op: DiffOpDivergentClashConflict, k: 2},
+				{op: DiffOpDivergentClashConflict, k: 3},
+				{op: DiffOpDivergentClashConflict, k: 5},
 			},
 		},
 		{
@@ -154,9 +154,9 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1, 1}, {2, 2, 3}, {3, 3, 4}, {4, 4, 4}, {5, 5, 6}},
 			right: [][]int{{1, 1, 1}, {2, 3, 2}, {3, 4, 3}, {4, 4, 4}, {5, 6, 5}},
 			exp: []testDiff{
-				{op: dtDivergentResolved, k: 2, m: []int{3, 3}},
-				{op: dtDivergentResolved, k: 3, m: []int{4, 4}},
-				{op: dtDivergentResolved, k: 5, m: []int{6, 6}},
+				{op: DiffOpDivergentResolved, k: 2, m: []int{3, 3}},
+				{op: DiffOpDivergentResolved, k: 3, m: []int{4, 4}},
+				{op: DiffOpDivergentResolved, k: 5, m: []int{6, 6}},
 			},
 		},
 		{
@@ -165,13 +165,13 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1, 1}, {2, 2, 3}, {3, 3, 4}, {5, 5, 6}, {6, 6, 6}},
 			right: [][]int{{1, 1, 1}, {2, 3, 4}, {3, 4, 3}, {4, 4, 4}, {5, 6, 5}, {7, 7, 7}},
 			exp: []testDiff{
-				{op: dtDivergentClashConflict, k: 2},
-				{op: dtDivergentResolved, k: 3, m: []int{4, 4}},
-				{op: dtLeftDelete, k: 4},
-				{op: dtDivergentResolved, k: 5, m: []int{6, 6}},
-				{op: dtLeftEdit, k: 6},
-				{op: dtRightEdit, k: 7},
-				{op: dtConvergentEdit, k: 8},
+				{op: DiffOpDivergentClashConflict, k: 2},
+				{op: DiffOpDivergentResolved, k: 3, m: []int{4, 4}},
+				{op: DiffOpLeftDelete, k: 4},
+				{op: DiffOpDivergentResolved, k: 5, m: []int{6, 6}},
+				{op: DiffOpLeftEdit, k: 6},
+				{op: DiffOpRightEdit, k: 7},
+				{op: DiffOpConvergentEdit, k: 8},
 			},
 		},
 	}
@@ -192,7 +192,7 @@ func TestThreeWayDiffer(t *testing.T) {
 			left := newTestMap(t, ctx, tt.left, ns, valDesc)
 			right := newTestMap(t, ctx, tt.right, ns, valDesc)
 
-			iter, err := NewThreeWayDiffer(ctx, ns, left, right, base, testResolver(t, ns, valDesc, val.NewTupleBuilder(valDesc)), keyDesc)
+			iter, err := NewThreeWayDiffer(ctx, ns, left, right, base, testResolver(t, ns, valDesc, val.NewTupleBuilder(valDesc)), false, keyDesc)
 			require.NoError(t, err)
 
 			var cmp []testDiff
@@ -215,23 +215,23 @@ func TestThreeWayDiffer(t *testing.T) {
 	}
 }
 
-func testResolver(t *testing.T, ns NodeStore, valDesc val.TupleDesc, valBuilder *val.TupleBuilder) func(Diff, Diff) (Item, bool) {
-	return func(l, r Diff) (Item, bool) {
+func testResolver(t *testing.T, ns NodeStore, valDesc val.TupleDesc, valBuilder *val.TupleBuilder) func(val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool) {
+	return func(l, r, b val.Tuple) (val.Tuple, bool) {
 		for i := range valDesc.Types {
 			var base, left, right int64
 			var ok bool
-			if l.From != nil {
-				base, ok = valDesc.GetInt64(i, val.Tuple(l.From))
+			if l != nil {
+				base, ok = valDesc.GetInt64(i, b)
 				require.True(t, ok)
 			}
 
-			if l.To != nil {
-				left, ok = valDesc.GetInt64(i, val.Tuple(l.To))
+			if l != nil {
+				left, ok = valDesc.GetInt64(i, l)
 				require.True(t, ok)
 			}
 
-			if r.To != nil {
-				right, ok = valDesc.GetInt64(i, val.Tuple(r.To))
+			if r != nil {
+				right, ok = valDesc.GetInt64(i, r)
 				require.True(t, ok)
 			}
 
@@ -245,7 +245,7 @@ func testResolver(t *testing.T, ns NodeStore, valDesc val.TupleDesc, valBuilder 
 				valBuilder.PutInt64(i, base)
 			}
 		}
-		return Item(valBuilder.Build(ns.Pool())), true
+		return valBuilder.Build(ns.Pool()), true
 	}
 }
 
@@ -253,21 +253,21 @@ func compareDiffs(t *testing.T, exp, cmp testDiff) {
 	require.Equal(t, exp.op, cmp.op, fmt.Sprintf("unequal diffs:\nexp: %s\nfnd: %s", exp, cmp))
 	require.Equal(t, exp.k, cmp.k, fmt.Sprintf("unequal diffs:\nexp: %s\nfnd: %s", exp, cmp))
 	switch exp.op {
-	case dtDivergentResolved:
+	case DiffOpDivergentResolved:
 		require.Equal(t, exp.m, cmp.m, fmt.Sprintf("unequal resolved:\nexp: %#v\nfnd: %#v", exp.m, cmp.m))
 	}
 }
 
-func formatTestDiff(t *testing.T, d threeWayDiff, keyDesc, valDesc val.TupleDesc) testDiff {
-	key, ok := keyDesc.GetInt64(0, d.k)
+func formatTestDiff(t *testing.T, d ThreeWayDiff, keyDesc, valDesc val.TupleDesc) testDiff {
+	key, ok := keyDesc.GetInt64(0, d.Key)
 	require.True(t, ok)
 
 	return testDiff{
-		op: d.op,
+		op: d.Op,
 		k:  int(key),
-		l:  extractTestVal(t, valDesc, d.l),
-		r:  extractTestVal(t, valDesc, d.r),
-		m:  extractTestVal(t, valDesc, d.m),
+		l:  extractTestVal(t, valDesc, d.Left),
+		r:  extractTestVal(t, valDesc, d.Right),
+		m:  extractTestVal(t, valDesc, d.Merged),
 	}
 }
 

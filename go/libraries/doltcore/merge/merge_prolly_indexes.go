@@ -45,9 +45,11 @@ type indexEdit interface {
 // cellWiseMergeEdit implements indexEdit. It resets the left and updates the
 // right to the merged value.
 type cellWiseMergeEdit struct {
-	left   tree.Diff
-	right  tree.Diff
-	merged tree.Diff
+	key    val.Tuple
+	lFrom  val.Tuple
+	lTo    val.Tuple
+	rTo    val.Tuple
+	merged val.Tuple
 }
 
 var _ indexEdit = cellWiseMergeEdit{}
@@ -55,24 +57,26 @@ var _ indexEdit = cellWiseMergeEdit{}
 func (m cellWiseMergeEdit) leftEdit() tree.Diff {
 	// Reset left
 	return tree.Diff{
-		Key:  m.left.Key,
-		From: m.left.To,
-		To:   m.left.From,
+		Key:  tree.Item(m.key),
+		From: tree.Item(m.lTo),
+		To:   tree.Item(m.lFrom),
 	}
 }
 
 func (m cellWiseMergeEdit) rightEdit() tree.Diff {
 	// Update right to merged val
 	return tree.Diff{
-		Key:  m.merged.Key,
-		From: m.right.To,
-		To:   m.merged.To,
+		Key:  tree.Item(m.key),
+		From: tree.Item(m.rTo),
+		To:   tree.Item(m.merged),
 	}
 }
 
 // conflictEdit implements indexEdit and it resets the right value.
 type conflictEdit struct {
-	right tree.Diff
+	key  val.Tuple
+	to   val.Tuple
+	from val.Tuple
 }
 
 var _ indexEdit = conflictEdit{}
@@ -85,11 +89,31 @@ func (c conflictEdit) leftEdit() tree.Diff {
 func (c conflictEdit) rightEdit() tree.Diff {
 	// Reset right
 	return tree.Diff{
-		Key:  c.right.Key,
-		From: c.right.To,
-		To:   c.right.From,
+		Key:  tree.Item(c.key),
+		From: tree.Item(c.from),
+		To:   tree.Item(c.to),
 	}
 }
+
+type rightEdit struct {
+	key  val.Tuple
+	from val.Tuple
+	to   val.Tuple
+}
+
+func (c rightEdit) leftEdit() tree.Diff {
+	return tree.Diff{}
+}
+
+func (c rightEdit) rightEdit() tree.Diff {
+	return tree.Diff{
+		Key:  tree.Item(c.key),
+		From: tree.Item(c.from),
+		To:   tree.Item(c.to),
+	}
+}
+
+var _ indexEdit = rightEdit{}
 
 type confVals struct {
 	key      val.Tuple
@@ -159,28 +183,30 @@ func mergeProllySecondaryIndexes(
 				return buildIndex(ctx, tm.vrw, tm.ns, finalSch, index, mergedM, artifacts, tm.rightSrc, tm.name)
 			}
 
+			var merged prolly.Map
 			if index.IsUnique() {
 				err = addUniqIdxViols(ctx, finalSch, index, left, right, anc, mergedM, artifacts, tm.rightSrc, tm.name)
 				if err != nil {
 					return nil, err
 				}
-			}
+				var collision = false
+				merged, _, err = prolly.MergeMaps(ctx, left, right, anc, func(left, right tree.Diff) (tree.Diff, bool) {
+					if left.Type == right.Type && bytes.Equal(left.To, right.To) {
+						// convergent edit
+						return left, true
+					}
 
-			var collision = false
-			merged, _, err := prolly.MergeMaps(ctx, left, right, anc, func(left, right tree.Diff) (tree.Diff, bool) {
-				if left.Type == right.Type && bytes.Equal(left.To, right.To) {
-					// convergent edit
-					return left, true
+					collision = true
+					return tree.Diff{}, true
+				})
+				if err != nil {
+					return nil, err
 				}
-
-				collision = true
-				return tree.Diff{}, true
-			})
-			if err != nil {
-				return nil, err
-			}
-			if collision {
-				return nil, errors.New("collisions not implemented")
+				if collision {
+					return nil, errors.New("collisions not implemented")
+				}
+			} else {
+				merged = left
 			}
 			return durable.IndexFromProllyMap(merged), nil
 		}()
@@ -250,7 +276,7 @@ func buildIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStor
 // |rootIndexSet| and |mergeIndexSet| such that when the index sets are merged,
 // they produce entries consistent with the cell-wise merges. The updated
 // |rootIndexSet| and |mergeIndexSet| are returned.
-func updateProllySecondaryIndexes(ctx context.Context, tm TableMerger, cellWiseEdits chan indexEdit) (durable.IndexSet, durable.IndexSet, error) {
+func updateProllySecondaryIndexes(ctx context.Context, tm TableMerger, cellWiseEdits chan indexEdit, finalSch schema.Schema) (durable.IndexSet, durable.IndexSet, error) {
 	ls, err := tm.leftTbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -269,7 +295,7 @@ func updateProllySecondaryIndexes(ctx context.Context, tm TableMerger, cellWiseE
 		return nil, nil, err
 	}
 
-	err = applyCellwiseEdits(ctx, lm, rm, cellWiseEdits)
+	err = applyCellwiseEdits(ctx, lm, rm, cellWiseEdits, finalSch)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -301,29 +327,63 @@ func persistIndexMuts(ctx context.Context, indexSet durable.IndexSet, idxs []Mut
 	return indexSet, nil
 }
 
-func applyCellwiseEdits(ctx context.Context, rootIdxs, mergeIdxs []MutableSecondaryIdx, edits chan indexEdit) error {
+func applyCellwiseEdits(ctx context.Context, rootIdxs, mergeIdxs []MutableSecondaryIdx, edits chan indexEdit, finalSch schema.Schema) error {
+	notUnique := make(map[string]struct{})
+	for _, idx := range rootIdxs {
+		schIdx := finalSch.Indexes().GetByName(idx.Name)
+		if schIdx != nil && !schIdx.IsUnique() {
+			notUnique[idx.Name] = struct{}{}
+		}
+	}
 	for {
 		select {
 		case e, ok := <-edits:
 			if !ok {
 				return nil
 			}
-			// See cellWiseMergeEdit and conflictEdit for implementations of leftEdit and rightEdit
-			if edit := e.leftEdit(); !emptyDiff(edit) {
-				for _, idx := range rootIdxs {
-					if err := applyEdit(ctx, idx, edit); err != nil {
-						return err
-					}
-				}
-			}
-			if edit := e.rightEdit(); !emptyDiff(edit) {
+			switch e := e.(type) {
+			case conflictEdit:
+				// reset right
 				for _, idx := range mergeIdxs {
-					if err := applyEdit(ctx, idx, edit); err != nil {
+					if _, ok := notUnique[idx.Name]; ok {
+						continue
+					} else {
+						if err := applyEdit(ctx, idx, e.rightEdit()); err != nil {
+							return err
+						}
+					}
+				}
+			case cellWiseMergeEdit:
+				// reset left, update right to merge
+				// or update left to merge
+				for _, idx := range rootIdxs {
+					if _, ok := notUnique[idx.Name]; ok {
+						if err := applyEdit(ctx, idx, e.rightEdit()); err != nil {
+							return err
+						}
+					} else {
+						if err := applyEdit(ctx, idx, e.leftEdit()); err != nil {
+							return err
+						}
+					}
+				}
+				for _, idx := range mergeIdxs {
+					if _, ok := notUnique[idx.Name]; ok {
+						continue
+					}
+					if err := applyEdit(ctx, idx, e.rightEdit()); err != nil {
 						return err
 					}
 				}
+			case rightEdit:
+				for _, idx := range rootIdxs {
+					if _, ok := notUnique[idx.Name]; ok {
+						if err := applyEdit(ctx, idx, e.rightEdit()); err != nil {
+							return err
+						}
+					}
+				}
 			}
-
 		case <-ctx.Done():
 			return ctx.Err()
 		}

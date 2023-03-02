@@ -19,7 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -78,7 +78,7 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 	})
 
 	group.Go(func() (err error) {
-		leftIdxs, rightIdxs, err = updateProllySecondaryIndexes(gCtx, tm, indexEdits)
+		leftIdxs, rightIdxs, err = updateProllySecondaryIndexes(gCtx, tm, indexEdits, finalSch)
 		return err
 	})
 
@@ -203,74 +203,169 @@ func mergeProllyRowData(
 	ancRows := durable.ProllyMapFromIndex(ar)
 
 	vMerger := newValueMerger(finalSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool())
-	keyless := schema.IsKeyless(finalSch)
 
-	mr, stats, err := prolly.MergeMaps(ctx, leftRows, rightRows, ancRows, func(left, right tree.Diff) (tree.Diff, bool) {
-		if left.Type == right.Type && bytes.Equal(left.To, right.To) {
-			if keyless {
-				// convergent edits are conflicts for keyless tables
-				d, b, _ := processConflict(ctx, conflicts, indexEdits, left, right)
-				return d, b
+	//patches := newPatchBuffer(patchBufferSize)
+
+	iter, err := tree.NewThreeWayDiffer(ctx, leftRows.NodeStore(), leftRows.Tuples(), rightRows.Tuples(), ancRows.Tuples(), vMerger.tryMerge, vMerger.keyless, leftRows.Tuples().Order)
+
+	conflictsIter := &tree.TeeDiffIter{
+		Iter: iter,
+		Cb: func(diff tree.ThreeWayDiff) error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
 			}
-			return left, true
-		}
-
-		merged, isConflict := vMerger.tryMerge(val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
-		if isConflict {
-			d, b, _ := processConflict(ctx, conflicts, indexEdits, left, right)
-			return d, b
-		}
-
-		d := tree.Diff{
-			Type: tree.ModifiedDiff,
-			Key:  left.Key,
-			From: left.From,
-			To:   tree.Item(merged),
-		}
-
-		select {
-		case indexEdits <- cellWiseMergeEdit{left, right, d}:
-			break
-		case <-ctx.Done():
-			return tree.Diff{}, false
-		}
-
-		return d, true
-	})
-	if err != nil {
-		return nil, tree.MergeStats{}, err
+			switch diff.Op {
+			case tree.DiffOpDivergentClashConflict, tree.DiffOpDivergentDeleteConflict:
+				// report conflict
+				sendConflict(conflicts, diff)
+				sendIndexReset(indexEdits, diff)
+			case tree.DiffOpDivergentResolved:
+				// "cellwise merge edit"
+				// safely apply to left
+				// for non-unique also the weird rollback logic
+				// update stats
+				if vMerger.keyless {
+					// still conflict
+					sendConflict(conflicts, diff)
+					sendIndexReset(indexEdits, diff)
+				} else {
+					sendCellWiseMergeEdit(indexEdits, diff)
+				}
+			case tree.DiffOpRightEdit, tree.DiffOpRightDelete:
+				// safely apply to left
+				// update stats
+				sendRightEdit(indexEdits, diff)
+			default:
+			}
+			return nil
+		},
 	}
 
-	return durable.IndexFromProllyMap(mr), stats, nil
+	editIter := &editsIter{
+		iter: conflictsIter,
+	}
+
+	serializer := message.NewProllyMapSerializer(leftRows.ValDesc(), leftRows.NodeStore().Pool())
+	final, err := tree.ApplyMutations[val.Tuple](ctx, leftRows.NodeStore(), leftRows.Node(), leftRows.Tuples().Order, serializer, editIter)
+	mergedMap := prolly.NewMap(final, leftRows.NodeStore(), leftRows.KeyDesc(), leftRows.ValDesc())
+
+	return durable.IndexFromProllyMap(mergedMap), tree.MergeStats{}, nil
+	//mr, stats, err := prolly.MergeMaps(ctx, leftRows, rightRows, ancRows, func(left, right tree.Diff) (tree.Diff, bool) {
+	//	if left.Type == right.Type && bytes.Equal(left.To, right.To) {
+	//		if keyless {
+	//			// convergent edits are conflicts for keyless tables
+	//			d, b, _ := processConflict(ctx, conflicts, indexEdits, left, right)
+	//			return d, b
+	//		}
+	//		return left, true
+	//	}
+	//
+	//	merged, isConflict := vMerger.tryMerge(val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
+	//	if isConflict {
+	//		d, b, _ := processConflict(ctx, conflicts, indexEdits, left, right)
+	//		return d, b
+	//	}
+	//
+	//	d := tree.Diff{
+	//		Type: tree.ModifiedDiff,
+	//		Key:  left.Key,
+	//		From: left.From,
+	//		To:   tree.Item(merged),
+	//	}
+	//
+	//	select {
+	//	case indexEdits <- cellWiseMergeEdit{left, right, d}:
+	//		break
+	//	case <-ctx.Done():
+	//		return tree.Diff{}, false
+	//	}
+	//
+	//	return d, true
+	//})
+	//if err != nil {
+	//	return nil, tree.MergeStats{}, err
+	//}
+
+	//return durable.IndexFromProllyMap(mr), stats, nil
 }
 
-func processConflict(ctx context.Context, confs chan confVals, edits chan indexEdit, left, right tree.Diff) (tree.Diff, bool, error) {
-	c := confVals{
-		key:      val.Tuple(left.Key),
-		ourVal:   val.Tuple(left.To),
-		theirVal: val.Tuple(right.To),
-		baseVal:  val.Tuple(left.From),
-	}
-	select {
-	case confs <- c:
-	case <-ctx.Done():
-		return tree.Diff{}, false, ctx.Err()
-	}
-	// Reset the change on the right
-	e := conflictEdit{right: right}
-	select {
-	case edits <- e:
-	case <-ctx.Done():
-		return tree.Diff{}, false, ctx.Err()
-	}
-	return tree.Diff{}, false, nil
+func sendRightEdit(edits chan indexEdit, diff tree.ThreeWayDiff) {
+	edits <- rightEdit{key: diff.Key, from: diff.Base, to: diff.Right}
 }
+
+func sendCellWiseMergeEdit(edits chan indexEdit, diff tree.ThreeWayDiff) {
+	edits <- cellWiseMergeEdit{key: diff.Key, lFrom: diff.Base, lTo: diff.Left, rTo: diff.Right, merged: diff.Merged}
+}
+
+func sendConflict(confs chan confVals, diff tree.ThreeWayDiff) {
+	confs <- confVals{
+		key:      diff.Key,
+		ourVal:   diff.Left,
+		theirVal: diff.Right,
+		baseVal:  diff.Base,
+	}
+}
+
+func sendIndexReset(edits chan indexEdit, diff tree.ThreeWayDiff) {
+	edits <- conflictEdit{key: diff.Key, from: diff.Right, to: diff.Base}
+}
+
+type editsIter struct {
+	iter tree.DiffIter
+}
+
+var _ tree.MutationIter = (*editsIter)(nil)
+
+func (i *editsIter) NextMutation(ctx context.Context) (tree.Item, tree.Item, error) {
+	for {
+		diff, err := i.iter.Next(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		switch diff.Op {
+		case tree.DiffOpRightEdit, tree.DiffOpRightDelete:
+			return tree.Item(diff.Key), tree.Item(diff.Right), nil
+		case tree.DiffOpDivergentResolved:
+			return tree.Item(diff.Key), tree.Item(diff.Merged), nil
+		default:
+		}
+	}
+}
+
+func (i *editsIter) Close() error {
+	return i.iter.Close()
+}
+
+//func processConflict(ctx context.Context, confs chan confVals, edits chan indexEdit, left, right tree.Diff) (tree.Diff, bool, error) {
+//	c := confVals{
+//		key:      val.Tuple(left.Key),
+//		ourVal:   val.Tuple(left.To),
+//		theirVal: val.Tuple(right.To),
+//		baseVal:  val.Tuple(left.From),
+//	}
+//	select {
+//	case confs <- c:
+//	case <-ctx.Done():
+//		return tree.Diff{}, false, ctx.Err()
+//	}
+//	// Reset the change on the right
+//	e := conflictEdit{right: right}
+//	select {
+//	case edits <- e:
+//	case <-ctx.Done():
+//		return tree.Diff{}, false, ctx.Err()
+//	}
+//	return tree.Diff{}, false, nil
+//}
 
 type valueMerger struct {
 	numCols                                int
 	vD                                     val.TupleDesc
 	leftMapping, rightMapping, baseMapping val.OrdinalMapping
 	syncPool                               pool.BuffPool
+	keyless                                bool
 }
 
 func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool pool.BuffPool) *valueMerger {
@@ -304,6 +399,7 @@ func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool p
 		rightMapping: rightMapping,
 		baseMapping:  baseMapping,
 		syncPool:     syncPool,
+		keyless:      schema.IsKeyless(merged),
 	}
 }
 
@@ -312,10 +408,13 @@ func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool p
 // conflict occurred. tryMerge should only be called if left and right produce
 // non-identical diffs against base.
 func (m *valueMerger) tryMerge(left, right, base val.Tuple) (val.Tuple, bool) {
+	if m.keyless {
+		return nil, false
+	}
 
 	if base != nil && (left == nil) != (right == nil) {
 		// One row deleted, the other modified
-		return nil, true
+		return nil, false
 	}
 
 	// Because we have non-identical diffs, left and right are guaranteed to be
@@ -328,12 +427,12 @@ func (m *valueMerger) tryMerge(left, right, base val.Tuple) (val.Tuple, bool) {
 	for i := 0; i < m.numCols; i++ {
 		v, isConflict := m.processColumn(i, left, right, base)
 		if isConflict {
-			return nil, true
+			return nil, false
 		}
 		mergedValues[i] = v
 	}
 
-	return val.NewTuple(m.syncPool, mergedValues...), false
+	return val.NewTuple(m.syncPool, mergedValues...), true
 }
 
 // processColumn returns the merged value of column |i| of the merged schema,
