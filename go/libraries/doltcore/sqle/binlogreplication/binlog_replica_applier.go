@@ -416,6 +416,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			ctx.SetSessionVariable(ctx, "unique_checks", 1)
 		}
 
+		ctx.SetCurrentDatabase(query.Database)
 		executeQueryWithEngine(ctx, engine, query.SQL)
 		createCommit = strings.ToLower(query.SQL) != "begin"
 
@@ -929,15 +930,20 @@ func loadReplicaServerId() (uint32, error) {
 
 func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) {
 	if ctx.GetCurrentDatabase() == "" {
-		ctx.GetLogger().Warn("No current database selected")
+		ctx.GetLogger().WithFields(logrus.Fields{
+			"query": query,
+		}).Warn("No current database selected")
 	}
 
 	_, iter, err := engine.Query(ctx, query)
 	if err != nil {
 		// Log any errors, except for commits with "nothing to commit"
 		if err.Error() != "nothing to commit" {
-			msg := fmt.Sprintf("ERROR executing query: %v ", err.Error())
-			ctx.GetLogger().Errorf(msg)
+			msg := fmt.Sprintf("Error executing query")
+			ctx.GetLogger().WithFields(logrus.Fields{
+				"error": err.Error(),
+				"query": query,
+			}).Errorf(msg)
 			DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, msg)
 		}
 		return
