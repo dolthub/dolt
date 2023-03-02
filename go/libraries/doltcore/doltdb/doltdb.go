@@ -1394,7 +1394,13 @@ func (ddb *DoltDB) GetBranchesByRootHash(ctx context.Context, rootHash hash.Hash
 }
 
 // AddStash takes current branch head commit, working root value and stash metadata to create a new stash.
+// It stores the new stash object in stash list Dataset, which can be created if it does not exist.
+// Otherwise, it updates the stash list Dataset as there can only be one stashes Dataset.
 func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, working *RootValue, meta *datas.StashMeta) error {
+	nbf := ddb.Format()
+	ns := ddb.NodeStore()
+	vrw := ddb.ValueReadWriter()
+
 	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
 	if err != nil {
 		return err
@@ -1413,22 +1419,63 @@ func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, working *RootValu
 	// TODO: do I need to set it?
 	working = r
 
-	stashesDS, err = ddb.db.Stash(ctx, stashesDS, workingRoot, headCommitAddr, meta)
+	// new stash object
+	stashAddr, _, err := datas.NewStash(ctx, nbf, vrw, workingRoot, headCommitAddr, meta)
+	if err != nil {
+		return err
+	}
+
+	// this either creates new map or loads current map rootHash is the head Addr of stashesRef
+	// stored in datasets reusing storeRoot implementation to get address map interface to use for stash
+	stashList, err := datas.LoadStashList(ctx, nbf, ns, vrw, stashesDS)
+	if err != nil {
+		return err
+	}
+
+	// this function updates stashes list ds head
+	stashListAddr, err := stashList.AddStash(ctx, vrw, stashAddr)
+	if err != nil {
+		return err
+	}
+
+	stashesDS, err = ddb.db.UpdateStashList(ctx, stashesDS, stashListAddr)
 	return err
 }
 
 // RemoveStashAtIdx takes and index of a stash to remove from the stash list map.
+// It removes a Stash message from stash list Dataset, which cannot be performed
+// by database Delete function. This function removes a single stash only and stash
+// list dataset does not get removed if there are no entries left.
 func (ddb *DoltDB) RemoveStashAtIdx(ctx context.Context, idx int) error {
 	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
 	if err != nil {
 		return err
 	}
 
-	stashesDS, err = ddb.db.DropStash(ctx, stashesDS, idx)
+	if !stashesDS.HasHead() {
+		return errors.New("No stash entries found.")
+	}
+
+	nbf := ddb.Format()
+	ns := ddb.NodeStore()
+	vrw := ddb.ValueReadWriter()
+
+	stashList, err := datas.LoadStashList(ctx, nbf, ns, vrw, stashesDS)
+	if err != nil {
+		return err
+	}
+
+	stashListAddr, err := stashList.RemoveStashAtIdx(ctx, vrw, idx)
+	if err != nil {
+		return err
+	}
+
+	stashesDS, err = ddb.db.UpdateStashList(ctx, stashesDS, stashListAddr)
 	return err
 }
 
-// RemoveAllStashes removes all stash entries from the stash list map.
+// RemoveAllStashes removes all Stash entries from the stash list Dataset.
+// TODO: could we just delete the whole Dataset in this case?
 func (ddb *DoltDB) RemoveAllStashes(ctx context.Context) error {
 	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
 	if err != nil {
@@ -1439,11 +1486,24 @@ func (ddb *DoltDB) RemoveAllStashes(ctx context.Context) error {
 		return nil
 	}
 
-	stashesDS, err = ddb.db.ClearStashes(ctx, stashesDS)
+	nbf := ddb.Format()
+	ns := ddb.NodeStore()
+	vrw := ddb.ValueReadWriter()
+	stashList, err := datas.LoadStashList(ctx, nbf, ns, vrw, stashesDS)
+	if err != nil {
+		return err
+	}
+
+	stashListAddr, err := stashList.ClearAllStashes(ctx, vrw)
+	if err != nil {
+		return err
+	}
+
+	stashesDS, err = ddb.db.UpdateStashList(ctx, stashesDS, stashListAddr)
 	return err
 }
 
-// GetStashes returns array of Stash objects containing all stash entries in the stash list map.
+// GetStashes returns array of Stash objects containing all stash entries in the stash list Dataset.
 func (ddb *DoltDB) GetStashes(ctx context.Context) ([]*Stash, error) {
 	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
 	if err != nil {

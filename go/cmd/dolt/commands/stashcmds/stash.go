@@ -16,6 +16,7 @@ package stashcmds
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -27,6 +28,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
 )
+
+var ErrStashNotSupportedForOldFormat = errors.New("stash is not supported for old storage format")
 
 var StashCommands = cli.NewSubCommandHandlerWithUnspecified("stash", "Stash the changes in a dirty working directory away.", false, StashCmd{}, []cli.Command{
 	StashClearCmd{},
@@ -78,6 +81,10 @@ func (cmd StashCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	if !dEnv.DoltDB.Format().UsesFlatbuffers() {
+		cli.PrintErrln(ErrStashNotSupportedForOldFormat.Error())
+		return 1
+	}
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, stashDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

@@ -56,8 +56,3 @@ func (br StashRef) GetPath() string {
 func (br StashRef) String() string {
 	return String(br)
 }
-
-// MarshalJSON serializes a StashRef to JSON.
-func (br StashRef) MarshalJSON() ([]byte, error) {
-	return MarshalJSON(br)
-}

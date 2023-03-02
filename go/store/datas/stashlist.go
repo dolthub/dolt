@@ -48,8 +48,8 @@ type stashHead struct {
 	addr hash.Hash
 }
 
-// addStash returns hash address of updated stash list map after adding the new stash using given hash address of the new stash.
-func (s *StashList) addStash(ctx context.Context, db *database, stashAddr hash.Hash) (hash.Hash, error) {
+// AddStash returns hash address of updated stash list map after adding the new stash using given hash address of the new stash.
+func (s *StashList) AddStash(ctx context.Context, vw types.ValueWriter, stashAddr hash.Hash) (hash.Hash, error) {
 	stashID := strconv.Itoa(s.lastIdx + 1)
 
 	ame := s.am.Editor()
@@ -62,11 +62,11 @@ func (s *StashList) addStash(ctx context.Context, db *database, stashAddr hash.H
 	if err != nil {
 		return hash.Hash{}, err
 	}
-	return s.updateStashListMap(ctx, db)
+	return s.updateStashListMap(ctx, vw)
 }
 
-// removeStashAtIdx returns hash address of updated stash list map after removing the stash at given index of the stash list.
-func (s *StashList) removeStashAtIdx(ctx context.Context, db *database, idx int) (hash.Hash, error) {
+// RemoveStashAtIdx returns hash address of updated stash list map after removing the stash at given index of the stash list.
+func (s *StashList) RemoveStashAtIdx(ctx context.Context, vw types.ValueWriter, idx int) (hash.Hash, error) {
 	amCount, err := s.am.Count()
 	if err != nil {
 		return hash.Hash{}, err
@@ -90,7 +90,7 @@ func (s *StashList) removeStashAtIdx(ctx context.Context, db *database, idx int)
 	if err != nil {
 		return hash.Hash{}, err
 	}
-	return s.updateStashListMap(ctx, db)
+	return s.updateStashListMap(ctx, vw)
 }
 
 // getAllStashes returns array of stashHead object which contains the key and hash address for a stash stored in the stash list map.
@@ -107,8 +107,8 @@ func (s *StashList) getAllStashes(ctx context.Context) ([]*stashHead, error) {
 	return getStashListOrdered(ctx, s.am, amCount), nil
 }
 
-// clearAllStashes returns address hash of updated stash list map after removing all stash entries in the stash list.
-func (s *StashList) clearAllStashes(ctx context.Context, db *database) (hash.Hash, error) {
+// ClearAllStashes returns address hash of updated stash list map after removing all stash entries in the stash list.
+func (s *StashList) ClearAllStashes(ctx context.Context, vw types.ValueWriter) (hash.Hash, error) {
 	amCount, err := s.am.Count()
 	if err != nil {
 		return hash.Hash{}, err
@@ -129,14 +129,14 @@ func (s *StashList) clearAllStashes(ctx context.Context, db *database) (hash.Has
 	if err != nil {
 		return hash.Hash{}, err
 	}
-	return s.updateStashListMap(ctx, db)
+	return s.updateStashListMap(ctx, vw)
 }
 
 // updateStashListMap returns address hash of updated stash list map.
-func (s *StashList) updateStashListMap(ctx context.Context, db *database) (hash.Hash, error) {
+func (s *StashList) updateStashListMap(ctx context.Context, vw types.ValueWriter) (hash.Hash, error) {
 	// update stash map data and reset the stash map's hash
 	data := stashlist_flatbuffer(s.am)
-	r, err := db.WriteValue(ctx, types.SerialMessage(data))
+	r, err := vw.WriteValue(ctx, types.SerialMessage(data))
 	if err != nil {
 		return hash.Hash{}, err
 	}
@@ -206,24 +206,25 @@ func GetHashListFromStashList(ctx context.Context, ns tree.NodeStore, val types.
 	return stashHashList, nil
 }
 
-// loadStashList returns StashList object that contains the AddressMap that contains all stashes. This method creates
-// new StashList address map, if there is none exists yet (rootHash is null). Otherwise, it returns the address map
+// LoadStashList returns StashList object that contains the AddressMap that contains all stashes. This method creates
+// new StashList address map, if there is none exists yet (dataset head is null). Otherwise, it returns the address map
 // that corresponds to given root hash value.
-func loadStashList(ctx context.Context, db *database, rootHash hash.Hash) (*StashList, error) {
-	if !db.Format().UsesFlatbuffers() {
-		return nil, errors.New("newStash: stash is not supported for old storage format")
+func LoadStashList(ctx context.Context, nbf *types.NomsBinFormat, ns tree.NodeStore, vr types.ValueReader, ds Dataset) (*StashList, error) {
+	if !nbf.UsesFlatbuffers() {
+		return nil, errors.New("loadStashList: stash is not supported for old storage format")
 	}
 
-	if rootHash == (hash.Hash{}) {
-		nam, err := prolly.NewEmptyAddressMap(db.ns)
+	rootHash, hasHead := ds.MaybeHeadAddr()
+	if !hasHead {
+		nam, err := prolly.NewEmptyAddressMap(ns)
 		if err != nil {
 			return nil, err
 		}
 
-		return &StashList{nam, nam.HashOf(), 0}, nil
+		return &StashList{nam, nam.HashOf(), -1}, nil
 	}
 
-	val, err := db.ReadValue(ctx, rootHash)
+	val, err := vr.ReadValue(ctx, rootHash)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +233,7 @@ func loadStashList(ctx context.Context, db *database, rootHash hash.Hash) (*Stas
 		return nil, errors.New("root hash doesn't exist")
 	}
 
-	return getExistingStashList(ctx, db.nodeStore(), val)
+	return getExistingStashList(ctx, ns, val)
 }
 
 // getExistingStashList returns stash list expecting that a stash list exists at given nodeStore and value.

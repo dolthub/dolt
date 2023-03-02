@@ -3,10 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    # dolt stash is not supported for old format ("__LD_1__")
-    if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ]; then
-        skip "dolt stash is not supported for old format: __LD_1__"
-    fi
+
 
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))"
     dolt add .
@@ -18,7 +15,18 @@ teardown() {
     teardown_common
 }
 
+@test "stash: stash is not supported for old format" {
+    if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ]; then
+        dolt sql -q "INSERT INTO test VALUES (1, 'a')"
+
+        run dolt stash
+        [ "$status" -eq 1 ]
+        [[ "$output" =~ "stash is not supported for old storage format" ]] || false
+    fi
+}
+
 @test "stash: simple stashing and popping stash" {
+    skiponoldformat
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     dolt sql -q "SELECT * FROM test"
     run dolt sql -q "SELECT * FROM test"
@@ -49,6 +57,7 @@ teardown() {
 }
 
 @test "stash: popping oldest stash" {
+    skiponoldformat
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -80,7 +89,8 @@ teardown() {
     [[ "$output" =~ "1,a" ]] || false
 }
 
-@test "stash: popping neither latest not oldest stash" {
+@test "stash: popping neither latest nor oldest stash" {
+    skiponoldformat
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -133,7 +143,7 @@ teardown() {
 }
 
 @test "stash: stashing multiple entries on different branches" {
-
+    skiponoldformat
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -150,6 +160,7 @@ teardown() {
 }
 
 @test "stash: popping stash on different branch" {
+    skiponoldformat
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -167,6 +178,7 @@ teardown() {
 }
 
 @test "stash: stash clear removes all entries in stash list" {
+    skiponoldformat
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     dolt stash
 
@@ -189,6 +201,7 @@ teardown() {
 }
 
 @test "stash: stash drop remove an entry at given index in stash list" {
+    skiponoldformat
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -233,6 +246,7 @@ teardown() {
 }
 
 @test "stash: popping stash on dirty working set with no conflict" {
+    skiponoldformat
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -253,6 +267,7 @@ teardown() {
 }
 
 @test "stash: popping stash on dirty working set with conflict" {
+    skiponoldformat
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -270,4 +285,11 @@ teardown() {
     run dolt stash list
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
+}
+
+skiponoldformat() {
+    # dolt stash is not supported for old format ("__LD_1__")
+    if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ]; then
+        skip "dolt stash is not supported for old format: __LD_1__"
+    fi
 }

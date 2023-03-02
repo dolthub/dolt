@@ -30,10 +30,10 @@ const (
 	stashListName = "StashList"
 )
 
-// newStash creates a new stash object.
-func newStash(ctx context.Context, db *database, stashRef types.Ref, headAddr hash.Hash, meta *StashMeta) (hash.Hash, types.Ref, error) {
-	if db.Format().UsesFlatbuffers() {
-		headCommit, err := db.ReadValue(ctx, headAddr)
+// NewStash creates a new stash object.
+func NewStash(ctx context.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, stashRef types.Ref, headAddr hash.Hash, meta *StashMeta) (hash.Hash, types.Ref, error) {
+	if nbf.UsesFlatbuffers() {
+		headCommit, err := vrw.ReadValue(ctx, headAddr)
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
 		}
@@ -46,18 +46,18 @@ func newStash(ctx context.Context, db *database, stashRef types.Ref, headAddr ha
 			return hash.Hash{}, types.Ref{}, errors.New("newStash: headAddr does not point to a commit")
 		}
 
-		headRef, err := types.NewRef(headCommit, db.Format())
+		headRef, err := types.NewRef(headCommit, nbf)
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
 		}
 
 		data := stash_flatbuffer(stashRef.TargetHash(), headRef.TargetHash(), meta)
-		r, err := db.WriteValue(ctx, types.SerialMessage(data))
+		r, err := vrw.WriteValue(ctx, types.SerialMessage(data))
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
 		}
 
-		ref, err := types.ToRefOfValue(r, db.Format())
+		ref, err := types.ToRefOfValue(r, nbf)
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
 		}

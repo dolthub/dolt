@@ -83,17 +83,11 @@ type Database interface {
 	// `opts.Meta`.
 	Tag(ctx context.Context, ds Dataset, commitAddr hash.Hash, opts TagOptions) (Dataset, error)
 
-	// Stash creates a new Stash message containing a RootValue and a Commit
-	// and stores in stashes Dataset, which can be created if it does not exist.
-	// Otherwise, it updates the stashes Dataset as there can only be one stashes Dataset.
-	Stash(ctx context.Context, ds Dataset, stashRootRef types.Ref, headCommitAddr hash.Hash, meta *StashMeta) (Dataset, error)
-
-	// DropStash removes a Stash message from stashes Dataset, which cannot be performed by Delete function.
-	// This function removes a single stash only and does not get removed if there are no entries left.
-	DropStash(ctx context.Context, ds Dataset, idx int) (Dataset, error)
-
-	// ClearStashes removes all Stash messages from stashes Dataset.
-	ClearStashes(ctx context.Context, ds Dataset) (Dataset, error)
+	// UpdateStashList updates the stash list dataset only with given address hash to the updated stash list.
+	// The new/updated stash list address should be obtained before calling this function depending on
+	// whether add or remove a stash actions have been performed. This function does not perform any actions
+	// on the stash list itself.
+	UpdateStashList(ctx context.Context, ds Dataset, stashListAddr hash.Hash) (Dataset, error)
 
 	// UpdateWorkingSet updates the dataset given, setting its value to a new
 	// working set value object with the ref and meta given. If the dataset given
