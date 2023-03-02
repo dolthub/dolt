@@ -83,6 +83,58 @@ teardown() {
     [[ "$output" =~ "+---------------------" ]] || false
 }
 
+@test "sql-shell: shell works after failing query" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    $BATS_TEST_DIRNAME/sql-works-after-failing-query.expect
+}
+
+@test "sql-shell: delimiter" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    mkdir doltsql
+    cd doltsql
+    dolt init
+
+    run $BATS_TEST_DIRNAME/sql-delimiter.expect
+    [ "$status" -eq "0" ]
+    [[ ! "$output" =~ "Error" ]] || false
+    [[ ! "$output" =~ "error" ]] || false
+
+    run dolt sql -q "SELECT * FROM test ORDER BY 1" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    run dolt sql -q "SHOW TRIGGERS"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "SET NEW.v1 = NEW.v1 * 11" ]] || false
+
+    cd ..
+    rm -rf doltsql
+}
+
+@test "sql-shell: use databases" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    mkdir doltsql
+    cd doltsql
+    dolt init
+    dolt sql -q "create database db1"
+    dolt sql -q "create database db2"
+
+    dolt branch test
+
+    run expect $BATS_TEST_DIRNAME/sql-use.expect
+    echo $output
+    
+    [ "$status" -eq "0" ]
+    [[ ! "$output" =~ "Error" ]] || false
+    [[ ! "$output" =~ "error" ]] || false
+
+    cd ..
+    rm -rf doltsql
+}
+
 @test "sql-shell: default datadir, doltcfg, and privs" {
     # remove config files
     rm -rf .doltcfg

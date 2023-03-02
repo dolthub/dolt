@@ -117,7 +117,7 @@ func (s journalChunkSource) hash() addr {
 // reader implements chunkSource.
 func (s journalChunkSource) reader(context.Context) (io.ReadCloser, uint64, error) {
 	rdr, sz, err := s.journal.snapshot()
-	return io.NopCloser(rdr), uint64(sz), err
+	return rdr, uint64(sz), err
 }
 
 func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error) {

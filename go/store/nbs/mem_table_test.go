@@ -190,6 +190,14 @@ func tableReaderAtFromBytes(b []byte) tableReaderAt {
 	return tableReaderAtAdapter{bytes.NewReader(b)}
 }
 
+func (adapter tableReaderAtAdapter) Close() error {
+	return nil
+}
+
+func (adapter tableReaderAtAdapter) clone() (tableReaderAt, error) {
+	return adapter, nil
+}
+
 func (adapter tableReaderAtAdapter) Reader(ctx context.Context) (io.ReadCloser, error) {
 	r := *adapter.br
 	return io.NopCloser(&r), nil

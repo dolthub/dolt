@@ -399,9 +399,18 @@ func (wr *journalWriter) maybeFlush() (err error) {
 	return wr.flush()
 }
 
+type journalWriterSnapshot struct {
+	io.Reader
+	closer func() error
+}
+
+func (s journalWriterSnapshot) Close() error {
+	return s.closer()
+}
+
 // snapshot returns an io.Reader with a consistent view of
 // the current state of the journal file.
-func (wr *journalWriter) snapshot() (io.Reader, int64, error) {
+func (wr *journalWriter) snapshot() (io.ReadCloser, int64, error) {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
 	if err := wr.flush(); err != nil {
@@ -413,7 +422,12 @@ func (wr *journalWriter) snapshot() (io.Reader, int64, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	return io.LimitReader(f, wr.off), wr.off, nil
+	return journalWriterSnapshot{
+		io.LimitReader(f, wr.off),
+		func() error {
+			return f.Close()
+		},
+	}, wr.off, nil
 }
 
 func (wr *journalWriter) offset() int64 {
@@ -443,6 +457,9 @@ func (wr *journalWriter) Close() (err error) {
 	defer wr.lock.Unlock()
 	if err = wr.flush(); err != nil {
 		return err
+	}
+	if wr.index != nil {
+		wr.index.Close()
 	}
 	if cerr := wr.journal.Sync(); cerr != nil {
 		err = cerr

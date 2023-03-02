@@ -44,8 +44,10 @@ func TestStats(t *testing.T) {
 
 	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
+	defer file.RemoveAll(dir)
 	store, err := NewLocalStore(context.Background(), constants.FormatDefaultString, dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
 	require.NoError(t, err)
+	defer store.Close()
 
 	assert.EqualValues(1, stats(store).OpenLatency.Samples())
 
@@ -147,7 +149,4 @@ func TestStats(t *testing.T) {
 
 	assert.Equal(uint64(1), stats(store).ConjoinLatency.Samples())
 	// TODO: Once random conjoin hack is out, test other conjoin stats
-
-	defer store.Close()
-	defer file.RemoveAll(dir)
 }

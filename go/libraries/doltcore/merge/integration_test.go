@@ -281,7 +281,7 @@ const (
 func TestMergeConcurrency(t *testing.T) {
 	ctx := context.Background()
 	dEnv := setupConcurrencyTest(t, ctx)
-	eng := engineFromEnvironment(ctx, dEnv)
+	_, eng := engineFromEnvironment(ctx, dEnv)
 
 	eg, ctx := errgroup.WithContext(ctx)
 	for i := 0; i < concurrentThreads; i++ {
@@ -339,37 +339,33 @@ func runConcurrentTxs(ctx context.Context, eng *engine.SqlEngine, seed int) erro
 func setupConcurrencyTest(t *testing.T, ctx context.Context) (dEnv *env.DoltEnv) {
 	dEnv = dtu.CreateTestEnv()
 
-	eng := engineFromEnvironment(ctx, dEnv)
-	sqlCtx, err := eng.NewContext(ctx)
+	dbName, eng := engineFromEnvironment(ctx, dEnv)
+	sqlCtx, err := eng.NewLocalContext(ctx)
 	require.NoError(t, err)
-	sqlCtx.Session.SetClient(sql.Client{
-		User: "root", Address: "%",
-	})
+	sqlCtx.SetCurrentDatabase(dbName)
 
 	require.NoError(t, executeQuery(sqlCtx, eng, concurrentTable))
 	require.NoError(t, executeQuery(sqlCtx, eng, generateTestData()))
 	return
 }
 
-func engineFromEnvironment(ctx context.Context, dEnv *env.DoltEnv) (eng *engine.SqlEngine) {
+func engineFromEnvironment(ctx context.Context, dEnv *env.DoltEnv) (dbName string, eng *engine.SqlEngine) {
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	if err != nil {
 		panic(err)
 	}
 
 	eng, err = engine.NewSqlEngine(ctx, mrEnv, engine.FormatNull, &engine.SqlEngineConfig{
-		InitialDb:    "dolt",
-		IsReadOnly:   false,
-		PrivFilePath: "",
-		ServerUser:   "root",
-		ServerPass:   "",
-		ServerHost:   "localhost",
-		Autocommit:   true,
+		IsReadOnly: false,
+		ServerUser: "root",
+		ServerHost: "localhost",
+		Autocommit: true,
 	})
 	if err != nil {
 		panic(err)
 	}
-	return
+
+	return mrEnv.GetFirstDatabase(), eng
 }
 
 func executeQuery(ctx *sql.Context, eng *engine.SqlEngine, query string) error {
