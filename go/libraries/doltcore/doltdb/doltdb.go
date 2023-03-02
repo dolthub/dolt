@@ -1397,10 +1397,6 @@ func (ddb *DoltDB) GetBranchesByRootHash(ctx context.Context, rootHash hash.Hash
 // It stores the new stash object in stash list Dataset, which can be created if it does not exist.
 // Otherwise, it updates the stash list Dataset as there can only be one stashes Dataset.
 func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, working *RootValue, meta *datas.StashMeta) error {
-	nbf := ddb.Format()
-	ns := ddb.NodeStore()
-	vrw := ddb.ValueReadWriter()
-
 	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
 	if err != nil {
 		return err
@@ -1419,20 +1415,19 @@ func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, working *RootValu
 	// TODO: do I need to set it?
 	working = r
 
-	// new stash object
+	nbf := ddb.Format()
+	vrw := ddb.ValueReadWriter()
 	stashAddr, _, err := datas.NewStash(ctx, nbf, vrw, workingRoot, headCommitAddr, meta)
 	if err != nil {
 		return err
 	}
 
-	// this either creates new map or loads current map rootHash is the head Addr of stashesRef
-	// stored in datasets reusing storeRoot implementation to get address map interface to use for stash
-	stashList, err := datas.LoadStashList(ctx, nbf, ns, vrw, stashesDS)
+	// this either creates new stash list dataset or loads current stash list dataset if exists.
+	stashList, err := datas.LoadStashList(ctx, nbf, ddb.NodeStore(), vrw, stashesDS)
 	if err != nil {
 		return err
 	}
 
-	// this function updates stashes list ds head
 	stashListAddr, err := stashList.AddStash(ctx, vrw, stashAddr)
 	if err != nil {
 		return err
@@ -1456,11 +1451,8 @@ func (ddb *DoltDB) RemoveStashAtIdx(ctx context.Context, idx int) error {
 		return errors.New("No stash entries found.")
 	}
 
-	nbf := ddb.Format()
-	ns := ddb.NodeStore()
 	vrw := ddb.ValueReadWriter()
-
-	stashList, err := datas.LoadStashList(ctx, nbf, ns, vrw, stashesDS)
+	stashList, err := datas.LoadStashList(ctx, ddb.Format(), ddb.NodeStore(), vrw, stashesDS)
 	if err != nil {
 		return err
 	}
@@ -1486,10 +1478,8 @@ func (ddb *DoltDB) RemoveAllStashes(ctx context.Context) error {
 		return nil
 	}
 
-	nbf := ddb.Format()
-	ns := ddb.NodeStore()
 	vrw := ddb.ValueReadWriter()
-	stashList, err := datas.LoadStashList(ctx, nbf, ns, vrw, stashesDS)
+	stashList, err := datas.LoadStashList(ctx, ddb.Format(), ddb.NodeStore(), vrw, stashesDS)
 	if err != nil {
 		return err
 	}
