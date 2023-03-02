@@ -176,7 +176,7 @@ jobs:
       with:
         region: us-west-2
         toAddresses: '["${{ github.event.client_payload.email_recipient }}"]'
-        subject: 'System Table Performance Benchmarks: ${{ github.event.client_payload.version }}'
+        subject: 'Merge Performance Benchmarks: ${{ github.event.client_payload.version }}'
         bodyPath: ${{ steps.html.outputs.html }}
         template: 'SysbenchTemplate'
 

@@ -108,8 +108,9 @@ func (suite *BlockStoreSuite) TestChunkStoreMissingDir() {
 
 func (suite *BlockStoreSuite) TestChunkStoreNotDir() {
 	existingFile := filepath.Join(suite.dir, "path-exists-but-is-a-file")
-	_, err := os.Create(existingFile)
+	f, err := os.Create(existingFile)
 	suite.NoError(err)
+	defer f.Close()
 
 	_, err = NewLocalStore(context.Background(), constants.FormatDefaultString, existingFile, testMemTableSize, NewUnlimitedMemQuotaProvider())
 	suite.Error(err)

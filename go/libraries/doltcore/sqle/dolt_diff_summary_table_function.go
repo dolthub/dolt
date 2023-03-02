@@ -41,7 +41,8 @@ type DiffSummaryTableFunction struct {
 }
 
 var diffSummaryTableSchema = sql.Schema{
-	&sql.Column{Name: "table_name", Type: types.LongText, Nullable: false},
+	&sql.Column{Name: "from_table_name", Type: types.LongText, Nullable: false},
+	&sql.Column{Name: "to_table_name", Type: types.LongText, Nullable: false},
 	&sql.Column{Name: "diff_type", Type: types.Text, Nullable: false},
 	&sql.Column{Name: "data_change", Type: types.Boolean, Nullable: false},
 	&sql.Column{Name: "schema_change", Type: types.Boolean, Nullable: false},
@@ -268,8 +269,6 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 
 		summs := []*diff.TableDeltaSummary{}
 		if summ != nil {
-			// Old name of renamed table can be matched, use provided name in result
-			summ.TableName = tableName
 			summs = []*diff.TableDeltaSummary{summ}
 		}
 
@@ -396,9 +395,10 @@ func (d *diffSummaryTableFunctionRowIter) Close(context *sql.Context) error {
 
 func getRowFromSummary(ds *diff.TableDeltaSummary) sql.Row {
 	return sql.Row{
-		ds.TableName,    // table_name
-		ds.DiffType,     // diff_type
-		ds.DataChange,   // data_change
-		ds.SchemaChange, // schema_change
+		ds.FromTableName, // from_table_name
+		ds.ToTableName,   // to_table_name
+		ds.DiffType,      // diff_type
+		ds.DataChange,    // data_change
+		ds.SchemaChange,  // schema_change
 	}
 }

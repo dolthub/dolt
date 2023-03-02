@@ -332,29 +332,6 @@ func (ts tableSet) flatten(ctx context.Context) (tableSet, error) {
 	return flattened, nil
 }
 
-func (ts tableSet) checkAllTablesExist(ctx context.Context, specs []tableSpec, stats *Stats) error {
-	eg, ectx := errgroup.WithContext(ctx)
-	eg.SetLimit(128)
-	for _, s := range specs {
-		// if the table file already exists in our upstream chunkSourceSet, we do not need to
-		// check with the upstream if it still exists.
-		if _, ok := ts.upstream[s.name]; ok {
-			continue
-		}
-		spec := s
-		eg.Go(func() error {
-			exists, err := ts.p.Exists(ectx, spec.name, spec.chunkCount, stats)
-			if err != nil {
-				return err
-			} else if !exists {
-				return fmt.Errorf("table spec does not exist")
-			}
-			return nil
-		})
-	}
-	return eg.Wait()
-}
-
 // rebase returns a new tableSet holding the novel tables managed by |ts| and
 // those specified by |specs|.
 func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) (tableSet, error) {
@@ -389,10 +366,6 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 		novel[t2.hash()] = t2
 	}
 
-	// newly opened tables are unowned, we must
-	// close them if the rebase operation fails
-	opened := make(chunkSourceSet, len(specs))
-
 	eg, ctx := errgroup.WithContext(ctx)
 	mu := new(sync.Mutex)
 	upstream := make(chunkSourceSet, len(specs))
@@ -401,6 +374,11 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 		if cs, ok := ts.upstream[s.name]; ok {
 			cl, err := cs.clone()
 			if err != nil {
+				_ = eg.Wait()
+				for _, cs := range upstream {
+					// close any opened chunkSources
+					_ = cs.close()
+				}
 				return tableSet{}, err
 			}
 			mu.Lock()
@@ -417,14 +395,13 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 			}
 			mu.Lock()
 			upstream[cs.hash()] = cs
-			opened[cs.hash()] = cs
 			mu.Unlock()
 			return nil
 		})
 	}
 
 	if err := eg.Wait(); err != nil {
-		for _, cs := range opened {
+		for _, cs := range upstream {
 			// close any opened chunkSources
 			_ = cs.close()
 		}

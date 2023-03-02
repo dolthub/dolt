@@ -183,9 +183,16 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 	sources[2], err = sources[0].clone()
 	require.NoError(t, err)
 
-	src, _, err := fts.ConjoinAll(ctx, sources, &Stats{})
+	src, cleanup, err := fts.ConjoinAll(ctx, sources, &Stats{})
 	require.NoError(t, err)
 	defer src.close()
+
+	// After ConjoinAll runs, we can close the sources and
+	// call the cleanup func.
+	for _, s := range sources {
+		s.close()
+	}
+	cleanup()
 
 	if assert.True(mustUint32(src.count()) > 0) {
 		buff, err := os.ReadFile(filepath.Join(dir, src.hash().String()))

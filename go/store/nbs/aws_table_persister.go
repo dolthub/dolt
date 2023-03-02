@@ -518,6 +518,7 @@ func (mp manualPart) run(ctx context.Context, buff []byte) error {
 	if err != nil {
 		return err
 	}
+	defer reader.Close()
 	_, err = io.ReadFull(reader, buff[mp.start:mp.end])
 	return err
 }
@@ -613,7 +614,7 @@ func (s3p awsTablePersister) uploadPart(ctx context.Context, data []byte, key, u
 	return
 }
 
-func (s3p awsTablePersister) PruneTableFiles(ctx context.Context, contents manifestContents, t time.Time) error {
+func (s3p awsTablePersister) PruneTableFiles(ctx context.Context, keeper func() []addr, t time.Time) error {
 	return chunks.ErrUnsupportedOperation
 }
 
