@@ -19,8 +19,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/val"
 	"io"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // threeWayDiffer is an iterator that gives an increased level of granularity

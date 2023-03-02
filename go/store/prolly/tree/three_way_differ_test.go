@@ -18,11 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/prolly/message"
-	"github.com/dolthub/dolt/go/store/val"
-	"github.com/stretchr/testify/require"
 	"io"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type testDiff struct {
