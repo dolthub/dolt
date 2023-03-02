@@ -29,14 +29,20 @@ func TestBinlogReplicationMultiDb(t *testing.T) {
 
 	// Make changes on the primary to db01 and db02
 	primaryDatabase.MustExec("create database db02;")
-	primaryDatabase.MustExec("create table db01.t01 (pk int primary key, c1 int default (0))")
-	primaryDatabase.MustExec("create table db02.t02 (pk int primary key, c1 int default (0))")
-	primaryDatabase.MustExec("insert into db01.t01 (pk) values (1), (3), (5), (8), (9);")
-	primaryDatabase.MustExec("insert into db02.t02 (pk) values (2), (4), (6), (7), (10);")
-	primaryDatabase.MustExec("delete from db01.t01 where pk=9;")
+	primaryDatabase.MustExec("use db01;")
+	primaryDatabase.MustExec("create table t01 (pk int primary key, c1 int default (0))")
+	primaryDatabase.MustExec("use db02;")
+	primaryDatabase.MustExec("create table t02 (pk int primary key, c1 int default (0))")
+	primaryDatabase.MustExec("use db01;")
+	primaryDatabase.MustExec("insert into t01 (pk) values (1), (3), (5), (8), (9);")
+	primaryDatabase.MustExec("use db02;")
+	primaryDatabase.MustExec("insert into t02 (pk) values (2), (4), (6), (7), (10);")
+	primaryDatabase.MustExec("use db01;")
+	primaryDatabase.MustExec("delete from t01 where pk=9;")
 	primaryDatabase.MustExec("delete from db02.t02 where pk=10;")
+	primaryDatabase.MustExec("use db02;")
 	primaryDatabase.MustExec("update db01.t01 set pk=7 where pk=8;")
-	primaryDatabase.MustExec("update db02.t02 set pk=8 where pk=7;")
+	primaryDatabase.MustExec("update t02 set pk=8 where pk=7;")
 
 	// Verify the changes in db01 on the replica
 	waitForReplicaToCatchUp(t)
