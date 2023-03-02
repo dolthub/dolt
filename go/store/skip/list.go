@@ -186,9 +186,9 @@ func (l *List) Put(key, val []byte) {
 	node = l.nodePtr(node.next[0])
 
 	if l.compareKeys(key, node.key) == 0 {
-		l.overwrite(key, val, path, node)
+		l.overwrite(key, val, &path, node)
 	} else {
-		l.insert(key, val, path)
+		l.insert(key, val, &path)
 		l.count++
 	}
 }
@@ -205,7 +205,7 @@ func (l *List) Copy() *List {
 	}
 }
 
-func (l *List) insert(key, value []byte, path tower) {
+func (l *List) insert(key, value []byte, path *tower) {
 	id := l.nextNodeId()
 	l.nodes = append(l.nodes, skipNode{
 		key:    key,
@@ -226,7 +226,7 @@ func (l *List) insert(key, value []byte, path tower) {
 	n.prev = novel.id
 }
 
-func (l *List) overwrite(key, value []byte, path tower, old *skipNode) {
+func (l *List) overwrite(key, value []byte, path *tower, old *skipNode) {
 	id := l.nextNodeId()
 	l.nodes = append(l.nodes, skipNode{
 		key:    key,
