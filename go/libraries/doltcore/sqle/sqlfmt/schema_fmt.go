@@ -15,137 +15,70 @@
 package sqlfmt
 
 import (
-	"fmt"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
-// FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
-// typeWidth are 0 or less than the length of the name or type, then the length of the name or type will be used
-func FmtCol(indent, nameWidth, typeWidth int, col schema.Column) string {
-	sqlType := col.TypeInfo.ToSqlType()
-	return FmtColWithNameAndType(indent, nameWidth, typeWidth, col.Name, sqlType.String(), col)
+// GenerateCreateTableColumnDefinition returns column definition for CREATE TABLE statement with no indentation
+func GenerateCreateTableColumnDefinition(col schema.Column) string {
+	colStr := sql.GenerateCreateTableColumnDefinition(col.Name, col.TypeInfo.ToSqlType(), col.IsNullable(), col.AutoIncrement, col.Default != "", col.Default, col.Comment)
+	return strings.TrimPrefix(colStr, "  ")
 }
 
-// FmtColWithNameAndType creates a string representing a column within a sql create table statement with a given indent
-// space count, name width, and type width.  If nameWidth or typeWidth are 0 or less than the length of the name or
-// type, then the length of the name or type will be used.
-func FmtColWithNameAndType(indent, nameWidth, typeWidth int, colName, typeStr string, col schema.Column) string {
-	colName = QuoteIdentifier(colName)
-	fmtStr := fmt.Sprintf("%%%ds%%%ds %%%ds", indent, nameWidth, typeWidth)
-	colStr := fmt.Sprintf(fmtStr, "", colName, typeStr)
-
-	for _, cnst := range col.Constraints {
-		switch cnst.GetConstraintType() {
-		case schema.NotNullConstraintType:
-			colStr += " NOT NULL"
-		default:
-			panic("FmtColWithNameAndType doesn't know how to format constraint type: " + cnst.GetConstraintType())
-		}
-	}
-
-	if col.AutoIncrement {
-		colStr += " AUTO_INCREMENT"
-	}
-
-	if col.Default != "" {
-		colStr += " DEFAULT " + col.Default
-	}
-
-	if col.Comment != "" {
-		colStr += " COMMENT " + QuoteComment(col.Comment)
-	}
-
-	return colStr
+// GenerateCreateTableIndentedColumnDefinition returns column definition for CREATE TABLE statement with no indentation
+func GenerateCreateTableIndentedColumnDefinition(col schema.Column) string {
+	return sql.GenerateCreateTableColumnDefinition(col.Name, col.TypeInfo.ToSqlType(), col.IsNullable(), col.AutoIncrement, col.Default != "", col.Default, col.Comment)
 }
 
-// FmtColPrimaryKey creates a string representing a primary key constraint within a sql create table statement with a
-// given indent.
-func FmtColPrimaryKey(indent int, colStr string, newline bool) string {
-	st := "%%%ds PRIMARY KEY (%s)"
-	if newline {
-		st += "\n"
-	}
-
-	fmtStr := fmt.Sprintf(st, indent, colStr)
-	return fmt.Sprintf(fmtStr, "")
+// GenerateCreateTableIndexDefinition returns index definition for CREATE TABLE statement with indentation of 2 spaces
+func GenerateCreateTableIndexDefinition(index schema.Index) string {
+	return sql.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.Name(), sql.QuoteIdentifiers(index.ColumnNames()), index.Comment())
 }
 
-func FmtIndex(index schema.Index) string {
-	sb := strings.Builder{}
-	if index.IsUnique() {
-		sb.WriteString("UNIQUE ")
-	}
-	sb.WriteString("INDEX ")
-	sb.WriteString(QuoteIdentifier(index.Name()))
-	sb.WriteString(" (")
-	for i, indexColName := range index.ColumnNames() {
-		if i != 0 {
-			sb.WriteRune(',')
-		}
-		sb.WriteString(QuoteIdentifier(indexColName))
-	}
-	sb.WriteRune(')')
-	if len(index.Comment()) > 0 {
-		sb.WriteString(" COMMENT ")
-		sb.WriteString(QuoteComment(index.Comment()))
-	}
-	return sb.String()
-}
-
-func FmtForeignKey(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
-	sb := strings.Builder{}
-	sb.WriteString("CONSTRAINT ")
-	sb.WriteString(QuoteIdentifier(fk.Name))
-	sb.WriteString(" FOREIGN KEY (")
+// GenerateCreateTableForeignKeyDefinition returns foreign key definition for CREATE TABLE statement with indentation of 2 spaces
+func GenerateCreateTableForeignKeyDefinition(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
+	var fkCols []string
 	if fk.IsResolved() {
-		for i, tag := range fk.TableColumns {
-			if i != 0 {
-				sb.WriteRune(',')
-			}
+		for _, tag := range fk.TableColumns {
 			c, _ := sch.GetAllCols().GetByTag(tag)
-			sb.WriteString(QuoteIdentifier(c.Name))
+			fkCols = append(fkCols, c.Name)
 		}
 	} else {
-		for i, col := range fk.UnresolvedFKDetails.TableColumns {
-			if i != 0 {
-				sb.WriteRune(',')
-			}
-			sb.WriteString(QuoteIdentifier(col))
+		for _, col := range fk.UnresolvedFKDetails.TableColumns {
+			fkCols = append(fkCols, col)
 		}
 	}
-	sb.WriteString(")\n    REFERENCES ")
-	sb.WriteString(QuoteIdentifier(fk.ReferencedTableName))
-	sb.WriteString(" (")
+
+	var parentCols []string
 	if fk.IsResolved() {
-		for i, tag := range fk.ReferencedTableColumns {
-			if i != 0 {
-				sb.WriteRune(',')
-			}
+		for _, tag := range fk.ReferencedTableColumns {
 			c, _ := parentSch.GetAllCols().GetByTag(tag)
-			sb.WriteString(QuoteIdentifier(c.Name))
+			parentCols = append(parentCols, c.Name)
 		}
 	} else {
-		for i, col := range fk.UnresolvedFKDetails.ReferencedTableColumns {
-			if i != 0 {
-				sb.WriteRune(',')
-			}
-			sb.WriteString(QuoteIdentifier(col))
+		for _, col := range fk.UnresolvedFKDetails.ReferencedTableColumns {
+			parentCols = append(parentCols, col)
 		}
 	}
-	sb.WriteRune(')')
+
+	onDelete := ""
 	if fk.OnDelete != doltdb.ForeignKeyReferentialAction_DefaultAction {
-		sb.WriteString("\n    ON DELETE ")
-		sb.WriteString(fk.OnDelete.String())
+		onDelete = fk.OnDelete.String()
 	}
+	onUpdate := ""
 	if fk.OnUpdate != doltdb.ForeignKeyReferentialAction_DefaultAction {
-		sb.WriteString("\n    ON UPDATE ")
-		sb.WriteString(fk.OnUpdate.String())
+		onUpdate = fk.OnUpdate.String()
 	}
-	return sb.String()
+	return sql.GenerateCreateTableForiegnKeyDefinition(fk.Name, fkCols, fk.ReferencedTableName, parentCols, onDelete, onUpdate)
+}
+
+// GenerateCreateTableCheckConstraintClause returns check constraint clause definition for CREATE TABLE statement with indentation of 2 spaces
+func GenerateCreateTableCheckConstraintClause(check schema.Check) string {
+	return sql.GenerateCreateTableCheckConstraintClause(check.Name(), check.Expression(), check.Enforced())
 }
 
 func DropTableStmt(tableName string) string {
