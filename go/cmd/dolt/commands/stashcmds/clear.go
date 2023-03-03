@@ -34,7 +34,7 @@ Removes all the stash entries from the current stash list.`,
 
 type StashClearCmd struct{}
 
-// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd StashClearCmd) Name() string {
 	return "clear"
 }

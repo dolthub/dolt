@@ -1407,13 +1407,10 @@ func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, working *RootValu
 		return err
 	}
 
-	r, workingRoot, err := ddb.writeRootValue(ctx, working)
+	_, workingRoot, err := ddb.writeRootValue(ctx, working)
 	if err != nil {
 		return err
 	}
-
-	// TODO: do I need to set it?
-	working = r
 
 	nbf := ddb.Format()
 	vrw := ddb.ValueReadWriter()
@@ -1462,34 +1459,26 @@ func (ddb *DoltDB) RemoveStashAtIdx(ctx context.Context, idx int) error {
 		return err
 	}
 
+	stashListCount, err := stashList.Count()
+	if err != nil {
+		return err
+	}
+	// if the stash list is empty, remove the stash list Dataset from the database
+	if stashListCount == 0 {
+		return ddb.RemoveAllStashes(ctx)
+	}
+
 	stashesDS, err = ddb.db.UpdateStashList(ctx, stashesDS, stashListAddr)
 	return err
 }
 
-// RemoveAllStashes removes all Stash entries from the stash list Dataset.
-// TODO: could we just delete the whole Dataset in this case?
+// RemoveAllStashes removes the stash list Dataset from the database,
+// which equivalent to removing Stash entries from the stash list.
 func (ddb *DoltDB) RemoveAllStashes(ctx context.Context) error {
-	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
-	if err != nil {
-		return err
-	}
-
-	if !stashesDS.HasHead() {
+	err := ddb.deleteRef(ctx, ref.NewStashRef())
+	if err == ErrBranchNotFound {
 		return nil
 	}
-
-	vrw := ddb.ValueReadWriter()
-	stashList, err := datas.LoadStashList(ctx, ddb.Format(), ddb.NodeStore(), vrw, stashesDS)
-	if err != nil {
-		return err
-	}
-
-	stashListAddr, err := stashList.ClearAllStashes(ctx, vrw)
-	if err != nil {
-		return err
-	}
-
-	stashesDS, err = ddb.db.UpdateStashList(ctx, stashesDS, stashListAddr)
 	return err
 }
 
@@ -1521,9 +1510,9 @@ func (ddb *DoltDB) GetStashHashAtIdx(ctx context.Context, idx int) (hash.Hash, e
 	return getStashHashAtIdx(ctx, ds, ddb.NodeStore(), idx)
 }
 
-// GetStashAtIdx returns root value of stash working set and head commit of the branch that the stash was made on
+// GetStashRootAndHeadCommitAtIdx returns root value of stash working set and head commit of the branch that the stash was made on
 // of the stash at given index.
-func (ddb *DoltDB) GetStashAtIdx(ctx context.Context, idx int) (*RootValue, *Commit, error) {
+func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) (*RootValue, *Commit, error) {
 	ds, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
 	if err != nil {
 		return nil, nil, err

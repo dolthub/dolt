@@ -26,7 +26,7 @@ teardown() {
 }
 
 @test "stash: simple stashing and popping stash" {
-    skiponoldformat
+    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     dolt sql -q "SELECT * FROM test"
     run dolt sql -q "SELECT * FROM test"
@@ -56,8 +56,39 @@ teardown() {
     [ "$output" = "$result" ]
 }
 
+@test "stash: stash clear and stash again" {
+    skip_nbf_ld_1
+    dolt sql -q "INSERT INTO test VALUES (1, 'a')"
+    dolt sql -q "SELECT * FROM test"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq 0 ]
+    result=$output
+
+    dolt stash
+    run dolt stash list
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+
+    run dolt stash clear
+    [ "$status" -eq 0 ]
+
+    run dolt stash list
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+
+    run dolt stash pop
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "No stash entries found." ]] || false
+
+    dolt sql -q "INSERT INTO test VALUES (2, 'b')"
+    dolt stash
+    run dolt stash list
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+}
+
 @test "stash: popping oldest stash" {
-    skiponoldformat
+    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -90,7 +121,7 @@ teardown() {
 }
 
 @test "stash: popping neither latest nor oldest stash" {
-    skiponoldformat
+    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -143,7 +174,7 @@ teardown() {
 }
 
 @test "stash: stashing multiple entries on different branches" {
-    skiponoldformat
+    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -160,7 +191,7 @@ teardown() {
 }
 
 @test "stash: popping stash on different branch" {
-    skiponoldformat
+    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -178,7 +209,7 @@ teardown() {
 }
 
 @test "stash: stash clear removes all entries in stash list" {
-    skiponoldformat
+    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     dolt stash
 
@@ -201,7 +232,7 @@ teardown() {
 }
 
 @test "stash: stash drop remove an entry at given index in stash list" {
-    skiponoldformat
+    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -246,7 +277,7 @@ teardown() {
 }
 
 @test "stash: popping stash on dirty working set with no conflict" {
-    skiponoldformat
+    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -267,7 +298,7 @@ teardown() {
 }
 
 @test "stash: popping stash on dirty working set with conflict" {
-    skiponoldformat
+    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -275,7 +306,7 @@ teardown() {
     dolt sql -q "INSERT INTO test VALUES (1, 'b')"
     run dolt stash pop
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: Your local changes to the following tables would be overwritten by merge" ]] || false
+    [[ "$output" =~ "error: Your local changes to the following tables would be overwritten by applying stash" ]] || false
     [[ "$output" =~ "The stash entry is kept in case you need it again." ]] || false
 
     run dolt sql -q "SELECT * FROM test" -r csv
@@ -285,11 +316,4 @@ teardown() {
     run dolt stash list
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
-}
-
-skiponoldformat() {
-    # dolt stash is not supported for old format ("__LD_1__")
-    if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ]; then
-        skip "dolt stash is not supported for old format: __LD_1__"
-    fi
 }

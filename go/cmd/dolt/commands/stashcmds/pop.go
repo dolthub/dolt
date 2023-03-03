@@ -44,7 +44,7 @@ You need to resolve the conflicts by hand and call dolt stash drop manually afte
 
 type StashPopCmd struct{}
 
-// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd StashPopCmd) Name() string {
 	return "pop"
 }
@@ -118,9 +118,9 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 
 	if len(tablesWithConflict) > 0 {
 		tblNames := strings.Join(tablesWithConflict, "', '")
-		cli.Printf("error: Your local changes to the following tables would be overwritten by merge:\n"+
-			"\tconflicts in table {'%s'}\n"+
-			"Please commit your changes or stash them before you merge.\nAborting\n", tblNames)
+		cli.Printf("error: Your local changes to the following tables would be overwritten by applying stash %d:\n"+
+			"\t{'%s'}\n"+
+			"Please commit your changes or stash them before you merge.\nAborting\n", idx, tblNames)
 	}
 
 	ret := commands.StatusCmd{}.Exec(ctx, "status", []string{}, dEnv)
@@ -151,7 +151,7 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 }
 
 func getStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, workingRoot *doltdb.RootValue, idx int) (*doltdb.RootValue, map[string]*merge.MergeStats, error) {
-	stashRoot, headCommit, err := dEnv.DoltDB.GetStashAtIdx(ctx, idx)
+	stashRoot, headCommit, err := dEnv.DoltDB.GetStashRootAndHeadCommitAtIdx(ctx, idx)
 	if err != nil {
 		return nil, nil, err
 	}

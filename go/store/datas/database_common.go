@@ -550,10 +550,11 @@ func (db *database) doTag(ctx context.Context, datasetID string, tagAddr hash.Ha
 // on the stash list itself.
 func (db *database) UpdateStashList(ctx context.Context, ds Dataset, stashListAddr hash.Hash) (Dataset, error) {
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
+		// TODO: this function needs concurrency control for using stash in SQL context
 		// this will update the dataset for stashes address map
 		return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
-			// TODO: this is for old format, so this should not happen?
-			return datasets, nil
+			// this is for old format, so this should not happen
+			return datasets, errors.New("UpdateStashList: stash is not supported for old storage format")
 		}, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
 			ae := am.Editor()
 			err := ae.Update(ctx, ds.ID(), stashListAddr)

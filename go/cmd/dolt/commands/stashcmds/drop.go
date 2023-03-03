@@ -39,7 +39,7 @@ Removes a single stash entry at given index from the list of stash entries.`,
 
 type StashDropCmd struct{}
 
-// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd StashDropCmd) Name() string {
 	return "drop"
 }

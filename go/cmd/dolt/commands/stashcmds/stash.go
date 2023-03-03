@@ -54,7 +54,7 @@ The command saves your local modifications away and reverts the working director
 
 type StashCmd struct{}
 
-// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd StashCmd) Name() string {
 	return "stash"
 }
@@ -135,6 +135,9 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv) error {
 	}
 
 	// TODO: handle cases with staged changes?
+	if !headHash.Equal(stagedHash) {
+		return fmt.Errorf("Stashing staged set of changes support is coming soon")
+	}
 
 	curHeadRef := dEnv.RepoStateReader().CWBHeadRef()
 	curBranchName := curHeadRef.String()

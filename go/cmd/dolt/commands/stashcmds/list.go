@@ -35,7 +35,7 @@ var stashListDocs = cli.CommandDocumentationContent{
 
 type StashListCmd struct{}
 
-// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd StashListCmd) Name() string {
 	return "list"
 }

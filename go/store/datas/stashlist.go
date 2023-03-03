@@ -43,6 +43,10 @@ func (s *StashList) Addr() hash.Hash {
 	return s.addr
 }
 
+func (s *StashList) Count() (int, error) {
+	return s.am.Count()
+}
+
 type stashHead struct {
 	key  int
 	addr hash.Hash
@@ -107,31 +111,6 @@ func (s *StashList) getAllStashes(ctx context.Context) ([]*stashHead, error) {
 	return getStashListOrdered(ctx, s.am, amCount), nil
 }
 
-// ClearAllStashes returns address hash of updated stash list map after removing all stash entries in the stash list.
-func (s *StashList) ClearAllStashes(ctx context.Context, vw types.ValueWriter) (hash.Hash, error) {
-	amCount, err := s.am.Count()
-	if err != nil {
-		return hash.Hash{}, err
-	}
-	if amCount == 0 {
-		return s.addr, nil
-	}
-
-	ame := s.am.Editor()
-	err = s.am.IterAll(ctx, func(key string, addr hash.Hash) error {
-		return ame.Delete(ctx, key)
-	})
-	if err != nil {
-		return hash.Hash{}, err
-	}
-
-	s.am, err = ame.Flush(ctx)
-	if err != nil {
-		return hash.Hash{}, err
-	}
-	return s.updateStashListMap(ctx, vw)
-}
-
 // updateStashListMap returns address hash of updated stash list map.
 func (s *StashList) updateStashListMap(ctx context.Context, vw types.ValueWriter) (hash.Hash, error) {
 	// update stash map data and reset the stash map's hash
@@ -165,9 +144,9 @@ func (s *StashList) getStashAtIdx(ctx context.Context, idx int) (hash.Hash, erro
 
 // IsStashList determines whether the types.Value is a stash list object.
 func IsStashList(v types.Value) (bool, error) {
-	if s, ok := v.(types.Struct); ok {
-		// TODO: do we need this check, as stash is not supported for old format
-		return s.Name() == stashListName, nil
+	if _, ok := v.(types.Struct); ok {
+		// this should not return true as stash is not supported for old format
+		return false, nil
 	} else if sm, ok := v.(types.SerialMessage); ok {
 		return serial.GetFileID(sm) == serial.StashListFileID, nil
 	} else {
@@ -281,13 +260,10 @@ func getStashListOrdered(ctx context.Context, am prolly.AddressMap, count int) [
 // getNthStash returns the stash at n-th position in the ordered stash list.
 func getNthStash(ctx context.Context, am prolly.AddressMap, count, idx int) (*stashHead, error) {
 	var stashList = getStashListOrdered(ctx, am, count)
-	for j, addr := range stashList {
-		if j == idx {
-			return addr, nil
-		}
+	if count <= idx {
+		return nil, fmt.Errorf("error: stash list only has %v entries", idx)
 	}
-
-	return nil, errors.New(fmt.Sprintf("could not find the stash element at postion %v", idx))
+	return stashList[idx], nil
 }
 
 func stashlist_flatbuffer(am prolly.AddressMap) serial.Message {
@@ -301,7 +277,7 @@ func stashlist_flatbuffer(am prolly.AddressMap) serial.Message {
 
 func parse_stashlist(bs []byte, ns tree.NodeStore) (prolly.AddressMap, error) {
 	if serial.GetFileID(bs) != serial.StashListFileID {
-		panic("expected stash list file id, got: " + serial.GetFileID(bs))
+		return prolly.AddressMap{}, fmt.Errorf("expected stash list file id, got: " + serial.GetFileID(bs))
 	}
 	sr, err := serial.TryGetRootAsStashList(bs, serial.MessagePrefixSz)
 	if err != nil {
