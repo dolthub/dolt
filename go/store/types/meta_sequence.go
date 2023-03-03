@@ -653,7 +653,7 @@ func (es emptySequence) Less(ctx context.Context, nbf *NomsBinFormat, other Less
 	panic("empty sequence")
 }
 
-func (es emptySequence) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error) {
+func (es emptySequence) Compare(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (int, error) {
 	panic("empty sequence")
 }
 

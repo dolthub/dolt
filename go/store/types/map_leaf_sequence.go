@@ -562,7 +562,7 @@ func (mes mapEntrySequence) Less(ctx context.Context, nbf *NomsBinFormat, other 
 	panic("not implemented")
 }
 
-func (mes mapEntrySequence) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error) {
+func (mes mapEntrySequence) Compare(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (int, error) {
 	panic("not implemented")
 }
 

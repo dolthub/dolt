@@ -283,7 +283,7 @@ func (v valueImpl) Less(ctx context.Context, nbf *NomsBinFormat, other LesserVal
 	return isLess, nil
 }
 
-func (v valueImpl) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error) {
+func (v valueImpl) Compare(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (int, error) {
 	return valueCompare(nbf, v, other.(Value))
 }
 

@@ -56,7 +56,7 @@ func NewEmptyBlob(vrw ValueReadWriter) (Blob, error) {
 
 // Less implements the LesserValuable interface.
 func (b Blob) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
-	res, err := b.Compare(nbf, other)
+	res, err := b.Compare(ctx, nbf, other)
 	if err != nil {
 		return false, err
 	}
@@ -64,10 +64,9 @@ func (b Blob) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable
 	return res < 0, nil
 }
 
-func (b Blob) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error) {
+func (b Blob) Compare(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (int, error) {
 	if b2, ok := other.(Blob); ok {
 		// Blobs can have an arbitrary length, so we compare in chunks rather than loading it entirely
-		ctx := context.Background()
 		b1Length := b.Len()
 		b2Length := b2.Len()
 		b1Reader := b.Reader(ctx)

@@ -112,7 +112,7 @@ func (ts testSequence) Less(ctx context.Context, nbf *NomsBinFormat, other Lesse
 	panic("not reached")
 }
 
-func (ts testSequence) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error) {
+func (ts testSequence) Compare(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (int, error) {
 	panic("not reached")
 }
 

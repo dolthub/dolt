@@ -38,7 +38,7 @@ func NewStash(ctx context.Context, nbf *types.NomsBinFormat, vrw types.ValueRead
 			return hash.Hash{}, types.Ref{}, err
 		}
 
-		isCommit, err := IsCommit(headCommit)
+		isCommit, err := IsCommit(ctx, headCommit)
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
 		}

@@ -824,7 +824,7 @@ func (t Tuple) TupleCompare(ctx context.Context, nbf *NomsBinFormat, otherTuple 
 			if err != nil {
 				return 0, err
 			}
-			res, err = blob.Compare(nbf, otherBlob)
+			res, err = blob.Compare(ctx, nbf, otherBlob)
 			if err != nil {
 				return 0, err
 			}

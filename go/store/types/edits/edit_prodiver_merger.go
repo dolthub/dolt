@@ -159,7 +159,7 @@ func (fep *EPMerger) ReachedEOF() bool {
 }
 
 type comparableValue interface {
-	Compare(ctx context.Context, vr types.ValueReader, other types.LesserValuable) (int, error)
+	Compare(ctx context.Context, nbf *types.NomsBinFormat, other types.LesserValuable) (int, error)
 }
 
 // search does a binary search or a sorted []entry and returns an integer representing the insertion index where the
@@ -174,7 +174,7 @@ func search(ctx context.Context, vr types.ValueReader, readerIdx int, key types.
 			}
 
 			var res int
-			res, err = comparable.Compare(ctx, vr, vals[i].key)
+			res, err = comparable.Compare(ctx, vr.Format(), vals[i].key)
 			if err != nil {
 				return false
 			} else if res < 0 {

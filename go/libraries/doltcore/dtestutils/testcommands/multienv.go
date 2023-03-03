@@ -298,10 +298,10 @@ func createTestDataTable(ctx context.Context, ddb *doltdb.DoltDB) (*table.InMemT
 	return imt, sch
 }
 
-func (mr *MultiRepoTestSetup) CreateTable(dbName, tblName string) {
+func (mr *MultiRepoTestSetup) CreateTable(ctx context.Context, dbName, tblName string) {
 	dEnv := mr.envs[dbName]
 
-	imt, sch := createTestDataTable(context.TODO(), dEnv.DoltDB)
+	imt, sch := createTestDataTable(ctx, dEnv.DoltDB)
 	rows := make([]row.Row, imt.NumRows())
 	for i := 0; i < imt.NumRows(); i++ {
 		r, err := imt.GetRow(i)

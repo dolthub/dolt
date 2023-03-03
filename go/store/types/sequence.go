@@ -47,7 +47,7 @@ type sequence interface {
 	Kind() NomsKind
 	Len() uint64
 	Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error)
-	Compare(nbf *NomsBinFormat, other LesserValuable) (int, error)
+	Compare(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (int, error)
 	numLeaves() uint64
 	seqLen() int
 	treeLevel() uint64
