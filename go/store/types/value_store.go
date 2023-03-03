@@ -73,10 +73,10 @@ type ValueReadWriter interface {
 // Currently, WriteValue validates the following properties of a Value v:
 // - v can be correctly serialized and its Ref taken
 type ValueStore struct {
-	cs                   chunks.ChunkStore
-	validateContentAddr  bool
-	decodedChunks        *sizecache.SizeCache
-	nbf                  *NomsBinFormat
+	cs                  chunks.ChunkStore
+	validateContentAddr bool
+	decodedChunks       *sizecache.SizeCache
+	nbf                 *NomsBinFormat
 
 	gcMu    sync.RWMutex
 	gcCond  *sync.Cond
@@ -141,9 +141,9 @@ func NewValueStore(cs chunks.ChunkStore) *ValueStore {
 
 func newValueStoreWithCacheAndPending(cs chunks.ChunkStore, cacheSize, pendingMax uint64) *ValueStore {
 	vs := &ValueStore{
-		cs: cs,
-		decodedChunks:        sizecache.New(cacheSize),
-		versOnce:             sync.Once{},
+		cs:            cs,
+		decodedChunks: sizecache.New(cacheSize),
+		versOnce:      sync.Once{},
 	}
 	vs.gcCond = sync.NewCond(&vs.gcMu)
 	return vs
