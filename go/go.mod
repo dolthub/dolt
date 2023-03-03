@@ -58,7 +58,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.1.3
 	github.com/cespare/xxhash v1.1.0
 	github.com/creasty/defaults v1.6.0
-	github.com/dolthub/go-mysql-server v0.14.1-0.20230302200901-1fcf1b00e774
+	github.com/dolthub/go-mysql-server v0.14.1-0.20230303195136-b771043c9f13
 	github.com/google/flatbuffers v2.0.6+incompatible
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
