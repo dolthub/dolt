@@ -40,16 +40,16 @@ func (tvs TupleValueSlice) Kind() NomsKind {
 	return TupleKind
 }
 
-func (tvs TupleValueSlice) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (tvs TupleValueSlice) Less(ctx context.Context, vr ValueReader, other LesserValuable) (bool, error) {
 	switch typedOther := other.(type) {
 	case Tuple:
-		val, err := NewTuple(nbf, tvs...)
+		val, err := NewTuple(vr.Format(), tvs...)
 
 		if err != nil {
 			return false, err
 		}
 
-		return typedOther.Less(nbf, val)
+		return typedOther.Less(ctx, vr, val)
 
 	case TupleValueSlice:
 		myLen := len(tvs)
@@ -77,7 +77,7 @@ func (tvs TupleValueSlice) Less(nbf *NomsBinFormat, other LesserValuable) (bool,
 			}
 
 			if !val.Equals(otherVal) {
-				return val.Less(nbf, otherVal)
+				return val.Less(ctx, vr, otherVal)
 			}
 		}
 
@@ -659,7 +659,7 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	return
 }
 
-func (t Tuple) TupleCompare(nbf *NomsBinFormat, otherTuple Tuple) (int, error) {
+func (t Tuple) TupleCompare(ctx context.Context, vr ValueReader, otherTuple Tuple) (int, error) {
 	itrs := tupItrPairPool.Get().(*tupleItrPair)
 	defer tupItrPairPool.Put(itrs)
 
@@ -775,8 +775,8 @@ func (t Tuple) TupleCompare(nbf *NomsBinFormat, otherTuple Tuple) (int, error) {
 			res = d.Cmp(otherD)
 
 		case FloatKind:
-			f := dec.ReadFloat(nbf)
-			otherF := otherDec.ReadFloat(nbf)
+			f := dec.ReadFloat(vr.Format())
+			otherF := otherDec.ReadFloat(vr.Format())
 			res = int(f - otherF)
 
 			if f == otherF {
@@ -824,19 +824,19 @@ func (t Tuple) TupleCompare(nbf *NomsBinFormat, otherTuple Tuple) (int, error) {
 			if err != nil {
 				return 0, err
 			}
-			res, err = blob.Compare(nbf, otherBlob)
+			res, err = blob.Compare(vr.Format(), otherBlob)
 			if err != nil {
 				return 0, err
 			}
 
 		default:
-			v, err := dec.readValue(nbf)
+			v, err := dec.readValue(vr.Format())
 
 			if err != nil {
 				return 0, err
 			}
 
-			otherV, err := otherDec.readValue(nbf)
+			otherV, err := otherDec.readValue(vr.Format())
 
 			if err != nil {
 				return 0, err
@@ -845,7 +845,7 @@ func (t Tuple) TupleCompare(nbf *NomsBinFormat, otherTuple Tuple) (int, error) {
 			if v.Equals(otherV) {
 				continue
 			} else {
-				isLess, err := v.Less(nbf, otherV)
+				isLess, err := v.Less(ctx, vr, otherV)
 				if err != nil {
 					return 0, err
 				} else if isLess {
@@ -864,13 +864,13 @@ func (t Tuple) TupleCompare(nbf *NomsBinFormat, otherTuple Tuple) (int, error) {
 	return int(itr.Len()) - int(otherItr.Len()), nil
 }
 
-func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (t Tuple) Less(ctx context.Context, vr ValueReader, other LesserValuable) (bool, error) {
 	otherTuple, ok := other.(Tuple)
 	if !ok {
 		return TupleKind < other.Kind(), nil
 	}
 
-	res, err := t.TupleCompare(nbf, otherTuple)
+	res, err := t.TupleCompare(ctx, vr, otherTuple)
 	if err != nil {
 		return false, err
 	}
@@ -878,13 +878,13 @@ func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	return res < 0, err
 }
 
-func (t Tuple) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error) {
+func (t Tuple) Compare(ctx context.Context, vr ValueReader, other LesserValuable) (int, error) {
 	otherTuple, ok := other.(Tuple)
 	if !ok {
 		return int(TupleKind) - int(other.Kind()), nil
 	}
 
-	res, err := t.TupleCompare(nbf, otherTuple)
+	res, err := t.TupleCompare(ctx, vr, otherTuple)
 	if err != nil {
 		return 0, err
 	}

@@ -57,7 +57,7 @@ func newTag(ctx context.Context, db *database, commitAddr hash.Hash, meta *TagMe
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
 		}
-		iscommit, err := IsCommit(commitSt)
+		iscommit, err := IsCommit(ctx, commitSt)
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
 		}
@@ -132,9 +132,9 @@ func tag_flatbuffer(commitAddr hash.Hash, meta *TagMeta) serial.Message {
 	return serial.FinishMessage(builder, serial.TagEnd(builder), []byte(serial.TagFileID))
 }
 
-func IsTag(v types.Value) (bool, error) {
+func IsTag(ctx context.Context, v types.Value) (bool, error) {
 	if s, ok := v.(types.Struct); ok {
-		return types.IsValueSubtypeOf(s.Format(), v, valueTagType)
+		return types.IsValueSubtypeOf(ctx, s.Format(), v, valueTagType)
 	} else if sm, ok := v.(types.SerialMessage); ok {
 		data := []byte(sm)
 		return serial.GetFileID(data) == serial.TagFileID, nil

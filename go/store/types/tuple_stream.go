@@ -191,7 +191,7 @@ func TupleReaderAsEditProvider(rd TupleReader) EditProvider {
 	return &TupleReadingEditProvider{rd: rd}
 }
 
-func (t TupleReadingEditProvider) Next() (*KVP, error) {
+func (t TupleReadingEditProvider) Next(ctx context.Context) (*KVP, error) {
 	k, err := t.rd.Read()
 
 	if err == io.EOF {

@@ -202,7 +202,7 @@ func (v NomsJSON) Compare(ctx *sql.Context, other gmstypes.JSONValue) (cmp int, 
 		return doc.Compare(ctx, other)
 	}
 
-	return types.JSON(v).Compare(types.JSON(noms))
+	return types.JSON(v).Compare(ctx, types.JSON(noms))
 }
 
 // ToString implements the sql.JSONValue interface.

@@ -72,7 +72,8 @@ func (ts testSequence) getCompareFn(other sequence) compareFn {
 }
 
 func (ts testSequence) valueReadWriter() ValueReadWriter {
-	panic("not reached")
+	// will panic if it is used
+	return nil
 }
 
 func (ts testSequence) writeTo(nomsWriter, *NomsBinFormat) error {
@@ -108,7 +109,7 @@ func (ts testSequence) kvTuples(from, to uint64, dest []Tuple) ([]Tuple, error) 
 	panic("not reached")
 }
 
-func (ts testSequence) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (ts testSequence) Less(ctx context.Context, vr ValueReader, other LesserValuable) (bool, error) {
 	panic("not reached")
 }
 

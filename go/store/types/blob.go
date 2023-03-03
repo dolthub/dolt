@@ -55,8 +55,8 @@ func NewEmptyBlob(vrw ValueReadWriter) (Blob, error) {
 }
 
 // Less implements the LesserValuable interface.
-func (b Blob) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
-	res, err := b.Compare(nbf, other)
+func (b Blob) Less(ctx context.Context, vr ValueReader, other LesserValuable) (bool, error) {
+	res, err := b.Compare(vr.Format(), other)
 	if err != nil {
 		return false, err
 	}
@@ -348,7 +348,7 @@ func newEmptyBlobChunker(ctx context.Context, vrw ValueReadWriter) (*sequenceChu
 }
 
 func makeBlobLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
-	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64, error) {
+	return func(ctx context.Context, level uint64, items []sequenceItem) (Collection, orderedKey, uint64, error) {
 		d.PanicIfFalse(level == 0)
 		buff := make([]byte, len(items))
 

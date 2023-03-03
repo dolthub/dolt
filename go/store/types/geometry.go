@@ -42,8 +42,8 @@ func (v Geometry) Equals(other Value) bool {
 	return v.Inner.Equals(other)
 }
 
-func (v Geometry) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
-	return v.Inner.Less(nbf, other)
+func (v Geometry) Less(ctx context.Context, vr ValueReader, other LesserValuable) (bool, error) {
+	return v.Inner.Less(ctx, vr, other)
 }
 
 func (v Geometry) Hash(nbf *NomsBinFormat) (hash.Hash, error) {

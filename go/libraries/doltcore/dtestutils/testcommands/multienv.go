@@ -280,7 +280,7 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 	return commit
 }
 
-func createTestDataTable() (*table.InMemTable, schema.Schema) {
+func createTestDataTable(ctx context.Context, ddb *doltdb.DoltDB) (*table.InMemTable, schema.Schema) {
 	rows, sch, err := dtestutils.RowsAndSchema()
 	if err != nil {
 		panic(err)
@@ -289,7 +289,7 @@ func createTestDataTable() (*table.InMemTable, schema.Schema) {
 	imt := table.NewInMemTable(sch)
 
 	for _, r := range rows {
-		err := imt.AppendRow(r)
+		err := imt.AppendRow(ctx, ddb.ValueReadWriter(), r)
 		if err != nil {
 			panic(err)
 		}
@@ -301,7 +301,7 @@ func createTestDataTable() (*table.InMemTable, schema.Schema) {
 func (mr *MultiRepoTestSetup) CreateTable(dbName, tblName string) {
 	dEnv := mr.envs[dbName]
 
-	imt, sch := createTestDataTable()
+	imt, sch := createTestDataTable(context.TODO(), dEnv.DoltDB)
 	rows := make([]row.Row, imt.NumRows())
 	for i := 0; i < imt.NumRows(); i++ {
 		r, err := imt.GetRow(i)

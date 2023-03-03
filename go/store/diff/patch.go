@@ -23,6 +23,7 @@ package diff
 
 import (
 	"bytes"
+	"context"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -34,7 +35,8 @@ type Patch []Difference
 
 type PatchSort struct {
 	patch Patch
-	nbf   *types.NomsBinFormat
+	ctx   context.Context
+	vr    types.ValueReader
 }
 
 func (ps PatchSort) Swap(i, j int) {
@@ -51,18 +53,18 @@ func (ps PatchSort) Less(i, j int) (bool, error) {
 	if ps.patch[i].Path.Equals(ps.patch[j].Path) {
 		return vals[ps.patch[i].ChangeType] < vals[ps.patch[j].ChangeType], nil
 	}
-	return pathIsLess(ps.nbf, ps.patch[i].Path, ps.patch[j].Path)
+	return pathIsLess(ps.ctx, ps.vr, ps.patch[i].Path, ps.patch[j].Path)
 }
 
 // Utility methods on path
 // TODO: Should these be on types.Path & types.PathPart?
-func pathIsLess(nbf *types.NomsBinFormat, p1, p2 types.Path) (bool, error) {
+func pathIsLess(ctx context.Context, vr types.ValueReader, p1, p2 types.Path) (bool, error) {
 	for i, pp1 := range p1 {
 		if len(p2) == i {
 			return false, nil // p1 > p2
 		}
 
-		idx, err := pathPartCompare(nbf, pp1, p2[i])
+		idx, err := pathPartCompare(ctx, vr, pp1, p2[i])
 
 		if err != nil {
 			return false, err
@@ -97,7 +99,7 @@ func fieldPathCompare(pp types.FieldPath, o types.PathPart) int {
 	panic("unreachable")
 }
 
-func indexPathCompare(nbf *types.NomsBinFormat, pp types.IndexPath, o types.PathPart) (int, error) {
+func indexPathCompare(ctx context.Context, vr types.ValueReader, pp types.IndexPath, o types.PathPart) (int, error) {
 	switch opp := o.(type) {
 	case types.FieldPath:
 		return 1, nil
@@ -111,7 +113,7 @@ func indexPathCompare(nbf *types.NomsBinFormat, pp types.IndexPath, o types.Path
 			}
 			return 1, nil
 		}
-		if isLess, err := pp.Index.Less(nbf, opp.Index); err != nil {
+		if isLess, err := pp.Index.Less(ctx, vr, opp.Index); err != nil {
 			return 0, err
 		} else if isLess {
 			return -1, nil
@@ -148,12 +150,12 @@ func hashIndexPathCompare(pp types.HashIndexPath, o types.PathPart) int {
 	panic("unreachable")
 }
 
-func pathPartCompare(nbf *types.NomsBinFormat, pp, pp2 types.PathPart) (int, error) {
+func pathPartCompare(ctx context.Context, vr types.ValueReader, pp, pp2 types.PathPart) (int, error) {
 	switch pp1 := pp.(type) {
 	case types.FieldPath:
 		return fieldPathCompare(pp1, pp2), nil
 	case types.IndexPath:
-		return indexPathCompare(nbf, pp1, pp2)
+		return indexPathCompare(ctx, vr, pp1, pp2)
 	case types.HashIndexPath:
 		return hashIndexPathCompare(pp1, pp2), nil
 	}
