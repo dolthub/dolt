@@ -862,7 +862,7 @@ func GetDiffTableSchemaAndJoiner(format *types.NomsBinFormat, fromSch, toSch sch
 			return nil, nil, err
 		}
 	} else {
-		fromSch, toSch, err = ResolveSchemaCollections(fromSch, toSch)
+		fromSch, toSch, err = expandFromToSchemas(fromSch, toSch)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -888,9 +888,9 @@ func GetDiffTableSchemaAndJoiner(format *types.NomsBinFormat, fromSch, toSch sch
 	return
 }
 
-// Convert schemas to ColCollections. One argument must be non-nil. If one is null, the result will be the columns
-// of the non-nil argument.
-func ResolveSchemaCollections(fromSch, toSch schema.Schema) (newFromSch, newToSch schema.Schema, err error) {
+// expandFromToSchemas converts input schemas to schemas appropriate for diffs. One argument must be
+// non-nil. If one is null, the result will be the columns of the non-nil argument.
+func expandFromToSchemas(fromSch, toSch schema.Schema) (newFromSch, newToSch schema.Schema, err error) {
 	var fromClmCol, toClmCol *schema.ColCollection
 	if fromSch == nil && toSch == nil {
 		return nil, nil, errors.New("non-nil argument required to CalculateDiffSchema")
@@ -921,8 +921,7 @@ func ResolveSchemaCollections(fromSch, toSch schema.Schema) (newFromSch, newToSc
 // CalculateDiffSchema returns the schema for the dolt_diff table based on the schemas from the from and to tables.
 // Either may be nil, in which case the nil argument will use the schema of the non-nil argument
 func CalculateDiffSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
-	//
-	fromSch, toSch, err := ResolveSchemaCollections(fromSch, toSch)
+	fromSch, toSch, err := expandFromToSchemas(fromSch, toSch)
 	if err != nil {
 		return nil, err
 	}
