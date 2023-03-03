@@ -939,11 +939,11 @@ func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) 
 	if err != nil {
 		// Log any errors, except for commits with "nothing to commit"
 		if err.Error() != "nothing to commit" {
-			msg := fmt.Sprintf("Error executing query")
 			ctx.GetLogger().WithFields(logrus.Fields{
 				"error": err.Error(),
 				"query": query,
-			}).Errorf(msg)
+			}).Errorf("Error executing query")
+			msg := fmt.Sprintf("Error executing query: %v", err.Error())
 			DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, msg)
 		}
 		return

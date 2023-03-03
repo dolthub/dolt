@@ -40,9 +40,6 @@ func TestMmapTableReader(t *testing.T) {
 	require.NoError(t, err)
 	defer file.RemoveAll(dir)
 
-	fc := newFDCache(1)
-	defer fc.Drop()
-
 	chunks := [][]byte{
 		[]byte("hello2"),
 		[]byte("goodbye2"),
@@ -54,7 +51,7 @@ func TestMmapTableReader(t *testing.T) {
 	err = os.WriteFile(filepath.Join(dir, h.String()), tableData, 0666)
 	require.NoError(t, err)
 
-	trc, err := newFileTableReader(ctx, dir, h, uint32(len(chunks)), &UnlimitedQuotaProvider{}, fc)
+	trc, err := newFileTableReader(ctx, dir, h, uint32(len(chunks)), &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	defer trc.close()
 	assertChunksInReader(chunks, trc, assert)

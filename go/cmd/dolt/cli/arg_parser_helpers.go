@@ -113,6 +113,7 @@ const (
 	DecorateFlag     = "decorate"
 	OneLineFlag      = "oneline"
 	ShallowFlag      = "shallow"
+	CachedFlag       = "cached"
 )
 
 const (
@@ -307,6 +308,12 @@ func CreateLogArgParser() *argparser.ArgParser {
 	ap.SupportsString(DecorateFlag, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
 	ap.SupportsFlag(OneLineFlag, "", "Shows logs in a compact format.")
 	ap.SupportsStringList(NotFlag, "", "revision", "Excludes commits from revision.")
+	return ap
+}
+
+func CreatePatchArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(CachedFlag, "c", "Show only the staged data changes.")
 	return ap
 }
 

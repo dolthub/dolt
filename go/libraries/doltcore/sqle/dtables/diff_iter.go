@@ -484,3 +484,66 @@ func maybeTime(t *time.Time) interface{} {
 	}
 	return nil
 }
+
+//------------------------------------
+// diffPartitionRowIter
+//------------------------------------
+
+var _ sql.RowIter = (*diffPartitionRowIter)(nil)
+
+type diffPartitionRowIter struct {
+	diffPartitions   *DiffPartitions
+	ddb              *doltdb.DoltDB
+	joiner           *rowconv.Joiner
+	currentPartition *sql.Partition
+	currentRowIter   *sql.RowIter
+}
+
+func NewDiffPartitionRowIter(partition sql.Partition, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) *diffPartitionRowIter {
+	return &diffPartitionRowIter{
+		currentPartition: &partition,
+		ddb:              ddb,
+		joiner:           joiner,
+	}
+}
+
+func (itr *diffPartitionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
+	for {
+		if itr.currentPartition == nil {
+			nextPartition, err := itr.diffPartitions.Next(ctx)
+			if err != nil {
+				return nil, err
+			}
+			itr.currentPartition = &nextPartition
+		}
+
+		if itr.currentRowIter == nil {
+			dp := (*itr.currentPartition).(DiffPartition)
+			rowIter, err := dp.GetRowIter(ctx, itr.ddb, itr.joiner, sql.IndexLookup{})
+			if err != nil {
+				return nil, err
+			}
+			itr.currentRowIter = &rowIter
+		}
+
+		row, err := (*itr.currentRowIter).Next(ctx)
+		if err == io.EOF {
+			itr.currentPartition = nil
+			itr.currentRowIter = nil
+
+			if itr.diffPartitions == nil {
+				return nil, err
+			}
+
+			continue
+		} else if err != nil {
+			return nil, err
+		} else {
+			return row, nil
+		}
+	}
+}
+
+func (itr *diffPartitionRowIter) Close(_ *sql.Context) error {
+	return nil
+}

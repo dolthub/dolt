@@ -119,13 +119,7 @@ func NewTestSQLCtx(ctx context.Context) *sql.Context {
 }
 
 func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider) *sql.Context {
-	s, err := dsess.NewDoltSession(
-		sql.NewEmptyContext(),
-		sql.NewBaseSession(),
-		pro,
-		config2.NewMapConfig(make(map[string]string)),
-		branch_control.CreateDefaultController(),
-	)
+	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config2.NewMapConfig(make(map[string]string)), branch_control.CreateDefaultController())
 	if err != nil {
 		panic(err)
 	}

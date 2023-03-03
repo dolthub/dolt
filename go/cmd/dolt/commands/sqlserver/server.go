@@ -141,7 +141,6 @@ func Serve(
 
 	// Create SQL Engine with users
 	config := &engine.SqlEngineConfig{
-		InitialDb:               "",
 		IsReadOnly:              serverConfig.ReadOnly(),
 		PrivFilePath:            serverConfig.PrivilegeFilePath(),
 		BranchCtrlFilePath:      serverConfig.BranchControlFilePath(),
@@ -231,7 +230,7 @@ func Serve(
 	var remoteSrv *remotesrv.Server
 	if serverConfig.RemotesapiPort() != nil {
 		port := *serverConfig.RemotesapiPort()
-		if remoteSrvSqlCtx, err := sqlEngine.NewContext(ctx); err == nil {
+		if remoteSrvSqlCtx, err := sqlEngine.NewDefaultContext(ctx); err == nil {
 			listenaddr := fmt.Sprintf(":%d", port)
 			args := sqle.RemoteSrvServerArgs(remoteSrvSqlCtx, remotesrv.ServerArgs{
 				Logger:         logrus.NewEntry(lgr),
@@ -263,7 +262,7 @@ func Serve(
 
 	var clusterRemoteSrv *remotesrv.Server
 	if clusterController != nil {
-		if remoteSrvSqlCtx, err := sqlEngine.NewContext(ctx); err == nil {
+		if remoteSrvSqlCtx, err := sqlEngine.NewDefaultContext(ctx); err == nil {
 			args := clusterController.RemoteSrvServerArgs(remoteSrvSqlCtx, remotesrv.ServerArgs{
 				Logger: logrus.NewEntry(lgr),
 			})
@@ -398,7 +397,7 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 
 		varsForUser := userToSessionVars[conn.User]
 		if len(varsForUser) > 0 {
-			sqlCtx, err := se.NewContext(ctx)
+			sqlCtx, err := se.NewContext(ctx, dsess)
 			if err != nil {
 				return nil, err
 			}

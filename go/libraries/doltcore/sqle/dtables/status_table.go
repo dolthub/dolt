@@ -130,7 +130,7 @@ func handleStagedUnstagedTables(staged, unstaged []diff.TableDelta, itr *StatusI
 			itr.statuses[idx] = tblDiffTypeToLabel[diff.RemovedTable]
 		} else if td.IsRename() {
 			itr.tables[idx] = fmt.Sprintf("%s -> %s", td.FromName, td.ToName)
-			itr.statuses[idx] = tblDiffTypeToLabel[diff.RemovedTable]
+			itr.statuses[idx] = tblDiffTypeToLabel[diff.RenamedTable]
 		} else {
 			itr.tables[idx] = td.CurName()
 			itr.statuses[idx] = tblDiffTypeToLabel[diff.ModifiedTable]

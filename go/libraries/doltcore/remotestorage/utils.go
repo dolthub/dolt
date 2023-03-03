@@ -14,7 +14,9 @@
 
 package remotestorage
 
-import "github.com/dolthub/dolt/go/store/hash"
+import (
+	"github.com/dolthub/dolt/go/store/hash"
+)
 
 // HashesToSlices takes a list of hashes and converts each hash to a byte slice returning a slice of byte slices
 func HashesToSlices(hashes []hash.Hash) [][]byte {

@@ -44,20 +44,9 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 		return nil, err
 	}
 
-	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
-	var dbName string
-	mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
-		dbName = name
-		return true, nil
-	})
-
 	config := &engine.SqlEngineConfig{
-		InitialDb:    dbName,
-		IsReadOnly:   false,
-		PrivFilePath: "",
-		ServerUser:   "root",
-		ServerPass:   "",
-		Autocommit:   true,
+		ServerUser: "root",
+		Autocommit: true,
 	}
 	se, err := engine.NewSqlEngine(
 		ctx,
@@ -69,13 +58,11 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 		return nil, err
 	}
 
-	sqlCtx, err := se.NewContext(ctx)
+	sqlCtx, err := se.NewLocalContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	// Add root client
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
 
 	sch, iter, err := se.Query(sqlCtx, fmt.Sprintf("SELECT * FROM `%s`", tableName))
 	if err != nil {

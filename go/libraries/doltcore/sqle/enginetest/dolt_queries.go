@@ -777,6 +777,99 @@ var DoltScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "test hashof",
+		SetUpScript: []string{
+			"CREATE TABLE hashof_test (pk int primary key, c1 int)",
+			"INSERT INTO hashof_test values (1,1), (2,2), (3,3)",
+			"CALL DOLT_ADD('hashof_test')",
+			"CALL DOLT_COMMIT('-a', '-m', 'first commit')",
+			"SET @Commit1 = (SELECT commit_hash FROM DOLT_LOG() LIMIT 1)",
+			"INSERT INTO hashof_test values (4,4), (5,5), (6,6)",
+			"CALL DOLT_COMMIT('-a', '-m', 'second commit')",
+			"SET @Commit2 = (SELECT commit_hash from DOLT_LOG() LIMIT 1)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT (hashof(@Commit1) = hashof(@Commit2))",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query: "SELECT (hashof(@Commit1) = hashof('HEAD~1'))",
+				Expected: []sql.Row{
+					{true},
+				},
+			},
+			{
+				Query: "SELECT (hashof(@Commit2) = hashof('HEAD'))",
+				Expected: []sql.Row{
+					{true},
+				},
+			},
+			{
+				Query: "SELECT (hashof(@Commit2) = hashof('main'))",
+				Expected: []sql.Row{
+					{true},
+				},
+			},
+			{
+				Query:          "SELECT hashof('non_branch')",
+				ExpectedErrStr: "invalid ref spec",
+			},
+			{
+				// Test that a short commit is invalid. This may change in the future.
+				Query:          "SELECT hashof(left(@Commit2,30))",
+				ExpectedErrStr: "invalid ref spec",
+			},
+		},
+	},
+	{
+		Name: "simple tests on DOLT_PATCH() stored procedure",
+		SetUpScript: []string{
+			"CREATE TABLE parent (id int PRIMARY KEY, id_ext int, v1 int, v2 text, INDEX v1 (v1));",
+			"CREATE TABLE child (id int primary key, v1 int);",
+			"CALL DOLT_COMMIT('-Am','added tables')",
+
+			"ALTER TABLE child ADD CONSTRAINT fk_named FOREIGN KEY (v1) REFERENCES parent(v1);",
+			"insert into parent values (0, 1, 2, NULL);",
+			"ALTER TABLE parent DROP PRIMARY KEY;",
+			"ALTER TABLE parent ADD PRIMARY KEY(id, id_ext);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "CALL DOLT_PATCH()",
+				Expected: []sql.Row{
+					{"ALTER TABLE `child` ADD INDEX `v1`(`v1`);"},
+					{"ALTER TABLE `child` ADD CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`);"},
+					{"ALTER TABLE `parent` DROP PRIMARY KEY;"},
+					{"ALTER TABLE `parent` ADD PRIMARY KEY (id,id_ext);"}},
+			},
+			{
+				Query: "CALL DOLT_PATCH('HEAD~')",
+				Expected: []sql.Row{
+					{"CREATE TABLE `child` (\n  `id` int NOT NULL,\n  `v1` int,\n  PRIMARY KEY (`id`),\n  KEY `v1` (`v1`),\n  CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"CREATE TABLE `parent` (\n  `id` int NOT NULL,\n  `id_ext` int NOT NULL,\n  `v1` int,\n  `v2` text,\n  PRIMARY KEY (`id`,`id_ext`),\n  KEY `v1` (`v1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"INSERT INTO `parent` (`id`,`id_ext`,`v1`,`v2`) VALUES (0,1,2,NULL);"}},
+			},
+			{
+				Query: "CALL DOLT_PATCH('child')",
+				Expected: []sql.Row{
+					{"ALTER TABLE `child` ADD INDEX `v1`(`v1`);"},
+					{"ALTER TABLE `child` ADD CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`);"}},
+			},
+			{
+				Query: "SHOW WARNINGS;",
+				Expected: []sql.Row{
+					{"Warning", 1235, "Incompatible schema change, skipping data diff for table 'child'"}},
+			},
+			{
+				Query: "CALL DOLT_PATCH('HEAD','HEAD~','parent')",
+				Expected: []sql.Row{
+					{"DROP TABLE `parent`;"},
+				},
+			},
+		},
+	},
 }
 
 func makeLargeInsert(sz int) string {

@@ -60,6 +60,14 @@ type s3svc interface {
 	PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput, opts ...request.Option) (*s3.PutObjectOutput, error)
 }
 
+func (s3tra *s3TableReaderAt) Close() error {
+	return nil
+}
+
+func (s3tra *s3TableReaderAt) clone() (tableReaderAt, error) {
+	return s3tra, nil
+}
+
 func (s3tra *s3TableReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {
 	return s3tra.s3.Reader(ctx, s3tra.h)
 }
