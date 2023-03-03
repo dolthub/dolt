@@ -143,9 +143,9 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}},
 			right: [][]int{{1, 1}, {2, 3}, {3, 4}, {4, 4}, {5, 6}},
 			exp: []testDiff{
-				{op: DiffOpDivergentClashConflict, k: 2},
-				{op: DiffOpDivergentClashConflict, k: 3},
-				{op: DiffOpDivergentClashConflict, k: 5},
+				{op: DiffOpDivergentModifyConflict, k: 2},
+				{op: DiffOpDivergentModifyConflict, k: 3},
+				{op: DiffOpDivergentModifyConflict, k: 5},
 			},
 		},
 		{
@@ -154,9 +154,9 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1, 1}, {2, 2, 3}, {3, 3, 4}, {4, 4, 4}, {5, 5, 6}},
 			right: [][]int{{1, 1, 1}, {2, 3, 2}, {3, 4, 3}, {4, 4, 4}, {5, 6, 5}},
 			exp: []testDiff{
-				{op: DiffOpDivergentResolved, k: 2, m: []int{3, 3}},
-				{op: DiffOpDivergentResolved, k: 3, m: []int{4, 4}},
-				{op: DiffOpDivergentResolved, k: 5, m: []int{6, 6}},
+				{op: DiffOpDivergentModifyResolved, k: 2, m: []int{3, 3}},
+				{op: DiffOpDivergentModifyResolved, k: 3, m: []int{4, 4}},
+				{op: DiffOpDivergentModifyResolved, k: 5, m: []int{6, 6}},
 			},
 		},
 		{
@@ -165,10 +165,10 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1, 1}, {2, 2, 3}, {3, 3, 4}, {5, 5, 6}, {6, 6, 6}},
 			right: [][]int{{1, 1, 1}, {2, 3, 4}, {3, 4, 3}, {4, 4, 4}, {5, 6, 5}, {7, 7, 7}},
 			exp: []testDiff{
-				{op: DiffOpDivergentClashConflict, k: 2},
-				{op: DiffOpDivergentResolved, k: 3, m: []int{4, 4}},
+				{op: DiffOpDivergentModifyConflict, k: 2},
+				{op: DiffOpDivergentModifyResolved, k: 3, m: []int{4, 4}},
 				{op: DiffOpLeftDelete, k: 4},
-				{op: DiffOpDivergentResolved, k: 5, m: []int{6, 6}},
+				{op: DiffOpDivergentModifyResolved, k: 5, m: []int{6, 6}},
 				{op: DiffOpLeftEdit, k: 6},
 				{op: DiffOpRightEdit, k: 7},
 				{op: DiffOpConvergentEdit, k: 8},
@@ -253,7 +253,7 @@ func compareDiffs(t *testing.T, exp, cmp testDiff) {
 	require.Equal(t, exp.op, cmp.op, fmt.Sprintf("unequal diffs:\nexp: %s\nfnd: %s", exp, cmp))
 	require.Equal(t, exp.k, cmp.k, fmt.Sprintf("unequal diffs:\nexp: %s\nfnd: %s", exp, cmp))
 	switch exp.op {
-	case DiffOpDivergentResolved:
+	case DiffOpDivergentModifyResolved:
 		require.Equal(t, exp.m, cmp.m, fmt.Sprintf("unequal resolved:\nexp: %#v\nfnd: %#v", exp.m, cmp.m))
 	}
 }

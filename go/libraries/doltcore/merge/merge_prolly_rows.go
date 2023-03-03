@@ -205,9 +205,9 @@ func mergeProllyRowData(
 
 	vMerger := newValueMerger(finalSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool())
 
-	//patches := newPatchBuffer(patchBufferSize)
-
 	iter, err := tree.NewThreeWayDiffer(ctx, leftRows.NodeStore(), leftRows.Tuples(), rightRows.Tuples(), ancRows.Tuples(), vMerger.tryMerge, vMerger.keyless, leftRows.Tuples().Order)
+
+	stats := tree.MergeStats{}
 
 	conflictsIter := &tree.TeeDiffIter{
 		Iter: iter,
@@ -218,25 +218,26 @@ func mergeProllyRowData(
 			default:
 			}
 			switch diff.Op {
-			case tree.DiffOpDivergentClashConflict, tree.DiffOpDivergentDeleteConflict:
-				// report conflict
+			case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
+				// TODO: count conflicts?
 				sendConflict(conflicts, diff)
 				sendIndexReset(indexEdits, diff)
-			case tree.DiffOpConvergentEdit:
+			case tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify, tree.DiffOpConvergentDelete:
 				if vMerger.keyless {
-					// still conflict
 					sendConflict(conflicts, diff)
 					sendIndexReset(indexEdits, diff)
 				}
-			case tree.DiffOpDivergentResolved:
-				// "cellwise merge edit"
-				// safely apply to left
-				// for non-unique also the weird rollback logic
-				// update stats
+			case tree.DiffOpDivergentModifyResolved:
+				stats.Modifications++
 				sendCellWiseMergeEdit(indexEdits, diff)
-			case tree.DiffOpRightEdit, tree.DiffOpRightDelete:
-				// safely apply to left
-				// update stats
+			case tree.DiffOpRightAdd:
+				stats.Adds++
+				sendRightEdit(indexEdits, diff)
+			case tree.DiffOpRightModify:
+				stats.Modifications++
+				sendRightEdit(indexEdits, diff)
+			case tree.DiffOpRightDelete:
+				stats.Removes++
 				sendRightEdit(indexEdits, diff)
 			default:
 			}
@@ -252,44 +253,7 @@ func mergeProllyRowData(
 	final, err := tree.ApplyMutations[val.Tuple](ctx, leftRows.NodeStore(), leftRows.Node(), leftRows.Tuples().Order, serializer, editIter)
 	mergedMap := prolly.NewMap(final, leftRows.NodeStore(), leftRows.KeyDesc(), leftRows.ValDesc())
 
-	return durable.IndexFromProllyMap(mergedMap), tree.MergeStats{}, nil
-	//mr, stats, err := prolly.MergeMaps(ctx, leftRows, rightRows, ancRows, func(left, right tree.Diff) (tree.Diff, bool) {
-	//	if left.Type == right.Type && bytes.Equal(left.To, right.To) {
-	//		if keyless {
-	//			// convergent edits are conflicts for keyless tables
-	//			d, b, _ := processConflict(ctx, conflicts, indexEdits, left, right)
-	//			return d, b
-	//		}
-	//		return left, true
-	//	}
-	//
-	//	merged, isConflict := vMerger.tryMerge(val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
-	//	if isConflict {
-	//		d, b, _ := processConflict(ctx, conflicts, indexEdits, left, right)
-	//		return d, b
-	//	}
-	//
-	//	d := tree.Diff{
-	//		Type: tree.ModifiedDiff,
-	//		Key:  left.Key,
-	//		From: left.From,
-	//		To:   tree.Item(merged),
-	//	}
-	//
-	//	select {
-	//	case indexEdits <- cellWiseMergeEdit{left, right, d}:
-	//		break
-	//	case <-ctx.Done():
-	//		return tree.Diff{}, false
-	//	}
-	//
-	//	return d, true
-	//})
-	//if err != nil {
-	//	return nil, tree.MergeStats{}, err
-	//}
-
-	//return durable.IndexFromProllyMap(mr), stats, nil
+	return durable.IndexFromProllyMap(mergedMap), stats, nil
 }
 
 func sendRightEdit(edits chan indexEdit, diff tree.ThreeWayDiff) {
@@ -326,9 +290,9 @@ func (i *editsIter) NextMutation(ctx context.Context) (tree.Item, tree.Item, err
 			return nil, nil, err
 		}
 		switch diff.Op {
-		case tree.DiffOpRightEdit, tree.DiffOpRightDelete:
+		case tree.DiffOpRightAdd, tree.DiffOpRightModify, tree.DiffOpRightDelete:
 			return tree.Item(diff.Key), tree.Item(diff.Right), nil
-		case tree.DiffOpDivergentResolved:
+		case tree.DiffOpDivergentModifyResolved:
 			return tree.Item(diff.Key), tree.Item(diff.Merged), nil
 		default:
 		}
@@ -338,28 +302,6 @@ func (i *editsIter) NextMutation(ctx context.Context) (tree.Item, tree.Item, err
 func (i *editsIter) Close() error {
 	return i.iter.Close()
 }
-
-//func processConflict(ctx context.Context, confs chan confVals, edits chan indexEdit, left, right tree.Diff) (tree.Diff, bool, error) {
-//	c := confVals{
-//		key:      val.Tuple(left.Key),
-//		ourVal:   val.Tuple(left.To),
-//		theirVal: val.Tuple(right.To),
-//		baseVal:  val.Tuple(left.From),
-//	}
-//	select {
-//	case confs <- c:
-//	case <-ctx.Done():
-//		return tree.Diff{}, false, ctx.Err()
-//	}
-//	// Reset the change on the right
-//	e := conflictEdit{right: right}
-//	select {
-//	case edits <- e:
-//	case <-ctx.Done():
-//		return tree.Diff{}, false, ctx.Err()
-//	}
-//	return tree.Diff{}, false, nil
-//}
 
 type valueMerger struct {
 	numCols                                int

@@ -141,7 +141,7 @@ func (d *threeWayDiffer[K, O]) Next(ctx context.Context) (ThreeWayDiff, error) {
 			default:
 			}
 		case dsNewLeft:
-			res = d.newLeftEdit(d.lDiff.Key, d.lDiff.To)
+			res = d.newLeftEdit(d.lDiff.Key, d.lDiff.To, d.lDiff.Type)
 			d.lDiff, err = d.lIter.Next(ctx)
 			if errors.Is(err, io.EOF) {
 				d.lDone = true
@@ -150,7 +150,7 @@ func (d *threeWayDiffer[K, O]) Next(ctx context.Context) (ThreeWayDiff, error) {
 			}
 			return res, nil
 		case dsNewRight:
-			res = d.newRightEdit(d.rDiff.Key, d.rDiff.From, d.rDiff.To)
+			res = d.newRightEdit(d.rDiff.Key, d.rDiff.From, d.rDiff.To, d.rDiff.Type)
 			d.rDiff, err = d.rIter.Next(ctx)
 			if errors.Is(err, io.EOF) {
 				d.rDone = true
@@ -160,11 +160,11 @@ func (d *threeWayDiffer[K, O]) Next(ctx context.Context) (ThreeWayDiff, error) {
 			return res, nil
 		case dsMatch:
 			if d.lDiff.To == nil && d.rDiff.To == nil {
-				res = d.newConvergentEdit(d.lDiff.Key, d.lDiff.To)
+				res = d.newConvergentEdit(d.lDiff.Key, d.lDiff.To, d.lDiff.Type)
 			} else if d.lDiff.To == nil || d.rDiff.To == nil {
 				res = d.newDivergentDeleteConflict(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To)
 			} else if d.lDiff.Type == d.rDiff.Type && bytes.Equal(d.lDiff.To, d.rDiff.To) {
-				res = d.newConvergentEdit(d.lDiff.Key, d.lDiff.To)
+				res = d.newConvergentEdit(d.lDiff.Key, d.lDiff.To, d.lDiff.Type)
 			} else {
 				resolved, ok := d.resolveCb(val.Tuple(d.lDiff.To), val.Tuple(d.rDiff.To), val.Tuple(d.lDiff.From))
 				if !ok {
@@ -200,37 +200,24 @@ func (d *threeWayDiffer[K, O]) Close() error {
 	return nil
 }
 
-type diffOp uint8
+//go:generate stringer -type=diffOp -linecomment
+
+type diffOp uint16
 
 const (
-	DiffOpLeftEdit diffOp = iota
-	DiffOpRightEdit
-	DiffOpLeftDelete
-	DiffOpRightDelete
-	DiffOpConvergentEdit
-	DiffOpDivergentResolved
-	DiffOpDivergentDeleteConflict
-	DiffOpDivergentClashConflict
+	DiffOpLeftAdd                 diffOp = iota // leftAdd
+	DiffOpRightAdd                              // rightAdd
+	DiffOpLeftDelete                            //leftDelete
+	DiffOpRightDelete                           //rightDelete
+	DiffOpLeftModify                            //leftModify
+	DiffOpRightModify                           //rightModify
+	DiffOpConvergentAdd                         //convergentAdd
+	DiffOpConvergentDelete                      //convergentDelete
+	DiffOpConvergentModify                      //convergentModify
+	DiffOpDivergentModifyResolved               //divergenModifytResolved
+	DiffOpDivergentDeleteConflict               //divergentDeleteConflict
+	DiffOpDivergentModifyConflict               //divergentModifyConflict
 )
-
-func (o diffOp) String() string {
-	switch o {
-	case DiffOpLeftEdit:
-		return "leftEdit"
-	case DiffOpRightEdit:
-		return "rightEdit"
-	case DiffOpConvergentEdit:
-		return "convergentEdit"
-	case DiffOpDivergentResolved:
-		return "divergentResolved"
-	case DiffOpDivergentDeleteConflict:
-		return "divergentDeleteConflict"
-	case DiffOpDivergentClashConflict:
-		return "divergentClashConflict"
-	default:
-		panic("unknown diff type")
-	}
-}
 
 // ThreeWayDiff is a generic object for encoding a three way diff.
 type ThreeWayDiff struct {
@@ -241,10 +228,17 @@ type ThreeWayDiff struct {
 	Key, Base, Left, Right, Merged val.Tuple
 }
 
-func (d *threeWayDiffer[K, O]) newLeftEdit(key, left Item) ThreeWayDiff {
-	op := DiffOpLeftEdit
-	if left == nil {
+func (d *threeWayDiffer[K, O]) newLeftEdit(key, left Item, typ DiffType) ThreeWayDiff {
+	var op diffOp
+	switch typ {
+	case AddedDiff:
+		op = DiffOpLeftAdd
+	case ModifiedDiff:
+		op = DiffOpLeftModify
+	case RemovedDiff:
 		op = DiffOpLeftDelete
+	default:
+		panic("unknown diff type")
 	}
 	return ThreeWayDiff{
 		Op:   op,
@@ -253,10 +247,17 @@ func (d *threeWayDiffer[K, O]) newLeftEdit(key, left Item) ThreeWayDiff {
 	}
 }
 
-func (d *threeWayDiffer[K, O]) newRightEdit(key, base, right Item) ThreeWayDiff {
-	op := DiffOpRightEdit
-	if right == nil {
+func (d *threeWayDiffer[K, O]) newRightEdit(key, base, right Item, typ DiffType) ThreeWayDiff {
+	var op diffOp
+	switch typ {
+	case AddedDiff:
+		op = DiffOpRightAdd
+	case ModifiedDiff:
+		op = DiffOpRightModify
+	case RemovedDiff:
 		op = DiffOpRightDelete
+	default:
+		panic("unknown diff type")
 	}
 	return ThreeWayDiff{
 		Op:    op,
@@ -266,9 +267,20 @@ func (d *threeWayDiffer[K, O]) newRightEdit(key, base, right Item) ThreeWayDiff 
 	}
 }
 
-func (d *threeWayDiffer[K, O]) newConvergentEdit(key, left Item) ThreeWayDiff {
+func (d *threeWayDiffer[K, O]) newConvergentEdit(key, left Item, typ DiffType) ThreeWayDiff {
+	var op diffOp
+	switch typ {
+	case AddedDiff:
+		op = DiffOpConvergentAdd
+	case ModifiedDiff:
+		op = DiffOpConvergentModify
+	case RemovedDiff:
+		op = DiffOpConvergentDelete
+	default:
+		panic("unknown diff type")
+	}
 	return ThreeWayDiff{
-		Op:   DiffOpConvergentEdit,
+		Op:   op,
 		Key:  val.Tuple(key),
 		Left: val.Tuple(left),
 	}
@@ -276,7 +288,7 @@ func (d *threeWayDiffer[K, O]) newConvergentEdit(key, left Item) ThreeWayDiff {
 
 func (d *threeWayDiffer[K, O]) newDivergentResolved(key, left, right, merged Item) ThreeWayDiff {
 	return ThreeWayDiff{
-		Op:     DiffOpDivergentResolved,
+		Op:     DiffOpDivergentModifyResolved,
 		Key:    val.Tuple(key),
 		Left:   val.Tuple(left),
 		Right:  val.Tuple(right),
@@ -296,7 +308,7 @@ func (d *threeWayDiffer[K, O]) newDivergentDeleteConflict(key, base, left, right
 
 func (d *threeWayDiffer[K, O]) newDivergentClashConflict(key, base, left, right Item) ThreeWayDiff {
 	return ThreeWayDiff{
-		Op:    DiffOpDivergentClashConflict,
+		Op:    DiffOpDivergentModifyConflict,
 		Key:   val.Tuple(key),
 		Base:  val.Tuple(base),
 		Left:  val.Tuple(left),
