@@ -1,4 +1,4 @@
-name: Check Formatting and Committers
+name: Check Formatting, Committers and Generated Code
 
 on:
   pull_request:
@@ -18,6 +18,8 @@ jobs:
         with:
           go-version: ^1.19
       - uses: actions/checkout@v3
+        with:
+          submodules: true
       - name: Check all
         working-directory: ./go
         # Keep this in sync with //go/utils/prepr/prepr.sh.
@@ -32,3 +34,27 @@ jobs:
         env:
           BRANCH_NAME: ${{ github.head_ref }}
           CHANGE_TARGET: ${{ github.base_ref }}
+      - name: Check generated protobufs
+        working-directory: ./proto
+        run: |
+          (cd third_party/protobuf && bazel build //:protoc)
+          (cd third_party/protobuf-go && go build -o ._protoc-gen-go ./cmd/protoc-gen-go)
+          (cd third_party/grpc-go/cmd/protoc-gen-go-grpc && go build -o ._protoc-gen-go-grpc .)
+          make clean all
+          changes=$(git status --porcelain)
+          if [ ! -z "$changes" ]; then
+             echo "ERROR: Generated protobuf structs are different from the checked in version."
+             echo "$changes"
+             exit 1
+          fi
+      - name: Check generated flatbuffers
+        working-directory: ./go/serial
+        run: |
+          (cd ../../proto/third_party/flatbuffers && bazel build //:flatc)
+          ./generate.sh
+          changes=$(git status --porcelain)
+          if [ ! -z "$changes" ]; then
+             echo "ERROR: Generated flatbuffer structs are different from the checked in version."
+             echo "$changes"
+             exit 1
+          fi
