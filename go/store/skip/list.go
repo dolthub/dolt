@@ -136,7 +136,7 @@ func (l *List) Has(key []byte) (ok bool) {
 // nil and false.
 func (l *List) Get(key []byte) (val []byte, ok bool) {
 	var id nodeId
-	next, prev := l.headPointer(), sentinelId
+	next, prev := l.headTower(), sentinelId
 	for lvl := maxHeight; lvl >= 0; {
 		nd := l.nodePtr(next[lvl])
 		// descend if we can't advance at |lvl|
@@ -146,7 +146,7 @@ func (l *List) Get(key []byte) (val []byte, ok bool) {
 			continue
 		}
 		// advance
-		next = nd.next
+		next = &nd.next
 		prev = nd.id
 	}
 	node := l.nodePtr(id)
@@ -167,7 +167,7 @@ func (l *List) Put(key, val []byte) {
 	// find the path to the greatest
 	// existing node key less than |key|
 	var path tower
-	next, prev := l.headPointer(), sentinelId
+	next, prev := l.headTower(), sentinelId
 	for h := maxHeight; h >= 0; {
 		curr := l.nodePtr(next[h])
 		// descend if we can't advance at |lvl|
@@ -177,7 +177,7 @@ func (l *List) Put(key, val []byte) {
 			continue
 		}
 		// advance
-		next = curr.next
+		next = &curr.next
 		prev = curr.id
 	}
 
@@ -314,19 +314,19 @@ func (l *List) seek(key []byte) *skipNode {
 }
 
 func (l *List) seekWithFn(cb SeekFn) (node *skipNode) {
-	ptr := l.headPointer()
+	ptr := l.headTower()
 	for h := int64(maxHeight); h >= 0; h-- {
 		node = l.nodePtr(ptr[h])
 		for cb(node.key) {
-			ptr = node.next
+			ptr = &node.next
 			node = l.nodePtr(ptr[h])
 		}
 	}
 	return
 }
 
-func (l *List) headPointer() tower {
-	return l.nodes[0].next
+func (l *List) headTower() *tower {
+	return &l.nodes[0].next
 }
 
 func (l *List) firstNode() *skipNode {
