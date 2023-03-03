@@ -272,144 +272,22 @@ func buildIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStor
 	return mergedIndex, nil
 }
 
-// Given cellWiseMergeEdit's sent on |cellWiseChan|, update the secondary indexes in
-// |rootIndexSet| and |mergeIndexSet| such that when the index sets are merged,
-// they produce entries consistent with the cell-wise merges. The updated
-// |rootIndexSet| and |mergeIndexSet| are returned.
-func updateProllySecondaryIndexes(ctx context.Context, tm TableMerger, cellWiseEdits chan indexEdit, finalSch schema.Schema) (durable.IndexSet, durable.IndexSet, error) {
-	ls, err := tm.leftTbl.GetIndexSet(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	lm, err := GetMutableSecondaryIdxs(ctx, tm.leftSch, ls)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rs, err := tm.rightTbl.GetIndexSet(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	rm, err := GetMutableSecondaryIdxs(ctx, tm.rightSch, rs)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = applyCellwiseEdits(ctx, lm, rm, cellWiseEdits, finalSch)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	ls, err = persistIndexMuts(ctx, ls, lm)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rs, err = persistIndexMuts(ctx, rs, rm)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return ls, rs, nil
-}
-
-func persistIndexMuts(ctx context.Context, indexSet durable.IndexSet, idxs []MutableSecondaryIdx) (durable.IndexSet, error) {
-	for _, idx := range idxs {
-		m, err := idx.Map(ctx)
-		if err != nil {
-			return nil, err
-		}
-		indexSet, err = indexSet.PutIndex(ctx, idx.Name, durable.IndexFromProllyMap(m))
-		if err != nil {
-			return nil, err
-		}
-	}
-	return indexSet, nil
-}
-
-func applyCellwiseEdits(ctx context.Context, rootIdxs, mergeIdxs []MutableSecondaryIdx, edits chan indexEdit, finalSch schema.Schema) error {
-	notUnique := make(map[string]struct{})
-	for _, idx := range rootIdxs {
-		schIdx := finalSch.Indexes().GetByName(idx.Name)
-		if schIdx != nil && !schIdx.IsUnique() {
-			notUnique[idx.Name] = struct{}{}
-		}
-	}
-	for {
-		select {
-		case e, ok := <-edits:
-			if !ok {
-				return nil
-			}
-			switch e := e.(type) {
-			case conflictEdit:
-				// reset right
-				for _, idx := range mergeIdxs {
-					if _, ok := notUnique[idx.Name]; ok {
-						continue
-					} else {
-						if err := applyEdit(ctx, idx, e.rightEdit()); err != nil {
-							return err
-						}
-					}
-				}
-			case cellWiseMergeEdit:
-				// reset left, update right to merge
-				// or update left to merge
-				for _, idx := range rootIdxs {
-					if _, ok := notUnique[idx.Name]; ok {
-						if err := applyEdit(ctx, idx, tree.Diff{
-							Key:  tree.Item(e.key),
-							From: tree.Item(e.lTo),
-							To:   tree.Item(e.merged),
-						}); err != nil {
-							return err
-						}
-					} else {
-						if err := applyEdit(ctx, idx, e.leftEdit()); err != nil {
-							return err
-						}
-					}
-				}
-				for _, idx := range mergeIdxs {
-					if _, ok := notUnique[idx.Name]; ok {
-						continue
-					}
-					if err := applyEdit(ctx, idx, e.rightEdit()); err != nil {
-						return err
-					}
-				}
-			case rightEdit:
-				for _, idx := range rootIdxs {
-					if _, ok := notUnique[idx.Name]; ok {
-						if err := applyEdit(ctx, idx, e.rightEdit()); err != nil {
-							return err
-						}
-					}
-				}
-			}
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
-
 // applyEdit applies |edit| to |idx|. If |len(edit.To)| == 0, then action is
 // a delete, if |len(edit.From)| == 0 then it is an insert, otherwise it is an
 // update.
-func applyEdit(ctx context.Context, idx MutableSecondaryIdx, edit tree.Diff) (err error) {
-	if len(edit.From) == 0 {
-		err := idx.InsertEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.To))
+func applyEdit(ctx context.Context, idx MutableSecondaryIdx, key, from, to val.Tuple) (err error) {
+	if len(from) == 0 {
+		err := idx.InsertEntry(ctx, key, to)
 		if err != nil {
 			return err
 		}
-	} else if len(edit.To) == 0 {
-		err := idx.DeleteEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.From))
+	} else if len(to) == 0 {
+		err := idx.DeleteEntry(ctx, key, from)
 		if err != nil {
 			return err
 		}
 	} else {
-		err := idx.UpdateEntry(ctx, val.Tuple(edit.Key), val.Tuple(edit.From), val.Tuple(edit.To))
+		err := idx.UpdateEntry(ctx, key, from, to)
 		if err != nil {
 			return err
 		}

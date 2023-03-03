@@ -51,10 +51,10 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}},
 			right: [][]int{{1, 1}, {2, 2}, {4, 4}},
 			exp: []testDiff{
-				{op: DiffOpLeftEdit, k: 3},
-				{op: DiffOpConvergentEdit, k: 4},
-				{op: DiffOpLeftEdit, k: 5},
-				{op: DiffOpLeftEdit, k: 6},
+				{op: DiffOpLeftAdd, k: 3},
+				{op: DiffOpConvergentAdd, k: 4},
+				{op: DiffOpLeftAdd, k: 5},
+				{op: DiffOpLeftAdd, k: 6},
 			},
 		},
 		{
@@ -63,10 +63,10 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1}, {2, 2}, {4, 4}},
 			right: [][]int{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}},
 			exp: []testDiff{
-				{op: DiffOpRightEdit, k: 3},
-				{op: DiffOpConvergentEdit, k: 4},
-				{op: DiffOpRightEdit, k: 5},
-				{op: DiffOpRightEdit, k: 6},
+				{op: DiffOpRightAdd, k: 3},
+				{op: DiffOpConvergentAdd, k: 4},
+				{op: DiffOpRightAdd, k: 5},
+				{op: DiffOpRightAdd, k: 6},
 			},
 		},
 		{
@@ -76,7 +76,7 @@ func TestThreeWayDiffer(t *testing.T) {
 			right: [][]int{{1, 1}, {2, 2}, {3, 3}, {5, 5}, {6, 6}},
 			exp: []testDiff{
 				{op: DiffOpLeftDelete, k: 3},
-				{op: DiffOpConvergentEdit, k: 4},
+				{op: DiffOpConvergentDelete, k: 4},
 				{op: DiffOpLeftDelete, k: 5},
 				{op: DiffOpLeftDelete, k: 6},
 			},
@@ -88,7 +88,7 @@ func TestThreeWayDiffer(t *testing.T) {
 			right: [][]int{{1, 1}, {2, 2}},
 			exp: []testDiff{
 				{op: DiffOpRightDelete, k: 3},
-				{op: DiffOpConvergentEdit, k: 4},
+				{op: DiffOpConvergentDelete, k: 4},
 				{op: DiffOpRightDelete, k: 5},
 				{op: DiffOpRightDelete, k: 6},
 			},
@@ -99,10 +99,10 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1}, {2, 3}, {3, 3}, {4, 5}, {5, 6}, {6, 7}},
 			right: [][]int{{1, 1}, {2, 2}, {3, 3}, {4, 5}, {5, 5}, {6, 6}},
 			exp: []testDiff{
-				{op: DiffOpLeftEdit, k: 2},
-				{op: DiffOpConvergentEdit, k: 4},
-				{op: DiffOpLeftEdit, k: 5},
-				{op: DiffOpLeftEdit, k: 6},
+				{op: DiffOpLeftModify, k: 2},
+				{op: DiffOpConvergentModify, k: 4},
+				{op: DiffOpLeftModify, k: 5},
+				{op: DiffOpLeftModify, k: 6},
 			},
 		},
 		{
@@ -111,10 +111,10 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1}, {2, 2}, {3, 3}, {4, 5}, {5, 5}, {6, 6}},
 			right: [][]int{{1, 1}, {2, 3}, {3, 3}, {4, 5}, {5, 6}, {6, 7}},
 			exp: []testDiff{
-				{op: DiffOpRightEdit, k: 2},
-				{op: DiffOpConvergentEdit, k: 4},
-				{op: DiffOpRightEdit, k: 5},
-				{op: DiffOpRightEdit, k: 6},
+				{op: DiffOpRightModify, k: 2},
+				{op: DiffOpConvergentModify, k: 4},
+				{op: DiffOpRightModify, k: 5},
+				{op: DiffOpRightModify, k: 6},
 			},
 		},
 		{
@@ -132,9 +132,9 @@ func TestThreeWayDiffer(t *testing.T) {
 			left:  [][]int{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}},
 			right: [][]int{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}},
 			exp: []testDiff{
-				{op: DiffOpConvergentEdit, k: 2},
-				{op: DiffOpConvergentEdit, k: 3},
-				{op: DiffOpConvergentEdit, k: 5},
+				{op: DiffOpConvergentAdd, k: 2},
+				{op: DiffOpConvergentAdd, k: 3},
+				{op: DiffOpConvergentAdd, k: 5},
 			},
 		},
 		{
@@ -169,9 +169,9 @@ func TestThreeWayDiffer(t *testing.T) {
 				{op: DiffOpDivergentModifyResolved, k: 3, m: []int{4, 4}},
 				{op: DiffOpLeftDelete, k: 4},
 				{op: DiffOpDivergentModifyResolved, k: 5, m: []int{6, 6}},
-				{op: DiffOpLeftEdit, k: 6},
-				{op: DiffOpRightEdit, k: 7},
-				{op: DiffOpConvergentEdit, k: 8},
+				{op: DiffOpLeftAdd, k: 6},
+				{op: DiffOpRightAdd, k: 7},
+				{op: DiffOpConvergentDelete, k: 8},
 			},
 		},
 	}
@@ -220,7 +220,7 @@ func testResolver(t *testing.T, ns NodeStore, valDesc val.TupleDesc, valBuilder 
 		for i := range valDesc.Types {
 			var base, left, right int64
 			var ok bool
-			if l != nil {
+			if b != nil {
 				base, ok = valDesc.GetInt64(i, b)
 				require.True(t, ok)
 			}

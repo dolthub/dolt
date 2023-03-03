@@ -81,7 +81,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		return Node{}, err
 	}
 
-	chkr, err := newChunker(ctx, cur.Clone(), 0, ns, serializer)
+	chkr, err := NewChunker(ctx, cur.Clone(), 0, ns, serializer)
 	if err != nil {
 		return Node{}, err
 	}

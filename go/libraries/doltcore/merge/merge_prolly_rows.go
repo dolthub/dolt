@@ -18,10 +18,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-
-	"golang.org/x/sync/errgroup"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -31,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"io"
 )
 
 // mergeTableData three-way merges rows and indexes for a given table. First,
@@ -46,68 +45,99 @@ import (
 // root and merge secondary indexes are merged, they will produce entries
 // consistent with the primary row data.
 func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table) (*doltdb.Table, *MergeStats, error) {
-	group, gCtx := errgroup.WithContext(ctx)
-
-	var (
-		finalRows durable.Index
-		stats     tree.MergeStats
-
-		leftIdxs  durable.IndexSet
-		rightIdxs durable.IndexSet
-		finalIdxs durable.IndexSet
-
-		indexEdits = make(chan indexEdit, 128)
-		conflicts  = make(chan confVals, 128)
-	)
-
-	// stage 1: merge clustered indexes and propagate changes from
-	//   conflicts and cell-wise merges to secondary indexes
-
-	cp, err := makeConflictProcessor(ctx, tm)
+	iter, err := threeWayDiffer(ctx, tm, finalSch)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	ai, err := mergeTbl.GetArtifacts(ctx)
+	conflicts, err := newConflictMerger(ctx, tm, mergeTbl)
 	if err != nil {
 		return nil, nil, err
 	}
-	artifacts := durable.ProllyMapFromArtifactIndex(ai).Editor()
-
-	group.Go(func() error {
-		return cp.process(gCtx, conflicts, artifacts)
-	})
-
-	group.Go(func() (err error) {
-		leftIdxs, rightIdxs, err = updateProllySecondaryIndexes(gCtx, tm, indexEdits, finalSch)
-		return err
-	})
-
-	group.Go(func() (err error) {
-		defer close(indexEdits)
-		defer close(conflicts)
-		finalRows, stats, err = mergeProllyRowData(gCtx, tm, finalSch, indexEdits, conflicts)
-		return err
-	})
-
-	err = group.Wait()
+	pri, err := newPrimaryMerger(ctx, tm)
+	if err != nil {
+		return nil, nil, err
+	}
+	sec, err := newSecondaryMerger(ctx, tm, finalSch)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// stage 2: merge the modified versions of the secondary
-	//   indexes generated in stage 1
+	s := &MergeStats{
+		Operation: TableModified,
+	}
+	for {
+		diff, err := iter.Next(ctx)
+		if errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			return nil, nil, err
+		}
 
-	finalIdxs, err = mergeProllySecondaryIndexes(ctx, tm, leftIdxs, rightIdxs, finalSch, finalRows, artifacts)
+		switch diff.Op {
+		case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
+			s.Conflicts++
+			err = conflicts.merge(ctx, diff)
+			if err != nil {
+				return nil, nil, err
+			}
+			err = sec.merge(ctx, diff)
+			if err != nil {
+				return nil, nil, err
+			}
+		case tree.DiffOpRightAdd:
+			s.Adds++
+			err = pri.merge(ctx, diff)
+			if err != nil {
+				return nil, nil, err
+			}
+			err = sec.merge(ctx, diff)
+			if err != nil {
+				return nil, nil, err
+			}
+		case tree.DiffOpRightModify:
+			s.Modifications++
+			err = pri.merge(ctx, diff)
+			if err != nil {
+				return nil, nil, err
+			}
+			err = sec.merge(ctx, diff)
+			if err != nil {
+				return nil, nil, err
+			}
+		case tree.DiffOpRightDelete:
+			s.Deletes++
+			err = pri.merge(ctx, diff)
+			if err != nil {
+				return nil, nil, err
+			}
+			err = sec.merge(ctx, diff)
+			if err != nil {
+				return nil, nil, err
+			}
+		case tree.DiffOpDivergentModifyResolved:
+			s.Modifications++
+			err = pri.merge(ctx, diff)
+			if err != nil {
+				return nil, nil, err
+			}
+			err = sec.merge(ctx, diff)
+			if err != nil {
+				return nil, nil, err
+			}
+		default:
+		}
+	}
+
+	finalRows, err := pri.finalize(ctx)
+	leftIdxs, rightIdxs, err := sec.finalize(ctx)
+
+	finalIdxs, err := mergeProllySecondaryIndexes(ctx, tm, leftIdxs, rightIdxs, finalSch, finalRows, conflicts.ae)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	am, err := artifacts.Flush(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	finalArtifacts := durable.ArtifactIndexFromProllyMap(am)
+	finalArtifacts, err := conflicts.finalize(ctx)
 
 	// collect merged data in |finalTbl|
 	finalTbl, err := mergeTbl.UpdateRows(ctx, finalRows)
@@ -125,13 +155,343 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 		return nil, nil, err
 	}
 
-	s := &MergeStats{
-		Operation:     TableModified,
-		Adds:          stats.Adds,
-		Deletes:       stats.Removes,
-		Modifications: stats.Modifications,
-	}
 	return finalTbl, s, nil
+}
+
+func threeWayDiffer(ctx context.Context, tm TableMerger, finalSch schema.Schema) (tree.DiffIter, error) {
+	lr, err := tm.leftTbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	leftRows := durable.ProllyMapFromIndex(lr)
+
+	rr, err := tm.rightTbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rightRows := durable.ProllyMapFromIndex(rr)
+
+	ar, err := tm.ancTbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ancRows := durable.ProllyMapFromIndex(ar)
+
+	vMerger := newValueMerger(finalSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool())
+
+	return tree.NewThreeWayDiffer(ctx, leftRows.NodeStore(), leftRows.Tuples(), rightRows.Tuples(), ancRows.Tuples(), vMerger.tryMerge, vMerger.keyless, leftRows.Tuples().Order)
+
+}
+
+type diffMerger interface {
+	merge(context.Context, tree.ThreeWayDiff) error
+}
+
+var _ diffMerger = (*conflictMerger)(nil)
+var _ diffMerger = (*primaryMerger)(nil)
+var _ diffMerger = (*secondaryMerger)(nil)
+
+type conflictMerger struct {
+	ae           *prolly.ArtifactsEditor
+	rightRootish hash.Hash
+	meta         []byte
+}
+
+func newConflictMerger(ctx context.Context, tm TableMerger, mergeTbl *doltdb.Table) (*conflictMerger, error) {
+	ai, err := mergeTbl.GetArtifacts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ae := durable.ProllyMapFromArtifactIndex(ai).Editor()
+
+	has, err := tm.leftTbl.HasConflicts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if has {
+		a, l, r, err := tm.leftTbl.GetConflictSchemas(ctx, tm.name)
+		if err != nil {
+			return nil, err
+		}
+
+		equal := schema.ColCollsAreEqual(a.GetAllCols(), tm.ancSch.GetAllCols()) &&
+			schema.ColCollsAreEqual(l.GetAllCols(), tm.leftSch.GetAllCols()) &&
+			schema.ColCollsAreEqual(r.GetAllCols(), tm.rightSch.GetAllCols())
+		if !equal {
+			return nil, ErrConflictsIncompatible
+		}
+	}
+
+	rightHash, err := tm.rightSrc.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	baseHash, err := tm.ancestorSrc.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	m := prolly.ConflictMetadata{
+		BaseRootIsh: baseHash,
+	}
+	meta, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+
+	return &conflictMerger{
+		meta:         meta,
+		rightRootish: rightHash,
+		ae:           ae,
+	}, nil
+}
+
+func (m *conflictMerger) merge(ctx context.Context, diff tree.ThreeWayDiff) error {
+	switch diff.Op {
+	case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict,
+		tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify, tree.DiffOpConvergentDelete:
+	default:
+		return fmt.Errorf("invalid conflict type: %s", diff.Op)
+	}
+	return m.ae.Add(ctx, diff.Key, m.rightRootish, prolly.ArtifactTypeConflict, m.meta)
+
+}
+
+func (m *conflictMerger) finalize(ctx context.Context) (durable.ArtifactIndex, error) {
+	am, err := m.ae.Flush(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return durable.ArtifactIndexFromProllyMap(am), nil
+}
+
+type primaryMerger struct {
+	serializer message.ProllyMapSerializer
+	keyDesc    val.TupleDesc
+	valDesc    val.TupleDesc
+	ns         tree.NodeStore
+	root       tree.Node
+	cur        *tree.Cursor
+	chunker    tree.Chunker
+	key, value val.Tuple
+}
+
+func newPrimaryMerger(ctx context.Context, tm TableMerger) (*primaryMerger, error) {
+	lr, err := tm.leftTbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	leftRows := durable.ProllyMapFromIndex(lr)
+
+	return &primaryMerger{
+		serializer: message.NewProllyMapSerializer(leftRows.ValDesc(), leftRows.NodeStore().Pool()),
+		keyDesc:    leftRows.KeyDesc(),
+		valDesc:    leftRows.ValDesc(),
+		ns:         leftRows.NodeStore(),
+		root:       leftRows.Node(),
+	}, nil
+}
+
+func (m *primaryMerger) init(ctx context.Context, key val.Tuple) error {
+	if key == nil {
+		return nil // no mutations
+	}
+
+	var err error
+	m.cur, err = tree.NewCursorAtKey(ctx, m.ns, m.root, key, m.keyDesc)
+	if err != nil {
+		return err
+	}
+
+	m.chunker, err = tree.NewChunker(ctx, m.cur.Clone(), 0, m.ns, m.serializer)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff) error {
+	var err error
+	if m.chunker == nil {
+		err = m.init(ctx, diff.Key)
+		if err != nil {
+			return err
+		}
+	}
+	newKey := diff.Key
+	var newValue val.Tuple
+	switch diff.Op {
+	case tree.DiffOpRightAdd, tree.DiffOpRightModify, tree.DiffOpRightDelete:
+		newValue = diff.Right
+	case tree.DiffOpDivergentModifyResolved:
+		newValue = diff.Merged
+	default:
+		return fmt.Errorf("unexpected diffOp for editing primary index: %s", diff.Op)
+	}
+
+	err = tree.Seek(ctx, m.cur, newKey, m.keyDesc)
+	if err != nil {
+		return err
+	}
+
+	var oldValue tree.Item
+	if m.cur.Valid() {
+		// Compare mutations |newKey| and |newValue|
+		// to the existing pair from the cursor
+		if m.keyDesc.Compare(newKey, val.Tuple(m.cur.CurrentKey())) == 0 {
+			oldValue = m.cur.CurrentValue()
+		}
+	}
+
+	if bytes.Equal(newValue, oldValue) {
+		// no-op mutations
+		m.key = newKey
+		return nil
+	}
+
+	// move |chkr| to the NextMutation mutation point
+	err = m.chunker.AdvanceTo(ctx, m.cur)
+	if err != nil {
+		return err
+	}
+
+	if oldValue == nil {
+		err = m.chunker.AddPair(ctx, tree.Item(newKey), tree.Item(newValue))
+	} else {
+		if newValue != nil {
+			err = m.chunker.UpdatePair(ctx, tree.Item(newKey), tree.Item(newValue))
+		} else {
+			err = m.chunker.DeletePair(ctx, tree.Item(newKey), oldValue)
+		}
+	}
+	return err
+}
+
+func (m *primaryMerger) finalize(ctx context.Context) (durable.Index, error) {
+	var err error
+	var final tree.Node
+	if m.chunker != nil {
+		final, err = m.chunker.Done(ctx)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		final = m.root
+	}
+	mergedMap := prolly.NewMap(final, m.ns, m.keyDesc, m.valDesc)
+
+	return durable.IndexFromProllyMap(mergedMap), nil
+}
+
+type secondaryMerger struct {
+	leftSet   durable.IndexSet
+	rightSet  durable.IndexSet
+	leftMut   []MutableSecondaryIdx
+	rightMut  []MutableSecondaryIdx
+	notUnique map[string]struct{}
+}
+
+func newSecondaryMerger(ctx context.Context, tm TableMerger, finalSch schema.Schema) (*secondaryMerger, error) {
+	ls, err := tm.leftTbl.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+	lm, err := GetMutableSecondaryIdxs(ctx, tm.leftSch, ls)
+	if err != nil {
+		return nil, err
+	}
+
+	rs, err := tm.rightTbl.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rm, err := GetMutableSecondaryIdxs(ctx, tm.rightSch, rs)
+	if err != nil {
+		return nil, err
+	}
+
+	notUnique := make(map[string]struct{})
+	for _, idx := range lm {
+		schIdx := finalSch.Indexes().GetByName(idx.Name)
+		if schIdx != nil && !schIdx.IsUnique() {
+			notUnique[idx.Name] = struct{}{}
+		}
+	}
+
+	return &secondaryMerger{
+		leftSet:   ls,
+		rightSet:  rs,
+		leftMut:   lm,
+		rightMut:  rm,
+		notUnique: notUnique,
+	}, nil
+}
+
+func (m *secondaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff) error {
+	var err error
+	for _, idx := range m.leftMut {
+		// update left to resolved or reset
+		if _, ok := m.notUnique[idx.Name]; ok {
+			switch diff.Op {
+			case tree.DiffOpDivergentModifyResolved:
+				err = applyEdit(ctx, idx, diff.Key, diff.Left, diff.Merged)
+			case tree.DiffOpRightAdd, tree.DiffOpRightModify, tree.DiffOpRightDelete:
+				err = applyEdit(ctx, idx, diff.Key, diff.Base, diff.Right)
+			default:
+			}
+		} else {
+			switch diff.Op {
+			case tree.DiffOpDivergentModifyResolved:
+				err = applyEdit(ctx, idx, diff.Key, diff.Left, diff.Base)
+			default:
+			}
+		}
+	}
+	for _, idx := range m.rightMut {
+		// ignore or update right for resolve/conflict
+		if _, ok := m.notUnique[idx.Name]; ok {
+			continue
+		} else {
+			switch diff.Op {
+			case tree.DiffOpDivergentModifyResolved:
+				// right -> merged
+				err = applyEdit(ctx, idx, diff.Key, diff.Right, diff.Merged)
+			case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
+				// conflict: right -> base
+				err = applyEdit(ctx, idx, diff.Key, diff.Right, diff.Base)
+			default:
+			}
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *secondaryMerger) finalize(ctx context.Context) (durable.IndexSet, durable.IndexSet, error) {
+	for _, idx := range m.leftMut {
+		idxMap, err := idx.Map(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		m.leftSet, err = m.leftSet.PutIndex(ctx, idx.Name, durable.IndexFromProllyMap(idxMap))
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	for _, idx := range m.rightMut {
+		idxMap, err := idx.Map(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		m.rightSet, err = m.rightSet.PutIndex(ctx, idx.Name, durable.IndexFromProllyMap(idxMap))
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return m.leftSet, m.rightSet, nil
 }
 
 func mergeTableArtifacts(ctx context.Context, tm TableMerger, mergeTbl *doltdb.Table) (*doltdb.Table, error) {

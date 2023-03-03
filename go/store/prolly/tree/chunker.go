@@ -28,7 +28,10 @@ import (
 )
 
 type Chunker interface {
+	AdvanceTo(ctx context.Context, next *Cursor) error
 	AddPair(ctx context.Context, key, value Item) error
+	UpdatePair(ctx context.Context, key, value Item) error
+	DeletePair(ctx context.Context, key, value Item) error
 	Done(ctx context.Context) (Node, error)
 }
 
@@ -52,10 +55,10 @@ func NewEmptyChunker[S message.Serializer](ctx context.Context, ns NodeStore, se
 }
 
 func newEmptyChunker[S message.Serializer](ctx context.Context, ns NodeStore, serializer S) (*chunker[S], error) {
-	return newChunker(ctx, nil, 0, ns, serializer)
+	return NewChunker(ctx, nil, 0, ns, serializer)
 }
 
-func newChunker[S message.Serializer](ctx context.Context, cur *Cursor, level int, ns NodeStore, serializer S) (*chunker[S], error) {
+func NewChunker[S message.Serializer](ctx context.Context, cur *Cursor, level int, ns NodeStore, serializer S) (*chunker[S], error) {
 	// |cur| will be nil if this is a new Node, implying this is a new tree, or the tree has grown in height relative
 	// to its original chunked form.
 
@@ -353,7 +356,7 @@ func (tc *chunker[S]) createParentChunker(ctx context.Context) (err error) {
 		parent = tc.cur.parent
 	}
 
-	tc.parent, err = newChunker(ctx, parent, tc.level+1, tc.ns, tc.serializer)
+	tc.parent, err = NewChunker(ctx, parent, tc.level+1, tc.ns, tc.serializer)
 	if err != nil {
 		return err
 	}
