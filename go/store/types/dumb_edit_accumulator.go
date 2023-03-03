@@ -47,7 +47,7 @@ func (dumb *DumbEditAccumulator) AddEdit(k LesserValuable, v Valuable) {
 // FinishEditing should be called when all edits have been added to get an EditProvider which provides the
 // edits in sorted order. Adding more edits after calling FinishedEditing is an error
 func (dumb *DumbEditAccumulator) FinishedEditing(ctx context.Context) (EditProvider, error) {
-	err := SortWithErroringLess(KVPSort{dumb.edits, ctx, dumb.vr})
+	err := SortWithErroringLess(ctx, dumb.vr.Format(), KVPSort{dumb.edits})
 
 	if err != nil {
 		return nil, err

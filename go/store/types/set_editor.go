@@ -41,7 +41,7 @@ type SetEditor struct {
 }
 
 func NewSetEditor(s Set) *SetEditor {
-	return &SetEditor{s, setEditSlice{vr: s.valueReadWriter()}, true}
+	return &SetEditor{s, setEditSlice{}, true}
 }
 
 func (se *SetEditor) Kind() NomsKind {
@@ -176,7 +176,7 @@ func (se *SetEditor) Set(ctx context.Context) (Set, error) {
 }
 
 func (se *SetEditor) Insert(ctx context.Context, vs ...Value) (*SetEditor, error) {
-	SortWithErroringLess(ValueSort{vs, ctx, se.s.valueReadWriter()})
+	SortWithErroringLess(ctx, se.s.format(), ValueSort{vs})
 	for _, v := range vs {
 		d.PanicIfTrue(v == nil)
 		err := se.edit(ctx, v, true)
@@ -189,7 +189,7 @@ func (se *SetEditor) Insert(ctx context.Context, vs ...Value) (*SetEditor, error
 }
 
 func (se *SetEditor) Remove(ctx context.Context, vs ...Value) (*SetEditor, error) {
-	SortWithErroringLess(ValueSort{vs, ctx, se.s.valueReadWriter()})
+	SortWithErroringLess(ctx, se.s.format(), ValueSort{vs})
 	for _, v := range vs {
 		d.PanicIfTrue(v == nil)
 		err := se.edit(ctx, v, false)
@@ -225,7 +225,7 @@ func (se *SetEditor) edit(ctx context.Context, v Value, insert bool) error {
 
 	se.edits.edits = append(se.edits.edits, setEdit{v, insert})
 
-	isLess, err := final.value.Less(ctx, se.s.valueReadWriter(), v)
+	isLess, err := final.value.Less(ctx, se.s.format(), v)
 
 	if err != nil {
 		return err
@@ -251,7 +251,7 @@ func (se *SetEditor) findEdit(ctx context.Context, v Value) (int, bool, error) {
 
 	var found bool
 	idx, err := SearchWithErroringLess(len(se.edits.edits), func(i int) (bool, error) {
-		return se.edits.edits[i].value.Less(ctx, se.s.valueReadWriter(), v)
+		return se.edits.edits[i].value.Less(ctx, se.s.format(), v)
 	})
 
 	if err != nil {
@@ -281,8 +281,7 @@ func (se *SetEditor) normalize(ctx context.Context) error {
 		return nil
 	}
 
-	se.edits.ctx = ctx
-	err := SortWithErroringLess(se.edits)
+	err := SortWithErroringLess(ctx, se.s.format(), se.edits)
 	if err != nil {
 		return err
 	}
@@ -299,12 +298,10 @@ type setEdit struct {
 
 type setEditSlice struct {
 	edits []setEdit
-	ctx   context.Context
-	vr    ValueReader
 }
 
 func (ses setEditSlice) Len() int      { return len(ses.edits) }
 func (ses setEditSlice) Swap(i, j int) { ses.edits[i], ses.edits[j] = ses.edits[j], ses.edits[i] }
-func (ses setEditSlice) Less(i, j int) (bool, error) {
-	return ses.edits[i].value.Less(ses.ctx, ses.vr, ses.edits[j].value)
+func (ses setEditSlice) Less(ctx context.Context, nbf *NomsBinFormat, i, j int) (bool, error) {
+	return ses.edits[i].value.Less(ctx, nbf, ses.edits[j].value)
 }

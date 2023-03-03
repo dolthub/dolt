@@ -159,7 +159,7 @@ LOOP:
 				k = v
 
 				if lastK != nil {
-					isLess, err := lastK.Less(ctx, vrw, k)
+					isLess, err := lastK.Less(ctx, vrw.Format(), k)
 					if err != nil {
 						return EmptyMap, err
 					}
@@ -524,8 +524,6 @@ func buildMapData(ctx context.Context, vr ValueReader, values []Value) (mapEntry
 	}
 	kvs := mapEntrySlice{
 		make([]mapEntry, len(values)/2),
-		ctx,
-		vr,
 	}
 
 	for i := 0; i < len(values); i += 2 {
@@ -537,11 +535,9 @@ func buildMapData(ctx context.Context, vr ValueReader, values []Value) (mapEntry
 
 	uniqueSorted := mapEntrySlice{
 		make([]mapEntry, 0, len(kvs.entries)),
-		ctx,
-		vr,
 	}
 
-	err := SortWithErroringLess(kvs)
+	err := SortWithErroringLess(ctx, vr.Format(), kvs)
 
 	if err != nil {
 		return mapEntrySlice{}, err
@@ -559,8 +555,6 @@ func buildMapData(ctx context.Context, vr ValueReader, values []Value) (mapEntry
 
 	return mapEntrySlice{
 		append(uniqueSorted.entries, last),
-		uniqueSorted.ctx,
-		uniqueSorted.vr,
 	}, nil
 }
 
@@ -574,7 +568,7 @@ func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 			entry := v.(mapEntry)
 
 			if lastKey != nil {
-				isLess, err := lastKey.Less(ctx, vrw, entry.key)
+				isLess, err := lastKey.Less(ctx, vrw.Format(), entry.key)
 
 				if err != nil {
 					return nil, orderedKey{}, 0, err
@@ -787,7 +781,7 @@ func indexForKeyWithinSubtree(ctx context.Context, key orderedKey, metaSeq metaS
 			return 0, err
 		}
 
-		isLess, err := key.Less(ctx, vrw, tupleKey)
+		isLess, err := key.Less(ctx, vrw.Format(), tupleKey)
 		if err != nil {
 			return 0, err
 		}
@@ -855,7 +849,7 @@ func UnionMaps(ctx context.Context, a Map, b Map, cb MapUnionConflictCB) (Map, e
 
 	for aKey != nil && bKey != nil {
 
-		aLess, err := aKey.Less(ctx, a.valueReadWriter(), bKey)
+		aLess, err := aKey.Less(ctx, a.format(), bKey)
 		if err != nil {
 			return EmptyMap, nil
 		}

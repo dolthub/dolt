@@ -57,7 +57,7 @@ func (t *testOrderedSequence) search(ctx context.Context, key orderedKey) (int, 
 			return false, err
 		}
 
-		isLess, err := k.Less(ctx, t.valueReadWriter(), key)
+		isLess, err := k.Less(ctx, t.format(), key)
 
 		if err != nil {
 			return false, nil

@@ -140,7 +140,7 @@ func newCursorBackFrom(ctx context.Context, seq orderedSequence, key orderedKey)
 			return nil, err
 		}
 
-		isLess, err := key.Less(ctx, cur.seq.valueReadWriter(), currKey)
+		isLess, err := key.Less(ctx, cur.seq.format(), currKey)
 		if err != nil {
 			return nil, err
 		}
@@ -215,7 +215,7 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 			}
 
 			if lastKey != emptyKey {
-				isLess, err := lastKey.Less(ctx, vrw, key)
+				isLess, err := lastKey.Less(ctx, vrw.Format(), key)
 
 				if err != nil {
 					return nil, orderedKey{}, 0, err

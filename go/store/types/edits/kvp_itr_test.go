@@ -45,7 +45,7 @@ func IsInOrder(ctx context.Context, vr types.ValueReader, itr types.EditProvider
 			return false, 0, err
 		}
 
-		isLess, err := curr.Key.Less(ctx, vr, prev.Key)
+		isLess, err := curr.Key.Less(ctx, vr.Format(), prev.Key)
 
 		if err != nil {
 			return false, 0, err
@@ -88,7 +88,7 @@ func TestKVPSliceSort(t *testing.T) {
 	for _, test := range tests {
 		_, _, err := IsInOrder(ctx, vrw, NewItr(vrw, NewKVPCollection(vrw, test.kvps)))
 		assert.NoError(t, err)
-		err = types.SortWithErroringLess(types.KVPSort{Values: test.kvps, Ctx: ctx, VR: vrw})
+		err = types.SortWithErroringLess(ctx, vrw.Format(), types.KVPSort{Values: test.kvps})
 		assert.NoError(t, err)
 
 		if len(test.kvps) != len(test.expSorted) {

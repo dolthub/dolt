@@ -88,8 +88,8 @@ func (t *Type) Equals(other Value) (res bool) {
 	return false
 }
 
-func (t *Type) Less(ctx context.Context, vr ValueReader, other LesserValuable) (bool, error) {
-	res, err := valueCompare(vr.Format(), t, other.(Value))
+func (t *Type) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+	res, err := valueCompare(nbf, t, other.(Value))
 	if err != nil {
 		return false, err
 	}

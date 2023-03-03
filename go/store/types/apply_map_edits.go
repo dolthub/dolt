@@ -279,7 +279,7 @@ func doWork(ctx context.Context, seq orderedSequence, work mapWork) (mapWorkResu
 
 		createCur := cur == nil
 		if cur != nil {
-			isLess, err := ordKey.Less(ctx, seq.valueReadWriter(), curKey)
+			isLess, err := ordKey.Less(ctx, seq.format(), curKey)
 
 			if err != nil {
 				return mapWorkResult{}, err
@@ -363,7 +363,7 @@ func buildBatches(ctx context.Context, vr ValueReader, ae *atomicerr.AtomicError
 				return
 			}
 
-			isLess, err := edit.Key.Less(ctx, vr, nextEdit.Key)
+			isLess, err := edit.Key.Less(ctx, vr.Format(), nextEdit.Key)
 
 			if ae.SetIfError(err) {
 				return

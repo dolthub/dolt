@@ -147,10 +147,10 @@ func orderedKeyFromUint64(n uint64, nbf *NomsBinFormat) (orderedKey, error) {
 	return newOrderedKey(Float(n), nbf)
 }
 
-func (key orderedKey) Less(ctx context.Context, vr ValueReader, mk2 orderedKey) (bool, error) {
+func (key orderedKey) Less(ctx context.Context, nbf *NomsBinFormat, mk2 orderedKey) (bool, error) {
 	switch {
 	case key.isOrderedByValue && mk2.isOrderedByValue:
-		return key.v.Less(ctx, vr, mk2.v)
+		return key.v.Less(ctx, nbf, mk2.v)
 	case key.isOrderedByValue:
 		return true, nil
 	case mk2.isOrderedByValue:
@@ -254,7 +254,7 @@ func (ms metaSequence) search(ctx context.Context, key orderedKey) (int, error) 
 			return false, err
 		}
 
-		isLess, err := ordKey.Less(ctx, ms.valueReadWriter(), key)
+		isLess, err := ordKey.Less(ctx, ms.format(), key)
 
 		if err != nil {
 			return false, err
@@ -649,7 +649,7 @@ func (es emptySequence) Equals(other Value) bool {
 	panic("empty sequence")
 }
 
-func (es emptySequence) Less(ctx context.Context, vr ValueReader, other LesserValuable) (bool, error) {
+func (es emptySequence) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	panic("empty sequence")
 }
 

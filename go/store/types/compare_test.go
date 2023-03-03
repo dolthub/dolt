@@ -324,11 +324,11 @@ func TestCompareTotalOrdering(t *testing.T) {
 			if i == j {
 				assert.True(vi.Equals(vj))
 			} else if i < j {
-				x, err := vi.Less(ctx, vrw, vj)
+				x, err := vi.Less(ctx, vrw.Format(), vj)
 				require.NoError(t, err)
 				assert.True(x)
 			} else {
-				x, err := vi.Less(ctx, vrw, vj)
+				x, err := vi.Less(ctx, vrw.Format(), vj)
 				require.NoError(t, err)
 				assert.False(x)
 			}
@@ -359,7 +359,7 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	require.NoError(t, err)
 
 	vals := ValueSlice{Bool(true), Float(19), String("hellow"), blob, nList, nMap, nRef, nSet, nStruct}
-	err = SortWithErroringLess(ValueSort{vals, ctx, vrw})
+	err = SortWithErroringLess(ctx, vrw.Format(), ValueSort{vals})
 	require.NoError(t, err)
 
 	for i, v1 := range vals {

@@ -46,7 +46,7 @@ type sequence interface {
 	isLeaf() bool
 	Kind() NomsKind
 	Len() uint64
-	Less(ctx context.Context, vr ValueReader, other LesserValuable) (bool, error)
+	Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error)
 	Compare(nbf *NomsBinFormat, other LesserValuable) (int, error)
 	numLeaves() uint64
 	seqLen() int

@@ -100,9 +100,9 @@ func TestTupleValsLess(t *testing.T) {
 			lesserTplVals := test.lesserTVs.nomsTupleForTags(vrw.Format(), test.tags, true)
 			greaterTplVals := test.greaterTVs.nomsTupleForTags(vrw.Format(), test.tags, true)
 
-			lessLTGreater, err := lesserTplVals.Less(ctx, vrw, greaterTplVals)
+			lessLTGreater, err := lesserTplVals.Less(ctx, vrw.Format(), greaterTplVals)
 			require.NoError(t, err)
-			greaterLTLess, err := greaterTplVals.Less(ctx, vrw, lesserTplVals)
+			greaterLTLess, err := greaterTplVals.Less(ctx, vrw.Format(), lesserTplVals)
 			require.NoError(t, err)
 			assert.True(t, test.areEqual && !lessLTGreater || !test.areEqual && lessLTGreater)
 			assert.True(t, !greaterLTLess)
@@ -112,9 +112,9 @@ func TestTupleValsLess(t *testing.T) {
 			greaterTpl, err := greaterTplVals.Value(ctx)
 			require.NoError(t, err)
 
-			lesserLess, err := lesserTpl.Less(ctx, vrw, greaterTpl)
+			lesserLess, err := lesserTpl.Less(ctx, vrw.Format(), greaterTpl)
 			require.NoError(t, err)
-			greaterLess, err := greaterTpl.Less(ctx, vrw, lesserTpl)
+			greaterLess, err := greaterTpl.Less(ctx, vrw.Format(), lesserTpl)
 			require.NoError(t, err)
 
 			// needs to match with the types.Tuple Less implementation.

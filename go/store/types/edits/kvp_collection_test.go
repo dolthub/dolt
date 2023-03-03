@@ -183,7 +183,7 @@ func createKVPColl(vr types.ValueReader, rng *rand.Rand, size int) *KVPCollectio
 		kvps[i] = types.KVP{Key: types.Uint(rng.Uint64() % 10000), Val: types.NullValue}
 	}
 
-	types.SortWithErroringLess(types.KVPSort{Values: kvps, Ctx: context.Background(), VR: vr})
+	types.SortWithErroringLess(context.Background(), vr.Format(), types.KVPSort{Values: kvps})
 
 	return NewKVPCollection(vr, kvps)
 }

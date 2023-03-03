@@ -55,8 +55,8 @@ func NewEmptyBlob(vrw ValueReadWriter) (Blob, error) {
 }
 
 // Less implements the LesserValuable interface.
-func (b Blob) Less(ctx context.Context, vr ValueReader, other LesserValuable) (bool, error) {
-	res, err := b.Compare(vr.Format(), other)
+func (b Blob) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+	res, err := b.Compare(nbf, other)
 	if err != nil {
 		return false, err
 	}

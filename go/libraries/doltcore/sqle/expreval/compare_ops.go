@@ -90,7 +90,7 @@ func (op GreaterOp) CompareNomsValues(ctx context.Context, v1, v2 types.Value) (
 		return false, nil
 	}
 
-	lt, err := v1.Less(ctx, op.vr, v2)
+	lt, err := v1.Less(ctx, op.vr.Format(), v2)
 
 	if err != nil {
 		return false, nil
@@ -124,7 +124,7 @@ func (op GreaterEqualOp) CompareLiterals(l1, l2 *expression.Literal) (bool, erro
 // CompareNomsValues compares two noms values returning true if the of the first
 // is greater or equal to than the second.
 func (op GreaterEqualOp) CompareNomsValues(ctx context.Context, v1, v2 types.Value) (bool, error) {
-	res, err := v1.Less(ctx, op.vr, v2)
+	res, err := v1.Less(ctx, op.vr.Format(), v2)
 
 	if err != nil {
 		return false, err
@@ -158,7 +158,7 @@ func (op LessOp) CompareLiterals(l1, l2 *expression.Literal) (bool, error) {
 // CompareNomsValues compares two noms values returning true if the of the first
 // is less than the second.
 func (op LessOp) CompareNomsValues(ctx context.Context, v1, v2 types.Value) (bool, error) {
-	return v1.Less(ctx, op.vr, v2)
+	return v1.Less(ctx, op.vr.Format(), v2)
 }
 
 // CompareToNil always returns false as values are neither greater than, less than, or equal to nil
@@ -192,7 +192,7 @@ func (op LessEqualOp) CompareNomsValues(ctx context.Context, v1, v2 types.Value)
 		return true, nil
 	}
 
-	return v1.Less(ctx, op.vr, v2)
+	return v1.Less(ctx, op.vr.Format(), v2)
 }
 
 // CompareToNil always returns false as values are neither greater than, less than, or equal to nil

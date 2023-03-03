@@ -67,7 +67,7 @@ func readerForTuples(t *testing.T, ctx context.Context, vrw types.ValueReadWrite
 	require.True(t, len(tuples)%2 == 0)
 	prev := tuples[0]
 	for i := 2; i < len(tuples); i += 2 {
-		isLess, err := prev.Less(ctx, vrw, tuples[i])
+		isLess, err := prev.Less(ctx, vrw.Format(), tuples[i])
 		require.NoError(t, err)
 		require.True(t, isLess)
 		prev = tuples[i]
@@ -226,7 +226,7 @@ func testMergeOrder(t *testing.T, ctx context.Context, vr types.ValueReader, mer
 		currKeyVal, err := curr.Key.Value(ctx)
 		require.NoError(t, err)
 
-		isLess, err := prevKeyVal.Less(ctx, vr, currKeyVal)
+		isLess, err := prevKeyVal.Less(ctx, vr.Format(), currKeyVal)
 		require.NoError(t, err)
 
 		require.True(t, isLess || prevKeyVal.Equals(currKeyVal))

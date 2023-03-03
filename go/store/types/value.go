@@ -80,7 +80,7 @@ type LesserValuable interface {
 	// String) then the natural ordering is used. For other Noms values the Hash of the value is
 	// used. When comparing Noms values of different type the following ordering is used:
 	// Bool < Float < String < everything else.
-	Less(ctx context.Context, vr ValueReader, other LesserValuable) (bool, error)
+	Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error)
 }
 
 // Emptyable is an interface for Values which may or may not be empty
@@ -151,22 +151,20 @@ func (vs ValueSlice) Contains(nbf *NomsBinFormat, val Value) bool {
 
 type ValueSort struct {
 	Values []Value
-	Ctx    context.Context
-	VR     ValueReader
 }
 
 func (vs ValueSort) Len() int      { return len(vs.Values) }
 func (vs ValueSort) Swap(i, j int) { vs.Values[i], vs.Values[j] = vs.Values[j], vs.Values[i] }
-func (vs ValueSort) Less(i, j int) (bool, error) {
-	return vs.Values[i].Less(vs.Ctx, vs.VR, vs.Values[j])
+func (vs ValueSort) Less(ctx context.Context, nbf *NomsBinFormat, i, j int) (bool, error) {
+	return vs.Values[i].Less(ctx, nbf, vs.Values[j])
 }
 
 func (vs ValueSort) Equals(other ValueSort) bool {
 	return ValueSlice(vs.Values).Equals(ValueSlice(other.Values))
 }
 
-func (vs ValueSort) Contains(v Value) bool {
-	return ValueSlice(vs.Values).Contains(vs.VR.Format(), v)
+func (vs ValueSort) Contains(nbf *NomsBinFormat, v Value) bool {
+	return ValueSlice(vs.Values).Contains(nbf, v)
 }
 
 type valueReadWriter interface {
@@ -200,8 +198,6 @@ func (vs TupleSlice) Contains(nbf *NomsBinFormat, v Tuple) bool {
 
 type TupleSort struct {
 	Tuples []Tuple
-	Ctx    context.Context
-	VR     ValueReader
 }
 
 func (vs TupleSort) Len() int {
@@ -212,8 +208,8 @@ func (vs TupleSort) Swap(i, j int) {
 	vs.Tuples[i], vs.Tuples[j] = vs.Tuples[j], vs.Tuples[i]
 }
 
-func (vs TupleSort) Less(i, j int) (bool, error) {
-	res, err := vs.Tuples[i].TupleCompare(vs.Ctx, vs.VR, vs.Tuples[j])
+func (vs TupleSort) Less(ctx context.Context, nbf *NomsBinFormat, i, j int) (bool, error) {
+	res, err := vs.Tuples[i].TupleCompare(ctx, nbf, vs.Tuples[j])
 	if err != nil {
 		return false, err
 	}
@@ -225,8 +221,8 @@ func (vs TupleSort) Equals(other TupleSort) bool {
 	return TupleSlice(vs.Tuples).Equals(other.Tuples)
 }
 
-func (vs TupleSort) Contains(v Tuple) bool {
-	return TupleSlice(vs.Tuples).Contains(vs.VR.Format(), v)
+func (vs TupleSort) Contains(nbf *NomsBinFormat, v Tuple) bool {
+	return TupleSlice(vs.Tuples).Contains(nbf, v)
 }
 
 type valueImpl struct {
@@ -277,8 +273,8 @@ func (v valueImpl) Equals(other Value) bool {
 	return false
 }
 
-func (v valueImpl) Less(ctx context.Context, vr ValueReader, other LesserValuable) (bool, error) {
-	res, err := valueCompare(vr.Format(), v, other.(Value))
+func (v valueImpl) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+	res, err := valueCompare(nbf, v, other.(Value))
 	if err != nil {
 		return false, nil
 	}

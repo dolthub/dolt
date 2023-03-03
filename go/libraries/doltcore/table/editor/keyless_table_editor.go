@@ -456,7 +456,7 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 		idx++
 	}
 
-	err = types.SortWithErroringLess(types.TupleSort{Tuples: keys, Ctx: ctx, VR: tbl.ValueReadWriter()})
+	err = types.SortWithErroringLess(ctx, tbl.ValueReadWriter().Format(), types.TupleSort{Tuples: keys})
 	if err != nil {
 		return nil, err
 	}

@@ -395,7 +395,7 @@ func FindCommonAncestor(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.Valu
 			}
 			return h1, true, nil
 		}
-		if pi1.Less(ctx, vr1, pi2) {
+		if pi1.Less(ctx, vr1.Format(), pi2) {
 			// TODO: Should pi2.Seek(pi1.curr), but MapIterator does not expose Seek yet.
 			if !pi2.Next(ctx) {
 				return hash.Hash{}, false, firstError(pi1.Err(), pi2.Err())

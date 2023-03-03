@@ -88,12 +88,12 @@ func (ase *AsyncSortedEdits) AddEdit(k types.LesserValuable, v types.Valuable) {
 		// in-place down below. We add it to |sortedColls| here.  By
 		// the time |sortedColls| is used, it will be sorted.
 		ase.sortedColls = append(ase.sortedColls, coll)
-		toSort := types.KVPSort{Values: ase.accumulating, Ctx: ase.sortCtx, VR: ase.vr}
+		toSort := types.KVPSort{Values: ase.accumulating}
 		select {
 		case ase.sortWork <- toSort:
 			break
 		default:
-			if err := types.SortWithErroringLess(toSort); err != nil {
+			if err := types.SortWithErroringLess(ase.sortCtx, ase.vr.Format(), toSort); err != nil {
 				ase.sortGroup.Go(func() error {
 					return err
 				})
@@ -116,7 +116,7 @@ func (ase *AsyncSortedEdits) sortWorker() error {
 			if !ok {
 				return nil
 			}
-			if err := types.SortWithErroringLess(toSort); err != nil {
+			if err := types.SortWithErroringLess(ase.sortCtx, ase.vr.Format(), toSort); err != nil {
 				return err
 			}
 		case <-ase.sortCtx.Done():
@@ -133,12 +133,12 @@ func (ase *AsyncSortedEdits) FinishedEditing(ctx context.Context) (types.EditPro
 	ase.closed = true
 
 	if len(ase.accumulating) > 0 {
-		toSort := types.KVPSort{Values: ase.accumulating, Ctx: ctx, VR: ase.vr}
+		toSort := types.KVPSort{Values: ase.accumulating}
 		select {
 		case ase.sortWork <- toSort:
 			break
 		default:
-			if err := types.SortWithErroringLess(toSort); err != nil {
+			if err := types.SortWithErroringLess(ase.sortCtx, ase.vr.Format(), toSort); err != nil {
 				return nil, err
 			}
 		}
@@ -151,7 +151,7 @@ func (ase *AsyncSortedEdits) FinishedEditing(ctx context.Context) (types.EditPro
 
 	// Calling thread helps work through remaining |sortWork| until it's sorted.
 	for toSort := range ase.sortWork {
-		if err := types.SortWithErroringLess(toSort); err != nil {
+		if err := types.SortWithErroringLess(ctx, ase.vr.Format(), toSort); err != nil {
 			return nil, err
 		}
 	}

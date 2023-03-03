@@ -192,7 +192,7 @@ func search(ctx context.Context, vr types.ValueReader, readerIdx int, key types.
 			}
 
 			var isLess bool
-			isLess, err = key.Less(ctx, vr, vals[i].key)
+			isLess, err = key.Less(ctx, vr.Format(), vals[i].key)
 			if err != nil {
 				return false
 			} else if isLess {

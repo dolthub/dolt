@@ -44,7 +44,7 @@ func TestTupleEquality(t *testing.T) {
 		t.Error("Tuple not equal to itself")
 	}
 
-	res, err := tpl.Compare(ctx, vs, tpl)
+	res, err := tpl.Compare(ctx, nbf, tpl)
 	require.NoError(t, err)
 	require.Equal(t, 0, res)
 
@@ -57,7 +57,7 @@ func TestTupleEquality(t *testing.T) {
 		t.Error("Tuples should not be equal")
 	}
 
-	res, err = tpl.Compare(ctx, vs, tpl2)
+	res, err = tpl.Compare(ctx, nbf, tpl2)
 	require.NoError(t, err)
 	require.NotEqual(t, 0, res)
 
@@ -74,7 +74,7 @@ func TestTupleEquality(t *testing.T) {
 		t.Error("tuples should be equal")
 	}
 
-	res, err = tpl2.Compare(ctx, vs, tpl3)
+	res, err = tpl2.Compare(ctx, nbf, tpl3)
 	require.NoError(t, err)
 	require.Equal(t, 0, res)
 
@@ -85,7 +85,7 @@ func TestTupleEquality(t *testing.T) {
 		t.Error("tuples should be equal")
 	}
 
-	res, err = tpl2.Compare(ctx, vs, tpl3)
+	res, err = tpl2.Compare(ctx, nbf, tpl3)
 	require.NoError(t, err)
 	require.Equal(t, 0, res)
 
@@ -96,7 +96,7 @@ func TestTupleEquality(t *testing.T) {
 		t.Error("should be equal")
 	}
 
-	res, err = tpl2.Compare(ctx, vs, tpl3)
+	res, err = tpl2.Compare(ctx, nbf, tpl3)
 	require.NoError(t, err)
 	require.Equal(t, 0, res)
 
@@ -107,7 +107,7 @@ func TestTupleEquality(t *testing.T) {
 		t.Error("should be equal")
 	}
 
-	res, err = tpl2.Compare(ctx, vs, tpl3)
+	res, err = tpl2.Compare(ctx, nbf, tpl3)
 	require.NoError(t, err)
 	require.Equal(t, 0, res)
 
@@ -118,7 +118,7 @@ func TestTupleEquality(t *testing.T) {
 		t.Error("should be equal")
 	}
 
-	res, err = tpl2.Compare(ctx, vs, tpl3)
+	res, err = tpl2.Compare(ctx, nbf, tpl3)
 	require.NoError(t, err)
 	require.Equal(t, 0, res)
 
@@ -248,14 +248,14 @@ func TestTupleLess(t *testing.T) {
 			tpl2, err := NewTuple(nbf, test.vals2...)
 			require.NoError(t, err)
 
-			actual, err := tpl1.Less(ctx, vs, tpl2)
+			actual, err := tpl1.Less(ctx, nbf, tpl2)
 			require.NoError(t, err)
 
 			if actual != test.expected {
 				t.Error("tpl1:", mustString(EncodedValue(context.Background(), tpl1)), "tpl2:", mustString(EncodedValue(context.Background(), tpl2)), "expected", test.expected, "actual:", actual)
 			}
 
-			res, err := tpl1.Compare(ctx, vs, tpl2)
+			res, err := tpl1.Compare(ctx, nbf, tpl2)
 			require.NoError(t, err)
 			require.Equal(t, actual, isLTZero(res))
 		})
@@ -388,6 +388,6 @@ func BenchmarkLess(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tuples[i].Less(ctx, vs, tuples[i+1])
+		tuples[i].Less(ctx, nbf, tuples[i+1])
 	}
 }

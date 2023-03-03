@@ -816,7 +816,7 @@ func TestSetIter2(t *testing.T) {
 		ts := toTestSet(scale, vrw)
 		set, err := ts.toSet(vrw)
 		require.NoError(t, err)
-		err = SortWithErroringLess(ValueSort{ts, context.Background(), vrw})
+		err = SortWithErroringLess(context.Background(), vrw.Format(), ValueSort{ts})
 		require.NoError(t, err)
 		idx := uint64(0)
 		endAt := uint64(64)
@@ -870,7 +870,7 @@ func TestSetIterAll2(t *testing.T) {
 		ts := toTestSet(scale, vrw)
 		set, err := ts.toSet(vrw)
 		require.NoError(t, err)
-		err = SortWithErroringLess(ValueSort{ts, context.Background(), vrw})
+		err = SortWithErroringLess(context.Background(), vrw.Format(), ValueSort{ts})
 		require.NoError(t, err)
 		idx := uint64(0)
 

@@ -54,7 +54,7 @@ func (itr *KVPCollItr) Less(ctx context.Context, other *KVPCollItr) (bool, error
 		return false, nil
 	}
 
-	return itr.currKey.Less(ctx, itr.vr, other.currKey)
+	return itr.currKey.Less(ctx, itr.vr.Format(), other.currKey)
 }
 
 // returns the next kvp, the slice it was read from when that slice is empty, and whether or not iteration is complete.

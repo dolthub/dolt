@@ -93,16 +93,14 @@ func (entry mapEntry) equals(other mapEntry) bool {
 
 type mapEntrySlice struct {
 	entries []mapEntry
-	ctx     context.Context
-	vr      ValueReader
 }
 
 func (mes mapEntrySlice) Len() int { return len(mes.entries) }
 func (mes mapEntrySlice) Swap(i, j int) {
 	mes.entries[i], mes.entries[j] = mes.entries[j], mes.entries[i]
 }
-func (mes mapEntrySlice) Less(i, j int) (bool, error) {
-	return mes.entries[i].key.Less(mes.ctx, mes.vr, mes.entries[j].key)
+func (mes mapEntrySlice) Less(ctx context.Context, nbf *NomsBinFormat, i, j int) (bool, error) {
+	return mes.entries[i].key.Less(ctx, nbf, mes.entries[j].key)
 }
 func (mes mapEntrySlice) Equals(other mapEntrySlice) bool {
 	if mes.Len() != other.Len() {
@@ -180,8 +178,6 @@ func (ml mapLeafSequence) entries(ctx context.Context) (mapEntrySlice, error) {
 	dec, count := ml.decoderSkipToValues()
 	entries := mapEntrySlice{
 		make([]mapEntry, count),
-		ctx,
-		ml.valueReadWriter(),
 	}
 	for i := uint64(0); i < count; i++ {
 		k, err := dec.readValue(ml.format())
@@ -347,7 +343,7 @@ func (ml mapLeafSequence) search(ctx context.Context, key orderedKey) (int, erro
 			return false, err
 		}
 
-		isLess, err := k.Less(ctx, ml.valueReadWriter(), key)
+		isLess, err := k.Less(ctx, ml.format(), key)
 
 		if err != nil {
 			return false, nil
@@ -398,7 +394,7 @@ func (mes mapEntrySequence) search(ctx context.Context, key orderedKey) (int, er
 			return false, err
 		}
 
-		isLess, err := ordKey.Less(ctx, mes.vrw, key)
+		isLess, err := ordKey.Less(ctx, mes.vrw.Format(), key)
 
 		if err != nil {
 			return false, nil
@@ -562,7 +558,7 @@ func (mes mapEntrySequence) writeTo(writer nomsWriter, format *NomsBinFormat) er
 	panic("not implemented")
 }
 
-func (mes mapEntrySequence) Less(ctx context.Context, vr ValueReader, other LesserValuable) (bool, error) {
+func (mes mapEntrySequence) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	panic("not implemented")
 }
 

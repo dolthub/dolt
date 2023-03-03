@@ -51,7 +51,7 @@ func Apply(ctx context.Context, vr types.ValueReader, root types.Value, patch Pa
 
 	var lastPath types.Path
 	stack := patchStack{}
-	types.SortWithErroringLess(PatchSort{patch, ctx, vr})
+	types.SortWithErroringLess(ctx, vr.Format(), PatchSort{patch})
 
 	// Push the element on the stack that corresponds to the root
 	// node.

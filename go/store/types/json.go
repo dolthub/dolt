@@ -164,7 +164,7 @@ func (t JSON) isPrimitive() bool {
 }
 
 // Less implements the LesserValuable interface.
-func (t JSON) Less(ctx context.Context, vr ValueReader, other LesserValuable) (bool, error) {
+func (t JSON) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	otherJSONDoc, ok := other.(JSON)
 	if !ok {
 		return JSONKind < other.Kind(), nil
@@ -274,7 +274,7 @@ func compareJSONArray(ctx context.Context, a List, b Value) (int, error) {
 		// where there is a difference. The array with the smaller value in that position is ordered first.
 
 		// TODO(andy): this diverges from GMS
-		aLess, err := a.Less(ctx, a.valueReadWriter(), b)
+		aLess, err := a.Less(ctx, a.format(), b)
 		if err != nil {
 			return 0, err
 		}
@@ -282,7 +282,7 @@ func compareJSONArray(ctx context.Context, a List, b Value) (int, error) {
 			return -1, nil
 		}
 
-		bLess, err := b.Less(ctx, a.valueReadWriter(), a)
+		bLess, err := b.Less(ctx, a.format(), a)
 		if err != nil {
 			return 0, err
 		}
@@ -311,7 +311,7 @@ func compareJSONObject(ctx context.Context, a Map, b Value) (int, error) {
 		// objects. The order of two objects that are not equal is unspecified but deterministic.
 
 		// TODO(andy): this diverges from GMS
-		aLess, err := a.Less(ctx, a.valueReadWriter(), b)
+		aLess, err := a.Less(ctx, a.format(), b)
 		if err != nil {
 			return 0, err
 		}
@@ -319,7 +319,7 @@ func compareJSONObject(ctx context.Context, a Map, b Value) (int, error) {
 			return -1, nil
 		}
 
-		bLess, err := b.Less(ctx, b.valueReadWriter(), a)
+		bLess, err := b.Less(ctx, b.format(), a)
 		if err != nil {
 			return 0, err
 		}

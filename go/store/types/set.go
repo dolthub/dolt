@@ -96,7 +96,7 @@ func readSetInput(ctx context.Context, vrw ValueReadWriter, ae *atomicerr.Atomic
 	var lastV Value
 	for v := range vChan {
 		if lastV != nil {
-			isLess, err := lastV.Less(ctx, vrw, v)
+			isLess, err := lastV.Less(ctx, vrw.Format(), v)
 
 			if ae.SetIfErrAndCheck(err) {
 				return
@@ -275,7 +275,7 @@ func buildSetData(ctx context.Context, vr ValueReader, values ValueSlice) ValueS
 		return ValueSlice{}
 	}
 
-	SortWithErroringLess(ValueSort{values, ctx, vr})
+	SortWithErroringLess(ctx, vr.Format(), ValueSort{values})
 
 	uniqueSorted := make(ValueSlice, 0, len(values))
 	last := values[0]
@@ -300,7 +300,7 @@ func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 			v := item.(Value)
 
 			if lastValue != nil {
-				isLess, err := lastValue.Less(ctx, vrw, v)
+				isLess, err := lastValue.Less(ctx, vrw.Format(), v)
 
 				if err != nil {
 					return nil, orderedKey{}, 0, err

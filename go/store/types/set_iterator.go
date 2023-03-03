@@ -358,7 +358,7 @@ func compareValue(ctx context.Context, vr ValueReader, v1, v2 Value) (int, error
 	}
 
 	if v1 != nil {
-		if isLess, err := v1.Less(ctx, vr, v2); err != nil {
+		if isLess, err := v1.Less(ctx, vr.Format(), v2); err != nil {
 			return 0, err
 		} else if isLess {
 			return -1, nil
@@ -369,7 +369,7 @@ func compareValue(ctx context.Context, vr ValueReader, v1, v2 Value) (int, error
 		return 1, nil
 	}
 
-	if isLess, err := v2.Less(ctx, vr, v1); err != nil {
+	if isLess, err := v2.Less(ctx, vr.Format(), v1); err != nil {
 		return 0, err
 	} else if isLess {
 		return 1, nil

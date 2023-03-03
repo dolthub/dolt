@@ -87,7 +87,7 @@ func (imt *InMemTable) AppendRow(ctx context.Context, vr types.ValueReader, r ro
 		jRow := imt.rows[j]
 
 		isLess := false
-		isLess, err = iRow.NomsMapKey(imt.sch).Less(ctx, vr, jRow.NomsMapKey(imt.sch))
+		isLess, err = iRow.NomsMapKey(imt.sch).Less(ctx, vr.Format(), jRow.NomsMapKey(imt.sch))
 
 		return isLess
 	})

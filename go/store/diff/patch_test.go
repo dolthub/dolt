@@ -64,11 +64,11 @@ func TestPatchPathPartCompare(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		res01, err := pathPartCompare(ctx, vs, tc[0], tc[1])
+		res01, err := pathPartCompare(ctx, vs.Format(), tc[0], tc[1])
 		require.NoError(t, err)
-		res00, err := pathPartCompare(ctx, vs, tc[0], tc[0])
+		res00, err := pathPartCompare(ctx, vs.Format(), tc[0], tc[0])
 		require.NoError(t, err)
-		res10, err := pathPartCompare(ctx, vs, tc[1], tc[0])
+		res10, err := pathPartCompare(ctx, vs.Format(), tc[1], tc[0])
 		require.NoError(t, err)
 
 		assert.Equal(-1, res01, "test case %d failed, pp0: %s, pp1: %s", i, tc[0], tc[1])
@@ -95,11 +95,11 @@ func TestPatchPathIsLess(t *testing.T) {
 	for i, tc := range testCases {
 		p0 := mustParsePath(assert, tc[0])
 		p1 := mustParsePath(assert, tc[1])
-		zeroLTOne, err := pathIsLess(ctx, vs, p0, p1)
+		zeroLTOne, err := pathIsLess(ctx, vs.Format(), p0, p1)
 		require.NoError(t, err)
-		zeroLTZero, err := pathIsLess(ctx, vs, p0, p0)
+		zeroLTZero, err := pathIsLess(ctx, vs.Format(), p0, p0)
 		require.NoError(t, err)
-		oneLTZero, err := pathIsLess(ctx, vs, p1, p0)
+		oneLTZero, err := pathIsLess(ctx, vs.Format(), p1, p0)
 		require.NoError(t, err)
 		assert.True(zeroLTOne, "test case %d failed", i)
 		assert.False(zeroLTZero, "test case %d failed", i)
@@ -131,6 +131,6 @@ func TestPatchSort(t *testing.T) {
 		shuffledPaths = append(shuffledPaths, sortedPaths[idx])
 	}
 
-	types.SortWithErroringLess(PatchSort{shuffledPaths, ctx, vs})
+	types.SortWithErroringLess(ctx, vs.Format(), PatchSort{shuffledPaths})
 	assert.Equal(sortedPaths, shuffledPaths)
 }

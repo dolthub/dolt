@@ -529,58 +529,58 @@ func (cb columnBounds) Between(ctx context.Context, vr types.ValueReader, val ty
 	case boundsCase_infinity_infinity:
 		return true, false, nil
 	case boundsCase_infinity_lessEquals:
-		ok, err := cb.upperbound.Less(ctx, vr, val)
+		ok, err := cb.upperbound.Less(ctx, vr.Format(), val)
 		if err != nil || ok {
 			return false, true, err
 		}
 	case boundsCase_infinity_less:
-		ok, err := val.Less(ctx, vr, cb.upperbound)
+		ok, err := val.Less(ctx, vr.Format(), cb.upperbound)
 		if err != nil || !ok {
 			return false, true, err
 		}
 	case boundsCase_greaterEquals_infinity:
-		ok, err := val.Less(ctx, vr, cb.lowerbound)
+		ok, err := val.Less(ctx, vr.Format(), cb.lowerbound)
 		if err != nil || ok {
 			return false, false, err
 		}
 	case boundsCase_greaterEquals_lessEquals:
-		ok, err := val.Less(ctx, vr, cb.lowerbound)
+		ok, err := val.Less(ctx, vr.Format(), cb.lowerbound)
 		if err != nil || ok {
 			return false, false, err
 		}
-		ok, err = cb.upperbound.Less(ctx, vr, val)
+		ok, err = cb.upperbound.Less(ctx, vr.Format(), val)
 		if err != nil || ok {
 			return false, true, err
 		}
 	case boundsCase_greaterEquals_less:
-		ok, err := val.Less(ctx, vr, cb.lowerbound)
+		ok, err := val.Less(ctx, vr.Format(), cb.lowerbound)
 		if err != nil || ok {
 			return false, false, err
 		}
-		ok, err = val.Less(ctx, vr, cb.upperbound)
+		ok, err = val.Less(ctx, vr.Format(), cb.upperbound)
 		if err != nil || !ok {
 			return false, true, err
 		}
 	case boundsCase_greater_infinity:
-		ok, err := cb.lowerbound.Less(ctx, vr, val)
+		ok, err := cb.lowerbound.Less(ctx, vr.Format(), val)
 		if err != nil || !ok {
 			return false, false, err
 		}
 	case boundsCase_greater_lessEquals:
-		ok, err := cb.lowerbound.Less(ctx, vr, val)
+		ok, err := cb.lowerbound.Less(ctx, vr.Format(), val)
 		if err != nil || !ok {
 			return false, false, err
 		}
-		ok, err = cb.upperbound.Less(ctx, vr, val)
+		ok, err = cb.upperbound.Less(ctx, vr.Format(), val)
 		if err != nil || ok {
 			return false, true, err
 		}
 	case boundsCase_greater_less:
-		ok, err := cb.lowerbound.Less(ctx, vr, val)
+		ok, err := cb.lowerbound.Less(ctx, vr.Format(), val)
 		if err != nil || !ok {
 			return false, false, err
 		}
-		ok, err = val.Less(ctx, vr, cb.upperbound)
+		ok, err = val.Less(ctx, vr.Format(), cb.upperbound)
 		if err != nil || !ok {
 			return false, true, err
 		}

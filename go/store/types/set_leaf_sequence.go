@@ -61,7 +61,7 @@ func (sl setLeafSequence) search(ctx context.Context, key orderedKey) (int, erro
 			return false, err
 		}
 
-		isLess, err := k.Less(ctx, sl.valueReadWriter(), key)
+		isLess, err := k.Less(ctx, sl.format(), key)
 
 		if err != nil {
 			return false, err
