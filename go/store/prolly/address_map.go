@@ -150,7 +150,7 @@ func (wr AddressMapEditor) Delete(ctx context.Context, name string) error {
 }
 
 func (wr AddressMapEditor) Flush(ctx context.Context) (AddressMap, error) {
-	sm := wr.addresses.StaticMap
+	sm := wr.addresses.Static
 	serializer := message.NewAddressMapSerializer(sm.NodeStore.Pool())
 	fn := tree.ApplyMutations[stringSlice, lexicographic, message.AddressMapSerializer]
 
