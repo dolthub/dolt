@@ -12,10 +12,6 @@ make_repo() {
 setup() {
     skiponwindows "tests are flaky on Windows"
     setup_no_dolt_init
-    mkdir $BATS_TMPDIR/sql-server-test$$
-    nativevar DOLT_ROOT_PATH $BATS_TMPDIR/sql-server-test$$ /p
-    dolt config --global --add user.email "test@test.com"
-    dolt config --global --add user.name "test"
     make_repo repo1
     make_repo repo2
 }
@@ -24,6 +20,16 @@ teardown() {
     stop_sql_server 1 && sleep 0.5
     rm -rf $BATS_TMPDIR/sql-server-test$$
     teardown_common
+}
+
+@test "sql-server: sanity check" {
+    cd repo1
+    for i in {1..16};
+    do
+        dolt sql -q "create table t_$i (pk int primary key, c$i int)"
+        dolt add -A
+        dolt commit -m "new table t_$i"
+    done
 }
 
 @test "sql-server: can create savepoint when no database is selected" {
@@ -1507,8 +1513,6 @@ databases:
     run grep '\"/tmp/mysql.sock\"' log.txt
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
-
-    rm /tmp/mysql.sock
 }
 
 @test "sql-server: the second server starts without unix socket set up if there is already a file in the socket file path" {
@@ -1629,7 +1633,6 @@ s.close()
     run ls repo2/.dolt
     [[ "$output" =~ "sql-server.lock" ]] || false
 
-    skip "this now fails because of the socket file not being cleaned up"
     start_sql_server
     run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
     [ $status -eq 0 ]
