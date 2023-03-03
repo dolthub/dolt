@@ -221,18 +221,18 @@ func mergeProllyRowData(
 				// report conflict
 				sendConflict(conflicts, diff)
 				sendIndexReset(indexEdits, diff)
+			case tree.DiffOpConvergentEdit:
+				if vMerger.keyless {
+					// still conflict
+					sendConflict(conflicts, diff)
+					sendIndexReset(indexEdits, diff)
+				}
 			case tree.DiffOpDivergentResolved:
 				// "cellwise merge edit"
 				// safely apply to left
 				// for non-unique also the weird rollback logic
 				// update stats
-				if vMerger.keyless {
-					// still conflict
-					sendConflict(conflicts, diff)
-					sendIndexReset(indexEdits, diff)
-				} else {
-					sendCellWiseMergeEdit(indexEdits, diff)
-				}
+				sendCellWiseMergeEdit(indexEdits, diff)
 			case tree.DiffOpRightEdit, tree.DiffOpRightDelete:
 				// safely apply to left
 				// update stats

@@ -358,7 +358,11 @@ func applyCellwiseEdits(ctx context.Context, rootIdxs, mergeIdxs []MutableSecond
 				// or update left to merge
 				for _, idx := range rootIdxs {
 					if _, ok := notUnique[idx.Name]; ok {
-						if err := applyEdit(ctx, idx, e.rightEdit()); err != nil {
+						if err := applyEdit(ctx, idx, tree.Diff{
+							Key:  tree.Item(e.key),
+							From: tree.Item(e.lTo),
+							To:   tree.Item(e.merged),
+						}); err != nil {
 							return err
 						}
 					} else {

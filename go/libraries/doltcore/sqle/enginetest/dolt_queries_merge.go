@@ -1307,6 +1307,7 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 	{
 		Name: "delete conflict",
 		SetUpScript: []string{
+			"set @@dolt_allow_commit_conflicts = 1",
 			"create table xyz (x int primary key, y int, z int, key y_idx(y), key z_idx(z))",
 			"insert into xyz values (0,0,0), (1,1,1)",
 			"call dolt_commit('-Am', 'make table')",
@@ -1321,18 +1322,19 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "CALL DOLT_MERGE('feature');",
-				ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
+				Query:    "CALL DOLT_MERGE('feature');",
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
-				Query:    "select * from dolt_constraint_violations_xyz",
-				Expected: []sql.Row{},
+				Query:    "select our_y, our_diff_type, their_y, their_diff_type from dolt_conflicts_xyz",
+				Expected: []sql.Row{{2, "modified", nil, "removed"}},
 			},
 		},
 	},
 	{
 		Name: "divergent edit conflict",
 		SetUpScript: []string{
+			"set @@dolt_allow_commit_conflicts = 1",
 			"create table xyz (x int primary key, y int, z int, key y_idx(y), key z_idx(z))",
 			"insert into xyz values (0,0,0), (1,1,1)",
 			"call dolt_commit('-Am', 'make table')",
@@ -1347,12 +1349,12 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "CALL DOLT_MERGE('feature');",
-				ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
+				Query:    "CALL DOLT_MERGE('feature');",
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
-				Query:    "select * from dolt_constraint_violations_xyz",
-				Expected: []sql.Row{},
+				Query:    "select our_y, our_diff_type, their_y, their_diff_type from dolt_conflicts_xyz",
+				Expected: []sql.Row{{2, "modified", 3, "modified"}},
 			},
 		},
 	},
