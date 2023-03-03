@@ -104,7 +104,7 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	mergedRoot, mergeStats, err := getStashAtIdx(ctx, dEnv, workingRoot, idx)
+	mergedRoot, mergeStats, err := applyStashAtIdx(ctx, dEnv, workingRoot, idx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -150,7 +150,7 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 	return 0
 }
 
-func getStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, workingRoot *doltdb.RootValue, idx int) (*doltdb.RootValue, map[string]*merge.MergeStats, error) {
+func applyStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, workingRoot *doltdb.RootValue, idx int) (*doltdb.RootValue, map[string]*merge.MergeStats, error) {
 	stashRoot, headCommit, err := dEnv.DoltDB.GetStashRootAndHeadCommitAtIdx(ctx, idx)
 	if err != nil {
 		return nil, nil, err

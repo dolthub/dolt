@@ -25,6 +25,13 @@ teardown() {
     fi
 }
 
+@test "stash: stashing on clean working set" {
+    skip_nbf_ld_1
+    run dolt stash
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No local changes to save" ]] || false
+}
+
 @test "stash: simple stashing and popping stash" {
     skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
@@ -56,18 +63,69 @@ teardown() {
     [ "$output" = "$result" ]
 }
 
-@test "stash: stash clear and stash again" {
+@test "stash: clearing stash when stash list is empty" {
+    skip_nbf_ld_1
+    run dolt stash list
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+
+    run dolt stash clear
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
+@test "stash: clearing stash removes all entries in stash list" {
     skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
-    dolt sql -q "SELECT * FROM test"
-    run dolt sql -q "SELECT * FROM test"
-    [ "$status" -eq 0 ]
-    result=$output
+    dolt stash
 
+    dolt sql -q "INSERT INTO test VALUES (2, 'b')"
+    dolt stash
+
+    dolt sql -q "INSERT INTO test VALUES (3, 'c')"
+    dolt stash
+
+    run dolt stash list
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+
+    run dolt stash clear
+    [ "$status" -eq 0 ]
+
+    run dolt stash list
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+}
+
+@test "stash: clearing stash and stashing again" {
+    skip_nbf_ld_1
+    dolt sql -q "INSERT INTO test VALUES (1, 'a')"
+    dolt stash
+
+    run dolt stash list
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+
+    run dolt stash clear
+    [ "$status" -eq 0 ]
+
+    dolt sql -q "INSERT INTO test VALUES (2, 'b')"
     dolt stash
     run dolt stash list
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
+}
+
+@test "stash: clearing stash and popping returns error of no entries found" {
+    skip_nbf_ld_1
+    dolt sql -q "INSERT INTO test VALUES (1, 'a')"
+    dolt stash
+    dolt sql -q "INSERT INTO test VALUES (2, 'b')"
+    dolt stash
+
+    run dolt stash list
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
 
     run dolt stash clear
     [ "$status" -eq 0 ]
@@ -208,30 +266,7 @@ teardown() {
     [[ "$output" =~ "1,a" ]] || false
 }
 
-@test "stash: stash clear removes all entries in stash list" {
-    skip_nbf_ld_1
-    dolt sql -q "INSERT INTO test VALUES (1, 'a')"
-    dolt stash
-
-    dolt sql -q "INSERT INTO test VALUES (2, 'b')"
-    dolt stash
-
-    dolt sql -q "INSERT INTO test VALUES (3, 'c')"
-    dolt stash
-
-    run dolt stash list
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
-
-    run dolt stash clear
-    [ "$status" -eq 0 ]
-
-    run dolt stash list
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 0 ]
-}
-
-@test "stash: stash drop remove an entry at given index in stash list" {
+@test "stash: dropping stash removes an entry at given index in stash list" {
     skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash

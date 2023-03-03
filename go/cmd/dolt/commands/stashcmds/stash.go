@@ -131,7 +131,8 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv) error {
 	}
 
 	if headHash.Equal(workingHash) && headHash.Equal(stagedHash) {
-		return fmt.Errorf("No local changes to save")
+		cli.Println("No local changes to save")
+		return nil
 	}
 
 	// TODO: handle cases with staged changes?
