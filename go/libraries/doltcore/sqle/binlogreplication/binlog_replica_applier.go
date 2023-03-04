@@ -257,8 +257,6 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 
 	var conn *mysql.Conn
 	var eventProducer *binlogEventProducer
-	var binlogEventChan = make(chan mysql.BinlogEvent)
-	var binlogErrorChan = make(chan error)
 
 	// Process binlog events
 	for {
@@ -274,19 +272,19 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 			} else if err != nil {
 				return err
 			}
-			eventProducer = newBinlogEventProducer(conn, binlogEventChan, binlogErrorChan)
+			eventProducer = newBinlogEventProducer(conn)
 			eventProducer.Go(ctx)
 		}
 
 		select {
-		case event := <-binlogEventChan:
+		case event := <-eventProducer.EventChan():
 			err := a.processBinlogEvent(ctx, engine, event)
 			if err != nil {
 				ctx.GetLogger().Errorf("unexpected error of type %T: '%v'", err, err.Error())
 				DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, err.Error())
 			}
 
-		case err := <-binlogErrorChan:
+		case err := <-eventProducer.ErrorChan():
 			if sqlError, isSqlError := err.(*mysql.SQLError); isSqlError {
 				if sqlError.Message == io.EOF.Error() {
 					ctx.GetLogger().Trace("No more binlog messages; retrying in 1s...")

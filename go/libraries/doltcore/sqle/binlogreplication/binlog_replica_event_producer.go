@@ -34,19 +34,32 @@ type binlogEventProducer struct {
 }
 
 // newBinlogEventProducer creates a new binlog event producer that reads from the specified, established MySQL
-// connection |conn|, sends events over the |eventChan| channel, and sends any errors over the |errorChan| channel.
-func newBinlogEventProducer(conn *mysql.Conn, eventChan chan mysql.BinlogEvent, errorChan chan error) *binlogEventProducer {
+// connection |conn|. The returned binlogEventProducer owns the communication channels
+// and is responsible for closing them when the binlogEventProducer is stopped.
+func newBinlogEventProducer(conn *mysql.Conn) *binlogEventProducer {
 	producer := &binlogEventProducer{
 		conn:      conn,
-		eventChan: eventChan,
-		errorChan: errorChan,
+		eventChan: make(chan mysql.BinlogEvent),
+		errorChan: make(chan error),
 	}
 	producer.running.Store(true)
 	return producer
 }
 
+// EventChan returns the event channel through which this event
+// producer sends binlog events.
+func (p *binlogEventProducer) EventChan() <-chan mysql.BinlogEvent {
+	return p.eventChan
+}
+
+// ErrorChan returns the error channel through which this event
+// producer sends any errors.
+func (p *binlogEventProducer) ErrorChan() <-chan error {
+	return p.errorChan
+}
+
 // Go starts this binlogEventProducer in a new goroutine. Right before this routine exits, it will close the
-// two communication channels it is managing.
+// two communication channels it owns.
 func (p *binlogEventProducer) Go(_ *sql.Context) {
 	go func() {
 		for p.IsRunning() {
