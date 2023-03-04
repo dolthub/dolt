@@ -920,6 +920,7 @@ func TestDoltDdlScripts(t *testing.T) {
 		enginetest.TestScriptWithEngine(t, e, harness, script)
 	}
 
+	// TODO: these scripts should be general enough to go in GMS
 	for _, script := range AddDropPrimaryKeysScripts {
 		e, err := harness.NewEngine(t)
 		require.NoError(t, err)
