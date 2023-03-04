@@ -402,6 +402,35 @@ func (h serialCommitHead) HeadWorkingSet() (*WorkingSetHead, error) {
 	return nil, errors.New("HeadWorkingSet called on commit")
 }
 
+type serialStashListHead struct {
+	msg  types.SerialMessage
+	addr hash.Hash
+}
+
+func newSerialStashListHead(sm types.SerialMessage, addr hash.Hash) serialStashListHead {
+	return serialStashListHead{sm, addr}
+}
+
+func (h serialStashListHead) TypeName() string {
+	return stashListName
+}
+
+func (h serialStashListHead) Addr() hash.Hash {
+	return h.addr
+}
+
+func (h serialStashListHead) value() types.Value {
+	return h.msg
+}
+
+func (h serialStashListHead) HeadTag() (*TagMeta, hash.Hash, error) {
+	return nil, hash.Hash{}, errors.New("HeadTag called on stash list")
+}
+
+func (h serialStashListHead) HeadWorkingSet() (*WorkingSetHead, error) {
+	return nil, errors.New("HeadWorkingSet called on stash list")
+}
+
 // Dataset is a named value within a Database. Different head values may be stored in a dataset. Most commonly, this is
 // a commit, but other values are also supported in some cases.
 type Dataset struct {
@@ -458,6 +487,9 @@ func newHead(head types.Value, addr hash.Hash) (dsHead, error) {
 		if fid == serial.CommitFileID {
 			return newSerialCommitHead(sm, addr), nil
 		}
+		if fid == serial.StashListFileID {
+			return newSerialStashListHead(sm, addr), nil
+		}
 	}
 
 	matched, err := IsCommit(head)
@@ -472,6 +504,12 @@ func newHead(head types.Value, addr hash.Hash) (dsHead, error) {
 	}
 	if !matched {
 		matched, err = IsWorkingSet(head)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !matched {
+		matched, err = IsStashList(head)
 		if err != nil {
 			return nil, err
 		}
@@ -513,6 +551,8 @@ func (ds Dataset) MaybeHead() (types.Value, bool) {
 		return nh.st, true
 	} else if sch, ok := ds.head.(serialCommitHead); ok {
 		return sch.msg, true
+	} else if slh, ok := ds.head.(serialStashListHead); ok {
+		return slh.msg, true
 	}
 	panic("unexpected ds.head type for MaybeHead call")
 }

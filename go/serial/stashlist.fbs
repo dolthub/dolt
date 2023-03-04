@@ -1,4 +1,4 @@
-// Copyright 2022-2023 Dolthub, Inc.
+// Copyright 2023 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,3 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+include "prolly.fbs";
+
+namespace serial;
+
+table StashList {
+  address_map:[ubyte]; // Embedded serialized AddressMap.
+}
+
+// KEEP THIS IN SYNC WITH fileidentifiers.go
+file_identifier "SLST";
+
+root_type StashList;

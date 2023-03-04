@@ -85,6 +85,13 @@ skip_nbf_not_dolt() {
   fi
 }
 
+skip_nbf_ld_1() {
+  if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ];
+  then
+    skip "skipping test for nomsBinFormat __LD_1__"
+  fi
+}
+
 setup_common() {
     setup_no_dolt_init
     dolt init
