@@ -54,17 +54,14 @@ const (
 // This type is NOT used concurrently – there is currently only one single applier process running to process binlog
 // events, so the state in this type is NOT protected with a mutex.
 type binlogReplicaApplier struct {
-	format              mysql.BinlogFormat
-	tableMapsById       map[uint64]*mysql.TableMap
-	stopReplicationChan chan struct{}
-	// currentGtid is the current GTID being processed, but not yet committed
-	currentGtid mysql.GTID
-	// replicationSourceUuid holds the UUID of the source server
+	format                *mysql.BinlogFormat
+	tableMapsById         map[uint64]*mysql.TableMap
+	stopReplicationChan   chan struct{}
+	currentGtid           mysql.GTID
 	replicationSourceUuid string
-	// currentPosition records which GTIDs have been successfully executed
-	currentPosition *mysql.Position
-	filters         *filterConfiguration
-	running         atomic.Bool
+	currentPosition       *mysql.Position // successfully executed GTIDs
+	filters               *filterConfiguration
+	running               atomic.Bool
 }
 
 func newBinlogReplicaApplier(filters *filterConfiguration) *binlogReplicaApplier {
@@ -234,7 +231,7 @@ func (a *binlogReplicaApplier) startReplicationEventStream(ctx *sql.Context, con
 
 	// Clear out the format description in case we're reconnecting, so that we don't use the old format description
 	// to interpret any event messages before we receive the new format description from the new stream.
-	a.format = mysql.BinlogFormat{}
+	a.format = nil
 
 	// If the source server has binlog checksums enabled (@@global.binlog_checksum), then the replica MUST
 	// set @master_binlog_checksum to handshake with the server to acknowledge that it knows that checksums
@@ -272,17 +269,13 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 			}
 
 			var err error
-			conn, err = a.connectAndStartReplicationEventStream(ctx)
-			if err != nil {
-				if err == ErrReplicationStopped {
-					return nil
-				} else {
-					return err
-				}
-			} else {
-				eventProducer = newBinlogEventProducer(conn, binlogEventChan, binlogErrorChan)
-				eventProducer.Go(ctx)
+			if conn, err = a.connectAndStartReplicationEventStream(ctx); err == ErrReplicationStopped {
+				return nil
+			} else if err != nil {
+				return err
 			}
+			eventProducer = newBinlogEventProducer(conn, binlogEventChan, binlogErrorChan)
+			eventProducer.Go(ctx)
 		}
 
 		select {
@@ -331,13 +324,15 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 	createCommit := false
 	commitToAllDatabases := false
 
-	// We don't support checksum validation, so we must strip off any checksum data if present, otherwise
-	// it could get interpreted as part of the data fields and corrupt the fields we pull out. There is not
-	// a future-proof guarantee on the checksum size, so we can't strip a checksum until we've seen the
-	// Format binlog event that definitively tells us if checksums are enabled and what algorithm they use.
-	if a.format.IsZero() == false {
+	// We don't support checksum validation, so we MUST strip off any checksum bytes if present, otherwise it gets
+	// interpreted as part of the payload and corrupts the data. Future checksum sizes, are not guaranteed to be the
+	// same size, so we can't strip the checksum until we've seen a valid Format binlog event that definitively
+	// tells us if checksums are enabled and what algorithm they use. We can NOT strip the checksum off of
+	// FormatDescription events, because FormatDescription always includes a CRC32 checksum, and Vitess depends on
+	// those bytes always being present when we parse the event into a FormatDescription type.
+	if a.format != nil && event.IsFormatDescription() == false {
 		var err error
-		event, _, err = event.StripChecksum(a.format)
+		event, _, err = event.StripChecksum(*a.format)
 		if err != nil {
 			msg := fmt.Sprintf("unable to strip checksum from binlog event: '%v'", err.Error())
 			ctx.GetLogger().Error(msg)
@@ -364,7 +359,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 		// replica. Used for all statements with statement-based replication, DDL statements with row-based replication
 		// as well as COMMITs for non-transactional engines such as MyISAM.
 		// For more details, see: https://mariadb.com/kb/en/query_event/
-		query, err := event.Query(a.format)
+		query, err := event.Query(*a.format)
 		if err != nil {
 			return err
 		}
@@ -430,18 +425,22 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 	case event.IsFormatDescription():
 		// This is a descriptor event that is written to the beginning of a binary log file, at position 4 (after
 		// the 4 magic number bytes). For more details, see: https://mariadb.com/kb/en/format_description_event/
-		a.format, err = event.Format()
+		format, err := event.Format()
 		if err != nil {
 			return err
 		}
+		a.format = &format
 		ctx.GetLogger().WithFields(logrus.Fields{
-			"format": a.format,
+			"format":        a.format,
+			"formatVersion": a.format.FormatVersion,
+			"serverVersion": a.format.ServerVersion,
+			"checksum":      a.format.ChecksumAlgorithm,
 		}).Debug("Received binlog event: FormatDescription")
 
 	case event.IsPreviousGTIDs():
 		// Logged in every binlog to record the current replication state. Consists of the last GTID seen for each
 		// replication domain. For more details, see: https://mariadb.com/kb/en/gtid_list_event/
-		position, err := event.PreviousGTIDs(a.format)
+		position, err := event.PreviousGTIDs(*a.format)
 		if err != nil {
 			return err
 		}
@@ -452,7 +451,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 	case event.IsGTID():
 		// For global transaction ID, used to start a new transaction event group, instead of the old BEGIN query event,
 		// and also to mark stand-alone (ddl). For more details, see: https://mariadb.com/kb/en/gtid_event/
-		gtid, isBegin, err := event.GTID(a.format)
+		gtid, isBegin, err := event.GTID(*a.format)
 		if err != nil {
 			return err
 		}
@@ -479,8 +478,8 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 		// operation event and maps a table definition to a number, where the table definition consists of database
 		// and table names. For more details, see: https://mariadb.com/kb/en/table_map_event/
 		// Note: TableMap events are sent before each row event, so there is no need to persist them between restarts.
-		tableId := event.TableID(a.format)
-		tableMap, err := event.TableMap(a.format)
+		tableId := event.TableID(*a.format)
+		tableMap, err := event.TableMap(*a.format)
 		if err != nil {
 			return err
 		}
@@ -586,7 +585,7 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 	}
 	ctx.GetLogger().Debugf("Received binlog event: %s", eventType)
 
-	tableId := event.TableID(a.format)
+	tableId := event.TableID(*a.format)
 	tableMap, ok := a.tableMapsById[tableId]
 	if !ok {
 		return fmt.Errorf("unable to find replication metadata for table ID: %d", tableId)
@@ -596,7 +595,7 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 		return nil
 	}
 
-	rows, err := event.Rows(a.format, tableMap)
+	rows, err := event.Rows(*a.format, tableMap)
 	if err != nil {
 		return err
 	}

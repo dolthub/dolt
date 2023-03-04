@@ -100,6 +100,33 @@ func TestBinlogReplicationSanityCheck(t *testing.T) {
 	assertRepoStateFileExists(t, "db01")
 }
 
+// TestFlushLogs tests that binary logs can be flushed on the primary, which forces a new binlog file to be written,
+// including sending new Rotate and FormatDescription events to the replica. This is a simple sanity tests that we can
+// process the events without errors.
+func TestFlushLogs(t *testing.T) {
+	defer teardown(t)
+	startSqlServers(t)
+	startReplication(t, mySqlPort)
+
+	// Make changes on the primary and verify on the replica
+	primaryDatabase.MustExec("create table t (pk int primary key)")
+	waitForReplicaToCatchUp(t)
+	expectedStatement := "CREATE TABLE t ( pk int NOT NULL, PRIMARY KEY (pk)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"
+	assertCreateTableStatement(t, replicaDatabase, "t", expectedStatement)
+
+	primaryDatabase.MustExec("flush binary logs;")
+	waitForReplicaToCatchUp(t)
+
+	primaryDatabase.MustExec("insert into t values (1), (2), (3);")
+	waitForReplicaToCatchUp(t)
+
+	rows, err := replicaDatabase.Queryx("select * from db01.t;")
+	require.NoError(t, err)
+	allRows := readAllRows(t, rows)
+	require.Equal(t, 3, len(allRows))
+	require.NoError(t, rows.Close())
+}
+
 // TestResetReplica tests that "RESET REPLICA" and "RESET REPLICA ALL" correctly clear out
 // replication configuration and metadata.
 func TestResetReplica(t *testing.T) {

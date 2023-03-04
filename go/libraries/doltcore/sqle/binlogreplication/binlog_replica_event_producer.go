@@ -45,10 +45,11 @@ func newBinlogEventProducer(conn *mysql.Conn, eventChan chan mysql.BinlogEvent, 
 	return producer
 }
 
-// Go starts this binlogEventProducer in a new goroutine
+// Go starts this binlogEventProducer in a new goroutine. Right before this routine exits, it will close the
+// two communication channels it is managing.
 func (p *binlogEventProducer) Go(_ *sql.Context) {
 	go func() {
-		for p.running.Load() {
+		for p.IsRunning() {
 			// ReadBinlogEvent blocks until a binlog event can be read and returned, so this has to be done on a
 			// separate thread, otherwise the applier would be blocked and wouldn't be able to handle the STOP
 			// REPLICA signal.
@@ -57,7 +58,7 @@ func (p *binlogEventProducer) Go(_ *sql.Context) {
 			// If this binlogEventProducer has been stopped while we were blocked waiting to read the next
 			// binlog event, abort processing it and just return instead.
 			if p.IsRunning() == false {
-				return
+				break
 			}
 
 			if err != nil {
@@ -66,6 +67,8 @@ func (p *binlogEventProducer) Go(_ *sql.Context) {
 				p.eventChan <- event
 			}
 		}
+		close(p.errorChan)
+		close(p.eventChan)
 	}()
 }
 
