@@ -116,10 +116,12 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 			if err != nil {
 				return nil, nil, err
 			}
-			err = uniq.valid(ctx, diff)
+			err, cnt := uniq.valid(ctx, diff.Key, diff.Right)
 			if err != nil {
 				return nil, nil, err
 			}
+			s.Conflicts += cnt
+
 		case tree.DiffOpRightModify:
 			s.Modifications++
 			err = pri.merge(ctx, diff)
@@ -130,10 +132,11 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 			if err != nil {
 				return nil, nil, err
 			}
-			err = uniq.valid(ctx, diff)
+			err, cnt := uniq.valid(ctx, diff.Key, diff.Right)
 			if err != nil {
 				return nil, nil, err
 			}
+			s.Conflicts += cnt
 		case tree.DiffOpRightDelete:
 			s.Deletes++
 			err = pri.merge(ctx, diff)
@@ -154,6 +157,11 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 			if err != nil {
 				return nil, nil, err
 			}
+			err, cnt := uniq.valid(ctx, diff.Key, diff.Merged)
+			if err != nil {
+				return nil, nil, err
+			}
+			s.Conflicts += cnt
 		case tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify, tree.DiffOpConvergentDelete:
 			if keyless {
 				s.Conflicts++
@@ -296,46 +304,48 @@ func newUniqAddValidator(ctx context.Context, finalSch schema.Schema, leftRows p
 	}, nil
 }
 
-func (v *uniqAddValidator) valid(ctx context.Context, diff tree.ThreeWayDiff) error {
+func (v *uniqAddValidator) valid(ctx context.Context, key, value val.Tuple) (error, int) {
+	var conflicts int
 	for _, s := range v.states {
-		secKey, hasNulls := makePartialKey(s.prefixKB, s.index.IndexedColumnTags(), s.index, v.leftSch, diff.Key, diff.Right, v.leftRows.Pool())
+		secKey, hasNulls := makePartialKey(s.prefixKB, s.index.IndexedColumnTags(), s.index, v.leftSch, key, value, v.leftRows.Pool())
 
 		// if the indexed column values includes a null, don't throw a unique key violation for it
 		if hasNulls {
-			return nil
+			return nil, 0
 		}
 
 		// TODO batch this
 		itr, err := creation.NewPrefixItr(ctx, secKey, s.prefixKD, s.leftMap)
 		if err != nil {
-			return err
+			return err, 0
 		}
 		indexK, _, err := itr.Next(ctx)
 		if err != nil && err != io.EOF {
-			return nil
+			return nil, 0
 		}
 		if err == nil {
+			conflicts++
 			existingPK := getPKFromSecondaryKey(s.primaryKB, v.leftRows.Pool(), s.pkMapping, indexK)
 
 			// pluck primary from secondary (trailing fields)
-			o := diff.Key.Count() - s.primaryKD.Count()
+			o := key.Count() - s.primaryKD.Count()
 			for i := 0; i < s.primaryKD.Count(); i++ {
 				j := o + i
-				s.primaryKB.PutRaw(i, diff.Key.GetField(j))
+				s.primaryKB.PutRaw(i, key.GetField(j))
 			}
 			newPK := s.primaryKB.Build(v.leftRows.Pool())
 
 			err = replaceUniqueKeyViolation(ctx, v.ae, v.leftRows, existingPK, s.primaryKD, v.rightRootish, s.vInfo, v.name)
 			if err != nil {
-				return err
+				return err, 0
 			}
-			err = replaceUniqueKeyViolationWithValue(ctx, v.ae, newPK, diff.Right, s.primaryKD, v.rightRootish, s.vInfo, v.name)
+			err = replaceUniqueKeyViolationWithValue(ctx, v.ae, newPK, value, s.primaryKD, v.rightRootish, s.vInfo, v.name)
 			if err != nil {
-				return err
+				return err, 0
 			}
 		}
 	}
-	return nil
+	return nil, conflicts
 }
 
 type diffMerger interface {
