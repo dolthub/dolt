@@ -62,6 +62,22 @@ func (sm SerialMessage) HumanReadableString() string {
 		mapbytes := msg.AddressMapBytes()
 		fmt.Fprintf(ret, "StoreRoot{%s}", SerialMessage(mapbytes).HumanReadableString())
 		return ret.String()
+	case serial.StashListFileID:
+		msg := serial.GetRootAsStashList([]byte(sm), serial.MessagePrefixSz)
+		ret := &strings.Builder{}
+		mapbytes := msg.AddressMapBytes()
+		fmt.Fprintf(ret, "StashList{%s}", SerialMessage(mapbytes).HumanReadableString())
+		return ret.String()
+	case serial.StashFileID:
+		msg := serial.GetRootAsStash(sm, serial.MessagePrefixSz)
+		ret := &strings.Builder{}
+		fmt.Fprintf(ret, "{\n")
+		fmt.Fprintf(ret, "\tBranchName: %s\n", msg.BranchName())
+		fmt.Fprintf(ret, "\tDesc: %s\n", msg.Desc())
+		fmt.Fprintf(ret, "\tStashRootAddr: #%s\n", hash.New(msg.StashRootAddrBytes()).String())
+		fmt.Fprintf(ret, "\tHeadCommitAddr: #%s\n", hash.New(msg.HeadCommitAddrBytes()).String())
+		fmt.Fprintf(ret, "}")
+		return ret.String()
 	case serial.TagFileID:
 		return "Tag"
 	case serial.WorkingSetFileID:
@@ -194,6 +210,28 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 		if msg.AddressMapLength() > 0 {
 			mapbytes := msg.AddressMapBytes()
 			return SerialMessage(mapbytes).WalkAddrs(nbf, cb)
+		}
+	case serial.StashListFileID:
+		var msg serial.StashList
+		err := serial.InitStashListRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		if err != nil {
+			return err
+		}
+		if msg.AddressMapLength() > 0 {
+			mapbytes := msg.AddressMapBytes()
+			return SerialMessage(mapbytes).WalkAddrs(nbf, cb)
+		}
+	case serial.StashFileID:
+		var msg serial.Stash
+		err := serial.InitStashRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		if err != nil {
+			return err
+		}
+		if err = cb(hash.New(msg.StashRootAddrBytes())); err != nil {
+			return err
+		}
+		if err = cb(hash.New(msg.HeadCommitAddrBytes())); err != nil {
+			return err
 		}
 	case serial.TagFileID:
 		var msg serial.Tag

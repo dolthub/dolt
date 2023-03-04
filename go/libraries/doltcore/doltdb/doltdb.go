@@ -1392,3 +1392,135 @@ func (ddb *DoltDB) GetBranchesByRootHash(ctx context.Context, rootHash hash.Hash
 
 	return refs, nil
 }
+
+// AddStash takes current branch head commit, working root value and stash metadata to create a new stash.
+// It stores the new stash object in stash list Dataset, which can be created if it does not exist.
+// Otherwise, it updates the stash list Dataset as there can only be one stashes Dataset.
+func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, working *RootValue, meta *datas.StashMeta) error {
+	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
+	if err != nil {
+		return err
+	}
+
+	headCommitAddr, err := head.HashOf()
+	if err != nil {
+		return err
+	}
+
+	_, workingRoot, err := ddb.writeRootValue(ctx, working)
+	if err != nil {
+		return err
+	}
+
+	nbf := ddb.Format()
+	vrw := ddb.ValueReadWriter()
+	stashAddr, _, err := datas.NewStash(ctx, nbf, vrw, workingRoot, headCommitAddr, meta)
+	if err != nil {
+		return err
+	}
+
+	// this either creates new stash list dataset or loads current stash list dataset if exists.
+	stashList, err := datas.LoadStashList(ctx, nbf, ddb.NodeStore(), vrw, stashesDS)
+	if err != nil {
+		return err
+	}
+
+	stashListAddr, err := stashList.AddStash(ctx, vrw, stashAddr)
+	if err != nil {
+		return err
+	}
+
+	stashesDS, err = ddb.db.UpdateStashList(ctx, stashesDS, stashListAddr)
+	return err
+}
+
+// RemoveStashAtIdx takes and index of a stash to remove from the stash list map.
+// It removes a Stash message from stash list Dataset, which cannot be performed
+// by database Delete function. This function removes a single stash only and stash
+// list dataset does not get removed if there are no entries left.
+func (ddb *DoltDB) RemoveStashAtIdx(ctx context.Context, idx int) error {
+	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
+	if err != nil {
+		return err
+	}
+
+	if !stashesDS.HasHead() {
+		return errors.New("No stash entries found.")
+	}
+
+	vrw := ddb.ValueReadWriter()
+	stashList, err := datas.LoadStashList(ctx, ddb.Format(), ddb.NodeStore(), vrw, stashesDS)
+	if err != nil {
+		return err
+	}
+
+	stashListAddr, err := stashList.RemoveStashAtIdx(ctx, vrw, idx)
+	if err != nil {
+		return err
+	}
+
+	stashListCount, err := stashList.Count()
+	if err != nil {
+		return err
+	}
+	// if the stash list is empty, remove the stash list Dataset from the database
+	if stashListCount == 0 {
+		return ddb.RemoveAllStashes(ctx)
+	}
+
+	stashesDS, err = ddb.db.UpdateStashList(ctx, stashesDS, stashListAddr)
+	return err
+}
+
+// RemoveAllStashes removes the stash list Dataset from the database,
+// which equivalent to removing Stash entries from the stash list.
+func (ddb *DoltDB) RemoveAllStashes(ctx context.Context) error {
+	err := ddb.deleteRef(ctx, ref.NewStashRef())
+	if err == ErrBranchNotFound {
+		return nil
+	}
+	return err
+}
+
+// GetStashes returns array of Stash objects containing all stash entries in the stash list Dataset.
+func (ddb *DoltDB) GetStashes(ctx context.Context) ([]*Stash, error) {
+	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
+	if err != nil {
+		return nil, err
+	}
+
+	if !stashesDS.HasHead() {
+		return []*Stash{}, nil
+	}
+
+	return getStashList(ctx, stashesDS, ddb.vrw, ddb.NodeStore())
+}
+
+// GetStashHashAtIdx returns hash address only of the stash at given index.
+func (ddb *DoltDB) GetStashHashAtIdx(ctx context.Context, idx int) (hash.Hash, error) {
+	ds, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	if !ds.HasHead() {
+		return hash.Hash{}, errors.New("No stash entries found.")
+	}
+
+	return getStashHashAtIdx(ctx, ds, ddb.NodeStore(), idx)
+}
+
+// GetStashRootAndHeadCommitAtIdx returns root value of stash working set and head commit of the branch that the stash was made on
+// of the stash at given index.
+func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) (*RootValue, *Commit, error) {
+	ds, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !ds.HasHead() {
+		return nil, nil, errors.New("No stash entries found.")
+	}
+
+	return getStashAtIdx(ctx, ds, ddb.vrw, ddb.NodeStore(), idx)
+}

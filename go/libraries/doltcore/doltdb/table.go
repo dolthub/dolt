@@ -474,6 +474,15 @@ func (t *Table) GetRowData(ctx context.Context) (durable.Index, error) {
 	return t.table.GetTableRows(ctx)
 }
 
+// GetRowDataHash returns the hash.Hash of the row data index.
+func (t *Table) GetRowDataHash(ctx context.Context) (hash.Hash, error) {
+	idx, err := t.table.GetTableRows(ctx)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	return idx.HashOf()
+}
+
 // ResolveConflicts resolves conflicts for this table.
 func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (invalid, notFound []types.Value, tbl *Table, err error) {
 	removed := 0

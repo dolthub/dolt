@@ -83,6 +83,12 @@ type Database interface {
 	// `opts.Meta`.
 	Tag(ctx context.Context, ds Dataset, commitAddr hash.Hash, opts TagOptions) (Dataset, error)
 
+	// UpdateStashList updates the stash list dataset only with given address hash to the updated stash list.
+	// The new/updated stash list address should be obtained before calling this function depending on
+	// whether add or remove a stash actions have been performed. This function does not perform any actions
+	// on the stash list itself.
+	UpdateStashList(ctx context.Context, ds Dataset, stashListAddr hash.Hash) (Dataset, error)
+
 	// UpdateWorkingSet updates the dataset given, setting its value to a new
 	// working set value object with the ref and meta given. If the dataset given
 	// already had a value, it must match the hash given or this method returns

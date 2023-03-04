@@ -335,8 +335,6 @@ func (wr *journalWriter) flushIndexRecord(root hash.Hash, end int64) (err error)
 
 // readAt reads len(p) bytes from the journal at offset |off|.
 func (wr *journalWriter) readAt(p []byte, off int64) (n int, err error) {
-	wr.lock.RLock()
-	defer wr.lock.RUnlock()
 	var bp []byte
 	if off < wr.off {
 		// fill some or all of |p| from |wr.file|

@@ -114,6 +114,7 @@ const (
 	OneLineFlag      = "oneline"
 	ShallowFlag      = "shallow"
 	CachedFlag       = "cached"
+	ListFlag         = "list"
 )
 
 const (
