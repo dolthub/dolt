@@ -997,3 +997,36 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "2 tables changed, 3 rows added(+), 1 rows modified(*), 1 rows deleted(-)" ]] || false
 }
+
+@test "merge: three-way merge with longer key on both left and right" {
+
+    # Base table has a key length of 2. Left and right will both add a column to
+    # the key, and the keys for all rows will differ in the last column.
+    dolt sql <<SQL
+create table t1 (a int, b int, c int, primary key (a,b));
+insert into t1 values (1,1,1), (2,2,2);
+call dolt_commit('-Am', 'new table');
+call dolt_branch('b1');
+call dolt_branch('b2');
+
+call dolt_checkout('b1');
+alter table t1 add column d int not null default 4;
+alter table t1 drop primary key;
+alter table t1 add primary key (a,b,d);
+update t1 set d = 5;
+call dolt_commit('-Am', 'added a column to the primary key with value 5');
+
+call dolt_checkout('b2');
+alter table t1 add column d int not null default 4;
+alter table t1 drop primary key;
+alter table t1 add primary key (a,b,d);
+update t1 set d = 6;
+call dolt_commit('-Am', 'added a column to the primary key with value 6');
+
+SQL
+
+    dolt merge b1
+
+    skip "this merge hangs forever, infinite loop bug"
+    dolt merge b2
+}
