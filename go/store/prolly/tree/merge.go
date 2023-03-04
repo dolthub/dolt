@@ -114,13 +114,13 @@ func (ps patchBuffer) sendPatch(ctx context.Context, diff Diff) error {
 }
 
 // NextMutation implements MutationIter.
-func (ps patchBuffer) NextMutation(ctx context.Context) (Item, Item, error) {
+func (ps patchBuffer) NextMutation(ctx context.Context) (Item, Item) {
 	var p patch
 	select {
 	case p = <-ps.buf:
-		return p[0], p[1], nil
+		return p[0], p[1]
 	case <-ctx.Done():
-		return nil, nil, nil
+		return nil, nil
 	}
 }
 

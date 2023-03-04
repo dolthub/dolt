@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -26,86 +25,10 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
-
-func addUniqIdxViols(
-	ctx context.Context,
-	postMergeSchema schema.Schema,
-	index schema.Index,
-	left, right, base prolly.Map,
-	m prolly.Map,
-	artEditor *prolly.ArtifactsEditor,
-	theirRootIsh doltdb.Rootish,
-	tblName string) error {
-
-	pkMapping := ordinalMappingFromIndex(index)
-
-	meta, err := makeUniqViolMeta(postMergeSchema, index)
-	if err != nil {
-		return err
-	}
-	vInfo, err := json.Marshal(meta)
-	if err != nil {
-		return err
-	}
-
-	kd := index.Schema().GetKeyDescriptor()
-	prefixKD := kd.PrefixDesc(index.Count())
-	prefixKB := val.NewTupleBuilder(prefixKD)
-	p := left.Pool()
-
-	primaryKD, _ := m.Descriptors()
-	primaryKB := val.NewTupleBuilder(primaryKD)
-
-	err = prolly.DiffMaps(ctx, base, right, func(ctx context.Context, diff tree.Diff) error {
-		switch diff.Type {
-		case tree.AddedDiff:
-			pre := getPrefix(prefixKB, p, val.Tuple(diff.Key))
-
-			// if the indexed column values includes a null, don't throw a unique key violation for it
-			for i := 0; i < prefixKD.Count(); i++ {
-				if prefixKD.IsNull(i, pre) {
-					return nil
-				}
-			}
-
-			itr, err := creation.NewPrefixItr(ctx, pre, prefixKD, left)
-			if err != nil {
-				return err
-			}
-			indexK, _, err := itr.Next(ctx)
-			if err != nil && err != io.EOF {
-				return nil
-			}
-			if err == nil {
-				existingPK := getPKFromSecondaryKey(primaryKB, p, pkMapping, indexK)
-				newPK := getPKFromSecondaryKey(primaryKB, p, pkMapping, val.Tuple(diff.Key))
-				err = replaceUniqueKeyViolation(ctx, artEditor, m, existingPK, primaryKD, theirRootIsh, vInfo, tblName)
-				if err != nil {
-					return err
-				}
-				err = replaceUniqueKeyViolation(ctx, artEditor, m, newPK, primaryKD, theirRootIsh, vInfo, tblName)
-				if err != nil {
-					return err
-				}
-			}
-		case tree.RemovedDiff:
-		default:
-			panic("unhandled diff type")
-		}
-		return nil
-	})
-	if err != io.EOF {
-		return err
-	}
-
-	return nil
-}
 
 func makeUniqViolMeta(sch schema.Schema, idx schema.Index) (UniqCVMeta, error) {
 	schCols := sch.GetAllCols()
@@ -195,12 +118,37 @@ func replaceUniqueKeyViolation(ctx context.Context, edt *prolly.ArtifactsEditor,
 	return nil
 }
 
-func getPrefix(pKB *val.TupleBuilder, pool pool.BuffPool, k val.Tuple) val.Tuple {
-	n := pKB.Desc.Count()
-	for i := 0; i < n; i++ {
-		pKB.PutRaw(i, k.GetField(i))
+func replaceUniqueKeyViolationWithValue(ctx context.Context, edt *prolly.ArtifactsEditor, k, value val.Tuple, kd val.TupleDesc, theirRootIsh doltdb.Rootish, vInfo []byte, tblName string) error {
+	meta := prolly.ConstraintViolationMeta{
+		VInfo: vInfo,
+		Value: value,
 	}
-	return pKB.Build(pool)
+
+	theirsHash, err := theirRootIsh.HashOf()
+	if err != nil {
+		return err
+	}
+
+	err = edt.ReplaceConstraintViolation(ctx, k, theirsHash, prolly.ArtifactTypeUniqueKeyViol, meta)
+	if err != nil {
+		if mv, ok := err.(*prolly.ErrMergeArtifactCollision); ok {
+			var e, n UniqCVMeta
+			err = json.Unmarshal(mv.ExistingInfo, &e)
+			if err != nil {
+				return err
+			}
+			err = json.Unmarshal(mv.NewInfo, &n)
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("%w: pk %s of table '%s' violates unique keys '%s' and '%s'",
+				ErrMultipleViolationsForRow,
+				kd.Format(mv.Key), tblName, e.Name, n.Name)
+		}
+		return err
+	}
+
+	return nil
 }
 
 func getPKFromSecondaryKey(pKB *val.TupleBuilder, pool pool.BuffPool, pkMapping val.OrdinalMapping, k val.Tuple) val.Tuple {

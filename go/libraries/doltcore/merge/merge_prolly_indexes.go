@@ -15,10 +15,8 @@
 package merge
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -169,11 +167,11 @@ func mergeProllySecondaryIndexes(
 		if err != nil {
 			return nil, err
 		}
-		right, mergeOK, err := tryGetIdx(tm.rightSch, rightSet, index.Name())
+		_, mergeOK, err := tryGetIdx(tm.rightSch, rightSet, index.Name())
 		if err != nil {
 			return nil, err
 		}
-		anc, ancOK, err := tryGetIdx(tm.ancSch, ancSet, index.Name())
+		_, ancOK, err := tryGetIdx(tm.ancSch, ancSet, index.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -182,33 +180,7 @@ func mergeProllySecondaryIndexes(
 			if !rootOK || !mergeOK || !ancOK {
 				return buildIndex(ctx, tm.vrw, tm.ns, finalSch, index, mergedM, artifacts, tm.rightSrc, tm.name)
 			}
-
-			var merged prolly.Map
-			if index.IsUnique() {
-				err = addUniqIdxViols(ctx, finalSch, index, left, right, anc, mergedM, artifacts, tm.rightSrc, tm.name)
-				if err != nil {
-					return nil, err
-				}
-				var collision = false
-				merged, _, err = prolly.MergeMaps(ctx, left, right, anc, func(left, right tree.Diff) (tree.Diff, bool) {
-					if left.Type == right.Type && bytes.Equal(left.To, right.To) {
-						// convergent edit
-						return left, true
-					}
-
-					collision = true
-					return tree.Diff{}, true
-				})
-				if err != nil {
-					return nil, err
-				}
-				if collision {
-					return nil, errors.New("collisions not implemented")
-				}
-			} else {
-				merged = left
-			}
-			return durable.IndexFromProllyMap(merged), nil
+			return durable.IndexFromProllyMap(left), nil
 		}()
 		if err != nil {
 			return nil, err

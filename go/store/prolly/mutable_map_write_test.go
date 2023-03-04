@@ -556,11 +556,11 @@ func materializeMap(t *testing.T, mut *MutableMap) Map {
 	err := mut.Checkpoint(ctx)
 	require.NoError(t, err)
 	iter := mut.tuples.Mutations()
-	prev, _, err := iter.NextMutation(ctx)
+	prev, _ := iter.NextMutation(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, prev)
 	for {
-		next, _, err := iter.NextMutation(ctx)
+		next, _ := iter.NextMutation(ctx)
 		if errors.Is(err, io.EOF) || next == nil {
 			break
 		}

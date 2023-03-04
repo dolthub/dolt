@@ -17,14 +17,11 @@ package tree
 import (
 	"bytes"
 	"context"
-	"errors"
-	"io"
-
 	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 type MutationIter interface {
-	NextMutation(ctx context.Context) (key, value Item, err error)
+	NextMutation(ctx context.Context) (key, value Item)
 	Close() error
 }
 
@@ -66,12 +63,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 	serializer S,
 	edits MutationIter,
 ) (Node, error) {
-	newKey, newValue, err := edits.NextMutation(ctx)
-	if errors.Is(err, io.EOF) {
-		return root, nil
-	} else if err != nil {
-		return Node{}, err
-	}
+	newKey, newValue := edits.NextMutation(ctx)
 	if newKey == nil {
 		return root, nil // no mutations
 	}
@@ -105,12 +97,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 
 		// check for no-op mutations
 		if equalValues(newValue, oldValue) {
-			newKey, newValue, err = edits.NextMutation(ctx)
-			if errors.Is(err, io.EOF) {
-				break
-			} else if err != nil {
-				return Node{}, err
-			}
+			newKey, newValue = edits.NextMutation(ctx)
 			continue // same newValue
 		}
 
@@ -133,12 +120,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 			return Node{}, err
 		}
 
-		newKey, newValue, err = edits.NextMutation(ctx)
-		if errors.Is(err, io.EOF) {
-			break
-		} else if err != nil {
-			return Node{}, err
-		}
+		newKey, newValue = edits.NextMutation(ctx)
 	}
 
 	return chkr.Done(ctx)
