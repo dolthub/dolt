@@ -1544,7 +1544,7 @@ func (t *AlterableDoltTable) adjustForeignKeysForDroppedPk(ctx *sql.Context, roo
 		return nil, err
 	}
 
-	fkcUpdates, err := backupFkcIndexesForPkDrop(ctx, t.sch, fkc)
+	fkcUpdates, err := backupFkcIndexesForPkDrop(ctx, t.Name(), t.sch, fkc)
 	if err != nil {
 		return nil, err
 	}

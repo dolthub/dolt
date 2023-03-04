@@ -334,11 +334,11 @@ var ErrKeylessAltTbl = errors.New("schema alterations not supported for keyless 
 // backupFkcIndexesForKeyDrop finds backup indexes to cover foreign key references during a primary
 // key drop. If multiple indexes are valid, we sort by unique and select the first.
 // This will not work with a non-pk index drop without an additional index filter argument.
-func backupFkcIndexesForPkDrop(ctx *sql.Context, sch schema.Schema, fkc *doltdb.ForeignKeyCollection) ([]doltdb.FkIndexUpdate, error) {
+func backupFkcIndexesForPkDrop(ctx *sql.Context, name string, sch schema.Schema, fkc *doltdb.ForeignKeyCollection) ([]doltdb.FkIndexUpdate, error) {
 	fkUpdates := make([]doltdb.FkIndexUpdate, 0)
 	for _, fk := range fkc.AllKeys() {
-		// if an index doesn't reference primary key, it is unaffected
-		if fk.ReferencedTableIndex != "" {
+		// if an index doesn't reference this table's primary key, it is unaffected
+		if fk.ReferencedTableIndex != "" || fk.ReferencedTableName != name {
 			continue
 		}
 
@@ -355,7 +355,7 @@ func backupFkcIndexesForPkDrop(ctx *sql.Context, sch schema.Schema, fkc *doltdb.
 			return nil, err
 		}
 		if !ok {
-			return nil, sql.ErrCantDropIndex.New("PRIMARY")
+			return nil, sql.ErrCantDropIndex.New("PRIMARY", fk.Name)
 		}
 
 		fkUpdates = append(fkUpdates, doltdb.FkIndexUpdate{FkName: fk.Name, FromIdx: fk.ReferencedTableIndex, ToIdx: newIdx.Name()})
