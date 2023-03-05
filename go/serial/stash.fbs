@@ -1,4 +1,4 @@
-// Copyright 2022-2023 Dolthub, Inc.
+// Copyright 2023 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,3 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+namespace serial;
+
+table Stash {
+  stash_root_addr:[ubyte] (required);
+  head_commit_addr:[ubyte] (required);
+  branch_name:string (required);
+  desc:string (required);
+}
+
+// KEEP THIS IN SYNC WITH fileidentifiers.go
+file_identifier "STSH";
+
+root_type Stash;
