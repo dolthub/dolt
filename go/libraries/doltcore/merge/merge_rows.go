@@ -111,9 +111,9 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	// Before we do any work to merge the table, check to see if we can actually do a merge. Various innocuous seeming
-	// operations below will fail badly or enter infinite loops when attempting to diff tables with different primary 
+	// operations below will fail badly or enter infinite loops when attempting to diff tables with different primary
 	// keys.
 	if !schema.ArePrimaryKeySetsDiffable(tm.vrw.Format(), tm.leftSch, tm.rightSch) {
 		return nil, nil, fmt.Errorf("error: cannot merge table %s because its different primary keys differ", tblName)
@@ -128,7 +128,7 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	if finished != nil || stats != nil || err != nil {
 		return finished, stats, err
 	}
-	
+
 	mergeSch, schConflicts, err := SchemaMerge(ctx, tm.vrw.Format(), tm.leftSch, tm.rightSch, tm.ancSch, tblName)
 	if err != nil {
 		return nil, nil, err
@@ -491,7 +491,7 @@ func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltd
 	if err != nil {
 		return MergeStats{}, err
 	}
-	
+
 	// sanity check: the diff code may loop infinitely if we have different primary keys
 	if !schema.ArePrimaryKeySetsDiffable(tbl.Format(), sch, mergeSch) {
 		return MergeStats{}, fmt.Errorf("cannot diff tables with different primary keys")
