@@ -310,7 +310,7 @@ func newUniqAddValidator(ctx context.Context, finalSch schema.Schema, leftRows p
 			primaryKD: primaryKD,
 			prefixKD:  prefixKD,
 			batch: skip.NewSkipList(func(left, right []byte) int {
-				return prefixKD.Compare(left, right)
+				return primaryKD.Compare(left, right)
 			}),
 		})
 	}
@@ -368,7 +368,7 @@ func (v *uniqAddValidator) flush(ctx context.Context, i int) (int, error) {
 		}
 
 		if cur == nil {
-			s.secCur, err = tree.NewCursorAtKey(ctx, s.leftMap.NodeStore(), s.leftMap.Node(), val.Tuple(key), s.leftMap.KeyDesc())
+			s.secCur, err = tree.NewCursorAtKey(ctx, s.leftMap.NodeStore(), s.leftMap.Node(), val.Tuple(secKey), s.leftMap.KeyDesc())
 			cur = s.secCur
 		}
 
