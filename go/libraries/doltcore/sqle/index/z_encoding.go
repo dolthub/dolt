@@ -196,8 +196,28 @@ func mergeZRanges(acc []ZRange, zRange ZRange) []ZRange {
 	return append(acc, zRange)
 }
 
+// it's too complicated to manually carry over numbers, so just round down
+func zRangeSize(zRange ZRange, shamt2 int) (uint64, int) {
+	zVal := ZVal{}
+	zVal[0] = zRange[1][0] - zRange[0][0]
+	if zRange[1][1] < zRange[0][1] {
+		zVal[0] -= 1
+		zVal[1] = ^zRange[1][1] - zRange[0][1]
+	} else {
+		zVal[1] = zRange[1][1] - zRange[0][1]
+	}
+	shamt := bits.LeadingZeros64(zVal[0])
+	if shamt2 != -1 {
+		shamt = shamt2
+	}
+	zVal[0] = zVal[0] << shamt
+	zVal[1] = zVal[1] >> (64 - shamt)
+	return zVal[0] | zVal[1], shamt // TODO: + instead?
+}
+
+
 // splitZRanges is a helper function to SplitZRanges
-func splitZRanges(zRange ZRange, depth int, acc []ZRange) []ZRange {
+func splitZRanges(zRange, origZRange ZRange, depth int, acc []ZRange) []ZRange {
 	// prevent too much splitting and point lookup is continuous
 	if depth == 0 || zRange[0] == zRange[1] {
 		return mergeZRanges(acc, zRange)
@@ -242,16 +262,18 @@ func splitZRanges(zRange ZRange, depth int, acc []ZRange) []ZRange {
 		zRangeR[0][1] |= 1 << (suffixLength - 1) // set at prefix to 1
 	}
 
-	// TODO: if zRangeL and zRangeR are not far apart, break early
-	// TODO: is this any different than prefix length? kinda...
-	if zRangeR[0][0] - zRangeL[1][0] < (1 << 39) {
+	cutRange := ZRange{zRangeL[1], zRangeR[0]}
+	whole, shamt := zRangeSize(origZRange, -1)
+	cut, _ := zRangeSize(cutRange, shamt)
+	cutAmount := float64(cut) / float64(whole)
+	if cutAmount < 0.02 {
 		return mergeZRanges(acc, zRange)
 	}
 
 	// recurse on left and right ranges
 	depth -= 1
-	acc = splitZRanges(zRangeL, depth, acc)
-	acc = splitZRanges(zRangeR, depth, acc)
+	acc = splitZRanges(zRangeL, origZRange, depth, acc)
+	acc = splitZRanges(zRangeR, origZRange, depth, acc)
 
 	return acc
 }
@@ -262,5 +284,5 @@ func splitZRanges(zRange ZRange, depth int, acc []ZRange) []ZRange {
 // 2. the ranges are within a cell (the suffixes of the bounds range from 00...0 to 11...1)
 // TODO: check validity of bbox to prevent inf recursion?
 func SplitZRanges(zRange ZRange, depth int) []ZRange {
-	return splitZRanges(zRange, depth, make([]ZRange, 0, 128))
+	return splitZRanges(zRange, zRange, depth, make([]ZRange, 0, 128))
 }
