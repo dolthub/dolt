@@ -395,7 +395,7 @@ func FindCommonAncestor(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.Valu
 			}
 			return h1, true, nil
 		}
-		if pi1.Less(vr1.Format(), pi2) {
+		if pi1.Less(ctx, vr1.Format(), pi2) {
 			// TODO: Should pi2.Seek(pi1.curr), but MapIterator does not expose Seek yet.
 			if !pi2.Next(ctx) {
 				return hash.Hash{}, false, firstError(pi1.Err(), pi2.Err())
@@ -695,9 +695,9 @@ func firstError(l, r error) error {
 	return r
 }
 
-func IsCommit(v types.Value) (bool, error) {
+func IsCommit(ctx context.Context, v types.Value) (bool, error) {
 	if s, ok := v.(types.Struct); ok {
-		return types.IsValueSubtypeOf(s.Format(), v, valueCommitType)
+		return types.IsValueSubtypeOf(ctx, s.Format(), v, valueCommitType)
 	} else if sm, ok := v.(types.SerialMessage); ok {
 		data := []byte(sm)
 		return serial.GetFileID(data) == serial.CommitFileID, nil

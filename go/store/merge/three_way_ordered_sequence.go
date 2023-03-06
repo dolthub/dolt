@@ -95,7 +95,7 @@ func (m *merger) threeWayOrderedSequenceMerge(ctx context.Context, a, b, parent 
 				var err error
 				noBOrALessB := bChange.Key == nil
 				if !noBOrALessB {
-					noBOrALessB, err = aChange.Key.Less(m.vrw.Format(), bChange.Key)
+					noBOrALessB, err = aChange.Key.Less(ctx, m.vrw.Format(), bChange.Key)
 					if err != nil {
 						return err
 					}
@@ -122,7 +122,7 @@ func (m *merger) threeWayOrderedSequenceMerge(ctx context.Context, a, b, parent 
 				noAOrBLessA := aChange.Key == nil
 
 				if !noAOrBLessA {
-					noAOrBLessA, err = bChange.Key.Less(m.vrw.Format(), aChange.Key)
+					noAOrBLessA, err = bChange.Key.Less(ctx, m.vrw.Format(), aChange.Key)
 					if err != nil {
 						return err
 					}

@@ -79,7 +79,7 @@ func (si *setIterator) Next(ctx context.Context) (Value, error) {
 func (si *setIterator) SkipTo(ctx context.Context, v Value) (Value, error) {
 	d.PanicIfTrue(v == nil)
 	if si.sequenceIter.valid() {
-		if cmp, err := compareValue(si.s.format(), v, si.currentValue); err != nil {
+		if cmp, err := compareValue(ctx, si.s.valueReadWriter(), v, si.currentValue); err != nil {
 			return nil, err
 		} else if cmp <= 0 {
 			return si.Next(ctx)
@@ -156,32 +156,30 @@ func (st *iterState) SkipTo(ctx context.Context, v Value) (Value, error) {
 type UnionIterator struct {
 	aState iterState
 	bState iterState
-	nbf    *NomsBinFormat
+	vr     ValueReader
 }
 
 // NewUnionIterator creates a union iterator from two other SetIterators.
-func NewUnionIterator(ctx context.Context, nbf *NomsBinFormat, iterA, iterB SetIterator) (SetIterator, error) {
+func NewUnionIterator(ctx context.Context, vr ValueReader, iterA, iterB SetIterator) (SetIterator, error) {
 	d.PanicIfTrue(iterA == nil)
 	d.PanicIfTrue(iterB == nil)
 	aVal, err := iterA.Next(ctx)
-
 	if err != nil {
 		return nil, err
 	}
 
 	bVal, err := iterB.Next(ctx)
-
 	if err != nil {
 		return nil, err
 	}
 
 	a := iterState{i: iterA, v: aVal}
 	b := iterState{i: iterB, v: bVal}
-	return &UnionIterator{aState: a, bState: b, nbf: nbf}, nil
+	return &UnionIterator{aState: a, bState: b, vr: vr}, nil
 }
 
 func (u *UnionIterator) Next(ctx context.Context) (Value, error) {
-	cmp, err := compareValue(u.nbf, u.aState.v, u.bState.v)
+	cmp, err := compareValue(ctx, u.vr, u.aState.v, u.bState.v)
 
 	if err != nil {
 		return nil, err
@@ -207,7 +205,7 @@ func (u *UnionIterator) Next(ctx context.Context) (Value, error) {
 func (u *UnionIterator) SkipTo(ctx context.Context, v Value) (Value, error) {
 	d.PanicIfTrue(v == nil)
 	didAdvance := false
-	if cmp, err := compareValue(u.nbf, u.aState.v, v); err != nil {
+	if cmp, err := compareValue(ctx, u.vr, u.aState.v, v); err != nil {
 		return nil, err
 	} else if cmp < 0 {
 		didAdvance = true
@@ -217,7 +215,7 @@ func (u *UnionIterator) SkipTo(ctx context.Context, v Value) (Value, error) {
 			return nil, err
 		}
 	}
-	if cmp, err := compareValue(u.nbf, u.bState.v, v); err != nil {
+	if cmp, err := compareValue(ctx, u.vr, u.bState.v, v); err != nil {
 		return nil, err
 	} else if cmp < 0 {
 		didAdvance = true
@@ -230,7 +228,7 @@ func (u *UnionIterator) SkipTo(ctx context.Context, v Value) (Value, error) {
 	if !didAdvance {
 		return u.Next(ctx)
 	}
-	cmp, err := compareValue(u.nbf, u.aState.v, u.bState.v)
+	cmp, err := compareValue(ctx, u.vr, u.aState.v, u.bState.v)
 
 	if err != nil {
 		return nil, err
@@ -258,11 +256,11 @@ func (u *UnionIterator) SkipTo(ctx context.Context, v Value) (Value, error) {
 type IntersectionIterator struct {
 	aState iterState
 	bState iterState
-	nbf    *NomsBinFormat
+	vr     ValueReader
 }
 
 // NewIntersectionIterator creates a intersect iterator from two other SetIterators.
-func NewIntersectionIterator(ctx context.Context, nbf *NomsBinFormat, iterA, iterB SetIterator) (SetIterator, error) {
+func NewIntersectionIterator(ctx context.Context, vr ValueReader, iterA, iterB SetIterator) (SetIterator, error) {
 	d.PanicIfTrue(iterA == nil)
 	d.PanicIfTrue(iterB == nil)
 	aVal, err := iterA.Next(ctx)
@@ -279,12 +277,12 @@ func NewIntersectionIterator(ctx context.Context, nbf *NomsBinFormat, iterA, ite
 
 	a := iterState{i: iterA, v: aVal}
 	b := iterState{i: iterB, v: bVal}
-	return &IntersectionIterator{aState: a, bState: b, nbf: nbf}, nil
+	return &IntersectionIterator{aState: a, bState: b, vr: vr}, nil
 }
 
 func (i *IntersectionIterator) Next(ctx context.Context) (Value, error) {
 	for cont := true; cont; {
-		cmp, err := compareValue(i.nbf, i.aState.v, i.bState.v)
+		cmp, err := compareValue(ctx, i.vr, i.aState.v, i.bState.v)
 
 		if err != nil {
 			return nil, err
@@ -326,7 +324,7 @@ func (i *IntersectionIterator) Next(ctx context.Context) (Value, error) {
 
 func (i *IntersectionIterator) SkipTo(ctx context.Context, v Value) (Value, error) {
 	d.PanicIfTrue(v == nil)
-	if cmp, err := compareValue(i.nbf, v, i.aState.v); err != nil {
+	if cmp, err := compareValue(ctx, i.vr, v, i.aState.v); err != nil {
 		return nil, err
 	} else if cmp >= 0 {
 		_, err := i.aState.SkipTo(ctx, v)
@@ -336,7 +334,7 @@ func (i *IntersectionIterator) SkipTo(ctx context.Context, v Value) (Value, erro
 		}
 	}
 
-	if cmp, err := compareValue(i.nbf, v, i.bState.v); err != nil {
+	if cmp, err := compareValue(ctx, i.vr, v, i.bState.v); err != nil {
 		return nil, err
 	} else if cmp >= 0 {
 		_, err := i.bState.SkipTo(ctx, v)
@@ -350,7 +348,7 @@ func (i *IntersectionIterator) SkipTo(ctx context.Context, v Value) (Value, erro
 }
 
 // considers nil max value, return -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
-func compareValue(nbf *NomsBinFormat, v1, v2 Value) (int, error) {
+func compareValue(ctx context.Context, vr ValueReader, v1, v2 Value) (int, error) {
 	if v1 == nil && v2 == nil {
 		return 0, nil
 	}
@@ -360,7 +358,7 @@ func compareValue(nbf *NomsBinFormat, v1, v2 Value) (int, error) {
 	}
 
 	if v1 != nil {
-		if isLess, err := v1.Less(nbf, v2); err != nil {
+		if isLess, err := v1.Less(ctx, vr.Format(), v2); err != nil {
 			return 0, err
 		} else if isLess {
 			return -1, nil
@@ -371,7 +369,7 @@ func compareValue(nbf *NomsBinFormat, v1, v2 Value) (int, error) {
 		return 1, nil
 	}
 
-	if isLess, err := v2.Less(nbf, v1); err != nil {
+	if isLess, err := v2.Less(ctx, vr.Format(), v1); err != nil {
 		return 0, err
 	} else if isLess {
 		return 1, nil

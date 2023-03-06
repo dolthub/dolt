@@ -744,7 +744,7 @@ func TestIndexEditorCapacityExceeded(t *testing.T) {
 	emptyMap, err := types.NewMap(ctx, vrw)
 	require.NoError(t, err)
 
-	opts := Options{Deaf: NewInMemDeafWithMaxCapacity(format, 224)}
+	opts := Options{Deaf: NewInMemDeafWithMaxCapacity(vrw, 224)}
 	indexEditor := NewIndexEditor(ctx, index, emptyMap, tableSch, opts)
 	for i := 0; i < 3; i++ {
 		dRow, err := row.New(format, indexSch, row.TaggedValues{

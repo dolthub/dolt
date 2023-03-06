@@ -58,7 +58,7 @@ func (v MultiPolygon) Equals(other Value) bool {
 	return true
 }
 
-func (v MultiPolygon) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (v MultiPolygon) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	// Compare types
 	v2, ok := other.(MultiPolygon)
 	if !ok {
@@ -80,7 +80,7 @@ func (v MultiPolygon) Less(nbf *NomsBinFormat, other LesserValuable) (bool, erro
 	// Compare each polygon until there is one that is less
 	for i := 0; i < n; i++ {
 		if !v.Polygons[i].Equals(v2.Polygons[i]) {
-			return v.Polygons[i].Less(nbf, v2.Polygons[i])
+			return v.Polygons[i].Less(ctx, nbf, v2.Polygons[i])
 		}
 	}
 	// Determine based off length

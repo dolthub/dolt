@@ -37,7 +37,7 @@ func (tvs TupleVals) Value(ctx context.Context) (types.Value, error) {
 	return types.NewTuple(tvs.nbf, tvs.vs...)
 }
 
-func (tvs TupleVals) Less(nbf *types.NomsBinFormat, other types.LesserValuable) (bool, error) {
+func (tvs TupleVals) Less(ctx context.Context, nbf *types.NomsBinFormat, other types.LesserValuable) (bool, error) {
 	if other.Kind() == types.TupleKind {
 		if otherTVs, ok := other.(TupleVals); ok {
 			for i, val := range tvs.vs {
@@ -49,7 +49,7 @@ func (tvs TupleVals) Less(nbf *types.NomsBinFormat, other types.LesserValuable) 
 				otherVal := otherTVs.vs[i]
 
 				if !val.Equals(otherVal) {
-					return val.Less(nbf, otherVal)
+					return val.Less(ctx, nbf, otherVal)
 				}
 			}
 

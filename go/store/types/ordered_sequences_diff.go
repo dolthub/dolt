@@ -96,7 +96,7 @@ VALIDRANGES:
 				return err
 			}
 
-			if isLess, err := currentKey.Less(last.format(), lastKey); err != nil {
+			if isLess, err := currentKey.Less(ctx, last.format(), lastKey); err != nil {
 				return err
 			} else if isLess {
 				valid, skip, err := inRange(ctx, currentKey.v)
@@ -145,7 +145,7 @@ VALIDRANGES:
 					continue
 				}
 
-				if isLess, err := lastKey.Less(last.format(), currentKey); err != nil {
+				if isLess, err := lastKey.Less(ctx, last.format(), currentKey); err != nil {
 					return err
 				} else if isLess {
 					mv, err := getMapValue(lastCur)

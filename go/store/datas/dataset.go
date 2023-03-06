@@ -447,7 +447,7 @@ func LoadRootNomsValueFromRootIshAddr(ctx context.Context, vr types.ValueReader,
 	if err != nil {
 		return nil, err
 	}
-	h, err := newHead(v, addr)
+	h, err := newHead(ctx, v, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -470,7 +470,7 @@ func LoadRootNomsValueFromRootIshAddr(ctx context.Context, vr types.ValueReader,
 	}
 }
 
-func newHead(head types.Value, addr hash.Hash) (dsHead, error) {
+func newHead(ctx context.Context, head types.Value, addr hash.Hash) (dsHead, error) {
 	if head == nil {
 		return nil, nil
 	}
@@ -492,12 +492,12 @@ func newHead(head types.Value, addr hash.Hash) (dsHead, error) {
 		}
 	}
 
-	matched, err := IsCommit(head)
+	matched, err := IsCommit(ctx, head)
 	if err != nil {
 		return nil, err
 	}
 	if !matched {
-		matched, err = IsTag(head)
+		matched, err = IsTag(ctx, head)
 		if err != nil {
 			return nil, err
 		}
@@ -521,8 +521,8 @@ func newHead(head types.Value, addr hash.Hash) (dsHead, error) {
 	return nomsHead{head.(types.Struct), addr}, nil
 }
 
-func newDataset(db *database, id string, head types.Value, addr hash.Hash) (Dataset, error) {
-	h, err := newHead(head, addr)
+func newDataset(ctx context.Context, db *database, id string, head types.Value, addr hash.Hash) (Dataset, error) {
+	h, err := newHead(ctx, head, addr)
 	if err != nil {
 		return Dataset{}, err
 	}

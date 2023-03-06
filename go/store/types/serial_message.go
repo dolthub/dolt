@@ -179,7 +179,7 @@ func (sm SerialMessage) HumanReadableString() string {
 	}
 }
 
-func (sm SerialMessage) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (sm SerialMessage) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(SerialMessage); ok {
 		return bytes.Compare(sm, v2) == -1, nil
 	}

@@ -246,24 +246,25 @@ func TestNewCommit(t *testing.T) {
 func TestCommitWithoutMetaField(t *testing.T) {
 	assert := assert.New(t)
 
+	ctx := context.Background()
 	storage := &chunks.TestStorage{}
 	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
 	defer db.Close()
 
 	metaCommit, err := types.NewStruct(db.Format(), "Commit", types.StructData{
 		"value":   types.Float(9),
-		"parents": mustSet(types.NewSet(context.Background(), db)),
+		"parents": mustSet(types.NewSet(ctx, db)),
 		"meta":    types.EmptyStruct(db.Format()),
 	})
 	assert.NoError(err)
-	assert.True(IsCommit(metaCommit))
+	assert.True(IsCommit(ctx, metaCommit))
 
 	noMetaCommit, err := types.NewStruct(db.Format(), "Commit", types.StructData{
 		"value":   types.Float(9),
-		"parents": mustSet(types.NewSet(context.Background(), db)),
+		"parents": mustSet(types.NewSet(ctx, db)),
 	})
 	assert.NoError(err)
-	assert.False(IsCommit(noMetaCommit))
+	assert.False(IsCommit(ctx, noMetaCommit))
 }
 
 func mustCommitToTargetHashes(vrw types.ValueReadWriter, commits ...types.Value) []hash.Hash {
