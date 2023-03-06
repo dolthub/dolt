@@ -32,7 +32,7 @@ var _ types.EditProvider = (*EPMerger)(nil)
 
 type EPMerger struct {
 	ctx        context.Context
-	nbf        *types.NomsBinFormat
+	vr         types.ValueReader
 	reachedEOF bool
 	editsRead  int64
 
@@ -44,10 +44,10 @@ type EPMerger struct {
 
 // NewEPMerger takes a slice of TupleReaders, whose contents should be key sorted key value tuple
 // pairs, and return a *EPMerger
-func NewEPMerger(ctx context.Context, nbf *types.NomsBinFormat, eps []types.EditProvider) (*EPMerger, error) {
+func NewEPMerger(ctx context.Context, vr types.ValueReader, eps []types.EditProvider) (*EPMerger, error) {
 	fep := &EPMerger{
 		ctx:      ctx,
-		nbf:      nbf,
+		vr:       vr,
 		numEPs:   len(eps),
 		eps:      eps,
 		nextKVPS: make([]entry, 0, len(eps)),
@@ -55,7 +55,7 @@ func NewEPMerger(ctx context.Context, nbf *types.NomsBinFormat, eps []types.Edit
 
 	// read in the initial values from each stream and put them into the nextKVPS slice in sorted order.
 	for i := range eps {
-		kvp, err := fep.eps[i].Next()
+		kvp, err := fep.eps[i].Next(ctx)
 		if err == io.EOF {
 			continue
 		} else if err != nil {
@@ -71,7 +71,7 @@ func NewEPMerger(ctx context.Context, nbf *types.NomsBinFormat, eps []types.Edit
 		newEntry := entry{key: key, val: val, readerIdx: i}
 
 		// binary search for where this entry should be inserted within the slice
-		insIdx, err := search(nbf, i, key, fep.nextKVPS)
+		insIdx, err := search(ctx, vr, i, key, fep.nextKVPS)
 		if err != nil {
 			return nil, err
 		}
@@ -103,7 +103,7 @@ func keyAndValForKVP(ctx context.Context, kvp *types.KVP) (key types.Value, val 
 
 // Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
 // in key sorted order.  Once all KVPs have been read io.EOF will be returned.
-func (fep *EPMerger) Next() (*types.KVP, error) {
+func (fep *EPMerger) Next(ctx context.Context) (*types.KVP, error) {
 	if fep.epsWithData == 0 {
 		return nil, io.EOF
 	}
@@ -112,7 +112,7 @@ func (fep *EPMerger) Next() (*types.KVP, error) {
 	nextKVP := fep.nextKVPS[0]
 
 	// read the next tuple from the TupleStream that next kvp was read from
-	kvp, err := fep.eps[nextKVP.readerIdx].Next()
+	kvp, err := fep.eps[nextKVP.readerIdx].Next(ctx)
 	if err == io.EOF {
 		// shrink the slice to only hold valid ordered data
 		fep.nextKVPS = fep.nextKVPS[1:]
@@ -130,7 +130,7 @@ func (fep *EPMerger) Next() (*types.KVP, error) {
 		}
 
 		// search for the location where the item should be placed
-		insPos, err := search(fep.nbf, nextKVP.readerIdx, key, fep.nextKVPS[1:])
+		insPos, err := search(ctx, fep.vr, nextKVP.readerIdx, key, fep.nextKVPS[1:])
 		if err != nil {
 			return nil, err
 		}
@@ -159,12 +159,12 @@ func (fep *EPMerger) ReachedEOF() bool {
 }
 
 type comparableValue interface {
-	Compare(nbf *types.NomsBinFormat, other types.LesserValuable) (int, error)
+	Compare(ctx context.Context, nbf *types.NomsBinFormat, other types.LesserValuable) (int, error)
 }
 
 // search does a binary search or a sorted []entry and returns an integer representing the insertion index where the
 // item should be placed in order to keep the vals sorted
-func search(nbf *types.NomsBinFormat, readerIdx int, key types.Value, vals []entry) (int, error) {
+func search(ctx context.Context, vr types.ValueReader, readerIdx int, key types.Value, vals []entry) (int, error) {
 	var err error
 	var n int
 	if comparable, ok := key.(comparableValue); ok {
@@ -174,7 +174,7 @@ func search(nbf *types.NomsBinFormat, readerIdx int, key types.Value, vals []ent
 			}
 
 			var res int
-			res, err = comparable.Compare(nbf, vals[i].key)
+			res, err = comparable.Compare(ctx, vr.Format(), vals[i].key)
 			if err != nil {
 				return false
 			} else if res < 0 {
@@ -192,7 +192,7 @@ func search(nbf *types.NomsBinFormat, readerIdx int, key types.Value, vals []ent
 			}
 
 			var isLess bool
-			isLess, err = key.Less(nbf, vals[i].key)
+			isLess, err = key.Less(ctx, vr.Format(), vals[i].key)
 			if err != nil {
 				return false
 			} else if isLess {

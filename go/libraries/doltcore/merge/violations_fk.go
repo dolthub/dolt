@@ -111,13 +111,13 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 			if err != nil {
 				return err
 			}
-			err = parentFkConstraintViolations(ctx, foreignKey, postParent, postChild, postParent.Schema, emptyIdx, receiver)
+			err = parentFkConstraintViolations(ctx, baseRoot.VRW(), foreignKey, postParent, postChild, postParent.Schema, emptyIdx, receiver)
 			if err != nil {
 				return err
 			}
 		} else {
 			// Parent exists in the ancestor
-			err = parentFkConstraintViolations(ctx, foreignKey, postParent, postChild, preParent.Schema, preParent.RowData, receiver)
+			err = parentFkConstraintViolations(ctx, baseRoot.VRW(), foreignKey, postParent, postChild, preParent.Schema, preParent.RowData, receiver)
 			if err != nil {
 				return err
 			}
@@ -134,12 +134,12 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 				return err
 			}
 
-			err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, postChild, emptyIdx, receiver)
+			err = childFkConstraintViolations(ctx, baseRoot.VRW(), foreignKey, postParent, postChild, postChild, emptyIdx, receiver)
 			if err != nil {
 				return err
 			}
 		} else {
-			err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChild, preChild.RowData, receiver)
+			err = childFkConstraintViolations(ctx, baseRoot.VRW(), foreignKey, postParent, postChild, preChild, preChild.RowData, receiver)
 			if err != nil {
 				return err
 			}
@@ -350,6 +350,7 @@ var _ FKViolationReceiver = (*foreignKeyViolationWriter)(nil)
 // parentFkConstraintViolations processes foreign key constraint violations for the parent in a foreign key.
 func parentFkConstraintViolations(
 	ctx context.Context,
+	vr types.ValueReader,
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild *constraintViolationsLoadedTable,
 	preParentSch schema.Schema,
@@ -361,13 +362,14 @@ func parentFkConstraintViolations(
 		return prollyParentFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
 	}
 	m := durable.NomsMapFromIndex(preParentRowData)
-	return nomsParentFkConstraintViolations(ctx, foreignKey, postParent, postChild, preParentSch, m, receiver)
+	return nomsParentFkConstraintViolations(ctx, vr, foreignKey, postParent, postChild, preParentSch, m, receiver)
 }
 
 // childFkConstraintViolations handles processing the reference options on a child, or creating a violation if
 // necessary.
 func childFkConstraintViolations(
 	ctx context.Context,
+	vr types.ValueReader,
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild, preChild *constraintViolationsLoadedTable,
 	preChildRowData durable.Index,
@@ -375,7 +377,7 @@ func childFkConstraintViolations(
 ) error {
 	if preChildRowData.Format() != types.Format_DOLT {
 		m := durable.NomsMapFromIndex(preChildRowData)
-		return nomsChildFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChild.Schema, m, receiver)
+		return nomsChildFkConstraintViolations(ctx, vr, foreignKey, postParent, postChild, preChild.Schema, m, receiver)
 	}
 	if preChild.IndexData == nil || postChild.Schema.GetPKCols().Size() == 0 || preChild.Schema.GetPKCols().Size() == 0 {
 		m := durable.ProllyMapFromIndex(preChildRowData)
@@ -400,6 +402,7 @@ func childFkConstraintViolations(
 
 func nomsParentFkConstraintViolations(
 	ctx context.Context,
+	vr types.ValueReader,
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild *constraintViolationsLoadedTable,
 	preParentSch schema.Schema,
@@ -448,6 +451,7 @@ func nomsParentFkConstraintViolations(
 
 			shouldContinue, err := func() (bool, error) {
 				var mapIter table.ReadCloser = noms.NewNomsRangeReader(
+					vr,
 					postParent.IndexSchema,
 					durable.NomsMapFromIndex(postParent.IndexData),
 					[]*noms.ReadRange{{Start: postParentIndexPartialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(postParentIndexPartialKey)}})
@@ -478,7 +482,7 @@ func nomsParentFkConstraintViolations(
 			if err != nil {
 				return err
 			}
-			err = nomsParentFkConstraintViolationsProcess(ctx, foreignKey, postChild, postChildIndexPartialKey, receiver)
+			err = nomsParentFkConstraintViolationsProcess(ctx, vr, foreignKey, postChild, postChildIndexPartialKey, receiver)
 			if err != nil {
 				return err
 			}
@@ -497,6 +501,7 @@ func nomsParentFkConstraintViolations(
 
 func nomsParentFkConstraintViolationsProcess(
 	ctx context.Context,
+	vr types.ValueReader,
 	foreignKey doltdb.ForeignKey,
 	postChild *constraintViolationsLoadedTable,
 	postChildIndexPartialKey types.Tuple,
@@ -506,6 +511,7 @@ func nomsParentFkConstraintViolationsProcess(
 	rowData := durable.NomsMapFromIndex(postChild.RowData)
 
 	mapIter := noms.NewNomsRangeReader(
+		vr,
 		postChild.IndexSchema,
 		indexData,
 		[]*noms.ReadRange{{Start: postChildIndexPartialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(postChildIndexPartialKey)}})
@@ -543,6 +549,7 @@ func nomsParentFkConstraintViolationsProcess(
 // nomsChildFkConstraintViolations processes foreign key constraint violations for the child in a foreign key.
 func nomsChildFkConstraintViolations(
 	ctx context.Context,
+	vr types.ValueReader,
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild *constraintViolationsLoadedTable,
 	preChildSch schema.Schema,
@@ -605,7 +612,7 @@ func nomsChildFkConstraintViolations(
 			if err != nil {
 				return err
 			}
-			err = childFkConstraintViolationsProcess(ctx, postParent, rowDiff, parentPartialKey, receiver)
+			err = childFkConstraintViolationsProcess(ctx, vr, postParent, rowDiff, parentPartialKey, receiver)
 			if err != nil {
 				return err
 			}
@@ -625,12 +632,14 @@ func nomsChildFkConstraintViolations(
 // childFkConstraintViolationsProcess handles processing the constraint violations for the child of a foreign key.
 func childFkConstraintViolationsProcess(
 	ctx context.Context,
+	vr types.ValueReader,
 	postParent *constraintViolationsLoadedTable,
 	rowDiff *diff2.Difference,
 	parentPartialKey types.Tuple,
 	receiver FKViolationReceiver,
 ) error {
 	var mapIter table.ReadCloser = noms.NewNomsRangeReader(
+		vr,
 		postParent.IndexSchema,
 		durable.NomsMapFromIndex(postParent.IndexData),
 		[]*noms.ReadRange{{Start: parentPartialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(parentPartialKey)}})

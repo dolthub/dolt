@@ -15,6 +15,7 @@
 package edits
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,8 +24,9 @@ import (
 )
 
 func TestAddKVP(t *testing.T) {
-	nbf := types.Format_Default
-	builder := NewKVPCollBuilder(2, nbf)
+	vrw := types.NewMemoryValueStore()
+	ctx := context.Background()
+	builder := NewKVPCollBuilder(vrw, 2)
 	builder.AddKVP(types.KVP{Key: types.Uint(0), Val: types.NullValue})
 	builder.AddKVP(types.KVP{Key: types.Uint(1), Val: types.NullValue})
 	builder.AddKVP(types.KVP{Key: types.Uint(2), Val: types.NullValue})
@@ -33,7 +35,7 @@ func TestAddKVP(t *testing.T) {
 	itr := coll.Iterator()
 
 	for i := int64(0); i < coll.Size(); i++ {
-		kvp, err := itr.Next()
+		kvp, err := itr.Next(ctx)
 		assert.NoError(t, err)
 
 		if uint(kvp.Key.(types.Uint)) != uint(i) {
@@ -43,7 +45,9 @@ func TestAddKVP(t *testing.T) {
 }
 
 func TestMoveRemaining(t *testing.T) {
-	nbf := types.Format_Default
+	ctx := context.Background()
+	vrw := types.NewMemoryValueStore()
+
 	sl1 := types.KVPSlice{{Key: types.Uint(0), Val: types.NullValue}, {Key: types.Uint(1), Val: types.NullValue}}
 	sl2 := types.KVPSlice{{Key: types.Uint(2), Val: types.NullValue}, {}}
 	coll := &KVPCollection{
@@ -51,17 +55,17 @@ func TestMoveRemaining(t *testing.T) {
 		2,
 		3,
 		[]types.KVPSlice{sl1, sl2[:1]},
-		nbf,
+		vrw,
 	}
 
-	builder := NewKVPCollBuilder(2, nbf)
+	builder := NewKVPCollBuilder(vrw, 2)
 	builder.MoveRemaining(coll.Iterator())
 
 	result := builder.Build()
 	itr := result.Iterator()
 
 	for i := int64(0); i < result.Size(); i++ {
-		kvp, err := itr.Next()
+		kvp, err := itr.Next(ctx)
 		assert.NoError(t, err)
 
 		if uint(kvp.Key.(types.Uint)) != uint(i) {
@@ -71,11 +75,13 @@ func TestMoveRemaining(t *testing.T) {
 }
 
 func TestAddKVPAndMoveRemaining(t *testing.T) {
-	nbf := types.Format_Default
-	sl := types.KVPSlice{{Key: types.Uint(1), Val: types.NullValue}, {Key: types.Uint(2), Val: types.NullValue}}
-	coll := NewKVPCollection(nbf, sl)
+	ctx := context.Background()
+	vrw := types.NewMemoryValueStore()
 
-	builder := NewKVPCollBuilder(2, nbf)
+	sl := types.KVPSlice{{Key: types.Uint(1), Val: types.NullValue}, {Key: types.Uint(2), Val: types.NullValue}}
+	coll := NewKVPCollection(vrw, sl)
+
+	builder := NewKVPCollBuilder(vrw, 2)
 	builder.AddKVP(types.KVP{Key: types.Uint(0), Val: types.NullValue})
 	builder.MoveRemaining(coll.Iterator())
 
@@ -83,7 +89,7 @@ func TestAddKVPAndMoveRemaining(t *testing.T) {
 	itr := result.Iterator()
 
 	for i := int64(0); i < result.Size(); i++ {
-		kvp, err := itr.Next()
+		kvp, err := itr.Next(ctx)
 		assert.NoError(t, err)
 
 		if uint(kvp.Key.(types.Uint)) != uint(i) {

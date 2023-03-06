@@ -62,7 +62,7 @@ func (v LineString) Equals(other Value) bool {
 	return true
 }
 
-func (v LineString) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (v LineString) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	// Compare types
 	v2, ok := other.(LineString)
 	if !ok {
@@ -86,7 +86,7 @@ func (v LineString) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error)
 	// Compare each point until there's one that is less than
 	for i := 0; i < n; i++ {
 		if !v.Points[i].Equals(v2.Points[i]) {
-			return v.Points[i].Less(nbf, v2.Points[i])
+			return v.Points[i].Less(ctx, nbf, v2.Points[i])
 		}
 	}
 

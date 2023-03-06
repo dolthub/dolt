@@ -103,7 +103,7 @@ func (o Options) WithDeaf(deaf DbEaFactory) Options {
 func TestEditorOptions(vrw types.ValueReadWriter) Options {
 	return Options{
 		ForeignKeyChecksDisabled: false,
-		Deaf:                     NewInMemDeaf(vrw.Format()),
+		Deaf:                     NewInMemDeaf(vrw),
 	}
 }
 

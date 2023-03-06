@@ -26,12 +26,12 @@ type DumbEditAccumulator struct {
 	pos        int
 	reachedEOF bool
 	edits      KVPSlice
-	nbf        *NomsBinFormat
+	vr         ValueReader
 }
 
 // NewDumbEditAccumulator is a factory method for creation of DumbEditAccumulators
-func NewDumbEditAccumulator(nbf *NomsBinFormat) EditAccumulator {
-	return &DumbEditAccumulator{nbf: nbf}
+func NewDumbEditAccumulator(vr ValueReader) EditAccumulator {
+	return &DumbEditAccumulator{vr: vr}
 }
 
 // EditsAdded returns the number of edits that have been added to this EditAccumulator
@@ -46,8 +46,8 @@ func (dumb *DumbEditAccumulator) AddEdit(k LesserValuable, v Valuable) {
 
 // FinishEditing should be called when all edits have been added to get an EditProvider which provides the
 // edits in sorted order. Adding more edits after calling FinishedEditing is an error
-func (dumb *DumbEditAccumulator) FinishedEditing() (EditProvider, error) {
-	err := SortWithErroringLess(KVPSort{dumb.edits, dumb.nbf})
+func (dumb *DumbEditAccumulator) FinishedEditing(ctx context.Context) (EditProvider, error) {
+	err := SortWithErroringLess(ctx, dumb.vr.Format(), KVPSort{dumb.edits})
 
 	if err != nil {
 		return nil, err
@@ -63,7 +63,7 @@ func (dumb *DumbEditAccumulator) Close(ctx context.Context) error {
 
 // Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
 // in key sorted order. Once all KVPs have been read io.EOF will be returned.
-func (dumb *DumbEditAccumulator) Next() (*KVP, error) {
+func (dumb *DumbEditAccumulator) Next(ctx context.Context) (*KVP, error) {
 	if dumb.pos < len(dumb.edits) {
 		curr := &dumb.edits[dumb.pos]
 		dumb.pos++

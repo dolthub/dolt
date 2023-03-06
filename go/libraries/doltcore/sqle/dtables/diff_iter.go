@@ -102,7 +102,7 @@ func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joine
 			if !ok {
 				return false, false, nil
 			}
-			return ranges[0].Check.Check(ctx, v)
+			return ranges[0].Check.Check(ctx, ddb.ValueReadWriter(), v)
 		}
 		rd.StartWithRange(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData), ranges[0].Start, rangeFunc)
 	}

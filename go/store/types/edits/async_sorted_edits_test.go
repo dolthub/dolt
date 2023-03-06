@@ -28,13 +28,13 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func createKVPs(t *testing.T, nbf *types.NomsBinFormat, rng *rand.Rand, size int) types.KVPSlice {
+func createKVPs(t *testing.T, vrw types.ValueReadWriter, rng *rand.Rand, size int) types.KVPSlice {
 	kvps := make(types.KVPSlice, size)
 
-	v, err := types.NewTuple(nbf, types.NullValue)
+	v, err := types.NewTuple(vrw.Format(), types.NullValue)
 	require.NoError(t, err)
 	for i := 0; i < size; i++ {
-		k, err := types.NewTuple(nbf, types.Uint(rng.Uint64()%10000))
+		k, err := types.NewTuple(vrw.Format(), types.Uint(rng.Uint64()%10000))
 		require.NoError(t, err)
 		kvps[i] = types.KVP{Key: k, Val: v}
 	}
@@ -55,7 +55,10 @@ func TestAsyncSortedEdits(t *testing.T) {
 }
 
 func TestAsyncSortedEditsStable(t *testing.T) {
-	ase := NewAsyncSortedEdits(types.Format_Default, 2, 1, 1)
+	ctx := context.Background()
+	vrw := types.NewMemoryValueStore()
+
+	ase := NewAsyncSortedEdits(vrw, 2, 1, 1)
 	assert.NotNil(t, ase)
 	ase.AddEdit(types.Int(0), nil)
 	ase.AddEdit(types.Int(1), nil)
@@ -64,43 +67,43 @@ func TestAsyncSortedEditsStable(t *testing.T) {
 	ase.AddEdit(types.Int(1), types.Int(0))
 	ase.AddEdit(types.Int(2), types.Int(0))
 
-	ep, err := ase.FinishedEditing()
+	ep, err := ase.FinishedEditing(ctx)
 	assert.NoError(t, err)
 
 	err = ase.Close(context.Background())
 	assert.NoError(t, err)
 
-	kvp, err := ep.Next()
+	kvp, err := ep.Next(ctx)
 	assert.NoError(t, err)
 	assert.NotNil(t, kvp)
 	assert.Equal(t, types.Int(0), kvp.Key)
 	assert.Nil(t, kvp.Val)
-	kvp, err = ep.Next()
+	kvp, err = ep.Next(ctx)
 	assert.NoError(t, err)
 	assert.NotNil(t, kvp)
 	assert.Equal(t, types.Int(0), kvp.Key)
 	assert.Equal(t, types.Int(0), kvp.Val)
-	kvp, err = ep.Next()
+	kvp, err = ep.Next(ctx)
 	assert.NoError(t, err)
 	assert.NotNil(t, kvp)
 	assert.Equal(t, types.Int(1), kvp.Key)
 	assert.Nil(t, kvp.Val)
-	kvp, err = ep.Next()
+	kvp, err = ep.Next(ctx)
 	assert.NoError(t, err)
 	assert.NotNil(t, kvp)
 	assert.Equal(t, types.Int(1), kvp.Key)
 	assert.Equal(t, types.Int(0), kvp.Val)
-	kvp, err = ep.Next()
+	kvp, err = ep.Next(ctx)
 	assert.NoError(t, err)
 	assert.NotNil(t, kvp)
 	assert.Equal(t, types.Int(2), kvp.Key)
 	assert.Nil(t, kvp.Val)
-	kvp, err = ep.Next()
+	kvp, err = ep.Next(ctx)
 	assert.NoError(t, err)
 	assert.NotNil(t, kvp)
 	assert.Equal(t, types.Int(2), kvp.Key)
 	assert.Equal(t, types.Int(0), kvp.Val)
-	_, err = ep.Next()
+	_, err = ep.Next(ctx)
 	assert.Equal(t, io.EOF, err)
 }
 
@@ -125,17 +128,19 @@ func testASE(t *testing.T, rng *rand.Rand) {
 	sortConcurrency := int(minSortCon + rng.Int31n(maxSortCon-minSortCon))
 
 	name := fmt.Sprintf("kvps_%d_bs_%d_asc_%d_sc_%d", numKVPs, buffSize, asyncSortConcurrency, sortConcurrency)
-	nbf := types.Format_Default
 
 	t.Run(name, func(t *testing.T) {
-		kvps := createKVPs(t, nbf, rng, numKVPs)
-		asyncSorted := NewAsyncSortedEdits(types.Format_Default, buffSize, asyncSortConcurrency, sortConcurrency)
+		ctx := context.Background()
+		vrw := types.NewMemoryValueStore()
+
+		kvps := createKVPs(t, vrw, rng, numKVPs)
+		asyncSorted := NewAsyncSortedEdits(vrw, buffSize, asyncSortConcurrency, sortConcurrency)
 
 		for _, kvp := range kvps {
 			asyncSorted.AddEdit(kvp.Key, kvp.Val)
 		}
 
-		itr, err := asyncSorted.FinishedEditing()
+		itr, err := asyncSorted.FinishedEditing(ctx)
 
 		assert.NoError(t, err)
 
@@ -143,7 +148,7 @@ func testASE(t *testing.T, rng *rand.Rand) {
 			t.Error("Invalid count", asyncSorted.Size(), "!=", numKVPs)
 		}
 
-		inOrder, count, err := IsInOrder(nbf, itr)
+		inOrder, count, err := IsInOrder(ctx, vrw, itr)
 
 		assert.NoError(t, err)
 

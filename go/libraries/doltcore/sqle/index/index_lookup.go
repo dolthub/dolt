@@ -80,7 +80,7 @@ func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRa
 		columns = idx.Schema().GetAllCols().Tags
 	}
 	m := durable.NomsMapFromIndex(durableState.Secondary)
-	nrr := noms.NewNomsRangeReader(idx.IndexSchema(), m, ranges)
+	nrr := noms.NewNomsRangeReader(idx.valueReadWriter(), idx.IndexSchema(), m, ranges)
 
 	covers := idx.coversColumns(durableState, columns)
 	if covers || idx.ID() == "PRIMARY" {
@@ -515,7 +515,7 @@ var _ noms.InRangeCheck = nomsRangeCheck{}
 
 // Between returns whether the given types.Value is between the bounds. In addition, this returns if the value is outside
 // the bounds and above the upperbound.
-func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, val types.Value) (ok bool, over bool, err error) {
+func (cb columnBounds) Between(ctx context.Context, vr types.ValueReader, val types.Value) (ok bool, over bool, err error) {
 	// Only boundCase_isNull matches NULL values,
 	// otherwise we terminate the range scan.
 	// This is checked early to bypass unpredictable
@@ -529,58 +529,58 @@ func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, va
 	case boundsCase_infinity_infinity:
 		return true, false, nil
 	case boundsCase_infinity_lessEquals:
-		ok, err := cb.upperbound.Less(nbf, val)
+		ok, err := cb.upperbound.Less(ctx, vr.Format(), val)
 		if err != nil || ok {
 			return false, true, err
 		}
 	case boundsCase_infinity_less:
-		ok, err := val.Less(nbf, cb.upperbound)
+		ok, err := val.Less(ctx, vr.Format(), cb.upperbound)
 		if err != nil || !ok {
 			return false, true, err
 		}
 	case boundsCase_greaterEquals_infinity:
-		ok, err := val.Less(nbf, cb.lowerbound)
+		ok, err := val.Less(ctx, vr.Format(), cb.lowerbound)
 		if err != nil || ok {
 			return false, false, err
 		}
 	case boundsCase_greaterEquals_lessEquals:
-		ok, err := val.Less(nbf, cb.lowerbound)
+		ok, err := val.Less(ctx, vr.Format(), cb.lowerbound)
 		if err != nil || ok {
 			return false, false, err
 		}
-		ok, err = cb.upperbound.Less(nbf, val)
+		ok, err = cb.upperbound.Less(ctx, vr.Format(), val)
 		if err != nil || ok {
 			return false, true, err
 		}
 	case boundsCase_greaterEquals_less:
-		ok, err := val.Less(nbf, cb.lowerbound)
+		ok, err := val.Less(ctx, vr.Format(), cb.lowerbound)
 		if err != nil || ok {
 			return false, false, err
 		}
-		ok, err = val.Less(nbf, cb.upperbound)
+		ok, err = val.Less(ctx, vr.Format(), cb.upperbound)
 		if err != nil || !ok {
 			return false, true, err
 		}
 	case boundsCase_greater_infinity:
-		ok, err := cb.lowerbound.Less(nbf, val)
+		ok, err := cb.lowerbound.Less(ctx, vr.Format(), val)
 		if err != nil || !ok {
 			return false, false, err
 		}
 	case boundsCase_greater_lessEquals:
-		ok, err := cb.lowerbound.Less(nbf, val)
+		ok, err := cb.lowerbound.Less(ctx, vr.Format(), val)
 		if err != nil || !ok {
 			return false, false, err
 		}
-		ok, err = cb.upperbound.Less(nbf, val)
+		ok, err = cb.upperbound.Less(ctx, vr.Format(), val)
 		if err != nil || ok {
 			return false, true, err
 		}
 	case boundsCase_greater_less:
-		ok, err := cb.lowerbound.Less(nbf, val)
+		ok, err := cb.lowerbound.Less(ctx, vr.Format(), val)
 		if err != nil || !ok {
 			return false, false, err
 		}
-		ok, err = val.Less(nbf, cb.upperbound)
+		ok, err = val.Less(ctx, vr.Format(), cb.upperbound)
 		if err != nil || !ok {
 			return false, true, err
 		}
@@ -616,14 +616,13 @@ func (cb columnBounds) Equals(otherBounds columnBounds) bool {
 }
 
 // Check implements the interface noms.InRangeCheck.
-func (nrc nomsRangeCheck) Check(ctx context.Context, tuple types.Tuple) (valid bool, skip bool, err error) {
+func (nrc nomsRangeCheck) Check(ctx context.Context, vr types.ValueReader, tuple types.Tuple) (valid bool, skip bool, err error) {
 	itr := types.TupleItrPool.Get().(*types.TupleIterator)
 	defer types.TupleItrPool.Put(itr)
 	err = itr.InitForTuple(tuple)
 	if err != nil {
 		return false, false, err
 	}
-	nbf := tuple.Format()
 
 	for i := 0; i < len(nrc) && itr.HasMore(); i++ {
 		if err := itr.Skip(); err != nil {
@@ -637,7 +636,7 @@ func (nrc nomsRangeCheck) Check(ctx context.Context, tuple types.Tuple) (valid b
 			break
 		}
 
-		ok, over, err := nrc[i].Between(ctx, nbf, val)
+		ok, over, err := nrc[i].Between(ctx, vr, val)
 		if err != nil {
 			return false, false, err
 		}

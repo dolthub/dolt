@@ -14,16 +14,21 @@
 
 package types
 
-import "sort"
+import (
+	"context"
+	"sort"
+)
 
 type SortData interface {
 	Len() int
-	Less(i, j int) (bool, error)
+	Less(ctx context.Context, nbf *NomsBinFormat, i, j int) (bool, error)
 	Swap(i, j int)
 }
 
 type sortWrapper struct {
 	data SortData
+	ctx  context.Context
+	nbf  *NomsBinFormat
 	err  error
 }
 
@@ -36,8 +41,7 @@ func (sw *sortWrapper) Less(i, j int) bool {
 		return false
 	}
 
-	isLess, err := sw.data.Less(i, j)
-
+	isLess, err := sw.data.Less(sw.ctx, sw.nbf, i, j)
 	if err != nil {
 		sw.err = err
 	}
@@ -49,10 +53,9 @@ func (sw *sortWrapper) Swap(i, j int) {
 	sw.data.Swap(i, j)
 }
 
-func SortWithErroringLess(data SortData) error {
-	sw := &sortWrapper{data, nil}
+func SortWithErroringLess(ctx context.Context, nbf *NomsBinFormat, data SortData) error {
+	sw := &sortWrapper{data, ctx, nbf, nil}
 	sort.Stable(sw)
-
 	return sw.err
 }
 

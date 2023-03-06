@@ -15,6 +15,7 @@
 package edits
 
 import (
+	"context"
 	"io"
 	"testing"
 
@@ -24,47 +25,50 @@ import (
 )
 
 func TestSortedEditItrStable(t *testing.T) {
-	left := NewKVPCollection(types.Format_Default, types.KVPSlice{
+	ctx := context.Background()
+	vrw := types.NewMemoryValueStore()
+
+	left := NewKVPCollection(vrw, types.KVPSlice{
 		types.KVP{Key: types.Int(0)},
 		types.KVP{Key: types.Int(1)},
 		types.KVP{Key: types.Int(2)},
 	})
-	right := NewKVPCollection(types.Format_Default, types.KVPSlice{
+	right := NewKVPCollection(vrw, types.KVPSlice{
 		types.KVP{Key: types.Int(0), Val: types.Int(0)},
 		types.KVP{Key: types.Int(1), Val: types.Int(0)},
 		types.KVP{Key: types.Int(2), Val: types.Int(0)},
 	})
 	assert.NotNil(t, left)
 	assert.NotNil(t, right)
-	i := NewSortedEditItr(types.Format_Default, left, right)
+	i := NewSortedEditItr(vrw, left, right)
 	assert.NotNil(t, i)
 
 	var err error
 	var v *types.KVP
-	v, err = i.Next()
+	v, err = i.Next(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, types.Int(0), v.Key)
 	assert.Nil(t, v.Val)
-	v, err = i.Next()
+	v, err = i.Next(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, types.Int(0), v.Key)
 	assert.NotNil(t, v.Val)
-	v, err = i.Next()
+	v, err = i.Next(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, types.Int(1), v.Key)
 	assert.Nil(t, v.Val)
-	v, err = i.Next()
+	v, err = i.Next(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, types.Int(1), v.Key)
 	assert.NotNil(t, v.Val)
-	v, err = i.Next()
+	v, err = i.Next(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, types.Int(2), v.Key)
 	assert.Nil(t, v.Val)
-	v, err = i.Next()
+	v, err = i.Next(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, types.Int(2), v.Key)
 	assert.NotNil(t, v.Val)
-	_, err = i.Next()
+	_, err = i.Next(ctx)
 	assert.Equal(t, io.EOF, err)
 }
