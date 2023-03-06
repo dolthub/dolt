@@ -154,7 +154,7 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 		if err != nil {
 			return nil, nil, err
 		}
-		
+
 		n, err := mergeTbl.NumRowsInConflict(ctx)
 		if err != nil {
 			return nil, nil, err
