@@ -31,9 +31,9 @@ var toxiClient *toxiproxyclient.Client
 var mysqlProxy *toxiproxyclient.Proxy
 var proxyPort int
 
-// TestBinlogReplicationReconnection tests that the replica's connection to the primary is correctly
+// TestBinlogReplicationAutoReconnect tests that the replica's connection to the primary is correctly
 // reestablished if it drops.
-func TestBinlogReplicationReconnection(t *testing.T) {
+func TestBinlogReplicationAutoReconnect(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
 	configureToxiProxy(t)

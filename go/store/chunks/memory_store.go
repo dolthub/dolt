@@ -218,14 +218,14 @@ func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb
 		return err
 	}
 
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
 	if ms.pendingRefs == nil {
 		ms.pendingRefs = addrs
 	} else {
 		ms.pendingRefs.InsertAll(addrs)
 	}
-
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
 
 	if ms.pending == nil {
 		ms.pending = map[hash.Hash]Chunk{}
