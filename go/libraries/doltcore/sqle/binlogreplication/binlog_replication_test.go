@@ -33,9 +33,10 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 var mySqlPort, doltPort int
@@ -172,6 +173,14 @@ func TestResetReplica(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, rows.Next())
 	require.NoError(t, rows.Close())
+
+	// Start replication again and verify that we can still query replica status
+	startReplication(t, mySqlPort)
+	replicaStatus := showReplicaStatus(t)
+	require.Equal(t, "0", replicaStatus["Last_Errno"])
+	require.Equal(t, "", replicaStatus["Last_Error"])
+	require.True(t, replicaStatus["Replica_IO_Running"] == binlogreplication.ReplicaIoRunning ||
+		replicaStatus["Replica_IO_Running"] == binlogreplication.ReplicaIoConnecting)
 }
 
 // TestStartReplicaErrors tests that the "START REPLICA" command returns appropriate responses
