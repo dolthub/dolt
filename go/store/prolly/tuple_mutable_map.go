@@ -63,7 +63,7 @@ func (mut *MutableMap) Map(ctx context.Context) (Map, error) {
 }
 
 func (mut *MutableMap) flushWithSerializer(ctx context.Context, s message.Serializer) (Map, error) {
-	sm := mut.tuples.StaticMap
+	sm := mut.tuples.Static
 	fn := tree.ApplyMutations[val.Tuple, val.TupleDesc, message.Serializer]
 
 	root, err := fn(ctx, sm.NodeStore, sm.Root, mut.keyDesc, s, mut.tuples.Mutations())
@@ -84,7 +84,7 @@ func (mut *MutableMap) flushWithSerializer(ctx context.Context, s message.Serial
 
 // NodeStore returns the map's NodeStore
 func (mut *MutableMap) NodeStore() tree.NodeStore {
-	return mut.tuples.StaticMap.NodeStore
+	return mut.tuples.Static.NodeStore
 }
 
 // Put adds the Tuple pair |key|, |value| to the MutableMap.
@@ -147,7 +147,8 @@ func (mut *MutableMap) flushPending(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	mut.tuples = sm.Mutate().tuples
+	mut.tuples.Static = sm.tuples
+	mut.tuples.Edits.Truncate() // reuse skip list
 	mut.stash = stash
 	return nil
 }
@@ -160,7 +161,7 @@ func (mut *MutableMap) IterAll(ctx context.Context) (MapIter, error) {
 
 // IterRange returns a MapIter that iterates over a Range.
 func (mut *MutableMap) IterRange(ctx context.Context, rng Range) (MapIter, error) {
-	treeIter, err := treeIterFromRange(ctx, mut.tuples.StaticMap.Root, mut.tuples.StaticMap.NodeStore, rng)
+	treeIter, err := treeIterFromRange(ctx, mut.tuples.Static.Root, mut.tuples.Static.NodeStore, rng)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +222,7 @@ func debugFormat(ctx context.Context, m *MutableMap) (string, error) {
 	kd, vd := m.keyDesc, m.valDesc
 
 	editIter := m.tuples.Edits.IterAtStart()
-	iter, err := m.tuples.StaticMap.IterAll(ctx)
+	iter, err := m.tuples.Static.IterAll(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -245,7 +246,7 @@ func debugFormat(ctx context.Context, m *MutableMap) (string, error) {
 	}
 	sb.WriteString("\t},\n")
 
-	ci, err := m.tuples.StaticMap.Count()
+	ci, err := m.tuples.Static.Count()
 	if err != nil {
 		return "", err
 	}

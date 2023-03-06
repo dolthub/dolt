@@ -202,7 +202,7 @@ func (t StaticMap[K, V, O]) Mutate() MutableMap[K, V, O] {
 		Edits: skip.NewSkipList(func(left, right []byte) int {
 			return t.Order.Compare(left, right)
 		}),
-		StaticMap: t,
+		Static: t,
 	}
 }
 

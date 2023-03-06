@@ -862,24 +862,10 @@ func GetDiffTableSchemaAndJoiner(format *types.NomsBinFormat, fromSch, toSch sch
 			return nil, nil, err
 		}
 	} else {
-
-		colCollection := schema.NewColCollection()
-		if fromSch != nil {
-			colCollection = fromSch.GetAllCols()
+		fromSch, toSch, err = expandFromToSchemas(fromSch, toSch)
+		if err != nil {
+			return nil, nil, err
 		}
-		colCollection = colCollection.Append(
-			schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
-			schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
-		fromSch = schema.MustSchemaFromCols(colCollection)
-
-		colCollection = schema.NewColCollection()
-		if toSch != nil {
-			colCollection = toSch.GetAllCols()
-		}
-		colCollection = colCollection.Append(
-			schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
-			schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
-		toSch = schema.MustSchemaFromCols(colCollection)
 
 		j, err = rowconv.NewJoiner(
 			[]rowconv.NamedSchema{{Name: diff.To, Sch: toSch}, {Name: diff.From, Sch: fromSch}},
@@ -890,44 +876,61 @@ func GetDiffTableSchemaAndJoiner(format *types.NomsBinFormat, fromSch, toSch sch
 		if err != nil {
 			return nil, nil, err
 		}
+
 		diffTableSchema = j.GetSchema()
-		colCollection = diffTableSchema.GetAllCols()
-		colCollection = colCollection.Append(
+		fullDiffCols := diffTableSchema.GetAllCols()
+		fullDiffCols = fullDiffCols.Append(
 			schema.NewColumn(diffTypeColName, schema.DiffTypeTag, types.StringKind, false),
 		)
-		diffTableSchema = schema.MustSchemaFromCols(colCollection)
+		diffTableSchema = schema.MustSchemaFromCols(fullDiffCols)
 	}
 
 	return
 }
 
+// expandFromToSchemas converts input schemas to schemas appropriate for diffs. One argument must be
+// non-nil. If one is null, the result will be the columns of the non-nil argument.
+func expandFromToSchemas(fromSch, toSch schema.Schema) (newFromSch, newToSch schema.Schema, err error) {
+	var fromClmCol, toClmCol *schema.ColCollection
+	if fromSch == nil && toSch == nil {
+		return nil, nil, errors.New("non-nil argument required to CalculateDiffSchema")
+	} else if fromSch == nil {
+		fromClmCol = toSch.GetAllCols()
+		toClmCol = toSch.GetAllCols()
+	} else if toSch == nil {
+		toClmCol = fromSch.GetAllCols()
+		fromClmCol = fromSch.GetAllCols()
+	} else {
+		fromClmCol = fromSch.GetAllCols()
+		toClmCol = toSch.GetAllCols()
+	}
+
+	fromClmCol = fromClmCol.Append(
+		schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
+		schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
+	newFromSch = schema.MustSchemaFromCols(fromClmCol)
+
+	toClmCol = toClmCol.Append(
+		schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
+		schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
+	newToSch = schema.MustSchemaFromCols(toClmCol)
+
+	return
+}
+
 // CalculateDiffSchema returns the schema for the dolt_diff table based on the schemas from the from and to tables.
-// Either may be nil, in which case it will be missing from the resulting schema.
+// Either may be nil, in which case the nil argument will use the schema of the non-nil argument
 func CalculateDiffSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
-
-	colCollection := schema.NewColCollection()
-	if fromSch != nil {
-		colCollection = fromSch.GetAllCols()
+	fromSch, toSch, err := expandFromToSchemas(fromSch, toSch)
+	if err != nil {
+		return nil, err
 	}
-	colCollection = colCollection.Append(
-		schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
-		schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
-	fromSch = schema.MustSchemaFromCols(colCollection)
-
-	colCollection = schema.NewColCollection()
-	if toSch != nil {
-		colCollection = toSch.GetAllCols()
-	}
-	colCollection = colCollection.Append(
-		schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
-		schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
-	toSch = schema.MustSchemaFromCols(colCollection)
 
 	cols := make([]schema.Column, toSch.GetAllCols().Size()+fromSch.GetAllCols().Size()+1)
 
 	i := 0
-	err := toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		toCol, err := schema.NewColumnWithTypeInfo("to_"+col.Name, uint64(i), col.TypeInfo, false, col.Default, false, col.Comment)
+	err = toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		toCol, err := schema.NewColumnWithTypeInfo(diff.ToColNamer(col.Name), uint64(i), col.TypeInfo, false, col.Default, false, col.Comment)
 		if err != nil {
 			return true, err
 		}
@@ -941,7 +944,7 @@ func CalculateDiffSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
 
 	j := toSch.GetAllCols().Size()
 	err = fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		fromCol, err := schema.NewColumnWithTypeInfo("from_"+col.Name, uint64(i), col.TypeInfo, false, col.Default, false, col.Comment)
+		fromCol, err := schema.NewColumnWithTypeInfo(diff.FromColNamer(col.Name), uint64(i), col.TypeInfo, false, col.Default, false, col.Comment)
 		if err != nil {
 			return true, err
 		}
@@ -954,7 +957,7 @@ func CalculateDiffSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
 		return nil, err
 	}
 
-	cols[len(cols)-1] = schema.NewColumn("diff_type", schema.DiffTypeTag, types.StringKind, false)
+	cols[len(cols)-1] = schema.NewColumn(diffTypeColName, schema.DiffTypeTag, types.StringKind, false)
 
 	return schema.UnkeyedSchemaFromCols(schema.NewColCollection(cols...)), nil
 }

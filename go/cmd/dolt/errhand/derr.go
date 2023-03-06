@@ -105,7 +105,7 @@ type DError struct {
 	printUsage bool
 }
 
-// Returns a verbose error using the error given. If the error given is already a VerboseError, returns it. Otherwise,
+// VerboseErrorFromError returns a verbose error using the error given. If the error given is already a VerboseError, returns it. Otherwise,
 // creates a new VerboseError with the given error's error string.
 func VerboseErrorFromError(err error) VerboseError {
 	if err == nil {

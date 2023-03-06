@@ -1249,12 +1249,12 @@ inner join t on to_pk = t.pk;`,
 				Expected: []sql.Row{{1, 2, "HEAD", "WORKING", "added"}},
 			},
 			{
-				Query:       "select to_a, from_b, from_commit, to_commit, diff_type from dolt_diff('HEAD', 'WORKING', 't1')",
-				ExpectedErr: sql.ErrColumnNotFound,
+				Query:    "select to_a, from_b, from_commit, to_commit, diff_type from dolt_diff('HEAD', 'WORKING', 't1')",
+				Expected: []sql.Row{{1, nil, "HEAD", "WORKING", "added"}},
 			},
 			{
-				Query:    "select from_a, from_b, from_commit, to_commit, diff_type from dolt_diff('WORKING', 'HEAD', 't1')",
-				Expected: []sql.Row{{1, 2, "WORKING", "HEAD", "removed"}},
+				Query:    "select from_a, from_b, to_a, from_commit, to_commit, diff_type from dolt_diff('WORKING', 'HEAD', 't1')",
+				Expected: []sql.Row{{1, 2, nil, "WORKING", "HEAD", "removed"}},
 			},
 		},
 	},
@@ -2543,7 +2543,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", false, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit5, 't');",
@@ -2592,7 +2592,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}}, // TODO: Data change should be false for renamed column
+				Expected: []sql.Row{{"t", "t", "modified", false, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
@@ -2720,7 +2720,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary('HEAD~2', 'HEAD');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", false, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('HEAD~', 'HEAD');",
