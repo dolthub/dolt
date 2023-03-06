@@ -49,9 +49,6 @@ export const branchTests = [
     res: [
       {
         name: "main",
-        // latest_committer: "Taylor Bantle",
-        // latest_committer_email: "taylor@liquidata.co",
-        // TODO: uncomment
         latest_committer: "mysql-test-runner",
         latest_committer_email: "mysql-test-runner@liquidata.co",
       },

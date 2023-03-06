@@ -35,9 +35,6 @@ export const mergeTests = [
       {
         message: "Initialize data repository",
         parentsLength: 0,
-        // committer: "Taylor Bantle",
-        // email: "taylor@liquidata.co",
-        // TODO: uncomment
         committer: "mysql-test-runner",
         email: "mysql-test-runner@liquidata.co",
       },
