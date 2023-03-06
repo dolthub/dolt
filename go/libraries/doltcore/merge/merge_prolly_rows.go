@@ -611,12 +611,14 @@ type secondaryMerger struct {
 	notUnique map[string]struct{}
 }
 
+const secondaryMergerPendingSize = 650_000
+
 func newSecondaryMerger(ctx context.Context, tm TableMerger, finalSch schema.Schema) (*secondaryMerger, error) {
 	ls, err := tm.leftTbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
-	lm, err := GetMutableSecondaryIdxs(ctx, tm.leftSch, ls)
+	lm, err := GetMutableSecondaryIdxsWithPending(ctx, tm.leftSch, ls, secondaryMergerPendingSize)
 	if err != nil {
 		return nil, err
 	}
@@ -625,7 +627,7 @@ func newSecondaryMerger(ctx context.Context, tm TableMerger, finalSch schema.Sch
 	if err != nil {
 		return nil, err
 	}
-	rm, err := GetMutableSecondaryIdxs(ctx, tm.rightSch, rs)
+	rm, err := GetMutableSecondaryIdxsWithPending(ctx, tm.rightSch, rs, secondaryMergerPendingSize)
 	if err != nil {
 		return nil, err
 	}
