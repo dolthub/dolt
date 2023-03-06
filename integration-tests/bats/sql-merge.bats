@@ -1534,7 +1534,7 @@ SQL
 
     run dolt sql -q "show create table t"
     log_status_eq 0
-    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))") ]] || false
+    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
 }
 
 @test "sql-merge: dropping constraint in one branch and modifying same in other results in conflict" {

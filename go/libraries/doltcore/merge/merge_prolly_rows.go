@@ -20,18 +20,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/skip"
 	"github.com/dolthub/dolt/go/store/val"
+	"io"
 )
 
 // mergeTableData three-way merges rows and indexes for a given table. First,
@@ -116,7 +115,7 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 			if err != nil {
 				return nil, nil, err
 			}
-			err, cnt := uniq.valid(ctx, diff.Key, diff.Right)
+			cnt, err := uniq.valid(ctx, diff.Key, diff.Right)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -132,7 +131,7 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 			if err != nil {
 				return nil, nil, err
 			}
-			err, cnt := uniq.valid(ctx, diff.Key, diff.Right)
+			cnt, err := uniq.valid(ctx, diff.Key, diff.Right)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -157,7 +156,7 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 			if err != nil {
 				return nil, nil, err
 			}
-			err, cnt := uniq.valid(ctx, diff.Key, diff.Merged)
+			cnt, err := uniq.valid(ctx, diff.Key, diff.Merged)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -175,7 +174,20 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 	}
 
 	finalRows, err := pri.finalize(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	leftIdxs, rightIdxs, err := sec.finalize(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	newUniq, err := uniq.finalize(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	s.Conflicts += newUniq
 
 	finalIdxs, err := mergeProllySecondaryIndexes(ctx, tm, leftIdxs, rightIdxs, finalSch, finalRows, conflicts.ae)
 	if err != nil {
@@ -235,6 +247,7 @@ type uniqAddValidator struct {
 	states       []*validateIndexState
 	leftRows     prolly.Map
 	leftSch      schema.Schema
+	batchSize    int
 }
 
 type validateIndexState struct {
@@ -246,6 +259,8 @@ type validateIndexState struct {
 	prefixKD  val.TupleDesc
 	primaryKB *val.TupleBuilder
 	prefixKB  *val.TupleBuilder
+	batch     *skip.List
+	secCur    *tree.Cursor
 }
 
 func newUniqAddValidator(ctx context.Context, finalSch schema.Schema, leftRows prolly.Map, ae *prolly.ArtifactsEditor, tm TableMerger) (*uniqAddValidator, error) {
@@ -291,6 +306,9 @@ func newUniqAddValidator(ctx context.Context, finalSch schema.Schema, leftRows p
 			primaryKB: primaryKB,
 			primaryKD: primaryKD,
 			prefixKD:  prefixKD,
+			batch: skip.NewSkipList(func(left, right []byte) int {
+				return prefixKD.Compare(left, right)
+			}),
 		})
 	}
 
@@ -301,51 +319,99 @@ func newUniqAddValidator(ctx context.Context, finalSch schema.Schema, leftRows p
 		states:       states,
 		leftRows:     leftRows,
 		leftSch:      tm.leftSch,
+		batchSize:    10_000,
 	}, nil
 }
 
-func (v *uniqAddValidator) valid(ctx context.Context, key, value val.Tuple) (error, int) {
+func (v *uniqAddValidator) valid(ctx context.Context, key, value val.Tuple) (int, error) {
 	var conflicts int
-	for _, s := range v.states {
-		secKey, hasNulls := makePartialKey(s.prefixKB, s.index.IndexedColumnTags(), s.index, v.leftSch, key, value, v.leftRows.Pool())
+	for i, s := range v.states {
+		s.batch.Put(key, value)
+		if s.batch.Count() > v.batchSize {
+			cnt, err := v.flush(ctx, i)
+			conflicts += cnt
+			if err != nil {
+				return 0, err
+			}
+		}
+	}
+	return conflicts, nil
+}
 
+func (v *uniqAddValidator) flush(ctx context.Context, i int) (int, error) {
+	var conflicts int
+	var err error
+
+	s := v.states[i]
+	iter := s.batch.IterAtStart()
+	cur := s.secCur
+	defer s.batch.Truncate()
+	defer func() {
+		s.secCur = nil
+	}()
+
+	var key, value []byte
+	for {
+		key, value = iter.Current()
+		if key == nil {
+			break
+		}
+		iter.Advance()
+
+		secKey, hasNulls := makePartialKey(s.prefixKB, s.index.IndexedColumnTags(), s.index, v.leftSch, key, value, v.leftRows.Pool())
 		// if the indexed column values includes a null, don't throw a unique key violation for it
 		if hasNulls {
-			return nil, 0
+			continue
 		}
 
-		// TODO batch this
-		itr, err := creation.NewPrefixItr(ctx, secKey, s.prefixKD, s.leftMap)
+		if cur == nil {
+			s.secCur, err = tree.NewCursorAtKey(ctx, s.leftMap.NodeStore(), s.leftMap.Node(), val.Tuple(key), s.leftMap.KeyDesc())
+			cur = s.secCur
+		}
+
+		err = tree.Seek(ctx, cur, secKey, s.prefixKD)
 		if err != nil {
-			return err, 0
+			return 0, err
 		}
-		indexK, _, err := itr.Next(ctx)
-		if err != nil && err != io.EOF {
-			return nil, 0
-		}
-		if err == nil {
+		if cur.Valid() {
+			indexK := val.Tuple(cur.CurrentKey())
+			if s.prefixKD.Compare(secKey, indexK) != 0 {
+				continue
+			}
+
 			conflicts++
 			existingPK := getPKFromSecondaryKey(s.primaryKB, v.leftRows.Pool(), s.pkMapping, indexK)
 
 			// pluck primary from secondary (trailing fields)
-			o := key.Count() - s.primaryKD.Count()
+			o := val.Tuple(key).Count() - s.primaryKD.Count()
 			for i := 0; i < s.primaryKD.Count(); i++ {
 				j := o + i
-				s.primaryKB.PutRaw(i, key.GetField(j))
+				s.primaryKB.PutRaw(i, val.Tuple(key).GetField(j))
 			}
 			newPK := s.primaryKB.Build(v.leftRows.Pool())
 
 			err = replaceUniqueKeyViolation(ctx, v.ae, v.leftRows, existingPK, s.primaryKD, v.rightRootish, s.vInfo, v.name)
 			if err != nil {
-				return err, 0
+				return 0, err
 			}
 			err = replaceUniqueKeyViolationWithValue(ctx, v.ae, newPK, value, s.primaryKD, v.rightRootish, s.vInfo, v.name)
 			if err != nil {
-				return err, 0
+				return 0, err
 			}
 		}
 	}
-	return nil, conflicts
+	return conflicts, nil
+}
+func (v *uniqAddValidator) finalize(ctx context.Context) (int, error) {
+	var conflicts int
+	for i, _ := range v.states {
+		cnt, err := v.flush(ctx, i)
+		if err != nil {
+			return 0, err
+		}
+		conflicts += cnt
+	}
+	return conflicts, nil
 }
 
 type diffMerger interface {
