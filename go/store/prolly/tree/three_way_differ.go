@@ -100,7 +100,9 @@ func (d *ThreeWayDiffer[K, O]) Next(ctx context.Context) (ThreeWayDiff, error) {
 			if !d.lDone {
 				if d.lDiff.Key == nil {
 					d.lDiff, err = d.lIter.Next(ctx)
-					if err != nil {
+					if errors.Is(err, io.EOF) {
+						d.lDone = true
+					} else if err != nil {
 						return ThreeWayDiff{}, err
 					}
 				}
@@ -108,7 +110,9 @@ func (d *ThreeWayDiffer[K, O]) Next(ctx context.Context) (ThreeWayDiff, error) {
 			if !d.rDone {
 				if d.rDiff.Key == nil {
 					d.rDiff, err = d.rIter.Next(ctx)
-					if err != nil {
+					if errors.Is(err, io.EOF) {
+						d.rDone = true
+					} else if err != nil {
 						return ThreeWayDiff{}, err
 					}
 				}

@@ -1183,6 +1183,57 @@ var MergeScripts = []queries.ScriptTest{
 
 var Dolt1MergeScripts = []queries.ScriptTest{
 	{
+		Name: "dropping constraint from one branch drops from both",
+		SetUpScript: []string{
+			"create table t (i int)",
+			"alter table t add constraint c check (i > 0)",
+			"call dolt_commit('-Am', 'initial commit')",
+
+			"call dolt_checkout('-b', 'other')",
+			"insert into t values (1)",
+			"call dolt_commit('-Am', 'changes to other')",
+
+			"call dolt_checkout('main')",
+			"alter table t drop constraint c",
+			"call dolt_commit('-Am', 'changes to main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select * from t",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "merge constraint with valid data on different branches",
+		SetUpScript: []string{
+			"create table t (i int)",
+			"call dolt_commit('-Am', 'initial commit')",
+
+			"call dolt_checkout('-b', 'other')",
+			"insert into t values (1)",
+			"call dolt_commit('-Am', 'changes to other')",
+
+			"call dolt_checkout('main')",
+			"alter table t add check (i < 10)",
+			"call dolt_commit('-Am', 'changes to main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select * from t",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
 		Name: "Pk convergent updates to sec diff congruent",
 		SetUpScript: []string{
 			"create table xyz (x int primary key, y int, z int, key y_idx(y), key z_idx(z))",
