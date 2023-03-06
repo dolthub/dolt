@@ -17,9 +17,11 @@ package dbfactory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -28,24 +30,39 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	// DoltDir defines the directory used to hold the dolt repo data within the filesys
-	DoltDir = ".dolt"
+// JournalFactory is a DBFactory implementation for creating local filesys backed databases
+type JournalFactory struct{}
 
-	// DataDir is the directory internal to the DoltDir which holds the noms files.
-	DataDir = "noms"
-)
+type singletonDB struct {
+	ddb datas.Database
+	vrw types.ValueReadWriter
+	ns  tree.NodeStore
+}
 
-// DoltDataDir is the directory where noms files will be stored
-var DoltDataDir = filepath.Join(DoltDir, DataDir)
+var singletonLock = new(sync.Mutex)
+var singletons = make(map[string]singletonDB)
 
-// FileFactory is a DBFactory implementation for creating local filesys backed databases
-type FileFactory struct {
+func CloseAllLocalDatabases() (err error) {
+	singletonLock.Lock()
+	defer singletonLock.Unlock()
+	for name, s := range singletons {
+		if cerr := s.ddb.Close(); cerr != nil {
+			err = fmt.Errorf("error closing DB %s (%s)", name, cerr)
+		}
+	}
+	return
+}
+
+func DeleteFromSingletonCache(path string) error {
+	singletonLock.Lock()
+	defer singletonLock.Unlock()
+	delete(singletons, path)
+	return nil
 }
 
 // PrepareDB creates the directory for the DB if it doesn't exist, and returns an error if a file or symlink is at the
 // path given
-func (fact FileFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, u *url.URL, params map[string]interface{}) error {
+func (fact JournalFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, u *url.URL, params map[string]interface{}) error {
 	path, err := url.PathUnescape(u.Path)
 	if err != nil {
 		return err
@@ -55,7 +72,6 @@ func (fact FileFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat,
 	path = u.Host + path
 
 	info, err := os.Stat(path)
-
 	if os.IsNotExist(err) {
 		return os.MkdirAll(path, os.ModePerm)
 	}
@@ -65,12 +81,18 @@ func (fact FileFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat,
 	} else if !info.IsDir() {
 		return filesys.ErrIsFile
 	}
-
 	return nil
 }
 
 // CreateDB creates a local filesys backed database
-func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
+func (fact JournalFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
+	singletonLock.Lock()
+	defer singletonLock.Unlock()
+
+	if s, ok := singletons[urlObj.String()]; ok {
+		return s.ddb, s.vrw, s.ns, nil
+	}
+
 	path, err := url.PathUnescape(urlObj.Path)
 	if err != nil {
 		return nil, nil, nil, err
@@ -86,7 +108,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 
 	var newGenSt *nbs.NomsBlockStore
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q)
+	newGenSt, err = nbs.NewLocalJournalingStore(ctx, nbf.VersionString(), path, q)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -105,7 +127,6 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	}
 
 	oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenPath, defaultMemTableSize, q)
-
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -116,17 +137,12 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	vrw := types.NewValueStore(st)
 	ns := tree.NewNodeStore(st)
 	ddb := datas.NewTypesDatabase(vrw, ns)
-	return ddb, vrw, ns, nil
-}
 
-func validateDir(path string) error {
-	info, err := os.Stat(path)
-
-	if err != nil {
-		return err
-	} else if !info.IsDir() {
-		return filesys.ErrIsFile
+	singletons[urlObj.String()] = singletonDB{
+		ddb: ddb,
+		vrw: vrw,
+		ns:  ns,
 	}
 
-	return nil
+	return ddb, vrw, ns, nil
 }

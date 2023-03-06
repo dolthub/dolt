@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"sort"
 	"time"
@@ -27,25 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
-
-var chunkJournalFeatureFlag = true
-
-func init() {
-	if os.Getenv("DOLT_DISABLE_CHUNK_JOURNAL") != "" {
-		chunkJournalFeatureFlag = false
-	}
-}
-
-func UseJournalStore(path string) bool {
-	if chunkJournalFeatureFlag {
-		return true
-	}
-	ok, err := fileExists(filepath.Join(path, chunkJournalAddr))
-	if err != nil {
-		panic(err)
-	}
-	return ok
-}
 
 const (
 	chunkJournalName = chunkJournalAddr // todo

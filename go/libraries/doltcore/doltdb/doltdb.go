@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -36,6 +37,10 @@ import (
 )
 
 func init() {
+	// default to chunk journal unless feature flag is set
+	if os.Getenv("DOLT_DISABLE_CHUNK_JOURNAL") != "" {
+		LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
+	}
 	types.CreateEditAccForMapEdits = edits.NewAsyncSortedEditsWithDefaults
 }
 
@@ -53,7 +58,7 @@ const (
 )
 
 // LocalDirDoltDB stores the db in the current directory
-var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
+var LocalDirDoltDB = "journal://./" + dbfactory.DoltDataDir
 
 // InMemDoltDB stores the DoltDB db in memory and is primarily used for testing
 var InMemDoltDB = "mem://"
@@ -89,7 +94,7 @@ func HackDatasDatabaseFromDoltDB(ddb *DoltDB) datas.Database {
 // to a newly created in memory database will be used. If the location is LocalDirDoltDB, the directory must exist or
 // this returns nil.
 func LoadDoltDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys) (*DoltDB, error) {
-	return LoadDoltDBWithParams(ctx, nbf, urlStr, fs, nil)
+	return LoadDoltDBWithParams(ctx, nbf, urlStr, fs, map[string]interface{}{"journal": true})
 }
 
 func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) (*DoltDB, error) {
