@@ -214,6 +214,18 @@ func TestStartReplicaErrors(t *testing.T) {
 	assertWarning(t, replicaDatabase, 3083, "Replication thread(s) for channel '' are already running.")
 }
 
+// TestShowReplicaStatus tests various cases "SHOW REPLICA STATUS" that aren't covered by other tests.
+func TestShowReplicaStatus(t *testing.T) {
+	defer teardown(t)
+	startSqlServers(t)
+
+	// Assert that very long hostnames are handled correctly
+	longHostname := "really.really.really.really.long.host.name.012345678901234567890123456789012345678901234567890123456789.com"
+	replicaDatabase.MustExec(fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s';", longHostname))
+	status := showReplicaStatus(t)
+	require.Equal(t, longHostname, status["Source_Host"])
+}
+
 // TestStopReplica tests that STOP REPLICA correctly stops the replication process, and that
 // warnings are logged when STOP REPLICA is invoked when replication is not running.
 func TestStopReplica(t *testing.T) {
