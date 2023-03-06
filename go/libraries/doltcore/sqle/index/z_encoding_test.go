@@ -509,6 +509,74 @@ func TestSplitZRanges(t *testing.T) {
 		}
 		assert.Equal(t, res, zRanges)
 	})
+
+	t.Run("test dynamic z-ranges", func(t *testing.T) {
+		poly := types.Polygon{Lines: []types.LineString{{Points: []types.Point{
+			{X: 2, Y: 2},
+			{X: 2, Y: 2.000001},
+			{X: 2.000001, Y: 2.000001},
+			{X: 2.000001, Y: 2},
+			{X: 2, Y: 2},
+		}}}}
+		bbox := spatial.FindBBox(poly)
+		zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
+		zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
+		zRange := ZRange{zMin, zMax}
+		zRanges := SplitZRanges(zRange, 8)
+		t.Log(fmt.Sprintf("%x", zRange))
+		t.Log(len(zRanges))
+	})
+
+	t.Run("test dynamic z-ranges", func(t *testing.T) {
+		poly := types.Polygon{Lines: []types.LineString{{Points: []types.Point{
+			{X: 2, Y: 2},
+			{X: 2, Y: 128},
+			{X: 128, Y: 128},
+			{X: 128, Y: 2},
+			{X: 2, Y: 2},
+		}}}}
+		bbox := spatial.FindBBox(poly)
+		zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
+		zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
+		zRange := ZRange{zMin, zMax}
+		zRanges := SplitZRanges(zRange, 100)
+		t.Log(fmt.Sprintf("%x", zRange))
+		t.Log(len(zRanges))
+	})
+
+	t.Run("test dynamic z-ranges", func(t *testing.T) {
+		poly := types.Polygon{Lines: []types.LineString{{Points: []types.Point{
+			{X: 2, Y: 2},
+			{X: 2, Y: 4},
+			{X: 4, Y: 4},
+			{X: 4, Y: 2},
+			{X: 2, Y: 2},
+		}}}}
+		bbox := spatial.FindBBox(poly)
+		zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
+		zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
+		zRange := ZRange{zMin, zMax}
+		zRanges := SplitZRanges(zRange, 100)
+		t.Log(fmt.Sprintf("%x", zRange))
+		t.Log(len(zRanges))
+	})
+
+	t.Run("test degenerate range", func(t *testing.T) {
+		poly := types.Polygon{Lines: []types.LineString{{Points: []types.Point{
+			{X: -1, Y: -1},
+			{X: -1, Y: 1},
+			{X: 1, Y: 1},
+			{X: 1, Y: -1},
+			{X: 1, Y: 1},
+		}}}}
+		bbox := spatial.FindBBox(poly)
+		zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
+		zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
+		zRange := ZRange{zMin, zMax}
+		zRanges := SplitZRanges(zRange, 2)
+		t.Log(fmt.Sprintf("%x", zRange))
+		t.Log(len(zRanges))
+	})
 }
 
 func BenchmarkSplitZRanges(b *testing.B) {

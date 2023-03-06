@@ -973,7 +973,7 @@ func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, er
 	var pRanges []prolly.Range
 	zMin := ZValue(minPoint)
 	zMax := ZValue(maxPoint)
-	zRanges := SplitZRanges(ZRange{zMin, zMax}, 2)
+	zRanges := SplitZRanges(ZRange{zMin, zMax}, 8)
 	for level := byte(0); level < 65; level++ {
 		// For example, at highest level, we'll just look at origin point multiple times
 		var prevMinCell, prevMaxCell val.Cell

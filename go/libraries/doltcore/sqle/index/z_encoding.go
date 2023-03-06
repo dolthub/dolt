@@ -242,10 +242,17 @@ func splitZRanges(zRange ZRange, depth int, acc []ZRange) []ZRange {
 		zRangeR[0][1] |= 1 << (suffixLength - 1) // set at prefix to 1
 	}
 
+	// TODO: if zRangeL and zRangeR are not far apart, break early
+	// TODO: is this any different than prefix length? kinda...
+	if zRangeR[0][0] - zRangeL[1][0] < (1 << 39) {
+		return mergeZRanges(acc, zRange)
+	}
+
 	// recurse on left and right ranges
 	depth -= 1
 	acc = splitZRanges(zRangeL, depth, acc)
 	acc = splitZRanges(zRangeR, depth, acc)
+
 	return acc
 }
 
