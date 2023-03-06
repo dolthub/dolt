@@ -215,7 +215,6 @@ func zRangeSize(zRange ZRange, shamt2 int) (uint64, int) {
 	return zVal[0] | zVal[1], shamt // TODO: + instead?
 }
 
-
 // splitZRanges is a helper function to SplitZRanges
 func splitZRanges(zRange, origZRange ZRange, depth int, acc []ZRange) []ZRange {
 	// prevent too much splitting and point lookup is continuous
