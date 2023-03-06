@@ -92,8 +92,6 @@ func BasicSelectTests() []SelectTest {
 	switch types.Format_Default {
 	case types.Format_DOLT:
 		headCommitHash = "a0gt4vif0b0bf19g89k87gs55qqlqpod"
-	case types.Format_DOLT_DEV:
-		headCommitHash = "a0gt4vif0b0bf19g89k87gs55qqlqpod"
 	case types.Format_LD_1:
 		headCommitHash = "73hc2robs4v0kt9taoe3m5hd49dmrgun"
 	}

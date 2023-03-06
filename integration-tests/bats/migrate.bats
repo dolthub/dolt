@@ -2,8 +2,6 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    skip_nbf_dolt_dev
-
     TARGET_NBF="__DOLT__"
     setup_no_dolt_init
     dolt init --old-format

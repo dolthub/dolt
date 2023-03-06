@@ -564,7 +564,7 @@ func SqlRowsFromDurableIndex(idx durable.Index, sch schema.Schema) ([]sql.Row, e
 		}
 
 	} else {
-		// types.Format_LD_1 and types.Format_DOLT_DEV
+		// types.Format_LD_1
 		rowData := durable.NomsMapFromIndex(idx)
 		_ = rowData.IterAll(ctx, func(key, value types.Value) error {
 			r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
