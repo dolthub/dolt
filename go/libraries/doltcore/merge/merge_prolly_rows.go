@@ -240,6 +240,8 @@ func threeWayDiffer(ctx context.Context, tm TableMerger, finalSch schema.Schema)
 
 }
 
+const uniqAddValidatorPendingSize = 650_000
+
 type uniqAddValidator struct {
 	name         string
 	rightRootish doltdb.Rootish
@@ -319,7 +321,7 @@ func newUniqAddValidator(ctx context.Context, finalSch schema.Schema, leftRows p
 		states:       states,
 		leftRows:     leftRows,
 		leftSch:      tm.leftSch,
-		batchSize:    10_000,
+		batchSize:    uniqAddValidatorPendingSize,
 	}, nil
 }
 
@@ -499,45 +501,17 @@ type primaryMerger struct {
 	root       tree.Node
 	cur        *tree.Cursor
 	chunker    tree.Chunker
+	mut        *prolly.MutableMap
 	key, value val.Tuple
 }
 
 func newPrimaryMerger(leftRows prolly.Map) (*primaryMerger, error) {
 	return &primaryMerger{
-		serializer: message.NewProllyMapSerializer(leftRows.ValDesc(), leftRows.NodeStore().Pool()),
-		keyDesc:    leftRows.KeyDesc(),
-		valDesc:    leftRows.ValDesc(),
-		ns:         leftRows.NodeStore(),
-		root:       leftRows.Node(),
+		mut: leftRows.Mutate(),
 	}, nil
 }
 
-func (m *primaryMerger) init(ctx context.Context, key val.Tuple) error {
-	if key == nil {
-		return nil // no mutations
-	}
-
-	var err error
-	m.cur, err = tree.NewCursorAtKey(ctx, m.ns, m.root, key, m.keyDesc)
-	if err != nil {
-		return err
-	}
-
-	m.chunker, err = tree.NewChunker(ctx, m.cur.Clone(), 0, m.ns, m.serializer)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff) error {
-	var err error
-	if m.chunker == nil {
-		err = m.init(ctx, diff.Key)
-		if err != nil {
-			return err
-		}
-	}
 	newKey := diff.Key
 	var newValue val.Tuple
 	switch diff.Op {
@@ -548,58 +522,14 @@ func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff) error
 	default:
 		return fmt.Errorf("unexpected diffOp for editing primary index: %s", diff.Op)
 	}
-
-	err = tree.Seek(ctx, m.cur, newKey, m.keyDesc)
-	if err != nil {
-		return err
-	}
-
-	var oldValue tree.Item
-	if m.cur.Valid() {
-		// Compare mutations |newKey| and |newValue|
-		// to the existing pair from the cursor
-		if m.keyDesc.Compare(newKey, val.Tuple(m.cur.CurrentKey())) == 0 {
-			oldValue = m.cur.CurrentValue()
-		}
-	}
-
-	if bytes.Equal(newValue, oldValue) {
-		// no-op mutations
-		m.key = newKey
-		return nil
-	}
-
-	// move |chkr| to the NextMutation mutation point
-	err = m.chunker.AdvanceTo(ctx, m.cur)
-	if err != nil {
-		return err
-	}
-
-	if oldValue == nil {
-		err = m.chunker.AddPair(ctx, tree.Item(newKey), tree.Item(newValue))
-	} else {
-		if newValue != nil {
-			err = m.chunker.UpdatePair(ctx, tree.Item(newKey), tree.Item(newValue))
-		} else {
-			err = m.chunker.DeletePair(ctx, tree.Item(newKey), oldValue)
-		}
-	}
-	return err
+	return m.mut.Put(ctx, newKey, newValue)
 }
 
 func (m *primaryMerger) finalize(ctx context.Context) (durable.Index, error) {
-	var err error
-	var final tree.Node
-	if m.chunker != nil {
-		final, err = m.chunker.Done(ctx)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		final = m.root
+	mergedMap, err := m.mut.Map(ctx)
+	if err != nil {
+		return nil, err
 	}
-	mergedMap := prolly.NewMap(final, m.ns, m.keyDesc, m.valDesc)
-
 	return durable.IndexFromProllyMap(mergedMap), nil
 }
 

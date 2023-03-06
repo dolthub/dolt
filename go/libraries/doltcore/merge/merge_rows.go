@@ -155,12 +155,6 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 			return nil, nil, err
 		}
 
-		n, err := mergeTbl.NumRowsInConflict(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		stats.Conflicts = int(n)
-
 		mergeTbl, err = mergeAutoIncrementValues(ctx, tm.leftTbl, tm.rightTbl, mergeTbl)
 		if err != nil {
 			return nil, nil, err
