@@ -1513,7 +1513,7 @@ SQL
 
     run dolt diff HEAD~1 HEAD
     [ $status -eq 0 ]
-    [[ "$output" =~ "CREATE TRIGGER avg_age AFTER INSERT ON people "                        ]] || false
+    [[ "$output" =~ "CREATE TRIGGER avg_age AFTER INSERT ON people"                         ]] || false
     [[ "$output" =~ "-    for each row"                                                     ]] || false
     [[ "$output" =~ "+    FOR EACH ROW"                                                     ]] || false
     [[ "$output" =~ "      update average_age set average = (SELECT AVG(age) FROM people);" ]] || false
@@ -1529,7 +1529,7 @@ SQL
 
     run dolt diff HEAD~1 HEAD
     [ $status -eq 0 ]
-    [[ "$output" =~ "-CREATE TRIGGER avg_age AFTER INSERT ON people "                          ]] || false
+    [[ "$output" =~ "-CREATE TRIGGER avg_age AFTER INSERT ON people"                           ]] || false
     [[ "$output" =~ "-    FOR EACH ROW"                                                        ]] || false
     [[ "$output" =~ "-        update average_age set average = (SELECT AVG(age) FROM people);" ]] || false
     [[ "$output" =~ "-CREATE VIEW adults AS SELECT name FROM people WHERE age >= 18;"          ]] || false
