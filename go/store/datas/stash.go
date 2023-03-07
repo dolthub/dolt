@@ -79,7 +79,25 @@ func GetStashData(val types.Value) (hash.Hash, hash.Hash, *StashMeta, error) {
 		return hash.Hash{}, hash.Hash{}, nil, err
 	}
 
-	meta := NewStashMeta(string(msg.BranchName()), string(msg.Desc()))
+	var addedTbls []string
+	at := msg.AddedTablesLength()
+	if at > 0 {
+		addedTbls = make([]string, at)
+		for i := range addedTbls {
+			addedTbls[i] = string(msg.AddedTables(i))
+		}
+	}
+
+	var droppedTbls []string
+	dt := msg.DroppedTablesLength()
+	if dt > 0 {
+		droppedTbls = make([]string, dt)
+		for i := range droppedTbls {
+			droppedTbls[i] = string(msg.DroppedTables(i))
+		}
+	}
+
+	meta := NewStashMeta(string(msg.BranchName()), string(msg.Desc()), addedTbls, droppedTbls)
 	stashRootAddr := hash.New(msg.StashRootAddrBytes())
 	headCommitAddr := hash.New(msg.HeadCommitAddrBytes())
 
@@ -92,26 +110,52 @@ func stash_flatbuffer(stash, head hash.Hash, meta *StashMeta) serial.Message {
 	headOff := builder.CreateByteVector(head[:])
 	branchNameOff := builder.CreateString(meta.BranchName)
 	descOff := builder.CreateString(meta.Description)
+	var (
+		addedTblsOff   flatbuffers.UOffsetT
+		droppedTblsOff flatbuffers.UOffsetT
+	)
+	if meta.AddedTbls != nil {
+		addedTblsOff = SerializeStringVector(builder, meta.AddedTbls)
+	}
+	if meta.DroppedTbls != nil {
+		droppedTblsOff = SerializeStringVector(builder, meta.DroppedTbls)
+	}
 
 	serial.StashStart(builder)
 	serial.StashAddStashRootAddr(builder, stashOff)
 	serial.StashAddHeadCommitAddr(builder, headOff)
 	serial.StashAddBranchName(builder, branchNameOff)
 	serial.StashAddDesc(builder, descOff)
+	serial.StashAddAddedTables(builder, addedTblsOff)
+	serial.StashAddDroppedTables(builder, droppedTblsOff)
 
 	return serial.FinishMessage(builder, serial.StashEnd(builder), []byte(serial.StashFileID))
+}
+
+func SerializeStringVector(b *flatbuffers.Builder, s []string) flatbuffers.UOffsetT {
+	offs := make([]flatbuffers.UOffsetT, len(s))
+	for j := len(s) - 1; j >= 0; j-- {
+		offs[j] = b.CreateString(s[j])
+	}
+	b.StartVector(4, len(s), 4)
+	for j := len(s) - 1; j >= 0; j-- {
+		b.PrependUOffsetT(offs[j])
+	}
+	return b.EndVector(len(s))
 }
 
 // StashMeta contains all the metadata that is associated with a stash within a data repo.
 type StashMeta struct {
 	BranchName  string
 	Description string
+	AddedTbls   []string
+	DroppedTbls []string
 }
 
 // NewStashMeta returns StashMeta that can be used to create a stash.
-func NewStashMeta(name, desc string) *StashMeta {
+func NewStashMeta(name, desc string, addedTbls, droppedTbls []string) *StashMeta {
 	bn := strings.TrimSpace(name)
 	d := strings.TrimSpace(desc)
 
-	return &StashMeta{bn, d}
+	return &StashMeta{bn, d, addedTbls, droppedTbls}
 }

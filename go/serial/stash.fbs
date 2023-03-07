@@ -19,6 +19,8 @@ table Stash {
   head_commit_addr:[ubyte] (required);
   branch_name:string (required);
   desc:string (required);
+  added_tables:[string];
+  dropped_tables:[string];
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

@@ -4,7 +4,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
     setup_common
 
-
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))"
     dolt add .
     dolt commit -am "Created table"
@@ -35,7 +34,6 @@ teardown() {
 @test "stash: simple stashing and popping stash" {
     skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
-    dolt sql -q "SELECT * FROM test"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq 0 ]
     result=$output
@@ -44,7 +42,6 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Saved working directory and index state" ]] || false
 
-    dolt sql -q "SELECT * FROM test"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -351,4 +348,217 @@ teardown() {
     run dolt stash list
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
+}
+
+@test "stash: stashing both modified staged and working set of changes and popping the stash" {
+    skip_nbf_ld_1
+    dolt sql -q "INSERT INTO test VALUES (1, 'a')"
+    dolt add .
+    dolt sql -q "INSERT INTO test VALUES (2, 'b')"
+
+    run dolt status
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq 0 ]
+    result=$output
+
+    run dolt stash
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Saved working directory and index state" ]] || false
+
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+
+    # both staged and working set changes will be in current working set only; no staged change
+    run dolt stash pop
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "Dropped refs/stash@{0}" ]] || false
+
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$result" ]
+}
+
+@test "stash: stashing on working set with untracked files only should be nothing to stash" {
+    skip_nbf_ld_1
+    dolt sql -q "CREATE TABLE new_table (id INT PRIMARY KEY);"
+
+    run dolt status
+    [[ ! "$output" =~ "Changes to be committed:" ]] || false
+    [[ ! "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "Untracked files:" ]] || false
+
+    run dolt stash
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No local changes to save" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new_table" ]] || false
+}
+
+@test "stash: stashing untracked files with --include-untracked flag and popping the table should not be staged" {
+    skip_nbf_ld_1
+    dolt sql -q "CREATE TABLE new_table (id INT PRIMARY KEY);"
+    dolt add .
+    dolt sql -q "CREATE TABLE test_table (id INT);"
+
+    run dolt status
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ ! "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "Untracked files:" ]] || false
+
+    run dolt stash --include-untracked
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Saved working directory and index state" ]] || false
+
+    run dolt status
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt stash pop
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "Changes to be committed:" ]] || false
+    [[ "${lines[3]}" =~ "new table:      new_table" ]] || false
+    [[ "${lines[4]}" =~ "Untracked files:" ]] || false
+    [[ "${lines[6]}" =~ "new table:      test_table" ]] || false
+}
+
+@test "stash: stashing staged new table changes and popping the stash, the added table should be staged" {
+    skip_nbf_ld_1
+    dolt sql -q "CREATE TABLE new_table (id INT PRIMARY KEY);"
+    dolt add .
+
+    run dolt status
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ ! "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ ! "$output" =~ "Untracked files:" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new_table" ]] || false
+
+    run dolt stash
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Saved working directory and index state" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "new_table" ]] || false
+
+    # staged new table change should be in the current staged set
+    run dolt stash pop
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ ! "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "Dropped refs/stash@{0}" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new_table" ]] || false
+}
+
+@test "stash: stashing with staged, working set changes with untracked files should only stash modified working set and staged changes" {
+    skip_nbf_ld_1
+    dolt sql -q "CREATE TABLE new_table (id INT PRIMARY KEY);"
+    dolt add .
+    dolt sql -q "INSERT INTO new_table VALUES (1),(2);"
+    dolt sql -q "CREATE TABLE test_table (id INT);"
+    run dolt status
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "Untracked files:" ]] || false
+
+    run dolt stash
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Saved working directory and index state" ]] || false
+
+    run dolt status
+    [[ ! "$output" =~ "Changes to be committed:" ]] || false
+    [[ ! "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "Untracked files:" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test_table" ]] || false
+
+    # popping the stash should result in no modified working set, but with staged new_table
+    run dolt stash pop
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ ! "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "Untracked files:" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new_table" ]] || false
+    [[ "$output" =~ "test_table" ]] || false
+}
+
+@test "stash: stashing working set with deleted table and popping it" {
+    skip_nbf_ld_1
+    dolt sql -q "CREATE TABLE new_table (id INT PRIMARY KEY);"
+    dolt commit -Am "create new table"
+
+    dolt sql -q "DROP TABLE new_table;"
+    run dolt status
+    [[ ! "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ ! "$output" =~ "Untracked files:" ]] || false
+
+    run dolt stash
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Saved working directory and index state" ]] || false
+
+    run dolt status
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new_table" ]] || false
+
+    # popping the stash should result in no modified working set, but with staged new_table
+    run dolt stash pop
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ ! "$output" =~ "Untracked files:" ]] || false
+
+    run dolt ls
+    [[ ! "$output" =~ "new_table" ]] || false
+}
+
+@test "stash: simple stashing and popping stash after running GC" {
+    skip_nbf_ld_1
+    dolt sql -q "INSERT INTO test VALUES (1, 'a')"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq 0 ]
+    result=$output
+
+    run dolt stash
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Saved working directory and index state" ]] || false
+
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+
+    dolt gc
+
+    run dolt stash list
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "stash@{0}" ]] || false
+
+    run dolt stash pop
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Dropped refs/stash@{0}" ]] || false
+
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$result" ]
 }
