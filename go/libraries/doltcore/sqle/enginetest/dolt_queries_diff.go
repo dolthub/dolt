@@ -2701,7 +2701,37 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "foreign key change",
+		SetUpScript: []string{
+			"create table test (id int primary key);",
+			"INSERT INTO test values (1), (2);",
+			"set @Commit1 = '';",
+			"CALL dolt_commit_hash_out(@Commit1, '-Am', 'create table test');",
 
+			"create table test2 (pk int primary key, test_id int);",
+			"alter table test2 add constraint fk_test_id foreign key (test_id) references test(id);",
+			"insert into test2 values (1, 1);",
+			"set @Commit2 = '';",
+			"CALL dolt_commit_hash_out(@Commit2, '-Am', 'table with foreign key and row');",
+
+			"alter table test2 drop foreign key fk_test_id;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2);",
+				Expected: []sql.Row{{"", "test2", "added", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('HEAD', 'WORKING');",
+				Expected: []sql.Row{{"test2", "test2", "modified", false, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, 'WORKING');",
+				Expected: []sql.Row{{"", "test2", "added", true, true}},
+			},
+		},
+	},
 	{
 		Name: "add multiple columns, then set and unset a value. Should not show a diff",
 		SetUpScript: []string{
