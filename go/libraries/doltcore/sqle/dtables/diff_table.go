@@ -142,7 +142,7 @@ func (dt *DiffTable) Collation() sql.CollationID {
 func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	cmItr := doltdb.CommitItrForRoots(dt.ddb, dt.head)
 
-	sf, err := SelectFuncForFilters(dt.ddb.Format(), dt.partitionFilters)
+	sf, err := SelectFuncForFilters(dt.ddb.ValueReadWriter(), dt.partitionFilters)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +329,7 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 		return sql.PartitionsToPartitionIter(), nil
 	}
 
-	sf, err := SelectFuncForFilters(dt.ddb.Format(), dt.partitionFilters)
+	sf, err := SelectFuncForFilters(dt.ddb.ValueReadWriter(), dt.partitionFilters)
 	if err != nil {
 		return nil, err
 	}
@@ -523,7 +523,7 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 		return sql.PartitionsToPartitionIter(), nil
 	}
 
-	sf, err := SelectFuncForFilters(dt.ddb.Format(), dt.partitionFilters)
+	sf, err := SelectFuncForFilters(dt.ddb.ValueReadWriter(), dt.partitionFilters)
 	if err != nil {
 		return nil, err
 	}
@@ -674,7 +674,7 @@ func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
 
 type partitionSelectFunc func(*sql.Context, DiffPartition) (bool, error)
 
-func SelectFuncForFilters(nbf *types.NomsBinFormat, filters []sql.Expression) (partitionSelectFunc, error) {
+func SelectFuncForFilters(vr types.ValueReader, filters []sql.Expression) (partitionSelectFunc, error) {
 	const (
 		toCommitTag uint64 = iota
 		fromCommitTag
@@ -689,7 +689,7 @@ func SelectFuncForFilters(nbf *types.NomsBinFormat, filters []sql.Expression) (p
 		schema.NewColumn(fromCommitDate, fromCommitDateTag, types.TimestampKind, false),
 	)
 
-	expFunc, err := expreval.ExpressionFuncFromSQLExpressions(nbf, schema.UnkeyedSchemaFromCols(colColl), filters)
+	expFunc, err := expreval.ExpressionFuncFromSQLExpressions(vr, schema.UnkeyedSchemaFromCols(colColl), filters)
 
 	if err != nil {
 		return nil, err

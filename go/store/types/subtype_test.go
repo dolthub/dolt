@@ -35,7 +35,7 @@ import (
 )
 
 func assertSubtype(ctx context.Context, nbf *NomsBinFormat, t *Type, v Value) {
-	is, err := IsValueSubtypeOf(nbf, v, t)
+	is, err := IsValueSubtypeOf(ctx, nbf, v, t)
 	d.PanicIfError(err)
 
 	if !is {
@@ -652,11 +652,11 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	vs := newTestValueStore()
 
 	assertTrue := func(v Value, t *Type) {
-		assert.True(IsValueSubtypeOf(vs.Format(), v, t))
+		assert.True(IsValueSubtypeOf(context.Background(), vs.Format(), v, t))
 	}
 
 	assertFalse := func(v Value, t *Type) {
-		assert.False(IsValueSubtypeOf(vs.Format(), v, t))
+		assert.False(IsValueSubtypeOf(context.Background(), vs.Format(), v, t))
 	}
 
 	allTypes := []struct {
@@ -971,7 +971,7 @@ func TestIsValueSubtypeOfDetails(tt *testing.T) {
 		require.NoError(tt, err)
 		t, err := makeTestStructTypeFromFieldNames(tString)
 		require.NoError(tt, err)
-		isSub, hasExtra, err := IsValueSubtypeOfDetails(vs.Format(), v, t)
+		isSub, hasExtra, err := IsValueSubtypeOfDetails(context.Background(), vs.Format(), v, t)
 		require.NoError(tt, err)
 		a.Equal(exp1, isSub, "expected %t for IsSub, received: %t", exp1, isSub)
 		if isSub {

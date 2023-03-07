@@ -176,21 +176,21 @@ func TestUnionIterator(t *testing.T) {
 	set3, err := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(vs.Format(), 10, 20, 1)...)
 	set4, err := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(vs.Format(), 15, 25, 1)...)
 
-	ui1, err := NewUnionIterator(context.Background(), vs.Format(), mustSIter(set1.Iterator(context.Background())), mustSIter(set2.Iterator(context.Background())))
+	ui1, err := NewUnionIterator(context.Background(), vs, mustSIter(set1.Iterator(context.Background())), mustSIter(set2.Iterator(context.Background())))
 	vals, err := iterToSlice(ui1)
 	expectedRes := generateNumbersAsValues(vs.Format(), 15)
 	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
 
-	ui1, err = NewUnionIterator(context.Background(), vs.Format(), mustSIter(set1.Iterator(context.Background())), mustSIter(set4.Iterator(context.Background())))
-	ui2, err := NewUnionIterator(context.Background(), vs.Format(), mustSIter(set3.Iterator(context.Background())), mustSIter(set2.Iterator(context.Background())))
-	ui3, err := NewUnionIterator(context.Background(), vs.Format(), ui1, ui2)
+	ui1, err = NewUnionIterator(context.Background(), vs, mustSIter(set1.Iterator(context.Background())), mustSIter(set4.Iterator(context.Background())))
+	ui2, err := NewUnionIterator(context.Background(), vs, mustSIter(set3.Iterator(context.Background())), mustSIter(set2.Iterator(context.Background())))
+	ui3, err := NewUnionIterator(context.Background(), vs, ui1, ui2)
 	vals, err = iterToSlice(ui3)
 	expectedRes = generateNumbersAsValues(vs.Format(), 25)
 	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
 
-	ui1, err = NewUnionIterator(context.Background(), vs.Format(), mustSIter(set1.Iterator(context.Background())), mustSIter(set4.Iterator(context.Background())))
-	ui2, err = NewUnionIterator(context.Background(), vs.Format(), mustSIter(set3.Iterator(context.Background())), mustSIter(set2.Iterator(context.Background())))
-	ui3, err = NewUnionIterator(context.Background(), vs.Format(), ui1, ui2)
+	ui1, err = NewUnionIterator(context.Background(), vs, mustSIter(set1.Iterator(context.Background())), mustSIter(set4.Iterator(context.Background())))
+	ui2, err = NewUnionIterator(context.Background(), vs, mustSIter(set3.Iterator(context.Background())), mustSIter(set2.Iterator(context.Background())))
+	ui3, err = NewUnionIterator(context.Background(), vs, ui1, ui2)
 
 	assert.Panics(func() {
 		_, _ = ui3.SkipTo(context.Background(), nil)
@@ -210,9 +210,9 @@ func TestUnionIterator(t *testing.T) {
 	singleElemSet, err := NewSet(context.Background(), vs, Float(4))
 	emptySet, err := NewSet(context.Background(), vs)
 
-	ui10, err := NewUnionIterator(context.Background(), vs.Format(), mustSIter(singleElemSet.Iterator(context.Background())), mustSIter(singleElemSet.Iterator(context.Background())))
-	ui20, err := NewUnionIterator(context.Background(), vs.Format(), mustSIter(emptySet.Iterator(context.Background())), mustSIter(emptySet.Iterator(context.Background())))
-	ui30, err := NewUnionIterator(context.Background(), vs.Format(), ui10, ui20)
+	ui10, err := NewUnionIterator(context.Background(), vs, mustSIter(singleElemSet.Iterator(context.Background())), mustSIter(singleElemSet.Iterator(context.Background())))
+	ui20, err := NewUnionIterator(context.Background(), vs, mustSIter(emptySet.Iterator(context.Background())), mustSIter(emptySet.Iterator(context.Background())))
+	ui30, err := NewUnionIterator(context.Background(), vs, ui10, ui20)
 	vals, err = iterToSlice(ui30)
 	expectedRes = ValueSlice{Float(4)}
 	assert.True(vals.Equals(expectedRes), "%v != %v\n", expectedRes, vs)
@@ -230,25 +230,25 @@ func TestIntersectionIterator(t *testing.T) {
 	byFives, err := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(vs.Format(), 0, 200, 5)...)
 	require.NoError(t, err)
 
-	i1, err := NewIntersectionIterator(context.Background(), vs.Format(), mustSIter(byTwos.Iterator(context.Background())), mustSIter(byThrees.Iterator(context.Background())))
+	i1, err := NewIntersectionIterator(context.Background(), vs, mustSIter(byTwos.Iterator(context.Background())), mustSIter(byThrees.Iterator(context.Background())))
 	require.NoError(t, err)
 	vals, err := iterToSlice(i1)
 	require.NoError(t, err)
 	expectedRes := generateNumbersAsValuesFromToBy(vs.Format(), 0, 200, 6)
 	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
 
-	it1, err := NewIntersectionIterator(context.Background(), vs.Format(), mustSIter(byTwos.Iterator(context.Background())), mustSIter(byThrees.Iterator(context.Background())))
+	it1, err := NewIntersectionIterator(context.Background(), vs, mustSIter(byTwos.Iterator(context.Background())), mustSIter(byThrees.Iterator(context.Background())))
 	require.NoError(t, err)
-	it2, err := NewIntersectionIterator(context.Background(), vs.Format(), it1, mustSIter(byFives.Iterator(context.Background())))
+	it2, err := NewIntersectionIterator(context.Background(), vs, it1, mustSIter(byFives.Iterator(context.Background())))
 	require.NoError(t, err)
 	vals, err = iterToSlice(it2)
 	require.NoError(t, err)
 	expectedRes = generateNumbersAsValuesFromToBy(vs.Format(), 0, 200, 30)
 	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
 
-	it1, err = NewIntersectionIterator(context.Background(), vs.Format(), mustSIter(byThrees.Iterator(context.Background())), mustSIter(byFives.Iterator(context.Background())))
+	it1, err = NewIntersectionIterator(context.Background(), vs, mustSIter(byThrees.Iterator(context.Background())), mustSIter(byFives.Iterator(context.Background())))
 	require.NoError(t, err)
-	it2, err = NewIntersectionIterator(context.Background(), vs.Format(), it1, mustSIter(byTwos.Iterator(context.Background())))
+	it2, err = NewIntersectionIterator(context.Background(), vs, it1, mustSIter(byTwos.Iterator(context.Background())))
 	require.NoError(t, err)
 
 	assert.Panics(func() {
@@ -276,11 +276,11 @@ func TestCombinationIterator(t *testing.T) {
 	bySevens, err := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(vs.Format(), 0, 70, 7)...)
 	require.NoError(t, err)
 
-	it1, err := NewIntersectionIterator(context.Background(), vs.Format(), mustSIter(byTwos.Iterator(context.Background())), mustSIter(bySevens.Iterator(context.Background())))
+	it1, err := NewIntersectionIterator(context.Background(), vs, mustSIter(byTwos.Iterator(context.Background())), mustSIter(bySevens.Iterator(context.Background())))
 	require.NoError(t, err)
-	it2, err := NewIntersectionIterator(context.Background(), vs.Format(), mustSIter(byFives.Iterator(context.Background())), mustSIter(byThrees.Iterator(context.Background())))
+	it2, err := NewIntersectionIterator(context.Background(), vs, mustSIter(byFives.Iterator(context.Background())), mustSIter(byThrees.Iterator(context.Background())))
 	require.NoError(t, err)
-	ut1, err := NewUnionIterator(context.Background(), vs.Format(), it1, it2)
+	ut1, err := NewUnionIterator(context.Background(), vs, it1, it2)
 	require.NoError(t, err)
 	vals, err := iterToSlice(ut1)
 	require.NoError(t, err)
@@ -288,11 +288,11 @@ func TestCombinationIterator(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
 
-	ut1, err = NewUnionIterator(context.Background(), vs.Format(), mustSIter(byTwos.Iterator(context.Background())), mustSIter(bySevens.Iterator(context.Background())))
+	ut1, err = NewUnionIterator(context.Background(), vs, mustSIter(byTwos.Iterator(context.Background())), mustSIter(bySevens.Iterator(context.Background())))
 	require.NoError(t, err)
-	it2, err = NewIntersectionIterator(context.Background(), vs.Format(), mustSIter(byFives.Iterator(context.Background())), mustSIter(byThrees.Iterator(context.Background())))
+	it2, err = NewIntersectionIterator(context.Background(), vs, mustSIter(byFives.Iterator(context.Background())), mustSIter(byThrees.Iterator(context.Background())))
 	require.NoError(t, err)
-	ut2, err := NewIntersectionIterator(context.Background(), vs.Format(), ut1, it2)
+	ut2, err := NewIntersectionIterator(context.Background(), vs, ut1, it2)
 	require.NoError(t, err)
 	vals, err = iterToSlice(ut2)
 	require.NoError(t, err)
@@ -315,9 +315,9 @@ func (ui *UnionTestIterator) SkipTo(ctx context.Context, v Value) (Value, error)
 	return ui.UnionIterator.SkipTo(ctx, v)
 }
 
-func NewUnionTestIterator(nbf *NomsBinFormat) func(i1, i2 SetIterator, cntr *int) (SetIterator, error) {
+func NewUnionTestIterator(vr ValueReader) func(i1, i2 SetIterator, cntr *int) (SetIterator, error) {
 	return func(i1, i2 SetIterator, cntr *int) (SetIterator, error) {
-		ui, err := NewUnionIterator(context.Background(), nbf, i1, i2)
+		ui, err := NewUnionIterator(context.Background(), vr, i1, i2)
 
 		if err != nil {
 			return nil, err
@@ -344,7 +344,7 @@ func TestUnionComplexity(t *testing.T) {
 	callCount1 := 0
 	itrs, err := createSetsWithDistinctNumbers(vs, numSets, numElemsPerSet)
 	require.NoError(t, err)
-	iter, err := iterize(itrs, NewUnionTestIterator(vs.Format()), &callCount1)
+	iter, err := iterize(itrs, NewUnionTestIterator(vs), &callCount1)
 	require.NoError(t, err)
 	vals, err := iterToSlice(iter)
 	require.NoError(t, err)
@@ -355,7 +355,7 @@ func TestUnionComplexity(t *testing.T) {
 	callCount2 := 0
 	itrs, err = createSetsWithSameNumbers(vs, numSets, numElemsPerSet)
 	require.NoError(t, err)
-	iter, err = iterize(itrs, NewUnionTestIterator(vs.Format()), &callCount2)
+	iter, err = iterize(itrs, NewUnionTestIterator(vs), &callCount2)
 	require.NoError(t, err)
 	vals, err = iterToSlice(iter)
 	require.NoError(t, err)
@@ -379,9 +379,9 @@ func (i *IntersectionTestIterator) SkipTo(ctx context.Context, v Value) (Value, 
 	return i.IntersectionIterator.SkipTo(ctx, v)
 }
 
-func NewIntersectionTestIterator(nbf *NomsBinFormat) func(i1, i2 SetIterator, cntr *int) (SetIterator, error) {
+func NewIntersectionTestIterator(vr ValueReader) func(i1, i2 SetIterator, cntr *int) (SetIterator, error) {
 	return func(i1, i2 SetIterator, cntr *int) (SetIterator, error) {
-		ui, err := NewIntersectionIterator(context.Background(), nbf, i1, i2)
+		ui, err := NewIntersectionIterator(context.Background(), vr, i1, i2)
 
 		if err != nil {
 			return nil, err
@@ -408,7 +408,7 @@ func TestIntersectComplexity(t *testing.T) {
 	callCount1 := 0
 	itrs, err := createSetsWithDistinctNumbers(vs, numSets, numElemsPerSet)
 	require.NoError(t, err)
-	iter, err := iterize(itrs, NewIntersectionTestIterator(vs.Format()), &callCount1)
+	iter, err := iterize(itrs, NewIntersectionTestIterator(vs), &callCount1)
 	require.NoError(t, err)
 	vals, err := iterToSlice(iter)
 	require.NoError(t, err)
@@ -419,7 +419,7 @@ func TestIntersectComplexity(t *testing.T) {
 	callCount2 := 0
 	itrs, err = createSetsWithSameNumbers(vs, numSets, numElemsPerSet)
 	require.NoError(t, err)
-	iter, err = iterize(itrs, NewIntersectionTestIterator(vs.Format()), &callCount2)
+	iter, err = iterize(itrs, NewIntersectionTestIterator(vs), &callCount2)
 	require.NoError(t, err)
 	vals, err = iterToSlice(iter)
 	require.NoError(t, err)

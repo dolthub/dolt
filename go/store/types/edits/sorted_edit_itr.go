@@ -31,22 +31,22 @@ type SortedEditItr struct {
 
 // NewSortedEditItr creates an iterator from two KVPCollection references.  As the iterator iterates it
 // merges the collections and iterates in order
-func NewSortedEditItr(nbf *types.NomsBinFormat, left, right *KVPCollection) *SortedEditItr {
-	leftItr := NewItr(nbf, left)
-	rightItr := NewItr(nbf, right)
+func NewSortedEditItr(vr types.ValueReader, left, right *KVPCollection) *SortedEditItr {
+	leftItr := NewItr(vr, left)
+	rightItr := NewItr(vr, right)
 
 	return &SortedEditItr{leftItr: leftItr, rightItr: rightItr}
 }
 
 // Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
 // in key sorted order.  Once all KVPs have been read io.EOF will be returned.
-func (itr *SortedEditItr) Next() (*types.KVP, error) {
+func (itr *SortedEditItr) Next(ctx context.Context) (*types.KVP, error) {
 	if itr.done {
 		return nil, io.EOF
 	}
 
 	lesser := itr.leftItr
-	isLess, err := itr.rightItr.Less(itr.leftItr)
+	isLess, err := itr.rightItr.Less(ctx, itr.leftItr)
 
 	if err != nil {
 		return nil, err
@@ -56,7 +56,7 @@ func (itr *SortedEditItr) Next() (*types.KVP, error) {
 		lesser = itr.rightItr
 	}
 
-	kvp, err := lesser.Next()
+	kvp, err := lesser.Next(ctx)
 
 	if err != nil {
 		return nil, err
@@ -81,13 +81,13 @@ func (itr *SortedEditItr) ReachedEOF() bool {
 }
 
 // Peek returns the next KVP without advancing
-func (itr *SortedEditItr) Peek() (*types.KVP, error) {
+func (itr *SortedEditItr) Peek(ctx context.Context) (*types.KVP, error) {
 	if itr.done {
 		return nil, nil
 	}
 
 	lesser := itr.leftItr
-	isLess, err := itr.rightItr.Less(itr.leftItr)
+	isLess, err := itr.rightItr.Less(ctx, itr.leftItr)
 
 	if err != nil {
 		return nil, err

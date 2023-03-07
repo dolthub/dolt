@@ -36,10 +36,10 @@ var errNotImplemented = errors.NewKind("Not Implemented: %s")
 type ExpressionFunc func(ctx context.Context, vals map[uint64]types.Value) (bool, error)
 
 // ExpressionFuncFromSQLExpressions returns an ExpressionFunc which represents the slice of sql.Expressions passed in
-func ExpressionFuncFromSQLExpressions(nbf *types.NomsBinFormat, sch schema.Schema, expressions []sql.Expression) (ExpressionFunc, error) {
+func ExpressionFuncFromSQLExpressions(vr types.ValueReader, sch schema.Schema, expressions []sql.Expression) (ExpressionFunc, error) {
 	var root ExpressionFunc
 	for _, exp := range expressions {
-		expFunc, err := getExpFunc(nbf, sch, exp)
+		expFunc, err := getExpFunc(vr, sch, exp)
 
 		if err != nil {
 			return nil, err
@@ -61,26 +61,26 @@ func ExpressionFuncFromSQLExpressions(nbf *types.NomsBinFormat, sch schema.Schem
 	return root, nil
 }
 
-func getExpFunc(nbf *types.NomsBinFormat, sch schema.Schema, exp sql.Expression) (ExpressionFunc, error) {
+func getExpFunc(vr types.ValueReader, sch schema.Schema, exp sql.Expression) (ExpressionFunc, error) {
 	switch typedExpr := exp.(type) {
 	case *expression.Equals:
 		return newComparisonFunc(EqualsOp{}, typedExpr.BinaryExpression, sch)
 	case *expression.GreaterThan:
-		return newComparisonFunc(GreaterOp{nbf}, typedExpr.BinaryExpression, sch)
+		return newComparisonFunc(GreaterOp{vr}, typedExpr.BinaryExpression, sch)
 	case *expression.GreaterThanOrEqual:
-		return newComparisonFunc(GreaterEqualOp{nbf}, typedExpr.BinaryExpression, sch)
+		return newComparisonFunc(GreaterEqualOp{vr}, typedExpr.BinaryExpression, sch)
 	case *expression.LessThan:
-		return newComparisonFunc(LessOp{nbf}, typedExpr.BinaryExpression, sch)
+		return newComparisonFunc(LessOp{vr}, typedExpr.BinaryExpression, sch)
 	case *expression.LessThanOrEqual:
-		return newComparisonFunc(LessEqualOp{nbf}, typedExpr.BinaryExpression, sch)
+		return newComparisonFunc(LessEqualOp{vr}, typedExpr.BinaryExpression, sch)
 	case *expression.Or:
-		leftFunc, err := getExpFunc(nbf, sch, typedExpr.Left)
+		leftFunc, err := getExpFunc(vr, sch, typedExpr.Left)
 
 		if err != nil {
 			return nil, err
 		}
 
-		rightFunc, err := getExpFunc(nbf, sch, typedExpr.Right)
+		rightFunc, err := getExpFunc(vr, sch, typedExpr.Right)
 
 		if err != nil {
 			return nil, err
@@ -88,13 +88,13 @@ func getExpFunc(nbf *types.NomsBinFormat, sch schema.Schema, exp sql.Expression)
 
 		return newOrFunc(leftFunc, rightFunc), nil
 	case *expression.And:
-		leftFunc, err := getExpFunc(nbf, sch, typedExpr.Left)
+		leftFunc, err := getExpFunc(vr, sch, typedExpr.Left)
 
 		if err != nil {
 			return nil, err
 		}
 
-		rightFunc, err := getExpFunc(nbf, sch, typedExpr.Right)
+		rightFunc, err := getExpFunc(vr, sch, typedExpr.Right)
 
 		if err != nil {
 			return nil, err
@@ -104,7 +104,7 @@ func getExpFunc(nbf *types.NomsBinFormat, sch schema.Schema, exp sql.Expression)
 	case *expression.InTuple:
 		return newComparisonFunc(EqualsOp{}, typedExpr.BinaryExpression, sch)
 	case *expression.Not:
-		expFunc, err := getExpFunc(nbf, sch, typedExpr.Child)
+		expFunc, err := getExpFunc(vr, sch, typedExpr.Child)
 		if err != nil {
 			return nil, err
 		}
@@ -260,7 +260,7 @@ func newComparisonFunc(op CompareOp, exp expression.BinaryExpression, sch schema
 			colVal, ok := vals[tag]
 
 			if ok && !types.IsNull(colVal) {
-				return compareNomsValues(colVal, nomsVal)
+				return compareNomsValues(ctx, colVal, nomsVal)
 			} else {
 				return compareToNil(nomsVal)
 			}
@@ -291,7 +291,7 @@ func newComparisonFunc(op CompareOp, exp expression.BinaryExpression, sch schema
 			if types.IsNull(v1) {
 				return compareToNull(v2)
 			} else {
-				return compareNomsValues(v1, v2)
+				return compareNomsValues(ctx, v1, v2)
 			}
 		}, nil
 	} else if compType == VariableInLiteralList {
@@ -323,7 +323,7 @@ func newComparisonFunc(op CompareOp, exp expression.BinaryExpression, sch schema
 			for _, nv := range nomsVals {
 				var lb bool
 				if ok && !types.IsNull(colVal) {
-					lb, err = compareNomsValues(colVal, nv)
+					lb, err = compareNomsValues(ctx, colVal, nv)
 				} else {
 					lb, err = compareToNil(nv)
 				}

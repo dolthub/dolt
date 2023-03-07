@@ -327,7 +327,7 @@ func (m *merger) threeWaySetMerge(ctx context.Context, a, b, parent types.Set, p
 		defer updateProgress(m.progress)
 		switch change.ChangeType {
 		case types.DiffChangeAdded, types.DiffChangeModified:
-			se, err := target.getValue().(types.Set).Edit().Insert(newVal)
+			se, err := target.getValue().(types.Set).Edit().Insert(ctx, newVal)
 
 			if err != nil {
 				return nil, err
@@ -341,7 +341,7 @@ func (m *merger) threeWaySetMerge(ctx context.Context, a, b, parent types.Set, p
 
 			return setCandidate{s}, nil
 		case types.DiffChangeRemoved:
-			se, err := target.getValue().(types.Set).Edit().Remove(newVal)
+			se, err := target.getValue().(types.Set).Edit().Remove(ctx, newVal)
 
 			if err != nil {
 				return nil, err

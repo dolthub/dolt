@@ -88,7 +88,7 @@ func (t *Type) Equals(other Value) (res bool) {
 	return false
 }
 
-func (t *Type) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (t *Type) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	res, err := valueCompare(nbf, t, other.(Value))
 	if err != nil {
 		return false, err

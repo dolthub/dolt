@@ -514,7 +514,7 @@ func (p *Parser) parseSet(ctx context.Context) (types.Set, error) {
 			return types.EmptySet, err
 		}
 
-		se, err = se.Insert(v)
+		se, err = se.Insert(ctx, v)
 
 		if err != nil {
 			return types.EmptySet, err

@@ -42,7 +42,7 @@ func (s String) Equals(other Value) bool {
 	return s == other
 }
 
-func (s String) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (s String) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if s2, ok := other.(String); ok {
 		return s < s2, nil
 	}
