@@ -320,6 +320,10 @@ func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 
+	if td.HasFKChanges() {
+		return true, nil
+	}
+
 	fromSchemaHash, err := td.FromTable.GetSchemaHash(ctx)
 	if err != nil {
 		return false, err
