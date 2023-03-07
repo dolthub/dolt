@@ -17,11 +17,11 @@ package doltdb
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/datas"
 
 	fb "github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/marshal"
 	"github.com/dolthub/dolt/go/store/types"
 )
