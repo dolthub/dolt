@@ -280,8 +280,8 @@ func splitZRanges(zRange ZRange, zSize float64, zShamt, depth int, acc []ZRange)
 	}
 
 	// recurse on left and right ranges
-	acc = splitZRanges(zRangeL, zSize, zShamt, depth - 1, acc)
-	acc = splitZRanges(zRangeR, zSize, zShamt, depth - 1, acc)
+	acc = splitZRanges(zRangeL, zSize, zShamt, depth-1, acc)
+	acc = splitZRanges(zRangeR, zSize, zShamt, depth-1, acc)
 
 	return acc
 }
