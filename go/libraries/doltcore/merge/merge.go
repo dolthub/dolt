@@ -18,11 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	goerrors "gopkg.in/src-d/go-errors.v1"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
-	goerrors "gopkg.in/src-d/go-errors.v1"
 )
 
 var ErrFastForward = errors.New("fast forward")
