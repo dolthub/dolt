@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"io"
 	"strings"
 
@@ -211,7 +212,7 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 				keyBld.PutRaw(to, k.GetField(from))
 			} else {
 				from -= pkLen
-				keyBld.PutRaw(to, v.GetField(from))
+				index.PutField(ctx, ns, keyBld, to, v.GetField(from))
 			}
 		}
 
