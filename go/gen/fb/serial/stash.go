@@ -148,7 +148,7 @@ func (rcv *Stash) Desc() []byte {
 	return nil
 }
 
-func (rcv *Stash) AddedTables(j int) []byte {
+func (rcv *Stash) TablesToStage(j int) []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -157,7 +157,7 @@ func (rcv *Stash) AddedTables(j int) []byte {
 	return nil
 }
 
-func (rcv *Stash) AddedTablesLength() int {
+func (rcv *Stash) TablesToStageLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -165,24 +165,7 @@ func (rcv *Stash) AddedTablesLength() int {
 	return 0
 }
 
-func (rcv *Stash) DroppedTables(j int) []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
-	}
-	return nil
-}
-
-func (rcv *Stash) DroppedTablesLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-const StashNumFields = 6
+const StashNumFields = 5
 
 func StashStart(builder *flatbuffers.Builder) {
 	builder.StartObject(StashNumFields)
@@ -205,16 +188,10 @@ func StashAddBranchName(builder *flatbuffers.Builder, branchName flatbuffers.UOf
 func StashAddDesc(builder *flatbuffers.Builder, desc flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(desc), 0)
 }
-func StashAddAddedTables(builder *flatbuffers.Builder, addedTables flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(addedTables), 0)
+func StashAddTablesToStage(builder *flatbuffers.Builder, tablesToStage flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(tablesToStage), 0)
 }
-func StashStartAddedTablesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(4, numElems, 4)
-}
-func StashAddDroppedTables(builder *flatbuffers.Builder, droppedTables flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(droppedTables), 0)
-}
-func StashStartDroppedTablesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+func StashStartTablesToStageVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func StashEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {

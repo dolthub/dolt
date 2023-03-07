@@ -51,6 +51,7 @@ var stashDocs = cli.CommandDocumentationContent{
 The command saves your local modifications away and reverts the working directory to match the HEAD commit.
 `,
 	Synopsis: []string{
+		"", // this is for `dolt stash` itself.
 		"list",
 		"pop {{.LessThan}}stash{{.GreaterThan}}",
 		"clear",
@@ -146,10 +147,10 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		if headHash.Equal(workingHash) {
 			cli.Println("No local changes to save")
 			return nil
-		} else if has, err := hasNonUntrackedFilesWorkingSetChanges(ctx, roots); err != nil {
+		} else if allUntracked, err := allAreUntrackedFilesInWorkingSet(ctx, roots); err != nil {
 			return err
-		} else if !apr.Contains(IncludeUntrackedFlag) && !has {
-			// if the only changes in working set are untracked files, then no local changes to save
+		} else if !apr.Contains(IncludeUntrackedFlag) && allUntracked {
+			// if all changes in working set are untracked files, then no local changes to save
 			cli.Println("No local changes to save")
 			return nil
 		}
@@ -162,7 +163,7 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 
 	// all tables with changes that are going to be stashed are staged at this point
 
-	allTblsToBeStashed, addedTbls, droppedTbls, err := stashedTableSets(ctx, roots)
+	allTblsToBeStashed, addedTblsToStage, err := stashedTableSets(ctx, roots)
 	if err != nil {
 		return err
 	}
@@ -197,7 +198,7 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return err
 	}
 
-	err = dEnv.DoltDB.AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, addedTbls, droppedTbls))
+	err = dEnv.DoltDB.AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, addedTblsToStage))
 	if err != nil {
 		return err
 	}
@@ -223,9 +224,9 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	return nil
 }
 
-// hasNonUntrackedFilesWorkingSetChanges returns true if there exists a change in working set that is not added table.
+// allAreUntrackedFilesInWorkingSet returns true if all changes in working set are untracked files/added tables.
 // Untracked files are part of working set changes, but should not be stashed unless staged or --include-untracked flag is used.
-func hasNonUntrackedFilesWorkingSetChanges(ctx context.Context, roots doltdb.Roots) (bool, error) {
+func allAreUntrackedFilesInWorkingSet(ctx context.Context, roots doltdb.Roots) (bool, error) {
 	_, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
 		return false, err
@@ -233,35 +234,33 @@ func hasNonUntrackedFilesWorkingSetChanges(ctx context.Context, roots doltdb.Roo
 
 	for _, tableDelta := range unstaged {
 		if !tableDelta.IsAdd() {
-			return true, nil
+			return false, nil
 		}
 	}
 
-	return false, nil
+	return true, nil
 }
 
-// stashedTableSets returns array of table names for all tables that are stashed, added tables and deleted tables.
+// stashedTableSets returns array of table names for all tables that are being stashed and added tables in staged.
 // These table names are determined from all tables in the staged set of changes as they are being stashed only.
-func stashedTableSets(ctx context.Context, roots doltdb.Roots) ([]string, []string, []string, error) {
-	var addedTbls []string
-	var droppedTbls []string
+func stashedTableSets(ctx context.Context, roots doltdb.Roots) ([]string, []string, error) {
+	var addedTblsInStaged []string
 	var allTbls []string
 	staged, _, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	for _, tableDelta := range staged {
 		tblName := tableDelta.ToName
 		if tableDelta.IsAdd() {
-			addedTbls = append(addedTbls, tableDelta.ToName)
+			addedTblsInStaged = append(addedTblsInStaged, tableDelta.ToName)
 		}
 		if tableDelta.IsDrop() {
 			tblName = tableDelta.FromName
-			droppedTbls = append(droppedTbls, tableDelta.FromName)
 		}
 		allTbls = append(allTbls, tblName)
 	}
 
-	return allTbls, addedTbls, droppedTbls, nil
+	return allTbls, addedTblsInStaged, nil
 }

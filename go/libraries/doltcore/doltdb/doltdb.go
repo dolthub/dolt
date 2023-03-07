@@ -1393,7 +1393,7 @@ func (ddb *DoltDB) GetBranchesByRootHash(ctx context.Context, rootHash hash.Hash
 	return refs, nil
 }
 
-// AddStash takes current branch head commit, working root value and stash metadata to create a new stash.
+// AddStash takes current branch head commit, stash root value and stash metadata to create a new stash.
 // It stores the new stash object in stash list Dataset, which can be created if it does not exist.
 // Otherwise, it updates the stash list Dataset as there can only be one stashes Dataset.
 func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, stash *RootValue, meta *datas.StashMeta) error {

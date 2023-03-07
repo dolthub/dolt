@@ -79,25 +79,16 @@ func GetStashData(val types.Value) (hash.Hash, hash.Hash, *StashMeta, error) {
 		return hash.Hash{}, hash.Hash{}, nil, err
 	}
 
-	var addedTbls []string
-	at := msg.AddedTablesLength()
+	var tblsToStage []string
+	at := msg.TablesToStageLength()
 	if at > 0 {
-		addedTbls = make([]string, at)
-		for i := range addedTbls {
-			addedTbls[i] = string(msg.AddedTables(i))
+		tblsToStage = make([]string, at)
+		for i := range tblsToStage {
+			tblsToStage[i] = string(msg.TablesToStage(i))
 		}
 	}
 
-	var droppedTbls []string
-	dt := msg.DroppedTablesLength()
-	if dt > 0 {
-		droppedTbls = make([]string, dt)
-		for i := range droppedTbls {
-			droppedTbls[i] = string(msg.DroppedTables(i))
-		}
-	}
-
-	meta := NewStashMeta(string(msg.BranchName()), string(msg.Desc()), addedTbls, droppedTbls)
+	meta := NewStashMeta(string(msg.BranchName()), string(msg.Desc()), tblsToStage)
 	stashRootAddr := hash.New(msg.StashRootAddrBytes())
 	headCommitAddr := hash.New(msg.HeadCommitAddrBytes())
 
@@ -111,14 +102,10 @@ func stash_flatbuffer(stash, head hash.Hash, meta *StashMeta) serial.Message {
 	branchNameOff := builder.CreateString(meta.BranchName)
 	descOff := builder.CreateString(meta.Description)
 	var (
-		addedTblsOff   flatbuffers.UOffsetT
-		droppedTblsOff flatbuffers.UOffsetT
+		addedTblsOff flatbuffers.UOffsetT
 	)
-	if meta.AddedTbls != nil {
-		addedTblsOff = SerializeStringVector(builder, meta.AddedTbls)
-	}
-	if meta.DroppedTbls != nil {
-		droppedTblsOff = SerializeStringVector(builder, meta.DroppedTbls)
+	if meta.TablesToStage != nil {
+		addedTblsOff = SerializeStringVector(builder, meta.TablesToStage)
 	}
 
 	serial.StashStart(builder)
@@ -126,8 +113,7 @@ func stash_flatbuffer(stash, head hash.Hash, meta *StashMeta) serial.Message {
 	serial.StashAddHeadCommitAddr(builder, headOff)
 	serial.StashAddBranchName(builder, branchNameOff)
 	serial.StashAddDesc(builder, descOff)
-	serial.StashAddAddedTables(builder, addedTblsOff)
-	serial.StashAddDroppedTables(builder, droppedTblsOff)
+	serial.StashAddTablesToStage(builder, addedTblsOff)
 
 	return serial.FinishMessage(builder, serial.StashEnd(builder), []byte(serial.StashFileID))
 }
@@ -145,17 +131,20 @@ func SerializeStringVector(b *flatbuffers.Builder, s []string) flatbuffers.UOffs
 }
 
 // StashMeta contains all the metadata that is associated with a stash within a data repo.
+// The BranchName is the name of the branch that the stash was made on.
+// The Description is the head commit description of the branch that the stash was made on.
+// The TablesToStage is array of table names that needs to be staged when popping the stash.
+// These tables were added tables that were staged when stashing.
 type StashMeta struct {
-	BranchName  string
-	Description string
-	AddedTbls   []string
-	DroppedTbls []string
+	BranchName    string
+	Description   string
+	TablesToStage []string
 }
 
 // NewStashMeta returns StashMeta that can be used to create a stash.
-func NewStashMeta(name, desc string, addedTbls, droppedTbls []string) *StashMeta {
+func NewStashMeta(name, desc string, tblsToStage []string) *StashMeta {
 	bn := strings.TrimSpace(name)
 	d := strings.TrimSpace(desc)
 
-	return &StashMeta{bn, d, addedTbls, droppedTbls}
+	return &StashMeta{bn, d, tblsToStage}
 }

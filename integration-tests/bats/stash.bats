@@ -543,9 +543,12 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Saved working directory and index state" ]] || false
 
-    run dolt sql -q "SELECT * FROM test"
+    dolt sql -q "INSERT INTO test VALUES (2, 'b')"
+    dolt commit -am "add row of 2b"
+
+    run dolt sql -q "SELECT * FROM test" -r csv
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ ! "$output" =~ "1,a" ]] || false
 
     dolt gc
 
@@ -558,9 +561,10 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Dropped refs/stash@{0}" ]] || false
 
-    run dolt sql -q "SELECT * FROM test"
+    run dolt sql -q "SELECT * FROM test" -r csv
     [ "$status" -eq 0 ]
-    [ "$output" = "$result" ]
+    [[ "$output" =~ "1,a
+2,b" ]] || false
 }
 
 @test "stash: popping stash with deleted table that is deleted already on current head" {

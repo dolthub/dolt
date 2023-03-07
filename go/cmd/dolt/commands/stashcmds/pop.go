@@ -183,7 +183,7 @@ func applyStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, curWorkingRoot *dol
 	}
 
 	// added tables need to be staged
-	roots, err = actions.StageTables(ctx, roots, meta.AddedTbls)
+	roots, err = actions.StageTables(ctx, roots, meta.TablesToStage)
 	if err != nil {
 		return false, err
 	}
@@ -197,9 +197,6 @@ func applyStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, curWorkingRoot *dol
 }
 
 func handleStashPopErr(usage cli.UsagePrinter, err error) int {
-	if err != nil {
-		cli.Println("The stash entry is kept in case you need it again.")
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	return 0
+	cli.Println("The stash entry is kept in case you need it again.")
+	return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
