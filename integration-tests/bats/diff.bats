@@ -374,7 +374,7 @@ SQL
     dolt commit -am "First commit"
 
     dolt sql <<SQL
-alter table test 
+alter table test
 drop column c2,
 add column c3 varchar(10);
 insert into test values (7,8,9);
@@ -410,7 +410,7 @@ EOF
     run dolt diff --data --schema
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
-    
+
     run dolt diff --schema
 
     EXPECTED=$(cat <<'EOF'
@@ -427,7 +427,7 @@ EOF
     [[ "$output" =~ "$EXPECTED" ]] || false
     # Count the line numbers to make sure there are no data changes output
     [ "${#lines[@]}" -eq 10 ]
-    
+
     run dolt diff --data
     EXPECTED=$(cat <<'EOF'
 +---+----+-----+------+------+
@@ -465,16 +465,16 @@ EOF
     dolt commit -am "First commit"
 
     dolt sql <<SQL
-alter table test 
-drop column c3, 
-add column c6 varchar(10) after c2, 
+alter table test
+drop column c3,
+add column c6 varchar(10) after c2,
 modify column c4 tinyint comment 'new comment'
 SQL
 
     dolt diff
     run dolt diff
     [ "$status" -eq 0 ]
-    
+
     EXPECTED=$(cat <<'EOF'
  CREATE TABLE `test` (
    `pk` bigint NOT NULL COMMENT 'tag:0',
@@ -735,7 +735,7 @@ ALTER TABLE test DROP FOREIGN KEY fk1;
 ALTER TABLE parent DROP INDEX c1;
 ALTER TABLE test ADD CONSTRAINT fk2 FOREIGN KEY (c2) REFERENCES parent(c2);
 SQL
-    
+
     dolt diff test
     run dolt diff test
     [ "$status" -eq 0 ]
@@ -767,7 +767,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "222" ]] || false
     ! [[ "$output" =~ "333" ]] || false
-    
+
     dolt add test
     dolt commit -m "added two rows"
 
@@ -797,7 +797,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "44" ]] || false
     [[ "$output" =~ "55" ]] || false
-    
+
     run dolt diff test1 test2 --where "from_pk=4"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "44" ]] || false
@@ -833,7 +833,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "44" ]] || false
     [[ "$output" =~ "55" ]] || false
-    
+
     run dolt diff test1..test2 --where "pk=4"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error running diff query" ]] || false
@@ -876,7 +876,7 @@ SQL
     dolt add test
     run dolt diff --cached
     [ $status -eq 0 ]
-    [[ $output =~ "added table" ]] || false  
+    [[ $output =~ "added table" ]] || false
 
     dolt commit -m "First commit"
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
@@ -1143,7 +1143,7 @@ SQL
 }
 
 @test "diff: keyless sql diffs" {
-    
+
     dolt sql -q "create table t(pk int, val int)"
     dolt add .
     dolt commit -am "cm1"
@@ -1212,7 +1212,7 @@ SQL
     dolt commit -am "creating table"
 
     dolt sql -q "alter table t add primary key (pk)"
-    
+
     run dolt diff -r sql
     [ $status -eq 0 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
@@ -1224,7 +1224,7 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ '+  PRIMARY KEY (`pk`)' ]] || false
     [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
-    
+
 
     dolt commit -am 'added primary key'
 
@@ -1418,7 +1418,7 @@ EOF
     [[ "$output" =~ "diff --dolt a/test2 b/test2" ]] || false
     [[ "$output" =~ "--- a/test2 @" ]] || false
     [[ "$output" =~ "+++ b/test2 @" ]] || false
-    
+
     run dolt diff --limit
     [ "$status" -ne 0 ]
 }
@@ -1489,3 +1489,51 @@ EOF
     [ $status -eq 0 ]
     [[ ! "$output" =~ "1 Row Modified" ]] || false
 }
+
+@test "diff: dolt_schema table changes are special" {
+    dolt sql <<SQL
+CREATE TABLE people (name varchar(255), nickname varchar(255), gender varchar(255), age int);
+CREATE TABLE average_age (average double);
+CREATE TRIGGER avg_age AFTER INSERT ON people
+    for each row
+        update average_age set average = (SELECT AVG(age) FROM people);
+SQL
+    dolt add .
+    dolt commit -m "commit 1"
+
+    dolt sql <<SQL
+CREATE VIEW adults AS SELECT name FROM people WHERE age >= 18;
+DROP TRIGGER avg_age;
+CREATE TRIGGER avg_age AFTER INSERT ON people
+    FOR EACH ROW
+        update average_age set average = (SELECT AVG(age) FROM people);
+SQL
+    dolt add .
+    dolt commit -m "commit 2"
+
+    run dolt diff HEAD~1 HEAD
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CREATE TRIGGER avg_age AFTER INSERT ON people"                         ]] || false
+    [[ "$output" =~ "-    for each row"                                                     ]] || false
+    [[ "$output" =~ "+    FOR EACH ROW"                                                     ]] || false
+    [[ "$output" =~ "      update average_age set average = (SELECT AVG(age) FROM people);" ]] || false
+    [[ "$output" =~ "+CREATE VIEW adults AS SELECT name FROM people WHERE age >= 18;"       ]] || false
+
+    dolt sql <<SQL
+DROP VIEW adults;
+CREATE VIEW adults AS SELECT nickname FROM people WHERE age >= 18;
+DROP TRIGGER avg_age;
+SQL
+    dolt add .
+    dolt commit -m "commit 3"
+
+    run dolt diff HEAD~1 HEAD
+    [ $status -eq 0 ]
+    [[ "$output" =~ "-CREATE TRIGGER avg_age AFTER INSERT ON people"                           ]] || false
+    [[ "$output" =~ "-    FOR EACH ROW"                                                        ]] || false
+    [[ "$output" =~ "-        update average_age set average = (SELECT AVG(age) FROM people);" ]] || false
+    [[ "$output" =~ "-CREATE VIEW adults AS SELECT name FROM people WHERE age >= 18;"          ]] || false
+    [[ "$output" =~ "+CREATE VIEW adults AS SELECT nickname FROM people WHERE age >= 18;"      ]] || false
+
+}
+
