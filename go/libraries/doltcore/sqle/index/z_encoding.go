@@ -216,8 +216,9 @@ func zRangeSize(zRange ZRange, shamt int) (uint64, int) {
 	return zVal[0] | zVal[1], shamt
 }
 
-// cutThresh is the threshold to stop splitting ZRanges
-var cutThresh = 0.02
+// Thresholds to stop splitting ZRanges
+const cutThresh = 0.02
+const depthThresh = 4
 
 // shouldCut checks if the size of the removed ZRange divided by the size of the whole ZRange is smaller than cutThresh, stop
 func shouldCut(cutRange ZRange, size float64, shamt int) bool {
@@ -289,7 +290,7 @@ func splitZRanges(zRange ZRange, zSize float64, zShamt, depth int, acc []ZRange)
 // A ZRange is continuous if
 // 1. it is a point (the lower and upper bounds are equal)
 // 2. the ranges are within a cell (the suffixes of the bounds range from 00...0 to 11...1)
-func SplitZRanges(zRange ZRange, depth int) []ZRange {
+func SplitZRanges(zRange ZRange) []ZRange {
 	zSize, zShamt := zRangeSize(zRange, -1)
-	return splitZRanges(zRange, float64(zSize), zShamt, depth, make([]ZRange, 0, 128))
+	return splitZRanges(zRange, float64(zSize), zShamt, depthThresh, make([]ZRange, 0, 128))
 }
