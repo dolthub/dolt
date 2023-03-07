@@ -238,8 +238,6 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 	switch string(data) {
 	case types.Format_LD_1.VersionString():
 		nbf = types.Format_LD_1
-	case types.Format_DOLT_DEV.VersionString():
-		nbf = types.Format_DOLT_DEV
 	case types.Format_DOLT.VersionString():
 		nbf = types.Format_DOLT
 	default:

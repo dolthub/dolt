@@ -41,11 +41,9 @@ type formatTag struct {
 
 var formatTag_LD_1 = &formatTag{}
 var formatTag_DOLT = &formatTag{}
-var formatTag_DOLT_DEV = &formatTag{}
 
 var Format_LD_1 = &NomsBinFormat{formatTag_LD_1}
 var Format_DOLT = &NomsBinFormat{formatTag_DOLT}
-var Format_DOLT_DEV = &NomsBinFormat{formatTag_DOLT_DEV}
 
 var nbfLock = &sync.Mutex{}
 var Format_Default *NomsBinFormat
@@ -54,15 +52,10 @@ var emptyTuples = make(map[*NomsBinFormat]Tuple)
 
 func init() {
 	emptyTuples[Format_LD_1], _ = NewTuple(Format_LD_1)
-	emptyTuples[Format_DOLT_DEV], _ = NewTuple(Format_DOLT_DEV)
 }
 
 func IsFormat_DOLT(nbf *NomsBinFormat) bool {
 	return nbf.tag == formatTag_DOLT
-}
-
-func IsFormat_DOLT_DEV(nbf *NomsBinFormat) bool {
-	return nbf.tag == formatTag_DOLT_DEV
 }
 
 func IsFormat_LD(nbf *NomsBinFormat) bool {
@@ -74,8 +67,6 @@ func GetFormatForVersionString(s string) (*NomsBinFormat, error) {
 		return Format_LD_1, nil
 	} else if s == constants.FormatDoltString {
 		return Format_DOLT, nil
-	} else if s == constants.FormatDoltDevString {
-		return Format_DOLT_DEV, nil
 	} else {
 		return nil, errors.New("unsupported ChunkStore version " + s)
 	}
@@ -86,13 +77,11 @@ func (nbf *NomsBinFormat) VersionString() string {
 		return constants.FormatLD1String
 	} else if nbf.tag == formatTag_DOLT {
 		return constants.FormatDoltString
-	} else if nbf.tag == formatTag_DOLT_DEV {
-		return constants.FormatDoltDevString
 	} else {
 		panic("unrecognized NomsBinFormat tag value")
 	}
 }
 
 func (nbf *NomsBinFormat) UsesFlatbuffers() bool {
-	return nbf.tag == formatTag_DOLT || nbf.tag == formatTag_DOLT_DEV
+	return nbf.tag == formatTag_DOLT
 }

@@ -38,13 +38,4 @@ var NomsGitSHA = "<developer build>"
 const FormatLD1String = "__LD_1__"
 const FormatDoltString = "__DOLT__"
 
-// A temporary format used for developing flatbuffers serialization of
-// top-of-DAG entities like StoreRoot, {Tag,WorkingSet,Commit}Head, etc.
-// Semantics are: __LD_1__ for everything that hasn't been migrated, and what
-// will become top-of-DAG in __DOLT__ for everything else.
-//
-// Things that will migrate are all structs leading up to table data and index
-// data maps.
-const FormatDoltDevString = "__DOLT_DEV__"
-
 var FormatDefaultString = FormatDoltString

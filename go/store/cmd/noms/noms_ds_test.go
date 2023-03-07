@@ -69,9 +69,6 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 	case types.Format_LD_1:
 		golden1 = "oetp3jigkp5pid2f5c4mknpo17mso31b"
 		golden2 = "tsbj1qq88llk3k8qqqb5n3188sbpiu7r"
-	case types.Format_DOLT_DEV:
-		golden1 = "c7g244286kom2a1326kkgs85pi97cjs7"
-		golden2 = "rn7dsl1146qr2n4chtg41n24n0jqgnte"
 	default:
 		s.Fail("no golden values exist for NBF %s", types.Format_Default.VersionString())
 	}
