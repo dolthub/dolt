@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"io"
 	"strings"
 
@@ -211,9 +212,16 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 				keyBld.PutRaw(to, k.GetField(from))
 			} else {
 				from -= pkLen
-				keyBld.PutRaw(to, v.GetField(from))
+				if keyBld.Desc.Types[to].Enc == val.CellEnc {
+					val := v.GetField(from)
+					geom := index.DeserializeGeometry(val)
+					index.PutField(ctx, ns, keyBld, to, geom)
+				} else {
+					keyBld.PutRaw(to, v.GetField(from))
+				}
 			}
 		}
+		// TODO: why doens't this use index.PutField?
 
 		// todo(andy): build permissive?
 		idxKey := keyBld.Build(primary.Pool())

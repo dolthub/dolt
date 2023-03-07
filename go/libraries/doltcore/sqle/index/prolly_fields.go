@@ -94,7 +94,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 		var buf []byte
 		buf, ok = td.GetGeometry(i, tup)
 		if ok {
-			v = deserializeGeometry(buf)
+			v = DeserializeGeometry(buf)
 		}
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
@@ -276,7 +276,7 @@ func convUint(v interface{}) uint {
 	}
 }
 
-func deserializeGeometry(buf []byte) (v interface{}) {
+func DeserializeGeometry(buf []byte) (v interface{}) {
 	srid, _, typ, _ := types.DeserializeEWKBHeader(buf)
 	buf = buf[types.EWKBHeaderSize:]
 	switch typ {
