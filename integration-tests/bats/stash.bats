@@ -562,3 +562,93 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" = "$result" ]
 }
+
+@test "stash: popping stash with deleted table that is deleted already on current head" {
+    skip_nbf_ld_1
+    dolt branch branch1
+    dolt checkout -b branch2
+    dolt sql -q "DROP TABLE test;"
+    dolt commit -am "table 'test' is dropped"
+
+    dolt checkout branch1
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+
+    dolt sql -q "DROP TABLE test;"
+    run dolt stash
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Saved working directory and index state" ]] || false
+
+    dolt checkout branch2
+    run dolt stash list
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "stash@{0}" ]] || false
+
+    run dolt stash pop
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    [[ "$output" =~ "Dropped refs/stash@{0}" ]] || false
+}
+
+@test "stash: popping stash with added table with PK on current head with the exact same table is added already" {
+    skip_nbf_ld_1
+    dolt branch branch1
+    dolt checkout -b branch2
+    dolt sql -q "CREATE TABLE new_test(id INT PRIMARY KEY); INSERT INTO new_test VALUES (1);"
+    dolt commit -Am "new table 'new_test' is created"
+
+    dolt checkout branch1
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+
+    dolt sql -q "CREATE TABLE new_test(id INT PRIMARY KEY); INSERT INTO new_test VALUES (1);"
+    dolt add .
+    run dolt stash
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Saved working directory and index state" ]] || false
+
+    dolt checkout branch2
+    run dolt stash list
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "stash@{0}" ]] || false
+
+    run dolt stash pop
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    [[ "$output" =~ "Dropped refs/stash@{0}" ]] || false
+}
+
+@test "stash: popping stash with added keyless table on current head with the exact same table is added already" {
+    skip_nbf_ld_1
+    dolt branch branch1
+    dolt checkout -b branch2
+    dolt sql -q "CREATE TABLE new_test(id INT); INSERT INTO new_test VALUES (1);"
+    dolt commit -Am "new table 'new_test' is created"
+
+    dolt checkout branch1
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+
+    dolt sql -q "CREATE TABLE new_test(id INT); INSERT INTO new_test VALUES (1);"
+    dolt add .
+    run dolt stash
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Saved working directory and index state" ]] || false
+
+    dolt checkout branch2
+    run dolt stash list
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "stash@{0}" ]] || false
+
+    skip # stash of the exact copy of keyless table causes merge conflict, where it should not
+    run dolt stash pop
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    [[ "$output" =~ "Dropped refs/stash@{0}" ]] || false
+}
