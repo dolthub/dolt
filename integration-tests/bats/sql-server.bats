@@ -13,7 +13,7 @@ setup() {
     skiponwindows "tests are flaky on Windows"
     setup_no_dolt_init
     mkdir $BATS_TMPDIR/sql-server-test$$
-    nativevar DOLT_ROOT_PATH $(pwd)
+    nativevar DOLT_ROOT_PATH $BATS_TMPDIR/sql-server-test$$
     dolt config --global --add user.email "test@test.com"
     dolt config --global --add user.name "test"
     make_repo repo1
