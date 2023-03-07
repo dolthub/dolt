@@ -1,5 +1,5 @@
 import { Database } from "./database.js";
-import { getConfig } from "./helpers.js";
+import { assertQueryResult, getConfig } from "./helpers.js";
 
 const tests = [
   {
@@ -8,11 +8,9 @@ const tests = [
       fieldCount: 0,
       affectedRows: 0,
       insertId: 0,
+      info: "",
       serverStatus: 2,
-      warningCount: 0,
-      message: "",
-      protocol41: true,
-      changedRows: 0,
+      warningStatus: 0,
     },
   },
   {
@@ -43,11 +41,9 @@ const tests = [
       fieldCount: 0,
       affectedRows: 1,
       insertId: 0,
+      info: "",
       serverStatus: 2,
-      warningCount: 0,
-      message: "",
-      protocol41: true,
-      changedRows: 0,
+      warningStatus: 0,
     },
   },
   { q: "select * from test", res: [{ pk: 0, value: 0 }] },
@@ -61,11 +57,9 @@ const tests = [
       fieldCount: 0,
       affectedRows: 1,
       insertId: 0,
+      info: "",
       serverStatus: 2,
-      warningCount: 0,
-      message: "",
-      protocol41: true,
-      changedRows: 0,
+      warningStatus: 0,
     },
   },
   { q: "call dolt_commit('-a', '-m', 'my commit2')", res: [] },
@@ -88,11 +82,7 @@ async function main() {
         .then((rows) => {
           const resultStr = JSON.stringify(rows);
           const result = JSON.parse(resultStr);
-          if (
-            resultStr !== JSON.stringify(expected) &&
-            test.q.includes("dolt_commit") &&
-            !(rows.length === 1 && rows[0].hash.length > 0)
-          ) {
+          if (!assertQueryResult(test.q, resultStr, expected, rows)) {
             console.log("Query:", test.q);
             console.log("Results:", result);
             console.log("Expected:", expected);
