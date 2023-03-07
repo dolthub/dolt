@@ -93,15 +93,14 @@ func (entry mapEntry) equals(other mapEntry) bool {
 
 type mapEntrySlice struct {
 	entries []mapEntry
-	nbf     *NomsBinFormat
 }
 
 func (mes mapEntrySlice) Len() int { return len(mes.entries) }
 func (mes mapEntrySlice) Swap(i, j int) {
 	mes.entries[i], mes.entries[j] = mes.entries[j], mes.entries[i]
 }
-func (mes mapEntrySlice) Less(i, j int) (bool, error) {
-	return mes.entries[i].key.Less(mes.nbf, mes.entries[j].key)
+func (mes mapEntrySlice) Less(ctx context.Context, nbf *NomsBinFormat, i, j int) (bool, error) {
+	return mes.entries[i].key.Less(ctx, nbf, mes.entries[j].key)
 }
 func (mes mapEntrySlice) Equals(other mapEntrySlice) bool {
 	if mes.Len() != other.Len() {
@@ -175,11 +174,10 @@ func (ml mapLeafSequence) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return walkRefs(w.buff[:w.offset], ml.format(), cb)
 }
 
-func (ml mapLeafSequence) entries() (mapEntrySlice, error) {
+func (ml mapLeafSequence) entries(ctx context.Context) (mapEntrySlice, error) {
 	dec, count := ml.decoderSkipToValues()
 	entries := mapEntrySlice{
 		make([]mapEntry, count),
-		ml.format(),
 	}
 	for i := uint64(0); i < count; i++ {
 		k, err := dec.readValue(ml.format())
@@ -337,7 +335,7 @@ func (ml mapLeafSequence) getKey(idx int) (orderedKey, error) {
 	return newOrderedKey(v, ml.format())
 }
 
-func (ml mapLeafSequence) search(key orderedKey) (int, error) {
+func (ml mapLeafSequence) search(ctx context.Context, key orderedKey) (int, error) {
 	n, err := SearchWithErroringLess(int(ml.Len()), func(i int) (bool, error) {
 		k, err := ml.getKey(i)
 
@@ -345,7 +343,7 @@ func (ml mapLeafSequence) search(key orderedKey) (int, error) {
 			return false, err
 		}
 
-		isLess, err := k.Less(ml.format(), key)
+		isLess, err := k.Less(ctx, ml.format(), key)
 
 		if err != nil {
 			return false, nil
@@ -372,24 +370,23 @@ var _ sequence = (*mapEntrySequence)(nil)
 var _ orderedSequence = (*mapEntrySequence)(nil)
 
 type mapEntrySequence struct {
-	nbf     *NomsBinFormat
 	vrw     ValueReadWriter
 	entries []mapEntry
 }
 
 func newMapEntrySequence(vrw ValueReadWriter, data ...mapEntry) (sequence, error) {
-	return mapEntrySequence{nbf: vrw.Format(), vrw: vrw, entries: data}, nil
+	return mapEntrySequence{vrw: vrw, entries: data}, nil
 }
 
 func (mes mapEntrySequence) getKey(idx int) (orderedKey, error) {
-	return newOrderedKey(mes.entries[idx].key, mes.nbf)
+	return newOrderedKey(mes.entries[idx].key, mes.vrw.Format())
 }
 
 func (mes mapEntrySequence) getValue(idx int) (Value, error) {
 	return mes.entries[idx].value, nil
 }
 
-func (mes mapEntrySequence) search(key orderedKey) (int, error) {
+func (mes mapEntrySequence) search(ctx context.Context, key orderedKey) (int, error) {
 	n, err := SearchWithErroringLess(len(mes.entries), func(i int) (bool, error) {
 		ordKey, err := mes.getKey(i)
 
@@ -397,7 +394,7 @@ func (mes mapEntrySequence) search(key orderedKey) (int, error) {
 			return false, err
 		}
 
-		isLess, err := ordKey.Less(mes.nbf, key)
+		isLess, err := ordKey.Less(ctx, mes.vrw.Format(), key)
 
 		if err != nil {
 			return false, nil
@@ -561,11 +558,11 @@ func (mes mapEntrySequence) writeTo(writer nomsWriter, format *NomsBinFormat) er
 	panic("not implemented")
 }
 
-func (mes mapEntrySequence) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (mes mapEntrySequence) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	panic("not implemented")
 }
 
-func (mes mapEntrySequence) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error) {
+func (mes mapEntrySequence) Compare(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (int, error) {
 	panic("not implemented")
 }
 

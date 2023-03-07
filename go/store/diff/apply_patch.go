@@ -44,14 +44,14 @@ import (
 // one is applied in order. When done in combination with the stack, this enables
 // all Differences that change a particular node to be applied to that node
 // before it gets assigned back to it's parent.
-func Apply(ctx context.Context, nbf *types.NomsBinFormat, root types.Value, patch Patch) (types.Value, error) {
+func Apply(ctx context.Context, vr types.ValueReader, root types.Value, patch Patch) (types.Value, error) {
 	if len(patch) == 0 {
 		return root, nil
 	}
 
 	var lastPath types.Path
 	stack := patchStack{}
-	types.SortWithErroringLess(PatchSort{patch, nbf})
+	types.SortWithErroringLess(ctx, vr.Format(), PatchSort{patch})
 
 	// Push the element on the stack that corresponds to the root
 	// node.
@@ -198,7 +198,7 @@ func (stack *patchStack) updateNode(ctx context.Context, top *stackElem, parent 
 			}
 		case types.Set:
 			if top.oldValue != nil {
-				se, err := el.Edit().Remove(top.oldValue)
+				se, err := el.Edit().Remove(ctx, top.oldValue)
 
 				if err != nil {
 					return nil, err
@@ -212,7 +212,7 @@ func (stack *patchStack) updateNode(ctx context.Context, top *stackElem, parent 
 			}
 
 			if top.newValue != nil {
-				se, err := el.Edit().Insert(top.newValue)
+				se, err := el.Edit().Insert(ctx, top.newValue)
 
 				if err != nil {
 					return nil, err
@@ -232,7 +232,7 @@ func (stack *patchStack) updateNode(ctx context.Context, top *stackElem, parent 
 		case types.Set:
 			switch top.changeType {
 			case types.DiffChangeAdded:
-				se, err := el.Edit().Insert(top.newValue)
+				se, err := el.Edit().Insert(ctx, top.newValue)
 
 				if err != nil {
 					return nil, err
@@ -240,7 +240,7 @@ func (stack *patchStack) updateNode(ctx context.Context, top *stackElem, parent 
 
 				return se.Set(ctx)
 			case types.DiffChangeRemoved:
-				se, err := el.Edit().Remove(top.oldValue)
+				se, err := el.Edit().Remove(ctx, top.oldValue)
 
 				if err != nil {
 					return nil, err
@@ -248,13 +248,13 @@ func (stack *patchStack) updateNode(ctx context.Context, top *stackElem, parent 
 
 				return se.Set(ctx)
 			case types.DiffChangeModified:
-				se, err := el.Edit().Remove(top.oldValue)
+				se, err := el.Edit().Remove(ctx, top.oldValue)
 
 				if err != nil {
 					return nil, err
 				}
 
-				se, err = se.Insert(top.newValue)
+				se, err = se.Insert(ctx, top.newValue)
 
 				if err != nil {
 					return nil, err

@@ -221,7 +221,7 @@ func (db *database) datasetFromMap(ctx context.Context, datasetID string, dsmap 
 				return Dataset{}, err
 			}
 		}
-		return newDataset(db, datasetID, head, headAddr)
+		return newDataset(ctx, db, datasetID, head, headAddr)
 	} else if rmdsmap, ok := dsmap.(refmapDatasetsMap); ok {
 		var err error
 		curr, err := rmdsmap.am.Get(ctx, datasetID)
@@ -235,7 +235,7 @@ func (db *database) datasetFromMap(ctx context.Context, datasetID string, dsmap 
 				return Dataset{}, err
 			}
 		}
-		return newDataset(db, datasetID, head, curr)
+		return newDataset(ctx, db, datasetID, head, curr)
 	} else {
 		return Dataset{}, errors.New("unimplemented or unsupported DatasetsMap type")
 	}
@@ -246,7 +246,7 @@ func (db *database) readHead(ctx context.Context, addr hash.Hash) (dsHead, error
 	if err != nil {
 		return nil, err
 	}
-	return newHead(head, addr)
+	return newHead(ctx, head, addr)
 }
 
 func (db *database) Close() error {
@@ -268,7 +268,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 	headType := newHead.TypeName()
 	switch headType {
 	case commitName:
-		iscommit, err := IsCommit(newVal)
+		iscommit, err := IsCommit(ctx, newVal)
 		if err != nil {
 			return err
 		}
@@ -276,7 +276,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 			return fmt.Errorf("SetHead failed: reffered to value is not a commit:")
 		}
 	case tagName:
-		istag, err := IsTag(newVal)
+		istag, err := IsTag(ctx, newVal)
 		if err != nil {
 			return err
 		}
@@ -291,7 +291,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 		if err != nil {
 			return err
 		}
-		iscommit, err := IsCommit(commitval)
+		iscommit, err := IsCommit(ctx, commitval)
 		if err != nil {
 			return err
 		}
@@ -376,7 +376,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 	}
 
 	v := newHead.value()
-	iscommit, err := IsCommit(v)
+	iscommit, err := IsCommit(ctx, v)
 	if err != nil {
 		return err
 	}
@@ -883,7 +883,7 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	var v types.Value
 	v = rHead.(nomsHead).st
 
-	is, err := IsCommit(v)
+	is, err := IsCommit(ctx, v)
 
 	if err != nil {
 		return types.Struct{}, err

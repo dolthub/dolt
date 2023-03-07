@@ -21,6 +21,8 @@
 
 package types
 
+import "context"
+
 type setLeafSequence struct {
 	leafSequence
 }
@@ -51,7 +53,7 @@ func (sl setLeafSequence) getKey(idx int) (orderedKey, error) {
 	return newOrderedKey(item.(Value), sl.format())
 }
 
-func (sl setLeafSequence) search(key orderedKey) (int, error) {
+func (sl setLeafSequence) search(ctx context.Context, key orderedKey) (int, error) {
 	n, err := SearchWithErroringLess(int(sl.Len()), func(i int) (b bool, e error) {
 		k, err := sl.getKey(i)
 
@@ -59,7 +61,7 @@ func (sl setLeafSequence) search(key orderedKey) (int, error) {
 			return false, err
 		}
 
-		isLess, err := k.Less(sl.format(), key)
+		isLess, err := k.Less(ctx, sl.format(), key)
 
 		if err != nil {
 			return false, err

@@ -32,28 +32,30 @@ func TestBinarySearch(t *testing.T) {
 	entryCounts := []int{11, 15, 16, 19, 31, 1024, 32151}
 	for _, count := range entryCounts {
 		t.Run(strconv.Itoa(count), func(t *testing.T) {
+			ctx := context.Background()
+			vrw := types.NewMemoryValueStore()
 			vals := make([]entry, count)
 			for i := 0; i < count; i++ {
 				vals[i] = entry{key: types.Float(float64(i + 1))}
 			}
 
 			for i := 0; i < count+1; i++ {
-				idx, err := search(types.Format_Default, 0, types.Float(float64(i)), vals)
+				idx, err := search(ctx, vrw, 0, types.Float(float64(i)), vals)
 				require.NoError(t, err)
 				require.Equal(t, i, idx)
 
-				idx, err = search(types.Format_Default, 0, types.Float(float64(i)+0.5), vals)
+				idx, err = search(ctx, vrw, 0, types.Float(float64(i)+0.5), vals)
 				require.NoError(t, err)
 				require.Equal(t, i, idx)
 			}
 
 			// test that in the case of equality that an earlier reader index returns as being less
 			for i := 1; i < count+1; i++ {
-				idx, err := search(types.Format_Default, -1, types.Float(float64(i)), vals)
+				idx, err := search(ctx, vrw, -1, types.Float(float64(i)), vals)
 				require.NoError(t, err)
 				require.Equal(t, i-1, idx)
 
-				idx, err = search(types.Format_Default, -1, types.Float(float64(i)+0.5), vals)
+				idx, err = search(ctx, vrw, -1, types.Float(float64(i)+0.5), vals)
 				require.NoError(t, err)
 				require.Equal(t, i, idx)
 			}
@@ -61,11 +63,11 @@ func TestBinarySearch(t *testing.T) {
 	}
 }
 
-func readerForTuples(t *testing.T, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, tuples ...types.Tuple) types.TupleReadCloser {
+func readerForTuples(t *testing.T, ctx context.Context, vrw types.ValueReadWriter, tuples ...types.Tuple) types.TupleReadCloser {
 	require.True(t, len(tuples)%2 == 0)
 	prev := tuples[0]
 	for i := 2; i < len(tuples); i += 2 {
-		isLess, err := prev.Less(nbf, tuples[i])
+		isLess, err := prev.Less(ctx, vrw.Format(), tuples[i])
 		require.NoError(t, err)
 		require.True(t, isLess)
 		prev = tuples[i]
@@ -77,7 +79,7 @@ func readerForTuples(t *testing.T, nbf *types.NomsBinFormat, vrw types.ValueRead
 	err := wr.WriteTuples(tuples...)
 	require.NoError(t, err)
 
-	return types.NewTupleReader(nbf, vrw, io.NopCloser(bytes.NewBuffer(buf.Bytes())))
+	return types.NewTupleReader(vrw.Format(), vrw, io.NopCloser(bytes.NewBuffer(buf.Bytes())))
 }
 
 func newTuple(t *testing.T, nbf *types.NomsBinFormat, vals ...types.Value) types.Tuple {
@@ -92,21 +94,21 @@ func TestComparableBinarySearch(t *testing.T) {
 	vrw := types.NewMemoryValueStore()
 
 	readers := []types.EditProvider{
-		types.TupleReaderAsEditProvider(readerForTuples(t, nbf, vrw, []types.Tuple{
+		types.TupleReaderAsEditProvider(readerForTuples(t, ctx, vrw, []types.Tuple{
 			newTuple(t, nbf), newTuple(t, nbf, types.Int(0)),
 			newTuple(t, nbf, types.Bool(false)), newTuple(t, nbf, types.Int(2)),
 			newTuple(t, nbf, types.Float(1.0)), newTuple(t, nbf, types.Int(5)),
 			newTuple(t, nbf, types.String("zz")), newTuple(t, nbf, types.Int(9)),
 			newTuple(t, nbf, types.UUID{}), newTuple(t, nbf, types.Int(11)),
 		}...)),
-		types.TupleReaderAsEditProvider(readerForTuples(t, nbf, vrw, []types.Tuple{
+		types.TupleReaderAsEditProvider(readerForTuples(t, ctx, vrw, []types.Tuple{
 			newTuple(t, nbf), newTuple(t, nbf, types.Int(1)),
 			newTuple(t, nbf, types.Bool(true)), newTuple(t, nbf, types.Int(4)),
 			newTuple(t, nbf, types.Float(2.0)), newTuple(t, nbf, types.Int(6)),
 			newTuple(t, nbf, types.String("zz")), newTuple(t, nbf, types.Int(10)),
 			newTuple(t, nbf, types.UUID{}), newTuple(t, nbf, types.Int(12)),
 		}...)),
-		types.TupleReaderAsEditProvider(readerForTuples(t, nbf, vrw, []types.Tuple{
+		types.TupleReaderAsEditProvider(readerForTuples(t, ctx, vrw, []types.Tuple{
 			newTuple(t, nbf, types.Bool(false)), newTuple(t, nbf, types.Int(3)),
 			newTuple(t, nbf, types.Float(2.0)), newTuple(t, nbf, types.Int(7)),
 			newTuple(t, nbf, types.String("aaa")), newTuple(t, nbf, types.Int(8)),
@@ -118,10 +120,10 @@ func TestComparableBinarySearch(t *testing.T) {
 
 	// create a merger and iterate through all values validating that every value is less than
 	// the next value read, and that we retrieved all of the data.
-	merger, err := NewEPMerger(ctx, nbf, readers)
+	merger, err := NewEPMerger(ctx, vrw, readers)
 	require.NoError(t, err)
 
-	items := testMergeOrder(t, ctx, nbf, merger)
+	items := testMergeOrder(t, ctx, vrw, merger)
 	require.Equal(t, numItems, len(items))
 
 	for i := 0; i < len(items); i++ {
@@ -195,17 +197,17 @@ func TestTupleStreamMerger(t *testing.T) {
 
 			// create a merger and iterate through all values validating that every value is less than
 			// the next value read, and that we retrieved all of the data.
-			merger, err := NewEPMerger(ctx, nbf, readers)
+			merger, err := NewEPMerger(ctx, vrw, readers)
 			require.NoError(t, err)
 
-			items := testMergeOrder(t, ctx, nbf, merger)
+			items := testMergeOrder(t, ctx, vrw, merger)
 			require.Equal(t, numItems, int64(len(items)))
 		})
 	}
 }
 
-func testMergeOrder(t *testing.T, ctx context.Context, nbf *types.NomsBinFormat, merger types.EditProvider) []*types.KVP {
-	curr, err := merger.Next()
+func testMergeOrder(t *testing.T, ctx context.Context, vr types.ValueReader, merger types.EditProvider) []*types.KVP {
+	curr, err := merger.Next(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, curr)
 
@@ -215,7 +217,7 @@ func testMergeOrder(t *testing.T, ctx context.Context, nbf *types.NomsBinFormat,
 	var items []*types.KVP
 	items = append(items, curr)
 	for {
-		curr, err = merger.Next()
+		curr, err = merger.Next(ctx)
 		if err == io.EOF {
 			break
 		}
@@ -224,7 +226,7 @@ func testMergeOrder(t *testing.T, ctx context.Context, nbf *types.NomsBinFormat,
 		currKeyVal, err := curr.Key.Value(ctx)
 		require.NoError(t, err)
 
-		isLess, err := prevKeyVal.Less(nbf, currKeyVal)
+		isLess, err := prevKeyVal.Less(ctx, vr.Format(), currKeyVal)
 		require.NoError(t, err)
 
 		require.True(t, isLess || prevKeyVal.Equals(currKeyVal))

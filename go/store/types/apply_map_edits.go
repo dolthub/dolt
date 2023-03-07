@@ -26,7 +26,7 @@ import (
 type EditProvider interface {
 	// Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
 	// in key sorted order.  Once all KVPs have been read io.EOF will be returned.
-	Next() (*KVP, error)
+	Next(ctx context.Context) (*KVP, error)
 
 	// ReachedEOF returns true once all data is exhausted.  If ReachedEOF returns false that does not mean that there
 	// is more data, only that io.EOF has not been returned previously.  If ReachedEOF returns true then all edits have
@@ -40,7 +40,7 @@ type EditProvider interface {
 type EmptyEditProvider struct{}
 
 // Next will always return nil, io.EOF
-func (eep EmptyEditProvider) Next() (*KVP, error) {
+func (eep EmptyEditProvider) Next(ctx context.Context) (*KVP, error) {
 	return nil, io.EOF
 }
 
@@ -136,7 +136,7 @@ func ApplyNEdits(ctx context.Context, edits EditProvider, m Map, numEdits int64)
 	}
 
 	// asynchronously add mapWork to be done by the workers
-	go buildBatches(m.Format(), ae, rc, wc, edits, numEdits)
+	go buildBatches(ctx, m.valueReadWriter(), ae, rc, wc, edits, numEdits)
 
 	// wait for workers to return results and then process them
 	var ch *sequenceChunker
@@ -279,7 +279,7 @@ func doWork(ctx context.Context, seq orderedSequence, work mapWork) (mapWorkResu
 
 		createCur := cur == nil
 		if cur != nil {
-			isLess, err := ordKey.Less(seq.format(), curKey)
+			isLess, err := ordKey.Less(ctx, seq.format(), curKey)
 
 			if err != nil {
 				return mapWorkResult{}, err
@@ -333,12 +333,12 @@ func doWork(ctx context.Context, seq orderedSequence, work mapWork) (mapWorkResu
 }
 
 // buildBatches iterates over the sorted edits building batches of work to be completed by the worker threads.
-func buildBatches(nbf *NomsBinFormat, ae *atomicerr.AtomicError, rc chan chan mapWorkResult, wc chan mapWork, edits EditProvider, numEdits int64) {
+func buildBatches(ctx context.Context, vr ValueReader, ae *atomicerr.AtomicError, rc chan chan mapWorkResult, wc chan mapWork, edits EditProvider, numEdits int64) {
 	defer close(rc)
 	defer close(wc)
 
 	batchSize := batchSizeStart
-	nextEdit, err := edits.Next()
+	nextEdit, err := edits.Next(ctx)
 
 	if err == io.EOF {
 		return
@@ -353,7 +353,7 @@ func buildBatches(nbf *NomsBinFormat, ae *atomicerr.AtomicError, rc chan chan ma
 		for len(batch) < batchSize {
 			edit := nextEdit
 
-			nextEdit, err = edits.Next()
+			nextEdit, err = edits.Next(ctx)
 			if err == io.EOF {
 				if edit != nil {
 					batch = append(batch, edit)
@@ -363,7 +363,7 @@ func buildBatches(nbf *NomsBinFormat, ae *atomicerr.AtomicError, rc chan chan ma
 				return
 			}
 
-			isLess, err := edit.Key.Less(nbf, nextEdit.Key)
+			isLess, err := edit.Key.Less(ctx, vr.Format(), nextEdit.Key)
 
 			if ae.SetIfError(err) {
 				return

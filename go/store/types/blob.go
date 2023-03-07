@@ -55,8 +55,8 @@ func NewEmptyBlob(vrw ValueReadWriter) (Blob, error) {
 }
 
 // Less implements the LesserValuable interface.
-func (b Blob) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
-	res, err := b.Compare(nbf, other)
+func (b Blob) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+	res, err := b.Compare(ctx, nbf, other)
 	if err != nil {
 		return false, err
 	}
@@ -64,10 +64,9 @@ func (b Blob) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	return res < 0, nil
 }
 
-func (b Blob) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error) {
+func (b Blob) Compare(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (int, error) {
 	if b2, ok := other.(Blob); ok {
 		// Blobs can have an arbitrary length, so we compare in chunks rather than loading it entirely
-		ctx := context.Background()
 		b1Length := b.Len()
 		b2Length := b2.Len()
 		b1Reader := b.Reader(ctx)
@@ -348,7 +347,7 @@ func newEmptyBlobChunker(ctx context.Context, vrw ValueReadWriter) (*sequenceChu
 }
 
 func makeBlobLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
-	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64, error) {
+	return func(ctx context.Context, level uint64, items []sequenceItem) (Collection, orderedKey, uint64, error) {
 		d.PanicIfFalse(level == 0)
 		buff := make([]byte, len(items))
 

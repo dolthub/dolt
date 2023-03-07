@@ -55,7 +55,7 @@ func (v UUID) Equals(other Value) bool {
 	return v == other
 }
 
-func (v UUID) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (v UUID) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(UUID); ok {
 		return bytes.Compare(v[:], v2[:]) < 0, nil
 	}

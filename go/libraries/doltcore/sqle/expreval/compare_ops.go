@@ -15,6 +15,8 @@
 package expreval
 
 import (
+	"context"
+
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -29,7 +31,7 @@ type CompareOp interface {
 	// CompareLiterals compares two go-mysql-server literals
 	CompareLiterals(l1, l2 *expression.Literal) (bool, error)
 	// CompareNomsValues compares two noms values
-	CompareNomsValues(v1, v2 types.Value) (bool, error)
+	CompareNomsValues(ctx context.Context, v1, v2 types.Value) (bool, error)
 	// CompareToNil compares a noms value to nil using sql logic rules
 	CompareToNil(v2 types.Value) (bool, error)
 }
@@ -49,7 +51,7 @@ func (op EqualsOp) CompareLiterals(l1, l2 *expression.Literal) (bool, error) {
 }
 
 // CompareNomsValues compares two noms values for equality
-func (op EqualsOp) CompareNomsValues(v1, v2 types.Value) (bool, error) {
+func (op EqualsOp) CompareNomsValues(_ context.Context, v1, v2 types.Value) (bool, error) {
 	return v1.Equals(v2), nil
 }
 
@@ -64,7 +66,7 @@ func (op EqualsOp) CompareToNil(v types.Value) (bool, error) {
 
 // GreaterOp implements the CompareOp interface implementing greater than logic
 type GreaterOp struct {
-	NBF *types.NomsBinFormat
+	vr types.ValueReader
 }
 
 // CompareLiterals compares two go-mysql-server literals returning true if the value of the first
@@ -81,14 +83,14 @@ func (op GreaterOp) CompareLiterals(l1, l2 *expression.Literal) (bool, error) {
 
 // CompareNomsValues compares two noms values returning true if the of the first
 // is greater than the second.
-func (op GreaterOp) CompareNomsValues(v1, v2 types.Value) (bool, error) {
+func (op GreaterOp) CompareNomsValues(ctx context.Context, v1, v2 types.Value) (bool, error) {
 	eq := v1.Equals(v2)
 
 	if eq {
 		return false, nil
 	}
 
-	lt, err := v1.Less(op.NBF, v2)
+	lt, err := v1.Less(ctx, op.vr.Format(), v2)
 
 	if err != nil {
 		return false, nil
@@ -104,7 +106,7 @@ func (op GreaterOp) CompareToNil(types.Value) (bool, error) {
 
 // GreaterEqualOp implements the CompareOp interface implementing greater than or equal to logic
 type GreaterEqualOp struct {
-	NBF *types.NomsBinFormat
+	vr types.ValueReader
 }
 
 // CompareLiterals compares two go-mysql-server literals returning true if the value of the first
@@ -121,8 +123,8 @@ func (op GreaterEqualOp) CompareLiterals(l1, l2 *expression.Literal) (bool, erro
 
 // CompareNomsValues compares two noms values returning true if the of the first
 // is greater or equal to than the second.
-func (op GreaterEqualOp) CompareNomsValues(v1, v2 types.Value) (bool, error) {
-	res, err := v1.Less(op.NBF, v2)
+func (op GreaterEqualOp) CompareNomsValues(ctx context.Context, v1, v2 types.Value) (bool, error) {
+	res, err := v1.Less(ctx, op.vr.Format(), v2)
 
 	if err != nil {
 		return false, err
@@ -138,7 +140,7 @@ func (op GreaterEqualOp) CompareToNil(types.Value) (bool, error) {
 
 // LessOp implements the CompareOp interface implementing less than logic
 type LessOp struct {
-	NBF *types.NomsBinFormat
+	vr types.ValueReader
 }
 
 // CompareLiterals compares two go-mysql-server literals returning true if the value of the first
@@ -155,8 +157,8 @@ func (op LessOp) CompareLiterals(l1, l2 *expression.Literal) (bool, error) {
 
 // CompareNomsValues compares two noms values returning true if the of the first
 // is less than the second.
-func (op LessOp) CompareNomsValues(v1, v2 types.Value) (bool, error) {
-	return v1.Less(op.NBF, v2)
+func (op LessOp) CompareNomsValues(ctx context.Context, v1, v2 types.Value) (bool, error) {
+	return v1.Less(ctx, op.vr.Format(), v2)
 }
 
 // CompareToNil always returns false as values are neither greater than, less than, or equal to nil
@@ -166,7 +168,7 @@ func (op LessOp) CompareToNil(types.Value) (bool, error) {
 
 // LessEqualOp implements the CompareOp interface implementing less than or equal to logic
 type LessEqualOp struct {
-	NBF *types.NomsBinFormat
+	vr types.ValueReader
 }
 
 // CompareLiterals compares two go-mysql-server literals returning true if the value of the first
@@ -183,14 +185,14 @@ func (op LessEqualOp) CompareLiterals(l1, l2 *expression.Literal) (bool, error) 
 
 // CompareNomsValues compares two noms values returning true if the of the first
 // is less than or equal to the second.
-func (op LessEqualOp) CompareNomsValues(v1, v2 types.Value) (bool, error) {
+func (op LessEqualOp) CompareNomsValues(ctx context.Context, v1, v2 types.Value) (bool, error) {
 	eq := v1.Equals(v2)
 
 	if eq {
 		return true, nil
 	}
 
-	return v1.Less(op.NBF, v2)
+	return v1.Less(ctx, op.vr.Format(), v2)
 }
 
 // CompareToNil always returns false as values are neither greater than, less than, or equal to nil

@@ -100,6 +100,33 @@ func TestBinlogReplicationSanityCheck(t *testing.T) {
 	assertRepoStateFileExists(t, "db01")
 }
 
+// TestFlushLogs tests that binary logs can be flushed on the primary, which forces a new binlog file to be written,
+// including sending new Rotate and FormatDescription events to the replica. This is a simple sanity tests that we can
+// process the events without errors.
+func TestFlushLogs(t *testing.T) {
+	defer teardown(t)
+	startSqlServers(t)
+	startReplication(t, mySqlPort)
+
+	// Make changes on the primary and verify on the replica
+	primaryDatabase.MustExec("create table t (pk int primary key)")
+	waitForReplicaToCatchUp(t)
+	expectedStatement := "CREATE TABLE t ( pk int NOT NULL, PRIMARY KEY (pk)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"
+	assertCreateTableStatement(t, replicaDatabase, "t", expectedStatement)
+
+	primaryDatabase.MustExec("flush binary logs;")
+	waitForReplicaToCatchUp(t)
+
+	primaryDatabase.MustExec("insert into t values (1), (2), (3);")
+	waitForReplicaToCatchUp(t)
+
+	rows, err := replicaDatabase.Queryx("select * from db01.t;")
+	require.NoError(t, err)
+	allRows := readAllRows(t, rows)
+	require.Equal(t, 3, len(allRows))
+	require.NoError(t, rows.Close())
+}
+
 // TestResetReplica tests that "RESET REPLICA" and "RESET REPLICA ALL" correctly clear out
 // replication configuration and metadata.
 func TestResetReplica(t *testing.T) {
@@ -165,22 +192,60 @@ func TestStartReplicaErrors(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorContains(t, err, ErrServerNotConfiguredAsReplica.Error())
 
-	// For partial source configuration, START REPLICA doesn't throw an error, but an error will
-	// be populated in SHOW REPLICA STATUS after START REPLICA returns.
-	//START REPLICA doesn't return an error when replication source is only partially configured
+	// For an incomplete source configuration, throw an error as early as possible to make sure the user notices it.
 	replicaDatabase.MustExec("CHANGE REPLICATION SOURCE TO SOURCE_PORT=1234, SOURCE_HOST='localhost';")
-	replicaDatabase.MustExec("START REPLICA;")
-	rows, err := replicaDatabase.Queryx("SHOW REPLICA STATUS;")
-	require.NoError(t, err)
-	status := convertByteArraysToStrings(readNextRow(t, rows))
-	require.Equal(t, "13117", status["Last_IO_Errno"])
-	require.NotEmpty(t, status["Last_IO_Error"])
-	require.NotEmpty(t, status["Last_IO_Error_Timestamp"])
-	require.NoError(t, rows.Close())
+	rows, err := replicaDatabase.Queryx("START REPLICA;")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "Invalid (empty) username")
+	require.Nil(t, rows)
 
-	// START REPLICA doesn't return an error if replication is already running
+	// START REPLICA logs a warning if replication is already running
 	startReplication(t, mySqlPort)
 	replicaDatabase.MustExec("START REPLICA;")
+	assertWarning(t, replicaDatabase, 3083, "Replication thread(s) for channel '' are already running.")
+}
+
+// TestStopReplica tests that STOP REPLICA correctly stops the replication process, and that
+// warnings are logged when STOP REPLICA is invoked when replication is not running.
+func TestStopReplica(t *testing.T) {
+	defer teardown(t)
+	startSqlServers(t)
+
+	// STOP REPLICA logs a warning if replication is not running
+	replicaDatabase.MustExec("STOP REPLICA;")
+	assertWarning(t, replicaDatabase, 3084, "Replication thread(s) for channel '' are already stopped.")
+
+	// Start replication with bad connection params
+	replicaDatabase.MustExec("SET @@GLOBAL.server_id=52;")
+	replicaDatabase.MustExec("CHANGE REPLICATION SOURCE TO SOURCE_HOST='doesnotexist', SOURCE_PORT=111, SOURCE_USER='nobody';")
+	replicaDatabase.MustExec("START REPLICA;")
+	time.Sleep(200 * time.Millisecond)
+	status := showReplicaStatus(t)
+	require.Equal(t, "Connecting", status["Replica_IO_Running"])
+	require.Equal(t, "Yes", status["Replica_SQL_Running"])
+
+	// STOP REPLICA works when replication cannot establish a connection
+	replicaDatabase.MustExec("STOP REPLICA;")
+	status = showReplicaStatus(t)
+	require.Equal(t, "No", status["Replica_IO_Running"])
+	require.Equal(t, "No", status["Replica_SQL_Running"])
+
+	// START REPLICA and verify status
+	startReplication(t, mySqlPort)
+	time.Sleep(100 * time.Millisecond)
+	status = showReplicaStatus(t)
+	require.True(t, status["Replica_IO_Running"] == "Connecting" || status["Replica_IO_Running"] == "Yes")
+	require.Equal(t, "Yes", status["Replica_SQL_Running"])
+
+	// STOP REPLICA stops replication when it is running and connected to the source
+	replicaDatabase.MustExec("STOP REPLICA;")
+	status = showReplicaStatus(t)
+	require.Equal(t, "No", status["Replica_IO_Running"])
+	require.Equal(t, "No", status["Replica_SQL_Running"])
+
+	// STOP REPLICA logs a warning if replication is not running
+	replicaDatabase.MustExec("STOP REPLICA;")
+	assertWarning(t, replicaDatabase, 3084, "Replication thread(s) for channel '' are already stopped.")
 }
 
 // TestDoltCommits tests that Dolt commits are created and use correct transaction boundaries.
@@ -415,6 +480,18 @@ func waitForReplicaToReachGtid(t *testing.T, target int) {
 	t.Fatal("replica did not reach target GTID within " + timeLimit.String())
 }
 
+// assertWarning asserts that the specified |database| has a warning with |code| and |message|,
+// otherwise it will fail the current test.
+func assertWarning(t *testing.T, database *sqlx.DB, code int, message string) {
+	rows, err := database.Queryx("SHOW WARNINGS;")
+	require.NoError(t, err)
+	warning := convertByteArraysToStrings(readNextRow(t, rows))
+	require.Equal(t, strconv.Itoa(code), warning["Code"])
+	require.Equal(t, message, warning["Message"])
+	require.False(t, rows.Next())
+	require.NoError(t, rows.Close())
+}
+
 func queryGtid(t *testing.T, database *sqlx.DB) string {
 	rows, err := database.Queryx("SELECT @@global.gtid_executed as gtid_executed;")
 	require.NoError(t, err)
@@ -455,7 +532,7 @@ func startSqlServers(t *testing.T) {
 		t.Skip("Skipping binlog replication integ tests in CI environment on Mac OS")
 	}
 
-	testDir = filepath.Join(os.TempDir(), t.Name()+"-"+time.Now().Format("12345"))
+	testDir = filepath.Join(os.TempDir(), fmt.Sprintf("%s-%v", t.Name(), time.Now().Unix()))
 	err := os.MkdirAll(testDir, 0777)
 
 	cmd := exec.Command("chmod", "777", testDir)

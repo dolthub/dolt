@@ -54,7 +54,7 @@ func (v MultiPoint) Equals(other Value) bool {
 	return true
 }
 
-func (v MultiPoint) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (v MultiPoint) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	v2, ok := other.(MultiPoint)
 	if !ok {
 		return MultiPointKind < other.Kind(), nil
@@ -73,7 +73,7 @@ func (v MultiPoint) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error)
 
 	for i := 0; i < n; i++ {
 		if !v.Points[i].Equals(v2.Points[i]) {
-			return v.Points[i].Less(nbf, v2.Points[i])
+			return v.Points[i].Less(ctx, nbf, v2.Points[i])
 		}
 	}
 

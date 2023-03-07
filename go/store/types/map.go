@@ -69,7 +69,7 @@ func newMapChunker(nbf *NomsBinFormat, salt byte) sequenceSplitter {
 }
 
 func NewMap(ctx context.Context, vrw ValueReadWriter, kv ...Value) (Map, error) {
-	entries, err := buildMapData(vrw.Format(), kv)
+	entries, err := buildMapData(ctx, vrw, kv)
 
 	if err != nil {
 		return EmptyMap, err
@@ -159,7 +159,7 @@ LOOP:
 				k = v
 
 				if lastK != nil {
-					isLess, err := lastK.Less(vrw.Format(), k)
+					isLess, err := lastK.Less(ctx, vrw.Format(), k)
 					if err != nil {
 						return EmptyMap, err
 					}
@@ -514,7 +514,7 @@ func (m Map) Edit() *MapEditor {
 	return NewMapEditor(m)
 }
 
-func buildMapData(nbf *NomsBinFormat, values []Value) (mapEntrySlice, error) {
+func buildMapData(ctx context.Context, vr ValueReader, values []Value) (mapEntrySlice, error) {
 	if len(values) == 0 {
 		return mapEntrySlice{}, nil
 	}
@@ -524,7 +524,6 @@ func buildMapData(nbf *NomsBinFormat, values []Value) (mapEntrySlice, error) {
 	}
 	kvs := mapEntrySlice{
 		make([]mapEntry, len(values)/2),
-		nbf,
 	}
 
 	for i := 0; i < len(values); i += 2 {
@@ -536,10 +535,9 @@ func buildMapData(nbf *NomsBinFormat, values []Value) (mapEntrySlice, error) {
 
 	uniqueSorted := mapEntrySlice{
 		make([]mapEntry, 0, len(kvs.entries)),
-		nbf,
 	}
 
-	err := SortWithErroringLess(kvs)
+	err := SortWithErroringLess(ctx, vr.Format(), kvs)
 
 	if err != nil {
 		return mapEntrySlice{}, err
@@ -557,12 +555,11 @@ func buildMapData(nbf *NomsBinFormat, values []Value) (mapEntrySlice, error) {
 
 	return mapEntrySlice{
 		append(uniqueSorted.entries, last),
-		uniqueSorted.nbf,
 	}, nil
 }
 
 func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
-	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64, error) {
+	return func(ctx context.Context, level uint64, items []sequenceItem) (Collection, orderedKey, uint64, error) {
 		d.PanicIfFalse(level == 0)
 		mapData := make([]mapEntry, len(items))
 
@@ -571,7 +568,7 @@ func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 			entry := v.(mapEntry)
 
 			if lastKey != nil {
-				isLess, err := lastKey.Less(vrw.Format(), entry.key)
+				isLess, err := lastKey.Less(ctx, vrw.Format(), entry.key)
 
 				if err != nil {
 					return nil, orderedKey{}, 0, err
@@ -760,7 +757,7 @@ func (m Map) IndexForKey(ctx context.Context, key Value) (int64, error) {
 	if metaSeq, ok := m.orderedSequence.(metaSequence); ok {
 		return indexForKeyWithinSubtree(ctx, orderedKey, metaSeq, m.valueReadWriter())
 	} else if leaf, ok := m.orderedSequence.(mapLeafSequence); ok {
-		leafIdx, err := leaf.search(orderedKey)
+		leafIdx, err := leaf.search(ctx, orderedKey)
 		if err != nil {
 			return 0, err
 		}
@@ -784,7 +781,7 @@ func indexForKeyWithinSubtree(ctx context.Context, key orderedKey, metaSeq metaS
 			return 0, err
 		}
 
-		isLess, err := key.Less(vrw.Format(), tupleKey)
+		isLess, err := key.Less(ctx, vrw.Format(), tupleKey)
 		if err != nil {
 			return 0, err
 		}
@@ -808,7 +805,7 @@ func indexForKeyWithinSubtree(ctx context.Context, key orderedKey, metaSeq metaS
 				}
 				return idx + subtreeIdx, nil
 			} else if leaf, ok := child.(mapLeafSequence); ok {
-				leafIdx, err := leaf.search(key)
+				leafIdx, err := leaf.search(ctx, key)
 				if err != nil {
 					return 0, err
 				}
@@ -852,7 +849,7 @@ func UnionMaps(ctx context.Context, a Map, b Map, cb MapUnionConflictCB) (Map, e
 
 	for aKey != nil && bKey != nil {
 
-		aLess, err := aKey.Less(a.Format(), bKey)
+		aLess, err := aKey.Less(ctx, a.format(), bKey)
 		if err != nil {
 			return EmptyMap, nil
 		}

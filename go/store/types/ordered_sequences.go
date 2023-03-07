@@ -30,7 +30,7 @@ import (
 type orderedSequence interface {
 	sequence
 	getKey(idx int) (orderedKey, error)
-	search(key orderedKey) (int, error)
+	search(ctx context.Context, key orderedKey) (int, error)
 }
 
 func newSetMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) (metaSequence, error) {
@@ -63,7 +63,7 @@ func newCursorAt(ctx context.Context, seq orderedSequence, key orderedKey, forIn
 		}
 		cur = newSequenceCursor(cur, seq, idx)
 		if key != emptyKey {
-			ok, err := seekTo(cur, key, forInsertion && !seq.isLeaf())
+			ok, err := seekTo(ctx, cur, key, forInsertion && !seq.isLeaf())
 
 			if err != nil {
 				return nil, err
@@ -110,7 +110,7 @@ func newCursorBackFrom(ctx context.Context, seq orderedSequence, key orderedKey)
 		cur = newReverseSequenceCursor(cur, seq, idx)
 		if key != emptyKey {
 			// If we run off the end of the sequence, start the cursor at the last element.
-			ok, err := seekTo(cur, key, true)
+			ok, err := seekTo(ctx, cur, key, true)
 
 			if err != nil {
 				return nil, err
@@ -140,7 +140,7 @@ func newCursorBackFrom(ctx context.Context, seq orderedSequence, key orderedKey)
 			return nil, err
 		}
 
-		isLess, err := key.Less(cur.seq.format(), currKey)
+		isLess, err := key.Less(ctx, cur.seq.format(), currKey)
 		if err != nil {
 			return nil, err
 		}
@@ -157,12 +157,12 @@ func newCursorBackFrom(ctx context.Context, seq orderedSequence, key orderedKey)
 	return cur, nil
 }
 
-func seekTo(cur *sequenceCursor, key orderedKey, lastPositionIfNotFound bool) (bool, error) {
+func seekTo(ctx context.Context, cur *sequenceCursor, key orderedKey, lastPositionIfNotFound bool) (bool, error) {
 	seq := cur.seq.(orderedSequence)
 
 	var err error
 	// Find smallest idx in seq where key(idx) >= key
-	cur.idx, err = seq.search(key)
+	cur.idx, err = seq.search(ctx, key)
 
 	if err != nil {
 		return false, err
@@ -201,7 +201,7 @@ func getMapValue(cur *sequenceCursor) (Value, error) {
 // If |vw| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
 func newOrderedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunkFn {
-	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64, error) {
+	return func(ctx context.Context, level uint64, items []sequenceItem) (Collection, orderedKey, uint64, error) {
 		tuples := make([]metaTuple, len(items))
 		numLeaves := uint64(0)
 
@@ -215,7 +215,7 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 			}
 
 			if lastKey != emptyKey {
-				isLess, err := lastKey.Less(vrw.Format(), key)
+				isLess, err := lastKey.Less(ctx, vrw.Format(), key)
 
 				if err != nil {
 					return nil, orderedKey{}, 0, err
