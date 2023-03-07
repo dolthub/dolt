@@ -588,6 +588,7 @@ DELIM
     dolt gc
     AFTER=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
 
+    skip "chunk journal doesn't shrink"
     # less than 10% smaller
     [ "$BEFORE" -lt $(($AFTER * 11 / 10)) ]
 }

@@ -402,3 +402,20 @@ func corruptJournalIndex(t *testing.T, path string) {
 	_, err = f.WriteAt(buf, info.Size()/2)
 	require.NoError(t, err)
 }
+
+func TestRangeIndex(t *testing.T) {
+	data := randomCompressedChunks(1024)
+	idx := newRangeIndex()
+	for _, c := range data {
+		idx.put(addr(c.Hash()), Range{})
+	}
+	for _, c := range data {
+		_, ok := idx.get(addr(c.Hash()))
+		assert.True(t, ok)
+	}
+	assert.Equal(t, len(data), idx.novelCount())
+	assert.Equal(t, len(data), int(idx.count()))
+	idx.flatten()
+	assert.Equal(t, 0, idx.novelCount())
+	assert.Equal(t, len(data), int(idx.count()))
+}
