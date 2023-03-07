@@ -212,7 +212,11 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 				keyBld.PutRaw(to, k.GetField(from))
 			} else {
 				from -= pkLen
-				index.PutField(ctx, ns, keyBld, to, v.GetField(from))
+				if keyBld.Desc.Types[to].Enc == val.CellEnc {
+					index.PutField(ctx, ns, keyBld, to, v.GetField(from))
+				} else {
+					keyBld.PutRaw(to, v.GetField(from))
+				}
 			}
 		}
 
