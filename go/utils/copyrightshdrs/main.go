@@ -113,8 +113,6 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/cmd/noms/noms_show.go", NomsPath: "cmd/noms/noms_show.go", HadCopyrightNotice: true},
 	{Path: "store/cmd/noms/noms_show_test.go", NomsPath: "cmd/noms/noms_show_test.go", HadCopyrightNotice: true},
 	{Path: "store/cmd/noms/noms_stats.go", NomsPath: "cmd/noms/noms_stats.go", HadCopyrightNotice: true},
-	{Path: "store/cmd/noms/noms_version.go", NomsPath: "cmd/noms/noms_version.go", HadCopyrightNotice: true},
-	{Path: "store/cmd/noms/noms_version_test.go", NomsPath: "cmd/noms/noms_version_test.go", HadCopyrightNotice: true},
 	{Path: "store/config/config.go", NomsPath: "go/config/config.go", HadCopyrightNotice: true},
 	{Path: "store/config/config_test.go", NomsPath: "go/config/config_test.go", HadCopyrightNotice: true},
 	{Path: "store/config/resolver.go", NomsPath: "go/config/resolver.go", HadCopyrightNotice: true},
