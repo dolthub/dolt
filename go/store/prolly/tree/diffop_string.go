@@ -40,8 +40,8 @@ const _diffOp_name = "leftAddrightAddleftDeleterightDeleteleftModifyrightModifyc
 
 var _diffOp_index = [...]uint8{0, 7, 15, 25, 36, 46, 57, 70, 86, 102, 125, 148, 171}
 
-func (i diffOp) String() string {
-	if i >= diffOp(len(_diffOp_index)-1) {
+func (i DiffOp) String() string {
+	if i >= DiffOp(len(_diffOp_index)-1) {
 		return "diffOp(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
 	return _diffOp_name[_diffOp_index[i]:_diffOp_index[i+1]]

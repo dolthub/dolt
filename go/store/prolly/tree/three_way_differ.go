@@ -201,10 +201,10 @@ func (d *ThreeWayDiffer[K, O]) Close() error {
 
 //go:generate stringer -type=diffOp -linecomment
 
-type diffOp uint16
+type DiffOp uint16
 
 const (
-	DiffOpLeftAdd                 diffOp = iota // leftAdd
+	DiffOpLeftAdd                 DiffOp = iota // leftAdd
 	DiffOpRightAdd                              // rightAdd
 	DiffOpLeftDelete                            //leftDelete
 	DiffOpRightDelete                           //rightDelete
@@ -221,14 +221,14 @@ const (
 // ThreeWayDiff is a generic object for encoding a three way diff.
 type ThreeWayDiff struct {
 	// Op indicates the type of diff
-	Op diffOp
+	Op DiffOp
 	// a partial set of tuple values are set
 	// depending on the diffOp
 	Key, Base, Left, Right, Merged val.Tuple
 }
 
 func (d *ThreeWayDiffer[K, O]) newLeftEdit(key, left Item, typ DiffType) ThreeWayDiff {
-	var op diffOp
+	var op DiffOp
 	switch typ {
 	case AddedDiff:
 		op = DiffOpLeftAdd
@@ -247,7 +247,7 @@ func (d *ThreeWayDiffer[K, O]) newLeftEdit(key, left Item, typ DiffType) ThreeWa
 }
 
 func (d *ThreeWayDiffer[K, O]) newRightEdit(key, base, right Item, typ DiffType) ThreeWayDiff {
-	var op diffOp
+	var op DiffOp
 	switch typ {
 	case AddedDiff:
 		op = DiffOpRightAdd
@@ -267,7 +267,7 @@ func (d *ThreeWayDiffer[K, O]) newRightEdit(key, base, right Item, typ DiffType)
 }
 
 func (d *ThreeWayDiffer[K, O]) newConvergentEdit(key, left Item, typ DiffType) ThreeWayDiff {
-	var op diffOp
+	var op DiffOp
 	switch typ {
 	case AddedDiff:
 		op = DiffOpConvergentAdd

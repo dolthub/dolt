@@ -28,7 +28,7 @@ import (
 )
 
 type testDiff struct {
-	op      diffOp
+	op      DiffOp
 	k       int
 	l, r, m []int
 }
