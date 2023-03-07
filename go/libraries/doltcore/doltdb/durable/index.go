@@ -77,7 +77,7 @@ type IndexSet interface {
 // RefFromIndex persists the Index and returns a types.Ref to it.
 func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (types.Ref, error) {
 	switch idx.Format() {
-	case types.Format_LD_1, types.Format_7_18, types.Format_DOLT_DEV:
+	case types.Format_LD_1, types.Format_7_18:
 		return refFromNomsValue(ctx, vrw, idx.(nomsIndex).index)
 
 	case types.Format_DOLT:
@@ -101,7 +101,7 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 	}
 
 	switch vrw.Format() {
-	case types.Format_LD_1, types.Format_7_18, types.Format_DOLT_DEV:
+	case types.Format_LD_1, types.Format_7_18:
 		return IndexFromNomsMap(v.(types.Map), vrw, ns), nil
 
 	case types.Format_DOLT:
@@ -119,7 +119,7 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 // NewEmptyIndex returns an index with no rows.
 func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (Index, error) {
 	switch vrw.Format() {
-	case types.Format_LD_1, types.Format_7_18, types.Format_DOLT_DEV:
+	case types.Format_LD_1, types.Format_7_18:
 		m, err := types.NewMap(ctx, vrw)
 		if err != nil {
 			return nil, err
