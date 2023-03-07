@@ -94,7 +94,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 		var buf []byte
 		buf, ok = td.GetGeometry(i, tup)
 		if ok {
-			v = DeserializeGeometry(buf)
+			v = deserializeGeometry(buf)
 		}
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
@@ -217,6 +217,9 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 	case val.CommitAddrEnc:
 		tb.PutCommitAddr(i, v.(hash.Hash))
 	case val.CellEnc:
+		if _, ok := v.([]byte); ok {
+			v = deserializeGeometry(v.([]byte))
+		}
 		tb.PutCell(i, ZCell(v.(types.GeometryValue)))
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
@@ -276,7 +279,7 @@ func convUint(v interface{}) uint {
 	}
 }
 
-func DeserializeGeometry(buf []byte) (v interface{}) {
+func deserializeGeometry(buf []byte) (v interface{}) {
 	srid, _, typ, _ := types.DeserializeEWKBHeader(buf)
 	buf = buf[types.EWKBHeaderSize:]
 	switch typ {
