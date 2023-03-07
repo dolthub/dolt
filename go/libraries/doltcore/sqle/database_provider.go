@@ -653,7 +653,7 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	}
 
 	// If this database is re-created, we don't want to return any cached results.
-	err = dbfactory.DeleteFromSingletonCache("file://" + dropDbLoc + "/.dolt/noms")
+	err = dbfactory.DeleteFromSingletonCache(dropDbLoc + "/.dolt/noms")
 	if err != nil {
 		return err
 	}

@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -485,6 +486,12 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 	cacheOnce.Do(makeGlobalCaches)
 	if err := checkDir(dir); err != nil {
 		return nil, err
+	}
+	ok, err := fileExists(filepath.Join(dir, chunkJournalAddr))
+	if err != nil {
+		return nil, err
+	} else if ok {
+		return nil, fmt.Errorf("cannot create NBS store for directory containing chunk journal: %s", dir)
 	}
 
 	m, err := getFileManifest(ctx, dir, asyncFlush)

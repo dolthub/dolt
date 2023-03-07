@@ -457,7 +457,6 @@ func NewPullSpec(_ context.Context, rsr RepoStateReader, remoteName, remoteRefNa
 
 func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg string) (string, string, error) {
 	u, err := earl.Parse(urlArg)
-
 	if err != nil {
 		return "", "", err
 	}
