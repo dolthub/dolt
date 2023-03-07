@@ -68,6 +68,10 @@ teardown() {
     node $BATS_TEST_DIRNAME/node/knex.js $USER $PORT $REPO_NAME
 }
 
+@test "node mysql client, hosted workbench stability" {
+    node $BATS_TEST_DIRNAME/node/workbench.js $USER $PORT $REPO_NAME
+}
+
 @test "c mysql connector" {
     (cd $BATS_TEST_DIRNAME/c; make clean; make)
     $BATS_TEST_DIRNAME/c/mysql-connector-c-test $USER $PORT $REPO_NAME
