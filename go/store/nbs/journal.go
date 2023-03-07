@@ -32,7 +32,7 @@ const (
 )
 
 // chunkJournal is a persistence abstraction for a NomsBlockStore.
-// It implemented both manifest and tablePersister, durably writing
+// It implements both manifest and tablePersister, durably writing
 // both memTable persists and manifest updates to a single file.
 type chunkJournal struct {
 	wr   *journalWriter
@@ -72,11 +72,11 @@ func newChunkJournal(ctx context.Context, nbfVers, dir string, m manifest, p *fs
 }
 
 // bootstrapJournalWriter initializes the journalWriter, which manages access to the
-// journal file for this chunkJournal. The bootstrapping process differed depending
+// journal file for this chunkJournal. The bootstrapping process differs depending
 // on whether a journal file exists at startup time.
 //
 // If a journal file does not exist, we create one and commit a root hash record
-// which we read from the manifest file.
+// containing the root hash we read from the manifest file.
 //
 // If a journal file does exist, we process its records to build up an index of its
 // resident chunks. Processing journal records is potentially accelerated by an index

@@ -36,9 +36,6 @@ const (
 	// FileScheme
 	FileScheme = "file"
 
-	// JournalScheme
-	JournalScheme = "journal"
-
 	// MemScheme
 	MemScheme = "mem"
 
@@ -73,7 +70,6 @@ var DBFactories = map[string]DBFactory{
 	OSSScheme:     OSSFactory{},
 	GSScheme:      GSFactory{},
 	FileScheme:    FileFactory{},
-	JournalScheme: JournalFactory{},
 	MemScheme:     MemFactory{},
 	LocalBSScheme: LocalBSFactory{},
 	HTTPScheme:    NewDoltRemoteFactory(true),

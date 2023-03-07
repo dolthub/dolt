@@ -17,9 +17,11 @@ package dbfactory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -28,12 +30,23 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+func init() {
+	// default to chunk journal unless feature flag is set
+	if os.Getenv("DOLT_DISABLE_CHUNK_JOURNAL") != "" {
+		chunkJournalFeatureFlag = false
+	}
+}
+
+var chunkJournalFeatureFlag = true
+
 const (
 	// DoltDir defines the directory used to hold the dolt repo data within the filesys
 	DoltDir = ".dolt"
 
 	// DataDir is the directory internal to the DoltDir which holds the noms files.
 	DataDir = "noms"
+
+	ChunkJournalParam = "journal"
 )
 
 // DoltDataDir is the directory where noms files will be stored
@@ -41,6 +54,33 @@ var DoltDataDir = filepath.Join(DoltDir, DataDir)
 
 // FileFactory is a DBFactory implementation for creating local filesys backed databases
 type FileFactory struct {
+}
+
+type singletonDB struct {
+	ddb datas.Database
+	vrw types.ValueReadWriter
+	ns  tree.NodeStore
+}
+
+var singletonLock = new(sync.Mutex)
+var singletons = make(map[string]singletonDB)
+
+func CloseAllLocalDatabases() (err error) {
+	singletonLock.Lock()
+	defer singletonLock.Unlock()
+	for name, s := range singletons {
+		if cerr := s.ddb.Close(); cerr != nil {
+			err = fmt.Errorf("error closing DB %s (%s)", name, cerr)
+		}
+	}
+	return
+}
+
+func DeleteFromSingletonCache(path string) error {
+	singletonLock.Lock()
+	defer singletonLock.Unlock()
+	delete(singletons, path)
+	return nil
 }
 
 // PrepareDB creates the directory for the DB if it doesn't exist, and returns an error if a file or symlink is at the
@@ -71,6 +111,13 @@ func (fact FileFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat,
 
 // CreateDB creates a local filesys backed database
 func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
+	singletonLock.Lock()
+	defer singletonLock.Unlock()
+
+	if s, ok := singletons[urlObj.Path]; ok {
+		return s.ddb, s.vrw, s.ns, nil
+	}
+
 	path, err := url.PathUnescape(urlObj.Path)
 	if err != nil {
 		return nil, nil, nil, err
@@ -84,9 +131,19 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		return nil, nil, nil, err
 	}
 
+	var useJournal bool
+	if params != nil {
+		_, useJournal = params[ChunkJournalParam]
+	}
+
 	var newGenSt *nbs.NomsBlockStore
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q)
+	if useJournal && chunkJournalFeatureFlag {
+		newGenSt, err = nbs.NewLocalJournalingStore(ctx, nbf.VersionString(), path, q)
+	} else {
+		newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q)
+	}
+
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -116,6 +173,13 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	vrw := types.NewValueStore(st)
 	ns := tree.NewNodeStore(st)
 	ddb := datas.NewTypesDatabase(vrw, ns)
+
+	singletons[urlObj.Path] = singletonDB{
+		ddb: ddb,
+		vrw: vrw,
+		ns:  ns,
+	}
+
 	return ddb, vrw, ns, nil
 }
 

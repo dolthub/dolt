@@ -19,14 +19,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
@@ -37,10 +37,6 @@ import (
 )
 
 func init() {
-	// default to chunk journal unless feature flag is set
-	if os.Getenv("DOLT_DISABLE_CHUNK_JOURNAL") != "" {
-		LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
-	}
 	types.CreateEditAccForMapEdits = edits.NewAsyncSortedEditsWithDefaults
 }
 
@@ -58,7 +54,7 @@ const (
 )
 
 // LocalDirDoltDB stores the db in the current directory
-var LocalDirDoltDB = "journal://./" + dbfactory.DoltDataDir
+var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
 
 // InMemDoltDB stores the DoltDB db in memory and is primarily used for testing
 var InMemDoltDB = "mem://"
@@ -94,13 +90,12 @@ func HackDatasDatabaseFromDoltDB(ddb *DoltDB) datas.Database {
 // to a newly created in memory database will be used. If the location is LocalDirDoltDB, the directory must exist or
 // this returns nil.
 func LoadDoltDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys) (*DoltDB, error) {
-	return LoadDoltDBWithParams(ctx, nbf, urlStr, fs, map[string]interface{}{"journal": true})
+	return LoadDoltDBWithParams(ctx, nbf, urlStr, fs, nil)
 }
 
 func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) (*DoltDB, error) {
 	if urlStr == LocalDirDoltDB {
 		exists, isDir := fs.Exists(dbfactory.DoltDataDir)
-
 		if !exists {
 			return nil, errors.New("missing dolt data directory")
 		} else if !isDir {
@@ -113,14 +108,17 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 		}
 
 		urlStr = fmt.Sprintf("file://%s", filepath.ToSlash(absPath))
+
+		if params == nil {
+			params = make(map[string]any)
+		}
+		params[dbfactory.ChunkJournalParam] = struct{}{}
 	}
 
 	db, vrw, ns, err := dbfactory.CreateDB(ctx, nbf, urlStr, params)
-
 	if err != nil {
 		return nil, err
 	}
-
 	return &DoltDB{hooksDatabase{Database: db}, vrw, ns}, nil
 }
 
