@@ -196,8 +196,10 @@ func mergeZRanges(acc []ZRange, zRange ZRange) []ZRange {
 	return append(acc, zRange)
 }
 
-// it's too complicated to manually carry over numbers, so just round down
-func zRangeSize(zRange ZRange, shamt2 int) (uint64, int) {
+// zRangeSize retrieves the approximate size of the zRange
+// it only takes the top 64 bits of the difference
+// it accepts and returns a shift-amount so that comparison between two zRangeSizes are consistent
+func zRangeSize(zRange ZRange, shamt int) (uint64, int) {
 	zVal := ZVal{}
 	zVal[0] = zRange[1][0] - zRange[0][0]
 	if zRange[1][1] < zRange[0][1] {
@@ -206,34 +208,46 @@ func zRangeSize(zRange ZRange, shamt2 int) (uint64, int) {
 	} else {
 		zVal[1] = zRange[1][1] - zRange[0][1]
 	}
-	shamt := bits.LeadingZeros64(zVal[0])
-	if shamt2 != -1 {
-		shamt = shamt2
+	if shamt == -1 {
+		shamt = bits.LeadingZeros64(zVal[0])
 	}
 	zVal[0] = zVal[0] << shamt
 	zVal[1] = zVal[1] >> (64 - shamt)
-	return zVal[0] | zVal[1], shamt // TODO: + instead?
+	return zVal[0] | zVal[1], shamt
+}
+
+// cutThresh is the threshold to stop splitting ZRanges
+var cutThresh = 0.02
+
+// shouldCut checks if the size of the removed ZRange divided by the size of the whole ZRange is smaller than cutThresh, stop
+func shouldCut(cutRange ZRange, size float64, shamt int) bool {
+	cut, _ := zRangeSize(cutRange, shamt)
+	return (float64(cut) / size) >= cutThresh
+}
+
+// isContinuous checks if the provided zRange is entirely within the bounding box
+func isContinuous(zl, zh uint64, prefixLength int) bool {
+	mask := uint64(math.MaxUint64 >> prefixLength)
+	return (zl&mask) == 0 && (zh&mask) == mask
 }
 
 // splitZRanges is a helper function to SplitZRanges
-func splitZRanges(zRange, origZRange ZRange, depth int, acc []ZRange) []ZRange {
+func splitZRanges(zRange ZRange, zSize float64, zShamt, depth int, acc []ZRange) []ZRange {
 	// prevent too much splitting and point lookup is continuous
 	if depth == 0 || zRange[0] == zRange[1] {
 		return mergeZRanges(acc, zRange)
 	}
 
-	var prefixLength int // this will never be 64
 	zl, zh := zRange[0], zRange[1]
 	zRangeL, zRangeR := zRange, zRange
 	if zl[0] != zh[0] {
-		prefixLength = bits.LeadingZeros64(zl[0] ^ zh[0])
-		suffixLength := 64 - prefixLength
-		mask := uint64(math.MaxUint64 >> prefixLength)
-		if zl[1] == 0 && zh[1] == math.MaxUint64 && (zl[0]&mask) == 0 && (zh[0]&mask) == mask {
+		prefixLength := bits.LeadingZeros64(zl[0] ^ zh[0])
+		if zl[1] == 0 && zh[1] == math.MaxUint64 && isContinuous(zl[0], zh[0], prefixLength) {
 			return mergeZRanges(acc, zRange)
 		}
 
 		// upper bound for left range; set 0 fill with 1s
+		suffixLength := 64 - prefixLength
 		zRangeL[1][0] |= 0xAAAAAAAAAAAAAAAA >> prefixLength       // set suffix to all 1s
 		zRangeL[1][0] &= ^(1 << (suffixLength - 1))               // set first suffix bit to 0
 		zRangeL[1][1] |= 0xAAAAAAAAAAAAAAAA >> (prefixLength % 2) // set suffix to all 1s
@@ -244,14 +258,13 @@ func splitZRanges(zRange, origZRange ZRange, depth int, acc []ZRange) []ZRange {
 		zRangeR[0][0] |= 1 << (suffixLength - 1)                  // set first suffix bit to 1
 		zRangeR[0][1] &= 0x5555555555555555 << (prefixLength % 2) // set suffix to all 0s
 	} else {
-		prefixLength = bits.LeadingZeros64(zl[1] ^ zh[1])
-		suffixLength := 64 - prefixLength
-		mask := uint64(math.MaxUint64 >> prefixLength)
-		if (zl[1]&mask) == 0 && (zh[1]&mask) == mask {
+		prefixLength := bits.LeadingZeros64(zl[1] ^ zh[1])
+		if isContinuous(zl[1], zh[1], prefixLength) {
 			return mergeZRanges(acc, zRange)
 		}
 
 		// upper bound for left range; set 0 fill with 1s
+		suffixLength := 64 - prefixLength
 		zRangeL[1][1] |= 0xAAAAAAAAAAAAAAAA >> prefixLength // set suffix to all 1s
 		zRangeL[1][1] &= ^(1 << (suffixLength - 1))         // set at prefix to 0
 
@@ -261,18 +274,13 @@ func splitZRanges(zRange, origZRange ZRange, depth int, acc []ZRange) []ZRange {
 		zRangeR[0][1] |= 1 << (suffixLength - 1) // set at prefix to 1
 	}
 
-	cutRange := ZRange{zRangeL[1], zRangeR[0]}
-	whole, shamt := zRangeSize(origZRange, -1)
-	cut, _ := zRangeSize(cutRange, shamt)
-	cutAmount := float64(cut) / float64(whole)
-	if cutAmount < 0.02 {
+	if !shouldCut(ZRange{zRangeL[1], zRangeR[0]}, zSize, zShamt) {
 		return mergeZRanges(acc, zRange)
 	}
 
 	// recurse on left and right ranges
-	depth -= 1
-	acc = splitZRanges(zRangeL, origZRange, depth, acc)
-	acc = splitZRanges(zRangeR, origZRange, depth, acc)
+	acc = splitZRanges(zRangeL, zSize, zShamt, depth - 1, acc)
+	acc = splitZRanges(zRangeR, zSize, zShamt, depth - 1, acc)
 
 	return acc
 }
@@ -281,7 +289,7 @@ func splitZRanges(zRange, origZRange ZRange, depth int, acc []ZRange) []ZRange {
 // A ZRange is continuous if
 // 1. it is a point (the lower and upper bounds are equal)
 // 2. the ranges are within a cell (the suffixes of the bounds range from 00...0 to 11...1)
-// TODO: check validity of bbox to prevent inf recursion?
 func SplitZRanges(zRange ZRange, depth int) []ZRange {
-	return splitZRanges(zRange, zRange, depth, make([]ZRange, 0, 128))
+	zSize, zShamt := zRangeSize(zRange, -1)
+	return splitZRanges(zRange, float64(zSize), zShamt, depth, make([]ZRange, 0, 128))
 }
