@@ -105,7 +105,7 @@ func (csMW *CSMetricWrapper) Put(ctx context.Context, c Chunk, getAddrs GetAddrs
 	return csMW.cs.Put(ctx, c, getAddrs)
 }
 
-// Returns the NomsVersion with which this ChunkSource is compatible.
+// Returns the NomsBinFormat with which this ChunkSource is compatible.
 func (csMW *CSMetricWrapper) Version() string {
 	return csMW.cs.Version()
 }

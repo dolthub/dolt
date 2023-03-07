@@ -155,36 +155,6 @@ func TestRoundTrips(t *testing.T) {
 	assertRoundTrips(newList(mseq))
 }
 
-func TestNonFiniteNumbers(tt *testing.T) {
-	vs := newTestValueStore_7_18()
-
-	t := func(f float64) (err error) {
-		defer func() {
-			if r := recover(); r != nil {
-				if err == nil {
-					err = r.(error)
-				}
-			}
-		}()
-
-		v := Float(f)
-		_, err = EncodeValue(v, vs.Format())
-		return
-	}
-
-	err := t(math.NaN())
-	assert.Error(tt, err)
-	assert.Contains(tt, err.Error(), "NaN is not a supported number")
-
-	err = t(math.Inf(1))
-	assert.Error(tt, err)
-	assert.Contains(tt, err.Error(), "+Inf is not a supported number")
-
-	err = t(math.Inf(-1))
-	assert.Error(tt, err)
-	assert.Contains(tt, err.Error(), "-Inf is not a supported number")
-}
-
 func TestWritePrimitives(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
@@ -648,8 +618,6 @@ func TestWriteEmptyUnionList(t *testing.T) {
 func TestNomsBinFormat(t *testing.T) {
 	v, _ := os.LookupEnv("DOLT_DEFAULT_BIN_FORMAT")
 	switch v {
-	case constants.Format718String:
-		assert.Equal(t, Format_7_18, Format_Default)
 	case constants.FormatLD1String:
 		assert.Equal(t, Format_LD_1, Format_Default)
 	case constants.FormatDoltString:
