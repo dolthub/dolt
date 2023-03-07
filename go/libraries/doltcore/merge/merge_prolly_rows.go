@@ -326,6 +326,11 @@ func newUniqAddValidator(ctx context.Context, finalSch schema.Schema, leftRows p
 		})
 	}
 
+	pkLen := tm.leftSch.GetPKCols().Size()
+	if schema.IsKeyless(tm.leftSch) {
+		pkLen = 1
+	}
+	
 	return &uniqAddValidator{
 		name:         tm.name,
 		rightRootish: tm.rightSrc,
@@ -335,7 +340,7 @@ func newUniqAddValidator(ctx context.Context, finalSch schema.Schema, leftRows p
 		leftSch:      tm.leftSch,
 		primaryKB:    primaryKB,
 		primaryKD:    primaryKD,
-		pkLen:        tm.leftSch.GetPKCols().Size(),
+		pkLen:        pkLen,
 		batchSize:    uniqAddValidatorPendingSize,
 	}, nil
 }

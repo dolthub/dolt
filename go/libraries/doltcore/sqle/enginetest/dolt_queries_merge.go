@@ -2546,6 +2546,34 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "unique key violation should be thrown even if a PK column is used in the unique index 2",
+		SetUpScript: []string{
+			"create table wxyz (w int, x int, y int, z int, primary key (x, w));",
+			"alter table wxyz add unique (z, x);",
+			"call dolt_commit('-Am', 'init');",
+
+			"call dolt_checkout('-b', 'right');",
+			"insert into wxyz values (1, 2, 3, 4);",
+			"call dolt_commit('-Am', 'right');",
+
+			"call dolt_checkout('main');",
+			"insert into wxyz values (5, 2, 6, 4);",
+			"call dolt_commit('-Am', 'left');",
+
+			"set dolt_force_transaction_commit = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select w, x, y, z from dolt_constraint_violations_wxyz;",
+				Expected: []sql.Row{{1, 2, 3, 4}, {5, 2, 6, 4}},
+			},
+		},
+	},
+	{
 		Name: "unique key violations should not be thrown for keys with null values",
 		SetUpScript: []string{
 			"create table t (col1 int not null, col2 int not null, col3 int, primary key (col1, col2));",

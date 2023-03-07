@@ -74,8 +74,7 @@ func mergeProllySecondaryIndexes(
 		return prolly.Map{}, false, nil
 	}
 
-	// Based on the indexes in the post merge schema, merge the root, merge,
-	// and ancestor indexes.
+	// Schema merge can introduce new constraints/uniqueness checks.
 	for _, index := range finalSch.Indexes().AllIndexes() {
 
 		left, rootOK, err := tryGetIdx(tm.leftSch, leftSet, index.Name())
