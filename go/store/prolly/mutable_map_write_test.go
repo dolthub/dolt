@@ -16,9 +16,7 @@ package prolly
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"math/rand"
 	"testing"
 
@@ -557,11 +555,10 @@ func materializeMap(t *testing.T, mut *MutableMap) Map {
 	require.NoError(t, err)
 	iter := mut.tuples.Mutations()
 	prev, _ := iter.NextMutation(ctx)
-	require.NoError(t, err)
 	require.NotNil(t, prev)
 	for {
 		next, _ := iter.NextMutation(ctx)
-		if errors.Is(err, io.EOF) || next == nil {
+		if next == nil {
 			break
 		}
 		cmp := mut.keyDesc.Compare(val.Tuple(prev), val.Tuple(next))
