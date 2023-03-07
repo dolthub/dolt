@@ -20,8 +20,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"io"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
