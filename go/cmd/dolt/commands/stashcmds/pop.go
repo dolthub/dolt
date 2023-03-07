@@ -115,6 +115,7 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return 1
 	}
 
+	cli.Println()
 	err = dropStashAtIdx(ctx, dEnv, idx)
 	if err != nil {
 		return handleStashPopErr(usage, err)
