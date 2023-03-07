@@ -129,7 +129,7 @@ func SchemaMerge(ctx context.Context, format *types.NomsBinFormat, ourSch, their
 
 	// TODO: We'll remove this once it's possible to get diff and merge on different primary key sets
 	// TODO: decide how to merge different orders of PKS
-	if !schema.ArePrimaryKeySetsDiffable(format, ourSch, theirSch) {
+	if !schema.ArePrimaryKeySetsDiffable(format, ourSch, theirSch) || !schema.ArePrimaryKeySetsDiffable(format, ourSch, ancSch) {
 		return nil, SchemaConflict{}, ErrMergeWithDifferentPks
 	}
 

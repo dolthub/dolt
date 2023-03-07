@@ -115,7 +115,8 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	// Before we do any work to merge the table, check to see if we can actually do a merge. Various innocuous seeming
 	// operations below will fail badly or enter infinite loops when attempting to diff tables with different primary
 	// keys.
-	if !schema.ArePrimaryKeySetsDiffable(tm.vrw.Format(), tm.leftSch, tm.rightSch) {
+	if !schema.ArePrimaryKeySetsDiffable(tm.vrw.Format(), tm.leftSch, tm.rightSch) ||
+		!schema.ArePrimaryKeySetsDiffable(tm.vrw.Format(), tm.leftSch, tm.ancSch) {
 		return nil, nil, fmt.Errorf("error: cannot merge table %s because its different primary keys differ", tblName)
 	}
 
