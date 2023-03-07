@@ -330,7 +330,38 @@ func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
-	return fromSchemaHash != toSchemaHash, nil
+	return !fromSchemaHash.Equal(toSchemaHash), nil
+}
+
+func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
+	if td.IsAdd() {
+		isEmpty, err := isTableDataEmpty(ctx, td.ToTable)
+		if err != nil {
+			return false, err
+		}
+
+		return !isEmpty, nil
+	}
+
+	if td.IsDrop() {
+		isEmpty, err := isTableDataEmpty(ctx, td.FromTable)
+		if err != nil {
+			return false, err
+		}
+		return !isEmpty, nil
+	}
+
+	fromRowDataHash, err := td.FromTable.GetRowDataHash(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	toRowDataHash, err := td.ToTable.GetRowDataHash(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return !fromRowDataHash.Equal(toRowDataHash), nil
 }
 
 func (td TableDelta) HasPrimaryKeySetChanged() bool {
@@ -412,63 +443,46 @@ func isTableDataEmpty(ctx context.Context, table *doltdb.Table) (bool, error) {
 
 // GetSummary returns a summary of the table delta.
 func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error) {
+	dataChange, err := td.HasDataChanged(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Dropping a table is always a schema change, and also a data change if the table contained data
 	if td.IsDrop() {
-		isEmpty, err := isTableDataEmpty(ctx, td.FromTable)
-		if err != nil {
-			return nil, err
-		}
-
 		return &TableDeltaSummary{
 			TableName:     td.FromName,
 			FromTableName: td.FromName,
-			DataChange:    !isEmpty,
+			DataChange:    dataChange,
 			SchemaChange:  true,
 			DiffType:      "dropped",
 		}, nil
 	}
 
-	// Renaming a table is always a schema change, and also a data change if the table data differs
-	if td.IsRename() {
-		dataChanged, err := td.HasHashChanged()
-		if err != nil {
-			return nil, err
-		}
-
-		return &TableDeltaSummary{
-			TableName:     td.ToName,
-			FromTableName: td.FromName,
-			ToTableName:   td.ToName,
-			DataChange:    dataChanged,
-			SchemaChange:  true,
-			DiffType:      "renamed",
-		}, nil
-	}
-
 	// Creating a table is always a schema change, and also a data change if data was inserted
 	if td.IsAdd() {
-		isEmpty, err := isTableDataEmpty(ctx, td.ToTable)
-		if err != nil {
-			return nil, err
-		}
-
 		return &TableDeltaSummary{
 			TableName:    td.ToName,
 			ToTableName:  td.ToName,
-			DataChange:   !isEmpty,
+			DataChange:   dataChange,
 			SchemaChange: true,
 			DiffType:     "added",
 		}, nil
 	}
 
-	// TODO: Renamed columns without a data change are not accounted for here,
-	// `dataChanged` is true when it should be false
-	dataChanged, err := td.HasHashChanged()
-	if err != nil {
-		return nil, err
+	// Renaming a table is always a schema change, and also a data change if the table data differs
+	if td.IsRename() {
+		return &TableDeltaSummary{
+			TableName:     td.ToName,
+			FromTableName: td.FromName,
+			ToTableName:   td.ToName,
+			DataChange:    dataChange,
+			SchemaChange:  true,
+			DiffType:      "renamed",
+		}, nil
 	}
 
-	schemaChanged, err := td.HasSchemaChanged(ctx)
+	schemaChange, err := td.HasSchemaChanged(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -477,8 +491,8 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 		TableName:     td.FromName,
 		FromTableName: td.FromName,
 		ToTableName:   td.ToName,
-		DataChange:    dataChanged,
-		SchemaChange:  schemaChanged,
+		DataChange:    dataChange,
+		SchemaChange:  schemaChange,
 		DiffType:      "modified",
 	}, nil
 }

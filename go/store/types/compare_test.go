@@ -317,16 +317,18 @@ func TestCompareTotalOrdering(t *testing.T) {
 		// Union - values cannot be unions
 	}
 
+	ctx := context.Background()
+
 	for i, vi := range values {
 		for j, vj := range values {
 			if i == j {
 				assert.True(vi.Equals(vj))
 			} else if i < j {
-				x, err := vi.Less(vrw.Format(), vj)
+				x, err := vi.Less(ctx, vrw.Format(), vj)
 				require.NoError(t, err)
 				assert.True(x)
 			} else {
-				x, err := vi.Less(vrw.Format(), vj)
+				x, err := vi.Less(ctx, vrw.Format(), vj)
 				require.NoError(t, err)
 				assert.False(x)
 			}
@@ -336,27 +338,28 @@ func TestCompareTotalOrdering(t *testing.T) {
 
 func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	assert := assert.New(t)
+	ctx := context.Background()
 	vrw := newTestValueStore()
 	defer vrw.Close()
 
 	nums := ValueSlice{Float(1), Float(2), Float(3)}
 	words := ValueSlice{String("k1"), String("v1")}
 
-	blob, err := NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{1, 2, 3}))
+	blob, err := NewBlob(ctx, vrw, bytes.NewBuffer([]byte{1, 2, 3}))
 	require.NoError(t, err)
-	nList, err := NewList(context.Background(), vrw, nums...)
+	nList, err := NewList(ctx, vrw, nums...)
 	require.NoError(t, err)
-	nMap, err := NewMap(context.Background(), vrw, words...)
+	nMap, err := NewMap(ctx, vrw, words...)
 	require.NoError(t, err)
 	nRef, err := NewRef(blob, vrw.Format())
 	require.NoError(t, err)
-	nSet, err := NewSet(context.Background(), vrw, nums...)
+	nSet, err := NewSet(ctx, vrw, nums...)
 	require.NoError(t, err)
 	nStruct, err := NewStruct(vrw.Format(), "teststruct", map[string]Value{"f1": Float(1)})
 	require.NoError(t, err)
 
 	vals := ValueSlice{Bool(true), Float(19), String("hellow"), blob, nList, nMap, nRef, nSet, nStruct}
-	err = SortWithErroringLess(ValueSort{vals, vrw.Format()})
+	err = SortWithErroringLess(ctx, vrw.Format(), ValueSort{vals})
 	require.NoError(t, err)
 
 	for i, v1 := range vals {

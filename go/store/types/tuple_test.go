@@ -32,7 +32,10 @@ const (
 )
 
 func TestTupleEquality(t *testing.T) {
-	nbf := Format_Default
+	vs := newTestValueStore()
+	nbf := vs.Format()
+	ctx := context.Background()
+
 	values := []Value{String("aoeu"), Int(-1234), Uint(1234)}
 	tpl, err := NewTuple(nbf, values...)
 	require.NoError(t, err)
@@ -41,7 +44,7 @@ func TestTupleEquality(t *testing.T) {
 		t.Error("Tuple not equal to itself")
 	}
 
-	res, err := tpl.Compare(nbf, tpl)
+	res, err := tpl.Compare(ctx, nbf, tpl)
 	require.NoError(t, err)
 	require.Equal(t, 0, res)
 
@@ -54,7 +57,7 @@ func TestTupleEquality(t *testing.T) {
 		t.Error("Tuples should not be equal")
 	}
 
-	res, err = tpl.Compare(nbf, tpl2)
+	res, err = tpl.Compare(ctx, nbf, tpl2)
 	require.NoError(t, err)
 	require.NotEqual(t, 0, res)
 
@@ -71,7 +74,7 @@ func TestTupleEquality(t *testing.T) {
 		t.Error("tuples should be equal")
 	}
 
-	res, err = tpl2.Compare(nbf, tpl3)
+	res, err = tpl2.Compare(ctx, nbf, tpl3)
 	require.NoError(t, err)
 	require.Equal(t, 0, res)
 
@@ -82,7 +85,7 @@ func TestTupleEquality(t *testing.T) {
 		t.Error("tuples should be equal")
 	}
 
-	res, err = tpl2.Compare(nbf, tpl3)
+	res, err = tpl2.Compare(ctx, nbf, tpl3)
 	require.NoError(t, err)
 	require.Equal(t, 0, res)
 
@@ -93,7 +96,7 @@ func TestTupleEquality(t *testing.T) {
 		t.Error("should be equal")
 	}
 
-	res, err = tpl2.Compare(nbf, tpl3)
+	res, err = tpl2.Compare(ctx, nbf, tpl3)
 	require.NoError(t, err)
 	require.Equal(t, 0, res)
 
@@ -104,7 +107,7 @@ func TestTupleEquality(t *testing.T) {
 		t.Error("should be equal")
 	}
 
-	res, err = tpl2.Compare(nbf, tpl3)
+	res, err = tpl2.Compare(ctx, nbf, tpl3)
 	require.NoError(t, err)
 	require.Equal(t, 0, res)
 
@@ -115,7 +118,7 @@ func TestTupleEquality(t *testing.T) {
 		t.Error("should be equal")
 	}
 
-	res, err = tpl2.Compare(nbf, tpl3)
+	res, err = tpl2.Compare(ctx, nbf, tpl3)
 	require.NoError(t, err)
 	require.Equal(t, 0, res)
 
@@ -146,6 +149,10 @@ func TestTupleEquality(t *testing.T) {
 }
 
 func TestTupleLess(t *testing.T) {
+	ctx := context.Background()
+	vs := newTestValueStore()
+	nbf := vs.Format()
+
 	tests := []struct {
 		vals1    []Value
 		vals2    []Value
@@ -232,7 +239,6 @@ func TestTupleLess(t *testing.T) {
 		return n < 0
 	}
 
-	nbf := Format_Default
 	for _, test := range tests {
 		t.Run("", func(t *testing.T) {
 			tpl1, err := NewTuple(nbf, test.vals1...)
@@ -242,14 +248,14 @@ func TestTupleLess(t *testing.T) {
 			tpl2, err := NewTuple(nbf, test.vals2...)
 			require.NoError(t, err)
 
-			actual, err := tpl1.Less(nbf, tpl2)
+			actual, err := tpl1.Less(ctx, nbf, tpl2)
 			require.NoError(t, err)
 
 			if actual != test.expected {
 				t.Error("tpl1:", mustString(EncodedValue(context.Background(), tpl1)), "tpl2:", mustString(EncodedValue(context.Background(), tpl2)), "expected", test.expected, "actual:", actual)
 			}
 
-			res, err := tpl1.Compare(nbf, tpl2)
+			res, err := tpl1.Compare(ctx, nbf, tpl2)
 			require.NoError(t, err)
 			require.Equal(t, actual, isLTZero(res))
 		})
@@ -366,7 +372,9 @@ func TestTupleStartsWith(t *testing.T) {
 }
 
 func BenchmarkLess(b *testing.B) {
-	nbf := Format_Default
+	ctx := context.Background()
+	vs := newTestValueStore()
+	nbf := vs.Format()
 	rng := rand.New(rand.NewSource(0))
 
 	tuples := make([]Tuple, b.N+1)
@@ -380,6 +388,6 @@ func BenchmarkLess(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tuples[i].Less(nbf, tuples[i+1])
+		tuples[i].Less(ctx, nbf, tuples[i+1])
 	}
 }

@@ -128,7 +128,7 @@ func TestRangeReader(t *testing.T) {
 	for _, test := range rangeReaderTests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			rd := NewNomsRangeReader(sch, m, test.ranges)
+			rd := NewNomsRangeReader(vrw, sch, m, test.ranges)
 
 			var keys []int64
 			for {
@@ -170,7 +170,7 @@ func TestRangeReaderOnEmptyMap(t *testing.T) {
 	for _, test := range rangeReaderTests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			rd := NewNomsRangeReader(sch, m, test.ranges)
+			rd := NewNomsRangeReader(vrw, sch, m, test.ranges)
 
 			r, err := rd.ReadRow(ctx)
 			assert.Equal(t, io.EOF, err)
@@ -181,7 +181,7 @@ func TestRangeReaderOnEmptyMap(t *testing.T) {
 
 type greaterThanCheck int64
 
-func (n greaterThanCheck) Check(ctx context.Context, k types.Tuple) (valid bool, skip bool, err error) {
+func (n greaterThanCheck) Check(ctx context.Context, _ types.ValueReader, k types.Tuple) (valid bool, skip bool, err error) {
 	col0, err := k.Get(1)
 
 	if err != nil {
@@ -193,7 +193,7 @@ func (n greaterThanCheck) Check(ctx context.Context, k types.Tuple) (valid bool,
 
 type lessThanCheck int64
 
-func (n lessThanCheck) Check(ctx context.Context, k types.Tuple) (valid bool, skip bool, err error) {
+func (n lessThanCheck) Check(ctx context.Context, _ types.ValueReader, k types.Tuple) (valid bool, skip bool, err error) {
 	col0, err := k.Get(1)
 
 	if err != nil {

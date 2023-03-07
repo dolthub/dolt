@@ -137,6 +137,10 @@ func typeString(value types.Value) string {
 		switch serial.GetFileID(value) {
 		case serial.StoreRootFileID:
 			typeString = "StoreRoot"
+		case serial.StashListFileID:
+			typeString = "StashList"
+		case serial.StashFileID:
+			typeString = "Stash"
 		case serial.TagFileID:
 			typeString = "Tag"
 		case serial.WorkingSetFileID:

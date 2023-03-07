@@ -55,14 +55,14 @@ func (tm testMap) SetValue(i int, v Value) testMap {
 	entries := make([]mapEntry, 0, len(tm.entries.entries))
 	entries = append(entries, tm.entries.entries...)
 	entries[i].value = v
-	return testMap{mapEntrySlice{entries, tm.entries.nbf}, tm.knownBadKey}
+	return testMap{mapEntrySlice{entries}, tm.knownBadKey}
 }
 
 func (tm testMap) Remove(from, to int) testMap {
 	entries := make([]mapEntry, 0, len(tm.entries.entries)-(to-from))
 	entries = append(entries, tm.entries.entries[:from]...)
 	entries = append(entries, tm.entries.entries[to:]...)
-	return testMap{mapEntrySlice{entries, tm.entries.nbf}, tm.knownBadKey}
+	return testMap{mapEntrySlice{entries}, tm.knownBadKey}
 }
 
 func (tm testMap) MaybeGet(key Value) (v Value, ok bool) {
@@ -141,13 +141,13 @@ func (tm testMap) FlattenAll() []Value {
 	return tm.Flatten(0, len(tm.entries.entries))
 }
 
-func newSortedTestMap(nbf *NomsBinFormat, length int, gen genValueFn) testMap {
+func newSortedTestMap(ctx context.Context, vr ValueReader, length int, gen genValueFn) testMap {
 	keys := make(ValueSlice, 0, length)
 	for i := 0; i < length; i++ {
-		keys = append(keys, mustValue(gen(nbf, i)))
+		keys = append(keys, mustValue(gen(vr.Format(), i)))
 	}
 
-	err := SortWithErroringLess(ValueSort{keys, nbf})
+	err := SortWithErroringLess(ctx, vr.Format(), ValueSort{keys})
 	d.PanicIfError(err)
 
 	entries := make([]mapEntry, 0, len(keys))
@@ -155,7 +155,7 @@ func newSortedTestMap(nbf *NomsBinFormat, length int, gen genValueFn) testMap {
 		entries = append(entries, mapEntry{k, Float(i * 2)})
 	}
 
-	return testMap{mapEntrySlice{entries, nbf}, Float(length + 2)}
+	return testMap{mapEntrySlice{entries}, Float(length + 2)}
 }
 
 func newTestMapFromMap(m Map) testMap {
@@ -167,10 +167,10 @@ func newTestMapFromMap(m Map) testMap {
 
 	d.PanicIfError(err)
 
-	return testMap{mapEntrySlice{entries, m.Format()}, Float(-0)}
+	return testMap{mapEntrySlice{entries}, Float(-0)}
 }
 
-func newRandomTestMap(nbf *NomsBinFormat, length int, gen genValueFn) testMap {
+func newRandomTestMap(ctx context.Context, vr ValueReader, length int, gen genValueFn) testMap {
 	s := rand.NewSource(4242)
 	used := map[int]bool{}
 
@@ -179,13 +179,13 @@ func newRandomTestMap(nbf *NomsBinFormat, length int, gen genValueFn) testMap {
 	for len(entries) < length {
 		v := int(s.Int63()) & mask
 		if _, ok := used[v]; !ok {
-			entry := mapEntry{mustValue(gen(nbf, v)), mustValue(gen(nbf, v*2))}
+			entry := mapEntry{mustValue(gen(vr.Format(), v)), mustValue(gen(vr.Format(), v*2))}
 			entries = append(entries, entry)
 			used[v] = true
 		}
 	}
 
-	return testMap{mapEntrySlice{entries, nbf}, mustValue(gen(nbf, mask+1))}
+	return testMap{mapEntrySlice{entries}, mustValue(gen(vr.Format(), mask+1))}
 }
 
 func validateMap(t *testing.T, vrw ValueReadWriter, m Map, entries mapEntrySlice) {
@@ -213,7 +213,7 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 	length := 1 << size
 	keyType, err := TypeOf(mustValue(gen(vrw.Format(), 0)))
 	d.PanicIfError(err)
-	elems := newSortedTestMap(vrw.Format(), length, gen)
+	elems := newSortedTestMap(context.Background(), vrw, length, gen)
 	tr, err := MakeMapType(keyType, PrimitiveTypeMap[FloatKind])
 	d.PanicIfError(err)
 	tmap, err := NewMap(context.Background(), vrw, elems.FlattenAll()...)
@@ -346,7 +346,7 @@ func (suite *mapTestSuite) TestStreamingMapOrder() {
 	vs := newTestValueStore()
 	defer vs.Close()
 
-	entries := mapEntrySlice{make([]mapEntry, len(suite.elems.entries.entries)), vs.Format()}
+	entries := mapEntrySlice{make([]mapEntry, len(suite.elems.entries.entries))}
 	copy(entries.entries, suite.elems.entries.entries)
 	entries.entries[0], entries.entries[1] = entries.entries[1], entries.entries[0]
 
@@ -400,21 +400,21 @@ func newNumberStruct(nbf *NomsBinFormat, i int) (Value, error) {
 }
 
 func getTestNativeOrderMap(scale int, vrw ValueReadWriter) testMap {
-	return newRandomTestMap(vrw.Format(), 64*scale, newNumber)
+	return newRandomTestMap(context.Background(), vrw, 64*scale, newNumber)
 }
 
 func getTestRefValueOrderMap(scale int, vrw ValueReadWriter) testMap {
-	return newRandomTestMap(vrw.Format(), 64*scale, newNumber)
+	return newRandomTestMap(context.Background(), vrw, 64*scale, newNumber)
 }
 
 func getTestRefToNativeOrderMap(scale int, vrw ValueReadWriter) testMap {
-	return newRandomTestMap(vrw.Format(), 64*scale, func(nbf *NomsBinFormat, i int) (Value, error) {
+	return newRandomTestMap(context.Background(), vrw, 64*scale, func(nbf *NomsBinFormat, i int) (Value, error) {
 		return vrw.WriteValue(context.Background(), Float(i))
 	})
 }
 
 func getTestRefToValueOrderMap(scale int, vrw ValueReadWriter) testMap {
-	return newRandomTestMap(vrw.Format(), 64*scale, func(nbf *NomsBinFormat, i int) (Value, error) {
+	return newRandomTestMap(context.Background(), vrw, 64*scale, func(nbf *NomsBinFormat, i int) (Value, error) {
 		s, err := NewSet(context.Background(), vrw, Float(i))
 
 		if err != nil {
@@ -470,8 +470,8 @@ func TestMapDiff(t *testing.T) {
 
 	vrw := newTestValueStore()
 
-	testMap1 := newRandomTestMap(vrw.Format(), 64*2, newNumber)
-	testMap2 := newRandomTestMap(vrw.Format(), 64*2, newNumber)
+	testMap1 := newRandomTestMap(context.Background(), vrw, 64*2, newNumber)
+	testMap2 := newRandomTestMap(context.Background(), vrw, 64*2, newNumber)
 	testMapAdded, testMapRemoved, testMapModified := testMap1.Diff(testMap2)
 	map1 := testMap1.toMap(vrw)
 	map2 := testMap2.toMap(vrw)
@@ -865,9 +865,10 @@ func TestMapFirst2(t *testing.T) {
 
 	doTest := func(toTestMap toTestMapFunc, scale int) {
 		vrw := newTestValueStore()
+		ctx := context.Background()
 		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
-		err := SortWithErroringLess(tm.entries)
+		err := SortWithErroringLess(ctx, vrw.Format(), tm.entries)
 		require.NoError(t, err)
 		actualKey, actualValue, err := m.First(context.Background())
 		require.NoError(t, err)
@@ -923,9 +924,10 @@ func TestMapLast2(t *testing.T) {
 
 	doTest := func(toTestMap toTestMapFunc, scale int) {
 		vrw := newTestValueStore()
+		ctx := context.Background()
 		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
-		err := SortWithErroringLess(tm.entries)
+		err := SortWithErroringLess(ctx, vrw.Format(), tm.entries)
 		require.NoError(t, err)
 		actualKey, actualValue, err := m.Last(context.Background())
 		require.NoError(t, err)
@@ -1042,7 +1044,7 @@ func TestMapValidateInsertAscending(t *testing.T) {
 	defer normalProductionChunks()
 
 	vrw := newTestValueStore()
-	validateMapInsertion(t, vrw, newSortedTestMap(vrw.Format(), 300, newNumber))
+	validateMapInsertion(t, vrw, newSortedTestMap(context.Background(), vrw, 300, newNumber))
 }
 
 func TestMapSet(t *testing.T) {
@@ -1239,9 +1241,10 @@ func TestMapIter2(t *testing.T) {
 
 	doTest := func(toTestMap toTestMapFunc, scale int) {
 		vrw := newTestValueStore()
+		ctx := context.Background()
 		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
-		err := SortWithErroringLess(tm.entries)
+		err := SortWithErroringLess(ctx, vrw.Format(), tm.entries)
 		require.NoError(t, err)
 		idx := uint64(0)
 		endAt := uint64(64)
@@ -1292,9 +1295,10 @@ func TestMapIterAll(t *testing.T) {
 
 	doTest := func(toTestMap toTestMapFunc, scale int) {
 		vrw := newTestValueStore()
+		ctx := context.Background()
 		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
-		err := SortWithErroringLess(tm.entries)
+		err := SortWithErroringLess(ctx, vrw.Format(), tm.entries)
 		require.NoError(t, err)
 		idx := uint64(0)
 
@@ -1992,7 +1996,7 @@ func TestMapIterFrom(t *testing.T) {
 	test := func(m Map, start, end Value) ValueSlice {
 		res := ValueSlice{}
 		err := m.IterFrom(context.Background(), start, func(k, v Value) (bool, error) {
-			isLess, err := end.Less(vrw.Format(), k)
+			isLess, err := end.Less(context.Background(), vrw.Format(), k)
 
 			if err != nil {
 				return false, err

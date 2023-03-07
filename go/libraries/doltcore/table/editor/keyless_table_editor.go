@@ -160,7 +160,7 @@ func (kte *keylessTableEditor) GetIndexedRows(ctx context.Context, key types.Tup
 		return nil, err
 	}
 
-	indexIter := noms.NewNomsRangeReader(idxSch, idxMap,
+	indexIter := noms.NewNomsRangeReader(kte.tbl.ValueReadWriter(), idxSch, idxMap,
 		[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(key)}},
 	)
 
@@ -456,7 +456,7 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 		idx++
 	}
 
-	err = types.SortWithErroringLess(types.TupleSort{Tuples: keys, Nbf: acc.nbf})
+	err = types.SortWithErroringLess(ctx, tbl.ValueReadWriter().Format(), types.TupleSort{Tuples: keys})
 	if err != nil {
 		return nil, err
 	}

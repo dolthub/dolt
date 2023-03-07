@@ -14,6 +14,8 @@
 
 package types
 
+import "context"
+
 // KVP is a simple key value pair
 type KVP struct {
 	// Key is the key
@@ -28,7 +30,6 @@ type KVPSlice []KVP
 
 type KVPSort struct {
 	Values []KVP
-	NBF    *NomsBinFormat
 }
 
 // Len returns the size of the slice
@@ -37,8 +38,8 @@ func (kvps KVPSort) Len() int {
 }
 
 // Less returns a bool representing whether the key at index i is less than the key at index j
-func (kvps KVPSort) Less(i, j int) (bool, error) {
-	return kvps.Values[i].Key.Less(kvps.NBF, kvps.Values[j].Key)
+func (kvps KVPSort) Less(ctx context.Context, nbf *NomsBinFormat, i, j int) (bool, error) {
+	return kvps.Values[i].Key.Less(ctx, nbf, kvps.Values[j].Key)
 }
 
 // Swap swaps the KVP at index i with the KVP at index j

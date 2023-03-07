@@ -38,6 +38,7 @@ type BulkImportTEA struct {
 	capMon     remotestorage.CapacityMonitor
 	emptyTuple types.Tuple
 
+	vr      types.ValueReader
 	ea      types.EditAccumulator
 	rowData types.Map
 
@@ -108,7 +109,7 @@ func (tea *BulkImportTEA) Get(ctx context.Context, keyHash hash.Hash, key types.
 func (tea *BulkImportTEA) HasPartial(ctx context.Context, idxSch schema.Schema, partialKeyHash hash.Hash, partialKey types.Tuple) ([]hashedTuple, error) {
 	var err error
 	var matches []hashedTuple
-	var mapIter table.ReadCloser = noms.NewNomsRangeReader(idxSch, tea.rowData, []*noms.ReadRange{
+	var mapIter table.ReadCloser = noms.NewNomsRangeReader(tea.vr, idxSch, tea.rowData, []*noms.ReadRange{
 		{Start: partialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(partialKey)}})
 	defer mapIter.Close(ctx)
 	var r row.Row
@@ -158,7 +159,7 @@ func (tea *BulkImportTEA) MaterializeEdits(ctx context.Context, nbf *types.NomsB
 	ea := tea.ea
 	defer ea.Close(ctx)
 
-	itr, err := ea.FinishedEditing()
+	itr, err := ea.FinishedEditing(ctx)
 	if err != nil {
 		return types.EmptyMap, err
 	}
@@ -184,6 +185,7 @@ type BulkImportIEA struct {
 	capMon     remotestorage.CapacityMonitor
 	emptyTuple types.Tuple
 
+	vr      types.ValueReader
 	ea      types.EditAccumulator
 	rowData types.Map
 
@@ -264,7 +266,7 @@ func (iea *BulkImportIEA) HasPartial(ctx context.Context, idxSch schema.Schema, 
 
 	var err error
 	var matches []hashedTuple
-	var mapIter table.ReadCloser = noms.NewNomsRangeReader(idxSch, iea.rowData, []*noms.ReadRange{
+	var mapIter table.ReadCloser = noms.NewNomsRangeReader(iea.vr, idxSch, iea.rowData, []*noms.ReadRange{
 		{Start: partialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(partialKey)}})
 	defer mapIter.Close(ctx)
 	var r row.Row
@@ -319,7 +321,7 @@ func (iea *BulkImportIEA) MaterializeEdits(ctx context.Context, nbf *types.NomsB
 	ea := iea.ea
 	defer ea.Close(ctx)
 
-	itr, err := ea.FinishedEditing()
+	itr, err := ea.FinishedEditing(ctx)
 	if err != nil {
 		return types.EmptyMap, err
 	}
@@ -339,14 +341,12 @@ func (iea *BulkImportIEA) MaterializeEdits(ctx context.Context, nbf *types.NomsB
 var _ DbEaFactory = (*BulkImportTEAFactory)(nil)
 
 type BulkImportTEAFactory struct {
-	nbf       *types.NomsBinFormat
 	vrw       types.ValueReadWriter
 	directory string
 }
 
-func NewBulkImportTEAFactory(nbf *types.NomsBinFormat, vrw types.ValueReadWriter, directory string) *BulkImportTEAFactory {
+func NewBulkImportTEAFactory(vrw types.ValueReadWriter, directory string) *BulkImportTEAFactory {
 	return &BulkImportTEAFactory{
-		nbf:       nbf,
 		vrw:       vrw,
 		directory: directory,
 	}
@@ -356,10 +356,10 @@ func (b *BulkImportTEAFactory) NewTableEA(ctx context.Context, rowData types.Map
 	const flushInterval = 256 * 1024
 
 	createMapEA := func() types.EditAccumulator {
-		return types.CreateEditAccForMapEdits(b.nbf)
+		return types.CreateEditAccForMapEdits(b.vrw)
 	}
 
-	ea := edits.NewDiskBackedEditAcc(ctx, b.nbf, b.vrw, flushInterval, b.directory, createMapEA)
+	ea := edits.NewDiskBackedEditAcc(ctx, b.vrw, flushInterval, b.directory, createMapEA)
 	return &BulkImportTEA{
 		teaf:       b,
 		capMon:     remotestorage.NewUncappedCapacityMonitor(),
@@ -367,7 +367,7 @@ func (b *BulkImportTEAFactory) NewTableEA(ctx context.Context, rowData types.Map
 		ea:         ea,
 		adds:       make(map[hash.Hash]bool),
 		deletes:    make(map[hash.Hash]bool),
-		emptyTuple: types.EmptyTuple(b.nbf),
+		emptyTuple: types.EmptyTuple(b.vrw.Format()),
 	}
 }
 
@@ -375,10 +375,10 @@ func (b *BulkImportTEAFactory) NewIndexEA(ctx context.Context, rowData types.Map
 	const flushInterval = 256 * 1024
 
 	createMapEA := func() types.EditAccumulator {
-		return types.CreateEditAccForMapEdits(b.nbf)
+		return types.CreateEditAccForMapEdits(b.vrw)
 	}
 
-	ea := edits.NewDiskBackedEditAcc(ctx, b.nbf, b.vrw, flushInterval, b.directory, createMapEA)
+	ea := edits.NewDiskBackedEditAcc(ctx, b.vrw, flushInterval, b.directory, createMapEA)
 	return &BulkImportIEA{
 		teaf:        b,
 		capMon:      remotestorage.NewUncappedCapacityMonitor(),
@@ -387,18 +387,18 @@ func (b *BulkImportTEAFactory) NewIndexEA(ctx context.Context, rowData types.Map
 		adds:        make(map[hash.Hash]struct{}),
 		deletes:     make(map[hash.Hash]struct{}),
 		partialAdds: make(map[hash.Hash]hashedTuple),
-		emptyTuple:  types.EmptyTuple(b.nbf),
+		emptyTuple:  types.EmptyTuple(b.vrw.Format()),
 	}
 }
 
 var _ DbEaFactory = (*InMemDEAF)(nil)
 
 type InMemDEAF struct {
-	nbf    *types.NomsBinFormat
+	vr     types.ValueReader
 	capMon remotestorage.CapacityMonitor
 }
 
-func NewInMemDeafWithMaxCapacity(nbf *types.NomsBinFormat, maxCapacity int64) DbEaFactory {
+func NewInMemDeafWithMaxCapacity(vr types.ValueReader, maxCapacity int64) DbEaFactory {
 	var capMon remotestorage.CapacityMonitor
 	if maxCapacity > 0 {
 		capMon = remotestorage.NewFixedCapacityMonitor(maxCapacity)
@@ -406,15 +406,15 @@ func NewInMemDeafWithMaxCapacity(nbf *types.NomsBinFormat, maxCapacity int64) Db
 		capMon = remotestorage.NewUncappedCapacityMonitor()
 	}
 
-	return &InMemDEAF{nbf: nbf, capMon: capMon}
+	return &InMemDEAF{vr: vr, capMon: capMon}
 }
 
-func NewInMemDeaf(nbf *types.NomsBinFormat) DbEaFactory {
-	return NewInMemDeafWithMaxCapacity(nbf, -1)
+func NewInMemDeaf(vr types.ValueReader) DbEaFactory {
+	return NewInMemDeafWithMaxCapacity(vr, -1)
 }
 
 func (i *InMemDEAF) NewTableEA(ctx context.Context, rowData types.Map) TableEditAccumulator {
-	ea := edits.NewAsyncSortedEditsWithDefaults(i.nbf)
+	ea := edits.NewAsyncSortedEditsWithDefaults(i.vr)
 	return &BulkImportTEA{
 		teaf:       i,
 		capMon:     i.capMon,
@@ -422,12 +422,12 @@ func (i *InMemDEAF) NewTableEA(ctx context.Context, rowData types.Map) TableEdit
 		ea:         ea,
 		adds:       make(map[hash.Hash]bool),
 		deletes:    make(map[hash.Hash]bool),
-		emptyTuple: types.EmptyTuple(i.nbf),
+		emptyTuple: types.EmptyTuple(i.vr.Format()),
 	}
 }
 
 func (i *InMemDEAF) NewIndexEA(ctx context.Context, rowData types.Map) IndexEditAccumulator {
-	ea := edits.NewAsyncSortedEditsWithDefaults(i.nbf)
+	ea := edits.NewAsyncSortedEditsWithDefaults(i.vr)
 	return &BulkImportIEA{
 		teaf:        i,
 		capMon:      i.capMon,
@@ -436,6 +436,6 @@ func (i *InMemDEAF) NewIndexEA(ctx context.Context, rowData types.Map) IndexEdit
 		adds:        make(map[hash.Hash]struct{}),
 		deletes:     make(map[hash.Hash]struct{}),
 		partialAdds: make(map[hash.Hash]hashedTuple),
-		emptyTuple:  types.EmptyTuple(i.nbf),
+		emptyTuple:  types.EmptyTuple(i.vr.Format()),
 	}
 }

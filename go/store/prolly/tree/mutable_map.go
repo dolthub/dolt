@@ -22,8 +22,8 @@ import (
 
 // MutableMap is a mutable prolly Static with ordered elements.
 type MutableMap[K, V ~[]byte, O Ordering[K]] struct {
-	Edits *skip.List
-	StaticMap[K, V, O]
+	Edits  *skip.List
+	Static StaticMap[K, V, O]
 }
 
 func (m MutableMap[K, V, O]) Put(_ context.Context, key K, value V) error {
@@ -46,7 +46,7 @@ func (m MutableMap[K, V, O]) Get(ctx context.Context, key K, cb KeyValueFn[K, V]
 		return cb(key, value)
 	}
 
-	return m.StaticMap.Get(ctx, key, cb)
+	return m.Static.Get(ctx, key, cb)
 }
 
 func (m MutableMap[K, V, O]) Has(ctx context.Context, key K) (present bool, err error) {
@@ -55,13 +55,13 @@ func (m MutableMap[K, V, O]) Has(ctx context.Context, key K) (present bool, err 
 		present = value != nil
 		return
 	}
-	return m.StaticMap.Has(ctx, key)
+	return m.Static.Has(ctx, key)
 }
 
 func (m MutableMap[K, V, O]) Copy() MutableMap[K, V, O] {
 	return MutableMap[K, V, O]{
-		Edits:     m.Edits.Copy(),
-		StaticMap: m.StaticMap,
+		Edits:  m.Edits.Copy(),
+		Static: m.Static,
 	}
 }
 

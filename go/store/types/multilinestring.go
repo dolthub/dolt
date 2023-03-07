@@ -58,7 +58,7 @@ func (v MultiLineString) Equals(other Value) bool {
 	return true
 }
 
-func (v MultiLineString) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (v MultiLineString) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	// Compare types
 	v2, ok := other.(MultiLineString)
 	if !ok {
@@ -80,7 +80,7 @@ func (v MultiLineString) Less(nbf *NomsBinFormat, other LesserValuable) (bool, e
 	// Compare each line until there is one that is less
 	for i := 0; i < n; i++ {
 		if !v.Lines[i].Equals(v2.Lines[i]) {
-			return v.Lines[i].Less(nbf, v2.Lines[i])
+			return v.Lines[i].Less(ctx, nbf, v2.Lines[i])
 		}
 	}
 	// Determine based off length

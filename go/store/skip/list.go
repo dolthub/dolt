@@ -113,10 +113,9 @@ func (l *List) Revert() {
 func (l *List) Truncate() {
 	l.nodes = l.nodes[:1]
 	// point sentinel.prev at itself
-	s := l.getNode(sentinelId)
+	s := l.nodePtr(sentinelId)
 	s.next = tower{}
 	s.prev = sentinelId
-	l.updateNode(s)
 	l.checkpoint = nodeId(1)
 	l.count = 0
 }
@@ -136,8 +135,21 @@ func (l *List) Has(key []byte) (ok bool) {
 // if |key| is a member of the list, otherwise it returns
 // nil and false.
 func (l *List) Get(key []byte) (val []byte, ok bool) {
-	path := l.pathToKey(key)
-	node := l.getNode(path[0])
+	var id nodeId
+	next, prev := l.headTower(), sentinelId
+	for lvl := maxHeight; lvl >= 0; {
+		nd := l.nodePtr(next[lvl])
+		// descend if we can't advance at |lvl|
+		if l.compareKeys(key, nd.key) < 0 {
+			id = prev
+			lvl--
+			continue
+		}
+		// advance
+		next = &nd.next
+		prev = nd.id
+	}
+	node := l.nodePtr(id)
 	if l.compareKeys(key, node.key) == 0 {
 		val, ok = node.val, true
 	}
@@ -148,23 +160,35 @@ func (l *List) Get(key []byte) (val []byte, ok bool) {
 func (l *List) Put(key, val []byte) {
 	if key == nil {
 		panic("key must be non-nil")
-	}
-	if len(l.nodes) >= maxCount {
+	} else if len(l.nodes) >= maxCount {
 		panic("list has no capacity")
 	}
 
 	// find the path to the greatest
 	// existing node key less than |key|
-	path := l.pathBeforeKey(key)
+	var path tower
+	next, prev := l.headTower(), sentinelId
+	for h := maxHeight; h >= 0; {
+		curr := l.nodePtr(next[h])
+		// descend if we can't advance at |lvl|
+		if l.compareKeys(key, curr.key) <= 0 {
+			path[h] = prev
+			h--
+			continue
+		}
+		// advance
+		next = &curr.next
+		prev = curr.id
+	}
 
 	// check if |key| exists in |l|
-	node := l.getNode(path[0])
-	node = l.getNode(node.next[0])
+	node := l.nodePtr(path[0])
+	node = l.nodePtr(node.next[0])
 
 	if l.compareKeys(key, node.key) == 0 {
-		l.overwrite(key, val, path, node)
+		l.overwrite(key, val, &path, node)
 	} else {
-		l.insert(key, val, path)
+		l.insert(key, val, &path)
 		l.count++
 	}
 }
@@ -181,95 +205,49 @@ func (l *List) Copy() *List {
 	}
 }
 
-func (l *List) pathToKey(key []byte) (path tower) {
-	next := l.headPointer()
-	prev := sentinelId
-
-	for lvl := int(maxHeight); lvl >= 0; {
-		curr := l.getNode(next[lvl])
-
-		// descend if we can't advance at |lvl|
-		if l.compareKeys(key, curr.key) < 0 {
-			path[lvl] = prev
-			lvl--
-			continue
-		}
-
-		// advance
-		next = curr.next
-		prev = curr.id
-	}
-	return
-}
-
-func (l *List) pathBeforeKey(key []byte) (path tower) {
-	next := l.headPointer()
-	prev := sentinelId
-
-	for lvl := int(maxHeight); lvl >= 0; {
-		curr := l.getNode(next[lvl])
-
-		// descend if we can't advance at |lvl|
-		if l.compareKeys(key, curr.key) <= 0 {
-			path[lvl] = prev
-			lvl--
-			continue
-		}
-
-		// advance
-		next = curr.next
-		prev = curr.id
-	}
-	return
-}
-
-func (l *List) insert(key, value []byte, path tower) {
-	novel := skipNode{
+func (l *List) insert(key, value []byte, path *tower) {
+	id := l.nextNodeId()
+	l.nodes = append(l.nodes, skipNode{
 		key:    key,
 		val:    value,
-		id:     l.nextNodeId(),
+		id:     id,
 		height: l.rollHeight(key),
-	}
-	l.nodes = append(l.nodes, novel)
-
+	})
+	novel := l.nodePtr(id)
 	for h := uint8(0); h <= novel.height; h++ {
 		// set forward pointers
-		n := l.getNode(path[h])
+		n := l.nodePtr(path[h])
 		novel.next[h] = n.next[h]
 		n.next[h] = novel.id
-		l.updateNode(n)
 	}
-
 	// set back pointers
-	n := l.getNode(novel.next[0])
+	n := l.nodePtr(novel.next[0])
 	novel.prev = n.prev
-	l.updateNode(novel)
 	n.prev = novel.id
-	l.updateNode(n)
 }
 
-func (l *List) overwrite(key, value []byte, path tower, old skipNode) {
-	novel := old
-	novel.id = l.nextNodeId()
-	novel.key = key
-	novel.val = value
-	l.nodes = append(l.nodes, novel)
-
-	for h := uint8(0); h <= novel.height; h++ {
+func (l *List) overwrite(key, value []byte, path *tower, old *skipNode) {
+	id := l.nextNodeId()
+	l.nodes = append(l.nodes, skipNode{
+		key:    key,
+		val:    value,
+		id:     id,
+		next:   old.next,
+		prev:   old.prev,
+		height: old.height,
+	})
+	for h := uint8(0); h <= old.height; h++ {
 		// set forward pointers
-		n := l.getNode(path[h])
-		n.next[h] = novel.id
-		l.updateNode(n)
+		n := l.nodePtr(path[h])
+		n.next[h] = id
 	}
-
 	// set back pointer
-	n := l.getNode(novel.next[0])
-	n.prev = novel.id
-	l.updateNode(n)
+	n := l.nodePtr(old.next[0])
+	n.prev = id
 }
 
 type ListIter struct {
-	curr skipNode
+	curr *skipNode
 	list *List
 }
 
@@ -280,13 +258,13 @@ func (it *ListIter) Current() (key, val []byte) {
 
 // Advance advances the iterator.
 func (it *ListIter) Advance() {
-	it.curr = it.list.getNode(it.curr.next[0])
+	it.curr = it.list.nodePtr(it.curr.next[0])
 	return
 }
 
 // Retreat retreats the iterator.
 func (it *ListIter) Retreat() {
-	it.curr = it.list.getNode(it.curr.prev)
+	it.curr = it.list.nodePtr(it.curr.prev)
 	return
 }
 
@@ -329,43 +307,39 @@ func (l *List) IterAtEnd() *ListIter {
 }
 
 // seek returns the skipNode with the smallest key >= |key|.
-func (l *List) seek(key []byte) skipNode {
+func (l *List) seek(key []byte) *skipNode {
 	return l.seekWithFn(func(curr []byte) (advance bool) {
 		return l.compareKeys(key, curr) > 0
 	})
 }
 
-func (l *List) seekWithFn(cb SeekFn) (node skipNode) {
-	ptr := l.headPointer()
+func (l *List) seekWithFn(cb SeekFn) (node *skipNode) {
+	ptr := l.headTower()
 	for h := int64(maxHeight); h >= 0; h-- {
-		node = l.getNode(ptr[h])
+		node = l.nodePtr(ptr[h])
 		for cb(node.key) {
-			ptr = node.next
-			node = l.getNode(ptr[h])
+			ptr = &node.next
+			node = l.nodePtr(ptr[h])
 		}
 	}
 	return
 }
 
-func (l *List) headPointer() tower {
-	return l.nodes[0].next
+func (l *List) headTower() *tower {
+	return &l.nodes[0].next
 }
 
-func (l *List) firstNode() skipNode {
-	return l.getNode(l.nodes[0].next[0])
+func (l *List) firstNode() *skipNode {
+	return l.nodePtr(l.nodes[0].next[0])
 }
 
-func (l *List) lastNode() skipNode {
-	s := l.getNode(sentinelId)
-	return l.getNode(s.prev)
+func (l *List) lastNode() *skipNode {
+	s := l.nodePtr(sentinelId)
+	return l.nodePtr(s.prev)
 }
 
-func (l *List) getNode(id nodeId) skipNode {
-	return l.nodes[id]
-}
-
-func (l *List) updateNode(node skipNode) {
-	l.nodes[node.id] = node
+func (l *List) nodePtr(id nodeId) *skipNode {
+	return &l.nodes[id]
 }
 
 func (l *List) nextNodeId() nodeId {

@@ -40,7 +40,7 @@ func (v Float) Equals(other Value) bool {
 	return v == other
 }
 
-func (v Float) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (v Float) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(Float); ok {
 		return v < v2, nil
 	}

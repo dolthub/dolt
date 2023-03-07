@@ -46,7 +46,7 @@ func (v Null) Equals(other Value) bool {
 	return other == nil || other.Kind() == NullKind
 }
 
-func (v Null) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (v Null) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	return NullKind < other.Kind(), nil
 }
 

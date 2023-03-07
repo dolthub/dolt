@@ -56,6 +56,8 @@ type DoltIndex interface {
 	Format() *types.NomsBinFormat
 	IsPrimaryKey() bool
 
+	valueReadWriter() types.ValueReadWriter
+
 	getDurableState(*sql.Context, DoltTableable) (*durableIndexState, error)
 	coversColumns(s *durableIndexState, columns []uint64) bool
 	sqlRowConverter(*durableIndexState, []uint64) *KVToSqlRowConverter
@@ -926,6 +928,10 @@ func (di *doltIndex) trimRangeCutValue(to int, keyPart interface{}) interface{} 
 		}
 	}
 	return keyPart
+}
+
+func (di *doltIndex) valueReadWriter() types.ValueReadWriter {
+	return di.vrw
 }
 
 func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, error) {

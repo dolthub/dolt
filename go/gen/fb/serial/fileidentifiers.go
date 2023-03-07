@@ -37,6 +37,8 @@ const ForeignKeyCollectionFileID = "DFKC"
 const MergeArtifactsFileID = "ARTM"
 const BlobFileID = "BLOB"
 const BranchControlFileID = "BRCL"
+const StashListFileID = "SLST"
+const StashFileID = "STSH"
 
 const MessageTypesKind int = 27
 

@@ -128,7 +128,7 @@ func (edits *inMemIndexEdits) Has(keyHash hash.Hash) (added, deleted bool) {
 // for the uncommitted changes to become so large that they need to be flushed to disk. At this point we change modes to write all edits
 // to a separate map edit accumulator as they occur until the next commit occurs.
 type indexEditAccumulatorImpl struct {
-	nbf *types.NomsBinFormat
+	vr types.ValueReader
 
 	// state of the index last time edits were applied
 	rowData types.Map
@@ -184,7 +184,7 @@ func (iea *indexEditAccumulatorImpl) flushUncommitted() {
 			iea.commitEAId = invalidEaId
 		}
 
-		iea.uncommittedEA = edits.NewAsyncSortedEditsWithDefaults(iea.nbf)
+		iea.uncommittedEA = edits.NewAsyncSortedEditsWithDefaults(iea.vr)
 		iea.uncommittedEAId = iea.accumulatorIdx
 		iea.accumulatorIdx++
 
@@ -203,7 +203,7 @@ func (iea *indexEditAccumulatorImpl) flushUncommitted() {
 	iea.flusher.Flush(iea.uncommittedEA, iea.uncommittedEAId)
 
 	// initialize a new types.EditAccumulator for additional uncommitted edits to be written to.
-	iea.uncommittedEA = edits.NewAsyncSortedEditsWithDefaults(iea.nbf)
+	iea.uncommittedEA = edits.NewAsyncSortedEditsWithDefaults(iea.vr)
 	iea.uncommittedEAId = iea.accumulatorIdx
 	iea.accumulatorIdx++
 }
@@ -286,7 +286,7 @@ func (iea *indexEditAccumulatorImpl) HasPartial(ctx context.Context, idxSch sche
 
 	var err error
 	var matches []hashedTuple
-	var mapIter table.ReadCloser = noms.NewNomsRangeReader(idxSch, iea.rowData, []*noms.ReadRange{
+	var mapIter table.ReadCloser = noms.NewNomsRangeReader(iea.vr, idxSch, iea.rowData, []*noms.ReadRange{
 		{Start: partialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(partialKey)}})
 	defer mapIter.Close(ctx)
 	var r row.Row
@@ -398,7 +398,7 @@ func (iea *indexEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *
 		return iea.rowData, nil
 	}
 
-	committedEP, err := iea.commitEA.FinishedEditing()
+	committedEP, err := iea.commitEA.FinishedEditing(ctx)
 	iea.commitEA = nil
 	if err != nil {
 		return types.EmptyMap, err
@@ -421,7 +421,7 @@ func (iea *indexEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *
 		}
 	}()
 
-	accEdits, err := edits.NewEPMerger(ctx, nbf, eps)
+	accEdits, err := edits.NewEPMerger(ctx, iea.vr, eps)
 	if err != nil {
 		return types.EmptyMap, err
 	}
@@ -436,7 +436,7 @@ func (iea *indexEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *
 	iea.committed = newInMemIndexEdits()
 	iea.commitEAId = iea.accumulatorIdx
 	iea.accumulatorIdx++
-	iea.commitEA = edits.NewAsyncSortedEditsWithDefaults(iea.nbf)
+	iea.commitEA = edits.NewAsyncSortedEditsWithDefaults(iea.vr)
 	iea.committedEaIds = set.NewUint64Set(nil)
 	iea.uncommittedEaIds = set.NewUint64Set(nil)
 

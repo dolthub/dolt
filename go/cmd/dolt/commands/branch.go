@@ -57,7 +57,6 @@ With a {{.EmphasisLeft}}-d{{.EmphasisRight}}, {{.LessThan}}branchname{{.GreaterT
 }
 
 const (
-	listFlag        = "list"
 	datasetsFlag    = "datasets"
 	showCurrentFlag = "show-current"
 )
@@ -84,7 +83,7 @@ func (cmd BranchCmd) Docs() *cli.CommandDocumentation {
 func (cmd BranchCmd) ArgParser() *argparser.ArgParser {
 	ap := cli.CreateBranchArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"start-point", "A commit that a new branch should point at."})
-	ap.SupportsFlag(listFlag, "", "List branches")
+	ap.SupportsFlag(cli.ListFlag, "", "List branches")
 	ap.SupportsFlag(cli.VerboseFlag, "v", "When in list mode, show the hash and commit subject line for each head")
 	ap.SupportsFlag(cli.AllFlag, "a", "When in list mode, shows remote tracked branches")
 	ap.SupportsFlag(datasetsFlag, "", "List all datasets in the database")
@@ -113,7 +112,7 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return deleteBranches(ctx, dEnv, apr, usage, apr.Contains(cli.ForceFlag))
 	case apr.Contains(cli.DeleteForceFlag):
 		return deleteBranches(ctx, dEnv, apr, usage, true)
-	case apr.Contains(listFlag):
+	case apr.Contains(cli.ListFlag):
 		return printBranches(ctx, dEnv, apr, usage)
 	case apr.Contains(showCurrentFlag):
 		return printCurrentBranch(dEnv)
