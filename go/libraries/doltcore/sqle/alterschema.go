@@ -334,13 +334,22 @@ var ErrKeylessAltTbl = errors.New("schema alterations not supported for keyless 
 // backupFkcIndexesForKeyDrop finds backup indexes to cover foreign key references during a primary
 // key drop. If multiple indexes are valid, we sort by unique and select the first.
 // This will not work with a non-pk index drop without an additional index filter argument.
-func backupFkcIndexesForPkDrop(ctx *sql.Context, sch schema.Schema, fkc *doltdb.ForeignKeyCollection) ([]doltdb.FkIndexUpdate, error) {
+func backupFkcIndexesForPkDrop(ctx *sql.Context, tbl string, sch schema.Schema, fkc *doltdb.ForeignKeyCollection) ([]doltdb.FkIndexUpdate, error) {
 	fkUpdates := make([]doltdb.FkIndexUpdate, 0)
-	for _, fk := range fkc.AllKeys() {
-		// if an index doesn't reference primary key, it is unaffected
+
+	declared, referenced := fkc.KeysForTable(tbl)
+	for _, fk := range declared {
+		if fk.TableIndex == "" {
+			// pk used in fk definition on |tbl|
+			return nil, sql.ErrCantDropIndex.New("PRIMARY", fk.Name)
+		}
+	}
+	for _, fk := range referenced {
 		if fk.ReferencedTableIndex != "" {
+			// if an index doesn't reference primary key, it is unaffected
 			continue
 		}
+		// pk reference by fk definition on |fk.TableName|
 
 		// get column names from tags in foreign key
 		fkParentCols := make([]string, len(fk.ReferencedTableColumns))
@@ -353,9 +362,8 @@ func backupFkcIndexesForPkDrop(ctx *sql.Context, sch schema.Schema, fkc *doltdb.
 		newIdx, ok, err := findIndexWithPrefix(sch, sch.GetPKCols().GetColumnNames())
 		if err != nil {
 			return nil, err
-		}
-		if !ok {
-			return nil, sql.ErrCantDropIndex.New("PRIMARY")
+		} else if !ok {
+			return nil, sql.ErrCantDropIndex.New("PRIMARY", fk.Name)
 		}
 
 		fkUpdates = append(fkUpdates, doltdb.FkIndexUpdate{FkName: fk.Name, FromIdx: fk.ReferencedTableIndex, ToIdx: newIdx.Name()})
