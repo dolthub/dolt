@@ -24,8 +24,9 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
@@ -95,7 +96,6 @@ func LoadDoltDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs
 func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) (*DoltDB, error) {
 	if urlStr == LocalDirDoltDB {
 		exists, isDir := fs.Exists(dbfactory.DoltDataDir)
-
 		if !exists {
 			return nil, errors.New("missing dolt data directory")
 		} else if !isDir {
@@ -108,14 +108,17 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 		}
 
 		urlStr = fmt.Sprintf("file://%s", filepath.ToSlash(absPath))
+
+		if params == nil {
+			params = make(map[string]any)
+		}
+		params[dbfactory.ChunkJournalParam] = struct{}{}
 	}
 
 	db, vrw, ns, err := dbfactory.CreateDB(ctx, nbf, urlStr, params)
-
 	if err != nil {
 		return nil, err
 	}
-
 	return &DoltDB{hooksDatabase{Database: db}, vrw, ns}, nil
 }
 

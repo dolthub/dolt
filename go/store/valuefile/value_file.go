@@ -240,8 +240,6 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 		nbf = types.Format_7_18
 	case types.Format_LD_1.VersionString():
 		nbf = types.Format_LD_1
-	case types.Format_DOLT_DEV.VersionString():
-		nbf = types.Format_DOLT_DEV
 	case types.Format_DOLT.VersionString():
 		nbf = types.Format_DOLT
 	default:

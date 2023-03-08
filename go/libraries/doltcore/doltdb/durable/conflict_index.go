@@ -33,7 +33,7 @@ type ConflictIndex interface {
 // RefFromConflictIndex persists |idx| and returns the types.Ref targeting it.
 func RefFromConflictIndex(ctx context.Context, vrw types.ValueReadWriter, idx ConflictIndex) (types.Ref, error) {
 	switch idx.Format() {
-	case types.Format_LD_1, types.Format_7_18, types.Format_DOLT_DEV:
+	case types.Format_LD_1, types.Format_7_18:
 		return refFromNomsValue(ctx, vrw, idx.(nomsConflictIndex).index)
 
 	case types.Format_DOLT:
@@ -47,7 +47,7 @@ func RefFromConflictIndex(ctx context.Context, vrw types.ValueReadWriter, idx Co
 // NewEmptyConflictIndex returns an ConflictIndex with no rows.
 func NewEmptyConflictIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, oursSch, theirsSch, baseSch schema.Schema) (ConflictIndex, error) {
 	switch vrw.Format() {
-	case types.Format_LD_1, types.Format_7_18, types.Format_DOLT_DEV:
+	case types.Format_LD_1, types.Format_7_18:
 		m, err := types.NewMap(ctx, vrw)
 		if err != nil {
 			return nil, err
@@ -84,7 +84,7 @@ func conflictIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tr
 	}
 
 	switch vrw.Format() {
-	case types.Format_LD_1, types.Format_7_18, types.Format_DOLT_DEV:
+	case types.Format_LD_1, types.Format_7_18:
 		return ConflictIndexFromNomsMap(v.(types.Map), vrw), nil
 
 	case types.Format_DOLT:

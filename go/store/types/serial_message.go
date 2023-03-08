@@ -339,19 +339,7 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 		}
 
 		mapbytes := msg.PrimaryIndexBytes()
-
-		if nbf == Format_DOLT_DEV {
-			dec := newValueDecoder(mapbytes, nil)
-			v, err := dec.readValue(nbf)
-			if err != nil {
-				return err
-			}
-			return v.walkRefs(nbf, func(ref Ref) error {
-				return cb(ref.TargetHash())
-			})
-		} else {
-			return SerialMessage(mapbytes).WalkAddrs(nbf, cb)
-		}
+		return SerialMessage(mapbytes).WalkAddrs(nbf, cb)
 	case serial.CommitFileID:
 		parents, err := SerialCommitParentAddrs(nbf, sm)
 		if err != nil {
