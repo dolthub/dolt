@@ -8,6 +8,7 @@ import {
   getQueryWithEscapedParameters,
 } from "../helpers.js";
 import { docsTests } from "./docs.js";
+import { tagsTests } from "./tags.js";
 
 export default async function runWorkbenchTests(database) {
   await runTests(database, databaseTests);
@@ -16,10 +17,10 @@ export default async function runWorkbenchTests(database) {
   await runTests(database, mergeTests);
   await runTests(database, tableTests);
   await runTests(database, docsTests);
+  await runTests(database, tagsTests);
   // TODO:
   // Diffs
   // Views
-  // Tags
 }
 
 async function runTests(database, tests) {

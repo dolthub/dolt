@@ -65,3 +65,30 @@ export function mergeBaseMatcher(rows, exp) {
   });
   return true;
 }
+
+export function tagsMatcher(rows, exp) {
+  if (rows.length !== exp.length) {
+    return false;
+  }
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].tag_name !== exp[i].tag_name) {
+      return false;
+    }
+    if (rows[i].message !== exp[i].message) {
+      return false;
+    }
+    if (rows[i].email !== exp[i].email) {
+      return false;
+    }
+    if (rows[i].tagger !== exp[i].tagger) {
+      return false;
+    }
+    if (rows[i].tag_hash.length !== 32) {
+      return false;
+    }
+    if (rows[i].date.length === 0) {
+      return false;
+    }
+  }
+  return true;
+}
