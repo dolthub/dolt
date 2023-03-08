@@ -948,34 +948,6 @@ func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, er
 		return nil, fmt.Errorf("spatial index bounding box using non-point type")
 	}
 
-	// TODO: saves a couple steps if point query, might not be worth extra code
-	if minPoint == maxPoint {
-		pRanges := make([]prolly.Range, 65)
-		zMin := ZValue(minPoint)
-		for level := byte(0); level < byte(65); level++ {
-			minCell := ZMask(level, zMin)
-			field := prolly.RangeField{
-				Exact:              false,
-				SpatialPointLookup: true,
-				Lo: prolly.Bound{
-					Binding:   true,
-					Inclusive: true,
-					Value:     minCell[:],
-				},
-				Hi: prolly.Bound{
-					Binding:   true,
-					Inclusive: true,
-					Value:     minCell[:],
-				},
-			}
-			pRanges[level] = prolly.Range{
-				Fields: []prolly.RangeField{field},
-				Desc:   di.keyBld.Desc,
-			}
-		}
-		return pRanges, nil
-	}
-
 	var pRanges []prolly.Range
 	zMin := ZValue(minPoint)
 	zMax := ZValue(maxPoint)
@@ -993,7 +965,6 @@ func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, er
 			prevMaxCell = maxCell
 			field := prolly.RangeField{
 				Exact:              false,
-				SpatialPointLookup: minCell == maxCell,
 				Lo: prolly.Bound{
 					Binding:   true,
 					Inclusive: true,

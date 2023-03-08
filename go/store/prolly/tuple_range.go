@@ -58,9 +58,8 @@ type Range struct {
 
 // RangeField bounds one dimension of a Range.
 type RangeField struct {
-	Lo, Hi             Bound
-	Exact              bool // Lo.Value == Hi.Value
-	SpatialPointLookup bool
+	Lo, Hi Bound
+	Exact  bool // Lo.Value == Hi.Value
 }
 
 type Bound struct {
@@ -141,7 +140,7 @@ func (r Range) Matches(t val.Tuple) bool {
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
-		if r.Fields[i].Exact || r.Fields[i].SpatialPointLookup {
+		if r.Fields[i].Exact {
 			v := r.Fields[i].Lo.Value
 			if order.CompareValues(i, field, v, typ) == 0 {
 				continue
