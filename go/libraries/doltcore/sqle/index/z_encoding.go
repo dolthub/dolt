@@ -220,7 +220,15 @@ func zRangeSize(zRange ZRange, shamt int) (uint64, int) {
 const cutThresh = 0.02
 const depthThresh = 4
 
-// shouldCut checks if the size of the removed ZRange divided by the size of the whole ZRange is smaller than cutThresh, stop
+// Masks for every other bit to avoid un-interleaving
+// Depending on prefixLength these will be shifted to either fill x or y values with 0s or 1s
+// while not altering the bits of their counterparts
+const xMask = 0x5555555555555555
+const yMask = 0xAAAAAAAAAAAAAAAA
+
+
+// shouldCut checks if the size of the removed ZRange divided by the size of the whole ZRange is smaller than cutThresh
+// This is used to get splitZRanges to stop recursing
 func shouldCut(cutRange ZRange, size float64, shamt int) bool {
 	cut, _ := zRangeSize(cutRange, shamt)
 	return (float64(cut) / size) >= cutThresh
@@ -249,15 +257,15 @@ func splitZRanges(zRange ZRange, zSize float64, zShamt, depth int, acc []ZRange)
 
 		// upper bound for left range; set 0 fill with 1s
 		suffixLength := 64 - prefixLength
-		zRangeL[1][0] |= 0xAAAAAAAAAAAAAAAA >> prefixLength       // set suffix to all 1s
-		zRangeL[1][0] &= ^(1 << (suffixLength - 1))               // set first suffix bit to 0
-		zRangeL[1][1] |= 0xAAAAAAAAAAAAAAAA >> (prefixLength % 2) // set suffix to all 1s
+		zRangeL[1][0] |= yMask >> prefixLength       // set suffix to all 1s
+		zRangeL[1][0] &= ^(1 << (suffixLength - 1))  // set first suffix bit to 0
+		zRangeL[1][1] |= yMask >> (prefixLength % 2) // set suffix to all 1s
 
 		// lower bound for right range; set 1 fill with 0s
-		suffixMask := uint64(math.MaxUint64<<suffixLength) | (0x5555555555555555 >> prefixLength)
-		zRangeR[0][0] &= suffixMask                               // set suffix to all 0s
-		zRangeR[0][0] |= 1 << (suffixLength - 1)                  // set first suffix bit to 1
-		zRangeR[0][1] &= 0x5555555555555555 << (prefixLength % 2) // set suffix to all 0s
+		suffixMask := uint64(math.MaxUint64<<suffixLength) | (xMask >> prefixLength)
+		zRangeR[0][0] &= suffixMask                  // set suffix to all 0s
+		zRangeR[0][0] |= 1 << (suffixLength - 1)     // set first suffix bit to 1
+		zRangeR[0][1] &= xMask << (prefixLength % 2) // set suffix to all 0s
 	} else {
 		prefixLength := bits.LeadingZeros64(zl[1] ^ zh[1])
 		if isContinuous(zl[1], zh[1], prefixLength) {
@@ -266,11 +274,11 @@ func splitZRanges(zRange ZRange, zSize float64, zShamt, depth int, acc []ZRange)
 
 		// upper bound for left range; set 0 fill with 1s
 		suffixLength := 64 - prefixLength
-		zRangeL[1][1] |= 0xAAAAAAAAAAAAAAAA >> prefixLength // set suffix to all 1s
-		zRangeL[1][1] &= ^(1 << (suffixLength - 1))         // set at prefix to 0
+		zRangeL[1][1] |= yMask >> prefixLength      // set suffix to all 1s
+		zRangeL[1][1] &= ^(1 << (suffixLength - 1)) // set at prefix to 0
 
 		// lower bound for right range; set 1 fill with 0s
-		suffixMask := uint64(math.MaxUint64<<suffixLength) | (0x5555555555555555 >> prefixLength)
+		suffixMask := uint64(math.MaxUint64<<suffixLength) | (xMask >> prefixLength)
 		zRangeR[0][1] &= suffixMask              // set suffix to all 0s
 		zRangeR[0][1] |= 1 << (suffixLength - 1) // set at prefix to 1
 	}
