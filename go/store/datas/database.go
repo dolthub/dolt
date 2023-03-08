@@ -62,6 +62,11 @@ type Database interface {
 
 	GetDatasetsByRootHash(ctx context.Context, rootHash hash.Hash) (DatasetsMap, error)
 
+	// BuildNewCommit creates a new Commit struct for the provided dataset,
+	// but does not modify the dataset. This allows the commit to be inspected
+	// if necessary before any update is performed.
+	BuildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error)
+
 	// Commit updates the Commit that ds.ID() in this database points at. All
 	// Values that have been written to this Database are guaranteed to be
 	// persistent after Commit() returns successfully.
@@ -74,7 +79,11 @@ type Database interface {
 	// If the update cannot be performed because the existing dataset head
 	// is not a common ancestor of the constructed commit struct, returns
 	// an 'ErrMergeNeeded' error.
+	//
+	// WriteCommit has the same behavior as Commit but accepts an already-constructed Commit
+	// instead of construction one from a Value and CommitOptions
 	Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error)
+	WriteCommit(ctx context.Context, ds Dataset, commit *Commit) (Dataset, error)
 
 	// Tag stores an immutable reference to a Commit. It takes a Hash to
 	// the Commit and a Dataset whose head must be nil (ie a newly created
