@@ -305,7 +305,7 @@ func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm TableMerger, opt
 	if !ancExists {
 		if rightExists && leftExists {
 			if !schema.SchemasAreEqual(tm.leftSch, tm.rightSch) {
-				return nil, nil, ErrSameTblAddedTwice
+				return nil, nil, ErrSameTblAddedTwice.New(tm.name)
 			}
 		} else if leftExists {
 			// fast-forward

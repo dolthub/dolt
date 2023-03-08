@@ -19,6 +19,9 @@ table Stash {
   head_commit_addr:[ubyte] (required);
   branch_name:string (required);
   desc:string (required);
+
+  // array of table names that are added(untracked files) and were staged when stashing
+  tables_to_stage:[string];
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

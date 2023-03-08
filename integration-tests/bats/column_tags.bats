@@ -355,7 +355,7 @@ DELIM
 
     run dolt merge other
     [ $status -ne 0 ]
-    [[ $output =~ "table with same name added in 2 commits can't be merged" ]] || false
+    [[ $output =~ "table with same name 'target' added in 2 commits can't be merged" ]] || false
     dolt reset --hard
 
     dolt schema update-tag target col1 14690
