@@ -160,14 +160,16 @@ func (k prollyKeylessWriter) uniqueKeyError(ctx context.Context, keyStr string, 
 		vd := k.valBld.Desc
 		for from := range k.valMap {
 			to := k.valMap.MapOrdinal(from)
-			if existing[to], err = index.GetField(ctx, vd, from, value, k.mut.NodeStore()); err != nil {
-				return err
-			}
+				// always skip first field of keyless, as it's the count?
+				if existing[to], err = index.GetField(ctx, vd, from+1, value, k.mut.NodeStore()); err != nil {
+					return err
+				}
 		}
 		return
 	})
 
 	return sql.NewUniqueKeyErr(keyStr, isPk, existing)
+	// TODO: skip over the ordinals that are the unique column
 }
 
 type secondaryUniqueKeyError struct {
