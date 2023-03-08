@@ -33,9 +33,10 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 var mySqlPort, doltPort int
@@ -172,6 +173,14 @@ func TestResetReplica(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, rows.Next())
 	require.NoError(t, rows.Close())
+
+	// Start replication again and verify that we can still query replica status
+	startReplication(t, mySqlPort)
+	replicaStatus := showReplicaStatus(t)
+	require.Equal(t, "0", replicaStatus["Last_Errno"])
+	require.Equal(t, "", replicaStatus["Last_Error"])
+	require.True(t, replicaStatus["Replica_IO_Running"] == binlogreplication.ReplicaIoRunning ||
+		replicaStatus["Replica_IO_Running"] == binlogreplication.ReplicaIoConnecting)
 }
 
 // TestStartReplicaErrors tests that the "START REPLICA" command returns appropriate responses
@@ -203,6 +212,18 @@ func TestStartReplicaErrors(t *testing.T) {
 	startReplication(t, mySqlPort)
 	replicaDatabase.MustExec("START REPLICA;")
 	assertWarning(t, replicaDatabase, 3083, "Replication thread(s) for channel '' are already running.")
+}
+
+// TestShowReplicaStatus tests various cases "SHOW REPLICA STATUS" that aren't covered by other tests.
+func TestShowReplicaStatus(t *testing.T) {
+	defer teardown(t)
+	startSqlServers(t)
+
+	// Assert that very long hostnames are handled correctly
+	longHostname := "really.really.really.really.long.host.name.012345678901234567890123456789012345678901234567890123456789.com"
+	replicaDatabase.MustExec(fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s';", longHostname))
+	status := showReplicaStatus(t)
+	require.Equal(t, longHostname, status["Source_Host"])
 }
 
 // TestStopReplica tests that STOP REPLICA correctly stops the replication process, and that
