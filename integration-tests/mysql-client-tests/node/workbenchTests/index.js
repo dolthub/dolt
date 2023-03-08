@@ -9,6 +9,7 @@ import {
 } from "../helpers.js";
 import { docsTests } from "./docs.js";
 import { tagsTests } from "./tags.js";
+import { viewsTests } from "./views.js";
 
 export default async function runWorkbenchTests(database) {
   await runTests(database, databaseTests);
@@ -18,9 +19,9 @@ export default async function runWorkbenchTests(database) {
   await runTests(database, tableTests);
   await runTests(database, docsTests);
   await runTests(database, tagsTests);
+  await runTests(database, viewsTests);
   // TODO:
   // Diffs
-  // Views
 }
 
 async function runTests(database, tests) {
