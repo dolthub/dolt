@@ -15,7 +15,6 @@ export default async function runWorkbenchTests(database) {
   await runTests(database, mergeTests);
   await runTests(database, tableTests);
   // TODO:
-  // Workspaces
   // Diffs
   // Docs
   // Views
