@@ -964,7 +964,7 @@ func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, er
 			prevMinCell = minCell
 			prevMaxCell = maxCell
 			field := prolly.RangeField{
-				Exact:              false,
+				Exact: false,
 				Lo: prolly.Bound{
 					Binding:   true,
 					Inclusive: true,

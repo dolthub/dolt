@@ -226,7 +226,6 @@ const depthThresh = 4
 const xMask = 0x5555555555555555
 const yMask = 0xAAAAAAAAAAAAAAAA
 
-
 // shouldCut checks if the size of the removed ZRange divided by the size of the whole ZRange is smaller than cutThresh
 // This is used to get splitZRanges to stop recursing
 func shouldCut(cutRange ZRange, size float64, shamt int) bool {
