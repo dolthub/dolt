@@ -174,12 +174,6 @@ func SetupDB(ctx context.Context, mConfig MysqlConfig, databaseName string) (err
 	if err != nil {
 		return err
 	}
-	// set MySQL durability level to match Dolt
-	// dev.mysql.com/doc/refman/8.0/en/innodb-parameters.html#sysvar_innodb_flush_log_at_trx_commit
-	_, err = db.ExecContext(ctx, "SET GLOBAL innodb_flush_log_at_trx_commit=2;")
-	if err != nil {
-		return err
-	}
 	// Required for running groupby_scan.lua without error
 	_, err = db.ExecContext(ctx, "SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));")
 	if err != nil {
