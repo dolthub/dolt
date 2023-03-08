@@ -52,7 +52,7 @@ func teardown(t *testing.T) {
 		mySqlProcess.Kill()
 	}
 	if doltProcess != nil {
-		doltProcess.Kill()
+		stopDoltSqlServer(t)
 	}
 	if mysqlLogFile != nil {
 		mysqlLogFile.Close()
