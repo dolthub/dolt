@@ -109,6 +109,13 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		externalProcedures.Register(esp)
 	}
 
+	// If the specified |fs| is an in mem file system, default to using the InMemDoltDB dbFactoryUrl so that all
+	// databases are created with the same file system type.
+	dbFactoryUrl := doltdb.LocalDirDoltDB
+	if _, ok := fs.(*filesys.InMemFS); ok {
+		dbFactoryUrl = doltdb.InMemDoltDB
+	}
+
 	return DoltDatabaseProvider{
 		dbLocations:        dbLocations,
 		databases:          dbs,
@@ -117,7 +124,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		mu:                 &sync.RWMutex{},
 		fs:                 fs,
 		defaultBranch:      defaultBranch,
-		dbFactoryUrl:       doltdb.LocalDirDoltDB,
+		dbFactoryUrl:       dbFactoryUrl,
 		InitDatabaseHook:   ConfigureReplicationDatabaseHook,
 		isStandby:          new(bool),
 	}, nil
