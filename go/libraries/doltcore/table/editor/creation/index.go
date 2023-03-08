@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -211,7 +212,11 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 				keyBld.PutRaw(to, k.GetField(from))
 			} else {
 				from -= pkLen
-				keyBld.PutRaw(to, v.GetField(from))
+				if keyBld.Desc.Types[to].Enc == val.CellEnc {
+					index.PutField(ctx, ns, keyBld, to, v.GetField(from))
+				} else {
+					keyBld.PutRaw(to, v.GetField(from))
+				}
 			}
 		}
 
