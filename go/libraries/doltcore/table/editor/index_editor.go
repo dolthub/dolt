@@ -312,7 +312,7 @@ func RebuildIndex(ctx context.Context, tbl *doltdb.Table, indexName string, opts
 	tf.Reset(tbl.Format())
 	defer tupleFactories.Put(tf)
 
-	opts = opts.WithDeaf(NewBulkImportTEAFactory(tbl.Format(), tbl.ValueReadWriter(), opts.Tempdir))
+	opts = opts.WithDeaf(NewBulkImportTEAFactory(tbl.ValueReadWriter(), opts.Tempdir))
 	rebuiltIndexData, err := rebuildIndexRowData(ctx, tbl.ValueReadWriter(), sch, tableRowData, index, opts, tf)
 	if err != nil {
 		return types.EmptyMap, err
@@ -344,7 +344,7 @@ func RebuildAllIndexes(ctx context.Context, t *doltdb.Table, opts Options) (*dol
 	tf.Reset(t.Format())
 	defer tupleFactories.Put(tf)
 
-	opts = opts.WithDeaf(NewBulkImportTEAFactory(t.Format(), t.ValueReadWriter(), opts.Tempdir))
+	opts = opts.WithDeaf(NewBulkImportTEAFactory(t.ValueReadWriter(), opts.Tempdir))
 	for _, index := range sch.Indexes().AllIndexes() {
 		rebuiltIndexRowData, err := rebuildIndexRowData(ctx, t.ValueReadWriter(), sch, tableRowData, index, opts, tf)
 		if err != nil {

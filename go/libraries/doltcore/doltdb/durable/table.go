@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -722,19 +721,12 @@ func (t doltDevTable) DebugString(ctx context.Context) string {
 		panic(err)
 	}
 
-	if t.vrw.Format() == types.Format_DOLT_DEV {
-		m := NomsMapFromIndex(rows)
-		var b bytes.Buffer
-		_ = types.WriteEncodedValue(ctx, &b, m)
-		return b.String()
-	} else {
-		m := ProllyMapFromIndex(rows)
-		var b bytes.Buffer
-		m.WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
-			return tree.OutputProllyNode(&b, nd)
-		})
-		return b.String()
-	}
+	m := ProllyMapFromIndex(rows)
+	var b bytes.Buffer
+	m.WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
+		return tree.OutputProllyNode(&b, nd)
+	})
+	return b.String()
 }
 
 var _ Table = doltDevTable{}
@@ -877,24 +869,15 @@ func (t doltDevTable) SetSchema(ctx context.Context, sch schema.Schema) (Table, 
 
 func (t doltDevTable) GetTableRows(ctx context.Context) (Index, error) {
 	rowbytes := t.msg.PrimaryIndexBytes()
-	if t.vrw.Format() == types.Format_DOLT_DEV {
-		rowchunk := chunks.NewChunk(rowbytes)
-		tv, err := types.DecodeValue(rowchunk, t.vrw)
-		if err != nil {
-			return nil, err
-		}
-		return IndexFromNomsMap(tv.(types.Map), t.vrw, t.ns), nil
-	} else {
-		sch, err := t.GetSchema(ctx)
-		if err != nil {
-			return nil, err
-		}
-		m, err := shim.MapFromValue(types.SerialMessage(rowbytes), sch, t.ns)
-		if err != nil {
-			return nil, err
-		}
-		return IndexFromProllyMap(m), nil
+	sch, err := t.GetSchema(ctx)
+	if err != nil {
+		return nil, err
 	}
+	m, err := shim.MapFromValue(types.SerialMessage(rowbytes), sch, t.ns)
+	if err != nil {
+		return nil, err
+	}
+	return IndexFromProllyMap(m), nil
 }
 
 func (t doltDevTable) SetTableRows(ctx context.Context, rows Index) (Table, error) {

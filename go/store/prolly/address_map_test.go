@@ -15,8 +15,10 @@
 package prolly
 
 import (
+	"bytes"
 	"context"
 	"math/rand"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -81,5 +83,9 @@ func randomAddressPairs(cnt int, addr hash.Hash) (ap []addrPair) {
 		ap[i].n = buf[o : o+20]
 		ap[i].h = addr
 	}
+	sort.Slice(ap, func(i, j int) bool {
+		return bytes.Compare(ap[i].n, ap[j].n) < 0
+	})
+
 	return
 }

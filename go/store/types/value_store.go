@@ -73,13 +73,13 @@ type ValueReadWriter interface {
 // Currently, WriteValue validates the following properties of a Value v:
 // - v can be correctly serialized and its Ref taken
 type ValueStore struct {
-	cs                   chunks.ChunkStore
-	validateContentAddr  bool
-	decodedChunks        *sizecache.SizeCache
-	nbf                  *NomsBinFormat
+	cs                  chunks.ChunkStore
+	validateContentAddr bool
+	decodedChunks       *sizecache.SizeCache
+	nbf                 *NomsBinFormat
 
-	gcMu       sync.Mutex
-	gcCond     *sync.Cond
+	gcMu    sync.RWMutex
+	gcCond  *sync.Cond
 	gcState    gcState
 	gcOut      int
 	gcNewAddrs hash.HashSet
@@ -131,7 +131,7 @@ func newTestValueStore() *ValueStore {
 	return NewValueStore(ts.NewViewWithDefaultFormat())
 }
 
-func newTestValueStore_7_18() *ValueStore {
+func newTestValueStore_LD_1() *ValueStore {
 	ts := &chunks.TestStorage{}
 	return NewValueStore(ts.NewView())
 }
@@ -152,11 +152,10 @@ func NewValueStore(cs chunks.ChunkStore) *ValueStore {
 
 func newValueStoreWithCacheAndPending(cs chunks.ChunkStore, cacheSize, pendingMax uint64) *ValueStore {
 	vs := &ValueStore{
-		cs: cs,
-
-		decodedChunks:        sizecache.New(cacheSize),
-		versOnce:             sync.Once{},
-		gcNewAddrs:           make(hash.HashSet),
+		cs:            cs,
+		decodedChunks: sizecache.New(cacheSize),
+		versOnce:      sync.Once{},
+		gcNewAddrs:    make(hash.HashSet),
 	}
 	vs.gcCond = sync.NewCond(&vs.gcMu)
 	return vs
@@ -190,20 +189,11 @@ func (lvs *ValueStore) Format() *NomsBinFormat {
 func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error) {
 	lvs.versOnce.Do(lvs.expectVersion)
 	if v, ok := lvs.decodedChunks.Get(h); ok {
-		if v == nil {
-			return nil, errors.New("value present but empty")
-		}
-
+		d.PanicIfTrue(v == nil)
 		nv := v.(Value)
-		if lvs.validateContentAddr {
-			if err := validateContentAddress(lvs.nbf, h, nv); err != nil {
-				return nil, err
-			}
-		}
 		return nv, nil
 	}
 
-	var err error
 	chunk, err := lvs.cs.Get(ctx, h)
 	if err != nil {
 		return nil, err
@@ -213,7 +203,6 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error
 	}
 
 	v, err := DecodeValue(chunk, lvs)
-
 	if err != nil {
 		return nil, err
 	}
@@ -265,13 +254,7 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 	for _, h := range hashes {
 		if v, ok := lvs.decodedChunks.Get(h); ok {
 			d.PanicIfTrue(v == nil)
-
 			nv := v.(Value)
-			if lvs.validateContentAddr {
-				if err := validateContentAddress(lvs.nbf, h, nv); err != nil {
-					return nil, err
-				}
-			}
 			foundValues[h] = nv
 		} else {
 			remaining.Insert(h)

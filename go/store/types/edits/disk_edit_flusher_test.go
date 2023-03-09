@@ -26,7 +26,8 @@ import (
 
 func TestFlushingNoEdits(t *testing.T) {
 	ctx := context.Background()
-	ef := NewDiskEditFlusher(ctx, "", types.Format_Default, nil)
+	vrw := types.NewMemoryValueStore()
+	ef := NewDiskEditFlusher(ctx, "", vrw)
 	eps, err := ef.Wait(ctx)
 	require.NoError(t, err)
 	require.Zero(t, len(eps))
@@ -35,11 +36,11 @@ func TestFlushingNoEdits(t *testing.T) {
 func TestEditFlusher(t *testing.T) {
 	const numEditors = 10
 	ctx := context.Background()
-	nbf := types.Format_Default
 	vrw := types.NewMemoryValueStore()
-	ef := NewDiskEditFlusher(ctx, os.TempDir(), nbf, vrw)
+	nbf := vrw.Format()
+	ef := NewDiskEditFlusher(ctx, os.TempDir(), vrw)
 	for i := 0; i < numEditors; i++ {
-		ea := types.NewDumbEditAccumulator(nbf)
+		ea := types.NewDumbEditAccumulator(vrw)
 		for j := 0; j < 100; j++ {
 			k, err := types.NewTuple(nbf, types.Int(i))
 			require.NoError(t, err)
@@ -57,7 +58,7 @@ func TestEditFlusher(t *testing.T) {
 
 	for i := 0; i < numEditors; i++ {
 		require.Equal(t, uint64(i), eps[i].ID)
-		kvp, err := eps[i].Edits.Next()
+		kvp, err := eps[i].Edits.Next(ctx)
 		require.NoError(t, err)
 		key, err := kvp.Key.Value(ctx)
 		require.NoError(t, err)

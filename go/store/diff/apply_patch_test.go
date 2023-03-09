@@ -169,7 +169,7 @@ func getPatch(g1, g2 types.Value) (Patch, error) {
 func checkApplyPatch(assert *assert.Assertions, vrw types.ValueReadWriter, g1, expectedG2 types.Value, k1, k2 string) {
 	patch, err := getPatch(g1, expectedG2)
 	assert.NoError(err)
-	g2, err := Apply(context.Background(), vrw.Format(), g1, patch)
+	g2, err := Apply(context.Background(), vrw, g1, patch)
 	assert.NoError(err)
 	assert.True(expectedG2.Equals(g2), "failed to apply diffs for k1: %s and k2: %s", k1, k2)
 }
@@ -298,7 +298,7 @@ func checkApplyDiffs(a *assert.Assertions, vrw types.ValueReadWriter, n1, n2 typ
 
 	a.NoError(derr)
 
-	res, err := Apply(context.Background(), vrw.Format(), n1, difs)
+	res, err := Apply(context.Background(), vrw, n1, difs)
 	a.NoError(err)
 	a.True(n2.Equals(res))
 }

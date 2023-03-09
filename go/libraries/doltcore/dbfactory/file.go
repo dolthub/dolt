@@ -30,12 +30,23 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+func init() {
+	// default to chunk journal unless feature flag is set
+	if os.Getenv("DOLT_DISABLE_CHUNK_JOURNAL") != "" {
+		chunkJournalFeatureFlag = false
+	}
+}
+
+var chunkJournalFeatureFlag = true
+
 const (
 	// DoltDir defines the directory used to hold the dolt repo data within the filesys
 	DoltDir = ".dolt"
 
 	// DataDir is the directory internal to the DoltDir which holds the noms files.
 	DataDir = "noms"
+
+	ChunkJournalParam = "journal"
 )
 
 // DoltDataDir is the directory where noms files will be stored
@@ -103,12 +114,11 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	singletonLock.Lock()
 	defer singletonLock.Unlock()
 
-	if s, ok := singletons[urlObj.String()]; ok {
+	if s, ok := singletons[urlObj.Path]; ok {
 		return s.ddb, s.vrw, s.ns, nil
 	}
 
 	path, err := url.PathUnescape(urlObj.Path)
-
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -121,9 +131,14 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		return nil, nil, nil, err
 	}
 
+	var useJournal bool
+	if params != nil {
+		_, useJournal = params[ChunkJournalParam]
+	}
+
 	var newGenSt *nbs.NomsBlockStore
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	if nbs.UseJournalStore(path) {
+	if useJournal && chunkJournalFeatureFlag {
 		newGenSt, err = nbs.NewLocalJournalingStore(ctx, nbf.VersionString(), path, q)
 	} else {
 		newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q)
@@ -159,7 +174,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	ns := tree.NewNodeStore(st)
 	ddb := datas.NewTypesDatabase(vrw, ns)
 
-	singletons[urlObj.String()] = singletonDB{
+	singletons[urlObj.Path] = singletonDB{
 		ddb: ddb,
 		vrw: vrw,
 		ns:  ns,

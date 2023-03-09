@@ -118,7 +118,7 @@ func (mods *inMemModifications) Get(keyHash hash.Hash) (kvp *doltKVP, added, del
 // for the uncommitted changes to become so large that they need to be flushed to disk. At this point we change modes to write all edits
 // to a separate map edit accumulator as they occur until the next commit occurs.
 type tableEditAccumulatorImpl struct {
-	nbf *types.NomsBinFormat
+	vr types.ValueReader
 
 	// initial state of the map
 	rowData types.Map
@@ -185,7 +185,7 @@ func (tea *tableEditAccumulatorImpl) Get(ctx context.Context, keyHash hash.Hash,
 func (tea *tableEditAccumulatorImpl) HasPartial(ctx context.Context, idxSch schema.Schema, partialKeyHash hash.Hash, partialKey types.Tuple) ([]hashedTuple, error) {
 	var err error
 	var matches []hashedTuple
-	var mapIter table.ReadCloser = noms.NewNomsRangeReader(idxSch, tea.rowData, []*noms.ReadRange{
+	var mapIter table.ReadCloser = noms.NewNomsRangeReader(tea.vr, idxSch, tea.rowData, []*noms.ReadRange{
 		{Start: partialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(partialKey)}})
 	defer mapIter.Close(ctx)
 	var r row.Row
@@ -243,7 +243,7 @@ func (tea *tableEditAccumulatorImpl) flushUncommitted() {
 			tea.commitEAId = invalidEaId
 		}
 
-		tea.uncommittedEA = edits.NewAsyncSortedEditsWithDefaults(tea.nbf)
+		tea.uncommittedEA = edits.NewAsyncSortedEditsWithDefaults(tea.vr)
 		tea.uncommittedEAId = tea.accumulatorIdx
 		tea.accumulatorIdx++
 
@@ -262,7 +262,7 @@ func (tea *tableEditAccumulatorImpl) flushUncommitted() {
 	tea.flusher.Flush(tea.uncommittedEA, tea.uncommittedEAId)
 
 	// initialize a new types.EditAccumulator for additional uncommitted edits to be written to.
-	tea.uncommittedEA = edits.NewAsyncSortedEditsWithDefaults(tea.nbf)
+	tea.uncommittedEA = edits.NewAsyncSortedEditsWithDefaults(tea.vr)
 	tea.uncommittedEAId = tea.accumulatorIdx
 	tea.accumulatorIdx++
 }
@@ -378,7 +378,7 @@ func (tea *tableEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *
 		return tea.rowData, nil
 	}
 
-	committedEP, err := tea.commitEA.FinishedEditing()
+	committedEP, err := tea.commitEA.FinishedEditing(ctx)
 	tea.commitEA = nil
 	if err != nil {
 		return types.EmptyMap, err
@@ -401,7 +401,7 @@ func (tea *tableEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *
 		}
 	}()
 
-	accEdits, err := edits.NewEPMerger(ctx, nbf, eps)
+	accEdits, err := edits.NewEPMerger(ctx, tea.vr, eps)
 	if err != nil {
 		return types.EmptyMap, err
 	}
@@ -416,7 +416,7 @@ func (tea *tableEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *
 	tea.committed = newInMemModifications()
 	tea.commitEAId = tea.accumulatorIdx
 	tea.accumulatorIdx++
-	tea.commitEA = edits.NewAsyncSortedEditsWithDefaults(nbf)
+	tea.commitEA = edits.NewAsyncSortedEditsWithDefaults(tea.vr)
 	tea.committedEaIds = set.NewUint64Set(nil)
 	tea.uncommittedEaIds = set.NewUint64Set(nil)
 
@@ -447,15 +447,15 @@ func NewDbEaFactory(directory string, vrw types.ValueReadWriter) DbEaFactory {
 // NewTableEA creates a TableEditAccumulator
 func (deaf *dbEaFactory) NewTableEA(ctx context.Context, rowData types.Map) TableEditAccumulator {
 	return &tableEditAccumulatorImpl{
-		nbf:                 rowData.Format(),
+		vr:                  deaf.vrw,
 		rowData:             rowData,
 		committed:           newInMemModifications(),
 		uncommitted:         newInMemModifications(),
 		accumulatorIdx:      1,
-		flusher:             edits.NewDiskEditFlusher(ctx, deaf.directory, rowData.Format(), deaf.vrw),
+		flusher:             edits.NewDiskEditFlusher(ctx, deaf.directory, deaf.vrw),
 		committedEaIds:      set.NewUint64Set(nil),
 		uncommittedEaIds:    set.NewUint64Set(nil),
-		commitEA:            edits.NewAsyncSortedEditsWithDefaults(rowData.Format()),
+		commitEA:            edits.NewAsyncSortedEditsWithDefaults(deaf.vrw),
 		commitEAId:          0,
 		flushingUncommitted: false,
 		lastFlush:           0,
@@ -467,14 +467,14 @@ func (deaf *dbEaFactory) NewTableEA(ctx context.Context, rowData types.Map) Tabl
 // NewIndexEA creates an IndexEditAccumulator
 func (deaf *dbEaFactory) NewIndexEA(ctx context.Context, rowData types.Map) IndexEditAccumulator {
 	return &indexEditAccumulatorImpl{
-		nbf:                 rowData.Format(),
+		vr:                  deaf.vrw,
 		rowData:             rowData,
 		committed:           newInMemIndexEdits(),
 		uncommitted:         newInMemIndexEdits(),
-		commitEA:            edits.NewAsyncSortedEditsWithDefaults(rowData.Format()),
+		commitEA:            edits.NewAsyncSortedEditsWithDefaults(deaf.vrw),
 		commitEAId:          0,
 		accumulatorIdx:      1,
-		flusher:             edits.NewDiskEditFlusher(ctx, deaf.directory, rowData.Format(), deaf.vrw),
+		flusher:             edits.NewDiskEditFlusher(ctx, deaf.directory, deaf.vrw),
 		committedEaIds:      set.NewUint64Set(nil),
 		uncommittedEaIds:    set.NewUint64Set(nil),
 		flushingUncommitted: false,

@@ -1249,12 +1249,12 @@ inner join t on to_pk = t.pk;`,
 				Expected: []sql.Row{{1, 2, "HEAD", "WORKING", "added"}},
 			},
 			{
-				Query:       "select to_a, from_b, from_commit, to_commit, diff_type from dolt_diff('HEAD', 'WORKING', 't1')",
-				ExpectedErr: sql.ErrColumnNotFound,
+				Query:    "select to_a, from_b, from_commit, to_commit, diff_type from dolt_diff('HEAD', 'WORKING', 't1')",
+				Expected: []sql.Row{{1, nil, "HEAD", "WORKING", "added"}},
 			},
 			{
-				Query:    "select from_a, from_b, from_commit, to_commit, diff_type from dolt_diff('WORKING', 'HEAD', 't1')",
-				Expected: []sql.Row{{1, 2, "WORKING", "HEAD", "removed"}},
+				Query:    "select from_a, from_b, to_a, from_commit, to_commit, diff_type from dolt_diff('WORKING', 'HEAD', 't1')",
+				Expected: []sql.Row{{1, 2, nil, "WORKING", "HEAD", "removed"}},
 			},
 		},
 	},
@@ -2543,7 +2543,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", false, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit5, 't');",
@@ -2592,7 +2592,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}}, // TODO: Data change should be false for renamed column
+				Expected: []sql.Row{{"t", "t", "modified", false, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
@@ -2701,7 +2701,37 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "foreign key change",
+		SetUpScript: []string{
+			"create table test (id int primary key);",
+			"INSERT INTO test values (1), (2);",
+			"set @Commit1 = '';",
+			"CALL dolt_commit_hash_out(@Commit1, '-Am', 'create table test');",
 
+			"create table test2 (pk int primary key, test_id int);",
+			"alter table test2 add constraint fk_test_id foreign key (test_id) references test(id);",
+			"insert into test2 values (1, 1);",
+			"set @Commit2 = '';",
+			"CALL dolt_commit_hash_out(@Commit2, '-Am', 'table with foreign key and row');",
+
+			"alter table test2 drop foreign key fk_test_id;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2);",
+				Expected: []sql.Row{{"", "test2", "added", true, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary('HEAD', 'WORKING');",
+				Expected: []sql.Row{{"test2", "test2", "modified", false, true}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_summary(@Commit1, 'WORKING');",
+				Expected: []sql.Row{{"", "test2", "added", true, true}},
+			},
+		},
+	},
 	{
 		Name: "add multiple columns, then set and unset a value. Should not show a diff",
 		SetUpScript: []string{
@@ -2720,7 +2750,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary('HEAD~2', 'HEAD');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+				Expected: []sql.Row{{"t", "t", "modified", false, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('HEAD~', 'HEAD');",

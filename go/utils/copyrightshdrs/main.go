@@ -23,7 +23,7 @@ import (
 	"strings"
 )
 
-var ExpectedHeader = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2023|2019-2020|2019-2021|2019-2022|2020-2021|2020-2022) Dolthub, Inc.
+var ExpectedHeader = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2023|2019-2020|2019-2021|2019-2022|2019-2023|2020-2021|2020-2022|2020-2023|2021-2022|2021-2023|2022-2023) Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 \(the "License"\);
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ var ExpectedHeader = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2023|
 
 `)
 
-var ExpectedHeaderForFileFromNoms = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2023|2019-2020|2019-2021|2019-2022|2020-2021|2020-2022) Dolthub, Inc.
+var ExpectedHeaderForFileFromNoms = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2023|2019-2020|2019-2021|2019-2022|2019-2023|2020-2021|2020-2022|2020-2023|2021-2022|2021-2023|2022-2023) Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 \(the "License"\);
 // you may not use this file except in compliance with the License.
@@ -113,8 +113,6 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/cmd/noms/noms_show.go", NomsPath: "cmd/noms/noms_show.go", HadCopyrightNotice: true},
 	{Path: "store/cmd/noms/noms_show_test.go", NomsPath: "cmd/noms/noms_show_test.go", HadCopyrightNotice: true},
 	{Path: "store/cmd/noms/noms_stats.go", NomsPath: "cmd/noms/noms_stats.go", HadCopyrightNotice: true},
-	{Path: "store/cmd/noms/noms_version.go", NomsPath: "cmd/noms/noms_version.go", HadCopyrightNotice: true},
-	{Path: "store/cmd/noms/noms_version_test.go", NomsPath: "cmd/noms/noms_version_test.go", HadCopyrightNotice: true},
 	{Path: "store/config/config.go", NomsPath: "go/config/config.go", HadCopyrightNotice: true},
 	{Path: "store/config/config_test.go", NomsPath: "go/config/config_test.go", HadCopyrightNotice: true},
 	{Path: "store/config/resolver.go", NomsPath: "go/config/resolver.go", HadCopyrightNotice: true},

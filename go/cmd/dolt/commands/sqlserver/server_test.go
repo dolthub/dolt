@@ -434,6 +434,8 @@ func TestReadReplica(t *testing.T) {
 	}
 	defer os.Chdir(cwd)
 
+	ctx := context.Background()
+
 	multiSetup := testcommands.NewMultiRepoTestSetup(t.Fatal)
 	defer multiSetup.Close()
 	defer os.RemoveAll(multiSetup.Root)
@@ -471,7 +473,7 @@ func TestReadReplica(t *testing.T) {
 	defer sc.StopServer()
 
 	replicatedTable := "new_table"
-	multiSetup.CreateTable(sourceDbName, replicatedTable)
+	multiSetup.CreateTable(ctx, sourceDbName, replicatedTable)
 	multiSetup.StageAll(sourceDbName)
 	_ = multiSetup.CommitWithWorkingSet(sourceDbName)
 	multiSetup.PushToRemote(sourceDbName, "remote1", "main")

@@ -60,7 +60,7 @@ type ChunkStore interface {
 	// addrs returned by `getAddrs` are absent from the chunk store.
 	Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb) error
 
-	// Returns the NomsVersion with which this ChunkSource is compatible.
+	// Returns the NomsBinFormat with which this ChunkSource is compatible.
 	Version() string
 
 	// Rebase brings this ChunkStore into sync with the persistent storage's

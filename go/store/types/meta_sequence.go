@@ -147,10 +147,10 @@ func orderedKeyFromUint64(n uint64, nbf *NomsBinFormat) (orderedKey, error) {
 	return newOrderedKey(Float(n), nbf)
 }
 
-func (key orderedKey) Less(nbf *NomsBinFormat, mk2 orderedKey) (bool, error) {
+func (key orderedKey) Less(ctx context.Context, nbf *NomsBinFormat, mk2 orderedKey) (bool, error) {
 	switch {
 	case key.isOrderedByValue && mk2.isOrderedByValue:
-		return key.v.Less(nbf, mk2.v)
+		return key.v.Less(ctx, nbf, mk2.v)
 	case key.isOrderedByValue:
 		return true, nil
 	case mk2.isOrderedByValue:
@@ -246,7 +246,7 @@ func (ms metaSequence) getKey(idx int) (orderedKey, error) {
 	return dec.readOrderedKey(ms.format())
 }
 
-func (ms metaSequence) search(key orderedKey) (int, error) {
+func (ms metaSequence) search(ctx context.Context, key orderedKey) (int, error) {
 	res, err := SearchWithErroringLess(int(ms.seqLen()), func(i int) (bool, error) {
 		ordKey, err := ms.getKey(i)
 
@@ -254,7 +254,7 @@ func (ms metaSequence) search(key orderedKey) (int, error) {
 			return false, err
 		}
 
-		isLess, err := ordKey.Less(ms.format(), key)
+		isLess, err := ordKey.Less(ctx, ms.format(), key)
 
 		if err != nil {
 			return false, err
@@ -491,7 +491,7 @@ func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint
 		var valueItems []mapEntry
 
 		for _, seq := range output {
-			entries, err := seq.(mapLeafSequence).entries()
+			entries, err := seq.(mapLeafSequence).entries(ctx)
 
 			if err != nil {
 				return nil, err
@@ -606,7 +606,7 @@ func (es emptySequence) getKey(idx int) (orderedKey, error) {
 	panic("empty sequence")
 }
 
-func (es emptySequence) search(key orderedKey) (int, error) {
+func (es emptySequence) search(ctx context.Context, key orderedKey) (int, error) {
 	panic("empty sequence")
 }
 
@@ -649,11 +649,11 @@ func (es emptySequence) Equals(other Value) bool {
 	panic("empty sequence")
 }
 
-func (es emptySequence) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (es emptySequence) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	panic("empty sequence")
 }
 
-func (es emptySequence) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error) {
+func (es emptySequence) Compare(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (int, error) {
 	panic("empty sequence")
 }
 

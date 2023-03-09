@@ -73,11 +73,13 @@ var rows = []row.Row{
 }
 
 func TestInMemTable(t *testing.T) {
+	vrw := types.NewMemoryValueStore()
+	ctx := context.Background()
 	imt := NewInMemTable(rowSch)
 
 	func() {
 		for _, r := range rows {
-			err := imt.AppendRow(r)
+			err := imt.AppendRow(ctx, vrw, r)
 
 			if err != nil {
 				t.Fatal("Failed to write row")

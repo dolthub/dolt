@@ -1155,7 +1155,7 @@ func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
 	if err != nil {
 		return nil
 	}
-	return editor.NewBulkImportTEAFactory(dEnv.DoltDB.Format(), dEnv.DoltDB.ValueReadWriter(), tmpDir)
+	return editor.NewBulkImportTEAFactory(dEnv.DoltDB.ValueReadWriter(), tmpDir)
 }
 
 func (dEnv *DoltEnv) LockFile() string {

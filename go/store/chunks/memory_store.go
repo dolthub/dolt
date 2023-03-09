@@ -49,7 +49,7 @@ type MemoryStorage struct {
 func (ms *MemoryStorage) NewView() ChunkStore {
 	version := ms.version
 	if version == "" {
-		version = constants.Format718String
+		version = constants.FormatLD1String
 	}
 	v := &MemoryStoreView{storage: ms, rootHash: ms.rootHash, version: version}
 	v.gcCond = sync.NewCond(&v.mu)

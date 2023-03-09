@@ -174,7 +174,7 @@ func (gcs *GenerationalNBS) Put(ctx context.Context, c chunks.Chunk, getAddrs ch
 	return gcs.newGen.putChunk(ctx, c, getAddrs, gcs.hasMany)
 }
 
-// Returns the NomsVersion with which this ChunkSource is compatible.
+// Returns the NomsBinFormat with which this ChunkSource is compatible.
 func (gcs *GenerationalNBS) Version() string {
 	return gcs.newGen.Version()
 }

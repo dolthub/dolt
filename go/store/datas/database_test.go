@@ -103,19 +103,21 @@ func (suite *DatabaseSuite) TestTolerateUngettableRefs() {
 }
 
 func (suite *DatabaseSuite) TestCompletenessCheck() {
+	ctx := context.Background()
+
 	datasetID := "ds1"
-	ds1, err := suite.db.GetDataset(context.Background(), datasetID)
+	ds1, err := suite.db.GetDataset(ctx, datasetID)
 	suite.NoError(err)
 
-	s, err := types.NewSet(context.Background(), suite.db)
+	s, err := types.NewSet(ctx, suite.db)
 	suite.NoError(err)
 	se := s.Edit()
 	for i := 0; i < 100; i++ {
-		ref, err := suite.db.WriteValue(context.Background(), types.Float(100))
+		ref, err := suite.db.WriteValue(ctx, types.Float(100))
 		suite.NoError(err)
-		se.Insert(ref)
+		se.Insert(ctx, ref)
 	}
-	s, err = se.Set(context.Background())
+	s, err = se.Set(ctx)
 	suite.NoError(err)
 
 	ds1, err = CommitValue(context.Background(), suite.db, ds1, s)
@@ -124,11 +126,11 @@ func (suite *DatabaseSuite) TestCompletenessCheck() {
 	s = mustHeadValue(ds1).(types.Set)
 	ref, err := types.NewRef(types.Float(1000), suite.db.Format())
 	suite.NoError(err)
-	se, err = s.Edit().Insert(ref)
+	se, err = s.Edit().Insert(ctx, ref)
 	suite.NoError(err)
-	s, err = se.Set(context.Background()) // danging ref
+	s, err = se.Set(ctx) // danging ref
 	suite.NoError(err)
-	_, err = CommitValue(context.Background(), suite.db, ds1, s)
+	_, err = CommitValue(ctx, suite.db, ds1, s)
 	suite.Error(err)
 }
 
@@ -334,7 +336,7 @@ func assertMapOfStringToRefOfCommit(ctx context.Context, proposed, datasets type
 			}
 			if targetValue, err := ref.TargetValue(ctx, vr); err != nil {
 				d.PanicIfError(err)
-			} else if is, err := IsCommit(targetValue); err != nil {
+			} else if is, err := IsCommit(ctx, targetValue); err != nil {
 				d.PanicIfError(err)
 			} else if !is {
 				d.Panic("Root of a Database must be a Map<String, Ref<Commit>>, but the ref at key %s points to a %s", change.Key.(types.String), mustString(mustType(types.TypeOf(targetValue)).Describe(ctx)))

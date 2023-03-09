@@ -31,9 +31,9 @@ var toxiClient *toxiproxyclient.Client
 var mysqlProxy *toxiproxyclient.Proxy
 var proxyPort int
 
-// TestBinlogReplicationReconnection tests that the replica's connection to the primary is correctly
+// TestBinlogReplicationAutoReconnect tests that the replica's connection to the primary is correctly
 // reestablished if it drops.
-func TestBinlogReplicationReconnection(t *testing.T) {
+func TestBinlogReplicationAutoReconnect(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
 	configureToxiProxy(t)
@@ -137,8 +137,8 @@ func requireRecentTimeString(t *testing.T, datetime interface{}) {
 // name of each column.
 func showReplicaStatus(t *testing.T) map[string]interface{} {
 	rows, err := replicaDatabase.Queryx("show replica status;")
-	defer rows.Close()
 	require.NoError(t, err)
+	defer rows.Close()
 	return convertByteArraysToStrings(readNextRow(t, rows))
 }
 

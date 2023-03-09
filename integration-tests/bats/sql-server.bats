@@ -12,10 +12,6 @@ make_repo() {
 setup() {
     skiponwindows "tests are flaky on Windows"
     setup_no_dolt_init
-    mkdir $BATS_TMPDIR/sql-server-test$$
-    nativevar DOLT_ROOT_PATH $BATS_TMPDIR/sql-server-test$$ /p
-    dolt config --global --add user.email "test@test.com"
-    dolt config --global --add user.name "test"
     make_repo repo1
     make_repo repo2
 }
@@ -24,6 +20,16 @@ teardown() {
     stop_sql_server 1 && sleep 0.5
     rm -rf $BATS_TMPDIR/sql-server-test$$
     teardown_common
+}
+
+@test "sql-server: sanity check" {
+    cd repo1
+    for i in {1..16};
+    do
+        dolt sql -q "create table t_$i (pk int primary key, c$i int)"
+        dolt add -A
+        dolt commit -m "new table t_$i"
+    done
 }
 
 @test "sql-server: can create savepoint when no database is selected" {
@@ -1507,8 +1513,6 @@ databases:
     run grep '\"/tmp/mysql.sock\"' log.txt
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
-
-    rm /tmp/mysql.sock
 }
 
 @test "sql-server: the second server starts without unix socket set up if there is already a file in the socket file path" {
@@ -1629,7 +1633,6 @@ s.close()
     run ls repo2/.dolt
     [[ "$output" =~ "sql-server.lock" ]] || false
 
-    skip "this now fails because of the socket file not being cleaned up"
     start_sql_server
     run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select 1 as col1"
     [ $status -eq 0 ]
@@ -1701,7 +1704,7 @@ s.close()
     [ $status -eq 0 ]
 
     skip "Forcefully deleting a database doesn't cause direct panics, but also doesn't stop the server"
-   
+
     run grep "panic" server_log.txt
     [ "${#lines[@]}" -eq 0 ]
 
@@ -1775,12 +1778,10 @@ s.close()
     dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE mydb1;"
     [ -d mydb1 ]
 
-    run dolt sql-client -P $PORT -u dolt --use-db '' -q "DROP DATABASE mydb1;"
-    [ $status -eq 0 ]
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "DROP DATABASE mydb1;"
     [ ! -d mydb1 ]
 
-    run dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE mydb1;"
-    [ $status -eq 0 ]
+    dolt sql-client -P $PORT -u dolt --use-db '' -q "CREATE DATABASE mydb1;"
     [ -d mydb1 ]
 
     run dolt sql-client -P $PORT -u dolt --use-db '' -q "SHOW DATABASES;"
@@ -1806,47 +1807,27 @@ s.close()
 }
 
 @test "sql-server: dolt_clone procedure in empty dir" {
-    repoDir="$BATS_TMPDIR/dolt-repo-$$"
-
-    # make directories outside of the dolt repo
-    repo1=$(mktemp -d)
-    cd $repo1
-
-    # init and populate repo 1
-    dolt init
+    mkdir rem1
+    cd repo1
     dolt sql -q "CREATE TABLE test (pk INT PRIMARY KEY);"
     dolt sql -q "INSERT INTO test VALUES (1), (2), (3);"
     dolt sql -q "CREATE PROCEDURE test() SELECT 42;"
     dolt add -A
     dolt commit -m "initial commit"
+    dolt remote add remote1 file://../rem1
+    dolt push remote1 main
 
-    # verify data
-    run dolt sql -q "SELECT * FROM test"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "1" ]] || false
-    [[ "$output" =~ "2" ]] || false
-    [[ "$output" =~ "3" ]] || false
-
-    # verify procedure
-    run dolt sql -q "call test()"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "42" ]] || false
-
-    # make repo 2 directory outside of the dolt repo
-    repo2=$(mktemp -d)
-    cd $repo2
-
-    # Clone repo 1 into repo 2
-    run dolt sql -q "call dolt_clone('file://$repo1/.dolt/noms', 'repo1');"
-    [ "$status" -eq 0 ]
+    cd ..
+    dolt sql -q "call dolt_clone('file://./rem1', 'repo3');"
+    cd repo3
 
     # verify databases
     run dolt sql -q "show databases;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "repo1" ]] || false
+    [[ "$output" =~ "repo3" ]] || false
 
     run dolt sql -q "select database();"
-    [[ "$output" =~ "repo1" ]] || false
+    [[ "$output" =~ "repo3" ]] || false
 
     # verify data
     run dolt sql -q "SELECT * FROM test"
