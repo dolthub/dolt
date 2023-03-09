@@ -1407,10 +1407,11 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 
 func NewTestSQLCtx(ctx context.Context) *sql.Context {
 	s := dsess.DefaultSession(dsess.EmptyDatabaseProvider())
+	s.SetCurrentDatabase("dolt")
 	sqlCtx := sql.NewContext(
 		ctx,
 		sql.WithSession(s),
-	).WithCurrentDB("dolt")
+	)
 
 	return sqlCtx
 }
