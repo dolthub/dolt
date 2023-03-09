@@ -3,6 +3,24 @@ import { getArgs } from "../helpers.js";
 const args = getArgs();
 
 export const viewsTests = [
+  // Getting "fatal: 'head' is not a commit and a branch 'more-updates' cannot be created from it" error
+  // TODO: Replace once this issue is resolved https://github.com/dolthub/dolt/issues/5526
+  // {
+  //   q: "CALL DOLT_CHECKOUT(:branchName)",
+  //   p: { branchName: "main" },
+  //   res: [{ status: 0 }],
+  // },
+  // {
+  {
+    q: "CALL DOLT_BRANCH(:branchName)",
+    p: { branchName: "more-updates" },
+    res: [{ status: 0 }],
+  },
+  {
+    q: "CALL DOLT_CHECKOUT(:branchName)",
+    p: { branchName: "more-updates" },
+    res: [{ status: 0 }],
+  },
   {
     q: "SELECT * FROM ::tableName ::col0 LIMIT :limit OFFSET :offset",
     p: { tableName: "dolt_schemas", col0: "id", limit: 10, offset: 0 },
@@ -37,11 +55,11 @@ export const viewsTests = [
     q: "SHOW FULL TABLES WHERE table_type = 'BASE TABLE'",
     res: [
       {
-        [`Tables_in_${args.dbName}/main`]: "test",
+        [`Tables_in_${args.dbName}`]: "test",
         Table_type: "BASE TABLE",
       },
       {
-        [`Tables_in_${args.dbName}/main`]: "test_info",
+        [`Tables_in_${args.dbName}`]: "test_info",
         Table_type: "BASE TABLE",
       },
     ],
@@ -50,13 +68,16 @@ export const viewsTests = [
     // Includes views
     q: "SHOW FULL TABLES",
     res: [
-      { [`Tables_in_${args.dbName}/main`]: "myview", Table_type: "VIEW" },
       {
-        [`Tables_in_${args.dbName}/main`]: "test",
+        [`Tables_in_${args.dbName}`]: "myview",
+        Table_type: "VIEW",
+      },
+      {
+        [`Tables_in_${args.dbName}`]: "test",
         Table_type: "BASE TABLE",
       },
       {
-        [`Tables_in_${args.dbName}/main`]: "test_info",
+        [`Tables_in_${args.dbName}`]: "test_info",
         Table_type: "BASE TABLE",
       },
     ],
@@ -72,10 +93,5 @@ export const viewsTests = [
         collation_connection: "utf8mb4_0900_bin",
       },
     ],
-  },
-  {
-    q: `CALL DOLT_COMMIT("-A", "-m", :commitMsg)`,
-    p: { commitMsg: "Add view" },
-    res: [{ hash: "" }],
   },
 ];

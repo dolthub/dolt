@@ -92,3 +92,29 @@ export function tagsMatcher(rows, exp) {
   }
   return true;
 }
+
+export function diffRowsMatcher(rows, exp) {
+  if (rows.length !== exp.length) {
+    return false;
+  }
+  for (let i = 0; i < rows.length; i++) {
+    const rowKeys = Object.keys(rows[i]);
+    const expKeys = Object.keys(exp[i]);
+    if (rowKeys.length !== expKeys.length) {
+      return false;
+    }
+    for (let j = 0; j < rowKeys.length; j++) {
+      if (
+        !(rowKeys[j] === "to_commit_date" || rowKeys[j] === "from_commit_date")
+      ) {
+        const cellVal = JSON.stringify(rows[i][rowKeys[j]]);
+        const expCellVal = JSON.stringify(exp[i][expKeys[j]]);
+        if (cellVal !== expCellVal) {
+          console.log("NOT MATCHING", rowKeys[j], expKeys[j]);
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
