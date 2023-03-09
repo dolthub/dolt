@@ -75,9 +75,9 @@ func (dtf *DiffTableFunction) Database() sql.Database {
 
 // WithDatabase implements the sql.Databaser interface
 func (dtf *DiffTableFunction) WithDatabase(database sql.Database) (sql.Node, error) {
-	dtf.database = database
-
-	return dtf, nil
+	ndtf := *dtf
+	ndtf.database = database
+	return &ndtf, nil
 }
 
 // Expressions implements the sql.Expressioner interface
@@ -111,32 +111,33 @@ func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql
 		}
 	}
 
+	newDtf := *dtf
 	if strings.Contains(expression[0].String(), "..") {
 		if len(expression) != 2 {
-			return nil, sql.ErrInvalidArgumentNumber.New(fmt.Sprintf("%v with .. or ...", dtf.Name()), 2, len(expression))
+			return nil, sql.ErrInvalidArgumentNumber.New(fmt.Sprintf("%v with .. or ...", newDtf.Name()), 2, len(expression))
 		}
-		dtf.dotCommitExpr = expression[0]
-		dtf.tableNameExpr = expression[1]
+		newDtf.dotCommitExpr = expression[0]
+		newDtf.tableNameExpr = expression[1]
 	} else {
 		if len(expression) != 3 {
-			return nil, sql.ErrInvalidArgumentNumber.New(dtf.Name(), 3, len(expression))
+			return nil, sql.ErrInvalidArgumentNumber.New(newDtf.Name(), 3, len(expression))
 		}
-		dtf.fromCommitExpr = expression[0]
-		dtf.toCommitExpr = expression[1]
-		dtf.tableNameExpr = expression[2]
+		newDtf.fromCommitExpr = expression[0]
+		newDtf.toCommitExpr = expression[1]
+		newDtf.tableNameExpr = expression[2]
 	}
 
-	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := dtf.evaluateArguments()
+	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := newDtf.evaluateArguments()
 	if err != nil {
 		return nil, err
 	}
 
-	err = dtf.generateSchema(dtf.ctx, fromCommitVal, toCommitVal, dotCommitVal, tableName)
+	err = newDtf.generateSchema(newDtf.ctx, fromCommitVal, toCommitVal, dotCommitVal, tableName)
 	if err != nil {
 		return nil, err
 	}
 
-	return dtf, nil
+	return &newDtf, nil
 }
 
 // Children implements the sql.Node interface

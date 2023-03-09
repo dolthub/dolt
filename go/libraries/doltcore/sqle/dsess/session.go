@@ -756,23 +756,24 @@ func (d *DoltSession) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, b
 
 // ResolveRootForRef returns the root value for the ref given, which refers to either a commit spec or is one of the
 // special identifiers |WORKING| or |STAGED|
-// Returns the root value associated with the identifier given and its commit time
-func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, hashStr string) (*doltdb.RootValue, *types.Timestamp, string, error) {
-	if hashStr == doltdb.Working || hashStr == doltdb.Staged {
+// Returns the root value associated with the identifier given, its commit time and its hash string. The hash string
+// for special identifiers |WORKING| or |STAGED| would be itself, 'WORKING' or 'STAGED', respectively.
+func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string) (*doltdb.RootValue, *types.Timestamp, string, error) {
+	if refStr == doltdb.Working || refStr == doltdb.Staged {
 		// TODO: get from working set / staged update time
 		now := types.Timestamp(time.Now())
 		// TODO: no current database
 		roots, _ := d.GetRoots(ctx, ctx.GetCurrentDatabase())
-		if hashStr == doltdb.Working {
-			return roots.Working, &now, hashStr, nil
-		} else if hashStr == doltdb.Staged {
-			return roots.Staged, &now, hashStr, nil
+		if refStr == doltdb.Working {
+			return roots.Working, &now, refStr, nil
+		} else if refStr == doltdb.Staged {
+			return roots.Staged, &now, refStr, nil
 		}
 	}
 
 	var root *doltdb.RootValue
 	var commitTime *types.Timestamp
-	cs, err := doltdb.NewCommitSpec(hashStr)
+	cs, err := doltdb.NewCommitSpec(refStr)
 	if err != nil {
 		return nil, nil, "", err
 	}

@@ -182,46 +182,47 @@ func (p *PatchTableFunction) WithExpressions(expression ...sql.Expression) (sql.
 		}
 	}
 
+	newPtf := *p
 	if strings.Contains(expression[0].String(), "..") {
 		if len(expression) < 1 || len(expression) > 2 {
-			return nil, sql.ErrInvalidArgumentNumber.New(p.Name(), "1 or 2", len(expression))
+			return nil, sql.ErrInvalidArgumentNumber.New(newPtf.Name(), "1 or 2", len(expression))
 		}
-		p.dotCommitExpr = expression[0]
+		newPtf.dotCommitExpr = expression[0]
 		if len(expression) == 2 {
-			p.tableNameExpr = expression[1]
+			newPtf.tableNameExpr = expression[1]
 		}
 	} else {
 		if len(expression) < 2 || len(expression) > 3 {
-			return nil, sql.ErrInvalidArgumentNumber.New(p.Name(), "2 or 3", len(expression))
+			return nil, sql.ErrInvalidArgumentNumber.New(newPtf.Name(), "2 or 3", len(expression))
 		}
-		p.fromCommitExpr = expression[0]
-		p.toCommitExpr = expression[1]
+		newPtf.fromCommitExpr = expression[0]
+		newPtf.toCommitExpr = expression[1]
 		if len(expression) == 3 {
-			p.tableNameExpr = expression[2]
+			newPtf.tableNameExpr = expression[2]
 		}
 	}
 
 	// validate the expressions
-	if p.dotCommitExpr != nil {
-		if !sqltypes.IsText(p.dotCommitExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(p.Name(), p.dotCommitExpr.String())
+	if newPtf.dotCommitExpr != nil {
+		if !sqltypes.IsText(newPtf.dotCommitExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(newPtf.Name(), newPtf.dotCommitExpr.String())
 		}
 	} else {
-		if !sqltypes.IsText(p.fromCommitExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(p.Name(), p.fromCommitExpr.String())
+		if !sqltypes.IsText(newPtf.fromCommitExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(newPtf.Name(), newPtf.fromCommitExpr.String())
 		}
-		if !sqltypes.IsText(p.toCommitExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(p.Name(), p.toCommitExpr.String())
-		}
-	}
-
-	if p.tableNameExpr != nil {
-		if !sqltypes.IsText(p.tableNameExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(p.Name(), p.tableNameExpr.String())
+		if !sqltypes.IsText(newPtf.toCommitExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(newPtf.Name(), newPtf.toCommitExpr.String())
 		}
 	}
 
-	return p, nil
+	if newPtf.tableNameExpr != nil {
+		if !sqltypes.IsText(newPtf.tableNameExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(newPtf.Name(), newPtf.tableNameExpr.String())
+		}
+	}
+
+	return &newPtf, nil
 }
 
 // Database implements the sql.Databaser interface
@@ -231,8 +232,9 @@ func (p *PatchTableFunction) Database() sql.Database {
 
 // WithDatabase implements the sql.Databaser interface
 func (p *PatchTableFunction) WithDatabase(database sql.Database) (sql.Node, error) {
-	p.database = database
-	return p, nil
+	np := *p
+	np.database = database
+	return &np, nil
 }
 
 // Name implements the sql.TableFunction interface
