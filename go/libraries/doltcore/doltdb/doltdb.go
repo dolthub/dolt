@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -187,18 +188,41 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		return err
 	}
 
-	cm, _ := datas.NewCommitMetaWithUserTS(name, email, "Initialize data repository", t)
+	var firstCommit *datas.Commit
+	for {
+		cm, _ := datas.NewCommitMetaWithUserTS(name, email, "Initialize data repository", t)
 
-	commitOpts := datas.CommitOptions{Meta: cm}
+		commitOpts := datas.CommitOptions{Meta: cm}
 
-	cb := ref.NewInternalRef(CreationBranch)
-	ds, err = ddb.db.GetDataset(ctx, cb.String())
+		cb := ref.NewInternalRef(CreationBranch)
+		ds, err = ddb.db.GetDataset(ctx, cb.String())
 
-	if err != nil {
-		return err
+		if err != nil {
+			return err
+		}
+
+		firstCommit, err = ddb.db.BuildNewCommit(ctx, ds, rv.nomsValue(), commitOpts)
+
+		if err != nil {
+			return err
+		}
+
+		// --fun is a hidden command line option that rerolls the initial commit until
+		// it starts with "d0lt" or similar. We achieve this by modifying the timestamp,
+		// one millisecond at a time, until it produces a fun hash.
+		if !requireFunHash {
+			break
+		}
+
+		if isFunHash(firstCommit.Addr()) {
+			break
+		}
+
+		// The Time type uses nanosecond precision. Subtract one millino nanoseconds (one ms)
+		t = t.Add(-1_000_000)
 	}
 
-	firstCommit, err := ddb.db.Commit(ctx, ds, rv.nomsValue(), commitOpts)
+	firstCommitDs, err := ddb.db.WriteCommit(ctx, ds, firstCommit)
 
 	if err != nil {
 		return err
@@ -210,7 +234,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		return err
 	}
 
-	headAddr, ok := firstCommit.MaybeHeadAddr()
+	headAddr, ok := firstCommitDs.MaybeHeadAddr()
 	if !ok {
 		return errors.New("commit without head")
 	}
