@@ -59,6 +59,6 @@ func JWKSHandlerInterceptor(keyID string, pub ed25519.PublicKey) func(http.Handl
 	}
 }
 
-func JWTExpectations() jwt.Expected {
-	return jwt.Expected{Issuer: creds.ClientIssuer, Audience: jwt.Audience{creds.RemotesAPIAudience}}
+func JWTExpectations(expectedAudience string) jwt.Expected {
+	return jwt.Expected{Issuer: creds.ClientIssuer, Audience: jwt.Audience{expectedAudience}}
 }

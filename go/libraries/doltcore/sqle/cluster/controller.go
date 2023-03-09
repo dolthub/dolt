@@ -138,9 +138,10 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 
 	keyID := creds.PubKeyToKID(ret.pub)
 	keyIDStr := creds.B32CredsEncoding.EncodeToString(keyID)
+	audience := "dolthub-remote-api.liquidata.co" // TODO
 	ret.grpcCreds = &creds.RPCCreds{
 		PrivKey:    ret.priv,
-		Audience:   creds.RemotesAPIAudience,
+		Audience:   audience,
 		Issuer:     creds.ClientIssuer,
 		KeyID:      keyIDStr,
 		RequireTLS: false,
@@ -148,7 +149,7 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 
 	ret.jwks = ret.standbyRemotesJWKS()
 	ret.sinterceptor.keyProvider = ret.jwks
-	ret.sinterceptor.jwtExpected = JWTExpectations()
+	ret.sinterceptor.jwtExpected = JWTExpectations(audience)
 
 	return ret, nil
 }

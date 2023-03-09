@@ -164,7 +164,6 @@ func (c *RPCCreds) RequireTransportSecurity() bool {
 	return c.RequireTLS
 }
 
-const RemotesAPIAudience = "dolthub-remote-api.liquidata.co"
 const ClientIssuer = "dolt-client.dolthub.com"
 
 func (dc DoltCreds) RPCCreds(audience string) *RPCCreds {
