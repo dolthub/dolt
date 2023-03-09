@@ -116,7 +116,9 @@ func (p GRPCDialProvider) getRPCCreds() (credentials.PerRPCCredentials, error) {
 	if !valid {
 		return nil, nil
 	}
-	return dCreds.RPCCreds(), nil
+
+	authHost := p.dEnv.Config.GetStringOrDefault(RemotesApiHostKey, DefaultRemotesApiHost)
+	return dCreds.RPCCreds(authHost), nil
 }
 
 // getUserAgentString returns a user agent string to use in GRPC requests.

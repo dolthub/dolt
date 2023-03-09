@@ -163,14 +163,14 @@ func (c *RPCCreds) RequireTransportSecurity() bool {
 }
 
 const RemotesAPIAudience = "dolthub-remote-api.liquidata.co"
-const ClientIssuer = "dolt-client.liquidata.co"
+const ClientIssuer = "dolt-client.dolthub.com"
 
-func (dc DoltCreds) RPCCreds() *RPCCreds {
+func (dc DoltCreds) RPCCreds(audience string) *RPCCreds {
 	b32KIDStr := dc.KeyIDBase32Str()
 	return &RPCCreds{
 		PrivKey:    ed25519.PrivateKey(dc.PrivKey),
 		KeyID:      b32KIDStr,
-		Audience:   RemotesAPIAudience,
+		Audience:   audience,
 		Issuer:     ClientIssuer,
 		Subject:    "doltClientCredentials/" + b32KIDStr,
 		RequireTLS: false,
