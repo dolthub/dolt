@@ -97,6 +97,8 @@ type procedurestore interface {
 const (
 	DoltClusterRoleVariable      = "dolt_cluster_role"
 	DoltClusterRoleEpochVariable = "dolt_cluster_role_epoch"
+	// Since we fetch the keys from the other replicas we’re going to use a fixed string here.
+	DoltClusterRemoteApiAudience = "dolt-cluster-remote-api.dolthub.com"
 )
 
 func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) (*Controller, error) {
@@ -138,10 +140,9 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 
 	keyID := creds.PubKeyToKID(ret.pub)
 	keyIDStr := creds.B32CredsEncoding.EncodeToString(keyID)
-	audience := "dolthub-remote-api.liquidata.co" // TODO
 	ret.grpcCreds = &creds.RPCCreds{
 		PrivKey:    ret.priv,
-		Audience:   audience,
+		Audience:   DoltClusterRemoteApiAudience,
 		Issuer:     creds.ClientIssuer,
 		KeyID:      keyIDStr,
 		RequireTLS: false,
@@ -149,7 +150,7 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 
 	ret.jwks = ret.standbyRemotesJWKS()
 	ret.sinterceptor.keyProvider = ret.jwks
-	ret.sinterceptor.jwtExpected = JWTExpectations(audience)
+	ret.sinterceptor.jwtExpected = JWTExpectations()
 
 	return ret, nil
 }
