@@ -153,7 +153,8 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 	}
 
-	err := dEnv.InitRepoWithTime(context.Background(), types.Format_Default, name, email, initBranch, t)
+	requiresFunHash := apr.Contains(requiresFunHashName)
+	err := dEnv.InitRepoWithTime(context.Background(), types.Format_Default, name, email, initBranch, t, requiresFunHash)
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to initialize directory as a data repo. %s", err.Error()))
 		return 1

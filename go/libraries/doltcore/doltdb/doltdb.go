@@ -143,11 +143,11 @@ func (ddb *DoltDB) CSMetricsSummary() string {
 // WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid
 // metadata for the creation commit, and an empty RootValue.
 func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, initBranch, name, email string) error {
-	return ddb.WriteEmptyRepoWithCommitTime(ctx, initBranch, name, email, datas.CommitNowFunc())
+	return ddb.WriteEmptyRepoWithCommitTime(ctx, initBranch, name, email, datas.CommitNowFunc(), false)
 }
 
-func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, initBranch, name, email string, t time.Time) error {
-	return ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, name, email, t, ref.NewBranchRef(initBranch))
+func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, initBranch, name, email string, t time.Time, requiresFunHash bool) error {
+	return ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, name, email, t, ref.NewBranchRef(initBranch), requiresFunHash)
 }
 
 func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
@@ -155,6 +155,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 	name, email string,
 	t time.Time,
 	init ref.BranchRef,
+	requireFunHash bool,
 ) error {
 	// precondition checks
 	name = strings.TrimSpace(name)
