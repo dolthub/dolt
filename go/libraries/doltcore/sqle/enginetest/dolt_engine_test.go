@@ -492,7 +492,7 @@ func TestDoltUserPrivileges(t *testing.T) {
 }
 
 func TestJoinOps(t *testing.T) {
-	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
+	if types.IsFormat_LD(types.Format_Default) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
 	}
 
@@ -502,7 +502,7 @@ func TestJoinOps(t *testing.T) {
 }
 
 func TestJoinPlanningPrepared(t *testing.T) {
-	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
+	if types.IsFormat_LD(types.Format_Default) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
 	}
 	h := newDoltHarness(t).WithParallelism(1)
@@ -511,7 +511,7 @@ func TestJoinPlanningPrepared(t *testing.T) {
 }
 
 func TestJoinPlanning(t *testing.T) {
-	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
+	if types.IsFormat_LD(types.Format_Default) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
 	}
 	h := newDoltHarness(t).WithParallelism(1)
@@ -520,7 +520,7 @@ func TestJoinPlanning(t *testing.T) {
 }
 
 func TestJoinOpsPrepared(t *testing.T) {
-	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
+	if types.IsFormat_LD(types.Format_Default) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
 	}
 

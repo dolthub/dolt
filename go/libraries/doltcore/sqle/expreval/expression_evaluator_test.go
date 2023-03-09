@@ -219,12 +219,14 @@ func TestNewComparisonFunc(t *testing.T) {
 		lte        = "lte"
 	)
 
+	vrw := types.NewMemoryValueStore()
+
 	ops := make(map[string]CompareOp)
 	ops[eq] = EqualsOp{}
-	ops[gt] = GreaterOp{}
-	ops[gte] = GreaterEqualOp{}
-	ops[lt] = LessOp{}
-	ops[lte] = LessEqualOp{}
+	ops[gt] = GreaterOp{vrw}
+	ops[gte] = GreaterEqualOp{vrw}
+	ops[lt] = LessOp{vrw}
+	ops[lte] = LessEqualOp{vrw}
 
 	type funcTestVal struct {
 		name      string

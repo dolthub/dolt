@@ -40,7 +40,7 @@ func (v InlineBlob) Equals(other Value) bool {
 	return bytes.Equal(v, v2)
 }
 
-func (v InlineBlob) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (v InlineBlob) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(InlineBlob); ok {
 		return bytes.Compare(v, v2) == -1, nil
 	}

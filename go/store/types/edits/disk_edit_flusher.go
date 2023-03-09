@@ -54,7 +54,6 @@ func (res FlushResults) Sort() {
 type DiskEditFlusher struct {
 	ctx       context.Context
 	directory string
-	nbf       *types.NomsBinFormat
 	vrw       types.ValueReadWriter
 
 	eg      *errgroup.Group
@@ -63,12 +62,11 @@ type DiskEditFlusher struct {
 }
 
 // NewDiskEditFlusher returns a new DiskEditFlusher instance
-func NewDiskEditFlusher(ctx context.Context, directory string, nbf *types.NomsBinFormat, vrw types.ValueReadWriter) *DiskEditFlusher {
+func NewDiskEditFlusher(ctx context.Context, directory string, vrw types.ValueReadWriter) *DiskEditFlusher {
 	eg, egCtx := errgroup.WithContext(ctx)
 	return &DiskEditFlusher{
 		ctx:       egCtx,
 		directory: directory,
-		nbf:       nbf,
 		vrw:       vrw,
 		eg:        eg,
 		mu:        &sync.Mutex{},
@@ -96,7 +94,7 @@ func (ef *DiskEditFlusher) Flush(accumulator types.EditAccumulator, id uint64) {
 func (ef *DiskEditFlusher) resultsFromEntries(ctx context.Context, entries []flusherEntry) (FlushResults, error) {
 	eps := make(FlushResults, 0, len(entries))
 	for _, entry := range entries {
-		ep, err := EditProviderFromDisk(ef.nbf, ef.vrw, entry.path)
+		ep, err := EditProviderFromDisk(ef.vrw, entry.path)
 		if err != nil {
 			for i := range eps {
 				_ = eps[i].Edits.Close(ctx)
@@ -160,20 +158,20 @@ func (ef *DiskEditFlusher) WaitForIDs(ctx context.Context, idFilter *set.Uint64S
 }
 
 // EditProviderFromDisk returns a types.EditProvider instance which reads data from the specified file
-func EditProviderFromDisk(nbf *types.NomsBinFormat, vrw types.ValueReadWriter, path string) (types.EditProvider, error) {
+func EditProviderFromDisk(vrw types.ValueReadWriter, path string) (types.EditProvider, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 
-	ep := types.TupleReaderAsEditProvider(types.NewTupleReader(nbf, vrw, f))
+	ep := types.TupleReaderAsEditProvider(types.NewTupleReader(vrw.Format(), vrw, f))
 	return &deleteOnCloseEP{EditProvider: ep, path: path}, nil
 }
 
 // FlushEditsToDisk writes the contents of a types.EditAccumulator to disk and returns the path where the
 // associated file exists.
 func FlushEditsToDisk(ctx context.Context, directory string, ea types.EditAccumulator) (string, error) {
-	itr, err := ea.FinishedEditing()
+	itr, err := ea.FinishedEditing(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -183,7 +181,7 @@ func FlushEditsToDisk(ctx context.Context, directory string, ea types.EditAccumu
 		return "", err
 	}
 
-	err = flushKVPs(wr, itr)
+	err = flushKVPs(ctx, wr, itr)
 	if err != nil {
 		return "", err
 	}
@@ -207,10 +205,10 @@ func openTupleWriter(directory string) (string, types.TupleWriteCloser, error) {
 	return absPath, types.NewTupleWriter(f), nil
 }
 
-func flushKVPs(wr types.TupleWriter, itr types.EditProvider) error {
+func flushKVPs(ctx context.Context, wr types.TupleWriter, itr types.EditProvider) error {
 	// iterate over all kvps writing the key followed by the value
 	for {
-		kvp, err := itr.Next()
+		kvp, err := itr.Next(ctx)
 
 		if err == io.EOF {
 			return nil

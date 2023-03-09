@@ -114,7 +114,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 	setup := func(lock addr, root hash.Hash, sizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
 		p = factory(t)
 		fm = &fakeManifest{}
-		fm.set(constants.NomsVersion, lock, root, makeTestTableSpecs(t, sizes, p), nil)
+		fm.set(constants.FormatLD1String, lock, root, makeTestTableSpecs(t, sizes, p), nil)
 		var err error
 		_, upstream, err = fm.ParseIfExists(context.Background(), nil, nil)
 		require.NoError(t, err)
@@ -206,7 +206,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
-				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, fm, p, stats)
+				_, _, err := conjoin(context.Background(), inlineConjoiner{}, upstream, fm, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -225,9 +225,9 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 				newTable := makeExtra(p)
 				u := updatePreemptManifest{fm, func() {
 					specs := append([]tableSpec{}, upstream.specs...)
-					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), nil)
+					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), nil)
 				}}
-				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -245,9 +245,9 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
 				u := updatePreemptManifest{fm, func() {
-					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:], nil)
+					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:], nil)
 				}}
-				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -260,7 +260,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 	setupAppendix := func(lock addr, root hash.Hash, specSizes, appendixSizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
 		p = newFakeTablePersister(&UnlimitedQuotaProvider{})
 		fm = &fakeManifest{}
-		fm.set(constants.NomsVersion, lock, root, makeTestTableSpecs(t, specSizes, p), makeTestTableSpecs(t, appendixSizes, p))
+		fm.set(constants.FormatLD1String, lock, root, makeTestTableSpecs(t, specSizes, p), makeTestTableSpecs(t, appendixSizes, p))
 
 		var err error
 		_, upstream, err = fm.ParseIfExists(context.Background(), nil, nil)
@@ -289,7 +289,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setupAppendix(startLock, startRoot, c.precompact, c.appendix)
 
-				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, fm, p, stats)
+				_, _, err := conjoin(context.Background(), inlineConjoiner{}, upstream, fm, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -310,10 +310,10 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 				newTable := makeExtra(p)
 				u := updatePreemptManifest{fm, func() {
 					specs := append([]tableSpec{}, upstream.specs...)
-					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), upstream.appendix)
+					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), upstream.appendix)
 				}}
 
-				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -335,10 +335,10 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 				u := updatePreemptManifest{fm, func() {
 					app := append([]tableSpec{}, upstream.appendix...)
 					specs := append([]tableSpec{}, newTable)
-					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(specs, upstream.specs...), append(app, newTable))
+					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, append(specs, upstream.specs...), append(app, newTable))
 				}}
 
-				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -360,9 +360,9 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 				fm, p, upstream := setupAppendix(startLock, startRoot, c.precompact, c.appendix)
 
 				u := updatePreemptManifest{fm, func() {
-					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, upstream.specs[len(c.appendix)+1:], upstream.appendix[:])
+					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, upstream.specs[len(c.appendix)+1:], upstream.appendix[:])
 				}}
-				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -383,10 +383,10 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 				u := updatePreemptManifest{fm, func() {
 					specs := append([]tableSpec{}, newTable)
 					specs = append(specs, upstream.specs[len(c.appendix)+1:]...)
-					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, specs, append([]tableSpec{}, newTable))
+					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, specs, append([]tableSpec{}, newTable))
 				}}
 
-				_, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)

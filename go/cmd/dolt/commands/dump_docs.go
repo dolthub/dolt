@@ -122,7 +122,14 @@ func (cmd *DumpDocsCmd) dumpDocs(wr io.Writer, cmdStr string, subCommands []cli.
 
 		if !hidden {
 			if subCmdHandler, ok := curr.(cli.SubCommandHandler); ok {
-				verr := cmd.dumpDocs(wr, cmdStr+" "+subCmdHandler.Name(), subCmdHandler.Subcommands)
+				var verr errhand.VerboseError
+				if subCmdHandler.Unspecified != nil {
+					verr = cmd.dumpDocs(wr, cmdStr, []cli.Command{subCmdHandler.Unspecified})
+					if verr != nil {
+						return verr
+					}
+				}
+				verr = cmd.dumpDocs(wr, cmdStr+" "+subCmdHandler.Name(), subCmdHandler.Subcommands)
 				if verr != nil {
 					return verr
 				}

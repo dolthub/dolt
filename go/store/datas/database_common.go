@@ -221,7 +221,7 @@ func (db *database) datasetFromMap(ctx context.Context, datasetID string, dsmap 
 				return Dataset{}, err
 			}
 		}
-		return newDataset(db, datasetID, head, headAddr)
+		return newDataset(ctx, db, datasetID, head, headAddr)
 	} else if rmdsmap, ok := dsmap.(refmapDatasetsMap); ok {
 		var err error
 		curr, err := rmdsmap.am.Get(ctx, datasetID)
@@ -235,7 +235,7 @@ func (db *database) datasetFromMap(ctx context.Context, datasetID string, dsmap 
 				return Dataset{}, err
 			}
 		}
-		return newDataset(db, datasetID, head, curr)
+		return newDataset(ctx, db, datasetID, head, curr)
 	} else {
 		return Dataset{}, errors.New("unimplemented or unsupported DatasetsMap type")
 	}
@@ -246,7 +246,7 @@ func (db *database) readHead(ctx context.Context, addr hash.Hash) (dsHead, error
 	if err != nil {
 		return nil, err
 	}
-	return newHead(head, addr)
+	return newHead(ctx, head, addr)
 }
 
 func (db *database) Close() error {
@@ -268,7 +268,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 	headType := newHead.TypeName()
 	switch headType {
 	case commitName:
-		iscommit, err := IsCommit(newVal)
+		iscommit, err := IsCommit(ctx, newVal)
 		if err != nil {
 			return err
 		}
@@ -276,7 +276,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 			return fmt.Errorf("SetHead failed: reffered to value is not a commit:")
 		}
 	case tagName:
-		istag, err := IsTag(newVal)
+		istag, err := IsTag(ctx, newVal)
 		if err != nil {
 			return err
 		}
@@ -291,7 +291,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 		if err != nil {
 			return err
 		}
-		iscommit, err := IsCommit(commitval)
+		iscommit, err := IsCommit(ctx, commitval)
 		if err != nil {
 			return err
 		}
@@ -376,7 +376,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 	}
 
 	v := newHead.value()
-	iscommit, err := IsCommit(v)
+	iscommit, err := IsCommit(ctx, v)
 	if err != nil {
 		return err
 	}
@@ -541,6 +541,28 @@ func (db *database) doTag(ctx context.Context, datasetID string, tagAddr hash.Ha
 			return prolly.AddressMap{}, err
 		}
 		return ae.Flush(ctx)
+	})
+}
+
+// UpdateStashList updates the stash list dataset only with given address hash to the updated stash list.
+// The new/updated stash list address should be obtained before calling this function depending on
+// whether add or remove a stash actions have been performed. This function does not perform any actions
+// on the stash list itself.
+func (db *database) UpdateStashList(ctx context.Context, ds Dataset, stashListAddr hash.Hash) (Dataset, error) {
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
+		// TODO: this function needs concurrency control for using stash in SQL context
+		// this will update the dataset for stashes address map
+		return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
+			// this is for old format, so this should not happen
+			return datasets, errors.New("UpdateStashList: stash is not supported for old storage format")
+		}, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+			ae := am.Editor()
+			err := ae.Update(ctx, ds.ID(), stashListAddr)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			return ae.Flush(ctx)
+		})
 	})
 }
 
@@ -861,7 +883,7 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	var v types.Value
 	v = rHead.(nomsHead).st
 
-	is, err := IsCommit(v)
+	is, err := IsCommit(ctx, v)
 
 	if err != nil {
 		return types.Struct{}, err

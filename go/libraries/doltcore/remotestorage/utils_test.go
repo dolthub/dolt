@@ -180,7 +180,7 @@ func TestParseByteSlices(t *testing.T) {
 	}{
 		{
 			"test nil",
-			[][]byte{},
+			[][]byte(nil),
 		},
 		{
 			"test empty",
@@ -213,5 +213,4 @@ func TestParseByteSlices(t *testing.T) {
 			}
 		})
 	}
-
 }

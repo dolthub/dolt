@@ -160,7 +160,7 @@ func mustList(l types.List, err error) types.List {
 
 func validate(ctx context.Context, nbf *types.NomsBinFormat, r types.Value) bool {
 	rootType := mustType(types.MakeMapType(types.PrimitiveTypeMap[types.StringKind], mustType(types.MakeRefType(types.PrimitiveTypeMap[types.ValueKind]))))
-	if isSub, err := types.IsValueSubtypeOf(nbf, r, rootType); err != nil {
+	if isSub, err := types.IsValueSubtypeOf(ctx, nbf, r, rootType); err != nil {
 		panic(err)
 	} else if !isSub {
 		fmt.Fprintf(os.Stderr, "Root of database must be %s, but you specified: %s\n", mustString(rootType.Describe(ctx)), mustString(mustType(types.TypeOf(r)).Describe(ctx)))

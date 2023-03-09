@@ -220,7 +220,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	}
 
 	if plan.chunkCount == 0 {
-		return emptyChunkSource{}, nil, nil
+		return emptyChunkSource{}, func() {}, nil
 	}
 
 	name := nameFromSuffixes(plan.suffixes())
@@ -250,21 +250,26 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 		}()
 
 		for _, sws := range plan.sources.sws {
-			var r io.Reader
+			var r io.ReadCloser
 			r, _, ferr = sws.source.reader(ctx)
-
 			if ferr != nil {
 				return "", cleanup, ferr
 			}
 
 			n, ferr := io.CopyN(temp, r, int64(sws.dataLen))
-
 			if ferr != nil {
+				r.Close()
 				return "", cleanup, ferr
 			}
 
 			if uint64(n) != sws.dataLen {
+				r.Close()
 				return "", cleanup, errors.New("failed to copy all data")
+			}
+
+			err := r.Close()
+			if err != nil {
+				return "", cleanup, err
 			}
 		}
 

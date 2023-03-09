@@ -108,8 +108,9 @@ func (suite *BlockStoreSuite) TestChunkStoreMissingDir() {
 
 func (suite *BlockStoreSuite) TestChunkStoreNotDir() {
 	existingFile := filepath.Join(suite.dir, "path-exists-but-is-a-file")
-	_, err := os.Create(existingFile)
+	f, err := os.Create(existingFile)
 	suite.NoError(err)
+	defer f.Close()
 
 	_, err = NewLocalStore(context.Background(), constants.FormatDefaultString, existingFile, testMemTableSize, NewUnlimitedMemQuotaProvider())
 	suite.Error(err)
@@ -537,7 +538,7 @@ func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tabl
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7}, p)
 		upstream, err := toSpecs(srcs)
 		require.NoError(t, err)
-		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
+		fm.set(constants.FormatLD1String, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
 		c := &fakeConjoiner{
 			[]cannedConjoin{
 				{conjoinees: upstream[:2], keepers: upstream[2:]},
@@ -573,7 +574,7 @@ func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tabl
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7, 13}, p)
 		upstream, err := toSpecs(srcs)
 		require.NoError(t, err)
-		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
+		fm.set(constants.FormatLD1String, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
 		c := &fakeConjoiner{
 			[]cannedConjoin{
 				{conjoinees: upstream[:2], keepers: upstream[2:]},

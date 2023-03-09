@@ -33,11 +33,12 @@ func TestDiskBackedEdits(t *testing.T) {
 	)
 
 	size := maxKVPs
+	vrw := types.NewMemoryValueStore()
 	rng := rand.New(rand.NewSource(0))
-	kvps := createKVPs(t, types.Format_Default, rng, maxKVPs)
+	kvps := createKVPs(t, vrw, rng, maxKVPs)
 	for i := 0; i < 8; i++ {
 		t.Run(fmt.Sprintf("size_%d", size), func(t *testing.T) {
-			testDBE(t, kvps[:size])
+			testDBE(t, vrw, kvps[:size])
 		})
 		size = rng.Intn(maxKVPs)
 	}
@@ -45,30 +46,28 @@ func TestDiskBackedEdits(t *testing.T) {
 	// test something smaller than the flush interval
 	size = 4
 	t.Run(fmt.Sprintf("size_%d", size), func(t *testing.T) {
-		testDBE(t, kvps[:size])
+		testDBE(t, vrw, kvps[:size])
 	})
 }
 
-func testDBE(t *testing.T, kvps []types.KVP) {
+func testDBE(t *testing.T, vrw types.ValueReadWriter, kvps []types.KVP) {
 	ctx := context.Background()
-	nbf := types.Format_Default
-	vrw := types.NewMemoryValueStore()
 	tmpDir, err := os.MkdirTemp("", "TestDiskBackedEdits")
 	require.NoError(t, err)
 
 	newEA := func() types.EditAccumulator {
-		return NewAsyncSortedEdits(nbf, 64, 2, 2)
+		return NewAsyncSortedEdits(vrw, 64, 2, 2)
 	}
 
-	dbe := NewDiskBackedEditAcc(ctx, nbf, vrw, 2*1024, tmpDir, newEA)
+	dbe := NewDiskBackedEditAcc(ctx, vrw, 2*1024, tmpDir, newEA)
 	for _, kvp := range kvps {
 		dbe.AddEdit(kvp.Key, kvp.Val)
 	}
 
-	itr, err := dbe.FinishedEditing()
+	itr, err := dbe.FinishedEditing(ctx)
 	assert.NoError(t, err)
 
-	inOrder, count, err := IsInOrder(nbf, itr)
+	inOrder, count, err := IsInOrder(ctx, vrw, itr)
 
 	assert.NoError(t, err)
 	require.Equal(t, len(kvps), count, "Invalid count %d != %d", count, len(kvps))

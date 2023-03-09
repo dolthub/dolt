@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     skip_nbf_dolt
-    skip_nbf_dolt_dev
 
     setup_common
     TARGET_NBF="__DOLT__"
@@ -21,7 +20,7 @@ teardown() {
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
-    [[ ! "$output" =~ "euna1i8brh95lo9mcg05s3m8h781fr8a" ]] || false
+    [[ ! "$output" =~ "d0q6hb3vcq1oe178usc6rd28db1cnh26" ]] || false
 
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
@@ -29,7 +28,7 @@ teardown() {
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "euna1i8brh95lo9mcg05s3m8h781fr8a" ]] || false
+    [[ "$output" =~ "d0q6hb3vcq1oe178usc6rd28db1cnh26" ]] || false
     [[ ! "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
 
     # validate TEXT migration
@@ -47,7 +46,7 @@ teardown() {
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
-    [[ ! "$output" =~ "euna1i8brh95lo9mcg05s3m8h781fr8a" ]] || false
+    [[ ! "$output" =~ "d0q6hb3vcq1oe178usc6rd28db1cnh26" ]] || false
 
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
@@ -55,7 +54,7 @@ teardown() {
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "euna1i8brh95lo9mcg05s3m8h781fr8a" ]] || false
+    [[ "$output" =~ "d0q6hb3vcq1oe178usc6rd28db1cnh26" ]] || false
     [[ ! "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
 
     # validate TEXT migration

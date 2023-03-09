@@ -335,8 +335,6 @@ func (wr *journalWriter) flushIndexRecord(root hash.Hash, end int64) (err error)
 
 // readAt reads len(p) bytes from the journal at offset |off|.
 func (wr *journalWriter) readAt(p []byte, off int64) (n int, err error) {
-	wr.lock.RLock()
-	defer wr.lock.RUnlock()
 	var bp []byte
 	if off < wr.off {
 		// fill some or all of |p| from |wr.file|
@@ -399,9 +397,18 @@ func (wr *journalWriter) maybeFlush() (err error) {
 	return wr.flush()
 }
 
+type journalWriterSnapshot struct {
+	io.Reader
+	closer func() error
+}
+
+func (s journalWriterSnapshot) Close() error {
+	return s.closer()
+}
+
 // snapshot returns an io.Reader with a consistent view of
 // the current state of the journal file.
-func (wr *journalWriter) snapshot() (io.Reader, int64, error) {
+func (wr *journalWriter) snapshot() (io.ReadCloser, int64, error) {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
 	if err := wr.flush(); err != nil {
@@ -413,7 +420,12 @@ func (wr *journalWriter) snapshot() (io.Reader, int64, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	return io.LimitReader(f, wr.off), wr.off, nil
+	return journalWriterSnapshot{
+		io.LimitReader(f, wr.off),
+		func() error {
+			return f.Close()
+		},
+	}, wr.off, nil
 }
 
 func (wr *journalWriter) offset() int64 {
@@ -443,6 +455,9 @@ func (wr *journalWriter) Close() (err error) {
 	defer wr.lock.Unlock()
 	if err = wr.flush(); err != nil {
 		return err
+	}
+	if wr.index != nil {
+		wr.index.Close()
 	}
 	if cerr := wr.journal.Sync(); cerr != nil {
 		err = cerr
@@ -503,12 +518,8 @@ func (idx rangeIndex) novelLookups() (lookups []lookup) {
 }
 
 func (idx rangeIndex) flatten() {
-	if len(idx.cached) == 0 {
-		idx.cached = idx.novel
-	} else {
-		for a, r := range idx.novel {
-			idx.cached[a] = r
-		}
+	for a, r := range idx.novel {
+		idx.cached[a] = r
+		delete(idx.novel, a)
 	}
-	idx.novel = make(map[addr]Range)
 }

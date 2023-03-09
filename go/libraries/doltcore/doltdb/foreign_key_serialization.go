@@ -21,6 +21,7 @@ import (
 	fb "github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/marshal"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -170,10 +171,10 @@ func serializeFlatbufferForeignKeys(fkc *ForeignKeyCollection) types.SerialMessa
 
 		fk := foreignKeys[i]
 		if fk.UnresolvedFKDetails.ReferencedTableColumns != nil {
-			unresolvedParent = serializeStringVector(b, fk.UnresolvedFKDetails.ReferencedTableColumns)
+			unresolvedParent = datas.SerializeStringVector(b, fk.UnresolvedFKDetails.ReferencedTableColumns)
 		}
 		if fk.UnresolvedFKDetails.TableColumns != nil {
-			unresolvedChild = serializeStringVector(b, fk.UnresolvedFKDetails.TableColumns)
+			unresolvedChild = datas.SerializeStringVector(b, fk.UnresolvedFKDetails.TableColumns)
 		}
 		parentCols = serializeUint64Vector(b, fk.ReferencedTableColumns)
 		childCols = serializeUint64Vector(b, fk.TableColumns)
@@ -208,18 +209,6 @@ func serializeFlatbufferForeignKeys(fkc *ForeignKeyCollection) types.SerialMessa
 	serial.ForeignKeyCollectionAddForeignKeys(b, vec)
 	o := serial.ForeignKeyCollectionEnd(b)
 	return []byte(serial.FinishMessage(b, o, []byte(serial.ForeignKeyCollectionFileID)))
-}
-
-func serializeStringVector(b *fb.Builder, s []string) fb.UOffsetT {
-	offs := make([]fb.UOffsetT, len(s))
-	for j := len(s) - 1; j >= 0; j-- {
-		offs[j] = b.CreateString(s[j])
-	}
-	b.StartVector(4, len(s), 4)
-	for j := len(s) - 1; j >= 0; j-- {
-		b.PrependUOffsetT(offs[j])
-	}
-	return b.EndVector(len(s))
 }
 
 func serializeUint64Vector(b *fb.Builder, u []uint64) fb.UOffsetT {

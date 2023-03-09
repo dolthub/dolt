@@ -124,10 +124,11 @@ func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvid
 		panic(err)
 	}
 
+	s.SetCurrentDatabase("dolt")
 	return sql.NewContext(
 		ctx,
 		sql.WithSession(s),
-	).WithCurrentDB("dolt")
+	)
 }
 
 // NewTestEngine creates a new default engine, and a *sql.Context and initializes indexes and schema fragments.
@@ -564,7 +565,7 @@ func SqlRowsFromDurableIndex(idx durable.Index, sch schema.Schema) ([]sql.Row, e
 		}
 
 	} else {
-		// types.Format_LD_1 and types.Format_DOLT_DEV
+		// types.Format_LD_1
 		rowData := durable.NomsMapFromIndex(idx)
 		_ = rowData.IterAll(ctx, func(key, value types.Value) error {
 			r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))

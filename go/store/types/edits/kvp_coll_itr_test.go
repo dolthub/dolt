@@ -55,11 +55,11 @@ func TestKVPCollItr(t *testing.T) {
 		},
 	}
 
-	nbf := types.Format_Default
+	vrw := types.NewMemoryValueStore()
 
 	for _, test := range tests {
-		coll := &KVPCollection{test.buffSize, len(test.slices), test.totalSize, test.slices, nbf}
-		itr := NewItr(nbf, coll)
+		coll := &KVPCollection{test.buffSize, len(test.slices), test.totalSize, test.slices, vrw}
+		itr := NewItr(vrw, coll)
 
 		for i := 0; i < 2; i++ {
 			for _, expRes := range test.itrResults {

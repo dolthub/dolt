@@ -48,7 +48,7 @@ type MemoryStorage struct {
 func (ms *MemoryStorage) NewView() ChunkStore {
 	version := ms.version
 	if version == "" {
-		version = constants.Format718String
+		version = constants.FormatLD1String
 	}
 
 	return &MemoryStoreView{storage: ms, rootHash: ms.rootHash, version: version}
@@ -218,14 +218,14 @@ func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb
 		return err
 	}
 
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
 	if ms.pendingRefs == nil {
 		ms.pendingRefs = addrs
 	} else {
 		ms.pendingRefs.InsertAll(addrs)
 	}
-
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
 
 	if ms.pending == nil {
 		ms.pending = map[hash.Hash]Chunk{}

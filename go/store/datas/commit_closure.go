@@ -130,7 +130,7 @@ type parentsClosureIter interface {
 	Err() error
 	Hash() hash.Hash
 	Height() uint64
-	Less(*types.NomsBinFormat, parentsClosureIter) bool
+	Less(ctx context.Context, nbf *types.NomsBinFormat, itr parentsClosureIter) bool
 	Next(context.Context) bool
 }
 
@@ -175,12 +175,12 @@ func (i *parentsClosureIterator) Hash() hash.Hash {
 	return h
 }
 
-func (i *parentsClosureIterator) Less(f *types.NomsBinFormat, otherI parentsClosureIter) bool {
+func (i *parentsClosureIterator) Less(ctx context.Context, nbf *types.NomsBinFormat, otherI parentsClosureIter) bool {
 	other := otherI.(*parentsClosureIterator)
 	if i.err != nil || other.err != nil {
 		return false
 	}
-	ret, err := i.curr.Less(f, other.curr)
+	ret, err := i.curr.Less(ctx, nbf, other.curr)
 	if err != nil {
 		i.err = err
 		other.err = err
@@ -246,7 +246,7 @@ func (i *fbParentsClosureIterator) Next(ctx context.Context) bool {
 	return true
 }
 
-func (i *fbParentsClosureIterator) Less(f *types.NomsBinFormat, otherI parentsClosureIter) bool {
+func (i *fbParentsClosureIterator) Less(ctx context.Context, nbf *types.NomsBinFormat, otherI parentsClosureIter) bool {
 	other := otherI.(*fbParentsClosureIterator)
 	return i.curr.Less(other.curr)
 }

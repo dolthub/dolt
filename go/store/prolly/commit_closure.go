@@ -159,7 +159,7 @@ func (wr CommitClosureEditor) Delete(ctx context.Context, key CommitClosureKey) 
 }
 
 func (wr CommitClosureEditor) Flush(ctx context.Context) (CommitClosure, error) {
-	sm := wr.closure.StaticMap
+	sm := wr.closure.Static
 	serializer := message.NewCommitClosureSerializer(sm.NodeStore.Pool())
 	fn := tree.ApplyMutations[CommitClosureKey, commitClosureKeyOrdering, message.CommitClosureSerializer]
 

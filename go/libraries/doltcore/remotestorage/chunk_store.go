@@ -823,7 +823,7 @@ func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 	return nil
 }
 
-// Returns the NomsVersion with which this ChunkSource is compatible.
+// Returns the NomsBinFormat with which this ChunkSource is compatible.
 func (dcs *DoltChunkStore) Version() string {
 	return dcs.metadata.NbfVersion
 }

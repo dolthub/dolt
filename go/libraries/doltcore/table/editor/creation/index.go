@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -141,7 +142,7 @@ func CreateIndex(
 
 func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Index, opts editor.Options) (durable.Index, error) {
 	switch tbl.Format() {
-	case types.Format_LD_1, types.Format_DOLT_DEV:
+	case types.Format_LD_1:
 		m, err := editor.RebuildIndex(ctx, tbl, idx.Name(), opts)
 		if err != nil {
 			return nil, err
@@ -211,7 +212,11 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 				keyBld.PutRaw(to, k.GetField(from))
 			} else {
 				from -= pkLen
-				keyBld.PutRaw(to, v.GetField(from))
+				if keyBld.Desc.Types[to].Enc == val.CellEnc {
+					index.PutField(ctx, ns, keyBld, to, v.GetField(from))
+				} else {
+					keyBld.PutRaw(to, v.GetField(from))
+				}
 			}
 		}
 

@@ -61,6 +61,12 @@ type RootValue struct {
 	hash hash.Hash             // cache first load
 }
 
+func (root *RootValue) ResolveRootValue(ctx context.Context) (*RootValue, error) {
+	return root, nil
+}
+
+var _ Rootish = &RootValue{}
+
 type tableEdit struct {
 	name string
 	ref  *types.Ref

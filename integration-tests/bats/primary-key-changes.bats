@@ -311,7 +311,7 @@ teardown() {
     dolt diff --data
     run dolt diff --data
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Primary key sets differ between revisions for table t, skipping data diff" ]] || false
+    [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
 }
 
 @test "primary-key-changes: diff on composite schema" {
@@ -338,7 +338,7 @@ teardown() {
     dolt diff --data
     run dolt diff --data
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Primary key sets differ between revisions for table t, skipping data diff" ]] || false
+    [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
 
     run dolt diff --stat
     [ "$status" -eq 1 ]
@@ -455,7 +455,7 @@ SQL
 
     run dolt sql -q "ALTER TABLE child DROP PRIMARY KEY"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: can't drop index 'PRIMARY': needed in a foreign key constraint" ]] || false
+    [[ "$output" =~ "error: can't drop index 'PRIMARY': needed in foreign key constraint" ]] || false
 }
 
 @test "primary-key-changes: dolt constraints verify works gracefully with schema violations" {

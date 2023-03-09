@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -165,6 +166,8 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	defer nbs.mu.Unlock()
 	nbs.waitForGC()
 
+	nbs.checkAllManifestUpdatesExist(ctx, updates)
+
 	nbs.mm.LockForUpdate()
 	defer func() {
 		unlockErr := nbs.mm.UnlockForUpdate()
@@ -211,11 +214,6 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 			}
 		}
 
-		err = nbs.tables.checkAllTablesExist(ctx, contents.specs, nbs.stats)
-		if err != nil {
-			return manifestContents{}, err
-		}
-
 		updatedContents, err = nbs.mm.Update(ctx, originalLock, contents, nbs.stats, nil)
 		if err != nil {
 			return manifestContents{}, err
@@ -246,6 +244,8 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	nbs.waitForGC()
+
+	nbs.checkAllManifestUpdatesExist(ctx, updates)
 
 	nbs.mm.LockForUpdate()
 	defer func() {
@@ -294,11 +294,6 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 			return manifestContents{}, err
 		}
 
-		err = nbs.tables.checkAllTablesExist(ctx, contents.specs, nbs.stats)
-		if err != nil {
-			return manifestContents{}, err
-		}
-
 		updatedContents, err = nbs.mm.Update(ctx, originalLock, contents, nbs.stats, nil)
 		if err != nil {
 			return manifestContents{}, err
@@ -322,6 +317,27 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 		return manifestContents{}, err
 	}
 	return updatedContents, nil
+}
+
+func (nbs *NomsBlockStore) checkAllManifestUpdatesExist(ctx context.Context, updates map[hash.Hash]uint32) error {
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.SetLimit(128)
+	for h, c := range updates {
+		h := h
+		c := c
+		eg.Go(func() error {
+			a := addr(h)
+			ok, err := nbs.p.Exists(ctx, a, c, nbs.stats)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return fmt.Errorf("missing table file referenced in UpdateManifest call: %v", a)
+			}
+			return nil
+		})
+	}
+	return eg.Wait()
 }
 
 func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSpecs []tableSpec, option ManifestAppendixOption) (manifestContents, error) {
@@ -470,6 +486,12 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 	cacheOnce.Do(makeGlobalCaches)
 	if err := checkDir(dir); err != nil {
 		return nil, err
+	}
+	ok, err := fileExists(filepath.Join(dir, chunkJournalAddr))
+	if err != nil {
+		return nil, err
+	} else if ok {
+		return nil, fmt.Errorf("cannot create NBS store for directory containing chunk journal: %s", dir)
 	}
 
 	m, err := getFileManifest(ctx, dir, asyncFlush)
@@ -1105,7 +1127,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	if nbs.c.conjoinRequired(nbs.tables) {
-		newUpstream, err := conjoin(ctx, nbs.c, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
+		newUpstream, cleanup, err := conjoin(ctx, nbs.c, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
 		if err != nil {
 			return err
 		}
@@ -1122,6 +1144,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		if err != nil {
 			return err
 		}
+		cleanup()
 		return errOptimisticLockFailedTables
 	}
 
@@ -1301,32 +1324,14 @@ func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
-	exists, contents, err := nbs.mm.m.ParseIfExists(ctx, nbs.stats, nil)
-
-	if err != nil {
-		return uint64(0), err
-	}
-
-	if !exists {
-		return uint64(0), nil
-	}
-
-	css, err := nbs.chunkSourcesByAddr()
-	if err != nil {
-		return uint64(0), err
-	}
-
-	numSpecs := contents.NumTableSpecs()
-
 	size := uint64(0)
-	for i := 0; i < numSpecs; i++ {
-		info := contents.getSpec(i)
-		cs, ok := css[info.name]
-		if !ok {
-			return uint64(0), errors.New("manifest referenced table file for which there is no chunkSource.")
-		}
+	for _, cs := range nbs.tables.upstream {
 		size += cs.currentSize()
 	}
+	for _, cs := range nbs.tables.novel {
+		size += cs.currentSize()
+	}
+
 	return size, nil
 }
 
