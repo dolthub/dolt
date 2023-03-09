@@ -40,8 +40,9 @@ const (
 	B32EncodedPubKeyLen = 52
 	B32EncodedKeyIdLen  = 45
 
-	JWTKIDHeader = "kid"
-	JWTAlgHeader = "alg"
+	JWTKIDHeader           = "kid"
+	JWTAlgHeader           = "alg"
+	DoltTokenVersionHeader = "dolt_token_version"
 )
 
 var B32CredsByteSet = set.NewByteSet([]byte(B32CharEncoding))
@@ -129,7 +130,8 @@ type RPCCreds struct {
 func (c *RPCCreds) toBearerToken() (string, error) {
 	key := jose.SigningKey{Algorithm: jose.EdDSA, Key: c.PrivKey}
 	opts := &jose.SignerOptions{ExtraHeaders: map[jose.HeaderKey]interface{}{
-		JWTKIDHeader: c.KeyID,
+		JWTKIDHeader:           c.KeyID,
+		DoltTokenVersionHeader: "2023.01",
 	}}
 
 	signer, err := jose.NewSigner(key, opts)
