@@ -892,14 +892,14 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
-				// Without access to the database, dolt_diff_stat should fail with a database access error
+				// Without access to the database, dolt_patch should fail with a database access error
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_patch('main~', 'main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
-				// Without access to the database, dolt_diff_stat with dots should fail with a database access error
+				// Without access to the database, dolt_patch with dots should fail with a database access error
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_patch('main~..main', 'test');",
@@ -1004,28 +1004,28 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
-				// With access to the db, but not the table, dolt_diff_stat should fail
+				// With access to the db, but not the table, dolt_patch should fail
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_patch('main~', 'main', 'test2');",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
-				// With access to the db, but not the table, dolt_diff_stat with dots should fail
+				// With access to the db, but not the table, dolt_patch with dots should fail
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_patch('main~...main', 'test2');",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
-				// With access to the db, dolt_diff_stat should fail for all tables if no access any of tables
+				// With access to the db, dolt_patch should fail for all tables if no access any of tables
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_patch('main~', 'main');",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
-				// With access to the db, dolt_diff_stat with dots should fail for all tables if no access any of tables
+				// With access to the db, dolt_patch with dots should fail for all tables if no access any of tables
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_patch('main~...main');",
@@ -1102,14 +1102,14 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
-				// After granting access to the entire db, dolt_diff_stat should work
+				// After granting access to the entire db, dolt_patch should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_patch('main~', 'main');",
 				Expected: []sql.Row{{1}},
 			},
 			{
-				// After granting access to the entire db, dolt_diff_stat with dots should work
+				// After granting access to the entire db, dolt_patch with dots should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_patch('main~...main');",
@@ -1158,7 +1158,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
-				// After revoking access, dolt_diff_stat should fail
+				// After revoking access, dolt_patch should fail
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_patch('main~', 'main', 'test');",
