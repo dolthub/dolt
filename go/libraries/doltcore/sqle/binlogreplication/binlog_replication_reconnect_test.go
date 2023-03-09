@@ -137,8 +137,8 @@ func requireRecentTimeString(t *testing.T, datetime interface{}) {
 // name of each column.
 func showReplicaStatus(t *testing.T) map[string]interface{} {
 	rows, err := replicaDatabase.Queryx("show replica status;")
-	defer rows.Close()
 	require.NoError(t, err)
+	defer rows.Close()
 	return convertByteArraysToStrings(readNextRow(t, rows))
 }
 

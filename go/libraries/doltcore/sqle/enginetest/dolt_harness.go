@@ -125,7 +125,8 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 
 			resetCmds = append(resetCmds, setup.SetupScript{fmt.Sprintf("drop table %s", tableName)})
 
-			ctx := enginetest.NewContext(d).WithCurrentDB(db)
+			ctx := enginetest.NewContext(d)
+			ctx.Session.SetCurrentDatabase(db)
 			_, showCreateResult := enginetest.MustQuery(ctx, d.engine, fmt.Sprintf("show create table %s;", tableName))
 			var createTableStatement strings.Builder
 			for _, row := range showCreateResult {
@@ -378,12 +379,16 @@ func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
 func (d *DoltHarness) newTable(db sql.Database, name string, schema sql.PrimaryKeySchema) (sql.Table, error) {
 	tc := db.(sql.TableCreator)
 
-	err := tc.CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema, sql.Collation_Default)
+	ctx := enginetest.NewContext(d)
+	ctx.Session.SetCurrentDatabase(db.Name())
+	err := tc.CreateTable(ctx, name, schema, sql.Collation_Default)
 	if err != nil {
 		return nil, err
 	}
 
-	table, ok, err := db.GetTableInsensitive(enginetest.NewContext(d).WithCurrentDB(db.Name()), name)
+	ctx = enginetest.NewContext(d)
+	ctx.Session.SetCurrentDatabase(db.Name())
+	table, ok, err := db.GetTableInsensitive(ctx, name)
 	require.NoError(d.t, err)
 	require.True(d.t, ok, "table %s not found after creation", name)
 	return table, nil

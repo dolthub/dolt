@@ -236,8 +236,6 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 
 	var nbf *types.NomsBinFormat
 	switch string(data) {
-	case types.Format_7_18.VersionString():
-		nbf = types.Format_7_18
 	case types.Format_LD_1.VersionString():
 		nbf = types.Format_LD_1
 	case types.Format_DOLT.VersionString():

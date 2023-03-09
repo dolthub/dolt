@@ -42,7 +42,7 @@ type ArtifactIndex interface {
 // RefFromArtifactIndex persists |idx| and returns the types.Ref targeting it.
 func RefFromArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, idx ArtifactIndex) (types.Ref, error) {
 	switch idx.Format() {
-	case types.Format_LD_1, types.Format_7_18:
+	case types.Format_LD_1:
 		panic("TODO")
 
 	case types.Format_DOLT:
@@ -57,7 +57,7 @@ func RefFromArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, idx Ar
 // NewEmptyArtifactIndex returns an ArtifactIndex with no artifacts.
 func NewEmptyArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, tableSch schema.Schema) (ArtifactIndex, error) {
 	switch vrw.Format() {
-	case types.Format_LD_1, types.Format_7_18:
+	case types.Format_LD_1:
 		panic("TODO")
 
 	case types.Format_DOLT:
@@ -94,7 +94,7 @@ func artifactIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tr
 	}
 
 	switch vrw.Format() {
-	case types.Format_LD_1, types.Format_7_18:
+	case types.Format_LD_1:
 		panic("TODO")
 
 	case types.Format_DOLT:

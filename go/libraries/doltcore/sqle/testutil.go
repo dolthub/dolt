@@ -124,10 +124,11 @@ func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvid
 		panic(err)
 	}
 
+	s.SetCurrentDatabase("dolt")
 	return sql.NewContext(
 		ctx,
 		sql.WithSession(s),
-	).WithCurrentDB("dolt")
+	)
 }
 
 // NewTestEngine creates a new default engine, and a *sql.Context and initializes indexes and schema fragments.

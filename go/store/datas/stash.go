@@ -79,7 +79,16 @@ func GetStashData(val types.Value) (hash.Hash, hash.Hash, *StashMeta, error) {
 		return hash.Hash{}, hash.Hash{}, nil, err
 	}
 
-	meta := NewStashMeta(string(msg.BranchName()), string(msg.Desc()))
+	var tblsToStage []string
+	at := msg.TablesToStageLength()
+	if at > 0 {
+		tblsToStage = make([]string, at)
+		for i := range tblsToStage {
+			tblsToStage[i] = string(msg.TablesToStage(i))
+		}
+	}
+
+	meta := NewStashMeta(string(msg.BranchName()), string(msg.Desc()), tblsToStage)
 	stashRootAddr := hash.New(msg.StashRootAddrBytes())
 	headCommitAddr := hash.New(msg.HeadCommitAddrBytes())
 
@@ -92,26 +101,50 @@ func stash_flatbuffer(stash, head hash.Hash, meta *StashMeta) serial.Message {
 	headOff := builder.CreateByteVector(head[:])
 	branchNameOff := builder.CreateString(meta.BranchName)
 	descOff := builder.CreateString(meta.Description)
+	var (
+		addedTblsOff flatbuffers.UOffsetT
+	)
+	if meta.TablesToStage != nil {
+		addedTblsOff = SerializeStringVector(builder, meta.TablesToStage)
+	}
 
 	serial.StashStart(builder)
 	serial.StashAddStashRootAddr(builder, stashOff)
 	serial.StashAddHeadCommitAddr(builder, headOff)
 	serial.StashAddBranchName(builder, branchNameOff)
 	serial.StashAddDesc(builder, descOff)
+	serial.StashAddTablesToStage(builder, addedTblsOff)
 
 	return serial.FinishMessage(builder, serial.StashEnd(builder), []byte(serial.StashFileID))
 }
 
+func SerializeStringVector(b *flatbuffers.Builder, s []string) flatbuffers.UOffsetT {
+	offs := make([]flatbuffers.UOffsetT, len(s))
+	for j := len(s) - 1; j >= 0; j-- {
+		offs[j] = b.CreateString(s[j])
+	}
+	b.StartVector(4, len(s), 4)
+	for j := len(s) - 1; j >= 0; j-- {
+		b.PrependUOffsetT(offs[j])
+	}
+	return b.EndVector(len(s))
+}
+
 // StashMeta contains all the metadata that is associated with a stash within a data repo.
+// The BranchName is the name of the branch that the stash was made on.
+// The Description is the head commit description of the branch that the stash was made on.
+// The TablesToStage is array of table names that needs to be staged when popping the stash.
+// These tables were added tables that were staged when stashing.
 type StashMeta struct {
-	BranchName  string
-	Description string
+	BranchName    string
+	Description   string
+	TablesToStage []string
 }
 
 // NewStashMeta returns StashMeta that can be used to create a stash.
-func NewStashMeta(name, desc string) *StashMeta {
+func NewStashMeta(name, desc string, tblsToStage []string) *StashMeta {
 	bn := strings.TrimSpace(name)
 	d := strings.TrimSpace(desc)
 
-	return &StashMeta{bn, d}
+	return &StashMeta{bn, d, tblsToStage}
 }

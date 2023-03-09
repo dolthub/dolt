@@ -39,11 +39,9 @@ type formatTag struct {
 	furp byte
 }
 
-var formatTag_7_18 *formatTag = nil
 var formatTag_LD_1 = &formatTag{}
 var formatTag_DOLT = &formatTag{}
 
-var Format_7_18 = &NomsBinFormat{}
 var Format_LD_1 = &NomsBinFormat{formatTag_LD_1}
 var Format_DOLT = &NomsBinFormat{formatTag_DOLT}
 
@@ -53,12 +51,7 @@ var Format_Default *NomsBinFormat
 var emptyTuples = make(map[*NomsBinFormat]Tuple)
 
 func init() {
-	emptyTuples[Format_7_18], _ = NewTuple(Format_7_18)
 	emptyTuples[Format_LD_1], _ = NewTuple(Format_LD_1)
-}
-
-func isFormat_7_18(nbf *NomsBinFormat) bool {
-	return nbf.tag == formatTag_7_18
 }
 
 func IsFormat_DOLT(nbf *NomsBinFormat) bool {
@@ -70,9 +63,7 @@ func IsFormat_LD(nbf *NomsBinFormat) bool {
 }
 
 func GetFormatForVersionString(s string) (*NomsBinFormat, error) {
-	if s == constants.Format718String {
-		return Format_7_18, nil
-	} else if s == constants.FormatLD1String {
+	if s == constants.FormatLD1String {
 		return Format_LD_1, nil
 	} else if s == constants.FormatDoltString {
 		return Format_DOLT, nil
@@ -82,9 +73,7 @@ func GetFormatForVersionString(s string) (*NomsBinFormat, error) {
 }
 
 func (nbf *NomsBinFormat) VersionString() string {
-	if nbf.tag == formatTag_7_18 {
-		return constants.Format718String
-	} else if nbf.tag == formatTag_LD_1 {
+	if nbf.tag == formatTag_LD_1 {
 		return constants.FormatLD1String
 	} else if nbf.tag == formatTag_DOLT {
 		return constants.FormatDoltString

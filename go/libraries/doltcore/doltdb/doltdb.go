@@ -1396,10 +1396,10 @@ func (ddb *DoltDB) GetBranchesByRootHash(ctx context.Context, rootHash hash.Hash
 	return refs, nil
 }
 
-// AddStash takes current branch head commit, working root value and stash metadata to create a new stash.
+// AddStash takes current branch head commit, stash root value and stash metadata to create a new stash.
 // It stores the new stash object in stash list Dataset, which can be created if it does not exist.
 // Otherwise, it updates the stash list Dataset as there can only be one stashes Dataset.
-func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, working *RootValue, meta *datas.StashMeta) error {
+func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, stash *RootValue, meta *datas.StashMeta) error {
 	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
 	if err != nil {
 		return err
@@ -1410,14 +1410,14 @@ func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, working *RootValu
 		return err
 	}
 
-	_, workingRoot, err := ddb.writeRootValue(ctx, working)
+	_, stashVal, err := ddb.writeRootValue(ctx, stash)
 	if err != nil {
 		return err
 	}
 
 	nbf := ddb.Format()
 	vrw := ddb.ValueReadWriter()
-	stashAddr, _, err := datas.NewStash(ctx, nbf, vrw, workingRoot, headCommitAddr, meta)
+	stashAddr, _, err := datas.NewStash(ctx, nbf, vrw, stashVal, headCommitAddr, meta)
 	if err != nil {
 		return err
 	}
@@ -1515,14 +1515,14 @@ func (ddb *DoltDB) GetStashHashAtIdx(ctx context.Context, idx int) (hash.Hash, e
 
 // GetStashRootAndHeadCommitAtIdx returns root value of stash working set and head commit of the branch that the stash was made on
 // of the stash at given index.
-func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) (*RootValue, *Commit, error) {
+func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) (*RootValue, *Commit, *datas.StashMeta, error) {
 	ds, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if !ds.HasHead() {
-		return nil, nil, errors.New("No stash entries found.")
+		return nil, nil, nil, errors.New("No stash entries found.")
 	}
 
 	return getStashAtIdx(ctx, ds, ddb.vrw, ddb.NodeStore(), idx)
