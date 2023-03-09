@@ -1527,3 +1527,10 @@ func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) 
 
 	return getStashAtIdx(ctx, ds, ddb.vrw, ddb.NodeStore(), idx)
 }
+
+var funRegExp = regexp.MustCompile("^d[o0][1l]t")
+
+func isFunHash(hashVal hash.Hash) bool {
+	hashString := hashVal.String()
+	return funRegExp.MatchString(hashString)
+}
