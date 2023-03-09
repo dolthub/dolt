@@ -34,6 +34,7 @@ const (
 	initBranchParamName = "initial-branch"
 	newFormatFlag       = "new-format"
 	oldFormatFlag       = "old-format"
+	requiresFunHashName = "fun"
 )
 
 var initDocs = cli.CommandDocumentationContent{
@@ -79,6 +80,7 @@ func (cmd InitCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(initBranchParamName, "b", "branch", fmt.Sprintf("The branch name used to initialize this database. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config. If unset, the default initialized branch will be named '%s'.", env.InitBranchName, env.DefaultInitBranch))
 	ap.SupportsFlag(newFormatFlag, "", fmt.Sprintf("Specify this flag to use the new storage format (%s).", types.Format_DOLT.VersionString()))
 	ap.SupportsFlag(oldFormatFlag, "", fmt.Sprintf("Specify this flag to use the old storage format (%s).", types.Format_LD_1.VersionString()))
+	ap.SupportsFlag(requiresFunHashName, "", "")
 	return ap
 }
 
