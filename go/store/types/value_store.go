@@ -78,8 +78,8 @@ type ValueStore struct {
 	decodedChunks       *sizecache.SizeCache
 	nbf                 *NomsBinFormat
 
-	gcMu    sync.RWMutex
-	gcCond  *sync.Cond
+	gcMu       sync.RWMutex
+	gcCond     *sync.Cond
 	gcState    gcState
 	gcOut      int
 	gcNewAddrs hash.HashSet
