@@ -146,15 +146,13 @@ func (a *binlogReplicaApplier) connectAndStartReplicationEventStream(ctx *sql.Co
 			// If there was an error connecting (and we haven't used up all our retry attempts), listen for a
 			// STOP REPLICA signal or for the retry delay timer to fire. We need to use select here so that we don't
 			// block on our retry backoff and ignore the STOP REPLICA signal for a long time.
-			for {
-				select {
-				case <-a.stopReplicationChan:
-					ctx.GetLogger().Debugf("Received stop replication signal while trying to connect")
-					return nil, ErrReplicationStopped
-				case <-time.After(time.Duration(connectRetryDelay) * time.Second):
-					// Nothing to do here if our timer completes; just fall through
-					break
-				}
+			select {
+			case <-a.stopReplicationChan:
+				ctx.GetLogger().Debugf("Received stop replication signal while trying to connect")
+				return nil, ErrReplicationStopped
+			case <-time.After(time.Duration(connectRetryDelay) * time.Second):
+				// Nothing to do here if our timer completes; just fall through
+				break
 			}
 		} else {
 			break
