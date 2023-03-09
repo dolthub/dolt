@@ -30,7 +30,6 @@ type DiffSplitter struct {
 	targetSch     sql.Schema
 	queryToTarget map[int]int
 	fromTo        map[int]int
-	toFrom        map[int]int
 	fromLen       int
 }
 
@@ -45,26 +44,18 @@ type RowDiff struct {
 // all |to| columns
 func NewDiffSplitter(diffQuerySch sql.Schema, targetSch sql.Schema) (*DiffSplitter, error) {
 	resultToTarget := make(map[int]int)
-	fromTo := make(map[int]int)
-	toFrom := make(map[int]int)
 	fromLen := -1
 
 	for i := 0; i < len(diffQuerySch)-1; i++ {
 		var baseColName string
 		if strings.HasPrefix(diffQuerySch[i].Name, "from_") {
 			baseColName = diffQuerySch[i].Name[5:]
-			if to := diffQuerySch.IndexOfColName("to_" + baseColName); to >= 0 {
-				fromTo[i] = to
-			}
 		} else if strings.HasPrefix(diffQuerySch[i].Name, "to_") {
 			// we order the columns so that all from_ come first
 			if fromLen == -1 {
 				fromLen = i
 			}
 			baseColName = diffQuerySch[i].Name[3:]
-			if from := diffQuerySch.IndexOfColName("from_" + baseColName); from >= 0 {
-				toFrom[i] = from
-			}
 		}
 
 		targetIdx := targetSch.IndexOfColName(baseColName)
@@ -84,8 +75,6 @@ func NewDiffSplitter(diffQuerySch sql.Schema, targetSch sql.Schema) (*DiffSplitt
 		targetSch:     targetSch,
 		fromLen:       fromLen,
 		queryToTarget: resultToTarget,
-		fromTo:        fromTo,
-		toFrom:        toFrom,
 	}, nil
 }
 
@@ -116,20 +105,9 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (RowDiff, RowDiff, error)
 		}
 
 		for i := 0; i < ds.fromLen; i++ {
-			cmp := ds.diffQuerySch[i].Type.Compare
 			oldRow.Row[ds.queryToTarget[i]] = row[i]
-
 			if diffTypeStr == "modified" {
-				fromToIndex, ok := ds.fromTo[i]
-				if ok {
-					if n, err := cmp(row[i], row[fromToIndex]); err != nil {
-						return RowDiff{}, RowDiff{}, err
-					} else if n != 0 {
-						oldRow.ColDiffs[ds.queryToTarget[i]] = ModifiedOld
-					}
-				} else {
-					oldRow.ColDiffs[ds.queryToTarget[i]] = ModifiedOld
-				}
+				oldRow.ColDiffs[ds.queryToTarget[i]] = ModifiedOld
 			} else {
 				oldRow.ColDiffs[ds.queryToTarget[i]] = Removed
 			}
@@ -145,16 +123,9 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (RowDiff, RowDiff, error)
 		}
 
 		for i := ds.fromLen; i < len(ds.diffQuerySch)-1; i++ {
-			cmp := ds.diffQuerySch[i].Type.Compare
 			newRow.Row[ds.queryToTarget[i]] = row[i]
-
 			if diffTypeStr == "modified" {
-				// need this to compare map[string]interface{} and other incomparable result types
-				if n, err := cmp(row[i], row[ds.toFrom[i]]); err != nil {
-					return RowDiff{}, RowDiff{}, err
-				} else if n != 0 {
-					newRow.ColDiffs[ds.queryToTarget[i]] = ModifiedNew
-				}
+				newRow.ColDiffs[ds.queryToTarget[i]] = ModifiedNew
 			} else {
 				newRow.ColDiffs[ds.queryToTarget[i]] = Added
 			}
