@@ -7,6 +7,9 @@ import {
   assertQueryResult,
   getQueryWithEscapedParameters,
 } from "../helpers.js";
+import { docsTests } from "./docs.js";
+import { tagsTests } from "./tags.js";
+import { viewsTests } from "./views.js";
 
 export default async function runWorkbenchTests(database) {
   await runTests(database, databaseTests);
@@ -14,12 +17,11 @@ export default async function runWorkbenchTests(database) {
   await runTests(database, logTests);
   await runTests(database, mergeTests);
   await runTests(database, tableTests);
+  await runTests(database, docsTests);
+  await runTests(database, tagsTests);
+  await runTests(database, viewsTests);
   // TODO:
-  // Workspaces
   // Diffs
-  // Docs
-  // Views
-  // Tags
 }
 
 async function runTests(database, tests) {
@@ -44,6 +46,13 @@ async function runTests(database, tests) {
           }
         })
         .catch((err) => {
+          if (test.expectedErr) {
+            if (err.message.includes(test.expectedErr)) {
+              return;
+            } else {
+              console.log("Query error did not match expected:", test.q);
+            }
+          }
           console.error(err);
           process.exit(1);
         });

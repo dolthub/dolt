@@ -1,3 +1,6 @@
+#!/usr/bin/env bats
+load $BATS_TEST_DIRNAME/helpers.bash
+
 # MySQL client tests are set up to test Dolt as a MySQL server and
 # standard MySQL Clients in a wide array of languages. I used BATS because
 # it was easy to set up the Dolt piece using the command line.
@@ -8,31 +11,12 @@
 # gotchas, we can add tests for that specific language.
 
 setup() {
-    REPO_NAME="dolt_repo_$$"
-    mkdir $REPO_NAME	
-    cd $REPO_NAME
-
-    dolt init
-
-    dolt sql -q "CREATE TABLE mysqldump_table(pk int)"
-    dolt sql -q "INSERT INTO mysqldump_table VALUES (1);"
-    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext)"
-    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
-
-    PORT=$( definePORT )
-    USER="dolt"
-    dolt sql-server --host 0.0.0.0 --port=$PORT --user=$USER --loglevel=trace &
-    SERVER_PID=$!
-    # Give the server a chance to start
-    sleep 1
-
-    export MYSQL_PWD=""
+    setup_dolt_repo
 }
 
 teardown() {
     cd ..
-    kill $SERVER_PID
-    rm -rf $REPO_NAME
+    teardown_dolt_repo
 
     # Check if postgresql is still running. If so stop it
     active=$(service postgresql status)
@@ -172,16 +156,4 @@ EOF" -m "postgres"
     Rscript $BATS_TEST_DIRNAME/r/rmariadb-test.r $USER $PORT $REPO_NAME
 }
 
-definePORT() {
-  getPORT=""
-  for i in {0..9}
-  do
-    let getPORT="($$ + $i) % (65536-1024) + 1024"
-    portinuse=$(lsof -i -P -n | grep LISTEN | grep $attemptedPORT | wc -l)
-      if [ $portinuse -eq 0 ]
-      then
-        echo "$getPORT"
-        break
-      fi
-  done
-}
+
