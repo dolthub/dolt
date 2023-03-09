@@ -31,11 +31,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var _ sql.TableFunction = (*PatchTableFunction)(nil)
@@ -254,23 +252,12 @@ func (p *PatchTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		return nil, fmt.Errorf("unable to get dolt database")
 	}
 
-	fromCommitStr, toCommitStr, err := loadCommitStrings(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
+	fromRefDetails, toRefDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
 	if err != nil {
 		return nil, err
 	}
 
-	sess := dsess.DSessFromSess(ctx.Session)
-	fromRoot, fromTime, err := sess.ResolveRootForRef(ctx, sqledb.Name(), fromCommitStr)
-	if err != nil {
-		return nil, err
-	}
-
-	toRoot, toTime, err := sess.ResolveRootForRef(ctx, sqledb.Name(), toCommitStr)
-	if err != nil {
-		return nil, err
-	}
-
-	tableDeltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
+	tableDeltas, err := diff.GetTableDeltas(ctx, fromRefDetails.root, toRefDetails.root)
 	if err != nil {
 		return nil, err
 	}
@@ -281,11 +268,11 @@ func (p *PatchTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 
 	// If tableNameExpr defined, return a single table patch result
 	if p.tableNameExpr != nil {
-		fromTblExists, err := fromRoot.HasTable(ctx, tableName)
+		fromTblExists, err := fromRefDetails.root.HasTable(ctx, tableName)
 		if err != nil {
 			return nil, err
 		}
-		toTblExists, err := toRoot.HasTable(ctx, tableName)
+		toTblExists, err := toRefDetails.root.HasTable(ctx, tableName)
 		if err != nil {
 			return nil, err
 		}
@@ -297,12 +284,12 @@ func (p *PatchTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		tableDeltas = []diff.TableDelta{delta}
 	}
 
-	patches, err := getPatchNodes(ctx, sqledb.DbData(), tableDeltas, toRoot, toCommitStr, toTime, fromCommitStr, fromTime)
+	patches, err := getPatchNodes(ctx, sqledb.DbData(), tableDeltas, fromRefDetails, toRefDetails)
 	if err != nil {
 		return nil, err
 	}
 
-	return newPatchTableFunctionRowIter(patches, fromCommitStr, toCommitStr), nil
+	return newPatchTableFunctionRowIter(patches, fromRefDetails.hashStr, toRefDetails.hashStr), nil
 }
 
 // evaluateArguments returns fromCommitVal, toCommitVal, dotCommitVal, and tableName.
@@ -350,7 +337,7 @@ type patchNode struct {
 	dataPatchStmts   []string
 }
 
-func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.TableDelta, toRoot *doltdb.RootValue, toRef string, toTime *types.Timestamp, fromRef string, fromTime *types.Timestamp) ([]*patchNode, error) {
+func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.TableDelta, fromRefDetails, toRefDetails *refDetails) ([]*patchNode, error) {
 	var patches []*patchNode
 	for _, td := range tableDeltas {
 		// no diff
@@ -364,7 +351,7 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 		}
 
 		// Get SCHEMA DIFF
-		schemaStmts, err := getSchemaSqlPatch(ctx, toRoot, td)
+		schemaStmts, err := getSchemaSqlPatch(ctx, toRefDetails.root, td)
 		if err != nil {
 			return nil, err
 		}
@@ -372,7 +359,7 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 		// Get DATA DIFF
 		var dataStmts []string
 		if canGetDataDiff(ctx, td) {
-			dataStmts, err = getUserTableDataSqlPatch(ctx, dbData, td, fromRef, fromTime, toRef, toTime)
+			dataStmts, err = getUserTableDataSqlPatch(ctx, dbData, td, fromRefDetails, toRefDetails)
 			if err != nil {
 				return nil, err
 			}
@@ -446,9 +433,9 @@ func canGetDataDiff(ctx *sql.Context, td diff.TableDelta) bool {
 	return true
 }
 
-func getUserTableDataSqlPatch(ctx *sql.Context, dbData env.DbData, td diff.TableDelta, fromRef string, fromTime *types.Timestamp, toRef string, toTime *types.Timestamp) ([]string, error) {
+func getUserTableDataSqlPatch(ctx *sql.Context, dbData env.DbData, td diff.TableDelta, fromRefDetails, toRefDetails *refDetails) ([]string, error) {
 	// ToTable is used as target table as it cannot be nil at this point
-	diffSch, projections, ri, err := getDiffQuery(ctx, dbData, td, fromRef, fromTime, toRef, toTime)
+	diffSch, projections, ri, err := getDiffQuery(ctx, dbData, td, fromRefDetails, toRefDetails)
 	if err != nil {
 		return nil, err
 	}
@@ -511,7 +498,7 @@ func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema
 // on diff table function row iter. This function attempts to imitate running a query
 // fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columnsWithDiff, "diff_type", fromRef, toRef, tableName)
 // on sql engine, which returns the schema and rowIter of the final data diff result.
-func getDiffQuery(ctx *sql.Context, dbData env.DbData, td diff.TableDelta, fromRef string, fromTime *types.Timestamp, toRef string, toTime *types.Timestamp) (sql.Schema, []sql.Expression, sql.RowIter, error) {
+func getDiffQuery(ctx *sql.Context, dbData env.DbData, td diff.TableDelta, fromRefDetails, toRefDetails *refDetails) (sql.Schema, []sql.Expression, sql.RowIter, error) {
 	diffTableSchema, j, err := dtables.GetDiffTableSchemaAndJoiner(td.ToTable.Format(), td.FromSch, td.ToSch)
 	if err != nil {
 		return nil, nil, nil, err
@@ -524,7 +511,7 @@ func getDiffQuery(ctx *sql.Context, dbData env.DbData, td diff.TableDelta, fromR
 	columnsWithDiff := getColumnNamesWithDiff(td.FromSch, td.ToSch)
 	diffQuerySqlSch, projections := getDiffQuerySqlSchemaAndProjections(diffPKSch.Schema, columnsWithDiff)
 
-	dp := dtables.NewDiffPartition(td.ToTable, td.FromTable, toRef, fromRef, toTime, fromTime, td.ToSch, td.FromSch)
+	dp := dtables.NewDiffPartition(td.ToTable, td.FromTable, toRefDetails.hashStr, fromRefDetails.hashStr, toRefDetails.commitTime, fromRefDetails.commitTime, td.ToSch, td.FromSch)
 	ri := dtables.NewDiffPartitionRowIter(*dp, dbData.Ddb, j)
 
 	return diffQuerySqlSch, projections, ri, nil

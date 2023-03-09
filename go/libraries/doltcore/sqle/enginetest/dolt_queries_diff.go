@@ -3058,13 +3058,11 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		Name: "using WORKING and STAGED refs on RENAME, DROP and ADD column",
 		SetUpScript: []string{
 			"set @Commit0 = HashOf('HEAD');",
-
 			"create table t (pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int comment 'tag:5');",
 			"call dolt_add('.')",
 			"insert into t values (0,1,2,3,4,5), (1,1,2,3,4,5);",
 			"set @Commit1 = '';",
 			"call dolt_commit_hash_out(@Commit1, '-am', 'inserting two rows into table t');",
-
 			"alter table t rename column c1 to c0",
 			"alter table t drop column c4",
 			"alter table t add c6 bigint",
@@ -3087,27 +3085,27 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('STAGED', 'WORKING', 't')",
+				Query: "SELECT * FROM dolt_patch('STAGED', 'WORKING', 't')",
 				Expected: []sql.Row{
-					{1, "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
-					{2, "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
-					{3, "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
+					{1, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
+					{2, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
+					{3, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
 				},
 			},
 			{
-				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('STAGED..WORKING', 't')",
+				Query: "SELECT * FROM dolt_patch('STAGED..WORKING', 't')",
 				Expected: []sql.Row{
-					{1, "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
-					{2, "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
-					{3, "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
+					{1, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
+					{2, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
+					{3, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
 				},
 			},
 			{
-				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('WORKING', 'STAGED', 't')",
+				Query: "SELECT * FROM dolt_patch('WORKING', 'STAGED', 't')",
 				Expected: []sql.Row{
-					{1, "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c0` TO `c1`;"},
-					{2, "t", "schema", "ALTER TABLE `t` DROP `c6`;"},
-					{3, "t", "schema", "ALTER TABLE `t` ADD `c4` int;"},
+					{1, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c0` TO `c1`;"},
+					{2, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` DROP `c6`;"},
+					{3, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` ADD `c4` int;"},
 				},
 			},
 			{
@@ -3314,6 +3312,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			"insert into parent values (0, 1, 2, NULL);",
 			"ALTER TABLE parent DROP PRIMARY KEY;",
 			"ALTER TABLE parent ADD PRIMARY KEY(id, id_ext);",
+			"call dolt_add('.')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -3325,12 +3324,12 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "SELECT * FROM dolt_patch('HEAD', 'WORKING')",
+				Query: "SELECT statement_order, to_commit_hash, table_name, diff_type, statement FROM dolt_patch('HEAD', 'STAGED')",
 				Expected: []sql.Row{
-					{1, "HEAD", "WORKING", "child", "schema", "ALTER TABLE `child` ADD INDEX `v1`(`v1`);"},
-					{2, "HEAD", "WORKING", "child", "schema", "ALTER TABLE `child` ADD CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`);"},
-					{3, "HEAD", "WORKING", "parent", "schema", "ALTER TABLE `parent` DROP PRIMARY KEY;"},
-					{4, "HEAD", "WORKING", "parent", "schema", "ALTER TABLE `parent` ADD PRIMARY KEY (id,id_ext);"},
+					{1, "STAGED", "child", "schema", "ALTER TABLE `child` ADD INDEX `v1`(`v1`);"},
+					{2, "STAGED", "child", "schema", "ALTER TABLE `child` ADD CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`);"},
+					{3, "STAGED", "parent", "schema", "ALTER TABLE `parent` DROP PRIMARY KEY;"},
+					{4, "STAGED", "parent", "schema", "ALTER TABLE `parent` ADD PRIMARY KEY (id,id_ext);"},
 				},
 				ExpectedWarningsCount: 2,
 			},

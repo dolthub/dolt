@@ -27,7 +27,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
@@ -254,23 +253,12 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		return nil, fmt.Errorf("unexpected database type: %T", ds.database)
 	}
 
-	fromCommitStr, toCommitStr, err := loadCommitStrings(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
+	fromRefDetails, toRefDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
 	if err != nil {
 		return nil, err
 	}
 
-	sess := dsess.DSessFromSess(ctx.Session)
-	fromRoot, _, err := sess.ResolveRootForRef(ctx, sqledb.Name(), fromCommitStr)
-	if err != nil {
-		return nil, err
-	}
-
-	toRoot, _, err := sess.ResolveRootForRef(ctx, sqledb.Name(), toCommitStr)
-	if err != nil {
-		return nil, err
-	}
-
-	deltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
+	deltas, err := diff.GetTableDeltas(ctx, fromRefDetails.root, toRefDetails.root)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +266,7 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 	// If tableNameExpr defined, return a single table diff stat result
 	if ds.tableNameExpr != nil {
 		delta := findMatchingDelta(deltas, tableName)
-		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRoot, toRoot, tableName)
+		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tableName)
 		if err != nil {
 			return nil, err
 		}
@@ -294,7 +282,7 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		if tblName == "" {
 			tblName = delta.FromName
 		}
-		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRoot, toRoot, tblName)
+		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName)
 		if err != nil {
 			if errors.Is(err, diff.ErrPrimaryKeySetChanged) {
 				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, fmt.Sprintf("stat for table %s cannot be determined. Primary key set changed.", tblName))

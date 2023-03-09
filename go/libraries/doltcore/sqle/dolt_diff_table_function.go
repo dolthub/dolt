@@ -206,16 +206,19 @@ func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
+	dbName := db.Name()
 
-	fromDetails, err := resolveRoot(ctx, sess, db.Name(), fromCommitStr)
+	fromRoot, fromCommitTime, fromHashStr, err := sess.ResolveRootForRef(ctx, dbName, fromCommitStr)
 	if err != nil {
 		return nil, nil, err
 	}
+	fromDetails := &refDetails{fromRoot, fromHashStr, fromCommitTime}
 
-	toDetails, err := resolveRoot(ctx, sess, db.Name(), toCommitStr)
+	toRoot, toCommitTime, toHashStr, err := sess.ResolveRootForRef(ctx, dbName, toCommitStr)
 	if err != nil {
 		return nil, nil, err
 	}
+	toDetails := &refDetails{toRoot, toHashStr, toCommitTime}
 
 	return fromDetails, toDetails, nil
 }
@@ -297,7 +300,7 @@ func interfaceToString(r interface{}) (string, error) {
 }
 
 func resolveRoot(ctx *sql.Context, sess *dsess.DoltSession, dbName, hashStr string) (*refDetails, error) {
-	root, commitTime, err := sess.ResolveRootForRef(ctx, dbName, hashStr)
+	root, commitTime, _, err := sess.ResolveRootForRef(ctx, dbName, hashStr)
 	if err != nil {
 		return nil, err
 	}
