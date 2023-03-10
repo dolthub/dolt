@@ -241,12 +241,20 @@ func (t StaticMap[K, V, O]) Has(ctx context.Context, query K) (ok bool, err erro
 	cur, err := newLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, t.Order)
 	if err != nil {
 		return false, err
-	}
-
-	if cur.valid() {
+	} else if cur.valid() {
 		ok = t.Order.Compare(query, K(cur.currentKey())) == 0
 	}
+	return
+}
 
+func (t StaticMap[K, V, O]) HasPrefix(ctx context.Context, query K, prefixOrder O) (ok bool, err error) {
+	cur, err := newLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, prefixOrder)
+	if err != nil {
+		return false, err
+	} else if cur.valid() {
+		// true if |query| is a prefix of |cur.currentKey()|
+		ok = t.Order.Compare(query, K(cur.currentKey())) == 0
+	}
 	return
 }
 

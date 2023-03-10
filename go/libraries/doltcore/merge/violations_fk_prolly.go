@@ -168,7 +168,7 @@ func prollyChildSecDiffFkConstraintViolations(
 				}
 			}
 
-			ok, err := parentSecIdx.HasRange(ctx, prolly.PrefixRange(k, prefixDesc))
+			ok, err := parentSecIdx.HasPrefix(ctx, k, prefixDesc)
 			if err != nil {
 				return err
 			} else if !ok {
