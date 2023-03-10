@@ -63,7 +63,7 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 				return doltdb.Roots{}, err
 			}
 
-			fkc, err = roots.Staged.GetForeignKeyCollection(ctx)
+			fkc, err = roots.Head.GetForeignKeyCollection(ctx)
 			if err != nil {
 				return doltdb.Roots{}, err
 			}

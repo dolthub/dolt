@@ -114,13 +114,19 @@ SQL
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
     [[ "$output" =~ "modified:       z" ]] || false
 
-    run dolt checkout z
+    run dolt schema show z
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ "$output" =~ "foreign_key1" ]] || false
+
+    dolt checkout z
 
     run dolt status
     [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt schema show z
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "foreign_key1" ]] || false
 
     dolt sql -q "ALTER TABLE z ADD CONSTRAINT foreign_key1 FOREIGN KEY (c1) references t(c1)"
     dolt commit -am "add fkey"
@@ -130,13 +136,19 @@ SQL
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
     [[ "$output" =~ "modified:       z" ]] || false
 
-    run dolt checkout z
+    run dolt schema show z
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ ! "$output" =~ "foreign_key1" ]] || false
+
+    dolt checkout z
 
     run dolt status
     [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt schema show z
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "foreign_key1" ]] || false
 }
 
 @test "checkout: with -f flag without conflict" {
