@@ -16,6 +16,7 @@ package env
 
 import (
 	"crypto/tls"
+	"net"
 	"net/http"
 	"runtime"
 	"strings"
@@ -117,7 +118,15 @@ func (p GRPCDialProvider) getRPCCreds(endpoint string) (credentials.PerRPCCreden
 		return nil, nil
 	}
 
-	return dCreds.RPCCreds(endpoint), nil
+	return dCreds.RPCCreds(getHostFromEndpoint(endpoint)), nil
+}
+
+func getHostFromEndpoint(endpoint string) string {
+	host, _, err := net.SplitHostPort(endpoint)
+	if err != nil {
+		return DefaultRemotesApiHost
+	}
+	return host
 }
 
 // getUserAgentString returns a user agent string to use in GRPC requests.
