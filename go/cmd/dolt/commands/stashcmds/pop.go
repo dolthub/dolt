@@ -33,9 +33,9 @@ import (
 
 var stashPopDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Remove a single stash from the stash list and apply it on top of the current working set.",
-	LongDesc: `Applying the state can fail with conflicts; in this case, it is not removed from the stash list. 
+	LongDesc: `Apply a single stash at given index and drop that stash entry from the stash list (e.g. 'dolt stash pop stash@{1}' will apply and drop the stash entry at index 1 in the stash list).
 
-You need to resolve the conflicts by hand and call dolt stash drop manually afterwards.
+Applying the stash entry can fail with conflicts; in this case, the stash entry is not removed from the stash list. You need to resolve the conflicts by hand and call dolt stash drop manually afterwards.
 `,
 	Synopsis: []string{
 		"{{.LessThan}}stash{{.GreaterThan}}",

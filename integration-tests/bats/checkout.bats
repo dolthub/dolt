@@ -104,6 +104,53 @@ SQL
     [[ "$output" =~ "some error" ]] || false
 }
 
+@test "checkout: dolt checkout table to restore working tree tables with add and drop foreign key" {
+    dolt sql -q "create table t (c1 int primary key, c2 int, check(c2 > 0))"
+    dolt sql -q "create table z (c1 int primary key, c2 int)"
+    dolt commit -Am "create tables t and z"
+
+    dolt sql -q "ALTER TABLE z ADD CONSTRAINT foreign_key1 FOREIGN KEY (c1) references t(c1)"
+    run dolt status
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "modified:       z" ]] || false
+
+    run dolt schema show z
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "foreign_key1" ]] || false
+
+    dolt checkout z
+
+    run dolt status
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt schema show z
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "foreign_key1" ]] || false
+
+    dolt sql -q "ALTER TABLE z ADD CONSTRAINT foreign_key1 FOREIGN KEY (c1) references t(c1)"
+    dolt commit -am "add fkey"
+
+    dolt sql -q "alter table z drop constraint foreign_key1"
+    run dolt status
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "modified:       z" ]] || false
+
+    run dolt schema show z
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "foreign_key1" ]] || false
+
+    dolt checkout z
+
+    run dolt status
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt schema show z
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "foreign_key1" ]] || false
+}
+
 @test "checkout: with -f flag without conflict" {
     dolt sql -q 'create table test (id int primary key);'
     dolt sql -q 'insert into test (id) values (8);'
