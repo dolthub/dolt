@@ -27,7 +27,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
@@ -80,8 +79,9 @@ func (ds *DiffStatTableFunction) Database() sql.Database {
 
 // WithDatabase implements the sql.Databaser interface
 func (ds *DiffStatTableFunction) WithDatabase(database sql.Database) (sql.Node, error) {
-	ds.database = database
-	return ds, nil
+	nds := *ds
+	nds.database = database
+	return &nds, nil
 }
 
 // Name implements the sql.TableFunction interface
@@ -200,46 +200,47 @@ func (ds *DiffStatTableFunction) WithExpressions(expression ...sql.Expression) (
 		}
 	}
 
+	newDstf := *ds
 	if strings.Contains(expression[0].String(), "..") {
 		if len(expression) < 1 || len(expression) > 2 {
-			return nil, sql.ErrInvalidArgumentNumber.New(ds.Name(), "1 or 2", len(expression))
+			return nil, sql.ErrInvalidArgumentNumber.New(newDstf.Name(), "1 or 2", len(expression))
 		}
-		ds.dotCommitExpr = expression[0]
+		newDstf.dotCommitExpr = expression[0]
 		if len(expression) == 2 {
-			ds.tableNameExpr = expression[1]
+			newDstf.tableNameExpr = expression[1]
 		}
 	} else {
 		if len(expression) < 2 || len(expression) > 3 {
-			return nil, sql.ErrInvalidArgumentNumber.New(ds.Name(), "2 or 3", len(expression))
+			return nil, sql.ErrInvalidArgumentNumber.New(newDstf.Name(), "2 or 3", len(expression))
 		}
-		ds.fromCommitExpr = expression[0]
-		ds.toCommitExpr = expression[1]
+		newDstf.fromCommitExpr = expression[0]
+		newDstf.toCommitExpr = expression[1]
 		if len(expression) == 3 {
-			ds.tableNameExpr = expression[2]
+			newDstf.tableNameExpr = expression[2]
 		}
 	}
 
 	// validate the expressions
-	if ds.dotCommitExpr != nil {
-		if !types.IsText(ds.dotCommitExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ds.Name(), ds.dotCommitExpr.String())
+	if newDstf.dotCommitExpr != nil {
+		if !types.IsText(newDstf.dotCommitExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.dotCommitExpr.String())
 		}
 	} else {
-		if !types.IsText(ds.fromCommitExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ds.Name(), ds.fromCommitExpr.String())
+		if !types.IsText(newDstf.fromCommitExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.fromCommitExpr.String())
 		}
-		if !types.IsText(ds.toCommitExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ds.Name(), ds.toCommitExpr.String())
-		}
-	}
-
-	if ds.tableNameExpr != nil {
-		if !types.IsText(ds.tableNameExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ds.Name(), ds.tableNameExpr.String())
+		if !types.IsText(newDstf.toCommitExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.toCommitExpr.String())
 		}
 	}
 
-	return ds, nil
+	if newDstf.tableNameExpr != nil {
+		if !types.IsText(newDstf.tableNameExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.tableNameExpr.String())
+		}
+	}
+
+	return &newDstf, nil
 }
 
 // RowIter implements the sql.Node interface
@@ -254,23 +255,12 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		return nil, fmt.Errorf("unexpected database type: %T", ds.database)
 	}
 
-	fromCommitStr, toCommitStr, err := loadCommitStrings(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
+	fromRefDetails, toRefDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
 	if err != nil {
 		return nil, err
 	}
 
-	sess := dsess.DSessFromSess(ctx.Session)
-	fromRoot, _, err := sess.ResolveRootForRef(ctx, sqledb.Name(), fromCommitStr)
-	if err != nil {
-		return nil, err
-	}
-
-	toRoot, _, err := sess.ResolveRootForRef(ctx, sqledb.Name(), toCommitStr)
-	if err != nil {
-		return nil, err
-	}
-
-	deltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
+	deltas, err := diff.GetTableDeltas(ctx, fromRefDetails.root, toRefDetails.root)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +268,7 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 	// If tableNameExpr defined, return a single table diff stat result
 	if ds.tableNameExpr != nil {
 		delta := findMatchingDelta(deltas, tableName)
-		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRoot, toRoot, tableName)
+		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tableName)
 		if err != nil {
 			return nil, err
 		}
@@ -294,7 +284,7 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		if tblName == "" {
 			tblName = delta.FromName
 		}
-		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRoot, toRoot, tblName)
+		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName)
 		if err != nil {
 			if errors.Is(err, diff.ErrPrimaryKeySetChanged) {
 				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, fmt.Sprintf("stat for table %s cannot be determined. Primary key set changed.", tblName))

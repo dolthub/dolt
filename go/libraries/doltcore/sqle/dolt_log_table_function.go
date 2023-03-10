@@ -76,8 +76,9 @@ func (ltf *LogTableFunction) Database() sql.Database {
 
 // WithDatabase implements the sql.Databaser interface
 func (ltf *LogTableFunction) WithDatabase(database sql.Database) (sql.Node, error) {
-	ltf.database = database
-	return ltf, nil
+	nltf := *ltf
+	nltf.database = database
+	return &nltf, nil
 }
 
 // Name implements the sql.TableFunction interface
@@ -259,7 +260,8 @@ func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.
 		}
 	}
 
-	if err := ltf.addOptions(expression); err != nil {
+	newLtf := *ltf
+	if err := newLtf.addOptions(expression); err != nil {
 		return nil, err
 	}
 
@@ -272,22 +274,22 @@ func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.
 	}
 
 	if len(filteredExpressions) > 2 {
-		return nil, sql.ErrInvalidArgumentNumber.New(ltf.Name(), "0 to 2", len(filteredExpressions))
+		return nil, sql.ErrInvalidArgumentNumber.New(newLtf.Name(), "0 to 2", len(filteredExpressions))
 	}
 
 	exLen := len(filteredExpressions)
 	if exLen > 0 {
-		ltf.revisionExpr = filteredExpressions[0]
+		newLtf.revisionExpr = filteredExpressions[0]
 	}
 	if exLen == 2 {
-		ltf.secondRevisionExpr = filteredExpressions[1]
+		newLtf.secondRevisionExpr = filteredExpressions[1]
 	}
 
-	if err := ltf.validateRevisionExpressions(); err != nil {
+	if err := newLtf.validateRevisionExpressions(); err != nil {
 		return nil, err
 	}
 
-	return ltf, nil
+	return &newLtf, nil
 }
 
 func (ltf *LogTableFunction) invalidArgDetailsErr(expr sql.Expression, reason string) *errors.Error {
