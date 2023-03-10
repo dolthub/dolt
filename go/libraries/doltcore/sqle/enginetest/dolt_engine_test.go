@@ -1276,6 +1276,28 @@ func TestDiffSummaryTableFunctionPrepared(t *testing.T) {
 	}
 }
 
+func TestPatchTableFunction(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range PatchTableFunctionScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func TestPatchTableFunctionPrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range PatchTableFunctionScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
 func TestLogTableFunction(t *testing.T) {
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
