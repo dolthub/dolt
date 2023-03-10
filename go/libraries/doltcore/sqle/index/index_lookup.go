@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -258,6 +259,7 @@ func NewLookupBuilder(
 	if isDoltFormat {
 		base.sec = durable.ProllyMapFromIndex(s.Secondary)
 		base.secKd, base.secVd = base.sec.Descriptors()
+		base.ns = base.sec.NodeStore()
 	}
 
 	switch {
@@ -328,6 +330,7 @@ type baseLookupBuilder struct {
 
 	sec          prolly.Map
 	secKd, secVd val.TupleDesc
+	ns           tree.NodeStore
 }
 
 func (lb *baseLookupBuilder) Key() doltdb.DataCacheKey {
@@ -391,6 +394,7 @@ func (lb *coveringLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition
 		valMap:    lb.valMap,
 		ordMap:    lb.ordMap,
 		sqlSch:    lb.sch.Schema,
+		ns:        lb.ns,
 	}, nil
 }
 
