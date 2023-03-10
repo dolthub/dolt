@@ -17,6 +17,7 @@ package credcmds
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"google.golang.org/grpc"
 
@@ -97,12 +98,20 @@ func (cmd CheckCmd) Exec(ctx context.Context, commandStr string, args []string, 
 func loadEndpoint(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (string, string) {
 	earg, ok := apr.GetValue("endpoint")
 	if ok {
-		return "", earg // TODO
+		return getHostFromEndpoint(earg), earg
 	}
 
 	host := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
 	port := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
 	return host, fmt.Sprintf("%s:%s", host, port)
+}
+
+func getHostFromEndpoint(endpoint string) string {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return env.DefaultRemotesApiHost
+	}
+	return u.Hostname()
 }
 
 func loadCred(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (creds.DoltCreds, errhand.VerboseError) {
