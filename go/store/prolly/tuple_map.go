@@ -118,29 +118,10 @@ func DiffMaps(ctx context.Context, from, to Map, cb tree.DiffFn) error {
 // RangeDiffMaps returns diffs within a Range. See Range for which diffs are
 // returned.
 func RangeDiffMaps(ctx context.Context, from, to Map, rng Range, cb tree.DiffFn) error {
-	fns, tns := from.tuples.NodeStore, to.tuples.NodeStore
-
-	fromStart, err := tree.NewCursorFromSearchFn(ctx, fns, from.tuples.Root, rangeStartSearchFn(rng))
-	if err != nil {
-		return err
-	}
-	toStart, err := tree.NewCursorFromSearchFn(ctx, tns, to.tuples.Root, rangeStartSearchFn(rng))
-	if err != nil {
-		return err
-	}
-
-	fromStop, err := tree.NewCursorFromSearchFn(ctx, fns, from.tuples.Root, rangeStopSearchFn(rng))
-	if err != nil {
-		return err
-	}
-	toStop, err := tree.NewCursorFromSearchFn(ctx, tns, to.tuples.Root, rangeStopSearchFn(rng))
-	if err != nil {
-		return err
-	}
-
 	differ, err := tree.DifferFromCursors[val.Tuple, val.TupleDesc](
-		fromStart, toStart,
-		fromStop, toStop,
+		ctx, from.tuples.Root, to.tuples.Root,
+		rangeStartSearchFn(rng), rangeStopSearchFn(rng),
+		from.NodeStore(), to.NodeStore(),
 		from.tuples.Order,
 	)
 	if err != nil {
@@ -287,10 +268,28 @@ func (m Map) FetchOrdinalRange(ctx context.Context, start, stop uint64) (MapIter
 	return m.tuples.FetchOrdinalRange(ctx, start, stop)
 }
 
+// HasRange returns true if the Map contains a key in |rng|.
+func (m Map) HasRange(ctx context.Context, rng Range) (bool, error) {
+	iter, err := m.IterRange(ctx, rng)
+	if err != nil {
+		return false, err
+	}
+	k, _, err := iter.Next(ctx)
+	if err != nil {
+		return false, err
+	}
+	return rng.Matches(k), nil
+}
+
 // IterRange returns a mutableMapIter that iterates over a Range.
 func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 	if rng.IsPointLookup(m.keyDesc) {
-		return m.pointLookupFromRange(ctx, rng)
+		var iter MapIter
+		err := m.Get(ctx, rng.Tup, func(key val.Tuple, value val.Tuple) error {
+			iter = &pointLookup{k: key, v: value}
+			return nil
+		})
+		return iter, err
 	}
 
 	iter, err := treeIterFromRange(ctx, m.tuples.Root, m.tuples.NodeStore, rng)
@@ -298,13 +297,6 @@ func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 		return nil, err
 	}
 	return filteredIter{iter: iter, rng: rng}, nil
-}
-
-// IterKeyRange iterates over a physical key range defined by |start| and
-// |stop|. If |startInclusive| and/or |stop| is nil, the range will be open
-// towards that end.
-func (m Map) IterKeyRange(ctx context.Context, start, stop val.Tuple) (MapIter, error) {
-	return m.tuples.IterKeyRange(ctx, start, stop)
 }
 
 // GetOrdinalForKey returns the smallest ordinal position at which the key >=
@@ -332,49 +324,14 @@ func (m Map) CompareItems(left, right tree.Item) int {
 	return m.keyDesc.Compare(val.Tuple(left), val.Tuple(right))
 }
 
-func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup, error) {
-	cur, err := tree.NewCursorFromSearchFn(ctx, m.tuples.NodeStore, m.tuples.Root, rangeStartSearchFn(rng))
-	if err != nil {
-		return nil, err
-	}
-	if !cur.Valid() {
-		// map does not contain |rng|
-		return &pointLookup{}, nil
-	}
-
-	key := val.Tuple(cur.CurrentKey())
-	value := val.Tuple(cur.CurrentValue())
-
-	if !rng.Matches(key) {
-		return &pointLookup{}, nil
-	}
-
-	return &pointLookup{k: key, v: value}, nil
-}
-
 func treeIterFromRange(
 	ctx context.Context,
 	root tree.Node,
 	ns tree.NodeStore,
 	rng Range,
 ) (*tree.OrderedTreeIter[val.Tuple, val.Tuple], error) {
-	var (
-		err   error
-		start *tree.Cursor
-		stop  *tree.Cursor
-	)
-
-	start, err = tree.NewCursorFromSearchFn(ctx, ns, root, rangeStartSearchFn(rng))
-	if err != nil {
-		return nil, err
-	}
-
-	stop, err = tree.NewCursorFromSearchFn(ctx, ns, root, rangeStopSearchFn(rng))
-	if err != nil {
-		return nil, err
-	}
-
-	return tree.OrderedTreeIterFromCursors[val.Tuple, val.Tuple](start, stop), nil
+	findStart, findStop := rangeStartSearchFn(rng), rangeStopSearchFn(rng)
+	return tree.OrderedTreeIterFromCursors[val.Tuple, val.Tuple](ctx, root, ns, findStart, findStop)
 }
 
 func NewPointLookup(k, v val.Tuple) *pointLookup {
