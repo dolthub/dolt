@@ -270,12 +270,14 @@ func (m Map) FetchOrdinalRange(ctx context.Context, start, stop uint64) (MapIter
 
 // HasRange returns true if the Map contains a key in |rng|.
 func (m Map) HasRange(ctx context.Context, rng Range) (bool, error) {
-	iter, err := m.IterRange(ctx, rng)
+	iter, err := treeIterFromRange(ctx, m.tuples.Root, m.tuples.NodeStore, rng)
 	if err != nil {
 		return false, err
 	}
 	k, _, err := iter.Next(ctx)
-	if err != nil {
+	if err == io.EOF {
+		return false, nil
+	} else if err != nil {
 		return false, err
 	}
 	return rng.Matches(k), nil
