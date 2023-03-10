@@ -362,18 +362,34 @@ func (w *prollyTableWriter) flush(ctx *sql.Context) error {
 }
 
 func ordinalMappingsFromSchema(from sql.Schema, to schema.Schema) (km, vm val.OrdinalMapping) {
-	km = makeOrdinalMapping(from, to.GetPKCols())
-	vm = makeOrdinalMapping(from, to.GetNonPKCols())
+	keyless := schema.IsKeyless(to)
+	km = makeOrdinalMapping(from, to.GetPKCols(), false)
+	vm = makeOrdinalMapping(from, to.GetNonPKCols(), keyless)
 	return
 }
 
-func makeOrdinalMapping(from sql.Schema, to *schema.ColCollection) (m val.OrdinalMapping) {
-	m = make(val.OrdinalMapping, len(to.GetColumns()))
-	for i := range m {
-		name := to.GetByIndex(i).Name
-		for j, col := range from {
-			if col.Name == name {
-				m[i] = j
+func makeOrdinalMapping(from sql.Schema, to *schema.ColCollection, keyless bool) (m val.OrdinalMapping) {
+	if keyless {
+		m = make(val.OrdinalMapping, len(to.GetColumns()) + 1)
+		for i := range m {
+			if i == 0 {
+				continue
+			}
+			name := to.GetByIndex(i - 1).Name
+			for j, col := range from {
+				if col.Name == name {
+					m[i] = j
+				}
+			}
+		}
+	} else {
+		m = make(val.OrdinalMapping, len(to.GetColumns()))
+		for i := range m {
+			name := to.GetByIndex(i).Name
+			for j, col := range from {
+				if col.Name == name {
+					m[i] = j
+				}
 			}
 		}
 	}

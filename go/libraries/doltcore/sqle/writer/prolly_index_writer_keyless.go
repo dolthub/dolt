@@ -135,9 +135,9 @@ func (k prollyKeylessWriter) tuplesFromRow(ctx context.Context, sqlRow sql.Row) 
 		return nil, nil, err
 	}
 
-	for to := range k.valMap {
+	for to := 1; to < len(k.valMap); to++ {
 		from := k.valMap.MapOrdinal(to)
-		if err = index.PutField(ctx, k.mut.NodeStore(), k.valBld, to+1, sqlRow[from]); err != nil {
+		if err = index.PutField(ctx, k.mut.NodeStore(), k.valBld, to, sqlRow[from]); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -158,10 +158,10 @@ func (k prollyKeylessWriter) uniqueKeyError(ctx context.Context, keyStr string, 
 
 	_ = k.mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
 		vd := k.valBld.Desc
-		for from := range k.valMap {
+		for from := 1; from < len(k.valMap); from++ {
 			to := k.valMap.MapOrdinal(from)
 			// offset from index for keyless rows, as first field is the count
-			if existing[to], err = index.GetField(ctx, vd, from+1, value, k.mut.NodeStore()); err != nil {
+			if existing[to], err = index.GetField(ctx, vd, from, value, k.mut.NodeStore()); err != nil {
 				return err
 			}
 		}
