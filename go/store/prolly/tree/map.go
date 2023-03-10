@@ -253,7 +253,7 @@ func (t StaticMap[K, V, O]) HasPrefix(ctx context.Context, query K, prefixOrder 
 		return false, err
 	} else if cur.valid() {
 		// true if |query| is a prefix of |cur.currentKey()|
-		ok = t.Order.Compare(query, K(cur.currentKey())) == 0
+		ok = prefixOrder.Compare(query, K(cur.currentKey())) == 0
 	}
 	return
 }
