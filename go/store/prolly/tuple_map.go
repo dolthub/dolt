@@ -283,15 +283,6 @@ func (m Map) HasRange(ctx context.Context, rng Range) (bool, error) {
 
 // IterRange returns a mutableMapIter that iterates over a Range.
 func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
-	if rng.IsPointLookup(m.keyDesc) {
-		var iter MapIter
-		err := m.Get(ctx, rng.Tup, func(key val.Tuple, value val.Tuple) error {
-			iter = &pointLookup{k: key, v: value}
-			return nil
-		})
-		return iter, err
-	}
-
 	iter, err := treeIterFromRange(ctx, m.tuples.Root, m.tuples.NodeStore, rng)
 	if err != nil {
 		return nil, err

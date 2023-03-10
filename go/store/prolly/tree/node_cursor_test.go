@@ -47,24 +47,24 @@ func TestNodeCursor(t *testing.T) {
 		ctx := context.Background()
 		root, _, ns := randomTree(t, 10_000)
 		assert.NotNil(t, root)
-		before, err := NewCursorAtStart(ctx, ns, root)
+		before, err := newCursorAtStart(ctx, ns, root)
 		assert.NoError(t, err)
-		err = before.Retreat(ctx)
+		err = before.retreat(ctx)
 		assert.NoError(t, err)
-		assert.False(t, before.Valid())
+		assert.False(t, before.valid())
 
-		start, err := NewCursorAtStart(ctx, ns, root)
+		start, err := newCursorAtStart(ctx, ns, root)
 		assert.NoError(t, err)
-		assert.True(t, start.Compare(before) > 0, "start is after before")
-		assert.True(t, before.Compare(start) < 0, "before is before start")
+		assert.True(t, start.compare(before) > 0, "start is after before")
+		assert.True(t, before.compare(start) < 0, "before is before start")
 
 		// Backwards iteration...
-		end, err := NewCursorAtEnd(ctx, ns, root)
+		end, err := newCursorAtEnd(ctx, ns, root)
 		assert.NoError(t, err)
 		i := 0
-		for end.Compare(before) > 0 {
+		for end.compare(before) > 0 {
 			i++
-			err = end.Retreat(ctx)
+			err = end.retreat(ctx)
 			assert.NoError(t, err)
 		}
 		assert.Equal(t, 10_000/2, i)
@@ -78,10 +78,10 @@ func testNewCursorAtItem(t *testing.T, count int) {
 	ctx := context.Background()
 	for i := range items {
 		key, value := items[i][0], items[i][1]
-		cur, err := NewCursorAtKey(ctx, ns, root, val.Tuple(key), keyDesc)
+		cur, err := newCursorAtKey(ctx, ns, root, val.Tuple(key), keyDesc)
 		require.NoError(t, err)
-		assert.Equal(t, key, cur.CurrentKey())
-		assert.Equal(t, value, cur.CurrentValue())
+		assert.Equal(t, key, cur.currentKey())
+		assert.Equal(t, value, cur.currentValue())
 	}
 
 	validateTreeItems(t, ns, root, items)
@@ -104,10 +104,10 @@ func testGetOrdinalOfCursor(t *testing.T, count int) {
 	assert.NoError(t, err)
 
 	for i := 0; i < len(tuples); i++ {
-		curr, err := NewCursorAtKey(ctx, ns, nd, tuples[i][0], desc)
+		curr, err := newCursorAtKey(ctx, ns, nd, tuples[i][0], desc)
 		require.NoError(t, err)
 
-		ord, err := GetOrdinalOfCursor(curr)
+		ord, err := getOrdinalOfCursor(curr)
 		require.NoError(t, err)
 
 		assert.Equal(t, uint64(i), ord)
@@ -117,20 +117,20 @@ func testGetOrdinalOfCursor(t *testing.T, count int) {
 	b.PutUint32(0, uint32(len(tuples)))
 	aboveItem := b.Build(sharedPool)
 
-	curr, err := NewCursorAtKey(ctx, ns, nd, aboveItem, desc)
+	curr, err := newCursorAtKey(ctx, ns, nd, aboveItem, desc)
 	require.NoError(t, err)
 
-	ord, err := GetOrdinalOfCursor(curr)
+	ord, err := getOrdinalOfCursor(curr)
 	require.NoError(t, err)
 
 	require.Equal(t, uint64(len(tuples)), ord)
 
 	// A cursor past the end should return an ordinal count equal to number of
 	// nodes.
-	curr, err = NewCursorPastEnd(ctx, ns, nd)
+	curr, err = newCursorPastEnd(ctx, ns, nd)
 	require.NoError(t, err)
 
-	ord, err = GetOrdinalOfCursor(curr)
+	ord, err = getOrdinalOfCursor(curr)
 	require.NoError(t, err)
 
 	require.Equal(t, uint64(len(tuples)), ord)
