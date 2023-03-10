@@ -343,25 +343,21 @@ func TestSpatialScriptsPrepared(t *testing.T) {
 
 func TestSpatialIndexScripts(t *testing.T) {
 	skipOldFormat(t)
-	schema.EnableSpatialIndex = true
 	enginetest.TestSpatialIndexScripts(t, newDoltHarness(t))
 }
 
 func TestSpatialIndexScriptsPrepared(t *testing.T) {
 	skipOldFormat(t)
-	schema.EnableSpatialIndex = true
 	enginetest.TestSpatialIndexScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestSpatialIndexPlans(t *testing.T) {
 	skipOldFormat(t)
-	schema.EnableSpatialIndex = true
 	enginetest.TestSpatialIndexPlans(t, newDoltHarness(t))
 }
 
 func TestSpatialIndexPlansPrepared(t *testing.T) {
 	skipOldFormat(t)
-	schema.EnableSpatialIndex = true
 	enginetest.TestSpatialIndexPlansPrepared(t, newDoltHarness(t))
 }
 
