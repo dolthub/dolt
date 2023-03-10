@@ -142,7 +142,7 @@ var ShowCreateTableAsOfScriptTest = queries.ScriptTest{
 					"  `pk` int NOT NULL,\n" +
 					"  `c2` varchar(20),\n" +
 					"  PRIMARY KEY (`pk`),\n" +
-					"  UNIQUE KEY `c2` (`c2`)\n" +
+					"  UNIQUE KEY `unique_c2` (`c2`)\n" +
 					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 				},
 			},
@@ -154,7 +154,7 @@ var ShowCreateTableAsOfScriptTest = queries.ScriptTest{
 					"  `pk` int NOT NULL,\n" +
 					"  `c2` varchar(20),\n" +
 					"  PRIMARY KEY (`pk`),\n" +
-					"  UNIQUE KEY `c2` (`c2`)\n" +
+					"  UNIQUE KEY `unique_c2` (`c2`)\n" +
 					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 				},
 			},
@@ -571,7 +571,7 @@ var DoltScripts = []queries.ScriptTest{
 						"  `c` int NOT NULL,\n" +
 						"  `d` varchar(10),\n" +
 						"  PRIMARY KEY (`c`),\n" +
-						"  UNIQUE KEY `d_0` (`d`),\n" +
+						"  UNIQUE KEY `t2du` (`d`),\n" +
 						"  CONSTRAINT `fk1` FOREIGN KEY (`d`) REFERENCES `t1` (`b`)\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
