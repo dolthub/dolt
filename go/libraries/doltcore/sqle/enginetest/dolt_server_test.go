@@ -333,6 +333,11 @@ var DropDatabaseMultiSessionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
+				// TODO: This test runner doesn't currently support asserting against null values
+				Query:    "/* client a */ select database() is NULL;",
+				Expected: []sql.Row{{1}},
+			},
+			{
 				Query:    "/* client a */ show databases like 'db01';",
 				Expected: []sql.Row{},
 			},
@@ -382,6 +387,11 @@ var DropDatabaseMultiSessionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "/* client a */ drop database db01;",
 				Expected: []sql.Row{},
+			},
+			{
+				// TODO: This test runner doesn't currently support asserting against null values
+				Query:    "/* client a */ select database() is NULL;",
+				Expected: []sql.Row{{1}},
 			},
 			{
 				Query:    "/* client a */ show databases like 'db01';",

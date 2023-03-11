@@ -190,6 +190,14 @@ func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 	return s, ok, nil
 }
 
+// RemoveDbState invalidates any cached db state in this session, for example, if a database is dropped.
+func (d *DoltSession) RemoveDbState(_ *sql.Context, dbName string) error {
+	// TODO: Add synchronization now that dbStates can be modified concurrently in a few edge cases (e.g. DROP DATABASE)
+	dbName = strings.ToLower(dbName)
+	delete(d.dbStates, dbName)
+	return nil
+}
+
 // Flush flushes all changes sitting in edit sessions to the session root for the database named. This normally
 // happens automatically as part of statement execution, and is only necessary when the session is manually batched (as
 // for bulk SQL import)

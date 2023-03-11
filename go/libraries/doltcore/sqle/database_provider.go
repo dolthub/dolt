@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
@@ -705,6 +706,45 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	}
 
 	delete(p.databases, dbKey)
+
+	return p.invalidateDbStateInAllSessions(ctx, name)
+}
+
+// invalidateDbStateInAllSessions removes the db state for this database from every session. This is necessary when a
+// database is dropped, so that other sessions don't use stale db state.
+func (p DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, name string) error {
+	// TODO: this might be a better fit as a function on SessionManager
+	// TODO: Instead of deleting the db state, could we just mark it as invalid and continue using that same instance
+	//       in memory, even when we create a new db with the same name? reusing for creation of a new db might be tricky.
+	runningServer := sqlserver.GetRunningServer()
+	if runningServer != nil {
+		sessionManager := runningServer.SessionManager()
+		err := sessionManager.Iter(func(session sql.Session) (bool, error) {
+			dsess, ok := session.(*dsess.DoltSession)
+			if !ok {
+				return false, fmt.Errorf("unexpected session type: %T", session)
+			}
+
+			// We need to invalidate this database state for EVERY session, even if other sessions aren't actively
+			// using this database, since they could still reference it with a db-qualified table name.
+			err := dsess.RemoveDbState(ctx, name)
+			if err != nil {
+				return true, err
+			}
+			return false, nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	if strings.ToLower(ctx.GetCurrentDatabase()) == strings.ToLower(name) {
+		// TODO: Clearing out the current database also happens in another spot in the code path, so isn't necessary
+		//       here, but clearing the transaction database currently is still necessary. It would be
+		//ctx.SetCurrentDatabase("")
+		ctx.Session.SetTransactionDatabase("")
+	}
+
 	return nil
 }
 
