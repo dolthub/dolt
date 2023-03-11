@@ -96,6 +96,11 @@ func (a *binlogReplicaApplier) Go(ctx *sql.Context) {
 	}()
 }
 
+// IsRunning returns true if this binlog applier is running and has not been stopped, otherwise returns false.
+func (a *binlogReplicaApplier) IsRunning() bool {
+	return a.running.Load()
+}
+
 // connectAndStartReplicationEventStream connects to the configured MySQL replication source, including pausing
 // and retrying if errors are encountered.
 func (a *binlogReplicaApplier) connectAndStartReplicationEventStream(ctx *sql.Context) (*mysql.Conn, error) {
