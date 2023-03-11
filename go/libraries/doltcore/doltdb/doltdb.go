@@ -237,19 +237,20 @@ func getCommitValForRefStr(ctx context.Context, db datas.Database, vrw types.Val
 		return nil, ErrBranchNotFound
 	}
 
+	var commitaddr hash.Hash
 	if ds.IsTag() {
-		_, commitaddr, err := ds.HeadTag()
+		_, commitaddr, err = ds.HeadTag()
 		if err != nil {
 			return nil, err
 		}
-		return datas.LoadCommitAddr(ctx, vrw, commitaddr)
+	} else {
+		addr, ok := ds.MaybeHeadAddr()
+		if !ok {
+			return nil, fmt.Errorf("Unable to load head for %s", ref)
+		}
+		commitaddr = addr
 	}
-
-	r, _, err := ds.MaybeHeadRef()
-	if err != nil {
-		return nil, err
-	}
-	return datas.LoadCommitRef(ctx, vrw, r)
+	return datas.LoadCommitAddr(ctx, vrw, commitaddr)
 }
 
 func getCommitValForHash(ctx context.Context, vr types.ValueReader, c string) (*datas.Commit, error) {
