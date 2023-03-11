@@ -287,6 +287,18 @@ func (m Map) FetchOrdinalRange(ctx context.Context, start, stop uint64) (MapIter
 	return m.tuples.FetchOrdinalRange(ctx, start, stop)
 }
 
+// HasPrefix returns true if the Map contains any key matching |preKey|.
+func (m Map) HasPrefix(ctx context.Context, preKey val.Tuple, preDesc val.TupleDesc) (bool, error) {
+	// todo(andy): we should compute our own |prefixDesc| here, but
+	//  we can't do that efficiently with the current TupleDesc.
+	if preKey.Count() < preDesc.Count() {
+		return false, fmt.Errorf("invalid prefix key (%d < %d)", preKey.Count(), preDesc.Count())
+	} else if m.keyDesc.Count() < preDesc.Count() {
+		return false, fmt.Errorf("invalid TupleDesc prefix (%d < %d)", m.keyDesc.Count(), preDesc.Count())
+	}
+	return m.tuples.HasPrefix(ctx, preKey, preDesc)
+}
+
 // IterRange returns a mutableMapIter that iterates over a Range.
 func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 	if rng.IsPointLookup(m.keyDesc) {

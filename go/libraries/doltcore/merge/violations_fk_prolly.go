@@ -34,7 +34,62 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func prollyParentFkConstraintViolations(
+func prollyParentSecDiffFkConstraintViolations(
+	ctx context.Context,
+	foreignKey doltdb.ForeignKey,
+	postParent, postChild *constraintViolationsLoadedTable,
+	preParentSecIdx prolly.Map,
+	receiver FKViolationReceiver) error {
+
+	postParentRowData := durable.ProllyMapFromIndex(postParent.RowData)
+	postParentSecIdx := durable.ProllyMapFromIndex(postParent.IndexData)
+	childSecIdx := durable.ProllyMapFromIndex(postChild.IndexData)
+
+	parentSecKD, _ := postParentSecIdx.Descriptors()
+	parentPrefixKD := parentSecKD.PrefixDesc(len(foreignKey.TableColumns))
+	partialKB := val.NewTupleBuilder(parentPrefixKD)
+
+	childPriIdx := durable.ProllyMapFromIndex(postChild.RowData)
+	childPriKD, _ := childPriIdx.Descriptors()
+
+	var err error
+	err = prolly.DiffMaps(ctx, preParentSecIdx, postParentSecIdx, func(ctx context.Context, diff tree.Diff) error {
+		switch diff.Type {
+		case tree.RemovedDiff, tree.ModifiedDiff:
+			toSecKey, hadNulls := makePartialKey(partialKB, foreignKey.ReferencedTableColumns, postParent.Index, postParent.IndexSchema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentSecIdx.Pool())
+			if hadNulls {
+				// row had some nulls previously, so it couldn't have been a parent
+				return nil
+			}
+
+			ok, err := postParentSecIdx.HasPrefix(ctx, toSecKey, parentPrefixKD)
+			if err != nil {
+				return err
+			}
+			if ok {
+				return nil
+			}
+
+			// All equivalent parents were deleted, let's check for dangling children.
+			// We search for matching keys in the child's secondary index
+			err = createCVsForPartialKeyMatches(ctx, toSecKey, parentPrefixKD, childPriKD, childPriIdx, childSecIdx, postParentRowData.Pool(), receiver)
+			if err != nil {
+				return err
+			}
+		case tree.AddedDiff:
+		default:
+			panic("unhandled diff type")
+		}
+		return nil
+	})
+	if err != nil && err != io.EOF {
+		return err
+	}
+
+	return nil
+}
+
+func prollyParentPriDiffFkConstraintViolations(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild *constraintViolationsLoadedTable,

@@ -247,6 +247,18 @@ func (t StaticMap[K, V, O]) Has(ctx context.Context, query K) (ok bool, err erro
 	return
 }
 
+func (t StaticMap[K, V, O]) HasPrefix(ctx context.Context, query K, prefixOrder O) (ok bool, err error) {
+	cur, err := NewLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, prefixOrder)
+	if err != nil {
+		return false, err
+	} else if cur.Valid() {
+		// true if |query| is a prefix of |cur.currentKey()|
+		ok = prefixOrder.Compare(query, K(cur.CurrentKey())) == 0
+	}
+
+	return
+}
+
 func (t StaticMap[K, V, O]) LastKey(ctx context.Context) (key K) {
 	if t.Root.count > 0 {
 		// if |t.Root| is a leaf node, it represents the entire map
