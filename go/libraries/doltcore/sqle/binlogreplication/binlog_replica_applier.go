@@ -152,7 +152,6 @@ func (a *binlogReplicaApplier) connectAndStartReplicationEventStream(ctx *sql.Co
 				return nil, ErrReplicationStopped
 			case <-time.After(time.Duration(connectRetryDelay) * time.Second):
 				// Nothing to do here if our timer completes; just fall through
-				break
 			}
 		} else {
 			break
