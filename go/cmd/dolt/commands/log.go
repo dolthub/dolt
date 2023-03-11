@@ -376,6 +376,9 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 		return 1
 	}
 
+	headRef := dEnv.RepoStateReader().CWBHeadRef()
+	cwbHash, err := dEnv.DoltDB.GetHashForRefStr(ctx, headRef.String())
+
 	var commitsInfo []logNode
 	for _, comm := range commits {
 		meta, mErr := comm.GetCommitMeta(ctx)
@@ -401,19 +404,12 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 			commitHash:   cmHash,
 			parentHashes: pHashes,
 			branchNames:  cHashToRefs[cmHash],
-			isHead:       hashIsHead(cmHash, hashes)})
+			isHead:       cmHash == *cwbHash})
 	}
 
 	logToStdOut(opts, commitsInfo)
 
 	return 0
-}
-
-func hashIsHead(cmHash hash.Hash, hashes []hash.Hash) bool {
-	if len(hashes) > 1 || len(hashes) == 0 {
-		return false
-	}
-	return cmHash == hashes[0]
 }
 
 func tableExists(ctx context.Context, commit *doltdb.Commit, tableName string) (bool, error) {
