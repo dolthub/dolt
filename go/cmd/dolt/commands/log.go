@@ -276,6 +276,54 @@ func getCommitSpec(commit string) (*doltdb.CommitSpec, error) {
 	return cs, nil
 }
 
+func getHashToRefs(ctx context.Context, dEnv *env.DoltEnv, decorationLevel string) (map[hash.Hash][]string, error) {
+	cHashToRefs := map[hash.Hash][]string{}
+
+	// Get all branches
+	branches, err := dEnv.DoltDB.GetBranchesWithHashes(ctx)
+	if err != nil {
+		return cHashToRefs, fmt.Errorf(color.HiRedString("Fatal error: cannot get Branch information."))
+	}
+
+	for _, b := range branches {
+		refName := b.Ref.String()
+		if decorationLevel != "full" {
+			refName = b.Ref.GetPath() // trim out "refs/heads/"
+		}
+		refName = fmt.Sprintf("\033[32;1m%s\033[0m", refName) // branch names are bright green (32;1m)
+		cHashToRefs[b.Hash] = append(cHashToRefs[b.Hash], refName)
+	}
+
+	// Get all remote branches
+	remotes, err := dEnv.DoltDB.GetRemotesWithHashes(ctx)
+	if err != nil {
+		return cHashToRefs, fmt.Errorf(color.HiRedString("Fatal error: cannot get Remotes information."))
+	}
+	for _, r := range remotes {
+		refName := r.Ref.String()
+		if decorationLevel != "full" {
+			refName = r.Ref.GetPath() // trim out "refs/remotes/"
+		}
+		refName = fmt.Sprintf("\033[31;1m%s\033[0m", refName) // remote names are bright red (31;1m)
+		cHashToRefs[r.Hash] = append(cHashToRefs[r.Hash], refName)
+	}
+
+	// Get all tags
+	tags, err := dEnv.DoltDB.GetTagsWithHashes(ctx)
+	if err != nil {
+		return cHashToRefs, fmt.Errorf(color.HiRedString("Fatal error: cannot get Tag information."))
+	}
+	for _, t := range tags {
+		tagName := t.Tag.GetDoltRef().String()
+		if decorationLevel != "full" {
+			tagName = t.Tag.Name // trim out "refs/tags/"
+		}
+		tagName = fmt.Sprintf("\033[33;1mtag: %s\033[0m", tagName) // tags names are bright yellow (33;1m)
+		cHashToRefs[t.Hash] = append(cHashToRefs[t.Hash], tagName)
+	}
+	return cHashToRefs, nil
+}
+
 func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 	hashes := make([]hash.Hash, len(opts.commitSpecs))
 
@@ -295,51 +343,10 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 		hashes[i] = h
 	}
 
-	cHashToRefs := map[hash.Hash][]string{}
+	cHashToRefs, err := getHashToRefs(ctx, dEnv, opts.decoration)
 
-	// Get all branches
-	branches, err := dEnv.DoltDB.GetBranchesWithHashes(ctx)
 	if err != nil {
-		cli.PrintErrln(color.HiRedString("Fatal error: cannot get Branch information."))
-		return 1
-	}
-	for _, b := range branches {
-		refName := b.Ref.String()
-		if opts.decoration != "full" {
-			refName = b.Ref.GetPath() // trim out "refs/heads/"
-		}
-		refName = fmt.Sprintf("\033[32;1m%s\033[0m", refName) // branch names are bright green (32;1m)
-		cHashToRefs[b.Hash] = append(cHashToRefs[b.Hash], refName)
-	}
-
-	// Get all remote branches
-	remotes, err := dEnv.DoltDB.GetRemotesWithHashes(ctx)
-	if err != nil {
-		cli.PrintErrln(color.HiRedString("Fatal error: cannot get Remotes information."))
-		return 1
-	}
-	for _, r := range remotes {
-		refName := r.Ref.String()
-		if opts.decoration != "full" {
-			refName = r.Ref.GetPath() // trim out "refs/remotes/"
-		}
-		refName = fmt.Sprintf("\033[31;1m%s\033[0m", refName) // remote names are bright red (31;1m)
-		cHashToRefs[r.Hash] = append(cHashToRefs[r.Hash], refName)
-	}
-
-	// Get all tags
-	tags, err := dEnv.DoltDB.GetTagsWithHashes(ctx)
-	if err != nil {
-		cli.PrintErrln(color.HiRedString("Fatal error: cannot get Tag information."))
-		return 1
-	}
-	for _, t := range tags {
-		tagName := t.Tag.GetDoltRef().String()
-		if opts.decoration != "full" {
-			tagName = t.Tag.Name // trim out "refs/tags/"
-		}
-		tagName = fmt.Sprintf("\033[33;1mtag: %s\033[0m", tagName) // tags names are bright yellow (33;1m)
-		cHashToRefs[t.Hash] = append(cHashToRefs[t.Hash], tagName)
+		return handleErrAndExit(err)
 	}
 
 	matchFunc := func(c *doltdb.Commit) (bool, error) {
