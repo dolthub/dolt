@@ -152,14 +152,18 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 	}
 
 	// First attempt to find a bare database (no revision spec)
-	init, err = d.provider.DbState(ctx, dbName, initialBranch)
-	if err != nil && !sql.ErrDatabaseNotFound.Is(err) {
+	init, ok, err = d.provider.DbState(ctx, dbName, initialBranch)
+	if err != nil {
 		return nil, false, err
 	}
 
 	// If that doesn't work, attempt to parse the database name as a revision spec
-	if err != nil {
-		init, err = d.provider.RevisionDbState(ctx, dbName)
+	if !ok {
+		// If revSpec is a branch and dbName is `database/branch`;
+		//		then dbName is now `database` with its working set updated to point at `branch`.
+		// If revSpec is a tag and dbName is `database/tag`; (same for commit hash)
+		//		then dbName is still the same with database pointing to new dataset at `database/tag`;
+		init, dbName, err = d.provider.RevisionDbState(ctx, dbName)
 		if err != nil {
 			return nil, false, err
 		}

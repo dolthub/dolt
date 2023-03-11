@@ -731,26 +731,28 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		return nil, dsess.InitialDbState{}, false, err
 	}
 
+	// If the revSpec is a branch, then checkout the branch on the srcDB and return the srcDB
+	// INSTEAD of creating new dataset at `db_name/branch_name`.
 	if isBranch {
 		// fetch the upstream head if this is a replicated db
 		if replicaDb, ok := srcDb.(ReadReplicaDatabase); ok {
 			// TODO move this out of analysis phase, should only happen at read time, when the transaction begins (like is
 			//  the case with a branch that already exists locally)
-			err := p.ensureReplicaHeadExists(ctx, resolvedRevSpec, replicaDb)
+			err = p.ensureReplicaHeadExists(ctx, resolvedRevSpec, replicaDb)
 			if err != nil {
 				return nil, dsess.InitialDbState{}, false, err
 			}
 		}
 
-		db, init, err := dbRevisionForBranch(ctx, srcDb, caseSensitiveBranchName)
+		init, found, err := p.DbState(ctx, srcDb.Name(), caseSensitiveBranchName)
 		// preserve original user case in the case of not found
-		if sql.ErrDatabaseNotFound.Is(err) {
-			return nil, dsess.InitialDbState{}, false, sql.ErrDatabaseNotFound.New(revDB)
-		} else if err != nil {
+		if err != nil {
 			return nil, dsess.InitialDbState{}, false, err
+		} else if !found {
+			return nil, dsess.InitialDbState{}, false, sql.ErrDatabaseNotFound.New(revDB)
 		}
 
-		return db, init, true, nil
+		return srcDb, init, true, nil
 	}
 
 	isTag, err := isTag(ctx, srcDb, resolvedRevSpec)
@@ -874,15 +876,15 @@ func (p DoltDatabaseProvider) resolveAncestorSpec(ctx *sql.Context, revSpec stri
 	return hash.String(), nil
 }
 
-func (p DoltDatabaseProvider) RevisionDbState(ctx *sql.Context, revDB string) (dsess.InitialDbState, error) {
-	_, init, ok, err := p.databaseForRevision(ctx, revDB)
+func (p DoltDatabaseProvider) RevisionDbState(ctx *sql.Context, revDB string) (dsess.InitialDbState, string, error) {
+	db, init, ok, err := p.databaseForRevision(ctx, revDB)
 	if err != nil {
-		return dsess.InitialDbState{}, err
+		return dsess.InitialDbState{}, revDB, err
 	} else if !ok {
-		return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(revDB)
+		return dsess.InitialDbState{}, revDB, sql.ErrDatabaseNotFound.New(revDB)
 	}
 
-	return init, nil
+	return init, db.Name(), nil
 }
 
 func (p DoltDatabaseProvider) stateForDatabase(ctx *sql.Context, dbName string, branch string) (dsess.InitialDbState, bool, error) {
@@ -901,15 +903,15 @@ func (p DoltDatabaseProvider) stateForDatabase(ctx *sql.Context, dbName string, 
 	return dbState, true, nil
 }
 
-func (p DoltDatabaseProvider) DbState(ctx *sql.Context, dbName string, defaultBranch string) (dsess.InitialDbState, error) {
+func (p DoltDatabaseProvider) DbState(ctx *sql.Context, dbName string, defaultBranch string) (dsess.InitialDbState, bool, error) {
 	init, ok, err := p.stateForDatabase(ctx, dbName, defaultBranch)
 	if err != nil {
-		return dsess.InitialDbState{}, err
+		return dsess.InitialDbState{}, false, err
 	} else if !ok {
-		return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(dbName)
+		return dsess.InitialDbState{}, false, nil
 	}
 
-	return init, nil
+	return init, true, nil
 }
 
 // Function implements the FunctionProvider interface
@@ -1081,95 +1083,6 @@ func isTag(ctx context.Context, db SqlDatabase, tagName string) (bool, error) {
 	}
 
 	return false, nil
-}
-
-func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string) (SqlDatabase, dsess.InitialDbState, error) {
-	branch := ref.NewBranchRef(revSpec)
-	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, branch)
-	if err != nil {
-		return Database{}, dsess.InitialDbState{}, err
-	}
-
-	wsRef, err := ref.WorkingSetRefForHead(branch)
-	if err != nil {
-		return Database{}, dsess.InitialDbState{}, err
-	}
-
-	ws, err := srcDb.DbData().Ddb.ResolveWorkingSet(ctx, wsRef)
-	if err != nil {
-		return Database{}, dsess.InitialDbState{}, err
-	}
-
-	dbName := srcDb.Name() + dbRevisionDelimiter + revSpec
-
-	static := staticRepoState{
-		branch:          branch,
-		RepoStateWriter: srcDb.DbData().Rsw,
-		RepoStateReader: srcDb.DbData().Rsr,
-	}
-
-	var db SqlDatabase
-
-	switch v := srcDb.(type) {
-	case Database:
-		db = Database{
-			name:     dbName,
-			ddb:      v.ddb,
-			rsw:      static,
-			rsr:      static,
-			gs:       v.gs,
-			editOpts: v.editOpts,
-			revision: revSpec,
-		}
-	case ReadReplicaDatabase:
-		db = ReadReplicaDatabase{
-			Database: Database{
-				name:     dbName,
-				ddb:      v.ddb,
-				rsw:      static,
-				rsr:      static,
-				gs:       v.gs,
-				editOpts: v.editOpts,
-				revision: revSpec,
-			},
-			remote:  v.remote,
-			srcDB:   v.srcDB,
-			tmpDir:  v.tmpDir,
-			limiter: newLimiter(),
-		}
-	}
-
-	remotes, err := static.GetRemotes()
-	if err != nil {
-		return nil, dsess.InitialDbState{}, err
-	}
-
-	branches, err := static.GetBranches()
-	if err != nil {
-		return nil, dsess.InitialDbState{}, err
-	}
-
-	backups, err := static.GetBackups()
-	if err != nil {
-		return nil, dsess.InitialDbState{}, err
-	}
-
-	init := dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: cm,
-		WorkingSet: ws,
-		DbData: env.DbData{
-			Ddb: srcDb.DbData().Ddb,
-			Rsw: static,
-			Rsr: static,
-		},
-		Remotes:  remotes,
-		Branches: branches,
-		Backups:  backups,
-		//ReadReplica: //todo
-	}
-
-	return db, init, nil
 }
 
 func dbRevisionForTag(ctx context.Context, srcDb Database, revSpec string) (ReadOnlyDatabase, dsess.InitialDbState, error) {
