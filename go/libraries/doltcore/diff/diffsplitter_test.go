@@ -126,12 +126,12 @@ func TestDiffSplitter(t *testing.T) {
 					old: RowDiff{
 						Row:      sql.Row{5, 6, nil},
 						RowDiff:  ModifiedOld,
-						ColDiffs: []ChangeType{ModifiedOld, None, None},
+						ColDiffs: []ChangeType{ModifiedOld, None, ModifiedOld},
 					},
 					new: RowDiff{
 						Row:      sql.Row{nil, 6, 100},
 						RowDiff:  ModifiedNew,
-						ColDiffs: []ChangeType{None, None, ModifiedNew},
+						ColDiffs: []ChangeType{ModifiedNew, None, ModifiedNew},
 					},
 				},
 			},
