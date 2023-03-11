@@ -493,38 +493,6 @@ func testIterOrdinalRangeWithBounds(t *testing.T, om Map, tuples [][2]val.Tuple,
 	})
 }
 
-func testIterKeyRange(t *testing.T, m Map, tuples [][2]val.Tuple) {
-	ctx := context.Background()
-
-	t.Run("RandomKeyRange", func(t *testing.T) {
-		bounds := generateInserts(t, m, m.keyDesc, m.valDesc, 2)
-		start, stop := bounds[0][0], bounds[1][0]
-		if m.keyDesc.Compare(start, stop) > 0 {
-			start, stop = stop, start
-		}
-		kR := keyRange{kd: m.keyDesc, start: start, stop: stop}
-
-		var expectedKeys []val.Tuple
-		for _, kv := range tuples {
-			if kR.includes(kv[0]) {
-				expectedKeys = append(expectedKeys, kv[0])
-			}
-		}
-
-		itr, err := m.IterKeyRange(ctx, start, stop)
-		require.NoError(t, err)
-
-		for _, eK := range expectedKeys {
-			k, _, err := itr.Next(ctx)
-			require.NoError(t, err)
-			assert.Equal(t, eK, k)
-		}
-
-		_, _, err = itr.Next(ctx)
-		require.Equal(t, io.EOF, err)
-	})
-}
-
 func iterOrdinalRange(t *testing.T, ctx context.Context, iter MapIter) (actual [][2]val.Tuple) {
 	for {
 		k, v, err := iter.Next(ctx)

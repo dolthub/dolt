@@ -27,9 +27,12 @@ import (
 
 var stashClearDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Remove all the stash entries.",
-	LongDesc: `
-Removes all the stash entries from the current stash list.`,
-	Synopsis: []string{},
+	LongDesc: `Removes all the stash entries from the current stash list. This command cannot be reverted and stash entries may not be recoverable.
+
+This command does not apply the stash on current working directory, use 'dolt stash pop' to apply a stash on current working directory.`,
+	Synopsis: []string{
+		"",
+	},
 }
 
 type StashClearCmd struct{}
