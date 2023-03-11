@@ -153,11 +153,10 @@ func prollyChildSecDiffFkConstraintViolations(
 	parentSecIdx := durable.ProllyMapFromIndex(postParent.IndexData)
 
 	parentSecIdxDesc, _ := parentSecIdx.Descriptors()
-	partialDesc := parentSecIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
+	prefixDesc := parentSecIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	childPriKD, _ := postChildRowData.Descriptors()
 	childPriKB := val.NewTupleBuilder(childPriKD)
 
-	var parentSecIdxCur *tree.Cursor
 	err := prolly.DiffMaps(ctx, preChildSecIdx, postChildSecIdx, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
@@ -169,31 +168,14 @@ func prollyChildSecDiffFkConstraintViolations(
 				}
 			}
 
-			if parentSecIdxCur == nil {
-				newCur, err := tree.NewCursorAtKey(ctx, parentSecIdx.NodeStore(), parentSecIdx.Node(), k, partialDesc)
-				if err != nil {
-					return err
-				}
-				if !newCur.Valid() {
-					return createCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
-				}
-				parentSecIdxCur = newCur
-			}
-
-			err := tree.Seek(ctx, parentSecIdxCur, k, partialDesc)
+			ok, err := parentSecIdx.HasPrefix(ctx, k, prefixDesc)
 			if err != nil {
 				return err
-			}
-			if !parentSecIdxCur.Valid() {
-				return createCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
-			}
-
-			// possible that k is less than the smallest key in parentSecIdxCur, so still should compare
-			key := val.Tuple(parentSecIdxCur.CurrentKey())
-			if partialDesc.Compare(k, key) != 0 {
+			} else if !ok {
 				return createCVForSecIdx(ctx, k, childPriKD, childPriKB, postChildRowData, postChildRowData.Pool(), receiver)
 			}
 			return nil
+
 		case tree.RemovedDiff:
 		default:
 			panic("unhandled diff type")
@@ -203,7 +185,6 @@ func prollyChildSecDiffFkConstraintViolations(
 	if err != nil && err != io.EOF {
 		return err
 	}
-
 	return nil
 }
 
