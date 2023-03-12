@@ -386,6 +386,11 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 	headRef := dEnv.RepoStateReader().CWBHeadRef()
 	cwbHash, err := dEnv.DoltDB.GetHashForRefStr(ctx, headRef.String())
 
+	if err != nil {
+		cli.PrintErrln(err)
+		return 1
+	}
+
 	var commitsInfo []logNode
 	for _, comm := range commits {
 		meta, mErr := comm.GetCommitMeta(ctx)
