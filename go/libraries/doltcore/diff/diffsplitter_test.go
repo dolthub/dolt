@@ -137,6 +137,71 @@ func TestDiffSplitter(t *testing.T) {
 			},
 		},
 		{
+			name: "column changes",
+			diffQuerySch: sql.Schema{
+				intCol("from_a"),
+				intCol("from_b"),
+				intCol("from_c"),
+				strCol("to_a"), // type change
+				// col b dropped
+				intCol("to_c"),
+				strCol("to_d"), // added col
+				strCol("diff_type"),
+			},
+			tableSch: sql.Schema{
+				// union schemas prefers "from"
+				intCol("a"),
+				intCol("b"),
+				intCol("c"),
+				intCol("d"),
+			},
+			diffQueryRows: []sql.Row{
+				{1, 2, 3, "1", 3, 4, "modified"},
+				{5, 6, 7, "5", 17, 8, "modified"},
+				{nil, 10, 11, "9", nil, 12, "modified"},
+			},
+			expectedRows: []splitRow{
+				{
+					old: RowDiff{
+						Row:      sql.Row{1, 2, 3, nil},
+						RowDiff:  ModifiedOld,
+						ColDiffs: []ChangeType{None, ModifiedOld, None, ModifiedOld},
+					},
+					new: RowDiff{
+						// todo(andy): should type changes generate a column diff?
+						Row:      sql.Row{"1", nil, 3, 4},
+						RowDiff:  ModifiedNew,
+						ColDiffs: []ChangeType{None, ModifiedNew, None, ModifiedNew},
+					},
+				},
+				{
+					old: RowDiff{
+						Row:      sql.Row{5, 6, 7, nil},
+						RowDiff:  ModifiedOld,
+						ColDiffs: []ChangeType{None, ModifiedOld, ModifiedOld, ModifiedOld},
+					},
+					new: RowDiff{
+						// todo(andy): should type changes generate a column diff?
+						Row:      sql.Row{"5", nil, 17, 8},
+						RowDiff:  ModifiedNew,
+						ColDiffs: []ChangeType{None, ModifiedNew, ModifiedNew, ModifiedNew},
+					},
+				},
+				{
+					old: RowDiff{
+						Row:      sql.Row{nil, 10, 11, nil},
+						RowDiff:  ModifiedOld,
+						ColDiffs: []ChangeType{ModifiedOld, ModifiedOld, ModifiedOld, ModifiedOld},
+					},
+					new: RowDiff{
+						Row:      sql.Row{"9", nil, nil, 12},
+						RowDiff:  ModifiedNew,
+						ColDiffs: []ChangeType{ModifiedNew, ModifiedNew, ModifiedNew, ModifiedNew},
+					},
+				},
+			},
+		},
+		{
 			name: "new table",
 			diffQuerySch: sql.Schema{
 				intCol("to_a"),
