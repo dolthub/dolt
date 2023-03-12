@@ -249,7 +249,7 @@ func (kte *keylessTableEditor) DeleteByKey(ctx context.Context, key types.Tuple,
 }
 
 // InsertRow implements TableEditor.
-func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row, _ PKDuplicateCb) (err error) {
+func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row, errFunc PKDuplicateCb) (err error) {
 	kte.mu.Lock()
 	defer kte.mu.Unlock()
 
@@ -259,6 +259,15 @@ func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row, _ PKDup
 	key, val, err = row.ToNoms(ctx, kte.sch, r)
 	if err != nil {
 		return err
+	}
+	// TODO: how to check for duplicates here??
+
+	for _, idx := range kte.sch.Indexes().AllIndexes() {
+		if idx.IsUnique() {
+			//if err = errFunc("aaaaaaaaaaaaaaaaaa", idx.Name(), key, val, false); err != nil {
+			//	return err
+			//}
+		}
 	}
 
 	kte.dirty = true
@@ -415,7 +424,7 @@ func (kte *keylessTableEditor) autoFlush(ctx context.Context) error {
 	if len(kte.acc.deltas) >= int(tableEditorMaxOps) {
 		return kte.flush(ctx)
 	}
-	return nil
+	return kte.flush(ctx)
 }
 
 func (kte *keylessTableEditor) flush(ctx context.Context) error {
