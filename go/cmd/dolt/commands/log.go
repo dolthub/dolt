@@ -576,41 +576,45 @@ func logCompact(pager *outputpager.Pager, opts *logOpts, commits []logNode) {
 	}
 }
 
+func PrintCommit(pager *outputpager.Pager, minParents int, showParents bool, decoration string, comm logNode) {
+	if len(comm.parentHashes) < minParents {
+		return
+	}
+
+	chStr := comm.commitHash.String()
+	if showParents {
+		for _, h := range comm.parentHashes {
+			chStr += " " + h.String()
+		}
+	}
+
+	// Write commit hash
+	pager.Writer.Write([]byte(fmt.Sprintf("\033[33mcommit %s \033[0m", chStr))) // Use Dim Yellow (33m)
+
+	// Show decoration
+	if decoration != "no" {
+		logRefs(pager, comm)
+	}
+
+	if len(comm.parentHashes) > 1 {
+		pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
+		for _, h := range comm.parentHashes {
+			pager.Writer.Write([]byte(fmt.Sprintf(" " + h.String())))
+		}
+	}
+
+	pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", comm.commitMeta.Name, comm.commitMeta.Email)))
+
+	timeStr := comm.commitMeta.FormatTS()
+	pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))
+
+	formattedDesc := "\n\n\t" + strings.Replace(comm.commitMeta.Description, "\n", "\n\t", -1) + "\n\n"
+	pager.Writer.Write([]byte(fmt.Sprintf("%s", formattedDesc)))
+}
+
 func logDefault(pager *outputpager.Pager, opts *logOpts, commits []logNode) {
 	for _, comm := range commits {
-		if len(comm.parentHashes) < opts.minParents {
-			return
-		}
-
-		chStr := comm.commitHash.String()
-		if opts.showParents {
-			for _, h := range comm.parentHashes {
-				chStr += " " + h.String()
-			}
-		}
-
-		// Write commit hash
-		pager.Writer.Write([]byte(fmt.Sprintf("\033[33mcommit %s \033[0m", chStr))) // Use Dim Yellow (33m)
-
-		// Show decoration
-		if opts.decoration != "no" {
-			logRefs(pager, comm)
-		}
-
-		if len(comm.parentHashes) > 1 {
-			pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
-			for _, h := range comm.parentHashes {
-				pager.Writer.Write([]byte(fmt.Sprintf(" " + h.String())))
-			}
-		}
-
-		pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", comm.commitMeta.Name, comm.commitMeta.Email)))
-
-		timeStr := comm.commitMeta.FormatTS()
-		pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))
-
-		formattedDesc := "\n\n\t" + strings.Replace(comm.commitMeta.Description, "\n", "\n\t", -1) + "\n\n"
-		pager.Writer.Write([]byte(fmt.Sprintf("%s", formattedDesc)))
+		PrintCommit(pager, opts.minParents, opts.showParents, opts.decoration, comm)
 	}
 }
 
