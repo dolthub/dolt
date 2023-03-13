@@ -1,0 +1,70 @@
+#!/usr/bin/expect
+
+set timeout 3
+spawn dolt sql
+
+# This script uses undefined variables in the failure case so that
+# error output includes the line of the failed test expectation
+
+expect {
+    "> " { send -- "create database newtest;\r"; }
+    timeout { puts "$TESTFAILURE"; }
+}
+
+expect {
+    "*> " { send -- "use newtest;\r"; }
+    timeout { puts "$TESTFAILURE"; }
+}
+
+expect {
+    "*> " { send -- "select active_branch();\r"; }
+    timeout { puts "$TESTFAILURE"; }
+}
+
+expect {
+    "*main*" { send -- "call dolt_checkout('-b', 'branch-to-delete');\r"; }
+    timeout { puts "$TESTFAILURE"; }
+}
+
+expect {
+    "*> " { send -- "select active_branch();\r"; }
+    timeout { puts "$TESTFAILURE"; }
+}
+
+expect {
+    "*branch-to-delete*" { send -- "use newtest/main;\r"; }
+    timeout { puts "$TESTFAILURE"; }
+}
+
+expect {
+    "*> " { send -- "select active_branch();\r"; }
+    timeout { puts "$TESTFAILURE"; }
+}
+
+expect {
+    "*main*" { send -- "call dolt_branch('-D', 'branch-to-delete');\r"; }
+    timeout { puts "$TESTFAILURE"; }
+}
+
+expect {
+    "*> " { send -- "select active_branch();\r"; }
+    timeout { puts "$TESTFAILURE"; }
+}
+
+expect {
+    "*main*" { send -- "call dolt_checkout('-b', 'another-branch');\r"; }
+    timeout { puts "$TESTFAILURE"; }
+}
+
+expect {
+    "*> " { send -- "select active_branch();\r"; }
+    timeout { puts "$TESTFAILURE"; }
+}
+
+expect {
+    "*another-branch*" { send -- "exit;\r"; }
+    timeout { puts "$TESTFAILURE"; }
+    failed { puts "$TEST_FAILURE" }
+}
+
+expect eof
