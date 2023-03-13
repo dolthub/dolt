@@ -170,7 +170,7 @@ func VisitMapLevelOrder[K, V ~[]byte, O Ordering[K]](
 	// then recurse upwards until we're at the root
 	for cur.parent != nil {
 		cur = cur.parent
-		for cur.valid() {
+		for cur.Valid() {
 			_, err = cb(cur.currentRef())
 			if err != nil {
 				return err
@@ -226,7 +226,7 @@ func (t StaticMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K, V
 	var key K
 	var value V
 
-	if cur.valid() {
+	if cur.Valid() {
 		key = K(cur.CurrentKey())
 		if t.Order.Compare(query, key) == 0 {
 			value = V(cur.currentValue())
@@ -241,7 +241,7 @@ func (t StaticMap[K, V, O]) Has(ctx context.Context, query K) (ok bool, err erro
 	cur, err := newLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, t.Order)
 	if err != nil {
 		return false, err
-	} else if cur.valid() {
+	} else if cur.Valid() {
 		ok = t.Order.Compare(query, K(cur.CurrentKey())) == 0
 	}
 	return
@@ -251,7 +251,7 @@ func (t StaticMap[K, V, O]) HasPrefix(ctx context.Context, query K, prefixOrder 
 	cur, err := newLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, prefixOrder)
 	if err != nil {
 		return false, err
-	} else if cur.valid() {
+	} else if cur.Valid() {
 		// true if |query| is a prefix of |cur.currentKey()|
 		ok = prefixOrder.Compare(query, K(cur.CurrentKey())) == 0
 	}
@@ -518,7 +518,7 @@ func (it *OrderedTreeIter[K, V]) Next(ctx context.Context) (key K, value V, err 
 
 func (it *OrderedTreeIter[K, V]) Current() (key K, value V) {
 	// |it.curr| is set to nil when its range is exhausted
-	if it.curr != nil && it.curr.valid() {
+	if it.curr != nil && it.curr.Valid() {
 		k, v := currentCursorItems(it.curr)
 		key, value = K(k), V(v)
 	}

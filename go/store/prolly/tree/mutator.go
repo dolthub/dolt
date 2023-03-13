@@ -88,7 +88,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		}
 
 		var oldValue Item
-		if cur.valid() {
+		if cur.Valid() {
 			// Compare mutations |newKey| and |newValue|
 			// to the existing pair from the cursor
 			if order.Compare(K(newKey), K(cur.CurrentKey())) == 0 {

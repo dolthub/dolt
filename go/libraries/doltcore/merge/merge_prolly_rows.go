@@ -430,8 +430,12 @@ func (v *uniqAddValidator) flush(ctx context.Context, i int) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		indexK := val.Tuple(cur.CurrentKey())
-		if s.prefixKD.Compare(secKey, indexK) == 0 {
+		if cur.Valid() {
+			indexK := val.Tuple(cur.CurrentKey())
+			if s.prefixKD.Compare(secKey, indexK) != 0 {
+				continue
+			}
+
 			conflicts++
 
 			// existingPk is the merge-left primary key that

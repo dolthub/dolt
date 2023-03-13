@@ -121,7 +121,7 @@ func DifferFromCursors[K ~[]byte, O Ordering[K]](
 }
 
 func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
-	for td.from.valid() && td.from.compare(td.fromStop) < 0 && td.to.valid() && td.to.compare(td.toStop) < 0 {
+	for td.from.Valid() && td.from.compare(td.fromStop) < 0 && td.to.Valid() && td.to.compare(td.toStop) < 0 {
 
 		f := td.from.CurrentKey()
 		t := td.to.CurrentKey()
@@ -146,10 +146,10 @@ func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
 		}
 	}
 
-	if td.from.valid() && td.from.compare(td.fromStop) < 0 {
+	if td.from.Valid() && td.from.compare(td.fromStop) < 0 {
 		return sendRemoved(ctx, td.from)
 	}
-	if td.to.valid() && td.to.compare(td.toStop) < 0 {
+	if td.to.Valid() && td.to.compare(td.toStop) < 0 {
 		return sendAdded(ctx, td.to)
 	}
 
@@ -204,7 +204,7 @@ func skipCommon(ctx context.Context, from, to *Cursor) (err error) {
 	// to avoid unnecessary comparisons.
 	parentsAreNew := true
 
-	for from.valid() && to.valid() {
+	for from.Valid() && to.Valid() {
 		if !equalItems(from, to) {
 			// found the next difference
 			return nil
@@ -244,7 +244,7 @@ func skipCommonParents(ctx context.Context, from, to *Cursor) (err error) {
 		return err
 	}
 
-	if from.parent.valid() {
+	if from.parent.Valid() {
 		if err = from.fetchNode(ctx); err != nil {
 			return err
 		}
@@ -253,7 +253,7 @@ func skipCommonParents(ctx context.Context, from, to *Cursor) (err error) {
 		from.invalidateAtEnd()
 	}
 
-	if to.parent.valid() {
+	if to.parent.Valid() {
 		if err = to.fetchNode(ctx); err != nil {
 			return err
 		}

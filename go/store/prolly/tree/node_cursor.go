@@ -382,7 +382,7 @@ func Seek[K ~[]byte, O Ordering[K]](ctx context.Context, cur *Cursor, key K, ord
 	return
 }
 
-func (cur *Cursor) valid() bool {
+func (cur *Cursor) Valid() bool {
 	return cur.nd.count != 0 &&
 		cur.nd.bytes() != nil &&
 		cur.idx >= 0 &&

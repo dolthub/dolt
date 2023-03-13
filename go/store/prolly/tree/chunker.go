@@ -418,7 +418,7 @@ func (tc *chunker[S]) Done(ctx context.Context) (Node, error) {
 // If we are mutating an existing Node, appending subsequent items in the Node until we reach a pre-existing chunk
 // boundary or the end of the Node.
 func (tc *chunker[S]) finalizeCursor(ctx context.Context) (err error) {
-	for tc.cur.valid() {
+	for tc.cur.Valid() {
 		var sz uint64
 		sz, err = tc.cur.currentSubtreeSize()
 		if err != nil {

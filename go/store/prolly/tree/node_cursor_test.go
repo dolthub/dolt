@@ -51,7 +51,7 @@ func TestNodeCursor(t *testing.T) {
 		assert.NoError(t, err)
 		err = before.retreat(ctx)
 		assert.NoError(t, err)
-		assert.False(t, before.valid())
+		assert.False(t, before.Valid())
 
 		start, err := newCursorAtStart(ctx, ns, root)
 		assert.NoError(t, err)
