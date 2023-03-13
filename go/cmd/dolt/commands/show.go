@@ -212,5 +212,54 @@ func showCommit(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, commitSp
 			isHead:       cmHash == *cwbHash})
 	})
 
-	return nil
+	if comm.NumParents() == 0 {
+		return nil
+	}
+
+	if comm.NumParents() > 1 {
+		return fmt.Errorf("Requested commit is a merge commit. 'dolt show' currently only supports viewing non-merge commits.")
+	}
+
+	commitRoot, err := comm.GetRootValue(ctx)
+	if err != nil {
+		return err
+	}
+
+	parent, err := comm.GetParent(ctx, 0)
+	if err != nil {
+		return err
+	}
+
+	parentRoot, err := parent.GetRootValue(ctx)
+	if err != nil {
+		return err
+	}
+
+	parentHash, err := parent.HashOf()
+	if err != nil {
+		return err
+	}
+
+	datasets := &diffDatasets{
+		fromRoot: parentRoot,
+		toRoot:   commitRoot,
+		fromRef:  parentHash.String(),
+		toRef:    cmHash.String(),
+	}
+
+	// An empty string will cause all tables to be printed.
+	var tableNames []string
+
+	tableSet, err := parseDiffTableSet(ctx, dEnv, datasets, tableNames)
+	if err != nil {
+		return err
+	}
+
+	dArgs := &diffArgs{
+		diffDisplaySettings: opts.diffDisplaySettings,
+		diffDatasets:        datasets,
+		tableSet:            tableSet,
+	}
+
+	return diffUserTables(ctx, dEnv, dArgs)
 }
