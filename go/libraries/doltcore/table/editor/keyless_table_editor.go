@@ -249,7 +249,7 @@ func (kte *keylessTableEditor) DeleteByKey(ctx context.Context, key types.Tuple,
 }
 
 // InsertRow implements TableEditor.
-func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row, errFunc PKDuplicateCb) (err error) {
+func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row, _ PKDuplicateCb) (err error) {
 	kte.mu.Lock()
 	defer kte.mu.Unlock()
 
