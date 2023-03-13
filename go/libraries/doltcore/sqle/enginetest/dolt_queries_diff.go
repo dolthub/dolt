@@ -3677,6 +3677,96 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 	},
 }
 
+var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
+	{
+		Name: "working set changes",
+		SetUpScript: []string{
+			"create table regularTable (a int primary key, b int, c int);",
+			"create table droppedTable (a int primary key, b int, c int);",
+			"create table renamedEmptyTable (a int primary key, b int, c int);",
+			"call dolt_add('.')",
+			"insert into regularTable values (1, 2, 3), (2, 3, 4);",
+			"insert into droppedTable values (1, 2, 3), (2, 3, 4);",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'Creating tables x and y');",
+
+			// changeSet: STAGED; data change: false; schema change: true
+			"create table addedTable (a int primary key, b int, c int);",
+			"call DOLT_ADD('addedTable');",
+			// changeSet: STAGED; data change: true; schema change: true
+			"drop table droppedTable;",
+			"call DOLT_ADD('droppedTable');",
+			// changeSet: WORKING; data change: false; schema change: true
+			"rename table renamedEmptyTable to newRenamedEmptyTable;",
+			// changeSet: WORKING; data change: true; schema change: false
+			"insert into regularTable values (3, 4, 5);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
+				Expected: []sql.Row{{21}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF WHERE commit_hash = @Commit1;",
+				Expected: []sql.Row{{9}},
+			},
+			{
+				Query:    "SELECT * FROM DOLT_COLUMN_DIFF WHERE commit_hash = @Commit1 AND committer <> 'billy bob';",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT commit_hash, committer FROM DOLT_COLUMN_DIFF WHERE commit_hash <> @Commit1 AND committer = 'billy bob' AND commit_hash NOT IN ('WORKING','STAGED');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "SELECT commit_hash, table_name, column_name FROM DOLT_COLUMN_DIFF WHERE commit_hash <> @Commit1 AND commit_hash NOT IN ('STAGED') ORDER BY table_name;",
+				Expected: []sql.Row{
+					{"WORKING", "newRenamedEmptyTable", "a"},
+					{"WORKING", "newRenamedEmptyTable", "b"},
+					{"WORKING", "newRenamedEmptyTable", "c"},
+					{"WORKING", "regularTable", "a"},
+					{"WORKING", "regularTable", "b"},
+					{"WORKING", "regularTable", "c"},
+				},
+			},
+			{
+				Query: "SELECT commit_hash, table_name, column_name FROM DOLT_COLUMN_DIFF WHERE commit_hash <> @Commit1 OR committer <> 'billy bob' ORDER BY table_name;",
+				Expected: []sql.Row{
+					{"STAGED", "addedTable", "a"},
+					{"STAGED", "addedTable", "b"},
+					{"STAGED", "addedTable", "c"},
+					{"STAGED", "droppedTable", "a"},
+					{"STAGED", "droppedTable", "b"},
+					{"STAGED", "droppedTable", "c"},
+					{"WORKING", "newRenamedEmptyTable", "a"},
+					{"WORKING", "newRenamedEmptyTable", "b"},
+					{"WORKING", "newRenamedEmptyTable", "c"},
+					{"WORKING", "regularTable", "a"},
+					{"WORKING", "regularTable", "b"},
+					{"WORKING", "regularTable", "c"},
+				},
+			},
+			{
+				Query: "SELECT * FROM DOLT_COLUMN_DIFF WHERE COMMIT_HASH in ('WORKING', 'STAGED') ORDER BY table_name;",
+				Expected: []sql.Row{
+					{"STAGED", "addedTable", "a", nil, nil, nil, nil, false, true},
+					{"STAGED", "addedTable", "b", nil, nil, nil, nil, false, true},
+					{"STAGED", "addedTable", "c", nil, nil, nil, nil, false, true},
+					{"STAGED", "droppedTable", "a", nil, nil, nil, nil, true, true},
+					{"STAGED", "droppedTable", "b", nil, nil, nil, nil, true, true},
+					{"STAGED", "droppedTable", "c", nil, nil, nil, nil, true, true},
+					{"WORKING", "newRenamedEmptyTable", "a", nil, nil, nil, nil, false, true},
+					{"WORKING", "newRenamedEmptyTable", "b", nil, nil, nil, nil, false, true},
+					{"WORKING", "newRenamedEmptyTable", "c", nil, nil, nil, nil, false, true},
+					{"WORKING", "regularTable", "a", nil, nil, nil, nil, true, false},
+					{"WORKING", "regularTable", "b", nil, nil, nil, nil, true, false},
+					{"WORKING", "regularTable", "c", nil, nil, nil, nil, true, false},
+				},
+			},
+		},
+	},
+}
+
 var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "error handling",

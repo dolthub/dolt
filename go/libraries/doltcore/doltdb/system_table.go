@@ -268,6 +268,9 @@ const (
 	// DiffTableName is the name of the table with a map of commits to tables changed
 	DiffTableName = "dolt_diff"
 
+	// ColumnDiffTableName is the name of the table with a map of commits to tables and columns changed
+	ColumnDiffTableName = "dolt_column_diff"
+
 	// TableOfTablesInConflictName is the conflicts system table name
 	TableOfTablesInConflictName = "dolt_conflicts"
 

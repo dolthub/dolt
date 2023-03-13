@@ -1225,6 +1225,14 @@ func TestUnscopedDiffSystemTable(t *testing.T) {
 	}
 }
 
+func TestColumnDiffSystemTable(t *testing.T) {
+	for _, test := range ColumnDiffSystemTableScriptTests {
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, newDoltHarness(t), test)
+		})
+	}
+}
+
 func TestUnscopedDiffSystemTablePrepared(t *testing.T) {
 	for _, test := range UnscopedDiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {

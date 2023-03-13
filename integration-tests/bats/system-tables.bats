@@ -320,6 +320,19 @@ SQL
     [[ "$output" =~ "WORKING,testWorking,,,,,false,true" ]] || false
 }
 
+@test "system-tables: query dolt_column_diff system table" {
+    dolt sql -q "CREATE TABLE testStaged (pk INT, c1 INT, PRIMARY KEY(pk))"
+    dolt add testStaged
+    dolt sql -q "CREATE TABLE testWorking (pk INT, c1 INT, PRIMARY KEY(pk))"
+
+    run dolt sql -r csv -q 'select * from dolt_column_diff'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "STAGED,testStaged,pk,,,,,false,true" ]] || false
+    [[ "$output" =~ "STAGED,testStaged,c1,,,,,false,true" ]] || false
+    [[ "$output" =~ "WORKING,testWorking,pk,,,,,false,true" ]] || false
+    [[ "$output" =~ "WORKING,testWorking,c1,,,,,false,true" ]] || false
+}
+
 @test "system-tables: query dolt_diff_ system table" {
     dolt sql -q "CREATE TABLE test (pk INT, c1 INT, PRIMARY KEY(pk))"
     dolt add test
