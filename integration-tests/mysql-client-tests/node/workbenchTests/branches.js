@@ -45,7 +45,7 @@ export const branchTests = [
     res: [{ hash: "" }],
   },
   {
-    q: `SELECT * FROM dolt_branches WHERE name NOT LIKE "workspaces/%" LIMIT 200`,
+    q: `SELECT * FROM dolt_branches LIMIT 200`,
     res: [
       {
         name: "main",
@@ -66,7 +66,7 @@ export const branchTests = [
     res: [{ status: 0 }],
   },
   {
-    q: `SELECT COUNT(*) FROM dolt_branches WHERE name NOT LIKE "workspaces/%" LIMIT 200`,
+    q: `SELECT COUNT(*) FROM dolt_branches LIMIT 200`,
     res: [{ ["COUNT(*)"]: 3 }],
   },
   {
@@ -87,7 +87,7 @@ export const branchTests = [
     res: [{ status: 0 }],
   },
   {
-    q: `SELECT COUNT(*) FROM dolt_branches WHERE name NOT LIKE "workspaces/%" LIMIT 200`,
+    q: `SELECT COUNT(*) FROM dolt_branches LIMIT 200`,
     res: [{ ["COUNT(*)"]: 2 }],
   },
 ];

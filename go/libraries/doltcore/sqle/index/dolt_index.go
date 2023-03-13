@@ -948,34 +948,43 @@ func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, er
 		return nil, fmt.Errorf("spatial index bounding box using non-point type")
 	}
 
-	pranges := make([]prolly.Range, 65)
+	var pRanges []prolly.Range
 	zMin := ZValue(minPoint)
 	zMax := ZValue(maxPoint)
-
-	// generate ranges for level 0 - 64
-	for level := byte(0); level < byte(65); level++ {
-		minVal := ZMask(level, zMin)
-		maxVal := ZMask(level, zMax)
-		field := prolly.RangeField{
-			Exact: false,
-			Lo: prolly.Bound{
-				Binding:   true,
-				Inclusive: true,
-				Value:     minVal[:],
-			},
-			Hi: prolly.Bound{
-				Binding:   true,
-				Inclusive: true,
-				Value:     maxVal[:],
-			},
-		}
-		pranges[level] = prolly.Range{
-			Fields: []prolly.RangeField{field},
-			Desc:   di.keyBld.Desc,
+	zRanges := SplitZRanges(ZRange{zMin, zMax})
+	for level := byte(0); level < 65; level++ {
+		// For example, at highest level, we'll just look at origin point multiple times
+		var prevMinCell, prevMaxCell val.Cell
+		for i, zRange := range zRanges {
+			minCell := ZMask(level, zRange[0])
+			maxCell := ZMask(level, zRange[1])
+			if i != 0 && minCell == prevMinCell && maxCell == prevMaxCell {
+				continue
+			}
+			prevMinCell = minCell
+			prevMaxCell = maxCell
+			field := prolly.RangeField{
+				Exact: false,
+				Lo: prolly.Bound{
+					Binding:   true,
+					Inclusive: true,
+					Value:     minCell[:],
+				},
+				Hi: prolly.Bound{
+					Binding:   true,
+					Inclusive: true,
+					Value:     maxCell[:],
+				},
+			}
+			pRange := prolly.Range{
+				Fields: []prolly.RangeField{field},
+				Desc:   di.keyBld.Desc,
+			}
+			pRanges = append(pRanges, pRange)
 		}
 	}
 
-	return pranges, nil
+	return pRanges, nil
 }
 
 func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.NodeStore, ranges []sql.Range, tb *val.TupleBuilder) ([]prolly.Range, error) {

@@ -1224,7 +1224,7 @@ SQL
     [[ "${lines[0]}" = "count" ]] || false
     [[ "${lines[1]}" = "1" ]] || false
 
-    run dolt index cat mytable v1v2 -r csv
+    run dolt index cat mytable ux -r csv
     [[ "${lines[0]}" = "v1,v2" ]] || false
     [[ "${lines[1]}" = "2,2" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
@@ -1264,7 +1264,7 @@ SQL
     [[ "${lines[1]}" = "1,2,2" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
 
-    run dolt index cat mytable v1 -r csv
+    run dolt index cat mytable ux -r csv
     [[ "${lines[0]}" = "v1" ]] || false
     [[ "${lines[1]}" = "2" ]] || false
     [[ "${lines[2]}" = "3" ]] || false
@@ -1295,7 +1295,7 @@ SQL
     [[ "${lines[1]}" = "1,2,2" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
 
-    run dolt index cat mytable v1 -r csv
+    run dolt index cat mytable ux -r csv
     [ $status -eq 0 ]
     [[ "${lines[0]}" = "v1" ]] || false
     [[ "${lines[1]}" = "2" ]] || false

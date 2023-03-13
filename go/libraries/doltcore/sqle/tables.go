@@ -1395,7 +1395,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 	}
 
 	if len(oldSchema.PkOrdinals) > 0 && len(newSchema.PkOrdinals) == 0 {
-		newRoot, err = t.adjustForeignKeysForDroppedPk(ctx, newRoot)
+		newRoot, err = t.adjustForeignKeysForDroppedPk(ctx, t.Name(), newRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -1534,7 +1534,7 @@ func validateSchemaChange(
 	return nil
 }
 
-func (t *AlterableDoltTable) adjustForeignKeysForDroppedPk(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+func (t *AlterableDoltTable) adjustForeignKeysForDroppedPk(ctx *sql.Context, tbl string, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 	if t.autoIncCol.AutoIncrement {
 		return nil, sql.ErrWrongAutoKey.New()
 	}
@@ -1544,7 +1544,7 @@ func (t *AlterableDoltTable) adjustForeignKeysForDroppedPk(ctx *sql.Context, roo
 		return nil, err
 	}
 
-	fkcUpdates, err := backupFkcIndexesForPkDrop(ctx, t.sch, fkc)
+	fkcUpdates, err := backupFkcIndexesForPkDrop(ctx, tbl, t.sch, fkc)
 	if err != nil {
 		return nil, err
 	}
@@ -1800,8 +1800,8 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	if !schema.EnableSpatialIndex && idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
-		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
+	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique && idx.Constraint != sql.IndexConstraint_Spatial {
+		return fmt.Errorf("only the following types of index constraints are supported: none, unique, spatial")
 	}
 
 	columns := make([]string, len(idx.Columns))
@@ -2176,8 +2176,8 @@ func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, s
 
 // CreateIndexForForeignKey implements sql.ForeignKeyTable
 func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
-	if !schema.EnableSpatialIndex && idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
-		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
+	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique && idx.Constraint != sql.IndexConstraint_Spatial {
+		return fmt.Errorf("only the following types of index constraints are supported: none, unique, spatial")
 	}
 	columns := make([]string, len(idx.Columns))
 	for i, indexCol := range idx.Columns {

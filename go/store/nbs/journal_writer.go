@@ -518,12 +518,8 @@ func (idx rangeIndex) novelLookups() (lookups []lookup) {
 }
 
 func (idx rangeIndex) flatten() {
-	if len(idx.cached) == 0 {
-		idx.cached = idx.novel
-	} else {
-		for a, r := range idx.novel {
-			idx.cached[a] = r
-		}
+	for a, r := range idx.novel {
+		idx.cached[a] = r
+		delete(idx.novel, a)
 	}
-	idx.novel = make(map[addr]Range)
 }

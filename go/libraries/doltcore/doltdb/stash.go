@@ -88,43 +88,43 @@ func getStashHashAtIdx(ctx context.Context, ds datas.Dataset, ns tree.NodeStore,
 }
 
 // getStashList returns stash root value and head commit of a stash entry at given index.
-func getStashAtIdx(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWriter, ns tree.NodeStore, idx int) (*RootValue, *Commit, error) {
+func getStashAtIdx(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWriter, ns tree.NodeStore, idx int) (*RootValue, *Commit, *datas.StashMeta, error) {
 	v, ok := ds.MaybeHead()
 	if !ok {
-		return nil, nil, errors.New("stashes not found")
+		return nil, nil, nil, errors.New("stashes not found")
 	}
 
 	stashHash, err := datas.GetStashAtIdx(ctx, ns, v, idx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	stashVal, err := vrw.ReadValue(ctx, stashHash)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	stashRootAddr, headCommitAddr, _, err := datas.GetStashData(stashVal)
+	stashRootAddr, headCommitAddr, meta, err := datas.GetStashData(stashVal)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	hc, err := datas.LoadCommitAddr(ctx, vrw, headCommitAddr)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	headCommit, err := NewCommit(ctx, vrw, ns, hc)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	stashRootVal, err := vrw.ReadValue(ctx, stashRootAddr)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	stashRoot, err := newRootValue(vrw, ns, stashRootVal)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return stashRoot, headCommit, nil
+	return stashRoot, headCommit, meta, nil
 }

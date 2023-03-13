@@ -567,13 +567,13 @@ func SqlSchemaDiff(ctx context.Context, td TableDelta, toSchemas map[string]sche
 		if err != nil {
 			return nil, err
 		}
-		stmt, err := generateCreateTableStatement(td.ToName, td.ToSch, toPkSch, td.ToFks, td.ToFksParentSch)
+		stmt, err := GenerateCreateTableStatement(td.ToName, td.ToSch, toPkSch, td.ToFks, td.ToFksParentSch)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
 		ddlStatements = append(ddlStatements, stmt)
 	} else {
-		stmts, err := getNonCreateNonDropTableSqlSchemaDiff(td, toSchemas, fromSch, toSch)
+		stmts, err := GetNonCreateNonDropTableSqlSchemaDiff(td, toSchemas, fromSch, toSch)
 		if err != nil {
 			return nil, err
 		}
@@ -583,7 +583,8 @@ func SqlSchemaDiff(ctx context.Context, td TableDelta, toSchemas map[string]sche
 	return ddlStatements, nil
 }
 
-func getNonCreateNonDropTableSqlSchemaDiff(td TableDelta, toSchemas map[string]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
+// GetNonCreateNonDropTableSqlSchemaDiff returns any schema diff in SQL statements that is NEITHER 'CREATE TABLE' NOR 'DROP TABLE' statements.
+func GetNonCreateNonDropTableSqlSchemaDiff(td TableDelta, toSchemas map[string]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
 	if td.IsAdd() || td.IsDrop() {
 		// use add and drop specific methods
 		return nil, nil
@@ -659,6 +660,7 @@ func getNonCreateNonDropTableSqlSchemaDiff(td TableDelta, toSchemas map[string]s
 	return ddlStatements, nil
 }
 
+// GetDataDiffStatement returns any data diff in SQL statements for given table including INSERT, UPDATE and DELETE row statements.
 func GetDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowDiffType ChangeType, colDiffTypes []ChangeType) (string, error) {
 	if len(row) != len(colDiffTypes) {
 		return "", fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
@@ -685,12 +687,12 @@ func GetDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowD
 	}
 }
 
-// generateCreateTableStatement returns CREATE TABLE statement for given table. This function was made to share the same
+// GenerateCreateTableStatement returns CREATE TABLE statement for given table. This function was made to share the same
 // 'create table' statement logic as GMS. We initially were running `SHOW CREATE TABLE` query to get the statement;
 // however, it cannot be done for cases that need this statement in sql shell mode. Dolt uses its own Schema and
 // Column and other object types which are not directly compatible with GMS, so we try to use as much shared logic
 // as possible with GMS to get 'create table' statement in Dolt.
-func generateCreateTableStatement(tblName string, sch schema.Schema, pkSchema sql.PrimaryKeySchema, fks []doltdb.ForeignKey, fksParentSch map[string]schema.Schema) (string, error) {
+func GenerateCreateTableStatement(tblName string, sch schema.Schema, pkSchema sql.PrimaryKeySchema, fks []doltdb.ForeignKey, fksParentSch map[string]schema.Schema) (string, error) {
 	sqlSch := pkSchema.Schema
 	colStmts := make([]string, len(sqlSch))
 

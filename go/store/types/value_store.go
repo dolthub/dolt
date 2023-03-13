@@ -120,7 +120,7 @@ func newTestValueStore() *ValueStore {
 	return NewValueStore(ts.NewViewWithDefaultFormat())
 }
 
-func newTestValueStore_7_18() *ValueStore {
+func newTestValueStore_LD_1() *ValueStore {
 	ts := &chunks.TestStorage{}
 	return NewValueStore(ts.NewView())
 }
