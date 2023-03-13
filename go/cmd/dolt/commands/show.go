@@ -48,7 +48,7 @@ var showDocs = cli.CommandDocumentationContent{
 
 type ShowCmd struct{}
 
-// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd ShowCmd) Name() string {
 	return "show"
 }
@@ -165,14 +165,12 @@ func showCommits(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error {
 func showCommit(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, commitSpec *doltdb.CommitSpec) error {
 
 	comm, err := dEnv.DoltDB.Resolve(ctx, commitSpec, dEnv.RepoStateReader().CWBHeadRef())
-
 	if err != nil {
 		cli.PrintErrln(color.HiRedString("Fatal error: cannot resolve commit spec."))
 		return err
 	}
 
 	cHashToRefs, err := getHashToRefs(ctx, dEnv, opts.decoration)
-
 	if err != nil {
 		return err
 	}
@@ -195,7 +193,6 @@ func showCommit(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, commitSp
 
 	headRef := dEnv.RepoStateReader().CWBHeadRef()
 	cwbHash, err := dEnv.DoltDB.GetHashForRefStr(ctx, headRef.String())
-
 	if err != nil {
 		return err
 	}
