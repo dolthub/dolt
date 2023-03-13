@@ -289,6 +289,13 @@ func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 	return filteredIter{iter: iter, rng: rng}, nil
 }
 
+// IterKeyRange iterates over a physical key range defined by |start| and
+// |stop|. If |startInclusive| and/or |stop| is nil, the range will be open
+// towards that end.
+func (m Map) IterKeyRange(ctx context.Context, start, stop val.Tuple) (MapIter, error) {
+	return m.tuples.IterKeyRange(ctx, start, stop)
+}
+
 // GetOrdinalForKey returns the smallest ordinal position at which the key >=
 // |query|.
 func (m Map) GetOrdinalForKey(ctx context.Context, query val.Tuple) (uint64, error) {
