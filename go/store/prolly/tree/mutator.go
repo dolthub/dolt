@@ -69,12 +69,12 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		return root, nil // no mutations
 	}
 
-	cur, err := NewCursorAtKey(ctx, ns, root, K(newKey), order)
+	cur, err := newCursorAtKey(ctx, ns, root, K(newKey), order)
 	if err != nil {
 		return Node{}, err
 	}
 
-	chkr, err := newChunker(ctx, cur.Clone(), 0, ns, serializer)
+	chkr, err := newChunker(ctx, cur.clone(), 0, ns, serializer)
 	if err != nil {
 		return Node{}, err
 	}
@@ -82,17 +82,17 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 	for newKey != nil {
 
 		// move |cur| to the NextMutation mutation point
-		err = Seek(ctx, cur, K(newKey), order)
+		err = seek(ctx, cur, K(newKey), order)
 		if err != nil {
 			return Node{}, err
 		}
 
 		var oldValue Item
-		if cur.Valid() {
+		if cur.valid() {
 			// Compare mutations |newKey| and |newValue|
 			// to the existing pair from the cursor
-			if order.Compare(K(newKey), K(cur.CurrentKey())) == 0 {
-				oldValue = cur.CurrentValue()
+			if order.Compare(K(newKey), K(cur.currentKey())) == 0 {
+				oldValue = cur.currentValue()
 			}
 		}
 
@@ -103,7 +103,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		}
 
 		// move |chkr| to the NextMutation mutation point
-		err = chkr.AdvanceTo(ctx, cur)
+		err = chkr.advanceTo(ctx, cur)
 		if err != nil {
 			return Node{}, err
 		}
