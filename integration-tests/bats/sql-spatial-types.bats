@@ -156,34 +156,6 @@ teardown() {
     [[ "$output" =~ "can't use Spatial Types as Primary Key" ]] || false
 }
 
-@test "sql-spatial-types: prevent creating index on point type" {
-    dolt sql -q "create table point_tbl (p point)"
-    run dolt sql -q "create index idx on point_tbl (p)"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "cannot create an index over spatial type columns" ]] || false
-}
-
-@test "sql-spatial-types: prevent creating index on linestring types" {
-    dolt sql -q "create table line_tbl (l linestring)"
-    run dolt sql -q "create index idx on line_tbl (l)"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "cannot create an index over spatial type columns" ]] || false
-}
-
-@test "sql-spatial-types: prevent creating index on polygon types" {
-    dolt sql -q "create table poly_tbl (p polygon)"
-    run dolt sql -q "create index idx on poly_tbl (p)"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "cannot create an index over spatial type columns" ]] || false
-}
-
-@test "sql-spatial-types: prevent creating index on geometry types" {
-    dolt sql -q "create table geom_tbl (g geometry)"
-    run dolt sql -q "create index idx on geom_tbl (g)"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "cannot create an index over spatial type columns" ]] || false
-}
-
 @test "sql-spatial-types: allow index on non-spatial columns of spatial table" {
     dolt sql -q "create table poly_tbl (a int, p polygon)"
     dolt sql -q "create index idx on poly_tbl (a)"

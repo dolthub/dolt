@@ -49,14 +49,21 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 	var unknownTbls []string
 	for _, tblName := range tbls {
 		tbl, ok, err := roots.Staged.GetTable(ctx, tblName)
-
+		if err != nil {
+			return doltdb.Roots{}, err
+		}
+		fkc, err := roots.Staged.GetForeignKeyCollection(ctx)
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
 
 		if !ok {
 			tbl, ok, err = roots.Head.GetTable(ctx, tblName)
+			if err != nil {
+				return doltdb.Roots{}, err
+			}
 
+			fkc, err = roots.Head.GetForeignKeyCollection(ctx)
 			if err != nil {
 				return doltdb.Roots{}, err
 			}
@@ -68,7 +75,11 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 		}
 
 		roots.Working, err = roots.Working.PutTable(ctx, tblName, tbl)
+		if err != nil {
+			return doltdb.Roots{}, err
+		}
 
+		roots.Working, err = roots.Working.PutForeignKeyCollection(ctx, fkc)
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
