@@ -26,9 +26,6 @@ jobs:
         journal_store: [ "" ]
         include:
           - os: "ubuntu-22.04"
-            dolt_fmt: "__DOLT_DEV__"
-            journal_store: ""
-          - os: "ubuntu-22.04"
             dolt_fmt: "__DOLT__"
             journal_store: "true"
     steps:
@@ -81,9 +78,6 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-22.04, windows-latest]
         dolt_fmt: [ "__DOLT__", "__LD_1__" ]
-        include:
-          - os: "ubuntu-22.04"
-            dolt_fmt: "__DOLT_DEV__"
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v3

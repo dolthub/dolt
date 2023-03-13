@@ -24,8 +24,9 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
@@ -95,7 +96,6 @@ func LoadDoltDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs
 func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) (*DoltDB, error) {
 	if urlStr == LocalDirDoltDB {
 		exists, isDir := fs.Exists(dbfactory.DoltDataDir)
-
 		if !exists {
 			return nil, errors.New("missing dolt data directory")
 		} else if !isDir {
@@ -108,14 +108,17 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 		}
 
 		urlStr = fmt.Sprintf("file://%s", filepath.ToSlash(absPath))
+
+		if params == nil {
+			params = make(map[string]any)
+		}
+		params[dbfactory.ChunkJournalParam] = struct{}{}
 	}
 
 	db, vrw, ns, err := dbfactory.CreateDB(ctx, nbf, urlStr, params)
-
 	if err != nil {
 		return nil, err
 	}
-
 	return &DoltDB{hooksDatabase{Database: db}, vrw, ns}, nil
 }
 
@@ -219,12 +222,12 @@ func (ddb *DoltDB) Close() error {
 	return ddb.db.Close()
 }
 
-func getCommitValForRefStr(ctx context.Context, db datas.Database, vrw types.ValueReadWriter, ref string) (*datas.Commit, error) {
+func (ddb *DoltDB) GetHashForRefStr(ctx context.Context, ref string) (*hash.Hash, error) {
 	if err := datas.ValidateDatasetId(ref); err != nil {
 		return nil, fmt.Errorf("invalid ref format: %s", ref)
 	}
 
-	ds, err := db.GetDataset(ctx, ref)
+	ds, err := ddb.db.GetDataset(ctx, ref)
 
 	if err != nil {
 		return nil, err
@@ -235,18 +238,28 @@ func getCommitValForRefStr(ctx context.Context, db datas.Database, vrw types.Val
 	}
 
 	if ds.IsTag() {
-		_, commitaddr, err := ds.HeadTag()
+		_, commitHash, err := ds.HeadTag()
 		if err != nil {
 			return nil, err
 		}
-		return datas.LoadCommitAddr(ctx, vrw, commitaddr)
+		return &commitHash, nil
+	} else {
+		commitHash, ok := ds.MaybeHeadAddr()
+		if !ok {
+			return nil, fmt.Errorf("Unable to load head for %s", ref)
+		}
+		return &commitHash, nil
 	}
+}
 
-	r, _, err := ds.MaybeHeadRef()
+func getCommitValForRefStr(ctx context.Context, ddb *DoltDB, ref string) (*datas.Commit, error) {
+	commitHash, err := ddb.GetHashForRefStr(ctx, ref)
+
 	if err != nil {
 		return nil, err
 	}
-	return datas.LoadCommitRef(ctx, vrw, r)
+
+	return datas.LoadCommitAddr(ctx, ddb.vrw, *commitHash)
 }
 
 func getCommitValForHash(ctx context.Context, vr types.ValueReader, c string) (*datas.Commit, error) {
@@ -308,7 +321,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 			}
 		}
 		for _, candidate := range candidates {
-			commitVal, err = getCommitValForRefStr(ctx, ddb.db, ddb.vrw, candidate)
+			commitVal, err = getCommitValForRefStr(ctx, ddb, candidate)
 			if err == nil {
 				break
 			}
@@ -322,7 +335,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 		if cwb == nil {
 			return nil, fmt.Errorf("cannot use a nil current working branch with a HEAD commit spec")
 		}
-		commitVal, err = getCommitValForRefStr(ctx, ddb.db, ddb.vrw, cwb.String())
+		commitVal, err = getCommitValForRefStr(ctx, ddb, cwb.String())
 	default:
 		panic("unrecognized commit spec csType: " + cs.csType)
 	}
@@ -341,7 +354,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 // ResolveCommitRef takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
 // point to a Commit.
 func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Commit, error) {
-	commitVal, err := getCommitValForRefStr(ctx, ddb.db, ddb.vrw, ref.String())
+	commitVal, err := getCommitValForRefStr(ctx, ddb, ref.String())
 	if err != nil {
 		return nil, err
 	}
@@ -1393,10 +1406,10 @@ func (ddb *DoltDB) GetBranchesByRootHash(ctx context.Context, rootHash hash.Hash
 	return refs, nil
 }
 
-// AddStash takes current branch head commit, working root value and stash metadata to create a new stash.
+// AddStash takes current branch head commit, stash root value and stash metadata to create a new stash.
 // It stores the new stash object in stash list Dataset, which can be created if it does not exist.
 // Otherwise, it updates the stash list Dataset as there can only be one stashes Dataset.
-func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, working *RootValue, meta *datas.StashMeta) error {
+func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, stash *RootValue, meta *datas.StashMeta) error {
 	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
 	if err != nil {
 		return err
@@ -1407,14 +1420,14 @@ func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, working *RootValu
 		return err
 	}
 
-	_, workingRoot, err := ddb.writeRootValue(ctx, working)
+	_, stashVal, err := ddb.writeRootValue(ctx, stash)
 	if err != nil {
 		return err
 	}
 
 	nbf := ddb.Format()
 	vrw := ddb.ValueReadWriter()
-	stashAddr, _, err := datas.NewStash(ctx, nbf, vrw, workingRoot, headCommitAddr, meta)
+	stashAddr, _, err := datas.NewStash(ctx, nbf, vrw, stashVal, headCommitAddr, meta)
 	if err != nil {
 		return err
 	}
@@ -1512,14 +1525,14 @@ func (ddb *DoltDB) GetStashHashAtIdx(ctx context.Context, idx int) (hash.Hash, e
 
 // GetStashRootAndHeadCommitAtIdx returns root value of stash working set and head commit of the branch that the stash was made on
 // of the stash at given index.
-func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) (*RootValue, *Commit, error) {
+func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) (*RootValue, *Commit, *datas.StashMeta, error) {
 	ds, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if !ds.HasHead() {
-		return nil, nil, errors.New("No stash entries found.")
+		return nil, nil, nil, errors.New("No stash entries found.")
 	}
 
 	return getStashAtIdx(ctx, ds, ddb.vrw, ddb.NodeStore(), idx)

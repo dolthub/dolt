@@ -217,6 +217,9 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 	case val.CommitAddrEnc:
 		tb.PutCommitAddr(i, v.(hash.Hash))
 	case val.CellEnc:
+		if _, ok := v.([]byte); ok {
+			v = deserializeGeometry(v.([]byte))
+		}
 		tb.PutCell(i, ZCell(v.(types.GeometryValue)))
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))

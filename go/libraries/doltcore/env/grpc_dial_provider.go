@@ -16,6 +16,7 @@ package env
 
 import (
 	"crypto/tls"
+	"net"
 	"net/http"
 	"runtime"
 	"strings"
@@ -87,7 +88,7 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 	if config.Creds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(config.Creds))
 	} else if config.WithEnvCreds {
-		rpcCreds, err := p.getRPCCreds()
+		rpcCreds, err := p.getRPCCreds(endpoint)
 		if err != nil {
 			return dbfactory.GRPCRemoteConfig{}, err
 		}
@@ -104,7 +105,7 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 
 // getRPCCreds returns any RPC credentials available to this dial provider. If a DoltEnv has been configured
 // in this dial provider, it will be used to load custom user credentials, otherwise nil will be returned.
-func (p GRPCDialProvider) getRPCCreds() (credentials.PerRPCCredentials, error) {
+func (p GRPCDialProvider) getRPCCreds(endpoint string) (credentials.PerRPCCredentials, error) {
 	if p.dEnv == nil {
 		return nil, nil
 	}
@@ -116,7 +117,16 @@ func (p GRPCDialProvider) getRPCCreds() (credentials.PerRPCCredentials, error) {
 	if !valid {
 		return nil, nil
 	}
-	return dCreds.RPCCreds(), nil
+
+	return dCreds.RPCCreds(getHostFromEndpoint(endpoint)), nil
+}
+
+func getHostFromEndpoint(endpoint string) string {
+	host, _, err := net.SplitHostPort(endpoint)
+	if err != nil {
+		return DefaultRemotesApiHost
+	}
+	return host
 }
 
 // getUserAgentString returns a user agent string to use in GRPC requests.

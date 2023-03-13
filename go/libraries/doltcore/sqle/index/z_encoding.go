@@ -15,11 +15,9 @@
 package index
 
 import (
-	"bytes"
 	"encoding/binary"
 	"math"
 	"math/bits"
-	"sort"
 
 	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -79,14 +77,6 @@ func InterleaveUInt64(x, y uint64) uint64 {
 	return x | (y << 1)
 }
 
-// ZValue takes a Point and interleaves the bits into a [2]uint64
-// It will put the bits in this order: x_0, y_0, x_1, y_1 ... x_63, Y_63
-func ZValue(p types.Point) (z [2]uint64) {
-	xLex, yLex := LexFloat(p.X), LexFloat(p.Y)
-	z[0], z[1] = InterleaveUInt64(xLex>>32, yLex>>32), InterleaveUInt64(xLex&0xFFFFFFFF, yLex&0xFFFFFFFF)
-	return
-}
-
 // UnInterleaveUint64 splits up the bits of the uint64 z into two uint64s
 // The first 32 bits of x and y must be 0.
 // Example:
@@ -135,7 +125,20 @@ func UnInterleaveUint64(z uint64) (x, y uint64) {
 	return
 }
 
-// UnZValue takes a [2]uint64 Z-Value and converts it back to a sql.Point
+// ZVal consists of uint64 x and y with bits their interleaved
+// ZVal[0] contains the upper 64 bits of x and y interleaved
+// ZVal[1] contains the lower 64 bits of x and y interleaved
+type ZVal = [2]uint64
+
+// ZValue takes a Point, Lexes the x and y values, and interleaves the bits into a [2]uint64
+// It will put the bits in this order: x_0, y_0, x_1, y_1 ... x_63, Y_63
+func ZValue(p types.Point) (z ZVal) {
+	xLex, yLex := LexFloat(p.X), LexFloat(p.Y)
+	z[0], z[1] = InterleaveUInt64(xLex>>32, yLex>>32), InterleaveUInt64(xLex&0xFFFFFFFF, yLex&0xFFFFFFFF)
+	return
+}
+
+// UnZValue takes a ZVal and converts it back to a sql.Point
 func UnZValue(z [2]uint64) types.Point {
 	xl, yl := UnInterleaveUint64(z[0])
 	xr, yr := UnInterleaveUint64(z[1])
@@ -144,16 +147,8 @@ func UnZValue(z [2]uint64) types.Point {
 	return types.Point{X: xf, Y: yf}
 }
 
-func ZSort(points []types.Point) []types.Point {
-	sort.Slice(points, func(i, j int) bool {
-		zi, zj := ZValue(points[i]), ZValue(points[j])
-		return zi[0] < zj[0] || (zi[0] == zj[0] && zi[1] < zi[1])
-	})
-	return points
-}
-
 // ZMask masks in pairs by shifting based off of level (shift amount)
-func ZMask(level byte, zVal [2]uint64) val.Cell {
+func ZMask(level byte, zVal ZVal) val.Cell {
 	cell := val.Cell{}
 	cell[0] = level
 	if level < 32 {
@@ -184,28 +179,125 @@ func ZCell(v types.GeometryValue) val.Cell {
 	return ZMask(level, zMin)
 }
 
-// ZAddr converts the GeometryValue into a key: (level, min_z_val)
-func ZAddr(v types.GeometryValue) val.Cell {
-	bbox := spatial.FindBBox(v)
-	zMin := ZValue(types.Point{X: bbox[0], Y: bbox[1]})
-	zMax := ZValue(types.Point{X: bbox[2], Y: bbox[3]})
-	addr := val.Cell{}
-	binary.BigEndian.PutUint64(addr[1:], zMin[0])
-	binary.BigEndian.PutUint64(addr[9:], zMin[1])
-	if res := zMin[0] ^ zMax[0]; res != 0 {
-		addr[0] = byte(64 - bits.LeadingZeros64(res)/2)
-	} else {
-		addr[0] = byte(32 - bits.LeadingZeros64(zMin[1]^zMax[1])/2)
+// ZRange is a pair of two ZVals
+// ZRange[0] is the lower bound (z-min)
+// ZRange[1] is the upper bound (z-max)
+type ZRange = [2]ZVal
+
+// mergeZRanges combines the z-ranges in acc with zRange by either
+// 1. combining the last ZRange in acc with zRange if the ranges are next to each other or
+// 2. appending zRange to acc
+func mergeZRanges(acc []ZRange, zRange ZRange) []ZRange {
+	n := len(acc) - 1
+	if n >= 0 && acc[n][1][0] == zRange[0][0] && zRange[0][1]-acc[n][1][1] == 1 {
+		acc[n][1] = zRange[1]
+		return acc
 	}
-	return addr
+	return append(acc, zRange)
 }
 
-// ZAddrSort converts the GeometryValue into a key: (min_z_val, level)
-// Note: there is an inefficiency here where small polygons may be placed into a level that's significantly larger
-func ZAddrSort(geoms []types.GeometryValue) []types.GeometryValue {
-	sort.Slice(geoms, func(i, j int) bool {
-		zi, zj := ZAddr(geoms[i]), ZAddr(geoms[j])
-		return bytes.Compare(zi[:], zj[:]) < 0
-	})
-	return geoms
+// zRangeSize retrieves the approximate size of the zRange
+// it only takes the top 64 bits of the difference
+// it accepts and returns a shift-amount so that comparison between two zRangeSizes are consistent
+func zRangeSize(zRange ZRange, shamt int) (uint64, int) {
+	zVal := ZVal{}
+	zVal[0] = zRange[1][0] - zRange[0][0]
+	if zRange[1][1] < zRange[0][1] {
+		zVal[0] -= 1
+		zVal[1] = ^zRange[1][1] - zRange[0][1]
+	} else {
+		zVal[1] = zRange[1][1] - zRange[0][1]
+	}
+	if shamt == -1 {
+		shamt = bits.LeadingZeros64(zVal[0])
+	}
+	zVal[0] = zVal[0] << shamt
+	zVal[1] = zVal[1] >> (64 - shamt)
+	return zVal[0] | zVal[1], shamt
+}
+
+// Thresholds to stop splitting ZRanges
+const cutThresh = 0.02
+const depthThresh = 4
+
+// Masks for every other bit to avoid un-interleaving
+// Depending on prefixLength these will be shifted to either fill x or y values with 0s or 1s
+// while not altering the bits of their counterparts
+const xMask = 0x5555555555555555
+const yMask = 0xAAAAAAAAAAAAAAAA
+
+// shouldCut checks if the size of the removed ZRange divided by the size of the whole ZRange is smaller than cutThresh
+// This is used to get splitZRanges to stop recursing
+func shouldCut(cutRange ZRange, size float64, shamt int) bool {
+	cut, _ := zRangeSize(cutRange, shamt)
+	return (float64(cut) / size) >= cutThresh
+}
+
+// isContinuous checks if the provided zRange is entirely within the bounding box
+func isContinuous(zl, zh uint64, prefixLength int) bool {
+	mask := uint64(math.MaxUint64 >> prefixLength)
+	return (zl&mask) == 0 && (zh&mask) == mask
+}
+
+// splitZRanges is a helper function to SplitZRanges
+func splitZRanges(zRange ZRange, zSize float64, zShamt, depth int, acc []ZRange) []ZRange {
+	// prevent too much splitting and point lookup is continuous
+	if depth == 0 || zRange[0] == zRange[1] {
+		return mergeZRanges(acc, zRange)
+	}
+
+	zl, zh := zRange[0], zRange[1]
+	zRangeL, zRangeR := zRange, zRange
+	if zl[0] != zh[0] {
+		prefixLength := bits.LeadingZeros64(zl[0] ^ zh[0])
+		if zl[1] == 0 && zh[1] == math.MaxUint64 && isContinuous(zl[0], zh[0], prefixLength) {
+			return mergeZRanges(acc, zRange)
+		}
+
+		// upper bound for left range; set 0 fill with 1s
+		suffixLength := 64 - prefixLength
+		zRangeL[1][0] |= yMask >> prefixLength       // set suffix to all 1s
+		zRangeL[1][0] &= ^(1 << (suffixLength - 1))  // set first suffix bit to 0
+		zRangeL[1][1] |= yMask >> (prefixLength % 2) // set suffix to all 1s
+
+		// lower bound for right range; set 1 fill with 0s
+		suffixMask := uint64(math.MaxUint64<<suffixLength) | (xMask >> prefixLength)
+		zRangeR[0][0] &= suffixMask                  // set suffix to all 0s
+		zRangeR[0][0] |= 1 << (suffixLength - 1)     // set first suffix bit to 1
+		zRangeR[0][1] &= xMask << (prefixLength % 2) // set suffix to all 0s
+	} else {
+		prefixLength := bits.LeadingZeros64(zl[1] ^ zh[1])
+		if isContinuous(zl[1], zh[1], prefixLength) {
+			return mergeZRanges(acc, zRange)
+		}
+
+		// upper bound for left range; set 0 fill with 1s
+		suffixLength := 64 - prefixLength
+		zRangeL[1][1] |= yMask >> prefixLength      // set suffix to all 1s
+		zRangeL[1][1] &= ^(1 << (suffixLength - 1)) // set at prefix to 0
+
+		// lower bound for right range; set 1 fill with 0s
+		suffixMask := uint64(math.MaxUint64<<suffixLength) | (xMask >> prefixLength)
+		zRangeR[0][1] &= suffixMask              // set suffix to all 0s
+		zRangeR[0][1] |= 1 << (suffixLength - 1) // set at prefix to 1
+	}
+
+	if !shouldCut(ZRange{zRangeL[1], zRangeR[0]}, zSize, zShamt) {
+		return mergeZRanges(acc, zRange)
+	}
+
+	// recurse on left and right ranges
+	acc = splitZRanges(zRangeL, zSize, zShamt, depth-1, acc)
+	acc = splitZRanges(zRangeR, zSize, zShamt, depth-1, acc)
+
+	return acc
+}
+
+// SplitZRanges takes a ZRange and splits it into continuous ZRanges within the bounding box
+// A ZRange is continuous if
+// 1. it is a point (the lower and upper bounds are equal)
+// 2. the ranges are within a cell (the suffixes of the bounds range from 00...0 to 11...1)
+func SplitZRanges(zRange ZRange) []ZRange {
+	zSize, zShamt := zRangeSize(zRange, -1)
+	return splitZRanges(zRange, float64(zSize), zShamt, depthThresh, make([]ZRange, 0, 128))
 }

@@ -519,8 +519,8 @@ func assertValues(t *testing.T, assertionIndex int, row map[string]interface{}) 
 			actualValue = row[typeDesc.ColumnName()].(string)
 		}
 		if typeDesc.TypeDefinition == "json" {
-			// LD_1, DOLT_DEV, and DOLT storage formats return JSON strings slightly differently; DOLT removes spaces
-			// while LD_1 and DOLT_DEV add whitespace, so for json comparison, we sanitize by removing whitespace.
+			// LD_1 and DOLT storage formats return JSON strings slightly differently; DOLT removes spaces
+			// while LD_1 add whitespace, so for json comparison, we sanitize by removing whitespace.
 			actualValue = strings.ReplaceAll(actualValue, " ", "")
 		}
 

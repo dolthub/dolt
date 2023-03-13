@@ -33,7 +33,7 @@ type JWKSHandler struct {
 func (h JWKSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	b, err := json.Marshal(jose.JSONWebKeySet{
 		Keys: []jose.JSONWebKey{
-			jose.JSONWebKey{
+			{
 				Key:   h.PublicKey,
 				KeyID: h.KeyID,
 			},
@@ -60,5 +60,5 @@ func JWKSHandlerInterceptor(keyID string, pub ed25519.PublicKey) func(http.Handl
 }
 
 func JWTExpectations() jwt.Expected {
-	return jwt.Expected{Issuer: creds.ClientIssuer, Audience: jwt.Audience{creds.RemotesAPIAudience}}
+	return jwt.Expected{Issuer: creds.ClientIssuer, Audience: jwt.Audience{DoltClusterRemoteApiAudience}}
 }

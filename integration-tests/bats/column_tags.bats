@@ -301,12 +301,6 @@ DELIM
     [ $status -ne 0 ]
     echo $output
     [[ $output =~ "update-tag is only available in storage format __DOLT__" ]] || false
-
-    cd ../dev
-    DOLT_DEFAULT_BIN_FORMAT=__DOLT_DEV__ dolt init
-    run dolt schema update-tag t col 5
-    [ $status -ne 0 ]
-    [[ $output =~ "update-tag is only available in storage format __DOLT__" ]] || false
 }
 
 @test "column_tags: update-tag updates a columns tag" {
@@ -361,7 +355,7 @@ DELIM
 
     run dolt merge other
     [ $status -ne 0 ]
-    [[ $output =~ "table with same name added in 2 commits can't be merged" ]] || false
+    [[ $output =~ "table with same name 'target' added in 2 commits can't be merged" ]] || false
     dolt reset --hard
 
     dolt schema update-tag target col1 14690
