@@ -123,7 +123,6 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 				return nil, nil, err
 			}
 			s.Conflicts += cnt
-
 		case tree.DiffOpRightModify:
 			s.Modifications++
 			err = pri.merge(ctx, diff)
@@ -431,11 +430,8 @@ func (v *uniqAddValidator) flush(ctx context.Context, i int) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		if cur.Valid() {
-			indexK := val.Tuple(cur.CurrentKey())
-			if s.prefixKD.Compare(secKey, indexK) != 0 {
-				continue
-			}
+		indexK := val.Tuple(cur.CurrentKey())
+		if s.prefixKD.Compare(secKey, indexK) == 0 {
 			conflicts++
 
 			// existingPk is the merge-left primary key that
@@ -557,7 +553,6 @@ type primaryMerger struct {
 	ns         tree.NodeStore
 	root       tree.Node
 	cur        *tree.Cursor
-	chunker    tree.Chunker
 	mut        *prolly.MutableMap
 	key, value val.Tuple
 }
