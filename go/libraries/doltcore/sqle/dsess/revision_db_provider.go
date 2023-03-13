@@ -36,7 +36,7 @@ var ErrRevisionDbNotFound = errors.NewKind("revision database not found: '%s'")
 // databases. Revision databases for branches will be read/write.
 type RevisionDatabaseProvider interface {
 	// RevisionDbState provides the InitialDbState for a revision database.
-	RevisionDbState(ctx *sql.Context, revDB string) (InitialDbState, string, error)
+	RevisionDbState(ctx *sql.Context, revDB string) (InitialDbState, error)
 	// IsRevisionDatabase validates the specified dbName and returns true if it is a valid revision database.
 	IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error)
 	// GetRevisionForRevisionDatabase looks up the named database and returns the root database name as well as the
@@ -89,7 +89,8 @@ type DoltDatabaseProvider interface {
 	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error
 	// DbState returns the InitialDbState for the specified database and given branch. An empty branch name should use
 	// the default branch for the repository.
-	DbState(ctx *sql.Context, dbName string, defaultBranch string) (InitialDbState, bool, error)
+	// TODO: make this use an ok bool instead of relying on sql.DatabaseNotFound errors
+	DbState(ctx *sql.Context, dbName string, defaultBranch string) (InitialDbState, error)
 }
 
 func EmptyDatabaseProvider() DoltDatabaseProvider {
@@ -100,8 +101,8 @@ type emptyRevisionDatabaseProvider struct {
 	sql.DatabaseProvider
 }
 
-func (e emptyRevisionDatabaseProvider) DbState(ctx *sql.Context, dbName string, defaultBranch string) (InitialDbState, bool, error) {
-	return InitialDbState{}, false, nil
+func (e emptyRevisionDatabaseProvider) DbState(ctx *sql.Context, dbName string, defaultBranch string) (InitialDbState, error) {
+	return InitialDbState{}, sql.ErrDatabaseNotFound.New(dbName)
 }
 
 func (e emptyRevisionDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
@@ -136,6 +137,6 @@ func (e emptyRevisionDatabaseProvider) CreateDatabase(ctx *sql.Context, dbName s
 	return nil
 }
 
-func (e emptyRevisionDatabaseProvider) RevisionDbState(_ *sql.Context, revDB string) (InitialDbState, string, error) {
-	return InitialDbState{}, revDB, sql.ErrDatabaseNotFound.New(revDB)
+func (e emptyRevisionDatabaseProvider) RevisionDbState(_ *sql.Context, revDB string) (InitialDbState, error) {
+	return InitialDbState{}, sql.ErrDatabaseNotFound.New(revDB)
 }
