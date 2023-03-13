@@ -340,6 +340,12 @@ func TestDoltCommits(t *testing.T) {
 	require.Equal(t, "t1", row["table_name"])
 
 	require.NoError(t, rows.Close())
+
+	// Verify that commit timestamps are unique
+	rows, err = replicaDatabase.Queryx("select distinct date from db01.dolt_log;")
+	require.NoError(t, err)
+	allRows := readAllRows(t, rows)
+	require.Equal(t, 5, len(allRows)) // 4 transactions + 1 initial commit
 }
 
 // TestForeignKeyChecks tests that foreign key constraints replicate correctly when foreign key checks are

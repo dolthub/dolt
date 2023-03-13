@@ -222,12 +222,12 @@ func (ddb *DoltDB) Close() error {
 	return ddb.db.Close()
 }
 
-func getCommitValForRefStr(ctx context.Context, db datas.Database, vrw types.ValueReadWriter, ref string) (*datas.Commit, error) {
+func (ddb *DoltDB) GetHashForRefStr(ctx context.Context, ref string) (*hash.Hash, error) {
 	if err := datas.ValidateDatasetId(ref); err != nil {
 		return nil, fmt.Errorf("invalid ref format: %s", ref)
 	}
 
-	ds, err := db.GetDataset(ctx, ref)
+	ds, err := ddb.db.GetDataset(ctx, ref)
 
 	if err != nil {
 		return nil, err
@@ -238,18 +238,28 @@ func getCommitValForRefStr(ctx context.Context, db datas.Database, vrw types.Val
 	}
 
 	if ds.IsTag() {
-		_, commitaddr, err := ds.HeadTag()
+		_, commitHash, err := ds.HeadTag()
 		if err != nil {
 			return nil, err
 		}
-		return datas.LoadCommitAddr(ctx, vrw, commitaddr)
+		return &commitHash, nil
+	} else {
+		commitHash, ok := ds.MaybeHeadAddr()
+		if !ok {
+			return nil, fmt.Errorf("Unable to load head for %s", ref)
+		}
+		return &commitHash, nil
 	}
+}
 
-	r, _, err := ds.MaybeHeadRef()
+func getCommitValForRefStr(ctx context.Context, ddb *DoltDB, ref string) (*datas.Commit, error) {
+	commitHash, err := ddb.GetHashForRefStr(ctx, ref)
+
 	if err != nil {
 		return nil, err
 	}
-	return datas.LoadCommitRef(ctx, vrw, r)
+
+	return datas.LoadCommitAddr(ctx, ddb.vrw, *commitHash)
 }
 
 func getCommitValForHash(ctx context.Context, vr types.ValueReader, c string) (*datas.Commit, error) {
@@ -311,7 +321,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 			}
 		}
 		for _, candidate := range candidates {
-			commitVal, err = getCommitValForRefStr(ctx, ddb.db, ddb.vrw, candidate)
+			commitVal, err = getCommitValForRefStr(ctx, ddb, candidate)
 			if err == nil {
 				break
 			}
@@ -325,7 +335,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 		if cwb == nil {
 			return nil, fmt.Errorf("cannot use a nil current working branch with a HEAD commit spec")
 		}
-		commitVal, err = getCommitValForRefStr(ctx, ddb.db, ddb.vrw, cwb.String())
+		commitVal, err = getCommitValForRefStr(ctx, ddb, cwb.String())
 	default:
 		panic("unrecognized commit spec csType: " + cs.csType)
 	}
@@ -344,7 +354,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 // ResolveCommitRef takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
 // point to a Commit.
 func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Commit, error) {
-	commitVal, err := getCommitValForRefStr(ctx, ddb.db, ddb.vrw, ref.String())
+	commitVal, err := getCommitValForRefStr(ctx, ddb, ref.String())
 	if err != nil {
 		return nil, err
 	}
