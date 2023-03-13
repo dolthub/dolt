@@ -1221,7 +1221,16 @@ func (ddb *DoltDB) Rebase(ctx context.Context) error {
 }
 
 // GC performs garbage collection on this ddb.
-func (ddb *DoltDB) GC(ctx context.Context) error {
+//
+// If |safepointF| is non-nil, it will be called at some point after the GC begins
+// and before the GC ends. It will be called without
+// Database/ValueStore/NomsBlockStore locks held. If should establish
+// safepoints in every application-level in-progress read and write workflow
+// against this DoltDB. Examples of doing this include, for example, blocking
+// until no possibly-stale ChunkStore state is retained in memory, or failing
+// certain in-progress operations which cannot be finalized in a timely manner,
+// etc.
+func (ddb *DoltDB) GC(ctx context.Context, safepointF func() error) error {
 	collector, ok := ddb.db.Database.(datas.GarbageCollector)
 	if !ok {
 		return fmt.Errorf("this database does not support garbage collection")
@@ -1265,7 +1274,7 @@ func (ddb *DoltDB) GC(ctx context.Context) error {
 		return err
 	}
 
-	return collector.GC(ctx, oldGen, newGen)
+	return collector.GC(ctx, oldGen, newGen, safepointF)
 }
 
 func (ddb *DoltDB) ShallowGC(ctx context.Context) error {

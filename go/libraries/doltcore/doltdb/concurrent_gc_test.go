@@ -195,7 +195,7 @@ func TestConcurrentMapEditsGC(t *testing.T) {
 			mu.Unlock()
 			t.Logf("%v: running gc", time.Now())
 			i := 0
-			err := db.(datas.GarbageCollector).GC(ctx, oldhashes, newhashes)
+			err := db.(datas.GarbageCollector).GC(ctx, oldhashes, newhashes, nil)
 			t.Logf("%v: finished gc with err: %v", i, err)
 		}
 		close(stop)
