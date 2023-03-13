@@ -303,6 +303,8 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 
 // DropDatabaseMultiSessionScriptTests test that when dropping a database, other sessions are properly updated
 // and don't get left with old state that causes incorrect results.
+// Note: this test needs to be run against a real Dolt sql-server, and not just with our transaction test scripts,
+// because the transaction tests currently have a different behavior for session management and don't emulate prod.
 var DropDatabaseMultiSessionScriptTests = []queries.ScriptTest{
 	{
 		Name: "Test multi-session behavior for dropping databases",
