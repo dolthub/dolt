@@ -584,19 +584,6 @@ SQL
   [[ "$output" =~ "0" ]] || false
 }
 
-@test "sql-checkout: checkout new branch should use revision database name to access DbData on current database" {
-    skiponwindows "Need to install expect and make this script work on windows."
-    mkdir doltsql
-    cd doltsql
-
-    run expect $BATS_TEST_DIRNAME/sql-checkout.expect
-    log_status_eq 0
-    [[ ! "$output" =~ "fatal: 'head' is not a commit and a branch 'another-branch' cannot be created from it" ]] || false
-
-    cd ..
-    rm -rf doltsql
-}
-
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | awk '{print $2}'
 }

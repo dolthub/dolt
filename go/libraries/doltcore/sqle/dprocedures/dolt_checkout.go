@@ -43,13 +43,13 @@ func doltCheckout(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 }
 
 func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
-	revDbName := ctx.GetCurrentDatabase()
-	if len(revDbName) == 0 {
-		return 1, fmt.Errorf("Empty database branchName.")
+	currentDbName := ctx.GetCurrentDatabase()
+	if len(currentDbName) == 0 {
+		return 1, fmt.Errorf("Empty database name.")
 	}
 
 	// non-revision database branchName is used to check out a branch on it.
-	dbName, _, err := getRevisionForRevisionDatabase(ctx, revDbName)
+	dbName, _, err := getRevisionForRevisionDatabase(ctx, currentDbName)
 	if err != nil {
 		return -1, err
 	}
@@ -66,9 +66,9 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	// dbData should use the current database data, which can be at revision database.
-	dbData, ok := dSess.GetDbData(ctx, revDbName)
+	dbData, ok := dSess.GetDbData(ctx, currentDbName)
 	if !ok {
-		return 1, fmt.Errorf("Could not load database %s", revDbName)
+		return 1, fmt.Errorf("Could not load database %s", currentDbName)
 	}
 
 	// Checking out new branch.
