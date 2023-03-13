@@ -163,7 +163,7 @@ func updateProfileWithCredentials(ctx context.Context, dEnv *env.DoltEnv, c cred
 	hostAndPort := fmt.Sprintf("%s:%s", host, port)
 	cfg, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: hostAndPort,
-		Creds:    c.RPCCreds(),
+		Creds:    c.RPCCreds(host),
 	})
 	if err != nil {
 		return fmt.Errorf("error: unable to build dial options server with credentials: %w", err)
