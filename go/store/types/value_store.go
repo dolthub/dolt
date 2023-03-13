@@ -77,12 +77,11 @@ type ValueStore struct {
 	validateContentAddr bool
 	decodedChunks       *sizecache.SizeCache
 	nbf                 *NomsBinFormat
+	versOnce            sync.Once
 
-	gcMu    sync.RWMutex
+	gcMu    sync.Mutex
 	gcCond  *sync.Cond
 	doingGC bool
-
-	versOnce sync.Once
 }
 
 func AddrsFromNomsValue(ctx context.Context, c chunks.Chunk, nbf *NomsBinFormat) (addrs hash.HashSet, err error) {
@@ -334,7 +333,7 @@ func (lvs *ValueStore) Rebase(ctx context.Context) error {
 	return lvs.cs.Rebase(ctx)
 }
 
-// Call with lvs.bufferMu locked. Blocks until doingGC == false, releasing the
+// Call with lvs.gcMu locked. Blocks until doingGC == false, releasing the
 // lock while we are blocked. Returns with the lock held, doingGC == false.
 func (lvs *ValueStore) waitForGC() {
 	for lvs.doingGC {
@@ -342,10 +341,10 @@ func (lvs *ValueStore) waitForGC() {
 	}
 }
 
-// Call without lvs.bufferMu held. If val == false, then doingGC must equal
+// Call without lvs.gcMu held. If val == false, then doingGC must equal
 // true when this is called. We will set it to false and return without
-// lvs.bufferMu held. If val == true, we will set doingGC to true and return
-// with lvs.bufferMu not held.
+// lvs.gcMu held. If val == true, we will set doingGC to true and return
+// with lvs.gcMu not held.
 //
 // When val == true, this routine will block until it has a unique opportunity
 // to toggle doingGC from false to true while holding the lock.
@@ -365,8 +364,8 @@ func (lvs *ValueStore) toggleGC(val bool) {
 	return
 }
 
-// Commit flushes all bufferedChunks into the ChunkStore, with best-effort
-// locality, and attempts to Commit, updating the root to |current| (or keeping
+// Commit flushes all bufferedChunks into the ChunkStore
+// and attempts to Commit, updating the root to |current| (or keeping
 // it the same as Root()). If the root has moved since this ValueStore was
 // opened, or last Rebased(), it will return false and will have internally
 // rebased. Until Commit() succeeds, no work of the ValueStore will be visible

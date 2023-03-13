@@ -199,6 +199,36 @@ func (j *chunkJournal) Exists(ctx context.Context, name addr, chunkCount uint32,
 
 // PruneTableFiles implements tablePersister.
 func (j *chunkJournal) PruneTableFiles(ctx context.Context, keeper func() []addr, mtime time.Time) error {
+	var keepJournal bool
+	for _, a := range keeper() {
+		if a == journalAddr {
+			keepJournal = true
+		}
+	}
+	if !keepJournal {
+		ok, prev, err := j.backing.ParseIfExists(ctx, &Stats{}, nil)
+		if err != nil {
+			return err
+		} else if !ok {
+			return errors.New("failed to find manifest at " + j.path)
+		}
+		// flush |j.contents| (with latest root hash) to the backing manifest file
+		contents, err := j.backing.Update(ctx, prev.lock, j.contents, &Stats{}, nil)
+		if err != nil {
+			return err
+		} else if contents.lock != j.contents.lock {
+			return errOptimisticLockFailedTables
+		}
+		wr := j.wr
+		j.wr = nil
+		// close current journal writer and delete files
+		if err = wr.Close(); err != nil {
+			return err
+		}
+		if err = deleteJournalAndIndexFiles(ctx, wr.path); err != nil {
+			return err
+		}
+	}
 	return j.persister.PruneTableFiles(ctx, keeper, mtime)
 }
 
@@ -218,7 +248,7 @@ func (j *chunkJournal) Name() string {
 // Update implements manifest.
 func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	if j.wr == nil {
-		// pass the update to |j.backing| if the journals is not initialized
+		// pass the update to |j.backing| if the journal is not initialized
 		return j.backing.Update(ctx, lastLock, next, stats, writeHook)
 	}
 
