@@ -260,15 +260,6 @@ func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row, errFunc
 	if err != nil {
 		return err
 	}
-	// TODO: how to check for duplicates here??
-
-	for _, idx := range kte.sch.Indexes().AllIndexes() {
-		if idx.IsUnique() {
-			//if err = errFunc("aaaaaaaaaaaaaaaaaa", idx.Name(), key, val, false); err != nil {
-			//	return err
-			//}
-		}
-	}
 
 	kte.dirty = true
 	return kte.acc.increment(key, val)
@@ -424,7 +415,7 @@ func (kte *keylessTableEditor) autoFlush(ctx context.Context) error {
 	if len(kte.acc.deltas) >= int(tableEditorMaxOps) {
 		return kte.flush(ctx)
 	}
-	return kte.flush(ctx)
+	return nil
 }
 
 func (kte *keylessTableEditor) flush(ctx context.Context) error {
