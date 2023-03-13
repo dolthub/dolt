@@ -30,8 +30,9 @@ import (
 
 var stashDropDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Remove a single stash entry.",
-	LongDesc: `
-Removes a single stash entry at given index from the list of stash entries.`,
+	LongDesc: `Removes a single stash entry at given index from the list of stash entries (e.g. 'dolt stash drop stash@{1}' will drop the stash entry at index 1 in the stash list). 
+
+This command does not apply the stash on current working directory, use 'dolt stash pop' to apply a stash on current working directory.`,
 	Synopsis: []string{
 		"{{.LessThan}}stash{{.GreaterThan}}",
 	},

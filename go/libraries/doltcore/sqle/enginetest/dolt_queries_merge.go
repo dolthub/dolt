@@ -916,7 +916,7 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('other');",
-				ExpectedErrStr: "table with same name added in 2 commits can't be merged",
+				ExpectedErrStr: "table with same name 't' added in 2 commits can't be merged",
 			},
 		},
 	},

@@ -343,25 +343,21 @@ func TestSpatialScriptsPrepared(t *testing.T) {
 
 func TestSpatialIndexScripts(t *testing.T) {
 	skipOldFormat(t)
-	schema.EnableSpatialIndex = true
 	enginetest.TestSpatialIndexScripts(t, newDoltHarness(t))
 }
 
 func TestSpatialIndexScriptsPrepared(t *testing.T) {
 	skipOldFormat(t)
-	schema.EnableSpatialIndex = true
 	enginetest.TestSpatialIndexScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestSpatialIndexPlans(t *testing.T) {
 	skipOldFormat(t)
-	schema.EnableSpatialIndex = true
 	enginetest.TestSpatialIndexPlans(t, newDoltHarness(t))
 }
 
 func TestSpatialIndexPlansPrepared(t *testing.T) {
 	skipOldFormat(t)
-	schema.EnableSpatialIndex = true
 	enginetest.TestSpatialIndexPlansPrepared(t, newDoltHarness(t))
 }
 
@@ -442,7 +438,7 @@ func TestDoltUserPrivileges(t *testing.T) {
 }
 
 func TestJoinOps(t *testing.T) {
-	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
+	if types.IsFormat_LD(types.Format_Default) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
 	}
 
@@ -450,7 +446,7 @@ func TestJoinOps(t *testing.T) {
 }
 
 func TestJoinPlanningPrepared(t *testing.T) {
-	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
+	if types.IsFormat_LD(types.Format_Default) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
 	}
 
@@ -458,7 +454,7 @@ func TestJoinPlanningPrepared(t *testing.T) {
 }
 
 func TestJoinPlanning(t *testing.T) {
-	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
+	if types.IsFormat_LD(types.Format_Default) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
 	}
 
@@ -466,7 +462,7 @@ func TestJoinPlanning(t *testing.T) {
 }
 
 func TestJoinOpsPrepared(t *testing.T) {
-	if types.IsFormat_DOLT_DEV(types.Format_Default) || types.IsFormat_LD(types.Format_Default) {
+	if types.IsFormat_LD(types.Format_Default) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
 	}
 
@@ -1273,6 +1269,28 @@ func TestDiffSummaryTableFunctionPrepared(t *testing.T) {
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSummaryTableFunctionScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
+func TestPatchTableFunction(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range PatchTableFunctionScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func TestPatchTableFunctionPrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range PatchTableFunctionScriptTests {
 		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, harness, test)

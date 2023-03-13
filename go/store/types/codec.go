@@ -170,14 +170,8 @@ func (b *binaryNomsReader) skipCount() {
 }
 
 func (b *binaryNomsReader) ReadFloat(nbf *NomsBinFormat) float64 {
-	if isFormat_7_18(nbf) {
-		i := b.ReadInt()
-		exp := b.ReadInt()
-		return fracExpToFloat(i, int(exp))
-	} else {
-		floatbits := binary.BigEndian.Uint64(b.readBytes(8))
-		return math.Float64frombits(floatbits)
-	}
+	floatbits := binary.BigEndian.Uint64(b.readBytes(8))
+	return math.Float64frombits(floatbits)
 }
 
 func (b *binaryNomsReader) ReadDecimal() (decimal.Decimal, error) {
@@ -198,12 +192,7 @@ func (b *binaryNomsReader) ReadTimestamp() (time.Time, error) {
 }
 
 func (b *binaryNomsReader) skipFloat(nbf *NomsBinFormat) {
-	if isFormat_7_18(nbf) {
-		b.skipInt()
-		b.skipInt()
-	} else {
-		b.skipBytes(8)
-	}
+	b.skipBytes(8)
 }
 
 func (b *binaryNomsReader) skipInt() {
@@ -465,18 +454,9 @@ func (b *binaryNomsWriter) writeUint16(v uint16) {
 }
 
 func (b *binaryNomsWriter) writeFloat(v Float, nbf *NomsBinFormat) {
-	if isFormat_7_18(nbf) {
-		b.ensureCapacity(binary.MaxVarintLen64 * 2)
-		i, exp := float64ToIntExp(float64(v))
-		count := binary.PutVarint(b.buff[b.offset:], i)
-		b.offset += uint32(count)
-		count = binary.PutVarint(b.buff[b.offset:], int64(exp))
-		b.offset += uint32(count)
-	} else {
-		b.ensureCapacity(8)
-		binary.BigEndian.PutUint64(b.buff[b.offset:], math.Float64bits(float64(v)))
-		b.offset += 8
-	}
+	b.ensureCapacity(8)
+	binary.BigEndian.PutUint64(b.buff[b.offset:], math.Float64bits(float64(v)))
+	b.offset += 8
 }
 
 func (b *binaryNomsWriter) writeBool(v bool) {

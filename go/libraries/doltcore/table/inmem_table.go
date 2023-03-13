@@ -49,7 +49,7 @@ func NewInMemTableWithDataAndValidationType(sch schema.Schema, rows []row.Row) *
 }
 
 // AppendRow appends a row.  Appended rows must be valid for the table's schema. Sorts rows as they are inserted.
-func (imt *InMemTable) AppendRow(r row.Row) error {
+func (imt *InMemTable) AppendRow(ctx context.Context, vr types.ValueReader, r row.Row) error {
 	if isv, err := row.IsValid(r, imt.sch); err != nil {
 		return err
 	} else if !isv {
@@ -87,7 +87,7 @@ func (imt *InMemTable) AppendRow(r row.Row) error {
 		jRow := imt.rows[j]
 
 		isLess := false
-		isLess, err = iRow.NomsMapKey(imt.sch).Less(r.Format(), jRow.NomsMapKey(imt.sch))
+		isLess, err = iRow.NomsMapKey(imt.sch).Less(ctx, vr.Format(), jRow.NomsMapKey(imt.sch))
 
 		return isLess
 	})

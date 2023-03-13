@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	textdiff "github.com/andreyvit/diff"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -293,14 +294,14 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 	}
 
 	dArgs.fromRoot = stagedRoot
-	dArgs.fromRef = "STAGED"
+	dArgs.fromRef = doltdb.Staged
 	dArgs.toRoot = workingRoot
-	dArgs.toRef = "WORKING"
+	dArgs.toRef = doltdb.Working
 	if isCached {
 		dArgs.fromRoot = headRoot
 		dArgs.fromRef = "HEAD"
 		dArgs.toRoot = stagedRoot
-		dArgs.toRef = "STAGED"
+		dArgs.toRef = doltdb.Staged
 	}
 
 	if len(args) == 0 {
@@ -501,12 +502,12 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 		return errhand.BuildDError("error: unable to diff tables").AddCause(err).Build()
 	}
 
-	engine, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	sqlEng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	sqlCtx, err := engine.NewLocalContext(ctx)
+	sqlCtx, err := sqlEng.NewLocalContext(ctx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -526,9 +527,20 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 	}
 
 	for _, td := range tableDeltas {
-		verr := diffUserTable(sqlCtx, td, engine, dArgs, dw)
-		if verr != nil {
-			return verr
+		if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
+			continue
+		}
+		if strings.ToLower(td.ToName) != doltdb.SchemasTableName {
+			verr := diffUserTable(sqlCtx, td, sqlEng, dArgs, dw)
+			if verr != nil {
+				return verr
+			}
+		} else {
+			// dolt_schemas table is treated as a special case. diff the rows of the table, and print fragments as DDL
+			verr := diffDoltSchemasTable(sqlCtx, td, sqlEng, dArgs, dw)
+			if verr != nil {
+				return verr
+			}
 		}
 	}
 
@@ -543,14 +555,10 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 func diffUserTable(
 	ctx *sql.Context,
 	td diff.TableDelta,
-	engine *engine.SqlEngine,
+	sqlEng *engine.SqlEngine,
 	dArgs *diffArgs,
 	dw diffWriter,
 ) errhand.VerboseError {
-	if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
-		return nil
-	}
-
 	fromTable := td.FromTable
 	toTable := td.ToTable
 
@@ -585,9 +593,53 @@ func diffUserTable(
 		fromSch = toSch
 	}
 
-	verr := diffRows(ctx, engine, td, dArgs, dw)
+	verr := diffRows(ctx, sqlEng, td, dArgs, dw)
 	if verr != nil {
 		return verr
+	}
+
+	return nil
+}
+
+func diffDoltSchemasTable(
+	sqlCtx *sql.Context,
+	td diff.TableDelta,
+	sqlEng *engine.SqlEngine,
+	dArgs *diffArgs,
+	dw diffWriter,
+) errhand.VerboseError {
+	err := dw.BeginTable(sqlCtx, td)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	query := fmt.Sprintf("select from_fragment,to_fragment from dolt_diff('%s','%s','%s')", dArgs.fromRef, dArgs.toRef, doltdb.SchemasTableName)
+
+	_, rowIter, err := sqlEng.Query(sqlCtx, query)
+	if err != nil {
+		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
+	}
+
+	defer rowIter.Close(sqlCtx)
+	for {
+		row, err := rowIter.Next(sqlCtx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+
+		from := ""
+		if row[0] != nil {
+			from = fmt.Sprintf("%v;", row[0])
+		}
+		to := ""
+		if row[1] != nil {
+			to = fmt.Sprintf("%v;", row[1])
+		}
+		if from != to {
+			cli.Println(textdiff.LineDiff(from, to))
+		}
 	}
 
 	return nil
@@ -608,7 +660,7 @@ func writeSqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[s
 
 func diffRows(
 	ctx *sql.Context,
-	se *engine.SqlEngine,
+	sqlEng *engine.SqlEngine,
 	td diff.TableDelta,
 	dArgs *diffArgs,
 	dw diffWriter,
@@ -685,7 +737,7 @@ func diffRows(
 		query += " limit " + strconv.Itoa(dArgs.limit)
 	}
 
-	sch, rowIter, err := se.Query(ctx, query)
+	sch, rowIter, err := sqlEng.Query(ctx, query)
 	if sql.ErrSyntaxError.Is(err) {
 		return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
 	} else if err != nil {
@@ -724,7 +776,7 @@ func diffRows(
 		if err != nil {
 			return errhand.BuildDError("Error closing row iterator:\n%s", query).AddCause(err).Build()
 		}
-		_, rowIter, err = se.Query(ctx, query)
+		_, rowIter, err = sqlEng.Query(ctx, query)
 		defer rowIter.Close(ctx)
 		if sql.ErrSyntaxError.Is(err) {
 			return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()

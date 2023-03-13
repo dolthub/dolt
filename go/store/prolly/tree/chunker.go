@@ -28,7 +28,6 @@ import (
 )
 
 type Chunker interface {
-	AdvanceTo(ctx context.Context, next *Cursor) error
 	AddPair(ctx context.Context, key, value Item) error
 	UpdatePair(ctx context.Context, key, value Item) error
 	DeletePair(ctx context.Context, key, value Item) error
@@ -36,7 +35,7 @@ type Chunker interface {
 }
 
 type chunker[S message.Serializer] struct {
-	cur    *Cursor
+	cur    *cursor
 	parent *chunker[S]
 	level  int
 	done   bool
@@ -55,10 +54,10 @@ func NewEmptyChunker[S message.Serializer](ctx context.Context, ns NodeStore, se
 }
 
 func newEmptyChunker[S message.Serializer](ctx context.Context, ns NodeStore, serializer S) (*chunker[S], error) {
-	return NewChunker(ctx, nil, 0, ns, serializer)
+	return newChunker(ctx, nil, 0, ns, serializer)
 }
 
-func NewChunker[S message.Serializer](ctx context.Context, cur *Cursor, level int, ns NodeStore, serializer S) (*chunker[S], error) {
+func newChunker[S message.Serializer](ctx context.Context, cur *cursor, level int, ns NodeStore, serializer S) (*chunker[S], error) {
 	// |cur| will be nil if this is a new Node, implying this is a new tree, or the tree has grown in height relative
 	// to its original chunked form.
 
@@ -101,8 +100,8 @@ func (tc *chunker[S]) processPrefix(ctx context.Context) (err error) {
 			return err
 		}
 		_, err = tc.append(ctx,
-			tc.cur.CurrentKey(),
-			tc.cur.CurrentValue(),
+			tc.cur.currentKey(),
+			tc.cur.currentValue(),
 			sz)
 
 		// todo(andy): seek to correct chunk
@@ -116,7 +115,7 @@ func (tc *chunker[S]) processPrefix(ctx context.Context) (err error) {
 			return err
 		}
 
-		err = tc.cur.Advance(ctx)
+		err = tc.cur.advance(ctx)
 		if err != nil {
 			return err
 		}
@@ -145,7 +144,7 @@ func (tc *chunker[S]) DeletePair(ctx context.Context, _, _ Item) error {
 	return tc.skip(ctx)
 }
 
-// AdvanceTo progresses the chunker until its tracking cursor catches up with
+// advanceTo progresses the chunker until its tracking cursor catches up with
 // |next|, a cursor indicating next key where an edit will be applied.
 //
 // The method proceeds from the deepest chunker recursively into its
@@ -169,8 +168,8 @@ func (tc *chunker[S]) DeletePair(ctx context.Context, _, _ Item) error {
 //	anticipation of impending edits that may edit the current chunk. Note that
 //	processPrefix is only necessary for the "fast forward" case where we
 //	synchronized the tree level before reaching |next|.
-func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
-	cmp := tc.cur.Compare(next)
+func (tc *chunker[S]) advanceTo(ctx context.Context, next *cursor) error {
+	cmp := tc.cur.compare(next)
 	if cmp == 0 { // step (1)
 		return nil
 	} else if cmp > 0 {
@@ -178,8 +177,8 @@ func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 		// we navigate to the end of the previous chunk rather than the
 		// beginning of the next chunk. I think this is basically a one-off
 		// error.
-		for tc.cur.Compare(next) > 0 {
-			if err := next.Advance(ctx); err != nil {
+		for tc.cur.compare(next) > 0 {
+			if err := next.advance(ctx); err != nil {
 				return err
 			}
 		}
@@ -190,17 +189,17 @@ func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 	if err != nil {
 		return err
 	}
-	split, err := tc.append(ctx, tc.cur.CurrentKey(), tc.cur.CurrentValue(), sz)
+	split, err := tc.append(ctx, tc.cur.currentKey(), tc.cur.currentValue(), sz)
 	if err != nil {
 		return err
 	}
 
 	for !(split && tc.cur.atNodeEnd()) { // step (2)
-		err = tc.cur.Advance(ctx)
+		err = tc.cur.advance(ctx)
 		if err != nil {
 			return err
 		}
-		if cmp = tc.cur.Compare(next); cmp >= 0 {
+		if cmp = tc.cur.compare(next); cmp >= 0 {
 			// we caught up before synchronizing
 			return nil
 		}
@@ -208,7 +207,7 @@ func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 		if err != nil {
 			return err
 		}
-		split, err = tc.append(ctx, tc.cur.CurrentKey(), tc.cur.CurrentValue(), sz)
+		split, err = tc.append(ctx, tc.cur.currentKey(), tc.cur.currentValue(), sz)
 		if err != nil {
 			return err
 		}
@@ -220,7 +219,7 @@ func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 		return nil
 	}
 
-	if tc.cur.parent.Compare(next.parent) == 0 { // step (3)
+	if tc.cur.parent.compare(next.parent) == 0 { // step (3)
 		// (rare) new tree synchronized with old tree at the
 		// same time as the cursor caught up to the next mutation point
 		tc.cur.copy(next)
@@ -232,7 +231,7 @@ func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 	// This optimization is logically equivalent to advancing
 	// current cursor. Because we just wrote a chunk, we are
 	// at a boundary and can simply increment the parent.
-	err = tc.cur.parent.Advance(ctx)
+	err = tc.cur.parent.advance(ctx)
 	if err != nil {
 		return err
 	}
@@ -240,7 +239,7 @@ func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 
 	// no more pending chunks at this level, recurse
 	// into parent
-	err = tc.parent.AdvanceTo(ctx, next.parent)
+	err = tc.parent.advanceTo(ctx, next.parent)
 	if err != nil {
 		return err
 	}
@@ -257,7 +256,7 @@ func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 }
 
 func (tc *chunker[S]) skip(ctx context.Context) error {
-	err := tc.cur.Advance(ctx)
+	err := tc.cur.advance(ctx)
 	return err
 }
 
@@ -348,7 +347,7 @@ func (tc *chunker[S]) handleChunkBoundary(ctx context.Context) error {
 func (tc *chunker[S]) createParentChunker(ctx context.Context) (err error) {
 	assertTrue(tc.parent == nil, "chunker parent must be nil")
 
-	var parent *Cursor
+	var parent *cursor
 	if tc.cur != nil && tc.cur.parent != nil {
 		// todo(andy): does this comment make sense? cloning a pointer?
 		// Clone the parent cursor because otherwise calling cur.forward() will affect our parent - and vice versa -
@@ -356,7 +355,7 @@ func (tc *chunker[S]) createParentChunker(ctx context.Context) (err error) {
 		parent = tc.cur.parent
 	}
 
-	tc.parent, err = NewChunker(ctx, parent, tc.level+1, tc.ns, tc.serializer)
+	tc.parent, err = newChunker(ctx, parent, tc.level+1, tc.ns, tc.serializer)
 	if err != nil {
 		return err
 	}
@@ -419,7 +418,7 @@ func (tc *chunker[S]) Done(ctx context.Context) (Node, error) {
 // If we are mutating an existing Node, appending subsequent items in the Node until we reach a pre-existing chunk
 // boundary or the end of the Node.
 func (tc *chunker[S]) finalizeCursor(ctx context.Context) (err error) {
-	for tc.cur.Valid() {
+	for tc.cur.valid() {
 		var sz uint64
 		sz, err = tc.cur.currentSubtreeSize()
 		if err != nil {
@@ -427,8 +426,8 @@ func (tc *chunker[S]) finalizeCursor(ctx context.Context) (err error) {
 		}
 		var ok bool
 		ok, err = tc.append(ctx,
-			tc.cur.CurrentKey(),
-			tc.cur.CurrentValue(),
+			tc.cur.currentKey(),
+			tc.cur.currentValue(),
 			sz)
 		if err != nil {
 			return err
@@ -437,14 +436,14 @@ func (tc *chunker[S]) finalizeCursor(ctx context.Context) (err error) {
 			break // boundary occurred at same place in old & new Node
 		}
 
-		err = tc.cur.Advance(ctx)
+		err = tc.cur.advance(ctx)
 		if err != nil {
 			return err
 		}
 	}
 
 	if tc.cur.parent != nil {
-		err := tc.cur.parent.Advance(ctx)
+		err := tc.cur.parent.advance(ctx)
 
 		if err != nil {
 			return err

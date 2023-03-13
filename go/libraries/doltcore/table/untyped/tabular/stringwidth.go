@@ -95,9 +95,16 @@ func NewFixedWidthStrings(text []string) []FixedWidthString {
 func ColoredStringWidth(coloredText string, uncoloredText string) FixedWidthString {
 	colored := NewFixedWidthString(coloredText)
 	uncolored := NewFixedWidthString(uncoloredText)
-	for i := range colored.Lines {
+	for i := 0; i < min(len(colored.Lines), len(uncolored.Lines)); i++ {
 		uncolored.Lines[i].ByteStart = colored.Lines[i].ByteStart
 		uncolored.Lines[i].ByteEnd = colored.Lines[i].ByteEnd
 	}
 	return uncolored
+}
+
+func min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
 }

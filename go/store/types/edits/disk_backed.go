@@ -25,7 +25,7 @@ var _ types.EditAccumulator = (*DiskBackedEditAcc)(nil)
 // DiskBackedEditAcc is an EditAccumulator implementation that flushes the edits to disk at regular intervals
 type DiskBackedEditAcc struct {
 	ctx context.Context
-	nbf *types.NomsBinFormat
+	vrw types.ValueReadWriter
 
 	flusher *DiskEditFlusher
 
@@ -40,11 +40,11 @@ type DiskBackedEditAcc struct {
 }
 
 // NewDiskBackedEditAcc returns a new DiskBackedEditAccumulator instance
-func NewDiskBackedEditAcc(ctx context.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, flushInterval int64, directory string, newEditAcc func() types.EditAccumulator) *DiskBackedEditAcc {
+func NewDiskBackedEditAcc(ctx context.Context, vrw types.ValueReadWriter, flushInterval int64, directory string, newEditAcc func() types.EditAccumulator) *DiskBackedEditAcc {
 	return &DiskBackedEditAcc{
 		ctx:           ctx,
-		nbf:           nbf,
-		flusher:       NewDiskEditFlusher(ctx, directory, nbf, vrw),
+		vrw:           vrw,
+		flusher:       NewDiskEditFlusher(ctx, directory, vrw),
 		newEditAcc:    newEditAcc,
 		backing:       newEditAcc(),
 		flushInterval: flushInterval,
@@ -71,10 +71,10 @@ func (dbea *DiskBackedEditAcc) AddEdit(key types.LesserValuable, val types.Valua
 
 // FinishedEditing should be called when all edits have been added to get an EditProvider which provides the
 // edits in sorted order. Adding more edits after calling FinishedEditing is an error.
-func (dbea *DiskBackedEditAcc) FinishedEditing() (types.EditProvider, error) {
+func (dbea *DiskBackedEditAcc) FinishedEditing(ctx context.Context) (types.EditProvider, error) {
 	// If we never flushed to disk then there is no need.  Just return the data from the backing edit accumulator
 	if dbea.flushCount == 0 {
-		return dbea.backing.FinishedEditing()
+		return dbea.backing.FinishedEditing(ctx)
 	}
 
 	// flush any data we haven't flushed yet before processing
@@ -85,7 +85,7 @@ func (dbea *DiskBackedEditAcc) FinishedEditing() (types.EditProvider, error) {
 		dbea.backing = nil
 	}
 
-	results, err := dbea.flusher.Wait(dbea.ctx)
+	results, err := dbea.flusher.Wait(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (dbea *DiskBackedEditAcc) FinishedEditing() (types.EditProvider, error) {
 		eps[i] = results[i].Edits
 	}
 
-	return NewEPMerger(dbea.ctx, dbea.nbf, eps)
+	return NewEPMerger(ctx, dbea.vrw, eps)
 }
 
 // Close ensures that the accumulator is closed. Repeat calls are allowed. Not guaranteed to be thread-safe, thus

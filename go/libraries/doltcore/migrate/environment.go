@@ -137,10 +137,11 @@ func initMigrationDB(ctx context.Context, existing *env.DoltEnv, src, dest files
 		return err
 	}
 
-	db, vrw, ns, err := dbfactory.FileFactory{}.CreateDB(ctx, targetFormat, u, nil)
-	if err != nil {
-		return err
-	}
+	params := map[string]any{dbfactory.ChunkJournalParam: struct{}{}}
+	ddb, err := doltdb.LoadDoltDBWithParams(ctx, targetFormat, u.String(), dest, params)
+	vrw := ddb.ValueReadWriter()
+	ns := ddb.NodeStore()
+	db := doltdb.HackDatasDatabaseFromDoltDB(ddb)
 
 	// write init commit for migration
 	name, email, err := env.GetNameAndEmail(existing.Config)

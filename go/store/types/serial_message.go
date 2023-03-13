@@ -179,7 +179,7 @@ func (sm SerialMessage) HumanReadableString() string {
 	}
 }
 
-func (sm SerialMessage) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (sm SerialMessage) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(SerialMessage); ok {
 		return bytes.Compare(sm, v2) == -1, nil
 	}
@@ -339,19 +339,7 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 		}
 
 		mapbytes := msg.PrimaryIndexBytes()
-
-		if nbf == Format_DOLT_DEV {
-			dec := newValueDecoder(mapbytes, nil)
-			v, err := dec.readValue(nbf)
-			if err != nil {
-				return err
-			}
-			return v.walkRefs(nbf, func(ref Ref) error {
-				return cb(ref.TargetHash())
-			})
-		} else {
-			return SerialMessage(mapbytes).WalkAddrs(nbf, cb)
-		}
+		return SerialMessage(mapbytes).WalkAddrs(nbf, cb)
 	case serial.CommitFileID:
 		parents, err := SerialCommitParentAddrs(nbf, sm)
 		if err != nil {

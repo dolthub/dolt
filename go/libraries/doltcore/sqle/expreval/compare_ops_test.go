@@ -15,6 +15,7 @@
 package expreval
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -76,20 +77,22 @@ func TestCompareNomsValues(t *testing.T) {
 		},
 	}
 
+	vrw := types.NewMemoryValueStore()
 	eqOp := EqualsOp{}
-	gtOp := GreaterOp{}
-	gteOp := GreaterEqualOp{}
-	ltOp := LessOp{}
-	lteOp := LessEqualOp{}
+	gtOp := GreaterOp{vrw}
+	gteOp := GreaterEqualOp{vrw}
+	ltOp := LessOp{vrw}
+	lteOp := LessEqualOp{vrw}
+	ctx := context.Background()
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			mustBool := getMustBool(t)
-			resEq := mustBool(eqOp.CompareNomsValues(test.v1, test.v2))
-			resGt := mustBool(gtOp.CompareNomsValues(test.v1, test.v2))
-			resGte := mustBool(gteOp.CompareNomsValues(test.v1, test.v2))
-			resLt := mustBool(ltOp.CompareNomsValues(test.v1, test.v2))
-			resLte := mustBool(lteOp.CompareNomsValues(test.v1, test.v2))
+			resEq := mustBool(eqOp.CompareNomsValues(ctx, test.v1, test.v2))
+			resGt := mustBool(gtOp.CompareNomsValues(ctx, test.v1, test.v2))
+			resGte := mustBool(gteOp.CompareNomsValues(ctx, test.v1, test.v2))
+			resLt := mustBool(ltOp.CompareNomsValues(ctx, test.v1, test.v2))
+			resLte := mustBool(lteOp.CompareNomsValues(ctx, test.v1, test.v2))
 
 			assert.True(t, resEq == test.eq, "equals failure. Expected: %t Actual %t", test.lte, resLte)
 			assert.True(t, resGt == test.gt, "greater failure. Expected: %t Actual %t", test.lte, resLte)

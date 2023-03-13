@@ -756,56 +756,62 @@ func (d *DoltSession) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, b
 
 // ResolveRootForRef returns the root value for the ref given, which refers to either a commit spec or is one of the
 // special identifiers |WORKING| or |STAGED|
-// Returns the root value associated with the identifier given and its commit time
-func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, hashStr string) (*doltdb.RootValue, *types.Timestamp, error) {
-	if hashStr == doltdb.Working || hashStr == doltdb.Staged {
+// Returns the root value associated with the identifier given, its commit time and its hash string. The hash string
+// for special identifiers |WORKING| or |STAGED| would be itself, 'WORKING' or 'STAGED', respectively.
+func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string) (*doltdb.RootValue, *types.Timestamp, string, error) {
+	if refStr == doltdb.Working || refStr == doltdb.Staged {
 		// TODO: get from working set / staged update time
 		now := types.Timestamp(time.Now())
 		// TODO: no current database
 		roots, _ := d.GetRoots(ctx, ctx.GetCurrentDatabase())
-		if hashStr == doltdb.Working {
-			return roots.Working, &now, nil
-		} else if hashStr == doltdb.Staged {
-			return roots.Staged, &now, nil
+		if refStr == doltdb.Working {
+			return roots.Working, &now, refStr, nil
+		} else if refStr == doltdb.Staged {
+			return roots.Staged, &now, refStr, nil
 		}
 	}
 
 	var root *doltdb.RootValue
 	var commitTime *types.Timestamp
-	cs, err := doltdb.NewCommitSpec(hashStr)
+	cs, err := doltdb.NewCommitSpec(refStr)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 
 	dbData, ok := d.GetDbData(ctx, dbName)
 	if !ok {
-		return nil, nil, sql.ErrDatabaseNotFound.New(dbName)
+		return nil, nil, "", sql.ErrDatabaseNotFound.New(dbName)
 	}
 
 	headRef, err := d.CWBHeadRef(ctx, dbName)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 
 	cm, err := dbData.Ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 
 	root, err = cm.GetRootValue(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 
 	meta, err := cm.GetCommitMeta(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 
 	t := meta.Time()
 	commitTime = (*types.Timestamp)(&t)
 
-	return root, commitTime, nil
+	commitHash, err := cm.HashOf()
+	if err != nil {
+		return nil, nil, "", err
+	}
+
+	return root, commitTime, commitHash.String(), nil
 }
 
 // SetRoot sets a new root value for the session for the database named. This is the primary mechanism by which data

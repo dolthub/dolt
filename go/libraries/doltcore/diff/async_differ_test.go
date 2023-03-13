@@ -146,7 +146,7 @@ func TestAsyncDiffer(t *testing.T) {
 				ad := NewAsyncDiffer(4)
 				end := types.Uint(27)
 				ad.StartWithRange(ctx, m1, m2, types.NullValue, func(ctx context.Context, value types.Value) (bool, bool, error) {
-					valid, err := value.Less(m1.Format(), end)
+					valid, err := value.Less(ctx, vrw.Format(), end)
 					return valid, false, err
 				})
 				return ad
@@ -164,7 +164,7 @@ func TestAsyncDiffer(t *testing.T) {
 				ad := NewAsyncDiffer(4)
 				end := types.Uint(15)
 				ad.StartWithRange(ctx, m1, m2, types.NullValue, func(ctx context.Context, value types.Value) (bool, bool, error) {
-					valid, err := value.Less(m1.Format(), end)
+					valid, err := value.Less(ctx, vrw.Format(), end)
 					return valid, false, err
 				})
 				return ad
@@ -183,7 +183,7 @@ func TestAsyncDiffer(t *testing.T) {
 				start := types.Uint(10)
 				end := types.Uint(15)
 				ad.StartWithRange(ctx, m1, m2, start, func(ctx context.Context, value types.Value) (bool, bool, error) {
-					valid, err := value.Less(m1.Format(), end)
+					valid, err := value.Less(ctx, vrw.Format(), end)
 					return valid, false, err
 				})
 				return ad

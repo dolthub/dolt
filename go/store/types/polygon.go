@@ -58,7 +58,7 @@ func (v Polygon) Equals(other Value) bool {
 	return true
 }
 
-func (v Polygon) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (v Polygon) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	// Compare types
 	v2, ok := other.(Polygon)
 	if !ok {
@@ -80,7 +80,7 @@ func (v Polygon) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	// Compare each point until there is one that is less
 	for i := 0; i < n; i++ {
 		if !v.Lines[i].Equals(v2.Lines[i]) {
-			return v.Lines[i].Less(nbf, v2.Lines[i])
+			return v.Lines[i].Less(ctx, nbf, v2.Lines[i])
 		}
 	}
 	// Determine based off length

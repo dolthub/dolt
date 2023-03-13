@@ -129,7 +129,7 @@ func TestWalkRefs(t *testing.T) {
 			require.NoError(t, err)
 			for s.isLeaf() {
 				e := s.Edit()
-				e, err = e.Insert(newValueSlice(vrw.Format(), r)...)
+				e, err = e.Insert(context.Background(), newValueSlice(vrw.Format(), r)...)
 				require.NoError(t, err)
 				s, err = e.Set(context.Background())
 				require.NoError(t, err)

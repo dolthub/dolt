@@ -42,7 +42,7 @@ func (v Point) Equals(other Value) bool {
 	return false
 }
 
-func (v Point) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (v Point) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(Point); ok {
 		return v.SRID < v2.SRID || v.X < v2.X || v.Y < v2.Y, nil
 	}

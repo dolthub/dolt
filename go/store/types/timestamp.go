@@ -41,7 +41,7 @@ func (v Timestamp) Equals(other Value) bool {
 	return time.Time(v).Equal(time.Time(v2))
 }
 
-func (v Timestamp) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (v Timestamp) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(Timestamp); ok {
 		return time.Time(v).Before(time.Time(v2)), nil
 	}

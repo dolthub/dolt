@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     skip_nbf_dolt
-    skip_nbf_dolt_dev
 
     setup_common
     TARGET_NBF="__DOLT__"

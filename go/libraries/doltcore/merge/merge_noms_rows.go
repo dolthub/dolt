@@ -114,7 +114,7 @@ func mergeNomsTableData(
 			if key != nil {
 				mkNilOrKeyLess := mergeKey == nil
 				if !mkNilOrKeyLess {
-					mkNilOrKeyLess, err = key.Less(vrw.Format(), mergeKey)
+					mkNilOrKeyLess, err = key.Less(ctx, vrw.Format(), mergeKey)
 					if err != nil {
 						return err
 					}
@@ -132,7 +132,7 @@ func mergeNomsTableData(
 			if !processed && mergeKey != nil {
 				keyNilOrMKLess := key == nil
 				if !keyNilOrMKLess {
-					keyNilOrMKLess, err = mergeKey.Less(vrw.Format(), key)
+					keyNilOrMKLess, err = mergeKey.Less(ctx, vrw.Format(), key)
 					if err != nil {
 						return err
 					}

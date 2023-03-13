@@ -61,7 +61,7 @@ type hashValueBytesFn func(item sequenceItem, sp sequenceSplitter) error
 
 // makeChunkFn takes a sequence of items to chunk, and returns the result of chunking those items,
 // a tuple of a reference to that chunk which can itself be chunked + its underlying value.
-type makeChunkFn func(level uint64, values []sequenceItem) (Collection, orderedKey, uint64, error)
+type makeChunkFn func(ctx context.Context, level uint64, values []sequenceItem) (Collection, orderedKey, uint64, error)
 
 type sequenceChunker struct {
 	cur                        *sequenceCursor
@@ -351,7 +351,7 @@ func (sc *sequenceChunker) createParent(ctx context.Context) error {
 // unnecessarily writing a chunk - the canonical root. However, this is a fair
 // tradeoff for simplicity of the chunking algorithm.
 func (sc *sequenceChunker) createSequence(ctx context.Context, write bool) (sequence, metaTuple, error) {
-	col, key, numLeaves, err := sc.makeChunk(sc.level, sc.current)
+	col, key, numLeaves, err := sc.makeChunk(ctx, sc.level, sc.current)
 
 	if err != nil {
 		return nil, metaTuple{}, err
