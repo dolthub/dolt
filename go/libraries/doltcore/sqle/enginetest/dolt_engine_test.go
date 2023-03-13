@@ -112,29 +112,26 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
+	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "insert on duplicate key for keyless table",
+			Name: "dolt_history table filter correctness",
 			SetUpScript: []string{
-				`create table t (i int unique, j varchar(128))`,
+				"create table xy (x int primary key, y int);",
+				"call dolt_add('.');",
+				"call dolt_commit('-m', 'creating table');",
+				"insert into xy values (0, 1);",
+				"call dolt_commit('-am', 'add data');",
+				"insert into xy values (2, 3);",
+				"call dolt_commit('-am', 'add data');",
+				"insert into xy values (4, 5);",
+				"call dolt_commit('-am', 'add data');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: `insert into t values (0, "first")`,
+					Query: "select count(*) from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1)",
 					Expected: []sql.Row{
-						{gmstypes.NewOkResult(1)},
-					},
-				},
-				{
-					Query: `insert into t values (0, "second") on duplicate key update j = "third"`,
-					Expected: []sql.Row{
-						{gmstypes.NewOkResult(2)},
-					},
-				},
-				{
-					Query: `select i, j from t order by i`,
-					Expected: []sql.Row{
-						{0, "third"},
+						{2},
 					},
 				},
 			},
@@ -145,37 +142,6 @@ func TestSingleScript(t *testing.T) {
 	for _, test := range scripts {
 		enginetest.TestScript(t, harness, test)
 	}
-
-	//t.Skip()
-	//var scripts = []queries.ScriptTest{
-	//	{
-	//		Name: "dolt_history table filter correctness",
-	//		SetUpScript: []string{
-	//			"create table xy (x int primary key, y int);",
-	//			"call dolt_add('.');",
-	//			"call dolt_commit('-m', 'creating table');",
-	//			"insert into xy values (0, 1);",
-	//			"call dolt_commit('-am', 'add data');",
-	//			"insert into xy values (2, 3);",
-	//			"call dolt_commit('-am', 'add data');",
-	//			"insert into xy values (4, 5);",
-	//			"call dolt_commit('-am', 'add data');",
-	//		},
-	//		Assertions: []queries.ScriptTestAssertion{
-	//			{
-	//				Query: "select count(*) from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1)",
-	//				Expected: []sql.Row{
-	//					{2},
-	//				},
-	//			},
-	//		},
-	//	},
-	//}
-	//
-	//harness := newDoltHarness(t)
-	//for _, test := range scripts {
-	//	enginetest.TestScript(t, harness, test)
-	//}
 }
 
 func TestSingleQueryPrepared(t *testing.T) {
