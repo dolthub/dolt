@@ -87,7 +87,7 @@ func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
 	newRoot := hash.Of([]byte("new root"))
 	tableName := hash.Of([]byte("table1"))
 	gcGen := addr{}
-	m := strings.Join([]string{StorageVersion, constants.NomsVersion, lock.String(), newRoot.String(), gcGen.String(), tableName.String(), "0"}, ":")
+	m := strings.Join([]string{StorageVersion, constants.FormatLD1String, lock.String(), newRoot.String(), gcGen.String(), tableName.String(), "0"}, ":")
 	err := clobberManifest(fm.dir, m)
 	require.NoError(t, err)
 
@@ -104,7 +104,7 @@ func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(exists)
-	assert.Equal(constants.NomsVersion, upstream.nbfVers)
+	assert.Equal(constants.FormatLD1String, upstream.nbfVers)
 	assert.Equal(newRoot, upstream.root)
 	if assert.Len(upstream.specs, 1) {
 		assert.Equal(tableName.String(), upstream.specs[0].name.String())
@@ -134,7 +134,7 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 	stats := &Stats{}
 
 	l := computeAddr([]byte{0x01})
-	upstream, err := fm.Update(context.Background(), addr{}, manifestContents{nbfVers: constants.NomsVersion, lock: l}, stats, nil)
+	upstream, err := fm.Update(context.Background(), addr{}, manifestContents{nbfVers: constants.FormatLD1String, lock: l}, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(l, upstream.lock)
 	assert.True(upstream.root.IsEmpty())
@@ -149,7 +149,7 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 	assert.Empty(upstream.specs)
 
 	l2 := computeAddr([]byte{0x02})
-	upstream, err = fm2.Update(context.Background(), l, manifestContents{nbfVers: constants.NomsVersion, lock: l2}, stats, nil)
+	upstream, err = fm2.Update(context.Background(), l, manifestContents{nbfVers: constants.FormatLD1String, lock: l2}, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(l2, upstream.lock)
 	assert.True(upstream.root.IsEmpty())
@@ -164,7 +164,7 @@ func TestFileManifestUpdate(t *testing.T) {
 
 	// First, test winning the race against another process.
 	contents := manifestContents{
-		nbfVers: constants.NomsVersion,
+		nbfVers: constants.FormatLD1String,
 		lock:    computeAddr([]byte("locker")),
 		root:    hash.Of([]byte("new root")),
 		specs:   []tableSpec{{computeAddr([]byte("a")), 3}},
@@ -174,7 +174,7 @@ func TestFileManifestUpdate(t *testing.T) {
 		lock := computeAddr([]byte("nolock"))
 		newRoot2 := hash.Of([]byte("noroot"))
 		gcGen := addr{}
-		m := strings.Join([]string{StorageVersion, constants.NomsVersion, lock.String(), newRoot2.String(), gcGen.String()}, ":")
+		m := strings.Join([]string{StorageVersion, constants.FormatLD1String, lock.String(), newRoot2.String(), gcGen.String()}, ":")
 		b, err := tryClobberManifest(fm.dir, m)
 		require.NoError(t, err, string(b))
 		return nil
@@ -185,7 +185,7 @@ func TestFileManifestUpdate(t *testing.T) {
 	assert.Equal(contents.specs, upstream.specs)
 
 	// Now, test the case where the optimistic lock fails, and someone else updated the root since last we checked.
-	contents2 := manifestContents{lock: computeAddr([]byte("locker 2")), root: hash.Of([]byte("new root 2")), nbfVers: constants.NomsVersion}
+	contents2 := manifestContents{lock: computeAddr([]byte("locker 2")), root: hash.Of([]byte("new root 2")), nbfVers: constants.FormatLD1String}
 	upstream, err = fm.Update(context.Background(), addr{}, contents2, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(contents.lock, upstream.lock)
@@ -201,11 +201,11 @@ func TestFileManifestUpdate(t *testing.T) {
 	jerkLock := computeAddr([]byte("jerk"))
 	tableName := computeAddr([]byte("table1"))
 	gcGen := addr{}
-	m := strings.Join([]string{StorageVersion, constants.NomsVersion, jerkLock.String(), contents2.root.String(), gcGen.String(), tableName.String(), "1"}, ":")
+	m := strings.Join([]string{StorageVersion, constants.FormatLD1String, jerkLock.String(), contents2.root.String(), gcGen.String(), tableName.String(), "1"}, ":")
 	err = clobberManifest(fm.dir, m)
 	require.NoError(t, err)
 
-	contents3 := manifestContents{lock: computeAddr([]byte("locker 3")), root: hash.Of([]byte("new root 3")), nbfVers: constants.NomsVersion}
+	contents3 := manifestContents{lock: computeAddr([]byte("locker 3")), root: hash.Of([]byte("new root 3")), nbfVers: constants.FormatLD1String}
 	upstream, err = fm.Update(context.Background(), upstream.lock, contents3, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(jerkLock, upstream.lock)

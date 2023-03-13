@@ -44,7 +44,6 @@ var commands = []*util.Command{
 	nomsDs,
 	nomsRoot,
 	nomsShow,
-	nomsVersion,
 	nomsManifest,
 	nomsCat,
 	nomsWalk,
