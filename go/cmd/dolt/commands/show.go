@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/fatih/color"
 
@@ -33,6 +34,8 @@ type showOpts struct {
 	showParents bool
 	decoration  string
 	specRefs    []string
+
+	*diffDisplaySettings
 }
 
 var showDocs = cli.CommandDocumentationContent{
@@ -67,8 +70,22 @@ func (cmd ShowCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd ShowCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
+	// Flags inherited from Log
 	ap.SupportsFlag(cli.ParentsFlag, "", "Shows all parents of each commit in the log.")
 	ap.SupportsString(cli.DecorateFlag, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
+
+	// Flags inherited from Diff
+	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
+	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
+	ap.SupportsFlag(StatFlag, "", "Show stats of data changes")
+	ap.SupportsFlag(SummaryFlag, "", "Show summary of data and schema changes")
+	ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular, sql, json. Defaults to tabular.")
+	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
+	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
+	ap.SupportsFlag(cli.CachedFlag, "c", "Show only the staged data changes.")
+	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
+	ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
+	ap.SupportsString(DiffMode, "", "diff mode", "Determines how to display modified rows with tabular output. Valid values are row, line, in-place, context. Defaults to context.")
 	return ap
 }
 
@@ -82,13 +99,29 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+
+	opts.diffDisplaySettings = parseDiffDisplaySettings(ctx, dEnv, apr)
+
 	err = showCommits(ctx, dEnv, opts)
 
-	if err != nil {
-		return handleErrAndExit(err)
+	return handleErrAndExit(err)
+}
+
+func (cmd ShowCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
+	if apr.Contains(StatFlag) || apr.Contains(SummaryFlag) {
+		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) {
+			return errhand.BuildDError("invalid Arguments: --stat and --summary cannot be combined with --schema or --data").Build()
+		}
 	}
 
-	return 0
+	f, _ := apr.GetValue(FormatFlag)
+	switch strings.ToLower(f) {
+	case "tabular", "sql", "json", "":
+	default:
+		return errhand.BuildDError("invalid output format: %s", f).Build()
+	}
+
+	return nil
 }
 
 func parseShowArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*showOpts, error) {
