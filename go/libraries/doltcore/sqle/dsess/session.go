@@ -136,7 +136,9 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 // LookupDbState returns the session state for the database named
 func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
 	dbName = strings.ToLower(dbName)
+	d.mu.Lock()
 	dbState, ok := d.dbStates[dbName]
+	d.mu.Unlock()
 	if ok {
 		return dbState, ok, nil
 	}
@@ -165,12 +167,14 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 		}
 	}
 
-	// If we got this far, we have a valid inital database state, so add it to the session for future reuse
+	// If we got this far, we have a valid initial database state, so add it to the session for future reuse
 	if err = d.AddDB(ctx, init); err != nil {
 		return nil, ok, err
 	}
 
+	d.mu.Lock()
 	dbState, ok = d.dbStates[dbName]
+	d.mu.Unlock()
 	if !ok {
 		return nil, false, sql.ErrDatabaseNotFound.New(dbName)
 	}
@@ -192,9 +196,9 @@ func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 
 // RemoveDbState invalidates any cached db state in this session, for example, if a database is dropped.
 func (d *DoltSession) RemoveDbState(_ *sql.Context, dbName string) error {
-	// TODO: Add synchronization now that dbStates can be modified concurrently in a few edge cases (e.g. DROP DATABASE)
-	dbName = strings.ToLower(dbName)
-	delete(d.dbStates, dbName)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	delete(d.dbStates, strings.ToLower(dbName))
 	return nil
 }
 
@@ -1065,6 +1069,9 @@ func (d *DoltSession) setHeadRefSessionVar(ctx *sql.Context, db, value string) e
 }
 
 func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string, value interface{}) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	convertedVal, err := sqltypes.Int64.Convert(value)
 	if err != nil {
 		return err
@@ -1093,7 +1100,9 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 }
 
 // HasDB returns true if |sess| is tracking state for this database.
-func (d *DoltSession) HasDB(ctx *sql.Context, dbName string) bool {
+func (d *DoltSession) HasDB(_ *sql.Context, dbName string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	_, ok := d.dbStates[strings.ToLower(dbName)]
 	return ok
 }
@@ -1108,7 +1117,9 @@ func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	DefineSystemVariablesForDB(db.Name())
 
 	sessionState := NewEmptyDatabaseSessionState()
+	d.mu.Lock()
 	d.dbStates[strings.ToLower(db.Name())] = sessionState
+	d.mu.Unlock()
 	sessionState.dbName = db.Name()
 	sessionState.db = db
 
