@@ -90,7 +90,7 @@ enum ClientEventType {
     STASH_DROP = 58;
     STASH_LIST = 59;
     STASH_POP = 60;
-	SHOW = 61;
+    SHOW = 61;
 }
 
 enum MetricID {
