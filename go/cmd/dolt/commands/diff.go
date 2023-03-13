@@ -170,9 +170,6 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	verr = diffUserTables(ctx, dEnv, dArgs)
-	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
-	}
 	return HandleVErrAndExitCode(verr, usage)
 }
 
