@@ -928,17 +928,20 @@ func loadReplicaServerId() (uint32, error) {
 }
 
 func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) {
-	if ctx.GetCurrentDatabase() == "" {
+	// Create a sub-context when running queries against the engine, so that we get an accurate query start time.
+	queryCtx := sql.NewContext(ctx, sql.WithSession(ctx.Session))
+
+	if queryCtx.GetCurrentDatabase() == "" {
 		ctx.GetLogger().WithFields(logrus.Fields{
 			"query": query,
 		}).Warn("No current database selected")
 	}
 
-	_, iter, err := engine.Query(ctx, query)
+	_, iter, err := engine.Query(queryCtx, query)
 	if err != nil {
 		// Log any errors, except for commits with "nothing to commit"
 		if err.Error() != "nothing to commit" {
-			ctx.GetLogger().WithFields(logrus.Fields{
+			queryCtx.GetLogger().WithFields(logrus.Fields{
 				"error": err.Error(),
 				"query": query,
 			}).Errorf("Error executing query")
@@ -948,10 +951,10 @@ func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) 
 		return
 	}
 	for {
-		_, err := iter.Next(ctx)
+		_, err := iter.Next(queryCtx)
 		if err != nil {
 			if err != io.EOF {
-				ctx.GetLogger().Errorf("ERROR reading query results: %v ", err.Error())
+				queryCtx.GetLogger().Errorf("ERROR reading query results: %v ", err.Error())
 			}
 			return
 		}
