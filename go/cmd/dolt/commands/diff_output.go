@@ -317,16 +317,30 @@ func (s sqlDiffWriter) WriteTableSchemaDiff(ctx context.Context, toRoot *doltdb.
 }
 
 func (s sqlDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
-	// TODO implement me
-	panic("implement me")
+	if oldDefn == "" {
+		cli.Println(fmt.Sprintf("%s;", newDefn))
+	} else if newDefn == "" {
+		cli.Println(fmt.Sprintf("DROP TRIGGER %s;", sql.QuoteIdentifier(triggerName)))
+	} else {
+		cli.Println(fmt.Sprintf("DROP TRIGGER %s;", sql.QuoteIdentifier(triggerName)))
+		cli.Println(fmt.Sprintf("%s;", newDefn))
+	}
+	
+	return nil
 }
 
 func (s sqlDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
-	// TODO implement me
-	panic("implement me")
+	if oldDefn == "" {
+		cli.Println(fmt.Sprintf("%s;", newDefn))
+	} else if newDefn == "" {
+		cli.Println(fmt.Sprintf("DROP VIEW %s;", sql.QuoteIdentifier(viewName)))
+	} else {
+		cli.Println(fmt.Sprintf("DROP VIEW %s;", sql.QuoteIdentifier(viewName)))
+		cli.Println(fmt.Sprintf("%s;", newDefn))
+	}
+
+	return nil
 }
-
-
 
 func (s sqlDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
 	targetSch := td.ToSch
