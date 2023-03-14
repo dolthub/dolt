@@ -159,6 +159,14 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 		return nil, err
 	}
 
+	// Make sure we always return the same order of deltas
+	sort.Slice(deltas, func(i, j int) bool {
+		if deltas[i].FromName == deltas[j].FromName {
+			return deltas[i].ToName < deltas[j].ToName
+		}
+		return deltas[i].FromName < deltas[j].FromName
+	})
+	
 	return deltas, nil
 }
 

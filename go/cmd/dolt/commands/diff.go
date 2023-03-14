@@ -523,21 +523,27 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 		return errhand.VerboseErrorFromError(err)
 	}
 
+	doltSchemasChanged := false
 	for _, td := range tableDeltas {
 		if !shouldPrintTableDelta(dArgs.tableSet, td) {
 			continue
 		}
 		
 		if isDoltSchemasTable(td) {
-			verr := diffDoltSchemasTable(sqlCtx, sqlEng, dArgs, dw)
-			if verr != nil {
-				return verr
-			}
+			// save dolt_schemas table diff for last in diff output
+			doltSchemasChanged = true
 		} else {
 			verr := diffUserTable(sqlCtx, td, sqlEng, dArgs, dw)
 			if verr != nil {
 				return verr
 			}
+		}
+	}
+
+	if doltSchemasChanged {
+		verr := diffDoltSchemasTable(sqlCtx, sqlEng, dArgs, dw)
+		if verr != nil {
+			return verr
 		}
 	}
 

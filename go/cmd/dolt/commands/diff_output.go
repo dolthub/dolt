@@ -271,28 +271,13 @@ func (t tabularDiffWriter) WriteTableSchemaDiff(ctx context.Context, toRoot *dol
 }
 
 func (t tabularDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
-	var diffString string
-	if newDefn == "" {
-		diffString = "DROP TRIGGER " + sql.QuoteIdentifier(triggerName)
-	} else if oldDefn == "" {
-		diffString = oldDefn
-	} else {
-		diffString = textdiff.LineDiff(oldDefn, newDefn)
-	}
-
+	diffString := textdiff.LineDiff(oldDefn, newDefn)
 	cli.Println(diffString)
 	return nil
 }
 
 func (t tabularDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
-	var diffString string
-	if newDefn == "" {
-		diffString = "DROP VIEW " + sql.QuoteIdentifier(viewName)
-	} else if oldDefn == "" {
-		diffString = oldDefn
-	} else {
-		diffString = textdiff.LineDiff(oldDefn, newDefn)
-	}
+	diffString := textdiff.LineDiff(oldDefn, newDefn)
 	cli.Println(diffString)
 	return nil
 }
