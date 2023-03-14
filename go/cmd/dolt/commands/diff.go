@@ -43,7 +43,6 @@ import (
 
 type diffOutput int
 type diffPart int
-type diffMode int
 
 const (
 	SchemaOnlyDiff diffPart = 1 // 0b0001
@@ -63,7 +62,6 @@ const (
 	SummaryFlag = "summary"
 	whereParam  = "where"
 	limitParam  = "limit"
-	SQLFlag     = "sql"
 	SkinnyFlag  = "skinny"
 	MergeBase   = "merge-base"
 	DiffMode    = "diff-mode"

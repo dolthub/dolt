@@ -44,6 +44,10 @@ type diffWriter interface {
 	BeginTable(ctx context.Context, td diff.TableDelta) error
 	// WriteSchemaDiff is called to write a schema diff for the table given (if requested by args)
 	WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error
+	// WriteTriggerDiff is called to write a trigger diff
+	WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error
+	// WriteViewDiff is called to write a view diff
+	WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error
 	// RowWriter returns a row writer for the table delta provided, which will have Close() called on it when rows are
 	// done being written.
 	RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error)
@@ -181,6 +185,16 @@ func pluralize(singular, plural string, n uint64) string {
 
 type tabularDiffWriter struct{}
 
+func (t tabularDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (t tabularDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 var _ diffWriter = (*tabularDiffWriter)(nil)
 
 func (t tabularDiffWriter) Close(ctx context.Context) error {
@@ -272,6 +286,16 @@ func (t tabularDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, un
 
 type sqlDiffWriter struct{}
 
+func (s sqlDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s sqlDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 var _ diffWriter = (*tabularDiffWriter)(nil)
 
 func (s sqlDiffWriter) Close(ctx context.Context) error {
@@ -308,6 +332,16 @@ type jsonDiffWriter struct {
 	tablesWritten      int
 }
 
+func (j *jsonDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 var _ diffWriter = (*tabularDiffWriter)(nil)
 
 func newJsonDiffWriter(wr io.WriteCloser) (*jsonDiffWriter, error) {
@@ -331,8 +365,13 @@ func (j *jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) err
 			return err
 		}
 	}
-
-	err := iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(jsonDiffTableHeader, td.ToName)))
+	
+	tableName := td.FromName
+	if len(tableName) == 0 {
+		tableName = td.ToName		
+	}
+	
+	err := iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(jsonDiffTableHeader, tableName)))
 	if err != nil {
 		return err
 	}

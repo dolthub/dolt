@@ -120,6 +120,44 @@ EOF
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
 
+@test "json-diff: views" {
+    dolt sql <<SQL
+drop table test;
+create table test (pk int primary key, c1 int, c2 int);
+call dolt_add('.');
+insert into test values (1,2,3);
+insert into test values (4,5,6);
+SQL
+    dolt commit -am "First commit"
+
+    dolt sql <<SQL
+create view v1 as select * from test;
+SQL
+    dolt commit -Am "Second commit"
+
+    dolt diff -r json HEAD HEAD~
+    run dolt diff -r json HEAD HEAD~
+
+    EXPECTED=$(cat <<'EOF'
+{"tables":[{"name":"","schema_diff":["DROP TABLE `dolt_schemas`;"],"data_diff":[{"from_row":{"extra":{"CreatedAt":0},"fragment":"create view v1 as select * from test","name":"v1","type":"view"},"to_row":{}}]}]}
+EOF
+)
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    dolt diff -r json HEAD~ HEAD
+    run dolt diff -r json HEAD~ HEAD
+
+    EXPECTED=$(cat <<'EOF'
+{"tables":[{"name":"test","schema_diff":["ALTER TABLE `test` DROP `c2`;","ALTER TABLE `test` ADD `c3` varchar(10);"],"data_diff":[{"from_row":{"c1":2,"c2":3,"pk":1},"to_row":{}},{"from_row":{"c1":5,"c2":6,"pk":4},"to_row":{"c1":100,"pk":4}},{"from_row":{},"to_row":{"c1":8,"c3":"9","pk":7}}]}]}
+EOF
+)
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false    
+}
+
 @test "json-diff: with table args" {
     dolt sql -q 'create table other (pk int not null primary key)'
     dolt add .
