@@ -312,7 +312,16 @@ func (s sqlDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootV
 		return errhand.BuildDError("could not read schemas from toRoot").AddCause(err).Build()
 	}
 
-	return writeSqlSchemaDiff(ctx, td, toSchemas)
+	ddlStatements, err := diff.SqlSchemaDiff(ctx, td, toSchemas)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	for _, stmt := range ddlStatements {
+		cli.Println(stmt)
+	}
+
+	return nil
 }
 
 func (s sqlDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {

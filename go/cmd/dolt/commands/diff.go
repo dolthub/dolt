@@ -525,17 +525,17 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 	}
 
 	for _, td := range tableDeltas {
-		if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
+		if !shouldPrintTableDelta(dArgs.tableSet, td) {
 			continue
 		}
-		if strings.ToLower(td.ToName) != doltdb.SchemasTableName {
-			verr := diffUserTable(sqlCtx, td, sqlEng, dArgs, dw)
+		
+		if isDoltSchemasTable(td) {
+			verr := diffDoltSchemasTable(sqlCtx, td, sqlEng, dArgs, dw)
 			if verr != nil {
 				return verr
 			}
 		} else {
-			// dolt_schemas table is treated as a special case. diff the rows of the table, and print fragments as DDL
-			verr := diffDoltSchemasTable(sqlCtx, td, sqlEng, dArgs, dw)
+			verr := diffUserTable(sqlCtx, td, sqlEng, dArgs, dw)
 			if verr != nil {
 				return verr
 			}
@@ -548,6 +548,15 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 	}
 
 	return nil
+}
+
+func shouldPrintTableDelta(tablesToPrint *set.StrSet, td diff.TableDelta) bool {
+	// TODO: this should be case insensitive
+	return tablesToPrint.Contains(td.FromName) || tablesToPrint.Contains(td.ToName)
+}
+
+func isDoltSchemasTable(td diff.TableDelta) bool {
+	return td.FromName == doltdb.SchemasTableName || td.ToName == doltdb.SchemasTableName
 }
 
 func diffUserTable(
@@ -638,19 +647,6 @@ func diffDoltSchemasTable(
 		if from != to {
 			cli.Println(textdiff.LineDiff(from, to))
 		}
-	}
-
-	return nil
-}
-
-func writeSqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string]schema.Schema) errhand.VerboseError {
-	ddlStatements, err := diff.SqlSchemaDiff(ctx, td, toSchemas)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	for _, stmt := range ddlStatements {
-		cli.Println(stmt)
 	}
 
 	return nil
