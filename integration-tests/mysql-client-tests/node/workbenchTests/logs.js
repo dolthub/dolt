@@ -6,10 +6,12 @@ export const logTests = [
     p: { refName: "main", limit: 10, offset: 0 },
     res: [
       {
-        message: "Initialize data repository",
-        parentsLength: 0,
+        commit_hash: "",
         committer: "mysql-test-runner",
         email: "mysql-test-runner@liquidata.co",
+        date: "",
+        message: "Initialize data repository",
+        parents: [],
       },
     ],
     matcher: logsMatcher,
@@ -19,14 +21,18 @@ export const logTests = [
     p: { refName: "mybranch" },
     res: [
       {
-        message: "Create table test",
+        commit_hash: "",
         committer: "Dolt",
         email: "dolt@dolthub.com",
+        date: "",
+        message: "Create table test",
       },
       {
-        message: "Initialize data repository",
+        commit_hash: "",
         committer: "mysql-test-runner",
         email: "mysql-test-runner@liquidata.co",
+        date: "",
+        message: "Initialize data repository",
       },
     ],
     matcher: logsMatcher,
@@ -36,10 +42,12 @@ export const logTests = [
     p: { refRange: "main..mybranch" },
     res: [
       {
-        message: "Create table test",
-        parentsLength: 1,
+        commit_hash: "",
         committer: "Dolt",
         email: "dolt@dolthub.com",
+        date: "",
+        message: "Create table test",
+        parents: [""],
       },
     ],
     matcher: logsMatcher,

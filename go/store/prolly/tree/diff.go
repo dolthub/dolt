@@ -37,8 +37,8 @@ type Diff struct {
 type DiffFn func(context.Context, Diff) error
 
 type Differ[K ~[]byte, O Ordering[K]] struct {
-	from, to         *cursor
-	fromStop, toStop *cursor
+	from, to         *Cursor
+	fromStop, toStop *Cursor
 	order            O
 }
 
@@ -48,7 +48,7 @@ func DifferFromRoots[K ~[]byte, O Ordering[K]](
 	from, to Node,
 	order O,
 ) (Differ[K, O], error) {
-	var fc, tc *cursor
+	var fc, tc *Cursor
 	var err error
 
 	if !from.empty() {
@@ -57,7 +57,7 @@ func DifferFromRoots[K ~[]byte, O Ordering[K]](
 			return Differ[K, O]{}, err
 		}
 	} else {
-		fc = &cursor{}
+		fc = &Cursor{}
 	}
 
 	if !to.empty() {
@@ -66,7 +66,7 @@ func DifferFromRoots[K ~[]byte, O Ordering[K]](
 			return Differ[K, O]{}, err
 		}
 	} else {
-		tc = &cursor{}
+		tc = &Cursor{}
 	}
 
 	fs, err := newCursorPastEnd(ctx, fromNs, from)
@@ -121,10 +121,10 @@ func DifferFromCursors[K ~[]byte, O Ordering[K]](
 }
 
 func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
-	for td.from.valid() && td.from.compare(td.fromStop) < 0 && td.to.valid() && td.to.compare(td.toStop) < 0 {
+	for td.from.Valid() && td.from.compare(td.fromStop) < 0 && td.to.Valid() && td.to.compare(td.toStop) < 0 {
 
-		f := td.from.currentKey()
-		t := td.to.currentKey()
+		f := td.from.CurrentKey()
+		t := td.to.CurrentKey()
 		cmp := td.order.Compare(K(f), K(t))
 
 		switch {
@@ -146,20 +146,20 @@ func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
 		}
 	}
 
-	if td.from.valid() && td.from.compare(td.fromStop) < 0 {
+	if td.from.Valid() && td.from.compare(td.fromStop) < 0 {
 		return sendRemoved(ctx, td.from)
 	}
-	if td.to.valid() && td.to.compare(td.toStop) < 0 {
+	if td.to.Valid() && td.to.compare(td.toStop) < 0 {
 		return sendAdded(ctx, td.to)
 	}
 
 	return Diff{}, io.EOF
 }
 
-func sendRemoved(ctx context.Context, from *cursor) (diff Diff, err error) {
+func sendRemoved(ctx context.Context, from *Cursor) (diff Diff, err error) {
 	diff = Diff{
 		Type: RemovedDiff,
-		Key:  from.currentKey(),
+		Key:  from.CurrentKey(),
 		From: from.currentValue(),
 	}
 
@@ -169,10 +169,10 @@ func sendRemoved(ctx context.Context, from *cursor) (diff Diff, err error) {
 	return
 }
 
-func sendAdded(ctx context.Context, to *cursor) (diff Diff, err error) {
+func sendAdded(ctx context.Context, to *Cursor) (diff Diff, err error) {
 	diff = Diff{
 		Type: AddedDiff,
-		Key:  to.currentKey(),
+		Key:  to.CurrentKey(),
 		To:   to.currentValue(),
 	}
 
@@ -182,10 +182,10 @@ func sendAdded(ctx context.Context, to *cursor) (diff Diff, err error) {
 	return
 }
 
-func sendModified(ctx context.Context, from, to *cursor) (diff Diff, err error) {
+func sendModified(ctx context.Context, from, to *Cursor) (diff Diff, err error) {
 	diff = Diff{
 		Type: ModifiedDiff,
-		Key:  from.currentKey(),
+		Key:  from.CurrentKey(),
 		From: from.currentValue(),
 		To:   to.currentValue(),
 	}
@@ -199,12 +199,12 @@ func sendModified(ctx context.Context, from, to *cursor) (diff Diff, err error) 
 	return
 }
 
-func skipCommon(ctx context.Context, from, to *cursor) (err error) {
+func skipCommon(ctx context.Context, from, to *Cursor) (err error) {
 	// track when |from.parent| and |to.parent| change
 	// to avoid unnecessary comparisons.
 	parentsAreNew := true
 
-	for from.valid() && to.valid() {
+	for from.Valid() && to.Valid() {
 		if !equalItems(from, to) {
 			// found the next difference
 			return nil
@@ -238,13 +238,13 @@ func skipCommon(ctx context.Context, from, to *cursor) (err error) {
 	return err
 }
 
-func skipCommonParents(ctx context.Context, from, to *cursor) (err error) {
+func skipCommonParents(ctx context.Context, from, to *Cursor) (err error) {
 	err = skipCommon(ctx, from.parent, to.parent)
 	if err != nil {
 		return err
 	}
 
-	if from.parent.valid() {
+	if from.parent.Valid() {
 		if err = from.fetchNode(ctx); err != nil {
 			return err
 		}
@@ -253,7 +253,7 @@ func skipCommonParents(ctx context.Context, from, to *cursor) (err error) {
 		from.invalidateAtEnd()
 	}
 
-	if to.parent.valid() {
+	if to.parent.Valid() {
 		if err = to.fetchNode(ctx); err != nil {
 			return err
 		}
@@ -266,18 +266,18 @@ func skipCommonParents(ctx context.Context, from, to *cursor) (err error) {
 }
 
 // todo(andy): assumes equal byte representations
-func equalItems(from, to *cursor) bool {
-	return bytes.Equal(from.currentKey(), to.currentKey()) &&
+func equalItems(from, to *Cursor) bool {
+	return bytes.Equal(from.CurrentKey(), to.CurrentKey()) &&
 		bytes.Equal(from.currentValue(), to.currentValue())
 }
 
-func equalParents(from, to *cursor) (eq bool) {
+func equalParents(from, to *Cursor) (eq bool) {
 	if from.parent != nil && to.parent != nil {
 		eq = equalItems(from.parent, to.parent)
 	}
 	return
 }
 
-func equalcursorValues(from, to *cursor) bool {
+func equalcursorValues(from, to *Cursor) bool {
 	return bytes.Equal(from.currentValue(), to.currentValue())
 }

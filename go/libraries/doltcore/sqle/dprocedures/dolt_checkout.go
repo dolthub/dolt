@@ -43,13 +43,13 @@ func doltCheckout(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 }
 
 func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
-	dbName := ctx.GetCurrentDatabase()
-
-	if len(dbName) == 0 {
+	currentDbName := ctx.GetCurrentDatabase()
+	if len(currentDbName) == 0 {
 		return 1, fmt.Errorf("Empty database name.")
 	}
 
-	dbName, _, err := getRevisionForRevisionDatabase(ctx, dbName)
+	// non-revision database branchName is used to check out a branch on it.
+	dbName, _, err := getRevisionForRevisionDatabase(ctx, currentDbName)
 	if err != nil {
 		return -1, err
 	}
@@ -64,13 +64,14 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		return 1, errors.New("Improper usage.")
 	}
 
-	// Checking out new branch.
 	dSess := dsess.DSessFromSess(ctx.Session)
-	dbData, ok := dSess.GetDbData(ctx, dbName)
+	// dbData should use the current database data, which can be at revision database.
+	dbData, ok := dSess.GetDbData(ctx, currentDbName)
 	if !ok {
-		return 1, fmt.Errorf("Could not load database %s", dbName)
+		return 1, fmt.Errorf("Could not load database %s", currentDbName)
 	}
 
+	// Checking out new branch.
 	if branchOrTrack {
 		err = checkoutNewBranch(ctx, dbName, dbData, apr)
 		if err != nil {
@@ -80,16 +81,16 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		}
 	}
 
-	name := apr.Arg(0)
-	if len(name) == 0 {
+	branchName := apr.Arg(0)
+	if len(branchName) == 0 {
 		return 1, ErrEmptyBranchName
 	}
 
 	// Check if user wants to checkout branch.
-	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, name); err != nil {
+	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, branchName); err != nil {
 		return 1, err
 	} else if isBranch {
-		err = checkoutBranch(ctx, dbName, name)
+		err = checkoutBranch(ctx, dbName, branchName)
 		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
 			// If there is a branch but there is no working set,
 			// somehow the local branch ref was created without a
@@ -100,12 +101,12 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 			//
 			// TODO: This is all quite racey, but so is the
 			// handling in DoltDB, etc.
-			err = createWorkingSetForLocalBranch(ctx, dbData.Ddb, name)
+			err = createWorkingSetForLocalBranch(ctx, dbData.Ddb, branchName)
 			if err != nil {
 				return 1, err
 			}
 
-			err = checkoutBranch(ctx, dbName, name)
+			err = checkoutBranch(ctx, dbName, branchName)
 		}
 		if err != nil {
 			return 1, err
@@ -120,7 +121,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 
 	err = checkoutTables(ctx, roots, dbName, args)
 	if err != nil && apr.NArg() == 1 {
-		err = checkoutRemoteBranch(ctx, dbName, dbData, name, apr)
+		err = checkoutRemoteBranch(ctx, dbName, dbData, branchName, apr)
 	}
 
 	if err != nil {
@@ -193,7 +194,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, br
 		return fmt.Errorf("error: could not find %s", branchName)
 	} else if len(remoteRefs) == 1 {
 		remoteRef := remoteRefs[0]
-		err := actions.CreateBranchWithStartPt(ctx, dbData, branchName, remoteRef.String(), false)
+		err = actions.CreateBranchWithStartPt(ctx, dbData, branchName, remoteRef.String(), false)
 		if err != nil {
 			return err
 		}

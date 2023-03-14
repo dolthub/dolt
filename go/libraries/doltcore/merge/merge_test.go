@@ -336,14 +336,14 @@ func TestMergeCommits(t *testing.T) {
 	artifacts := durable.ProllyMapFromArtifactIndex(artIdx)
 	MustEqualArtifactMap(t, expectedArtifacts, artifacts)
 
-	MustEqualProlly(t, durable.ProllyMapFromIndex(expectedRows), durable.ProllyMapFromIndex(mergedRows))
+	MustEqualProlly(t, tableName, durable.ProllyMapFromIndex(expectedRows), durable.ProllyMapFromIndex(mergedRows))
 
 	for _, index := range sch.Indexes().AllIndexes() {
 		mergedIndexRows, err := merged.GetIndexRowData(context.Background(), index.Name())
 		require.NoError(t, err)
 		expectedIndexRows, err := expected.GetIndexRowData(context.Background(), index.Name())
 		require.NoError(t, err)
-		MustEqualProlly(t, durable.ProllyMapFromIndex(expectedIndexRows), durable.ProllyMapFromIndex(mergedIndexRows))
+		MustEqualProlly(t, index.Name(), durable.ProllyMapFromIndex(expectedIndexRows), durable.ProllyMapFromIndex(mergedIndexRows))
 	}
 
 	h, err := merged.HashOf()
@@ -820,9 +820,9 @@ func MustDebugFormatProlly(t *testing.T, m prolly.Map) string {
 	return s
 }
 
-func MustEqualProlly(t *testing.T, expected prolly.Map, actual prolly.Map) {
+func MustEqualProlly(t *testing.T, name string, expected, actual prolly.Map) {
 	require.Equal(t, expected.HashOf(), actual.HashOf(),
-		"hashes differed. expected: %s\nactual: %s", MustDebugFormatProlly(t, expected), MustDebugFormatProlly(t, actual))
+		"hashes differed for %s. expected: %s\nactual: %s", name, MustDebugFormatProlly(t, expected), MustDebugFormatProlly(t, actual))
 }
 
 func MustEqualArtifactMap(t *testing.T, expected prolly.ArtifactMap, actual prolly.ArtifactMap) {
