@@ -69,7 +69,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		return root, nil // no mutations
 	}
 
-	cur, err := newCursorAtKey(ctx, ns, root, K(newKey), order)
+	cur, err := NewCursorAtKey(ctx, ns, root, K(newKey), order)
 	if err != nil {
 		return Node{}, err
 	}
@@ -82,16 +82,16 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 	for newKey != nil {
 
 		// move |cur| to the NextMutation mutation point
-		err = seek(ctx, cur, K(newKey), order)
+		err = Seek(ctx, cur, K(newKey), order)
 		if err != nil {
 			return Node{}, err
 		}
 
 		var oldValue Item
-		if cur.valid() {
+		if cur.Valid() {
 			// Compare mutations |newKey| and |newValue|
 			// to the existing pair from the cursor
-			if order.Compare(K(newKey), K(cur.currentKey())) == 0 {
+			if order.Compare(K(newKey), K(cur.CurrentKey())) == 0 {
 				oldValue = cur.currentValue()
 			}
 		}
