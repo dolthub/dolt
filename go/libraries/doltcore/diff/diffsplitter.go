@@ -42,10 +42,6 @@ type DiffSplitter struct {
 	targetSch sql.Schema
 	// maps querySch fields to targetSch
 	queryToTarget []int
-	// maps "to_..." and "from_..." columns
-	// to each other and vice-versa.
-	// NB: not all columns have matches
-	queryToQuery []int
 	// divides "from_..." and "to_..." cols
 	splitIdx int
 }
@@ -62,6 +58,7 @@ type RowDiff struct {
 // and "to" schemas used to generate the diff.
 // |targetSch| is the output schema used to print the diff and is computed
 // as the union schema of the "from" and "to" schemas.
+
 func NewDiffSplitter(querySch sql.Schema, targetSch sql.Schema) (*DiffSplitter, error) {
 	split, err := findDiffSchemaSplit(querySch)
 	if err != nil {
@@ -73,18 +70,10 @@ func NewDiffSplitter(querySch sql.Schema, targetSch sql.Schema) (*DiffSplitter, 
 		return nil, err
 	}
 
-	// not all "from..." columns will have a "to..." column and vice-versa
-	// unmapped columns in |qtq| are marked with -1
-	qtq, err := mapToAndFromColumns(querySch)
-	if err != nil {
-		return nil, err
-	}
-
 	return &DiffSplitter{
 		querySch:      querySch,
 		targetSch:     targetSch,
 		queryToTarget: qtt,
-		queryToQuery:  qtq,
 		splitIdx:      split,
 	}, nil
 }
@@ -92,20 +81,19 @@ func NewDiffSplitter(querySch sql.Schema, targetSch sql.Schema) (*DiffSplitter, 
 func findDiffSchemaSplit(querySch sql.Schema) (int, error) {
 	split := -1
 	for i, col := range querySch {
-		switch {
-		case strings.HasPrefix(col.Name, fromPrefix):
+		if strings.HasPrefix(col.Name, fromPrefix) {
 			if split >= 0 { // seen first "to_..." col
 				return 0, errors.New("interleaved 'from' and 'to' cols")
 			}
-		case strings.HasPrefix(col.Name, toPrefix):
+		} else if strings.HasPrefix(col.Name, toPrefix) {
 			if split < 0 { // |i| is first "to_..." col
 				split = i
 			}
-		case col.Name == "diff_type":
+		} else if col.Name == "diff_type" {
 			if split < 0 {
 				split = i
 			}
-		default:
+		} else {
 			return 0, errors.New("expected column prefix of 'to_' or 'from_' (" + col.Name + ")")
 		}
 	}
@@ -121,17 +109,16 @@ func mapQuerySchemaToTargetSchema(query, target sql.Schema) (mapping []int, err 
 
 	mapping = make([]int, len(query))
 	for i, col := range query {
-		switch {
-		case strings.HasPrefix(col.Name, fromPrefix):
+		if strings.HasPrefix(col.Name, fromPrefix) {
 			base := col.Name[len(fromPrefix):]
 			mapping[i] = target.IndexOfColName(base)
-		case strings.HasPrefix(col.Name, toPrefix):
+		} else if strings.HasPrefix(col.Name, toPrefix) {
 			base := col.Name[len(toPrefix):]
 			mapping[i] = target.IndexOfColName(base)
-		default:
+		} else {
 			return nil, errors.New("expected column prefix of 'to_' or 'from_' (" + col.Name + ")")
 		}
-		if mapping[i] < 0 {
+		if mapping[i] < 0 { // sanity check
 			return nil, errors.New("failed to map diff column: " + col.Name)
 		}
 	}
@@ -147,16 +134,15 @@ func mapToAndFromColumns(query sql.Schema) (mapping []int, err error) {
 
 	mapping = make([]int, len(query))
 	for i, col := range query {
-		switch {
-		case strings.HasPrefix(col.Name, fromPrefix):
+		if strings.HasPrefix(col.Name, fromPrefix) {
 			// map "from_..." column to "to_..." column
 			base := col.Name[len(fromPrefix):]
 			mapping[i] = query.IndexOfColName(toPrefix + base)
-		case strings.HasPrefix(col.Name, toPrefix):
+		} else if strings.HasPrefix(col.Name, toPrefix) {
 			// map "to_..." column to "from_..." column
 			base := col.Name[len(toPrefix):]
 			mapping[i] = query.IndexOfColName(fromPrefix + base)
-		default:
+		} else {
 			return nil, errors.New("expected column prefix of 'to_' or 'from_' (" + col.Name + ")")
 		}
 	}
