@@ -49,13 +49,19 @@ export const branchTests = [
     res: [
       {
         name: "main",
+        hash: "",
         latest_committer: "mysql-test-runner",
         latest_committer_email: "mysql-test-runner@liquidata.co",
+        latest_commit_date: "",
+        latest_commit_message: "Initialize data repository",
       },
       {
         name: "mybranch",
+        hash: "",
         latest_committer: "Dolt",
         latest_committer_email: "dolt@dolthub.com",
+        latest_commit_date: "",
+        latest_commit_message: "Create table test",
       },
     ],
     matcher: branchesMatcher,
