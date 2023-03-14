@@ -140,4 +140,9 @@ export const tableTests = [
       },
     ],
   },
+  {
+    q: `SELECT * FROM ::tableName ORDER BY ::col0 LIMIT :limit OFFSET :offset`,
+    p: { tableName: "test_info", col0: "id", limit: 10, offset: 0 },
+    res: [{ id: 1, info: "info about test pk 0", test_pk: 0 }],
+  },
 ];

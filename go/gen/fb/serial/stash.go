@@ -148,7 +148,24 @@ func (rcv *Stash) Desc() []byte {
 	return nil
 }
 
-const StashNumFields = 4
+func (rcv *Stash) TablesToStage(j int) []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
+	}
+	return nil
+}
+
+func (rcv *Stash) TablesToStageLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+const StashNumFields = 5
 
 func StashStart(builder *flatbuffers.Builder) {
 	builder.StartObject(StashNumFields)
@@ -170,6 +187,12 @@ func StashAddBranchName(builder *flatbuffers.Builder, branchName flatbuffers.UOf
 }
 func StashAddDesc(builder *flatbuffers.Builder, desc flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(desc), 0)
+}
+func StashAddTablesToStage(builder *flatbuffers.Builder, tablesToStage flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(tablesToStage), 0)
+}
+func StashStartTablesToStageVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
 }
 func StashEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

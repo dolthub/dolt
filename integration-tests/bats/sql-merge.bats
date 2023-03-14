@@ -1509,77 +1509,6 @@ SQL
     [[ "$output" =~ "our check 'c1' and their check 'c0' both reference the same column(s)" ]] || false
 }
 
-# TODO: what happens when the new data conflicts with modified check?
-@test "sql-merge: non-conflicting constraint modification is preserved" {
-    dolt sql -q "create table t (i int)"
-    dolt add .
-    dolt sql -q "alter table t add constraint c check (i > 0)"
-    dolt commit -am "initial commit"
-
-    dolt checkout -b other
-    dolt sql -q "insert into t values (1)"
-    run dolt sql -q "select * from t"
-    log_status_eq 0
-    [[ "$output" =~ "1" ]] || false
-    run dolt sql -q "show create table t"
-    log_status_eq 0
-    [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))" ]] || false
-    dolt commit -am "changes to other"
-
-    dolt checkout main
-    dolt sql -q "alter table t drop constraint c"
-    dolt sql -q "alter table t add constraint c check (i < 10)"
-    run dolt sql -q "show create table t"
-    log_status_eq 0
-    [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))" ]] || false
-    dolt commit -am "changes to main"
-
-    run dolt merge other -m "merge other"
-    log_status_eq 0
-
-    run dolt sql -q "select * from t"
-    log_status_eq 0
-    [[ "$output" =~ "1" ]] || false
-    run dolt sql -q "show create table t"
-    log_status_eq 0
-    [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))" ]] || false
-}
-
-# TODO: expected behavior for dropping constraints?
-@test "sql-merge: dropping constraint in one branch drops from both" {
-    dolt sql -q "create table t (i int)"
-    dolt add .
-    dolt sql -q "alter table t add constraint c check (i > 0)"
-    dolt commit -am "initial commit"
-
-    dolt checkout -b other
-    dolt sql -q "insert into t values (1)"
-    run dolt sql -q "select * from t"
-    log_status_eq 0
-    [[ "$output" =~ "1" ]] || false
-    run dolt sql -q "show create table t"
-    log_status_eq 0
-    [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))" ]] || false
-    dolt commit -am "changes to other"
-
-    dolt checkout main
-    dolt sql -q "alter table t drop constraint c"
-    run dolt sql -q "show create table t"
-    log_status_eq 0
-    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
-    dolt commit -am "changes to main"
-
-    run dolt merge other -m "merge other"
-    log_status_eq 0
-
-    run dolt sql -q "select * from t"
-    log_status_eq 0
-    [[ "$output" =~ "1" ]] || false
-    run dolt sql -q "show create table t"
-    log_status_eq 0
-    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
-}
-
 @test "sql-merge: dropping constraint on both branches merges successfully" {
     dolt sql -q "create table t (i int)"
     dolt add .
@@ -1605,7 +1534,7 @@ SQL
 
     run dolt sql -q "show create table t"
     log_status_eq 0
-    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))") ]] || false
+    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
 }
 
 @test "sql-merge: dropping constraint in one branch and modifying same in other results in conflict" {

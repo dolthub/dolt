@@ -142,7 +142,7 @@ var ShowCreateTableAsOfScriptTest = queries.ScriptTest{
 					"  `pk` int NOT NULL,\n" +
 					"  `c2` varchar(20),\n" +
 					"  PRIMARY KEY (`pk`),\n" +
-					"  UNIQUE KEY `c2` (`c2`)\n" +
+					"  UNIQUE KEY `unique_c2` (`c2`)\n" +
 					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 				},
 			},
@@ -154,7 +154,7 @@ var ShowCreateTableAsOfScriptTest = queries.ScriptTest{
 					"  `pk` int NOT NULL,\n" +
 					"  `c2` varchar(20),\n" +
 					"  PRIMARY KEY (`pk`),\n" +
-					"  UNIQUE KEY `c2` (`c2`)\n" +
+					"  UNIQUE KEY `unique_c2` (`c2`)\n" +
 					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 				},
 			},
@@ -442,6 +442,51 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "database revision specs: dolt_checkout uses revision database name for DbData access",
+		SetUpScript: []string{
+			"create database newtest;",
+			"use newtest;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "call dolt_checkout('-b', 'branch-to-delete');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"branch-to-delete"}},
+			},
+			{
+				Query:    "use `newtest/main`;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "call dolt_branch('-D', 'branch-to-delete');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "call dolt_checkout('-b', 'another-branch');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"another-branch"}},
+			},
+		},
+	},
 }
 
 // DoltScripts are script tests specific to Dolt (not the engine in general), e.g. by involving Dolt functions. Break
@@ -571,7 +616,7 @@ var DoltScripts = []queries.ScriptTest{
 						"  `c` int NOT NULL,\n" +
 						"  `d` varchar(10),\n" +
 						"  PRIMARY KEY (`c`),\n" +
-						"  UNIQUE KEY `d_0` (`d`),\n" +
+						"  UNIQUE KEY `t2du` (`d`),\n" +
 						"  CONSTRAINT `fk1` FOREIGN KEY (`d`) REFERENCES `t1` (`b`)\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
@@ -823,53 +868,6 @@ var DoltScripts = []queries.ScriptTest{
 			},
 		},
 	},
-	{
-		Name: "simple tests on DOLT_PATCH() stored procedure",
-		SetUpScript: []string{
-			"CREATE TABLE parent (id int PRIMARY KEY, id_ext int, v1 int, v2 text, INDEX v1 (v1));",
-			"CREATE TABLE child (id int primary key, v1 int);",
-			"CALL DOLT_COMMIT('-Am','added tables')",
-
-			"ALTER TABLE child ADD CONSTRAINT fk_named FOREIGN KEY (v1) REFERENCES parent(v1);",
-			"insert into parent values (0, 1, 2, NULL);",
-			"ALTER TABLE parent DROP PRIMARY KEY;",
-			"ALTER TABLE parent ADD PRIMARY KEY(id, id_ext);",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "CALL DOLT_PATCH()",
-				Expected: []sql.Row{
-					{"ALTER TABLE `child` ADD INDEX `v1`(`v1`);"},
-					{"ALTER TABLE `child` ADD CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`);"},
-					{"ALTER TABLE `parent` DROP PRIMARY KEY;"},
-					{"ALTER TABLE `parent` ADD PRIMARY KEY (id,id_ext);"}},
-			},
-			{
-				Query: "CALL DOLT_PATCH('HEAD~')",
-				Expected: []sql.Row{
-					{"CREATE TABLE `child` (\n  `id` int NOT NULL,\n  `v1` int,\n  PRIMARY KEY (`id`),\n  KEY `v1` (`v1`),\n  CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
-					{"CREATE TABLE `parent` (\n  `id` int NOT NULL,\n  `id_ext` int NOT NULL,\n  `v1` int,\n  `v2` text,\n  PRIMARY KEY (`id`,`id_ext`),\n  KEY `v1` (`v1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
-					{"INSERT INTO `parent` (`id`,`id_ext`,`v1`,`v2`) VALUES (0,1,2,NULL);"}},
-			},
-			{
-				Query: "CALL DOLT_PATCH('child')",
-				Expected: []sql.Row{
-					{"ALTER TABLE `child` ADD INDEX `v1`(`v1`);"},
-					{"ALTER TABLE `child` ADD CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`);"}},
-			},
-			{
-				Query: "SHOW WARNINGS;",
-				Expected: []sql.Row{
-					{"Warning", 1235, "Incompatible schema change, skipping data diff for table 'child'"}},
-			},
-			{
-				Query: "CALL DOLT_PATCH('HEAD','HEAD~','parent')",
-				Expected: []sql.Row{
-					{"DROP TABLE `parent`;"},
-				},
-			},
-		},
-	},
 }
 
 func makeLargeInsert(sz int) string {
@@ -936,6 +934,20 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff_summary('main~..main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// Without access to the database, dolt_patch should fail with a database access error
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_patch('main~', 'main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// Without access to the database, dolt_patch with dots should fail with a database access error
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_patch('main~..main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
@@ -1037,6 +1049,34 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
+				// With access to the db, but not the table, dolt_patch should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_patch('main~', 'main', 'test2');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				// With access to the db, but not the table, dolt_patch with dots should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_patch('main~...main', 'test2');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				// With access to the db, dolt_patch should fail for all tables if no access any of tables
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_patch('main~', 'main');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				// With access to the db, dolt_patch with dots should fail for all tables if no access any of tables
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_patch('main~...main');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
 				// Revoke select on mydb.test
 				User:     "root",
 				Host:     "localhost",
@@ -1107,6 +1147,20 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
+				// After granting access to the entire db, dolt_patch should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_patch('main~', 'main');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				// After granting access to the entire db, dolt_patch with dots should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_patch('main~...main');",
+				Expected: []sql.Row{{1}},
+			},
+			{
 				// After granting access to the entire db, dolt_log should work
 				User:     "tester",
 				Host:     "localhost",
@@ -1146,6 +1200,13 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff_summary('main~', 'main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// After revoking access, dolt_patch should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_patch('main~', 'main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{

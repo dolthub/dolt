@@ -331,8 +331,6 @@ type baseLookupBuilder struct {
 	sec          prolly.Map
 	secKd, secVd val.TupleDesc
 	ns           tree.NodeStore
-
-	cur *tree.Cursor
 }
 
 func (lb *baseLookupBuilder) Key() doltdb.DataCacheKey {
@@ -347,36 +345,16 @@ func (lb *baseLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (s
 // newPointLookup will create a cursor once, and then use the same cursor for
 // every subsequent point lookup. Note that equality joins can have a mix of
 // point lookups on concrete values, and range lookups for null matches.
-func (lb *baseLookupBuilder) newPointLookup(ctx *sql.Context, rang prolly.Range) (prolly.MapIter, error) {
-	if lb.cur == nil {
-		cur, err := tree.NewCursorAtKey(ctx, lb.sec.NodeStore(), lb.sec.Node(), rang.Tup, lb.secKd)
-		if err != nil {
-			return nil, err
+func (lb *baseLookupBuilder) newPointLookup(ctx *sql.Context, rang prolly.Range) (iter prolly.MapIter, err error) {
+	err = lb.sec.Get(ctx, rang.Tup, func(key val.Tuple, value val.Tuple) (err error) {
+		if key != nil && rang.Matches(key) {
+			iter = prolly.NewPointLookup(key, value)
+		} else {
+			iter = prolly.EmptyPointLookup
 		}
-		if !cur.Valid() {
-			// map does not contain |rng|
-			return prolly.EmptyPointLookup, nil
-		}
-
-		lb.cur = cur
-	}
-
-	err := tree.Seek(ctx, lb.cur, rang.Tup, lb.secKd)
-	if err != nil {
-		return nil, err
-	}
-	if !lb.cur.Valid() {
-		return prolly.EmptyPointLookup, nil
-	}
-
-	key := val.Tuple(lb.cur.CurrentKey())
-	value := val.Tuple(lb.cur.CurrentValue())
-
-	if !rang.Matches(key) {
-		return prolly.EmptyPointLookup, nil
-	}
-
-	return prolly.NewPointLookup(key, value), nil
+		return
+	})
+	return
 }
 
 func (lb *baseLookupBuilder) rangeIter(ctx *sql.Context, part sql.Partition) (prolly.MapIter, error) {

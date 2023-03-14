@@ -74,7 +74,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		return Node{}, err
 	}
 
-	chkr, err := newChunker(ctx, cur.Clone(), 0, ns, serializer)
+	chkr, err := newChunker(ctx, cur.clone(), 0, ns, serializer)
 	if err != nil {
 		return Node{}, err
 	}
@@ -92,7 +92,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 			// Compare mutations |newKey| and |newValue|
 			// to the existing pair from the cursor
 			if order.Compare(K(newKey), K(cur.CurrentKey())) == 0 {
-				oldValue = cur.CurrentValue()
+				oldValue = cur.currentValue()
 			}
 		}
 
@@ -103,7 +103,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		}
 
 		// move |chkr| to the NextMutation mutation point
-		err = chkr.AdvanceTo(ctx, cur)
+		err = chkr.advanceTo(ctx, cur)
 		if err != nil {
 			return Node{}, err
 		}

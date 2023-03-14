@@ -415,7 +415,7 @@ SQL
     dolt commit -am "adding new t1 table"
     run dolt pull test-remote test-branch
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "table with same name added in 2 commits can't be merged" ]] || false
+    [[ "$output" =~ "table with same name 't1' added in 2 commits can't be merged" ]] || false
 }
 
 @test "remotes: push and pull from non-main branch and use --set-upstream" {

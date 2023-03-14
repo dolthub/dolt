@@ -45,17 +45,23 @@ export const branchTests = [
     res: [{ hash: "" }],
   },
   {
-    q: `SELECT * FROM dolt_branches WHERE name NOT LIKE "workspaces/%" LIMIT 200`,
+    q: `SELECT * FROM dolt_branches LIMIT 200`,
     res: [
       {
         name: "main",
+        hash: "",
         latest_committer: "mysql-test-runner",
         latest_committer_email: "mysql-test-runner@liquidata.co",
+        latest_commit_date: "",
+        latest_commit_message: "Initialize data repository",
       },
       {
         name: "mybranch",
+        hash: "",
         latest_committer: "Dolt",
         latest_committer_email: "dolt@dolthub.com",
+        latest_commit_date: "",
+        latest_commit_message: "Create table test",
       },
     ],
     matcher: branchesMatcher,
@@ -66,7 +72,7 @@ export const branchTests = [
     res: [{ status: 0 }],
   },
   {
-    q: `SELECT COUNT(*) FROM dolt_branches WHERE name NOT LIKE "workspaces/%" LIMIT 200`,
+    q: `SELECT COUNT(*) FROM dolt_branches LIMIT 200`,
     res: [{ ["COUNT(*)"]: 3 }],
   },
   {
@@ -87,7 +93,7 @@ export const branchTests = [
     res: [{ status: 0 }],
   },
   {
-    q: `SELECT COUNT(*) FROM dolt_branches WHERE name NOT LIKE "workspaces/%" LIMIT 200`,
+    q: `SELECT COUNT(*) FROM dolt_branches LIMIT 200`,
     res: [{ ["COUNT(*)"]: 2 }],
   },
 ];

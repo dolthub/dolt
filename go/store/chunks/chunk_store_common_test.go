@@ -126,7 +126,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreVersion() {
 	suite.NoError(err)
 	suite.True(success)
 
-	suite.Equal(constants.NomsVersion, store.Version())
+	suite.Equal(constants.FormatLD1String, store.Version())
 }
 
 func (suite *ChunkStoreTestSuite) TestChunkStoreCommitUnchangedRoot() {

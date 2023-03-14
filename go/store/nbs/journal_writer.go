@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	chunkJournalFileSize = 256 * 1024 * 1024
+	chunkJournalFileSize = 16 * 1024
 
 	// todo(andy): buffer must be able to hold an entire record,
 	//   but we don't have a hard limit on record size right now
@@ -36,7 +36,7 @@ const (
 	chunkJournalAddr = "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"
 
 	journalIndexFileName        = "journal.idx"
-	journalIndexDefaultMaxNovel = 64 * 1024
+	journalIndexDefaultMaxNovel = 4096
 )
 
 var (
