@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"strings"
 
-	textdiff "github.com/andreyvit/diff"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -530,7 +529,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 		}
 		
 		if isDoltSchemasTable(td) {
-			verr := diffDoltSchemasTable(sqlCtx, td, sqlEng, dArgs, dw)
+			verr := diffDoltSchemasTable(sqlCtx, sqlEng, dArgs, dw)
 			if verr != nil {
 				return verr
 			}
@@ -609,18 +608,16 @@ func diffUserTable(
 }
 
 func diffDoltSchemasTable(
-	sqlCtx *sql.Context,
-	td diff.TableDelta,
-	sqlEng *engine.SqlEngine,
-	dArgs *diffArgs,
-	dw diffWriter,
+		sqlCtx *sql.Context,
+		sqlEng *engine.SqlEngine,
+		dArgs *diffArgs,
+		dw diffWriter,
 ) errhand.VerboseError {
-	err := dw.BeginTable(sqlCtx, td)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	query := fmt.Sprintf("select from_fragment,to_fragment from dolt_diff('%s','%s','%s')", dArgs.fromRef, dArgs.toRef, doltdb.SchemasTableName)
+	// TODO: does this work when the table has been deleted in the current revision?
+	query := fmt.Sprintf("select from_name,to_name,from_type,to_type,from_fragment,to_fragment " +
+		"from dolt_diff('%s','%s','%s') " +
+		"order by coalesce(from_type, to_type), coalesce(from_name, to_name)",
+		dArgs.fromRef, dArgs.toRef, doltdb.SchemasTableName)
 
 	_, rowIter, err := sqlEng.Query(sqlCtx, query)
 	if err != nil {
@@ -635,17 +632,44 @@ func diffDoltSchemasTable(
 		} else if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
-
-		from := ""
+		
+		var fragmentName string
 		if row[0] != nil {
-			from = fmt.Sprintf("%v;", row[0])
+			fragmentName = row[0].(string)
+		} else {
+			fragmentName = row[1].(string)
 		}
-		to := ""
-		if row[1] != nil {
-			to = fmt.Sprintf("%v;", row[1])
+		
+		var fragmentType string  
+		if row[2] != nil {
+			fragmentType = row[2].(string)
+		} else {
+			fragmentType = row[3].(string)
 		}
-		if from != to {
-			cli.Println(textdiff.LineDiff(from, to))
+		
+		var oldFragment string
+		var newFragment string
+		if row[4] != nil {
+			oldFragment = row[4].(string)
+		}
+		if row[5] != nil {
+			newFragment = row[5].(string)
+		}
+		
+		switch fragmentType {
+		case "view":
+			err := dw.WriteViewDiff(sqlCtx, fragmentName, oldFragment, newFragment)
+			if err != nil {
+				return nil
+			}
+		case "trigger":
+			err := dw.WriteTriggerDiff(sqlCtx, fragmentName, oldFragment, newFragment)
+			if err != nil {
+				return nil
+			}
+		default:
+			cli.PrintErrf("Unrecognized schema element type: %s", fragmentType)
+			continue
 		}
 	}
 

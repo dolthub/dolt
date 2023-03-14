@@ -552,7 +552,6 @@ func fkSlicesAreEqual(from, to []doltdb.ForeignKey) bool {
 
 // SqlSchemaDiff returns a slice of DDL statements that will transform the schema in the from delta to the schema in
 // the to delta.
-// TODO: this doesn't handle constraints or triggers
 func SqlSchemaDiff(ctx context.Context, td TableDelta, toSchemas map[string]schema.Schema) ([]string, error) {
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {
