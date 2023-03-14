@@ -574,15 +574,15 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 			return err
 		}
 
-		err = lvs.gc(ctx, newGenRefs, oldGen.HasMany, newGen, newGen, lvs.transitionToFinalizingGC)
-		if err != nil {
-			newGen.EndGC()
-			return err
-		}
-
 		if safepointF != nil {
 			err = safepointF()
+			if err != nil {
+				newGen.EndGC()
+				return err
+			}
 		}
+
+		err = lvs.gc(ctx, newGenRefs, oldGen.HasMany, newGen, newGen, lvs.transitionToFinalizingGC)
 		newGen.EndGC()
 		if err != nil {
 			return err
@@ -611,15 +611,15 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 
 		newGenRefs.Insert(root)
 
-		err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, collector, collector, lvs.transitionToFinalizingGC)
-		if err != nil {
-			collector.EndGC()
-			return err
-		}
-
 		if safepointF != nil {
 			err = safepointF()
+			if err != nil {
+				collector.EndGC()
+				return err
+			}
 		}
+
+		err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, collector, collector, lvs.transitionToFinalizingGC)
 		collector.EndGC()
 		if err != nil {
 			return err
