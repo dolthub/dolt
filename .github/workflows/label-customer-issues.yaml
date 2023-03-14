@@ -1,4 +1,4 @@
-name: Label Customer Issues
+name: Label Customer Issues2
 
 on:
   issues:
