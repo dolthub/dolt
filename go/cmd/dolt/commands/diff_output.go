@@ -43,7 +43,7 @@ type diffWriter interface {
 	// BeginTable is called when a new table is about to be written, before any schema or row diffs are written
 	BeginTable(ctx context.Context, td diff.TableDelta) error
 	// WriteSchemaDiff is called to write a schema diff for the table given (if requested by args)
-	WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error
+	WriteTableSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error
 	// WriteTriggerDiff is called to write a trigger diff
 	WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error
 	// WriteViewDiff is called to write a view diff
@@ -185,16 +185,6 @@ func pluralize(singular, plural string, n uint64) string {
 
 type tabularDiffWriter struct{}
 
-func (t tabularDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (t tabularDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
-	// TODO implement me
-	panic("implement me")
-}
-
 var _ diffWriter = (*tabularDiffWriter)(nil)
 
 func (t tabularDiffWriter) Close(ctx context.Context) error {
@@ -230,7 +220,7 @@ func (t tabularDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) e
 	return nil
 }
 
-func (t tabularDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
+func (t tabularDiffWriter) WriteTableSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
@@ -280,21 +270,38 @@ func (t tabularDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.R
 	return nil
 }
 
+func (t tabularDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
+	var diffString string
+	if newDefn == "" {
+		diffString = "DROP TRIGGER " + sql.QuoteIdentifier(triggerName)
+	} else if oldDefn == "" {
+		diffString = oldDefn
+	} else {
+		diffString = textdiff.LineDiff(oldDefn, newDefn)
+	}
+
+	cli.Println(diffString)
+	return nil
+}
+
+func (t tabularDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
+	var diffString string
+	if newDefn == "" {
+		diffString = "DROP VIEW " + sql.QuoteIdentifier(viewName)
+	} else if oldDefn == "" {
+		diffString = oldDefn
+	} else {
+		diffString = textdiff.LineDiff(oldDefn, newDefn)
+	}
+	cli.Println(diffString)
+	return nil
+}
+
 func (t tabularDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
 	return tabular.NewFixedWidthDiffTableWriter(unionSch, iohelp.NopWrCloser(cli.CliOut), 100), nil
 }
 
 type sqlDiffWriter struct{}
-
-func (s sqlDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (s sqlDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
-	// TODO implement me
-	panic("implement me")
-}
 
 var _ diffWriter = (*tabularDiffWriter)(nil)
 
@@ -306,7 +313,7 @@ func (s sqlDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) error
 	return nil
 }
 
-func (s sqlDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
+func (s sqlDiffWriter) WriteTableSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
 	toSchemas, err := toRoot.GetAllSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("could not read schemas from toRoot").AddCause(err).Build()
@@ -323,6 +330,18 @@ func (s sqlDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootV
 
 	return nil
 }
+
+func (s sqlDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s sqlDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+
 
 func (s sqlDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
 	targetSch := td.ToSch
@@ -391,7 +410,7 @@ func (j *jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) err
 	return err
 }
 
-func (j *jsonDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
+func (j *jsonDiffWriter) WriteTableSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
 	toSchemas, err := toRoot.GetAllSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("could not read schemas from toRoot").AddCause(err).Build()
