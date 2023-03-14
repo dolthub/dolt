@@ -117,7 +117,7 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	// keys.
 	if !schema.ArePrimaryKeySetsDiffable(tm.vrw.Format(), tm.leftSch, tm.rightSch) ||
 		!schema.ArePrimaryKeySetsDiffable(tm.vrw.Format(), tm.leftSch, tm.ancSch) {
-		return nil, nil, fmt.Errorf("error: cannot merge table %s because its different primary keys differ", tblName)
+		return nil, nil, fmt.Errorf("error: cannot merge table %s because its primary keys differ", tblName)
 	}
 
 	if mergeOpts.IsCherryPick && !schema.SchemasAreEqual(tm.leftSch, tm.rightSch) {
