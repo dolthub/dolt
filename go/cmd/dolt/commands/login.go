@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/skratchdot/open-golang/open"
@@ -102,17 +103,33 @@ func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	loginUrl := dEnv.Config.GetStringOrDefault(env.AddCredsUrlKey, env.DefaultLoginUrl)
 	loginUrl = apr.GetValueOrDefault(loginURLParam, loginUrl)
 
-	authHost := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
-	authPort := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
+	var authHost string
+	var authPort string
+	authEndpoint := apr.GetValueOrDefault(authEndpointParam, "")
 
-	authEndpoint := apr.GetValueOrDefault(authEndpointParam, fmt.Sprintf("%s:%s", authHost, authPort))
+	if authEndpoint != "" {
+		parts := strings.Split(authEndpoint, ":")
+		if len(parts) < 1 || len(parts) > 2 {
+			HandleVErrAndExitCode(errhand.BuildDError(fmt.Sprintf("unable to parse auth-endpoint: '%s'", authEndpoint)).Build(), usage)
+		}
+
+		authHost = strings.TrimSpace(parts[0])
+
+		if len(parts) == 2 {
+			authEndpoint = fmt.Sprintf("%s:%s", authHost, strings.TrimSpace(parts[1]))
+		} else {
+			authPort = dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
+			authEndpoint = fmt.Sprintf("%s:%s", authHost, authPort)
+		}
+	} else {
+		authHost = dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
+		authPort = dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
+		authEndpoint = fmt.Sprintf("%s:%s", authHost, authPort)
+	}
 
 	// handle args supplied with empty strings
 	if loginUrl == "" {
 		loginUrl = env.DefaultLoginUrl
-	}
-	if authEndpoint == "" {
-		authEndpoint = fmt.Sprintf("%s:%s", authHost, authPort)
 	}
 
 	insecure := apr.Contains(insecureParam)
