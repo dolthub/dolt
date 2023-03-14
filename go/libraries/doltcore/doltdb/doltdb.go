@@ -188,9 +188,38 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		return err
 	}
 
+	// --fun is a hidden command line option that rerolls the initial commit until
+	// it starts with "d0lt" or similar. We achieve this by replacing characters
+	// in the commit description with Cyrillic equivalents, then by decrementing
+	// the timestamp.
+	descriptionReplacementCandidates := [][]rune{
+		{'I', '\u0406'},
+		{'i', '\u0456'},
+		{'i', '\u0456'},
+		{'a', '\u0430'},
+		{'i', '\u0456'},
+		{'e', '\u0435'},
+		{'a', '\u0430'},
+		{'a', '\u0430'},
+		{'e', '\u0435'},
+		{'o', '\u043e'},
+		{'i', '\u0456'},
+		{'o', '\u043e'},
+	}
+	attempt := 0
 	var firstCommit *datas.Commit
 	for {
-		cm, _ := datas.NewCommitMetaWithUserTS(name, email, "Initialize data repository", t)
+		generateInitialCommitDesc := func(attempt int) string {
+			// "Initialize data repository", with characters that could be Cyrillic replaced.
+			descFmt := "%cn%ct%c%cl%cz%c d%ct%c r%cp%cs%ct%cry"
+			choices := []any{}
+			for i := 0; i < len(descriptionReplacementCandidates); i++ {
+				choices = append(choices, descriptionReplacementCandidates[i][(attempt>>i)%2])
+			}
+			return fmt.Sprintf(descFmt, choices...)
+		}
+
+		cm, _ := datas.NewCommitMetaWithUserTS(name, email, generateInitialCommitDesc(attempt), t)
 
 		commitOpts := datas.CommitOptions{Meta: cm}
 
@@ -207,9 +236,6 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 			return err
 		}
 
-		// --fun is a hidden command line option that rerolls the initial commit until
-		// it starts with "d0lt" or similar. We achieve this by modifying the timestamp,
-		// one millisecond at a time, until it produces a fun hash.
 		if !requireFunHash {
 			break
 		}
@@ -218,8 +244,13 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 			break
 		}
 
-		// The Time type uses nanosecond precision. Subtract one millino nanoseconds (one ms)
-		t = t.Add(-1_000_000)
+		attempt += 1
+		if attempt >= 1<<len(descriptionReplacementCandidates) {
+			attempt = 0
+			// The Time type uses nanosecond precision. Subtract one millino nanoseconds (one ms)
+			t = t.Add(-1_000_000)
+		}
+
 	}
 
 	firstCommitDs, err := ddb.db.WriteCommit(ctx, ds, firstCommit)
