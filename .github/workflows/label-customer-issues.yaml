@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: dolthub/label-customer-issues@main
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          repo-token: ${{ secrets.REPO_ACCESS_TOKEN }}
           issue-label: customer-issue
           pr-label: contribution
           exclude: dependabot
