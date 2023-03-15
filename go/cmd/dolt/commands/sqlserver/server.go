@@ -206,6 +206,7 @@ func Serve(
 
 	if errors.Is(startError, server.UnixSocketInUseError) {
 		lgr.Warn("unix socket set up failed: file already in use: ", serverConf.Socket)
+		startError = nil
 	} else if startError != nil {
 		cli.PrintErr(startError)
 		return
