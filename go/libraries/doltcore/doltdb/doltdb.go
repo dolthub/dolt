@@ -212,7 +212,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		generateInitialCommitDesc := func(attempt int) string {
 			// "Initialize data repository", with characters that could be Cyrillic replaced.
 			descFmt := "%cn%ct%c%cl%cz%c d%ct%c r%cp%cs%ct%cry"
-			choices := []any{}
+			choices := make([]any, 0, len(descriptionReplacementCandidates))
 			for i := 0; i < len(descriptionReplacementCandidates); i++ {
 				choices = append(choices, descriptionReplacementCandidates[i][(attempt>>i)%2])
 			}
