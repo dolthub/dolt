@@ -242,6 +242,30 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 	if err != nil && err != io.EOF {
 		return 0, err
 	}
+
+	// we've processed the journal prefix, now validate
+	// that everything past |off| is zero-valued
+	buf = make([]byte, 4096)
+	curr := off
+	for {
+		var n int
+		if n, err = rdr.Read(buf); err != nil {
+			break
+		}
+		for i := range buf {
+			if buf[i] != 0 {
+				panic(fmt.Sprintf("found non-zero data at offset %d: '%s'", curr, string(buf)))
+			}
+		}
+		curr += int64(n)
+	}
+	if err != nil && err != io.EOF {
+		return 0, err
+	}
+	if curr <= off {
+		panic("did nothing")
+	}
+
 	// reset the file pointer to end of the last
 	// successfully processed journal record
 	if _, err = r.Seek(off, 0); err != nil {
