@@ -68,6 +68,22 @@ SQL
     [ "$status" -eq "0" ]
 }
 
+@test "garbage_collection: call GC in sql script" {
+    export DOLT_ENABLE_GC_PROCEDURE="true"
+    dolt sql <<SQL
+CREATE TABLE t (pk int primary key);
+INSERT INTO t VALUES (1),(2),(3);
+CALL dolt_commit('-Am', 'new table with three rows');
+INSERT INTO t VALUES (11),(12),(13);
+SQL
+    dolt reset --hard
+    dolt sql <<SQL
+INSERT INTO t VALUES (21),(22),(23);
+CALL dolt_commit('-Am', 'new table with three rows');
+CALL dolt_gc();
+SQL
+}
+
 @test "garbage_collection: blob types work after GC" {
     dolt sql -q "create table t(pk int primary key, val text)"
     dolt sql -q "insert into t values (1, 'one'), (2, 'two');"

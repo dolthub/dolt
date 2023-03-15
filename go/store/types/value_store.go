@@ -77,14 +77,13 @@ type ValueStore struct {
 	validateContentAddr bool
 	decodedChunks       *sizecache.SizeCache
 	nbf                 *NomsBinFormat
+	versOnce            sync.Once
 
-	gcMu       sync.RWMutex
+	gcMu       sync.Mutex
 	gcCond     *sync.Cond
 	gcState    gcState
 	gcOut      int
 	gcNewAddrs hash.HashSet
-
-	versOnce sync.Once
 }
 
 type gcState int

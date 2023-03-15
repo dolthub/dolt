@@ -58,7 +58,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.1.3
 	github.com/cespare/xxhash v1.1.0
 	github.com/creasty/defaults v1.6.0
-	github.com/dolthub/go-mysql-server v0.14.1-0.20230313214944-06dfbe4300ea
+	github.com/dolthub/go-mysql-server v0.14.1-0.20230314214101-3cd3a9c96d04
 	github.com/google/flatbuffers v2.0.6+incompatible
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
@@ -127,7 +127,7 @@ require (
 	go.opencensus.io v0.22.4 // indirect
 	go.uber.org/atomic v1.6.0 // indirect
 	go.uber.org/multierr v1.5.0 // indirect
-	golang.org/x/image v0.0.0-20220302094943-723b81ca9867 // indirect
+	golang.org/x/image v0.5.0 // indirect
 	golang.org/x/lint v0.0.0-20201208152925-83fdc39ff7b5 // indirect
 	golang.org/x/mod v0.7.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20220223155221-ee480838109b // indirect
