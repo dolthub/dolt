@@ -109,7 +109,7 @@ func TestKeylessMerge(t *testing.T) {
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
-			root, err = root.CreateEmptyTable(ctx, tblName, sch)
+			root, err = root.CreateEmptyTable(ctx, tblName, keylessSch)
 			require.NoError(t, err)
 			err = dEnv.UpdateWorkingRoot(ctx, root)
 			require.NoError(t, err)
@@ -242,7 +242,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 	setupTest := func(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, cc []testCommand) {
 		root, err := dEnv.WorkingRoot(ctx)
 		require.NoError(t, err)
-		root, err = root.CreateEmptyTable(ctx, tblName, sch)
+		root, err = root.CreateEmptyTable(ctx, tblName, keylessSch)
 		require.NoError(t, err)
 		err = dEnv.UpdateWorkingRoot(ctx, root)
 		require.NoError(t, err)
@@ -474,7 +474,7 @@ func assertKeylessNomsRows(t *testing.T, ctx context.Context, tbl *doltdb.Table,
 
 const tblName = "noKey"
 
-var sch = dtu.MustSchema(
+var keylessSch = dtu.MustSchema(
 	schema.NewColumn("c1", 1, types.IntKind, false),
 	schema.NewColumn("c2", 2, types.IntKind, false),
 )

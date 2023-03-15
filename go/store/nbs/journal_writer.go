@@ -126,6 +126,14 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 	}, nil
 }
 
+func deleteJournalAndIndexFiles(ctx context.Context, path string) (err error) {
+	if err = os.Remove(path); err != nil {
+		return err
+	}
+	idxPath := filepath.Join(filepath.Dir(path), journalIndexFileName)
+	return os.Remove(idxPath)
+}
+
 type journalWriter struct {
 	buf []byte
 
