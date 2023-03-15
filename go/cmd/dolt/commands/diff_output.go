@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	ejson "encoding/json"
 	"fmt"
 	"io"
 
@@ -42,8 +43,12 @@ import (
 type diffWriter interface {
 	// BeginTable is called when a new table is about to be written, before any schema or row diffs are written
 	BeginTable(ctx context.Context, td diff.TableDelta) error
-	// WriteSchemaDiff is called to write a schema diff for the table given (if requested by args)
-	WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error
+	// WriteTableSchemaDiff is called to write a schema diff for the table given (if requested by args)
+	WriteTableSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error
+	// WriteTriggerDiff is called to write a trigger diff
+	WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error
+	// WriteViewDiff is called to write a view diff
+	WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error
 	// RowWriter returns a row writer for the table delta provided, which will have Close() called on it when rows are
 	// done being written.
 	RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error)
@@ -216,7 +221,7 @@ func (t tabularDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) e
 	return nil
 }
 
-func (t tabularDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
+func (t tabularDiffWriter) WriteTableSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
@@ -266,6 +271,17 @@ func (t tabularDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.R
 	return nil
 }
 
+func (t tabularDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
+	// identical implementation
+	return t.WriteViewDiff(ctx, triggerName, oldDefn, newDefn)
+}
+
+func (t tabularDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
+	diffString := textdiff.LineDiff(oldDefn, newDefn)
+	cli.Println(diffString)
+	return nil
+}
+
 func (t tabularDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
 	return tabular.NewFixedWidthDiffTableWriter(unionSch, iohelp.NopWrCloser(cli.CliOut), 100), nil
 }
@@ -282,13 +298,50 @@ func (s sqlDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) error
 	return nil
 }
 
-func (s sqlDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
+func (s sqlDiffWriter) WriteTableSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
 	toSchemas, err := toRoot.GetAllSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("could not read schemas from toRoot").AddCause(err).Build()
 	}
 
-	return writeSqlSchemaDiff(ctx, td, toSchemas)
+	ddlStatements, err := diff.SqlSchemaDiff(ctx, td, toSchemas)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	for _, stmt := range ddlStatements {
+		cli.Println(stmt)
+	}
+
+	return nil
+}
+
+func (s sqlDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
+	// definitions will already be semicolon terminated, no need to add additional ones
+	if oldDefn == "" {
+		cli.Println(newDefn)
+	} else if newDefn == "" {
+		cli.Println(fmt.Sprintf("DROP TRIGGER %s;", sql.QuoteIdentifier(triggerName)))
+	} else {
+		cli.Println(fmt.Sprintf("DROP TRIGGER %s;", sql.QuoteIdentifier(triggerName)))
+		cli.Println(newDefn)
+	}
+
+	return nil
+}
+
+func (s sqlDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
+	// definitions will already be semicolon terminated, no need to add additional ones
+	if oldDefn == "" {
+		cli.Println(newDefn)
+	} else if newDefn == "" {
+		cli.Println(fmt.Sprintf("DROP VIEW %s;", sql.QuoteIdentifier(viewName)))
+	} else {
+		cli.Println(fmt.Sprintf("DROP VIEW %s;", sql.QuoteIdentifier(viewName)))
+		cli.Println(newDefn)
+	}
+
+	return nil
 }
 
 func (s sqlDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
@@ -301,11 +354,12 @@ func (s sqlDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionS
 }
 
 type jsonDiffWriter struct {
-	wr                 io.WriteCloser
-	schemaDiffWriter   diff.SchemaDiffWriter
-	rowDiffWriter      diff.SqlRowDiffWriter
-	schemaDiffsWritten int
-	tablesWritten      int
+	wr               io.WriteCloser
+	schemaDiffWriter diff.SchemaDiffWriter
+	rowDiffWriter    diff.SqlRowDiffWriter
+	tablesWritten    int
+	triggersWritten  int
+	viewsWritten     int
 }
 
 var _ diffWriter = (*tabularDiffWriter)(nil)
@@ -316,12 +370,27 @@ func newJsonDiffWriter(wr io.WriteCloser) (*jsonDiffWriter, error) {
 	}, nil
 }
 
+const tablesHeader = `"tables":[`
 const jsonDiffTableHeader = `{"name":"%s","schema_diff":`
-const jsonDiffFooter = `}]}`
+const jsonDiffDataDiffHeader = `],"data_diff":[`
+const jsonDataDiffFooter = `}]`
+
+func (j *jsonDiffWriter) beginDocumentIfNecessary() error {
+	if j.tablesWritten == 0 && j.triggersWritten == 0 && j.viewsWritten == 0 {
+		_, err := j.wr.Write([]byte("{"))
+		return err
+	}
+	return nil
+}
 
 func (j *jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) error {
-	if j.schemaDiffWriter == nil {
-		err := iohelp.WriteAll(j.wr, []byte(`{"tables":[`))
+	err := j.beginDocumentIfNecessary()
+	if err != nil {
+		return err
+	}
+
+	if j.tablesWritten == 0 {
+		err := iohelp.WriteAll(j.wr, []byte(tablesHeader))
 		if err != nil {
 			return err
 		}
@@ -332,7 +401,12 @@ func (j *jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) err
 		}
 	}
 
-	err := iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(jsonDiffTableHeader, td.ToName)))
+	tableName := td.FromName
+	if len(tableName) == 0 {
+		tableName = td.ToName
+	}
+
+	err = iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(jsonDiffTableHeader, tableName)))
 	if err != nil {
 		return err
 	}
@@ -343,7 +417,7 @@ func (j *jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) err
 	return err
 }
 
-func (j *jsonDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
+func (j *jsonDiffWriter) WriteTableSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
 	toSchemas, err := toRoot.GetAllSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("could not read schemas from toRoot").AddCause(err).Build()
@@ -366,7 +440,7 @@ func (j *jsonDiffWriter) WriteSchemaDiff(ctx context.Context, toRoot *doltdb.Roo
 
 func (j *jsonDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
 	// close off the schema diff block, start the data block
-	err := iohelp.WriteAll(j.wr, []byte(`],"data_diff":[`))
+	err := iohelp.WriteAll(j.wr, []byte(jsonDiffDataDiffHeader))
 	if err != nil {
 		return nil, err
 	}
@@ -390,9 +464,133 @@ func (j *jsonDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unio
 	return j.rowDiffWriter, err
 }
 
+func (j *jsonDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
+	err := j.beginDocumentIfNecessary()
+	if err != nil {
+		return err
+	}
+
+	if j.triggersWritten == 0 {
+		// end the table if necessary
+		if j.tablesWritten > 0 {
+			_, err := j.wr.Write([]byte(jsonDataDiffFooter + ","))
+			if err != nil {
+				return err
+			}
+		}
+
+		_, err := j.wr.Write([]byte(`"triggers":[`))
+		if err != nil {
+			return err
+		}
+	} else {
+		_, err := j.wr.Write([]byte(","))
+		if err != nil {
+			return err
+		}
+	}
+
+	triggerNameBytes, err := ejson.Marshal(triggerName)
+	if err != nil {
+		return err
+	}
+
+	oldDefnBytes, err := ejson.Marshal(oldDefn)
+	if err != nil {
+		return err
+	}
+
+	newDefnBytes, err := ejson.Marshal(newDefn)
+	if err != nil {
+		return err
+	}
+
+	_, err = j.wr.Write([]byte(fmt.Sprintf(`{"name":%s,"from_definition":%s,"to_definition":%s}`,
+		triggerNameBytes, oldDefnBytes, newDefnBytes)))
+	if err != nil {
+		return err
+	}
+
+	j.triggersWritten++
+	return nil
+}
+
+func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
+	err := j.beginDocumentIfNecessary()
+	if err != nil {
+		return err
+	}
+
+	if j.viewsWritten == 0 {
+		// end the previous block if necessary
+		if j.tablesWritten > 0 && j.triggersWritten == 0 {
+			_, err := j.wr.Write([]byte(jsonDataDiffFooter + ","))
+			if err != nil {
+				return err
+			}
+		} else if j.triggersWritten > 0 {
+			_, err := j.wr.Write([]byte("],"))
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if j.viewsWritten == 0 {
+		_, err := j.wr.Write([]byte(`"views":[`))
+		if err != nil {
+			return err
+		}
+	} else {
+		_, err := j.wr.Write([]byte(","))
+		if err != nil {
+			return err
+		}
+	}
+
+	viewNameBytes, err := ejson.Marshal(viewName)
+	if err != nil {
+		return err
+	}
+
+	oldDefnBytes, err := ejson.Marshal(oldDefn)
+	if err != nil {
+		return err
+	}
+
+	newDefnBytes, err := ejson.Marshal(newDefn)
+	if err != nil {
+		return err
+	}
+
+	_, err = j.wr.Write([]byte(fmt.Sprintf(`{"name":%s,"from_definition":%s,"to_definition":%s}`,
+		viewNameBytes, oldDefnBytes, newDefnBytes)))
+	if err != nil {
+		return err
+	}
+
+	j.viewsWritten++
+	return nil
+}
+
 func (j *jsonDiffWriter) Close(ctx context.Context) error {
-	if j.tablesWritten > 0 {
-		err := iohelp.WriteLine(j.wr, jsonDiffFooter)
+	if j.tablesWritten > 0 || j.triggersWritten > 0 || j.viewsWritten > 0 {
+		// We only need to close off the "tables" array if we didn't also write a view / trigger
+		// (which also closes that array)
+		if j.triggersWritten == 0 && j.viewsWritten == 0 {
+			_, err := j.wr.Write([]byte(jsonDataDiffFooter))
+			if err != nil {
+				return err
+			}
+		} else {
+			// if we did write a trigger or view, we need to close off that array
+			_, err := j.wr.Write([]byte("]"))
+			if err != nil {
+				return err
+			}
+		}
+
+		err := iohelp.WriteLine(j.wr, "}")
 		if err != nil {
 			return err
 		}

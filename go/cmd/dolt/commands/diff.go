@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"strings"
 
-	textdiff "github.com/andreyvit/diff"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -43,7 +42,6 @@ import (
 
 type diffOutput int
 type diffPart int
-type diffMode int
 
 const (
 	SchemaOnlyDiff diffPart = 1 // 0b0001
@@ -63,7 +61,6 @@ const (
 	SummaryFlag = "summary"
 	whereParam  = "where"
 	limitParam  = "limit"
-	SQLFlag     = "sql"
 	SkinnyFlag  = "skinny"
 	MergeBase   = "merge-base"
 	DiffMode    = "diff-mode"
@@ -526,21 +523,27 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 		return errhand.VerboseErrorFromError(err)
 	}
 
+	doltSchemasChanged := false
 	for _, td := range tableDeltas {
-		if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
+		if !shouldPrintTableDelta(dArgs.tableSet, td) {
 			continue
 		}
-		if strings.ToLower(td.ToName) != doltdb.SchemasTableName {
+
+		if isDoltSchemasTable(td) {
+			// save dolt_schemas table diff for last in diff output
+			doltSchemasChanged = true
+		} else {
 			verr := diffUserTable(sqlCtx, td, sqlEng, dArgs, dw)
 			if verr != nil {
 				return verr
 			}
-		} else {
-			// dolt_schemas table is treated as a special case. diff the rows of the table, and print fragments as DDL
-			verr := diffDoltSchemasTable(sqlCtx, td, sqlEng, dArgs, dw)
-			if verr != nil {
-				return verr
-			}
+		}
+	}
+
+	if doltSchemasChanged {
+		verr := diffDoltSchemasTable(sqlCtx, sqlEng, dArgs, dw)
+		if verr != nil {
+			return verr
 		}
 	}
 
@@ -550,6 +553,15 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 	}
 
 	return nil
+}
+
+func shouldPrintTableDelta(tablesToPrint *set.StrSet, td diff.TableDelta) bool {
+	// TODO: this should be case insensitive
+	return tablesToPrint.Contains(td.FromName) || tablesToPrint.Contains(td.ToName)
+}
+
+func isDoltSchemasTable(td diff.TableDelta) bool {
+	return td.FromName == doltdb.SchemasTableName || td.ToName == doltdb.SchemasTableName
 }
 
 func diffUserTable(
@@ -581,7 +593,7 @@ func diffUserTable(
 	}
 
 	if dArgs.diffParts&SchemaOnlyDiff != 0 {
-		err := dw.WriteSchemaDiff(ctx, dArgs.toRoot, td)
+		err := dw.WriteTableSchemaDiff(ctx, dArgs.toRoot, td)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -603,17 +615,14 @@ func diffUserTable(
 
 func diffDoltSchemasTable(
 	sqlCtx *sql.Context,
-	td diff.TableDelta,
 	sqlEng *engine.SqlEngine,
 	dArgs *diffArgs,
 	dw diffWriter,
 ) errhand.VerboseError {
-	err := dw.BeginTable(sqlCtx, td)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	query := fmt.Sprintf("select from_fragment,to_fragment from dolt_diff('%s','%s','%s')", dArgs.fromRef, dArgs.toRef, doltdb.SchemasTableName)
+	query := fmt.Sprintf("select from_name,to_name,from_type,to_type,from_fragment,to_fragment "+
+		"from dolt_diff('%s','%s','%s') "+
+		"order by coalesce(from_type, to_type), coalesce(from_name, to_name)",
+		dArgs.fromRef, dArgs.toRef, doltdb.SchemasTableName)
 
 	_, rowIter, err := sqlEng.Query(sqlCtx, query)
 	if err != nil {
@@ -629,30 +638,52 @@ func diffDoltSchemasTable(
 			return errhand.VerboseErrorFromError(err)
 		}
 
-		from := ""
+		var fragmentName string
 		if row[0] != nil {
-			from = fmt.Sprintf("%v;", row[0])
+			fragmentName = row[0].(string)
+		} else {
+			fragmentName = row[1].(string)
 		}
-		to := ""
-		if row[1] != nil {
-			to = fmt.Sprintf("%v;", row[1])
+
+		var fragmentType string
+		if row[2] != nil {
+			fragmentType = row[2].(string)
+		} else {
+			fragmentType = row[3].(string)
 		}
-		if from != to {
-			cli.Println(textdiff.LineDiff(from, to))
+
+		var oldFragment string
+		var newFragment string
+		if row[4] != nil {
+			oldFragment = row[4].(string)
+			// Typically schema fragements have the semicolons stripped, so put it back on
+			if len(oldFragment) > 0 && oldFragment[len(oldFragment)-1] != ';' {
+				oldFragment += ";"
+			}
 		}
-	}
+		if row[5] != nil {
+			newFragment = row[5].(string)
+			// Typically schema fragements have the semicolons stripped, so put it back on
+			if len(newFragment) > 0 && newFragment[len(newFragment)-1] != ';' {
+				newFragment += ";"
+			}
+		}
 
-	return nil
-}
-
-func writeSqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string]schema.Schema) errhand.VerboseError {
-	ddlStatements, err := diff.SqlSchemaDiff(ctx, td, toSchemas)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	for _, stmt := range ddlStatements {
-		cli.Println(stmt)
+		switch fragmentType {
+		case "view":
+			err := dw.WriteViewDiff(sqlCtx, fragmentName, oldFragment, newFragment)
+			if err != nil {
+				return nil
+			}
+		case "trigger":
+			err := dw.WriteTriggerDiff(sqlCtx, fragmentName, oldFragment, newFragment)
+			if err != nil {
+				return nil
+			}
+		default:
+			cli.PrintErrf("Unrecognized schema element type: %s", fragmentType)
+			continue
+		}
 	}
 
 	return nil
