@@ -272,9 +272,8 @@ func (t tabularDiffWriter) WriteTableSchemaDiff(ctx context.Context, toRoot *dol
 }
 
 func (t tabularDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
-	diffString := textdiff.LineDiff(oldDefn, newDefn)
-	cli.Println(diffString)
-	return nil
+	// identical implementation
+	return t.WriteViewDiff(ctx, triggerName, oldDefn, newDefn)
 }
 
 func (t tabularDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {

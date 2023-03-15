@@ -619,7 +619,6 @@ func diffDoltSchemasTable(
 	dArgs *diffArgs,
 	dw diffWriter,
 ) errhand.VerboseError {
-	// TODO: does this work when the table has been deleted in the current revision?
 	query := fmt.Sprintf("select from_name,to_name,from_type,to_type,from_fragment,to_fragment "+
 		"from dolt_diff('%s','%s','%s') "+
 		"order by coalesce(from_type, to_type), coalesce(from_name, to_name)",
