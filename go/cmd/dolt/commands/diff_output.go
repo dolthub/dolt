@@ -16,9 +16,9 @@ package commands
 
 import (
 	"context"
+	ejson "encoding/json"
 	"fmt"
 	"io"
-	ejson "encoding/json"
 
 	textdiff "github.com/andreyvit/diff"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -326,7 +326,7 @@ func (s sqlDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDef
 		cli.Println(fmt.Sprintf("DROP TRIGGER %s;", sql.QuoteIdentifier(triggerName)))
 		cli.Println(fmt.Sprintf("%s;", newDefn))
 	}
-	
+
 	return nil
 }
 
@@ -353,12 +353,12 @@ func (s sqlDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionS
 }
 
 type jsonDiffWriter struct {
-	wr                 io.WriteCloser
-	schemaDiffWriter   diff.SchemaDiffWriter
-	rowDiffWriter      diff.SqlRowDiffWriter
-	tablesWritten      int
-	triggersWritten    int
-	viewsWritten       int
+	wr               io.WriteCloser
+	schemaDiffWriter diff.SchemaDiffWriter
+	rowDiffWriter    diff.SqlRowDiffWriter
+	tablesWritten    int
+	triggersWritten  int
+	viewsWritten     int
 }
 
 var _ diffWriter = (*tabularDiffWriter)(nil)
@@ -386,12 +386,12 @@ func (j *jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) err
 			return err
 		}
 	}
-	
+
 	tableName := td.FromName
 	if len(tableName) == 0 {
-		tableName = td.ToName		
+		tableName = td.ToName
 	}
-	
+
 	err := iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(jsonDiffTableHeader, tableName)))
 	if err != nil {
 		return err
@@ -465,14 +465,14 @@ func (j *jsonDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldD
 			}
 		}
 	}
-	
+
 	if j.triggersWritten == 0 {
-		_, err := j.wr.Write([]byte( `"triggers":[`))
+		_, err := j.wr.Write([]byte(`"triggers":[`))
 		if err != nil {
 			return err
 		}
 	} else {
-		_, err := j.wr.Write([]byte( ","))
+		_, err := j.wr.Write([]byte(","))
 		if err != nil {
 			return err
 		}
@@ -493,12 +493,12 @@ func (j *jsonDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldD
 		return err
 	}
 
-	_, err = j.wr.Write([]byte( fmt.Sprintf(`{"name":%s,"from_definition":%s,"to_definition":%s}`, 
+	_, err = j.wr.Write([]byte(fmt.Sprintf(`{"name":%s,"from_definition":%s,"to_definition":%s}`,
 		triggerNameBytes, oldDefnBytes, newDefnBytes)))
 	if err != nil {
 		return err
 	}
-	
+
 	j.triggersWritten++
 	return nil
 }
@@ -526,7 +526,7 @@ func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, n
 			}
 		}
 	}
-	
+
 	if j.viewsWritten == 0 {
 		_, err := j.wr.Write([]byte(`"views":[`))
 		if err != nil {
@@ -543,17 +543,17 @@ func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, n
 	if err != nil {
 		return err
 	}
-	
+
 	oldDefnBytes, err := ejson.Marshal(oldDefn)
 	if err != nil {
 		return err
 	}
-	
+
 	newDefnBytes, err := ejson.Marshal(newDefn)
 	if err != nil {
 		return err
 	}
-	
+
 	_, err = j.wr.Write([]byte(fmt.Sprintf(`{"name":%s,"from_definition":%s,"to_definition":%s}`,
 		viewNameBytes, oldDefnBytes, newDefnBytes)))
 	if err != nil {
