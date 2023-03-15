@@ -346,7 +346,7 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 		}
 	}
 
-	err := dEnv.DoltDB.GC(ctx)
+	err := dEnv.DoltDB.GC(ctx, nil)
 	require.NoError(t, err)
 	test.postGCFunc(ctx, t, dEnv.DoltDB, res)
 

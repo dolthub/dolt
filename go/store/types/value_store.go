@@ -529,7 +529,7 @@ func makeBatches(hss []hash.HashSet, count int) [][]hash.Hash {
 }
 
 // GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
-func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet) error {
+func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet, safepointF func() error) error {
 	lvs.versOnce.Do(lvs.expectVersion)
 
 	lvs.transitionToOldGenGC()
@@ -573,6 +573,14 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 			return err
 		}
 
+		if safepointF != nil {
+			err = safepointF()
+			if err != nil {
+				newGen.EndGC()
+				return err
+			}
+		}
+
 		err = lvs.gc(ctx, newGenRefs, oldGen.HasMany, newGen, newGen, lvs.transitionToFinalizingGC)
 		newGen.EndGC()
 		if err != nil {
@@ -601,6 +609,14 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 		}
 
 		newGenRefs.Insert(root)
+
+		if safepointF != nil {
+			err = safepointF()
+			if err != nil {
+				collector.EndGC()
+				return err
+			}
+		}
 
 		err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, collector, collector, lvs.transitionToFinalizingGC)
 		collector.EndGC()

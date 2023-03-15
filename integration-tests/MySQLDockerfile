@@ -50,6 +50,7 @@ RUN apt update -y && \
         postgresql-contrib \
         libpq-dev \
         nodejs \
+        lsof \
         postgresql-server-dev-all && \
         update-ca-certificates -f
 
