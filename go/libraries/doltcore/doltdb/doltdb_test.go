@@ -293,8 +293,11 @@ func TestLDNoms(t *testing.T) {
 		ctx := context.Background()
 		tSchema := createTestSchema(t)
 		rowData, err := durable.NewEmptyIndex(ctx, ddb.vrw, ddb.ns, tSchema)
-		tbl, err = CreateTestTable(ddb.vrw, ddb.ns, tSchema, rowData)
+		if err != nil {
+			t.Fatal("Failed to create new empty index")
+		}
 
+		tbl, err = CreateTestTable(ddb.vrw, ddb.ns, tSchema, rowData)
 		if err != nil {
 			t.Fatal("Failed to create test table with data")
 		}
