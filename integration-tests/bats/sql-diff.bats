@@ -836,4 +836,31 @@ ${output}
 EOF
 
     diff -w expected actual
+
+    # check alterations of triggers and views
+    dolt sql <<SQL
+drop trigger tr1;
+drop view v1;
+create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 100;
+create view v1 as select "goodbye" from test;
+SQL
+
+    dolt commit -am "new view and trigger defs"
+
+    dolt diff -r sql HEAD~ HEAD
+    run dolt diff -r sql HEAD~ HEAD
+    [ "$status" -eq 0 ]
+
+    cat > expected <<'EOF'
+DROP TRIGGER `tr1`;
+create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 100;
+DROP VIEW `v1`;
+create view v1 as select "goodbye" from test;
+EOF
+
+    cat > actual <<EOF
+${output}
+EOF
+
+    diff -w expected actual    
 }

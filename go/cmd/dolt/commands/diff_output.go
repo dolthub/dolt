@@ -43,7 +43,7 @@ import (
 type diffWriter interface {
 	// BeginTable is called when a new table is about to be written, before any schema or row diffs are written
 	BeginTable(ctx context.Context, td diff.TableDelta) error
-	// WriteSchemaDiff is called to write a schema diff for the table given (if requested by args)
+	// WriteTableSchemaDiff is called to write a schema diff for the table given (if requested by args)
 	WriteTableSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error
 	// WriteTriggerDiff is called to write a trigger diff
 	WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error
