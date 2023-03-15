@@ -112,6 +112,9 @@ func (test Test) Run(t *testing.T) {
 
 	u, err := driver.NewDoltUser()
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		u.Cleanup()
+	})
 	rs, err := u.MakeRepoStore()
 	require.NoError(t, err)
 
@@ -130,6 +133,9 @@ func (test Test) Run(t *testing.T) {
 		// Each MultiRepo gets its own dolt config --global.
 		u, err := driver.NewDoltUser()
 		require.NoError(t, err)
+		t.Cleanup(func() {
+			u.Cleanup()
+		})
 		rs, err = u.MakeRepoStore()
 		require.NoError(t, err)
 		for _, r := range mr.Repos {
