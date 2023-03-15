@@ -355,18 +355,9 @@ type jsonDiffWriter struct {
 	wr                 io.WriteCloser
 	schemaDiffWriter   diff.SchemaDiffWriter
 	rowDiffWriter      diff.SqlRowDiffWriter
-	schemaDiffsWritten int
 	tablesWritten      int
-}
-
-func (j *jsonDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
-	// TODO implement me
-	panic("implement me")
+	triggersWritten    int
+	viewsWritten       int
 }
 
 var _ diffWriter = (*tabularDiffWriter)(nil)
@@ -377,12 +368,14 @@ func newJsonDiffWriter(wr io.WriteCloser) (*jsonDiffWriter, error) {
 	}, nil
 }
 
+const jsonFileHeader = `{"tables":[`
 const jsonDiffTableHeader = `{"name":"%s","schema_diff":`
-const jsonDiffFooter = `}]}`
+const jsonDiffDataDiffHeader = `],"data_diff":[`
+const jsonDataDiffFooter = `}]`
 
 func (j *jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) error {
-	if j.schemaDiffWriter == nil {
-		err := iohelp.WriteAll(j.wr, []byte(`{"tables":[`))
+	if j.tablesWritten == 0 {
+		err := iohelp.WriteAll(j.wr, []byte(jsonFileHeader))
 		if err != nil {
 			return err
 		}
@@ -432,7 +425,7 @@ func (j *jsonDiffWriter) WriteTableSchemaDiff(ctx context.Context, toRoot *doltd
 
 func (j *jsonDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
 	// close off the schema diff block, start the data block
-	err := iohelp.WriteAll(j.wr, []byte(`],"data_diff":[`))
+	err := iohelp.WriteAll(j.wr, []byte(jsonDiffDataDiffHeader))
 	if err != nil {
 		return nil, err
 	}
@@ -456,9 +449,99 @@ func (j *jsonDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unio
 	return j.rowDiffWriter, err
 }
 
+func (j *jsonDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
+	// begin the document if necessary
+	if j.tablesWritten == 0 {
+		_, err := j.wr.Write([]byte("{"))
+		if err != nil {
+			return err
+		}
+	}
+	
+	// end the previous block if necessary
+	if j.tablesWritten > 0 && j.triggersWritten == 0 {
+		_, err := j.wr.Write([]byte(jsonDataDiffFooter + ","))
+		if err != nil {
+			return err
+		}
+	}
+	
+	if j.triggersWritten == 0 {
+		_, err := j.wr.Write([]byte( `"triggers":[`))
+		if err != nil {
+			return err
+		}
+	} else {
+		_, err := j.wr.Write([]byte( ","))
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err := j.wr.Write([]byte( fmt.Sprintf(`{"name":"%s","from_definition":"%s","to_definition":"%s"}`, triggerName, oldDefn, newDefn)))
+	if err != nil {
+		return err
+	}
+	
+	j.triggersWritten++
+	return nil
+}
+
+func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
+	// begin the document if necessary
+	if j.tablesWritten == 0 && j.triggersWritten == 0 {
+		_, err := j.wr.Write([]byte("{"))
+		if err != nil {
+			return err
+		}
+	}
+	
+	// end the previous block if necessary
+	if j.tablesWritten > 0 && j.triggersWritten == 0 {
+		_, err := j.wr.Write([]byte(jsonDataDiffFooter + ","))
+		if err != nil {
+			return err
+		}
+	} else if j.triggersWritten > 0 {
+		_, err := j.wr.Write([]byte("],"))
+		if err != nil {
+			return err
+		}
+	}
+	
+	if j.viewsWritten == 0 {
+		_, err := j.wr.Write([]byte(`"views":[`))
+		if err != nil {
+			return err
+		}
+	} else {
+		_, err := j.wr.Write([]byte(","))
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err := j.wr.Write([]byte(fmt.Sprintf(`{"name":"%s","from_definition":"%s","to_definition":"%s"}`, viewName, oldDefn, newDefn)))
+	if err != nil {
+		return err
+	}
+
+	j.viewsWritten++
+	return nil
+}
+
 func (j *jsonDiffWriter) Close(ctx context.Context) error {
-	if j.tablesWritten > 0 {
-		err := iohelp.WriteLine(j.wr, jsonDiffFooter)
+	if j.tablesWritten > 0 || j.triggersWritten > 0 || j.viewsWritten > 0 {
+		// We only need to close off the "tables" array if we didn't also write a view / trigger
+		// (which also closes that array)
+		if j.triggersWritten == 0 && j.viewsWritten == 0 {
+			_, err := j.wr.Write([]byte(jsonDataDiffFooter))
+			if err != nil {
+				return err
+			}
+		}
+
+		err := iohelp.WriteLine(j.wr, "}")
 		if err != nil {
 			return err
 		}
