@@ -388,7 +388,7 @@ func (j *jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) err
 	if err != nil {
 		return err
 	}
-	
+
 	if j.tablesWritten == 0 {
 		err := iohelp.WriteAll(j.wr, []byte(tablesHeader))
 		if err != nil {
