@@ -34,7 +34,7 @@ const (
 	initBranchParamName = "initial-branch"
 	newFormatFlag       = "new-format"
 	oldFormatFlag       = "old-format"
-	requiresFunHashName = "fun"
+	funHashFlag         = "fun"
 )
 
 var initDocs = cli.CommandDocumentationContent{
@@ -80,7 +80,7 @@ func (cmd InitCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(initBranchParamName, "b", "branch", fmt.Sprintf("The branch name used to initialize this database. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config. If unset, the default initialized branch will be named '%s'.", env.InitBranchName, env.DefaultInitBranch))
 	ap.SupportsFlag(newFormatFlag, "", fmt.Sprintf("Specify this flag to use the new storage format (%s).", types.Format_DOLT.VersionString()))
 	ap.SupportsFlag(oldFormatFlag, "", fmt.Sprintf("Specify this flag to use the old storage format (%s).", types.Format_LD_1.VersionString()))
-	ap.SupportsFlag(requiresFunHashName, "", "")
+	ap.SupportsFlag(funHashFlag, "", "")
 	return ap
 }
 
@@ -153,7 +153,7 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 	}
 
-	requiresFunHash := apr.Contains(requiresFunHashName)
+	requiresFunHash := apr.Contains(funHashFlag)
 	err := dEnv.InitRepoWithTime(context.Background(), types.Format_Default, name, email, initBranch, t, requiresFunHash)
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to initialize directory as a data repo. %s", err.Error()))
