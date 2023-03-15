@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	ejson "encoding/json"
 
 	textdiff "github.com/andreyvit/diff"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -477,7 +478,23 @@ func (j *jsonDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldD
 		}
 	}
 
-	_, err := j.wr.Write([]byte( fmt.Sprintf(`{"name":"%s","from_definition":"%s","to_definition":"%s"}`, triggerName, oldDefn, newDefn)))
+	triggerNameBytes, err := ejson.Marshal(triggerName)
+	if err != nil {
+		return err
+	}
+
+	oldDefnBytes, err := ejson.Marshal(oldDefn)
+	if err != nil {
+		return err
+	}
+
+	newDefnBytes, err := ejson.Marshal(newDefn)
+	if err != nil {
+		return err
+	}
+
+	_, err = j.wr.Write([]byte( fmt.Sprintf(`{"name":%s,"from_definition":%s,"to_definition":%s}`, 
+		triggerNameBytes, oldDefnBytes, newDefnBytes)))
 	if err != nil {
 		return err
 	}
@@ -522,7 +539,23 @@ func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, n
 		}
 	}
 
-	_, err := j.wr.Write([]byte(fmt.Sprintf(`{"name":"%s","from_definition":"%s","to_definition":"%s"}`, viewName, oldDefn, newDefn)))
+	viewNameBytes, err := ejson.Marshal(viewName)
+	if err != nil {
+		return err
+	}
+	
+	oldDefnBytes, err := ejson.Marshal(oldDefn)
+	if err != nil {
+		return err
+	}
+	
+	newDefnBytes, err := ejson.Marshal(newDefn)
+	if err != nil {
+		return err
+	}
+	
+	_, err = j.wr.Write([]byte(fmt.Sprintf(`{"name":%s,"from_definition":%s,"to_definition":%s}`,
+		viewNameBytes, oldDefnBytes, newDefnBytes)))
 	if err != nil {
 		return err
 	}
