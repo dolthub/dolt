@@ -92,7 +92,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			killed := make(map[uint32]struct{})
 			processes := ctx.ProcessList.Processes()
 			for _, p := range processes {
-				if (p.Connection != ctx.Session.ID()) {
+				if p.Connection != ctx.Session.ID() {
 					// Kill any inflight query.
 					ctx.ProcessList.Kill(p.Connection)
 					// Tear down the connection itself.
@@ -101,7 +101,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 				}
 			}
 			// Look in processes until the connections are actually gone.
-			for i := 0 ; i < 100; i++ {
+			for i := 0; i < 100; i++ {
 				if i == 100 {
 					return errors.New("unable to establish safepoint.")
 				}
