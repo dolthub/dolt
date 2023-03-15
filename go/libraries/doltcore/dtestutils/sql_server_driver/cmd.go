@@ -107,6 +107,10 @@ func (u DoltUser) MakeRepoStore() (RepoStore, error) {
 	return RepoStore{u, tmpdir}, nil
 }
 
+func (u DoltUser) Cleanup() error {
+	return os.RemoveAll(u.tmpdir)
+}
+
 type RepoStore struct {
 	user DoltUser
 	Dir  string

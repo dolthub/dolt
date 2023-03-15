@@ -1,4 +1,4 @@
-import { diffRowsMatcher } from "./matchers.js";
+import { diffRowsMatcher, patchRowsMatcher } from "./matchers.js";
 
 export const diffTests = [
   {
@@ -211,10 +211,56 @@ export const diffTests = [
     matcher: diffRowsMatcher,
   },
   {
+    q: "SELECT * FROM DOLT_PATCH(:fromRefName, :toRefName) WHERE diff_type = 'schema'",
+    p: { fromRefName: "HEAD", toRefName: "WORKING" },
+    res: [
+      {
+        statement_order: 1,
+        from_commit_hash: "",
+        to_commit_hash: "WORKING",
+        table_name: "test_info",
+        diff_type: "schema",
+        statement: "DROP TABLE `test_info`;",
+      },
+      {
+        statement_order: 2,
+        from_commit_hash: "",
+        to_commit_hash: "WORKING",
+        table_name: "dolt_schemas",
+        diff_type: "schema",
+        statement:
+          "CREATE TABLE `dolt_schemas` (\n" +
+          "  `type` varchar(64) COLLATE utf8mb4_0900_ai_ci NOT NULL,\n" +
+          "  `name` varchar(64) COLLATE utf8mb4_0900_ai_ci NOT NULL,\n" +
+          "  `fragment` longtext,\n" +
+          "  `extra` json,\n" +
+          "  PRIMARY KEY (`type`,`name`)\n" +
+          ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+      },
+    ],
+    matcher: patchRowsMatcher,
+  },
+  {
+    q: "SELECT * FROM DOLT_PATCH(:fromRefName, :toRefName, :tableName) WHERE diff_type = 'schema'",
+    p: { fromRefName: "HEAD", toRefName: "WORKING", tableName: "test_info" },
+    res: [
+      {
+        statement_order: 1,
+        from_commit_hash: "",
+        to_commit_hash: "WORKING",
+        table_name: "test_info",
+        diff_type: "schema",
+        statement: "DROP TABLE `test_info`;",
+      },
+    ],
+    matcher: patchRowsMatcher,
+  },
+  {
     q: `CALL DOLT_COMMIT("-A", "-m", :commitMsg)`,
     p: { commitMsg: "Make some changes on branch" },
     res: [{ hash: "" }],
   },
+
   // Three dot
   {
     q: "SELECT * FROM dolt_diff_summary(:refRange)",
@@ -323,5 +369,50 @@ export const diffTests = [
         new_cell_count: 0,
       },
     ],
+  },
+  {
+    q: "SELECT * FROM DOLT_PATCH(:refRange) WHERE diff_type = 'schema'",
+    p: { refRange: "main...HEAD" },
+    res: [
+      {
+        statement_order: 1,
+        from_commit_hash: "",
+        to_commit_hash: "",
+        table_name: "test_info",
+        diff_type: "schema",
+        statement: "DROP TABLE `test_info`;",
+      },
+      {
+        statement_order: 2,
+        from_commit_hash: "",
+        to_commit_hash: "",
+        table_name: "dolt_schemas",
+        diff_type: "schema",
+        statement:
+          "CREATE TABLE `dolt_schemas` (\n" +
+          "  `type` varchar(64) COLLATE utf8mb4_0900_ai_ci NOT NULL,\n" +
+          "  `name` varchar(64) COLLATE utf8mb4_0900_ai_ci NOT NULL,\n" +
+          "  `fragment` longtext,\n" +
+          "  `extra` json,\n" +
+          "  PRIMARY KEY (`type`,`name`)\n" +
+          ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+      },
+    ],
+    matcher: patchRowsMatcher,
+  },
+  {
+    q: "SELECT * FROM DOLT_PATCH(:refRange, :tableName) WHERE diff_type = 'schema'",
+    p: { refRange: "main...HEAD", tableName: "test_info" },
+    res: [
+      {
+        statement_order: 1,
+        from_commit_hash: "",
+        to_commit_hash: "",
+        table_name: "test_info",
+        diff_type: "schema",
+        statement: "DROP TABLE `test_info`;",
+      },
+    ],
+    matcher: patchRowsMatcher,
   },
 ];
