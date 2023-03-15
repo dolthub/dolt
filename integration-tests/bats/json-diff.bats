@@ -139,7 +139,7 @@ SQL
     run dolt diff -r json HEAD HEAD~
 
     EXPECTED=$(cat <<'EOF'
-{"views":[{"name":"v1","from_definition":"create view v1 as select * from test","to_definition":""}]}
+{"views":[{"name":"v1","from_definition":"create view v1 as select * from test;","to_definition":""}]}
 EOF
 )
 
@@ -150,7 +150,7 @@ EOF
     run dolt diff -r json HEAD~ HEAD
 
     EXPECTED=$(cat <<'EOF'
-{"views":[{"name":"v1","from_definition":"","to_definition":"create view v1 as select * from test"}]}
+{"views":[{"name":"v1","from_definition":"","to_definition":"create view v1 as select * from test;"}]}
 EOF
 )
 
@@ -168,7 +168,7 @@ SQL
     run dolt diff -r json HEAD~ HEAD
 
     EXPECTED=$(cat <<'EOF'
-{"views":[{"name":"v1","from_definition":"create view v1 as select * from test","to_definition":"create view v1 as select \"one\" from dual"}]}
+{"views":[{"name":"v1","from_definition":"create view v1 as select * from test;","to_definition":"create view v1 as select \"one\" from dual;"}]}
 EOF
 )
 
@@ -219,7 +219,7 @@ EOF
     run dolt diff -r json HEAD~2 HEAD~
 
     EXPECTED=$(cat <<'EOF'
-{"views":[{"name":"v1","from_definition":"","to_definition":"create view v1 as select \"hello\" from test"}]}
+{"views":[{"name":"v1","from_definition":"","to_definition":"create view v1 as select \"hello\" from test;"}]}
 EOF
 )
 
@@ -231,7 +231,7 @@ EOF
     run dolt diff -r json HEAD~ HEAD
 
     EXPECTED=$(cat <<'EOF'
-{"triggers":[{"name":"tr1","from_definition":"","to_definition":"create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 1"}]}
+{"triggers":[{"name":"tr1","from_definition":"","to_definition":"create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 1;"}]}
 EOF
 )
 
@@ -243,7 +243,7 @@ EOF
     run dolt diff -r json HEAD~2 HEAD
 
     EXPECTED=$(cat <<'EOF'
-{"triggers":[{"name":"tr1","from_definition":"","to_definition":"create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 1"}],"views":[{"name":"v1","from_definition":"","to_definition":"create view v1 as select \"hello\" from test"}]}
+{"triggers":[{"name":"tr1","from_definition":"","to_definition":"create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 1;"}],"views":[{"name":"v1","from_definition":"","to_definition":"create view v1 as select \"hello\" from test;"}]}
 EOF
 )
 
@@ -255,7 +255,7 @@ EOF
     run dolt diff -r json HEAD~3 HEAD~
 
     EXPECTED=$(cat <<'EOF'
-{"tables":[{"name":"test","schema_diff":[],"data_diff":[{"from_row":{"c1":5,"c2":6,"pk":4},"to_row":{}},{"from_row":{},"to_row":{"c1":8,"c2":9,"pk":7}}]}],"views":[{"name":"v1","from_definition":"","to_definition":"create view v1 as select \"hello\" from test"}]}
+{"tables":[{"name":"test","schema_diff":[],"data_diff":[{"from_row":{"c1":5,"c2":6,"pk":4},"to_row":{}},{"from_row":{},"to_row":{"c1":8,"c2":9,"pk":7}}]}],"views":[{"name":"v1","from_definition":"","to_definition":"create view v1 as select \"hello\" from test;"}]}
 EOF
 )
 
@@ -267,7 +267,7 @@ EOF
     run dolt diff -r json HEAD~3 HEAD
 
     EXPECTED=$(cat <<'EOF'
-{"tables":[{"name":"test","schema_diff":[],"data_diff":[{"from_row":{"c1":5,"c2":6,"pk":4},"to_row":{}},{"from_row":{},"to_row":{"c1":8,"c2":9,"pk":7}}]}],"triggers":[{"name":"tr1","from_definition":"","to_definition":"create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 1"}],"views":[{"name":"v1","from_definition":"","to_definition":"create view v1 as select \"hello\" from test"}]}
+{"tables":[{"name":"test","schema_diff":[],"data_diff":[{"from_row":{"c1":5,"c2":6,"pk":4},"to_row":{}},{"from_row":{},"to_row":{"c1":8,"c2":9,"pk":7}}]}],"triggers":[{"name":"tr1","from_definition":"","to_definition":"create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 1;"}],"views":[{"name":"v1","from_definition":"","to_definition":"create view v1 as select \"hello\" from test;"}]}
 EOF
 )
 
