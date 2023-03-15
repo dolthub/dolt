@@ -450,19 +450,18 @@ func (j *jsonDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unio
 }
 
 func (j *jsonDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
-	// begin the document if necessary
-	if j.tablesWritten == 0 {
-		_, err := j.wr.Write([]byte("{"))
-		if err != nil {
-			return err
-		}
-	}
-	
-	// end the previous block if necessary
-	if j.tablesWritten > 0 && j.triggersWritten == 0 {
-		_, err := j.wr.Write([]byte(jsonDataDiffFooter + ","))
-		if err != nil {
-			return err
+	if j.triggersWritten == 0 {
+		// begin the document if necessary
+		if j.tablesWritten == 0 {
+			_, err := j.wr.Write([]byte("{"))
+			if err != nil {
+				return err
+			}
+		} else {
+			_, err := j.wr.Write([]byte(jsonDataDiffFooter + ","))
+			if err != nil {
+				return err
+			}
 		}
 	}
 	
@@ -488,24 +487,26 @@ func (j *jsonDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldD
 }
 
 func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
-	// begin the document if necessary
-	if j.tablesWritten == 0 && j.triggersWritten == 0 {
-		_, err := j.wr.Write([]byte("{"))
-		if err != nil {
-			return err
+	if j.viewsWritten == 0 {
+		// begin the document if necessary
+		if j.tablesWritten == 0 && j.triggersWritten == 0 {
+			_, err := j.wr.Write([]byte("{"))
+			if err != nil {
+				return err
+			}
 		}
-	}
-	
-	// end the previous block if necessary
-	if j.tablesWritten > 0 && j.triggersWritten == 0 {
-		_, err := j.wr.Write([]byte(jsonDataDiffFooter + ","))
-		if err != nil {
-			return err
-		}
-	} else if j.triggersWritten > 0 {
-		_, err := j.wr.Write([]byte("],"))
-		if err != nil {
-			return err
+
+		// end the previous block if necessary
+		if j.tablesWritten > 0 && j.triggersWritten == 0 {
+			_, err := j.wr.Write([]byte(jsonDataDiffFooter + ","))
+			if err != nil {
+				return err
+			}
+		} else if j.triggersWritten > 0 {
+			_, err := j.wr.Write([]byte("],"))
+			if err != nil {
+				return err
+			}
 		}
 	}
 	
@@ -536,6 +537,12 @@ func (j *jsonDiffWriter) Close(ctx context.Context) error {
 		// (which also closes that array)
 		if j.triggersWritten == 0 && j.viewsWritten == 0 {
 			_, err := j.wr.Write([]byte(jsonDataDiffFooter))
+			if err != nil {
+				return err
+			}
+		} else {
+			// if we did write a trigger or view, we need to close off that array
+			_, err := j.wr.Write([]byte("]"))
 			if err != nil {
 				return err
 			}
