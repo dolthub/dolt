@@ -370,14 +370,27 @@ func newJsonDiffWriter(wr io.WriteCloser) (*jsonDiffWriter, error) {
 	}, nil
 }
 
-const jsonFileHeader = `{"tables":[`
+const tablesHeader = `"tables":[`
 const jsonDiffTableHeader = `{"name":"%s","schema_diff":`
 const jsonDiffDataDiffHeader = `],"data_diff":[`
 const jsonDataDiffFooter = `}]`
 
+func (j *jsonDiffWriter) beginDocumentIfNecessary() error {
+	if j.tablesWritten == 0 && j.triggersWritten == 0 && j.viewsWritten == 0 {
+		_, err := j.wr.Write([]byte("{"))
+		return err
+	}
+	return nil
+}
+
 func (j *jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) error {
+	err := j.beginDocumentIfNecessary()
+	if err != nil {
+		return err
+	}
+	
 	if j.tablesWritten == 0 {
-		err := iohelp.WriteAll(j.wr, []byte(jsonFileHeader))
+		err := iohelp.WriteAll(j.wr, []byte(tablesHeader))
 		if err != nil {
 			return err
 		}
@@ -393,7 +406,7 @@ func (j *jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) err
 		tableName = td.ToName
 	}
 
-	err := iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(jsonDiffTableHeader, tableName)))
+	err = iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(jsonDiffTableHeader, tableName)))
 	if err != nil {
 		return err
 	}
@@ -452,22 +465,20 @@ func (j *jsonDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unio
 }
 
 func (j *jsonDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
+	err := j.beginDocumentIfNecessary()
+	if err != nil {
+		return err
+	}
+
 	if j.triggersWritten == 0 {
-		// begin the document if necessary
-		if j.tablesWritten == 0 {
-			_, err := j.wr.Write([]byte("{"))
-			if err != nil {
-				return err
-			}
-		} else {
+		// end the table if necessary
+		if j.tablesWritten > 0 {
 			_, err := j.wr.Write([]byte(jsonDataDiffFooter + ","))
 			if err != nil {
 				return err
 			}
 		}
-	}
 
-	if j.triggersWritten == 0 {
 		_, err := j.wr.Write([]byte(`"triggers":[`))
 		if err != nil {
 			return err
@@ -505,15 +516,12 @@ func (j *jsonDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldD
 }
 
 func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
-	if j.viewsWritten == 0 {
-		// begin the document if necessary
-		if j.tablesWritten == 0 && j.triggersWritten == 0 {
-			_, err := j.wr.Write([]byte("{"))
-			if err != nil {
-				return err
-			}
-		}
+	err := j.beginDocumentIfNecessary()
+	if err != nil {
+		return err
+	}
 
+	if j.viewsWritten == 0 {
 		// end the previous block if necessary
 		if j.tablesWritten > 0 && j.triggersWritten == 0 {
 			_, err := j.wr.Write([]byte(jsonDataDiffFooter + ","))
