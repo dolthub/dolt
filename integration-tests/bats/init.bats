@@ -298,12 +298,11 @@ teardown() {
 }
 
 @test "init: fun flag produces an initial commit with the right hash" {
-    set_dolt_user "baz", "baz@bash.com"
-	
-	dolt init --fun
-  run dolt log
-	[ $status -eq 0 ]
-	[[ $output =~ "commit dolt" ]] || [[ $output =~ "commit do1t" ]] || [[ $output =~ "commit d0lt" ]] || [[ $output =~ "commit d01t" ]] || false
+    set_dolt_user "baz", "baz@bash.com"	
+    dolt init --fun
+    run dolt log
+    [ $status -eq 0 ]
+    [[ $output =~ "commit dolt" ]] || [[ $output =~ "commit do1t" ]] || [[ $output =~ "commit d0lt" ]] || [[ $output =~ "commit d01t" ]] || false
 }
 
 assert_valid_repository () {
