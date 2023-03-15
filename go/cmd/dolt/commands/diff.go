@@ -657,9 +657,17 @@ func diffDoltSchemasTable(
 		var newFragment string
 		if row[4] != nil {
 			oldFragment = row[4].(string)
+			// Typically schema fragements have the semicolons stripped, so put it back on
+			if len(oldFragment) > 0 && oldFragment[len(oldFragment)-1] != ';' {
+				oldFragment += ";"
+			}
 		}
 		if row[5] != nil {
 			newFragment = row[5].(string)
+			// Typically schema fragements have the semicolons stripped, so put it back on
+			if len(newFragment) > 0 && newFragment[len(newFragment)-1] != ';' {
+				newFragment += ";"
+			}
 		}
 
 		switch fragmentType {
