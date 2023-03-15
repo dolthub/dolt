@@ -46,6 +46,7 @@ func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv)
 
 type args []string
 
+// TestMergeSchemas are schema merge integration tests from 2020
 func TestMergeSchemas(t *testing.T) {
 	for _, test := range mergeSchemaTests {
 		t.Run(test.name, func(t *testing.T) {
