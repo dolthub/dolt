@@ -318,26 +318,28 @@ func (s sqlDiffWriter) WriteTableSchemaDiff(ctx context.Context, toRoot *doltdb.
 }
 
 func (s sqlDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
+	// definitions will already be semicolon terminated, no need to add additional ones
 	if oldDefn == "" {
-		cli.Println(fmt.Sprintf("%s;", newDefn))
+		cli.Println(newDefn)
 	} else if newDefn == "" {
 		cli.Println(fmt.Sprintf("DROP TRIGGER %s;", sql.QuoteIdentifier(triggerName)))
 	} else {
 		cli.Println(fmt.Sprintf("DROP TRIGGER %s;", sql.QuoteIdentifier(triggerName)))
-		cli.Println(fmt.Sprintf("%s;", newDefn))
+		cli.Println(newDefn)
 	}
 
 	return nil
 }
 
 func (s sqlDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
+	// definitions will already be semicolon terminated, no need to add additional ones
 	if oldDefn == "" {
-		cli.Println(fmt.Sprintf("%s;", newDefn))
+		cli.Println(newDefn)
 	} else if newDefn == "" {
 		cli.Println(fmt.Sprintf("DROP VIEW %s;", sql.QuoteIdentifier(viewName)))
 	} else {
 		cli.Println(fmt.Sprintf("DROP VIEW %s;", sql.QuoteIdentifier(viewName)))
-		cli.Println(fmt.Sprintf("%s;", newDefn))
+		cli.Println(newDefn)
 	}
 
 	return nil
