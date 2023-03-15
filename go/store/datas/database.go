@@ -79,10 +79,10 @@ type Database interface {
 	// If the update cannot be performed because the existing dataset head
 	// is not a common ancestor of the constructed commit struct, returns
 	// an 'ErrMergeNeeded' error.
-	//
-	// WriteCommit has the same behavior as Commit but accepts an already-constructed Commit
-	// instead of construction one from a Value and CommitOptions
 	Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error)
+
+	// WriteCommit has the same behavior as Commit but accepts an already-constructed Commit
+	// instead of constructing one from a Value and CommitOptions
 	WriteCommit(ctx context.Context, ds Dataset, commit *Commit) (Dataset, error)
 
 	// Tag stores an immutable reference to a Commit. It takes a Hash to
