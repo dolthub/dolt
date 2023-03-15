@@ -528,7 +528,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 		if !shouldPrintTableDelta(dArgs.tableSet, td) {
 			continue
 		}
-		
+
 		if isDoltSchemasTable(td) {
 			// save dolt_schemas table diff for last in diff output
 			doltSchemasChanged = true
@@ -614,14 +614,14 @@ func diffUserTable(
 }
 
 func diffDoltSchemasTable(
-		sqlCtx *sql.Context,
-		sqlEng *engine.SqlEngine,
-		dArgs *diffArgs,
-		dw diffWriter,
+	sqlCtx *sql.Context,
+	sqlEng *engine.SqlEngine,
+	dArgs *diffArgs,
+	dw diffWriter,
 ) errhand.VerboseError {
 	// TODO: does this work when the table has been deleted in the current revision?
-	query := fmt.Sprintf("select from_name,to_name,from_type,to_type,from_fragment,to_fragment " +
-		"from dolt_diff('%s','%s','%s') " +
+	query := fmt.Sprintf("select from_name,to_name,from_type,to_type,from_fragment,to_fragment "+
+		"from dolt_diff('%s','%s','%s') "+
 		"order by coalesce(from_type, to_type), coalesce(from_name, to_name)",
 		dArgs.fromRef, dArgs.toRef, doltdb.SchemasTableName)
 
@@ -638,21 +638,21 @@ func diffDoltSchemasTable(
 		} else if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
-		
+
 		var fragmentName string
 		if row[0] != nil {
 			fragmentName = row[0].(string)
 		} else {
 			fragmentName = row[1].(string)
 		}
-		
-		var fragmentType string  
+
+		var fragmentType string
 		if row[2] != nil {
 			fragmentType = row[2].(string)
 		} else {
 			fragmentType = row[3].(string)
 		}
-		
+
 		var oldFragment string
 		var newFragment string
 		if row[4] != nil {
@@ -661,7 +661,7 @@ func diffDoltSchemasTable(
 		if row[5] != nil {
 			newFragment = row[5].(string)
 		}
-		
+
 		switch fragmentType {
 		case "view":
 			err := dw.WriteViewDiff(sqlCtx, fragmentName, oldFragment, newFragment)

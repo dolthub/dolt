@@ -166,7 +166,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 		}
 		return deltas[i].FromName < deltas[j].FromName
 	})
-	
+
 	return deltas, nil
 }
 
