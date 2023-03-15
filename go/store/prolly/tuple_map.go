@@ -195,6 +195,14 @@ func (m Map) Tuples() tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc] {
 	return m.tuples
 }
 
+func (m Map) ValDesc() val.TupleDesc {
+	return m.valDesc
+}
+
+func (m Map) KeyDesc() val.TupleDesc {
+	return m.keyDesc
+}
+
 // Mutate makes a MutableMap from a Map.
 func (m Map) Mutate() *MutableMap {
 	return newMutableMap(m)
@@ -287,6 +295,13 @@ func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 		return nil, err
 	}
 	return filteredIter{iter: iter, rng: rng}, nil
+}
+
+// IterKeyRange iterates over a physical key range defined by |start| and
+// |stop|. If |startInclusive| and/or |stop| is nil, the range will be open
+// towards that end.
+func (m Map) IterKeyRange(ctx context.Context, start, stop val.Tuple) (MapIter, error) {
+	return m.tuples.IterKeyRange(ctx, start, stop)
 }
 
 // GetOrdinalForKey returns the smallest ordinal position at which the key >=

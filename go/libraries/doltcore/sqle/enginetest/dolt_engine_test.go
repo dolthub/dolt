@@ -48,7 +48,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 83
+const SkipPreparedsCount = 82
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -284,13 +284,36 @@ func TestInsertIgnoreInto(t *testing.T) {
 	enginetest.TestInsertIgnoreInto(t, newDoltHarness(t))
 }
 
-// todo: merge this into the above test when https://github.com/dolthub/dolt/issues/3836 is fixed
+// TODO: merge this into the above test when we remove old format
+func TestInsertDuplicateKeyKeyless(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip()
+	}
+	enginetest.TestInsertDuplicateKeyKeyless(t, newDoltHarness(t))
+}
+
+// TODO: merge this into the above test when we remove old format
+func TestInsertDuplicateKeyKeylessPrepared(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip()
+	}
+	enginetest.TestInsertDuplicateKeyKeylessPrepared(t, newDoltHarness(t))
+}
+
+// TODO: merge this into the above test when we remove old format
 func TestIgnoreIntoWithDuplicateUniqueKeyKeyless(t *testing.T) {
 	if !types.IsFormat_DOLT(types.Format_Default) {
-		// todo: fix https://github.com/dolthub/dolt/issues/3836
 		t.Skip()
 	}
 	enginetest.TestIgnoreIntoWithDuplicateUniqueKeyKeyless(t, newDoltHarness(t))
+}
+
+// TODO: merge this into the above test when we remove old format
+func TestIgnoreIntoWithDuplicateUniqueKeyKeylessPrepared(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip()
+	}
+	enginetest.TestIgnoreIntoWithDuplicateUniqueKeyKeylessPrepared(t, newDoltHarness(t))
 }
 
 func TestInsertIntoErrors(t *testing.T) {

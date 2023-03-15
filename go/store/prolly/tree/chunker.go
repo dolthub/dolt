@@ -29,11 +29,13 @@ import (
 
 type Chunker interface {
 	AddPair(ctx context.Context, key, value Item) error
+	UpdatePair(ctx context.Context, key, value Item) error
+	DeletePair(ctx context.Context, key, value Item) error
 	Done(ctx context.Context) (Node, error)
 }
 
 type chunker[S message.Serializer] struct {
-	cur    *cursor
+	cur    *Cursor
 	parent *chunker[S]
 	level  int
 	done   bool
@@ -55,7 +57,7 @@ func newEmptyChunker[S message.Serializer](ctx context.Context, ns NodeStore, se
 	return newChunker(ctx, nil, 0, ns, serializer)
 }
 
-func newChunker[S message.Serializer](ctx context.Context, cur *cursor, level int, ns NodeStore, serializer S) (*chunker[S], error) {
+func newChunker[S message.Serializer](ctx context.Context, cur *Cursor, level int, ns NodeStore, serializer S) (*chunker[S], error) {
 	// |cur| will be nil if this is a new Node, implying this is a new tree, or the tree has grown in height relative
 	// to its original chunked form.
 
@@ -98,7 +100,7 @@ func (tc *chunker[S]) processPrefix(ctx context.Context) (err error) {
 			return err
 		}
 		_, err = tc.append(ctx,
-			tc.cur.currentKey(),
+			tc.cur.CurrentKey(),
 			tc.cur.currentValue(),
 			sz)
 
@@ -142,21 +144,21 @@ func (tc *chunker[S]) DeletePair(ctx context.Context, _, _ Item) error {
 	return tc.skip(ctx)
 }
 
-// advanceTo progresses the chunker until its tracking cursor catches up with
-// |next|, a cursor indicating next key where an edit will be applied.
+// advanceTo progresses the chunker until its tracking Cursor catches up with
+// |next|, a Cursor indicating next key where an edit will be applied.
 //
 // The method proceeds from the deepest chunker recursively into its
 // linked list parents:
 //
-//	(1) If the current cursor and all of its parents are aligned with |next|,
+//	(1) If the current Cursor and all of its parents are aligned with |next|,
 //	we are done.
 //
-//	(2) In lockstep, a) append to the chunker and b) increment the cursor until
+//	(2) In lockstep, a) append to the chunker and b) increment the Cursor until
 //	we either meet condition (1) and return, or we synchronize and progress to
 //	(3) or (4). Synchronizing means that the current tree being built has
 //	reached a chunk boundary that aligns with a chunk boundary in the old tree
 //	being mutated. Synchronization means chunks between this boundary and
-//	|next| at the current cursor level will be unchanged and can be skipped.
+//	|next| at the current Cursor level will be unchanged and can be skipped.
 //
 //	(3) All parent cursors are (1) current or (2) synchronized, or there are no
 //	parents, and we are done.
@@ -166,7 +168,7 @@ func (tc *chunker[S]) DeletePair(ctx context.Context, _, _ Item) error {
 //	anticipation of impending edits that may edit the current chunk. Note that
 //	processPrefix is only necessary for the "fast forward" case where we
 //	synchronized the tree level before reaching |next|.
-func (tc *chunker[S]) advanceTo(ctx context.Context, next *cursor) error {
+func (tc *chunker[S]) advanceTo(ctx context.Context, next *Cursor) error {
 	cmp := tc.cur.compare(next)
 	if cmp == 0 { // step (1)
 		return nil
@@ -187,7 +189,7 @@ func (tc *chunker[S]) advanceTo(ctx context.Context, next *cursor) error {
 	if err != nil {
 		return err
 	}
-	split, err := tc.append(ctx, tc.cur.currentKey(), tc.cur.currentValue(), sz)
+	split, err := tc.append(ctx, tc.cur.CurrentKey(), tc.cur.currentValue(), sz)
 	if err != nil {
 		return err
 	}
@@ -205,7 +207,7 @@ func (tc *chunker[S]) advanceTo(ctx context.Context, next *cursor) error {
 		if err != nil {
 			return err
 		}
-		split, err = tc.append(ctx, tc.cur.currentKey(), tc.cur.currentValue(), sz)
+		split, err = tc.append(ctx, tc.cur.CurrentKey(), tc.cur.currentValue(), sz)
 		if err != nil {
 			return err
 		}
@@ -345,7 +347,7 @@ func (tc *chunker[S]) handleChunkBoundary(ctx context.Context) error {
 func (tc *chunker[S]) createParentChunker(ctx context.Context) (err error) {
 	assertTrue(tc.parent == nil, "chunker parent must be nil")
 
-	var parent *cursor
+	var parent *Cursor
 	if tc.cur != nil && tc.cur.parent != nil {
 		// todo(andy): does this comment make sense? cloning a pointer?
 		// Clone the parent cursor because otherwise calling cur.forward() will affect our parent - and vice versa -
@@ -416,7 +418,7 @@ func (tc *chunker[S]) Done(ctx context.Context) (Node, error) {
 // If we are mutating an existing Node, appending subsequent items in the Node until we reach a pre-existing chunk
 // boundary or the end of the Node.
 func (tc *chunker[S]) finalizeCursor(ctx context.Context) (err error) {
-	for tc.cur.valid() {
+	for tc.cur.Valid() {
 		var sz uint64
 		sz, err = tc.cur.currentSubtreeSize()
 		if err != nil {
@@ -424,7 +426,7 @@ func (tc *chunker[S]) finalizeCursor(ctx context.Context) (err error) {
 		}
 		var ok bool
 		ok, err = tc.append(ctx,
-			tc.cur.currentKey(),
+			tc.cur.CurrentKey(),
 			tc.cur.currentValue(),
 			sz)
 		if err != nil {

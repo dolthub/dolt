@@ -43,6 +43,24 @@ func GetMutableSecondaryIdxs(ctx context.Context, sch schema.Schema, indexes dur
 	return mods, nil
 }
 
+// GetMutableSecondaryIdxsWithPending returns a MutableSecondaryIdx for each secondary index in |indexes|.
+func GetMutableSecondaryIdxsWithPending(ctx context.Context, sch schema.Schema, indexes durable.IndexSet, pendingSize int) ([]MutableSecondaryIdx, error) {
+	mods := make([]MutableSecondaryIdx, sch.Indexes().Count())
+	for i, index := range sch.Indexes().AllIndexes() {
+		idx, err := indexes.GetIndex(ctx, sch, index.Name())
+		if err != nil {
+			return nil, err
+		}
+		m := durable.ProllyMapFromIndex(idx)
+		if schema.IsKeyless(sch) {
+			m = prolly.ConvertToSecondaryKeylessIndex(m)
+		}
+		mods[i] = NewMutableSecondaryIdx(m, sch, index, m.Pool())
+		mods[i].mut = mods[i].mut.WithMaxPending(pendingSize)
+	}
+	return mods, nil
+}
+
 // MutableSecondaryIdx wraps a prolly.MutableMap of a secondary table index. It
 // provides the InsertEntry, UpdateEntry, and DeleteEntry functions which can be
 // used to modify the index based on a modification to corresponding primary row.

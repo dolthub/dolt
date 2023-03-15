@@ -17,6 +17,7 @@ package credcmds
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"google.golang.org/grpc"
 
@@ -82,27 +83,35 @@ func (cmd CheckCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, checkDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	endpoint := loadEndpoint(dEnv, apr)
+	host, endpoint := loadEndpoint(dEnv, apr)
 
 	dc, verr := loadCred(dEnv, apr)
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	verr = checkCredAndPrintSuccess(ctx, dEnv, dc, endpoint)
+	verr = checkCredAndPrintSuccess(ctx, dEnv, dc, host, endpoint)
 
 	return commands.HandleVErrAndExitCode(verr, usage)
 }
 
-func loadEndpoint(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) string {
+func loadEndpoint(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (string, string) {
 	earg, ok := apr.GetValue("endpoint")
 	if ok {
-		return earg
+		return getHostFromEndpoint(earg), earg
 	}
 
 	host := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
 	port := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
-	return fmt.Sprintf("%s:%s", host, port)
+	return host, fmt.Sprintf("%s:%s", host, port)
+}
+
+func getHostFromEndpoint(endpoint string) string {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return env.DefaultRemotesApiHost
+	}
+	return u.Hostname()
 }
 
 func loadCred(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (creds.DoltCreds, errhand.VerboseError) {
@@ -135,10 +144,10 @@ func loadCred(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (creds.DoltCred
 	}
 }
 
-func checkCredAndPrintSuccess(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, endpoint string) errhand.VerboseError {
+func checkCredAndPrintSuccess(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, authHost, endpoint string) errhand.VerboseError {
 	cfg, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: endpoint,
-		Creds:    dc.RPCCreds(),
+		Creds:    dc.RPCCreds(authHost),
 	})
 	if err != nil {
 		return errhand.BuildDError("error: unable to build server endpoint options.").AddCause(err).Build()
