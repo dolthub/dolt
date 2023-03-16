@@ -33,12 +33,12 @@ const (
 )
 
 func init() {
-	if os.Getenv("DOLT_ENABLE_GC_PROCEDURE") != "" {
-		DoltGCFeatureFlag = true
+	if os.Getenv("DOLT_DISABLE_GC_PROCEDURE") != "" {
+		DoltGCFeatureFlag = false
 	}
 }
 
-var DoltGCFeatureFlag = false
+var DoltGCFeatureFlag = true
 
 // doltGC is the stored procedure to run online garbage collection on a database.
 func doltGC(ctx *sql.Context, args ...string) (sql.RowIter, error) {
