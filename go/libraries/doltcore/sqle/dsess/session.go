@@ -1115,9 +1115,6 @@ func (d *DoltSession) HasDB(_ *sql.Context, dbName string) bool {
 
 // AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
-// TODO: the session has a database provider, we shouldn't need to add databases to it explicitly, this should be
-//
-//	internal only
 func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	db := dbState.Db
 	DefineSystemVariablesForDB(db.Name())
