@@ -195,6 +195,14 @@ func (m Map) Tuples() tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc] {
 	return m.tuples
 }
 
+func (m Map) ValDesc() val.TupleDesc {
+	return m.valDesc
+}
+
+func (m Map) KeyDesc() val.TupleDesc {
+	return m.keyDesc
+}
+
 // Mutate makes a MutableMap from a Map.
 func (m Map) Mutate() *MutableMap {
 	return newMutableMap(m)

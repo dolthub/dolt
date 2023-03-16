@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
@@ -109,6 +110,13 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		externalProcedures.Register(esp)
 	}
 
+	// If the specified |fs| is an in mem file system, default to using the InMemDoltDB dbFactoryUrl so that all
+	// databases are created with the same file system type.
+	dbFactoryUrl := doltdb.LocalDirDoltDB
+	if _, ok := fs.(*filesys.InMemFS); ok {
+		dbFactoryUrl = doltdb.InMemDoltDB
+	}
+
 	return DoltDatabaseProvider{
 		dbLocations:        dbLocations,
 		databases:          dbs,
@@ -117,7 +125,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		mu:                 &sync.RWMutex{},
 		fs:                 fs,
 		defaultBranch:      defaultBranch,
-		dbFactoryUrl:       doltdb.LocalDirDoltDB,
+		dbFactoryUrl:       dbFactoryUrl,
 		InitDatabaseHook:   ConfigureReplicationDatabaseHook,
 		isStandby:          new(bool),
 	}, nil
@@ -698,6 +706,35 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	}
 
 	delete(p.databases, dbKey)
+
+	return p.invalidateDbStateInAllSessions(ctx, name)
+}
+
+// invalidateDbStateInAllSessions removes the db state for this database from every session. This is necessary when a
+// database is dropped, so that other sessions don't use stale db state.
+func (p DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, name string) error {
+	runningServer := sqlserver.GetRunningServer()
+	if runningServer != nil {
+		sessionManager := runningServer.SessionManager()
+		err := sessionManager.Iter(func(session sql.Session) (bool, error) {
+			dsess, ok := session.(*dsess.DoltSession)
+			if !ok {
+				return false, fmt.Errorf("unexpected session type: %T", session)
+			}
+
+			// We need to invalidate this database state for EVERY session, even if other sessions aren't actively
+			// using this database, since they could still reference it with a db-qualified table name.
+			err := dsess.RemoveDbState(ctx, name)
+			if err != nil {
+				return true, err
+			}
+			return false, nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

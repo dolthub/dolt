@@ -96,6 +96,11 @@ func (a *binlogReplicaApplier) Go(ctx *sql.Context) {
 	}()
 }
 
+// IsRunning returns true if this binlog applier is running and has not been stopped, otherwise returns false.
+func (a *binlogReplicaApplier) IsRunning() bool {
+	return a.running.Load()
+}
+
 // connectAndStartReplicationEventStream connects to the configured MySQL replication source, including pausing
 // and retrying if errors are encountered.
 func (a *binlogReplicaApplier) connectAndStartReplicationEventStream(ctx *sql.Context) (*mysql.Conn, error) {
@@ -146,15 +151,12 @@ func (a *binlogReplicaApplier) connectAndStartReplicationEventStream(ctx *sql.Co
 			// If there was an error connecting (and we haven't used up all our retry attempts), listen for a
 			// STOP REPLICA signal or for the retry delay timer to fire. We need to use select here so that we don't
 			// block on our retry backoff and ignore the STOP REPLICA signal for a long time.
-			for {
-				select {
-				case <-a.stopReplicationChan:
-					ctx.GetLogger().Debugf("Received stop replication signal while trying to connect")
-					return nil, ErrReplicationStopped
-				case <-time.After(time.Duration(connectRetryDelay) * time.Second):
-					// Nothing to do here if our timer completes; just fall through
-					break
-				}
+			select {
+			case <-a.stopReplicationChan:
+				ctx.GetLogger().Debugf("Received stop replication signal while trying to connect")
+				return nil, ErrReplicationStopped
+			case <-time.After(time.Duration(connectRetryDelay) * time.Second):
+				// Nothing to do here if our timer completes; just fall through
 			}
 		} else {
 			break
@@ -926,17 +928,20 @@ func loadReplicaServerId() (uint32, error) {
 }
 
 func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) {
-	if ctx.GetCurrentDatabase() == "" {
+	// Create a sub-context when running queries against the engine, so that we get an accurate query start time.
+	queryCtx := sql.NewContext(ctx, sql.WithSession(ctx.Session))
+
+	if queryCtx.GetCurrentDatabase() == "" {
 		ctx.GetLogger().WithFields(logrus.Fields{
 			"query": query,
 		}).Warn("No current database selected")
 	}
 
-	_, iter, err := engine.Query(ctx, query)
+	_, iter, err := engine.Query(queryCtx, query)
 	if err != nil {
 		// Log any errors, except for commits with "nothing to commit"
 		if err.Error() != "nothing to commit" {
-			ctx.GetLogger().WithFields(logrus.Fields{
+			queryCtx.GetLogger().WithFields(logrus.Fields{
 				"error": err.Error(),
 				"query": query,
 			}).Errorf("Error executing query")
@@ -946,10 +951,10 @@ func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) 
 		return
 	}
 	for {
-		_, err := iter.Next(ctx)
+		_, err := iter.Next(queryCtx)
 		if err != nil {
 			if err != io.EOF {
-				ctx.GetLogger().Errorf("ERROR reading query results: %v ", err.Error())
+				queryCtx.GetLogger().Errorf("ERROR reading query results: %v ", err.Error())
 			}
 			return
 		}

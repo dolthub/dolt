@@ -16,7 +16,7 @@ package diff
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -25,13 +25,25 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
+const (
+	fromPrefix = "from_"
+	toPrefix   = "to_"
+
+	addedStr    = "added"
+	modifiedStr = "modified"
+	removedStr  = "removed"
+)
+
 type DiffSplitter struct {
-	diffQuerySch  sql.Schema
-	targetSch     sql.Schema
-	queryToTarget map[int]int
-	fromTo        map[int]int
-	toFrom        map[int]int
-	fromLen       int
+	// results schema of dolt_diff(...)
+	// sql table function
+	querySch sql.Schema
+	// output schema for CLI diff
+	targetSch sql.Schema
+	// maps querySch fields to targetSch
+	queryToTarget []int
+	// divides "from_..." and "to_..." cols
+	splitIdx int
 }
 
 type RowDiff struct {
@@ -40,128 +52,162 @@ type RowDiff struct {
 	ColDiffs []ChangeType
 }
 
-// NewDiffSplitter returns a splitter that knows how to split unified diff query rows with the schema given into
-// |old| and |new| rows in the union schema given. In the diff query schema, all |from| columns are expected to precede
-// all |to| columns
-func NewDiffSplitter(diffQuerySch sql.Schema, targetSch sql.Schema) (*DiffSplitter, error) {
-	resultToTarget := make(map[int]int)
-	fromTo := make(map[int]int)
-	toFrom := make(map[int]int)
-	fromLen := -1
+// NewDiffSplitter returns a splitter that knows how to split unified diff query rows.
+// |querySch| is the result schema from the dolt_dif(...) table function
+// it contains "from_..." and "to..." columns corresponding to the "from"
+// and "to" schemas used to generate the diff.
+// |targetSch| is the output schema used to print the diff and is computed
+// as the union schema of the "from" and "to" schemas.
 
-	for i := 0; i < len(diffQuerySch)-1; i++ {
-		var baseColName string
-		if strings.HasPrefix(diffQuerySch[i].Name, "from_") {
-			baseColName = diffQuerySch[i].Name[5:]
-			if to := diffQuerySch.IndexOfColName("to_" + baseColName); to >= 0 {
-				fromTo[i] = to
-			}
-		} else if strings.HasPrefix(diffQuerySch[i].Name, "to_") {
-			// we order the columns so that all from_ come first
-			if fromLen == -1 {
-				fromLen = i
-			}
-			baseColName = diffQuerySch[i].Name[3:]
-			if from := diffQuerySch.IndexOfColName("from_" + baseColName); from >= 0 {
-				toFrom[i] = from
-			}
-		}
-
-		targetIdx := targetSch.IndexOfColName(baseColName)
-		if targetIdx < 0 {
-			return nil, fmt.Errorf("couldn't find a column named %s", baseColName)
-		}
-
-		resultToTarget[i] = targetIdx
+func NewDiffSplitter(querySch sql.Schema, targetSch sql.Schema) (*DiffSplitter, error) {
+	split, err := findDiffSchemaSplit(querySch)
+	if err != nil {
+		return nil, err
 	}
 
-	if fromLen == -1 {
-		fromLen = len(diffQuerySch) - 1
+	qtt, err := mapQuerySchemaToTargetSchema(querySch, targetSch)
+	if err != nil {
+		return nil, err
 	}
 
 	return &DiffSplitter{
-		diffQuerySch:  diffQuerySch,
+		querySch:      querySch,
 		targetSch:     targetSch,
-		fromLen:       fromLen,
-		queryToTarget: resultToTarget,
-		fromTo:        fromTo,
-		toFrom:        toFrom,
+		queryToTarget: qtt,
+		splitIdx:      split,
 	}, nil
 }
 
-func newRowDiff(size int) RowDiff {
-	return RowDiff{
-		ColDiffs: make([]ChangeType, size),
+func findDiffSchemaSplit(querySch sql.Schema) (int, error) {
+	split := -1
+	for i, col := range querySch {
+		if strings.HasPrefix(col.Name, fromPrefix) {
+			if split >= 0 { // seen first "to_..." col
+				return 0, errors.New("interleaved 'from' and 'to' cols")
+			}
+		} else if strings.HasPrefix(col.Name, toPrefix) {
+			if split < 0 { // |i| is first "to_..." col
+				split = i
+			}
+		} else if col.Name == "diff_type" {
+			if split < 0 {
+				split = i
+			}
+		} else {
+			return 0, errors.New("expected column prefix of 'to_' or 'from_' (" + col.Name + ")")
+		}
 	}
+	return split, nil
 }
 
-func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (RowDiff, RowDiff, error) {
-	// split rows in the result set into old, new
-	diffTypeColIdx := ds.diffQuerySch.IndexOfColName("diff_type")
-	if diffTypeColIdx < 0 {
-		return RowDiff{}, RowDiff{}, fmt.Errorf("expected a diff_type column")
+func mapQuerySchemaToTargetSchema(query, target sql.Schema) (mapping []int, err error) {
+	last := query[len(query)-1]
+	if last.Name != "diff_type" {
+		return nil, errors.New("expected last diff column to be 'diff_type'")
 	}
+	query = query[:len(query)-1]
 
-	diffType := row[diffTypeColIdx]
-
-	oldRow, newRow := newRowDiff(len(ds.targetSch)), newRowDiff(len(ds.targetSch))
-
-	diffTypeStr := diffType.(string)
-	if diffTypeStr == "removed" || diffTypeStr == "modified" {
-		oldRow.Row = make(sql.Row, len(ds.targetSch))
-		if diffTypeStr == "modified" {
-			oldRow.RowDiff = ModifiedOld
+	mapping = make([]int, len(query))
+	for i, col := range query {
+		if strings.HasPrefix(col.Name, fromPrefix) {
+			base := col.Name[len(fromPrefix):]
+			mapping[i] = target.IndexOfColName(base)
+		} else if strings.HasPrefix(col.Name, toPrefix) {
+			base := col.Name[len(toPrefix):]
+			mapping[i] = target.IndexOfColName(base)
 		} else {
-			oldRow.RowDiff = Removed
+			return nil, errors.New("expected column prefix of 'to_' or 'from_' (" + col.Name + ")")
+		}
+		if mapping[i] < 0 { // sanity check
+			return nil, errors.New("failed to map diff column: " + col.Name)
+		}
+	}
+	return
+}
+
+func mapToAndFromColumns(query sql.Schema) (mapping []int, err error) {
+	last := query[len(query)-1]
+	if last.Name != "diff_type" {
+		return nil, errors.New("expected last diff column to be 'diff_type'")
+	}
+	query = query[:len(query)-1]
+
+	mapping = make([]int, len(query))
+	for i, col := range query {
+		if strings.HasPrefix(col.Name, fromPrefix) {
+			// map "from_..." column to "to_..." column
+			base := col.Name[len(fromPrefix):]
+			mapping[i] = query.IndexOfColName(toPrefix + base)
+		} else if strings.HasPrefix(col.Name, toPrefix) {
+			// map "to_..." column to "from_..." column
+			base := col.Name[len(toPrefix):]
+			mapping[i] = query.IndexOfColName(fromPrefix + base)
+		} else {
+			return nil, errors.New("expected column prefix of 'to_' or 'from_' (" + col.Name + ")")
+		}
+	}
+	// |mapping| will contain -1 for unmapped columns
+	return
+}
+
+func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (from, to RowDiff, err error) {
+	from = RowDiff{ColDiffs: make([]ChangeType, len(ds.targetSch))}
+	to = RowDiff{ColDiffs: make([]ChangeType, len(ds.targetSch))}
+
+	diffType := row[len(row)-1]
+	row = row[:len(row)-1]
+
+	switch diffType.(string) {
+	case removedStr:
+		from.Row = make(sql.Row, len(ds.targetSch))
+		from.RowDiff = Removed
+		for i := 0; i < ds.splitIdx; i++ {
+			j := ds.queryToTarget[i]
+			from.Row[j] = row[i]
+			from.ColDiffs[j] = Removed
 		}
 
-		for i := 0; i < ds.fromLen; i++ {
-			cmp := ds.diffQuerySch[i].Type.Compare
-			oldRow.Row[ds.queryToTarget[i]] = row[i]
+	case addedStr:
+		to.Row = make(sql.Row, len(ds.targetSch))
+		to.RowDiff = Added
+		for i := ds.splitIdx; i < len(row); i++ {
+			j := ds.queryToTarget[i]
+			to.Row[j] = row[i]
+			to.ColDiffs[j] = Added
+		}
 
-			if diffTypeStr == "modified" {
-				fromToIndex, ok := ds.fromTo[i]
-				if ok {
-					if n, err := cmp(row[i], row[fromToIndex]); err != nil {
-						return RowDiff{}, RowDiff{}, err
-					} else if n != 0 {
-						oldRow.ColDiffs[ds.queryToTarget[i]] = ModifiedOld
-					}
-				} else {
-					oldRow.ColDiffs[ds.queryToTarget[i]] = ModifiedOld
-				}
+	case modifiedStr:
+		from.Row = make(sql.Row, len(ds.targetSch))
+		from.RowDiff = ModifiedOld
+		for i := 0; i < ds.splitIdx; i++ {
+			j := ds.queryToTarget[i]
+			from.Row[j] = row[i]
+		}
+		to.Row = make(sql.Row, len(ds.targetSch))
+		to.RowDiff = ModifiedNew
+		for i := ds.splitIdx; i < len(row); i++ {
+			j := ds.queryToTarget[i]
+			to.Row[j] = row[i]
+		}
+		// now do field-wise comparison
+		var cmp int
+		for i, col := range ds.targetSch {
+			cmp, err = col.Type.Compare(from.Row[i], to.Row[i])
+			if err != nil {
+				return RowDiff{}, RowDiff{}, err
+			} else if cmp != 0 {
+				from.ColDiffs[i] = ModifiedOld
+				to.ColDiffs[i] = ModifiedNew
 			} else {
-				oldRow.ColDiffs[ds.queryToTarget[i]] = Removed
+				from.ColDiffs[i] = None
+				to.ColDiffs[i] = None
 			}
 		}
+
+	default:
+		panic("unknown diff type " + diffType.(string))
 	}
-
-	if diffTypeStr == "added" || diffTypeStr == "modified" {
-		newRow.Row = make(sql.Row, len(ds.targetSch))
-		if diffTypeStr == "modified" {
-			newRow.RowDiff = ModifiedNew
-		} else {
-			newRow.RowDiff = Added
-		}
-
-		for i := ds.fromLen; i < len(ds.diffQuerySch)-1; i++ {
-			cmp := ds.diffQuerySch[i].Type.Compare
-			newRow.Row[ds.queryToTarget[i]] = row[i]
-
-			if diffTypeStr == "modified" {
-				// need this to compare map[string]interface{} and other incomparable result types
-				if n, err := cmp(row[i], row[ds.toFrom[i]]); err != nil {
-					return RowDiff{}, RowDiff{}, err
-				} else if n != 0 {
-					newRow.ColDiffs[ds.queryToTarget[i]] = ModifiedNew
-				}
-			} else {
-				newRow.ColDiffs[ds.queryToTarget[i]] = Added
-			}
-		}
-	}
-
-	return oldRow, newRow, nil
+	return
 }
 
 // MaybeResolveRoot returns a root value and true if the a commit exists for given spec string; nil and false if it does not exist.

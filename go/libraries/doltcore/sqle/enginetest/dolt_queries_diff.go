@@ -3354,6 +3354,30 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "patch DDL changes",
+		SetUpScript: []string{
+			"create table t (pk int primary key, a int, b int, c int)",
+			"insert into t values (1, null, 1, 1), (2, 2, null, 2), (3, 3, 3, 3)",
+			"CALL dolt_commit('-Am', 'new table t')",
+			"CALL dolt_checkout('-b', 'other')",
+			"alter table t drop column b",
+			"alter table t add column d int",
+			"delete from t where pk = 3",
+			"update t set a = 9 where a = NULL",
+			"insert into t values (7,7,7,7)",
+			"CALL dolt_commit('-am', 'modified table t')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT statement FROM dolt_patch('main', 'other', 't') ORDER BY statement_order",
+				Expected: []sql.Row{
+					{"ALTER TABLE `t` DROP `b`;"},
+					{"ALTER TABLE `t` ADD `d` int;"},
+				},
+			},
+		},
+	},
 }
 
 var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{

@@ -1183,6 +1183,233 @@ var MergeScripts = []queries.ScriptTest{
 
 var Dolt1MergeScripts = []queries.ScriptTest{
 	{
+		Name: "dropping constraint from one branch drops from both",
+		SetUpScript: []string{
+			"create table t (i int)",
+			"alter table t add constraint c check (i > 0)",
+			"call dolt_commit('-Am', 'initial commit')",
+
+			"call dolt_checkout('-b', 'other')",
+			"insert into t values (1)",
+			"call dolt_commit('-Am', 'changes to other')",
+
+			"call dolt_checkout('main')",
+			"alter table t drop constraint c",
+			"call dolt_commit('-Am', 'changes to main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select * from t",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "merge constraint with valid data on different branches",
+		SetUpScript: []string{
+			"create table t (i int)",
+			"call dolt_commit('-Am', 'initial commit')",
+
+			"call dolt_checkout('-b', 'other')",
+			"insert into t values (1)",
+			"call dolt_commit('-Am', 'changes to other')",
+
+			"call dolt_checkout('main')",
+			"alter table t add check (i < 10)",
+			"call dolt_commit('-Am', 'changes to main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select * from t",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "Pk convergent updates to sec diff congruent",
+		SetUpScript: []string{
+			"create table xyz (x int primary key, y int, z int, key y_idx(y), key z_idx(z))",
+			"insert into xyz values (0,0,0), (1,1,1)",
+			"call dolt_commit('-Am', 'make table')",
+
+			"call dolt_checkout('-b', 'feature')",
+			"update xyz set z = 2 where z = 1",
+			"call dolt_commit('-am', 'update z=2')",
+
+			"call dolt_checkout('main')",
+			"update xyz set y = 2 where z = 1",
+			"call dolt_commit('-am', 'update y=2')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select y from xyz where y >= 0",
+				Expected: []sql.Row{{0}, {2}},
+			},
+			{
+				Query:    "select z from xyz where y >= 0",
+				Expected: []sql.Row{{0}, {2}},
+			},
+		},
+	},
+	{
+		Name: "Pk convergent left and right adds",
+		SetUpScript: []string{
+			"create table xyz (x int primary key, y int, z int, key y_idx(y), key z_idx(z))",
+			"insert into xyz values (0,0,0)",
+			"call dolt_commit('-Am', 'make table')",
+
+			"call dolt_checkout('-b', 'feature')",
+			"insert into xyz values (1,1,1)",
+			"call dolt_commit('-am', 'adds')",
+
+			"call dolt_checkout('main')",
+			"insert into xyz values (1,1,1), (2,2,2)",
+			"call dolt_commit('-am', 'adds')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select y from xyz where y >= 0",
+				Expected: []sql.Row{{0}, {1}, {2}},
+			},
+			{
+				Query:    "select z from xyz where y >= 0",
+				Expected: []sql.Row{{0}, {1}, {2}},
+			},
+		},
+	},
+	{
+		Name: "Pk adds+convergent adds to sec congruent",
+		SetUpScript: []string{
+			"create table xyz (x int primary key, y int, z int, key y_idx(y), key z_idx(z))",
+			"insert into xyz values (0,0,0), (1,1,1)",
+			"call dolt_commit('-Am', 'make table')",
+
+			"call dolt_checkout('-b', 'feature')",
+			"insert into xyz values (3,3,3)",
+			"update xyz set z = 5 where z = 1",
+			"call dolt_commit('-am', 'right adds + edit')",
+
+			"call dolt_checkout('main')",
+			"insert into xyz values (4,4,4)",
+			"update xyz set y = 2 where z = 1",
+			"call dolt_commit('-am', 'left adds + update')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select y from xyz where y >= 0 order by 1",
+				Expected: []sql.Row{{0}, {2}, {3}, {4}},
+			},
+			{
+				Query:    "select z from xyz where y >= 0 order by 1",
+				Expected: []sql.Row{{0}, {3}, {4}, {5}},
+			},
+		},
+	},
+	{
+		Name: "Left deletes",
+		SetUpScript: []string{
+			"create table xyz (x int primary key, y int, z int, key y_idx(y), key z_idx(z))",
+			"insert into xyz values (0,0,0), (1,1,1),(2,2,2),(3,3,3)",
+			"call dolt_commit('-Am', 'make table')",
+
+			"call dolt_checkout('-b', 'feature')",
+			"delete from xyz where y = 3",
+			"call dolt_commit('-am', 'right deletes')",
+
+			"call dolt_checkout('main')",
+			"delete from xyz where y = 1",
+			"call dolt_commit('-am', 'left deletes')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select y from xyz where y >= 0 order by 1",
+				Expected: []sql.Row{{0}, {2}},
+			},
+			{
+				Query:    "select z from xyz where y >= 0 order by 1",
+				Expected: []sql.Row{{0}, {2}},
+			},
+		},
+	},
+	{
+		Name: "delete conflict",
+		SetUpScript: []string{
+			"set @@dolt_allow_commit_conflicts = 1",
+			"create table xyz (x int primary key, y int, z int, key y_idx(y), key z_idx(z))",
+			"insert into xyz values (0,0,0), (1,1,1)",
+			"call dolt_commit('-Am', 'make table')",
+
+			"call dolt_checkout('-b', 'feature')",
+			"delete from xyz where y = 1",
+			"call dolt_commit('-am', 'right delete')",
+
+			"call dolt_checkout('main')",
+			"update xyz set y = 2 where y = 1",
+			"call dolt_commit('-am', 'left update')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select our_y, our_diff_type, their_y, their_diff_type from dolt_conflicts_xyz",
+				Expected: []sql.Row{{2, "modified", nil, "removed"}},
+			},
+		},
+	},
+	{
+		Name: "divergent edit conflict",
+		SetUpScript: []string{
+			"set @@dolt_allow_commit_conflicts = 1",
+			"create table xyz (x int primary key, y int, z int, key y_idx(y), key z_idx(z))",
+			"insert into xyz values (0,0,0), (1,1,1)",
+			"call dolt_commit('-Am', 'make table')",
+
+			"call dolt_checkout('-b', 'feature')",
+			"update xyz set y = 3 where y = 1",
+			"call dolt_commit('-am', 'right delete')",
+
+			"call dolt_checkout('main')",
+			"update xyz set y = 2 where y = 1",
+			"call dolt_commit('-am', 'left update')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select our_y, our_diff_type, their_y, their_diff_type from dolt_conflicts_xyz",
+				Expected: []sql.Row{{2, "modified", 3, "modified"}},
+			},
+		},
+	},
+	{
 		Name: "Merge errors if the primary key types have changed (even if the new type has the same NomsKind)",
 		SetUpScript: []string{
 			"CREATE TABLE t (pk1 bigint, pk2 bigint, PRIMARY KEY (pk1, pk2));",
@@ -2315,6 +2542,34 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			{
 				Query:    "select col1, col2, col3 from dolt_constraint_violations_t;",
 				Expected: []sql.Row{{1, 2, 3}, {2, 2, 3}},
+			},
+		},
+	},
+	{
+		Name: "unique key violation should be thrown even if a PK column is used in the unique index 2",
+		SetUpScript: []string{
+			"create table wxyz (w int, x int, y int, z int, primary key (x, w));",
+			"alter table wxyz add unique (z, x);",
+			"call dolt_commit('-Am', 'init');",
+
+			"call dolt_checkout('-b', 'right');",
+			"insert into wxyz values (1, 2, 3, 4);",
+			"call dolt_commit('-Am', 'right');",
+
+			"call dolt_checkout('main');",
+			"insert into wxyz values (5, 2, 6, 4);",
+			"call dolt_commit('-Am', 'left');",
+
+			"set dolt_force_transaction_commit = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select w, x, y, z from dolt_constraint_violations_wxyz;",
+				Expected: []sql.Row{{1, 2, 3, 4}, {5, 2, 6, 4}},
 			},
 		},
 	},

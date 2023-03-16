@@ -23,6 +23,7 @@ package chunks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -50,19 +51,25 @@ func (ms *MemoryStorage) NewView() ChunkStore {
 	if version == "" {
 		version = constants.FormatLD1String
 	}
+	v := &MemoryStoreView{storage: ms, rootHash: ms.rootHash, version: version}
+	v.gcCond = sync.NewCond(&v.mu)
 
-	return &MemoryStoreView{storage: ms, rootHash: ms.rootHash, version: version}
+	return v
 }
 
 // NewViewWithFormat makes a MemoryStoreView with a specific NomsBinFormat.
 func (ms *MemoryStorage) NewViewWithFormat(nbf string) ChunkStore {
-	return &MemoryStoreView{storage: ms, rootHash: ms.rootHash, version: nbf}
+	v := &MemoryStoreView{storage: ms, rootHash: ms.rootHash, version: nbf}
+	v.gcCond = sync.NewCond(&v.mu)
+	return v
 }
 
 // NewViewWithVersion vends a MemoryStoreView backed by this MemoryStorage. It's
 // initialized with the currently "persisted" root. Uses the default format.
 func (ms *MemoryStorage) NewViewWithDefaultFormat() ChunkStore {
-	return &MemoryStoreView{storage: ms, rootHash: ms.rootHash, version: constants.FormatDefaultString}
+	v := &MemoryStoreView{storage: ms, rootHash: ms.rootHash, version: constants.FormatDefaultString}
+	v.gcCond = sync.NewCond(&v.mu)
+	return v
 }
 
 // Get retrieves the Chunk with the Hash h, returning EmptyChunk if it's not
@@ -130,8 +137,13 @@ type MemoryStoreView struct {
 	pending     map[hash.Hash]Chunk
 	pendingRefs hash.HashSet
 	rootHash    hash.Hash
-	mu          sync.RWMutex
-	version     string
+
+	mu         sync.RWMutex
+	isGC       bool
+	gcCond     *sync.Cond
+	keeperFunc func(hash.Hash) bool
+
+	version string
 
 	storage *MemoryStorage
 }
@@ -221,6 +233,12 @@ func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 
+	if ms.keeperFunc != nil {
+		if ms.keeperFunc(c.Hash()) {
+			ms.waitForGC()
+		}
+	}
+
 	if ms.pendingRefs == nil {
 		ms.pendingRefs = addrs
 	} else {
@@ -255,9 +273,45 @@ func (ms *MemoryStoreView) Root(ctx context.Context) (hash.Hash, error) {
 	return ms.rootHash, nil
 }
 
+func (ms *MemoryStoreView) waitForGC() {
+	for ms.isGC {
+		ms.gcCond.Wait()
+	}
+}
+
+func (ms *MemoryStoreView) transitionToGC(keeperFunc func(hash.Hash) bool) error {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	if ms.isGC == true {
+		return errors.New("gc already in progress")
+	}
+	ms.isGC = true
+	ms.keeperFunc = keeperFunc
+	ms.gcCond.Broadcast()
+	return nil
+}
+
+func (ms *MemoryStoreView) transitionToNoGC() {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	if !ms.isGC {
+		panic("attempt to toggle GC to false when GC is not true")
+	}
+	ms.isGC = false
+	ms.keeperFunc = nil
+	ms.gcCond.Broadcast()
+}
+
 func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
+
+	if ms.keeperFunc != nil {
+		if ms.keeperFunc(current) {
+			ms.waitForGC()
+		}
+	}
+
 	if last != ms.rootHash {
 		return false, nil
 	}
@@ -275,21 +329,31 @@ func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) 
 	return success, nil
 }
 
-func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest ChunkStore) error {
+func (ms *MemoryStoreView) BeginGC(keeper func(hash.Hash) bool) error {
+	return ms.transitionToGC(keeper)
+}
+
+func (ms *MemoryStoreView) EndGC() {
+	ms.transitionToNoGC()
+}
+
+func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore) error {
 	if dest != ms {
 		panic("unsupported")
 	}
 
-	if last != ms.rootHash {
-		return fmt.Errorf("last does not match ms.Root()")
+	ms.mu.Lock()
+	if !ms.isGC {
+		panic("MarkAndSweepChunks called without BeginGC")
 	}
+	ms.mu.Unlock()
 
 	keepers := make(map[hash.Hash]Chunk, ms.storage.Len())
 
 LOOP:
 	for {
 		select {
-		case hs, ok := <-keepChunks:
+		case hs, ok := <-hashes:
 			if !ok {
 				break LOOP
 			}
@@ -305,6 +369,8 @@ LOOP:
 		}
 	}
 
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
 	ms.storage = &MemoryStorage{rootHash: ms.rootHash, data: keepers}
 	ms.pending = map[hash.Hash]Chunk{}
 	return nil

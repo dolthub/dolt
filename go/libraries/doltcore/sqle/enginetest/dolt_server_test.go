@@ -301,10 +301,131 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 	},
 }
 
+// DropDatabaseMultiSessionScriptTests test that when dropping a database, other sessions are properly updated
+// and don't get left with old state that causes incorrect results.
+// Note: this test needs to be run against a real Dolt sql-server, and not just with our transaction test scripts,
+// because the transaction tests currently have a different behavior for session management and don't emulate prod.
+var DropDatabaseMultiSessionScriptTests = []queries.ScriptTest{
+	{
+		Name: "Test multi-session behavior for dropping databases",
+		SetUpScript: []string{
+			"create database db01;",
+			"create table db01.t01 (pk int primary key);",
+			"insert into db01.t01 values (101), (202), (303);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ use db01;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ use db01;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ show tables;",
+				Expected: []sql.Row{{"t01"}},
+			},
+			{
+				Query:    "/* client b */ show tables;",
+				Expected: []sql.Row{{"t01"}},
+			},
+			{
+				Query:    "/* client a */ drop database db01;",
+				Expected: []sql.Row{},
+			},
+			{
+				// TODO: This test runner doesn't currently support asserting against null values
+				Query:    "/* client a */ select database() is NULL;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client a */ show databases like 'db01';",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ create database db01;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select database();",
+				Expected: []sql.Row{{"db01"}},
+			},
+			{
+				Query:    "/* client b */ show tables;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "Test multi-session behavior for dropping databases with a revision db",
+		SetUpScript: []string{
+			"create database db01;",
+			"use db01;",
+			"create table db01.t01 (pk int primary key);",
+			"insert into db01.t01 values (101), (202), (303);",
+			"call dolt_commit('-Am', 'commit on main');",
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into db01.t01 values (1001), (2002), (3003);",
+			"call dolt_commit('-Am', 'commit on branch1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ use db01;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ use `db01/branch1`;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ show tables;",
+				Expected: []sql.Row{{"t01"}},
+			},
+			{
+				Query:    "/* client b */ show tables;",
+				Expected: []sql.Row{{"t01"}},
+			},
+			{
+				Query:    "/* client a */ drop database db01;",
+				Expected: []sql.Row{},
+			},
+			{
+				// TODO: This test runner doesn't currently support asserting against null values
+				Query:    "/* client a */ select database() is NULL;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client a */ show databases like 'db01';",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ create database db01;",
+				Expected: []sql.Row{},
+			},
+			{
+				// At this point, this is an invalid revision database, and any queries against it will fail.
+				Query:    "/* client b */ select database();",
+				Expected: []sql.Row{{"db01/branch1"}},
+			},
+			{
+				Query:          "/* client b */ show tables;",
+				ExpectedErrStr: "Error 1105: database not found: db01/branch1",
+			},
+		},
+	},
+}
+
 // TestDoltMultiSessionBehavior runs tests that exercise multi-session logic on a running SQL server. Statements
 // are sent through the server, from out of process, instead of directly to the in-process engine API.
 func TestDoltMultiSessionBehavior(t *testing.T) {
 	testMultiSessionScriptTests(t, DoltBranchMultiSessionScriptTests)
+}
+
+// TestDropDatabaseMultiSessionBehavior tests that dropping a database from one session correctly updates state
+// in other sessions.
+func TestDropDatabaseMultiSessionBehavior(t *testing.T) {
+	testMultiSessionScriptTests(t, DropDatabaseMultiSessionScriptTests)
 }
 
 func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
