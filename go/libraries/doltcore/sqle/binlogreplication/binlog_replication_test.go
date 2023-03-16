@@ -789,9 +789,14 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 
 	socketPath := filepath.Join("/tmp", fmt.Sprintf("dolt.%v.sock", doltPort))
 
+	// use an admin user NOT named "root" to test that we don't require the "root" account
+	// TODO: We could use a randomly created user login? This might make logging into the DB
+	//       to debug more challenging... but we could always include the admin user in the logs
+	adminUser := fmt.Sprintf("admin")
+
 	args := []string{"go", "run", "./cmd/dolt",
 		"sql-server",
-		"-uroot",
+		fmt.Sprintf("-u%s", adminUser),
 		"--loglevel=TRACE",
 		fmt.Sprintf("--data-dir=%s", dir),
 		fmt.Sprintf("--port=%v", doltPort),
@@ -837,7 +842,7 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 
 	fmt.Printf("Dolt CMD: %s\n", cmd.String())
 
-	dsn := fmt.Sprintf("root@tcp(127.0.0.1:%v)/", doltPort)
+	dsn := fmt.Sprintf("%s@tcp(127.0.0.1:%v)/", adminUser, doltPort)
 	replicaDatabase = sqlx.MustOpen("mysql", dsn)
 
 	err = waitForSqlServerToStart(replicaDatabase)

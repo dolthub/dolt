@@ -20,6 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
@@ -122,6 +124,13 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 	if d.ctx == nil {
 		return fmt.Errorf("no execution context set for the replica controller")
 	}
+
+	// Set execution context's user to the current user who started replication
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	d.ctx.SetClient(sql.Client{
+		User:    doltSession.GetUser(),
+		Address: "localhost",
+	})
 
 	ctx.GetLogger().Info("starting binlog replication...")
 	d.applier.Go(d.ctx)
