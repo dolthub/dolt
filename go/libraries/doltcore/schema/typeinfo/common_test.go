@@ -168,8 +168,7 @@ func generateBlobStringType(t *testing.T, length int64) *blobStringType {
 	return &blobStringType{gmstypes.MustCreateStringWithDefaults(sqltypes.Text, length)}
 }
 
-func mustBlobString(t *testing.T, str string) types.Blob {
-	vrw := types.NewMemoryValueStore()
+func mustBlobString(t *testing.T, vrw types.ValueReadWriter, str string) types.Blob {
 	blob, err := types.NewBlob(context.Background(), vrw, strings.NewReader(str))
 	require.NoError(t, err)
 	return blob

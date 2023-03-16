@@ -133,7 +133,7 @@ func testConcurrentGC(t *testing.T, test concurrentGCtest) {
 			return runWithSqlSession(ectx, eng, func(sctx *sql.Context, eng *engine.SqlEngine) error {
 				defer func() {
 					if r := recover(); r != nil {
-						//t.Logf("panic in client %s: %v", cl.id, r)
+						// t.Logf("panic in client %s: %v", cl.id, r)
 					}
 				}()
 				// generate and run 128 batches of queries
@@ -154,6 +154,21 @@ func testConcurrentGC(t *testing.T, test concurrentGCtest) {
 		})
 	}
 	require.NoError(t, eg.Wait())
+
+	// now run a simple write, which is allowed to fail spuriously
+	runWithSqlSession(ctx, eng, func(sctx *sql.Context, eng *engine.SqlEngine) (err error) {
+		qq := []string{
+			// ensure we have garbage to collect
+			"CREATE TABLE garbage (val int)",
+			"DROP TABLE garbage",
+		}
+		for _, q := range qq {
+			if err = execQuery(sctx, eng, q); err != nil {
+				return err
+			}
+		}
+		return
+	})
 
 	// now run a full GC and assert we don't find dangling refs
 	err = runWithSqlSession(ctx, eng, func(sctx *sql.Context, eng *engine.SqlEngine) (err error) {
@@ -331,7 +346,7 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 		}
 	}
 
-	err := dEnv.DoltDB.GC(ctx)
+	err := dEnv.DoltDB.GC(ctx, nil)
 	require.NoError(t, err)
 	test.postGCFunc(ctx, t, dEnv.DoltDB, res)
 
