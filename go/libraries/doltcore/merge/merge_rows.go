@@ -118,11 +118,11 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	if finished != nil || stats != nil || err != nil {
 		return finished, stats, err
 	}
-	
+
 	if mergeOpts.IsCherryPick && !schema.SchemasAreEqual(tm.leftSch, tm.rightSch) {
 		return nil, nil, errors.New(fmt.Sprintf("schema changes not supported: %s table schema does not match in current HEAD and cherry-pick commit.", tblName))
 	}
-	
+
 	mergeSch, schConflicts, err := SchemaMerge(ctx, tm.vrw.Format(), tm.leftSch, tm.rightSch, tm.ancSch, tblName)
 	if err != nil {
 		return nil, nil, err

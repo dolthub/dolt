@@ -648,7 +648,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "call dolt_merge('b1')",
+				Query:    "call dolt_merge('b1')",
 				Expected: []sql.Row{{0, 0}},
 			},
 			{
