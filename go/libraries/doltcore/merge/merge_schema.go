@@ -118,7 +118,7 @@ func (c ChkConflict) String() string {
 	return ""
 }
 
-var ErrMergeWithDifferentPkSets = errors.New("error: cannot merge two tables with different primary key sets")
+var ErrMergeWithDifferentPks = errors.New("error: cannot merge two tables with different primary keys")
 
 // SchemaMerge performs a three-way merge of ourSch, theirSch, and ancSch.
 func SchemaMerge(ctx context.Context, format *types.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, err error) {
@@ -129,8 +129,8 @@ func SchemaMerge(ctx context.Context, format *types.NomsBinFormat, ourSch, their
 
 	// TODO: We'll remove this once it's possible to get diff and merge on different primary key sets
 	// TODO: decide how to merge different orders of PKS
-	if !schema.ArePrimaryKeySetsDiffable(format, ourSch, theirSch) {
-		return nil, SchemaConflict{}, ErrMergeWithDifferentPkSets
+	if !schema.ArePrimaryKeySetsDiffable(format, ourSch, theirSch) || !schema.ArePrimaryKeySetsDiffable(format, ourSch, ancSch) {
+		return nil, SchemaConflict{}, ErrMergeWithDifferentPks
 	}
 
 	var mergedCC *schema.ColCollection
