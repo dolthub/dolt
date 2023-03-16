@@ -649,7 +649,7 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "call dolt_merge('b1')",
-				ExpectedErrStr: "error: cannot merge table t1 because its primary keys differ",
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query:    "select count(*) from dolt_conflicts",
@@ -1201,7 +1201,7 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('right');",
-				ExpectedErrStr: "error: cannot merge table t because its primary keys differ",
+				ExpectedErrStr: "error: cannot merge two tables with different primary keys",
 			},
 		},
 	},
