@@ -106,22 +106,11 @@ func NewMerger(
 }
 
 // MergeTable merges schema and table data for the table tblName.
+// TODO: this code will loop infinitely when merging certain schema changes
 func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*doltdb.Table, *MergeStats, error) {
 	tm, err := rm.makeTableMerger(ctx, tblName)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	// Before we do any work to merge the table, check to see if we can actually do a merge. Various innocuous seeming
-	// operations below will fail badly or enter infinite loops when attempting to diff tables with different primary
-	// keys.
-	if !schema.ArePrimaryKeySetsDiffable(tm.vrw.Format(), tm.leftSch, tm.rightSch) ||
-		!schema.ArePrimaryKeySetsDiffable(tm.vrw.Format(), tm.leftSch, tm.ancSch) {
-		return nil, nil, fmt.Errorf("error: cannot merge table %s because its primary keys differ", tblName)
-	}
-
-	if mergeOpts.IsCherryPick && !schema.SchemasAreEqual(tm.leftSch, tm.rightSch) {
-		return nil, nil, errors.New(fmt.Sprintf("schema changes not supported: %s table schema does not match in current HEAD and cherry-pick commit.", tblName))
 	}
 
 	// short-circuit here if we can
@@ -129,7 +118,11 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	if finished != nil || stats != nil || err != nil {
 		return finished, stats, err
 	}
-
+	
+	if mergeOpts.IsCherryPick && !schema.SchemasAreEqual(tm.leftSch, tm.rightSch) {
+		return nil, nil, errors.New(fmt.Sprintf("schema changes not supported: %s table schema does not match in current HEAD and cherry-pick commit.", tblName))
+	}
+	
 	mergeSch, schConflicts, err := SchemaMerge(ctx, tm.vrw.Format(), tm.leftSch, tm.rightSch, tm.ancSch, tblName)
 	if err != nil {
 		return nil, nil, err
@@ -491,11 +484,6 @@ func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltd
 	mergeSch, err := mergeTbl.GetSchema(ctx)
 	if err != nil {
 		return MergeStats{}, err
-	}
-
-	// sanity check: the diff code may loop infinitely if we have different primary keys
-	if !schema.ArePrimaryKeySetsDiffable(tbl.Format(), sch, mergeSch) {
-		return MergeStats{}, fmt.Errorf("cannot diff tables with different primary keys")
 	}
 
 	ae := atomicerr.New()

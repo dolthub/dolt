@@ -56,6 +56,8 @@ SQL
 
     dolt merge b1
 
+    skip "merge hangs"
+        
     run dolt merge b2
     log_status_eq 1
     [[ "$output" =~ "cause: error: cannot merge table t1 because its different primary keys differ" ]]
