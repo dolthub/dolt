@@ -129,24 +129,37 @@ func (j *chunkJournal) bootstrapJournalWriter(ctx context.Context) (err error) {
 		return err
 	}
 
-	var contents manifestContents
-	ok, contents, err = j.backing.ParseIfExists(ctx, &Stats{}, nil)
+	mc, err := trueUpBackingManifest(ctx, root, j.backing)
 	if err != nil {
 		return err
 	}
-
-	if ok {
-		// the journal file is the source of truth for the root hash, true-up persisted manifest
-		contents.root = root
-		contents, err = j.backing.Update(ctx, contents.lock, contents, &Stats{}, nil)
-		if err != nil {
-			return err
-		}
-	} else {
-		return fmt.Errorf("manifest not found when opening chunk journal")
-	}
-	j.contents = contents
+	j.contents = mc
 	return
+}
+
+// the journal file is the source of truth for the root hash, true-up persisted manifest
+func trueUpBackingManifest(ctx context.Context, root hash.Hash, backing manifest) (manifestContents, error) {
+	ok, mc, err := backing.ParseIfExists(ctx, &Stats{}, nil)
+	if err != nil {
+		return manifestContents{}, err
+	} else if !ok {
+		return manifestContents{}, fmt.Errorf("manifest not found when opening chunk journal")
+	}
+
+	prev := mc.lock
+	next := generateLockHash(root, mc.specs, mc.appendix)
+	mc.lock = next
+	mc.root = root
+
+	mc, err = backing.Update(ctx, prev, mc, &Stats{}, nil)
+	if err != nil {
+		return manifestContents{}, err
+	} else if mc.lock != next {
+		return manifestContents{}, errOptimisticLockFailedTables
+	} else if mc.root != root {
+		return manifestContents{}, errOptimisticLockFailedRoot
+	}
+	return mc, nil
 }
 
 // Persist implements tablePersister.
