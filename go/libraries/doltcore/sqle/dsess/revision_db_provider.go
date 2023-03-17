@@ -69,8 +69,6 @@ type RemoteReadReplicaDatabase interface {
 type DoltDatabaseProvider interface {
 	sql.MutableDatabaseProvider
 	RevisionDatabaseProvider
-	// env.RemoteDbProvider
-
 	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases.
 	FileSystem() filesys.Filesys
 	// FileSystemForDatabase returns a filesystem, with the working directory set to the root directory

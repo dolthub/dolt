@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -56,34 +55,6 @@ type SqlDatabase interface {
 	DbData() env.DbData
 	Flush(*sql.Context) error
 	EditOptions() editor.Options
-}
-
-// AllDbs returns all the databases in the given provider.
-func AllDbs(ctx *sql.Context, pro sql.DatabaseProvider) []SqlDatabase {
-	dbs := pro.AllDatabases(ctx)
-	dsqlDBs := make([]SqlDatabase, 0, len(dbs))
-	for _, db := range dbs {
-		var sqlDb SqlDatabase
-		if sqlDatabase, ok := db.(SqlDatabase); ok {
-			sqlDb = sqlDatabase
-		} else if privDatabase, ok := db.(mysql_db.PrivilegedDatabase); ok {
-			if sqlDatabase, ok := privDatabase.Unwrap().(SqlDatabase); ok {
-				sqlDb = sqlDatabase
-			}
-		}
-		if sqlDb == nil {
-			continue
-		}
-		switch v := sqlDb.(type) {
-		case ReadReplicaDatabase, Database:
-			dsqlDBs = append(dsqlDBs, v)
-		case ReadOnlyDatabase, *UserSpaceDatabase:
-		default:
-			// esoteric analyzer errors occur if we silently drop databases, usually caused by pointer receivers
-			panic("cannot cast to SqlDatabase")
-		}
-	}
-	return dsqlDBs
 }
 
 // Database implements sql.Database for a dolt DB.

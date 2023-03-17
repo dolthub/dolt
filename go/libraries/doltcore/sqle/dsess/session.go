@@ -168,7 +168,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 	}
 
 	// If we got this far, we have a valid initial database state, so add it to the session for future reuse
-	if err = d.AddDB(ctx, init); err != nil {
+	if err = d.addDB(ctx, init); err != nil {
 		return nil, ok, err
 	}
 
@@ -296,7 +296,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		}
 
 		// TODO: make this take a DB, not a DBState
-		err = d.AddDB(ctx, init)
+		err = d.addDB(ctx, init)
 		if err != nil {
 			return nil, err
 		}
@@ -1113,9 +1113,9 @@ func (d *DoltSession) HasDB(_ *sql.Context, dbName string) bool {
 	return ok
 }
 
-// AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
+// addDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
-func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
+func (d *DoltSession) addDB(ctx *sql.Context, dbState InitialDbState) error {
 	db := dbState.Db
 	DefineSystemVariablesForDB(db.Name())
 
