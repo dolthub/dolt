@@ -165,7 +165,10 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (mi ManifestInfo, err error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-	nbs.waitForGC()
+	err = nbs.waitForGC(ctx)
+	if err != nil {
+		return
+	}
 
 	nbs.checkAllManifestUpdatesExist(ctx, updates)
 
@@ -244,7 +247,10 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updates map[hash.Hash]uint32, option ManifestAppendixOption) (mi ManifestInfo, err error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-	nbs.waitForGC()
+	err = nbs.waitForGC(ctx)
+	if err != nil {
+		return
+	}
 
 	nbs.checkAllManifestUpdatesExist(ctx, updates)
 
@@ -392,7 +398,10 @@ func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSp
 func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root hash.Hash, tableFiles map[hash.Hash]uint32, appendixTableFiles map[hash.Hash]uint32) (err error) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
-	store.waitForGC()
+	err = store.waitForGC(ctx)
+	if err != nil {
+		return
+	}
 
 	contents := manifestContents{
 		root:    root,
@@ -604,10 +613,20 @@ func (nbs *NomsBlockStore) WithoutConjoiner() *NomsBlockStore {
 }
 
 // Wait for GC to complete to continue with writes
-func (nbs *NomsBlockStore) waitForGC() {
-	for nbs.gcInProgress {
+func (nbs *NomsBlockStore) waitForGC(ctx context.Context) error {
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		select {
+		case <-ctx.Done():
+			nbs.cond.Broadcast()
+		case <-stop:
+		}
+	}()
+	for nbs.gcInProgress && ctx.Err() == nil {
 		nbs.cond.Wait()
 	}
+	return ctx.Err()
 }
 
 func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
@@ -668,7 +687,9 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs 
 			if nbs.keeperFunc != nil {
 				if nbs.keeperFunc(ch.Hash()) {
 					retry = true
-					nbs.waitForGC()
+					if err := nbs.waitForGC(ctx); err != nil {
+						return false, err
+					}
 				}
 			}
 		}
@@ -1032,7 +1053,10 @@ func (nbs *NomsBlockStore) commit(ctx context.Context, current, last hash.Hash, 
 
 	if nbs.keeperFunc != nil {
 		if nbs.keeperFunc(current) {
-			nbs.waitForGC()
+			err = nbs.waitForGC(ctx)
+			if err != nil {
+				return false, err
+			}
 		}
 	}
 
@@ -1614,7 +1638,24 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 	}
 	oldTables := nbs.tables
 	nbs.tables, nbs.upstream = ts, upstream
-	return oldTables.close()
+	err = oldTables.close()
+	if err != nil {
+		return err
+	}
+
+	// When this is called, we are at a safepoint in the GC process.
+	// We clear novel and the memtable, which are not coming with us
+	// into the new store.
+	oldNovel := nbs.tables.novel
+	nbs.tables.novel = make(chunkSourceSet)
+	for _, css := range oldNovel {
+		err = css.close()
+		if err != nil {
+			return err
+		}
+	}
+	nbs.mt = nil
+	return nil
 }
 
 // SetRootChunk changes the root chunk hash from the previous value to the new root.
@@ -1625,7 +1666,10 @@ func (nbs *NomsBlockStore) SetRootChunk(ctx context.Context, root, previous hash
 func (nbs *NomsBlockStore) setRootChunk(ctx context.Context, root, previous hash.Hash, checker refCheck) error {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-	nbs.waitForGC()
+	err := nbs.waitForGC(ctx)
+	if err != nil {
+		return err
+	}
 	for {
 		err := nbs.updateManifest(ctx, root, previous, checker)
 

@@ -29,6 +29,9 @@ import (
 )
 
 func TestConcurrentGC(t *testing.T) {
+	NumThreads := 8
+	Duration := 30 * time.Second
+
         u, err := driver.NewDoltUser()
         require.NoError(t, err)
         t.Cleanup(func() {
@@ -57,7 +60,7 @@ func TestConcurrentGC(t *testing.T) {
 		_, err = conn.ExecContext(context.Background(), "create table vals (id int primary key, val int)")
 		require.NoError(t, err)
 		vals := []string{}
-		for i := 0; i < 7 * 1024; i++ {
+		for i := 0; i <= 7 * 1024; i++ {
 			vals = append(vals, fmt.Sprintf("(%d,0)", i))
 		}
 		_, err = conn.ExecContext(context.Background(), "insert into vals values " + strings.Join(vals, ","))
@@ -65,15 +68,14 @@ func TestConcurrentGC(t *testing.T) {
 	}()
 
 	start := time.Now()
-	dur := 30 * time.Second
 
 	var eg errgroup.Group
 
 	// We're going to spawn 8 threads, each running mutations on their own part of the table...
-	for i := 0; i < 8; i++ {
+	for i := 0; i < NumThreads; i++ {
 		i := i * 1024
 		eg.Go(func() error {
-			for j := 0; time.Since(start) < dur; j++ {
+			for j := 0; time.Since(start) < Duration; j++ {
 				func() {
 					conn, err := db.Conn(context.Background())
 					if err != nil {
@@ -93,17 +95,21 @@ func TestConcurrentGC(t *testing.T) {
 
 	// We spawn a thread which calls dolt_gc() periodically
 	eg.Go(func() error {
-		for time.Since(start) < dur {
+		for time.Since(start) < Duration {
 			func() {
 				conn, err := db.Conn(context.Background())
 				if err != nil {
 					t.Logf("err in Conn for dolt_gc: %v", err)
 					return
 				}
+				b := time.Now()
 				_, err = conn.ExecContext(context.Background(), "call dolt_gc()")
 				if err != nil {
 					t.Logf("err in Exec dolt_gc: %v", err)
+				} else {
+					t.Logf("successful dolt_gc took %v", time.Since(b))
 				}
+				// After calling dolt_gc, the connection is bad. Remove it from the connection pool.
 				conn.Raw(func(_ any) error {
 					return sqldriver.ErrBadConn
 				})
@@ -114,4 +120,21 @@ func TestConcurrentGC(t *testing.T) {
 	})
 
 	eg.Wait()
+
+	conn, err := db.Conn(context.Background())
+	require.NoError(t, err)
+	rows, err := conn.QueryContext(context.Background(), "select val from vals where id in (0, 1024, 2048, 3072, 4096, 5120, 6144, 7168)")
+	i := 0
+	cnt := 0
+	for rows.Next() {
+		var val int
+		i += 1
+		require.NoError(t, rows.Scan(&val))
+		cnt += val
+	}
+	require.Equal(t, 8, i)
+	t.Logf("successfully updated val %d times", cnt)
+	require.NoError(t, rows.Close())
+	require.NoError(t, rows.Err())
+	require.NoError(t, conn.Close())
 }
