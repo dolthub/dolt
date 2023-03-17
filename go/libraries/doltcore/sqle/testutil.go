@@ -141,17 +141,6 @@ func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db SqlDatabase) (*sql
 
 	engine := sqle.NewDefault(pro)
 	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro)
-
-	dbState, err := getDbState(db, dEnv)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = dsess.DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, dbState)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	sqlCtx.SetCurrentDatabase(db.Name())
 	return engine, sqlCtx, nil
 }
