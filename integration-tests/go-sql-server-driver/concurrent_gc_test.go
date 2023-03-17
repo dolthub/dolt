@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -37,7 +38,7 @@ func TestConcurrentGC(t *testing.T) {
 		gct.run(t)
 	})
 	gct.commit = true
-	t.Run("Commits", func(t *testing.T) {
+	t.Run("WithCommits", func(t *testing.T) {
 		gct.run(t)
 	})
 }
@@ -66,34 +67,62 @@ func (gct gcTest) createDB(t *testing.T, ctx context.Context, db *sql.DB) {
 	require.NoError(t, err)
 }
 
-func (gct gcTest) doUpdate(t *testing.T, ctx context.Context, db *sql.DB, i int) {
+func (gct gcTest) doUpdate(t *testing.T, ctx context.Context, db *sql.DB, i int) error {
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Logf("err in Conn: %v", err)
-		return
+		return nil
 	}
 	defer conn.Close()
 	_, err = conn.ExecContext(ctx, "update vals set val = val+1 where id = ?", i)
 	if err != nil {
+		if !assert.NotContains(t, err.Error(), "dangling ref") {
+			return err
+		}
+		if !assert.NotContains(t, err.Error(), "is unexpected noms value") {
+			return err
+		}
+		if !assert.NotContains(t, err.Error(), "interface conversion: types.Value is nil") {
+			return err
+		}
 		t.Logf("err in Exec update: %v", err)
 	}
 	if gct.commit {
 		_, err = conn.ExecContext(ctx, fmt.Sprintf("call dolt_commit('-am', 'increment vals id = %d')", i))
 		if err != nil {
+			if !assert.NotContains(t, err.Error(), "dangling ref") {
+				return err
+			}
+			if !assert.NotContains(t, err.Error(), "is unexpected noms value") {
+				return err
+			}
+			if !assert.NotContains(t, err.Error(), "interface conversion: types.Value is nil") {
+				return err
+			}
 			t.Logf("err in Exec call dolt_commit: %v", err)
 		}
 	}
+	return nil
 }
 
-func (gct gcTest) doGC(t *testing.T, ctx context.Context, db *sql.DB) {
+func (gct gcTest) doGC(t *testing.T, ctx context.Context, db *sql.DB) error {
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Logf("err in Conn for dolt_gc: %v", err)
-		return
+		return nil
 	}
 	b := time.Now()
 	_, err = conn.ExecContext(ctx, "call dolt_gc()")
 	if err != nil {
+		if !assert.NotContains(t, err.Error(), "dangling ref") {
+			return err
+		}
+		if !assert.NotContains(t, err.Error(), "is unexpected noms value") {
+			return err
+		}
+		if !assert.NotContains(t, err.Error(), "interface conversion: types.Value is nil") {
+			return err
+		}
 		t.Logf("err in Exec dolt_gc: %v", err)
 	} else {
 		t.Logf("successful dolt_gc took %v", time.Since(b))
@@ -102,6 +131,7 @@ func (gct gcTest) doGC(t *testing.T, ctx context.Context, db *sql.DB) {
 	conn.Raw(func(_ any) error {
 		return sqldriver.ErrBadConn
 	})
+	return nil
 }
 
 func (gct gcTest) finalize(t *testing.T, ctx context.Context, db *sql.DB) {
@@ -163,14 +193,16 @@ func (gct gcTest) run(t *testing.T) {
 
 	start := time.Now()
 
-	var eg errgroup.Group
+	eg, egCtx := errgroup.WithContext(context.Background())
 
 	// We're going to spawn 8 threads, each running mutations on their own part of the table...
 	for i := 0; i < gct.numThreads; i++ {
 		i := i * 1024
 		eg.Go(func() error {
-			for j := 0; time.Since(start) < gct.duration; j++ {
-				gct.doUpdate(t, context.Background(), db, i)
+			for j := 0; time.Since(start) < gct.duration && egCtx.Err() == nil; j++ {
+				if err := gct.doUpdate(t, egCtx, db, i); err != nil {
+					return err
+				}
 			}
 			return nil
 		})
@@ -178,14 +210,16 @@ func (gct gcTest) run(t *testing.T) {
 
 	// We spawn a thread which calls dolt_gc() periodically
 	eg.Go(func() error {
-		for time.Since(start) < gct.duration {
-			gct.doGC(t, context.Background(), db)
+		for time.Since(start) < gct.duration && egCtx.Err() == nil {
+			if err := gct.doGC(t, egCtx, db); err != nil {
+				return err
+			}
 			time.Sleep(100 * time.Millisecond)
 		}
 		return nil
 	})
 
-	eg.Wait()
+	require.NoError(t, eg.Wait())
 
 	gct.finalize(t, context.Background(), db)
 }
