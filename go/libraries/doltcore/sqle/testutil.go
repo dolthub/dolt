@@ -113,11 +113,6 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 	return db.GetRoot(ctx)
 }
 
-// NewTestSQLCtx returns a new *sql.Context with a default DoltSession, a new IndexRegistry, and a new ViewRegistry
-func NewTestSQLCtx(ctx context.Context) *sql.Context {
-	return NewTestSQLCtxWithProvider(ctx, dsess.EmptyDatabaseProvider())
-}
-
 func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider) *sql.Context {
 	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config2.NewMapConfig(make(map[string]string)), branch_control.CreateDefaultController())
 	if err != nil {
@@ -143,29 +138,6 @@ func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db SqlDatabase) (*sql
 	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro)
 	sqlCtx.SetCurrentDatabase(db.Name())
 	return engine, sqlCtx, nil
-}
-
-func getDbState(db sql.Database, dEnv *env.DoltEnv) (dsess.InitialDbState, error) {
-	ctx := context.Background()
-
-	head := dEnv.RepoStateReader().CWBHeadSpec()
-	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	ws, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	return dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     dEnv.DbData(),
-		Remotes:    dEnv.RepoState.Remotes,
-	}, nil
 }
 
 // ExecuteSelect executes the select statement given and returns the resulting rows, or an error if one is encountered.

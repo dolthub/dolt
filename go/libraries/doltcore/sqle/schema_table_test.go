@@ -27,26 +27,20 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 func TestSchemaTableMigrationOriginal(t *testing.T) {
-	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
+	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	dbState, err := getDbState(db, dEnv)
+	_, ctx, err := NewTestEngine(dEnv, context.Background(), db)
 	require.NoError(t, err)
-
-	err = dsess.DSessFromSess(ctx.Session).AddDB(ctx, dbState)
-	require.NoError(t, err)
-	ctx.SetCurrentDatabase(db.Name())
 
 	err = db.createSqlTable(ctx, doltdb.SchemasTableName, sql.NewPrimaryKeySchema(sql.Schema{ // original schema of dolt_schemas table
 		{Name: doltdb.SchemasTablesTypeCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
@@ -94,20 +88,15 @@ func TestSchemaTableMigrationOriginal(t *testing.T) {
 }
 
 func TestSchemaTableMigrationV1(t *testing.T) {
-	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
+	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	dbState, err := getDbState(db, dEnv)
+	_, ctx, err := NewTestEngine(dEnv, context.Background(), db)
 	require.NoError(t, err)
-
-	err = dsess.DSessFromSess(ctx.Session).AddDB(ctx, dbState)
-	require.NoError(t, err)
-	ctx.SetCurrentDatabase(db.Name())
 
 	// original schema of dolt_schemas table with the ID column
 	err = db.createSqlTable(ctx, doltdb.SchemasTableName, sql.NewPrimaryKeySchema(sql.Schema{

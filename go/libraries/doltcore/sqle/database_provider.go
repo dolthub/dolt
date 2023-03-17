@@ -461,13 +461,8 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 	formattedName := formatDbMapKeyName(db.Name())
 	p.databases[formattedName] = db
 	p.dbLocations[formattedName] = newEnv.FS
-
-	dbstate, err := GetInitialDBState(ctx, db, "")
-	if err != nil {
-		return err
-	}
-
-	return sess.AddDB(ctx, dbstate)
+	
+	return nil
 }
 
 type InitDatabaseHook func(ctx *sql.Context, pro DoltDatabaseProvider, name string, env *env.DoltEnv) error
@@ -591,7 +586,6 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 		Remote: remoteName,
 	})
 
-	sess := dsess.DSessFromSess(ctx.Session)
 	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
 	if err != nil {
 		return nil, err
@@ -609,16 +603,6 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 	}
 
 	p.databases[formatDbMapKeyName(db.Name())] = db
-
-	dbstate, err := GetInitialDBState(ctx, db, "")
-	if err != nil {
-		return nil, err
-	}
-
-	err = sess.AddDB(ctx, dbstate)
-	if err != nil {
-		return nil, err
-	}
 
 	return dEnv, nil
 }
