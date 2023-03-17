@@ -23,13 +23,9 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/nbs"
 )
 
 var gcDocs = cli.CommandDocumentationContent{
@@ -79,7 +75,6 @@ func (cmd GarbageCollectionCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_GARBAGE_COLLECTION
 }
 
-// Version displays the version of the running dolt client
 // Exec executes the command
 func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	var verr errhand.VerboseError
@@ -104,12 +99,6 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 		}
 	} else {
 		// full gc
-		dEnv, err = MaybeMigrateEnv(ctx, dEnv)
-		if err != nil {
-			verr = errhand.BuildDError("could not load manifest for gc").AddCause(err).Build()
-			return HandleVErrAndExitCode(verr, usage)
-		}
-
 		err = dEnv.DoltDB.GC(ctx, nil)
 		if err != nil {
 			if errors.Is(err, chunks.ErrNothingToCollect) {
@@ -121,29 +110,4 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
-}
-
-func MaybeMigrateEnv(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, error) {
-	migrated, err := nbs.MaybeMigrateFileManifest(ctx, dbfactory.DoltDataDir)
-	if err != nil {
-		return nil, err
-	}
-	if !migrated {
-		return dEnv, nil
-	}
-
-	// reload env with new manifest
-	tmp := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, dEnv.Version)
-
-	if tmp.CfgLoadErr != nil {
-		return nil, tmp.CfgLoadErr
-	}
-	if tmp.RSLoadErr != nil {
-		return nil, tmp.RSLoadErr
-	}
-	if tmp.DBLoadError != nil {
-		return nil, tmp.DBLoadError
-	}
-
-	return tmp, nil
 }

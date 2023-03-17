@@ -378,15 +378,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, importDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	dEnv, err := commands.MaybeMigrateEnv(ctx, dEnv)
-
-	var verr errhand.VerboseError
-	if err != nil {
-		verr = errhand.BuildDError("could not load manifest for gc").AddCause(err).Build()
-		return commands.HandleVErrAndExitCode(verr, usage)
-	}
-
-	verr = validateImportArgs(apr)
+	verr := validateImportArgs(apr)
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}

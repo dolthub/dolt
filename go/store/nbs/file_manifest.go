@@ -24,7 +24,6 @@ package nbs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -44,8 +43,6 @@ const (
 	manifestFileName = "manifest"
 	lockFileName     = "LOCK"
 
-	storageVersion4 = "4"
-
 	prefixLen = 5
 )
 
@@ -56,43 +53,6 @@ type manifestChecker func(upstream, contents manifestContents) error
 // ParseManifest parses a manifest file from the supplied reader
 func ParseManifest(r io.Reader) (ManifestInfo, error) {
 	return parseManifest(r)
-}
-
-func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
-	_, err := os.Stat(filepath.Join(dir, manifestFileName))
-	if os.IsNotExist(err) {
-		// no manifest exists, no need to migrate
-		return false, nil
-	} else if err != nil {
-		return false, err
-	}
-
-	_, contents, err := parseIfExists(ctx, dir, nil)
-	if err != nil {
-		return false, err
-	}
-
-	if contents.manifestVers == StorageVersion {
-		// already on v5, no need to migrate
-		return false, nil
-	}
-
-	check := func(_, contents manifestContents) error {
-		var empty addr
-		if contents.gcGen != empty {
-			return errors.New("migrating from v4 to v5 should result in a manifest with a 0 gcGen")
-		}
-
-		return nil
-	}
-
-	_, err = updateWithChecker(ctx, dir, syncFlush, check, contents.lock, contents, nil)
-
-	if err != nil {
-		return false, err
-	}
-
-	return true, err
 }
 
 // parse the manifest in its given format
@@ -284,18 +244,14 @@ func parseManifest(r io.Reader) (manifestContents, error) {
 		}
 		version = append(version, buf[0])
 	}
+	ver := string(version)
 	if chars >= 8 {
 		return manifestContents{}, ErrCorruptManifest
+	} else if ver != StorageVersion {
+		return manifestContents{}, errors.New("Unknown manifest version: " + ver + ". You may need to update your client")
 	}
 
-	switch string(version) {
-	case storageVersion4:
-		return parseV4Manifest(r)
-	case StorageVersion:
-		return parseV5Manifest(r)
-	default:
-		return manifestContents{}, fmt.Errorf("Unknown manifest version: %s. You may need to update your client", string(version))
-	}
+	return parseV5Manifest(r)
 }
 
 func writeManifest(temp io.Writer, contents manifestContents) error {
@@ -306,44 +262,6 @@ func writeManifest(temp io.Writer, contents manifestContents) error {
 	_, err := io.WriteString(temp, strings.Join(strs, ":"))
 
 	return err
-}
-
-// parseV4Manifest parses the v4 manifest from the Reader given. Assumes the first field (the manifest version and
-// following : character) have already been consumed by the reader.
-//
-// |-- String --|-- String --|-------- String --------|-------- String --------|-- String --|- String --|...|-- String --|- String --|
-// | nbs version:Noms version:Base32-encoded lock hash:Base32-encoded root hash:table 1 hash:table 1 cnt:...:table N hash:table N cnt|
-func parseV4Manifest(r io.Reader) (manifestContents, error) {
-	manifest, err := io.ReadAll(r)
-
-	if err != nil {
-		return manifestContents{}, err
-	}
-
-	slices := strings.Split(string(manifest), ":")
-	if len(slices) < 3 || len(slices)%2 == 0 {
-		return manifestContents{}, ErrCorruptManifest
-	}
-
-	specs, err := parseSpecs(slices[3:])
-
-	if err != nil {
-		return manifestContents{}, err
-	}
-
-	ad, err := parseAddr(slices[1])
-
-	if err != nil {
-		return manifestContents{}, err
-	}
-
-	return manifestContents{
-		manifestVers: storageVersion4,
-		nbfVers:      slices[0],
-		lock:         ad,
-		root:         hash.Parse(slices[2]),
-		specs:        specs,
-	}, nil
 }
 
 func parseIfExists(_ context.Context, dir string, readHook func() error) (exists bool, contents manifestContents, err error) {
