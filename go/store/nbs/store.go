@@ -682,16 +682,17 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs 
 			nbs.mt = newMemTable(nbs.mtSize)
 			addChunkRes = nbs.mt.addChunk(a, ch.Data())
 		}
+		if addChunkRes == chunkAdded || addChunkRes == chunkExists {
+			if nbs.keeperFunc != nil && nbs.keeperFunc(ch.Hash()) {
+				retry = true
+				if err := nbs.waitForGC(ctx); err != nil {
+					return false, err
+				}
+				continue
+			}
+		}
 		if addChunkRes == chunkAdded {
 			nbs.mt.addChildRefs(addrs)
-			if nbs.keeperFunc != nil {
-				if nbs.keeperFunc(ch.Hash()) {
-					retry = true
-					if err := nbs.waitForGC(ctx); err != nil {
-						return false, err
-					}
-				}
-			}
 		}
 	}
 
@@ -1041,6 +1042,15 @@ func (nbs *NomsBlockStore) commit(ctx context.Context, current, last hash.Hash, 
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
+	if nbs.keeperFunc != nil {
+		if nbs.keeperFunc(current) {
+			err = nbs.waitForGC(ctx)
+			if err != nil {
+				return false, err
+			}
+		}
+	}
+
 	anyPossiblyNovelChunks := nbs.mt != nil || len(nbs.tables.novel) > 0
 
 	if !anyPossiblyNovelChunks && current == last {
@@ -1049,15 +1059,6 @@ func (nbs *NomsBlockStore) commit(ctx context.Context, current, last hash.Hash, 
 			return false, err
 		}
 		return true, nil
-	}
-
-	if nbs.keeperFunc != nil {
-		if nbs.keeperFunc(current) {
-			err = nbs.waitForGC(ctx)
-			if err != nil {
-				return false, err
-			}
-		}
 	}
 
 	// check for dangling references in |nbs.mt|
@@ -1652,6 +1653,12 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 		err = css.close()
 		if err != nil {
 			return err
+		}
+	}
+	if nbs.mt != nil {
+		var thrown []string
+		for a := range nbs.mt.chunks {
+			thrown = append(thrown, a.String())
 		}
 	}
 	nbs.mt = nil
