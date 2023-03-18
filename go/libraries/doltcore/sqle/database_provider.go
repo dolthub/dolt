@@ -184,39 +184,20 @@ func (p DoltDatabaseProvider) FileSystemForDatabase(dbname string) (filesys.File
 }
 
 // Database implements the sql.DatabaseProvider interface
-func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Database, err error) {
-	var ok bool
-	p.mu.RLock()
-	db, ok = p.databases[formatDbMapKeyName(name)]
-	standby := *p.isStandby
-	p.mu.RUnlock()
-	if ok {
-		return wrapForStandby(db, standby), nil
-	}
-
-	// Revision databases aren't tracked in the map, just instantiated on demand
-	db, _, ok, err = p.databaseForRevision(ctx, name)
+func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (sql.Database, error) {
+	database, b, err := p.SessionDatabase(ctx, name, "")
 	if err != nil {
 		return nil, err
 	}
-
-	// A final check: if the database doesn't exist and this is a read replica, attempt to clone it from the remote
-	if !ok {
-		db, err = p.databaseForClone(ctx, name)
-
-		if err != nil {
-			return nil, err
-		}
-
-		if db == nil {
-			return nil, sql.ErrDatabaseNotFound.New(name)
-		}
+	
+	if !b {
+		return nil, sql.ErrDatabaseNotFound.New(name)
 	}
-
-	return wrapForStandby(db, standby), nil
+	
+	return database, nil
 }
 
-func wrapForStandby(db sql.Database, standby bool) sql.Database {
+func wrapForStandby(db SqlDatabase, standby bool) SqlDatabase {
 	if !standby {
 		return db
 	}
@@ -722,7 +703,7 @@ func (p DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, n
 	return nil
 }
 
-func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string) (sql.Database, dsess.InitialDbState, bool, error) {
+func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string) (SqlDatabase, dsess.InitialDbState, bool, error) {
 	if !strings.Contains(revDB, dbRevisionDelimiter) {
 		return nil, dsess.InitialDbState{}, false, nil
 	}
@@ -822,7 +803,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 
 // databaseForClone returns a newly cloned database if read replication is enabled and a remote DB exists, or an error
 // otherwise
-func (p DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (sql.Database, error) {
+func (p DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (SqlDatabase, error) {
 	if !readReplicationActive(ctx) {
 		return nil, nil
 	}
@@ -842,7 +823,8 @@ func (p DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (
 	}
 
 	// now that the database has been cloned, retry the Database call
-	return p.Database(ctx, revDB)
+	database, err := p.Database(ctx, revDB)
+	return database.(SqlDatabase), err
 }
 
 // TODO: figure out the right contract: which variables must be set? What happens if they aren't all set?
@@ -931,6 +913,39 @@ func (p DoltDatabaseProvider) DbState(ctx *sql.Context, dbName string, defaultBr
 	}
 
 	return init, nil
+}
+
+// SessionDatabase implements dsess.SessionDatabaseProvider
+func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string, defaultBranch string) (dsess.SessionDatabase, bool, error) {
+	var ok bool
+	p.mu.RLock()
+	db, ok := p.databases[formatDbMapKeyName(name)]
+	standby := *p.isStandby
+	p.mu.RUnlock()
+	if ok {
+		return wrapForStandby(db, standby), true, nil
+	}
+
+	// Revision databases aren't tracked in the map, just instantiated on demand
+	db, _, ok, err := p.databaseForRevision(ctx, name)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// A final check: if the database doesn't exist and this is a read replica, attempt to clone it from the remote
+	if !ok {
+		db, err = p.databaseForClone(ctx, name)
+
+		if err != nil {
+			return nil, false, err
+		}
+
+		if db == nil {
+			return nil, false, nil
+		}
+	}
+	
+	return wrapForStandby(db, standby), true, nil
 }
 
 // Function implements the FunctionProvider interface

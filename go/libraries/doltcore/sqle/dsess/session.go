@@ -142,7 +142,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 	if ok {
 		return dbState, ok, nil
 	}
-
+	
 	// TODO: this needs to include the transaction's snapshot of the DB at tx start time
 	var init InitialDbState
 	var err error
@@ -153,20 +153,21 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 		initialBranch = val.(string)
 	}
 
-	// First attempt to find a bare database (no revision spec)
-	init, err = d.provider.DbState(ctx, dbName, initialBranch)
-	if err != nil && !sql.ErrDatabaseNotFound.Is(err) {
+	// TODO: is initialBranch needed here?
+	database, ok, err := d.provider.SessionDatabase(ctx, dbName, initialBranch)
+	if err != nil {
 		return nil, false, err
 	}
-
-	// If that doesn't work, attempt to parse the database name as a revision spec
-	if err != nil {
-		init, err = d.provider.RevisionDbState(ctx, dbName)
-		if err != nil {
-			return nil, false, err
-		}
+	
+	if !ok {
+		return nil, false, nil
 	}
 
+	init, err = database.InitialDBState(ctx, initialBranch)
+	if err != nil {
+		return nil, false, err
+	}
+	
 	// If we got this far, we have a valid initial database state, so add it to the session for future reuse
 	if err = d.addDB(ctx, init); err != nil {
 		return nil, ok, err
