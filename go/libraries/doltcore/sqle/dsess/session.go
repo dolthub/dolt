@@ -146,15 +146,8 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 	// TODO: this needs to include the transaction's snapshot of the DB at tx start time
 	var init InitialDbState
 	var err error
-
-	_, val, ok := sql.SystemVariables.GetGlobal(DefaultBranchKey(dbName))
-	initialBranch := ""
-	if ok {
-		initialBranch = val.(string)
-	}
-
-	// TODO: is initialBranch needed here?
-	database, ok, err := d.provider.SessionDatabase(ctx, dbName, initialBranch)
+	
+	database, ok, err := d.provider.SessionDatabase(ctx, dbName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -163,12 +156,18 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 		return nil, false, nil
 	}
 
+	_, val, ok := sql.SystemVariables.GetGlobal(DefaultBranchKey(dbName))
+	initialBranch := ""
+	if ok {
+		initialBranch = val.(string)
+	}
+
 	init, err = database.InitialDBState(ctx, initialBranch)
 	if err != nil {
 		return nil, false, err
 	}
 	
-	// If we got this far, we have a valid initial database state, so add it to the session for future reuse
+	// Add the initial state to the session for future reuse
 	if err = d.addDB(ctx, init); err != nil {
 		return nil, ok, err
 	}

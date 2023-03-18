@@ -35,9 +35,6 @@ var ErrRevisionDbNotFound = errors.NewKind("revision database not found: '%s'")
 // corresponding to historical commits in the repository will be read-only
 // databases. Revision databases for branches will be read/write.
 type RevisionDatabaseProvider interface {
-	// RevisionDbState provides the InitialDbState for a revision database.
-	// TODO: remove
-	RevisionDbState(ctx *sql.Context, revDB string) (InitialDbState, error)
 	// IsRevisionDatabase validates the specified dbName and returns true if it is a valid revision database.
 	IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error)
 	// GetRevisionForRevisionDatabase looks up the named database and returns the root database name as well as the
@@ -86,13 +83,9 @@ type DoltDatabaseProvider interface {
 	// (otherwise all branches are cloned), remoteName is the name for the remote created in the new database, and
 	// remoteUrl is a URL (e.g. "file:///dbs/db1") or an <org>/<database> path indicating a database hosted on DoltHub.
 	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error
-	// SessionDatabase returns the SessionDatabase for the specified database and given branch. An empty branch name 
-	// will use the default branch for the repository.
-	SessionDatabase(ctx *sql.Context, dbName string, defaultBranch string) (SessionDatabase, bool, error)
-	// DbState returns the InitialDbState for the specified database and given branch. An empty branch name should use
-	// the default branch for the repository.
-	// TODO: make this use an ok bool instead of relying on sql.DatabaseNotFound errors
-	DbState(ctx *sql.Context, dbName string, defaultBranch string) (InitialDbState, error)
+	// SessionDatabase returns the SessionDatabase for the specified database, which may name a revision of a base 
+	// database, as in |Database|
+	SessionDatabase(ctx *sql.Context, dbName string) (SessionDatabase, bool, error)
 }
 
 func EmptyDatabaseProvider() DoltDatabaseProvider {
@@ -143,6 +136,6 @@ func (e emptyRevisionDatabaseProvider) RevisionDbState(_ *sql.Context, revDB str
 	return InitialDbState{}, sql.ErrDatabaseNotFound.New(revDB)
 }
 
-func (e emptyRevisionDatabaseProvider) SessionDatabase(ctx *sql.Context, dbName string, defaultBranch string) (SessionDatabase, bool, error) {
+func (e emptyRevisionDatabaseProvider) SessionDatabase(ctx *sql.Context, dbName string) (SessionDatabase, bool, error) {
 	return nil, false, nil
 }

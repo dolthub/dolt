@@ -185,7 +185,7 @@ func (p DoltDatabaseProvider) FileSystemForDatabase(dbname string) (filesys.File
 
 // Database implements the sql.DatabaseProvider interface
 func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (sql.Database, error) {
-	database, b, err := p.SessionDatabase(ctx, name, "")
+	database, b, err := p.SessionDatabase(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -877,46 +877,8 @@ func (p DoltDatabaseProvider) resolveAncestorSpec(ctx *sql.Context, revSpec stri
 	return hash.String(), nil
 }
 
-func (p DoltDatabaseProvider) RevisionDbState(ctx *sql.Context, revDB string) (dsess.InitialDbState, error) {
-	_, init, ok, err := p.databaseForRevision(ctx, revDB)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	} else if !ok {
-		return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(revDB)
-	}
-
-	return init, nil
-}
-
-func (p DoltDatabaseProvider) stateForDatabase(ctx *sql.Context, dbName string, branch string) (dsess.InitialDbState, bool, error) {
-	p.mu.RLock()
-	db, ok := p.databases[formatDbMapKeyName(dbName)]
-	p.mu.RUnlock()
-	if !ok {
-		return dsess.InitialDbState{}, false, nil
-	}
-
-	dbState, err := db.InitialDBState(ctx, branch)
-	if err != nil {
-		return dsess.InitialDbState{}, false, err
-	}
-
-	return dbState, true, nil
-}
-
-func (p DoltDatabaseProvider) DbState(ctx *sql.Context, dbName string, defaultBranch string) (dsess.InitialDbState, error) {
-	init, ok, err := p.stateForDatabase(ctx, dbName, defaultBranch)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	} else if !ok {
-		return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	return init, nil
-}
-
 // SessionDatabase implements dsess.SessionDatabaseProvider
-func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string, defaultBranch string) (dsess.SessionDatabase, bool, error) {
+func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (dsess.SessionDatabase, bool, error) {
 	var ok bool
 	p.mu.RLock()
 	db, ok := p.databases[formatDbMapKeyName(name)]
