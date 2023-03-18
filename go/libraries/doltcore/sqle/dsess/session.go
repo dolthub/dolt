@@ -144,9 +144,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 	}
 	
 	// TODO: this needs to include the transaction's snapshot of the DB at tx start time
-	var init InitialDbState
-	var err error
-	
+
 	database, ok, err := d.provider.SessionDatabase(ctx, dbName)
 	if err != nil {
 		return nil, false, err
@@ -155,21 +153,10 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 	if !ok {
 		return nil, false, nil
 	}
-
-	_, val, ok := sql.SystemVariables.GetGlobal(DefaultBranchKey(dbName))
-	initialBranch := ""
-	if ok {
-		initialBranch = val.(string)
-	}
-
-	init, err = database.InitialDBState(ctx, initialBranch)
-	if err != nil {
-		return nil, false, err
-	}
 	
 	// Add the initial state to the session for future reuse
-	if err = d.addDB(ctx, init); err != nil {
-		return nil, ok, err
+	if err = d.addDB(ctx, database); err != nil {
+		return nil, false, err
 	}
 
 	d.mu.Lock()
@@ -279,24 +266,16 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	// Since StartTransaction occurs before even any analysis, it's possible that this session has no state for the
 	// database with the transaction being performed, so we load it here.
 	if !d.HasDB(ctx, dbName) {
-		db, err := d.provider.Database(ctx, dbName)
+		db, ok, err := d.provider.SessionDatabase(ctx, dbName)
 		if err != nil {
 			return nil, err
 		}
-
-		sdb, ok := db.(SessionDatabase)
+		
 		if !ok {
-			return nil, fmt.Errorf("database %s does not support sessions", dbName)
+			return nil, sql.ErrDatabaseNotFound.New(dbName)
 		}
-
-		// TODO: this needs a real branch name
-		init, err := sdb.InitialDBState(ctx, "")
-		if err != nil {
-			return nil, err
-		}
-
-		// TODO: make this take a DB, not a DBState
-		err = d.addDB(ctx, init)
+		
+		err = d.addDB(ctx, db)
 		if err != nil {
 			return nil, err
 		}
@@ -1115,8 +1094,7 @@ func (d *DoltSession) HasDB(_ *sql.Context, dbName string) bool {
 
 // addDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
-func (d *DoltSession) addDB(ctx *sql.Context, dbState InitialDbState) error {
-	db := dbState.Db
+func (d *DoltSession) addDB(ctx *sql.Context, db SessionDatabase) error {
 	DefineSystemVariablesForDB(db.Name())
 
 	sessionState := NewEmptyDatabaseSessionState()
@@ -1125,6 +1103,18 @@ func (d *DoltSession) addDB(ctx *sql.Context, dbState InitialDbState) error {
 	d.mu.Unlock()
 	sessionState.dbName = db.Name()
 	sessionState.db = db
+
+	_, val, ok := sql.SystemVariables.GetGlobal(DefaultBranchKey(db.Name()))
+	initialBranch := ""
+	if ok {
+		initialBranch = val.(string)
+	}
+
+	// TODO: the branch should be already set if the DB was specified with a branch revision string 
+	dbState, err := db.InitialDBState(ctx, initialBranch)
+	if err != nil {
+		return err
+	}
 
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
