@@ -230,7 +230,6 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		}
 
 		firstCommit, err = ddb.db.BuildNewCommit(ctx, ds, rv.nomsValue(), commitOpts)
-
 		if err != nil {
 			return err
 		}
