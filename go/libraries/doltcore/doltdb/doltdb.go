@@ -245,7 +245,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		attempt += 1
 		if attempt >= 1<<len(descriptionReplacementCandidates) {
 			attempt = 0
-			// The Time type uses nanosecond precision. Subtract one millino nanoseconds (one ms)
+			// The Time type uses nanosecond precision. Subtract one million nanoseconds (one ms)
 			t = t.Add(-1_000_000)
 		}
 
