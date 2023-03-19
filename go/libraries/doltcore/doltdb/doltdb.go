@@ -225,7 +225,6 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 
 		cb := ref.NewInternalRef(CreationBranch)
 		ds, err = ddb.db.GetDataset(ctx, cb.String())
-
 		if err != nil {
 			return err
 		}
