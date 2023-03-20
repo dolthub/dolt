@@ -791,7 +791,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		if !ok {
 			return nil, false, nil
 		}
-		db, _, err := dbRevisionForCommit(ctx, srcDb.(Database), revSpec)
+		db, err := revisionDbForCommit(ctx, srcDb.(Database), revSpec)
 		if err != nil {
 			return nil, false, err
 		}
@@ -860,12 +860,13 @@ func initialStateForRevision(ctx *sql.Context, srcDb SqlDatabase) (dsess.Initial
 			srcDb = replicaDb.Database
 		}
 
-		srcDb, ok = srcDb.(Database)
+		srcDb, ok = srcDb.(ReadOnlyDatabase)
 		if !ok {
 			// TODO: error here?
 			return dsess.InitialDbState{}, nil
 		}
-		_, init, err := dbRevisionForCommit(ctx, srcDb.(Database), revSpec)
+		
+		init, err := initialStateForCommit(ctx, srcDb.(ReadOnlyDatabase))
 		if err != nil {
 			return dsess.InitialDbState{}, err
 		}
@@ -1345,17 +1346,7 @@ func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.In
 	return init, nil
 }
 
-func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (ReadOnlyDatabase, dsess.InitialDbState, error) {
-	spec, err := doltdb.NewCommitSpec(revSpec)
-	if err != nil {
-		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
-	}
-
-	cm, err := srcDb.DbData().Ddb.Resolve(ctx, spec, srcDb.DbData().Rsr.CWBHeadRef())
-	if err != nil {
-		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
-	}
-
+func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string) (ReadOnlyDatabase, error) {
 	name := srcDb.Name() + dbRevisionDelimiter + revSpec
 	db := ReadOnlyDatabase{Database: Database{
 		name:     name,
@@ -1365,9 +1356,25 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		editOpts: srcDb.editOpts,
 		revision: revSpec,
 	}}
+	
+	return db, nil
+}
 
+func initialStateForCommit(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.InitialDbState, error) {
+	_, revSpec := SplitRevisionDbName(srcDb)
+
+	spec, err := doltdb.NewCommitSpec(revSpec)
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	cm, err := srcDb.DbData().Ddb.Resolve(ctx, spec, srcDb.DbData().Rsr.CWBHeadRef())
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+	
 	init := dsess.InitialDbState{
-		Db:         db,
+		Db:         srcDb,
 		HeadCommit: cm,
 		ReadOnly:   true,
 		DbData: env.DbData{
@@ -1382,7 +1389,7 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		//  - ReadReplicas
 	}
 
-	return db, init, nil
+	return init, nil
 }
 
 type staticRepoState struct {
