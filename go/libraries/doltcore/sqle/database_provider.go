@@ -773,7 +773,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 			return nil, false, nil
 		}
 
-		db, _, err := dbRevisionForTag(ctx, srcDb.(Database), resolvedRevSpec)
+		db, err := revisionDbForTag(ctx, srcDb.(Database), resolvedRevSpec)
 		if err != nil {
 			return nil, false, err
 		}
@@ -839,13 +839,13 @@ func initialStateForRevision(ctx *sql.Context, srcDb SqlDatabase) (dsess.Initial
 			srcDb = replicaDb.Database
 		}
 
-		srcDb, ok = srcDb.(Database)
+		srcDb, ok = srcDb.(ReadOnlyDatabase)
 		if !ok {
 			// TODO: do we need an error here?
 			return dsess.InitialDbState{}, nil
 		}
-
-		_, init, err := dbRevisionForTag(ctx, srcDb.(Database), resolvedRevSpec)
+		
+		init, err := initialStateForTagDb(ctx, srcDb.(ReadOnlyDatabase))
 		if err != nil {
 			return dsess.InitialDbState{}, err
 		}
@@ -1303,15 +1303,7 @@ func initialStateForBranchDb(ctx context.Context, srcDb SqlDatabase) (dsess.Init
 	return init, nil
 }
 
-
-func dbRevisionForTag(ctx context.Context, srcDb Database, revSpec string) (ReadOnlyDatabase, dsess.InitialDbState, error) {
-	tag := ref.NewTagRef(revSpec)
-
-	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, tag)
-	if err != nil {
-		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
-	}
-
+func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string) (ReadOnlyDatabase, error) {
 	name := srcDb.Name() + dbRevisionDelimiter + revSpec
 	db := ReadOnlyDatabase{Database: Database{
 		name:     name,
@@ -1321,8 +1313,21 @@ func dbRevisionForTag(ctx context.Context, srcDb Database, revSpec string) (Read
 		editOpts: srcDb.editOpts,
 		revision: revSpec,
 	}}
+
+	return db, nil
+}
+
+func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.InitialDbState, error) {
+	_, revSpec:= SplitRevisionDbName(srcDb)
+	tag := ref.NewTagRef(revSpec)
+
+	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, tag)
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
 	init := dsess.InitialDbState{
-		Db:         db,
+		Db:         srcDb,
 		HeadCommit: cm,
 		ReadOnly:   true,
 		DbData: env.DbData{
@@ -1337,7 +1342,7 @@ func dbRevisionForTag(ctx context.Context, srcDb Database, revSpec string) (Read
 		//  - ReadReplicas
 	}
 
-	return db, init, nil
+	return init, nil
 }
 
 func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (ReadOnlyDatabase, dsess.InitialDbState, error) {
