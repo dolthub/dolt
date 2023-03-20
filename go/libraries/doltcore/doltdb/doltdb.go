@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -174,54 +173,6 @@ func (g SimpleCommitMetaGenerator) Next() (*datas.CommitMeta, error) {
 
 func (SimpleCommitMetaGenerator) IsGoodHash(hash.Hash) bool {
 	return true
-}
-
-type FunHashCommitMetaGenerator struct {
-	Name, Email string
-	Timestamp   time.Time
-	attempt     int
-}
-
-var descriptionReplacementCandidates = [][]rune{
-	{'I', '\u0406'},
-	{'i', '\u0456'},
-	{'i', '\u0456'},
-	{'a', '\u0430'},
-	{'i', '\u0456'},
-	{'e', '\u0435'},
-	{'a', '\u0430'},
-	{'a', '\u0430'},
-	{'e', '\u0435'},
-	{'o', '\u043e'},
-	{'i', '\u0456'},
-	{'o', '\u043e'},
-}
-
-func (g FunHashCommitMetaGenerator) Next() (*datas.CommitMeta, error) {
-	if g.attempt >= 1<<len(descriptionReplacementCandidates) {
-		g.attempt = 0
-		// The Time type uses nanosecond precision. Subtract one million nanoseconds (one ms)
-		g.Timestamp = g.Timestamp.Add(-1_000_000)
-	}
-
-	// "Initialize data repository", with characters that could be Cyrillic replaced.
-	descFmt := "%cn%ct%c%cl%cz%c d%ct%c r%cp%cs%ct%cry"
-	choices := make([]any, 0, len(descriptionReplacementCandidates))
-	for i := 0; i < len(descriptionReplacementCandidates); i++ {
-		choices = append(choices, descriptionReplacementCandidates[i][(g.attempt>>i)%2])
-	}
-	description := fmt.Sprintf(descFmt, choices...)
-
-	g.attempt += 1
-
-	return datas.NewCommitMetaWithUserTS(g.Name, g.Email, description, g.Timestamp)
-}
-
-func (g FunHashCommitMetaGenerator) IsGoodHash(h hash.Hash) bool {
-	var funRegExp = regexp.MustCompile("^d[o0][1l]t")
-
-	hashString := h.String()
-	return funRegExp.MatchString(hashString)
 }
 
 func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
