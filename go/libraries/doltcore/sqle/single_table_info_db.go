@@ -319,3 +319,7 @@ func (idx fmtIndex) ColumnExpressionTypes() []sql.ColumnExpressionType {
 func (db *SingleTableInfoDatabase) EditOptions() editor.Options {
 	return editor.Options{}
 }
+
+func (db *SingleTableInfoDatabase) Revision() string {
+	return ""
+}

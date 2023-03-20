@@ -101,3 +101,7 @@ func (db *UserSpaceDatabase) Flush(ctx *sql.Context) error {
 func (db *UserSpaceDatabase) EditOptions() editor.Options {
 	return db.editOpts
 }
+
+func (db *UserSpaceDatabase) Revision() string {
+	return ""
+}

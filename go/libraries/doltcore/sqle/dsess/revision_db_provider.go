@@ -35,8 +35,6 @@ var ErrRevisionDbNotFound = errors.NewKind("revision database not found: '%s'")
 // corresponding to historical commits in the repository will be read-only
 // databases. Revision databases for branches will be read/write.
 type RevisionDatabaseProvider interface {
-	// IsRevisionDatabase validates the specified dbName and returns true if it is a valid revision database.
-	IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error)
 	// GetRevisionForRevisionDatabase looks up the named database and returns the root database name as well as the
 	// revision and any errors encountered. If the specified database is not a revision database, the root database
 	// name will still be returned, and the revision will be an empty string.

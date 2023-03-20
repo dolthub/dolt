@@ -49,7 +49,8 @@ var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables c
 type SqlDatabase interface {
 	sql.Database
 	dsess.SessionDatabase
-
+	dsess.RevisionDatabase
+	
 	// TODO: get rid of this, it's managed by the session, not the DB
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
 	DbData() env.DbData

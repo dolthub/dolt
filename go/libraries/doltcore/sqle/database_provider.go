@@ -296,7 +296,7 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 
 	// If the current database is not one of the primary databases, it must be a transitory revision database
 	if !foundDatabase && currDb != "" {
-		revDb, _, ok, err := p.databaseForRevision(ctx, currDb)
+		revDb, ok, err := p.databaseForRevision(ctx, currDb)
 		if err != nil {
 			// We can't return an error from this interface function, so just log a message
 			ctx.GetLogger().Warnf("unable to load %q as a database revision: %s", ctx.GetCurrentDatabase(), err.Error())
@@ -324,7 +324,7 @@ func (p DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db SqlDatabase) (
 
 	revDbs := make([]sql.Database, len(branches))
 	for i, branch := range branches {
-		revDb, _, ok, err := p.databaseForRevision(ctx, fmt.Sprintf("%s/%s", db.Name(), branch.GetPath()))
+		revDb, ok, err := p.databaseForRevision(ctx, fmt.Sprintf("%s/%s", db.Name(), branch.GetPath()))
 		if err != nil {
 			return nil, err
 		}
@@ -703,9 +703,9 @@ func (p DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, n
 	return nil
 }
 
-func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string) (SqlDatabase, dsess.InitialDbState, bool, error) {
+func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string) (SqlDatabase, bool, error) {
 	if !strings.Contains(revDB, dbRevisionDelimiter) {
-		return nil, dsess.InitialDbState{}, false, nil
+		return nil, false, nil
 	}
 
 	parts := strings.SplitN(revDB, dbRevisionDelimiter, 2)
@@ -715,22 +715,22 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 	candidate, ok := p.databases[formatDbMapKeyName(dbName)]
 	p.mu.RUnlock()
 	if !ok {
-		return nil, dsess.InitialDbState{}, false, nil
+		return nil, false, nil
 	}
 
 	srcDb, ok := candidate.(SqlDatabase)
 	if !ok {
-		return nil, dsess.InitialDbState{}, false, nil
+		return nil, false, nil
 	}
 
-	resolvedRevSpec, err := p.resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
+	resolvedRevSpec, err := resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
 	if err != nil {
-		return nil, dsess.InitialDbState{}, false, err
+		return nil, false, err
 	}
 
 	caseSensitiveBranchName, isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec)
 	if err != nil {
-		return nil, dsess.InitialDbState{}, false, err
+		return nil, false, err
 	}
 
 	if isBranch {
@@ -740,24 +740,24 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 			//  the case with a branch that already exists locally)
 			err := p.ensureReplicaHeadExists(ctx, resolvedRevSpec, replicaDb)
 			if err != nil {
-				return nil, dsess.InitialDbState{}, false, err
+				return nil, false, err
 			}
 		}
 
-		db, init, err := dbRevisionForBranch(ctx, srcDb, caseSensitiveBranchName)
+		db, _, err := dbRevisionForBranch(ctx, srcDb, caseSensitiveBranchName)
 		// preserve original user case in the case of not found
 		if sql.ErrDatabaseNotFound.Is(err) {
-			return nil, dsess.InitialDbState{}, false, sql.ErrDatabaseNotFound.New(revDB)
+			return nil, false, sql.ErrDatabaseNotFound.New(revDB)
 		} else if err != nil {
-			return nil, dsess.InitialDbState{}, false, err
+			return nil, false, err
 		}
 
-		return db, init, true, nil
+		return db, true, nil
 	}
 
 	isTag, err := isTag(ctx, srcDb, resolvedRevSpec)
 	if err != nil {
-		return nil, dsess.InitialDbState{}, false, err
+		return nil, false, err
 	}
 
 	if isTag {
@@ -770,14 +770,14 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 
 		srcDb, ok = srcDb.(Database)
 		if !ok {
-			return nil, dsess.InitialDbState{}, false, nil
+			return nil, false, nil
 		}
 
-		db, init, err := dbRevisionForTag(ctx, srcDb.(Database), resolvedRevSpec)
+		db, _, err := dbRevisionForTag(ctx, srcDb.(Database), resolvedRevSpec)
 		if err != nil {
-			return nil, dsess.InitialDbState{}, false, err
+			return nil, false, err
 		}
-		return db, init, true, nil
+		return db, true, nil
 	}
 
 	if doltdb.IsValidCommitHash(resolvedRevSpec) {
@@ -789,16 +789,91 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 
 		srcDb, ok = srcDb.(Database)
 		if !ok {
-			return nil, dsess.InitialDbState{}, false, nil
+			return nil, false, nil
 		}
-		db, init, err := dbRevisionForCommit(ctx, srcDb.(Database), revSpec)
+		db, _, err := dbRevisionForCommit(ctx, srcDb.(Database), revSpec)
 		if err != nil {
-			return nil, dsess.InitialDbState{}, false, err
+			return nil, false, err
 		}
-		return db, init, true, nil
+		return db, true, nil
 	}
 
-	return nil, dsess.InitialDbState{}, false, nil
+	return nil, false, nil
+}
+
+func initialStateForRevision(ctx *sql.Context, srcDb SqlDatabase) (dsess.InitialDbState, error) {
+	_, revSpec := SplitRevisionDbName(srcDb)
+	
+	resolvedRevSpec, err := resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	caseSensitiveBranchName, isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec)
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	if isBranch {
+		_, init, err := dbRevisionForBranch(ctx, srcDb, caseSensitiveBranchName)
+		// preserve original user case in the case of not found
+		if sql.ErrDatabaseNotFound.Is(err) {
+			return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(srcDb.Name())
+		} else 	if err != nil {
+			return dsess.InitialDbState{}, err
+		}
+
+		return init, nil
+	}
+
+	isTag, err := isTag(ctx, srcDb, resolvedRevSpec)
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	if isTag {
+		// TODO: this should be an interface, not a struct
+		replicaDb, ok := srcDb.(ReadReplicaDatabase)
+
+		if ok {
+			srcDb = replicaDb.Database
+		}
+
+		srcDb, ok = srcDb.(Database)
+		if !ok {
+			// TODO: do we need an error here?
+			return dsess.InitialDbState{}, nil
+		}
+
+		_, init, err := dbRevisionForTag(ctx, srcDb.(Database), resolvedRevSpec)
+		if err != nil {
+			return dsess.InitialDbState{}, err
+		}
+
+		return init, nil
+	}
+
+	if doltdb.IsValidCommitHash(resolvedRevSpec) {
+		// TODO: this should be an interface, not a struct
+		replicaDb, ok := srcDb.(ReadReplicaDatabase)
+		if ok {
+			srcDb = replicaDb.Database
+		}
+
+		srcDb, ok = srcDb.(Database)
+		if !ok {
+			// TODO: error here?
+			return dsess.InitialDbState{}, nil
+		}
+		_, init, err := dbRevisionForCommit(ctx, srcDb.(Database), revSpec)
+		if err != nil {
+			return dsess.InitialDbState{}, err
+		}
+		return init, nil
+	}
+
+	// TODO: error here?
+	return dsess.InitialDbState{}, nil
 }
 
 // databaseForClone returns a newly cloned database if read replication is enabled and a remote DB exists, or an error
@@ -845,7 +920,7 @@ func readReplicationActive(ctx *sql.Context) bool {
 // resolveAncestorSpec resolves the specified revSpec to a specific commit hash if it contains an ancestor reference
 // such as ~ or ^. If no ancestor reference is present, the specified revSpec is returned as is. If any unexpected
 // problems are encountered, an error is returned.
-func (p DoltDatabaseProvider) resolveAncestorSpec(ctx *sql.Context, revSpec string, ddb *doltdb.DoltDB) (string, error) {
+func resolveAncestorSpec(ctx *sql.Context, revSpec string, ddb *doltdb.DoltDB) (string, error) {
 	refname, ancestorSpec, err := doltdb.SplitAncestorSpec(revSpec)
 	if err != nil {
 		return "", err
@@ -889,7 +964,7 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 	}
 
 	// Revision databases aren't tracked in the map, just instantiated on demand
-	db, _, ok, err := p.databaseForRevision(ctx, name)
+	db, ok, err := p.databaseForRevision(ctx, name)
 	if err != nil {
 		return nil, false, err
 	}
@@ -959,25 +1034,36 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 
 // GetRevisionForRevisionDatabase implements dsess.RevisionDatabaseProvider
 func (p DoltDatabaseProvider) GetRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, string, error) {
-	db, err := p.Database(ctx, dbName)
+	db, ok, err := p.SessionDatabase(ctx, dbName)
 	if err != nil {
 		return "", "", err
 	}
-
-	sqldb, ok := db.(dsess.RevisionDatabase)
 	if !ok {
-		return db.Name(), "", nil
+		return "", "", sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	if sqldb.Revision() != "" {
-		dbName = strings.TrimSuffix(dbName, dbRevisionDelimiter+sqldb.Revision())
+	sqldb, ok := db.(SqlDatabase)
+	if !ok {
+		return dbName, "",  nil
 	}
 
-	return dbName, sqldb.Revision(), nil
+	base, rev := SplitRevisionDbName(sqldb)
+	return base, rev, nil
+}
+
+// SplitRevisionDbName splits the given database name into its base and revision parts and returns them
+func SplitRevisionDbName(db SqlDatabase) (string, string) {
+	dbName := db.Name()
+	if db.Revision() != "" {
+		dbName = strings.TrimSuffix(dbName, dbRevisionDelimiter+db.Revision())
+	}
+
+	return dbName, db.Revision()
 }
 
 // IsRevisionDatabase returns true if the specified dbName represents a database that is tied to a specific
 // branch or commit from a database (e.g. "dolt/branch1").
+// TODO: move this to session, eliminate the lookup here
 func (p DoltDatabaseProvider) IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error) {
 	_, revision, err := p.GetRevisionForRevisionDatabase(ctx, dbName)
 	if err != nil {
