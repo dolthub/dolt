@@ -121,6 +121,8 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts e
 }
 
 // GetInitialDBState returns the InitialDbState for |db|.
+// TODO NEXT: this is just wrong and shouldn't be used
+//  manifesting as using the base db state, not a revisoin db state for revision dbs
 func GetInitialDBState(ctx context.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
 	switch db := db.(type) {
 	case *UserSpaceDatabase, *SingleTableInfoDatabase:

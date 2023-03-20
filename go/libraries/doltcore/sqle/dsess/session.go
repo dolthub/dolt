@@ -1369,14 +1369,17 @@ func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
 func (d *DoltSession) GetBranch() (string, error) {
 	ctx := sql.NewContext(context.Background(), sql.WithSession(d))
 	currentDb := d.Session.GetCurrentDatabase()
+	
+	// no branch if there's no current db
+	if currentDb == "" {
+		return "", nil
+	}
+	
 	dbState, _, err := d.LookupDbState(ctx, currentDb)
 	if err != nil {
-		if len(currentDb) == 0 && sql.ErrDatabaseNotFound.Is(err) {
-			// Some operations return an empty database (namely tests), so we return an empty branch in such cases
-			return "", nil
-		}
 		return "", err
 	}
+	
 	if dbState.WorkingSet != nil {
 		branchRef, err := dbState.WorkingSet.Ref().ToHeadRef()
 		if err != nil {
