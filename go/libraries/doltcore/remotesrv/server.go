@@ -61,7 +61,8 @@ type ServerArgs struct {
 	ReadOnly bool
 	Options  []grpc.ServerOption
 
-	HttpInterceptor func(http.Handler) http.Handler
+	HttpInterceptor   func(http.Handler) http.Handler
+	ServerInterceptor serverinterceptor
 
 	// If supplied, the listener(s) returned from Listeners() will be TLS
 	// listeners. The scheme used in the URLs returned from the gRPC server

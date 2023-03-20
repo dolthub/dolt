@@ -115,6 +115,7 @@ const (
 	ShallowFlag      = "shallow"
 	CachedFlag       = "cached"
 	ListFlag         = "list"
+	UserParam        = "user"
 )
 
 const (
@@ -192,6 +193,7 @@ func CreateCloneArgParser() *argparser.ArgParser {
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use.")
 	ap.SupportsString(dbfactory.OSSCredsFileParam, "", "file", "OSS credentials file.")
 	ap.SupportsString(dbfactory.OSSCredsProfile, "", "profile", "OSS profile to use.")
+	ap.SupportsString(UserParam, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
 	return ap
 }
 

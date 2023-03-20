@@ -18,7 +18,9 @@ import (
 	"context"
 	"crypto/sha512"
 	"encoding/base32"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"time"
 
 	"golang.org/x/crypto/ed25519"
@@ -56,6 +58,11 @@ type DoltCreds struct {
 	PubKey  []byte
 	PrivKey []byte
 	KeyID   []byte
+}
+
+type DoltCredsForPass struct {
+	Username string
+	Password string
 }
 
 func PubKeyStrToKIDStr(pub string) (string, error) {
@@ -119,15 +126,20 @@ func (dc DoltCreds) Sign(data []byte) []byte {
 }
 
 type RPCCreds struct {
-	PrivKey    ed25519.PrivateKey
-	KeyID      string
-	Audience   string
-	Issuer     string
-	Subject    string
-	RequireTLS bool
+	PrivKey          ed25519.PrivateKey
+	KeyID            string
+	Audience         string
+	Issuer           string
+	Subject          string
+	RequireTLS       bool
+	UserPassContents string
 }
 
 func (c *RPCCreds) toBearerToken() (string, error) {
+	if len(c.UserPassContents) > 0 {
+		return "", fmt.Errorf("cannot create bearer token with user/pass credentials")
+	}
+
 	key := jose.SigningKey{Algorithm: jose.EdDSA, Key: c.PrivKey}
 	opts := &jose.SignerOptions{ExtraHeaders: map[jose.HeaderKey]interface{}{
 		JWTKIDHeader:           c.KeyID,
@@ -151,6 +163,11 @@ func (c *RPCCreds) toBearerToken() (string, error) {
 }
 
 func (c *RPCCreds) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	if len(c.UserPassContents) > 0 {
+		return map[string]string{
+			"authorization": "Basic " + c.UserPassContents,
+		}, nil
+	}
 	t, err := c.toBearerToken()
 	if err != nil {
 		return nil, err
@@ -175,5 +192,16 @@ func (dc DoltCreds) RPCCreds(audience string) *RPCCreds {
 		Issuer:     ClientIssuer,
 		Subject:    "doltClientCredentials/" + b32KIDStr,
 		RequireTLS: false,
+	}
+}
+
+func (dcp DoltCredsForPass) ToBase64Str() string {
+	return base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", dcp.Username, dcp.Password)))
+}
+
+func (dc DoltCredsForPass) RPCCreds() *RPCCreds {
+	return &RPCCreds{
+		RequireTLS:       false,
+		UserPassContents: dc.ToBase64Str(),
 	}
 }

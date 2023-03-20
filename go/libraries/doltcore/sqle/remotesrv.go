@@ -60,9 +60,14 @@ func (s remotesrvStore) Get(path, nbfVerStr string) (remotesrv.RemoteSrvStore, e
 	return rss, nil
 }
 
-func RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.ServerArgs) remotesrv.ServerArgs {
+func RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.ServerArgs, userAuth *remotesrv.UserAuth) remotesrv.ServerArgs {
 	sess := dsess.DSessFromSess(ctx.Session)
 	args.FS = sess.Provider().FileSystem()
 	args.DBCache = remotesrvStore{ctx, args.ReadOnly}
+	if userAuth != nil {
+		args.ServerInterceptor.Lgr = args.Logger
+		args.ServerInterceptor.ExpectedUserAuth = *userAuth
+		args.Options = append(args.Options, args.ServerInterceptor.Options()...)
+	}
 	return args
 }
