@@ -111,6 +111,12 @@ func (gct gcTest) doGC(t *testing.T, ctx context.Context, db *sql.DB) error {
 		t.Logf("err in Conn for dolt_gc: %v", err)
 		return nil
 	}
+	defer func() {
+		// After calling dolt_gc, the connection is bad. Remove it from the connection pool.
+		conn.Raw(func(_ any) error {
+			return sqldriver.ErrBadConn
+		})
+	}()
 	b := time.Now()
 	_, err = conn.ExecContext(ctx, "call dolt_gc()")
 	if err != nil {
@@ -127,10 +133,6 @@ func (gct gcTest) doGC(t *testing.T, ctx context.Context, db *sql.DB) error {
 	} else {
 		t.Logf("successful dolt_gc took %v", time.Since(b))
 	}
-	// After calling dolt_gc, the connection is bad. Remove it from the connection pool.
-	conn.Raw(func(_ any) error {
-		return sqldriver.ErrBadConn
-	})
 	return nil
 }
 
