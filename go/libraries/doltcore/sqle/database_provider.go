@@ -744,7 +744,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 			}
 		}
 
-		db, _, err := dbRevisionForBranch(ctx, srcDb, caseSensitiveBranchName)
+		db, err := revisionDbForBranch(ctx, srcDb, caseSensitiveBranchName)
 		// preserve original user case in the case of not found
 		if sql.ErrDatabaseNotFound.Is(err) {
 			return nil, false, sql.ErrDatabaseNotFound.New(revDB)
@@ -809,13 +809,13 @@ func initialStateForRevision(ctx *sql.Context, srcDb SqlDatabase) (dsess.Initial
 		return dsess.InitialDbState{}, err
 	}
 
-	caseSensitiveBranchName, isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec)
+	_, isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec)
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
 
 	if isBranch {
-		_, init, err := dbRevisionForBranch(ctx, srcDb, caseSensitiveBranchName)
+		init, err := initialStateForBranchDb(ctx, srcDb)
 		// preserve original user case in the case of not found
 		if sql.ErrDatabaseNotFound.Is(err) {
 			return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(srcDb.Name())
@@ -1167,21 +1167,68 @@ func isTag(ctx context.Context, db SqlDatabase, tagName string) (bool, error) {
 	return false, nil
 }
 
-func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string) (SqlDatabase, dsess.InitialDbState, error) {
+// revisionDbForBranch returns a new database that is tied to the branch named by revSpec
+func revisionDbForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string) (SqlDatabase, error) {
+	branch := ref.NewBranchRef(revSpec)
+	dbName := srcDb.Name() + dbRevisionDelimiter + revSpec
+
+	static := staticRepoState{
+		branch:          branch,
+		RepoStateWriter: srcDb.DbData().Rsw,
+		RepoStateReader: srcDb.DbData().Rsr,
+	}
+
+	var db SqlDatabase
+
+	switch v := srcDb.(type) {
+	case Database:
+		db = Database{
+			name:     dbName,
+			ddb:      v.ddb,
+			rsw:      static,
+			rsr:      static,
+			gs:       v.gs,
+			editOpts: v.editOpts,
+			revision: revSpec,
+		}
+	case ReadReplicaDatabase:
+		db = ReadReplicaDatabase{
+			Database: Database{
+				name:     dbName,
+				ddb:      v.ddb,
+				rsw:      static,
+				rsr:      static,
+				gs:       v.gs,
+				editOpts: v.editOpts,
+				revision: revSpec,
+			},
+			remote:  v.remote,
+			srcDB:   v.srcDB,
+			tmpDir:  v.tmpDir,
+			limiter: newLimiter(),
+		}
+	}
+	
+	return db, nil
+}
+
+func initialStateForBranchDb(ctx context.Context, srcDb SqlDatabase) (dsess.InitialDbState, error) {
+	_, revSpec := SplitRevisionDbName(srcDb)
+	
 	branch := ref.NewBranchRef(revSpec)
 	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, branch)
 	if err != nil {
-		return Database{}, dsess.InitialDbState{}, err
+		return dsess.InitialDbState{}, err
 	}
 
 	wsRef, err := ref.WorkingSetRefForHead(branch)
 	if err != nil {
-		return Database{}, dsess.InitialDbState{}, err
+		return dsess.InitialDbState{}, err
 	}
 
 	ws, err := srcDb.DbData().Ddb.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
-		return Database{}, dsess.InitialDbState{}, err
+		return dsess.InitialDbState{}, err
 	}
 
 	dbName := srcDb.Name() + dbRevisionDelimiter + revSpec
@@ -1225,17 +1272,17 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 
 	remotes, err := static.GetRemotes()
 	if err != nil {
-		return nil, dsess.InitialDbState{}, err
+		return dsess.InitialDbState{}, err
 	}
 
 	branches, err := static.GetBranches()
 	if err != nil {
-		return nil, dsess.InitialDbState{}, err
+		return dsess.InitialDbState{}, err
 	}
 
 	backups, err := static.GetBackups()
 	if err != nil {
-		return nil, dsess.InitialDbState{}, err
+		return dsess.InitialDbState{}, err
 	}
 
 	init := dsess.InitialDbState{
@@ -1253,8 +1300,9 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 		//ReadReplica: //todo
 	}
 
-	return db, init, nil
+	return init, nil
 }
+
 
 func dbRevisionForTag(ctx context.Context, srcDb Database, revSpec string) (ReadOnlyDatabase, dsess.InitialDbState, error) {
 	tag := ref.NewTagRef(revSpec)
