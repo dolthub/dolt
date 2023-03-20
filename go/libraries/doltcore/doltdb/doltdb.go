@@ -144,11 +144,84 @@ func (ddb *DoltDB) CSMetricsSummary() string {
 // WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid
 // metadata for the creation commit, and an empty RootValue.
 func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, initBranch, name, email string) error {
-	return ddb.WriteEmptyRepoWithCommitTime(ctx, initBranch, name, email, datas.CommitNowFunc(), false)
+	return ddb.WriteEmptyRepoWithCommitMeta(ctx, initBranch, MakeCommitMetaGenerator(name, email, datas.CommitNowFunc()))
 }
 
-func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, initBranch, name, email string, t time.Time, requiresFunHash bool) error {
-	return ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, name, email, t, ref.NewBranchRef(initBranch), requiresFunHash)
+const defaultInitialCommitMessage = "Initialize data repository"
+
+func (ddb *DoltDB) WriteEmptyRepoWithCommitMeta(ctx context.Context, initBranch string, commitMeta CommitMetaGenerator) error {
+	return ddb.WriteEmptyRepoWithCommitMetaAndDefaultBranch(ctx, commitMeta, ref.NewBranchRef(initBranch))
+}
+
+type CommitMetaGenerator interface {
+	Next() (*datas.CommitMeta, error)
+	IsGoodHash(hash.Hash) bool
+}
+
+func MakeCommitMetaGenerator(name, email string, timestamp time.Time) CommitMetaGenerator {
+	return SimpleCommitMetaGenerator{Name: name, Email: email, Timestamp: timestamp, Message: defaultInitialCommitMessage}
+}
+
+type SimpleCommitMetaGenerator struct {
+	Name, Email string
+	Timestamp   time.Time
+	Message     string
+}
+
+func (g SimpleCommitMetaGenerator) Next() (*datas.CommitMeta, error) {
+	return datas.NewCommitMetaWithUserTS(g.Name, g.Email, g.Message, g.Timestamp)
+}
+
+func (SimpleCommitMetaGenerator) IsGoodHash(hash.Hash) bool {
+	return true
+}
+
+type FunHashCommitMetaGenerator struct {
+	Name, Email string
+	Timestamp   time.Time
+	attempt     int
+}
+
+var descriptionReplacementCandidates = [][]rune{
+	{'I', '\u0406'},
+	{'i', '\u0456'},
+	{'i', '\u0456'},
+	{'a', '\u0430'},
+	{'i', '\u0456'},
+	{'e', '\u0435'},
+	{'a', '\u0430'},
+	{'a', '\u0430'},
+	{'e', '\u0435'},
+	{'o', '\u043e'},
+	{'i', '\u0456'},
+	{'o', '\u043e'},
+}
+
+func (g FunHashCommitMetaGenerator) Next() (*datas.CommitMeta, error) {
+	if g.attempt >= 1<<len(descriptionReplacementCandidates) {
+		g.attempt = 0
+		// The Time type uses nanosecond precision. Subtract one million nanoseconds (one ms)
+		g.Timestamp = g.Timestamp.Add(-1_000_000)
+	}
+
+	// "Initialize data repository", with characters that could be Cyrillic replaced.
+	descFmt := "%cn%ct%c%cl%cz%c d%ct%c r%cp%cs%ct%cry"
+	choices := make([]any, 0, len(descriptionReplacementCandidates))
+	for i := 0; i < len(descriptionReplacementCandidates); i++ {
+		choices = append(choices, descriptionReplacementCandidates[i][(g.attempt>>i)%2])
+	}
+	description := fmt.Sprintf(descFmt, choices...)
+
+	g.attempt += 1
+
+	return datas.NewCommitMetaWithUserTS(g.Name, g.Email, description, g.Timestamp)
+}
+
+func (g FunHashCommitMetaGenerator) IsGoodHash(h hash.Hash) bool {
+	var funRegExp = regexp.MustCompile("^d[o0][1l]t")
+
+	hashString := h.String()
+	return funRegExp.MatchString(hashString)
 }
 
 func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
@@ -156,16 +229,15 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 	name, email string,
 	t time.Time,
 	init ref.BranchRef,
-	requireFunHash bool,
 ) error {
-	// precondition checks
-	name = strings.TrimSpace(name)
-	email = strings.TrimSpace(email)
+	return ddb.WriteEmptyRepoWithCommitMetaAndDefaultBranch(ctx, MakeCommitMetaGenerator(name, email, t), init)
+}
 
-	if name == "" || email == "" {
-		panic("Passed bad name or email.  Both should be valid")
-	}
-
+func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaAndDefaultBranch(
+	ctx context.Context,
+	commitMetaGenerator CommitMetaGenerator,
+	init ref.BranchRef,
+) error {
 	ds, err := ddb.db.GetDataset(ctx, CreationBranch)
 
 	if err != nil {
@@ -192,34 +264,12 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 	// it starts with "d0lt" or similar. We achieve this by replacing characters
 	// in the commit description with Cyrillic equivalents, then by decrementing
 	// the timestamp.
-	descriptionReplacementCandidates := [][]rune{
-		{'I', '\u0406'},
-		{'i', '\u0456'},
-		{'i', '\u0456'},
-		{'a', '\u0430'},
-		{'i', '\u0456'},
-		{'e', '\u0435'},
-		{'a', '\u0430'},
-		{'a', '\u0430'},
-		{'e', '\u0435'},
-		{'o', '\u043e'},
-		{'i', '\u0456'},
-		{'o', '\u043e'},
-	}
-	attempt := 0
 	var firstCommit *datas.Commit
 	for {
-		generateInitialCommitDesc := func(attempt int) string {
-			// "Initialize data repository", with characters that could be Cyrillic replaced.
-			descFmt := "%cn%ct%c%cl%cz%c d%ct%c r%cp%cs%ct%cry"
-			choices := make([]any, 0, len(descriptionReplacementCandidates))
-			for i := 0; i < len(descriptionReplacementCandidates); i++ {
-				choices = append(choices, descriptionReplacementCandidates[i][(attempt>>i)%2])
-			}
-			return fmt.Sprintf(descFmt, choices...)
+		cm, err := commitMetaGenerator.Next()
+		if err != nil {
+			return err
 		}
-
-		cm, _ := datas.NewCommitMetaWithUserTS(name, email, generateInitialCommitDesc(attempt), t)
 
 		commitOpts := datas.CommitOptions{Meta: cm}
 
@@ -234,21 +284,9 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 			return err
 		}
 
-		if !requireFunHash {
+		if !commitMetaGenerator.IsGoodHash(firstCommit.Addr()) {
 			break
 		}
-
-		if isFunHash(firstCommit.Addr()) {
-			break
-		}
-
-		attempt += 1
-		if attempt >= 1<<len(descriptionReplacementCandidates) {
-			attempt = 0
-			// The Time type uses nanosecond precision. Subtract one million nanoseconds (one ms)
-			t = t.Add(-1_000_000)
-		}
-
 	}
 
 	firstCommitDs, err := ddb.db.WriteCommit(ctx, ds, firstCommit)
@@ -1590,11 +1628,4 @@ func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) 
 	}
 
 	return getStashAtIdx(ctx, ds, ddb.vrw, ddb.NodeStore(), idx)
-}
-
-var funRegExp = regexp.MustCompile("^d[o0][1l]t")
-
-func isFunHash(hashVal hash.Hash) bool {
-	hashString := hashVal.String()
-	return funRegExp.MatchString(hashString)
 }

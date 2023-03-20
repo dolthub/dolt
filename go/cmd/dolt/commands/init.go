@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/types"
@@ -154,7 +155,15 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	requiresFunHash := apr.Contains(funHashFlag)
-	err := dEnv.InitRepoWithTime(context.Background(), types.Format_Default, name, email, initBranch, t, requiresFunHash)
+	commitMeta := func() doltdb.CommitMetaGenerator {
+		if requiresFunHash {
+			return doltdb.MakeCommitMetaGenerator(name, email, t)
+		} else {
+			return doltdb.FunHashCommitMetaGenerator{Name: name, Email: email, Timestamp: t}
+		}
+	}()
+
+	err := dEnv.InitRepoWithCommitMeta(context.Background(), types.Format_Default, initBranch, commitMeta)
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to initialize directory as a data repo. %s", err.Error()))
 		return 1
