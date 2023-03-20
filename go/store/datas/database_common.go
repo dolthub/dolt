@@ -97,7 +97,7 @@ func (db *database) loadDatasetsNomsMap(ctx context.Context, rootHash hash.Hash)
 	}
 
 	if val == nil {
-		return types.EmptyMap, errors.New("Root hash doesn't exist")
+		return types.EmptyMap, fmt.Errorf("Root hash doesn't exist: %v", rootHash)
 	}
 
 	return val.(types.Map), nil
@@ -114,7 +114,7 @@ func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) 
 	}
 
 	if val == nil {
-		return prolly.AddressMap{}, errors.New("Root hash doesn't exist")
+		return prolly.AddressMap{}, fmt.Errorf("Root hash doesn't exist: %v", rootHash)
 	}
 
 	return parse_storeroot([]byte(val.(types.SerialMessage)), db.nodeStore())
@@ -855,8 +855,8 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 }
 
 // GC traverses the database starting at the Root and removes all unreferenced data from persistent storage.
-func (db *database) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet) error {
-	return db.ValueStore.GC(ctx, oldGenRefs, newGenRefs)
+func (db *database) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet, safepointF func() error) error {
+	return db.ValueStore.GC(ctx, oldGenRefs, newGenRefs, safepointF)
 }
 
 func (db *database) tryCommitChunks(ctx context.Context, newRootHash hash.Hash, currentRootHash hash.Hash) error {

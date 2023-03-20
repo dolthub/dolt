@@ -59,7 +59,12 @@ func TestChunkStoreVersion(t *testing.T) {
 	}()
 
 	assert.Equal(constants.FormatLD1String, store.Version())
-	newRoot := hash.Of([]byte("new root"))
+	newChunk := chunks.NewChunk([]byte("new root"))
+	require.NoError(t, store.Put(context.Background(), newChunk, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+		return nil, nil
+	}))
+	newRoot := newChunk.Hash()
+
 	if assert.True(store.Commit(context.Background(), newRoot, hash.Hash{})) {
 		assert.Equal(constants.FormatLD1String, store.Version())
 	}
@@ -204,14 +209,18 @@ func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 	}()
 
 	// Simulate another process writing a manifest behind store's back.
-	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
+	newRoot, chks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 	require.NoError(t, err)
 
-	newRoot2 := hash.Of([]byte("new root 2"))
+	newChunk := chunks.NewChunk([]byte("new root 2"))
+	require.NoError(t, store.Put(context.Background(), newChunk, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+		return nil, nil
+	}))
+	newRoot2 := newChunk.Hash()
 	success, err := store.Commit(context.Background(), newRoot2, hash.Hash{})
 	require.NoError(t, err)
 	assert.False(success)
-	assertDataInStore(chunks, store, assert)
+	assertDataInStore(chks, store, assert)
 	success, err = store.Commit(context.Background(), newRoot2, newRoot)
 	require.NoError(t, err)
 	assert.True(success)
