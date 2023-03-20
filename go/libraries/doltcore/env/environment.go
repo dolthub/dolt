@@ -106,39 +106,45 @@ func (dEnv *DoltEnv) GetRemoteDB(ctx context.Context, format *types.NomsBinForma
 	}
 }
 
-// Load loads the DoltEnv for the .dolt directory determined by resolving the specified urlStr with the specified Filesys.
-func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
+func LoadWithoutDB(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, version string) *DoltEnv {
 	cfg, cfgErr := LoadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
 
-	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr, fs)
-
-	dEnv := &DoltEnv{
-		Version:     version,
-		Config:      cfg,
-		CfgLoadErr:  cfgErr,
-		RepoState:   repoState,
-		RSLoadErr:   rsErr,
-		DoltDB:      ddb,
-		DBLoadError: dbLoadErr,
-		FS:          fs,
-		urlStr:      urlStr,
-		hdp:         hdp,
-	}
-
-	if dEnv.RepoState != nil {
-		remotes := make(map[string]Remote, len(dEnv.RepoState.Remotes))
-		for n, r := range dEnv.RepoState.Remotes {
+	// deep copy remotes and backups ¯\_(ツ)_/¯ (see commit c59cbead)
+	if repoState != nil {
+		remotes := make(map[string]Remote, len(repoState.Remotes))
+		for n, r := range repoState.Remotes {
 			remotes[n] = r
 		}
-		dEnv.RepoState.Remotes = remotes
+		repoState.Remotes = remotes
 
-		backups := make(map[string]Remote, len(dEnv.RepoState.Backups))
-		for n, r := range dEnv.RepoState.Backups {
+		backups := make(map[string]Remote, len(repoState.Backups))
+		for n, r := range repoState.Backups {
 			backups[n] = r
 		}
-		dEnv.RepoState.Backups = backups
+		repoState.Backups = backups
 	}
+
+	return &DoltEnv{
+		Version:    version,
+		Config:     cfg,
+		CfgLoadErr: cfgErr,
+		RepoState:  repoState,
+		RSLoadErr:  rsErr,
+		FS:         fs,
+		hdp:        hdp,
+	}
+}
+
+// Load loads the DoltEnv for the .dolt directory determined by resolving the specified urlStr with the specified Filesys.
+func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
+	dEnv := LoadWithoutDB(ctx, hdp, fs, version)
+
+	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr, fs)
+
+	dEnv.DoltDB = ddb
+	dEnv.DBLoadError = dbLoadErr
+	dEnv.urlStr = urlStr
 
 	if dbLoadErr == nil && dEnv.HasDoltDir() {
 		if !dEnv.HasDoltTempTableDir() {
@@ -172,7 +178,7 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr s
 		}
 	}
 
-	if rsErr == nil && dbLoadErr == nil {
+	if dEnv.RSLoadErr == nil && dbLoadErr == nil {
 		// If the working set isn't present in the DB, create it from the repo state. This step can be removed post 1.0.
 		_, err := dEnv.WorkingSet(ctx)
 		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {

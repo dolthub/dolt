@@ -458,7 +458,7 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
 			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
-		expectedErr: merge.ErrMergeWithDifferentPkSets,
+		expectedErr: merge.ErrMergeWithDifferentPks,
 	},
 }
 
