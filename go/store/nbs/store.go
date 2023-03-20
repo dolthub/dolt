@@ -299,7 +299,6 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 		return manifestContents{}, err
 	}
 
-
 	var updatedContents manifestContents
 	for {
 		ok, contents, _, ferr := nbs.mm.Fetch(ctx, nbs.stats)
