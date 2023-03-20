@@ -165,7 +165,7 @@ func TestTableEditor(t *testing.T) {
 
 			engine, ctx, err := sqle.NewTestEngine(dEnv, context.Background(), db)
 			require.NoError(t, err)
-			
+
 			peopleTable, _, err := db.GetTableInsensitive(ctx, "people")
 			require.NoError(t, err)
 
@@ -183,7 +183,7 @@ func TestTableEditor(t *testing.T) {
 
 			sch, rowIter, err := engine.Query(ctx, test.selectQuery)
 			require.NoError(t, err)
-			
+
 			actualRows, err := sql.RowIterToRows(ctx, sch, rowIter)
 			require.NoError(t, err)
 

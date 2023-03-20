@@ -189,11 +189,11 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (sql.Datab
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if !b {
 		return nil, sql.ErrDatabaseNotFound.New(name)
 	}
-	
+
 	return database, nil
 }
 
@@ -442,7 +442,7 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 	formattedName := formatDbMapKeyName(db.Name())
 	p.databases[formattedName] = db
 	p.dbLocations[formattedName] = newEnv.FS
-	
+
 	return nil
 }
 
@@ -906,7 +906,7 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 			return nil, false, nil
 		}
 	}
-	
+
 	return wrapForStandby(db, standby), true, nil
 }
 

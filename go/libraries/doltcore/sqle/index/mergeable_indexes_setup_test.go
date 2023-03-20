@@ -105,7 +105,7 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *s
 
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 	engine = sqle.NewDefault(pro)
-	
+
 	it := []*indexTuple{
 		idxv1ToTuple,
 		idxv2v1ToTuple,

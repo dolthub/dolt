@@ -142,18 +142,18 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 	if ok {
 		return dbState, ok, nil
 	}
-	
+
 	// TODO: this needs to include the transaction's snapshot of the DB at tx start time
 
 	database, ok, err := d.provider.SessionDatabase(ctx, dbName)
 	if err != nil {
 		return nil, false, err
 	}
-	
+
 	if !ok {
 		return nil, false, nil
 	}
-	
+
 	// Add the initial state to the session for future reuse
 	if err = d.addDB(ctx, database); err != nil {
 		return nil, false, err
@@ -270,11 +270,11 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		if err != nil {
 			return nil, err
 		}
-		
+
 		if !ok {
 			return nil, sql.ErrDatabaseNotFound.New(dbName)
 		}
-		
+
 		err = d.addDB(ctx, db)
 		if err != nil {
 			return nil, err
@@ -1110,7 +1110,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SessionDatabase) error {
 		initialBranch = val.(string)
 	}
 
-	// TODO: the branch should be already set if the DB was specified with a branch revision string 
+	// TODO: the branch should be already set if the DB was specified with a branch revision string
 	dbState, err := db.InitialDBState(ctx, initialBranch)
 	if err != nil {
 		return err
@@ -1369,17 +1369,17 @@ func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
 func (d *DoltSession) GetBranch() (string, error) {
 	ctx := sql.NewContext(context.Background(), sql.WithSession(d))
 	currentDb := d.Session.GetCurrentDatabase()
-	
+
 	// no branch if there's no current db
 	if currentDb == "" {
 		return "", nil
 	}
-	
+
 	dbState, _, err := d.LookupDbState(ctx, currentDb)
 	if err != nil {
 		return "", err
 	}
-	
+
 	if dbState.WorkingSet != nil {
 		branchRef, err := dbState.WorkingSet.Ref().ToHeadRef()
 		if err != nil {
