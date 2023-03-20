@@ -511,7 +511,7 @@ func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQ
 		return nil, err
 	}
 
-	m, err := getFileManifest(ctx, dir, syncFlush)
+	m, err := newJournalManifest(ctx, dir)
 	if err != nil {
 		return nil, err
 	}

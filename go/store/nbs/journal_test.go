@@ -35,7 +35,7 @@ func makeTestChunkJournal(t *testing.T) *chunkJournal {
 	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
 	t.Cleanup(func() { file.RemoveAll(dir) })
-	m, err := getFileManifest(ctx, dir, syncFlush)
+	m, err := newJournalManifest(ctx, dir)
 	require.NoError(t, err)
 	q := NewUnlimitedMemQuotaProvider()
 	p := newFSTablePersister(dir, q)

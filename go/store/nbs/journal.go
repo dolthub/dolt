@@ -19,9 +19,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/dolthub/fslock"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -398,6 +401,101 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, ke
 	}
 	keepers = append(keepers, stash)
 	return
+}
+
+// newJournalManifest makes a new file manifest.
+func newJournalManifest(ctx context.Context, dir string) (m manifest, err error) {
+	var readOnly bool
+	// try to take the file lock. if we fail, make the manifest read-only.
+	// if we succeed, hold the file lock until the process terminates.
+	err = fslock.New(filepath.Join(dir, lockFileName)).LockWithTimeout(lockFileTimeout)
+	if errors.Is(err, fslock.ErrTimeout) {
+		readOnly, err = true, nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	m = journalManifest{dir: dir, readOnly: readOnly}
+
+	var f *os.File
+	f, err = openIfExists(filepath.Join(dir, manifestFileName))
+	if err != nil {
+		return nil, err
+	} else if f == nil {
+		return m, nil
+	}
+	defer func() {
+		// keep first error
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+	}()
+
+	var ok bool
+	ok, _, err = m.ParseIfExists(ctx, &Stats{}, nil)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, ErrUnreadableManifest
+	}
+	return
+}
+
+type journalManifest struct {
+	dir      string
+	readOnly bool
+}
+
+// Name implements manifest.
+func (jm journalManifest) Name() string {
+	return jm.dir
+}
+
+// ParseIfExists implements manifest.
+func (jm journalManifest) ParseIfExists(
+	ctx context.Context,
+	stats *Stats,
+	readHook func() error,
+) (exists bool, contents manifestContents, err error) {
+	t1 := time.Now()
+	defer func() { stats.ReadManifestLatency.SampleTimeSince(t1) }()
+	return parseIfExists(ctx, jm.dir, readHook)
+}
+
+// Update implements manifest.
+func (jm journalManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+	if jm.readOnly {
+		return manifestContents{}, errors.New("cannot update manifest: database is read only")
+	}
+
+	t1 := time.Now()
+	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
+	checker := func(upstream, contents manifestContents) error {
+		if contents.gcGen != upstream.gcGen {
+			return chunks.ErrGCGenerationExpired
+		}
+		return nil
+	}
+	return updateWithChecker(ctx, jm.dir, syncFlush, checker, lastLock, newContents, writeHook)
+}
+
+// UpdateGCGen implements manifest.
+func (jm journalManifest) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+	if jm.readOnly {
+		return manifestContents{}, errors.New("cannot update manifest: database is read only")
+	}
+
+	t1 := time.Now()
+	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
+	checker := func(upstream, contents manifestContents) error {
+		if contents.gcGen == upstream.gcGen {
+			return errors.New("UpdateGCGen() must update the garbage collection generation")
+		} else if contents.root != upstream.root {
+			return errors.New("UpdateGCGen() cannot update the root")
+		}
+		return nil
+	}
+	return updateWithChecker(ctx, jm.dir, syncFlush, checker, lastLock, newContents, writeHook)
 }
 
 func containsJournalSpec(specs []tableSpec) (ok bool) {
