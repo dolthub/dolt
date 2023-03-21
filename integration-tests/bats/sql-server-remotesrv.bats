@@ -157,7 +157,7 @@ SQL
     [[ "$output" =~ "| 5 " ]] || false
 }
 
-@test "sql-server-remotesrv: can read from sql-server with --remotesapi-port with clone authentication" {
+@test "sql-server-remotesrv: can read from sql-server with --remotesapi-port with clone/fetch/pull authentication" {
     mkdir remote
     cd remote
     dolt init
@@ -169,7 +169,7 @@ SQL
     export DOLT_REMOTE_USER="user0"
     export DOLT_REMOTE_PASSWORD="pass0"
 
-    dolt sql-server -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD --remotesapi-port 50051 &
+    dolt sql-server --port 3307 -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD --remotesapi-port 50051 &
     srv_pid=$!
 
     cd ../
@@ -180,22 +180,52 @@ SQL
     run dolt sql -q 'select count(*) from vals'
     [[ "$output" =~ "5" ]] || false
 
-    dolt sql-client -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD <<SQL
+    dolt sql-client --port 3307 -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD <<SQL
 use remote;
+call dolt_checkout('-b', 'new_branch');
 insert into vals (i) values (6), (7), (8), (9), (10);
 call dolt_commit('-am', 'add some vals');
 SQL
 
-    # No auth
+    run dolt branch -v -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remotes/origin/main" ]] || false
+    [[ ! "$output" =~ "remotes/origin/new_branch" ]] || false
+
+    # No auth fetch
+    run dolt fetch
+    [[ "$status" != 0 ]] || false
+    [[ "$output" =~ "Unauthenticated" ]] || false
+
+    # # With auth fetch
+    run dolt fetch -u $DOLT_REMOTE_USER
+    [[ "$status" -eq 0 ]] || false
+
+    run dolt branch -v -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remotes/origin/main" ]] || false
+    [[ "$output" =~ "remotes/origin/new_branch" ]] || false
+
+    run dolt checkout new_branch
+    [[ "$status" -eq 0 ]] || false
+
+    dolt sql-client --port 3307 -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD <<SQL
+use remote;
+call dolt_checkout('new_branch');
+insert into vals (i) values (11);
+call dolt_commit('-am', 'add one val');
+SQL
+
+    # No auth pull
     run dolt pull
     [[ "$status" != 0 ]] || false
     [[ "$output" =~ "Unauthenticated" ]] || false
 
-    # With auth
+    # With auth pull
     run dolt pull -u $DOLT_REMOTE_USER
     [[ "$status" -eq 0 ]] || false
     run dolt sql -q 'select count(*) from vals;'
-    [[ "$output" =~ "10" ]] || false
+    [[ "$output" =~ "11" ]] || false
 }
 
 @test "sql-server-remotesrv: dolt clone without authentication errors" {

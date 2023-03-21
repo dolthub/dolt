@@ -91,7 +91,11 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 
-	dEnv.UserPassConfig = getUserAndPassConfig(apr)
+	var verr errhand.VerboseError
+	dEnv.UserPassConfig, verr = getRemoteUserAndPassConfig(apr)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
 
 	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
 	if err != nil {

@@ -102,7 +102,7 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		return verr
 	}
 
-	dEnv.UserPassConfig, verr = getUserAndPassConfig(apr)
+	dEnv.UserPassConfig, verr = getRemoteUserAndPassConfig(apr)
 	if verr != nil {
 		return verr
 	}
@@ -236,7 +236,7 @@ func validateAndParseDolthubUrl(urlStr string) (string, bool) {
 	return "", false
 }
 
-func getUserAndPassConfig(apr *argparser.ArgParseResults) (*creds.DoltCredsForPass, errhand.VerboseError) {
+func getRemoteUserAndPassConfig(apr *argparser.ArgParseResults) (*creds.DoltCredsForPass, errhand.VerboseError) {
 	if !apr.Contains(cli.UserParam) {
 		return nil, nil
 	}
