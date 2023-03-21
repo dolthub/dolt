@@ -83,7 +83,7 @@ func (database) IsReadOnly() bool {
 	return true
 }
 
-func (db database) InitialDBState(ctx context.Context, branch string) (dsess.InitialDbState, error) {
+func (db database) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
 	// TODO: almost none of this state is actually used, but is necessary because the current session setup requires a
 	//  repo state writer
 	return dsess.InitialDbState{
@@ -109,6 +109,10 @@ func (db database) Flush(context *sql.Context) error {
 
 func (db database) EditOptions() editor.Options {
 	return editor.Options{}
+}
+
+func (db database) Revision() string {
+	return ""
 }
 
 type noopRepoStateWriter struct{}

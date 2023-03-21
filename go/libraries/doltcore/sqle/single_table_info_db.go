@@ -15,7 +15,6 @@
 package sqle
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -89,7 +88,7 @@ func (db *SingleTableInfoDatabase) Collation() sql.CollationID {
 	return sql.CollationID(db.sch.GetCollation())
 }
 
-func (db *SingleTableInfoDatabase) InitialDBState(ctx context.Context, branch string) (dsess.InitialDbState, error) {
+func (db *SingleTableInfoDatabase) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
 	return getInitialDBStateForUserSpaceDb(ctx, db)
 }
 

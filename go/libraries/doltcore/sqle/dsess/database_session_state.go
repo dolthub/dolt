@@ -15,8 +15,6 @@
 package dsess
 
 import (
-	"context"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -48,7 +46,7 @@ type InitialDbState struct {
 // order for the session to manage it.
 type SessionDatabase interface {
 	sql.Database
-	InitialDBState(ctx context.Context, branch string) (InitialDbState, error)
+	InitialDBState(ctx *sql.Context, branch string) (InitialDbState, error)
 }
 
 type DatabaseSessionState struct {

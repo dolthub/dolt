@@ -95,6 +95,10 @@ func (r ReadOnlyDatabase) IsReadOnly() bool {
 	return true
 }
 
+func (r ReadOnlyDatabase) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
+	return GetInitialDBState(ctx, r, branch)
+}
+
 // Revision implements dsess.RevisionDatabase
 func (db Database) Revision() string {
 	return db.revision
@@ -122,77 +126,15 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts e
 }
 
 // GetInitialDBState returns the InitialDbState for |db|.
-// TODO NEXT: this is just wrong and shouldn't be used
-//
-//	manifesting as using the base db state, not a revisoin db state for revision dbs
-func GetInitialDBState(ctx context.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
-	switch db := db.(type) {
-	case *UserSpaceDatabase, *SingleTableInfoDatabase:
-		return getInitialDBStateForUserSpaceDb(ctx, db)
+func GetInitialDBState(ctx *sql.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
+	if len(db.Revision()) > 0 {
+		return initialStateForRevisionDb(ctx, db)
 	}
 
-	rsr := db.DbData().Rsr
-	ddb := db.DbData().Ddb
-
-	var r ref.DoltRef
-	if len(branch) > 0 {
-		r = ref.NewBranchRef(branch)
-	} else {
-		r = rsr.CWBHeadRef()
-	}
-
-	var retainedErr error
-
-	headCommit, err := ddb.ResolveCommitRef(ctx, r)
-	if err == doltdb.ErrBranchNotFound {
-		retainedErr = err
-		err = nil
-	}
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	var ws *doltdb.WorkingSet
-	if retainedErr == nil {
-		workingSetRef, err := ref.WorkingSetRefForHead(r)
-		if err != nil {
-			return dsess.InitialDbState{}, err
-		}
-
-		ws, err = db.DbData().Ddb.ResolveWorkingSet(ctx, workingSetRef)
-		if err != nil {
-			return dsess.InitialDbState{}, err
-		}
-	}
-
-	remotes, err := rsr.GetRemotes()
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	backups, err := rsr.GetBackups()
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	branches, err := rsr.GetBranches()
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	return dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     db.DbData(),
-		Remotes:    remotes,
-		Branches:   branches,
-		Backups:    backups,
-		Err:        retainedErr,
-	}, nil
+	return initialDbState(ctx, db, branch)
 }
 
-func (db Database) InitialDBState(ctx context.Context, branch string) (dsess.InitialDbState, error) {
+func (db Database) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
 	return GetInitialDBState(ctx, db, branch)
 }
 

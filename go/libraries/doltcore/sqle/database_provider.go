@@ -801,7 +801,74 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 	return nil, false, nil
 }
 
-func initialStateForRevision(ctx *sql.Context, srcDb SqlDatabase) (dsess.InitialDbState, error) {
+func initialDbState(ctx context.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
+	switch db := db.(type) {
+	case *UserSpaceDatabase, *SingleTableInfoDatabase:
+		return getInitialDBStateForUserSpaceDb(ctx, db)
+	}
+
+	rsr := db.DbData().Rsr
+	ddb := db.DbData().Ddb
+
+	var r ref.DoltRef
+	if len(branch) > 0 {
+		r = ref.NewBranchRef(branch)
+	} else {
+		r = rsr.CWBHeadRef()
+	}
+
+	var retainedErr error
+
+	headCommit, err := ddb.ResolveCommitRef(ctx, r)
+	if err == doltdb.ErrBranchNotFound {
+		retainedErr = err
+		err = nil
+	}
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	var ws *doltdb.WorkingSet
+	if retainedErr == nil {
+		workingSetRef, err := ref.WorkingSetRefForHead(r)
+		if err != nil {
+			return dsess.InitialDbState{}, err
+		}
+
+		ws, err = db.DbData().Ddb.ResolveWorkingSet(ctx, workingSetRef)
+		if err != nil {
+			return dsess.InitialDbState{}, err
+		}
+	}
+
+	remotes, err := rsr.GetRemotes()
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	backups, err := rsr.GetBackups()
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	branches, err := rsr.GetBranches()
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	return dsess.InitialDbState{
+		Db:         db,
+		HeadCommit: headCommit,
+		WorkingSet: ws,
+		DbData:     db.DbData(),
+		Remotes:    remotes,
+		Branches:   branches,
+		Backups:    backups,
+		Err:        retainedErr,
+	}, nil
+}
+
+func initialStateForRevisionDb(ctx *sql.Context, srcDb SqlDatabase) (dsess.InitialDbState, error) {
 	_, revSpec := SplitRevisionDbName(srcDb)
 	
 	resolvedRevSpec, err := resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
@@ -841,8 +908,7 @@ func initialStateForRevision(ctx *sql.Context, srcDb SqlDatabase) (dsess.Initial
 
 		srcDb, ok = srcDb.(ReadOnlyDatabase)
 		if !ok {
-			// TODO: do we need an error here?
-			return dsess.InitialDbState{}, nil
+			return dsess.InitialDbState{}, fmt.Errorf("expected a ReadOnlyDatabase, got %T", srcDb)
 		}
 		
 		init, err := initialStateForTagDb(ctx, srcDb.(ReadOnlyDatabase))
@@ -862,8 +928,7 @@ func initialStateForRevision(ctx *sql.Context, srcDb SqlDatabase) (dsess.Initial
 
 		srcDb, ok = srcDb.(ReadOnlyDatabase)
 		if !ok {
-			// TODO: error here?
-			return dsess.InitialDbState{}, nil
+			return dsess.InitialDbState{}, fmt.Errorf("expected a ReadOnlyDatabase, got %T", srcDb)
 		}
 		
 		init, err := initialStateForCommit(ctx, srcDb.(ReadOnlyDatabase))
