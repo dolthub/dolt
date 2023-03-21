@@ -140,25 +140,9 @@ func (ddb *DoltDB) CSMetricsSummary() string {
 	return datas.GetCSStatSummaryForDB(ddb.db)
 }
 
-// WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid
-// metadata for the creation commit, and an empty RootValue.
-func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, initBranch, name, email string) error {
-	return ddb.WriteEmptyRepoWithCommitMeta(ctx, initBranch, MakeCommitMetaGenerator(name, email, datas.CommitNowFunc()))
-}
-
-const defaultInitialCommitMessage = "Initialize data repository"
-
-func (ddb *DoltDB) WriteEmptyRepoWithCommitMeta(ctx context.Context, initBranch string, commitMeta CommitMetaGenerator) error {
-	return ddb.WriteEmptyRepoWithCommitMetaAndDefaultBranch(ctx, commitMeta, ref.NewBranchRef(initBranch))
-}
-
 type CommitMetaGenerator interface {
 	next() (*datas.CommitMeta, error)
 	isGoodHash(hash.Hash) bool
-}
-
-func MakeCommitMetaGenerator(name, email string, timestamp time.Time) CommitMetaGenerator {
-	return simpleCommitMetaGenerator{name: name, email: email, timestamp: timestamp, message: defaultInitialCommitMessage}
 }
 
 type simpleCommitMetaGenerator struct {
@@ -173,6 +157,22 @@ func (g simpleCommitMetaGenerator) next() (*datas.CommitMeta, error) {
 
 func (simpleCommitMetaGenerator) isGoodHash(hash.Hash) bool {
 	return true
+}
+
+const defaultInitialCommitMessage = "Initialize data repository"
+
+func MakeCommitMetaGenerator(name, email string, timestamp time.Time) CommitMetaGenerator {
+	return simpleCommitMetaGenerator{name: name, email: email, timestamp: timestamp, message: defaultInitialCommitMessage}
+}
+
+// WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid
+// metadata for the creation commit, and an empty RootValue.
+func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, initBranch, name, email string) error {
+	return ddb.WriteEmptyRepoWithCommitMeta(ctx, initBranch, MakeCommitMetaGenerator(name, email, datas.CommitNowFunc()))
+}
+
+func (ddb *DoltDB) WriteEmptyRepoWithCommitMeta(ctx context.Context, initBranch string, commitMeta CommitMetaGenerator) error {
+	return ddb.WriteEmptyRepoWithCommitMetaAndDefaultBranch(ctx, commitMeta, ref.NewBranchRef(initBranch))
 }
 
 func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
