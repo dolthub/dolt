@@ -1932,6 +1932,7 @@ func skipPreparedTests(t *testing.T) {
 
 func newSessionBuilder(harness *DoltHarness) server.SessionBuilder {
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, error) {
-		return harness.session, nil
+		newCtx := harness.NewSession()
+		return newCtx.Session, nil
 	}
 }
