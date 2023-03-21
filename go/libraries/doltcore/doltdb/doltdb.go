@@ -53,6 +53,8 @@ const (
 	defaultChunksPerTF = 256 * 1024
 )
 
+const defaultInitialCommitMessage = "Initialize data repository"
+
 // LocalDirDoltDB stores the db in the current directory
 var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
 
@@ -140,11 +142,14 @@ func (ddb *DoltDB) CSMetricsSummary() string {
 	return datas.GetCSStatSummaryForDB(ddb.db)
 }
 
+// CommitMetaGenerator is an interface that generates a sequence of CommitMeta structs, and implements a predicate to check whether
+// a proposed commit is acceptable.
 type CommitMetaGenerator interface {
 	next() (*datas.CommitMeta, error)
 	isGoodHash(hash.Hash) bool
 }
 
+// The default implementation of CommitMetaGenerator, which generates a single commit which is always acceptable.
 type simpleCommitMetaGenerator struct {
 	name, email string
 	timestamp   time.Time
@@ -158,8 +163,6 @@ func (g simpleCommitMetaGenerator) next() (*datas.CommitMeta, error) {
 func (simpleCommitMetaGenerator) isGoodHash(hash.Hash) bool {
 	return true
 }
-
-const defaultInitialCommitMessage = "Initialize data repository"
 
 func MakeCommitMetaGenerator(name, email string, timestamp time.Time) CommitMetaGenerator {
 	return simpleCommitMetaGenerator{name: name, email: email, timestamp: timestamp, message: defaultInitialCommitMessage}
