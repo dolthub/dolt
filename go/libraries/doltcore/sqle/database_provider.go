@@ -669,7 +669,7 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 			delete(p.databases, dbName)
 		}
 	}
-	
+
 	delete(p.databases, dbKey)
 
 	return p.invalidateDbStateInAllSessions(ctx, name)
@@ -683,7 +683,7 @@ func (p DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, n
 	if err != nil {
 		return err
 	}
-	
+
 	// If we have a running server, remove it from other sessions as well
 	runningServer := sqlserver.GetRunningServer()
 	if runningServer != nil {
@@ -877,7 +877,7 @@ func initialDbState(ctx context.Context, db SqlDatabase, branch string) (dsess.I
 
 func initialStateForRevisionDb(ctx *sql.Context, srcDb SqlDatabase) (dsess.InitialDbState, error) {
 	_, revSpec := SplitRevisionDbName(srcDb)
-	
+
 	resolvedRevSpec, err := resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
 	if err != nil {
 		return dsess.InitialDbState{}, err
@@ -893,7 +893,7 @@ func initialStateForRevisionDb(ctx *sql.Context, srcDb SqlDatabase) (dsess.Initi
 		// preserve original user case in the case of not found
 		if sql.ErrDatabaseNotFound.Is(err) {
 			return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(srcDb.Name())
-		} else 	if err != nil {
+		} else if err != nil {
 			return dsess.InitialDbState{}, err
 		}
 
@@ -917,7 +917,7 @@ func initialStateForRevisionDb(ctx *sql.Context, srcDb SqlDatabase) (dsess.Initi
 		if !ok {
 			return dsess.InitialDbState{}, fmt.Errorf("expected a ReadOnlyDatabase, got %T", srcDb)
 		}
-		
+
 		init, err := initialStateForTagDb(ctx, srcDb.(ReadOnlyDatabase))
 		if err != nil {
 			return dsess.InitialDbState{}, err
@@ -937,7 +937,7 @@ func initialStateForRevisionDb(ctx *sql.Context, srcDb SqlDatabase) (dsess.Initi
 		if !ok {
 			return dsess.InitialDbState{}, fmt.Errorf("expected a ReadOnlyDatabase, got %T", srcDb)
 		}
-		
+
 		init, err := initialStateForCommit(ctx, srcDb.(ReadOnlyDatabase))
 		if err != nil {
 			return dsess.InitialDbState{}, err
@@ -1117,7 +1117,7 @@ func (p DoltDatabaseProvider) GetRevisionForRevisionDatabase(ctx *sql.Context, d
 
 	sqldb, ok := db.(SqlDatabase)
 	if !ok {
-		return dbName, "",  nil
+		return dbName, "", nil
 	}
 
 	base, rev := SplitRevisionDbName(sqldb)
@@ -1230,7 +1230,7 @@ func isTag(ctx context.Context, db SqlDatabase, tagName string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	
+
 	for _, ddb := range ddbs {
 		tagExists, err := ddb.HasTag(ctx, tagName)
 		if err != nil {
@@ -1286,13 +1286,13 @@ func revisionDbForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			limiter: newLimiter(),
 		}
 	}
-	
+
 	return db, nil
 }
 
 func initialStateForBranchDb(ctx context.Context, srcDb SqlDatabase) (dsess.InitialDbState, error) {
 	_, revSpec := SplitRevisionDbName(srcDb)
-	
+
 	branch := ref.NewBranchRef(revSpec)
 	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, branch)
 	if err != nil {
@@ -1396,7 +1396,7 @@ func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string) (Read
 }
 
 func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.InitialDbState, error) {
-	_, revSpec:= SplitRevisionDbName(srcDb)
+	_, revSpec := SplitRevisionDbName(srcDb)
 	tag := ref.NewTagRef(revSpec)
 
 	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, tag)
@@ -1433,7 +1433,7 @@ func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		editOpts: srcDb.editOpts,
 		revision: revSpec,
 	}}
-	
+
 	return db, nil
 }
 
@@ -1449,7 +1449,7 @@ func initialStateForCommit(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.I
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
-	
+
 	init := dsess.InitialDbState{
 		Db:         srcDb,
 		HeadCommit: cm,
