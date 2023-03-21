@@ -342,10 +342,10 @@ func (dEnv *DoltEnv) InitRepo(ctx context.Context, nbf *types.NomsBinFormat, nam
 }
 
 func (dEnv *DoltEnv) InitRepoWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email, branchName string, t time.Time) error { // should remove name and email args
-	return dEnv.InitRepoWithCommitMeta(ctx, nbf, branchName, doltdb.MakeCommitMetaGenerator(name, email, t))
+	return dEnv.InitRepoWithCommitMeta(ctx, nbf, branchName, datas.MakeCommitMetaGenerator(name, email, t))
 }
 
-func (dEnv *DoltEnv) InitRepoWithCommitMeta(ctx context.Context, nbf *types.NomsBinFormat, branchName string, commitMeta doltdb.CommitMetaGenerator) error {
+func (dEnv *DoltEnv) InitRepoWithCommitMeta(ctx context.Context, nbf *types.NomsBinFormat, branchName string, commitMeta datas.CommitMetaGenerator) error {
 	doltDir, err := dEnv.createDirectories(".")
 
 	if err != nil {
@@ -436,10 +436,10 @@ func (dEnv *DoltEnv) configureRepo(doltDir string) error {
 // Inits the dolt DB of this environment with an empty commit at the time given and writes default docs to disk.
 // Writes new repo state with a main branch and current root hash.
 func (dEnv *DoltEnv) InitDBAndRepoState(ctx context.Context, nbf *types.NomsBinFormat, name, email, branchName string, t time.Time) error {
-	return dEnv.InitDBAndRepoStateWithCommitMeta(ctx, nbf, branchName, doltdb.MakeCommitMetaGenerator(name, email, t))
+	return dEnv.InitDBAndRepoStateWithCommitMeta(ctx, nbf, branchName, datas.MakeCommitMetaGenerator(name, email, t))
 }
 
-func (dEnv *DoltEnv) InitDBAndRepoStateWithCommitMeta(ctx context.Context, nbf *types.NomsBinFormat, branchName string, commitMeta doltdb.CommitMetaGenerator) error {
+func (dEnv *DoltEnv) InitDBAndRepoStateWithCommitMeta(ctx context.Context, nbf *types.NomsBinFormat, branchName string, commitMeta datas.CommitMetaGenerator) error {
 	err := dEnv.InitDBWithCommitMeta(ctx, nbf, branchName, commitMeta)
 	if err != nil {
 		return err
@@ -451,10 +451,10 @@ func (dEnv *DoltEnv) InitDBAndRepoStateWithCommitMeta(ctx context.Context, nbf *
 // Inits the dolt DB of this environment with an empty commit at the time given and writes default docs to disk.
 // Does not update repo state.
 func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email, branchName string, t time.Time) error {
-	return dEnv.InitDBWithCommitMeta(ctx, nbf, branchName, doltdb.MakeCommitMetaGenerator(name, email, t))
+	return dEnv.InitDBWithCommitMeta(ctx, nbf, branchName, datas.MakeCommitMetaGenerator(name, email, t))
 }
 
-func (dEnv *DoltEnv) InitDBWithCommitMeta(ctx context.Context, nbf *types.NomsBinFormat, branchName string, commitMeta doltdb.CommitMetaGenerator) error {
+func (dEnv *DoltEnv) InitDBWithCommitMeta(ctx context.Context, nbf *types.NomsBinFormat, branchName string, commitMeta datas.CommitMetaGenerator) error {
 	var err error
 	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, dEnv.FS)
 	if err != nil {

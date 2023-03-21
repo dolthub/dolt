@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package datas
 
 import (
 	"fmt"
 	"regexp"
 	"time"
-
-	"github.com/dolthub/dolt/go/store/datas"
 )
 
 // An alternate implementation of CommitMetaGenerator, which only produces hashes which begin with "d0lt" or similar.
@@ -48,7 +46,7 @@ var descriptionReplacementCandidates = [][]rune{
 	{'o', '\u043e'},
 }
 
-func (g funHashCommitMetaGenerator) next() (*datas.CommitMeta, error) {
+func (g funHashCommitMetaGenerator) Next() (*CommitMeta, error) {
 	if g.attempt >= 1<<len(descriptionReplacementCandidates) {
 		g.attempt = 0
 		// The Time type uses nanosecond precision. Subtract one million nanoseconds (one ms)
@@ -65,10 +63,10 @@ func (g funHashCommitMetaGenerator) next() (*datas.CommitMeta, error) {
 
 	g.attempt += 1
 
-	return datas.NewCommitMetaWithUserTS(g.name, g.email, description, g.timestamp)
+	return NewCommitMetaWithUserTS(g.name, g.email, description, g.timestamp)
 }
 
-func (g funHashCommitMetaGenerator) isGoodCommit(commit *datas.Commit) bool {
+func (g funHashCommitMetaGenerator) IsGoodCommit(commit *Commit) bool {
 	var funRegExp = regexp.MustCompile("^d[o0][1l]t")
 
 	hashString := commit.Addr().String()

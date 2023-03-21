@@ -23,9 +23,9 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -155,11 +155,11 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	requiresFunHash := apr.Contains(funHashFlag)
-	commitMeta := func() doltdb.CommitMetaGenerator {
+	commitMeta := func() datas.CommitMetaGenerator {
 		if requiresFunHash {
-			return doltdb.MakeCommitMetaGenerator(name, email, t)
+			return datas.MakeCommitMetaGenerator(name, email, t)
 		} else {
-			return doltdb.MakeFunCommitMetaGenerator(name, email, t)
+			return datas.MakeFunCommitMetaGenerator(name, email, t)
 		}
 	}()
 
