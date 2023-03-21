@@ -186,10 +186,16 @@ insert into vals (i) values (6), (7), (8), (9), (10);
 call dolt_commit('-am', 'add some vals');
 SQL
 
-    # TODO: Add auth to dolt pull
+    # No auth
     run dolt pull
     [[ "$status" != 0 ]] || false
     [[ "$output" =~ "Unauthenticated" ]] || false
+
+    # With auth
+    run dolt pull -u $DOLT_REMOTE_USER
+    [[ "$status" -eq 0 ]] || false
+    run dolt sql -q 'select count(*) from vals;'
+    [[ "$output" =~ "10" ]] || false
 }
 
 @test "sql-server-remotesrv: dolt clone without authentication errors" {
