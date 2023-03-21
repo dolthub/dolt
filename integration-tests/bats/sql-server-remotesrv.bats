@@ -212,3 +212,30 @@ SQL
     [[ "$status" != 0 ]] || false
     [[ "$output" =~ "Unauthenticated" ]] || false
 }
+
+@test "sql-server-remotesrv: dolt clone with incorrect authentication errors" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql --privilege-file=privs.json -q "CREATE USER user0 IDENTIFIED BY 'pass0'"
+    dolt sql -q 'create table vals (i int);'
+    dolt sql -q 'insert into vals (i) values (1), (2), (3), (4), (5);'
+    dolt add vals
+    dolt commit -m 'initial vals.'
+    export DOLT_REMOTE_USER="user0"
+    export PASSWORD="pass0"
+
+    dolt sql-server -u $DOLT_REMOTE_USER  -p $PASSWORD --remotesapi-port 50051 &
+    srv_pid=$!
+
+    cd ../
+
+    run dolt clone http://localhost:50051/remote repo1 -u $DOLT_REMOTE_USER
+    [[ "$status" != 0 ]] || false
+    [[ "$output" =~ "must set DOLT_REMOTE_PASSWORD environment variable" ]] || false
+
+    export DOLT_REMOTE_PASSWORD="wrong-password"
+    run dolt clone http://localhost:50051/remote repo1 -u $DOLT_REMOTE_USER
+    [[ "$status" != 0 ]] || false
+    [[ "$output" =~ "Unauthenticated" ]] || false
+}

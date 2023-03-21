@@ -60,11 +60,6 @@ type DoltCreds struct {
 	KeyID   []byte
 }
 
-type DoltCredsForPass struct {
-	Username string
-	Password string
-}
-
 func PubKeyStrToKIDStr(pub string) (string, error) {
 	data, err := B32CredsEncoding.DecodeString(pub)
 
@@ -126,20 +121,15 @@ func (dc DoltCreds) Sign(data []byte) []byte {
 }
 
 type RPCCreds struct {
-	PrivKey          ed25519.PrivateKey
-	KeyID            string
-	Audience         string
-	Issuer           string
-	Subject          string
-	RequireTLS       bool
-	UserPassContents string
+	PrivKey    ed25519.PrivateKey
+	KeyID      string
+	Audience   string
+	Issuer     string
+	Subject    string
+	RequireTLS bool
 }
 
 func (c *RPCCreds) toBearerToken() (string, error) {
-	if len(c.UserPassContents) > 0 {
-		return "", fmt.Errorf("cannot create bearer token with user/pass credentials")
-	}
-
 	key := jose.SigningKey{Algorithm: jose.EdDSA, Key: c.PrivKey}
 	opts := &jose.SignerOptions{ExtraHeaders: map[jose.HeaderKey]interface{}{
 		JWTKIDHeader:           c.KeyID,
@@ -163,11 +153,6 @@ func (c *RPCCreds) toBearerToken() (string, error) {
 }
 
 func (c *RPCCreds) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	if len(c.UserPassContents) > 0 {
-		return map[string]string{
-			"authorization": "Basic " + c.UserPassContents,
-		}, nil
-	}
 	t, err := c.toBearerToken()
 	if err != nil {
 		return nil, err
@@ -195,13 +180,34 @@ func (dc DoltCreds) RPCCreds(audience string) *RPCCreds {
 	}
 }
 
-func (dcp DoltCredsForPass) ToBase64Str() string {
-	return base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", dcp.Username, dcp.Password)))
+type DoltCredsForPass struct {
+	Username string
+	Password string
 }
 
-func (dc DoltCredsForPass) RPCCreds() *RPCCreds {
-	return &RPCCreds{
+type RPCCredsForPass struct {
+	RequireTLS       bool
+	UserPassContents string
+}
+
+func (dcp DoltCredsForPass) ToBase64Str() string {
+	bStr := []byte(fmt.Sprintf("%s:%s", dcp.Username, dcp.Password))
+	return base64.StdEncoding.EncodeToString(bStr)
+}
+
+func (dc DoltCredsForPass) RPCCreds() *RPCCredsForPass {
+	return &RPCCredsForPass{
 		RequireTLS:       false,
 		UserPassContents: dc.ToBase64Str(),
 	}
+}
+
+func (c *RPCCredsForPass) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return map[string]string{
+		"authorization": "Basic " + c.UserPassContents,
+	}, nil
+}
+
+func (c *RPCCredsForPass) RequireTransportSecurity() bool {
+	return c.RequireTLS
 }

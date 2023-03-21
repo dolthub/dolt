@@ -33,12 +33,12 @@ type UserAuth struct {
 	Password string
 }
 
-type serverinterceptor struct {
+type ServerInterceptor struct {
 	Lgr              *logrus.Entry
 	ExpectedUserAuth UserAuth
 }
 
-func (si *serverinterceptor) Stream() grpc.StreamServerInterceptor {
+func (si *ServerInterceptor) Stream() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		if err := si.authenticate(ss.Context()); err != nil {
 			return err
@@ -48,7 +48,7 @@ func (si *serverinterceptor) Stream() grpc.StreamServerInterceptor {
 	}
 }
 
-func (si *serverinterceptor) Unary() grpc.UnaryServerInterceptor {
+func (si *ServerInterceptor) Unary() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		if err := si.authenticate(ctx); err != nil {
 			return nil, err
@@ -58,14 +58,14 @@ func (si *serverinterceptor) Unary() grpc.UnaryServerInterceptor {
 	}
 }
 
-func (si *serverinterceptor) Options() []grpc.ServerOption {
+func (si *ServerInterceptor) Options() []grpc.ServerOption {
 	return []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(si.Unary()),
 		grpc.ChainStreamInterceptor(si.Stream()),
 	}
 }
 
-func (si *serverinterceptor) authenticate(ctx context.Context) error {
+func (si *ServerInterceptor) authenticate(ctx context.Context) error {
 	if len(si.ExpectedUserAuth.User) == 0 && len(si.ExpectedUserAuth.Password) == 0 {
 		return nil
 	}
@@ -86,7 +86,8 @@ func (si *serverinterceptor) authenticate(ctx context.Context) error {
 			si.Lgr.Infof("incoming request authorization header failed to decode: %v", err)
 			return status.Error(codes.Unauthenticated, "unauthenticated")
 		}
-		compare := subtle.ConstantTimeCompare(uDec, []byte(fmt.Sprintf("%s:%s", si.ExpectedUserAuth.User, si.ExpectedUserAuth.Password)))
+		uExp := []byte(fmt.Sprintf("%s:%s", si.ExpectedUserAuth.User, si.ExpectedUserAuth.Password))
+		compare := subtle.ConstantTimeCompare(uDec, uExp)
 		if compare == 0 {
 
 			si.Lgr.Infof("incoming request authorization header failed to match")

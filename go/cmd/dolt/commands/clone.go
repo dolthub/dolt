@@ -102,7 +102,10 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		return verr
 	}
 
-	dEnv.UserPassConfig = getUserAndPassConfig(apr)
+	dEnv.UserPassConfig, verr = getUserAndPassConfig(apr)
+	if verr != nil {
+		return verr
+	}
 
 	userDirExists, _ := dEnv.FS.Exists(dir)
 
@@ -233,13 +236,16 @@ func validateAndParseDolthubUrl(urlStr string) (string, bool) {
 	return "", false
 }
 
-func getUserAndPassConfig(apr *argparser.ArgParseResults) *creds.DoltCredsForPass {
+func getUserAndPassConfig(apr *argparser.ArgParseResults) (*creds.DoltCredsForPass, errhand.VerboseError) {
 	if !apr.Contains(cli.UserParam) {
-		return nil
+		return nil, nil
 	}
-	pass := os.Getenv("DOLT_REMOTE_PASSWORD")
+	pass, found := os.LookupEnv("DOLT_REMOTE_PASSWORD")
+	if !found {
+		return nil, errhand.BuildDError("error: must set DOLT_REMOTE_PASSWORD environment variable to use --user param").Build()
+	}
 	return &creds.DoltCredsForPass{
 		Username: apr.GetValueOrDefault(cli.UserParam, ""),
 		Password: pass,
-	}
+	}, nil
 }

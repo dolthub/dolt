@@ -238,7 +238,8 @@ func Serve(
 				ReadOnly:       true,
 				HttpListenAddr: listenaddr,
 				GrpcListenAddr: listenaddr,
-			}, &remotesrv.UserAuth{User: serverConfig.User(), Password: serverConfig.Password()})
+			})
+			args = sqle.WithUserPasswordAuth(args, remotesrv.UserAuth{User: serverConfig.User(), Password: serverConfig.Password()})
 			args.TLSConfig = serverConf.TLSConfig
 			remoteSrv, err = remotesrv.NewServer(args)
 			if err != nil {

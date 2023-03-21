@@ -465,7 +465,7 @@ func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.Server
 	args.HttpListenAddr = listenaddr
 	args.GrpcListenAddr = listenaddr
 	args.Options = c.ServerOptions()
-	args = sqle.RemoteSrvServerArgs(ctx, args, nil)
+	args = sqle.RemoteSrvServerArgs(ctx, args)
 	args.DBCache = remotesrvStoreCache{args.DBCache, c}
 
 	keyID := creds.PubKeyToKID(c.pub)
