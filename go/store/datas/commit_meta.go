@@ -173,12 +173,17 @@ type CommitMetaGenerator interface {
 
 // The default implementation of CommitMetaGenerator, which generates a single commit which is always acceptable.
 type simpleCommitMetaGenerator struct {
-	name, email string
-	timestamp   time.Time
-	message     string
+	name, email      string
+	timestamp        time.Time
+	message          string
+	alreadyGenerated bool
 }
 
 func (g simpleCommitMetaGenerator) Next() (*CommitMeta, error) {
+	if g.alreadyGenerated {
+		return nil, fmt.Errorf("Called simpleCommitMetaGenerator.Next twice. This should never happen.")
+	}
+	g.alreadyGenerated = true
 	return NewCommitMetaWithUserTS(g.name, g.email, g.message, g.timestamp)
 }
 
@@ -187,5 +192,5 @@ func (simpleCommitMetaGenerator) IsGoodCommit(*Commit) bool {
 }
 
 func MakeCommitMetaGenerator(name, email string, timestamp time.Time) CommitMetaGenerator {
-	return simpleCommitMetaGenerator{name: name, email: email, timestamp: timestamp, message: defaultInitialCommitMessage}
+	return simpleCommitMetaGenerator{name: name, email: email, timestamp: timestamp, message: defaultInitialCommitMessage, alreadyGenerated: false}
 }
