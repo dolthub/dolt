@@ -69,7 +69,6 @@ SQL
 }
 
 @test "garbage_collection: call GC in sql script" {
-    export DOLT_ENABLE_GC_PROCEDURE="true"
     dolt sql <<SQL
 CREATE TABLE t (pk int primary key);
 INSERT INTO t VALUES (1),(2),(3);
