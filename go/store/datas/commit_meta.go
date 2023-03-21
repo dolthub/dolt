@@ -179,7 +179,7 @@ type simpleCommitMetaGenerator struct {
 	alreadyGenerated bool
 }
 
-func (g simpleCommitMetaGenerator) Next() (*CommitMeta, error) {
+func (g *simpleCommitMetaGenerator) Next() (*CommitMeta, error) {
 	if g.alreadyGenerated {
 		return nil, fmt.Errorf("Called simpleCommitMetaGenerator.Next twice. This should never happen.")
 	}
@@ -187,10 +187,10 @@ func (g simpleCommitMetaGenerator) Next() (*CommitMeta, error) {
 	return NewCommitMetaWithUserTS(g.name, g.email, g.message, g.timestamp)
 }
 
-func (simpleCommitMetaGenerator) IsGoodCommit(*Commit) bool {
+func (*simpleCommitMetaGenerator) IsGoodCommit(*Commit) bool {
 	return true
 }
 
 func MakeCommitMetaGenerator(name, email string, timestamp time.Time) CommitMetaGenerator {
-	return simpleCommitMetaGenerator{name: name, email: email, timestamp: timestamp, message: defaultInitialCommitMessage, alreadyGenerated: false}
+	return &simpleCommitMetaGenerator{name: name, email: email, timestamp: timestamp, message: defaultInitialCommitMessage, alreadyGenerated: false}
 }

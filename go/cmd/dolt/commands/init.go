@@ -157,9 +157,9 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	requiresFunHash := apr.Contains(funHashFlag)
 	commitMeta := func() datas.CommitMetaGenerator {
 		if requiresFunHash {
-			return datas.MakeCommitMetaGenerator(name, email, t)
-		} else {
 			return datas.MakeFunCommitMetaGenerator(name, email, t)
+		} else {
+			return datas.MakeCommitMetaGenerator(name, email, t)
 		}
 	}()
 

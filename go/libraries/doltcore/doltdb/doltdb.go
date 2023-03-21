@@ -210,7 +210,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaAndDefaultBranch(
 			return err
 		}
 
-		if !commitMetaGenerator.IsGoodCommit(firstCommit) {
+		if commitMetaGenerator.IsGoodCommit(firstCommit) {
 			break
 		}
 	}

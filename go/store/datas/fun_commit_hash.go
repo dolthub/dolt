@@ -28,7 +28,7 @@ type funHashCommitMetaGenerator struct {
 }
 
 func MakeFunCommitMetaGenerator(name, email string, timestamp time.Time) CommitMetaGenerator {
-	return funHashCommitMetaGenerator{name: name, email: email, timestamp: timestamp, attempt: 0}
+	return &funHashCommitMetaGenerator{name: name, email: email, timestamp: timestamp, attempt: 0}
 }
 
 var descriptionReplacementCandidates = [][]rune{
@@ -46,7 +46,7 @@ var descriptionReplacementCandidates = [][]rune{
 	{'o', '\u043e'},
 }
 
-func (g funHashCommitMetaGenerator) Next() (*CommitMeta, error) {
+func (g *funHashCommitMetaGenerator) Next() (*CommitMeta, error) {
 	if g.attempt >= 1<<len(descriptionReplacementCandidates) {
 		g.attempt = 0
 		// The Time type uses nanosecond precision. Subtract one million nanoseconds (one ms)
@@ -66,7 +66,7 @@ func (g funHashCommitMetaGenerator) Next() (*CommitMeta, error) {
 	return NewCommitMetaWithUserTS(g.name, g.email, description, g.timestamp)
 }
 
-func (g funHashCommitMetaGenerator) IsGoodCommit(commit *Commit) bool {
+func (g *funHashCommitMetaGenerator) IsGoodCommit(commit *Commit) bool {
 	var funRegExp = regexp.MustCompile("^d[o0][1l]t")
 
 	hashString := commit.Addr().String()
