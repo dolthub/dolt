@@ -156,3 +156,59 @@ select count(*) from vals;
 SQL
     [[ "$output" =~ "| 5 " ]] || false
 }
+
+@test "sql-server-remotesrv: can read from sql-server with --remotesapi-port with clone authentication" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql --privilege-file=privs.json -q "CREATE USER user IDENTIFIED BY 'pass0'"
+    dolt sql -q 'create table vals (i int);'
+    dolt sql -q 'insert into vals (i) values (1), (2), (3), (4), (5);'
+    dolt add vals
+    dolt commit -m 'initial vals.'
+    export DOLT_REMOTE_USER="user0"
+    export DOLT_REMOTE_PASSWORD="pass0"
+
+    dolt sql-server -u $USER  -p $DOLT_REMOTE_PASSWORD --remotesapi-port 50051 &
+    srv_pid=$!
+
+    cd ../
+    dolt clone http://localhost:50051/remote repo1 -u $USER
+    cd repo1
+    run dolt ls
+    [[ "$output" =~ "vals" ]] || false
+    run dolt sql -q 'select count(*) from vals'
+    [[ "$output" =~ "5" ]] || false
+
+    dolt sql-client -u $USER  -p $DOLT_REMOTE_PASSWORD <<SQL
+use remote;
+insert into vals (i) values (6), (7), (8), (9), (10);
+call dolt_commit('-am', 'add some vals');
+SQL
+
+    # TODO: Add auth to dolt pull
+    run dolt pull
+    [[ "$status" != 0 ]] || false
+    [[ "$output" =~ "Unauthenticated" ]] || false
+}
+
+@test "sql-server-remotesrv: dolt clone without authentication errors" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql --privilege-file=privs.json -q "CREATE USER user0 IDENTIFIED BY 'pass0'"
+    dolt sql -q 'create table vals (i int);'
+    dolt sql -q 'insert into vals (i) values (1), (2), (3), (4), (5);'
+    dolt add vals
+    dolt commit -m 'initial vals.'
+    export DOLT_REMOTE_USER="user0"
+    export DOLT_REMOTE_PASSWORD="pass0"
+
+    dolt sql-server -u $USER  -p $DOLT_REMOTE_PASSWORD --remotesapi-port 50051 &
+    srv_pid=$!
+
+    cd ../
+    run dolt clone http://localhost:50051/remote repo1
+    [[ "$status" != 0 ]] || false
+    [[ "$output" =~ "Unauthenticated" ]] || false
+}
