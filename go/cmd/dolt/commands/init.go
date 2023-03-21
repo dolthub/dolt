@@ -159,7 +159,7 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		if requiresFunHash {
 			return doltdb.MakeCommitMetaGenerator(name, email, t)
 		} else {
-			return doltdb.FunHashCommitMetaGenerator{Name: name, Email: email, Timestamp: t}
+			return doltdb.MakeFunCommitMetaGenerator(name, email, t)
 		}
 	}()
 

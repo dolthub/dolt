@@ -23,10 +23,14 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-type FunHashCommitMetaGenerator struct {
-	Name, Email string
-	Timestamp   time.Time
+type funHashCommitMetaGenerator struct {
+	name, email string
+	timestamp   time.Time
 	attempt     int
+}
+
+func MakeFunCommitMetaGenerator(name, email string, timestamp time.Time) CommitMetaGenerator {
+	return funHashCommitMetaGenerator{name: name, email: email, timestamp: timestamp, attempt: 0}
 }
 
 var descriptionReplacementCandidates = [][]rune{
@@ -44,11 +48,11 @@ var descriptionReplacementCandidates = [][]rune{
 	{'o', '\u043e'},
 }
 
-func (g FunHashCommitMetaGenerator) Next() (*datas.CommitMeta, error) {
+func (g funHashCommitMetaGenerator) next() (*datas.CommitMeta, error) {
 	if g.attempt >= 1<<len(descriptionReplacementCandidates) {
 		g.attempt = 0
 		// The Time type uses nanosecond precision. Subtract one million nanoseconds (one ms)
-		g.Timestamp = g.Timestamp.Add(-1_000_000)
+		g.timestamp = g.timestamp.Add(-1_000_000)
 	}
 
 	// "Initialize data repository", with characters that could be Cyrillic replaced.
@@ -61,10 +65,10 @@ func (g FunHashCommitMetaGenerator) Next() (*datas.CommitMeta, error) {
 
 	g.attempt += 1
 
-	return datas.NewCommitMetaWithUserTS(g.Name, g.Email, description, g.Timestamp)
+	return datas.NewCommitMetaWithUserTS(g.name, g.email, description, g.timestamp)
 }
 
-func (g FunHashCommitMetaGenerator) IsGoodHash(h hash.Hash) bool {
+func (g funHashCommitMetaGenerator) isGoodHash(h hash.Hash) bool {
 	var funRegExp = regexp.MustCompile("^d[o0][1l]t")
 
 	hashString := h.String()

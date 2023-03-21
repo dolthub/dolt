@@ -153,25 +153,25 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMeta(ctx context.Context, initBranch 
 }
 
 type CommitMetaGenerator interface {
-	Next() (*datas.CommitMeta, error)
-	IsGoodHash(hash.Hash) bool
+	next() (*datas.CommitMeta, error)
+	isGoodHash(hash.Hash) bool
 }
 
 func MakeCommitMetaGenerator(name, email string, timestamp time.Time) CommitMetaGenerator {
-	return SimpleCommitMetaGenerator{Name: name, Email: email, Timestamp: timestamp, Message: defaultInitialCommitMessage}
+	return simpleCommitMetaGenerator{name: name, email: email, timestamp: timestamp, message: defaultInitialCommitMessage}
 }
 
-type SimpleCommitMetaGenerator struct {
-	Name, Email string
-	Timestamp   time.Time
-	Message     string
+type simpleCommitMetaGenerator struct {
+	name, email string
+	timestamp   time.Time
+	message     string
 }
 
-func (g SimpleCommitMetaGenerator) Next() (*datas.CommitMeta, error) {
-	return datas.NewCommitMetaWithUserTS(g.Name, g.Email, g.Message, g.Timestamp)
+func (g simpleCommitMetaGenerator) next() (*datas.CommitMeta, error) {
+	return datas.NewCommitMetaWithUserTS(g.name, g.email, g.message, g.timestamp)
 }
 
-func (SimpleCommitMetaGenerator) IsGoodHash(hash.Hash) bool {
+func (simpleCommitMetaGenerator) isGoodHash(hash.Hash) bool {
 	return true
 }
 
@@ -217,7 +217,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaAndDefaultBranch(
 	// the timestamp.
 	var firstCommit *datas.Commit
 	for {
-		cm, err := commitMetaGenerator.Next()
+		cm, err := commitMetaGenerator.next()
 		if err != nil {
 			return err
 		}
@@ -235,7 +235,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaAndDefaultBranch(
 			return err
 		}
 
-		if !commitMetaGenerator.IsGoodHash(firstCommit.Addr()) {
+		if !commitMetaGenerator.isGoodHash(firstCommit.Addr()) {
 			break
 		}
 	}
