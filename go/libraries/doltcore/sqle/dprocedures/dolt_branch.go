@@ -173,7 +173,7 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 			}
 		}
 
-		if headOnCLI == branchName {
+		if headOnCLI == branchName && sqlserver.RunningInServerMode() {
 			return fmt.Errorf("unable to delete branch '%s', because it is the default branch for database '%s'; this can by changed on the command line, by stopping the sql-server, running `dolt checkout <another_branch> and restarting the sql-server", branchName, dbName)
 		}
 

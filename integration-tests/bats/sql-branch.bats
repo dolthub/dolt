@@ -162,3 +162,13 @@ SQL
     run dolt sql -q "CALL DOLT_BRANCH('-D', 'branch_with_unpushed_commit');"
     [ $status -eq 0 ]
 }
+
+@test "sql-branch: CALL DOLT_BRANCH -d error cases" {
+    dolt add . && dolt commit -m "1, 2, and 3 in test table"
+    dolt branch new_branch
+
+    run dolt sql -q "CALL DOLT_BRANCH('-D', 'main');"
+    [ $status -eq 1 ]
+    echo "OUTPUT: $output \n\n"
+    [[ "$output" =~ "attempted to delete checked out branch" ]] || false
+}
