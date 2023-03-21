@@ -572,6 +572,17 @@ SQL
      [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
+@test "sql-server: dolt_branch -d won't delete a db's default branch" {
+    cd repo1
+    dolt branch branch1
+    start_sql_server repo1
+
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CALL DOLT_CHECKOUT('branch1'); CALL DOLT_BRANCH('-D', 'main');"
+    [ $status -eq 1 ]
+    [[ $output =~ "default branch for database 'repo1'" ]] || false
+
+}
+
 @test "sql-server: DOLT_MERGE ff works" {
     skiponwindows "Missing dependencies"
 
