@@ -31,6 +31,8 @@ func MakeFunCommitMetaGenerator(name, email string, timestamp time.Time) CommitM
 	return &funHashCommitMetaGenerator{name: name, email: email, timestamp: timestamp, attempt: 0}
 }
 
+// Each entry in this array represents a character in the default initial commit message
+// that could be replaced with a Cyrillic homoglyph.
 var descriptionReplacementCandidates = [][]rune{
 	{'I', '\u0406'},
 	{'i', '\u0456'},

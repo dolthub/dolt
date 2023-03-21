@@ -186,10 +186,6 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaAndDefaultBranch(
 		return err
 	}
 
-	// --fun is a hidden command line option that rerolls the initial commit until
-	// it starts with "d0lt" or similar. We achieve this by replacing characters
-	// in the commit description with Cyrillic equivalents, then by decrementing
-	// the timestamp.
 	var firstCommit *datas.Commit
 	for {
 		cm, err := commitMetaGenerator.Next()
