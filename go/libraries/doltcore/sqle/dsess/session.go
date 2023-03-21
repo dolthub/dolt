@@ -223,11 +223,11 @@ func (d *DoltSession) ValidateSession(ctx *sql.Context, dbName string) error {
 		return d.validateErr
 	}
 	sessionState, ok, err := d.LookupDbState(ctx, dbName)
-	if !ok {
-		return nil
-	}
 	if err != nil {
 		return err
+	}
+	if !ok {
+		return nil
 	}
 	if sessionState.WorkingSet == nil {
 		return nil

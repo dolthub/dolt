@@ -1147,14 +1147,9 @@ func (p DoltDatabaseProvider) ensureReplicaHeadExists(ctx *sql.Context, branch s
 
 // isBranch returns whether a branch with the given name is in scope for the database given
 func isBranch(ctx context.Context, db SqlDatabase, branchName string) (string, bool, error) {
-	var ddbs []*doltdb.DoltDB
-
-	if rdb, ok := db.(ReadReplicaDatabase); ok {
-		ddbs = append(ddbs, rdb.ddb, rdb.srcDB)
-	} else if ddb, ok := db.(Database); ok {
-		ddbs = append(ddbs, ddb.ddb)
-	} else {
-		return "", false, fmt.Errorf("unrecognized type of database %T", db)
+	ddbs, err := doltDbs(db)
+	if err != nil {
+		return "", false, err
 	}
 
 	brName, branchExists, err := isLocalBranch(ctx, ddbs, branchName)
@@ -1174,6 +1169,21 @@ func isBranch(ctx context.Context, db SqlDatabase, branchName string) (string, b
 	}
 
 	return "", false, nil
+}
+
+func doltDbs(db SqlDatabase) ([]*doltdb.DoltDB, error) {
+	var ddbs []*doltdb.DoltDB
+	switch db := db.(type) {
+	case ReadReplicaDatabase:
+		ddbs = append(ddbs, db.ddb, db.srcDB)
+	case Database:
+		ddbs = append(ddbs, db.ddb)
+	case ReadOnlyDatabase:
+		ddbs = append(ddbs, db.ddb)
+	default:
+		return nil, fmt.Errorf("unrecognized type of database %T", db)
+	}
+	return ddbs, nil
 }
 
 func isLocalBranch(ctx context.Context, ddbs []*doltdb.DoltDB, branchName string) (string, bool, error) {
@@ -1209,16 +1219,11 @@ func isRemoteBranch(ctx context.Context, ddbs []*doltdb.DoltDB, branchName strin
 
 // isTag returns whether a tag with the given name is in scope for the database given
 func isTag(ctx context.Context, db SqlDatabase, tagName string) (bool, error) {
-	var ddbs []*doltdb.DoltDB
-
-	if rdb, ok := db.(ReadReplicaDatabase); ok {
-		ddbs = append(ddbs, rdb.ddb, rdb.srcDB)
-	} else if ddb, ok := db.(Database); ok {
-		ddbs = append(ddbs, ddb.ddb)
-	} else {
-		return false, fmt.Errorf("unrecognized type of database %T", db)
+	ddbs, err := doltDbs(db)
+	if err != nil {
+		return false, err
 	}
-
+	
 	for _, ddb := range ddbs {
 		tagExists, err := ddb.HasTag(ctx, tagName)
 		if err != nil {
