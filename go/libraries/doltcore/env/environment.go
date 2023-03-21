@@ -96,6 +96,7 @@ type DoltEnv struct {
 	hdp    HomeDirProvider
 
 	IgnoreLockFile bool
+	UserPassConfig *creds.DoltCredsForPass
 }
 
 func (dEnv *DoltEnv) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote, withCaching bool) (*doltdb.DoltDB, error) {
