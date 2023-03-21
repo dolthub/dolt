@@ -20,9 +20,9 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
+// An alternate implementation of CommitMetaGenerator, which only produces hashes which begin with "d0lt" or similar.
 type funHashCommitMetaGenerator struct {
 	name, email string
 	timestamp   time.Time
@@ -68,9 +68,9 @@ func (g funHashCommitMetaGenerator) next() (*datas.CommitMeta, error) {
 	return datas.NewCommitMetaWithUserTS(g.name, g.email, description, g.timestamp)
 }
 
-func (g funHashCommitMetaGenerator) isGoodHash(h hash.Hash) bool {
+func (g funHashCommitMetaGenerator) isGoodCommit(commit *datas.Commit) bool {
 	var funRegExp = regexp.MustCompile("^d[o0][1l]t")
 
-	hashString := h.String()
+	hashString := commit.Addr().String()
 	return funRegExp.MatchString(hashString)
 }

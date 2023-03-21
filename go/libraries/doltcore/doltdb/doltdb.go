@@ -146,7 +146,7 @@ func (ddb *DoltDB) CSMetricsSummary() string {
 // a proposed commit is acceptable.
 type CommitMetaGenerator interface {
 	next() (*datas.CommitMeta, error)
-	isGoodHash(hash.Hash) bool
+	isGoodCommit(*datas.Commit) bool
 }
 
 // The default implementation of CommitMetaGenerator, which generates a single commit which is always acceptable.
@@ -160,7 +160,7 @@ func (g simpleCommitMetaGenerator) next() (*datas.CommitMeta, error) {
 	return datas.NewCommitMetaWithUserTS(g.name, g.email, g.message, g.timestamp)
 }
 
-func (simpleCommitMetaGenerator) isGoodHash(hash.Hash) bool {
+func (simpleCommitMetaGenerator) isGoodCommit(*datas.Commit) bool {
 	return true
 }
 
@@ -238,7 +238,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaAndDefaultBranch(
 			return err
 		}
 
-		if !commitMetaGenerator.isGoodHash(firstCommit.Addr()) {
+		if !commitMetaGenerator.isGoodCommit(firstCommit) {
 			break
 		}
 	}
