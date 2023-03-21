@@ -169,18 +169,18 @@ SQL
     export DOLT_REMOTE_USER="user0"
     export DOLT_REMOTE_PASSWORD="pass0"
 
-    dolt sql-server -u $USER  -p $DOLT_REMOTE_PASSWORD --remotesapi-port 50051 &
+    dolt sql-server -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD --remotesapi-port 50051 &
     srv_pid=$!
 
     cd ../
-    dolt clone http://localhost:50051/remote repo1 -u $USER
+    dolt clone http://localhost:50051/remote repo1 -u $DOLT_REMOTE_USER
     cd repo1
     run dolt ls
     [[ "$output" =~ "vals" ]] || false
     run dolt sql -q 'select count(*) from vals'
     [[ "$output" =~ "5" ]] || false
 
-    dolt sql-client -u $USER  -p $DOLT_REMOTE_PASSWORD <<SQL
+    dolt sql-client -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD <<SQL
 use remote;
 insert into vals (i) values (6), (7), (8), (9), (10);
 call dolt_commit('-am', 'add some vals');
@@ -204,7 +204,7 @@ SQL
     export DOLT_REMOTE_USER="user0"
     export DOLT_REMOTE_PASSWORD="pass0"
 
-    dolt sql-server -u $USER  -p $DOLT_REMOTE_PASSWORD --remotesapi-port 50051 &
+    dolt sql-server -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD --remotesapi-port 50051 &
     srv_pid=$!
 
     cd ../
