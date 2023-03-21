@@ -35,8 +35,55 @@ make_it() {
 
     dolt branch -av
 
+    # Checkout the branch and verify that we can run commands on the branch
     dolt checkout to_keep
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "On branch to_keep" ]] || false
 }
+
+@test "deleted-branches: dolt checkout on CLI works even when repo state is invalid" {
+    make_it
+
+    run dolt status
+    [[ "$output" =~ "On branch main" ]] || false
+
+    # Corrupt the repo_state metadata
+    cat << EOF > .dolt/repo_state.json
+{
+  "head": "refs/heads/does-not-exist",
+  "remotes": {},
+  "backups": {},
+  "branches": {}
+}
+EOF
+
+    dolt checkout to_keep
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "On branch to_keep" ]] || false
+}
+
+@test "deleted-branches: dolt_checkout() stored procedure works even when repo state is invalid" {
+    make_it
+
+    start_sql_server "dolt_repo_$$"
+
+    # Corrupt the repo_state metadata
+    cat << EOF > .dolt/repo_state.json
+{
+  "head": "refs/heads/does-not-exist",
+  "remotes": {},
+  "backups": {},
+  "branches": {}
+}
+EOF
+
+    run dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "call dolt_checkout('to_keep'); show tables;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+}
+
 
 @test "deleted-branches: attempt to delete the last branch when currently on no branch" {
     make_it
