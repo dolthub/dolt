@@ -162,6 +162,32 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 	return ranges, nil
 }
 
+func (nbs *NomsBlockStore) conjoinIfRequired(ctx context.Context) (bool, error) {
+	if nbs.c.conjoinRequired(nbs.tables) {
+		newUpstream, cleanup, err := conjoin(ctx, nbs.c, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
+		if err != nil {
+			return false, err
+		}
+
+		newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, nbs.stats)
+		if err != nil {
+			return false, err
+		}
+
+		nbs.upstream = newUpstream
+		oldTables := nbs.tables
+		nbs.tables = newTables
+		err = oldTables.close()
+		if err != nil {
+			return true, err
+		}
+		cleanup()
+		return true, nil
+	} else {
+		return false, nil
+	}
+}
+
 func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (mi ManifestInfo, err error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
@@ -180,6 +206,11 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 			err = unlockErr
 		}
 	}()
+
+	_, err = nbs.conjoinIfRequired(ctx)
+	if err != nil {
+		return manifestContents{}, err
+	}
 
 	var updatedContents manifestContents
 	for {
@@ -262,6 +293,11 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 			err = unlockErr
 		}
 	}()
+
+	_, err = nbs.conjoinIfRequired(ctx)
+	if err != nil {
+		return manifestContents{}, err
+	}
 
 	var updatedContents manifestContents
 	for {
@@ -1172,25 +1208,11 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		}
 	}
 
-	if nbs.c.conjoinRequired(nbs.tables) {
-		newUpstream, cleanup, err := conjoin(ctx, nbs.c, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
-		if err != nil {
-			return err
-		}
-
-		newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, nbs.stats)
-		if err != nil {
-			return err
-		}
-
-		nbs.upstream = newUpstream
-		oldTables := nbs.tables
-		nbs.tables = newTables
-		err = oldTables.close()
-		if err != nil {
-			return err
-		}
-		cleanup()
+	didConjoin, err := nbs.conjoinIfRequired(ctx)
+	if err != nil {
+		return err
+	}
+	if didConjoin {
 		return errOptimisticLockFailedTables
 	}
 
