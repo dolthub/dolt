@@ -669,7 +669,7 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 			delete(p.databases, dbName)
 		}
 	}
-
+	
 	delete(p.databases, dbKey)
 
 	return p.invalidateDbStateInAllSessions(ctx, name)
@@ -678,6 +678,13 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 // invalidateDbStateInAllSessions removes the db state for this database from every session. This is necessary when a
 // database is dropped, so that other sessions don't use stale db state.
 func (p DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, name string) error {
+	// Remove the db state from the current session
+	err := dsess.DSessFromSess(ctx.Session).RemoveDbState(ctx, name)
+	if err != nil {
+		return err
+	}
+	
+	// If we have a running server, remove it from other sessions as well
 	runningServer := sqlserver.GetRunningServer()
 	if runningServer != nil {
 		sessionManager := runningServer.SessionManager()
