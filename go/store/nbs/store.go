@@ -1154,6 +1154,7 @@ var (
 	errLastRootMismatch           = fmt.Errorf("last does not match nbs.Root()")
 	errOptimisticLockFailedRoot   = fmt.Errorf("root moved")
 	errOptimisticLockFailedTables = fmt.Errorf("tables changed")
+	errReadOnlyManifest           = fmt.Errorf("cannot update manifest: database is read only")
 )
 
 // callers must acquire lock |nbs.mu|

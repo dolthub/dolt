@@ -34,7 +34,6 @@ teardown() {
 
 @test "sql-server: can create savepoint when no database is selected" {
     skiponwindows "Missing dependencies"
-    skip "currently fails with: Error 1105: plan is not resolved because of node '*plan.CreateSavepoint' in server log"
 
     mkdir my-db
     cd my-db
@@ -179,7 +178,7 @@ SQL
 }
 
 
-@test "sql-server: test command line modification" {
+@test "sql-server: inspect sql-server using CLI" {
     skiponwindows "Missing dependencies"
 
     cd repo1
@@ -195,7 +194,7 @@ SQL
         c1 BIGINT,
         c2 BIGINT,
         PRIMARY KEY (pk))"
-    
+
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
@@ -226,6 +225,7 @@ SQL
     start_sql_server repo1
 
     # No tables at the start
+    dolt ls
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false

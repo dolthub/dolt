@@ -155,13 +155,18 @@ func trueUpBackingManifest(ctx context.Context, root hash.Hash, backing manifest
 	mc.root = root
 
 	mc, err = backing.Update(ctx, prev, mc, &Stats{}, nil)
-	if err != nil {
+	if errors.Is(err, errReadOnlyManifest) {
+		// set our in-memory root to match the journal
+		mc.root = root
+		return mc, nil
+	} else if err != nil {
 		return manifestContents{}, err
 	} else if mc.lock != next {
 		return manifestContents{}, errOptimisticLockFailedTables
 	} else if mc.root != root {
 		return manifestContents{}, errOptimisticLockFailedRoot
 	}
+	// true-up succeeded
 	return mc, nil
 }
 
@@ -425,9 +430,8 @@ func newJournalManifest(ctx context.Context, dir string) (m manifest, err error)
 		return m, nil
 	}
 	defer func() {
-		// keep first error
 		if cerr := f.Close(); err == nil {
-			err = cerr
+			err = cerr // keep first error
 		}
 	}()
 
@@ -452,11 +456,7 @@ func (jm journalManifest) Name() string {
 }
 
 // ParseIfExists implements manifest.
-func (jm journalManifest) ParseIfExists(
-	ctx context.Context,
-	stats *Stats,
-	readHook func() error,
-) (exists bool, contents manifestContents, err error) {
+func (jm journalManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error) {
 	t1 := time.Now()
 	defer func() { stats.ReadManifestLatency.SampleTimeSince(t1) }()
 	return parseIfExists(ctx, jm.dir, readHook)
@@ -465,7 +465,12 @@ func (jm journalManifest) ParseIfExists(
 // Update implements manifest.
 func (jm journalManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
 	if jm.readOnly {
-		return manifestContents{}, errors.New("cannot update manifest: database is read only")
+		_, mc, err = jm.ParseIfExists(ctx, stats, nil)
+		if err != nil {
+			return manifestContents{}, err
+		}
+		// return current contents and sentinel error
+		return mc, errReadOnlyManifest
 	}
 
 	t1 := time.Now()
@@ -482,7 +487,12 @@ func (jm journalManifest) Update(ctx context.Context, lastLock addr, newContents
 // UpdateGCGen implements manifest.
 func (jm journalManifest) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
 	if jm.readOnly {
-		return manifestContents{}, errors.New("cannot update manifest: database is read only")
+		_, mc, err = jm.ParseIfExists(ctx, stats, nil)
+		if err != nil {
+			return manifestContents{}, err
+		}
+		// return current contents and sentinel error
+		return mc, errReadOnlyManifest
 	}
 
 	t1 := time.Now()
