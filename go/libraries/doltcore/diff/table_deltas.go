@@ -159,6 +159,14 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 		return nil, err
 	}
 
+	// Make sure we always return the same order of deltas
+	sort.Slice(deltas, func(i, j int) bool {
+		if deltas[i].FromName == deltas[j].FromName {
+			return deltas[i].ToName < deltas[j].ToName
+		}
+		return deltas[i].FromName < deltas[j].FromName
+	})
+
 	return deltas, nil
 }
 
@@ -552,7 +560,6 @@ func fkSlicesAreEqual(from, to []doltdb.ForeignKey) bool {
 
 // SqlSchemaDiff returns a slice of DDL statements that will transform the schema in the from delta to the schema in
 // the to delta.
-// TODO: this doesn't handle constraints or triggers
 func SqlSchemaDiff(ctx context.Context, td TableDelta, toSchemas map[string]schema.Schema) ([]string, error) {
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {

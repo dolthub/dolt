@@ -94,8 +94,3 @@ func (p *binlogEventProducer) IsRunning() bool {
 func (p *binlogEventProducer) Stop() {
 	p.running.Store(false)
 }
-
-// IsRunning returns true if this binlog applier is running and has not been stopped, otherwise returns false.
-func (a *binlogReplicaApplier) IsRunning() bool {
-	return a.running.Load()
-}

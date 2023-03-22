@@ -261,7 +261,7 @@ teardown() {
 
     run dolt merge test -m "merge other"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'error: cannot merge two tables with different primary key sets' ]] || false
+    [[ "$output" =~ 'error: cannot merge two tables with different primary keys' ]] || false
 }
 
 @test "primary-key-changes: merge on branch with primary key added throws an error" {
@@ -288,7 +288,7 @@ teardown() {
 
     run dolt merge test -m "merge other"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'error: cannot merge two tables with different primary key sets' ]] || false
+    [[ "$output" =~ 'error: cannot merge two tables with different primary keys' ]] || false
 }
 
 @test "primary-key-changes: diff on primary key schema change shows schema level diff but does not show row level diff" {
@@ -527,11 +527,11 @@ SQL
 
     run dolt merge test -m "merge other"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'error: cannot merge two tables with different primary key sets' ]] || false
+    [[ "$output" =~ 'error: cannot merge two tables with different primary keys' ]] || false
 
     run dolt sql -q "call dolt_merge('test')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'error: cannot merge two tables with different primary key sets' ]] || false
+    [[ "$output" =~ 'error: cannot merge two tables with different primary keys' ]] || false
 
     skip "Dolt doesn't correctly store primary key order if it doesn't match the column order"
 }

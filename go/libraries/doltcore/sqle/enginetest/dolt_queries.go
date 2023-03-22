@@ -442,6 +442,51 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "database revision specs: dolt_checkout uses revision database name for DbData access",
+		SetUpScript: []string{
+			"create database newtest;",
+			"use newtest;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "call dolt_checkout('-b', 'branch-to-delete');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"branch-to-delete"}},
+			},
+			{
+				Query:    "use `newtest/main`;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "call dolt_branch('-D', 'branch-to-delete');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "call dolt_checkout('-b', 'another-branch');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"another-branch"}},
+			},
+		},
+	},
 }
 
 // DoltScripts are script tests specific to Dolt (not the engine in general), e.g. by involving Dolt functions. Break

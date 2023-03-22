@@ -143,11 +143,11 @@ func (ddb *DoltDB) CSMetricsSummary() string {
 // WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid
 // metadata for the creation commit, and an empty RootValue.
 func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, initBranch, name, email string) error {
-	return ddb.WriteEmptyRepoWithCommitTime(ctx, initBranch, name, email, datas.CommitNowFunc())
+	return ddb.WriteEmptyRepoWithCommitMetaGenerator(ctx, initBranch, datas.MakeCommitMetaGenerator(name, email, datas.CommitNowFunc()))
 }
 
-func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, initBranch, name, email string, t time.Time) error {
-	return ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, name, email, t, ref.NewBranchRef(initBranch))
+func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGenerator(ctx context.Context, initBranch string, commitMeta datas.CommitMetaGenerator) error {
+	return ddb.WriteEmptyRepoWithCommitMetaGeneratorAndDefaultBranch(ctx, commitMeta, ref.NewBranchRef(initBranch))
 }
 
 func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
@@ -156,14 +156,14 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 	t time.Time,
 	init ref.BranchRef,
 ) error {
-	// precondition checks
-	name = strings.TrimSpace(name)
-	email = strings.TrimSpace(email)
+	return ddb.WriteEmptyRepoWithCommitMetaGeneratorAndDefaultBranch(ctx, datas.MakeCommitMetaGenerator(name, email, t), init)
+}
 
-	if name == "" || email == "" {
-		panic("Passed bad name or email.  Both should be valid")
-	}
-
+func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGeneratorAndDefaultBranch(
+	ctx context.Context,
+	commitMetaGenerator datas.CommitMetaGenerator,
+	init ref.BranchRef,
+) error {
 	ds, err := ddb.db.GetDataset(ctx, CreationBranch)
 
 	if err != nil {
@@ -186,18 +186,32 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		return err
 	}
 
-	cm, _ := datas.NewCommitMetaWithUserTS(name, email, "Initialize data repository", t)
+	var firstCommit *datas.Commit
+	for {
+		cm, err := commitMetaGenerator.Next()
+		if err != nil {
+			return err
+		}
 
-	commitOpts := datas.CommitOptions{Meta: cm}
+		commitOpts := datas.CommitOptions{Meta: cm}
 
-	cb := ref.NewInternalRef(CreationBranch)
-	ds, err = ddb.db.GetDataset(ctx, cb.String())
+		cb := ref.NewInternalRef(CreationBranch)
+		ds, err = ddb.db.GetDataset(ctx, cb.String())
+		if err != nil {
+			return err
+		}
 
-	if err != nil {
-		return err
+		firstCommit, err = ddb.db.BuildNewCommit(ctx, ds, rv.nomsValue(), commitOpts)
+		if err != nil {
+			return err
+		}
+
+		if commitMetaGenerator.IsGoodCommit(firstCommit) {
+			break
+		}
 	}
 
-	firstCommit, err := ddb.db.Commit(ctx, ds, rv.nomsValue(), commitOpts)
+	firstCommitDs, err := ddb.db.WriteCommit(ctx, ds, firstCommit)
 
 	if err != nil {
 		return err
@@ -209,7 +223,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		return err
 	}
 
-	headAddr, ok := firstCommit.MaybeHeadAddr()
+	headAddr, ok := firstCommitDs.MaybeHeadAddr()
 	if !ok {
 		return errors.New("commit without head")
 	}
@@ -1221,7 +1235,16 @@ func (ddb *DoltDB) Rebase(ctx context.Context) error {
 }
 
 // GC performs garbage collection on this ddb.
-func (ddb *DoltDB) GC(ctx context.Context) error {
+//
+// If |safepointF| is non-nil, it will be called at some point after the GC begins
+// and before the GC ends. It will be called without
+// Database/ValueStore/NomsBlockStore locks held. If should establish
+// safepoints in every application-level in-progress read and write workflow
+// against this DoltDB. Examples of doing this include, for example, blocking
+// until no possibly-stale ChunkStore state is retained in memory, or failing
+// certain in-progress operations which cannot be finalized in a timely manner,
+// etc.
+func (ddb *DoltDB) GC(ctx context.Context, safepointF func() error) error {
 	collector, ok := ddb.db.Database.(datas.GarbageCollector)
 	if !ok {
 		return fmt.Errorf("this database does not support garbage collection")
@@ -1265,7 +1288,7 @@ func (ddb *DoltDB) GC(ctx context.Context) error {
 		return err
 	}
 
-	return collector.GC(ctx, oldGen, newGen)
+	return collector.GC(ctx, oldGen, newGen, safepointF)
 }
 
 func (ddb *DoltDB) ShallowGC(ctx context.Context) error {

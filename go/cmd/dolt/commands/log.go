@@ -276,6 +276,54 @@ func getCommitSpec(commit string) (*doltdb.CommitSpec, error) {
 	return cs, nil
 }
 
+func getHashToRefs(ctx context.Context, dEnv *env.DoltEnv, decorationLevel string) (map[hash.Hash][]string, error) {
+	cHashToRefs := map[hash.Hash][]string{}
+
+	// Get all branches
+	branches, err := dEnv.DoltDB.GetBranchesWithHashes(ctx)
+	if err != nil {
+		return cHashToRefs, fmt.Errorf(color.HiRedString("Fatal error: cannot get Branch information."))
+	}
+
+	for _, b := range branches {
+		refName := b.Ref.String()
+		if decorationLevel != "full" {
+			refName = b.Ref.GetPath() // trim out "refs/heads/"
+		}
+		refName = fmt.Sprintf("\033[32;1m%s\033[0m", refName) // branch names are bright green (32;1m)
+		cHashToRefs[b.Hash] = append(cHashToRefs[b.Hash], refName)
+	}
+
+	// Get all remote branches
+	remotes, err := dEnv.DoltDB.GetRemotesWithHashes(ctx)
+	if err != nil {
+		return cHashToRefs, fmt.Errorf(color.HiRedString("Fatal error: cannot get Remotes information."))
+	}
+	for _, r := range remotes {
+		refName := r.Ref.String()
+		if decorationLevel != "full" {
+			refName = r.Ref.GetPath() // trim out "refs/remotes/"
+		}
+		refName = fmt.Sprintf("\033[31;1m%s\033[0m", refName) // remote names are bright red (31;1m)
+		cHashToRefs[r.Hash] = append(cHashToRefs[r.Hash], refName)
+	}
+
+	// Get all tags
+	tags, err := dEnv.DoltDB.GetTagsWithHashes(ctx)
+	if err != nil {
+		return cHashToRefs, fmt.Errorf(color.HiRedString("Fatal error: cannot get Tag information."))
+	}
+	for _, t := range tags {
+		tagName := t.Tag.GetDoltRef().String()
+		if decorationLevel != "full" {
+			tagName = t.Tag.Name // trim out "refs/tags/"
+		}
+		tagName = fmt.Sprintf("\033[33;1mtag: %s\033[0m", tagName) // tags names are bright yellow (33;1m)
+		cHashToRefs[t.Hash] = append(cHashToRefs[t.Hash], tagName)
+	}
+	return cHashToRefs, nil
+}
+
 func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 	hashes := make([]hash.Hash, len(opts.commitSpecs))
 
@@ -295,51 +343,10 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 		hashes[i] = h
 	}
 
-	cHashToRefs := map[hash.Hash][]string{}
+	cHashToRefs, err := getHashToRefs(ctx, dEnv, opts.decoration)
 
-	// Get all branches
-	branches, err := dEnv.DoltDB.GetBranchesWithHashes(ctx)
 	if err != nil {
-		cli.PrintErrln(color.HiRedString("Fatal error: cannot get Branch information."))
-		return 1
-	}
-	for _, b := range branches {
-		refName := b.Ref.String()
-		if opts.decoration != "full" {
-			refName = b.Ref.GetPath() // trim out "refs/heads/"
-		}
-		refName = fmt.Sprintf("\033[32;1m%s\033[0m", refName) // branch names are bright green (32;1m)
-		cHashToRefs[b.Hash] = append(cHashToRefs[b.Hash], refName)
-	}
-
-	// Get all remote branches
-	remotes, err := dEnv.DoltDB.GetRemotesWithHashes(ctx)
-	if err != nil {
-		cli.PrintErrln(color.HiRedString("Fatal error: cannot get Remotes information."))
-		return 1
-	}
-	for _, r := range remotes {
-		refName := r.Ref.String()
-		if opts.decoration != "full" {
-			refName = r.Ref.GetPath() // trim out "refs/remotes/"
-		}
-		refName = fmt.Sprintf("\033[31;1m%s\033[0m", refName) // remote names are bright red (31;1m)
-		cHashToRefs[r.Hash] = append(cHashToRefs[r.Hash], refName)
-	}
-
-	// Get all tags
-	tags, err := dEnv.DoltDB.GetTagsWithHashes(ctx)
-	if err != nil {
-		cli.PrintErrln(color.HiRedString("Fatal error: cannot get Tag information."))
-		return 1
-	}
-	for _, t := range tags {
-		tagName := t.Tag.GetDoltRef().String()
-		if opts.decoration != "full" {
-			tagName = t.Tag.Name // trim out "refs/tags/"
-		}
-		tagName = fmt.Sprintf("\033[33;1mtag: %s\033[0m", tagName) // tags names are bright yellow (33;1m)
-		cHashToRefs[t.Hash] = append(cHashToRefs[t.Hash], tagName)
+		return handleErrAndExit(err)
 	}
 
 	matchFunc := func(c *doltdb.Commit) (bool, error) {
@@ -378,6 +385,11 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 
 	headRef := dEnv.RepoStateReader().CWBHeadRef()
 	cwbHash, err := dEnv.DoltDB.GetHashForRefStr(ctx, headRef.String())
+
+	if err != nil {
+		cli.PrintErrln(err)
+		return 1
+	}
 
 	var commitsInfo []logNode
 	for _, comm := range commits {
@@ -569,41 +581,45 @@ func logCompact(pager *outputpager.Pager, opts *logOpts, commits []logNode) {
 	}
 }
 
+func PrintCommit(pager *outputpager.Pager, minParents int, showParents bool, decoration string, comm logNode) {
+	if len(comm.parentHashes) < minParents {
+		return
+	}
+
+	chStr := comm.commitHash.String()
+	if showParents {
+		for _, h := range comm.parentHashes {
+			chStr += " " + h.String()
+		}
+	}
+
+	// Write commit hash
+	pager.Writer.Write([]byte(fmt.Sprintf("\033[33mcommit %s \033[0m", chStr))) // Use Dim Yellow (33m)
+
+	// Show decoration
+	if decoration != "no" {
+		logRefs(pager, comm)
+	}
+
+	if len(comm.parentHashes) > 1 {
+		pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
+		for _, h := range comm.parentHashes {
+			pager.Writer.Write([]byte(fmt.Sprintf(" " + h.String())))
+		}
+	}
+
+	pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", comm.commitMeta.Name, comm.commitMeta.Email)))
+
+	timeStr := comm.commitMeta.FormatTS()
+	pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))
+
+	formattedDesc := "\n\n\t" + strings.Replace(comm.commitMeta.Description, "\n", "\n\t", -1) + "\n\n"
+	pager.Writer.Write([]byte(fmt.Sprintf("%s", formattedDesc)))
+}
+
 func logDefault(pager *outputpager.Pager, opts *logOpts, commits []logNode) {
 	for _, comm := range commits {
-		if len(comm.parentHashes) < opts.minParents {
-			return
-		}
-
-		chStr := comm.commitHash.String()
-		if opts.showParents {
-			for _, h := range comm.parentHashes {
-				chStr += " " + h.String()
-			}
-		}
-
-		// Write commit hash
-		pager.Writer.Write([]byte(fmt.Sprintf("\033[33mcommit %s \033[0m", chStr))) // Use Dim Yellow (33m)
-
-		// Show decoration
-		if opts.decoration != "no" {
-			logRefs(pager, comm)
-		}
-
-		if len(comm.parentHashes) > 1 {
-			pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
-			for _, h := range comm.parentHashes {
-				pager.Writer.Write([]byte(fmt.Sprintf(" " + h.String())))
-			}
-		}
-
-		pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", comm.commitMeta.Name, comm.commitMeta.Email)))
-
-		timeStr := comm.commitMeta.FormatTS()
-		pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))
-
-		formattedDesc := "\n\n\t" + strings.Replace(comm.commitMeta.Description, "\n", "\n\t", -1) + "\n\n"
-		pager.Writer.Write([]byte(fmt.Sprintf("%s", formattedDesc)))
+		PrintCommit(pager, opts.minParents, opts.showParents, opts.decoration, comm)
 	}
 }
 

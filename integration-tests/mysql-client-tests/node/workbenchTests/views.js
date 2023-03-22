@@ -3,21 +3,8 @@ import { getArgs } from "../helpers.js";
 const args = getArgs();
 
 export const viewsTests = [
-  // Getting "fatal: 'head' is not a commit and a branch 'more-updates' cannot be created from it" error
-  // TODO: Replace once this issue is resolved https://github.com/dolthub/dolt/issues/5526
-  // {
-  //   q: "CALL DOLT_CHECKOUT(:branchName)",
-  //   p: { branchName: "main" },
-  //   res: [{ status: 0 }],
-  // },
-  // {
   {
-    q: "CALL DOLT_BRANCH(:branchName)",
-    p: { branchName: "more-updates" },
-    res: [{ status: 0 }],
-  },
-  {
-    q: "CALL DOLT_CHECKOUT(:branchName)",
+    q: "CALL DOLT_CHECKOUT('-b', :branchName)",
     p: { branchName: "more-updates" },
     res: [{ status: 0 }],
   },

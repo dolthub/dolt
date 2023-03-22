@@ -97,7 +97,7 @@ func (db *database) loadDatasetsNomsMap(ctx context.Context, rootHash hash.Hash)
 	}
 
 	if val == nil {
-		return types.EmptyMap, errors.New("Root hash doesn't exist")
+		return types.EmptyMap, fmt.Errorf("Root hash doesn't exist: %v", rootHash)
 	}
 
 	return val.(types.Map), nil
@@ -114,7 +114,7 @@ func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) 
 	}
 
 	if val == nil {
-		return prolly.AddressMap{}, errors.New("Root hash doesn't exist")
+		return prolly.AddressMap{}, fmt.Errorf("Root hash doesn't exist: %v", rootHash)
 	}
 
 	return parse_storeroot([]byte(val.(types.SerialMessage)), db.nodeStore())
@@ -412,16 +412,38 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 	return err
 }
 
+func (db *database) BuildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error) {
+	if len(opts.Parents) == 0 {
+		headAddr, ok := ds.MaybeHeadAddr()
+		if ok {
+			opts.Parents = []hash.Hash{headAddr}
+		}
+	} else {
+		curr, ok := ds.MaybeHeadAddr()
+		if ok {
+			if !hasParentHash(opts, curr) {
+				return nil, ErrMergeNeeded
+			}
+		}
+	}
+
+	return newCommitForValue(ctx, ds.db.chunkStore(), ds.db, ds.db.nodeStore(), v, opts)
+}
+
 func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
-	currentAddr, _ := ds.MaybeHeadAddr()
-	commit, err := buildNewCommit(ctx, ds, v, opts)
+	commit, err := db.BuildNewCommit(ctx, ds, v, opts)
 	if err != nil {
 		return Dataset{}, err
 	}
+	return db.WriteCommit(ctx, ds, commit)
+}
+
+func (db *database) WriteCommit(ctx context.Context, ds Dataset, commit *Commit) (Dataset, error) {
+	currentAddr, _ := ds.MaybeHeadAddr()
 
 	val := commit.NomsValue()
 
-	_, err = db.WriteValue(ctx, val)
+	_, err := db.WriteValue(ctx, val)
 	if err != nil {
 		return Dataset{}, err
 	}
@@ -657,7 +679,7 @@ func (db *database) CommitWithWorkingSet(
 		}
 	}
 
-	commit, err := buildNewCommit(ctx, commitDS, val, opts)
+	commit, err := db.BuildNewCommit(ctx, commitDS, val, opts)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
 	}
@@ -855,8 +877,8 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 }
 
 // GC traverses the database starting at the Root and removes all unreferenced data from persistent storage.
-func (db *database) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet) error {
-	return db.ValueStore.GC(ctx, oldGenRefs, newGenRefs)
+func (db *database) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet, safepointF func() error) error {
+	return db.ValueStore.GC(ctx, oldGenRefs, newGenRefs, safepointF)
 }
 
 func (db *database) tryCommitChunks(ctx context.Context, newRootHash hash.Hash, currentRootHash hash.Hash) error {
@@ -894,24 +916,6 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	}
 
 	return v.(types.Struct), nil
-}
-
-func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error) {
-	if len(opts.Parents) == 0 {
-		headAddr, ok := ds.MaybeHeadAddr()
-		if ok {
-			opts.Parents = []hash.Hash{headAddr}
-		}
-	} else {
-		curr, ok := ds.MaybeHeadAddr()
-		if ok {
-			if !hasParentHash(opts, curr) {
-				return nil, ErrMergeNeeded
-			}
-		}
-	}
-
-	return newCommitForValue(ctx, ds.db.chunkStore(), ds.db, ds.db.nodeStore(), v, opts)
 }
 
 func hasParentHash(opts CommitOptions, curr hash.Hash) bool {
