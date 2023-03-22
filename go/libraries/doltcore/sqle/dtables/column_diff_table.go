@@ -19,11 +19,9 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -32,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	dtypes "github.com/dolthub/dolt/go/store/types"
@@ -77,8 +74,7 @@ func (dt *ColumnDiffTable) Schema() sql.Schema {
 		{Name: "email", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: false},
 		{Name: "date", Type: types.Datetime, Source: doltdb.ColumnDiffTableName, PrimaryKey: false},
 		{Name: "message", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: false},
-		{Name: "data_change", Type: types.Boolean, Source: doltdb.ColumnDiffTableName, PrimaryKey: false},
-		{Name: "schema_change", Type: types.Boolean, Source: doltdb.ColumnDiffTableName, PrimaryKey: false},
+		{Name: "diff_type", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: false},
 	}
 }
 
@@ -189,6 +185,8 @@ type doltColDiffWorkingSetRowItr struct {
 	colIndex            int
 	stagedTableDeltas   []diff.TableDelta
 	unstagedTableDeltas []diff.TableDelta
+	colNames            []string
+	diffTypes           []string
 }
 
 func (dt *ColumnDiffTable) newWorkingSetRowItr(ctx *sql.Context) (sql.RowIter, error) {
@@ -218,17 +216,11 @@ func (dt *ColumnDiffTable) newWorkingSetRowItr(ctx *sql.Context) (sql.RowIter, e
 
 // incrementColIndex increments the column index and table changes index.  When the end of the column names array is
 // reached, moves to the next table changes delta.
-func (d *doltColDiffWorkingSetRowItr) incrementColIndex(tableDelta diff.TableDelta, staged bool) {
+func (d *doltColDiffWorkingSetRowItr) incrementColIndex(staged bool) {
 	d.colIndex++
-	var numCols int
-	if tableDelta.ToSch != nil {
-		numCols = tableDelta.ToSch.GetAllCols().Size()
-	} else {
-		numCols = tableDelta.FromSch.GetAllCols().Size()
-	}
 
 	// move to next table once all modified columns are iterated through
-	if d.colIndex >= numCols {
+	if d.colIndex >= len(d.colNames) {
 		d.colIndex = 0
 		if staged {
 			d.stagedIndex++
@@ -247,40 +239,57 @@ func (d *doltColDiffWorkingSetRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 		changeSet = "STAGED"
 		tableDelta = d.stagedTableDeltas[d.stagedIndex]
 		staged = true
+		// only need to load new changes when we're finished iterating through the previous tableDelta
+		if d.colIndex == 0 {
+			d.loadColumnChanges(tableDelta)
+		}
 	} else if d.unstagedIndex < len(d.unstagedTableDeltas) {
 		changeSet = "WORKING"
 		tableDelta = d.unstagedTableDeltas[d.unstagedIndex]
+		// only need to load new changes when we're finished iterating through the previous tableDelta
+		if d.colIndex == 0 {
+			d.loadColumnChanges(tableDelta)
+		}
 	} else {
 		return nil, io.EOF
 	}
 
-	defer d.incrementColIndex(tableDelta, staged)
+	defer d.incrementColIndex(staged)
 
 	change, err := tableDelta.GetSummary(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var colName string
-	if tableDelta.FromSch != nil {
-		colName = tableDelta.FromSch.GetAllCols().GetColumnNames()[d.colIndex]
-	} else {
-		colName = tableDelta.ToSch.GetAllCols().GetColumnNames()[d.colIndex]
-	}
-
 	sqlRow := sql.NewRow(
 		changeSet,
 		change.TableName,
-		colName,
+		d.colNames[d.colIndex],
 		nil, // committer
 		nil, // email
 		nil, // date
 		nil, // message
-		change.DataChange,
-		change.SchemaChange,
+		d.diffTypes[d.colIndex],
 	)
 
 	return sqlRow, nil
+}
+
+// loadColumnChanges loads the list of column names for columns that have changed and the corresponding diff_type for
+// those column changes
+func (d *doltColDiffWorkingSetRowItr) loadColumnChanges(tableDelta diff.TableDelta) {
+	var toCols, fromCols *schema.ColCollection
+	if tableDelta.ToSch != nil {
+		toCols = tableDelta.ToSch.GetAllCols()
+	}
+	if tableDelta.FromSch != nil {
+		fromCols = tableDelta.FromSch.GetAllCols()
+	}
+	_, _, _, colNames, diffTypes := calculateColSchemaDiff(toCols, fromCols)
+	// TODO (steph): if a row has been modified, all columns will be marked as modified instead of just the columns which contain the changes
+
+	d.colNames = colNames
+	d.diffTypes = diffTypes
 }
 
 func (d *doltColDiffWorkingSetRowItr) Close(c *sql.Context) error {
@@ -369,6 +378,7 @@ func (itr *doltColDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, erro
 	meta := itr.meta
 	h := itr.hash
 	col := tableChange.colNames[itr.colIdx]
+	diffType := tableChange.diffTypes[itr.colIdx]
 
 	return sql.NewRow(
 		h.String(),
@@ -378,13 +388,11 @@ func (itr *doltColDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, erro
 		meta.Email,
 		meta.Time(),
 		meta.Description,
-		tableChange.dataChange,
-		tableChange.schemaChange,
+		diffType,
 	), nil
 }
 
-// loadTableChanges loads the current commit's table changes and metadata
-// into the iterator.
+// loadTableChanges loads the current commit's table changes and metadata into the iterator.
 func (itr *doltColDiffCommitHistoryRowItr) loadTableChanges(ctx context.Context, commit *doltdb.Commit) error {
 	tableChanges, err := itr.calculateTableChanges(ctx, commit)
 	if err != nil {
@@ -440,13 +448,25 @@ func (itr *doltColDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Con
 	}
 
 	tableChanges := make([]tableColChange, len(deltas))
+	tableChangeIdx := 0
 	for i := 0; i < len(deltas); i++ {
 		change, err := processTableColDelta(itr.ctx, itr.ddb, deltas[i])
 		if err != nil {
 			return nil, err
 		}
 
-		tableChanges[i] = *change
+		// filter out changes that have no modified columns
+		if len(change.colNames) != 0 {
+			tableChanges[tableChangeIdx] = *change
+			tableChangeIdx++
+		} else {
+			// remove table changes that don't have any modified columns
+			if tableChangeIdx == len(tableChanges)-1 {
+				tableChanges = tableChanges[:tableChangeIdx]
+			} else {
+				tableChanges = append(tableChanges[:tableChangeIdx], tableChanges[tableChangeIdx+1:]...)
+			}
+		}
 	}
 
 	// Not all commits mutate tables (e.g. empty commits)
@@ -465,10 +485,9 @@ func (itr *doltColDiffCommitHistoryRowItr) Close(*sql.Context) error {
 // tableColChange is an internal data structure used to hold the results of processing
 // a diff.TableDelta structure into the output data for this system table.
 type tableColChange struct {
-	tableName    string
-	colNames     []string
-	dataChange   bool
-	schemaChange bool
+	tableName string
+	colNames  []string
+	diffTypes []string
 }
 
 // processTableColDelta processes the specified TableDelta to determine what kind of change it was (i.e. table drop,
@@ -476,60 +495,35 @@ type tableColChange struct {
 func processTableColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta diff.TableDelta) (*tableColChange, error) {
 	// Dropping a table is always a schema change, and also a data change if the table contained data
 	if delta.IsDrop() {
-		isEmpty, err := isTableDataEmpty(ctx, delta.FromTable)
-		if err != nil {
-			return nil, err
+		diffTypes := make([]string, delta.FromSch.GetAllCols().Size())
+		for i := range diffTypes {
+			diffTypes[i] = diffTypeRemoved
 		}
 
 		return &tableColChange{
-			tableName:    delta.FromName,
-			colNames:     delta.FromSch.GetAllCols().GetColumnNames(),
-			dataChange:   !isEmpty,
-			schemaChange: true,
+			tableName: delta.FromName,
+			colNames:  delta.FromSch.GetAllCols().GetColumnNames(),
+			diffTypes: diffTypes,
 		}, nil
 	}
 
-	// Renaming a table is always a schema change, and also a data change if the table data differs
-	if delta.IsRename() {
-		dataChanged, err := delta.HasHashChanged()
-		if err != nil {
-			return nil, err
-		}
-
-		return &tableColChange{
-			tableName:    delta.ToName,
-			colNames:     delta.ToSch.GetAllCols().GetColumnNames(),
-			dataChange:   dataChanged,
-			schemaChange: true,
-		}, nil
-	}
+	// Renaming a table does not affect columns necessarily, if table data was changed it will be checked below
 
 	// Creating a table is always a schema change, and also a data change if data was inserted
 	if delta.IsAdd() {
-		isEmpty, err := isTableDataEmpty(ctx, delta.ToTable)
-		if err != nil {
-			return nil, err
+		diffTypes := make([]string, delta.ToSch.GetAllCols().Size())
+		for i := range diffTypes {
+			diffTypes[i] = diffTypeAdded
 		}
 
 		return &tableColChange{
-			tableName:    delta.ToName,
-			colNames:     delta.ToSch.GetAllCols().GetColumnNames(),
-			dataChange:   !isEmpty,
-			schemaChange: true,
+			tableName: delta.ToName,
+			colNames:  delta.ToSch.GetAllCols().GetColumnNames(),
+			diffTypes: diffTypes,
 		}, nil
 	}
 
-	dataChanged, err := delta.HasHashChanged()
-	if err != nil {
-		return nil, err
-	}
-
-	schemaChanged, err := delta.HasSchemaChanged(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// calculate which columns have changed
+	// calculate which columns have been modified
 	diffTableSchema, j, err := GetDiffTableSchemaAndJoiner(delta.ToTable.Format(), delta.FromSch, delta.ToSch)
 	if err != nil {
 		return nil, err
@@ -539,111 +533,123 @@ func processTableColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta diff.Table
 	now := time.Now()
 	dp := NewDiffPartition(delta.ToTable, delta.FromTable, delta.ToName, delta.FromName, (*dtypes.Timestamp)(&now), (*dtypes.Timestamp)(&now), delta.ToSch, delta.FromSch)
 	ri := NewDiffPartitionRowIter(*dp, ddb, j)
-	colNames, err := calculateColDelta(ctx, delta, ri, diffTableSchema)
+	colNames, diffTypes, err := calculateColDelta(ctx, ri, delta.ToSch.GetAllCols(), delta.FromSch.GetAllCols(), diffTableSchema.GetAllCols())
 	if err != nil {
 		return nil, err
 	}
 
 	return &tableColChange{
-		tableName:    delta.ToName,
-		colNames:     colNames,
-		dataChange:   dataChanged,
-		schemaChange: schemaChanged,
+		tableName: delta.ToName,
+		colNames:  colNames,
+		diffTypes: diffTypes,
 	}, nil
 }
 
-func calculateColDelta(ctx *sql.Context, delta diff.TableDelta, iter sql.RowIter, diffTableSchema schema.Schema) ([]string, error) {
-	diffPkSch, err := sqlutil.FromDoltSchema("", diffTableSchema)
-	if err != nil {
-		return nil, err
+// calculateColDelta iterates through the rows of the given table delta and compares each cell in the to_ and from_
+// cells to compile a list of modified columns
+func calculateColDelta(ctx *sql.Context, iter sql.RowIter, toCols, fromCols, diffTableCols *schema.ColCollection) ([]string, []string, error) {
+	colNamesSet := make(map[string]struct{})
+	var resultColNames []string
+	var resultDiffTypes []string
+	modifiedCols, addedCols, droppedCols, _, _ := calculateColSchemaDiff(toCols, fromCols)
+
+	// add all added/dropped columns to result
+	for _, col := range addedCols {
+		resultColNames = append(resultColNames, col)
+		resultDiffTypes = append(resultDiffTypes, diffTypeAdded)
 	}
-	columnsWithDiff := getColumnNamesWithDiff(delta.FromSch, delta.ToSch)
-	_, projections := getDiffSqlSchema(diffPkSch.Schema, columnsWithDiff)
+	for _, col := range droppedCols {
+		resultColNames = append(resultColNames, col)
+		resultDiffTypes = append(resultDiffTypes, diffTypeRemoved)
+	}
 
-	columns := make(map[string]string)
-	var result []string
-	numCols := (len(projections) - 1) / 2
-
+	// check each row for diffs in modified columns
 	for {
 		r, err := iter.Next(ctx)
 		if err == io.EOF {
-			for key := range columns {
-				// returning only names of modified columns
-				result = append(result, key)
+			for col := range colNamesSet {
+				// append modified columns to result
+				resultColNames = append(resultColNames, col)
+				resultDiffTypes = append(resultDiffTypes, diffTypeModified)
 			}
-			return result, nil
+			return resultColNames, resultDiffTypes, nil
 		} else if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
-		i := 0
-		for i < numCols {
-			// compare the to_ and from_ cells, accounting for to_commit and to_commit_date columns
-			if r[i] != r[i+numCols+2] {
-				cleanedName := strings.Split(projections[i].(*expression.GetField).Name(), "_")[1]
-				columns[cleanedName] = ""
+		// only need to check modified columns
+		for _, col := range modifiedCols {
+			toColTag := diffTableCols.NameToCol["to_"+col].Tag
+			fromColTag := diffTableCols.NameToCol["from_"+col].Tag
+			toIdx := diffTableCols.TagToIdx[toColTag]
+			fromIdx := diffTableCols.TagToIdx[fromColTag]
+
+			if r[toIdx] != r[fromIdx] {
+				colNamesSet[col] = struct{}{}
 			}
-			i++
 		}
 
-		// can stop checking rows when we already have all columns in the result set
-		if len(columns) == numCols {
-			for key := range columns {
-				// returning only names of modified columns
-				result = append(result, key)
+		// can stop checking rows when we already have all modified columns in the result set
+		if len(colNamesSet) == len(modifiedCols) {
+			for col := range colNamesSet {
+				// append modified columns to result
+				resultColNames = append(resultColNames, col)
+				resultDiffTypes = append(resultDiffTypes, diffTypeModified)
 			}
-			return result, nil
+			return resultColNames, resultDiffTypes, nil
 		}
 	}
 }
 
-// getColumnNamesWithDiff attaches the to_ and from_ prefixes to all columns
-func getColumnNamesWithDiff(fromSch, toSch schema.Schema) []string {
-	var cols []string
-
-	if fromSch != nil {
-		_ = fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			cols = append(cols, fmt.Sprintf("from_%s", col.Name))
-			return false, nil
-		})
+// calculateColSchemaDiff calculates which columns were modified, added, or dropped between to and from schemas and
+// returns a list of column names for each type of change, the total list of column names, and a corresponding list of
+// diff_types for each column
+func calculateColSchemaDiff(toCols *schema.ColCollection, fromCols *schema.ColCollection) ([]string, []string, []string, []string, []string) {
+	// put to/from columns into a set
+	toColTags := make(map[uint64]struct{})
+	fromColTags := make(map[uint64]struct{})
+	if toCols != nil {
+		for _, tag := range toCols.Tags {
+			toColTags[tag] = struct{}{}
+		}
 	}
-	if toSch != nil {
-		_ = toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			cols = append(cols, fmt.Sprintf("to_%s", col.Name))
-			return false, nil
-		})
-	}
-	return cols
-}
-
-// getDiffSqlSchema returns the schema of columns with data diff and "diff_type". This is used for diff splitter.
-// When extracting the diff schema, the ordering must follow the ordering of given columns
-func getDiffSqlSchema(diffTableSch sql.Schema, columns []string) (sql.Schema, []sql.Expression) {
-	type column struct {
-		sqlCol *sql.Column
-		idx    int
-	}
-
-	columns = append(columns, "diff_type")
-	colMap := make(map[string]*column)
-	for _, c := range columns {
-		colMap[c] = nil
-	}
-
-	var cols = make([]*sql.Column, len(columns))
-	var getFieldCols = make([]sql.Expression, len(columns))
-
-	for i, c := range diffTableSch {
-		if _, ok := colMap[c.Name]; ok {
-			colMap[c.Name] = &column{c, i}
+	if fromCols != nil {
+		for _, tag := range fromCols.Tags {
+			fromColTags[tag] = struct{}{}
 		}
 	}
 
-	for i, c := range columns {
-		col := colMap[c].sqlCol
-		cols[i] = col
-		getFieldCols[i] = expression.NewGetField(colMap[c].idx, col.Type, col.Name, col.Nullable)
+	var modifiedCols []string
+	var addedCols []string
+	var droppedCols []string
+	var allCols []string
+	var diffTypes []string
+
+	if toCols != nil {
+		for _, tag := range toCols.Tags {
+			if _, ok := fromColTags[tag]; ok {
+				// if the tag is also in fromColumnTags, this column was modified
+				modifiedCols = append(modifiedCols, toCols.TagToCol[tag].Name)
+				allCols = append(allCols, toCols.TagToCol[tag].Name)
+				diffTypes = append(diffTypes, diffTypeModified)
+				delete(fromColTags, tag)
+			} else {
+				// else if it isn't in fromColumnTags, this column was added
+				addedCols = append(addedCols, toCols.TagToCol[tag].Name)
+				allCols = append(allCols, toCols.TagToCol[tag].Name)
+				diffTypes = append(diffTypes, diffTypeAdded)
+			}
+		}
 	}
 
-	return cols, getFieldCols
+	if fromCols != nil {
+		for tag, _ := range fromColTags {
+			// all remaining tags are columns not in toColumnTags, i.e. dropped columns
+			droppedCols = append(droppedCols, fromCols.TagToCol[tag].Name)
+			allCols = append(allCols, fromCols.TagToCol[tag].Name)
+			diffTypes = append(diffTypes, diffTypeRemoved)
+		}
+	}
+
+	return modifiedCols, addedCols, droppedCols, allCols, diffTypes
 }

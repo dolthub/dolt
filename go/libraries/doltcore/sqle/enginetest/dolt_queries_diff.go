@@ -3681,86 +3681,421 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "working set changes",
 		SetUpScript: []string{
-			"create table regularTable (a int primary key, b int, c int);",
-			"create table droppedTable (a int primary key, b int, c int);",
-			"create table renamedEmptyTable (a int primary key, b int, c int);",
+			"create table regularTable (a int primary key, b int);",
+			"create table droppedTable (a int primary key, b int);",
+			"insert into droppedTable values (1, 2), (2, 3);",
+			"create table renamedTable (a int primary key, b int);",
 			"call dolt_add('.')",
-			"insert into regularTable values (1, 2, 3), (2, 3, 4);",
-			"insert into droppedTable values (1, 2, 3), (2, 3, 4);",
-			"set @Commit1 = '';",
-			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'Creating tables x and y');",
 
-			// changeSet: STAGED; data change: false; schema change: true
-			"create table addedTable (a int primary key, b int, c int);",
-			"call DOLT_ADD('addedTable');",
-			// changeSet: STAGED; data change: true; schema change: true
+			"insert into regularTable values (1, 2), (2, 3);",
 			"drop table droppedTable;",
-			"call DOLT_ADD('droppedTable');",
-			// changeSet: WORKING; data change: false; schema change: true
-			"rename table renamedEmptyTable to newRenamedEmptyTable;",
-			// changeSet: WORKING; data change: true; schema change: false
-			"insert into regularTable values (3, 4, 5);",
+			"rename table renamedTable to newRenamedTable;",
+			"create table addedTable (a int primary key, b int);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT commit_hash, table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'regularTable' ORDER BY commit_hash, table_name, column_name;",
+				Expected: []sql.Row{
+					{"STAGED", "regularTable", "a", "added"},
+					{"STAGED", "regularTable", "b", "added"},
+					{"WORKING", "regularTable", "a", "modified"},
+					{"WORKING", "regularTable", "b", "modified"},
+				},
+			},
+			{
+				Query: "SELECT commit_hash, table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'droppedTable' ORDER BY commit_hash, table_name, column_name;",
+				Expected: []sql.Row{
+					{"STAGED", "droppedTable", "a", "added"},
+					{"STAGED", "droppedTable", "b", "added"},
+					{"WORKING", "droppedTable", "a", "removed"},
+					{"WORKING", "droppedTable", "b", "removed"},
+				},
+			},
+			{
+				Query: "SELECT commit_hash, table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'renamedTable' OR table_name = 'newRenamedTable' ORDER BY commit_hash, table_name, column_name;",
+				Expected: []sql.Row{
+					{"STAGED", "renamedTable", "a", "added"},
+					{"STAGED", "renamedTable", "b", "added"},
+					{"WORKING", "newRenamedTable", "a", "modified"},
+					{"WORKING", "newRenamedTable", "b", "modified"},
+				},
+			},
+			{
+				Query: "SELECT commit_hash, table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'addedTable' ORDER BY commit_hash, table_name, column_name;",
+				Expected: []sql.Row{
+					{"WORKING", "addedTable", "a", "added"},
+					{"WORKING", "addedTable", "b", "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "add column",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c int);",
+			"call dolt_add('.')",
+			"insert into t values (1, 2), (3, 4);",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
+
+			"alter table t add column d int;",
+			"set @Commit2 = '';",
+			"update t set d = 6 where pk = 1;",
+			"call dolt_add('.')",
+			"call dolt_commit_hash_out(@Commit2, '-m', 'updating d in t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from dolt_column_diff where commit_hash = @Commit1;",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select table_name, column_name from dolt_column_diff where commit_hash = @Commit2;",
+				Expected: []sql.Row{{"t", "d"}},
+			},
+		},
+	},
+	{
+		Name: "modify column",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c int);",
+			"call dolt_add('.')",
+			"insert into t values (1, 2), (3, 4);",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
+
+			"update t set c = 5 where pk = 3;",
+			"call dolt_add('.')",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'updating value in t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from dolt_column_diff where commit_hash = @Commit1;",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select table_name, column_name, diff_type from dolt_column_diff where commit_hash = @Commit2;",
+				Expected: []sql.Row{{"t", "c", "modified"}},
+			},
+		},
+	},
+	{
+		Name: "drop column",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c int);",
+			"call dolt_add('.')",
+			"insert into t values (1, 2), (3, 4);",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
+
+			"alter table t drop column c;",
+			"call dolt_add('.')",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'dropping column c in t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from dolt_column_diff where commit_hash = @Commit1;",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select table_name, column_name, diff_type from dolt_column_diff where commit_hash = @Commit2;",
+				Expected: []sql.Row{{"t", "c", "removed"}},
+			},
+		},
+	},
+	{
+		Name: "drop column and recreate with same type",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c int);",
+			"call dolt_add('.')",
+			"insert into t values (1, 2), (3, 4);",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
+
+			"alter table t drop column c;",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping column c');",
+
+			"alter table t add column c int;",
+			"insert into t values (100, 101);",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'inserting into t');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{21}},
+				Expected: []sql.Row{{5}},
 			},
 			{
-				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF WHERE commit_hash = @Commit1;",
-				Expected: []sql.Row{{9}},
-			},
-			{
-				Query:    "SELECT * FROM DOLT_COLUMN_DIFF WHERE commit_hash = @Commit1 AND committer <> 'billy bob';",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "SELECT commit_hash, committer FROM DOLT_COLUMN_DIFF WHERE commit_hash <> @Commit1 AND committer = 'billy bob' AND commit_hash NOT IN ('WORKING','STAGED');",
-				Expected: []sql.Row{},
-			},
-			{
-				Query: "SELECT commit_hash, table_name, column_name FROM DOLT_COLUMN_DIFF WHERE commit_hash <> @Commit1 AND commit_hash NOT IN ('STAGED') ORDER BY table_name;",
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit1;",
 				Expected: []sql.Row{
-					{"WORKING", "newRenamedEmptyTable", "a"},
-					{"WORKING", "newRenamedEmptyTable", "b"},
-					{"WORKING", "newRenamedEmptyTable", "c"},
-					{"WORKING", "regularTable", "a"},
-					{"WORKING", "regularTable", "b"},
-					{"WORKING", "regularTable", "c"},
+					{"t", "pk", "added"},
+					{"t", "c", "added"},
 				},
 			},
 			{
-				Query: "SELECT commit_hash, table_name, column_name FROM DOLT_COLUMN_DIFF WHERE commit_hash <> @Commit1 OR committer <> 'billy bob' ORDER BY table_name;",
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit2;",
 				Expected: []sql.Row{
-					{"STAGED", "addedTable", "a"},
-					{"STAGED", "addedTable", "b"},
-					{"STAGED", "addedTable", "c"},
-					{"STAGED", "droppedTable", "a"},
-					{"STAGED", "droppedTable", "b"},
-					{"STAGED", "droppedTable", "c"},
-					{"WORKING", "newRenamedEmptyTable", "a"},
-					{"WORKING", "newRenamedEmptyTable", "b"},
-					{"WORKING", "newRenamedEmptyTable", "c"},
-					{"WORKING", "regularTable", "a"},
-					{"WORKING", "regularTable", "b"},
-					{"WORKING", "regularTable", "c"},
+					{"t", "c", "removed"},
 				},
 			},
 			{
-				Query: "SELECT * FROM DOLT_COLUMN_DIFF WHERE COMMIT_HASH in ('WORKING', 'STAGED') ORDER BY table_name;",
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit3",
 				Expected: []sql.Row{
-					{"STAGED", "addedTable", "a", nil, nil, nil, nil, false, true},
-					{"STAGED", "addedTable", "b", nil, nil, nil, nil, false, true},
-					{"STAGED", "addedTable", "c", nil, nil, nil, nil, false, true},
-					{"STAGED", "droppedTable", "a", nil, nil, nil, nil, true, true},
-					{"STAGED", "droppedTable", "b", nil, nil, nil, nil, true, true},
-					{"STAGED", "droppedTable", "c", nil, nil, nil, nil, true, true},
-					{"WORKING", "newRenamedEmptyTable", "a", nil, nil, nil, nil, false, true},
-					{"WORKING", "newRenamedEmptyTable", "b", nil, nil, nil, nil, false, true},
-					{"WORKING", "newRenamedEmptyTable", "c", nil, nil, nil, nil, false, true},
-					{"WORKING", "regularTable", "a", nil, nil, nil, nil, true, false},
-					{"WORKING", "regularTable", "b", nil, nil, nil, nil, true, false},
-					{"WORKING", "regularTable", "c", nil, nil, nil, nil, true, false},
+					{"t", "pk", "modified"},
+					{"t", "c", "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "drop column, then rename column with same type to same name",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 int);",
+			"call dolt_add('.')",
+			"insert into t values (1, 2, 3), (4, 5, 6);",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
+
+			"alter table t drop column c1;",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping column c1');",
+
+			"alter table t rename column c2 to c1;",
+			"insert into t values (100, 101);",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'inserting into t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
+				Expected: []sql.Row{{6}},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit1;",
+				Expected: []sql.Row{
+					{"t", "pk", "added"},
+					{"t", "c1", "added"},
+					{"t", "c2", "added"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit2;",
+				Expected: []sql.Row{
+					{"t", "c1", "removed"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit3;",
+				Expected: []sql.Row{
+					{"t", "pk", "modified"},
+					{"t", "c1", "modified"},
+				},
+			},
+		},
+	},
+	{
+		Name: "column drop and recreate with different type that can be coerced (int -> string)",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c int);",
+			"call dolt_add('.')",
+			"insert into t values (1, 2), (3, 4);",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
+
+			"alter table t drop column c;",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping column c');",
+
+			"alter table t add column c varchar(20);",
+			"insert into t values (100, '101');",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 're-adding column c');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
+				Expected: []sql.Row{{5}},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit1;",
+				Expected: []sql.Row{
+					{"t", "pk", "added"},
+					{"t", "c", "added"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit2;",
+				Expected: []sql.Row{
+					{"t", "c", "removed"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit3;",
+				Expected: []sql.Row{
+					{"t", "pk", "modified"},
+					{"t", "c", "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "column drop and recreate with different type that can NOT be coerced (string -> int)",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c varchar(20));",
+			"call dolt_add('.')",
+			"insert into t values (1, 'two'), (3, 'four');",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
+
+			"alter table t drop column c;",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping column c');",
+
+			"alter table t add column c int;",
+			"insert into t values (100, 101);",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 're-adding column c');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
+				Expected: []sql.Row{{5}},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit1;",
+				Expected: []sql.Row{
+					{"t", "pk", "added"},
+					{"t", "c", "added"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit2;",
+				Expected: []sql.Row{
+					{"t", "c", "removed"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit3;",
+				Expected: []sql.Row{
+					{"t", "pk", "modified"},
+					{"t", "c", "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "multiple column renames",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int);",
+			"call dolt_add('.')",
+			"insert into t values (1, 2);",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
+
+			"alter table t rename column c1 to c2;",
+			"insert into t values (3, 4);",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'renaming c1 to c2');",
+
+			"alter table t drop column c2;",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'dropping column c2');",
+
+			"alter table t add column c2 int;",
+			"insert into t values (100, '101');",
+			"set @Commit4 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit4, '-am', 'recreating column c2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
+				Expected: []sql.Row{{7}},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit1;",
+				Expected: []sql.Row{
+					{"t", "pk", "added"},
+					{"t", "c1", "added"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit2;",
+				Expected: []sql.Row{
+					{"t", "pk", "modified"},
+					{"t", "c2", "modified"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit3;",
+				Expected: []sql.Row{
+					{"t", "c2", "removed"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit4;",
+				Expected: []sql.Row{
+					{"t", "pk", "modified"},
+					{"t", "c2", "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "primary key change",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int);",
+			"call dolt_add('.')",
+			"insert into t values (1, 2), (3, 4);",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
+
+			"alter table t drop primary key;",
+			"insert into t values (5, 6);",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping primary key');",
+
+			"alter table t add primary key (c1);",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'adding primary key');",
+
+			"insert into t values (7, 8);",
+			"set @Commit4 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit4, '-am', 'adding more data');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
+				Expected: []sql.Row{{8}},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit1;",
+				Expected: []sql.Row{
+					{"t", "pk", "added"},
+					{"t", "c1", "added"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit2;",
+				Expected: []sql.Row{
+					{"t", "pk", "modified"},
+					{"t", "c1", "modified"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit3;",
+				Expected: []sql.Row{
+					{"t", "pk", "modified"},
+					{"t", "c1", "modified"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit4;",
+				Expected: []sql.Row{
+					{"t", "pk", "modified"},
+					{"t", "c1", "modified"},
 				},
 			},
 		},

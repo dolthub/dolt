@@ -327,10 +327,10 @@ SQL
 
     run dolt sql -r csv -q 'select * from dolt_column_diff'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "STAGED,testStaged,pk,,,,,false,true" ]] || false
-    [[ "$output" =~ "STAGED,testStaged,c1,,,,,false,true" ]] || false
-    [[ "$output" =~ "WORKING,testWorking,pk,,,,,false,true" ]] || false
-    [[ "$output" =~ "WORKING,testWorking,c1,,,,,false,true" ]] || false
+    [[ "$output" =~ "STAGED,testStaged,pk,,,,,added" ]] || false
+    [[ "$output" =~ "STAGED,testStaged,c1,,,,,added" ]] || false
+    [[ "$output" =~ "WORKING,testWorking,pk,,,,,added" ]] || false
+    [[ "$output" =~ "WORKING,testWorking,c1,,,,,added" ]] || false
 }
 
 @test "system-tables: query dolt_diff_ system table" {
