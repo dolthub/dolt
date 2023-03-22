@@ -174,7 +174,9 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 		}
 
 		if headOnCLI == branchName && sqlserver.RunningInServerMode() && !shouldAllowDefaultBranchDeletion(ctx) {
-			return fmt.Errorf("unable to delete branch '%s', because it is the default branch for database '%s'; this can by changed on the command line, by stopping the sql-server, running `dolt checkout <another_branch> and restarting the sql-server", branchName, dbName)
+			return fmt.Errorf("unable to delete branch '%s', because it is the default branch for "+
+				"database '%s'; this can by changed on the command line, by stopping the sql-server, "+
+				"running `dolt checkout <another_branch> and restarting the sql-server", branchName, dbName)
 		}
 
 		err = actions.DeleteBranch(ctx, dbData, branchName, actions.DeleteOptions{
@@ -189,8 +191,9 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 }
 
 // shouldAllowDefaultBranchDeletion returns true if the default branch deletion check should be
-// bypassed. This is determined by looking for the presence of an undocumented dolt user var,
-// dolt_allow_default_branch_deletion.
+// bypassed for testing. This should only ever be true for tests that need to invalidate a databases
+// default branch to test recovery from a bad state. We determine if the check should be bypassed by
+// looking for the presence of an undocumented dolt user var, dolt_allow_default_branch_deletion.
 func shouldAllowDefaultBranchDeletion(ctx *sql.Context) bool {
 	_, userVar, _ := ctx.Session.GetUserVariable(ctx, "dolt_allow_default_branch_deletion")
 	return userVar != nil
