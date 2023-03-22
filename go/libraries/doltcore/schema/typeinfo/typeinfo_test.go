@@ -32,7 +32,8 @@ import (
 
 func TestTypeInfoSuite(t *testing.T) {
 	t.Skip()
-	typeInfoArrays, validTypeValues := generateTypeInfoArrays(t)
+	vrw := types.NewMemoryValueStore()
+	typeInfoArrays, validTypeValues := generateTypeInfoArrays(t, vrw)
 	t.Run("VerifyArray", func(t *testing.T) {
 		verifyTypeInfoArrays(t, typeInfoArrays, validTypeValues)
 	})
@@ -343,7 +344,7 @@ func testTypeInfoConversionsExist(t *testing.T, tiArrays [][]TypeInfo) {
 }
 
 // generate unique TypeInfos for each type, and also values that are valid for at least one of the TypeInfos for the matching row
-func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
+func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeInfo, [][]types.Value) {
 	return [][]TypeInfo{
 			generateBitTypes(t, 16),
 			{&blobStringType{gmstypes.TinyText}, &blobStringType{gmstypes.Text},
@@ -377,8 +378,8 @@ func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 		},
 		[][]types.Value{
 			{types.Uint(1), types.Uint(207), types.Uint(79147), types.Uint(34845728), types.Uint(9274618927)}, //Bit
-			{mustBlobString(t, ""), mustBlobString(t, "a"), mustBlobString(t, "abc"), //BlobString
-				mustBlobString(t, "abcdefghijklmnopqrstuvwxyz"), mustBlobString(t, "هذا هو بعض نماذج النص التي أستخدمها لاختبار عناصر")},
+			{mustBlobString(t, vrw, ""), mustBlobString(t, vrw, "a"), mustBlobString(t, vrw, "abc"), //BlobString
+				mustBlobString(t, vrw, "abcdefghijklmnopqrstuvwxyz"), mustBlobString(t, vrw, "هذا هو بعض نماذج النص التي أستخدمها لاختبار عناصر")},
 			{types.Bool(false), types.Bool(true)}, //Bool
 			{types.Timestamp(time.Date(1000, 1, 1, 0, 0, 0, 0, time.UTC)), //Datetime
 				types.Timestamp(time.Date(1970, 1, 1, 0, 0, 1, 0, time.UTC)),

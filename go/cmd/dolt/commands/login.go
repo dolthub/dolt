@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"net"
 	"strconv"
 	"time"
 
@@ -102,17 +103,25 @@ func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	loginUrl := dEnv.Config.GetStringOrDefault(env.AddCredsUrlKey, env.DefaultLoginUrl)
 	loginUrl = apr.GetValueOrDefault(loginURLParam, loginUrl)
 
-	authHost := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
-	authPort := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
-
-	authEndpoint := apr.GetValueOrDefault(authEndpointParam, fmt.Sprintf("%s:%s", authHost, authPort))
+	var authHost string
+	var authPort string
+	authEndpoint := apr.GetValueOrDefault(authEndpointParam, "")
+	if authEndpoint != "" {
+		var err error
+		authHost, authPort, err = net.SplitHostPort(authEndpoint)
+		if err != nil {
+			HandleVErrAndExitCode(errhand.BuildDError(fmt.Sprintf("unable to parse auth-endpoint: '%s'", authEndpoint)).AddCause(err).Build(), usage)
+		}
+		authEndpoint = fmt.Sprintf("%s:%s", authHost, authPort)
+	} else {
+		authHost = dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
+		authPort = dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
+		authEndpoint = fmt.Sprintf("%s:%s", authHost, authPort)
+	}
 
 	// handle args supplied with empty strings
 	if loginUrl == "" {
 		loginUrl = env.DefaultLoginUrl
-	}
-	if authEndpoint == "" {
-		authEndpoint = fmt.Sprintf("%s:%s", authHost, authPort)
 	}
 
 	insecure := apr.Contains(insecureParam)

@@ -120,6 +120,161 @@ EOF
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
 
+@test "json-diff: views" {
+    dolt sql <<SQL
+drop table test;
+create table test (pk int primary key, c1 int, c2 int);
+call dolt_add('.');
+insert into test values (1,2,3);
+insert into test values (4,5,6);
+SQL
+    dolt commit -am "First commit"
+
+    dolt sql <<SQL
+create view v1 as select * from test;
+SQL
+    dolt commit -Am "Second commit"
+
+    dolt diff -r json HEAD HEAD~
+    run dolt diff -r json HEAD HEAD~
+
+    EXPECTED=$(cat <<'EOF'
+{"views":[{"name":"v1","from_definition":"create view v1 as select * from test;","to_definition":""}]}
+EOF
+)
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    dolt diff -r json HEAD~ HEAD
+    run dolt diff -r json HEAD~ HEAD
+
+    EXPECTED=$(cat <<'EOF'
+{"views":[{"name":"v1","from_definition":"","to_definition":"create view v1 as select * from test;"}]}
+EOF
+)
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    dolt sql <<SQL
+drop view v1;
+create view v1 as select "one" from dual;
+SQL
+
+    dolt commit -Am "redefined view"
+
+    dolt diff -r json HEAD~ HEAD
+    run dolt diff -r json HEAD~ HEAD
+
+    EXPECTED=$(cat <<'EOF'
+{"views":[{"name":"v1","from_definition":"create view v1 as select * from test;","to_definition":"create view v1 as select \"one\" from dual;"}]}
+EOF
+)
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+}
+
+@test "json-diff: views, triggers, tables" {
+    dolt sql <<SQL
+drop table test;
+create table test (pk int primary key, c1 int, c2 int);
+call dolt_add('.');
+insert into test values (1,2,3);
+insert into test values (4,5,6);
+SQL
+    dolt commit -am "Table with rows"
+
+    dolt sql <<SQL
+insert into test values (7,8,9);
+delete from test where pk = 4;
+SQL
+    dolt commit -Am "Table data diff"
+
+    dolt sql <<SQL
+create view v1 as select "hello" from test;
+SQL
+    dolt commit -Am "View"
+
+    dolt sql <<SQL
+create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 1;
+SQL
+    dolt commit -Am "Trigger"
+
+    # Only table data diff
+    dolt diff -r json HEAD~3 HEAD~2
+    run dolt diff -r json HEAD~3 HEAD~2
+
+    EXPECTED=$(cat <<'EOF'
+{"tables":[{"name":"test","schema_diff":[],"data_diff":[{"from_row":{"c1":5,"c2":6,"pk":4},"to_row":{}},{"from_row":{},"to_row":{"c1":8,"c2":9,"pk":7}}]}]}
+EOF
+)
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    # Only view diff
+    dolt diff -r json HEAD~2 HEAD~
+    run dolt diff -r json HEAD~2 HEAD~
+
+    EXPECTED=$(cat <<'EOF'
+{"views":[{"name":"v1","from_definition":"","to_definition":"create view v1 as select \"hello\" from test;"}]}
+EOF
+)
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    # Only trigger diff
+    dolt diff -r json HEAD~ HEAD
+    run dolt diff -r json HEAD~ HEAD
+
+    EXPECTED=$(cat <<'EOF'
+{"triggers":[{"name":"tr1","from_definition":"","to_definition":"create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 1;"}]}
+EOF
+)
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    # View and trigger diff
+    dolt diff -r json HEAD~2 HEAD
+    run dolt diff -r json HEAD~2 HEAD
+
+    EXPECTED=$(cat <<'EOF'
+{"triggers":[{"name":"tr1","from_definition":"","to_definition":"create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 1;"}],"views":[{"name":"v1","from_definition":"","to_definition":"create view v1 as select \"hello\" from test;"}]}
+EOF
+)
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    # Table and view diff
+    dolt diff -r json HEAD~3 HEAD~
+    run dolt diff -r json HEAD~3 HEAD~
+
+    EXPECTED=$(cat <<'EOF'
+{"tables":[{"name":"test","schema_diff":[],"data_diff":[{"from_row":{"c1":5,"c2":6,"pk":4},"to_row":{}},{"from_row":{},"to_row":{"c1":8,"c2":9,"pk":7}}]}],"views":[{"name":"v1","from_definition":"","to_definition":"create view v1 as select \"hello\" from test;"}]}
+EOF
+)
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    # All three kinds of diff
+    dolt diff -r json HEAD~3 HEAD
+    run dolt diff -r json HEAD~3 HEAD
+
+    EXPECTED=$(cat <<'EOF'
+{"tables":[{"name":"test","schema_diff":[],"data_diff":[{"from_row":{"c1":5,"c2":6,"pk":4},"to_row":{}},{"from_row":{},"to_row":{"c1":8,"c2":9,"pk":7}}]}],"triggers":[{"name":"tr1","from_definition":"","to_definition":"create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 1;"}],"views":[{"name":"v1","from_definition":"","to_definition":"create view v1 as select \"hello\" from test;"}]}
+EOF
+)
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false    
+}
+
 @test "json-diff: with table args" {
     dolt sql -q 'create table other (pk int not null primary key)'
     dolt add .
