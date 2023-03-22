@@ -225,7 +225,6 @@ SQL
     start_sql_server repo1
 
     # No tables at the start
-    dolt ls
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false
@@ -261,20 +260,20 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
 
-    dolt sql --user=dolt -q "CALL DOLT_ADD('.')"
+    dolt sql-client -P $PORT --user=dolt -q "CALL DOLT_ADD('.')"
     # check that dolt_commit works properly when autocommit is on
-    run dolt sql --user=dolt -q "call dolt_commit('-a', '-m', 'Commit1')"
+    run dolt sql-client -P $PORT --user=dolt -q "call dolt_commit('-a', '-m', 'Commit1')"
     [ "$status" -eq 0 ]
 
     # check that dolt_commit throws error now that there are no working set changes.
-    run dolt sql --user=dolt -q "call dolt_commit('-a', '-m', 'Commit1')"
+    run dolt sql-client -P $PORT --user=dolt -q "call dolt_commit('-a', '-m', 'Commit1')"
     [ "$status" -eq 1 ]
 
     # Make a change to the working set but not the staged set.
-    run dolt sql --user=dolt -q "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
+    run dolt sql-client -P $PORT --user=dolt -q "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
 
     # check that dolt_commit throws error now that there are no staged changes.
-    run dolt sql --user=dolt -q "call dolt_commit('-m', 'Commit1')"
+    run dolt sql-client -P $PORT --user=dolt -q "call dolt_commit('-m', 'Commit1')"
     [ "$status" -eq 1 ]
 
     run dolt log
@@ -1013,9 +1012,9 @@ END""")
     mkdir rem1
     cd repo1
     dolt remote add origin file://../rem1
+    dolt push origin main
     start_sql_server repo1
 
-    dolt push origin main
     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call  dolt_push()"
     [ $status -ne 0 ]
     [[ "$output" =~ "the current branch has no upstream branch" ]] || false

@@ -42,7 +42,7 @@ type chunkJournal struct {
 	path string
 
 	contents  manifestContents
-	backing   manifest
+	backing   journalManifest
 	persister *fsTablePersister
 }
 
@@ -52,7 +52,7 @@ var _ manifest = &chunkJournal{}
 var _ manifestGCGenUpdater = &chunkJournal{}
 var _ io.Closer = &chunkJournal{}
 
-func newChunkJournal(ctx context.Context, nbfVers, dir string, m manifest, p *fsTablePersister) (*chunkJournal, error) {
+func newChunkJournal(ctx context.Context, nbfVers, dir string, m journalManifest, p *fsTablePersister) (*chunkJournal, error) {
 	path, err := filepath.Abs(filepath.Join(dir, chunkJournalName))
 	if err != nil {
 		return nil, err
@@ -141,7 +141,7 @@ func (j *chunkJournal) bootstrapJournalWriter(ctx context.Context) (err error) {
 }
 
 // the journal file is the source of truth for the root hash, true-up persisted manifest
-func trueUpBackingManifest(ctx context.Context, root hash.Hash, backing manifest) (manifestContents, error) {
+func trueUpBackingManifest(ctx context.Context, root hash.Hash, backing journalManifest) (manifestContents, error) {
 	ok, mc, err := backing.ParseIfExists(ctx, &Stats{}, nil)
 	if err != nil {
 		return manifestContents{}, err
@@ -149,17 +149,18 @@ func trueUpBackingManifest(ctx context.Context, root hash.Hash, backing manifest
 		return manifestContents{}, fmt.Errorf("manifest not found when opening chunk journal")
 	}
 
-	prev := mc.lock
-	next := generateLockHash(root, mc.specs, mc.appendix)
-	mc.lock = next
+	// set our in-memory root to match the journal
 	mc.root = root
+	if backing.readOnly {
+		return mc, nil
+	}
+
+	prev := mc.lock
+	next := generateLockHash(mc.root, mc.specs, mc.appendix)
+	mc.lock = next
 
 	mc, err = backing.Update(ctx, prev, mc, &Stats{}, nil)
-	if errors.Is(err, errReadOnlyManifest) {
-		// set our in-memory root to match the journal
-		mc.root = root
-		return mc, nil
-	} else if err != nil {
+	if err != nil {
 		return manifestContents{}, err
 	} else if mc.lock != next {
 		return manifestContents{}, errOptimisticLockFailedTables
@@ -248,6 +249,10 @@ func (j *chunkJournal) Name() string {
 
 // Update implements manifest.
 func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+	if j.backing.readOnly {
+		return j.contents, errReadOnlyManifest
+	}
+
 	if j.wr == nil {
 		// pass the update to |j.backing| if the journal is not initialized
 		return j.backing.Update(ctx, lastLock, next, stats, writeHook)
@@ -282,9 +287,8 @@ func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 
 // UpdateGCGen implements manifestGCGenUpdater.
 func (j *chunkJournal) UpdateGCGen(ctx context.Context, lastLock addr, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
-	updater, ok := j.backing.(manifestGCGenUpdater)
-	if !ok {
-		return manifestContents{}, fmt.Errorf("manifest (%s) does not support garbage collection", j.backing.Name())
+	if j.backing.readOnly {
+		return j.contents, errReadOnlyManifest
 	} else if j.contents.lock != lastLock {
 		return j.contents, nil // |next| is stale
 	}
@@ -295,7 +299,7 @@ func (j *chunkJournal) UpdateGCGen(ctx context.Context, lastLock addr, next mani
 		return manifestContents{}, err
 	}
 
-	latest, err := updater.UpdateGCGen(ctx, j.contents.lock, next, stats, writeHook)
+	latest, err := j.backing.UpdateGCGen(ctx, j.contents.lock, next, stats, writeHook)
 	if err != nil {
 		return manifestContents{}, err
 	} else if latest.root == next.root {
@@ -409,7 +413,7 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, ke
 }
 
 // newJournalManifest makes a new file manifest.
-func newJournalManifest(ctx context.Context, dir string) (m manifest, err error) {
+func newJournalManifest(ctx context.Context, dir string) (m journalManifest, err error) {
 	var readOnly bool
 	// try to take the file lock. if we fail, make the manifest read-only.
 	// if we succeed, hold the file lock until the process terminates.
@@ -417,7 +421,7 @@ func newJournalManifest(ctx context.Context, dir string) (m manifest, err error)
 	if errors.Is(err, fslock.ErrTimeout) {
 		readOnly, err = true, nil
 	} else if err != nil {
-		return nil, err
+		return journalManifest{}, err
 	}
 
 	m = journalManifest{dir: dir, readOnly: readOnly}
@@ -425,7 +429,7 @@ func newJournalManifest(ctx context.Context, dir string) (m manifest, err error)
 	var f *os.File
 	f, err = openIfExists(filepath.Join(dir, manifestFileName))
 	if err != nil {
-		return nil, err
+		return journalManifest{}, err
 	} else if f == nil {
 		return m, nil
 	}
@@ -438,9 +442,9 @@ func newJournalManifest(ctx context.Context, dir string) (m manifest, err error)
 	var ok bool
 	ok, _, err = m.ParseIfExists(ctx, &Stats{}, nil)
 	if err != nil {
-		return nil, err
+		return journalManifest{}, err
 	} else if !ok {
-		return nil, ErrUnreadableManifest
+		return journalManifest{}, ErrUnreadableManifest
 	}
 	return
 }
