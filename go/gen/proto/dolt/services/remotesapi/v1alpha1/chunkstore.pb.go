@@ -454,6 +454,7 @@ type DownloadLoc struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Location:
+	//
 	//	*DownloadLoc_HttpGet
 	//	*DownloadLoc_HttpGetRange
 	Location       isDownloadLoc_Location      `protobuf_oneof:"location"`
@@ -598,6 +599,7 @@ type UploadLoc struct {
 
 	TableFileHash []byte `protobuf:"bytes,1,opt,name=table_file_hash,json=tableFileHash,proto3" json:"table_file_hash,omitempty"`
 	// Types that are assignable to Location:
+	//
 	//	*UploadLoc_HttpPost
 	Location isUploadLoc_Location `protobuf_oneof:"location"`
 }

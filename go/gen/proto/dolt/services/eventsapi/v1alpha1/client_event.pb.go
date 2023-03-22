@@ -99,6 +99,7 @@ type ClientEventMetric struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to MetricOneof:
+	//
 	//	*ClientEventMetric_Duration
 	//	*ClientEventMetric_Count
 	MetricOneof isClientEventMetric_MetricOneof `protobuf_oneof:"metric_oneof"`
