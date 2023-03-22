@@ -55,8 +55,10 @@ jobs:
           (cd ../../proto/third_party/flatbuffers && bazel build //:flatc)
           ./generate.sh
           changes=$(git status --porcelain)
+          diff=$(git diff)
           if [ ! -z "$changes" ]; then
              echo "ERROR: Generated flatbuffer structs are different from the checked in version."
              echo "$changes"
+             echo "$diff"
              exit 1
           fi
