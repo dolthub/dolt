@@ -45,7 +45,7 @@ jobs:
           diff=$(git diff)
           if [ ! -z "$changes" ]; then
              echo "ERROR: Generated protobuf structs are different from the checked in version."
-             echo "changes"
+             echo "$changes"
              echo "$diff"
              exit 1
           fi
