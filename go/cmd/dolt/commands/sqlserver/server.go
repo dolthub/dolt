@@ -455,6 +455,7 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 	serverConf.MaxLoggedQueryLen = serverConfig.MaxLoggedQueryLen()
+	serverConf.EncodeLoggedQuery = serverConfig.ShouldEncodeLoggedQuery()
 
 	return serverConf, nil, nil
 }
