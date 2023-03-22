@@ -155,13 +155,10 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	requiresFunHash := apr.Contains(funHashFlag)
-	commitMeta := func() datas.CommitMetaGenerator {
-		if requiresFunHash {
-			return datas.MakeFunCommitMetaGenerator(name, email, t)
-		} else {
-			return datas.MakeCommitMetaGenerator(name, email, t)
-		}
-	}()
+	generator := datas.MakeCommitMetaGenerator(name, email, t)
+	if requiresFunHash {
+		generator = datas.MakeFunCommitMetaGenerator(name, email, t)
+	}
 
 	err := dEnv.InitRepoWithCommitMeta(context.Background(), types.Format_Default, initBranch, commitMeta)
 	if err != nil {
