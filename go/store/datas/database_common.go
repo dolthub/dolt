@@ -412,16 +412,38 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 	return err
 }
 
+func (db *database) BuildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error) {
+	if len(opts.Parents) == 0 {
+		headAddr, ok := ds.MaybeHeadAddr()
+		if ok {
+			opts.Parents = []hash.Hash{headAddr}
+		}
+	} else {
+		curr, ok := ds.MaybeHeadAddr()
+		if ok {
+			if !hasParentHash(opts, curr) {
+				return nil, ErrMergeNeeded
+			}
+		}
+	}
+
+	return newCommitForValue(ctx, ds.db.chunkStore(), ds.db, ds.db.nodeStore(), v, opts)
+}
+
 func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
-	currentAddr, _ := ds.MaybeHeadAddr()
-	commit, err := buildNewCommit(ctx, ds, v, opts)
+	commit, err := db.BuildNewCommit(ctx, ds, v, opts)
 	if err != nil {
 		return Dataset{}, err
 	}
+	return db.WriteCommit(ctx, ds, commit)
+}
+
+func (db *database) WriteCommit(ctx context.Context, ds Dataset, commit *Commit) (Dataset, error) {
+	currentAddr, _ := ds.MaybeHeadAddr()
 
 	val := commit.NomsValue()
 
-	_, err = db.WriteValue(ctx, val)
+	_, err := db.WriteValue(ctx, val)
 	if err != nil {
 		return Dataset{}, err
 	}
@@ -657,7 +679,7 @@ func (db *database) CommitWithWorkingSet(
 		}
 	}
 
-	commit, err := buildNewCommit(ctx, commitDS, val, opts)
+	commit, err := db.BuildNewCommit(ctx, commitDS, val, opts)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
 	}
@@ -894,24 +916,6 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	}
 
 	return v.(types.Struct), nil
-}
-
-func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error) {
-	if len(opts.Parents) == 0 {
-		headAddr, ok := ds.MaybeHeadAddr()
-		if ok {
-			opts.Parents = []hash.Hash{headAddr}
-		}
-	} else {
-		curr, ok := ds.MaybeHeadAddr()
-		if ok {
-			if !hasParentHash(opts, curr) {
-				return nil, ErrMergeNeeded
-			}
-		}
-	}
-
-	return newCommitForValue(ctx, ds.db.chunkStore(), ds.db, ds.db.nodeStore(), v, opts)
 }
 
 func hasParentHash(opts CommitOptions, curr hash.Hash) bool {
