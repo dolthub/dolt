@@ -91,10 +91,10 @@ setup_common() {
 
 teardown_common() {
     # rm -rf can fail with a "directory not empty" error in some cases. This seems to be a misleading
-    # error message and the real error is that a file is still in use, as describe here:
-    # https://superuser.com/questions/467059/trying-to-delete-directory-with-rm-rf-but-get-message-that-its-not-empty
-    # We return true from this function so that teardown will never fail the tests, even if it encounters a
-    # problem cleaning up temporary work dirs.
+    # error message; the real error is that a file is still in use. Instead of waiting longer for
+    # any processes to finish, we just ignore any error removing temp files and use 'true' as the last
+    # command in this function to ensure that teardown_common doesn't fail a test just because we
+    # couldn't delete any temporary test files.
     rm -rf "$BATS_TMPDIR/dolt-repo-$$"
     true
 }
