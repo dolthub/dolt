@@ -151,7 +151,7 @@ force_delete_main_branch_on_sqlserver() {
     [[ "$output" =~ "branch not found" ]] || false
 }
 
-@test "deleted-branches: dolt_checkout() from sql-server works when connected to a revision db and the db's default branch is invalid" {
+@test "deleted-branches: dolt_checkout() from sql-server doesn't panic when connected to a revision db and the db's default branch is invalid" {
     make_it
     dolt branch -c to_keep to_checkout
     start_sql_server "dolt_repo_$$"
