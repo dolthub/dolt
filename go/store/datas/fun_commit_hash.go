@@ -76,7 +76,6 @@ func (g *funHashCommitMetaGenerator) Next() (*CommitMeta, error) {
 }
 
 func (g *funHashCommitMetaGenerator) IsGoodCommit(commit *Commit) bool {
-
 	hashString := commit.Addr().String()
 	return g.regex.MatchString(hashString)
 }
