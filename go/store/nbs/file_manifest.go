@@ -359,6 +359,11 @@ func parseIfExists(_ context.Context, dir string, readHook func() error) (exists
 	} else if f == nil {
 		return false, manifestContents{}, nil
 	}
+	defer func() {
+		if cerr := f.Close(); err == nil {
+			err = cerr // keep first error
+		}
+	}()
 
 	contents, err = parseManifest(f)
 	if err != nil {
