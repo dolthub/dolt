@@ -170,7 +170,8 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
                                    b int not null default 42,
                                    c int not null default (24),
                                    d int not null default '-108',
-                                   e int not null default ((((7+11)))));`,
+                                   e int not null default ((((7+11)))),
+                                   f int default (now()))`,
 			`call dolt_commit('-Am', 'new table');`,
 			`create index tbl_bc on tbl (b,c);`,
 			`create unique index tbl_cbd on tbl (c,b,d);`,
@@ -186,10 +187,43 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 					"  `c` int NOT NULL DEFAULT (24),\n" + // Ensure these match setup above.
 					"  `d` int NOT NULL DEFAULT '-108',\n" + //
 					"  `e` int NOT NULL DEFAULT ((7 + 11)),\n" + // Matches MySQL behavior.
+					"  `f` int DEFAULT (NOW()),\n" + // MySql preserves now as lower case.
 					"  PRIMARY KEY (`a`),\n" +
 					"  KEY `tbl_bc` (`b`,`c`),\n" +
 					"  UNIQUE KEY `tbl_c` (`c`),\n" +
 					"  UNIQUE KEY `tbl_cbd` (`c`,`b`,`d`),\n" +
+					"  UNIQUE KEY `tbl_e` (`e`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		// "https://github.com/dolthub/dolt/issues/5478"
+		Name: "show table for default types with unique indexes no PK",
+		SetUpScript: []string{
+			`create table tbl (a int not null default (now()),
+                                   b int not null default 42,
+                                   c int not null default (24),
+                                   d int not null default '-108',
+                                   e int not null default ((((7+11)))));`,
+			`call dolt_commit('-Am', 'new table');`,
+			`create index tbl_bc on tbl (b,c);`,
+			`create unique index tbl_cab on tbl (c,a,b);`,
+			`create unique index tbl_c on tbl (c);`,
+			`create unique index tbl_e on tbl (e);`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "show create table tbl",
+				Expected: []sql.Row{sql.Row{"tbl", "CREATE TABLE `tbl` (\n" +
+					"  `a` int NOT NULL DEFAULT (NOW()),\n" + // MySql preserves now as lower case.
+					"  `b` int NOT NULL DEFAULT '42',\n" + //
+					"  `c` int NOT NULL DEFAULT (24),\n" + // Ensure these match setup above.
+					"  `d` int NOT NULL DEFAULT '-108',\n" + //
+					"  `e` int NOT NULL DEFAULT ((7 + 11)),\n" + // Matches MySQL behavior.
+					"  KEY `tbl_bc` (`b`,`c`),\n" +
+					"  UNIQUE KEY `tbl_c` (`c`),\n" +
+					"  UNIQUE KEY `tbl_cab` (`c`,`a`,`b`),\n" +
 					"  UNIQUE KEY `tbl_e` (`e`)\n" +
 					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
