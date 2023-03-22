@@ -173,7 +173,7 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 			}
 		}
 
-		if headOnCLI == branchName && sqlserver.RunningInServerMode() {
+		if headOnCLI == branchName && sqlserver.RunningInServerMode() && !shouldAllowDefaultBranchDeletion(ctx) {
 			return fmt.Errorf("unable to delete branch '%s', because it is the default branch for database '%s'; this can by changed on the command line, by stopping the sql-server, running `dolt checkout <another_branch> and restarting the sql-server", branchName, dbName)
 		}
 
@@ -186,6 +186,14 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 	}
 
 	return nil
+}
+
+// shouldAllowDefaultBranchDeletion returns true if the default branch deletion check should be
+// bypassed. This is determined by looking for the presence of an undocumented dolt user var,
+// dolt_allow_default_branch_deletion.
+func shouldAllowDefaultBranchDeletion(ctx *sql.Context) bool {
+	_, userVar, _ := ctx.Session.GetUserVariable(ctx, "dolt_allow_default_branch_deletion")
+	return userVar != nil
 }
 
 // validateBranchNotActiveInAnySessions returns an error if the specified branch is currently
