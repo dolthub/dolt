@@ -98,18 +98,26 @@ The {{.EmphasisLeft}}--diff-mode{{.EmphasisRight}} argument controls how modifie
 	},
 }
 
-type diffArgs struct {
+type diffDisplaySettings struct {
 	diffParts  diffPart
 	diffOutput diffOutput
 	diffMode   diff.Mode
-	fromRoot   *doltdb.RootValue
-	toRoot     *doltdb.RootValue
-	fromRef    string
-	toRef      string
-	tableSet   *set.StrSet
 	limit      int
 	where      string
 	skinny     bool
+}
+
+type diffDatasets struct {
+	fromRoot *doltdb.RootValue
+	toRoot   *doltdb.RootValue
+	fromRef  string
+	toRef    string
+}
+
+type diffArgs struct {
+	*diffDisplaySettings
+	*diffDatasets
+	tableSet *set.StrSet
 }
 
 type DiffCmd struct{}
@@ -167,9 +175,6 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	verr = diffUserTables(ctx, dEnv, dArgs)
-	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
-	}
 	return HandleVErrAndExitCode(verr, usage)
 }
 
@@ -190,69 +195,89 @@ func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 	return nil
 }
 
-func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*diffArgs, error) {
-	dArgs := &diffArgs{}
+func parseDiffDisplaySettings(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) *diffDisplaySettings {
+	displaySettings := &diffDisplaySettings{}
 
-	dArgs.diffParts = SchemaAndDataDiff
+	displaySettings.diffParts = SchemaAndDataDiff
 	if apr.Contains(DataFlag) && !apr.Contains(SchemaFlag) {
-		dArgs.diffParts = DataOnlyDiff
+		displaySettings.diffParts = DataOnlyDiff
 	} else if apr.Contains(SchemaFlag) && !apr.Contains(DataFlag) {
-		dArgs.diffParts = SchemaOnlyDiff
+		displaySettings.diffParts = SchemaOnlyDiff
 	} else if apr.Contains(StatFlag) {
-		dArgs.diffParts = Stat
+		displaySettings.diffParts = Stat
 	} else if apr.Contains(SummaryFlag) {
-		dArgs.diffParts = Summary
+		displaySettings.diffParts = Summary
 	}
 
-	dArgs.skinny = apr.Contains(SkinnyFlag)
+	displaySettings.skinny = apr.Contains(SkinnyFlag)
 
 	f := apr.GetValueOrDefault(FormatFlag, "tabular")
 	switch strings.ToLower(f) {
 	case "tabular":
-		dArgs.diffOutput = TabularDiffOutput
+		displaySettings.diffOutput = TabularDiffOutput
 		switch strings.ToLower(apr.GetValueOrDefault(DiffMode, "context")) {
 		case "row":
-			dArgs.diffMode = diff.ModeRow
+			displaySettings.diffMode = diff.ModeRow
 		case "line":
-			dArgs.diffMode = diff.ModeLine
+			displaySettings.diffMode = diff.ModeLine
 		case "in-place":
-			dArgs.diffMode = diff.ModeInPlace
+			displaySettings.diffMode = diff.ModeInPlace
 		case "context":
-			dArgs.diffMode = diff.ModeContext
+			displaySettings.diffMode = diff.ModeContext
 		}
 	case "sql":
-		dArgs.diffOutput = SQLDiffOutput
+		displaySettings.diffOutput = SQLDiffOutput
 	case "json":
-		dArgs.diffOutput = JsonDiffOutput
+		displaySettings.diffOutput = JsonDiffOutput
 	}
 
-	dArgs.limit, _ = apr.GetInt(limitParam)
-	dArgs.where = apr.GetValueOrDefault(whereParam, "")
+	displaySettings.limit, _ = apr.GetInt(limitParam)
+	displaySettings.where = apr.GetValueOrDefault(whereParam, "")
+
+	return displaySettings
+}
+
+func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*diffArgs, error) {
+	dArgs := &diffArgs{
+		diffDisplaySettings: parseDiffDisplaySettings(ctx, dEnv, apr),
+	}
 
 	tableNames, err := dArgs.applyDiffRoots(ctx, dEnv, apr.Args, apr.Contains(cli.CachedFlag), apr.Contains(MergeBase))
 	if err != nil {
 		return nil, err
 	}
 
-	dArgs.tableSet = set.NewStrSet(nil)
+	tableSet, err := parseDiffTableSet(ctx, dEnv, dArgs.diffDatasets, tableNames)
+	if err != nil {
+		return nil, err
+	}
+
+	dArgs.tableSet = tableSet
+
+	return dArgs, nil
+}
+
+func parseDiffTableSet(ctx context.Context, dEnv *env.DoltEnv, datasets *diffDatasets, tableNames []string) (*set.StrSet, error) {
+
+	tableSet := set.NewStrSet(nil)
 
 	for _, tableName := range tableNames {
 		// verify table args exist in at least one root
-		_, ok, err := dArgs.fromRoot.GetTable(ctx, tableName)
+		_, ok, err := datasets.fromRoot.GetTable(ctx, tableName)
 		if err != nil {
 			return nil, err
 		}
 		if ok {
-			dArgs.tableSet.Add(tableName)
+			tableSet.Add(tableName)
 			continue
 		}
 
-		_, ok, err = dArgs.toRoot.GetTable(ctx, tableName)
+		_, ok, err = datasets.toRoot.GetTable(ctx, tableName)
 		if err != nil {
 			return nil, err
 		}
 		if ok {
-			dArgs.tableSet.Add(tableName)
+			tableSet.Add(tableName)
 			continue
 		}
 		if !ok {
@@ -262,14 +287,14 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 
 	// if no tables or docs were specified as args, diff all tables and docs
 	if len(tableNames) == 0 {
-		utn, err := doltdb.UnionTableNames(ctx, dArgs.fromRoot, dArgs.toRoot)
+		utn, err := doltdb.UnionTableNames(ctx, datasets.fromRoot, datasets.toRoot)
 		if err != nil {
 			return nil, err
 		}
-		dArgs.tableSet.Add(utn...)
+		tableSet.Add(utn...)
 	}
 
-	return dArgs, nil
+	return tableSet, nil
 }
 
 // applyDiffRoots applies the appropriate |from| and |to| root values to the receiver and returns the table names
@@ -290,10 +315,13 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 		return nil, err
 	}
 
-	dArgs.fromRoot = stagedRoot
-	dArgs.fromRef = doltdb.Staged
-	dArgs.toRoot = workingRoot
-	dArgs.toRef = doltdb.Working
+	dArgs.diffDatasets = &diffDatasets{
+		fromRoot: stagedRoot,
+		fromRef:  doltdb.Staged,
+		toRoot:   workingRoot,
+		toRef:    doltdb.Working,
+	}
+
 	if isCached {
 		dArgs.fromRoot = headRoot
 		dArgs.fromRef = "HEAD"
