@@ -155,12 +155,12 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	requiresFunHash := apr.Contains(funHashFlag)
-	generator := datas.MakeCommitMetaGenerator(name, email, t)
+	commitMetaGenerator := datas.MakeCommitMetaGenerator(name, email, t)
 	if requiresFunHash {
-		generator = datas.MakeFunCommitMetaGenerator(name, email, t)
+		commitMetaGenerator = datas.MakeFunCommitMetaGenerator(name, email, t)
 	}
 
-	err := dEnv.InitRepoWithCommitMeta(context.Background(), types.Format_Default, initBranch, commitMeta)
+	err := dEnv.InitRepoWithCommitMetaGenerator(context.Background(), types.Format_Default, initBranch, commitMetaGenerator)
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to initialize directory as a data repo. %s", err.Error()))
 		return 1
