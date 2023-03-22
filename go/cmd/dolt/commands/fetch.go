@@ -78,6 +78,12 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
+	var verr errhand.VerboseError
+	dEnv.UserPassConfig, verr = getRemoteUserAndPassConfig(apr)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
 	srcDB, err := r.GetRemoteDBWithoutCaching(ctx, dEnv.DbData().Ddb.ValueReadWriter().Format(), dEnv)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
