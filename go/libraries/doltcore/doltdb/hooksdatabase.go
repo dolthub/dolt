@@ -96,6 +96,14 @@ func (db hooksDatabase) Commit(ctx context.Context, ds datas.Dataset, v types.Va
 	return ds, err
 }
 
+func (db hooksDatabase) WriteCommit(ctx context.Context, ds datas.Dataset, commit *datas.Commit) (datas.Dataset, error) {
+	ds, err := db.Database.WriteCommit(ctx, ds, commit)
+	if err == nil {
+		db.ExecuteCommitHooks(ctx, ds, false)
+	}
+	return ds, err
+}
+
 func (db hooksDatabase) SetHead(ctx context.Context, ds datas.Dataset, newHeadAddr hash.Hash) (datas.Dataset, error) {
 	ds, err := db.Database.SetHead(ctx, ds, newHeadAddr)
 	if err == nil {
