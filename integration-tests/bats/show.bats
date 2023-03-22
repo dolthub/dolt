@@ -78,9 +78,9 @@ teardown() {
     dolt add .
     dolt commit -m "commit: add values"
     
-	run dolt show
-	[ $status -eq 0 ]
-	[[ "$output" =~ "commit: add values" ]] || false
-	[[ "$output" =~ "|   | pk |" ]] || false
-	[[ "$output" =~ "| + | 4  |" ]] || false
+    run dolt show
+    [ $status -eq 0 ]
+    [[ "$output" =~ "commit: add values" ]] || false
+    [[ "$output" =~ "|   | pk |" ]] || false
+    [[ "$output" =~ "| + | 4  |" ]] || false
 }
