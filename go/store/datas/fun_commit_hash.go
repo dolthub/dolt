@@ -25,10 +25,17 @@ type funHashCommitMetaGenerator struct {
 	name, email string
 	timestamp   time.Time
 	attempt     int
+	regex       *regexp.Regexp
 }
 
 func MakeFunCommitMetaGenerator(name, email string, timestamp time.Time) CommitMetaGenerator {
-	return &funHashCommitMetaGenerator{name: name, email: email, timestamp: timestamp, attempt: 0}
+	return &funHashCommitMetaGenerator{
+		name:      name,
+		email:     email,
+		timestamp: timestamp,
+		attempt:   0,
+		regex:     regexp.MustCompile("^d[o0][1l]t"),
+	}
 }
 
 // Each entry in this array represents a character in the default initial commit message
@@ -69,8 +76,7 @@ func (g *funHashCommitMetaGenerator) Next() (*CommitMeta, error) {
 }
 
 func (g *funHashCommitMetaGenerator) IsGoodCommit(commit *Commit) bool {
-	var funRegExp = regexp.MustCompile("^d[o0][1l]t")
 
 	hashString := commit.Addr().String()
-	return funRegExp.MatchString(hashString)
+	return g.regex.MatchString(hashString)
 }
