@@ -447,25 +447,16 @@ func (itr *doltColDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Con
 		return nil, err
 	}
 
-	tableChanges := make([]tableColChange, len(deltas))
-	tableChangeIdx := 0
+	tableChanges := make([]tableColChange, 0)
 	for i := 0; i < len(deltas); i++ {
 		change, err := processTableColDelta(itr.ctx, itr.ddb, deltas[i])
 		if err != nil {
 			return nil, err
 		}
 
-		// filter out changes that have no modified columns
+		// only add changes that have modified columns
 		if len(change.colNames) != 0 {
-			tableChanges[tableChangeIdx] = *change
-			tableChangeIdx++
-		} else {
-			// remove table changes that don't have any modified columns
-			if tableChangeIdx == len(tableChanges)-1 {
-				tableChanges = tableChanges[:tableChangeIdx]
-			} else {
-				tableChanges = append(tableChanges[:tableChangeIdx], tableChanges[tableChangeIdx+1:]...)
-			}
+			tableChanges = append(tableChanges, *change)
 		}
 	}
 
