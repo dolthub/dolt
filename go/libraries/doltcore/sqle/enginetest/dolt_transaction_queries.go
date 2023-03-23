@@ -1751,6 +1751,69 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 		},
 	},
 	{
+		Name: "staged changes in working set, dolt_add and dolt_commit on top of it",
+		SetUpScript: []string{
+			"create table users (id int primary key, name varchar(32))",
+			"insert into users values (1, 'tim'), (2, 'jim')",
+			"call dolt_commit('-A', '-m', 'initial commit')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ update users set name = 'tim2' where name = 'tim'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ update users set name = 'jim2' where name = 'jim'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ call dolt_add('users')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ commit",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ call dolt_add('users')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from users order by id",
+				Expected: []sql.Row{{1, "tim"}, {2, "jim2"}},
+			},
+			{
+				Query:    "/* client b */ call dolt_commit('-am', 'jim2 commit')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from users order by id",
+				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+			},
+			{
+				Query:    "/* client b */ select * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
+				Expected: []sql.Row{},
+			},
+			{
+				// staged changes include changes from both A and B at staged revision of data
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
 		Name: "call dolt_commit commits staged stuff, merges with working set and branch head",
 		SetUpScript: []string{
 			"create table t1 (id int primary key, val int)",
