@@ -1791,7 +1791,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{{1, "tim"}, {2, "jim2"}},
 			},
 			{
-				Query:    "/* client b */ call dolt_commit('-am', 'jim2 commit')",
+				Query:    "/* client b */ call dolt_commit('-m', 'jim2 commit')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -1799,16 +1799,20 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
 			},
 			{
+				Query:    "/* client b */ select * from users as of 'HEAD' order by id",
+				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+			},
+			{
 				Query:    "/* client b */ select * from dolt_status",
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
+				Query: "/* client b */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
 				Expected: []sql.Row{},
 			},
 			{
 				// staged changes include changes from both A and B at staged revision of data
-				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
+				Query: "/* client b */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
 				Expected: []sql.Row{},
 			},
 		},

@@ -156,7 +156,12 @@ func doltCommit(ctx *sql.Context,
 		return nil, nil, err
 	}
 
-	// We check if the branch HEAD has changed since our transaction started.
+	// We already got a new staged root via merge or ff via the doCommit method, so now apply it to the STAGED value
+	// we're about to commit.
+	pending.Roots.Staged = workingSet.StagedRoot()
+
+	// We check if the branch HEAD has changed since our transaction started and perform an additional merge if so. The 
+	// non-dolt-commit transaction logic only merges working sets and doesn't consider the HEAD value.
 	if curHead != nil {
 		curRootVal, err := curHead.ResolveRootValue(ctx)
 		if err != nil {
@@ -394,6 +399,7 @@ const (
 //
 // The justification for this behavior is that we want to protect the working
 // set from constraint violations with the above settings.
+// TODO: should this validate staged as well?
 func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, workingSet *doltdb.WorkingSet, isFf ffMerge) error {
 	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
 	if err != nil {
