@@ -43,7 +43,7 @@ import (
 
 // ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
 // the updated root, or an error. Statements in the input string are split by `;\n`
-func ExecuteSql(dEnv *env.DoltEnv, statements string) (*doltdb.RootValue, error) {
+func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
 		return nil, err
@@ -382,7 +382,7 @@ func CreateEnvWithSeedData() (*env.DoltEnv, error) {
 		return nil, err
 	}
 
-	root, err = ExecuteSql(dEnv, seedData)
+	root, err = ExecuteSql(dEnv, root, seedData)
 	if err != nil {
 		return nil, err
 	}
@@ -526,7 +526,7 @@ func CreateTestDatabase() (*env.DoltEnv, error) {
 		return nil, err
 	}
 
-	root, err = ExecuteSql(dEnv, simpsonsRowData)
+	root, err = ExecuteSql(dEnv, root, simpsonsRowData)
 	if err != nil {
 		return nil, err
 	}

@@ -189,7 +189,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	require.NoError(t, err)
 	err = dEnv.UpdateWorkingRoot(ctx, root)
 	require.NoError(t, err)
-	root, err = ExecuteSql(dEnv, queries)
+	root, err = ExecuteSql(dEnv, root, queries)
 	require.NoError(t, err)
 	err = dEnv.UpdateWorkingRoot(ctx, root)
 	require.NoError(t, err)
@@ -199,7 +199,7 @@ func ExecuteSetupSQL(ctx context.Context, queries string) SetupFn {
 	return func(t *testing.T, dEnv *env.DoltEnv) {
 		root, err := dEnv.WorkingRoot(ctx)
 		require.NoError(t, err)
-		root, err = ExecuteSql(dEnv, queries)
+		root, err = ExecuteSql(dEnv, root, queries)
 		require.NoError(t, err)
 		err = dEnv.UpdateWorkingRoot(ctx, root)
 		require.NoError(t, err)

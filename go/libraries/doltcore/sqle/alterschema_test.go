@@ -88,7 +88,7 @@ func TestRenameTable(t *testing.T) {
 			require.NoError(t, err)
 
 			// setup tests
-			root, err = ExecuteSql(dEnv, setup)
+			root, err = ExecuteSql(dEnv, root, setup)
 			require.NoError(t, err)
 
 			schemas, err := root.GetAllSchemas(ctx)
