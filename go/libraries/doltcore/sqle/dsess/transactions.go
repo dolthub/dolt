@@ -251,7 +251,7 @@ func (tx *DoltTransaction) doCommit(
 				return nil, nil, err
 			}
 
-			if newWorkingSet || rootsEqual(existingWs.WorkingRoot(), tx.startState.WorkingRoot()) {
+			if newWorkingSet || workingAndStagedEqual(existingWs, tx.startState) {
 				// ff merge
 				err = tx.validateWorkingSetForCommit(ctx, workingSet, isFfMerge)
 				if err != nil {
@@ -308,24 +308,46 @@ func (tx *DoltTransaction) doCommit(
 
 // mergeRoots merges the roots in the existing working set with the one being committed and returns the resulting
 // working set. Conflicts are automatically resolved with "accept ours" if the session settings dictate it.
+// Currently merges working and staged roots as necessary. HEAD root is only handled by the DoltCommit function.
 func (tx *DoltTransaction) mergeRoots(
 	ctx *sql.Context,
-	existingWorkingRoot *doltdb.WorkingSet,
+	existingWorkingSet *doltdb.WorkingSet,
 	workingSet *doltdb.WorkingSet,
 ) (*doltdb.WorkingSet, error) {
-	mergedRoot, _, err := merge.MergeRoots(
-		ctx,
-		existingWorkingRoot.WorkingRoot(),
-		workingSet.WorkingRoot(),
-		tx.startState.WorkingRoot(),
-		workingSet,
-		tx.startState,
-		tx.mergeEditOpts,
-		merge.MergeOpts{})
-	if err != nil {
-		return nil, err
+	
+	if !rootsEqual(existingWorkingSet.WorkingRoot(), workingSet.WorkingRoot()) {
+		mergedRoot, _, err := merge.MergeRoots(
+			ctx,
+			existingWorkingSet.WorkingRoot(),
+			workingSet.WorkingRoot(),
+			tx.startState.WorkingRoot(),
+			workingSet,
+			tx.startState,
+			tx.mergeEditOpts,
+			merge.MergeOpts{})
+		if err != nil {
+			return nil, err
+		}
+		workingSet = workingSet.WithWorkingRoot(mergedRoot)
 	}
-	return workingSet.WithWorkingRoot(mergedRoot), nil
+
+	if !rootsEqual(existingWorkingSet.StagedRoot(), workingSet.StagedRoot()) {
+		mergedRoot, _, err := merge.MergeRoots(
+			ctx,
+			existingWorkingSet.StagedRoot(),
+			workingSet.StagedRoot(),
+			tx.startState.StagedRoot(),
+			workingSet,
+			tx.startState,
+			tx.mergeEditOpts,
+			merge.MergeOpts{})
+		if err != nil {
+			return nil, err
+		}
+		workingSet = workingSet.WithStagedRoot(mergedRoot)
+	}
+
+	return workingSet, nil
 }
 
 // rollback attempts a transaction rollback
@@ -516,4 +538,8 @@ func rootsEqual(left, right *doltdb.RootValue) bool {
 	}
 
 	return lh == rh
+}
+
+func workingAndStagedEqual(left, right *doltdb.WorkingSet) bool {
+	return rootsEqual(left.WorkingRoot(), right.WorkingRoot()) && rootsEqual(left.StagedRoot(), right.StagedRoot())
 }

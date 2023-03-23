@@ -1603,7 +1603,6 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 				Query:    "/* client a */ select * from dolt_status",
 				Expected: []sql.Row{
 					{"users", true, "modified"},
-					{"users", false, "modified"},
 				},
 			},
 			{
@@ -1611,7 +1610,6 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 				Query:    "/* client b */ select * from dolt_status",
 				Expected: []sql.Row{
 					{"users", true, "modified"},
-					{"users", false, "modified"},
 				},
 			},
 			{
@@ -1619,7 +1617,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
 				Expected: []sql.Row{
 					{1, 1, "tim", "tim2"},
-					{1, 1, "jim", "jim2"},
+					{2, 2, "jim", "jim2"},
 				},
 			},
 			{
@@ -1627,7 +1625,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
 				Expected: []sql.Row{
 					{1, 1, "tim", "tim2"},
-					{1, 1, "jim", "jim2"},
+					{2, 2, "jim", "jim2"},
 				},
 			},
 		},
