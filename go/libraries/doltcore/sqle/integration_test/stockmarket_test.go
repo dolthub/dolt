@@ -20132,7 +20132,7 @@ func TestCreateTables(t *testing.T) {
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqle.ExecuteSql(dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, createTables)
 	require.NoError(t, err)
 
 	table, _, err := root.GetTable(ctx, "daily_summary")
@@ -20154,10 +20154,10 @@ func TestInserts(t *testing.T) {
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqle.ExecuteSql(dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, createTables)
 	require.NoError(t, err)
 
-	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
+	root, err = sqle.ExecuteSql(dEnv, insertRows)
 	require.NoError(t, err)
 
 	table, _, err := root.GetTable(ctx, "daily_summary")
@@ -20183,13 +20183,13 @@ func TestInsertsWithIndexes(t *testing.T) {
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqle.ExecuteSql(dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, createTables)
 	require.NoError(t, err)
 
-	root, err = sqle.ExecuteSql(dEnv, root, createIndexes)
+	root, err = sqle.ExecuteSql(dEnv, createIndexes)
 	require.NoError(t, err)
 
-	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
+	root, err = sqle.ExecuteSql(dEnv, insertRows)
 	require.NoError(t, err)
 
 	table, _, err := root.GetTable(ctx, "daily_summary")
@@ -20218,10 +20218,10 @@ func TestJoin(t *testing.T) {
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqle.ExecuteSql(dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, createTables)
 	require.NoError(t, err)
 
-	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
+	root, err = sqle.ExecuteSql(dEnv, insertRows)
 	require.NoError(t, err)
 
 	rows, err := sqle.ExecuteSelect(dEnv, root, `select Type, d.Symbol, Country, TradingDate, Open, High, Low, Close, Volume, OpenInt, Name, Sector, IPOYear
@@ -20266,11 +20266,11 @@ func TestExplain(t *testing.T) {
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqle.ExecuteSql(dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, createTables)
 	require.NoError(t, err)
 
 	// insert test data to generate a realistic plan
-	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
+	root, err = sqle.ExecuteSql(dEnv, insertRows)
 	require.NoError(t, err)
 
 	rows, err := sqle.ExecuteSelect(dEnv, root, "explain select * from daily_summary d join symbols t on d.Symbol = t.Symbol")

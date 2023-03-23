@@ -38,7 +38,7 @@ func setupEditorFkTest(t *testing.T) (*env.DoltEnv, *doltdb.RootValue) {
 	if err != nil {
 		panic(err)
 	}
-	initialRoot, err := ExecuteSql(dEnv, root, `
+	initialRoot, err := ExecuteSql(dEnv, `
 CREATE TABLE one (
   pk BIGINT PRIMARY KEY,
   v1 BIGINT,
@@ -154,7 +154,7 @@ func TestTableEditorForeignKeyCascade(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			dEnv, initialRoot := setupEditorFkTest(t)
 
-			testRoot, err := ExecuteSql(dEnv, initialRoot, `
+			testRoot, err := ExecuteSql(dEnv, `
 ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASCADE ON UPDATE CASCADE;
 `)
@@ -203,7 +203,7 @@ func TestTableEditorForeignKeySetNull(t *testing.T) {
 		t.Run(test.sqlStatement, func(t *testing.T) {
 			dEnv, initialRoot := setupEditorFkTest(t)
 
-			testRoot, err := ExecuteSql(dEnv, initialRoot, `
+			testRoot, err := ExecuteSql(dEnv, `
 ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE SET NULL ON UPDATE SET NULL;`)
 			require.NoError(t, err)
 
@@ -285,7 +285,7 @@ func TestTableEditorForeignKeyRestrict(t *testing.T) {
 				t.Run(test.setup+test.trigger, func(t *testing.T) {
 					dEnv, initialRoot := setupEditorFkTest(t)
 
-					testRoot, err := ExecuteSql(dEnv, initialRoot, fmt.Sprintf(`
+					testRoot, err := ExecuteSql(dEnv, fmt.Sprintf(`
 			ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) %s;
 			INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 			INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);`, referenceOption))
@@ -356,7 +356,7 @@ func TestTableEditorForeignKeyViolations(t *testing.T) {
 		t.Run(test.setup+test.trigger, func(t *testing.T) {
 			dEnv, initialRoot := setupEditorFkTest(t)
 
-			testRoot, err := ExecuteSql(dEnv, initialRoot, `
+			testRoot, err := ExecuteSql(dEnv, `
 ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASCADE ON UPDATE CASCADE;
 `)
@@ -740,7 +740,7 @@ func setupEditorKeylessFkTest(t *testing.T) (*env.DoltEnv, *doltdb.RootValue) {
 	if err != nil {
 		panic(err)
 	}
-	initialRoot, err := ExecuteSql(dEnv, root, `
+	initialRoot, err := ExecuteSql(dEnv, `
 CREATE TABLE one (
   pk BIGINT,
   v1 BIGINT,
@@ -858,7 +858,7 @@ func TestTableEditorKeylessFKCascade(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			dEnv, initialRoot := setupEditorKeylessFkTest(t)
 
-			testRoot, err := ExecuteSql(dEnv, initialRoot, `
+			testRoot, err := ExecuteSql(dEnv, `
 ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASCADE ON UPDATE CASCADE;
 `)
