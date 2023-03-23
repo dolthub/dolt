@@ -786,7 +786,7 @@ func TestTransactions(t *testing.T) {
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
-	for _, script := range DoltSqlFuncTransactionTests {
+	for _, script := range DoltStoredProcedureTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 	for _, script := range DoltConflictHandlingTests {
