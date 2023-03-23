@@ -66,7 +66,18 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 	// TODO: This logic is broken if the common cols are in the same order, but one dropped, one added so length is the same
 	schemasDifferentSize := len(tm.leftSch.GetAllCols().GetColumns()) != len(mergedSch.GetAllCols().GetColumns())
 	if schemasDifferentSize || leftMapping.ReordersColumns() {
-		migrateDataToMergedSchema(ctx, tm, valueMerger, mergedSch)
+		if err := migrateDataToMergedSchema(ctx, tm, valueMerger, mergedSch); err != nil {
+			return nil, nil, err
+		}
+
+		// After we migrate the data on the left-side to the new, merged schema, we can reset
+		// the left mapping to an identity mapping, since it's a direct mapping now.
+		// TODO: We also need to update valueMerger's TupleDescription with the changes...
+		//       we can't update the left data's schema to the merged schema and then use the
+		//       old left data TupleDescription, or we will pull out the wrong bytes/types!
+		// valueMerger.vD = mergedSch.GetValueDescriptor() // TODO: is this right?
+		// TODO: Add a test that triggers this!
+		valueMerger.leftMapping = val.NewIdentityOrdinalMapping(len(valueMerger.leftMapping))
 	}
 
 	// After we've migrated the existing data to the new schema, it's safe for us to update the schema on the table

@@ -31,6 +31,15 @@ const (
 // It's used to construct index tuples from another index's tuples.
 type OrdinalMapping []int
 
+// NewIdentityOrdinalMapping returns a new OrdinalMapping that maps every ordinal to itself.
+func NewIdentityOrdinalMapping(size int) OrdinalMapping {
+	newMapping := make(OrdinalMapping, size)
+	for i := 0; i < size; i++ {
+		newMapping[i] = i
+	}
+	return newMapping
+}
+
 // MapOrdinal returns the ordinal of the field in the source tuple that maps to the |to| ordinal in the destination tuple.
 func (om OrdinalMapping) MapOrdinal(to int) (from int) {
 	from = om[to]
