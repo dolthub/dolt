@@ -159,7 +159,6 @@ func MergeRoots(
 			if err != nil {
 				return nil, nil, err
 			}
-
 		} else {
 			// This is a deleted table that the merge root still has
 			if stats.Operation != TableRemoved {
