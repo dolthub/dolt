@@ -1599,14 +1599,14 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
 			},
 			{
-				// dirty working set: client a's changes were not committed to head, but modifications are staged and unstaged
+				// dirty working set: modifications are staged
 				Query:    "/* client a */ select * from dolt_status",
 				Expected: []sql.Row{
 					{"users", true, "modified"},
 				},
 			},
 			{
-				// dirty working set: client b's changes were not committed to head, but modifications are staged and unstaged
+				// dirty working set: modifications are staged
 				Query:    "/* client b */ select * from dolt_status",
 				Expected: []sql.Row{
 					{"users", true, "modified"},
@@ -1626,6 +1626,126 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{
 					{1, 1, "tim", "tim2"},
 					{2, 2, "jim", "jim2"},
+				},
+			},
+		},
+	},
+	{
+		Name: "staged and unstaged changes in working set",
+		SetUpScript: []string{
+			"create table users (id int primary key, name varchar(32))",
+			"insert into users values (1, 'tim'), (2, 'jim')",
+			"call dolt_commit('-A', '-m', 'initial commit')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ update users set name = 'tim2' where name = 'tim'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ update users set name = 'jim2' where name = 'jim'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ call dolt_add('users')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ call dolt_add('users')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ update users set name = 'tim3' where name = 'tim2'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ update users set name = 'jim3' where name = 'jim2'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ commit",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ commit",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select * from users order by id",
+				Expected: []sql.Row{{1, "tim3"}, {2, "jim3"}},
+			},
+			{
+				Query:    "/* client b */ select * from users order by id",
+				Expected: []sql.Row{{1, "tim3"}, {2, "jim3"}},
+			},
+			{
+				// dirty working set: modifications are staged and unstaged
+				Query:    "/* client a */ select * from dolt_status",
+				Expected: []sql.Row{
+					{"users", true, "modified"},
+					{"users", false, "modified"},
+				},
+			},
+			{
+				// dirty working set: modifications are staged and unstaged
+				Query:    "/* client b */ select * from dolt_status",
+				Expected: []sql.Row{
+					{"users", true, "modified"},
+					{"users", false, "modified"},
+				},
+			},
+			{
+				// staged changes include changes from both A and B at staged revision of data
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
+				Expected: []sql.Row{
+					{1, 1, "tim", "tim2"},
+					{2, 2, "jim", "jim2"},
+				},
+			},
+			{
+				// staged changes include changes from both A and B at staged revision of data
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
+				Expected: []sql.Row{
+					{1, 1, "tim", "tim2"},
+					{2, 2, "jim", "jim2"},
+				},
+			},
+			{
+				// working changes include changes from both A and B at working revision of data
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
+				Expected: []sql.Row{
+					{1, 1, "tim", "tim3"},
+					{2, 2, "jim", "jim3"},
+				},
+			},
+			{
+				// working changes include changes from both A and B at working revision of data
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
+				Expected: []sql.Row{
+					{1, 1, "tim", "tim3"},
+					{2, 2, "jim", "jim3"},
+				},
+			},
+			{
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('STAGED', 'WORKING', 'users') order by from_id, to_id",
+				Expected: []sql.Row{
+					{1, 1, "tim2", "tim3"},
+					{2, 2, "jim2", "jim3"},
+				},
+			},
+			{
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('STAGED', 'WORKING', 'users') order by from_id, to_id",
+				Expected: []sql.Row{
+					{1, 1, "tim2", "tim3"},
+					{2, 2, "jim2", "jim3"},
 				},
 			},
 		},
