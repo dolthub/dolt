@@ -191,10 +191,10 @@ func doltCommit(ctx *sql.Context,
 			if err != nil {
 				return nil, nil, err
 			}
-			
+
 			// We also need to update the working set to reflect the new staged root value
 			workingSet = workingSet.WithStagedRoot(pending.Roots.Staged)
-			
+
 			logrus.Tracef("staged and HEAD merge took %s", time.Since(start))
 		}
 	}
@@ -314,7 +314,7 @@ func (tx *DoltTransaction) mergeRoots(
 	existingWorkingSet *doltdb.WorkingSet,
 	workingSet *doltdb.WorkingSet,
 ) (*doltdb.WorkingSet, error) {
-	
+
 	if !rootsEqual(existingWorkingSet.WorkingRoot(), workingSet.WorkingRoot()) {
 		mergedRoot, _, err := merge.MergeRoots(
 			ctx,
