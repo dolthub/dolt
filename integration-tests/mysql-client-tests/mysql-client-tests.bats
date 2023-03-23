@@ -135,7 +135,7 @@ CREATE USER MAPPING FOR postgres
 CREATE FOREIGN TABLE warehouse
         (
                 warehouse_id int,
-                warehouse_name char(128)
+                warehouse_name text
         )
         SERVER mysql_server
         OPTIONS (dbname '$REPO_NAME', table_name 'warehouse');
