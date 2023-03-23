@@ -559,7 +559,7 @@ func makeRoot(t *testing.T, tbl table) *doltdb.RootValue {
 		sb.WriteString(stmt)
 	}
 	denv := dtestutils.CreateTestEnv()
-	root, err := sqle.ExecuteSql(denv, sb.String())
+	root, err := sqle.ExecuteSql(denv, nil, sb.String())
 	assert.NoError(t, err)
 	return root
 }
