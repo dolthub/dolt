@@ -137,11 +137,11 @@ func mergeProllyTableData(ctx context.Context, tm TableMerger, finalSch schema.S
 
 	keyless := schema.IsKeyless(tm.leftSch)
 
-	pri, err := newPrimaryMerger(leftRows)
+	pri, err := newPrimaryMerger(leftRows, valueMerger, finalSch)
 	if err != nil {
 		return nil, nil, err
 	}
-	sec, err := newSecondaryMerger(ctx, tm, finalSch)
+	sec, err := newSecondaryMerger(ctx, tm)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -168,6 +168,8 @@ func mergeProllyTableData(ctx context.Context, tm TableMerger, finalSch schema.S
 
 		switch diff.Op {
 		case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
+			// In this case, a modification or delete was made to one side, and a conflicting delete or modification
+			// was made to the other side, so these cannot be automatically resolved.
 			s.Conflicts++
 			err = conflicts.merge(ctx, diff)
 			if err != nil {
@@ -179,7 +181,7 @@ func mergeProllyTableData(ctx context.Context, tm TableMerger, finalSch schema.S
 			}
 		case tree.DiffOpRightAdd:
 			s.Adds++
-			err = pri.merge(ctx, diff)
+			err = pri.merge(ctx, diff, tm.rightSch)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -194,7 +196,7 @@ func mergeProllyTableData(ctx context.Context, tm TableMerger, finalSch schema.S
 			s.Conflicts += cnt
 		case tree.DiffOpRightModify:
 			s.Modifications++
-			err = pri.merge(ctx, diff)
+			err = pri.merge(ctx, diff, tm.rightSch)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -209,7 +211,7 @@ func mergeProllyTableData(ctx context.Context, tm TableMerger, finalSch schema.S
 			s.Conflicts += cnt
 		case tree.DiffOpRightDelete:
 			s.Deletes++
-			err = pri.merge(ctx, diff)
+			err = pri.merge(ctx, diff, tm.rightSch)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -218,8 +220,12 @@ func mergeProllyTableData(ctx context.Context, tm TableMerger, finalSch schema.S
 				return nil, nil, err
 			}
 		case tree.DiffOpDivergentModifyResolved:
+			// In this case, both sides of the merge have made different changes to a row, but we were able to
+			// resolve them automatically.
 			s.Modifications++
-			err = pri.merge(ctx, diff)
+			// TODO: In this case... we DON'T want to map columns, since they have already been remapped by tryMerge.
+			//       We pass in nil here for the schema to signal that, but that's pretty hacky and should be cleaned up.
+			err = pri.merge(ctx, diff, nil)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -233,6 +239,7 @@ func mergeProllyTableData(ctx context.Context, tm TableMerger, finalSch schema.S
 			}
 			s.Conflicts += cnt
 		case tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify, tree.DiffOpConvergentDelete:
+			// In this case, both sides of the merge have made the same change, so no additional changes are needed.
 			if keyless {
 				s.Conflicts++
 				err = conflicts.merge(ctx, diff)
@@ -241,6 +248,8 @@ func mergeProllyTableData(ctx context.Context, tm TableMerger, finalSch schema.S
 				}
 			}
 		default:
+			// Currently, all changes are applied to the left-side of the merge, so for any left-side diff ops,
+			// we can simply ignore them since that data is already in the destination (the left-side).
 		}
 	}
 
@@ -323,9 +332,7 @@ func threeWayDiffer(ctx context.Context, tm TableMerger, valueMerger *valueMerge
 	}
 	ancRows := durable.ProllyMapFromIndex(ar)
 
-	vMerger := newValueMerger(finalSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool())
-
-	return tree.NewThreeWayDiffer(ctx, leftRows.NodeStore(), leftRows.Tuples(), rightRows.Tuples(), ancRows.Tuples(), vMerger.tryMerge, vMerger.keyless, leftRows.Tuples().Order)
+	return tree.NewThreeWayDiffer(ctx, leftRows.NodeStore(), leftRows.Tuples(), rightRows.Tuples(), ancRows.Tuples(), valueMerger.tryMerge, valueMerger.keyless, leftRows.Tuples().Order)
 }
 
 const uniqAddValidatorPendingSize = 650_000
@@ -561,7 +568,9 @@ type diffMerger interface {
 }
 
 var _ diffMerger = (*conflictMerger)(nil)
-var _ diffMerger = (*primaryMerger)(nil)
+
+// TODO: We don't actually use this diffMerger interface anywhere
+// var _ diffMerger = (*primaryMerger)(nil)
 var _ diffMerger = (*secondaryMerger)(nil)
 
 // conflictMerger processing primary key diffs
@@ -638,29 +647,57 @@ func (m *conflictMerger) finalize(ctx context.Context) (durable.ArtifactIndex, e
 // primaryMerger translates three-way diffs
 // on the primary index into merge-left updates.
 type primaryMerger struct {
-	serializer message.ProllyMapSerializer
-	keyDesc    val.TupleDesc
-	valDesc    val.TupleDesc
-	ns         tree.NodeStore
-	root       tree.Node
-	cur        *tree.Cursor
-	mut        *prolly.MutableMap
-	key, value val.Tuple
+	serializer  message.ProllyMapSerializer
+	keyDesc     val.TupleDesc
+	valDesc     val.TupleDesc
+	ns          tree.NodeStore
+	root        tree.Node
+	cur         *tree.Cursor
+	mut         *prolly.MutableMap
+	key, value  val.Tuple
+	valueMerger *valueMerger
+	finalSch    schema.Schema
 }
 
-func newPrimaryMerger(leftRows prolly.Map) (*primaryMerger, error) {
+func newPrimaryMerger(leftRows prolly.Map, valueMerger *valueMerger, finalSch schema.Schema) (*primaryMerger, error) {
 	return &primaryMerger{
-		mut: leftRows.Mutate(),
+		mut:         leftRows.Mutate(),
+		valueMerger: valueMerger,
+		finalSch:    finalSch,
 	}, nil
 }
 
-func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff) error {
+// TODO: GODOCS
+func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourceSch schema.Schema) error {
 	newKey := diff.Key
 	var newValue val.Tuple
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify, tree.DiffOpRightDelete:
 		newValue = diff.Right
+		rightMapping := m.valueMerger.rightMapping
+
+		// TODO: This is a hack... if a conflict has been automatically resolved, then the tryMerge callback func
+		//       has already mapped the diff to the right columns for us, so we don't need to run this mapping
+		//       logic here. Ideally, the column mapping would happen at the same layer in the code and all in
+		//       one place, but that may not be possible.
+		// NEXT STEP: Need to dig into the tryMerge code and see how it's using the OrdinalMappings and see if
+		//            it's changeable. If it's not... then maybe the ThreeWayDiff should have a flag that say
+		//            if the columns have been mapped or not? That would be cleaner than this hack.
+		if sourceSch != nil {
+			finalSchNonPKColCount := len(m.finalSch.GetNonPKCols().GetColumns())
+			modifiedValue := make([][]byte, finalSchNonPKColCount)
+			for i := 0; i < finalSchNonPKColCount; i++ {
+				fromOrdinal := rightMapping.MapOrdinal(i)
+				if fromOrdinal == -1 {
+					continue
+				}
+				modifiedValue[i] = sourceSch.GetValueDescriptor().GetField(fromOrdinal, newValue)
+			}
+			newValue = val.NewTuple(m.valueMerger.syncPool, modifiedValue...)
+		}
 	case tree.DiffOpDivergentModifyResolved:
+		// TODO: Does this case work correctly already? i.e. does it not need it's data to be shifted by the ordinal mapping?
+		//       Tests aren't currently covering this path yet, so need to add something here.
 		newValue = diff.Merged
 	default:
 		return fmt.Errorf("unexpected diffOp for editing primary index: %s", diff.Op)
@@ -686,7 +723,7 @@ type secondaryMerger struct {
 
 const secondaryMergerPendingSize = 650_000
 
-func newSecondaryMerger(ctx context.Context, tm TableMerger, finalSch schema.Schema) (*secondaryMerger, error) {
+func newSecondaryMerger(ctx context.Context, tm TableMerger) (*secondaryMerger, error) {
 	ls, err := tm.leftTbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
