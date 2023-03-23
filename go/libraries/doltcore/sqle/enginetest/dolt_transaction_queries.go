@@ -1444,27 +1444,27 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "/* client a */ start transaction",
+				Query:            "/* client a */ start transaction",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ start transaction",
+				Query:            "/* client b */ start transaction",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ update users set name = 'tim2' where name = 'tim'",
+				Query:            "/* client a */ update users set name = 'tim2' where name = 'tim'",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ update users set name = 'jim2' where name = 'jim'",
+				Query:            "/* client b */ update users set name = 'jim2' where name = 'jim'",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ call dolt_commit('-A', '-m', 'update tim')",
+				Query:            "/* client a */ call dolt_commit('-A', '-m', 'update tim')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ call dolt_commit('-A', '-m', 'update jim')",
+				Query:            "/* client b */ call dolt_commit('-A', '-m', 'update jim')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -1494,27 +1494,27 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "/* client a */ start transaction",
+				Query:            "/* client a */ start transaction",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ start transaction",
+				Query:            "/* client b */ start transaction",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ update users set name = 'tim2' where name = 'tim'",
+				Query:            "/* client a */ update users set name = 'tim2' where name = 'tim'",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ update users set name = 'jim2' where name = 'jim'",
+				Query:            "/* client b */ update users set name = 'jim2' where name = 'jim'",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ commit",
+				Query:            "/* client a */ commit",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ call dolt_commit('-A', '-m', 'update jim')",
+				Query:            "/* client b */ call dolt_commit('-A', '-m', 'update jim')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -1524,7 +1524,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				// dirty working set: client a's changes were not committed to head, but are visible to client b
-				Query:    "/* client b */ select * from dolt_status", 
+				Query:    "/* client b */ select * from dolt_status",
 				Expected: []sql.Row{{"users", false, "modified"}},
 			},
 			{
@@ -1559,35 +1559,35 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "/* client a */ start transaction",
+				Query:            "/* client a */ start transaction",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ start transaction",
+				Query:            "/* client b */ start transaction",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ update users set name = 'tim2' where name = 'tim'",
+				Query:            "/* client a */ update users set name = 'tim2' where name = 'tim'",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ update users set name = 'jim2' where name = 'jim'",
+				Query:            "/* client b */ update users set name = 'jim2' where name = 'jim'",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ call dolt_add('users')",
+				Query:            "/* client a */ call dolt_add('users')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ call dolt_add('users')",
+				Query:            "/* client b */ call dolt_add('users')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ commit",
+				Query:            "/* client a */ commit",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ commit",
+				Query:            "/* client b */ commit",
 				SkipResultsCheck: true,
 			},
 			{
@@ -1600,14 +1600,14 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				// dirty working set: modifications are staged
-				Query:    "/* client a */ select * from dolt_status",
+				Query: "/* client a */ select * from dolt_status",
 				Expected: []sql.Row{
 					{"users", true, "modified"},
 				},
 			},
 			{
 				// dirty working set: modifications are staged
-				Query:    "/* client b */ select * from dolt_status",
+				Query: "/* client b */ select * from dolt_status",
 				Expected: []sql.Row{
 					{"users", true, "modified"},
 				},
@@ -1639,43 +1639,43 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "/* client a */ start transaction",
+				Query:            "/* client a */ start transaction",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ start transaction",
+				Query:            "/* client b */ start transaction",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ update users set name = 'tim2' where name = 'tim'",
+				Query:            "/* client a */ update users set name = 'tim2' where name = 'tim'",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ update users set name = 'jim2' where name = 'jim'",
+				Query:            "/* client b */ update users set name = 'jim2' where name = 'jim'",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ call dolt_add('users')",
+				Query:            "/* client a */ call dolt_add('users')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ call dolt_add('users')",
+				Query:            "/* client b */ call dolt_add('users')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ update users set name = 'tim3' where name = 'tim2'",
+				Query:            "/* client a */ update users set name = 'tim3' where name = 'tim2'",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ update users set name = 'jim3' where name = 'jim2'",
+				Query:            "/* client b */ update users set name = 'jim3' where name = 'jim2'",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ commit",
+				Query:            "/* client a */ commit",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ commit",
+				Query:            "/* client b */ commit",
 				SkipResultsCheck: true,
 			},
 			{
@@ -1688,7 +1688,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				// dirty working set: modifications are staged and unstaged
-				Query:    "/* client a */ select * from dolt_status",
+				Query: "/* client a */ select * from dolt_status",
 				Expected: []sql.Row{
 					{"users", true, "modified"},
 					{"users", false, "modified"},
@@ -1696,7 +1696,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				// dirty working set: modifications are staged and unstaged
-				Query:    "/* client b */ select * from dolt_status",
+				Query: "/* client b */ select * from dolt_status",
 				Expected: []sql.Row{
 					{"users", true, "modified"},
 					{"users", false, "modified"},
@@ -1920,7 +1920,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				// working set has t2 new, t1 modified, nothing staged
-				Query:    "/* client a */ select * from dolt_status",
+				Query: "/* client a */ select * from dolt_status",
 				Expected: []sql.Row{
 					{"t2", false, "new table"},
 					{"t1", false, "modified"},
@@ -1928,22 +1928,22 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				// working set has t2 new, t1 modified, nothing staged
-				Query:    "/* client b */ select * from dolt_status",
+				Query: "/* client b */ select * from dolt_status",
 				Expected: []sql.Row{
 					{"t2", false, "new table"},
 					{"t1", false, "modified"},
 				},
 			},
 			{
-				// client a has a stale view of t1 from before the commit, so it's missing the row with 4 in its session's working set 
-				Query:    "/* client a */ select from_id, to_id, from_val, to_val from dolt_diff('HEAD', 'WORKING', 't1') order by from_id",
+				// client a has a stale view of t1 from before the commit, so it's missing the row with 4 in its session's working set
+				Query: "/* client a */ select from_id, to_id, from_val, to_val from dolt_diff('HEAD', 'WORKING', 't1') order by from_id",
 				Expected: []sql.Row{
 					{nil, 5, nil, 5},
 					{4, nil, 4, nil},
 				},
 			},
 			{
-				Query:    "/* client b */ select from_id, to_id, from_val, to_val from dolt_diff('HEAD', 'WORKING', 't1') order by from_id",
+				Query: "/* client b */ select from_id, to_id, from_val, to_val from dolt_diff('HEAD', 'WORKING', 't1') order by from_id",
 				Expected: []sql.Row{
 					{nil, 5, nil, 5},
 					{nil, 6, nil, 6},

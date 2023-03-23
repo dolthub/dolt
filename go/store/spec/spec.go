@@ -467,7 +467,7 @@ func (sp Spec) createDatabase(ctx context.Context) (datas.Database, types.ValueR
 		}
 
 		newGenSt, err := nbs.NewLocalJournalingStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, nbs.NewUnlimitedMemQuotaProvider())
-	
+
 		// If the journaling store can't be created, fall back to a standard local store
 		if err != nil {
 			var localErr error
