@@ -31,9 +31,21 @@ const (
 // It's used to construct index tuples from another index's tuples.
 type OrdinalMapping []int
 
+// MapOrdinal returns the ordinal of the field in the source tuple that maps to the |to| ordinal in the destination tuple.
 func (om OrdinalMapping) MapOrdinal(to int) (from int) {
 	from = om[to]
 	return
+}
+
+// ReordersColumns returns true if this mapping reorders columns. If the mapping simply maps every ordinal to the
+// same ordinal position in the destination tuple, then this function returns false.
+func (om OrdinalMapping) ReordersColumns() bool {
+	for i, mapping := range om {
+		if i != mapping {
+			return true
+		}
+	}
+	return false
 }
 
 type TupleBuilder struct {
