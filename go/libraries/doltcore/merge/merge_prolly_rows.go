@@ -36,7 +36,65 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// mergeTableData three-way merges rows and indexes for a given table. First,
+// TODO: GODOCS!
+// TODO: Clean up consistent use of passing tm as ref vs value
+func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Schema) (*doltdb.Table, *MergeStats, error) {
+	err := maybeAbortDueToUnmergeableIndexes(tm.name, tm.leftSch, tm.rightSch, mergedSch)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergeTbl, err := mergeTableArtifacts(ctx, *tm, tm.leftTbl)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Before we merge the table data we need to fix up the primary index on the left-side of the merge for
+	// any ordinal mapping changes (i.e. moving/dropping/adding columns).
+	// TODO: This is also needed for column type changes, applying default vals for new columns, etc.
+	// NOTE: This won't ALWAYS be the left side... eventually we will need to optimize which side we
+	//       pick (i.e. the side that needs the least work to modify) and make this logic work for either side.
+	lr, err := tm.leftTbl.GetRowData(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	leftRows := durable.ProllyMapFromIndex(lr)
+	valueMerger := newValueMerger(mergedSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool())
+	leftMapping := valueMerger.leftMapping
+
+	// Migrate primary and secondary indexes to rewrite the values for the left side of the merge
+	// TODO: This logic is broken if the common cols are in the same order, but one dropped, one added so length is the same
+	schemasDifferentSize := len(tm.leftSch.GetAllCols().GetColumns()) != len(mergedSch.GetAllCols().GetColumns())
+	if schemasDifferentSize || leftMapping.ReordersColumns() {
+		migrateDataToMergedSchema(ctx, tm, valueMerger, mergedSch)
+	}
+
+	// After we've migrated the existing data to the new schema, it's safe for us to update the schema on the table
+	mergeTbl, err = tm.leftTbl.UpdateSchema(ctx, mergedSch)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var stats *MergeStats
+	mergeTbl, stats, err = mergeProllyTableData(ctx, *tm, mergedSch, mergeTbl, valueMerger)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	n, err := mergeTbl.NumRowsInConflict(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	stats.Conflicts = int(n)
+
+	mergeTbl, err = mergeAutoIncrementValues(ctx, tm.leftTbl, tm.rightTbl, mergeTbl)
+	if err != nil {
+		return nil, nil, err
+	}
+	return mergeTbl, stats, nil
+}
+
+// mergeProllyTableData three-way merges rows and indexes for a given table. First,
 // the primary row data is merged, then secondary indexes are merged. In the
 // process of merging the primary row data, we may need to perform cell-wise
 // merges. Since a cell-wise merge result neither contains the values from the
@@ -48,8 +106,8 @@ import (
 // entries are set to values consistent the cell-wise merge result. When the
 // root and merge secondary indexes are merged, they will produce entries
 // consistent with the primary row data.
-func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table) (*doltdb.Table, *MergeStats, error) {
-	iter, err := threeWayDiffer(ctx, tm, finalSch)
+func mergeProllyTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger) (*doltdb.Table, *MergeStats, error) {
+	iter, err := threeWayDiffer(ctx, tm, valueMerger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -217,7 +275,25 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 	return finalTbl, s, nil
 }
 
-func threeWayDiffer(ctx context.Context, tm TableMerger, finalSch schema.Schema) (*tree.ThreeWayDiffer[val.Tuple, val.TupleDesc], error) {
+func maybeAbortDueToUnmergeableIndexes(tableName string, leftSchema, rightSchema, targetSchema schema.Schema) error {
+	leftOk, err := validateTupleFields(leftSchema, targetSchema)
+	if err != nil {
+		return err
+	}
+
+	rightOk, err := validateTupleFields(rightSchema, targetSchema)
+	if err != nil {
+		return err
+	}
+
+	if !leftOk || !rightOk {
+		return fmt.Errorf("table %s can't be automatically merged.\nTo merge this table, make the schema on the source and target branch equal.", tableName)
+	}
+
+	return nil
+}
+
+func threeWayDiffer(ctx context.Context, tm TableMerger, valueMerger *valueMerger) (*tree.ThreeWayDiffer[val.Tuple, val.TupleDesc], error) {
 	lr, err := tm.leftTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -548,7 +624,7 @@ func (m *conflictMerger) finalize(ctx context.Context) (durable.ArtifactIndex, e
 	return durable.ArtifactIndexFromProllyMap(am), nil
 }
 
-// primaryMerger translaties three-way diffs
+// primaryMerger translates three-way diffs
 // on the primary index into merge-left updates.
 type primaryMerger struct {
 	serializer message.ProllyMapSerializer
@@ -706,31 +782,10 @@ type valueMerger struct {
 }
 
 func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool pool.BuffPool) *valueMerger {
-	n := merged.GetNonPKCols().Size()
-	leftMapping := make(val.OrdinalMapping, n)
-	rightMapping := make(val.OrdinalMapping, n)
-	baseMapping := make(val.OrdinalMapping, n)
-
-	for i, tag := range merged.GetNonPKCols().Tags {
-		if j, ok := leftSch.GetNonPKCols().TagToIdx[tag]; ok {
-			leftMapping[i] = j
-		} else {
-			leftMapping[i] = -1
-		}
-		if j, ok := rightSch.GetNonPKCols().TagToIdx[tag]; ok {
-			rightMapping[i] = j
-		} else {
-			rightMapping[i] = -1
-		}
-		if j, ok := baseSch.GetNonPKCols().TagToIdx[tag]; ok {
-			baseMapping[i] = j
-		} else {
-			baseMapping[i] = -1
-		}
-	}
+	leftMapping, rightMapping, baseMapping := generateSchemaMappings(merged, leftSch, rightSch, baseSch)
 
 	return &valueMerger{
-		numCols:      n,
+		numCols:      merged.GetNonPKCols().Size(),
 		vD:           merged.GetValueDescriptor(),
 		leftMapping:  leftMapping,
 		rightMapping: rightMapping,
@@ -738,6 +793,103 @@ func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool p
 		syncPool:     syncPool,
 		keyless:      schema.IsKeyless(merged),
 	}
+}
+
+// TODO: Godocs!
+func generateSchemaMappings(merged, leftSch, rightSch, baseSch schema.Schema) (leftMapping, rightMapping, baseMapping val.OrdinalMapping) {
+	n := merged.GetNonPKCols().Size()
+	leftMapping = make(val.OrdinalMapping, n)
+	rightMapping = make(val.OrdinalMapping, n)
+	baseMapping = make(val.OrdinalMapping, n)
+
+	for i, col := range merged.GetNonPKCols().GetColumns() {
+		leftMapping[i] = findNonPKColumnMappingByTagOrName(leftSch, col)
+		rightMapping[i] = findNonPKColumnMappingByTagOrName(rightSch, col)
+		baseMapping[i] = findNonPKColumnMappingByTagOrName(baseSch, col)
+	}
+
+	return leftMapping, rightMapping, baseMapping
+}
+
+func findNonPKColumnMappingByName(sch schema.Schema, name string) int {
+	leftNonPKCols := sch.GetNonPKCols()
+	if leftNonPKCols.Contains(name) {
+		return leftNonPKCols.IndexOf(name)
+	} else {
+		return -1
+	}
+}
+
+// TODO: Consider just passing in column here instead of tag and name
+// TODO: GODOCS!
+func findNonPKColumnMappingByTagOrName(sch schema.Schema, col schema.Column) int {
+	if idx, ok := sch.GetNonPKCols().TagToIdx[col.Tag]; ok {
+		return idx
+	} else {
+		return findNonPKColumnMappingByName(sch, col.Name)
+	}
+}
+
+// migrateDataToMergedSchema migrates the data from the left side of the merge of a table to the merged schema. This
+// includes updating the primary index, as well as any secondary indexes. This is necessary when a schema change is
+// being applied, so that when the new schema is used to pull out data from the table, it will be in the right order.
+// TODO: This function only updates the primary index currently and only accounts for column additions/drops/reorders.
+func migrateDataToMergedSchema(ctx context.Context, tm *TableMerger, vm *valueMerger, mergedSch schema.Schema) error {
+	lr, err := tm.leftTbl.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+	leftRows := durable.ProllyMapFromIndex(lr)
+	mut := leftRows.Mutate()
+	mapIter, err := mut.IterAll(ctx)
+	if err != nil {
+		return err
+	}
+
+	leftSch, err := tm.leftTbl.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+	valueDescriptor := leftSch.GetValueDescriptor()
+
+	for {
+		key, value, err := mapIter.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+		modifiedValue := make([][]byte, len(mergedSch.GetNonPKCols().GetColumns()))
+		for i := 0; i < len(mergedSch.GetNonPKCols().GetColumns()); i++ {
+			fromOrdinal := vm.leftMapping.MapOrdinal(i)
+			if fromOrdinal == -1 {
+				continue
+			}
+			modifiedValue[i] = valueDescriptor.GetField(fromOrdinal, value)
+		}
+
+		pool := vm.syncPool
+		modifiedValueAsTuple := val.NewTuple(pool, modifiedValue...)
+		err = mut.Put(ctx, key, modifiedValueAsTuple)
+		if err != nil {
+			return err
+		}
+	}
+	m, err := mut.Map(ctx)
+	if err != nil {
+		return err
+	}
+
+	newIndex := durable.IndexFromProllyMap(m)
+	newTable, err := tm.leftTbl.UpdateRows(ctx, newIndex)
+	if err != nil {
+		return err
+	}
+	tm.leftTbl = newTable
+
+	// TODO: Update all secondary indexes, too!
+
+	return nil
 }
 
 // tryMerge performs a cell-wise merge given left, right, and base cell value

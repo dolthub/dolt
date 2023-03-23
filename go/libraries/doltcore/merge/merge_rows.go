@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -122,6 +121,7 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 		return nil, nil, errors.New(fmt.Sprintf("schema changes not supported: %s table schema does not match in current HEAD and cherry-pick commit.", tblName))
 	}
 
+	// Calculate a merge of the schemas, but don't apply it yet
 	mergeSch, schConflicts, err := SchemaMerge(ctx, tm.vrw.Format(), tm.leftSch, tm.rightSch, tm.ancSch, tblName)
 	if err != nil {
 		return nil, nil, err
@@ -132,100 +132,10 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	}
 
 	if types.IsFormat_DOLT(tm.vrw.Format()) {
-		err = rm.maybeAbortDueToUnmergeableIndexes(tm.name, tm.leftSch, tm.rightSch, mergeSch)
-		if err != nil {
-			return nil, nil, err
-		}
+		return mergeProllyTable(ctx, &tm, mergeSch)
+	} else {
+		return mergeNomsTable(ctx, &tm, mergeSch, rm.vrw, opts)
 	}
-
-	mergeTbl, err := tm.leftTbl.UpdateSchema(ctx, mergeSch)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if types.IsFormat_DOLT(mergeTbl.Format()) {
-		mergeTbl, err = mergeTableArtifacts(ctx, tm, mergeTbl)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		var stats *MergeStats
-		mergeTbl, stats, err = mergeTableData(ctx, tm, mergeSch, mergeTbl)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		n, err := mergeTbl.NumRowsInConflict(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		stats.Conflicts = int(n)
-
-		mergeTbl, err = mergeAutoIncrementValues(ctx, tm.leftTbl, tm.rightTbl, mergeTbl)
-		if err != nil {
-			return nil, nil, err
-		}
-		return mergeTbl, stats, nil
-	}
-
-	// If any indexes were added during the merge, then we need to generate their row data to add to our updated table.
-	addedIndexesSet := make(map[string]string)
-	for _, index := range mergeSch.Indexes().AllIndexes() {
-		addedIndexesSet[strings.ToLower(index.Name())] = index.Name()
-	}
-	for _, index := range tm.leftSch.Indexes().AllIndexes() {
-		delete(addedIndexesSet, strings.ToLower(index.Name()))
-	}
-	for _, addedIndex := range addedIndexesSet {
-		newIndexData, err := editor.RebuildIndex(ctx, mergeTbl, addedIndex, opts)
-		if err != nil {
-			return nil, nil, err
-		}
-		mergeTbl, err = mergeTbl.SetNomsIndexRows(ctx, addedIndex, newIndexData)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	updatedTblEditor, err := editor.NewTableEditor(ctx, mergeTbl, mergeSch, tblName, opts)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rows, err := tm.leftTbl.GetNomsRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	mergeRows, err := tm.rightTbl.GetNomsRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	ancRows, err := tm.ancTbl.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	resultTbl, cons, stats, err := mergeNomsTableData(ctx, rm.vrw, tblName, mergeSch, rows, mergeRows, durable.NomsMapFromIndex(ancRows), updatedTblEditor)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if cons.Len() > 0 {
-		resultTbl, err = setConflicts(ctx, durable.ConflictIndexFromNomsMap(cons, rm.vrw), tm.leftTbl, tm.rightTbl, tm.ancTbl, resultTbl)
-		if err != nil {
-			return nil, nil, err
-		}
-		stats.Conflicts = int(cons.Len())
-	}
-
-	resultTbl, err = mergeAutoIncrementValues(ctx, tm.leftTbl, tm.rightTbl, resultTbl)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return resultTbl, stats, nil
 }
 
 func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (TableMerger, error) {
@@ -360,24 +270,6 @@ func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm TableMerger, opt
 
 	// no short-circuit
 	return nil, nil, nil
-}
-
-func (rm *RootMerger) maybeAbortDueToUnmergeableIndexes(tableName string, leftSchema, rightSchema, targetSchema schema.Schema) error {
-	leftOk, err := validateTupleFields(leftSchema, targetSchema)
-	if err != nil {
-		return err
-	}
-
-	rightOk, err := validateTupleFields(rightSchema, targetSchema)
-	if err != nil {
-		return err
-	}
-
-	if !leftOk || !rightOk {
-		return fmt.Errorf("table %s can't be automatically merged.\nTo merge this table, make the schema on the source and target branch equal.", tableName)
-	}
-
-	return nil
 }
 
 func validateTupleFields(existingSch schema.Schema, targetSch schema.Schema) (bool, error) {
