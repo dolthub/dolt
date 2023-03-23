@@ -131,6 +131,7 @@ type UserSessionVars struct {
 type YAMLConfig struct {
 	LogLevelStr       *string               `yaml:"log_level"`
 	MaxQueryLenInLogs *int                  `yaml:"max_logged_query_len"`
+	EncodeLoggedQuery *bool                 `yaml:"encode_logged_query"`
 	BehaviorConfig    BehaviorYAMLConfig    `yaml:"behavior"`
 	UserConfig        UserYAMLConfig        `yaml:"user"`
 	ListenerConfig    ListenerYAMLConfig    `yaml:"listener"`
@@ -440,6 +441,14 @@ func (cfg YAMLConfig) MaxLoggedQueryLen() int {
 	}
 
 	return *cfg.MaxQueryLenInLogs
+}
+
+func (cfg YAMLConfig) ShouldEncodeLoggedQuery() bool {
+	if cfg.EncodeLoggedQuery == nil {
+		return defaultEncodeLoggedQuery
+	}
+
+	return *cfg.EncodeLoggedQuery
 }
 
 // PersistenceBehavior is "load" if we include persisted system globals on server init
