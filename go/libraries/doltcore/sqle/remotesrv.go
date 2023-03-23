@@ -66,3 +66,12 @@ func RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.ServerArgs) remotesrv.
 	args.DBCache = remotesrvStore{ctx, args.ReadOnly}
 	return args
 }
+
+func WithUserPasswordAuth(args remotesrv.ServerArgs, userAuth remotesrv.UserAuth) remotesrv.ServerArgs {
+	si := remotesrv.ServerInterceptor{
+		Lgr:              args.Logger,
+		ExpectedUserAuth: userAuth,
+	}
+	args.Options = append(args.Options, si.Options()...)
+	return args
+}

@@ -957,8 +957,10 @@ func TestDescribeTableAsOf(t *testing.T) {
 	enginetest.TestScript(t, newDoltHarness(t), DescribeTableAsOfScriptTest)
 }
 
-func TestShowCreateTableAsOf(t *testing.T) {
-	enginetest.TestScript(t, newDoltHarness(t), ShowCreateTableAsOfScriptTest)
+func TestShowCreateTable(t *testing.T) {
+	for _, script := range ShowCreateTableScriptTests {
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
 }
 
 func TestViewsWithAsOf(t *testing.T) {
