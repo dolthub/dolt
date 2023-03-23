@@ -1099,31 +1099,31 @@ func TestSingleTransactionScript(t *testing.T) {
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "/* client a */ start transaction",
+				Query:            "/* client a */ start transaction",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ start transaction",
+				Query:            "/* client b */ start transaction",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ update users set name = 'tim2' where name = 'tim'",
+				Query:            "/* client a */ update users set name = 'tim2' where name = 'tim'",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ update users set name = 'jim2' where name = 'jim'",
+				Query:            "/* client b */ update users set name = 'jim2' where name = 'jim'",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ call dolt_add('users')",
+				Query:            "/* client a */ call dolt_add('users')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ commit",
+				Query:            "/* client a */ commit",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ call dolt_add('users')",
+				Query:            "/* client b */ call dolt_add('users')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -1131,7 +1131,7 @@ func TestSingleTransactionScript(t *testing.T) {
 				Expected: []sql.Row{{1, "tim"}, {2, "jim2"}},
 			},
 			{
-				Query:    "/* client b */ call dolt_commit('-m', 'jim2 commit')",
+				Query:            "/* client b */ call dolt_commit('-m', 'jim2 commit')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -1147,12 +1147,12 @@ func TestSingleTransactionScript(t *testing.T) {
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "/* client b */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
+				Query:    "/* client b */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
 				Expected: []sql.Row{},
 			},
 			{
 				// staged changes include changes from both A and B at staged revision of data
-				Query: "/* client b */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
+				Query:    "/* client b */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
 				Expected: []sql.Row{},
 			},
 		},

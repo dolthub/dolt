@@ -160,7 +160,7 @@ func doltCommit(ctx *sql.Context,
 	// we're about to commit.
 	pending.Roots.Staged = workingSet.StagedRoot()
 
-	// We check if the branch HEAD has changed since our transaction started and perform an additional merge if so. The 
+	// We check if the branch HEAD has changed since our transaction started and perform an additional merge if so. The
 	// non-dolt-commit transaction logic only merges working sets and doesn't consider the HEAD value.
 	if curHead != nil {
 		curRootVal, err := curHead.ResolveRootValue(ctx)
