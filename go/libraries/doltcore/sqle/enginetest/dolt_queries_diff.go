@@ -3774,8 +3774,8 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{2}},
 			},
 			{
-				Query:    "select table_name, column_name from dolt_column_diff where commit_hash = @Commit2;",
-				Expected: []sql.Row{{"t", "d"}},
+				Query:    "select table_name, column_name, diff_type from dolt_column_diff where commit_hash = @Commit2;",
+				Expected: []sql.Row{{"t", "d", "added"}},
 			},
 		},
 	},
