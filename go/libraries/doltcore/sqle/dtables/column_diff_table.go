@@ -508,8 +508,8 @@ func processTableColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta diff.Table
 	// NOTE: Renaming a table does not affect columns necessarily, if table data was changed it will be checked below
 
 	// calculate which columns have been modified
-	colSchemaDiff := calculateColSchemaDiff(delta.ToSch.GetAllCols(), delta.FromSch.GetAllCols())
-	colNames, diffTypes, err := calculateColDelta(ctx, ddb, &delta, colSchemaDiff)
+	colSchDiff := calculateColSchemaDiff(delta.ToSch.GetAllCols(), delta.FromSch.GetAllCols())
+	colNames, diffTypes, err := calculateColDelta(ctx, ddb, &delta, colSchDiff)
 	if err != nil {
 		return nil, err
 	}
@@ -523,7 +523,7 @@ func processTableColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta diff.Table
 
 // calculateColDelta iterates through the rows of the given table delta and compares each cell in the to_ and from_
 // cells to compile a list of modified columns
-func calculateColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta *diff.TableDelta, colSchemaDiff *ColSchemaDiff) ([]string, []string, error) {
+func calculateColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta *diff.TableDelta, colSchDiff *colSchemaDiff) ([]string, []string, error) {
 	// initialize row iterator
 	diffTableSchema, j, err := GetDiffTableSchemaAndJoiner(delta.ToTable.Format(), delta.FromSch, delta.ToSch)
 	if err != nil {
@@ -538,11 +538,11 @@ func calculateColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta *diff.TableDe
 	var resultColNames []string
 	var resultDiffTypes []string
 	// add all added/dropped columns to result
-	for _, col := range colSchemaDiff.addedCols {
+	for _, col := range colSchDiff.addedCols {
 		resultColNames = append(resultColNames, col)
 		resultDiffTypes = append(resultDiffTypes, diffTypeAdded)
 	}
-	for _, col := range colSchemaDiff.droppedCols {
+	for _, col := range colSchDiff.droppedCols {
 		resultColNames = append(resultColNames, col)
 		resultDiffTypes = append(resultDiffTypes, diffTypeRemoved)
 	}
@@ -563,7 +563,7 @@ func calculateColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta *diff.TableDe
 		}
 
 		// only need to check modified columns
-		for _, col := range colSchemaDiff.modifiedCols {
+		for _, col := range colSchDiff.modifiedCols {
 			toColTag := diffTableCols.NameToCol["to_"+col].Tag
 			fromColTag := diffTableCols.NameToCol["from_"+col].Tag
 			toIdx := diffTableCols.TagToIdx[toColTag]
@@ -575,7 +575,7 @@ func calculateColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta *diff.TableDe
 		}
 
 		// can stop checking rows when we already have all modified columns in the result set
-		if len(colNamesSet) == len(colSchemaDiff.modifiedCols) {
+		if len(colNamesSet) == len(colSchDiff.modifiedCols) {
 			for col := range colNamesSet {
 				// append modified columns to result
 				resultColNames = append(resultColNames, col)
@@ -586,10 +586,10 @@ func calculateColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta *diff.TableDe
 	}
 }
 
-// ColSchemaDiff is a collection of column names that hold the results of doing a schema diff between to/from schemas,
+// colSchemaDiff is a collection of column names that hold the results of doing a schema diff between to/from schemas,
 // i.e. a list of column names for each type of change, the total list of column names, and a corresponding list of
 // diff_types for each column
-type ColSchemaDiff struct {
+type colSchemaDiff struct {
 	modifiedCols []string
 	addedCols    []string
 	droppedCols  []string
@@ -598,8 +598,8 @@ type ColSchemaDiff struct {
 }
 
 // calculateColSchemaDiff calculates which columns were modified, added, or dropped between to and from schemas and
-// returns a ColSchemaDiff to hold the results of the diff
-func calculateColSchemaDiff(toCols *schema.ColCollection, fromCols *schema.ColCollection) *ColSchemaDiff {
+// returns a colSchemaDiff to hold the results of the diff
+func calculateColSchemaDiff(toCols *schema.ColCollection, fromCols *schema.ColCollection) *colSchemaDiff {
 	// put to/from columns into a set
 	toColTags := make(map[uint64]struct{})
 	fromColTags := make(map[uint64]struct{})
@@ -646,7 +646,7 @@ func calculateColSchemaDiff(toCols *schema.ColCollection, fromCols *schema.ColCo
 		}
 	}
 
-	return &ColSchemaDiff{
+	return &colSchemaDiff{
 		modifiedCols: modifiedCols,
 		addedCols:    addedCols,
 		droppedCols:  droppedCols,
