@@ -77,7 +77,14 @@ func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
 }
 
 func (db *UserSpaceDatabase) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
-	return getInitialDBStateForUserSpaceDb(ctx, db)
+	return dsess.InitialDbState{
+		Db:       db,
+		ReadOnly: true,
+		HeadRoot: db.RootValue,
+		DbData: env.DbData{
+			Rsw: noopRepoStateWriter{},
+		},
+	}, nil
 }
 
 func (db *UserSpaceDatabase) GetRoot(*sql.Context) (*doltdb.RootValue, error) {

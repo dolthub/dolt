@@ -97,7 +97,7 @@ func (rrd ReadReplicaDatabase) ValidReplicaState(ctx *sql.Context) bool {
 // This seems like a pointless override from the embedded Database implementation, but it's necessary to pass the
 // correct pointer type to the session initializer.
 func (rrd ReadReplicaDatabase) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
-	return GetInitialDBState(ctx, rrd, branch)
+	return initialDBState(ctx, rrd, branch)
 }
 
 func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {

@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	goerrors "gopkg.in/src-d/go-errors.v1"
@@ -33,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -1135,23 +1135,26 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SessionDatabase) error {
 	sessionState.readOnly, sessionState.readReplica = dbState.ReadOnly, dbState.ReadReplica
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
+	// Or better yet, get rid of EditOptions from the database, it's a session setting
 	nbf := types.Format_Default
 	if sessionState.dbData.Ddb != nil {
 		nbf = sessionState.dbData.Ddb.Format()
 	}
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
-
-	stateProvider, ok := db.(globalstate.StateProvider)
-	if !ok {
-		return fmt.Errorf("database does not contain global state store")
-	}
-	sessionState.globalState = stateProvider.GetGlobalState()
-
-	// WorkingSet is nil in the case of a read only, detached head DB
+	
 	if dbState.Err != nil {
 		sessionState.Err = dbState.Err
 	} else if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
+
+		// TODO: this is pretty clunky, there is a silly dependency between InitialDbState and globalstate.StateProvider 
+		//  that's hard to express with the current types
+		stateProvider, ok := db.(globalstate.StateProvider)
+		if !ok {
+			return fmt.Errorf("database does not contain global state store")
+		}
+		sessionState.globalState = stateProvider.GetGlobalState()
+
 		tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx)
 		if err != nil {
 			return err
@@ -1160,13 +1163,17 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SessionDatabase) error {
 		if err = d.SetWorkingSet(ctx, db.Name(), dbState.WorkingSet); err != nil {
 			return err
 		}
-
-	} else {
+	} else if dbState.HeadCommit != nil {
+		// WorkingSet is nil in the case of a read only, detached head DB
 		headRoot, err := dbState.HeadCommit.GetRootValue(ctx)
 		if err != nil {
 			return err
 		}
 		sessionState.headRoot = headRoot
+	} else if dbState.HeadRoot != nil {
+		sessionState.headRoot = dbState.HeadRoot
+	} else {
+		return fmt.Errorf("invalid initial state for database %s", db.Name())
 	}
 
 	// This has to happen after SetRoot above, since it does a stale check before its work
@@ -1276,13 +1283,15 @@ func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string) error
 		return err
 	}
 
-	h, err = state.headCommit.HashOf()
-	if err != nil {
-		return err
-	}
-	err = d.Session.SetSessionVariable(ctx, HeadKey(dbName), h.String())
-	if err != nil {
-		return err
+	if state.headCommit != nil {
+		h, err = state.headCommit.HashOf()
+		if err != nil {
+			return err
+		}
+		err = d.Session.SetSessionVariable(ctx, HeadKey(dbName), h.String())
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

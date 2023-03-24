@@ -96,7 +96,7 @@ func (r ReadOnlyDatabase) IsReadOnly() bool {
 }
 
 func (r ReadOnlyDatabase) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
-	return GetInitialDBState(ctx, r, branch)
+	return initialDBState(ctx, r, branch)
 }
 
 // Revision implements dsess.RevisionDatabase
@@ -125,8 +125,9 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts e
 	}, nil
 }
 
-// GetInitialDBState returns the InitialDbState for |db|.
-func GetInitialDBState(ctx *sql.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
+// initialDBState returns the InitialDbState for |db|. Other implementations of SqlDatabase outside this file should 
+// implement their own method for an initial db state and not rely on this method.
+func initialDBState(ctx *sql.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
 	if len(db.Revision()) > 0 {
 		return initialStateForRevisionDb(ctx, db)
 	}
@@ -135,7 +136,7 @@ func GetInitialDBState(ctx *sql.Context, db SqlDatabase, branch string) (dsess.I
 }
 
 func (db Database) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
-	return GetInitialDBState(ctx, db, branch)
+	return initialDBState(ctx, db, branch)
 }
 
 // Name returns the name of this database, set at creation time.
@@ -1330,19 +1331,6 @@ func (db Database) SetCollation(ctx *sql.Context, collation sql.CollationID) err
 		return err
 	}
 	return db.SetRoot(ctx, newRoot)
-}
-
-// TODO: this is a hack to make user space DBs appear to the analyzer as full DBs with state etc., but the state is
-// really skeletal. We need to reexamine the DB / session initialization to make this simpler -- most of these things
-// aren't needed at initialization time and for most code paths.
-func getInitialDBStateForUserSpaceDb(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
-	return dsess.InitialDbState{
-		Db: db,
-		DbData: env.DbData{
-			Rsw: noopRepoStateWriter{},
-		},
-		ReadOnly: true,
-	}, nil
 }
 
 // noopRepoStateWriter is a minimal implementation of RepoStateWriter that does nothing

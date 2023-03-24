@@ -809,11 +809,6 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 }
 
 func initialDbState(ctx context.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
-	switch db := db.(type) {
-	case *UserSpaceDatabase, *SingleTableInfoDatabase:
-		return getInitialDBStateForUserSpaceDb(ctx, db)
-	}
-
 	rsr := db.DbData().Rsr
 	ddb := db.DbData().Ddb
 

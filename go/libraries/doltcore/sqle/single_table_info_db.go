@@ -89,7 +89,13 @@ func (db *SingleTableInfoDatabase) Collation() sql.CollationID {
 }
 
 func (db *SingleTableInfoDatabase) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
-	return getInitialDBStateForUserSpaceDb(ctx, db)
+	return dsess.InitialDbState{
+		Db:       db,
+		ReadOnly: true,
+		DbData: env.DbData{
+			Rsw: noopRepoStateWriter{},
+		},
+	}, nil
 }
 
 // Partitions implements sql.Table.
