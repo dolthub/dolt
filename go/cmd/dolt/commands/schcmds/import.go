@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -37,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"

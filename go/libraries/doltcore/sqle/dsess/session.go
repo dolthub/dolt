@@ -23,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	goerrors "gopkg.in/src-d/go-errors.v1"
@@ -34,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -1141,13 +1141,13 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SessionDatabase) error {
 		nbf = sessionState.dbData.Ddb.Format()
 	}
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
-	
+
 	if dbState.Err != nil {
 		sessionState.Err = dbState.Err
 	} else if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
 
-		// TODO: this is pretty clunky, there is a silly dependency between InitialDbState and globalstate.StateProvider 
+		// TODO: this is pretty clunky, there is a silly dependency between InitialDbState and globalstate.StateProvider
 		//  that's hard to express with the current types
 		stateProvider, ok := db.(globalstate.StateProvider)
 		if !ok {

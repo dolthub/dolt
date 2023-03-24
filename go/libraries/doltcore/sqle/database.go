@@ -125,7 +125,7 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts e
 	}, nil
 }
 
-// initialDBState returns the InitialDbState for |db|. Other implementations of SqlDatabase outside this file should 
+// initialDBState returns the InitialDbState for |db|. Other implementations of SqlDatabase outside this file should
 // implement their own method for an initial db state and not rely on this method.
 func initialDBState(ctx *sql.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
 	if len(db.Revision()) > 0 {
