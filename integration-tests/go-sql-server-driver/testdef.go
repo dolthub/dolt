@@ -37,10 +37,10 @@ type TestDef struct {
 // any Servers defined within them will be started. The interactions and
 // assertions defined in Conns will be run.
 type Test struct {
-	Name       string              `yaml:"name"`
-	Repos      []driver.TestRepo   `yaml:"repos"`
-	MultiRepos []driver.MultiRepo  `yaml:"multi_repos"`
-	Conns      []driver.Connection `yaml:"connections"`
+	Name        string              `yaml:"name"`
+	Repos       []driver.TestRepo   `yaml:"repos"`
+	MultiRepos  []driver.MultiRepo  `yaml:"multi_repos"`
+	Conns       []driver.Connection `yaml:"connections"`
 
 	// Skip the entire test with this reason.
 	Skip string `yaml:"skip"`
@@ -74,7 +74,7 @@ func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server) *driver.S
 	if s == nil {
 		return nil
 	}
-	opts := []driver.SqlServerOpt{driver.WithArgs(s.Args...)}
+	opts := []driver.SqlServerOpt{driver.WithArgs(s.Args...), driver.WithEnvs(s.Envs...)}
 	if s.Port != 0 {
 		opts = append(opts, driver.WithPort(s.Port))
 	}
@@ -184,7 +184,7 @@ func (test Test) Run(t *testing.T) {
 			}()
 		}
 		if c.RestartServer != nil {
-			err := server.Restart(c.RestartServer.Args)
+			err := server.Restart(c.RestartServer.Args, c.RestartServer.Envs)
 			require.NoError(t, err)
 		}
 	}

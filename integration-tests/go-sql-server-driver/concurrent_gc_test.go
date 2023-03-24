@@ -223,5 +223,11 @@ func (gct gcTest) run(t *testing.T) {
 
 	require.NoError(t, eg.Wait())
 
+	// Recreate the connection pool here, since idle connections in the
+	// connection pool may be stale.
+	db.Close()
+	db, err = server.DB(driver.Connection{User: "root"})
+	require.NoError(t, err)
+
 	gct.finalize(t, context.Background(), db)
 }
