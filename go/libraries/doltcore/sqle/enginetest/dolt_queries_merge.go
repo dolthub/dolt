@@ -3557,14 +3557,85 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "call dolt_merge('right');",
-				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
 			},
-			// desired behavior
 			{
 				Query:    "select pk, col2 from t;",
 				Expected: []sql.Row{{1, 100}, {2, 200}, {3, 300}, {4, 400}, {5, 500}, {6, 600}},
-				Skip:     true,
+			},
+		},
+	},
+	{
+		Name: "renaming a column",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 int);",
+			"INSERT into t values (1, 10, 100), (2, 20, 200);",
+		},
+		RightSetUpScript: []string{
+			"alter table t rename column col1 to col11;",
+			"insert into t values (3, 30, 300), (4, 40, 400);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (5, 50, 500), (6, 60, 600);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 10, 100}, {2, 20, 200}, {3, 30, 300}, {4, 40, 400}, {5, 50, 500}, {6, 60, 600}},
+			},
+		},
+	},
+	{
+		Name: "renaming and reordering a column",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 int);",
+			"INSERT into t values (1, 10, 100), (2, 20, 200);",
+		},
+		RightSetUpScript: []string{
+			"alter table t rename column col1 to col11;",
+			"alter table t modify col11 int after col2;",
+			"insert into t values (3, 300, 30), (4, 400, 40);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (5, 50, 500), (6, 60, 600);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select pk, col11, col2 from t;",
+				Expected: []sql.Row{{1, 10, 100}, {2, 20, 200}, {3, 30, 300}, {4, 40, 400}, {5, 50, 500}, {6, 60, 600}},
+			},
+		},
+	},
+	{
+		Name: "reordering a column",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 int);",
+			"INSERT into t values (1, 10, 100), (2, 20, 200);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify col1 int after col2;",
+			"insert into t (pk, col1, col2) values (3, 30, 300), (4, 40, 400);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (5, 50, 500), (6, 60, 600);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select pk, col1, col2 from t;",
+				Expected: []sql.Row{{1, 10, 100}, {2, 20, 200}, {3, 30, 300}, {4, 40, 400}, {5, 50, 500}, {6, 60, 600}},
 			},
 		},
 	},
@@ -3614,9 +3685,9 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
 			},
 			{
+				Skip:     true,
 				Query:    "select * from t;",
 				Expected: []sql.Row{{1, 1, 1, nil}, {2, 2, 2, nil}, {3, 3, 0, nil}},
-				Skip:     true,
 			},
 		},
 	},
@@ -3636,8 +3707,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "call dolt_merge('right');",
-				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query: "select pk, col1, col2 from t;",
@@ -3649,12 +3720,11 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 					{5, 50, nil},
 					{6, 60, nil},
 				},
-				Skip: true,
 			},
 		},
 	},
 	{
-		Name: "re-ordering columns",
+		Name: "dropping and adding a column with the same name",
 		AncSetUpScript: []string{
 			"create table t (pk int primary key, col1 int, col2 int);",
 			"insert into t values (1, 10, 100), (2, 20, 200);",
@@ -3662,19 +3732,19 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		RightSetUpScript: []string{
 			"alter table t drop column col1;",
 			"alter table t add column col1 int;",
-			"insert into t values (3, 300, 30), (40, 400, 40);",
+			"insert into t values (3, 300, 30), (4, 400, 40);",
 		},
 		LeftSetUpScript: []string{
 			"insert into t values (5, 50, 500), (6, 60, 600);",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "call dolt_merge('right');",
-				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
 			},
-			// desired behavior
 			{
-				Query: "select pk, col1, col2 form t;",
+				// NOTE: If we can't find an exact tag mapping, then we want to fall back to matching by name and exact type.
+				Query: "select pk, col1, col2 from t order by pk;",
 				Expected: []sql.Row{
 					{1, nil, 100},
 					{2, nil, 200},
@@ -3683,7 +3753,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 					{5, 50, 500},
 					{6, 60, 600},
 				},
-				Skip: true,
 			},
 		},
 	},
@@ -3772,6 +3841,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
 			},
 			{
+				Skip:  true,
 				Query: "select pk, col1 from t;",
 				Expected: []sql.Row{
 					{1, 9999},
@@ -3781,7 +3851,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 					{5, 9999},
 					{6, 9999},
 				},
-				Skip: true,
 			},
 		},
 	},
