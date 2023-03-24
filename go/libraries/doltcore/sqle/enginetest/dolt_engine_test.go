@@ -1241,6 +1241,9 @@ func TestUnscopedDiffSystemTablePrepared(t *testing.T) {
 }
 
 func TestColumnDiffSystemTable(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("correct behavior of dolt_column_diff only guaranteed on new format")
+	}
 	for _, test := range ColumnDiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, newDoltHarness(t), test)
@@ -1249,6 +1252,9 @@ func TestColumnDiffSystemTable(t *testing.T) {
 }
 
 func TestColumnDiffSystemTablePrepared(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("correct behavior of dolt_column_diff only guaranteed on new format")
+	}
 	for _, test := range ColumnDiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, newDoltHarness(t), test)
