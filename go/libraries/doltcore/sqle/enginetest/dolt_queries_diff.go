@@ -3703,27 +3703,79 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 
 var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 	{
-		Name: "working set changes",
+		Name: "table changes - commit history",
 		SetUpScript: []string{
-			"create table regularTable (a int primary key, b int);",
+			"create table modifiedTable (a int primary key, b int);",
+			"insert into modifiedTable values (1, 2), (2, 3);",
+			"create table droppedTable (a int primary key, b int);",
+			"insert into droppedTable values (1, 2), (2, 3);",
+			"create table renamedTable (a int primary key, b int);",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'creating tables');",
+
+			"update modifiedTable set b = 5 where a = 1;",
+			"drop table droppedTable;",
+			"rename table renamedTable to newRenamedTable;",
+			"create table addedTable (a int primary key, b int);",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'make table changes');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'modifiedTable';",
+				Expected: []sql.Row{
+					{"modifiedTable", "a", "added"},
+					{"modifiedTable", "b", "added"},
+					{"modifiedTable", "b", "modified"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'droppedTable';",
+				Expected: []sql.Row{
+					{"droppedTable", "a", "added"},
+					{"droppedTable", "b", "added"},
+					{"droppedTable", "a", "removed"},
+					{"droppedTable", "b", "removed"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'renamedTable' OR table_name = 'newRenamedTable';",
+				Expected: []sql.Row{
+					{"renamedTable", "a", "added"},
+					{"renamedTable", "b", "added"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'addedTable';",
+				Expected: []sql.Row{
+					{"addedTable", "a", "added"},
+					{"addedTable", "b", "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "table changes - working set",
+		SetUpScript: []string{
+			"create table modifiedTable (a int primary key, b int);",
+			"insert into modifiedTable values (1, 2), (2, 3);",
 			"create table droppedTable (a int primary key, b int);",
 			"insert into droppedTable values (1, 2), (2, 3);",
 			"create table renamedTable (a int primary key, b int);",
 			"call dolt_add('.')",
 
-			"insert into regularTable values (1, 2), (2, 3);",
+			"update modifiedTable set b = 5 where a = 1;",
 			"drop table droppedTable;",
 			"rename table renamedTable to newRenamedTable;",
 			"create table addedTable (a int primary key, b int);",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT commit_hash, table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'regularTable' ORDER BY commit_hash, table_name, column_name;",
+				Query: "SELECT commit_hash, table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'modifiedTable' ORDER BY commit_hash, table_name, column_name;",
 				Expected: []sql.Row{
-					{"STAGED", "regularTable", "a", "added"},
-					{"STAGED", "regularTable", "b", "added"},
-					{"WORKING", "regularTable", "a", "modified"},
-					{"WORKING", "regularTable", "b", "modified"},
+					{"STAGED", "modifiedTable", "a", "added"},
+					{"STAGED", "modifiedTable", "b", "added"},
+					{"WORKING", "modifiedTable", "b", "modified"},
 				},
 			},
 			{
@@ -3740,8 +3792,6 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"STAGED", "renamedTable", "a", "added"},
 					{"STAGED", "renamedTable", "b", "added"},
-					{"WORKING", "newRenamedTable", "a", "modified"},
-					{"WORKING", "newRenamedTable", "b", "modified"},
 				},
 			},
 			{
@@ -3754,7 +3804,7 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "add column",
+		Name: "add column - commit history",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c int);",
 			"call dolt_add('.')",
@@ -3764,7 +3814,6 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 
 			"alter table t add column d int;",
 			"set @Commit2 = '';",
-			"update t set d = 6 where pk = 1;",
 			"call dolt_add('.')",
 			"call dolt_commit_hash_out(@Commit2, '-m', 'updating d in t');",
 		},
@@ -3780,7 +3829,27 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "modify column",
+		Name: "add column - working set",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c int);",
+			"insert into t values (1, 2), (3, 4);",
+			"call dolt_add('.')",
+
+			"alter table t add column d int;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from dolt_column_diff where commit_hash = 'STAGED';",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select table_name, column_name, diff_type from dolt_column_diff where commit_hash = 'WORKING';",
+				Expected: []sql.Row{{"t", "d", "added"}},
+			},
+		},
+	},
+	{
+		Name: "modify column - commit history",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c int);",
 			"call dolt_add('.')",
@@ -3805,7 +3874,27 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "drop column",
+		Name: "modify column - working set",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c int);",
+			"insert into t values (1, 2), (3, 4);",
+			"call dolt_add('.')",
+
+			"update t set c = 5 where pk = 3;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from dolt_column_diff where commit_hash = 'STAGED';",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select table_name, column_name, diff_type from dolt_column_diff where commit_hash = 'WORKING';",
+				Expected: []sql.Row{{"t", "c", "modified"}},
+			},
+		},
+	},
+	{
+		Name: "drop column - commit history",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c int);",
 			"call dolt_add('.')",
@@ -3830,7 +3919,27 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "drop column and recreate with same type",
+		Name: "drop column - working set",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c int);",
+			"insert into t values (1, 2), (3, 4);",
+			"call dolt_add('.')",
+
+			"alter table t drop column c;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from dolt_column_diff where commit_hash = 'STAGED';",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select table_name, column_name, diff_type from dolt_column_diff where commit_hash = 'WORKING';",
+				Expected: []sql.Row{{"t", "c", "removed"}},
+			},
+		},
+	},
+	{
+		Name: "drop column and recreate with same type - commit history",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c int);",
 			"call dolt_add('.')",
@@ -3875,7 +3984,39 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "drop column, then rename column with same type to same name",
+		Name: "drop column and recreate with same type - working set",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c int);",
+			"insert into t values (1, 2), (3, 4);",
+			"call dolt_add('.')",
+
+			"alter table t drop column c;",
+			"alter table t add column c int;",
+			"insert into t values (100, 101);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='STAGED';",
+				Expected: []sql.Row{
+					{"t", "pk", "added"},
+					{"t", "c", "added"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='WORKING';",
+				Expected: []sql.Row{
+					{"t", "pk", "modified"},
+					{"t", "c", "modified"},
+				},
+			},
+		},
+	},
+	{
+		Name: "drop column, then rename column with same type to same name - commit history",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
@@ -3921,7 +4062,41 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "column drop and recreate with different type that can be coerced (int -> string)",
+		Name: "drop column, then rename column with same type to same name - working set",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 int);",
+			"insert into t values (1, 2, 3), (4, 5, 6);",
+			"call dolt_add('.')",
+
+			"alter table t drop column c1;",
+			"alter table t rename column c2 to c1;",
+			"insert into t values (100, 101);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
+				Expected: []sql.Row{{6}},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='STAGED';",
+				Expected: []sql.Row{
+					{"t", "pk", "added"},
+					{"t", "c1", "added"},
+					{"t", "c2", "added"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='WORKING';",
+				Expected: []sql.Row{
+					{"t", "pk", "modified"},
+					{"t", "c1", "removed"},
+					{"t", "c1", "modified"},
+				},
+			},
+		},
+	},
+	{
+		Name: "column drop and recreate with different type that can be coerced (int -> string) - commit history",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c int);",
 			"call dolt_add('.')",
@@ -3966,7 +4141,40 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "column drop and recreate with different type that can NOT be coerced (string -> int)",
+		Name: "column drop and recreate with different type that can be coerced (int -> string) - working set",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c int);",
+			"insert into t values (1, 2), (3, 4);",
+			"call dolt_add('.')",
+
+			"alter table t drop column c;",
+			"alter table t add column c varchar(20);",
+			"insert into t values (100, '101');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
+				Expected: []sql.Row{{5}},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='STAGED';",
+				Expected: []sql.Row{
+					{"t", "pk", "added"},
+					{"t", "c", "added"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='WORKING';",
+				Expected: []sql.Row{
+					{"t", "pk", "modified"},
+					{"t", "c", "removed"},
+					{"t", "c", "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "column drop and recreate with different type that can NOT be coerced (string -> int) - commit history",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c varchar(20));",
 			"call dolt_add('.')",
@@ -4011,7 +4219,40 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "multiple column renames",
+		Name: "column drop and recreate with different type that can NOT be coerced (string -> int) - working set",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c varchar(20));",
+			"insert into t values (1, 'two'), (3, 'four');",
+			"call dolt_add('.')",
+
+			"alter table t drop column c;",
+			"alter table t add column c int;",
+			"insert into t values (100, 101);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
+				Expected: []sql.Row{{5}},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='STAGED';",
+				Expected: []sql.Row{
+					{"t", "pk", "added"},
+					{"t", "c", "added"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='WORKING';",
+				Expected: []sql.Row{
+					{"t", "pk", "modified"},
+					{"t", "c", "removed"},
+					{"t", "c", "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "multiple column renames - commit history",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int);",
 			"call dolt_add('.')",
@@ -4068,7 +4309,43 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "primary key change",
+		Name: "multiple column renames - working set",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int);",
+			"insert into t values (1, 2);",
+			"call dolt_add('.')",
+
+			"alter table t rename column c1 to c2;",
+			"insert into t values (3, 4);",
+
+			"alter table t drop column c2;",
+			"alter table t add column c2 int;",
+			"insert into t values (100, '101');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
+				Expected: []sql.Row{{5}},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='STAGED';",
+				Expected: []sql.Row{
+					{"t", "pk", "added"},
+					{"t", "c1", "added"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='WORKING';",
+				Expected: []sql.Row{
+					{"t", "pk", "modified"},
+					{"t", "c1", "removed"},
+					{"t", "c2", "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "primary key change - commit history",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int);",
 			"call dolt_add('.')",
@@ -4117,6 +4394,38 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit4;",
+				Expected: []sql.Row{
+					{"t", "pk", "modified"},
+					{"t", "c1", "modified"},
+				},
+			},
+		},
+	},
+	{
+		Name: "primary key change - working set",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int);",
+			"insert into t values (1, 2), (3, 4);",
+			"call dolt_add('.')",
+
+			"alter table t drop primary key;",
+			"alter table t add primary key (c1);",
+			"insert into t values (7, 8);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='STAGED';",
+				Expected: []sql.Row{
+					{"t", "pk", "added"},
+					{"t", "c1", "added"},
+				},
+			},
+			{
+				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='WORKING';",
 				Expected: []sql.Row{
 					{"t", "pk", "modified"},
 					{"t", "c1", "modified"},
