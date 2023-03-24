@@ -281,27 +281,26 @@ func validateTupleFields(existingSch schema.Schema, targetSch schema.Schema) (bo
 		return false, err
 	}
 
-	for i, j := range valMapping {
-
-		// If the field positions have changed between existing and target, bail.
-		if i != j {
-			return false, nil
+	for existingIndex, targetIndex := range valMapping {
+		// If the column was dropped, continue to the next column targetIndex
+		if targetIndex == -1 {
+			continue
 		}
 
 		// If the field types have changed between existing and target, bail.
-		if existingVD.Types[i].Enc != targetVD.Types[j].Enc {
+		if existingVD.Types[existingIndex].Enc != targetVD.Types[targetIndex].Enc {
 			return false, nil
 		}
 
-		// If a not null constraint was added, bail.
-		if existingVD.Types[j].Nullable && !targetVD.Types[j].Nullable {
+		// If a not-null constraint was added, bail.
+		if existingVD.Types[existingIndex].Nullable && !targetVD.Types[targetIndex].Nullable {
 			return false, nil
 		}
 
 		// If the collation was changed, bail.
 		// Different collations will affect the ordering of any secondary indexes using this column.
-		existingStr, ok1 := existingSch.GetNonPKCols().GetByIndex(i).TypeInfo.ToSqlType().(sql.StringType)
-		targetStr, ok2 := targetSch.GetNonPKCols().GetByIndex(i).TypeInfo.ToSqlType().(sql.StringType)
+		existingStr, ok1 := existingSch.GetNonPKCols().GetByIndex(existingIndex).TypeInfo.ToSqlType().(sql.StringType)
+		targetStr, ok2 := targetSch.GetNonPKCols().GetByIndex(targetIndex).TypeInfo.ToSqlType().(sql.StringType)
 
 		if ok1 && ok2 && !existingStr.Collation().Equals(targetStr.Collation()) {
 			return false, nil
