@@ -21,6 +21,7 @@ import (
 	"io"
 
 	textdiff "github.com/andreyvit/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dustin/go-humanize"
 	"github.com/fatih/color"
@@ -44,7 +45,7 @@ type diffWriter interface {
 	// BeginTable is called when a new table is about to be written, before any schema or row diffs are written
 	BeginTable(ctx context.Context, td diff.TableDelta) error
 	// WriteTableSchemaDiff is called to write a schema diff for the table given (if requested by args)
-	WriteTableSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error
+	WriteTableSchemaDiff(ctx context.Context, fromRoot *doltdb.RootValue, toRoot *doltdb.RootValue, td diff.TableDelta) error
 	// WriteTriggerDiff is called to write a trigger diff
 	WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error
 	// WriteViewDiff is called to write a view diff
@@ -221,17 +222,13 @@ func (t tabularDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) e
 	return nil
 }
 
-func (t tabularDiffWriter) WriteTableSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
-	fromSch, toSch, err := td.GetSchemas(ctx)
-	if err != nil {
-		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
-	}
-
+func (t tabularDiffWriter) WriteTableSchemaDiff(ctx context.Context, fromRoot *doltdb.RootValue, toRoot *doltdb.RootValue, td diff.TableDelta) error {
 	var fromCreateStmt = ""
 	if td.FromTable != nil {
-		// TODO: use UserSpaceDatabase for these, no reason for this separate database implementation
-		sqlDb := sqle.NewSingleTableDatabase(td.FromName, fromSch, td.FromFks, td.FromFksParentSch)
+		sqlDb := sqle.NewUserSpaceDatabase(fromRoot, editor.Options{})
+		// sqlDb := sqle.NewSingleTableDatabase(td.FromName, fromSch, td.FromFks, td.FromFksParentSch)
 		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
+		var err error
 		fromCreateStmt, err = sqle.GetCreateTableStmt(sqlCtx, engine, td.FromName)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
@@ -240,8 +237,10 @@ func (t tabularDiffWriter) WriteTableSchemaDiff(ctx context.Context, toRoot *dol
 
 	var toCreateStmt = ""
 	if td.ToTable != nil {
-		sqlDb := sqle.NewSingleTableDatabase(td.ToName, toSch, td.ToFks, td.ToFksParentSch)
+		sqlDb := sqle.NewUserSpaceDatabase(toRoot, editor.Options{})
+		// sqlDb := sqle.NewSingleTableDatabase(td.FromName, fromSch, td.FromFks, td.FromFksParentSch)
 		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
+		var err error
 		toCreateStmt, err = sqle.GetCreateTableStmt(sqlCtx, engine, td.ToName)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
@@ -298,7 +297,7 @@ func (s sqlDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) error
 	return nil
 }
 
-func (s sqlDiffWriter) WriteTableSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
+func (s sqlDiffWriter) WriteTableSchemaDiff(ctx context.Context, fromRoot *doltdb.RootValue, toRoot *doltdb.RootValue, td diff.TableDelta) error {
 	toSchemas, err := toRoot.GetAllSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("could not read schemas from toRoot").AddCause(err).Build()
@@ -417,7 +416,7 @@ func (j *jsonDiffWriter) BeginTable(ctx context.Context, td diff.TableDelta) err
 	return err
 }
 
-func (j *jsonDiffWriter) WriteTableSchemaDiff(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta) error {
+func (j *jsonDiffWriter) WriteTableSchemaDiff(ctx context.Context, fromRoot *doltdb.RootValue, toRoot *doltdb.RootValue, td diff.TableDelta) error {
 	toSchemas, err := toRoot.GetAllSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("could not read schemas from toRoot").AddCause(err).Build()

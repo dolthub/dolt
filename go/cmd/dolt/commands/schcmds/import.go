@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -301,8 +302,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	}
 
 	tblName := impArgs.tableName
-	// inferred schemas have no foreign keys
-	sqlDb := sqle.NewSingleTableDatabase(tblName, sch, nil, nil)
+	sqlDb := sqle.NewUserSpaceDatabase(root, editor.Options{})
 	sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
 
 	stmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, tblName)

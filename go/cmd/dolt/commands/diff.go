@@ -593,7 +593,7 @@ func diffUserTable(
 	}
 
 	if dArgs.diffParts&SchemaOnlyDiff != 0 {
-		err := dw.WriteTableSchemaDiff(ctx, dArgs.toRoot, td)
+		err := dw.WriteTableSchemaDiff(ctx, dArgs.fromRoot, dArgs.toRoot, td)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
