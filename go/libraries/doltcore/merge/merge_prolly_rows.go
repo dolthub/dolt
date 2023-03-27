@@ -672,7 +672,7 @@ func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourc
 	newKey := diff.Key
 	var newValue val.Tuple
 	switch diff.Op {
-	case tree.DiffOpRightAdd, tree.DiffOpRightModify, tree.DiffOpRightDelete:
+	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
 		newValue = diff.Right
 		rightMapping := m.valueMerger.rightMapping
 
@@ -681,7 +681,7 @@ func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourc
 		//       logic here. Ideally, the column mapping would happen at the same layer in the code and all in
 		//       one place, but that may not be possible.
 		// NEXT STEP: Need to dig into the tryMerge code and see how it's using the OrdinalMappings and see if
-		//            it's changeable. If it's not... then maybe the ThreeWayDiff should have a flag that say
+		//            it's changeable. If it's not... then maybe the ThreeWayDiff should have a flag that says
 		//            if the columns have been mapped or not? That would be cleaner than this hack.
 		if sourceSch != nil {
 			finalSchNonPKColCount := len(m.finalSch.GetNonPKCols().GetColumns())
@@ -695,6 +695,8 @@ func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourc
 			}
 			newValue = val.NewTuple(m.valueMerger.syncPool, modifiedValue...)
 		}
+	case tree.DiffOpRightDelete:
+		newValue = diff.Right
 	case tree.DiffOpDivergentModifyResolved:
 		// TODO: Does this case work correctly already? i.e. does it not need it's data to be shifted by the ordinal mapping?
 		//       Tests aren't currently covering this path yet, so need to add something here.
