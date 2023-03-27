@@ -75,6 +75,7 @@ func (c Connection) Password() (string, error) {
 // example, to change server config on a restart.
 type RestartArgs struct {
 	Args *[]string `yaml:"args"`
+	Envs *[]string `yaml:"envs"`
 }
 
 // |TestRepo| represents an init'd dolt repository that is available to a
@@ -155,6 +156,7 @@ func (f WithFile) WriteAtDir(dir string) error {
 type Server struct {
 	Name string   `yaml:"name"`
 	Args []string `yaml:"args"`
+	Envs []string `yaml:"envs"`
 
 	// The |Port| which the server will be running on. For now, it is up to
 	// the |Args| to make sure this is true. Defaults to 3308.

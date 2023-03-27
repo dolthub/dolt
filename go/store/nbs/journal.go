@@ -289,6 +289,9 @@ func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 func (j *chunkJournal) UpdateGCGen(ctx context.Context, lastLock addr, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	if j.backing.readOnly() {
 		return j.contents, errReadOnlyManifest
+	} else if j.wr == nil {
+		// pass the update to |j.backing| if the journal is not initialized
+		return j.backing.UpdateGCGen(ctx, lastLock, next, stats, writeHook)
 	} else if j.contents.lock != lastLock {
 		return j.contents, nil // |next| is stale
 	}
