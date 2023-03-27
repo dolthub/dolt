@@ -372,22 +372,18 @@ func (j *chunkJournal) maybeInit(ctx context.Context) (err error) {
 
 // Close implements io.Closer
 func (j *chunkJournal) Close() (err error) {
-	ctx := context.Background()
-	_, last, cerr := j.backing.ParseIfExists(ctx, &Stats{}, nil)
-	if cerr != nil {
-		err = cerr
-	} else if !emptyAddr(j.contents.lock) {
-		// best effort update to |backing|, this will
-		// fail if the database has been deleted.
-		// if we spuriously fail, we'll update |backing|
-		// next time we open this chunkJournal
-		_, _ = j.backing.Update(ctx, last.lock, j.contents, &Stats{}, nil)
-	}
 	if j.wr != nil {
 		err = j.wr.Close()
+		// flush the latest root to the backing manifest
+		if !j.backing.readOnly() {
+			cerr := j.flushToBackingManifest(context.Background(), j.contents, &Stats{})
+			if err == nil {
+				err = cerr
+			}
+		}
 	}
 	// close the journal manifest to release the file lock
-	if cerr = j.backing.Close(); err == nil {
+	if cerr := j.backing.Close(); err == nil {
 		err = cerr // keep first error
 	}
 	return
