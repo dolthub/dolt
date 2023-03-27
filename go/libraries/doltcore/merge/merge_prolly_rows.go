@@ -683,7 +683,7 @@ func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourc
 		// NEXT STEP: Need to dig into the tryMerge code and see how it's using the OrdinalMappings and see if
 		//            it's changeable. If it's not... then maybe the ThreeWayDiff should have a flag that says
 		//            if the columns have been mapped or not? That would be cleaner than this hack.
-		if sourceSch != nil {
+		if sourceSch != nil && !schema.IsKeyless(sourceSch) {
 			finalSchNonPKColCount := len(m.finalSch.GetNonPKCols().GetColumns())
 			modifiedValue := make([][]byte, finalSchNonPKColCount)
 			for i := 0; i < finalSchNonPKColCount; i++ {
