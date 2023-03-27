@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -510,17 +511,23 @@ func testSchemaMerge(t *testing.T, tests []schemaMergeTest) {
 	var mo merge.MergeOpts
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			a := makeRoot(t, test.ancestor)
-			l := makeRoot(t, test.left)
-			r := makeRoot(t, test.right)
-			m := makeRoot(t, test.merged)
-			assertNoneNil(t, a, l, r, m)
-
+			denv := dtestutils.CreateTestEnv()
+			a := makeRoot(t, denv, test.ancestor)
+			l := makeRoot(t, denv, test.left)
+			r := makeRoot(t, denv, test.right)
+			assertNoneNil(t, a, l, r)
+			var m *doltdb.RootValue
+			if !test.conflict {
+				m = makeRoot(t, denv, test.merged)
+				assert.NotNil(t, m)
+			} else {
+				t.Skip("todo: assert conflict error")
+			}
 			ctx := context.Background()
 			eo = eo.WithDeaf(editor.NewInMemDeaf(a.VRW()))
 			root, _, err := merge.MergeRoots(ctx, l, r, a, rootish{r}, rootish{a}, eo, mo)
 			if err != nil {
-				t.Skip()
+				t.Skip("error during merge: " + err.Error())
 			}
 			assert.NoError(t, err)
 			assert.NotNil(t, root)
@@ -550,8 +557,9 @@ func row(values ...any) sql.Row {
 	return sql.NewRow(values...)
 }
 
-func makeRoot(t *testing.T, tbl table) *doltdb.RootValue {
+func makeRoot(t *testing.T, denv *env.DoltEnv, tbl table) *doltdb.RootValue {
 	var sb strings.Builder
+	sb.WriteString("DROP TABLE IF EXISTS " + tbl.ns.name + ";\n")
 	sb.WriteString(tbl.ns.create)
 	for _, r := range tbl.rows {
 		sb.WriteString(";\n")
@@ -559,9 +567,15 @@ func makeRoot(t *testing.T, tbl table) *doltdb.RootValue {
 		require.NoError(t, err)
 		sb.WriteString(stmt)
 	}
-	denv := dtestutils.CreateTestEnv()
 	root, err := sqle.ExecuteSql(denv, nil, sb.String())
-	assert.NoError(t, err)
+	if err != nil {
+		t.Logf("")
+	}
+	require.NoError(t, err)
+	require.NotNil(t, root)
+	names, err := root.GetTableNames(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []string{tbl.ns.name}, names)
 	return root
 }
 
