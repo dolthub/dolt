@@ -78,43 +78,6 @@ func TestFileManifestLoadIfExists(t *testing.T) {
 	}
 }
 
-func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
-	t.Skip("TODO")
-	assert := assert.New(t)
-	fm := makeFileManifestTempDir(t)
-	defer file.RemoveAll(fm.dir)
-	stats := &Stats{}
-
-	// Simulate another process writing a manifest.
-	lock := computeAddr([]byte("locker"))
-	newRoot := hash.Of([]byte("new root"))
-	tableName := hash.Of([]byte("table1"))
-	gcGen := addr{}
-	m := strings.Join([]string{StorageVersion, constants.FormatLD1String, lock.String(), newRoot.String(), gcGen.String(), tableName.String(), "0"}, ":")
-	err := clobberManifest(fm.dir, m)
-	require.NoError(t, err)
-
-	// ParseIfExists should now reflect the manifest written above.
-	exists, upstream, err := fm.ParseIfExists(context.Background(), stats, func() error {
-		// This should fail to get the lock, and therefore _not_ clobber the manifest.
-		lock := computeAddr([]byte("newlock"))
-		badRoot := hash.Of([]byte("bad root"))
-		m = strings.Join([]string{StorageVersion, "0", lock.String(), badRoot.String(), gcGen.String(), tableName.String(), "0"}, ":")
-		b, err := tryClobberManifest(fm.dir, m)
-		require.NoError(t, err, string(b))
-		return err
-	})
-
-	require.NoError(t, err)
-	assert.True(exists)
-	assert.Equal(constants.FormatLD1String, upstream.nbfVers)
-	assert.Equal(newRoot, upstream.root)
-	if assert.Len(upstream.specs, 1) {
-		assert.Equal(tableName.String(), upstream.specs[0].name.String())
-		assert.Equal(uint32(0), upstream.specs[0].chunkCount)
-	}
-}
-
 func TestFileManifestUpdateWontClobberOldVersion(t *testing.T) {
 	assert := assert.New(t)
 	fm := makeFileManifestTempDir(t)

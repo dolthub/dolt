@@ -37,7 +37,7 @@ setup() {
 }
 
 teardown() {
-    stop_sql_server 1 && sleep 0.5
+    stop_sql_server 1
     teardown_common
 }
 

@@ -435,6 +435,7 @@ func newJournalManifest(ctx context.Context, dir string) (m *journalManifest, er
 	var f *os.File
 	f, err = openIfExists(filepath.Join(dir, manifestFileName))
 	if err != nil {
+		_ = lock.Unlock()
 		return nil, err
 	} else if f == nil {
 		return m, nil
@@ -443,13 +444,18 @@ func newJournalManifest(ctx context.Context, dir string) (m *journalManifest, er
 		if cerr := f.Close(); err == nil {
 			err = cerr // keep first error
 		}
+		if err != nil {
+			_ = lock.Unlock()
+		}
 	}()
 
 	var ok bool
 	ok, _, err = m.ParseIfExists(ctx, &Stats{}, nil)
 	if err != nil {
+		_ = lock.Unlock()
 		return nil, err
 	} else if !ok {
+		_ = lock.Unlock()
 		return nil, ErrUnreadableManifest
 	}
 	return
