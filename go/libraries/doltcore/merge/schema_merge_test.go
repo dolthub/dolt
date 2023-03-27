@@ -517,6 +517,7 @@ func testSchemaMerge(t *testing.T, tests []schemaMergeTest) {
 			assertNoneNil(t, a, l, r, m)
 
 			ctx := context.Background()
+			eo = eo.WithDeaf(editor.NewInMemDeaf(a.VRW()))
 			root, _, err := merge.MergeRoots(ctx, l, r, a, rootish{r}, rootish{a}, eo, mo)
 			if err != nil {
 				t.Skip()
