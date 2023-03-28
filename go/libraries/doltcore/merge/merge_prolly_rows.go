@@ -48,6 +48,7 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 	if err != nil {
 		return nil, nil, err
 	}
+	tm.leftTbl = mergeTbl
 
 	// Before we merge the table data we need to fix up the primary index on the left-side of the merge for
 	// any ordinal mapping changes (i.e. moving/dropping/adding columns).
