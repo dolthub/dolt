@@ -904,18 +904,13 @@ func initialDbState(ctx context.Context, db SqlDatabase, branch string) (dsess.I
 
 func initialStateForRevisionDb(ctx *sql.Context, srcDb SqlDatabase) (dsess.InitialDbState, error) {
 	_, revSpec := splitRevisionDbName(srcDb)
-
-	resolvedRevSpec, err := resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
+	dbType, _, err := revisionDbType(ctx, srcDb, revSpec)
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
-
-	_, isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	if isBranch {
+	
+	switch dbType {
+	case RevisionDbTypeBranch:
 		init, err := initialStateForBranchDb(ctx, srcDb)
 		// preserve original user case in the case of not found
 		if sql.ErrDatabaseNotFound.Is(err) {
@@ -925,14 +920,7 @@ func initialStateForRevisionDb(ctx *sql.Context, srcDb SqlDatabase) (dsess.Initi
 		}
 
 		return init, nil
-	}
-
-	isTag, err := isTag(ctx, srcDb, resolvedRevSpec)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	if isTag {
+	case RevisionDbTypeTag:
 		// TODO: this should be an interface, not a struct
 		replicaDb, ok := srcDb.(ReadReplicaDatabase)
 
@@ -951,9 +939,7 @@ func initialStateForRevisionDb(ctx *sql.Context, srcDb SqlDatabase) (dsess.Initi
 		}
 
 		return init, nil
-	}
-
-	if doltdb.IsValidCommitHash(resolvedRevSpec) {
+	case RevisionDbTypeCommit:
 		// TODO: this should be an interface, not a struct
 		replicaDb, ok := srcDb.(ReadReplicaDatabase)
 		if ok {
@@ -970,10 +956,10 @@ func initialStateForRevisionDb(ctx *sql.Context, srcDb SqlDatabase) (dsess.Initi
 			return dsess.InitialDbState{}, err
 		}
 		return init, nil
+	default:
+		// TODO: error here?
+		return dsess.InitialDbState{}, nil
 	}
-
-	// TODO: error here?
-	return dsess.InitialDbState{}, nil
 }
 
 // databaseForClone returns a newly cloned database if read replication is enabled and a remote DB exists, or an error
