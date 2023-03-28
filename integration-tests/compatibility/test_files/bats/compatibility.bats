@@ -190,6 +190,7 @@ EOF
     run dolt version
     if [[ $output =~ "__DOLT__" ]]; then
         run dolt merge other
+        echo "status: $status , output: $output \n"
         [ $status -ne 0 ]
         [[ $output =~ "table abc can't be automatically merged" ]] || false
     else
