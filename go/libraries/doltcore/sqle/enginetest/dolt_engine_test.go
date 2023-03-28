@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-	"github.com/dolthub/go-mysql-server/sql/plan"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/assert"
@@ -786,7 +785,7 @@ func TestTransactions(t *testing.T) {
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
-	for _, script := range DoltSqlFuncTransactionTests {
+	for _, script := range DoltStoredProcedureTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 	for _, script := range DoltConflictHandlingTests {
@@ -938,6 +937,13 @@ func TestDoltDdlScripts(t *testing.T) {
 		require.NoError(t, err)
 		enginetest.TestScriptWithEngine(t, e, harness, script)
 	}
+
+	// TODO: these scripts should be general enough to go in GMS
+	for _, script := range AddDropPrimaryKeysScripts {
+		e, err := harness.NewEngine(t)
+		require.NoError(t, err)
+		enginetest.TestScriptWithEngine(t, e, harness, script)
+	}
 }
 
 func TestBrokenDdlScripts(t *testing.T) {
@@ -950,8 +956,10 @@ func TestDescribeTableAsOf(t *testing.T) {
 	enginetest.TestScript(t, newDoltHarness(t), DescribeTableAsOfScriptTest)
 }
 
-func TestShowCreateTableAsOf(t *testing.T) {
-	enginetest.TestScript(t, newDoltHarness(t), ShowCreateTableAsOfScriptTest)
+func TestShowCreateTable(t *testing.T) {
+	for _, script := range ShowCreateTableScriptTests {
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
 }
 
 func TestViewsWithAsOf(t *testing.T) {
@@ -1085,91 +1093,69 @@ func TestSingleTransactionScript(t *testing.T) {
 	t.Skip()
 
 	script := queries.TransactionTest{
-		Name: "allow commit conflicts on, conflict on dolt_merge",
+		Name: "staged changes in working set, dolt_add and dolt_commit on top of it",
 		SetUpScript: []string{
-			"CREATE TABLE test (pk int primary key, val int)",
-			"CALL DOLT_ADD('.')",
-			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
+			"create table users (id int primary key, name varchar(32))",
+			"insert into users values (1, 'tim'), (2, 'jim')",
+			"call dolt_commit('-A', '-m', 'initial commit')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "/* client a */ set autocommit = off, dolt_allow_commit_conflicts = on",
-				Expected: []sql.Row{{}},
-			},
-			{
-				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client b */ set autocommit = off, dolt_allow_commit_conflicts = on",
-				Expected: []sql.Row{{}},
-			},
-			{
-				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
-			},
-			{
-				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
+				Query:            "/* client a */ start transaction",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:            "/* client a */ call dolt_commit('-am', 'commit on main')",
+				Query:            "/* client b */ start transaction",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
-			},
-			{
-				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
+				Query:            "/* client a */ update users set name = 'tim2' where name = 'tim'",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ call dolt_merge('main')",
-				Expected: []sql.Row{{0, 1}},
+				Query:            "/* client b */ update users set name = 'jim2' where name = 'jim'",
+				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ select count(*) from dolt_conflicts",
-				Expected: []sql.Row{{1}},
+				Query:            "/* client a */ call dolt_add('users')",
+				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0, 0}, {1, 2}},
+				Query:            "/* client a */ commit",
+				SkipResultsCheck: true,
 			},
-			{ // no error because of our session settings
-				Query:    "/* client b */ commit",
+			{
+				Query:            "/* client b */ call dolt_add('users')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from users order by id",
+				Expected: []sql.Row{{1, "tim"}, {2, "jim2"}},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-m', 'jim2 commit')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from users order by id",
+				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+			},
+			{
+				Query:    "/* client b */ select * from users as of 'HEAD' order by id",
+				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+			},
+			{
+				Query:    "/* client b */ select * from dolt_status",
 				Expected: []sql.Row{},
 			},
-			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
-				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
-				Expected: []sql.Row{{gmstypes.OkResult{
-					RowsAffected: 1,
-					Info: plan.UpdateInfo{
-						Matched: 1,
-						Updated: 1,
-					},
-				}}},
-			},
 			{
-				Query:    "/* client b */ delete from dolt_conflicts_test",
-				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
-			},
-			{
-				Query:    "/* client b */ commit",
+				Query:    "/* client b */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0, 0}, {1, 1}},
-			},
-			{
-				Query:    "/* client b */ select count(*) from dolt_conflicts",
-				Expected: []sql.Row{{0}},
+				// staged changes include changes from both A and B at staged revision of data
+				Query:    "/* client b */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
+				Expected: []sql.Row{},
 			},
 		},
 	}
@@ -1227,6 +1213,28 @@ func TestUnscopedDiffSystemTable(t *testing.T) {
 
 func TestUnscopedDiffSystemTablePrepared(t *testing.T) {
 	for _, test := range UnscopedDiffSystemTableScriptTests {
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, newDoltHarness(t), test)
+		})
+	}
+}
+
+func TestColumnDiffSystemTable(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("correct behavior of dolt_column_diff only guaranteed on new format")
+	}
+	for _, test := range ColumnDiffSystemTableScriptTests {
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, newDoltHarness(t), test)
+		})
+	}
+}
+
+func TestColumnDiffSystemTablePrepared(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("correct behavior of dolt_column_diff only guaranteed on new format")
+	}
+	for _, test := range ColumnDiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, newDoltHarness(t), test)
 		})

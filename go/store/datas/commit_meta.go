@@ -35,6 +35,8 @@ const (
 	commitMetaVersion = "1.0"
 )
 
+const defaultInitialCommitMessage = "Initialize data repository"
+
 var ErrNameNotConfigured = errors.New("Aborting commit due to empty committer name. Is your config set?")
 var ErrEmailNotConfigured = errors.New("Aborting commit due to empty committer email. Is your config set?")
 var ErrEmptyCommitMessage = errors.New("Aborting commit due to empty commit message.")
@@ -160,4 +162,35 @@ func (cm *CommitMeta) FormatTS() string {
 // String returns the human readable string representation of the commit data
 func (cm *CommitMeta) String() string {
 	return fmt.Sprintf("name: %s, email: %s, timestamp: %s, description: %s", cm.Name, cm.Email, cm.FormatTS(), cm.Description)
+}
+
+// CommitMetaGenerator is an interface that generates a sequence of CommitMeta structs, and implements a predicate to check whether
+// a proposed commit is acceptable.
+type CommitMetaGenerator interface {
+	Next() (*CommitMeta, error)
+	IsGoodCommit(*Commit) bool
+}
+
+// The default implementation of CommitMetaGenerator, which generates a single commit which is always acceptable.
+type simpleCommitMetaGenerator struct {
+	name, email      string
+	timestamp        time.Time
+	message          string
+	alreadyGenerated bool
+}
+
+func (g *simpleCommitMetaGenerator) Next() (*CommitMeta, error) {
+	if g.alreadyGenerated {
+		return nil, fmt.Errorf("Called simpleCommitMetaGenerator.Next twice. This should never happen.")
+	}
+	g.alreadyGenerated = true
+	return NewCommitMetaWithUserTS(g.name, g.email, g.message, g.timestamp)
+}
+
+func (*simpleCommitMetaGenerator) IsGoodCommit(*Commit) bool {
+	return true
+}
+
+func MakeCommitMetaGenerator(name, email string, timestamp time.Time) CommitMetaGenerator {
+	return &simpleCommitMetaGenerator{name: name, email: email, timestamp: timestamp, message: defaultInitialCommitMessage, alreadyGenerated: false}
 }

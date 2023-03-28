@@ -18,7 +18,9 @@ import (
 	"context"
 	"crypto/sha512"
 	"encoding/base32"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"time"
 
 	"golang.org/x/crypto/ed25519"
@@ -176,4 +178,36 @@ func (dc DoltCreds) RPCCreds(audience string) *RPCCreds {
 		Subject:    "doltClientCredentials/" + b32KIDStr,
 		RequireTLS: false,
 	}
+}
+
+type DoltCredsForPass struct {
+	Username string
+	Password string
+}
+
+type RPCCredsForPass struct {
+	RequireTLS       bool
+	UserPassContents string
+}
+
+func (dcp DoltCredsForPass) ToBase64Str() string {
+	bStr := []byte(fmt.Sprintf("%s:%s", dcp.Username, dcp.Password))
+	return base64.StdEncoding.EncodeToString(bStr)
+}
+
+func (dc DoltCredsForPass) RPCCreds() *RPCCredsForPass {
+	return &RPCCredsForPass{
+		RequireTLS:       false,
+		UserPassContents: dc.ToBase64Str(),
+	}
+}
+
+func (c *RPCCredsForPass) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return map[string]string{
+		"authorization": "Basic " + c.UserPassContents,
+	}, nil
+}
+
+func (c *RPCCredsForPass) RequireTransportSecurity() bool {
+	return c.RequireTLS
 }

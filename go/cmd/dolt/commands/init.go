@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -34,6 +35,7 @@ const (
 	initBranchParamName = "initial-branch"
 	newFormatFlag       = "new-format"
 	oldFormatFlag       = "old-format"
+	funHashFlag         = "fun"
 )
 
 var initDocs = cli.CommandDocumentationContent{
@@ -79,6 +81,7 @@ func (cmd InitCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(initBranchParamName, "b", "branch", fmt.Sprintf("The branch name used to initialize this database. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config. If unset, the default initialized branch will be named '%s'.", env.InitBranchName, env.DefaultInitBranch))
 	ap.SupportsFlag(newFormatFlag, "", fmt.Sprintf("Specify this flag to use the new storage format (%s).", types.Format_DOLT.VersionString()))
 	ap.SupportsFlag(oldFormatFlag, "", fmt.Sprintf("Specify this flag to use the old storage format (%s).", types.Format_LD_1.VersionString()))
+	ap.SupportsFlag(funHashFlag, "", "") // This flag is an easter egg. We can't currently prevent it from being listed in the help, but the description is deliberately left blank.
 	return ap
 }
 
@@ -151,7 +154,13 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 	}
 
-	err := dEnv.InitRepoWithTime(context.Background(), types.Format_Default, name, email, initBranch, t)
+	requiresFunHash := apr.Contains(funHashFlag)
+	commitMetaGenerator := datas.MakeCommitMetaGenerator(name, email, t)
+	if requiresFunHash {
+		commitMetaGenerator = datas.MakeFunCommitMetaGenerator(name, email, t)
+	}
+
+	err := dEnv.InitRepoWithCommitMetaGenerator(context.Background(), types.Format_Default, initBranch, commitMetaGenerator)
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to initialize directory as a data repo. %s", err.Error()))
 		return 1

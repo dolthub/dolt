@@ -101,6 +101,27 @@ func TestBinlogReplicationSanityCheck(t *testing.T) {
 	assertRepoStateFileExists(t, "db01")
 }
 
+// TestBinlogSystemUserIsLocked tests that the binlog applier user is locked and cannot be used to connect to the server.
+func TestBinlogSystemUserIsLocked(t *testing.T) {
+	defer teardown(t)
+	startSqlServers(t)
+
+	dsn := fmt.Sprintf("%s@tcp(127.0.0.1:%v)/", binlogApplierUser, doltPort)
+	db, err := sqlx.Open("mysql", dsn)
+	require.NoError(t, err)
+
+	// Before starting replication, the system account does not exist
+	err = db.Ping()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "User not found")
+
+	// After starting replication, the system account is locked
+	startReplication(t, mySqlPort)
+	err = db.Ping()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "Access denied for user")
+}
+
 // TestFlushLogs tests that binary logs can be flushed on the primary, which forces a new binlog file to be written,
 // including sending new Rotate and FormatDescription events to the replica. This is a simple sanity tests that we can
 // process the events without errors.
@@ -589,6 +610,14 @@ func stopDoltSqlServer(t *testing.T) {
 	err = p.Signal(syscall.SIGKILL)
 	require.NoError(t, err)
 	time.Sleep(250 * time.Millisecond)
+
+	// Remove the sql-server lock file so that we can restart cleanly
+	lockFilepath := filepath.Join(testDir, "dolt", "db01", ".dolt", "sql-server.lock")
+	stat, _ := os.Stat(lockFilepath)
+	if stat != nil {
+		err = os.Remove(lockFilepath)
+		require.NoError(t, err)
+	}
 }
 
 func startReplication(_ *testing.T, port int) {
@@ -789,9 +818,12 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 
 	socketPath := filepath.Join("/tmp", fmt.Sprintf("dolt.%v.sock", doltPort))
 
+	// use an admin user NOT named "root" to test that we don't require the "root" account
+	adminUser := "admin"
+
 	args := []string{"go", "run", "./cmd/dolt",
 		"sql-server",
-		"-uroot",
+		fmt.Sprintf("-u%s", adminUser),
 		"--loglevel=TRACE",
 		fmt.Sprintf("--data-dir=%s", dir),
 		fmt.Sprintf("--port=%v", doltPort),
@@ -837,7 +869,7 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 
 	fmt.Printf("Dolt CMD: %s\n", cmd.String())
 
-	dsn := fmt.Sprintf("root@tcp(127.0.0.1:%v)/", doltPort)
+	dsn := fmt.Sprintf("%s@tcp(127.0.0.1:%v)/", adminUser, doltPort)
 	replicaDatabase = sqlx.MustOpen("mysql", dsn)
 
 	err = waitForSqlServerToStart(replicaDatabase)

@@ -106,6 +106,7 @@ func NewMerger(
 }
 
 // MergeTable merges schema and table data for the table tblName.
+// TODO: this code will loop infinitely when merging certain schema changes
 func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*doltdb.Table, *MergeStats, error) {
 	tm, err := rm.makeTableMerger(ctx, tblName)
 	if err != nil {
