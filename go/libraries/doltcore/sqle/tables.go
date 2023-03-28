@@ -1112,6 +1112,7 @@ type doltAlterableTableInterface interface {
 	sql.CheckAlterableTable
 	sql.PrimaryKeyAlterableTable
 	sql.ProjectedTable
+	sql.CollationAlterableTable
 }
 
 var _ doltAlterableTableInterface = (*AlterableDoltTable)(nil)
@@ -2510,6 +2511,44 @@ func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
 		return err
 	}
 
+	return t.updateFromRoot(ctx, newRoot)
+}
+
+func (t *AlterableDoltTable) ModifyCollation(ctx *sql.Context, collation sql.CollationID) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
+	currentTable, _, err := root.GetTable(ctx, t.tableName)
+	if err != nil {
+		return err
+	}
+	sch, err := currentTable.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	sch.SetCollation(schema.Collation(collation))
+
+	table, err := t.DoltTable.DoltTable(ctx)
+	if err != nil {
+		return err
+	}
+	newTable, err := table.UpdateSchema(ctx, sch)
+	if err != nil {
+		return err
+	}
+	newRoot, err := root.PutTable(ctx, t.tableName, newTable)
+	if err != nil {
+		return err
+	}
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
 	return t.updateFromRoot(ctx, newRoot)
 }
 
