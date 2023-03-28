@@ -190,7 +190,6 @@ EOF
     run dolt version
     if [[ $output =~ "__DOLT__" ]]; then
         run dolt merge other
-        echo "status: $status , output: $output \n"
         [ $status -eq 0 ]
         [[ $output =~ "Merge conflict in abc" ]] || false
         [[ $output =~ "Automatic merge failed" ]] || false
