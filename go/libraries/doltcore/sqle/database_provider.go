@@ -873,7 +873,7 @@ func initialDbState(ctx context.Context, db SqlDatabase, branch string) (dsess.I
 }
 
 func initialStateForRevisionDb(ctx *sql.Context, srcDb SqlDatabase) (dsess.InitialDbState, error) {
-	_, revSpec := SplitRevisionDbName(srcDb)
+	_, revSpec := splitRevisionDbName(srcDb)
 
 	resolvedRevSpec, err := resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
 	if err != nil {
@@ -1102,8 +1102,9 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 	return nil, sql.ErrTableFunctionNotFound.New(name)
 }
 
-// SplitRevisionDbName splits the given database name into its base and revision parts and returns them
-func SplitRevisionDbName(db sql.Database) (string, string) {
+// splitRevisionDbName splits the given database name into its base and revision parts and returns them. Non-revision 
+// DBs use their full name as the base name, and empty string as the revision.
+func splitRevisionDbName(db sql.Database) (string, string) {
 	sqldb, ok := db.(SqlDatabase)
 	if !ok {
 		return db.Name(), ""
@@ -1128,7 +1129,7 @@ func (p DoltDatabaseProvider) isRevisionDatabase(ctx *sql.Context, dbName string
 		return false, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	_, rev := SplitRevisionDbName(db)
+	_, rev := splitRevisionDbName(db)
 	return rev != "", nil
 }
 
@@ -1277,7 +1278,7 @@ func revisionDbForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 }
 
 func initialStateForBranchDb(ctx context.Context, srcDb SqlDatabase) (dsess.InitialDbState, error) {
-	_, revSpec := SplitRevisionDbName(srcDb)
+	_, revSpec := splitRevisionDbName(srcDb)
 
 	branch := ref.NewBranchRef(revSpec)
 	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, branch)
@@ -1382,7 +1383,7 @@ func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string) (Read
 }
 
 func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.InitialDbState, error) {
-	_, revSpec := SplitRevisionDbName(srcDb)
+	_, revSpec := splitRevisionDbName(srcDb)
 	tag := ref.NewTagRef(revSpec)
 
 	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, tag)
@@ -1424,7 +1425,7 @@ func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 }
 
 func initialStateForCommit(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.InitialDbState, error) {
-	_, revSpec := SplitRevisionDbName(srcDb)
+	_, revSpec := splitRevisionDbName(srcDb)
 
 	spec, err := doltdb.NewCommitSpec(revSpec)
 	if err != nil {

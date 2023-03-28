@@ -105,7 +105,7 @@ func (db Database) Revision() string {
 }
 
 func (db Database) BaseName() string {
-	base, _ := SplitRevisionDbName(db)
+	base, _ := splitRevisionDbName(db)
 	return base
 }
 
