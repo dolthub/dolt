@@ -40,7 +40,7 @@ type confVals struct {
 // and returns its updated value.
 func mergeProllySecondaryIndexes(
 	ctx context.Context,
-	tm TableMerger,
+	tm *TableMerger,
 	leftSet, rightSet durable.IndexSet,
 	finalSch schema.Schema,
 	finalRows durable.Index,

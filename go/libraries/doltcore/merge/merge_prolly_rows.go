@@ -88,7 +88,7 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 	}
 
 	var stats *MergeStats
-	mergeTbl, stats, err = mergeProllyTableData(ctx, *tm, mergedSch, mergeTbl, valueMerger)
+	mergeTbl, stats, err = mergeProllyTableData(ctx, tm, mergedSch, mergeTbl, valueMerger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -118,8 +118,8 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 // entries are set to values consistent the cell-wise merge result. When the
 // root and merge secondary indexes are merged, they will produce entries
 // consistent with the primary row data.
-func mergeProllyTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger) (*doltdb.Table, *MergeStats, error) {
-	iter, err := threeWayDiffer(ctx, tm, valueMerger)
+func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger) (*doltdb.Table, *MergeStats, error) {
+	iter, err := threeWayDiffer(ctx, *tm, valueMerger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -368,7 +368,7 @@ type validateIndexState struct {
 	secCur    *tree.Cursor
 }
 
-func newUniqAddValidator(ctx context.Context, finalSch schema.Schema, leftRows prolly.Map, ae *prolly.ArtifactsEditor, tm TableMerger) (*uniqAddValidator, error) {
+func newUniqAddValidator(ctx context.Context, finalSch schema.Schema, leftRows prolly.Map, ae *prolly.ArtifactsEditor, tm *TableMerger) (*uniqAddValidator, error) {
 	indexes := finalSch.Indexes().AllIndexes()
 	primaryKD, _ := leftRows.Descriptors()
 	primaryKB := val.NewTupleBuilder(primaryKD)
@@ -582,7 +582,7 @@ type conflictMerger struct {
 	meta         []byte
 }
 
-func newConflictMerger(ctx context.Context, tm TableMerger, ae *prolly.ArtifactsEditor) (*conflictMerger, error) {
+func newConflictMerger(ctx context.Context, tm *TableMerger, ae *prolly.ArtifactsEditor) (*conflictMerger, error) {
 	has, err := tm.leftTbl.HasConflicts(ctx)
 	if err != nil {
 		return nil, err
@@ -634,7 +634,6 @@ func (m *conflictMerger) merge(ctx context.Context, diff tree.ThreeWayDiff) erro
 		return fmt.Errorf("invalid conflict type: %s", diff.Op)
 	}
 	return m.ae.Add(ctx, diff.Key, m.rightRootish, prolly.ArtifactTypeConflict, m.meta)
-
 }
 
 func (m *conflictMerger) finalize(ctx context.Context) (durable.ArtifactIndex, error) {
@@ -757,6 +756,11 @@ func (m *secondaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff) err
 		case tree.DiffOpRightAdd, tree.DiffOpRightModify, tree.DiffOpRightDelete:
 			err = applyEdit(ctx, idx, diff.Key, diff.Base, diff.Right)
 		default:
+			// Any changes to the left-side of the merge are not needed, since we currently
+			// always default to using the left side of the merge as the final result, so all
+			// left-side changes are already there. This won't always be the case though! We'll
+			// eventually want to optimize the merge side we choose for applying changes and
+			// will need to update this code.
 		}
 		if err != nil {
 			return err
@@ -948,6 +952,7 @@ func migrateDataToMergedSchema(ctx context.Context, tm *TableMerger, vm *valueMe
 // conflict occurred. tryMerge should only be called if left and right produce
 // non-identical diffs against base.
 func (m *valueMerger) tryMerge(left, right, base val.Tuple) (val.Tuple, bool) {
+	// We can't ever merge two divergent keyless rows
 	if m.keyless {
 		return nil, false
 	}
