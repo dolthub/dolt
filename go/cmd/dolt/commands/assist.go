@@ -21,11 +21,23 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/apache/arrow/go/arrow/decimal128"
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/admin"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/cnfcmds"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/credcmds"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/cvcmds"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/docscmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/indexcmds"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/schcmds"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/stashcmds"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -168,7 +180,7 @@ func getJsonPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.Dolt
 		return nil, err
 	}
 	
-var logOutput := ` commit l2dqemamag9oq28aeam6323sgc4317sj (HEAD -> feature, main, origin/main)
+   logOutput := ` commit l2dqemamag9oq28aeam6323sgc4317sj (HEAD -> feature, main, origin/main)
  Author: timsehn <tim@dolthub.com>
  Date:  Thu Feb 02 14:49:26 -0800 2023
 
@@ -179,6 +191,18 @@ var logOutput := ` commit l2dqemamag9oq28aeam6323sgc4317sj (HEAD -> feature, mai
 	sb.WriteString(chatGptJsonFooter)
 
 	return strings.NewReader(sb.String()), nil
+}
+
+func runDolt(ctx context.Context, dEnv *env.DoltEnv, command string) (string, error) {
+	res := doltCommand.Exec(ctx, "dolt", strings.Split(command, " "), dEnv)
+	cmd := exec.CommandContext(ctx, "dolt", strings.Split(command, " ")...)
+	
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	
+	return string(output), nil
 }
 
 func writeJsonMessage(sb *strings.Builder, role string, content string) error {
@@ -201,7 +225,7 @@ func getCreateTableStatements(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEn
 	
 	tables, err := root.GetTableNames(ctx)
 	for _, table := range tables {
-		sch, iter, err := sqlEngine.Query(ctx, fmt.Sprintf("SHOW CREATE TABLE %s", table)
+		sch, iter, err := sqlEngine.Query(ctx, fmt.Sprintf("SHOW CREATE TABLE %s", sql.QuoteIdentifier(table)))
 		if err != nil {
 			return "", err
 		}
@@ -237,3 +261,51 @@ func (a Assist) ArgParser() *argparser.ArgParser {
 	return ap
 }
 
+var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Command{
+	InitCmd{},
+	StatusCmd{},
+	AddCmd{},
+	DiffCmd{},
+	ResetCmd{},
+	CleanCmd{},
+	CommitCmd{},
+	SqlCmd{VersionStr: "0.75.3"},
+	admin.Commands,
+	sqlserver.SqlServerCmd{VersionStr: "0.75.3"},
+	sqlserver.SqlClientCmd{VersionStr: "0.75.3"},
+	LogCmd{},
+	BranchCmd{},
+	CheckoutCmd{},
+	MergeCmd{},
+	cnfcmds.Commands,
+	CherryPickCmd{},
+	RevertCmd{},
+	CloneCmd{},
+	FetchCmd{},
+	PullCmd{},
+	PushCmd{},
+	ConfigCmd{},
+	RemoteCmd{},
+	BackupCmd{},
+	LoginCmd{},
+	credcmds.Commands,
+	LsCmd{},
+	schcmds.Commands,
+	tblcmds.Commands,
+	TagCmd{},
+	BlameCmd{},
+	cvcmds.Commands,
+	SendMetricsCmd{},
+	MigrateCmd{},
+	indexcmds.Commands,
+	ReadTablesCmd{},
+	GarbageCollectionCmd{},
+	FilterBranchCmd{},
+	MergeBaseCmd{},
+	RootsCmd{},
+	VersionCmd{VersionStr: "0.75.3"},
+	DumpCmd{},
+	InspectCmd{},
+	docscmds.Commands,
+	stashcmds.StashCommands,
+})
