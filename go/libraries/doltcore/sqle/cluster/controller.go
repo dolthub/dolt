@@ -382,8 +382,15 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool, save
 		var err error
 		if role == string(RoleStandby) {
 			if graceful {
+				beforeRole, beforeEpoch := c.role, c.epoch
 				err = c.gracefulTransitionToStandby(saveConnID)
+				if err == nil && (beforeRole != c.role || beforeEpoch != c.epoch) {
+					// The role or epoch moved out from under us while we were unlocked and transitioning to standby.
+					err = fmt.Errorf("error assuming role '%s' at epoch %d: the role configuration changed while we were replicating to our standbys. Please try again", role, epoch)
+				}
 				if err != nil {
+					c.setProviderIsStandby(c.role != RolePrimary)
+					c.killRunningQueries(saveConnID)
 					return false, err
 				}
 			} else {
@@ -491,12 +498,9 @@ func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.Server
 func (c *Controller) gracefulTransitionToStandby(saveConnID int) error {
 	c.setProviderIsStandby(true)
 	c.killRunningQueries(saveConnID)
-	// TODO: this can block with c.mu held, although we are not too
-	// interested in the server proceeding gracefully while this is
-	// happening.
+	// waitForHooksToReplicate will release the lock while it
+	// blocks, but will return with the lock held.
 	if err := c.waitForHooksToReplicate(); err != nil {
-		c.setProviderIsStandby(false)
-		c.killRunningQueries(saveConnID)
 		return err
 	}
 	return nil
@@ -559,25 +563,30 @@ const waitForHooksToReplicateTimeout = 10 * time.Second
 //
 // called with c.mu held
 func (c *Controller) waitForHooksToReplicate() error {
-	caughtup := make([]bool, len(c.commithooks))
+	commithooks := make([]*commithook, len(c.commithooks))
+	copy(commithooks, c.commithooks)
+	caughtup := make([]bool, len(commithooks))
 	var wg sync.WaitGroup
-	wg.Add(len(c.commithooks))
-	for li, lch := range c.commithooks {
+	wg.Add(len(commithooks))
+	for li, lch := range commithooks {
 		i := li
 		ch := lch
-		if ch.isCaughtUpLocking() {
-			caughtup[i] = true
-			wg.Done()
-		} else {
-			ch.setWaitNotify(func() {
-				// called with ch.mu locked.
-				if !caughtup[i] && ch.isCaughtUp() {
-					caughtup[i] = true
-					wg.Done()
-				}
-			})
+		ok := ch.setWaitNotify(func() {
+			// called with ch.mu locked.
+			if !caughtup[i] && ch.isCaughtUp() {
+				caughtup[i] = true
+				wg.Done()
+			}
+		})
+		if !ok {
+			for j := li - 1; j >= 0; j-- {
+				commithooks[j].setWaitNotify(nil)
+			}
+			c.lgr.Warnf("cluster/controller: failed to wait for graceful transition to standby; there were concurrent attempts to transition..")
+			return errors.New("cluster/controller: failed to transition from primary to standby gracefully; did not gain exclusive access to commithooks.")
 		}
 	}
+	c.mu.Unlock()
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -590,21 +599,25 @@ func (c *Controller) waitForHooksToReplicate() error {
 	case <-time.After(waitForHooksToReplicateTimeout):
 		success = false
 	}
-	for _, ch := range c.commithooks {
+	c.mu.Lock()
+	for _, ch := range commithooks {
 		ch.setWaitNotify(nil)
 	}
-	// make certain we don't leak the wg.Wait goroutine in the failure case.
-	for _, b := range caughtup {
-		if !b {
-			wg.Done()
+	if !success {
+		// make certain we don't leak the wg.Wait goroutine in the failure case.
+		// at this point, none of the callbacks will ever be called again and
+		// ch.setWaitNotify grabs a lock and so establishes the happens before.
+		for _, b := range caughtup {
+			if !b {
+				wg.Done()
+			}
 		}
-	}
-	if success {
-		c.lgr.Tracef("cluster/controller: successfully replicated all databases to all standbys; transitioning to standby.")
-		return nil
-	} else {
+		<-done
 		c.lgr.Warnf("cluster/controller: failed to replicate all databases to all standbys; not transitioning to standby.")
 		return errors.New("cluster/controller: failed to transition from primary to standby gracefully; could not replicate databases to standby in a timely manner.")
+	} else {
+		c.lgr.Tracef("cluster/controller: successfully replicated all databases to all standbys; transitioning to standby.")
+		return nil
 	}
 }
 

@@ -277,7 +277,14 @@ func (j *chunkJournal) UpdateGCGen(ctx context.Context, lastLock addr, next mani
 	updater, ok := j.backing.(manifestGCGenUpdater)
 	if !ok {
 		return manifestContents{}, fmt.Errorf("manifest (%s) does not support garbage collection", j.backing.Name())
-	} else if j.contents.lock != lastLock {
+	}
+
+	if j.wr == nil {
+		// pass the update to |j.backing| if the journal is not initialized
+		return updater.UpdateGCGen(ctx, lastLock, next, stats, writeHook)
+	}
+
+	if j.contents.lock != lastLock {
 		return j.contents, nil // |next| is stale
 	}
 

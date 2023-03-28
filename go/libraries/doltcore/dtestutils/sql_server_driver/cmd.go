@@ -178,6 +178,12 @@ func WithArgs(args ...string) SqlServerOpt {
 	}
 }
 
+func WithEnvs(envs ...string) SqlServerOpt {
+	return func(s *SqlServer) {
+		s.Cmd.Env = append(s.Cmd.Env, envs...)
+	}
+}
+
 func WithPort(port int) SqlServerOpt {
 	return func(s *SqlServer) {
 		s.Port = port
@@ -235,7 +241,7 @@ func (s *SqlServer) ErrorStop() error {
 	return s.Cmd.Wait()
 }
 
-func (s *SqlServer) Restart(newargs *[]string) error {
+func (s *SqlServer) Restart(newargs *[]string, newenvs *[]string) error {
 	err := s.GracefulStop()
 	if err != nil {
 		return err
@@ -245,6 +251,9 @@ func (s *SqlServer) Restart(newargs *[]string) error {
 		args = append([]string{"sql-server"}, (*newargs)...)
 	}
 	s.Cmd = s.RecreateCmd(args...)
+	if newenvs != nil {
+		s.Cmd.Env = append(s.Cmd.Env, (*newenvs)...)
+	}
 	stdout, err := s.Cmd.StdoutPipe()
 	if err != nil {
 		return err
