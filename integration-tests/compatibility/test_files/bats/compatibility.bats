@@ -191,8 +191,9 @@ EOF
     if [[ $output =~ "__DOLT__" ]]; then
         run dolt merge other
         echo "status: $status , output: $output \n"
-        [ $status -ne 0 ]
+        [ $status -eq 0 ]
         [[ $output =~ "Merge conflict in abc" ]] || false
+        [[ $output =~ "Automatic merge failed" ]] || false
     else
         # throws a conflict
         dolt merge other
