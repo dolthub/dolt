@@ -23,6 +23,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/dolthub/swiss"
+
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -211,7 +213,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 				return
 			}
 		}
-		wr.ranges.flatten()
+		wr.ranges = wr.ranges.flatten()
 	}
 
 	// process the non-indexed portion of the journal starting at |wr.indexed|,
@@ -335,7 +337,7 @@ func (wr *journalWriter) flushIndexRecord(root hash.Hash, end int64) (err error)
 	if _, err = wr.index.Write(buf); err != nil {
 		return err
 	}
-	wr.ranges.flatten()
+	wr.ranges = wr.ranges.flatten()
 	// set a new high-water-mark for the indexed portion of the journal
 	wr.indexed = end
 	return
@@ -477,57 +479,65 @@ func (wr *journalWriter) Close() (err error) {
 }
 
 type rangeIndex struct {
-	novel  map[addr]Range
-	cached map[addr]Range
+	novel  *swiss.Map[addr, Range]
+	cached *swiss.Map[addr, Range]
 }
 
 func newRangeIndex() rangeIndex {
 	return rangeIndex{
-		novel:  make(map[addr]Range),
-		cached: make(map[addr]Range),
+		novel:  swiss.NewMap[addr, Range](0),
+		cached: swiss.NewMap[addr, Range](0),
 	}
 }
 
 func (idx rangeIndex) get(a addr) (rng Range, ok bool) {
-	rng, ok = idx.novel[a]
+	rng, ok = idx.novel.Get(a)
 	if !ok {
-		rng, ok = idx.cached[a]
+		rng, ok = idx.cached.Get(a)
 	}
 	return
 }
 
 func (idx rangeIndex) put(a addr, rng Range) {
-	idx.novel[a] = rng
+	idx.novel.Put(a, rng)
 }
 
-func (idx rangeIndex) iter(cb func(addr, Range)) {
-	for a, r := range idx.novel {
-		cb(a, r)
-	}
-	for a, r := range idx.cached {
-		cb(a, r)
-	}
+func (idx rangeIndex) iter(cb func(addr, Range) (stop bool)) {
+	idx.novel.Iter(cb)
+	idx.cached.Iter(cb)
 }
 
 func (idx rangeIndex) count() uint32 {
-	return uint32(len(idx.novel) + len(idx.cached))
+	return uint32(idx.novel.Count() + idx.cached.Count())
 }
 
 func (idx rangeIndex) novelCount() int {
-	return len(idx.novel)
+	return idx.novel.Count()
 }
 
 func (idx rangeIndex) novelLookups() (lookups []lookup) {
-	lookups = make([]lookup, 0, len(idx.novel))
-	for a, r := range idx.novel {
+	lookups = make([]lookup, 0, idx.novel.Count())
+	idx.novel.Iter(func(a addr, r Range) (stop bool) {
 		lookups = append(lookups, lookup{a: a, r: r})
-	}
+		return
+	})
 	return
 }
 
-func (idx rangeIndex) flatten() {
-	for a, r := range idx.novel {
-		idx.cached[a] = r
-		delete(idx.novel, a)
+func (idx rangeIndex) flatten() rangeIndex {
+	var union *swiss.Map[addr, Range]
+	if idx.cached.Count() == 0 {
+		union = idx.novel
+
+	} else {
+		union = idx.cached
+		idx.novel.Iter(func(a addr, r Range) (stop bool) {
+			union.Put(a, r)
+			return
+		})
+	}
+	return rangeIndex{
+		novel:  swiss.NewMap[addr, Range](0),
+		cached: union,
 	}
 }

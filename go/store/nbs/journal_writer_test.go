@@ -199,8 +199,9 @@ func TestJournalWriterWriteCompressedChunk(t *testing.T) {
 		r, _ := j.ranges.get(a)
 		validateLookup(t, j, r, cc)
 	}
-	j.ranges.iter(func(a addr, r Range) {
+	j.ranges.iter(func(a addr, r Range) (stop bool) {
 		validateLookup(t, j, r, data[a])
+		return
 	})
 }
 
@@ -222,8 +223,9 @@ func TestJournalWriterBootstrap(t *testing.T) {
 	_, err = j.bootstrapJournal(ctx)
 	require.NoError(t, err)
 
-	j.ranges.iter(func(a addr, r Range) {
+	j.ranges.iter(func(a addr, r Range) (stop bool) {
 		validateLookup(t, j, r, data[a])
+		return
 	})
 
 	source := journalChunkSource{journal: j}
@@ -415,7 +417,7 @@ func TestRangeIndex(t *testing.T) {
 	}
 	assert.Equal(t, len(data), idx.novelCount())
 	assert.Equal(t, len(data), int(idx.count()))
-	idx.flatten()
+	idx = idx.flatten()
 	assert.Equal(t, 0, idx.novelCount())
 	assert.Equal(t, len(data), int(idx.count()))
 }
