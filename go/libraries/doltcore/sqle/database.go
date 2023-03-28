@@ -104,6 +104,11 @@ func (db Database) Revision() string {
 	return db.revision
 }
 
+func (db Database) BaseName() string {
+	base, _ := SplitRevisionDbName(db)
+	return base
+}
+
 func (db Database) EditOptions() editor.Options {
 	return db.editOpts
 }

@@ -178,8 +178,20 @@ func getRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, st
 		return "", "", fmt.Errorf("unexpected session type: %T", ctx.Session)
 	}
 
-	provider := doltsess.Provider()
-	return provider.GetRevisionForRevisionDatabase(ctx, dbName)
+	db, ok, err := doltsess.Provider().SessionDatabase(ctx, dbName)
+	if err != nil {
+		return "", "", err
+	}
+	if !ok {
+		return "", "", sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	rdb, ok := db.(dsess.RevisionDatabase)
+	if !ok {
+		return dbName, "", nil
+	}
+	
+	return rdb.BaseName(), rdb.Revision(), nil
 }
 
 // checkoutRemoteBranch checks out a remote branch creating a new local branch with the same name as the remote branch

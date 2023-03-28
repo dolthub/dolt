@@ -592,7 +592,7 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 
 // DropDatabase implements the sql.MutableDatabaseProvider interface
 func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
-	isRevisionDatabase, err := p.IsRevisionDatabase(ctx, name)
+	isRevisionDatabase, err := p.isRevisionDatabase(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -1102,45 +1102,34 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 	return nil, sql.ErrTableFunctionNotFound.New(name)
 }
 
-// GetRevisionForRevisionDatabase implements dsess.RevisionDatabaseProvider
-func (p DoltDatabaseProvider) GetRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, string, error) {
-	db, ok, err := p.SessionDatabase(ctx, dbName)
-	if err != nil {
-		return "", "", err
-	}
-	if !ok {
-		return "", "", sql.ErrDatabaseNotFound.New(dbName)
-	}
-
+// SplitRevisionDbName splits the given database name into its base and revision parts and returns them
+func SplitRevisionDbName(db sql.Database) (string, string) {
 	sqldb, ok := db.(SqlDatabase)
 	if !ok {
-		return dbName, "", nil
+		return db.Name(), ""
 	}
 
-	base, rev := SplitRevisionDbName(sqldb)
-	return base, rev, nil
-}
-
-// SplitRevisionDbName splits the given database name into its base and revision parts and returns them
-func SplitRevisionDbName(db SqlDatabase) (string, string) {
 	dbName := db.Name()
-	if db.Revision() != "" {
-		dbName = strings.TrimSuffix(dbName, dbRevisionDelimiter+db.Revision())
+	if sqldb.Revision() != "" {
+		dbName = strings.TrimSuffix(dbName, dbRevisionDelimiter+sqldb.Revision())
 	}
 
-	return dbName, db.Revision()
+	return dbName, sqldb.Revision()
 }
 
-// IsRevisionDatabase returns true if the specified dbName represents a database that is tied to a specific
+// isRevisionDatabase returns true if the specified dbName represents a database that is tied to a specific
 // branch or commit from a database (e.g. "dolt/branch1").
-// TODO: move this to session, eliminate the lookup here
-func (p DoltDatabaseProvider) IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error) {
-	_, revision, err := p.GetRevisionForRevisionDatabase(ctx, dbName)
+func (p DoltDatabaseProvider) isRevisionDatabase(ctx *sql.Context, dbName string) (bool, error) {
+	db, ok, err := p.SessionDatabase(ctx, dbName)
 	if err != nil {
 		return false, err
 	}
+	if !ok {
+		return false, sql.ErrDatabaseNotFound.New(dbName)
+	}
 
-	return revision != "", nil
+	_, rev := SplitRevisionDbName(db)
+	return rev != "", nil
 }
 
 // ensureReplicaHeadExists tries to pull the latest version of a remote branch. Will fail if the branch

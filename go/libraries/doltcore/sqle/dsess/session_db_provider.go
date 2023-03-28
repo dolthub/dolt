@@ -18,29 +18,12 @@ import (
 	"context"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-// ErrRevisionDbNotFound is thrown when a RevisionDatabaseProvider cannot find a specified revision database.
-var ErrRevisionDbNotFound = errors.NewKind("revision database not found: '%s'")
-
-// RevisionDatabaseProvider provides revision databases.
-// In Dolt, commits and branches can be accessed as discrete databases
-// using a Dolt-specific syntax: `my_database/my_branch`. Revision databases
-// corresponding to historical commits in the repository will be read-only
-// databases. Revision databases for branches will be read/write.
-// TODO: most of the functionality in this interface has been exported to DoltDatabaseProvider, and what's left would better fit on RevisionDatabase
-type RevisionDatabaseProvider interface {
-	// GetRevisionForRevisionDatabase looks up the named database and returns the root database name as well as the
-	// revision and any errors encountered. If the specified database is not a revision database, the root database
-	// name will still be returned, and the revision will be an empty string.
-	GetRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, string, error)
-}
 
 // RevisionDatabase allows callers to query a revision database for the commit, branch, or tag it is pinned to. For
 // example, when using a database with a branch revision specification, that database is only able to use that branch
@@ -53,6 +36,9 @@ type RevisionDatabase interface {
 	// revision specifications (e.g. "HEAD~2") are not supported. If a database implements RevisionDatabase, but
 	// is not pinned to a specific revision, the empty string is returned.
 	Revision() string
+	// BaseName returns the name of the database without the revision specifier. For example, if the database is named 
+	// "myDB/master", BaseName returns "myDB".
+	BaseName() string
 }
 
 // RemoteReadReplicaDatabase is a database that pulls from a connected remote when a transaction begins.
@@ -65,7 +51,6 @@ type RemoteReadReplicaDatabase interface {
 
 type DoltDatabaseProvider interface {
 	sql.MutableDatabaseProvider
-	RevisionDatabaseProvider
 	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases.
 	FileSystem() filesys.Filesys
 	// FileSystemForDatabase returns a filesystem, with the working directory set to the root directory
