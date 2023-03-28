@@ -34,6 +34,7 @@ var ErrRevisionDbNotFound = errors.NewKind("revision database not found: '%s'")
 // using a Dolt-specific syntax: `my_database/my_branch`. Revision databases
 // corresponding to historical commits in the repository will be read-only
 // databases. Revision databases for branches will be read/write.
+// TODO: most of the functionality in this interface has been exported to DoltDatabaseProvider, and what's left would better fit on RevisionDatabase
 type RevisionDatabaseProvider interface {
 	// GetRevisionForRevisionDatabase looks up the named database and returns the root database name as well as the
 	// revision and any errors encountered. If the specified database is not a revision database, the root database
@@ -82,10 +83,11 @@ type DoltDatabaseProvider interface {
 	// remoteUrl is a URL (e.g. "file:///dbs/db1") or an <org>/<database> path indicating a database hosted on DoltHub.
 	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error
 	// SessionDatabase returns the SessionDatabase for the specified database, which may name a revision of a base
-	// database, as in |Database|
+	// database.
 	SessionDatabase(ctx *sql.Context, dbName string) (SessionDatabase, bool, error)
 }
 
+// EmptyDatabaseProvider returns a DoltDatabaseProvider with no content. Only suitable for test cases 
 func EmptyDatabaseProvider() DoltDatabaseProvider {
 	return emptyRevisionDatabaseProvider{}
 }

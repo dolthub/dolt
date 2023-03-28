@@ -226,7 +226,6 @@ func (t tabularDiffWriter) WriteTableSchemaDiff(ctx context.Context, fromRoot *d
 	var fromCreateStmt = ""
 	if td.FromTable != nil {
 		sqlDb := sqle.NewUserSpaceDatabase(fromRoot, editor.Options{})
-		// sqlDb := sqle.NewSingleTableDatabase(td.FromName, fromSch, td.FromFks, td.FromFksParentSch)
 		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
 		var err error
 		fromCreateStmt, err = sqle.GetCreateTableStmt(sqlCtx, engine, td.FromName)
@@ -238,7 +237,6 @@ func (t tabularDiffWriter) WriteTableSchemaDiff(ctx context.Context, fromRoot *d
 	var toCreateStmt = ""
 	if td.ToTable != nil {
 		sqlDb := sqle.NewUserSpaceDatabase(toRoot, editor.Options{})
-		// sqlDb := sqle.NewSingleTableDatabase(td.FromName, fromSch, td.FromFks, td.FromFksParentSch)
 		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
 		var err error
 		toCreateStmt, err = sqle.GetCreateTableStmt(sqlCtx, engine, td.ToName)
