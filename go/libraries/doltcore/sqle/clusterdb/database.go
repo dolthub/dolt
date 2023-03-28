@@ -115,6 +115,10 @@ func (db database) Revision() string {
 	return ""
 }
 
+func (db database) BaseName() string {
+	return db.Name()
+}
+
 type noopRepoStateWriter struct{}
 
 func (n noopRepoStateWriter) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {

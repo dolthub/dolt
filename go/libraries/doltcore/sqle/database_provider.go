@@ -732,17 +732,13 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		return nil, false, nil
 	}
 
-	resolvedRevSpec, err := resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
+	dbType, resolvedRevSpec, err := revisionDbType(ctx, srcDb, revSpec)
 	if err != nil {
 		return nil, false, err
 	}
 
-	caseSensitiveBranchName, isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec)
-	if err != nil {
-		return nil, false, err
-	}
-
-	if isBranch {
+	switch dbType {
+	case RevisionDbTypeBranch:
 		// fetch the upstream head if this is a replicated db
 		if replicaDb, ok := srcDb.(ReadReplicaDatabase); ok {
 			// TODO move this out of analysis phase, should only happen at read time, when the transaction begins (like is
@@ -752,8 +748,8 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 				return nil, false, err
 			}
 		}
-
-		db, err := revisionDbForBranch(ctx, srcDb, caseSensitiveBranchName)
+		
+		db, err := revisionDbForBranch(ctx, srcDb, resolvedRevSpec)
 		// preserve original user case in the case of not found
 		if sql.ErrDatabaseNotFound.Is(err) {
 			return nil, false, sql.ErrDatabaseNotFound.New(revDB)
@@ -762,14 +758,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		}
 
 		return db, true, nil
-	}
-
-	isTag, err := isTag(ctx, srcDb, resolvedRevSpec)
-	if err != nil {
-		return nil, false, err
-	}
-
-	if isTag {
+	case RevisionDbTypeTag:
 		// TODO: this should be an interface, not a struct
 		replicaDb, ok := srcDb.(ReadReplicaDatabase)
 
@@ -787,9 +776,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 			return nil, false, err
 		}
 		return db, true, nil
-	}
-
-	if doltdb.IsValidCommitHash(resolvedRevSpec) {
+	case RevisionDbTypeCommit:
 		// TODO: this should be an interface, not a struct
 		replicaDb, ok := srcDb.(ReadReplicaDatabase)
 		if ok {
@@ -805,10 +792,53 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 			return nil, false, err
 		}
 		return db, true, nil
+	case RevisionDbTypeNotFound:
+		// not an error, ok = false will get handled as a not found error in a layer above as appropriate
+		return nil, false, nil
+	default:
+		return nil, false, fmt.Errorf("unrecognized revision type for revision spec %s", revSpec)
+	}
+}
+
+// revisionDbType returns the type of revision spec given for the database given, and the resolved revision spec
+func revisionDbType(ctx *sql.Context, srcDb SqlDatabase, revSpec string) (revType revType, resolvedRevSpec string, err error) {
+	resolvedRevSpec, err = resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
+	if err != nil {
+		return 0, "", err
 	}
 
-	return nil, false, nil
+	caseSensitiveBranchName, isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec)
+	if err != nil {
+		return 0, "", err
+	}
+
+	if isBranch {
+		return RevisionDbTypeBranch, caseSensitiveBranchName, nil
+	}
+	
+	isTag, err := isTag(ctx, srcDb, resolvedRevSpec)
+	if err != nil {
+		return 0, "", err
+	}
+
+	if isTag {
+		return RevisionDbTypeTag, resolvedRevSpec,nil
+	}
+
+	if doltdb.IsValidCommitHash(resolvedRevSpec) {
+		return RevisionDbTypeCommit, resolvedRevSpec,nil
+	}
+
+	return RevisionDbTypeNotFound, "", nil
 }
+
+type revType int
+const (
+	RevisionDbTypeNotFound revType = iota
+	RevisionDbTypeBranch
+	RevisionDbTypeTag
+	RevisionDbTypeCommit
+)
 
 func initialDbState(ctx context.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
 	rsr := db.DbData().Rsr
