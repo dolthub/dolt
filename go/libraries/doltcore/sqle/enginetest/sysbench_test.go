@@ -26,6 +26,7 @@ import (
 
 func TestSysbenchTransactionCV(t *testing.T) {
 	harness := newDoltHarness(t)
+	defer harness.Close()
 	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "Sysbench Transactions Shouldn't Cause Constraint Violations",
 		SetUpScript: []string{

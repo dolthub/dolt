@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"runtime"
 	"runtime/debug"
 	"sync/atomic"
@@ -35,24 +34,11 @@ var (
 	ErrWrongCopySize   = errors.New("could not copy enough bytes")
 )
 
-// By setting the environment variable DOLT_ASSERT_TABLE_FILES_CLOSED to any
-// non-empty string, dolt will run some sanity checks on table file lifecycle
-// management. In particular, dolt will install a GC finalizer on the table
-// file index buffer to assert that it has been properly closed at the time
-// that it gets garbage collected.
-//
-// This is mostly intended for developers. It isa recommended mode in tests and
-// can make sense in other contexts as well. At the time of this writing---
-// (2023/02, aaron@)---lifecycle management in tests in particular is not good
-// enough to globally enable this.
+// By setting this to false, you can make tablefile index creation cheaper. In
+// exchange, the panics which leaked table files create do not come with as
+// much information.
 
-var TableIndexAssertClosedWithGCFinalizer bool
-
-func init() {
-	if os.Getenv("DOLT_ASSERT_TABLE_FILES_CLOSED") != "" {
-		TableIndexAssertClosedWithGCFinalizer = true
-	}
-}
+var TableIndexGCFinalizerWithStackTrace = true
 
 type tableIndex interface {
 	// entrySuffixMatches returns true if the entry at index |idx| matches
@@ -278,10 +264,15 @@ func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, to
 
 	refCnt := new(int32)
 	*refCnt = 1
-	if TableIndexAssertClosedWithGCFinalizer {
+
+	if TableIndexGCFinalizerWithStackTrace {
 		stack := string(debug.Stack())
 		runtime.SetFinalizer(refCnt, func(i *int32) {
-			panic(fmt.Sprintf("OnHeapTableIndex not closed:\n%s", stack))
+			panic(fmt.Sprintf("OnHeapTableIndex %x not closed:\n%s", refCnt, stack))
+		})
+	} else {
+		runtime.SetFinalizer(refCnt, func(i *int32) {
+			panic(fmt.Sprintf("OnHeapTableIndex %x was not closed", refCnt))
 		})
 	}
 
@@ -539,9 +530,7 @@ func (ti onHeapTableIndex) Close() error {
 		return nil
 	}
 
-	if TableIndexAssertClosedWithGCFinalizer {
-		runtime.SetFinalizer(ti.refCnt, nil)
-	}
+	runtime.SetFinalizer(ti.refCnt, nil)
 	ti.q.ReleaseQuotaBytes(len(ti.prefixTuples) + len(ti.offsets1) + len(ti.offsets2) + len(ti.suffixes) + len(ti.footer))
 	return nil
 }

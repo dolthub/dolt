@@ -144,6 +144,7 @@ func TestInitRepo(t *testing.T) {
 	dEnv, _ := createTestEnv(false, false)
 	err := dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org", DefaultInitBranch)
 	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
 
 	_, err = dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
@@ -168,6 +169,7 @@ func TestMigrateWorkingSet(t *testing.T) {
 
 	err = dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org", DefaultInitBranch)
 	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
 
 	ws, err := dEnv.WorkingSet(context.Background())
 	require.NoError(t, err)

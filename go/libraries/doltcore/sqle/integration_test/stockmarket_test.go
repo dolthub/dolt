@@ -20128,6 +20128,7 @@ INSERT INTO join_result VALUES ('stock','ZYNE','us','2017-11-01',9.7,9.93,9.41,9
 func TestCreateTables(t *testing.T) {
 	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
@@ -20150,6 +20151,7 @@ func TestInserts(t *testing.T) {
 	}
 	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
@@ -20179,6 +20181,7 @@ func TestInsertsWithIndexes(t *testing.T) {
 	}
 	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
@@ -20214,6 +20217,7 @@ func TestInsertsWithIndexes(t *testing.T) {
 func TestJoin(t *testing.T) {
 	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
@@ -20262,6 +20266,7 @@ func assertResultRowsEqual(t *testing.T, expected, actual []sql.Row) {
 func TestExplain(t *testing.T) {
 	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
