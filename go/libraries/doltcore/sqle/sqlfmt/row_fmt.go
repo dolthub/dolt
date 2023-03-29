@@ -16,6 +16,7 @@ package sqlfmt
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -500,7 +501,9 @@ func valueAsSqlString(ti typeinfo.TypeInfo, value types.Value) (string, error) {
 		return "FALSE", nil
 	case typeinfo.UuidTypeIdentifier, typeinfo.TimeTypeIdentifier, typeinfo.YearTypeIdentifier, typeinfo.DatetimeTypeIdentifier:
 		return singleQuote + *str + singleQuote, nil
-	case typeinfo.BlobStringTypeIdentifier, typeinfo.VarBinaryTypeIdentifier, typeinfo.InlineBlobTypeIdentifier, typeinfo.JSONTypeIdentifier, typeinfo.EnumTypeIdentifier, typeinfo.SetTypeIdentifier:
+	case typeinfo.BlobStringTypeIdentifier:
+		return base64EncodeAndWrapeString(*str), nil
+	case typeinfo.VarBinaryTypeIdentifier, typeinfo.InlineBlobTypeIdentifier, typeinfo.JSONTypeIdentifier, typeinfo.EnumTypeIdentifier, typeinfo.SetTypeIdentifier:
 		return quoteAndEscapeString(*str), nil
 	case typeinfo.VarStringTypeIdentifier:
 		s, ok := value.(types.String)
@@ -533,7 +536,9 @@ func interfaceValueAsSqlString(ti typeinfo.TypeInfo, value interface{}) (string,
 		return singleQuote + str + singleQuote, nil
 	case typeinfo.DatetimeTypeIdentifier:
 		return singleQuote + str + singleQuote, nil
-	case typeinfo.BlobStringTypeIdentifier, typeinfo.VarBinaryTypeIdentifier, typeinfo.InlineBlobTypeIdentifier, typeinfo.JSONTypeIdentifier, typeinfo.EnumTypeIdentifier, typeinfo.SetTypeIdentifier:
+	case typeinfo.InlineBlobTypeIdentifier:
+		return base64EncodeAndWrapeString(str), nil
+	case typeinfo.BlobStringTypeIdentifier, typeinfo.VarBinaryTypeIdentifier, typeinfo.JSONTypeIdentifier, typeinfo.EnumTypeIdentifier, typeinfo.SetTypeIdentifier:
 		return quoteAndEscapeString(str), nil
 	case typeinfo.VarStringTypeIdentifier:
 		s, ok := value.(string)
@@ -553,6 +558,11 @@ func interfaceValueAsSqlString(ti typeinfo.TypeInfo, value interface{}) (string,
 	default:
 		return str, nil
 	}
+}
+
+func base64EncodeAndWrapeString(s string) string {
+	b64 := base64.StdEncoding.EncodeToString([]byte(s))
+	return fmt.Sprintf("FROM_BASE64('%s')", b64)
 }
 
 func quoteAndEscapeString(s string) string {
