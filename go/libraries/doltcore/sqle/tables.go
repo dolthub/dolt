@@ -2514,7 +2514,11 @@ func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-func (t *AlterableDoltTable) ModifyCollation(ctx *sql.Context, collation sql.CollationID) error {
+func (t *AlterableDoltTable) ModifyStoredCollation(ctx *sql.Context, collation sql.CollationID) error {
+	return fmt.Errorf("converting the collations of columns is not yet supported")
+}
+
+func (t *AlterableDoltTable) ModifyDefaultCollation(ctx *sql.Context, collation sql.CollationID) error {
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
