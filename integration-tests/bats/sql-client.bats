@@ -58,11 +58,10 @@ teardown() {
     create_test_table
     run show_tables
     [ "$status" -eq 0 ]
-    echo $output
     [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
     [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
     [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
-    [[ "${lines[3]}" = 'Query OK ('.*' sec)' ]]
+    [[ "${lines[3]}" = 'Query OK' ]]
     [ "${lines[4]}" = '+-----------------+' ]
     [ "${lines[5]}" = '| Tables_in_repo1 |' ]
     [ "${lines[6]}" = '+-----------------+' ]
