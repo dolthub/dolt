@@ -943,7 +943,7 @@ func initialStateForRevisionDb(ctx *sql.Context, db SqlDatabase) (dsess.InitialD
 		}
 		return init, nil
 	default:
-		return dsess.InitialDbState{}, nil
+		return dsess.InitialDbState{}, fmt.Errorf("unrecognized revision type for revision spec %s: %v", db.Revision(), db.RevisionType())
 	}
 }
 
