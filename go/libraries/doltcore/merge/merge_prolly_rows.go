@@ -761,20 +761,6 @@ func newSecondaryMerger(ctx context.Context, tm *TableMerger, valueMerger *value
 
 func (m *secondaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourceSch schema.Schema) error {
 	var err error
-
-	// TODO: Move this code down into the diffOpRightAdd/DiffOpRightModify case
-	var newTupleValue val.Tuple
-	if sourceSch != nil {
-		valueMappedToMergeSchema := make([][]byte, m.valueMerger.numCols)
-		for to, from := range m.valueMerger.rightMapping {
-			if from == -1 {
-				continue
-			}
-			valueMappedToMergeSchema[to] = sourceSch.GetValueDescriptor().GetField(from, diff.Right)
-		}
-		newTupleValue = val.NewTuple(m.valueMerger.syncPool, valueMappedToMergeSchema...)
-	}
-
 	for _, idx := range m.leftMut {
 		switch diff.Op {
 		case tree.DiffOpDivergentModifyResolved:
@@ -782,6 +768,20 @@ func (m *secondaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sou
 		case tree.DiffOpRightAdd, tree.DiffOpRightModify:
 			// Just as with the primary index, we need to map right-side changes to the final, merged schema.
 			// TODO: For non-unique indexes, we probably have additional updates?
+			if sourceSch == nil {
+				return fmt.Errorf("no source schema specified to map right-side changes to merged schema")
+			}
+
+			// TODO: is this pattern repeated many times? consider extracting to a helper function.
+			valueMappedToMergeSchema := make([][]byte, m.valueMerger.numCols)
+			for to, from := range m.valueMerger.rightMapping {
+				if from == -1 {
+					continue
+				}
+				valueMappedToMergeSchema[to] = sourceSch.GetValueDescriptor().GetField(from, diff.Right)
+			}
+			newTupleValue := val.NewTuple(m.valueMerger.syncPool, valueMappedToMergeSchema...)
+
 			err = applyEdit(ctx, idx, diff.Key, diff.Base, newTupleValue)
 		case tree.DiffOpRightDelete:
 			err = applyEdit(ctx, idx, diff.Key, diff.Base, diff.Right)
@@ -896,6 +896,8 @@ func generateSchemaMappings(merged, leftSch, rightSch, baseSch schema.Schema) (l
 	return leftMapping, rightMapping, baseMapping
 }
 
+// findNonPKColumnMappingByName returns the index of the column with the given name in the given schema, or -1 if it
+// doesn't exist.
 func findNonPKColumnMappingByName(sch schema.Schema, name string) int {
 	leftNonPKCols := sch.GetNonPKCols()
 	if leftNonPKCols.Contains(name) {
@@ -905,8 +907,9 @@ func findNonPKColumnMappingByName(sch schema.Schema, name string) int {
 	}
 }
 
-// TODO: Consider just passing in column here instead of tag and name
-// TODO: GODOCS!
+// findNonPKColumnMappingByTagOrName returns the index of the column with the given tag in the given schema. If a
+// matching tag is not found, then this function falls back to looking for a matching column by name. If no
+// matching column is found, then this function returns -1.
 func findNonPKColumnMappingByTagOrName(sch schema.Schema, col schema.Column) int {
 	if idx, ok := sch.GetNonPKCols().TagToIdx[col.Tag]; ok {
 		return idx
@@ -961,10 +964,11 @@ func migrateDataToMergedSchema(ctx context.Context, tm *TableMerger, vm *valueMe
 	}
 
 	// TODO: for now... we don't actually need to migrate any of the data held in secondary indexes (yet).
-	//       We're currently dealing with column adds/drops/renames/reorders, but none of those directly affect secondary
-	//       indexes (columns drops *should*, but currently Dolt just drops any index referencing the dropped column,
-	//       so there's nothing to do currently).
-	//       Once we start handling type changes changes or primary key changes, or fix the bug with dropping indexes,
+	//       We're currently dealing with column adds/drops/renames/reorders, but none of those directly affect
+	//       secondary indexes. Columns drops *should*, but currently Dolt just drops any index referencing the
+	//       dropped column, so there's nothing to do currently.
+	//       https://github.com/dolthub/dolt/issues/5641
+	//       Once we start handling type changes changes or primary key changes, or fix the bug above,
 	//       then we will need to start migrating secondary index data, too.
 
 	return nil

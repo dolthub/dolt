@@ -3638,6 +3638,12 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		AncSetUpScript: []string{
 			"CREATE table t (pk int primary key, col1 int, col2 int);",
 			"INSERT into t values (1, 10, 100), (2, 20, 200);",
+			"alter table t add index idx1 (pk, col1);",
+			"alter table t add index idx2 (col2);",
+			"alter table t add index idx3 (pk, col1, col2);",
+			"alter table t add index idx4 (col1, col2);",
+			"alter table t add index idx5 (col2, col1);",
+			"alter table t add index idx6 (col2, pk, col1);",
 		},
 		RightSetUpScript: []string{
 			"alter table t modify col1 int after col2;",
