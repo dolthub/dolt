@@ -410,11 +410,8 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 
 	currentWs, err := dEnv.WorkingSet(ctx)
 	if err != nil {
-		// working set does not exist, skip check
-		return nil
-	}
-
-	if !force {
+		// working set does not exist, ignore error and skip the compatibility check below
+	} else if !force {
 		err = checkWorkingSetCompatibility(ctx, dEnv, branchRef, currentWs)
 		if err != nil {
 			return err

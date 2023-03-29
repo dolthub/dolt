@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	maxPending = 64 * 1024
+	defaultMaxPending = 64 * 1024
 )
 
 // MutableMap is an ordered collection of val.Tuple backed by a Prolly Tree.
@@ -45,14 +45,18 @@ type MutableMap struct {
 
 	// keyDesc and valDesc are tuples descriptors for the map.
 	keyDesc, valDesc val.TupleDesc
+
+	// buffer size
+	maxPending int
 }
 
 // newMutableMap returns a new MutableMap.
 func newMutableMap(m Map) *MutableMap {
 	return &MutableMap{
-		tuples:  m.tuples.Mutate(),
-		keyDesc: m.keyDesc,
-		valDesc: m.valDesc,
+		tuples:     m.tuples.Mutate(),
+		keyDesc:    m.keyDesc,
+		valDesc:    m.valDesc,
+		maxPending: defaultMaxPending,
 	}
 }
 
@@ -82,6 +86,13 @@ func (mut *MutableMap) flushWithSerializer(ctx context.Context, s message.Serial
 	}, nil
 }
 
+// WithMaxPending returns a MutableMap with a new pending buffer size.
+func (mut *MutableMap) WithMaxPending(max int) *MutableMap {
+	ret := *mut
+	ret.maxPending = max
+	return &ret
+}
+
 // NodeStore returns the map's NodeStore
 func (mut *MutableMap) NodeStore() tree.NodeStore {
 	return mut.tuples.Static.NodeStore
@@ -92,7 +103,7 @@ func (mut *MutableMap) Put(ctx context.Context, key, value val.Tuple) error {
 	if err := mut.tuples.Put(ctx, key, value); err != nil {
 		return err
 	}
-	if mut.tuples.Edits.Count() > maxPending {
+	if mut.tuples.Edits.Count() > mut.maxPending {
 		return mut.flushPending(ctx)
 	}
 	return nil

@@ -1112,6 +1112,7 @@ type doltAlterableTableInterface interface {
 	sql.CheckAlterableTable
 	sql.PrimaryKeyAlterableTable
 	sql.ProjectedTable
+	sql.CollationAlterableTable
 }
 
 var _ doltAlterableTableInterface = (*AlterableDoltTable)(nil)
@@ -1800,8 +1801,8 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	if !schema.EnableSpatialIndex && idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
-		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
+	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique && idx.Constraint != sql.IndexConstraint_Spatial {
+		return fmt.Errorf("only the following types of index constraints are supported: none, unique, spatial")
 	}
 
 	columns := make([]string, len(idx.Columns))
@@ -2176,8 +2177,8 @@ func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, s
 
 // CreateIndexForForeignKey implements sql.ForeignKeyTable
 func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
-	if !schema.EnableSpatialIndex && idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique {
-		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
+	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique && idx.Constraint != sql.IndexConstraint_Spatial {
+		return fmt.Errorf("only the following types of index constraints are supported: none, unique, spatial")
 	}
 	columns := make([]string, len(idx.Columns))
 	for i, indexCol := range idx.Columns {
@@ -2510,6 +2511,48 @@ func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
 		return err
 	}
 
+	return t.updateFromRoot(ctx, newRoot)
+}
+
+func (t *AlterableDoltTable) ModifyStoredCollation(ctx *sql.Context, collation sql.CollationID) error {
+	return fmt.Errorf("converting the collations of columns is not yet supported")
+}
+
+func (t *AlterableDoltTable) ModifyDefaultCollation(ctx *sql.Context, collation sql.CollationID) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
+	currentTable, _, err := root.GetTable(ctx, t.tableName)
+	if err != nil {
+		return err
+	}
+	sch, err := currentTable.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	sch.SetCollation(schema.Collation(collation))
+
+	table, err := t.DoltTable.DoltTable(ctx)
+	if err != nil {
+		return err
+	}
+	newTable, err := table.UpdateSchema(ctx, sch)
+	if err != nil {
+		return err
+	}
+	newRoot, err := root.PutTable(ctx, t.tableName, newTable)
+	if err != nil {
+		return err
+	}
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
 	return t.updateFromRoot(ctx, newRoot)
 }
 

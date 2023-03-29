@@ -90,73 +90,142 @@ var ViewsWithAsOfScriptTest = queries.ScriptTest{
 	},
 }
 
-var ShowCreateTableAsOfScriptTest = queries.ScriptTest{
-	Name: "Show create table as of",
-	SetUpScript: []string{
-		"set @Commit0 = '';",
-		"set @Commit1 = '';",
-		"set @Commit2 = '';",
-		"set @Commit3 = '';",
-		"set @Commit0 = hashof('main');",
-		"create table a (pk int primary key, c1 int);",
-		"call dolt_add('.');",
-		"call dolt_commit_hash_out(@Commit1, '-am', 'creating table a');",
-		"alter table a add column c2 varchar(20);",
-		"call dolt_commit_hash_out(@Commit2, '-am', 'adding column c2');",
-		"alter table a drop column c1;",
-		"alter table a add constraint unique_c2 unique(c2);",
-		"call dolt_commit_hash_out(@Commit3, '-am', 'dropping column c1');",
+var ShowCreateTableScriptTests = []queries.ScriptTest{
+	{
+		Name: "Show create table as of",
+		SetUpScript: []string{
+			"set @Commit0 = '';",
+			"set @Commit1 = '';",
+			"set @Commit2 = '';",
+			"set @Commit3 = '';",
+			"set @Commit0 = hashof('main');",
+			"create table a (pk int primary key, c1 int);",
+			"call dolt_add('.');",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table a');",
+			"alter table a add column c2 varchar(20);",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'adding column c2');",
+			"alter table a drop column c1;",
+			"alter table a add constraint unique_c2 unique(c2);",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'dropping column c1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "show create table a as of @Commit0;",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query: "show create table a as of @Commit1;",
+				Expected: []sql.Row{
+					{"a", "CREATE TABLE `a` (\n" +
+						"  `pk` int NOT NULL,\n" +
+						"  `c1` int,\n" +
+						"  PRIMARY KEY (`pk`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+					},
+				},
+			},
+			{
+				Query: "show create table a as of @Commit2;",
+				Expected: []sql.Row{
+					{"a", "CREATE TABLE `a` (\n" +
+						"  `pk` int NOT NULL,\n" +
+						"  `c1` int,\n" +
+						"  `c2` varchar(20),\n" +
+						"  PRIMARY KEY (`pk`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+					},
+				},
+			},
+			{
+				Query: "show create table a as of @Commit3;",
+				Expected: []sql.Row{
+					{"a", "CREATE TABLE `a` (\n" +
+						"  `pk` int NOT NULL,\n" +
+						"  `c2` varchar(20),\n" +
+						"  PRIMARY KEY (`pk`),\n" +
+						"  UNIQUE KEY `unique_c2` (`c2`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+					},
+				},
+			},
+			{
+				Query: "show create table a as of HEAD;",
+				Expected: []sql.Row{
+					{"a", "CREATE TABLE `a` (\n" +
+						"  `pk` int NOT NULL,\n" +
+						"  `c2` varchar(20),\n" +
+						"  PRIMARY KEY (`pk`),\n" +
+						"  UNIQUE KEY `unique_c2` (`c2`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+					},
+				},
+			},
+		},
 	},
-	Assertions: []queries.ScriptTestAssertion{
-		{
-			Query:       "show create table a as of @Commit0;",
-			ExpectedErr: sql.ErrTableNotFound,
+	{
+		// "https://github.com/dolthub/dolt/issues/5478"
+		Name: "show table for default types with unique indexes",
+		SetUpScript: []string{
+			`create table tbl (a int primary key,
+                                   b int not null default 42,
+                                   c int not null default (24),
+                                   d int not null default '-108',
+                                   e int not null default ((((7+11)))),
+                                   f int default (now()))`,
+			`call dolt_commit('-Am', 'new table');`,
+			`create index tbl_bc on tbl (b,c);`,
+			`create unique index tbl_cbd on tbl (c,b,d);`,
+			`create unique index tbl_c on tbl (c);`,
+			`create unique index tbl_e on tbl (e);`,
 		},
-		{
-			Query: "show create table a as of @Commit1;",
-			Expected: []sql.Row{
-				{"a", "CREATE TABLE `a` (\n" +
-					"  `pk` int NOT NULL,\n" +
-					"  `c1` int,\n" +
-					"  PRIMARY KEY (`pk`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
-				},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "show create table tbl",
+				Expected: []sql.Row{sql.Row{"tbl", "CREATE TABLE `tbl` (\n" +
+					"  `a` int NOT NULL,\n" +
+					"  `b` int NOT NULL DEFAULT '42',\n" + //
+					"  `c` int NOT NULL DEFAULT (24),\n" + // Ensure these match setup above.
+					"  `d` int NOT NULL DEFAULT '-108',\n" + //
+					"  `e` int NOT NULL DEFAULT ((7 + 11)),\n" + // Matches MySQL behavior.
+					"  `f` int DEFAULT (NOW()),\n" + // MySql preserves now as lower case.
+					"  PRIMARY KEY (`a`),\n" +
+					"  KEY `tbl_bc` (`b`,`c`),\n" +
+					"  UNIQUE KEY `tbl_c` (`c`),\n" +
+					"  UNIQUE KEY `tbl_cbd` (`c`,`b`,`d`),\n" +
+					"  UNIQUE KEY `tbl_e` (`e`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
-		{
-			Query: "show create table a as of @Commit2;",
-			Expected: []sql.Row{
-				{"a", "CREATE TABLE `a` (\n" +
-					"  `pk` int NOT NULL,\n" +
-					"  `c1` int,\n" +
-					"  `c2` varchar(20),\n" +
-					"  PRIMARY KEY (`pk`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
-				},
-			},
+	},
+	{
+		// "https://github.com/dolthub/dolt/issues/5478"
+		Name: "show table for default types with unique indexes no PK",
+		SetUpScript: []string{
+			`create table tbl (a int not null default (now()),
+                                   b int not null default 42,
+                                   c int not null default (24),
+                                   d int not null default '-108',
+                                   e int not null default ((((7+11)))));`,
+			`call dolt_commit('-Am', 'new table');`,
+			`create index tbl_bc on tbl (b,c);`,
+			`create unique index tbl_cab on tbl (c,a,b);`,
+			`create unique index tbl_c on tbl (c);`,
+			`create unique index tbl_e on tbl (e);`,
 		},
-		{
-			Query: "show create table a as of @Commit3;",
-			Expected: []sql.Row{
-				{"a", "CREATE TABLE `a` (\n" +
-					"  `pk` int NOT NULL,\n" +
-					"  `c2` varchar(20),\n" +
-					"  PRIMARY KEY (`pk`),\n" +
-					"  UNIQUE KEY `c2` (`c2`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
-				},
-			},
-		},
-		{
-			Query: "show create table a as of HEAD;",
-			Expected: []sql.Row{
-				{"a", "CREATE TABLE `a` (\n" +
-					"  `pk` int NOT NULL,\n" +
-					"  `c2` varchar(20),\n" +
-					"  PRIMARY KEY (`pk`),\n" +
-					"  UNIQUE KEY `c2` (`c2`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
-				},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "show create table tbl",
+				Expected: []sql.Row{sql.Row{"tbl", "CREATE TABLE `tbl` (\n" +
+					"  `a` int NOT NULL DEFAULT (NOW()),\n" + // MySql preserves now as lower case.
+					"  `b` int NOT NULL DEFAULT '42',\n" + //
+					"  `c` int NOT NULL DEFAULT (24),\n" + // Ensure these match setup above.
+					"  `d` int NOT NULL DEFAULT '-108',\n" + //
+					"  `e` int NOT NULL DEFAULT ((7 + 11)),\n" + // Matches MySQL behavior.
+					"  KEY `tbl_bc` (`b`,`c`),\n" +
+					"  UNIQUE KEY `tbl_c` (`c`),\n" +
+					"  UNIQUE KEY `tbl_cab` (`c`,`a`,`b`),\n" +
+					"  UNIQUE KEY `tbl_e` (`e`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -442,6 +511,51 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "database revision specs: dolt_checkout uses revision database name for DbData access",
+		SetUpScript: []string{
+			"create database newtest;",
+			"use newtest;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "call dolt_checkout('-b', 'branch-to-delete');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"branch-to-delete"}},
+			},
+			{
+				Query:    "use `newtest/main`;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "call dolt_branch('-D', 'branch-to-delete');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "call dolt_checkout('-b', 'another-branch');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"another-branch"}},
+			},
+		},
+	},
 }
 
 // DoltScripts are script tests specific to Dolt (not the engine in general), e.g. by involving Dolt functions. Break
@@ -571,7 +685,7 @@ var DoltScripts = []queries.ScriptTest{
 						"  `c` int NOT NULL,\n" +
 						"  `d` varchar(10),\n" +
 						"  PRIMARY KEY (`c`),\n" +
-						"  UNIQUE KEY `d_0` (`d`),\n" +
+						"  UNIQUE KEY `t2du` (`d`),\n" +
 						"  CONSTRAINT `fk1` FOREIGN KEY (`d`) REFERENCES `t1` (`b`)\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
@@ -823,53 +937,6 @@ var DoltScripts = []queries.ScriptTest{
 			},
 		},
 	},
-	{
-		Name: "simple tests on DOLT_PATCH() stored procedure",
-		SetUpScript: []string{
-			"CREATE TABLE parent (id int PRIMARY KEY, id_ext int, v1 int, v2 text, INDEX v1 (v1));",
-			"CREATE TABLE child (id int primary key, v1 int);",
-			"CALL DOLT_COMMIT('-Am','added tables')",
-
-			"ALTER TABLE child ADD CONSTRAINT fk_named FOREIGN KEY (v1) REFERENCES parent(v1);",
-			"insert into parent values (0, 1, 2, NULL);",
-			"ALTER TABLE parent DROP PRIMARY KEY;",
-			"ALTER TABLE parent ADD PRIMARY KEY(id, id_ext);",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "CALL DOLT_PATCH()",
-				Expected: []sql.Row{
-					{"ALTER TABLE `child` ADD INDEX `v1`(`v1`);"},
-					{"ALTER TABLE `child` ADD CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`);"},
-					{"ALTER TABLE `parent` DROP PRIMARY KEY;"},
-					{"ALTER TABLE `parent` ADD PRIMARY KEY (id,id_ext);"}},
-			},
-			{
-				Query: "CALL DOLT_PATCH('HEAD~')",
-				Expected: []sql.Row{
-					{"CREATE TABLE `child` (\n  `id` int NOT NULL,\n  `v1` int,\n  PRIMARY KEY (`id`),\n  KEY `v1` (`v1`),\n  CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
-					{"CREATE TABLE `parent` (\n  `id` int NOT NULL,\n  `id_ext` int NOT NULL,\n  `v1` int,\n  `v2` text,\n  PRIMARY KEY (`id`,`id_ext`),\n  KEY `v1` (`v1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
-					{"INSERT INTO `parent` (`id`,`id_ext`,`v1`,`v2`) VALUES (0,1,2,NULL);"}},
-			},
-			{
-				Query: "CALL DOLT_PATCH('child')",
-				Expected: []sql.Row{
-					{"ALTER TABLE `child` ADD INDEX `v1`(`v1`);"},
-					{"ALTER TABLE `child` ADD CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`);"}},
-			},
-			{
-				Query: "SHOW WARNINGS;",
-				Expected: []sql.Row{
-					{"Warning", 1235, "Incompatible schema change, skipping data diff for table 'child'"}},
-			},
-			{
-				Query: "CALL DOLT_PATCH('HEAD','HEAD~','parent')",
-				Expected: []sql.Row{
-					{"DROP TABLE `parent`;"},
-				},
-			},
-		},
-	},
 }
 
 func makeLargeInsert(sz int) string {
@@ -936,6 +1003,20 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff_summary('main~..main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// Without access to the database, dolt_patch should fail with a database access error
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_patch('main~', 'main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// Without access to the database, dolt_patch with dots should fail with a database access error
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_patch('main~..main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
@@ -1037,6 +1118,34 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
+				// With access to the db, but not the table, dolt_patch should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_patch('main~', 'main', 'test2');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				// With access to the db, but not the table, dolt_patch with dots should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_patch('main~...main', 'test2');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				// With access to the db, dolt_patch should fail for all tables if no access any of tables
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_patch('main~', 'main');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				// With access to the db, dolt_patch with dots should fail for all tables if no access any of tables
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_patch('main~...main');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
 				// Revoke select on mydb.test
 				User:     "root",
 				Host:     "localhost",
@@ -1107,6 +1216,20 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
+				// After granting access to the entire db, dolt_patch should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_patch('main~', 'main');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				// After granting access to the entire db, dolt_patch with dots should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_patch('main~...main');",
+				Expected: []sql.Row{{1}},
+			},
+			{
 				// After granting access to the entire db, dolt_log should work
 				User:     "tester",
 				Host:     "localhost",
@@ -1146,6 +1269,13 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff_summary('main~', 'main', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// After revoking access, dolt_patch should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_patch('main~', 'main', 'test');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{

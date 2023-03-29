@@ -101,7 +101,7 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 				foreignKey.Name, foreignKey.TableIndex, foreignKey.TableName)
 		}
 
-		preParent, _, err := newConstraintViolationsLoadedTable(ctx, foreignKey.ReferencedTableName, "", baseRoot)
+		preParent, _, err := newConstraintViolationsLoadedTable(ctx, foreignKey.ReferencedTableName, foreignKey.ReferencedTableIndex, baseRoot)
 		if err != nil {
 			if err != doltdb.ErrTableNotFound {
 				return err
@@ -111,13 +111,13 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 			if err != nil {
 				return err
 			}
-			err = parentFkConstraintViolations(ctx, baseRoot.VRW(), foreignKey, postParent, postChild, postParent.Schema, emptyIdx, receiver)
+			err = parentFkConstraintViolations(ctx, baseRoot.VRW(), foreignKey, postParent, postParent, postChild, emptyIdx, receiver)
 			if err != nil {
 				return err
 			}
 		} else {
 			// Parent exists in the ancestor
-			err = parentFkConstraintViolations(ctx, baseRoot.VRW(), foreignKey, postParent, postChild, preParent.Schema, preParent.RowData, receiver)
+			err = parentFkConstraintViolations(ctx, baseRoot.VRW(), foreignKey, preParent, postParent, postChild, preParent.RowData, receiver)
 			if err != nil {
 				return err
 			}
@@ -352,17 +352,33 @@ func parentFkConstraintViolations(
 	ctx context.Context,
 	vr types.ValueReader,
 	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
-	preParentSch schema.Schema,
+	preParent, postParent, postChild *constraintViolationsLoadedTable,
 	preParentRowData durable.Index,
 	receiver FKViolationReceiver,
 ) error {
-	if preParentRowData.Format() == types.Format_DOLT {
-		m := durable.ProllyMapFromIndex(preParentRowData)
-		return prollyParentFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
+	if preParentRowData.Format() != types.Format_DOLT {
+		m := durable.NomsMapFromIndex(preParentRowData)
+		return nomsParentFkConstraintViolations(ctx, vr, foreignKey, postParent, postChild, preParent.Schema, m, receiver)
 	}
-	m := durable.NomsMapFromIndex(preParentRowData)
-	return nomsParentFkConstraintViolations(ctx, vr, foreignKey, postParent, postChild, preParentSch, m, receiver)
+	if preParent.IndexData == nil || postParent.Schema.GetPKCols().Size() == 0 || preParent.Schema.GetPKCols().Size() == 0 {
+		m := durable.ProllyMapFromIndex(preParentRowData)
+		return prollyParentPriDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
+	}
+	empty, err := preParentRowData.Empty()
+	if err != nil {
+		return err
+	}
+	var idx durable.Index
+	if empty {
+		idx, err = durable.NewEmptyIndex(ctx, postChild.Table.ValueReadWriter(), postParent.Table.NodeStore(), postParent.Schema)
+		if err != nil {
+			return err
+		}
+	} else {
+		idx = preParent.IndexData
+	}
+	m := durable.ProllyMapFromIndex(idx)
+	return prollyParentSecDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
 }
 
 // childFkConstraintViolations handles processing the reference options on a child, or creating a violation if

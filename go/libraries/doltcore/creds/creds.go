@@ -18,7 +18,9 @@ import (
 	"context"
 	"crypto/sha512"
 	"encoding/base32"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"time"
 
 	"golang.org/x/crypto/ed25519"
@@ -40,8 +42,9 @@ const (
 	B32EncodedPubKeyLen = 52
 	B32EncodedKeyIdLen  = 45
 
-	JWTKIDHeader = "kid"
-	JWTAlgHeader = "alg"
+	JWTKIDHeader           = "kid"
+	JWTAlgHeader           = "alg"
+	DoltTokenVersionHeader = "dolt_token_version"
 )
 
 var B32CredsByteSet = set.NewByteSet([]byte(B32CharEncoding))
@@ -129,7 +132,8 @@ type RPCCreds struct {
 func (c *RPCCreds) toBearerToken() (string, error) {
 	key := jose.SigningKey{Algorithm: jose.EdDSA, Key: c.PrivKey}
 	opts := &jose.SignerOptions{ExtraHeaders: map[jose.HeaderKey]interface{}{
-		JWTKIDHeader: c.KeyID,
+		JWTKIDHeader:           c.KeyID,
+		DoltTokenVersionHeader: "2023.01",
 	}}
 
 	signer, err := jose.NewSigner(key, opts)
@@ -162,17 +166,48 @@ func (c *RPCCreds) RequireTransportSecurity() bool {
 	return c.RequireTLS
 }
 
-const RemotesAPIAudience = "dolthub-remote-api.liquidata.co"
-const ClientIssuer = "dolt-client.liquidata.co"
+const ClientIssuer = "dolt-client.dolthub.com"
 
-func (dc DoltCreds) RPCCreds() *RPCCreds {
+func (dc DoltCreds) RPCCreds(audience string) *RPCCreds {
 	b32KIDStr := dc.KeyIDBase32Str()
 	return &RPCCreds{
 		PrivKey:    ed25519.PrivateKey(dc.PrivKey),
 		KeyID:      b32KIDStr,
-		Audience:   RemotesAPIAudience,
+		Audience:   audience,
 		Issuer:     ClientIssuer,
 		Subject:    "doltClientCredentials/" + b32KIDStr,
 		RequireTLS: false,
 	}
+}
+
+type DoltCredsForPass struct {
+	Username string
+	Password string
+}
+
+type RPCCredsForPass struct {
+	RequireTLS       bool
+	UserPassContents string
+}
+
+func (dcp DoltCredsForPass) ToBase64Str() string {
+	bStr := []byte(fmt.Sprintf("%s:%s", dcp.Username, dcp.Password))
+	return base64.StdEncoding.EncodeToString(bStr)
+}
+
+func (dc DoltCredsForPass) RPCCreds() *RPCCredsForPass {
+	return &RPCCredsForPass{
+		RequireTLS:       false,
+		UserPassContents: dc.ToBase64Str(),
+	}
+}
+
+func (c *RPCCredsForPass) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return map[string]string{
+		"authorization": "Basic " + c.UserPassContents,
+	}, nil
+}
+
+func (c *RPCCredsForPass) RequireTransportSecurity() bool {
+	return c.RequireTLS
 }

@@ -426,6 +426,16 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 
 		dt, found = dtables.NewUnscopedDiffTable(ctx, db.name, db.ddb, head), true
+	case doltdb.ColumnDiffTableName:
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.Name())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
+		dt, found = dtables.NewColumnDiffTable(ctx, db.name, db.ddb, head), true
 	case doltdb.TableOfTablesInConflictName:
 		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.name, db.ddb), true
 	case doltdb.TableOfTablesWithViolationsName:
@@ -536,7 +546,7 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 func resolveAsOfCommitRef(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, commitRef string) (*doltdb.Commit, *doltdb.RootValue, error) {
 	if commitRef == doltdb.Working || commitRef == doltdb.Staged {
 		sess := dsess.DSessFromSess(ctx.Session)
-		root, _, err := sess.ResolveRootForRef(ctx, ctx.GetCurrentDatabase(), commitRef)
+		root, _, _, err := sess.ResolveRootForRef(ctx, ctx.GetCurrentDatabase(), commitRef)
 		if err != nil {
 			return nil, nil, err
 		}

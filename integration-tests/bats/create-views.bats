@@ -93,11 +93,13 @@ SQL
 
     run dolt ls --all
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt_schemas" ]]
+    [[ "$output" =~ "dolt_schemas" ]] || false
 
+    dolt diff
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt_schemas" ]]
+    [[ "$output" =~ "-create view four as select 2+2 as res from dual" ]] || false
+    [[ ! "$output" =~ "dolt_schemas" ]] || false
 
     dolt commit -Am "dropped a view"
     dolt sql -q "drop view six"
@@ -105,11 +107,12 @@ SQL
     # Dropping all views should result in the dolt_schemas table deleting itself
     run dolt ls --all
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "dolt_schemas" ]]
+    [[ ! "$output" =~ "dolt_schemas" ]] || false
 
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "deleted table" ]]
+    [[ "$output" =~ "-create view six as select 3+3 as res from dual" ]] || false
+    [[ ! "$output" =~ "deleted table" ]] || false
 
     dolt commit -Am "no views left"
 

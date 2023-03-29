@@ -30,7 +30,9 @@ var stashListDocs = cli.CommandDocumentationContent{
 	ShortDesc: "List the stash entries that you currently have.",
 	LongDesc: `Each stash entry is listed with its name (e.g. stash@{0} is the latest entry, stash@{1} is the one before, etc.), the name of the branch that was current when the entry was made, and a short description of the commit the entry was based on.
 `,
-	Synopsis: []string{},
+	Synopsis: []string{
+		"",
+	},
 }
 
 type StashListCmd struct{}

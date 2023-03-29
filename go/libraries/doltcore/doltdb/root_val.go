@@ -1096,6 +1096,9 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 		}
 		return false, nil
 	})
+	if err != nil {
+		return err
+	}
 	if len(ee) > 0 {
 		return fmt.Errorf(strings.Join(ee, "\n"))
 	}

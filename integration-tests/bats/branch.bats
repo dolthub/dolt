@@ -139,3 +139,8 @@ teardown() {
     [[ ! "$output" =~ "b3" ]] || false
 }
 
+@test "branch: attempting to delete the currently checked out branch results in an error" {
+    run dolt branch -D main
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Cannot delete checked out branch 'main'" ]] || false
+}

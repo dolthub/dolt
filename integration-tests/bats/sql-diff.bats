@@ -713,3 +713,154 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ 'INSERT INTO `test` (`pk`,`c1`) VALUES (0,NULL)' ]] || false
 }
+
+@test "sql-diff: views, triggers, tables" {
+    dolt sql <<SQL
+create table test (pk int primary key, c1 int, c2 int);
+call dolt_add('.');
+insert into test values (1,2,3);
+insert into test values (4,5,6);
+SQL
+    dolt commit -am "Table with rows"
+
+    dolt sql <<SQL
+insert into test values (7,8,9);
+delete from test where pk = 4;
+SQL
+    dolt commit -Am "Table data diff"
+
+    dolt sql <<SQL
+create view v1 as select "hello" from test;
+SQL
+    dolt commit -Am "View"
+
+    dolt sql <<SQL
+create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 1;
+SQL
+    dolt commit -Am "Trigger"
+
+    # Only table data diff
+    dolt diff -r sql HEAD~3 HEAD~2
+    run dolt diff -r sql HEAD~3 HEAD~2
+    [ "$status" -eq 0 ]
+
+    cat > expected <<'EOF'
+DELETE FROM `test` WHERE `pk`=4;
+INSERT INTO `test` (`pk`,`c1`,`c2`) VALUES (7,8,9);
+EOF
+
+    # We can't do direct bash comparisons because of newlines, so use diff to compare
+    # Diff returns non-zero unless empty
+    cat > actual <<EOF
+${output}
+EOF
+    diff -w expected actual
+
+    # Only view diff
+    dolt diff -r sql HEAD~2 HEAD~
+    run dolt diff -r sql HEAD~2 HEAD~
+    [ "$status" -eq 0 ]
+
+    cat > expected <<'EOF'
+create view v1 as select "hello" from test;
+EOF
+
+    cat > actual <<EOF
+${output}
+EOF
+
+    diff -w expected actual
+
+    # Only trigger diff
+    dolt diff -r sql HEAD~ HEAD
+    run dolt diff -r sql HEAD~ HEAD
+    [ "$status" -eq 0 ]
+    
+    cat > expected <<'EOF'
+create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 1;
+EOF
+
+    cat > actual <<EOF
+${output}
+EOF
+    
+    diff -w expected actual
+
+    # View and trigger diff
+    dolt diff -r sql HEAD~2 HEAD
+    run dolt diff -r sql HEAD~2 HEAD
+    [ "$status" -eq 0 ]
+
+    cat > expected <<EOF
+create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 1;
+create view v1 as select "hello" from test;
+EOF
+    
+    cat > actual <<EOF
+${output}
+EOF
+
+    diff -w expected actual
+
+    # Table and view diff
+    dolt diff -r sql HEAD~3 HEAD~
+    run dolt diff -r sql HEAD~3 HEAD~
+    [ "$status" -eq 0 ]
+
+    cat > expected <<'EOF'
+DELETE FROM `test` WHERE `pk`=4;
+INSERT INTO `test` (`pk`,`c1`,`c2`) VALUES (7,8,9);
+create view v1 as select "hello" from test;
+EOF
+
+    cat > actual <<EOF
+${output}
+EOF
+
+    diff -w expected actual
+
+    # All three kinds of diff
+    dolt diff -r sql HEAD~3 HEAD
+    run dolt diff -r sql HEAD~3 HEAD
+    [ "$status" -eq 0 ]
+
+    cat > expected <<'EOF'
+DELETE FROM `test` WHERE `pk`=4;
+INSERT INTO `test` (`pk`,`c1`,`c2`) VALUES (7,8,9);
+create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 1;
+create view v1 as select "hello" from test;
+EOF
+
+    cat > actual <<EOF
+${output}
+EOF
+
+    diff -w expected actual
+
+    # check alterations of triggers and views
+    dolt sql <<SQL
+drop trigger tr1;
+drop view v1;
+create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 100;
+create view v1 as select "goodbye" from test;
+SQL
+
+    dolt commit -am "new view and trigger defs"
+
+    dolt diff -r sql HEAD~ HEAD
+    run dolt diff -r sql HEAD~ HEAD
+    [ "$status" -eq 0 ]
+
+    cat > expected <<'EOF'
+DROP TRIGGER `tr1`;
+create trigger tr1 before insert on test for each row set new.c1 = new.c1 + 100;
+DROP VIEW `v1`;
+create view v1 as select "goodbye" from test;
+EOF
+
+    cat > actual <<EOF
+${output}
+EOF
+
+    diff -w expected actual    
+}

@@ -708,3 +708,49 @@ var AddIndexScripts = []queries.ScriptTest{
 		},
 	},
 }
+
+var AddDropPrimaryKeysScripts = []queries.ScriptTest{
+	{
+		Name: "drop primary key blocked when foreign key present",
+		SetUpScript: []string{
+			"create table parent (a int primary key )",
+			"create table child (b int primary key, c int, key (c))",
+			"alter table child add constraint fk1 foreign key (c) references parent (a)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "alter table parent drop primary key",
+				ExpectedErr: sql.ErrCantDropIndex,
+			},
+		},
+	},
+	{
+		Name: "drop primary key succeeds when foreign key present on other column",
+		SetUpScript: []string{
+			"create table parent (a int primary key, d int, key (d))",
+			"create table child (b int primary key, c int, key (c))",
+			"alter table child add constraint fk1 foreign key (c) references parent (d)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table parent drop primary key",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0x0, InsertID: 0x0}}},
+			},
+		},
+	},
+	{
+		Name: "drop primary key succeeds when foreign key present on other table",
+		SetUpScript: []string{
+			"create table unrelated (a int primary key, d int)",
+			"create table parent (a int primary key)",
+			"create table child (b int primary key, c int, key (c))",
+			"alter table child add constraint fk1 foreign key (c) references parent (a)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table unrelated drop primary key",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0x0, InsertID: 0x0}}},
+			},
+		},
+	},
+}

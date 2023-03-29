@@ -596,6 +596,70 @@ teardown() {
     [[ "$output" =~ "Dropped refs/stash@{0}" ]] || false
 }
 
+@test "stash: popping stash with deleted table that the same table exists on current head" {
+    skip_nbf_ld_1
+    dolt branch branch1
+    dolt branch branch2
+
+    dolt checkout branch1
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+
+    dolt sql -q "DROP TABLE test;"
+    run dolt stash
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Saved working directory and index state" ]] || false
+
+    dolt checkout branch2
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+
+    run dolt stash list
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "stash@{0}" ]] || false
+
+    # if the table is the same, it's dropped
+    run dolt stash pop
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "deleted:        test" ]] || false
+    [[ "$output" =~ "Dropped refs/stash@{0}" ]] || false
+}
+
+@test "stash: popping stash with deleted table that different table with same name on current head gives conflict" {
+    skip_nbf_ld_1
+    dolt branch branch1
+    dolt branch branch2
+
+    dolt checkout branch1
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+
+    dolt sql -q "DROP TABLE test;"
+    run dolt stash
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Saved working directory and index state" ]] || false
+
+    dolt checkout branch2
+    dolt sql -q "DROP TABLE test;"
+    dolt sql -q "CREATE TABLE test (id BIGINT PRIMARY KEY);"
+
+    run dolt stash list
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "stash@{0}" ]] || false
+
+    # if the table is different with the same name, it gives conflict
+    run dolt stash pop
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "The stash entry is kept in case you need it again." ]] || false
+    [[ "$output" =~ "conflict: table with same name deleted and modified " ]] || false
+}
+
 @test "stash: popping stash with added table with PK on current head with the exact same table is added already" {
     skip_nbf_ld_1
     dolt branch branch1

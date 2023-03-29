@@ -18,7 +18,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -32,12 +34,12 @@ const (
 )
 
 func init() {
-	if os.Getenv("DOLT_ENABLE_GC_PROCEDURE") != "" {
-		DoltGCFeatureFlag = true
+	if os.Getenv("DOLT_DISABLE_GC_PROCEDURE") != "" {
+		DoltGCFeatureFlag = false
 	}
 }
 
-var DoltGCFeatureFlag = false
+var DoltGCFeatureFlag = true
 
 // doltGC is the stored procedure to run online garbage collection on a database.
 func doltGC(ctx *sql.Context, args ...string) (sql.RowIter, error) {
@@ -50,6 +52,8 @@ func doltGC(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	}
 	return rowToIter(int64(res)), nil
 }
+
+var ErrServerPerformedGC = errors.New("this connection was established when this server performed an online garbage collection. this connection can no longer be used. please reconnect.")
 
 func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
@@ -82,7 +86,43 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			return cmdFailure, err
 		}
 	} else {
-		err = ddb.GC(ctx)
+		// TODO: If we got a callback at the beginning and an
+		// (allowed-to-block) callback at the end, we could more
+		// gracefully tear things down.
+		err = ddb.GC(ctx, func() error {
+			killed := make(map[uint32]struct{})
+			processes := ctx.ProcessList.Processes()
+			for _, p := range processes {
+				if p.Connection != ctx.Session.ID() {
+					// Kill any inflight query.
+					ctx.ProcessList.Kill(p.Connection)
+					// Tear down the connection itself.
+					ctx.KillConnection(p.Connection)
+					killed[p.Connection] = struct{}{}
+				}
+			}
+
+			// Look in processes until the connections are actually gone.
+			params := backoff.NewExponentialBackOff()
+			params.InitialInterval = 1 * time.Millisecond
+			params.MaxInterval = 25 * time.Millisecond
+			params.MaxElapsedTime = 3 * time.Second
+			err := backoff.Retry(func() error {
+				processes := ctx.ProcessList.Processes()
+				for _, p := range processes {
+					if _, ok := killed[p.Connection]; ok {
+						return errors.New("unable to establish safepoint.")
+					}
+				}
+				return nil
+			}, params)
+			if err != nil {
+				return err
+			}
+			ctx.Session.SetTransaction(nil)
+			dsess.DSessFromSess(ctx.Session).SetValidateErr(ErrServerPerformedGC)
+			return nil
+		})
 		if err != nil {
 			return cmdFailure, err
 		}

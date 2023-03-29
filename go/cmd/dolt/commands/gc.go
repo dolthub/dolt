@@ -110,7 +110,7 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 			return HandleVErrAndExitCode(verr, usage)
 		}
 
-		err = dEnv.DoltDB.GC(ctx)
+		err = dEnv.DoltDB.GC(ctx, nil)
 		if err != nil {
 			if errors.Is(err, chunks.ErrNothingToCollect) {
 				cli.PrintErrln(color.YellowString("Nothing to collect."))

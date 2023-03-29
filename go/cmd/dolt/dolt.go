@@ -58,7 +58,7 @@ import (
 )
 
 const (
-	Version = "0.75.0"
+	Version = "0.75.9"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -76,6 +76,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.LogCmd{},
+	commands.ShowCmd{},
 	commands.BranchCmd{},
 	commands.CheckoutCmd{},
 	commands.MergeCmd{},
@@ -313,6 +314,10 @@ func runMain() int {
 	warnIfMaxFilesTooLow()
 
 	ctx := context.Background()
+	if ok, exit := interceptSendMetrics(ctx, args); ok {
+		return exit
+	}
+
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 	dEnv.IgnoreLockFile = ignoreLockFile
 
@@ -451,4 +456,12 @@ func processEventsDir(args []string, dEnv *env.DoltEnv) error {
 	}
 
 	return nil
+}
+
+func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
+	if len(args) < 1 || args[0] != commands.SendMetricsCommand {
+		return false, 0
+	}
+	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, Version)
+	return true, doltCommand.Exec(ctx, "dolt", args, dEnv)
 }

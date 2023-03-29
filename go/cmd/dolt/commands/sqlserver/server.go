@@ -206,6 +206,7 @@ func Serve(
 
 	if errors.Is(startError, server.UnixSocketInUseError) {
 		lgr.Warn("unix socket set up failed: file already in use: ", serverConf.Socket)
+		startError = nil
 	} else if startError != nil {
 		cli.PrintErr(startError)
 		return
@@ -238,6 +239,7 @@ func Serve(
 				HttpListenAddr: listenaddr,
 				GrpcListenAddr: listenaddr,
 			})
+			args = sqle.WithUserPasswordAuth(args, remotesrv.UserAuth{User: serverConfig.User(), Password: serverConfig.Password()})
 			args.TLSConfig = serverConf.TLSConfig
 			remoteSrv, err = remotesrv.NewServer(args)
 			if err != nil {
@@ -453,6 +455,7 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 	serverConf.MaxLoggedQueryLen = serverConfig.MaxLoggedQueryLen()
+	serverConf.EncodeLoggedQuery = serverConfig.ShouldEncodeLoggedQuery()
 
 	return serverConf, nil, nil
 }

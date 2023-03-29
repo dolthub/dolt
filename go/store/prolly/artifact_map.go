@@ -41,6 +41,7 @@ const (
 	ArtifactTypeUniqueKeyViol
 	// ArtifactTypeChkConsViol is the type for check constraint violations.
 	ArtifactTypeChkConsViol
+	artifactMapPendingBufferSize = 650_000
 )
 
 type ArtifactMap struct {
@@ -160,9 +161,10 @@ func (m ArtifactMap) Editor() *ArtifactsEditor {
 	return &ArtifactsEditor{
 		srcKeyDesc: m.srcKeyDesc,
 		mut: MutableMap{
-			tuples:  m.tuples.Mutate(),
-			keyDesc: m.keyDesc,
-			valDesc: m.valDesc,
+			tuples:     m.tuples.Mutate(),
+			keyDesc:    m.keyDesc,
+			valDesc:    m.valDesc,
+			maxPending: artifactMapPendingBufferSize,
 		},
 		artKB: val.NewTupleBuilder(artKD),
 		artVB: val.NewTupleBuilder(artVD),

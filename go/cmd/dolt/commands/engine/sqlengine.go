@@ -307,11 +307,6 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 	if err != nil {
 		return err
 	}
-	executionCtx.SetClient(sql.Client{
-		User:    "root",
-		Address: "localhost",
-	})
-
 	dblr.DoltBinlogReplicaController.SetExecutionContext(executionCtx)
 	engine.Analyzer.BinlogReplicaController = config.BinlogReplicaController
 

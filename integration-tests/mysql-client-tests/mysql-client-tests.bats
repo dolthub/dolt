@@ -153,6 +153,8 @@ EOF" -m "postgres"
 }
 
 @test "R RMariaDB client" {
+    skip "Error loading RMariaDB library"
+    # ex: https://github.com/dolthub/dolt/actions/runs/4428743682/jobs/7770282852
     Rscript $BATS_TEST_DIRNAME/r/rmariadb-test.r $USER $PORT $REPO_NAME
 }
 
