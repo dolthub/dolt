@@ -748,7 +748,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 				return nil, false, err
 			}
 		}
-		
+
 		db, err := revisionDbForBranch(ctx, srcDb, resolvedRevSpec)
 		// preserve original user case in the case of not found
 		if sql.ErrDatabaseNotFound.Is(err) {
@@ -815,18 +815,18 @@ func revisionDbType(ctx *sql.Context, srcDb SqlDatabase, revSpec string) (revTyp
 	if isBranch {
 		return dsess.RevisionTypeBranch, caseSensitiveBranchName, nil
 	}
-	
+
 	isTag, err := isTag(ctx, srcDb, resolvedRevSpec)
 	if err != nil {
 		return 0, "", err
 	}
 
 	if isTag {
-		return dsess.RevisionTypeTag, resolvedRevSpec,nil
+		return dsess.RevisionTypeTag, resolvedRevSpec, nil
 	}
 
 	if doltdb.IsValidCommitHash(resolvedRevSpec) {
-		return dsess.RevisionTypeCommit, resolvedRevSpec,nil
+		return dsess.RevisionTypeCommit, resolvedRevSpec, nil
 	}
 
 	return dsess.RevisionTypeNone, "", nil
@@ -1103,7 +1103,7 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 	return nil, sql.ErrTableFunctionNotFound.New(name)
 }
 
-// splitRevisionDbName splits the given database name into its base and revision parts and returns them. Non-revision 
+// splitRevisionDbName splits the given database name into its base and revision parts and returns them. Non-revision
 // DBs use their full name as the base name, and empty string as the revision.
 func splitRevisionDbName(db sql.Database) (string, string) {
 	sqldb, ok := db.(SqlDatabase)
@@ -1298,13 +1298,13 @@ func initialStateForBranchDb(ctx context.Context, srcDb SqlDatabase) (dsess.Init
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
-	
+
 	static := staticRepoState{
 		branch:          branch,
 		RepoStateWriter: srcDb.DbData().Rsw,
 		RepoStateReader: srcDb.DbData().Rsr,
 	}
-	
+
 	remotes, err := static.GetRemotes()
 	if err != nil {
 		return dsess.InitialDbState{}, err

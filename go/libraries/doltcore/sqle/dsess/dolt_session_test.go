@@ -18,16 +18,16 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/src-d/go-errors.v1"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestDoltSessionInit(t *testing.T) {

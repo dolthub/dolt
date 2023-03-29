@@ -190,7 +190,7 @@ func getRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, st
 	if !ok {
 		return dbName, "", nil
 	}
-	
+
 	return rdb.BaseName(), rdb.Revision(), nil
 }
 
