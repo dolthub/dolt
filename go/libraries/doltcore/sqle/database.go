@@ -67,6 +67,7 @@ type Database struct {
 	gs       globalstate.GlobalState
 	editOpts editor.Options
 	revision string
+	revType  revType  
 }
 
 var _ SqlDatabase = Database{}

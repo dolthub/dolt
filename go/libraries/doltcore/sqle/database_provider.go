@@ -1271,6 +1271,7 @@ func revisionDbForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			gs:       v.gs,
 			editOpts: v.editOpts,
 			revision: revSpec,
+			revType: RevisionDbTypeBranch,
 		}
 	case ReadReplicaDatabase:
 		db = ReadReplicaDatabase{
@@ -1282,6 +1283,7 @@ func revisionDbForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 				gs:       v.gs,
 				editOpts: v.editOpts,
 				revision: revSpec,
+				revType: RevisionDbTypeBranch,
 			},
 			remote:  v.remote,
 			srcDB:   v.srcDB,
@@ -1311,46 +1313,13 @@ func initialStateForBranchDb(ctx context.Context, srcDb SqlDatabase) (dsess.Init
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
-
-	dbName := srcDb.Name() + dbRevisionDelimiter + revSpec
-
+	
 	static := staticRepoState{
 		branch:          branch,
 		RepoStateWriter: srcDb.DbData().Rsw,
 		RepoStateReader: srcDb.DbData().Rsr,
 	}
-
-	var db SqlDatabase
-
-	switch v := srcDb.(type) {
-	case Database:
-		db = Database{
-			name:     dbName,
-			ddb:      v.ddb,
-			rsw:      static,
-			rsr:      static,
-			gs:       v.gs,
-			editOpts: v.editOpts,
-			revision: revSpec,
-		}
-	case ReadReplicaDatabase:
-		db = ReadReplicaDatabase{
-			Database: Database{
-				name:     dbName,
-				ddb:      v.ddb,
-				rsw:      static,
-				rsr:      static,
-				gs:       v.gs,
-				editOpts: v.editOpts,
-				revision: revSpec,
-			},
-			remote:  v.remote,
-			srcDB:   v.srcDB,
-			tmpDir:  v.tmpDir,
-			limiter: newLimiter(),
-		}
-	}
-
+	
 	remotes, err := static.GetRemotes()
 	if err != nil {
 		return dsess.InitialDbState{}, err
@@ -1367,7 +1336,7 @@ func initialStateForBranchDb(ctx context.Context, srcDb SqlDatabase) (dsess.Init
 	}
 
 	init := dsess.InitialDbState{
-		Db:         db,
+		Db:         srcDb,
 		HeadCommit: cm,
 		WorkingSet: ws,
 		DbData: env.DbData{
@@ -1378,7 +1347,6 @@ func initialStateForBranchDb(ctx context.Context, srcDb SqlDatabase) (dsess.Init
 		Remotes:  remotes,
 		Branches: branches,
 		Backups:  backups,
-		//ReadReplica: //todo
 	}
 
 	return init, nil
@@ -1393,6 +1361,7 @@ func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string) (Read
 		rsr:      srcDb.DbData().Rsr,
 		editOpts: srcDb.editOpts,
 		revision: revSpec,
+		revType:  RevisionDbTypeTag,
 	}}
 
 	return db, nil
@@ -1435,6 +1404,7 @@ func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		rsr:      srcDb.DbData().Rsr,
 		editOpts: srcDb.editOpts,
 		revision: revSpec,
+		revType:  RevisionDbTypeCommit,
 	}}
 
 	return db, nil
