@@ -115,6 +115,10 @@ func (db database) Revision() string {
 	return ""
 }
 
+func (db database) RevisionType() dsess.RevisionType {
+	return dsess.RevisionTypeNone
+}
+
 func (db database) BaseName() string {
 	return db.Name()
 }

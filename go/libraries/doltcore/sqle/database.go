@@ -67,7 +67,7 @@ type Database struct {
 	gs       globalstate.GlobalState
 	editOpts editor.Options
 	revision string
-	revType  revType  
+	revType  dsess.RevisionType
 }
 
 var _ SqlDatabase = Database{}
@@ -103,6 +103,10 @@ func (r ReadOnlyDatabase) InitialDBState(ctx *sql.Context, branch string) (dsess
 // Revision implements dsess.RevisionDatabase
 func (db Database) Revision() string {
 	return db.revision
+}
+
+func (db Database) RevisionType() dsess.RevisionType {
+	return db.revType
 }
 
 func (db Database) BaseName() string {

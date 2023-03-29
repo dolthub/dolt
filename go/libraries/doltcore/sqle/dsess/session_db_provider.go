@@ -36,10 +36,23 @@ type RevisionDatabase interface {
 	// revision specifications (e.g. "HEAD~2") are not supported. If a database implements RevisionDatabase, but
 	// is not pinned to a specific revision, the empty string is returned.
 	Revision() string
-	// BaseName returns the name of the database without the revision specifier. For example, if the database is named 
+	// RevisionType returns the type of revision this database is pinned to.
+	RevisionType() RevisionType
+	// BaseName returns the name of the database without the revision specifier. E.g.if the database is named 
 	// "myDB/master", BaseName returns "myDB".
 	BaseName() string
 }
+
+// RevisionType represents the type of revision a database is pinned to. For branches and tags, the revision is a 
+// string naming that branch or tag. For other revision specs, e.g. "HEAD~2", the revision is a commit hash. 
+type RevisionType int
+
+const (
+	RevisionTypeNone RevisionType = iota
+	RevisionTypeBranch
+	RevisionTypeTag
+	RevisionTypeCommit
+)
 
 // RemoteReadReplicaDatabase is a database that pulls from a connected remote when a transaction begins.
 type RemoteReadReplicaDatabase interface {
