@@ -894,19 +894,13 @@ func initialDbState(ctx context.Context, db SqlDatabase, branch string) (dsess.I
 	}, nil
 }
 
-func initialStateForRevisionDb(ctx *sql.Context, srcDb SqlDatabase) (dsess.InitialDbState, error) {
-	_, revSpec := splitRevisionDbName(srcDb)
-	dbType, _, err := revisionDbType(ctx, srcDb, revSpec)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-	
-	switch dbType {
+func initialStateForRevisionDb(ctx *sql.Context, db SqlDatabase) (dsess.InitialDbState, error) {
+	switch db.RevisionType() {
 	case dsess.RevisionTypeBranch:
-		init, err := initialStateForBranchDb(ctx, srcDb)
+		init, err := initialStateForBranchDb(ctx, db)
 		// preserve original user case in the case of not found
 		if sql.ErrDatabaseNotFound.Is(err) {
-			return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(srcDb.Name())
+			return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(db.Name())
 		} else if err != nil {
 			return dsess.InitialDbState{}, err
 		}
@@ -914,18 +908,18 @@ func initialStateForRevisionDb(ctx *sql.Context, srcDb SqlDatabase) (dsess.Initi
 		return init, nil
 	case dsess.RevisionTypeTag:
 		// TODO: this should be an interface, not a struct
-		replicaDb, ok := srcDb.(ReadReplicaDatabase)
+		replicaDb, ok := db.(ReadReplicaDatabase)
 
 		if ok {
-			srcDb = replicaDb.Database
+			db = replicaDb.Database
 		}
 
-		srcDb, ok = srcDb.(ReadOnlyDatabase)
+		db, ok = db.(ReadOnlyDatabase)
 		if !ok {
-			return dsess.InitialDbState{}, fmt.Errorf("expected a ReadOnlyDatabase, got %T", srcDb)
+			return dsess.InitialDbState{}, fmt.Errorf("expected a ReadOnlyDatabase, got %T", db)
 		}
 
-		init, err := initialStateForTagDb(ctx, srcDb.(ReadOnlyDatabase))
+		init, err := initialStateForTagDb(ctx, db.(ReadOnlyDatabase))
 		if err != nil {
 			return dsess.InitialDbState{}, err
 		}
@@ -933,23 +927,22 @@ func initialStateForRevisionDb(ctx *sql.Context, srcDb SqlDatabase) (dsess.Initi
 		return init, nil
 	case dsess.RevisionTypeCommit:
 		// TODO: this should be an interface, not a struct
-		replicaDb, ok := srcDb.(ReadReplicaDatabase)
+		replicaDb, ok := db.(ReadReplicaDatabase)
 		if ok {
-			srcDb = replicaDb.Database
+			db = replicaDb.Database
 		}
 
-		srcDb, ok = srcDb.(ReadOnlyDatabase)
+		db, ok = db.(ReadOnlyDatabase)
 		if !ok {
-			return dsess.InitialDbState{}, fmt.Errorf("expected a ReadOnlyDatabase, got %T", srcDb)
+			return dsess.InitialDbState{}, fmt.Errorf("expected a ReadOnlyDatabase, got %T", db)
 		}
 
-		init, err := initialStateForCommit(ctx, srcDb.(ReadOnlyDatabase))
+		init, err := initialStateForCommit(ctx, db.(ReadOnlyDatabase))
 		if err != nil {
 			return dsess.InitialDbState{}, err
 		}
 		return init, nil
 	default:
-		// TODO: error here?
 		return dsess.InitialDbState{}, nil
 	}
 }
