@@ -47,7 +47,7 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 		return nil, nil, err
 	}
 
-	mergeTbl, err := mergeTableArtifacts(ctx, *tm, tm.leftTbl)
+	mergeTbl, err := mergeTableArtifacts(ctx, tm, tm.leftTbl)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -122,7 +122,7 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 // root and merge secondary indexes are merged, they will produce entries
 // consistent with the primary row data.
 func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger) (*doltdb.Table, *MergeStats, error) {
-	iter, err := threeWayDiffer(ctx, *tm, valueMerger)
+	iter, err := threeWayDiffer(ctx, tm, valueMerger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -319,7 +319,7 @@ func maybeAbortDueToUnmergeableIndexes(tableName string, leftSchema, rightSchema
 	return nil
 }
 
-func threeWayDiffer(ctx context.Context, tm TableMerger, valueMerger *valueMerger) (*tree.ThreeWayDiffer[val.Tuple, val.TupleDesc], error) {
+func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerger) (*tree.ThreeWayDiffer[val.Tuple, val.TupleDesc], error) {
 	lr, err := tm.leftTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -813,7 +813,7 @@ func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping)
 	return result
 }
 
-func mergeTableArtifacts(ctx context.Context, tm TableMerger, mergeTbl *doltdb.Table) (*doltdb.Table, error) {
+func mergeTableArtifacts(ctx context.Context, tm *TableMerger, mergeTbl *doltdb.Table) (*doltdb.Table, error) {
 	la, err := tm.leftTbl.GetArtifacts(ctx)
 	if err != nil {
 		return nil, err

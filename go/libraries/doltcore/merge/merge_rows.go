@@ -132,13 +132,13 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	}
 
 	if types.IsFormat_DOLT(tm.vrw.Format()) {
-		return mergeProllyTable(ctx, &tm, mergeSch)
+		return mergeProllyTable(ctx, tm, mergeSch)
 	} else {
-		return mergeNomsTable(ctx, &tm, mergeSch, rm.vrw, opts)
+		return mergeNomsTable(ctx, tm, mergeSch, rm.vrw, opts)
 	}
 }
 
-func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (TableMerger, error) {
+func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (*TableMerger, error) {
 	tm := TableMerger{
 		name:        tblName,
 		rightSrc:    rm.rightSrc,
@@ -152,45 +152,45 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (Tabl
 
 	tm.leftTbl, ok, err = rm.left.GetTable(ctx, tblName)
 	if err != nil {
-		return TableMerger{}, err
+		return nil, err
 	}
 	if ok {
 		if tm.leftSch, err = tm.leftTbl.GetSchema(ctx); err != nil {
-			return TableMerger{}, err
+			return nil, err
 		}
 	}
 
 	tm.rightTbl, ok, err = rm.right.GetTable(ctx, tblName)
 	if err != nil {
-		return TableMerger{}, err
+		return nil, err
 	}
 	if ok {
 		if tm.rightSch, err = tm.rightTbl.GetSchema(ctx); err != nil {
-			return TableMerger{}, err
+			return nil, err
 		}
 	}
 
 	tm.ancTbl, ok, err = rm.anc.GetTable(ctx, tblName)
 	if err != nil {
-		return TableMerger{}, err
+		return nil, err
 	}
 	if ok {
 		if tm.ancSch, err = tm.ancTbl.GetSchema(ctx); err != nil {
-			return TableMerger{}, err
+			return nil, err
 		}
 	} else if schema.SchemasAreEqual(tm.leftSch, tm.rightSch) && tm.leftTbl != nil {
 		// If left & right added the same table, fill tm.anc with an empty table
 		tm.ancSch = tm.leftSch
 		tm.ancTbl, err = doltdb.NewEmptyTable(ctx, rm.vrw, rm.ns, tm.ancSch)
 		if err != nil {
-			return TableMerger{}, err
+			return nil, err
 		}
 	}
 
-	return tm, nil
+	return &tm, nil
 }
 
-func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm TableMerger, opts MergeOpts) (*doltdb.Table, *MergeStats, error) {
+func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm *TableMerger, opts MergeOpts) (*doltdb.Table, *MergeStats, error) {
 	rootHash, mergeHash, ancHash, err := tm.tableHashes()
 	if err != nil {
 		return nil, nil, err
