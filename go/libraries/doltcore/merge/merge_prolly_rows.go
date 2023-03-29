@@ -772,15 +772,26 @@ func (m *secondaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sou
 				return fmt.Errorf("no source schema specified to map right-side changes to merged schema")
 			}
 
-			// TODO: is this pattern repeated many times? consider extracting to a helper function.
-			valueMappedToMergeSchema := make([][]byte, m.valueMerger.numCols)
-			for to, from := range m.valueMerger.rightMapping {
-				if from == -1 {
-					continue
+			newTupleValue := diff.Right
+			if schema.IsKeyless(sourceSch) {
+				// TODO: If the schema is keyless, then before we can map it to the merged schema to
+				//       account for any schema changes, we need the mapping to understand the special
+				//       fields in a keyless index, such as hash and cardinality.
+				//       Until then, just throw an error if a mapping is needed.
+				if m.valueMerger.rightMapping.ReordersColumns() {
+					return fmt.Errorf("cannot merge keyless tables with reordering")
 				}
-				valueMappedToMergeSchema[to] = sourceSch.GetValueDescriptor().GetField(from, diff.Right)
+			} else {
+				// TODO: is this pattern repeated many times? consider extracting to a helper function.
+				valueMappedToMergeSchema := make([][]byte, m.valueMerger.numCols)
+				for to, from := range m.valueMerger.rightMapping {
+					if from == -1 {
+						continue
+					}
+					valueMappedToMergeSchema[to] = sourceSch.GetValueDescriptor().GetField(from, diff.Right)
+				}
+				newTupleValue = val.NewTuple(m.valueMerger.syncPool, valueMappedToMergeSchema...)
 			}
-			newTupleValue := val.NewTuple(m.valueMerger.syncPool, valueMappedToMergeSchema...)
 
 			err = applyEdit(ctx, idx, diff.Key, diff.Base, newTupleValue)
 		case tree.DiffOpRightDelete:
