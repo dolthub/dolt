@@ -148,8 +148,7 @@ teardown() {
     [[ $output =~ " test_dashes " ]] || false
 }
 
-@test "sql-client: prints accurate query timing" {
-    skiponwindows "Missing dependencies"
+@test "sql-client: select statement prints accurate query timing" {
     cd repo1
     start_sql_server repo1
     cd ../
@@ -158,4 +157,33 @@ USE repo1;
 SELECT SLEEP(2);
 SQL
     [[ $output =~ "1 row in set (2".*" sec)" ]] || false
+}
+
+@test "sql-client: insert/update/delete statements print accurate query timing" {
+    cd repo1
+    start_sql_server repo1
+    cd ../
+    run dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
+    USE repo1;
+    create table t (pk int primary key, c int);
+SQL
+    [[ $output =~ "Query OK (".*" sec)" ]] || false
+
+    run dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
+    USE repo1;
+    insert into t values (1, 2);
+SQL
+    [[ $output =~ "Query OK (".*" sec)" ]] || false
+
+    run dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
+    USE repo1;
+    update t set c = 3 where pk = 1;
+SQL
+    [[ $output =~ "Query OK (".*" sec)" ]] || false
+
+    run dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
+    USE repo1;
+    delete from t where pk = 1;
+SQL
+    [[ $output =~ "Query OK (".*" sec)" ]] || false
 }
