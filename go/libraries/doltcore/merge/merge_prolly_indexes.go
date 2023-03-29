@@ -76,7 +76,6 @@ func mergeProllySecondaryIndexes(
 
 	// Schema merge can introduce new constraints/uniqueness checks.
 	for _, index := range finalSch.Indexes().AllIndexes() {
-
 		left, rootOK, err := tryGetIdx(tm.leftSch, leftSet, index.Name())
 		if err != nil {
 			return nil, err

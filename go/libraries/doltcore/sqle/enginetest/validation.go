@@ -218,6 +218,9 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 		return err
 	}
 
+	// TODO: In addition to validating that every row in the primary index exists in the secondary index, we also
+	//       need to check the other direction – every row in the secondary index must exist in the primary index.
+	//       Without this check, we can miss extra, corrupted data in the secondary index.
 	for {
 		key, value, err := iter.Next(ctx)
 		if err == io.EOF {
@@ -252,6 +255,16 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			return err
 		}
 		if !ok {
+			fmt.Printf("Secondary index contents:\n")
+			iterAll, _ := secondary.IterAll(ctx)
+			for {
+				k, _, err := iterAll.Next(ctx)
+				if err == io.EOF {
+					break
+				}
+				fmt.Printf("  - k: %v \n", k)
+			}
+
 			return fmt.Errorf("index key %v not found in index %s", builder.Desc.Format(k), def.Name())
 		}
 	}

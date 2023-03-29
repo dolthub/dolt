@@ -36,9 +36,12 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// TODO: GODOCS!
-// TODO: Clean up consistent use of passing tm as ref vs value
+// mergeProllyTable merges the table specified by |tm| using the specified |mergedSch| and returns the new table
+// instance, along with merge stats and any error. This function will merge the table artifacts (e.g. recorded
+// conflicts), migrate any existing table data to the specified |mergedSch|, and merge table data from both sides
+// of the merge together.
 func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Schema) (*doltdb.Table, *MergeStats, error) {
+	// TODO: Clean up consistent use of passing tm as ref vs value
 	err := maybeAbortDueToUnmergeableIndexes(tm.name, tm.leftSch, tm.rightSch, mergedSch)
 	if err != nil {
 		return nil, nil, err
@@ -142,7 +145,7 @@ func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.
 	if err != nil {
 		return nil, nil, err
 	}
-	sec, err := newSecondaryMerger(ctx, tm)
+	sec, err := newSecondaryMerger(ctx, tm, valueMerger, finalSch)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -172,21 +175,23 @@ func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.
 			// In this case, a modification or delete was made to one side, and a conflicting delete or modification
 			// was made to the other side, so these cannot be automatically resolved.
 			s.Conflicts++
-			err = conflicts.merge(ctx, diff)
+			err = conflicts.merge(ctx, diff, nil)
 			if err != nil {
 				return nil, nil, err
 			}
-			err = sec.merge(ctx, diff)
-			if err != nil {
-				return nil, nil, err
-			}
+			// TODO: Why would we merge the secondary index data if we can't merge the primary index?
+			//       This doesn't seem correct...
+			//err = sec.merge(ctx, diff, nil)
+			//if err != nil {
+			//	return nil, nil, err
+			//}
 		case tree.DiffOpRightAdd:
 			s.Adds++
 			err = pri.merge(ctx, diff, tm.rightSch)
 			if err != nil {
 				return nil, nil, err
 			}
-			err = sec.merge(ctx, diff)
+			err = sec.merge(ctx, diff, tm.rightSch)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -201,7 +206,7 @@ func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.
 			if err != nil {
 				return nil, nil, err
 			}
-			err = sec.merge(ctx, diff)
+			err = sec.merge(ctx, diff, tm.rightSch)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -216,7 +221,7 @@ func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.
 			if err != nil {
 				return nil, nil, err
 			}
-			err = sec.merge(ctx, diff)
+			err = sec.merge(ctx, diff, tm.rightSch)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -230,7 +235,7 @@ func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.
 			if err != nil {
 				return nil, nil, err
 			}
-			err = sec.merge(ctx, diff)
+			err = sec.merge(ctx, diff, nil)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -243,7 +248,7 @@ func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.
 			// In this case, both sides of the merge have made the same change, so no additional changes are needed.
 			if keyless {
 				s.Conflicts++
-				err = conflicts.merge(ctx, diff)
+				err = conflicts.merge(ctx, diff, nil)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -565,7 +570,7 @@ func (v *uniqAddValidator) finalize(ctx context.Context) (int, error) {
 }
 
 type diffMerger interface {
-	merge(context.Context, tree.ThreeWayDiff) error
+	merge(ctx context.Context, diff tree.ThreeWayDiff, sourceSch schema.Schema) error
 }
 
 var _ diffMerger = (*conflictMerger)(nil)
@@ -626,7 +631,8 @@ func newConflictMerger(ctx context.Context, tm *TableMerger, ae *prolly.Artifact
 	}, nil
 }
 
-func (m *conflictMerger) merge(ctx context.Context, diff tree.ThreeWayDiff) error {
+// TODO: Do we actually need the schema.Schema var?
+func (m *conflictMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, _ schema.Schema) error {
 	switch diff.Op {
 	case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict,
 		tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify, tree.DiffOpConvergentDelete:
@@ -718,19 +724,23 @@ func (m *primaryMerger) finalize(ctx context.Context) (durable.Index, error) {
 // secondaryMerger translates diffs on the primary index
 // into secondary index updates.
 type secondaryMerger struct {
-	leftSet  durable.IndexSet
-	rightSet durable.IndexSet
-	leftMut  []MutableSecondaryIdx
+	leftSet      durable.IndexSet
+	rightSet     durable.IndexSet
+	leftMut      []MutableSecondaryIdx
+	valueMerger  *valueMerger
+	mergedSchema schema.Schema
 }
 
 const secondaryMergerPendingSize = 650_000
 
-func newSecondaryMerger(ctx context.Context, tm TableMerger) (*secondaryMerger, error) {
+func newSecondaryMerger(ctx context.Context, tm *TableMerger, valueMerger *valueMerger, mergedSchema schema.Schema) (*secondaryMerger, error) {
 	ls, err := tm.leftTbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
-	lm, err := GetMutableSecondaryIdxsWithPending(ctx, tm.leftSch, ls, secondaryMergerPendingSize)
+	// Use the mergedSchema to work with the secondary indexes, to pull out row data using the right
+	// pri_index -> sec_index mapping.
+	lm, err := GetMutableSecondaryIdxsWithPending(ctx, mergedSchema, ls, secondaryMergerPendingSize)
 	if err != nil {
 		return nil, err
 	}
@@ -741,19 +751,39 @@ func newSecondaryMerger(ctx context.Context, tm TableMerger) (*secondaryMerger, 
 	}
 
 	return &secondaryMerger{
-		leftSet:  ls,
-		rightSet: rs,
-		leftMut:  lm,
+		leftSet:      ls,
+		rightSet:     rs,
+		leftMut:      lm,
+		valueMerger:  valueMerger,
+		mergedSchema: mergedSchema,
 	}, nil
 }
 
-func (m *secondaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff) error {
+func (m *secondaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourceSch schema.Schema) error {
 	var err error
+
+	// TODO: Move this code down into the diffOpRightAdd/DiffOpRightModify case
+	var newTupleValue val.Tuple
+	if sourceSch != nil {
+		valueMappedToMergeSchema := make([][]byte, m.valueMerger.numCols)
+		for to, from := range m.valueMerger.rightMapping {
+			if from == -1 {
+				continue
+			}
+			valueMappedToMergeSchema[to] = sourceSch.GetValueDescriptor().GetField(from, diff.Right)
+		}
+		newTupleValue = val.NewTuple(m.valueMerger.syncPool, valueMappedToMergeSchema...)
+	}
+
 	for _, idx := range m.leftMut {
 		switch diff.Op {
 		case tree.DiffOpDivergentModifyResolved:
 			err = applyEdit(ctx, idx, diff.Key, diff.Left, diff.Merged)
-		case tree.DiffOpRightAdd, tree.DiffOpRightModify, tree.DiffOpRightDelete:
+		case tree.DiffOpRightAdd, tree.DiffOpRightModify:
+			// Just as with the primary index, we need to map right-side changes to the final, merged schema.
+			// TODO: For non-unique indexes, we probably have additional updates?
+			err = applyEdit(ctx, idx, diff.Key, diff.Base, newTupleValue)
+		case tree.DiffOpRightDelete:
 			err = applyEdit(ctx, idx, diff.Key, diff.Base, diff.Right)
 		default:
 			// Any changes to the left-side of the merge are not needed, since we currently
@@ -886,9 +916,8 @@ func findNonPKColumnMappingByTagOrName(sch schema.Schema, col schema.Column) int
 }
 
 // migrateDataToMergedSchema migrates the data from the left side of the merge of a table to the merged schema. This
-// includes updating the primary index, as well as any secondary indexes. This is necessary when a schema change is
+// currently only includes updating the primary index. This is necessary when a schema change is
 // being applied, so that when the new schema is used to pull out data from the table, it will be in the right order.
-// TODO: This function only updates the primary index currently and only accounts for column additions/drops/reorders.
 func migrateDataToMergedSchema(ctx context.Context, tm *TableMerger, vm *valueMerger, mergedSch schema.Schema) error {
 	lr, err := tm.leftTbl.GetRowData(ctx)
 	if err != nil {
@@ -930,19 +959,13 @@ func migrateDataToMergedSchema(ctx context.Context, tm *TableMerger, vm *valueMe
 			return err
 		}
 	}
-	m, err := mut.Map(ctx)
-	if err != nil {
-		return err
-	}
 
-	newIndex := durable.IndexFromProllyMap(m)
-	newTable, err := tm.leftTbl.UpdateRows(ctx, newIndex)
-	if err != nil {
-		return err
-	}
-	tm.leftTbl = newTable
-
-	// TODO: Update all secondary indexes, too!
+	// TODO: for now... we don't actually need to migrate any of the data held in secondary indexes (yet).
+	//       We're currently dealing with column adds/drops/renames/reorders, but none of those directly affect secondary
+	//       indexes (columns drops *should*, but currently Dolt just drops any index referencing the dropped column,
+	//       so there's nothing to do currently).
+	//       Once we start handling type changes changes or primary key changes, or fix the bug with dropping indexes,
+	//       then we will need to start migrating secondary index data, too.
 
 	return nil
 }

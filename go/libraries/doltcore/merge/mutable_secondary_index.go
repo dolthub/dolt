@@ -16,6 +16,7 @@ package merge
 
 import (
 	"context"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 
@@ -45,18 +46,32 @@ func GetMutableSecondaryIdxs(ctx context.Context, sch schema.Schema, indexes dur
 
 // GetMutableSecondaryIdxsWithPending returns a MutableSecondaryIdx for each secondary index in |indexes|.
 func GetMutableSecondaryIdxsWithPending(ctx context.Context, sch schema.Schema, indexes durable.IndexSet, pendingSize int) ([]MutableSecondaryIdx, error) {
-	mods := make([]MutableSecondaryIdx, sch.Indexes().Count())
-	for i, index := range sch.Indexes().AllIndexes() {
+	mods := make([]MutableSecondaryIdx, 0, sch.Indexes().Count())
+	for _, index := range sch.Indexes().AllIndexes() {
 		idx, err := indexes.GetIndex(ctx, sch, index.Name())
-		if err != nil {
+
+		// TODO: This is a total hack, but just testing this out... if an index
+		//       isn't found on the left side, we know it must be a new
+		//       index added on the right side, so just skip it, and we'll
+		//       rebuild the full index at the end of merging when we notice it's missing.
+		// TODO: We could add a "HasIndex" function to the IndexSet
+		//       interface, or we could make this error exposed so we could
+		//       more cleanly check for this condition.
+		// TODO: GetMutableSecondaryIdxs should get this same treatment, or we should have a flag that
+		//       allows skipping over missing indexes. Seems like we could refactor this code to remove
+		//       the duplication.
+		if err != nil && strings.Contains(err.Error(), "not found in IndexSet") {
+			continue
+		} else if err != nil {
 			return nil, err
 		}
 		m := durable.ProllyMapFromIndex(idx)
 		if schema.IsKeyless(sch) {
 			m = prolly.ConvertToSecondaryKeylessIndex(m)
 		}
-		mods[i] = NewMutableSecondaryIdx(m, sch, index, m.Pool())
-		mods[i].mut = mods[i].mut.WithMaxPending(pendingSize)
+		newMutableSecondaryIdx := NewMutableSecondaryIdx(m, sch, index, m.Pool())
+		newMutableSecondaryIdx.mut = newMutableSecondaryIdx.mut.WithMaxPending(pendingSize)
+		mods = append(mods, newMutableSecondaryIdx)
 	}
 	return mods, nil
 }

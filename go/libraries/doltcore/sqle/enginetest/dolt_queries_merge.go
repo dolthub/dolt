@@ -3662,6 +3662,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		AncSetUpScript: []string{
 			"create table t (pk int primary key, col1 int);",
 			"insert into t values (1, 1);",
+			"alter table t add index idx1 (col1, pk);",
+			"alter table t add index idx2 (col1);",
 		},
 		RightSetUpScript: []string{
 			"alter table t add column col2 int;",
@@ -3714,6 +3716,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		AncSetUpScript: []string{
 			"create table t (pk int primary key);",
 			"insert into t values (1), (2);",
+			"alter table t add index idx1 (pk);",
 		},
 		RightSetUpScript: []string{
 			"alter table t add column col2 int;",
@@ -3746,6 +3749,9 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		AncSetUpScript: []string{
 			"create table t (pk int primary key, col1 int, col2 int);",
 			"insert into t values (1, 10, 100), (2, 20, 200);",
+			"alter table t add index idx1 (col1, pk);",
+			"alter table t add index idx2 (col2, pk);",
+			"alter table t add index idx3 (col2, col1);",
 		},
 		RightSetUpScript: []string{
 			"alter table t drop column col1;",
@@ -3897,6 +3903,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		AncSetUpScript: []string{
 			"create table t (pk int primary key, col1 int not null);",
 			"insert into t values (1, 1), (2, 2);",
+			"alter table t add index idx1 (col1, pk);",
+			"alter table t add index idx2 (col1);",
 		},
 		RightSetUpScript: []string{
 			"alter table t modify col1 int;",
@@ -3929,6 +3937,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			"insert into parent values (1);",
 			"insert into child values (1, 1);",
 			"set DOLT_FORCE_TRANSACTION_COMMIT = true;",
+			"alter table child add index idx1 (p_fk, pk);",
 		},
 		RightSetUpScript: []string{
 			"alter table child add constraint fk_parent foreign key (p_fk) references parent(pk);",
