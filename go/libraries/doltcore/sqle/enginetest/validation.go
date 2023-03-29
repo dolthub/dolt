@@ -200,6 +200,15 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 			return err
 		}
 		if !ok {
+			fmt.Printf("Secondary index contents:\n")
+			iterAll, _ := secondary.IterAll(ctx)
+			for {
+				k, _, err := iterAll.Next(ctx)
+				if err == io.EOF {
+					break
+				}
+				fmt.Printf("  - k: %v \n", k)
+			}
 			return fmt.Errorf("index key %s not found in index %s", builder.Desc.Format(k), def.Name())
 		}
 	}
@@ -264,7 +273,6 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 				}
 				fmt.Printf("  - k: %v \n", k)
 			}
-
 			return fmt.Errorf("index key %v not found in index %s", builder.Desc.Format(k), def.Name())
 		}
 	}

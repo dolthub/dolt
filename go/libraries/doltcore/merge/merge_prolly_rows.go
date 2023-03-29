@@ -569,16 +569,6 @@ func (v *uniqAddValidator) finalize(ctx context.Context) (int, error) {
 	return conflicts, nil
 }
 
-type diffMerger interface {
-	merge(ctx context.Context, diff tree.ThreeWayDiff, sourceSch schema.Schema) error
-}
-
-var _ diffMerger = (*conflictMerger)(nil)
-
-// TODO: We don't actually use this diffMerger interface anywhere
-// var _ diffMerger = (*primaryMerger)(nil)
-var _ diffMerger = (*secondaryMerger)(nil)
-
 // conflictMerger processing primary key diffs
 // with conflict types into artifact table writes.
 type conflictMerger struct {
@@ -675,13 +665,9 @@ func newPrimaryMerger(leftRows prolly.Map, valueMerger *valueMerger, finalSch sc
 
 // TODO: GODOCS
 func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourceSch schema.Schema) error {
-	newKey := diff.Key
 	var newValue val.Tuple
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
-		newValue = diff.Right
-		rightMapping := m.valueMerger.rightMapping
-
 		// TODO: This is a hack... if a conflict has been automatically resolved, then the tryMerge callback func
 		//       has already mapped the diff to the right columns for us, so we don't need to run this mapping
 		//       logic here. Ideally, the column mapping would happen at the same layer in the code and all in
@@ -690,15 +676,7 @@ func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourc
 		//            it's changeable. If it's not... then maybe the ThreeWayDiff should have a flag that says
 		//            if the columns have been mapped or not? That would be cleaner than this hack.
 		if sourceSch != nil && !schema.IsKeyless(sourceSch) {
-			finalSchNonPKColCount := len(m.finalSch.GetNonPKCols().GetColumns())
-			modifiedValue := make([][]byte, finalSchNonPKColCount)
-			for i := 0; i < finalSchNonPKColCount; i++ {
-				fromOrdinal := rightMapping.MapOrdinal(i)
-				if fromOrdinal == -1 {
-					continue
-				}
-				modifiedValue[i] = sourceSch.GetValueDescriptor().GetField(fromOrdinal, newValue)
-			}
+			modifiedValue := remapTuple(diff.Right, sourceSch.GetValueDescriptor(), m.valueMerger.rightMapping)
 			newValue = val.NewTuple(m.valueMerger.syncPool, modifiedValue...)
 		}
 	case tree.DiffOpRightDelete:
@@ -710,7 +688,7 @@ func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourc
 	default:
 		return fmt.Errorf("unexpected diffOp for editing primary index: %s", diff.Op)
 	}
-	return m.mut.Put(ctx, newKey, newValue)
+	return m.mut.Put(ctx, diff.Key, newValue)
 }
 
 func (m *primaryMerger) finalize(ctx context.Context) (durable.Index, error) {
@@ -782,14 +760,7 @@ func (m *secondaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sou
 					return fmt.Errorf("cannot merge keyless tables with reordering")
 				}
 			} else {
-				// TODO: is this pattern repeated many times? consider extracting to a helper function.
-				valueMappedToMergeSchema := make([][]byte, m.valueMerger.numCols)
-				for to, from := range m.valueMerger.rightMapping {
-					if from == -1 {
-						continue
-					}
-					valueMappedToMergeSchema[to] = sourceSch.GetValueDescriptor().GetField(from, diff.Right)
-				}
+				valueMappedToMergeSchema := remapTuple(diff.Right, sourceSch.GetValueDescriptor(), m.valueMerger.rightMapping)
 				newTupleValue = val.NewTuple(m.valueMerger.syncPool, valueMappedToMergeSchema...)
 			}
 
@@ -823,6 +794,20 @@ func (m *secondaryMerger) finalize(ctx context.Context) (durable.IndexSet, durab
 		}
 	}
 	return m.leftSet, m.rightSet, nil
+}
+
+// remapTuple takes the given |tuple| and the |desc| that describes its data, and uses |mapping| to map the tuple's
+// data into a new [][]byte, as indicated by the specified ordinal mapping.
+func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping) [][]byte {
+	result := make([][]byte, len(mapping))
+	for to, from := range mapping {
+		if from == -1 {
+			continue
+		}
+		result[to] = desc.GetField(from, tuple)
+	}
+
+	return result
 }
 
 func mergeTableArtifacts(ctx context.Context, tm TableMerger, mergeTbl *doltdb.Table) (*doltdb.Table, error) {
@@ -957,16 +942,8 @@ func migrateDataToMergedSchema(ctx context.Context, tm *TableMerger, vm *valueMe
 		} else if err != nil {
 			return err
 		}
-		modifiedValue := make([][]byte, len(mergedSch.GetNonPKCols().GetColumns()))
-		for i := 0; i < len(mergedSch.GetNonPKCols().GetColumns()); i++ {
-			fromOrdinal := vm.leftMapping.MapOrdinal(i)
-			if fromOrdinal == -1 {
-				continue
-			}
-			modifiedValue[i] = valueDescriptor.GetField(fromOrdinal, value)
-		}
-
 		pool := vm.syncPool
+		modifiedValue := remapTuple(value, valueDescriptor, vm.leftMapping)
 		modifiedValueAsTuple := val.NewTuple(pool, modifiedValue...)
 		err = mut.Put(ctx, key, modifiedValueAsTuple)
 		if err != nil {
