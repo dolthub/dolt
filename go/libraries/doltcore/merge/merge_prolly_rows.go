@@ -963,6 +963,18 @@ func migrateDataToMergedSchema(ctx context.Context, tm *TableMerger, vm *valueMe
 		}
 	}
 
+	m, err := mut.Map(ctx)
+	if err != nil {
+		return err
+	}
+
+	newIndex := durable.IndexFromProllyMap(m)
+	newTable, err := tm.leftTbl.UpdateRows(ctx, newIndex)
+	if err != nil {
+		return err
+	}
+	tm.leftTbl = newTable
+
 	// TODO: for now... we don't actually need to migrate any of the data held in secondary indexes (yet).
 	//       We're currently dealing with column adds/drops/renames/reorders, but none of those directly affect
 	//       secondary indexes. Columns drops *should*, but currently Dolt just drops any index referencing the
