@@ -61,7 +61,7 @@ teardown() {
     [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
     [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
     [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
-    [[ "${lines[3]}" = 'Query OK' ]]
+    [ "${lines[3]}" = 'Query OK (0.00 sec)' ]
     [ "${lines[4]}" = '+-----------------+' ]
     [ "${lines[5]}" = '| Tables_in_repo1 |' ]
     [ "${lines[6]}" = '+-----------------+' ]
