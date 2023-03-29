@@ -668,6 +668,9 @@ func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourc
 	var newValue val.Tuple
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
+		// Default to the right value, in case we don't take the branch below
+		newValue = diff.Right
+
 		// TODO: This is a hack... if a conflict has been automatically resolved, then the tryMerge callback func
 		//       has already mapped the diff to the right columns for us, so we don't need to run this mapping
 		//       logic here. Ideally, the column mapping would happen at the same layer in the code and all in
