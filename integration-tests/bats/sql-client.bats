@@ -58,14 +58,16 @@ teardown() {
     create_test_table
     run show_tables
     [ "$status" -eq 0 ]
+    echo $output
     [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
     [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
     [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
-    [ "${lines[3]}" = '+-----------------+' ]
-    [ "${lines[4]}" = '| Tables_in_repo1 |' ]
-    [ "${lines[5]}" = '+-----------------+' ]
-    [ "${lines[6]}" = '| test            |' ]
-    [ "${lines[7]}" = '+-----------------+' ]
+    [[ "${lines[3]}" = 'Query OK ('.*' sec)' ]]
+    [ "${lines[4]}" = '+-----------------+' ]
+    [ "${lines[5]}" = '| Tables_in_repo1 |' ]
+    [ "${lines[6]}" = '+-----------------+' ]
+    [ "${lines[7]}" = '| test            |' ]
+    [ "${lines[8]}" = '+-----------------+' ]
 }
 
 @test "sql-client: --user argument is required" {
