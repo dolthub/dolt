@@ -16,7 +16,7 @@ package sqlfmt
 
 import (
 	"bytes"
-	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -502,7 +502,7 @@ func valueAsSqlString(ti typeinfo.TypeInfo, value types.Value) (string, error) {
 	case typeinfo.UuidTypeIdentifier, typeinfo.TimeTypeIdentifier, typeinfo.YearTypeIdentifier, typeinfo.DatetimeTypeIdentifier:
 		return singleQuote + *str + singleQuote, nil
 	case typeinfo.BlobStringTypeIdentifier:
-		return base64EncodeAndWrapeString(*str), nil
+		return hexEncodeString(*str), nil
 	case typeinfo.VarBinaryTypeIdentifier, typeinfo.InlineBlobTypeIdentifier, typeinfo.JSONTypeIdentifier, typeinfo.EnumTypeIdentifier, typeinfo.SetTypeIdentifier:
 		return quoteAndEscapeString(*str), nil
 	case typeinfo.VarStringTypeIdentifier:
@@ -537,7 +537,7 @@ func interfaceValueAsSqlString(ti typeinfo.TypeInfo, value interface{}) (string,
 	case typeinfo.DatetimeTypeIdentifier:
 		return singleQuote + str + singleQuote, nil
 	case typeinfo.InlineBlobTypeIdentifier:
-		return base64EncodeAndWrapeString(str), nil
+		return hexEncodeString(str), nil
 	case typeinfo.BlobStringTypeIdentifier, typeinfo.VarBinaryTypeIdentifier, typeinfo.JSONTypeIdentifier, typeinfo.EnumTypeIdentifier, typeinfo.SetTypeIdentifier:
 		return quoteAndEscapeString(str), nil
 	case typeinfo.VarStringTypeIdentifier:
@@ -560,9 +560,9 @@ func interfaceValueAsSqlString(ti typeinfo.TypeInfo, value interface{}) (string,
 	}
 }
 
-func base64EncodeAndWrapeString(s string) string {
-	b64 := base64.StdEncoding.EncodeToString([]byte(s))
-	return fmt.Sprintf("FROM_BASE64('%s')", b64)
+func hexEncodeString(s string) string {
+	h := hex.EncodeToString([]byte(s))
+	return fmt.Sprintf("0x%s", h)
 }
 
 func quoteAndEscapeString(s string) string {
