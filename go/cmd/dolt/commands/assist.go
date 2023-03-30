@@ -24,20 +24,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/apache/arrow/go/arrow/decimal128"
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/admin"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/cnfcmds"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/credcmds"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/cvcmds"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/docscmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/indexcmds"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/schcmds"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/stashcmds"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -67,9 +55,9 @@ func (a Assist) Exec(ctx context.Context, commandStr string, args []string, dEnv
 	helpPr, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, addDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, helpPr)
 	
-	apr.GetValueOrDefault("mode", "execute")
+	query := apr.GetValueOrDefault("query", "what can you tell me about my database?")
 	
-	response, err := queryGpt(ctx, dEnv, apiKey)
+	response, err := queryGpt(ctx, dEnv, apiKey, query)
 	if err != nil {
 		return 1
 	}
@@ -91,10 +79,12 @@ var chatGptJsonFooter = `]}`
 var messageJson = `{"role": "%s", "content": "%s"}`
 
 func handleResponse(response string) error {
-	
+	// TODO: switch on response type and take further actions
+	cli.Println(response)
+	return nil
 }
 
-func queryGpt(ctx context.Context, dEnv *env.DoltEnv, apiKey string) (string, error) {
+func queryGpt(ctx context.Context, dEnv *env.DoltEnv, apiKey string, query string) (string, error) {
 	sqlEng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return "", err
@@ -105,8 +95,8 @@ func queryGpt(ctx context.Context, dEnv *env.DoltEnv, apiKey string) (string, er
 		return "", errhand.VerboseErrorFromError(err)
 	}
 	sqlCtx.SetCurrentDatabase(dbName)
-
-	prompt, err := getJsonPrompt(sqlCtx, sqlEng, dEnv)
+	
+	prompt, err := getJsonPrompt(sqlCtx, sqlEng, dEnv, query)
 	if err != nil {
 		return "", err
 	}
@@ -137,7 +127,7 @@ func queryGpt(ctx context.Context, dEnv *env.DoltEnv, apiKey string) (string, er
 	return string(body), nil
 }
 
-func getJsonPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.DoltEnv) (io.Reader, error) {
+func getJsonPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.DoltEnv, query string) (io.Reader, error) {
 	sb := strings.Builder{}
 
 	statements, err := getCreateTableStatements(ctx, sqlEngine, dEnv)
@@ -146,11 +136,11 @@ func getJsonPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.Dolt
 	}
 
 	sb.WriteString(chatGptJsonHeader)
-	writeJsonMessage(&sb, "system", "You are an expert dolt user who helps other users understand, query, and manage their dolt databases."))
+	writeJsonMessage(&sb, "system", "You are an expert dolt user who helps other users understand, query, and manage their dolt databases.")
 	sb.WriteRune(',')
-	writeJsonMessage(&sb, "user", "I'm going to give you some information about my database before I ask anything, OK?"))
+	writeJsonMessage(&sb, "user", "I'm going to give you some information about my database before I ask anything, OK?")
 	sb.WriteRune(',')
-	writeJsonMessage(&sb, "assistant", "I understand. Please tell me the schema of all tables as CREATE TABLE statements."))
+	writeJsonMessage(&sb, "assistant", "I understand. Please tell me the schema of all tables as CREATE TABLE statements.")
 	sb.WriteRune(',')
 	writeJsonMessage(&sb, "user", fmt.Sprintf("CREATE TABLE statements for the database are as follows: %s", statements))
 	sb.WriteRune(',')
@@ -164,37 +154,101 @@ func getJsonPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.Dolt
 
 	sb.WriteRune(',')
 	writeJsonMessage(&sb, "user", fmt.Sprintf("who wrote the most recent commit?"))
-	sb.WriteRune(',')
-	responseJson, err := json.Marshal(map[string]string{"action": "DOLT_QUERY", "content": "dolt log -n 1"})
+	
+  responseJson, err := json.Marshal(map[string]string{"action": "DOLT_QUERY", "content": "dolt log -n 1"})
 	if err != nil {
 		return nil, err
 	}
 	
+	sb.WriteRune(',')
+	writeJsonMessage(&sb, "assistant", string(responseJson))
+	
+	logOutput, err := runDolt(ctx, "log -n 1")
+	if err != nil {
+		return nil, err
+	}
+
+	sb.WriteRune(',')
+	writeJsonMessage(&sb, "user", logOutput)
+	
+	commit, err := dEnv.HeadCommit(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	cm, err := commit.GetCommitMeta(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	responseJson, err = json.Marshal(map[string]string{"action": "ANSWER", "content": fmt.Sprintf("The most recent commit was written by %s", cm.Name)})
+	if err != nil {
+		return nil, err
+	}
+	
+	sb.WriteRune(',')
 	writeJsonMessage(&sb, "assistant", string(responseJson))
 
 	sb.WriteRune(',')
-	writeJsonMessage(&sb, "user", fmt.Sprintf("who wrote the most recent commit?"))
+	writeJsonMessage(&sb, "user", "write a SQL query that shows me the five most recent commits on the current branch")
+
+	responseJson, err = json.Marshal(map[string]string{"action": "SQL_QUERY", "content": "SELECT * FROM DOLT_LOG order by date LIMIT 5"})
+	if err != nil {
+		return nil, err
+	}
+
 	sb.WriteRune(',')
-	responseJson, err := json.Marshal(map[string]string{"action": "DOLT_QUERY", "content": "dolt log -n 1"})
+	writeJsonMessage(&sb, "assistant", string(responseJson))
+
+	sb.WriteRune(',')
+	writeJsonMessage(&sb, "user", "check out a new branch named feature2 two commits before the head of the current branch")
+
+	responseJson, err = json.Marshal(map[string]string{"action": "DOLT_EXEC", "content": "dolt checkout -b feature2 HEAD~2"})
 	if err != nil {
 		return nil, err
 	}
 	
-   logOutput := ` commit l2dqemamag9oq28aeam6323sgc4317sj (HEAD -> feature, main, origin/main)
- Author: timsehn <tim@dolthub.com>
- Date:  Thu Feb 02 14:49:26 -0800 2023
+	sb.WriteRune(',')
+	writeJsonMessage(&sb, "assistant", string(responseJson))
 
-     Initial import of employees test db
-`
 
+	sb.WriteRune(',')
+	writeJsonMessage(&sb, "user", "what changed in the last 3 commits?")
+
+	responseJson, err = json.Marshal(map[string]string{"action": "DOLT_EXEC", "content": "dolt diff HEAD~3 HEAD"})
+	if err != nil {
+		return nil, err
+	}
+
+	sb.WriteRune(',')
+	writeJsonMessage(&sb, "assistant", string(responseJson))
+
+	sb.WriteRune(',')
+	writeJsonMessage(&sb, "user", "create a new table for storing log events")
+
+	responseJson, err = json.Marshal(map[string]string{"action": "SQL_QUERY", "content": "CREATE TABLE log_events (id int, event_time timestamp, description varchar(255))"})
+	if err != nil {
+		return nil, err
+	}
+
+	sb.WriteRune(',')
+	writeJsonMessage(&sb, "assistant", string(responseJson))
+	
+	sb.WriteRune(',')
+	userQuery, err := json.Marshal(query)
+	if err != nil {
+		return nil, err
+	}
+	
+	writeJsonMessage(&sb, "user", string(userQuery))
 
 	sb.WriteString(chatGptJsonFooter)
 
 	return strings.NewReader(sb.String()), nil
 }
 
-func runDolt(ctx context.Context, dEnv *env.DoltEnv, command string) (string, error) {
-	res := doltCommand.Exec(ctx, "dolt", strings.Split(command, " "), dEnv)
+// TODO: rather than forking a new process and getting its output, instantiate command structs and run in-process here
+func runDolt(ctx context.Context, command string) (string, error) {
 	cmd := exec.CommandContext(ctx, "dolt", strings.Split(command, " ")...)
 	
 	output, err := cmd.CombinedOutput()
@@ -257,55 +311,6 @@ func (a Assist) Docs() *cli.CommandDocumentation {
 
 func (a Assist) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsString("mode", "m", "mode", "The mode of assistance to provide.  Valid values are 'command' and 'query'.")
+	ap.SupportsString("query", "-q", "query to ask the assistant", "Query to ask the assistant")
 	return ap
 }
-
-var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Command{
-	InitCmd{},
-	StatusCmd{},
-	AddCmd{},
-	DiffCmd{},
-	ResetCmd{},
-	CleanCmd{},
-	CommitCmd{},
-	SqlCmd{VersionStr: "0.75.3"},
-	admin.Commands,
-	sqlserver.SqlServerCmd{VersionStr: "0.75.3"},
-	sqlserver.SqlClientCmd{VersionStr: "0.75.3"},
-	LogCmd{},
-	BranchCmd{},
-	CheckoutCmd{},
-	MergeCmd{},
-	cnfcmds.Commands,
-	CherryPickCmd{},
-	RevertCmd{},
-	CloneCmd{},
-	FetchCmd{},
-	PullCmd{},
-	PushCmd{},
-	ConfigCmd{},
-	RemoteCmd{},
-	BackupCmd{},
-	LoginCmd{},
-	credcmds.Commands,
-	LsCmd{},
-	schcmds.Commands,
-	tblcmds.Commands,
-	TagCmd{},
-	BlameCmd{},
-	cvcmds.Commands,
-	SendMetricsCmd{},
-	MigrateCmd{},
-	indexcmds.Commands,
-	ReadTablesCmd{},
-	GarbageCollectionCmd{},
-	FilterBranchCmd{},
-	MergeBaseCmd{},
-	RootsCmd{},
-	VersionCmd{VersionStr: "0.75.3"},
-	DumpCmd{},
-	InspectCmd{},
-	docscmds.Commands,
-	stashcmds.StashCommands,
-})
