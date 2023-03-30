@@ -275,7 +275,7 @@ func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q driver.Query) {
 			defer rows.Close()
 		}
 		if q.ErrorMatch != "" {
-			require.Error(t, err)
+			require.Error(t, err, "expected error running query %s", q.Query)
 			require.Regexp(t, q.ErrorMatch, err.Error())
 			return
 		}
