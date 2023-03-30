@@ -144,12 +144,10 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 
 	// The current branch on CLI can be deleted as user can be on different branch on SQL and delete it from SQL session.
 	// To update current head info on RepoState, we need DoltEnv to load CLI environment.
-	var rs *env.RepoState
 	var headOnCLI string
 	fs, err := sess.Provider().FileSystemForDatabase(dbName)
 	if err == nil {
 		if repoState, err := env.LoadRepoState(fs); err == nil {
-			rs = repoState
 			headOnCLI = repoState.Head.Ref.GetPath()
 		}
 	}
@@ -161,37 +159,44 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 		}
 	}
 
-	var updateFS = false
 	dSess := dsess.DSessFromSess(ctx.Session)
 	for _, branchName := range apr.Args {
 		if len(branchName) == 0 {
 			return EmptyBranchNameErr
 		}
-		force := apr.Contains(cli.DeleteForceFlag) || apr.Contains(cli.ForceFlag)
 
+		force := apr.Contains(cli.DeleteForceFlag) || apr.Contains(cli.ForceFlag)
 		if !force {
 			err = validateBranchNotActiveInAnySession(ctx, branchName)
 			if err != nil {
 				return err
 			}
 		}
+
+		if headOnCLI == branchName && sqlserver.RunningInServerMode() && !shouldAllowDefaultBranchDeletion(ctx) {
+			return fmt.Errorf("unable to delete branch '%s', because it is the default branch for "+
+				"database '%s'; this can by changed on the command line, by stopping the sql-server, "+
+				"running `dolt checkout <another_branch> and restarting the sql-server", branchName, dbName)
+		}
+
 		err = actions.DeleteBranch(ctx, dbData, branchName, actions.DeleteOptions{
 			Force: force,
 		}, dSess.Provider())
 		if err != nil {
 			return err
 		}
-		if headOnCLI == branchName {
-			updateFS = true
-		}
-	}
-
-	if fs != nil && updateFS {
-		rs.Head.Ref = ref.NewBranchRef("")
-		rs.Save(fs)
 	}
 
 	return nil
+}
+
+// shouldAllowDefaultBranchDeletion returns true if the default branch deletion check should be
+// bypassed for testing. This should only ever be true for tests that need to invalidate a databases
+// default branch to test recovery from a bad state. We determine if the check should be bypassed by
+// looking for the presence of an undocumented dolt user var, dolt_allow_default_branch_deletion.
+func shouldAllowDefaultBranchDeletion(ctx *sql.Context) bool {
+	_, userVar, _ := ctx.Session.GetUserVariable(ctx, "dolt_allow_default_branch_deletion")
+	return userVar != nil
 }
 
 // validateBranchNotActiveInAnySessions returns an error if the specified branch is currently

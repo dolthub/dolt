@@ -80,6 +80,7 @@ var defaultSkippedQueries = []string{
 
 // Setup sets the setup scripts for this DoltHarness's engine
 func (d *DoltHarness) Setup(setupData ...[]setup.SetupScript) {
+	d.closeProvider()
 	d.engine = nil
 	d.provider = nil
 	d.setupData = nil
@@ -284,6 +285,7 @@ func (d *DoltHarness) SupportsKeylessTables() bool {
 }
 
 func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
+	d.closeProvider()
 	d.engine = nil
 	d.provider = nil
 
@@ -359,8 +361,31 @@ func (d *DoltHarness) NewDatabaseProvider() sql.MutableDatabaseProvider {
 	return d.provider
 }
 
+func (d *DoltHarness) Close() {
+	d.closeProvider()
+}
+
+func (d *DoltHarness) closeProvider() {
+	if d.provider != nil {
+		dbs := sqle.AllDbs(sql.NewEmptyContext(), d.provider)
+		for _, db := range dbs {
+			d.t.Logf("closing %v", db)
+			require.NoError(d.t, db.DbData().Ddb.Close())
+		}
+	}
+	if d.session != nil {
+		dbs := sqle.AllDbs(sql.NewEmptyContext(), d.session.Provider())
+		for _, db := range dbs {
+			d.t.Logf("session had database %v", db)
+		}
+	}
+}
+
 func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
+	d.closeProvider()
+
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 
 	store := dEnv.DoltDB.ValueReadWriter().(*types.ValueStore)
 	store.SetValidateContentAddresses(true)

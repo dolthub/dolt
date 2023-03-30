@@ -66,7 +66,7 @@ func DiffKeyRangeOrderedTrees[K, V ~[]byte, O Ordering[K]](
 	start, stop K,
 	cb DiffFn,
 ) error {
-	var fromStart, fromStop, toStart, toStop *cursor
+	var fromStart, fromStop, toStart, toStop *Cursor
 	var err error
 
 	if len(start) == 0 {
@@ -80,12 +80,12 @@ func DiffKeyRangeOrderedTrees[K, V ~[]byte, O Ordering[K]](
 			return err
 		}
 	} else {
-		fromStart, err = newCursorAtKey(ctx, from.NodeStore, from.Root, start, from.Order)
+		fromStart, err = NewCursorAtKey(ctx, from.NodeStore, from.Root, start, from.Order)
 		if err != nil {
 			return err
 		}
 
-		toStart, err = newCursorAtKey(ctx, to.NodeStore, to.Root, start, to.Order)
+		toStart, err = NewCursorAtKey(ctx, to.NodeStore, to.Root, start, to.Order)
 		if err != nil {
 			return err
 		}
@@ -102,12 +102,12 @@ func DiffKeyRangeOrderedTrees[K, V ~[]byte, O Ordering[K]](
 			return err
 		}
 	} else {
-		fromStop, err = newCursorAtKey(ctx, from.NodeStore, from.Root, stop, from.Order)
+		fromStop, err = NewCursorAtKey(ctx, from.NodeStore, from.Root, stop, from.Order)
 		if err != nil {
 			return err
 		}
 
-		toStop, err = newCursorAtKey(ctx, to.NodeStore, to.Root, stop, to.Order)
+		toStop, err = NewCursorAtKey(ctx, to.NodeStore, to.Root, stop, to.Order)
 		if err != nil {
 			return err
 		}
@@ -164,13 +164,13 @@ func VisitMapLevelOrder[K, V ~[]byte, O Ordering[K]](
 	if err != nil {
 		return err
 	}
-	first := cur.currentKey()
+	first := cur.CurrentKey()
 
 	// start by iterating level 1 nodes,
 	// then recurse upwards until we're at the root
 	for cur.parent != nil {
 		cur = cur.parent
-		for cur.valid() {
+		for cur.Valid() {
 			_, err = cb(cur.currentRef())
 			if err != nil {
 				return err
@@ -181,7 +181,7 @@ func VisitMapLevelOrder[K, V ~[]byte, O Ordering[K]](
 		}
 
 		// return cursor to the start of the map
-		if err = seek(ctx, cur, K(first), m.Order); err != nil {
+		if err = Seek(ctx, cur, K(first), m.Order); err != nil {
 			return err
 		}
 	}
@@ -226,8 +226,8 @@ func (t StaticMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K, V
 	var key K
 	var value V
 
-	if cur.valid() {
-		key = K(cur.currentKey())
+	if cur.Valid() {
+		key = K(cur.CurrentKey())
 		if t.Order.Compare(query, key) == 0 {
 			value = V(cur.currentValue())
 		} else {
@@ -241,8 +241,8 @@ func (t StaticMap[K, V, O]) Has(ctx context.Context, query K) (ok bool, err erro
 	cur, err := newLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, t.Order)
 	if err != nil {
 		return false, err
-	} else if cur.valid() {
-		ok = t.Order.Compare(query, K(cur.currentKey())) == 0
+	} else if cur.Valid() {
+		ok = t.Order.Compare(query, K(cur.CurrentKey())) == 0
 	}
 	return
 }
@@ -251,9 +251,9 @@ func (t StaticMap[K, V, O]) HasPrefix(ctx context.Context, query K, prefixOrder 
 	cur, err := newLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, prefixOrder)
 	if err != nil {
 		return false, err
-	} else if cur.valid() {
+	} else if cur.Valid() {
 		// true if |query| is a prefix of |cur.currentKey()|
-		ok = prefixOrder.Compare(query, K(cur.currentKey())) == 0
+		ok = prefixOrder.Compare(query, K(cur.CurrentKey())) == 0
 	}
 	return
 }
@@ -279,7 +279,7 @@ func (t StaticMap[K, V, O]) IterAll(ctx context.Context) (*OrderedTreeIter[K, V]
 		return nil, err
 	}
 
-	stop := func(curr *cursor) bool {
+	stop := func(curr *Cursor) bool {
 		return curr.compare(s) >= 0
 	}
 
@@ -306,7 +306,7 @@ func (t StaticMap[K, V, O]) IterAllReverse(ctx context.Context) (*OrderedTreeIte
 		return nil, err
 	}
 
-	stop := func(curr *cursor) bool {
+	stop := func(curr *Cursor) bool {
 		return curr.compare(beginning) <= 0
 	}
 
@@ -344,7 +344,7 @@ func (t StaticMap[K, V, O]) IterOrdinalRange(ctx context.Context, start, stop ui
 		return nil, err
 	}
 
-	stopF := func(curr *cursor) bool {
+	stopF := func(curr *Cursor) bool {
 		return curr.compare(hi) >= 0
 	}
 
@@ -392,7 +392,7 @@ func (t StaticMap[K, V, O]) IterKeyRange(ctx context.Context, start, stop K) (*O
 		return nil, err
 	}
 
-	stopF := func(curr *cursor) bool {
+	stopF := func(curr *Cursor) bool {
 		return curr.compare(hi) >= 0
 	}
 
@@ -425,14 +425,14 @@ func (t StaticMap[K, V, O]) GetKeyRangeCardinality(ctx context.Context, start, s
 	return endOrd - startOrd, nil
 }
 
-func (t StaticMap[K, V, O]) getKeyRangeCursors(ctx context.Context, startInclusive, stopExclusive K) (lo, hi *cursor, err error) {
+func (t StaticMap[K, V, O]) getKeyRangeCursors(ctx context.Context, startInclusive, stopExclusive K) (lo, hi *Cursor, err error) {
 	if len(startInclusive) == 0 {
 		lo, err = newCursorAtStart(ctx, t.NodeStore, t.Root)
 		if err != nil {
 			return nil, nil, err
 		}
 	} else {
-		lo, err = newCursorAtKey(ctx, t.NodeStore, t.Root, startInclusive, t.Order)
+		lo, err = NewCursorAtKey(ctx, t.NodeStore, t.Root, startInclusive, t.Order)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -444,7 +444,7 @@ func (t StaticMap[K, V, O]) getKeyRangeCursors(ctx context.Context, startInclusi
 			return nil, nil, err
 		}
 	} else {
-		hi, err = newCursorAtKey(ctx, t.NodeStore, t.Root, stopExclusive, t.Order)
+		hi, err = NewCursorAtKey(ctx, t.NodeStore, t.Root, stopExclusive, t.Order)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -454,7 +454,7 @@ func (t StaticMap[K, V, O]) getKeyRangeCursors(ctx context.Context, startInclusi
 
 // GetOrdinalForKey returns the smallest ordinal position at which the key >= |query|.
 func (t StaticMap[K, V, O]) GetOrdinalForKey(ctx context.Context, query K) (uint64, error) {
-	cur, err := newCursorAtKey(ctx, t.NodeStore, t.Root, query, t.Order)
+	cur, err := NewCursorAtKey(ctx, t.NodeStore, t.Root, query, t.Order)
 	if err != nil {
 		return 0, err
 	}
@@ -463,12 +463,12 @@ func (t StaticMap[K, V, O]) GetOrdinalForKey(ctx context.Context, query K) (uint
 
 type OrderedTreeIter[K, V ~[]byte] struct {
 	// current tuple location
-	curr *cursor
+	curr *Cursor
 
 	// the function called to moved |curr| forward in the direction of iteration.
 	step func(context.Context) error
-	// should return |true| if the passed in cursor is past the iteration's stopping point.
-	stop func(*cursor) bool
+	// should return |true| if the passed in Cursor is past the iteration's stopping point.
+	stop func(*Cursor) bool
 }
 
 func OrderedTreeIterFromCursors[K, V ~[]byte](
@@ -485,7 +485,7 @@ func OrderedTreeIterFromCursors[K, V ~[]byte](
 		return nil, err
 	}
 
-	stopFn := func(curr *cursor) bool {
+	stopFn := func(curr *Cursor) bool {
 		return curr.compare(stop) >= 0
 	}
 
@@ -518,7 +518,7 @@ func (it *OrderedTreeIter[K, V]) Next(ctx context.Context) (key K, value V, err 
 
 func (it *OrderedTreeIter[K, V]) Current() (key K, value V) {
 	// |it.curr| is set to nil when its range is exhausted
-	if it.curr != nil && it.curr.valid() {
+	if it.curr != nil && it.curr.Valid() {
 		k, v := currentCursorItems(it.curr)
 		key, value = K(k), V(v)
 	}

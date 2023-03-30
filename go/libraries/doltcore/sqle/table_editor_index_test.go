@@ -120,6 +120,7 @@ UPDATE onepk SET pk1 = v1 + pk1 ORDER BY pk1 DESC;
 	for _, test := range tests {
 		t.Run(test.sqlStatement, func(t *testing.T) {
 			dEnv, initialRoot := setupEditorIndexTest(t)
+			defer dEnv.DoltDB.Close()
 
 			root := initialRoot
 			for _, sqlStatement := range strings.Split(test.sqlStatement, ";") {
@@ -282,6 +283,7 @@ UPDATE oneuni SET v1 = v1 + pk1;
 	for _, test := range tests {
 		t.Run(test.sqlStatement, func(t *testing.T) {
 			dEnv, initialRoot := setupEditorIndexTest(t)
+			defer dEnv.DoltDB.Close()
 
 			root := initialRoot
 			var err error

@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 ubuntu:18.04
+FROM --platform=linux/amd64 ubuntu:20.04
 
 # install python, libmysqlclient-dev, java, bats, git ruby, perl, cpan
 ENV DEBIAN_FRONTEND=noninteractive
@@ -8,15 +8,16 @@ RUN apt update -y && \
         gnupg \
         libwxbase3.0-0v5 \
         libwxgtk3.0-gtk3-0v5 \
+        libncurses5 \
         libsctp1 \
         software-properties-common && \
     curl -sL https://deb.nodesource.com/setup_14.x | bash - && \
     add-apt-repository ppa:deadsnakes/ppa -y && \
-    curl -OL http://packages.erlang-solutions.com/ubuntu/pool/esl-erlang_22.3.4.9-1~ubuntu~bionic_amd64.deb && \
-    dpkg -i esl-erlang_22.3.4.9-1~ubuntu~bionic_amd64.deb && \
-    curl -LO http://packages.erlang-solutions.com/ubuntu/pool/elixir_1.10.1-1~ubuntu~bionic_all.deb && \
-    dpkg -i elixir_1.10.1-1~ubuntu~bionic_all.deb && \
-    apt update -y && \
+    curl -OL https://packages.erlang-solutions.com/erlang/debian/pool/esl-erlang_22.3.4.9-1~ubuntu~focal_amd64.deb && \
+    dpkg -i esl-erlang_22.3.4.9-1~ubuntu~focal_amd64.deb && \
+    curl -LO https://packages.erlang-solutions.com/erlang/debian/pool/elixir_1.10.2-1~ubuntu~focal_all.deb && \
+    dpkg -i elixir_1.10.2-1~ubuntu~focal_all.deb
+RUN apt update -y && \
     apt install -y \
         python3.8 \
         python3-pip \
@@ -40,7 +41,7 @@ RUN apt update -y && \
         libc6 \
         libgcc1 \
         libgssapi-krb5-2 \
-        libicu60 \
+        libicu66 \
         libssl1.1 \
         libstdc++6 \
         zlib1g \
@@ -49,6 +50,7 @@ RUN apt update -y && \
         postgresql-contrib \
         libpq-dev \
         nodejs \
+        lsof \
         postgresql-server-dev-all && \
         update-ca-certificates -f
 
@@ -112,7 +114,7 @@ RUN gem install bundler -v 2.1.4 && bundle install
 
 # install R packages
 RUN Rscript -e 'install.packages(c("DBI", "RMySQL", "RMariaDB"), \
-                  repos = c(RSPM="https://packagemanager.rstudio.com/cran/__linux__/bionic/latest"))'
+                  repos = c(RSPM="https://packagemanager.rstudio.com/cran/__linux__/focal/latest"))'
 
 # install postgres and psql
 RUN service postgresql start

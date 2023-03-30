@@ -302,6 +302,7 @@ func testReplaceQuery(t *testing.T, test ReplaceTest) {
 
 	dEnv, err := CreateEmptyTestDatabase()
 	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)

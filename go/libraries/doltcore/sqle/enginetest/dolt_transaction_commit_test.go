@@ -35,6 +35,7 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 	// In this test, we're setting only one client to match transaction commits to dolt commits.
 	// Autocommit is disabled for the enabled client, as it's the recommended way to use this feature.
 	harness := newDoltHarness(t)
+	defer harness.Close()
 	harness.Setup(setup.MydbData)
 	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "dolt commit on transaction commit one client",
@@ -176,6 +177,7 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 	// In this test, we're setting both clients to match transaction commits to dolt commits.
 	// Autocommit is disabled, as it's the recommended way to use this feature.
 	harness := newDoltHarness(t)
+	defer harness.Close()
 	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "dolt commit on transaction commit two clients",
 		SetUpScript: []string{
@@ -336,6 +338,7 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 	// In this test, each insertion from both clients cause a commit as autocommit is enabled.
 	// Not the recommended way to use the feature, but it's permitted.
 	harness := newDoltHarness(t)
+	defer harness.Close()
 	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "dolt commit with autocommit",
 		SetUpScript: []string{
@@ -414,6 +417,7 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 
 func TestDoltTransactionCommitLateFkResolution(t *testing.T) {
 	harness := newDoltHarness(t)
+	defer harness.Close()
 	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "delayed foreign key resolution with transaction commits",
 		SetUpScript: []string{

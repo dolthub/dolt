@@ -106,10 +106,11 @@ func TestKeylessMerge(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtu.CreateTestEnv()
+			defer dEnv.DoltDB.Close()
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
-			root, err = root.CreateEmptyTable(ctx, tblName, sch)
+			root, err = root.CreateEmptyTable(ctx, tblName, keylessSch)
 			require.NoError(t, err)
 			err = dEnv.UpdateWorkingRoot(ctx, root)
 			require.NoError(t, err)
@@ -242,7 +243,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 	setupTest := func(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, cc []testCommand) {
 		root, err := dEnv.WorkingRoot(ctx)
 		require.NoError(t, err)
-		root, err = root.CreateEmptyTable(ctx, tblName, sch)
+		root, err = root.CreateEmptyTable(ctx, tblName, keylessSch)
 		require.NoError(t, err)
 		err = dEnv.UpdateWorkingRoot(ctx, root)
 		require.NoError(t, err)
@@ -257,6 +258,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			dEnv := dtu.CreateTestEnv()
+			defer dEnv.DoltDB.Close()
 			setupTest(t, ctx, dEnv, test.setup)
 
 			root, err := dEnv.WorkingRoot(ctx)
@@ -270,6 +272,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 
 		t.Run(test.name+"_resolved_ours", func(t *testing.T) {
 			dEnv := dtu.CreateTestEnv()
+			defer dEnv.DoltDB.Close()
 
 			setupTest(t, ctx, dEnv, test.setup)
 
@@ -287,6 +290,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 		})
 		t.Run(test.name+"_resolved_theirs", func(t *testing.T) {
 			dEnv := dtu.CreateTestEnv()
+			defer dEnv.DoltDB.Close()
 
 			setupTest(t, ctx, dEnv, test.setup)
 
@@ -474,7 +478,7 @@ func assertKeylessNomsRows(t *testing.T, ctx context.Context, tbl *doltdb.Table,
 
 const tblName = "noKey"
 
-var sch = dtu.MustSchema(
+var keylessSch = dtu.MustSchema(
 	schema.NewColumn("c1", 1, types.IntKind, false),
 	schema.NewColumn("c2", 2, types.IntKind, false),
 )

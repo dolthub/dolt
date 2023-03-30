@@ -46,6 +46,7 @@ func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv)
 
 type args []string
 
+// TestMergeSchemas are schema merge integration tests from 2020
 func TestMergeSchemas(t *testing.T) {
 	for _, test := range mergeSchemaTests {
 		t.Run(test.name, func(t *testing.T) {
@@ -457,7 +458,7 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
 			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
-		expectedErr: merge.ErrMergeWithDifferentPkSets,
+		expectedErr: merge.ErrMergeWithDifferentPks,
 	},
 }
 
@@ -557,6 +558,7 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	}
 
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 
 	for _, c := range setupCommon {
@@ -600,6 +602,7 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 	}
 
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 	for _, c := range setupCommon {
 		c.exec(t, ctx, dEnv)
@@ -654,6 +657,7 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 
 func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 	for _, c := range setupForeignKeyTests {
 		c.exec(t, ctx, dEnv)

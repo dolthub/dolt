@@ -151,6 +151,7 @@ func TestDbRevision(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
+			defer dEnv.DoltDB.Close()
 
 			setup := append(setupCommon, test.setup...)
 			for _, c := range setup {

@@ -81,7 +81,7 @@ func (dt *UnscopedDiffTable) WithFilters(_ *sql.Context, filters []sql.Expressio
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
-// LogTableName
+// DiffTableName
 func (dt *UnscopedDiffTable) Name() string {
 	return doltdb.DiffTableName
 }

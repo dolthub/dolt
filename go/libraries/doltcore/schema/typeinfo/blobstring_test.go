@@ -29,6 +29,7 @@ import (
 )
 
 func TestBlobStringConvertNomsValueToValue(t *testing.T) {
+	vrw := types.NewMemoryValueStore()
 	tests := []struct {
 		typ         *blobStringType
 		input       types.Blob
@@ -37,19 +38,19 @@ func TestBlobStringConvertNomsValueToValue(t *testing.T) {
 	}{
 		{
 			generateBlobStringType(t, 10),
-			mustBlobString(t, "0  "),
+			mustBlobString(t, vrw, "0  "),
 			"0  ",
 			false,
 		},
 		{
 			generateBlobStringType(t, 80),
-			mustBlobString(t, "this is some text that will be returned"),
+			mustBlobString(t, vrw, "this is some text that will be returned"),
 			"this is some text that will be returned",
 			false,
 		},
 		{
 			&blobStringType{gmstypes.CreateLongText(sql.Collation_Default)},
-			mustBlobString(t, "  This is a sentence.  "),
+			mustBlobString(t, vrw, "  This is a sentence.  "),
 			"  This is a sentence.  ",
 			false,
 		},
@@ -69,6 +70,7 @@ func TestBlobStringConvertNomsValueToValue(t *testing.T) {
 }
 
 func TestBlobStringConvertValueToNomsValue(t *testing.T) {
+	vrw := types.NewMemoryValueStore()
 	tests := []struct {
 		typ         *blobStringType
 		input       interface{}
@@ -78,32 +80,31 @@ func TestBlobStringConvertValueToNomsValue(t *testing.T) {
 		{
 			generateBlobStringType(t, 10),
 			"0  ",
-			mustBlobString(t, "0  "),
+			mustBlobString(t, vrw, "0  "),
 			false,
 		},
 		{
 			generateBlobStringType(t, 80),
 			int64(28354),
-			mustBlobString(t, "28354"),
+			mustBlobString(t, vrw, "28354"),
 			false,
 		},
 		{
 			&blobStringType{gmstypes.CreateLongText(sql.Collation_Default)},
 			float32(3724.75),
-			mustBlobString(t, "3724.75"),
+			mustBlobString(t, vrw, "3724.75"),
 			false,
 		},
 		{
 			generateBlobStringType(t, 80),
 			time.Date(2030, 1, 2, 4, 6, 3, 472382485, time.UTC),
-			mustBlobString(t, "2030-01-02 04:06:03.472382"),
+			mustBlobString(t, vrw, "2030-01-02 04:06:03.472382"),
 			false,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf(`%v %v`, test.typ.String(), test.input), func(t *testing.T) {
-			vrw := types.NewMemoryValueStore()
 			output, err := test.typ.ConvertValueToNomsValue(context.Background(), vrw, test.input)
 			if !test.expectedErr {
 				require.NoError(t, err)
@@ -116,6 +117,7 @@ func TestBlobStringConvertValueToNomsValue(t *testing.T) {
 }
 
 func TestBlobStringFormatValue(t *testing.T) {
+	vrw := types.NewMemoryValueStore()
 	tests := []struct {
 		typ         *blobStringType
 		input       types.Blob
@@ -124,19 +126,19 @@ func TestBlobStringFormatValue(t *testing.T) {
 	}{
 		{
 			generateBlobStringType(t, 10),
-			mustBlobString(t, "0  "),
+			mustBlobString(t, vrw, "0  "),
 			"0  ",
 			false,
 		},
 		{
 			generateBlobStringType(t, 80),
-			mustBlobString(t, "this is some text that will be returned"),
+			mustBlobString(t, vrw, "this is some text that will be returned"),
 			"this is some text that will be returned",
 			false,
 		},
 		{
 			&blobStringType{gmstypes.CreateLongText(sql.Collation_Default)},
-			mustBlobString(t, "  This is a sentence.  "),
+			mustBlobString(t, vrw, "  This is a sentence.  "),
 			"  This is a sentence.  ",
 			false,
 		},
@@ -156,6 +158,7 @@ func TestBlobStringFormatValue(t *testing.T) {
 }
 
 func TestBlobStringParseValue(t *testing.T) {
+	vrw := types.NewMemoryValueStore()
 	tests := []struct {
 		typ         *blobStringType
 		input       string
@@ -165,26 +168,25 @@ func TestBlobStringParseValue(t *testing.T) {
 		{
 			generateBlobStringType(t, 10),
 			"0  ",
-			mustBlobString(t, "0  "),
+			mustBlobString(t, vrw, "0  "),
 			false,
 		},
 		{
 			generateBlobStringType(t, 80),
 			"this is some text that will be returned",
-			mustBlobString(t, "this is some text that will be returned"),
+			mustBlobString(t, vrw, "this is some text that will be returned"),
 			false,
 		},
 		{
 			&blobStringType{gmstypes.CreateLongText(sql.Collation_Default)},
 			"  This is a sentence.  ",
-			mustBlobString(t, "  This is a sentence.  "),
+			mustBlobString(t, vrw, "  This is a sentence.  "),
 			false,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf(`%v %v`, test.typ.String(), test.input), func(t *testing.T) {
-			vrw := types.NewMemoryValueStore()
 			output, err := StringDefaultType.ConvertToType(context.Background(), vrw, test.typ, types.String(test.input))
 			if !test.expectedErr {
 				require.NoError(t, err)

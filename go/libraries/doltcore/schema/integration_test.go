@@ -50,7 +50,8 @@ func TestSqlIntegration(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			root := runTestSql(t, ctx, test.setup)
+			ddb, root := runTestSql(t, ctx, test.setup)
+			defer ddb.Close()
 
 			tbl, ok, err := root.GetTable(ctx, tblName)
 			require.NoError(t, err)
@@ -86,7 +87,8 @@ func TestSchemaOrdering(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			root := runTestSql(t, ctx, []string{test.query})
+			ddb, root := runTestSql(t, ctx, []string{test.query})
+			defer ddb.Close()
 
 			tbl, ok, err := root.GetTable(ctx, "t")
 			require.NoError(t, err)
@@ -147,7 +149,8 @@ func TestGetKeyTags(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			root := runTestSql(t, ctx, test.setup)
+			ddb, root := runTestSql(t, ctx, test.setup)
+			defer ddb.Close()
 
 			tbl, ok, err := root.GetTable(ctx, tblName)
 			require.NoError(t, err)
@@ -170,7 +173,7 @@ func TestGetKeyTags(t *testing.T) {
 	}
 }
 
-func runTestSql(t *testing.T, ctx context.Context, setup []string) *doltdb.RootValue {
+func runTestSql(t *testing.T, ctx context.Context, setup []string) (*doltdb.DoltDB, *doltdb.RootValue) {
 	dEnv := dtestutils.CreateTestEnv()
 	cmd := commands.SqlCmd{}
 	for _, query := range setup {
@@ -179,5 +182,5 @@ func runTestSql(t *testing.T, ctx context.Context, setup []string) *doltdb.RootV
 	}
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
-	return root
+	return dEnv.DoltDB, root
 }

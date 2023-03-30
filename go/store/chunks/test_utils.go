@@ -71,13 +71,28 @@ func (s *TestStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb) e
 	return s.ChunkStore.Put(ctx, c, getAddrs)
 }
 
-func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest ChunkStore) error {
+func (s *TestStoreView) BeginGC(keeper func(hash.Hash) bool) error {
+	collector, ok := s.ChunkStore.(ChunkStoreGarbageCollector)
+	if !ok {
+		return ErrUnsupportedOperation
+	}
+	return collector.BeginGC(keeper)
+}
+
+func (s *TestStoreView) EndGC() {
+	collector, ok := s.ChunkStore.(ChunkStoreGarbageCollector)
+	if !ok {
+		panic(ErrUnsupportedOperation)
+	}
+	collector.EndGC()
+}
+
+func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore) error {
 	collector, ok := s.ChunkStore.(ChunkStoreGarbageCollector)
 	if !ok || dest != s {
 		return ErrUnsupportedOperation
 	}
-
-	return collector.MarkAndSweepChunks(ctx, last, keepChunks, collector)
+	return collector.MarkAndSweepChunks(ctx, hashes, collector)
 }
 
 func (s *TestStoreView) Reads() int {
