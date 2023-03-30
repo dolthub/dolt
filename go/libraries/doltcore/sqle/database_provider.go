@@ -426,9 +426,11 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 		}
 	}
 
-	// if calling process has a lockfile, also create one for new database
-	if env.FsIsLocked(p.fs) {
-		err := newEnv.Lock()
+	// If we're running in a sql-server context, ensure the new database is locked so that it can't
+	// be edited from the CLI. We can't rely on looking for an existing lock file, since this could
+	// be the first db creation if sql-server was started from a bare directory.
+	if sqlserver.GetRunningServer() != nil {
+		err = newEnv.Lock()
 		if err != nil {
 			ctx.GetLogger().Warnf("Failed to lock newly created database: %s", err.Error())
 		}

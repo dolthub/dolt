@@ -345,6 +345,12 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 					shell.Println(color.RedString(err.Error()))
 					return
 				}
+			} else {
+				err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("Query OK (%.2f sec)", secondsSince(startTime, time.Now())))
+				if err != nil {
+					shell.Println(color.RedString(err.Error()))
+					return
+				}
 			}
 		}
 
@@ -437,4 +443,13 @@ func (s *MysqlRowWrapper) HasMoreRows() bool {
 
 func (s *MysqlRowWrapper) Close(*sql.Context) error {
 	return s.rows.Close()
+}
+
+// secondsSince returns the number of full and partial seconds since the time given
+func secondsSince(start time.Time, end time.Time) float64 {
+	runTime := end.Sub(start)
+	seconds := runTime / time.Second
+	milliRemainder := (runTime - seconds*time.Second) / time.Millisecond
+	timeDisplay := float64(seconds) + float64(milliRemainder)*.001
+	return timeDisplay
 }

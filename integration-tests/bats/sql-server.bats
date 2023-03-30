@@ -571,6 +571,17 @@ SQL
      [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
+@test "sql-server: dolt_branch -d won't delete a db's default branch" {
+    cd repo1
+    dolt branch branch1
+    start_sql_server repo1
+
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 \
+      -q "CALL DOLT_CHECKOUT('branch1'); CALL DOLT_BRANCH('-D', 'main');"
+    [ $status -eq 1 ]
+    [[ $output =~ "default branch for database 'repo1'" ]] || false
+}
+
 @test "sql-server: DOLT_MERGE ff works" {
     skiponwindows "Missing dependencies"
 
@@ -1063,6 +1074,9 @@ END""")
     [[ $output =~ "information_schema" ]] || false
     [[ $output =~ "test1" ]] ||	false
 
+    # Make sure the sql-server lock file is set for a newly created database
+    [[ -f "$PWD/test1/.dolt/sql-server.lock" ]] || false
+
     dolt sql-client -P $PORT -u dolt --use-db 'test1' -q "create table a(x int)"
     dolt sql-client -P $PORT -u dolt --use-db 'test1' -q "call dolt_add('.')"
     dolt sql-client -P $PORT -u dolt --use-db 'test1' -q "insert into a values (1), (2)"
@@ -1230,6 +1244,9 @@ END""")
     [[ $output =~ "mysql" ]] || false
     [[ $output =~ "information_schema" ]] || false
     [[ $output =~ "test1" ]] || false
+
+    # Make sure the sql-server lock file is set for a newly created database
+    [[ -f "$PWD/db_dir/test1/.dolt/sql-server.lock" ]] || false
 
     dolt sql-client -P $PORT -u dolt --use-db test1 -q "create table a(x int)"
     dolt sql-client -P $PORT -u dolt --use-db test1 -q "call dolt_add('.')"
@@ -1422,6 +1439,8 @@ databases:
 @test "sql-server: sql-server locks database" {
     cd repo1
     start_sql_server
+    [[ -f "$PWD/.dolt/sql-server.lock" ]] || false
+
     PORT=$( definePORT )
     run dolt sql-server -P $PORT --socket "dolt.$PORT.sock"
     [ "$status" -eq 1 ]
@@ -1448,6 +1467,11 @@ databases:
     cd repo1
     start_sql_server
     dolt sql-client -P $PORT -u dolt --use-db '' -q "create database newdb"
+
+    # Make sure the sql-server lock file is set for the new database
+    [[ -f "$PWD/newdb/.dolt/sql-server.lock" ]] || false
+
+    # Verify that we can't start a sql-server from the new database dir
     cd newdb
     PORT=$( definePORT )
     run dolt sql-server -P $PORT --socket "dolt.$PORT.sock"

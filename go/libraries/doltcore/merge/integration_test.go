@@ -122,6 +122,7 @@ func TestMerge(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtu.CreateTestEnv()
+			defer dEnv.DoltDB.Close()
 
 			for _, tc := range setupCommon {
 				tc.exec(t, ctx, dEnv)
@@ -241,6 +242,7 @@ func TestMergeConflicts(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtu.CreateTestEnv()
+			defer dEnv.DoltDB.Close()
 
 			for _, tc := range setupCommon {
 				tc.exec(t, ctx, dEnv)
@@ -281,6 +283,7 @@ const (
 func TestMergeConcurrency(t *testing.T) {
 	ctx := context.Background()
 	dEnv := setupConcurrencyTest(t, ctx)
+	defer dEnv.DoltDB.Close()
 	_, eng := engineFromEnvironment(ctx, dEnv)
 
 	eg, ctx := errgroup.WithContext(ctx)

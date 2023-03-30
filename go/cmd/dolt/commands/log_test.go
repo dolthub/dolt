@@ -34,6 +34,7 @@ import (
 func TestLog(t *testing.T) {
 	dEnv := createUninitializedEnv()
 	err := dEnv.InitRepo(context.Background(), types.Format_Default, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
+	defer dEnv.DoltDB.Close()
 
 	if err != nil {
 		t.Error("Failed to init repo")
@@ -52,6 +53,7 @@ func TestLogSigterm(t *testing.T) {
 
 	dEnv := createUninitializedEnv()
 	err := dEnv.InitRepo(context.Background(), types.Format_Default, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
+	defer dEnv.DoltDB.Close()
 
 	if err != nil {
 		t.Error("Failed to init repo")

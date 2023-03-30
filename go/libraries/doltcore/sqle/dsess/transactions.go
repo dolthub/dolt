@@ -156,7 +156,12 @@ func doltCommit(ctx *sql.Context,
 		return nil, nil, err
 	}
 
-	// We check if the branch HEAD has changed since our transaction started.
+	// We already got a new staged root via merge or ff via the doCommit method, so now apply it to the STAGED value
+	// we're about to commit.
+	pending.Roots.Staged = workingSet.StagedRoot()
+
+	// We check if the branch HEAD has changed since our transaction started and perform an additional merge if so. The
+	// non-dolt-commit transaction logic only merges working sets and doesn't consider the HEAD value.
 	if curHead != nil {
 		curRootVal, err := curHead.ResolveRootValue(ctx)
 		if err != nil {
@@ -191,6 +196,10 @@ func doltCommit(ctx *sql.Context,
 			if err != nil {
 				return nil, nil, err
 			}
+
+			// We also need to update the working set to reflect the new staged root value
+			workingSet = workingSet.WithStagedRoot(pending.Roots.Staged)
+
 			logrus.Tracef("staged and HEAD merge took %s", time.Since(start))
 		}
 	}
@@ -247,7 +256,7 @@ func (tx *DoltTransaction) doCommit(
 				return nil, nil, err
 			}
 
-			if newWorkingSet || rootsEqual(existingWs.WorkingRoot(), tx.startState.WorkingRoot()) {
+			if newWorkingSet || workingAndStagedEqual(existingWs, tx.startState) {
 				// ff merge
 				err = tx.validateWorkingSetForCommit(ctx, workingSet, isFfMerge)
 				if err != nil {
@@ -304,24 +313,46 @@ func (tx *DoltTransaction) doCommit(
 
 // mergeRoots merges the roots in the existing working set with the one being committed and returns the resulting
 // working set. Conflicts are automatically resolved with "accept ours" if the session settings dictate it.
+// Currently merges working and staged roots as necessary. HEAD root is only handled by the DoltCommit function.
 func (tx *DoltTransaction) mergeRoots(
 	ctx *sql.Context,
-	existingWorkingRoot *doltdb.WorkingSet,
+	existingWorkingSet *doltdb.WorkingSet,
 	workingSet *doltdb.WorkingSet,
 ) (*doltdb.WorkingSet, error) {
-	mergedRoot, _, err := merge.MergeRoots(
-		ctx,
-		existingWorkingRoot.WorkingRoot(),
-		workingSet.WorkingRoot(),
-		tx.startState.WorkingRoot(),
-		workingSet,
-		tx.startState,
-		tx.mergeEditOpts,
-		merge.MergeOpts{})
-	if err != nil {
-		return nil, err
+
+	if !rootsEqual(existingWorkingSet.WorkingRoot(), workingSet.WorkingRoot()) {
+		mergedRoot, _, err := merge.MergeRoots(
+			ctx,
+			existingWorkingSet.WorkingRoot(),
+			workingSet.WorkingRoot(),
+			tx.startState.WorkingRoot(),
+			workingSet,
+			tx.startState,
+			tx.mergeEditOpts,
+			merge.MergeOpts{})
+		if err != nil {
+			return nil, err
+		}
+		workingSet = workingSet.WithWorkingRoot(mergedRoot)
 	}
-	return workingSet.WithWorkingRoot(mergedRoot), nil
+
+	if !rootsEqual(existingWorkingSet.StagedRoot(), workingSet.StagedRoot()) {
+		mergedRoot, _, err := merge.MergeRoots(
+			ctx,
+			existingWorkingSet.StagedRoot(),
+			workingSet.StagedRoot(),
+			tx.startState.StagedRoot(),
+			workingSet,
+			tx.startState,
+			tx.mergeEditOpts,
+			merge.MergeOpts{})
+		if err != nil {
+			return nil, err
+		}
+		workingSet = workingSet.WithStagedRoot(mergedRoot)
+	}
+
+	return workingSet, nil
 }
 
 // rollback attempts a transaction rollback
@@ -368,6 +399,7 @@ const (
 //
 // The justification for this behavior is that we want to protect the working
 // set from constraint violations with the above settings.
+// TODO: should this validate staged as well?
 func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, workingSet *doltdb.WorkingSet, isFf ffMerge) error {
 	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
 	if err != nil {
@@ -512,4 +544,8 @@ func rootsEqual(left, right *doltdb.RootValue) bool {
 	}
 
 	return lh == rh
+}
+
+func workingAndStagedEqual(left, right *doltdb.WorkingSet) bool {
+	return rootsEqual(left.WorkingRoot(), right.WorkingRoot()) && rootsEqual(left.StagedRoot(), right.StagedRoot())
 }
