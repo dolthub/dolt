@@ -16,6 +16,7 @@ package merge
 
 import (
 	"context"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
