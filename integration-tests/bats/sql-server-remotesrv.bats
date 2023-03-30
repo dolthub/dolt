@@ -144,6 +144,9 @@ SQL
     dolt sql-server --port 3307 &
     srv_two_pid=$!
 
+    # move CWD to make sure we don't lock ".../read_replica/db"
+    mkdir tmp && cd tmp
+
     dolt sql-client -u root <<SQL
 use db;
 insert into vals values (1), (2), (3), (4), (5);
