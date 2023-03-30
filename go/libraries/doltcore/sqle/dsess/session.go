@@ -1249,8 +1249,8 @@ func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string) error
 		return err
 	}
 
-	// Different DBs have different requirements for what state is set, so we are maximally permissive on what's expected 
-	// in the state object here 
+	// Different DBs have different requirements for what state is set, so we are maximally permissive on what's expected
+	// in the state object here
 	if state.WorkingSet != nil {
 		headRef, err := state.WorkingSet.Ref().ToHeadRef()
 		if err != nil {
