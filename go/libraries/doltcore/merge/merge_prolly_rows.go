@@ -68,7 +68,7 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 	// Migrate primary and secondary indexes to rewrite the values for the left side of the merge
 	// TODO: This logic is broken if the common cols are in the same order, but one dropped, one added so length is the same
 	schemasDifferentSize := len(tm.leftSch.GetAllCols().GetColumns()) != len(mergedSch.GetAllCols().GetColumns())
-	if schemasDifferentSize || leftMapping.ReordersColumns() {
+	if schemasDifferentSize || leftMapping.IsIdentityMapping() == false {
 		if err := migrateDataToMergedSchema(ctx, tm, valueMerger, mergedSch); err != nil {
 			return nil, nil, err
 		}
@@ -754,12 +754,8 @@ func (m *secondaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sou
 
 			newTupleValue := diff.Right
 			if schema.IsKeyless(sourceSch) {
-				// TODO: If the schema is keyless, then before we can map it to the merged schema to
-				//       account for any schema changes, we need the mapping to understand the special
-				//       fields in a keyless index, such as hash and cardinality.
-				//       Until then, just throw an error if a mapping is needed.
-				if m.valueMerger.rightMapping.ReordersColumns() {
-					return fmt.Errorf("cannot merge keyless tables with reordering")
+				if m.valueMerger.rightMapping.IsIdentityMapping() == false {
+					return fmt.Errorf("cannot merge keyless tables with reordered columns")
 				}
 			} else {
 				valueMappedToMergeSchema := remapTuple(diff.Right, sourceSch.GetValueDescriptor(), m.valueMerger.rightMapping)

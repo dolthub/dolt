@@ -46,15 +46,15 @@ func (om OrdinalMapping) MapOrdinal(to int) (from int) {
 	return
 }
 
-// ReordersColumns returns true if this mapping reorders columns. If the mapping simply maps every ordinal to the
-// same ordinal position in the destination tuple, then this function returns false.
-func (om OrdinalMapping) ReordersColumns() bool {
+// IsIdentityMapping returns true if this mapping is the identity mapping (i.e. every position is mapped
+// to the same position and no columns are reordered).
+func (om OrdinalMapping) IsIdentityMapping() bool {
 	for i, mapping := range om {
 		if i != mapping {
-			return true
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 type TupleBuilder struct {
