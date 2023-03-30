@@ -199,10 +199,7 @@ func TestJournalWriterWriteCompressedChunk(t *testing.T) {
 		r, _ := j.ranges.get(a)
 		validateLookup(t, j, r, cc)
 	}
-	j.ranges.iter(func(a addr, r Range) (stop bool) {
-		validateLookup(t, j, r, data[a])
-		return
-	})
+	validateAllLookups(t, j, data)
 }
 
 func TestJournalWriterBootstrap(t *testing.T) {
@@ -223,10 +220,7 @@ func TestJournalWriterBootstrap(t *testing.T) {
 	_, err = j.bootstrapJournal(ctx)
 	require.NoError(t, err)
 
-	j.ranges.iter(func(a addr, r Range) (stop bool) {
-		validateLookup(t, j, r, data[a])
-		return
-	})
+	validateAllLookups(t, j, data)
 
 	source := journalChunkSource{journal: j}
 	for a, cc := range data {
@@ -236,6 +230,27 @@ func TestJournalWriterBootstrap(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, ch.Data(), buf)
 	}
+}
+
+func validateAllLookups(t *testing.T, j *journalWriter, data map[addr]CompressedChunk) {
+	// move |data| to addr16-keyed map
+	prefixMap := make(map[addr16]CompressedChunk, len(data))
+	var prefix addr16
+	for a, cc := range data {
+		copy(prefix[:], a[:])
+		prefixMap[prefix] = cc
+	}
+	iterRangeIndex(j.ranges, func(a addr16, r Range) (stop bool) {
+		validateLookup(t, j, r, prefixMap[a])
+		return
+	})
+}
+
+func iterRangeIndex(idx rangeIndex, cb func(addr16, Range) (stop bool)) {
+	idx.novel.Iter(func(a addr, r Range) (stop bool) {
+		return cb(toAddr16(a), r)
+	})
+	idx.cached.Iter(cb)
 }
 
 func validateLookup(t *testing.T, j *journalWriter, r Range, cc CompressedChunk) {
