@@ -30,6 +30,7 @@ import (
 
 func TestInsertIntoQueryCatalogTable(t *testing.T) {
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 
 	ctx := context.Background()
 	root, _ := dEnv.WorkingRoot(ctx)
