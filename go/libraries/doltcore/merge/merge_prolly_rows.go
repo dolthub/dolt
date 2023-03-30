@@ -41,7 +41,6 @@ import (
 // conflicts), migrate any existing table data to the specified |mergedSch|, and merge table data from both sides
 // of the merge together.
 func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Schema) (*doltdb.Table, *MergeStats, error) {
-	// TODO: Clean up consistent use of passing tm as ref vs value
 	err := maybeAbortDueToUnmergeableIndexes(tm.name, tm.leftSch, tm.rightSch, mergedSch)
 	if err != nil {
 		return nil, nil, err
