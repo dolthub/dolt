@@ -33,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
@@ -183,7 +182,7 @@ var (
 )
 
 func TestDoltIndexEqual(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	root, indexMap := doltIndexSetup(t)
 
 	tests := []doltIndexTestCase{
 		{
@@ -297,6 +296,7 @@ func TestDoltIndexEqual(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s|%v", test.indexName, test.keys), func(t *testing.T) {
+			ctx := sql.NewEmptyContext()
 			idx, ok := indexMap[test.indexName]
 			require.True(t, ok)
 			testDoltIndex(t, ctx, root, test.keys, test.expectedRows, idx, indexComp_Eq)
@@ -305,7 +305,7 @@ func TestDoltIndexEqual(t *testing.T) {
 }
 
 func TestDoltIndexGreaterThan(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	root, indexMap := doltIndexSetup(t)
 
 	tests := []struct {
 		indexName    string
@@ -438,6 +438,7 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s|%v", test.indexName, test.keys), func(t *testing.T) {
+			ctx := sql.NewEmptyContext()
 			index, ok := indexMap[test.indexName]
 			require.True(t, ok)
 			testDoltIndex(t, ctx, root, test.keys, test.expectedRows, index, indexComp_Gt)
@@ -446,7 +447,7 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 }
 
 func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	root, indexMap := doltIndexSetup(t)
 
 	tests := []struct {
 		indexName    string
@@ -575,6 +576,7 @@ func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s|%v", test.indexName, test.keys), func(t *testing.T) {
+			ctx := sql.NewEmptyContext()
 			index, ok := indexMap[test.indexName]
 			require.True(t, ok)
 			testDoltIndex(t, ctx, root, test.keys, test.expectedRows, index, indexComp_GtE)
@@ -583,7 +585,7 @@ func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
 }
 
 func TestDoltIndexLessThan(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	root, indexMap := doltIndexSetup(t)
 
 	tests := []struct {
 		indexName    string
@@ -721,6 +723,7 @@ func TestDoltIndexLessThan(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s|%v", test.indexName, test.keys), func(t *testing.T) {
+			ctx := sql.NewEmptyContext()
 			index, ok := indexMap[test.indexName]
 			require.True(t, ok)
 			testDoltIndex(t, ctx, root, test.keys, test.expectedRows, index, indexComp_Lt)
@@ -729,7 +732,7 @@ func TestDoltIndexLessThan(t *testing.T) {
 }
 
 func TestDoltIndexLessThanOrEqual(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	root, indexMap := doltIndexSetup(t)
 
 	tests := []struct {
 		indexName    string
@@ -868,6 +871,7 @@ func TestDoltIndexLessThanOrEqual(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s|%v", test.indexName, test.keys), func(t *testing.T) {
+			ctx := sql.NewEmptyContext()
 			index, ok := indexMap[test.indexName]
 			require.True(t, ok)
 			testDoltIndex(t, ctx, root, test.keys, test.expectedRows, index, indexComp_LtE)
@@ -876,7 +880,7 @@ func TestDoltIndexLessThanOrEqual(t *testing.T) {
 }
 
 func TestDoltIndexBetween(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	root, indexMap := doltIndexSetup(t)
 
 	tests := []doltIndexBetweenTestCase{
 		{
@@ -1046,6 +1050,8 @@ func TestDoltIndexBetween(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s|%v%v", test.indexName, test.greaterThanOrEqual, test.lessThanOrEqual), func(t *testing.T) {
+			ctx := sql.NewEmptyContext()
+
 			idx, ok := indexMap[test.indexName]
 			require.True(t, ok)
 
@@ -1286,6 +1292,7 @@ func requireUnorderedRowsEqual(t *testing.T, s sql.Schema, rows1, rows2 []sql.Ro
 }
 
 func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys []interface{}, expectedRows []sql.Row, idx index.DoltIndex, cmp indexComp) {
+	ctx = sql.NewEmptyContext()
 	exprs := idx.Expressions()
 	builder := sql.NewIndexBuilder(idx)
 	for i, key := range keys {
@@ -1329,8 +1336,8 @@ func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys 
 	requireUnorderedRowsEqual(t, pkSch.Schema, convertSqlRowToInt64(expectedRows), readRows)
 }
 
-func doltIndexSetup(t *testing.T) (*sql.Context, *doltdb.RootValue, map[string]index.DoltIndex) {
-	ctx := NewTestSQLCtx(context.Background())
+func doltIndexSetup(t *testing.T) (*doltdb.RootValue, map[string]index.DoltIndex) {
+	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
@@ -1402,18 +1409,7 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 		}
 	}
 
-	return ctx, root, indexMap
-}
-
-func NewTestSQLCtx(ctx context.Context) *sql.Context {
-	s := dsess.DefaultSession(dsess.EmptyDatabaseProvider())
-	s.SetCurrentDatabase("dolt")
-	sqlCtx := sql.NewContext(
-		ctx,
-		sql.WithSession(s),
-	)
-
-	return sqlCtx
+	return root, indexMap
 }
 
 func mustTime(timeString string) time.Time {

@@ -84,6 +84,7 @@ func TestRenameTable(t *testing.T) {
 		t.Run(tt.description, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
+			defer dEnv.DoltDB.Close()
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 
@@ -228,6 +229,7 @@ func TestAddColumnToTable(t *testing.T) {
 			ctx := context.Background()
 			dEnv, err := makePeopleTable(ctx, dtestutils.CreateTestEnv())
 			require.NoError(t, err)
+			defer dEnv.DoltDB.Close()
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
@@ -434,6 +436,7 @@ func TestDropPks(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
+			defer dEnv.DoltDB.Close()
 			ctx := context.Background()
 			tmpDir, err := dEnv.TempTableFilesDir()
 			require.NoError(t, err)
@@ -746,6 +749,7 @@ func TestModifyColumn(t *testing.T) {
 			ctx := context.Background()
 			dEnv, err := makePeopleTable(ctx, dtestutils.CreateTestEnv())
 			require.NoError(t, err)
+			defer dEnv.DoltDB.Close()
 
 			root, err := dEnv.WorkingRoot(ctx)
 			assert.NoError(t, err)

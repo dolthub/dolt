@@ -53,11 +53,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const (
-	Version = "0.75.7"
+	Version = "0.75.9"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -144,6 +145,10 @@ func main() {
 
 func runMain() int {
 	args := os.Args[1:]
+
+	if os.Getenv("DOLT_VERBOSE_ASSERT_TABLE_FILES_CLOSED") == "" {
+		nbs.TableIndexGCFinalizerWithStackTrace = false
+	}
 
 	csMetrics := false
 	ignoreLockFile := false
