@@ -188,8 +188,21 @@ func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
 	return repoState.Save(fs)
 }
 
-func (s SessionStateAdapter) AddBackup(_ env.Remote) error {
-	return fmt.Errorf("cannot insert remote in an SQL session")
+func (s SessionStateAdapter) AddBackup(backup env.Remote) error {
+	s.backups[backup.Name] = backup
+
+	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
+	if err != nil {
+		return err
+	}
+
+	repoState, err := env.LoadRepoState(fs)
+	if err != nil {
+		return err
+	}
+
+	repoState.AddBackup(backup)
+	return repoState.Save(fs)
 }
 
 func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error {
@@ -208,8 +221,20 @@ func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error 
 	return repoState.Save(fs)
 }
 
-func (s SessionStateAdapter) RemoveBackup(_ context.Context, _ string) error {
-	return fmt.Errorf("cannot delete remote in an SQL session")
+func (s SessionStateAdapter) RemoveBackup(_ context.Context, name string) error {
+	delete(s.backups, name)
+
+	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
+	if err != nil {
+		return err
+	}
+
+	repoState, err := env.LoadRepoState(fs)
+	if err != nil {
+		return err
+	}
+	delete(repoState.Backups, name)
+	return repoState.Save(fs)
 }
 
 func (s SessionStateAdapter) TempTableFilesDir() (string, error) {
