@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
@@ -143,15 +142,13 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 }
 
 func (cmd CatCmd) prettyPrintResults(ctx context.Context, doltSch schema.Schema, idx durable.Index) error {
-
 	wr, err := getTableWriter(cmd.resultFormat, doltSch)
 	if err != nil {
 		return err
 	}
 	defer wr.Close(ctx)
 
-	sess := dsess.DefaultSession(dsess.EmptyDatabaseProvider())
-	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
+	sqlCtx := sql.NewEmptyContext()
 
 	rowItr, err := table.NewTableIterator(ctx, doltSch, idx, 0)
 	if err != nil {
