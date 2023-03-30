@@ -3545,18 +3545,19 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
 		Name: "dropping columns",
 		AncSetUpScript: []string{
-			"CREATE table t (pk int primary key, col1 int, col2 int);",
-			"INSERT into t values (1, 10, 100), (2, 20, 200);",
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100), " +
+				"UNIQUE KEY unique1 (col2), UNIQUE KEY unique2 (col1, pk));",
+			"INSERT into t values (1, 10, '100'), (2, 20, '200');",
 			"alter table t add index idx1 (pk, col1);",
 			"alter table t add index idx2 (pk, col1, col2);",
 			"alter table t add index idx3 (col1, col2);",
 		},
 		RightSetUpScript: []string{
 			"alter table t drop column col1;",
-			"insert into t values (3, 300), (4, 400);",
+			"insert into t values (3, '300'), (4, '400');",
 		},
 		LeftSetUpScript: []string{
-			"insert into t values (5, 50, 500), (6, 60, 600);",
+			"insert into t values (5, 50, '500'), (6, 60, '600');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -3565,15 +3566,15 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			},
 			{
 				Query:    "select pk, col2 from t;",
-				Expected: []sql.Row{{1, 100}, {2, 200}, {3, 300}, {4, 400}, {5, 500}, {6, 600}},
+				Expected: []sql.Row{{1, "100"}, {2, "200"}, {3, "300"}, {4, "400"}, {5, "500"}, {6, "600"}},
 			},
 		},
 	},
 	{
 		Name: "renaming a column",
 		AncSetUpScript: []string{
-			"CREATE table t (pk int primary key, col1 int, col2 int);",
-			"INSERT into t values (1, 10, 100), (2, 20, 200);",
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+			"INSERT into t values (1, 10, '100'), (2, 20, '200');",
 			"alter table t add index idx1 (pk, col1);",
 			"alter table t add index idx2 (col1, pk);",
 			"alter table t add index idx3 (pk, col1, col2);",
@@ -3581,10 +3582,10 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		RightSetUpScript: []string{
 			"alter table t rename column col1 to col11;",
-			"insert into t values (3, 30, 300), (4, 40, 400);",
+			"insert into t values (3, 30, '300'), (4, 40, '400');",
 		},
 		LeftSetUpScript: []string{
-			"insert into t values (5, 50, 500), (6, 60, 600);",
+			"insert into t values (5, 50, '500'), (6, 60, '600');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -3592,16 +3593,20 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				Expected: []sql.Row{{0, 0}},
 			},
 			{
-				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 10, 100}, {2, 20, 200}, {3, 30, 300}, {4, 40, 400}, {5, 50, 500}, {6, 60, 600}},
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, 10, "100"}, {2, 20, "200"},
+					{3, 30, "300"}, {4, 40, "400"},
+					{5, 50, "500"}, {6, 60, "600"},
+				},
 			},
 		},
 	},
 	{
 		Name: "renaming and reordering a column",
 		AncSetUpScript: []string{
-			"CREATE table t (pk int primary key, col1 int, col2 int);",
-			"INSERT into t values (1, 10, 100), (2, 20, 200);",
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+			"INSERT into t values (1, 10, '100'), (2, 20, '200');",
 			"alter table t add index idx1 (pk, col1);",
 			"alter table t add index idx2 (col2);",
 			"alter table t add index idx3 (pk, col1, col2);",
@@ -3614,10 +3619,10 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		RightSetUpScript: []string{
 			"alter table t rename column col1 to col11;",
 			"alter table t modify col11 int after col2;",
-			"insert into t values (3, 300, 30), (4, 400, 40);",
+			"insert into t values (3, '300', 30), (4, '400', 40);",
 		},
 		LeftSetUpScript: []string{
-			"insert into t values (5, 50, 500), (6, 60, 600);",
+			"insert into t values (5, 50, '500'), (6, 60, '600');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -3627,9 +3632,9 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			{
 				Query: "select pk, col11, col2 from t;",
 				Expected: []sql.Row{
-					{1, 10, 100}, {2, 20, 200},
-					{3, 30, 300}, {4, 40, 400},
-					{5, 50, 500}, {6, 60, 600},
+					{1, 10, "100"}, {2, 20, "200"},
+					{3, 30, "300"}, {4, 40, "400"},
+					{5, 50, "500"}, {6, 60, "600"},
 				},
 			},
 		},
@@ -3637,8 +3642,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
 		Name: "reordering a column",
 		AncSetUpScript: []string{
-			"CREATE table t (pk int primary key, col1 int, col2 int);",
-			"INSERT into t values (1, 10, 100), (2, 20, 200);",
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+			"INSERT into t values (1, 10, '100'), (2, 20, '200');",
 			"alter table t add index idx1 (pk, col1);",
 			"alter table t add index idx2 (col2);",
 			"alter table t add index idx3 (pk, col1, col2);",
@@ -3648,10 +3653,10 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		RightSetUpScript: []string{
 			"alter table t modify col1 int after col2;",
-			"insert into t (pk, col1, col2) values (3, 30, 300), (4, 40, 400);",
+			"insert into t (pk, col1, col2) values (3, 30, '300'), (4, 40, '400');",
 		},
 		LeftSetUpScript: []string{
-			"insert into t values (5, 50, 500), (6, 60, 600);",
+			"insert into t values (5, 50, '500'), (6, 60, '600');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -3659,8 +3664,11 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				Expected: []sql.Row{{0, 0}},
 			},
 			{
-				Query:    "select pk, col1, col2 from t;",
-				Expected: []sql.Row{{1, 10, 100}, {2, 20, 200}, {3, 30, 300}, {4, 40, 400}, {5, 50, 500}, {6, 60, 600}},
+				Query: "select pk, col1, col2 from t;",
+				Expected: []sql.Row{
+					{1, 10, "100"}, {2, 20, "200"},
+					{3, 30, "300"}, {4, 40, "400"},
+					{5, 50, "500"}, {6, 60, "600"}},
 			},
 		},
 	},
@@ -3726,8 +3734,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			"alter table t add index idx1 (pk);",
 		},
 		RightSetUpScript: []string{
-			"alter table t add column col2 int;",
-			"insert into t values (3, 300), (4, 400);",
+			"alter table t add column col2 varchar(100);",
+			"insert into t values (3, '300'), (4, '400');",
 		},
 		LeftSetUpScript: []string{
 			"alter table t add column col1 int;",
@@ -3743,8 +3751,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				Expected: []sql.Row{
 					{1, nil, nil},
 					{2, nil, nil},
-					{3, nil, 300},
-					{4, nil, 400},
+					{3, nil, "300"},
+					{4, nil, "400"},
 					{5, 50, nil},
 					{6, 60, nil},
 				},
@@ -3754,8 +3762,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
 		Name: "dropping and adding a column with the same name",
 		AncSetUpScript: []string{
-			"create table t (pk int primary key, col1 int, col2 int);",
-			"insert into t values (1, 10, 100), (2, 20, 200);",
+			"create table t (pk int primary key, col1 int, col2 varchar(100));",
+			"insert into t values (1, 10, '100'), (2, 20, '200');",
 			"alter table t add index idx1 (col1, pk);",
 			"alter table t add index idx2 (col2, pk);",
 			"alter table t add index idx3 (col2, col1);",
@@ -3763,10 +3771,10 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		RightSetUpScript: []string{
 			"alter table t drop column col1;",
 			"alter table t add column col1 int;",
-			"insert into t values (3, 300, 30), (4, 400, 40);",
+			"insert into t values (3, '300', 30), (4, '400', 40);",
 		},
 		LeftSetUpScript: []string{
-			"insert into t values (5, 50, 500), (6, 60, 600);",
+			"insert into t values (5, 50, '500'), (6, 60, '600');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -3774,15 +3782,16 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				Expected: []sql.Row{{0, 0}},
 			},
 			{
-				// NOTE: If we can't find an exact tag mapping, then we want to fall back to matching by name and exact type.
+				// NOTE: If we can't find an exact tag mapping, then we fall back to
+				//       matching by name and exact type.
 				Query: "select pk, col1, col2 from t order by pk;",
 				Expected: []sql.Row{
-					{1, nil, 100},
-					{2, nil, 200},
-					{3, 30, 300},
-					{4, 40, 400},
-					{5, 50, 500},
-					{6, 60, 600},
+					{1, nil, "100"},
+					{2, nil, "200"},
+					{3, 30, "300"},
+					{4, 40, "400"},
+					{5, 50, "500"},
+					{6, 60, "600"},
 				},
 			},
 		},
@@ -3948,10 +3957,12 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		RightSetUpScript: []string{
 			"alter table child add constraint fk_parent foreign key (p_fk) references parent(pk);",
+			"alter table child add column col1 int after pk;",
 		},
 		LeftSetUpScript: []string{
 			"insert into child values (2, 2);",
 			"update child set p_fk = 3 where pk = 1;",
+			"alter table child add column col2 varchar(100) after pk;",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -3960,7 +3971,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			},
 			{
 				Query:    "select * from child order by pk;",
-				Expected: []sql.Row{{1, 3}, {2, 2}},
+				Expected: []sql.Row{{1, 3, nil}, {2, 2, nil}},
 			},
 			{
 				Query:    "select pk, p_fk from dolt_constraint_violations_child order by pk;",
@@ -4098,32 +4109,40 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	},
 }
 
-func convertMergeScriptTest(mst MergeScriptTest) queries.ScriptTest {
-	n := 5 + len(mst.AncSetUpScript) + len(mst.RightSetUpScript) + len(mst.LeftSetUpScript)
-	setupScript := make([]string, n)
+// convertMergeScriptTest converts a MergeScriptTest into a standard ScriptTest. If flipSides is true, then the
+// left and right setup is swapped (i.e. left setup is done on right branch and right setup is done on main branch).
+// This enables us to test merges in both directions, since the merge code is asymmetric and some code paths currently
+// only run on the left side of the merge.
+func convertMergeScriptTest(mst MergeScriptTest, flipSides bool) queries.ScriptTest {
+	setupScript := make([]string, 100)
 
-	o := 0
-	for i, s := range mst.AncSetUpScript {
-		setupScript[o+i] = s
-	}
-	o += len(mst.AncSetUpScript)
-	setupScript[o] = "CALL DOLT_COMMIT('-Am', 'ancestor commit');"
-	setupScript[o+1] = "CALL DOLT_CHECKOUT('-b', 'right');"
-	o += 2
+	// Ancestor setup
+	setupScript = append(setupScript, mst.AncSetUpScript...)
+	setupScript = append(setupScript, "CALL DOLT_COMMIT('-Am', 'ancestor commit');")
+	setupScript = append(setupScript, "CALL DOLT_BRANCH('right');")
 
-	for i, s := range mst.RightSetUpScript {
-		setupScript[o+i] = s
+	// Right-side setup
+	if flipSides {
+		setupScript = append(setupScript, "CALL DOLT_CHECKOUT('main');")
+	} else {
+		setupScript = append(setupScript, "CALL DOLT_CHECKOUT('right');")
 	}
-	o += len(mst.RightSetUpScript)
-	setupScript[o] = "CALL DOLT_COMMIT('-Am', 'right commit');"
-	setupScript[o+1] = "CALL DOLT_CHECKOUT('main');"
-	o += 2
+	setupScript = append(setupScript, mst.RightSetUpScript...)
+	setupScript = append(setupScript, "CALL DOLT_COMMIT('-Am', 'right commit');")
 
-	for i, s := range mst.LeftSetUpScript {
-		setupScript[o+i] = s
+	// Left-side setup
+	if flipSides {
+		setupScript = append(setupScript, "CALL DOLT_CHECKOUT('right');")
+	} else {
+		setupScript = append(setupScript, "CALL DOLT_CHECKOUT('main');")
 	}
-	o += len(mst.LeftSetUpScript)
-	setupScript[o] = "CALL DOLT_COMMIT('-Am', 'left commit');"
+	setupScript = append(setupScript, mst.LeftSetUpScript...)
+	setupScript = append(setupScript, "CALL DOLT_COMMIT('-Am', 'left commit');")
+
+	// Always run the tests with the main branch checked out
+	if flipSides {
+		setupScript = append(setupScript, "CALL DOLT_CHECKOUT('main');")
+	}
 
 	return queries.ScriptTest{
 		Name:         mst.Name,
