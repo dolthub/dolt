@@ -3971,7 +3971,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			},
 			{
 				Query:    "select * from child order by pk;",
-				Expected: []sql.Row{{1, 3, nil}, {2, 2, nil}},
+				Expected: []sql.Row{{1, 3, nil, nil}, {2, 2, nil, nil}},
 			},
 			{
 				Query:    "select pk, p_fk from dolt_constraint_violations_child order by pk;",
