@@ -407,9 +407,11 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 		}
 	}
 
-	// if calling process has a lockfile, also create one for new database
-	if env.FsIsLocked(p.fs) {
-		err := newEnv.Lock()
+	// If we're running in a sql-server context, ensure the new database is locked so that it can't
+	// be edited from the CLI. We can't rely on looking for an existing lock file, since this could
+	// be the first db creation if sql-server was started from a bare directory.
+	if sqlserver.GetRunningServer() != nil {
+		err = newEnv.Lock()
 		if err != nil {
 			ctx.GetLogger().Warnf("Failed to lock newly created database: %s", err.Error())
 		}
@@ -590,7 +592,7 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 
 // DropDatabase implements the sql.MutableDatabaseProvider interface
 func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
-	isRevisionDatabase, err := p.IsRevisionDatabase(ctx, name)
+	isRevisionDatabase, err := p.isRevisionDatabase(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -730,17 +732,13 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		return nil, false, nil
 	}
 
-	resolvedRevSpec, err := resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
+	dbType, resolvedRevSpec, err := revisionDbType(ctx, srcDb, revSpec)
 	if err != nil {
 		return nil, false, err
 	}
 
-	caseSensitiveBranchName, isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec)
-	if err != nil {
-		return nil, false, err
-	}
-
-	if isBranch {
+	switch dbType {
+	case dsess.RevisionTypeBranch:
 		// fetch the upstream head if this is a replicated db
 		if replicaDb, ok := srcDb.(ReadReplicaDatabase); ok {
 			// TODO move this out of analysis phase, should only happen at read time, when the transaction begins (like is
@@ -751,7 +749,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 			}
 		}
 
-		db, err := revisionDbForBranch(ctx, srcDb, caseSensitiveBranchName)
+		db, err := revisionDbForBranch(ctx, srcDb, resolvedRevSpec)
 		// preserve original user case in the case of not found
 		if sql.ErrDatabaseNotFound.Is(err) {
 			return nil, false, sql.ErrDatabaseNotFound.New(revDB)
@@ -760,14 +758,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		}
 
 		return db, true, nil
-	}
-
-	isTag, err := isTag(ctx, srcDb, resolvedRevSpec)
-	if err != nil {
-		return nil, false, err
-	}
-
-	if isTag {
+	case dsess.RevisionTypeTag:
 		// TODO: this should be an interface, not a struct
 		replicaDb, ok := srcDb.(ReadReplicaDatabase)
 
@@ -785,9 +776,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 			return nil, false, err
 		}
 		return db, true, nil
-	}
-
-	if doltdb.IsValidCommitHash(resolvedRevSpec) {
+	case dsess.RevisionTypeCommit:
 		// TODO: this should be an interface, not a struct
 		replicaDb, ok := srcDb.(ReadReplicaDatabase)
 		if ok {
@@ -803,9 +792,44 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 			return nil, false, err
 		}
 		return db, true, nil
+	case dsess.RevisionTypeNone:
+		// not an error, ok = false will get handled as a not found error in a layer above as appropriate
+		return nil, false, nil
+	default:
+		return nil, false, fmt.Errorf("unrecognized revision type for revision spec %s", revSpec)
+	}
+}
+
+// revisionDbType returns the type of revision spec given for the database given, and the resolved revision spec
+func revisionDbType(ctx *sql.Context, srcDb SqlDatabase, revSpec string) (revType dsess.RevisionType, resolvedRevSpec string, err error) {
+	resolvedRevSpec, err = resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
+	if err != nil {
+		return 0, "", err
 	}
 
-	return nil, false, nil
+	caseSensitiveBranchName, isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec)
+	if err != nil {
+		return 0, "", err
+	}
+
+	if isBranch {
+		return dsess.RevisionTypeBranch, caseSensitiveBranchName, nil
+	}
+
+	isTag, err := isTag(ctx, srcDb, resolvedRevSpec)
+	if err != nil {
+		return 0, "", err
+	}
+
+	if isTag {
+		return dsess.RevisionTypeTag, resolvedRevSpec, nil
+	}
+
+	if doltdb.IsValidCommitHash(resolvedRevSpec) {
+		return dsess.RevisionTypeCommit, resolvedRevSpec, nil
+	}
+
+	return dsess.RevisionTypeNone, "", nil
 }
 
 func initialDbState(ctx context.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
@@ -870,78 +894,57 @@ func initialDbState(ctx context.Context, db SqlDatabase, branch string) (dsess.I
 	}, nil
 }
 
-func initialStateForRevisionDb(ctx *sql.Context, srcDb SqlDatabase) (dsess.InitialDbState, error) {
-	_, revSpec := SplitRevisionDbName(srcDb)
-
-	resolvedRevSpec, err := resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	_, isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	if isBranch {
-		init, err := initialStateForBranchDb(ctx, srcDb)
+func initialStateForRevisionDb(ctx *sql.Context, db SqlDatabase) (dsess.InitialDbState, error) {
+	switch db.RevisionType() {
+	case dsess.RevisionTypeBranch:
+		init, err := initialStateForBranchDb(ctx, db)
 		// preserve original user case in the case of not found
 		if sql.ErrDatabaseNotFound.Is(err) {
-			return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(srcDb.Name())
+			return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(db.Name())
 		} else if err != nil {
 			return dsess.InitialDbState{}, err
 		}
 
 		return init, nil
-	}
-
-	isTag, err := isTag(ctx, srcDb, resolvedRevSpec)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	if isTag {
+	case dsess.RevisionTypeTag:
 		// TODO: this should be an interface, not a struct
-		replicaDb, ok := srcDb.(ReadReplicaDatabase)
+		replicaDb, ok := db.(ReadReplicaDatabase)
 
 		if ok {
-			srcDb = replicaDb.Database
+			db = replicaDb.Database
 		}
 
-		srcDb, ok = srcDb.(ReadOnlyDatabase)
+		db, ok = db.(ReadOnlyDatabase)
 		if !ok {
-			return dsess.InitialDbState{}, fmt.Errorf("expected a ReadOnlyDatabase, got %T", srcDb)
+			return dsess.InitialDbState{}, fmt.Errorf("expected a ReadOnlyDatabase, got %T", db)
 		}
 
-		init, err := initialStateForTagDb(ctx, srcDb.(ReadOnlyDatabase))
+		init, err := initialStateForTagDb(ctx, db.(ReadOnlyDatabase))
 		if err != nil {
 			return dsess.InitialDbState{}, err
 		}
 
 		return init, nil
-	}
-
-	if doltdb.IsValidCommitHash(resolvedRevSpec) {
+	case dsess.RevisionTypeCommit:
 		// TODO: this should be an interface, not a struct
-		replicaDb, ok := srcDb.(ReadReplicaDatabase)
+		replicaDb, ok := db.(ReadReplicaDatabase)
 		if ok {
-			srcDb = replicaDb.Database
+			db = replicaDb.Database
 		}
 
-		srcDb, ok = srcDb.(ReadOnlyDatabase)
+		db, ok = db.(ReadOnlyDatabase)
 		if !ok {
-			return dsess.InitialDbState{}, fmt.Errorf("expected a ReadOnlyDatabase, got %T", srcDb)
+			return dsess.InitialDbState{}, fmt.Errorf("expected a ReadOnlyDatabase, got %T", db)
 		}
 
-		init, err := initialStateForCommit(ctx, srcDb.(ReadOnlyDatabase))
+		init, err := initialStateForCommit(ctx, db.(ReadOnlyDatabase))
 		if err != nil {
 			return dsess.InitialDbState{}, err
 		}
 		return init, nil
+	default:
+		return dsess.InitialDbState{}, fmt.Errorf("unrecognized revision type for revision spec %s: %v", db.Revision(), db.RevisionType())
 	}
-
-	// TODO: error here?
-	return dsess.InitialDbState{}, nil
 }
 
 // databaseForClone returns a newly cloned database if read replication is enabled and a remote DB exists, or an error
@@ -1100,45 +1103,35 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 	return nil, sql.ErrTableFunctionNotFound.New(name)
 }
 
-// GetRevisionForRevisionDatabase implements dsess.RevisionDatabaseProvider
-func (p DoltDatabaseProvider) GetRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, string, error) {
-	db, ok, err := p.SessionDatabase(ctx, dbName)
-	if err != nil {
-		return "", "", err
-	}
-	if !ok {
-		return "", "", sql.ErrDatabaseNotFound.New(dbName)
-	}
-
+// splitRevisionDbName splits the given database name into its base and revision parts and returns them. Non-revision
+// DBs use their full name as the base name, and empty string as the revision.
+func splitRevisionDbName(db sql.Database) (string, string) {
 	sqldb, ok := db.(SqlDatabase)
 	if !ok {
-		return dbName, "", nil
+		return db.Name(), ""
 	}
 
-	base, rev := SplitRevisionDbName(sqldb)
-	return base, rev, nil
-}
-
-// SplitRevisionDbName splits the given database name into its base and revision parts and returns them
-func SplitRevisionDbName(db SqlDatabase) (string, string) {
 	dbName := db.Name()
-	if db.Revision() != "" {
-		dbName = strings.TrimSuffix(dbName, dbRevisionDelimiter+db.Revision())
+	if sqldb.Revision() != "" {
+		dbName = strings.TrimSuffix(dbName, dbRevisionDelimiter+sqldb.Revision())
 	}
 
-	return dbName, db.Revision()
+	return dbName, sqldb.Revision()
 }
 
-// IsRevisionDatabase returns true if the specified dbName represents a database that is tied to a specific
+// isRevisionDatabase returns true if the specified dbName represents a database that is tied to a specific
 // branch or commit from a database (e.g. "dolt/branch1").
-// TODO: move this to session, eliminate the lookup here
-func (p DoltDatabaseProvider) IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error) {
-	_, revision, err := p.GetRevisionForRevisionDatabase(ctx, dbName)
+func (p DoltDatabaseProvider) isRevisionDatabase(ctx *sql.Context, dbName string) (bool, error) {
+	db, ok, err := p.SessionDatabase(ctx, dbName)
 	if err != nil {
 		return false, err
 	}
+	if !ok {
+		return false, sql.ErrDatabaseNotFound.New(dbName)
+	}
 
-	return revision != "", nil
+	_, rev := splitRevisionDbName(db)
+	return rev != "", nil
 }
 
 // ensureReplicaHeadExists tries to pull the latest version of a remote branch. Will fail if the branch
@@ -1263,6 +1256,7 @@ func revisionDbForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			gs:       v.gs,
 			editOpts: v.editOpts,
 			revision: revSpec,
+			revType:  dsess.RevisionTypeBranch,
 		}
 	case ReadReplicaDatabase:
 		db = ReadReplicaDatabase{
@@ -1274,6 +1268,7 @@ func revisionDbForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 				gs:       v.gs,
 				editOpts: v.editOpts,
 				revision: revSpec,
+				revType:  dsess.RevisionTypeBranch,
 			},
 			remote:  v.remote,
 			srcDB:   v.srcDB,
@@ -1286,7 +1281,7 @@ func revisionDbForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 }
 
 func initialStateForBranchDb(ctx context.Context, srcDb SqlDatabase) (dsess.InitialDbState, error) {
-	_, revSpec := SplitRevisionDbName(srcDb)
+	_, revSpec := splitRevisionDbName(srcDb)
 
 	branch := ref.NewBranchRef(revSpec)
 	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, branch)
@@ -1304,43 +1299,10 @@ func initialStateForBranchDb(ctx context.Context, srcDb SqlDatabase) (dsess.Init
 		return dsess.InitialDbState{}, err
 	}
 
-	dbName := srcDb.Name() + dbRevisionDelimiter + revSpec
-
 	static := staticRepoState{
 		branch:          branch,
 		RepoStateWriter: srcDb.DbData().Rsw,
 		RepoStateReader: srcDb.DbData().Rsr,
-	}
-
-	var db SqlDatabase
-
-	switch v := srcDb.(type) {
-	case Database:
-		db = Database{
-			name:     dbName,
-			ddb:      v.ddb,
-			rsw:      static,
-			rsr:      static,
-			gs:       v.gs,
-			editOpts: v.editOpts,
-			revision: revSpec,
-		}
-	case ReadReplicaDatabase:
-		db = ReadReplicaDatabase{
-			Database: Database{
-				name:     dbName,
-				ddb:      v.ddb,
-				rsw:      static,
-				rsr:      static,
-				gs:       v.gs,
-				editOpts: v.editOpts,
-				revision: revSpec,
-			},
-			remote:  v.remote,
-			srcDB:   v.srcDB,
-			tmpDir:  v.tmpDir,
-			limiter: newLimiter(),
-		}
 	}
 
 	remotes, err := static.GetRemotes()
@@ -1359,7 +1321,7 @@ func initialStateForBranchDb(ctx context.Context, srcDb SqlDatabase) (dsess.Init
 	}
 
 	init := dsess.InitialDbState{
-		Db:         db,
+		Db:         srcDb,
 		HeadCommit: cm,
 		WorkingSet: ws,
 		DbData: env.DbData{
@@ -1370,7 +1332,6 @@ func initialStateForBranchDb(ctx context.Context, srcDb SqlDatabase) (dsess.Init
 		Remotes:  remotes,
 		Branches: branches,
 		Backups:  backups,
-		//ReadReplica: //todo
 	}
 
 	return init, nil
@@ -1385,13 +1346,14 @@ func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string) (Read
 		rsr:      srcDb.DbData().Rsr,
 		editOpts: srcDb.editOpts,
 		revision: revSpec,
+		revType:  dsess.RevisionTypeTag,
 	}}
 
 	return db, nil
 }
 
 func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.InitialDbState, error) {
-	_, revSpec := SplitRevisionDbName(srcDb)
+	_, revSpec := splitRevisionDbName(srcDb)
 	tag := ref.NewTagRef(revSpec)
 
 	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, tag)
@@ -1427,13 +1389,14 @@ func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		rsr:      srcDb.DbData().Rsr,
 		editOpts: srcDb.editOpts,
 		revision: revSpec,
+		revType:  dsess.RevisionTypeCommit,
 	}}
 
 	return db, nil
 }
 
 func initialStateForCommit(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.InitialDbState, error) {
-	_, revSpec := SplitRevisionDbName(srcDb)
+	_, revSpec := splitRevisionDbName(srcDb)
 
 	spec, err := doltdb.NewCommitSpec(revSpec)
 	if err != nil {

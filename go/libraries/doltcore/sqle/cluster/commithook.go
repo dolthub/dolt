@@ -167,12 +167,6 @@ func (h *commithook) isCaughtUp() bool {
 	return h.nextHead == h.lastPushedHead
 }
 
-func (h *commithook) isCaughtUpLocking() bool {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.isCaughtUp()
-}
-
 // called with h.mu locked.
 func (h *commithook) primaryNeedsInit() bool {
 	return h.role == RolePrimary && h.nextHead == (hash.Hash{})
@@ -340,10 +334,17 @@ func (h *commithook) setRole(role Role) {
 	h.cond.Signal()
 }
 
-func (h *commithook) setWaitNotify(f func()) {
+func (h *commithook) setWaitNotify(f func()) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if f != nil {
+		if h.waitNotify != nil {
+			return false
+		}
+		f()
+	}
 	h.waitNotify = f
+	return true
 }
 
 var errDetectedBrokenConfigStr = "error: more than one server was configured as primary in the same epoch. this server has stopped accepting writes. choose a primary in the cluster and call dolt_assume_cluster_role() on servers in the cluster to start replication at a higher epoch"
@@ -352,11 +353,11 @@ var errDetectedBrokenConfigStr = "error: more than one server was configured as 
 // replicate and wakes the replication thread.
 func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
 	lgr := h.logger()
-	lgr.Warnf("cluster/commithook: Execute called post commit")
+	lgr.Tracef("cluster/commithook: Execute called post commit")
 	cs := datas.ChunkStoreFromDatabase(db)
 	root, err := cs.Root(ctx)
 	if err != nil {
-		lgr.Warnf("cluster/commithook: Execute: error retrieving local database root: %v", err)
+		lgr.Errorf("cluster/commithook: Execute: error retrieving local database root: %v", err)
 		return err
 	}
 	h.mu.Lock()

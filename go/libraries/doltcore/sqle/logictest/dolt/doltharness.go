@@ -51,6 +51,13 @@ type DoltHarness struct {
 	sess    *dsess.DoltSession
 }
 
+func (h *DoltHarness) Close() {
+	dbs := h.sess.Provider().AllDatabases(sql.NewEmptyContext())
+	for _, db := range dbs {
+		db.(dsql.SqlDatabase).DbData().Ddb.Close()
+	}
+}
+
 func (h *DoltHarness) EngineStr() string {
 	return "mysql"
 }

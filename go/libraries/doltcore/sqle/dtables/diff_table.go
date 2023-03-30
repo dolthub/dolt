@@ -944,7 +944,7 @@ func CalculateDiffSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
 
 	j := toSch.GetAllCols().Size()
 	err = fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		fromCol, err := schema.NewColumnWithTypeInfo(diff.FromColNamer(col.Name), uint64(i), col.TypeInfo, false, col.Default, false, col.Comment)
+		fromCol, err := schema.NewColumnWithTypeInfo(diff.FromColNamer(col.Name), uint64(j), col.TypeInfo, false, col.Default, false, col.Comment)
 		if err != nil {
 			return true, err
 		}

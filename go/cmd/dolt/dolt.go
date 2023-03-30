@@ -53,11 +53,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const (
-	Version = "0.75.3"
+	Version = "0.75.9"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -75,6 +76,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.LogCmd{},
+	commands.ShowCmd{},
 	commands.BranchCmd{},
 	commands.CheckoutCmd{},
 	commands.MergeCmd{},
@@ -143,6 +145,10 @@ func main() {
 
 func runMain() int {
 	args := os.Args[1:]
+
+	if os.Getenv("DOLT_VERBOSE_ASSERT_TABLE_FILES_CLOSED") == "" {
+		nbs.TableIndexGCFinalizerWithStackTrace = false
+	}
 
 	csMetrics := false
 	ignoreLockFile := false
@@ -308,6 +314,10 @@ func runMain() int {
 	warnIfMaxFilesTooLow()
 
 	ctx := context.Background()
+	if ok, exit := interceptSendMetrics(ctx, args); ok {
+		return exit
+	}
+
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 	dEnv.IgnoreLockFile = ignoreLockFile
 
@@ -446,4 +456,12 @@ func processEventsDir(args []string, dEnv *env.DoltEnv) error {
 	}
 
 	return nil
+}
+
+func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
+	if len(args) < 1 || args[0] != commands.SendMetricsCommand {
+		return false, 0
+	}
+	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, Version)
+	return true, doltCommand.Exec(ctx, "dolt", args, dEnv)
 }

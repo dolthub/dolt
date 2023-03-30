@@ -1135,6 +1135,7 @@ var BranchControlTests = []BranchControlTest{
 func TestBranchControl(t *testing.T) {
 	for _, test := range BranchControlTests {
 		harness := newDoltHarness(t)
+		defer harness.Close()
 		t.Run(test.Name, func(t *testing.T) {
 			engine, err := harness.NewEngine(t)
 			require.NoError(t, err)
@@ -1187,6 +1188,7 @@ func TestBranchControl(t *testing.T) {
 func TestBranchControlBlocks(t *testing.T) {
 	for _, test := range BranchControlBlockTests {
 		harness := newDoltHarness(t)
+		defer harness.Close()
 		t.Run(test.Name, func(t *testing.T) {
 			engine, err := harness.NewEngine(t)
 			require.NoError(t, err)

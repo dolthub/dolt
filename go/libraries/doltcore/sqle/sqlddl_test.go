@@ -259,6 +259,7 @@ func TestCreateTable(t *testing.T) {
 			ctx := context.Background()
 			dEnv, err := CreateEmptyTestDatabase()
 			require.NoError(t, err)
+			defer dEnv.DoltDB.Close()
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
@@ -334,6 +335,7 @@ func TestDropTable(t *testing.T) {
 			ctx := context.Background()
 			dEnv, err := CreateTestDatabase()
 			require.NoError(t, err)
+			defer dEnv.DoltDB.Close()
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
@@ -508,6 +510,7 @@ func TestAddColumn(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv, err := CreateTestDatabase()
 			require.NoError(t, err)
+			defer dEnv.DoltDB.Close()
 
 			ctx := context.Background()
 			root, err := dEnv.WorkingRoot(ctx)
@@ -629,6 +632,7 @@ func TestRenameColumn(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv, err := CreateTestDatabase()
 			require.NoError(t, err)
+			defer dEnv.DoltDB.Close()
 
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
@@ -744,6 +748,7 @@ func TestRenameTableStatements(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv, err := CreateTestDatabase()
 			require.NoError(t, err)
+			defer dEnv.DoltDB.Close()
 
 			ctx := context.Background()
 			root, err := dEnv.WorkingRoot(ctx)
@@ -820,6 +825,7 @@ func TestAlterSystemTables(t *testing.T) {
 
 	t.Run("Create", func(t *testing.T) {
 		setup()
+		defer dEnv.DoltDB.Close()
 		for _, tableName := range append(systemTableNames, reservedTableNames...) {
 			assertFails(t, dEnv, fmt.Sprintf("create table %s (a int primary key not null)", tableName), "reserved")
 		}
@@ -827,8 +833,12 @@ func TestAlterSystemTables(t *testing.T) {
 
 	t.Run("Drop", func(t *testing.T) {
 		setup()
-		for _, tableName := range append(systemTableNames) {
-			expectedErr := "system tables cannot be dropped or altered"
+		defer dEnv.DoltDB.Close()
+		for _, tableName := range systemTableNames {
+			expectedErr := "system table"
+			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
+				expectedErr = "system tables cannot be dropped or altered"
+			}
 			assertFails(t, dEnv, fmt.Sprintf("drop table %s", tableName), expectedErr)
 		}
 		for _, tableName := range reservedTableNames {
@@ -838,6 +848,7 @@ func TestAlterSystemTables(t *testing.T) {
 
 	t.Run("Rename", func(t *testing.T) {
 		setup()
+		defer dEnv.DoltDB.Close()
 		for _, tableName := range systemTableNames {
 			expectedErr := "system table"
 			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
@@ -852,6 +863,7 @@ func TestAlterSystemTables(t *testing.T) {
 
 	t.Run("Alter", func(t *testing.T) {
 		setup()
+		defer dEnv.DoltDB.Close()
 		for _, tableName := range append(systemTableNames, reservedTableNames...) {
 			expectedErr := "cannot be altered"
 			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
@@ -1061,6 +1073,7 @@ func TestParseCreateTableStatement(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
+			defer dEnv.DoltDB.Close()
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
@@ -1081,6 +1094,7 @@ func TestParseCreateTableStatement(t *testing.T) {
 func TestIndexOverwrite(t *testing.T) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		panic(err)
@@ -1185,6 +1199,7 @@ INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5'
 func TestDropPrimaryKey(t *testing.T) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		panic(err)
@@ -1242,6 +1257,7 @@ func TestDropPrimaryKey(t *testing.T) {
 func TestDropIndex(t *testing.T) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		panic(err)
@@ -1295,6 +1311,7 @@ func TestDropIndex(t *testing.T) {
 
 func TestCreateIndexUnique(t *testing.T) {
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	root, err := dEnv.WorkingRoot(context.Background())
 	if err != nil {
 		panic(err)

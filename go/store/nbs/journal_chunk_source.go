@@ -73,10 +73,14 @@ func (s journalChunkSource) getMany(ctx context.Context, _ *errgroup.Group, reqs
 	var remaining bool
 	// todo: read planning
 	for i := range reqs {
+		if reqs[i].found {
+			continue
+		}
 		data, err := s.get(ctx, *reqs[i].a, stats)
 		if err != nil {
 			return false, err
 		} else if data != nil {
+			reqs[i].found = true
 			ch := chunks.NewChunkWithHash(hash.Hash(*reqs[i].a), data)
 			found(ctx, &ch)
 		} else {
@@ -90,12 +94,16 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, _ *errgroup.G
 	var remaining bool
 	// todo: read planning
 	for i := range reqs {
+		if reqs[i].found {
+			continue
+		}
 		cc, err := s.getCompressed(ctx, *reqs[i].a, stats)
 		if err != nil {
 			return false, err
 		} else if cc.IsEmpty() {
 			remaining = true
 		} else {
+			reqs[i].found = true
 			found(ctx, cc)
 		}
 	}

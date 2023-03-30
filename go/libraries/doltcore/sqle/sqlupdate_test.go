@@ -399,6 +399,7 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 
 	dEnv, err := CreateTestDatabase()
 	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)

@@ -110,3 +110,11 @@ func (db *UserSpaceDatabase) EditOptions() editor.Options {
 func (db *UserSpaceDatabase) Revision() string {
 	return ""
 }
+
+func (db *UserSpaceDatabase) RevisionType() dsess.RevisionType {
+	return dsess.RevisionTypeNone
+}
+
+func (db *UserSpaceDatabase) BaseName() string {
+	return db.Name()
+}

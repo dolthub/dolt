@@ -67,6 +67,7 @@ type Database struct {
 	gs       globalstate.GlobalState
 	editOpts editor.Options
 	revision string
+	revType  dsess.RevisionType
 }
 
 var _ SqlDatabase = Database{}
@@ -104,6 +105,15 @@ func (db Database) Revision() string {
 	return db.revision
 }
 
+func (db Database) RevisionType() dsess.RevisionType {
+	return db.revType
+}
+
+func (db Database) BaseName() string {
+	base, _ := splitRevisionDbName(db)
+	return base
+}
+
 func (db Database) EditOptions() editor.Options {
 	return db.editOpts
 }
@@ -125,7 +135,7 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts e
 	}, nil
 }
 
-// initialDBState returns the InitialDbState for |db|. Other implementations of SqlDatabase outside this file should 
+// initialDBState returns the InitialDbState for |db|. Other implementations of SqlDatabase outside this file should
 // implement their own method for an initial db state and not rely on this method.
 func initialDBState(ctx *sql.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
 	if len(db.Revision()) > 0 {
@@ -344,6 +354,16 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 
 		dt, found = dtables.NewUnscopedDiffTable(ctx, db.name, db.ddb, head), true
+	case doltdb.ColumnDiffTableName:
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.Name())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
+		dt, found = dtables.NewColumnDiffTable(ctx, db.name, db.ddb, head), true
 	case doltdb.TableOfTablesInConflictName:
 		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.name, db.ddb), true
 	case doltdb.TableOfTablesWithViolationsName:

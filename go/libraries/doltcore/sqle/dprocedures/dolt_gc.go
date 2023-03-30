@@ -20,6 +20,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -33,12 +34,12 @@ const (
 )
 
 func init() {
-	if os.Getenv("DOLT_ENABLE_GC_PROCEDURE") != "" {
-		DoltGCFeatureFlag = true
+	if os.Getenv("DOLT_DISABLE_GC_PROCEDURE") != "" {
+		DoltGCFeatureFlag = false
 	}
 }
 
-var DoltGCFeatureFlag = false
+var DoltGCFeatureFlag = true
 
 // doltGC is the stored procedure to run online garbage collection on a database.
 func doltGC(ctx *sql.Context, args ...string) (sql.RowIter, error) {
@@ -100,23 +101,23 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 					killed[p.Connection] = struct{}{}
 				}
 			}
+
 			// Look in processes until the connections are actually gone.
-			for i := 0; i < 100; i++ {
-				if i == 100 {
-					return errors.New("unable to establish safepoint.")
-				}
+			params := backoff.NewExponentialBackOff()
+			params.InitialInterval = 1 * time.Millisecond
+			params.MaxInterval = 25 * time.Millisecond
+			params.MaxElapsedTime = 3 * time.Second
+			err := backoff.Retry(func() error {
 				processes := ctx.ProcessList.Processes()
-				done := true
 				for _, p := range processes {
 					if _, ok := killed[p.Connection]; ok {
-						done = false
-						break
+						return errors.New("unable to establish safepoint.")
 					}
 				}
-				if done {
-					break
-				}
-				time.Sleep(50 * time.Millisecond)
+				return nil
+			}, params)
+			if err != nil {
+				return err
 			}
 			ctx.Session.SetTransaction(nil)
 			dsess.DSessFromSess(ctx.Session).SetValidateErr(ErrServerPerformedGC)

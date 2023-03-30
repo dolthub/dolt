@@ -23,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	goerrors "gopkg.in/src-d/go-errors.v1"
@@ -34,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -1141,13 +1141,13 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SessionDatabase) error {
 		nbf = sessionState.dbData.Ddb.Format()
 	}
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
-	
+
 	if dbState.Err != nil {
 		sessionState.Err = dbState.Err
 	} else if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
 
-		// TODO: this is pretty clunky, there is a silly dependency between InitialDbState and globalstate.StateProvider 
+		// TODO: this is pretty clunky, there is a silly dependency between InitialDbState and globalstate.StateProvider
 		//  that's hard to express with the current types
 		stateProvider, ok := db.(globalstate.StateProvider)
 		if !ok {
@@ -1172,8 +1172,6 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SessionDatabase) error {
 		sessionState.headRoot = headRoot
 	} else if dbState.HeadRoot != nil {
 		sessionState.headRoot = dbState.HeadRoot
-	} else {
-		return fmt.Errorf("invalid initial state for database %s", db.Name())
 	}
 
 	// This has to happen after SetRoot above, since it does a stale check before its work
@@ -1251,6 +1249,8 @@ func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string) error
 		return err
 	}
 
+	// Different DBs have different requirements for what state is set, so we are maximally permissive on what's expected
+	// in the state object here
 	if state.WorkingSet != nil {
 		headRef, err := state.WorkingSet.Ref().ToHeadRef()
 		if err != nil {
@@ -1265,26 +1265,30 @@ func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string) error
 
 	roots := state.GetRoots()
 
-	h, err := roots.Working.HashOf()
-	if err != nil {
-		return err
-	}
-	err = d.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
-	if err != nil {
-		return err
+	if roots.Working != nil {
+		h, err := roots.Working.HashOf()
+		if err != nil {
+			return err
+		}
+		err = d.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
+		if err != nil {
+			return err
+		}
 	}
 
-	h, err = roots.Staged.HashOf()
-	if err != nil {
-		return err
-	}
-	err = d.Session.SetSessionVariable(ctx, StagedKey(dbName), h.String())
-	if err != nil {
-		return err
+	if roots.Staged != nil {
+		h, err := roots.Staged.HashOf()
+		if err != nil {
+			return err
+		}
+		err = d.Session.SetSessionVariable(ctx, StagedKey(dbName), h.String())
+		if err != nil {
+			return err
+		}
 	}
 
 	if state.headCommit != nil {
-		h, err = state.headCommit.HashOf()
+		h, err := state.headCommit.HashOf()
 		if err != nil {
 			return err
 		}

@@ -21,7 +21,6 @@ import (
 	"io"
 
 	textdiff "github.com/andreyvit/diff"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dustin/go-humanize"
 	"github.com/fatih/color"
@@ -33,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
@@ -226,7 +226,6 @@ func (t tabularDiffWriter) WriteTableSchemaDiff(ctx context.Context, fromRoot *d
 	var fromCreateStmt = ""
 	if td.FromTable != nil {
 		sqlDb := sqle.NewUserSpaceDatabase(fromRoot, editor.Options{})
-		// sqlDb := sqle.NewSingleTableDatabase(td.FromName, fromSch, td.FromFks, td.FromFksParentSch)
 		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
 		var err error
 		fromCreateStmt, err = sqle.GetCreateTableStmt(sqlCtx, engine, td.FromName)
@@ -238,7 +237,6 @@ func (t tabularDiffWriter) WriteTableSchemaDiff(ctx context.Context, fromRoot *d
 	var toCreateStmt = ""
 	if td.ToTable != nil {
 		sqlDb := sqle.NewUserSpaceDatabase(toRoot, editor.Options{})
-		// sqlDb := sqle.NewSingleTableDatabase(td.FromName, fromSch, td.FromFks, td.FromFksParentSch)
 		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
 		var err error
 		toCreateStmt, err = sqle.GetCreateTableStmt(sqlCtx, engine, td.ToName)

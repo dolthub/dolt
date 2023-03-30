@@ -466,8 +466,16 @@ func (sp Spec) createDatabase(ctx context.Context) (datas.Database, types.ValueR
 			return getStandardLocalStore(ctx, sp.DatabaseName)
 		}
 
-		newGenSt, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
-		d.PanicIfError(err)
+		newGenSt, err := nbs.NewLocalJournalingStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, nbs.NewUnlimitedMemQuotaProvider())
+
+		// If the journaling store can't be created, fall back to a standard local store
+		if err != nil {
+			var localErr error
+			newGenSt, localErr = nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
+			if localErr != nil {
+				d.PanicIfError(err)
+			}
+		}
 
 		oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenDb, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 		d.PanicIfError(err)
