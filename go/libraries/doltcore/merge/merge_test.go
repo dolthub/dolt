@@ -305,7 +305,8 @@ func TestMergeCommits(t *testing.T) {
 		t.Skip()
 	}
 
-	vrw, ns, rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedArtifacts := setupMergeTest(t)
+	ddb, vrw, ns, rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedArtifacts := setupMergeTest(t)
+	defer ddb.Close()
 	merger, err := NewMerger(root, mergeRoot, ancRoot, rightCommitHash, ancCommitHash, vrw, ns)
 	if err != nil {
 		t.Fatal(err)
@@ -422,7 +423,7 @@ func sortTests(t []testRow) {
 	})
 }
 
-func setupMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index, prolly.ArtifactMap) {
+func setupMergeTest(t *testing.T) (*doltdb.DoltDB, types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index, prolly.ArtifactMap) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
 	ns := ddb.NodeStore()
@@ -519,7 +520,7 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, doltdb
 	expectedArtifacts, err := artEditor.Flush(context.Background())
 	require.NoError(t, err)
 
-	return vrw, ns, rightCm, baseCm, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedArtifacts
+	return ddb, vrw, ns, rightCm, baseCm, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedArtifacts
 }
 
 func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, types.Map, types.Map, *MergeStats) {

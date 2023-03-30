@@ -100,6 +100,7 @@ func TestDoltHarness(t *testing.T) {
 
 	fs := filesys.NewInMemFS([]string{}, nil, tmp)
 	dEnv := createTestEnvWithFS(fs, wd)
+	defer dEnv.DoltDB.Close()
 
 	// We run this several times in a row to make sure that the same dolt env can be used in multiple setup / teardown
 	// cycles
@@ -108,6 +109,7 @@ func TestDoltHarness(t *testing.T) {
 			h := &DoltHarness{}
 			err := innerInit(h, dEnv)
 			assert.Equal(t, nil, err)
+			defer h.Close()
 
 			// setup repo with statements
 			for _, test := range statementTests {

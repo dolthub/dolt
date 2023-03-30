@@ -432,6 +432,7 @@ func testInsertQuery(t *testing.T, test InsertTest) {
 
 	dEnv, err := CreateEmptyTestDatabase()
 	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)

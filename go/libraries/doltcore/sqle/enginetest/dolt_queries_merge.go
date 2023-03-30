@@ -1428,7 +1428,7 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('right');",
-				ExpectedErrStr: "error: cannot merge two tables with different primary key sets",
+				ExpectedErrStr: "error: cannot merge two tables with different primary keys",
 			},
 		},
 	},

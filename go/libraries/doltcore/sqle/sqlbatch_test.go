@@ -62,6 +62,7 @@ func TestSqlBatchInserts(t *testing.T) {
 	ctx := context.Background()
 	dEnv, err := CreateTestDatabase()
 	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
 
 	root, err := dEnv.WorkingRoot(ctx)
 
@@ -159,6 +160,7 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	ctx := context.Background()
 	dEnv, err := CreateTestDatabase()
 	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
 
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
@@ -204,6 +206,7 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	ctx := context.Background()
 	dEnv, err := CreateTestDatabase()
 	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
 
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
