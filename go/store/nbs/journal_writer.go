@@ -205,6 +205,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 				}
 				// record a high-water-mark for the indexed portion of the journal
 				wr.indexed = int64(r.end)
+				wr.ranges = wr.ranges.flatten()
 				// todo: uncompressed size
 			default:
 				return fmt.Errorf("unknown index record kind (%d)", r.kind)
@@ -541,24 +542,10 @@ func (idx rangeIndex) novelLookups() (lookups []lookup) {
 }
 
 func (idx rangeIndex) flatten() rangeIndex {
-	// rather than copy |idx.novel| to |idx.cached|, we construct
-	// a new map |union| with only enough capacity for the current
-	// set of Ranges, and copy everything into it. This maximizes
-	// the load factor of |union| and reduces the memory overhead
-	// of |idx|. The tradeoff is that we allocate/copy more often,
-	// but the cost of this work is much less than flushing journal
-	// index records to disk.
-	union := swiss.NewMap[addr16, Range](idx.count())
 	idx.novel.Iter(func(a addr, r Range) (stop bool) {
-		union.Put(toAddr16(a), r)
+		idx.cached.Put(toAddr16(a), r)
 		return
 	})
-	idx.cached.Iter(func(a addr16, r Range) (stop bool) {
-		union.Put(a, r)
-		return
-	})
-	return rangeIndex{
-		novel:  swiss.NewMap[addr, Range](journalIndexDefaultMaxNovel),
-		cached: union,
-	}
+	idx.novel = swiss.NewMap[addr, Range](journalIndexDefaultMaxNovel)
+	return idx
 }
