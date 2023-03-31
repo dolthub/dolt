@@ -54,9 +54,8 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 
 	// Before we merge the table data we need to fix up the primary index on the left-side of the merge for
 	// any ordinal mapping changes (i.e. moving/dropping/adding columns).
-	// TODO: This is also needed for column type changes, applying default vals for new columns, etc.
-	// NOTE: This won't ALWAYS be the left side... eventually we will need to optimize which side we
-	//       pick (i.e. the side that needs the least work to modify) and make this logic work for either side.
+	// NOTE: This won't ALWAYS be the left side... eventually we will need to optimize which side we pick
+	//       (i.e. the side that needs the least work to modify) and make this logic work for either side.
 	lr, err := tm.leftTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -65,21 +64,15 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 	valueMerger := newValueMerger(mergedSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool())
 	leftMapping := valueMerger.leftMapping
 
-	// Migrate primary and secondary indexes to rewrite the values for the left side of the merge
-	// TODO: This logic is broken if the common cols are in the same order, but one dropped, one added so length is the same
+	// Migrate primary index data to rewrite the values on the left side of the merge if necessary
 	schemasDifferentSize := len(tm.leftSch.GetAllCols().GetColumns()) != len(mergedSch.GetAllCols().GetColumns())
 	if schemasDifferentSize || leftMapping.IsIdentityMapping() == false {
 		if err := migrateDataToMergedSchema(ctx, tm, valueMerger, mergedSch); err != nil {
 			return nil, nil, err
 		}
 
-		// After we migrate the data on the left-side to the new, merged schema, we can reset
+		// After we migrate the data on the left-side to the new, merged schema, we reset
 		// the left mapping to an identity mapping, since it's a direct mapping now.
-		// TODO: We also need to update valueMerger's TupleDescription with the changes...
-		//       we can't update the left data's schema to the merged schema and then use the
-		//       old left data TupleDescription, or we will pull out the wrong bytes/types!
-		// valueMerger.vD = mergedSch.GetValueDescriptor() // TODO: is this right?
-		// TODO: Add a test that triggers this!
 		valueMerger.leftMapping = val.NewIdentityOrdinalMapping(len(valueMerger.leftMapping))
 	}
 
@@ -179,7 +172,7 @@ func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.
 				return nil, nil, err
 			}
 			// TODO: Why would we merge the secondary index data if we can't merge the primary index?
-			//       This doesn't seem correct...
+			//       This doesn't seem correct... was this needed for unique index validation or something?
 			//err = sec.merge(ctx, diff, nil)
 			//if err != nil {
 			//	return nil, nil, err
@@ -662,35 +655,36 @@ func newPrimaryMerger(leftRows prolly.Map, valueMerger *valueMerger, finalSch sc
 	}, nil
 }
 
-// TODO: GODOCS
+// merge applies the specified |diff| to the primary index of this primaryMerger. The given |sourceSch|
+// specifies the schema of the source of the diff, which is used to map the diff to the post-merge
+// schema. |sourceSch| may be nil when no mapping from the source schema is needed (i.e. DiffOpRightDelete,
+// and DiffOpDivergentModifyResolved).
 func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourceSch schema.Schema) error {
-	var newValue val.Tuple
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
-		// Default to the right value, in case we don't take the branch below
-		newValue = diff.Right
-
-		// TODO: This is a hack... if a conflict has been automatically resolved, then the tryMerge callback func
-		//       has already mapped the diff to the right columns for us, so we don't need to run this mapping
-		//       logic here. Ideally, the column mapping would happen at the same layer in the code and all in
-		//       one place, but that may not be possible.
-		// NEXT STEP: Need to dig into the tryMerge code and see how it's using the OrdinalMappings and see if
-		//            it's changeable. If it's not... then maybe the ThreeWayDiff should have a flag that says
-		//            if the columns have been mapped or not? That would be cleaner than this hack.
-		if sourceSch != nil && !schema.IsKeyless(sourceSch) {
-			modifiedValue := remapTuple(diff.Right, sourceSch.GetValueDescriptor(), m.valueMerger.rightMapping)
-			newValue = val.NewTuple(m.valueMerger.syncPool, modifiedValue...)
+		if sourceSch == nil {
+			return fmt.Errorf("no source schema specified to map right-side changes to merged schema")
 		}
+
+		newTupleValue := diff.Right
+		if schema.IsKeyless(sourceSch) {
+			if m.valueMerger.rightMapping.IsIdentityMapping() == false {
+				return fmt.Errorf("cannot merge keyless tables with reordered columns")
+			}
+		} else {
+			modifiedValue := remapTuple(diff.Right, sourceSch.GetValueDescriptor(), m.valueMerger.rightMapping)
+			newTupleValue = val.NewTuple(m.valueMerger.syncPool, modifiedValue...)
+		}
+		return m.mut.Put(ctx, diff.Key, newTupleValue)
 	case tree.DiffOpRightDelete:
-		newValue = diff.Right
+		return m.mut.Put(ctx, diff.Key, diff.Right)
 	case tree.DiffOpDivergentModifyResolved:
-		// TODO: Does this case work correctly already? i.e. does it not need it's data to be shifted by the ordinal mapping?
-		//       Tests aren't currently covering this path yet, so need to add something here.
-		newValue = diff.Merged
+		// TODO: This data should have already been mapped for any schema changes by tryMerge, but we
+		//       don't have test coverage yet, so need to add something to trigger this code path.
+		return m.mut.Put(ctx, diff.Key, diff.Merged)
 	default:
 		return fmt.Errorf("unexpected diffOp for editing primary index: %s", diff.Op)
 	}
-	return m.mut.Put(ctx, diff.Key, newValue)
 }
 
 func (m *primaryMerger) finalize(ctx context.Context) (durable.Index, error) {
@@ -747,7 +741,6 @@ func (m *secondaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sou
 			err = applyEdit(ctx, idx, diff.Key, diff.Left, diff.Merged)
 		case tree.DiffOpRightAdd, tree.DiffOpRightModify:
 			// Just as with the primary index, we need to map right-side changes to the final, merged schema.
-			// TODO: For non-unique indexes, we probably have additional updates?
 			if sourceSch == nil {
 				return fmt.Errorf("no source schema specified to map right-side changes to merged schema")
 			}

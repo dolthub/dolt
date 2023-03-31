@@ -3545,12 +3545,13 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
 		Name: "dropping columns",
 		AncSetUpScript: []string{
-			"CREATE table t (pk int primary key, col1 int, col2 varchar(100), " +
-				"UNIQUE KEY unique1 (col2), UNIQUE KEY unique2 (col1, pk));",
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100), UNIQUE KEY unique1 (col2, pk));",
 			"INSERT into t values (1, 10, '100'), (2, 20, '200');",
 			"alter table t add index idx1 (pk, col1);",
 			"alter table t add index idx2 (pk, col1, col2);",
 			"alter table t add index idx3 (col1, col2);",
+			"alter table t add index idx4 (pk, col2);",
+			"CREATE INDEX idx5 ON t(col2(2));",
 		},
 		RightSetUpScript: []string{
 			"alter table t drop column col1;",
