@@ -173,7 +173,9 @@ func trueUpBackingManifest(ctx context.Context, root hash.Hash, backing *journal
 
 // Persist implements tablePersister.
 func (j *chunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
-	if err := j.maybeInit(ctx); err != nil {
+	if j.backing.readOnly() {
+		return nil, errReadOnlyManifest
+	} else if err := j.maybeInit(ctx); err != nil {
 		return nil, err
 	}
 
@@ -200,6 +202,9 @@ func (j *chunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkRea
 
 // ConjoinAll implements tablePersister.
 func (j *chunkJournal) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
+	if j.backing.readOnly() {
+		return nil, nil, errReadOnlyManifest
+	}
 	return j.persister.ConjoinAll(ctx, sources, stats)
 }
 
@@ -221,6 +226,9 @@ func (j *chunkJournal) Exists(ctx context.Context, name addr, chunkCount uint32,
 
 // PruneTableFiles implements tablePersister.
 func (j *chunkJournal) PruneTableFiles(ctx context.Context, keeper func() []addr, mtime time.Time) error {
+	if j.backing.readOnly() {
+		return errReadOnlyManifest
+	}
 	// sanity check that we're not deleting the journal
 	var keepJournal bool
 	for _, a := range keeper() {
@@ -239,6 +247,9 @@ func (j *chunkJournal) Path() string {
 }
 
 func (j *chunkJournal) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, fileSz uint64, chunkCount uint32) error {
+	if j.backing.readOnly() {
+		return errReadOnlyManifest
+	}
 	return j.persister.CopyTableFile(ctx, r, fileId, fileSz, chunkCount)
 }
 
