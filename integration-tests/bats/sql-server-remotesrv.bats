@@ -174,6 +174,7 @@ SQL
 
     dolt sql-server --port 3307 -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD --remotesapi-port 50051 &
     srv_pid=$!
+    sleep 2 # wait for server to start so we don't lock it out
 
     cd ../
     dolt clone http://localhost:50051/remote repo1 -u $DOLT_REMOTE_USER
