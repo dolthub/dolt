@@ -524,8 +524,12 @@ func (v *uniqAddValidator) flush(ctx context.Context, i int) (int, error) {
 			}
 
 			conflicts++
-			modifiedValue := remapTuple(value, v.tm.rightSch.GetValueDescriptor(), v.valueMerger.rightMapping)
-			value = val.NewTuple(v.valueMerger.syncPool, modifiedValue...)
+			// Don't map the value to the merged schema if the table is keyless (since they
+			// don't allow schema changes) or if the mapping is an identity mapping.
+			if !v.valueMerger.keyless && !v.valueMerger.rightMapping.IsIdentityMapping() {
+				modifiedValue := remapTuple(value, v.tm.rightSch.GetValueDescriptor(), v.valueMerger.rightMapping)
+				value = val.NewTuple(v.valueMerger.syncPool, modifiedValue...)
+			}
 
 			// existingPk is the merge-left primary key that
 			// generated the conflicting unique index key
