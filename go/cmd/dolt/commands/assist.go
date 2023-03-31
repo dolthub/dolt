@@ -56,8 +56,9 @@ func (a Assist) Exec(ctx context.Context, commandStr string, args []string, dEnv
 	apr := cli.ParseArgsOrDie(ap, args, helpPr)
 	
 	query := apr.GetValueOrDefault("query", "what can you tell me about my database?")
+	model := apr.GetValueOrDefault("model", "gpt-3.5-turbo")
 	
-	response, err := queryGpt(ctx, dEnv, apiKey, query)
+	response, err := queryGpt(ctx, dEnv, apiKey, model, query)
 	if err != nil {
 		return 1
 	}
@@ -71,7 +72,7 @@ func (a Assist) Exec(ctx context.Context, commandStr string, args []string, dEnv
 }
 
 var chatGptJsonHeader = `{
-    "model": "gpt-3.5-turbo",
+    "model": "%s",
     "messages": [`
 
 var chatGptJsonFooter = `]}`
@@ -84,7 +85,7 @@ func handleResponse(response string) error {
 	return nil
 }
 
-func queryGpt(ctx context.Context, dEnv *env.DoltEnv, apiKey string, query string) (string, error) {
+func queryGpt(ctx context.Context, dEnv *env.DoltEnv, apiKey, modelId, query string) (string, error) {
 	sqlEng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return "", err
@@ -96,7 +97,7 @@ func queryGpt(ctx context.Context, dEnv *env.DoltEnv, apiKey string, query strin
 	}
 	sqlCtx.SetCurrentDatabase(dbName)
 	
-	prompt, err := getJsonPrompt(sqlCtx, sqlEng, dEnv, query)
+	prompt, err := getJsonPrompt(sqlCtx, sqlEng, dEnv, modelId, query)
 	if err != nil {
 		return "", err
 	}
@@ -127,22 +128,23 @@ func queryGpt(ctx context.Context, dEnv *env.DoltEnv, apiKey string, query strin
 	return string(body), nil
 }
 
-func getJsonPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.DoltEnv, query string) (io.Reader, error) {
+func getJsonPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.DoltEnv, modelId string, query string) (io.Reader, error) {
 	sb := strings.Builder{}
 
-	statements, err := getCreateTableStatements(ctx, sqlEngine, dEnv)
+	createTableStatements, err := getCreateTableStatements(ctx, sqlEngine, dEnv)
 	if err != nil {
 		return nil, err
 	}
 
-	sb.WriteString(chatGptJsonHeader)
+	sb.WriteString(fmt.Sprintf(chatGptJsonHeader, modelId))
+	
 	writeJsonMessage(&sb, "system", "You are an expert dolt user who helps other users understand, query, and manage their dolt databases.")
 	sb.WriteRune(',')
 	writeJsonMessage(&sb, "user", "I'm going to give you some information about my database before I ask anything, OK?")
 	sb.WriteRune(',')
 	writeJsonMessage(&sb, "assistant", "I understand. Please tell me the schema of all tables as CREATE TABLE statements.")
 	sb.WriteRune(',')
-	writeJsonMessage(&sb, "user", fmt.Sprintf("CREATE TABLE statements for the database are as follows: %s", statements))
+	writeJsonMessage(&sb, "user", fmt.Sprintf("CREATE TABLE statements for the database are as follows: %s", createTableStatements))
 	sb.WriteRune(',')
 	writeJsonMessage(&sb, "assistant", fmt.Sprintf("Thank you, I'll refer to these schemas " +
 		"during our talk. Since we are talking over text, for the rest of this conversation, I'll respond in a machine readable " +
@@ -311,6 +313,7 @@ func (a Assist) Docs() *cli.CommandDocumentation {
 
 func (a Assist) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsString("query", "-q", "query to ask the assistant", "Query to ask the assistant")
+	ap.SupportsString("query", "q", "query to ask the assistant", "Query to ask the assistant")
+	ap.SupportsString("model", "m", "open AI model id", "The ID of the Open AI model to use for the assistant")
 	return ap
 }
