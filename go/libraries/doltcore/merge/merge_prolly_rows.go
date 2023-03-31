@@ -146,7 +146,7 @@ func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.
 		return nil, nil, err
 	}
 	// validator shares editor with conflict merge
-	uniq, err := newUniqAddValidator(ctx, finalSch, leftRows, ae, tm)
+	uniq, err := newUniqAddValidator(ctx, finalSch, leftRows, ae, tm, valueMerger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -171,12 +171,6 @@ func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.
 			if err != nil {
 				return nil, nil, err
 			}
-			// TODO: Why would we merge the secondary index data if we can't merge the primary index?
-			//       This doesn't seem correct... was this needed for unique index validation or something?
-			//err = sec.merge(ctx, diff, nil)
-			//if err != nil {
-			//	return nil, nil, err
-			//}
 		case tree.DiffOpRightAdd:
 			s.Adds++
 			err = pri.merge(ctx, diff, tm.rightSch)
@@ -346,6 +340,8 @@ type uniqAddValidator struct {
 	primaryKB    *val.TupleBuilder
 	batchSize    int
 	pkLen        int
+	valueMerger  *valueMerger
+	tm           *TableMerger
 }
 
 // validateIndexState carries the state required to validate
@@ -363,7 +359,7 @@ type validateIndexState struct {
 	secCur    *tree.Cursor
 }
 
-func newUniqAddValidator(ctx context.Context, finalSch schema.Schema, leftRows prolly.Map, ae *prolly.ArtifactsEditor, tm *TableMerger) (*uniqAddValidator, error) {
+func newUniqAddValidator(ctx context.Context, finalSch schema.Schema, leftRows prolly.Map, ae *prolly.ArtifactsEditor, tm *TableMerger, valueMerger *valueMerger) (*uniqAddValidator, error) {
 	indexes := finalSch.Indexes().AllIndexes()
 	primaryKD, _ := leftRows.Descriptors()
 	primaryKB := val.NewTupleBuilder(primaryKD)
@@ -399,7 +395,7 @@ func newUniqAddValidator(ctx context.Context, finalSch schema.Schema, leftRows p
 		prefixKB := val.NewTupleBuilder(prefixKD)
 
 		secKb := val.NewTupleBuilder(m.KeyDesc())
-		_, secPkMap := creation.GetIndexKeyMapping(tm.leftSch, index)
+		_, secPkMap := creation.GetIndexKeyMapping(tm.rightSch, index)
 
 		states = append(states, &validateIndexState{
 			index:     index,
@@ -432,6 +428,8 @@ func newUniqAddValidator(ctx context.Context, finalSch schema.Schema, leftRows p
 		primaryKD:    primaryKD,
 		pkLen:        pkLen,
 		batchSize:    uniqAddValidatorPendingSize,
+		valueMerger:  valueMerger,
+		tm:           tm,
 	}, nil
 }
 
@@ -465,8 +463,7 @@ func (v *uniqAddValidator) valid(ctx context.Context, op tree.DiffOp, key, value
 // convertPriToSec converts a key:value from the primary index into a
 // secondary index key.
 func (v *uniqAddValidator) convertPriToSec(s *validateIndexState, key, value val.Tuple) (val.Tuple, bool) {
-	for to := range s.secPkMap {
-		from := s.secPkMap.MapOrdinal(to)
+	for to, from := range s.secPkMap {
 		var field []byte
 		if from < v.pkLen {
 			field = key.GetField(from)
@@ -527,6 +524,8 @@ func (v *uniqAddValidator) flush(ctx context.Context, i int) (int, error) {
 			}
 
 			conflicts++
+			modifiedValue := remapTuple(value, v.tm.rightSch.GetValueDescriptor(), v.valueMerger.rightMapping)
+			value = val.NewTuple(v.valueMerger.syncPool, modifiedValue...)
 
 			// existingPk is the merge-left primary key that
 			// generated the conflicting unique index key
