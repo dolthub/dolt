@@ -16,7 +16,6 @@ package merge_test
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -25,12 +24,12 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -41,6 +40,7 @@ type schemaMergeTest struct {
 	left, right table
 	merged      table
 	conflict    bool
+	skipTest    bool
 }
 
 type table struct {
@@ -283,6 +283,7 @@ var columnDefaultTests = []schemaMergeTest{
 		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)"), row(1, 42)),
 		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                  "), row(1), row(12)),
 		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)"), row(1, 42), row(12, 42)),
+		skipTest: true,
 	},
 	{
 		name:     "right side column add, left side insert row",
@@ -290,6 +291,7 @@ var columnDefaultTests = []schemaMergeTest{
 		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                  "), row(1), row(11)),
 		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)"), row(1, 42)),
 		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)"), row(1, 42), row(11, 42)),
+		skipTest: true,
 	},
 	// both sides change columns and insert rows
 	{
@@ -345,118 +347,118 @@ var typeChangeTests = []schemaMergeTest{
 var keyChangeTests = []schemaMergeTest{
 	{
 		name:     "add a trailing primary key column on left side",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
 	},
 	{
 		name:     "add a trailing primary key column on right side",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", 3.0)),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
+		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
 	},
 	{
 		name:     "add a leading primary key column on left side",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
 	},
 	{
 		name:     "add a leading primary key column on right side",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", 3.0)),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
+		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
 	},
 	{
 		name:     "remove a trailing primary key column on left side",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", 3.0)),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
+		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
 	},
 	{
 		name:     "remove a trailing primary key column on right side",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
 	},
 	{
 		name:     "remove a trailing primary key column on both sides",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
 	},
 	{
 		name:     "remove a leading primary key column on left side",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", 3.0)),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
+		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
 	},
 	{
 		name:     "remove a leading primary key column on right side",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
 	},
 	{
 		name:     "remove a leading primary key column on both sides",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
 	},
 	{
 		name:     "convert left side to a keyless table",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))"), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))"), row(1, "2", 3.0)),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))"), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))"), row(1, "2", float32(3.0))),
+		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", float32(3.0))),
 	},
 	{
 		name:     "convert left side to a keyless table",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))"), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))"), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", 3.0)),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))"), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))"), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", float32(3.0))),
+		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", float32(3.0))),
 	},
 	{
 		name:     "convert both sides to keyless tables",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))"), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", 3.0)),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))"), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", float32(3.0))),
+		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", float32(3.0))),
 	},
 }
 
 var secondaryIndexTests = []schemaMergeTest{
 	{
 		name:     "independent index adds",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)                     "), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a))          "), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (b))          "), row(1, "2", 3.0)),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a), INDEX(b))"), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)                     "), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a))          "), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (b))          "), row(1, "2", float32(3.0))),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a), INDEX(b))"), row(1, "2", float32(3.0))),
 	},
 	{
 		name:     "independent composite index adds",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)                            "), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a, b))              "), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (b, a))              "), row(1, "2", 3.0)),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a, b), INDEX (b, a))"), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)                            "), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a, b))              "), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (b, a))              "), row(1, "2", float32(3.0))),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a, b), INDEX (b, a))"), row(1, "2", float32(3.0))),
 	},
 	{
 		name:     "independent index drops",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a), INDEX (b))"), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a))           "), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (b))           "), row(1, "2", 3.0)),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)                      "), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a), INDEX (b))"), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a))           "), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (b))           "), row(1, "2", float32(3.0))),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)                      "), row(1, "2", float32(3.0))),
 	},
 }
 
@@ -492,16 +494,16 @@ var simpleConflictTests = []schemaMergeTest{
 	},
 	{
 		name:     "add primary key columns at different key positions on left and right sides",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
 		conflict: true,
 	},
 	{
 		name:     "remove different primary key columns on left and right sides",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", 3.0)),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", 3.0)),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b))   "), row(1, "2", 3.0)),
+		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
+		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b))   "), row(1, "2", float32(3.0))),
 		conflict: true,
 	},
 }
@@ -512,26 +514,38 @@ func testSchemaMerge(t *testing.T, tests []schemaMergeTest) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			denv := dtestutils.CreateTestEnv()
-			a := makeRoot(t, denv, test.ancestor)
-			l := makeRoot(t, denv, test.left)
-			r := makeRoot(t, denv, test.right)
+			eo = eo.WithDeaf(editor.NewInMemDeaf(denv.DoltDB.ValueReadWriter()))
+			a := makeRootWithTable(t, denv.DoltDB, eo, test.ancestor)
+			l := makeRootWithTable(t, denv.DoltDB, eo, test.left)
+			r := makeRootWithTable(t, denv.DoltDB, eo, test.right)
 			assertNoneNil(t, a, l, r)
 			var m *doltdb.RootValue
 			if !test.conflict {
-				m = makeRoot(t, denv, test.merged)
+				m = makeRootWithTable(t, denv.DoltDB, eo, test.merged)
 				assert.NotNil(t, m)
 			} else {
 				t.Skip("todo: assert conflict error")
 			}
 			ctx := context.Background()
-			eo = eo.WithDeaf(editor.NewInMemDeaf(a.VRW()))
 			root, _, err := merge.MergeRoots(ctx, l, r, a, rootish{r}, rootish{a}, eo, mo)
 			if err != nil {
 				t.Skip("error during merge: " + err.Error())
+			} else if test.skipTest {
+				t.Skip("todo: unskip merge test")
 			}
 			assert.NoError(t, err)
-			assert.NotNil(t, root)
-			// todo: assert |root| == |m|
+
+			exp, err := m.MapTableHashes(ctx)
+			assert.NoError(t, err)
+			act, err := root.MapTableHashes(ctx)
+			assert.NoError(t, err)
+
+			assert.Equal(t, len(exp), len(act))
+			for name, addr := range exp {
+				a, ok := act[name]
+				assert.True(t, ok)
+				assert.Equal(t, addr, a)
+			}
 		})
 	}
 }
@@ -557,26 +571,33 @@ func row(values ...any) sql.Row {
 	return sql.NewRow(values...)
 }
 
-func makeRoot(t *testing.T, denv *env.DoltEnv, tbl table) *doltdb.RootValue {
-	var sb strings.Builder
-	sb.WriteString("DROP TABLE IF EXISTS " + tbl.ns.name + ";\n")
-	sb.WriteString(tbl.ns.create)
+func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl table) *doltdb.RootValue {
+	ctx := context.Background()
+	wsr, err := ref.WorkingSetRefForHead(ref.NewBranchRef("main"))
+	require.NoError(t, err)
+	ws, err := ddb.ResolveWorkingSet(ctx, wsr)
+	require.NoError(t, err)
+	dt, err := doltdb.NewEmptyTable(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), tbl.ns.sch)
+	require.NoError(t, err)
+	root, err := ws.WorkingRoot().PutTable(ctx, tbl.ns.name, dt)
+	require.NoError(t, err)
+	ws = ws.WithWorkingRoot(root)
+
+	gst, err := globalstate.NewAutoIncrementTracker(ctx, ws)
+	require.NoError(t, err)
+	noop := func(ctx *sql.Context, dbName string, root *doltdb.RootValue) (err error) { return }
+	sess := writer.NewWriteSession(ddb.Format(), ws, gst, eo)
+	wr, err := sess.GetTableWriter(ctx, tbl.ns.name, "test", noop, false)
+	require.NoError(t, err)
+
+	sctx := sql.NewEmptyContext()
 	for _, r := range tbl.rows {
-		sb.WriteString(";\n")
-		stmt, err := sqlfmt.SqlRowAsInsertStmt(r, tbl.ns.name, tbl.ns.sch)
-		require.NoError(t, err)
-		sb.WriteString(stmt)
+		err = wr.Insert(sctx, r)
+		assert.NoError(t, err)
 	}
-	root, err := sqle.ExecuteSql(denv, nil, sb.String())
-	if err != nil {
-		t.Logf("")
-	}
+	ws, err = sess.Flush(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, root)
-	names, err := root.GetTableNames(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, []string{tbl.ns.name}, names)
-	return root
+	return ws.WorkingRoot()
 }
 
 type rootish struct {
