@@ -465,7 +465,7 @@ func (wr *journalWriter) Close() (err error) {
 		return err
 	}
 	if wr.index != nil {
-		wr.index.Close()
+		_ = wr.index.Close()
 	}
 	if cerr := wr.journal.Sync(); cerr != nil {
 		err = cerr

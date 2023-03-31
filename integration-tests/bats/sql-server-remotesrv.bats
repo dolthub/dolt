@@ -144,6 +144,9 @@ SQL
     dolt sql-server --port 3307 &
     srv_two_pid=$!
 
+    # move CWD to make sure we don't lock ".../read_replica/db"
+    mkdir tmp && cd tmp
+
     dolt sql-client -u root <<SQL
 use db;
 insert into vals values (1), (2), (3), (4), (5);
@@ -171,6 +174,7 @@ SQL
 
     dolt sql-server --port 3307 -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD --remotesapi-port 50051 &
     srv_pid=$!
+    sleep 2 # wait for server to start so we don't lock it out
 
     cd ../
     dolt clone http://localhost:50051/remote repo1 -u $DOLT_REMOTE_USER
