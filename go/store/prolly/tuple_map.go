@@ -246,6 +246,12 @@ func (m Map) Get(ctx context.Context, key val.Tuple, cb tree.KeyValueFn[val.Tupl
 	return m.tuples.Get(ctx, key, cb)
 }
 
+// GetPrefix searches for the key-value pair keyed by |key| and passes the results to the callback.
+// If |key| is not present in the map, a nil key-value pair are passed.
+func (m Map) GetPrefix(ctx context.Context, key val.Tuple, prefDesc val.TupleDesc, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
+	return m.tuples.GetPrefix(ctx, key, prefDesc, cb)
+}
+
 // Has returns true is |key| is present in the Map.
 func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 	return m.tuples.Has(ctx, key)
