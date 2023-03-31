@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/go-mysql-server/sql"
+   "github.com/google/shlex"
 )
 
 type Assist struct {}
@@ -63,7 +64,7 @@ func (a Assist) Exec(ctx context.Context, commandStr string, args []string, dEnv
 		return 1
 	}
 	
-	err = handleResponse(response)
+	err = handleResponse(ctx, response)
 	if err != nil {
 		return 1
 	}
@@ -79,9 +80,91 @@ var chatGptJsonFooter = `]}`
 
 var messageJson = `{"role": "%s", "content": "%s"}`
 
-func handleResponse(response string) error {
-	// TODO: switch on response type and take further actions
-	cli.Println(response)
+func handleResponse(ctx context.Context, response string) error {
+	var respJson map[string]interface{}
+	err := json.Unmarshal([]byte(response), &respJson)
+	if err != nil {
+		return err
+	}
+	
+	if respJson["choices"] != nil {
+		for _, choice := range respJson["choices"].([]interface{}) {
+			msg := choice.(map[string]interface{})["message"].(map[string]interface{})
+			innerContent := msg["content"].(string)
+			
+			// attempt to interpret this as a well formed json command
+			var innerRespJson map[string]interface{}
+			err := json.Unmarshal([]byte(innerContent), &innerRespJson)
+			if err != nil {
+				return textResponse(innerContent)
+			}
+			
+			action, ok := innerRespJson["action"].(string)
+			if !ok {
+				return textResponse(innerContent)
+			}
+			content, ok := innerRespJson["content"].(string)
+			if !ok {
+				return textResponse(innerContent)
+			}
+			
+			switch action {
+			case "DOLT_EXEC":
+				_, err = doltExec(ctx, content)
+				return err
+			case "DOLT_QUERY":
+				return doltQuery(ctx, content)
+			case "SQL_QUERY":
+				return sqlQuery(ctx, content)
+			case "ANSWER":
+				return textResponse(content)
+			default:
+				return textResponse(content)
+			}
+		}
+	}
+
+	return textResponse(fmt.Sprintf("error: couldn't interpret response: %s", response))
+}
+
+func sqlQuery(ctx context.Context, content string) error {
+	_, err := doltExec(ctx, fmt.Sprintf("dolt sql -q \"%s\"", content))
+	return err
+}
+
+func doltQuery(ctx context.Context, content string) error {
+	_, err := doltExec(ctx, content)
+	if err != nil {
+		return err
+	}
+	
+	// TODO: feed output back into chatgpt
+	return nil
+}
+
+func doltExec(ctx context.Context, commandString string) (string, error) {
+	command := strings.TrimSpace(commandString)
+	if !strings.HasPrefix(command, "dolt") {
+		return "", textResponse(commandString)
+	}
+	command = strings.TrimPrefix(command, "dolt ")
+
+	output, err := runDolt(ctx, command)
+
+	cli.Println(commandString)
+	cli.Println()
+	cli.Println(output)
+
+	// this is delayed error handling from running the dolt command
+	if err != nil {
+		return "", err
+	}
+
+	return output, nil
+}
+
+func textResponse(content string) error {
+	cli.Println(content)
 	return nil
 }
 
@@ -102,11 +185,13 @@ func queryGpt(ctx context.Context, dEnv *env.DoltEnv, apiKey, modelId, query str
 		return "", err
 	}
 	
-	cli.Println(prompt)
+	// cli.Println(prompt)
 
 	url := "https://api.openai.com/v1/chat/completions"
 	client := &http.Client{}
 
+	// TODO: allow cancelation via SIGINT
+	
 	req, err := http.NewRequest("POST", url, prompt)
 	if err != nil {	
 		return "", err
@@ -251,11 +336,16 @@ func getJsonPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.Dolt
 
 // TODO: rather than forking a new process and getting its output, instantiate command structs and run in-process here
 func runDolt(ctx context.Context, command string) (string, error) {
-	cmd := exec.CommandContext(ctx, "dolt", strings.Split(command, " ")...)
+	args, err := shlex.Split(command)
+	if err != nil {
+		return "", err
+	}
+	
+	cmd := exec.CommandContext(ctx, "dolt", args...)
 	
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", err
+		return string(output), err
 	}
 	
 	return string(output), nil
