@@ -221,8 +221,6 @@ func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.
 			// In this case, both sides of the merge have made different changes to a row, but we were able to
 			// resolve them automatically.
 			s.Modifications++
-			// TODO: In this case... we DON'T want to map columns, since they have already been remapped by tryMerge.
-			//       We pass in nil here for the schema to signal that, but that's pretty hacky and should be cleaned up.
 			err = pri.merge(ctx, diff, nil)
 			if err != nil {
 				return nil, nil, err
@@ -867,14 +865,17 @@ func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool p
 	}
 }
 
-// TODO: Godocs!
-func generateSchemaMappings(merged, leftSch, rightSch, baseSch schema.Schema) (leftMapping, rightMapping, baseMapping val.OrdinalMapping) {
-	n := merged.GetNonPKCols().Size()
+// generateSchemaMappings returns three schema mappings: 1) mapping the |leftSch| to |mergedSch|,
+// 2) mapping |rightSch| to |mergedSch|, and 3) mapping |baseSch| to |mergedSch|. Columns are
+// mapped from the source schema to destination schema by finding an identical tag, or if no
+// identical tag is found, then falling back to a match on column name and type.
+func generateSchemaMappings(mergedSch, leftSch, rightSch, baseSch schema.Schema) (leftMapping, rightMapping, baseMapping val.OrdinalMapping) {
+	n := mergedSch.GetNonPKCols().Size()
 	leftMapping = make(val.OrdinalMapping, n)
 	rightMapping = make(val.OrdinalMapping, n)
 	baseMapping = make(val.OrdinalMapping, n)
 
-	for i, col := range merged.GetNonPKCols().GetColumns() {
+	for i, col := range mergedSch.GetNonPKCols().GetColumns() {
 		leftMapping[i] = findNonPKColumnMappingByTagOrName(leftSch, col)
 		rightMapping[i] = findNonPKColumnMappingByTagOrName(rightSch, col)
 		baseMapping[i] = findNonPKColumnMappingByTagOrName(baseSch, col)
@@ -970,7 +971,7 @@ func migrateDataToMergedSchema(ctx context.Context, tm *TableMerger, vm *valueMe
 // conflict occurred. tryMerge should only be called if left and right produce
 // non-identical diffs against base.
 func (m *valueMerger) tryMerge(left, right, base val.Tuple) (val.Tuple, bool) {
-	// We can't ever merge two divergent keyless rows
+	// We can't merge two divergent keyless rows
 	if m.keyless {
 		return nil, false
 	}
