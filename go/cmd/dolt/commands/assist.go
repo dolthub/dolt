@@ -15,6 +15,7 @@
 package commands
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -60,10 +61,12 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 	helpPr, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, addDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, helpPr)
 	
-	query := apr.GetValueOrDefault("query", "what can you tell me about my database?")
+	query := apr.GetValueOrDefault("query", "")
 	model := apr.GetValueOrDefault("model", "gpt-3.5-turbo")
 	debug := apr.Contains("debug")
 
+	shellMode := query == ""
+	
 	sqlEng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return 1
@@ -80,8 +83,32 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 		return 1
 	}
 
+	scanner := bufio.NewScanner(cli.InStream)
+	if shellMode {
+		cli.Println("# Welcome to the Dolt Assistant, powered by ChatGPT.\n# Type your question or command, or exit to quit.\n")
+		cli.Print("> ")
+		scanner.Scan()
+		input := strings.TrimSpace(scanner.Text())
+		if input == "exit" {
+			return 0
+		}
+		query = input
+	}
+
 	cont := true
-	for cont {
+	for cont || shellMode {
+		// In shell mode, prompt for user input if the last response was terminal
+		if shellMode && !cont {
+			cli.Print("\n> ")
+			scanner.Scan()
+			input := strings.TrimSpace(scanner.Text())
+			if input == "exit" {
+				return 0
+			}
+			cli.Println("")
+			query = input
+		}
+		
 		response, err := a.queryGpt(ctx, apiKey, model, query, debug)
 		if err != nil {
 			return 1
@@ -90,8 +117,12 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 		var userOutput string
 		userOutput, cont, err = a.handleResponse(ctx, response, debug)
 		if err != nil {
-			cli.PrintErrln(err.Error())
-			return 1
+			if shellMode {
+				cli.PrintErrln("An error occurred: %s", err.Error())
+			} else {
+				cli.PrintErrln(err.Error())
+				return 1
+			}
 		}
 
 		query = userOutput
@@ -349,7 +380,6 @@ func getInitialPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.D
 	if err != nil {
 		return nil, err
 	}
-
 	messages = mustAppendJson(messages,  "assistant", string(responseJson))
 
 	messages = mustAppendJson(messages,  "user", "write a SQL query that shows me the five most recent commits on the current branch")
@@ -358,7 +388,6 @@ func getInitialPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.D
 	if err != nil {
 		return nil, err
 	}
-
 	messages = mustAppendJson(messages,  "assistant", string(responseJson))
 
 	messages = mustAppendJson(messages,  "user", "check out a new branch named feature2 two commits before the head of the current branch")
@@ -367,9 +396,7 @@ func getInitialPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.D
 	if err != nil {
 		return nil, err
 	}
-
 	messages = mustAppendJson(messages,  "assistant", string(responseJson))
-
 
 	messages = mustAppendJson(messages,  "user", "what changed in the last 3 commits?")
 
@@ -377,18 +404,8 @@ func getInitialPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.D
 	if err != nil {
 		return nil, err
 	}
-
 	messages = mustAppendJson(messages,  "assistant", string(responseJson))
-
-	messages = mustAppendJson(messages,  "user", "create a new table for storing log events")
-
-	responseJson, err = json.Marshal(map[string]string{"action": "SQL_QUERY", "content": "CREATE TABLE log_events (id int, event_time timestamp, description varchar(255))"})
-	if err != nil {
-		return nil, err
-	}
-
-	messages = mustAppendJson(messages,  "assistant", string(responseJson))
-
+	
 	return messages, nil
 }
 
