@@ -42,7 +42,7 @@ expect {
 }
 
 expect {
-   "*JSON_OBJECT('id', 87, 'name', 'carrot'): {\"id\":87,\"name\":\"carrot\"}*" { exit 0 ; }
+   "*JSON_OBJECT('id', 87, 'name', 'carrot'): {\"id\": 87, \"name\": \"carrot\"}*" { exit 0 ; }
    timeout { puts "$TEST_FAILURE" }
    failed { puts "$TEST_FAILURE" }
 }
