@@ -62,6 +62,7 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 	
 	query := apr.GetValueOrDefault("query", "what can you tell me about my database?")
 	model := apr.GetValueOrDefault("model", "gpt-3.5-turbo")
+	debug := apr.Contains("debug")
 
 	sqlEng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
@@ -81,13 +82,13 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 
 	cont := true
 	for cont {
-		response, err := a.queryGpt(ctx, apiKey, model, query)
+		response, err := a.queryGpt(ctx, apiKey, model, query, debug)
 		if err != nil {
 			return 1
 		}
 
 		var userOutput string
-		userOutput, cont, err = a.handleResponse(ctx, response)
+		userOutput, cont, err = a.handleResponse(ctx, response, debug)
 		if err != nil {
 			cli.PrintErrln(err.Error())
 			return 1
@@ -107,7 +108,11 @@ var chatGptJsonFooter = `]}`
 
 var messageJson = `{"role": "%s", "content": "%s"}`
 
-func (a *Assist) handleResponse(ctx context.Context, response string) (string, bool, error) {
+func (a *Assist) handleResponse(ctx context.Context, response string, debug bool) (string, bool, error) {
+	if debug {
+		cli.Println(fmt.Sprintf("Assistant response: %s", response))
+	}
+
 	var respJson map[string]interface{}
 	err := json.Unmarshal([]byte(response), &respJson)
 	if err != nil {
@@ -167,7 +172,7 @@ func sqlQuery(ctx context.Context, query string) (string, bool, error) {
 		return "", false, err
 	}
 
-	return output, true, nil
+	return output, false, nil
 }
 
 func doltQuery(ctx context.Context, content string) (string, bool, error) {
@@ -208,13 +213,15 @@ func textResponse(content string) (string, bool, error) {
 	return "", false, nil
 }
 
-func (a *Assist) queryGpt(ctx context.Context, apiKey, modelId, query string) (string, error) {
+func (a *Assist) queryGpt(ctx context.Context, apiKey, modelId, query string, debug bool) (string, error) {
 	prompt, err := a.getJsonPrompt(ctx, modelId, query)
 	if err != nil {
 		return "", err
 	}
 	
-	cli.Println(prompt)
+	if debug {
+		cli.Println(prompt)
+	}
 
 	url := "https://api.openai.com/v1/chat/completions"
 	client := &http.Client{}
@@ -461,6 +468,7 @@ func (a Assist) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString("query", "q", "query to ask the assistant", "Query to ask the assistant")
 	ap.SupportsString("model", "m", "open AI model id", "The ID of the Open AI model to use for the assistant")
+	ap.SupportsFlag("debug", "d",  "log API requests to and from the assistant")
 	return ap
 }
 
