@@ -367,16 +367,10 @@ func (d *DoltHarness) Close() {
 
 func (d *DoltHarness) closeProvider() {
 	if d.provider != nil {
-		dbs := sqle.AllDbs(sql.NewEmptyContext(), d.provider)
+		dbs := d.provider.AllDatabases(sql.NewEmptyContext())
 		for _, db := range dbs {
 			d.t.Logf("closing %v", db)
-			require.NoError(d.t, db.DbData().Ddb.Close())
-		}
-	}
-	if d.session != nil {
-		dbs := sqle.AllDbs(sql.NewEmptyContext(), d.session.Provider())
-		for _, db := range dbs {
-			d.t.Logf("session had database %v", db)
+			require.NoError(d.t, db.(sqle.SqlDatabase).DbData().Ddb.Close())
 		}
 	}
 }

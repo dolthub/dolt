@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
@@ -301,8 +302,12 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	}
 
 	tblName := impArgs.tableName
-	// inferred schemas have no foreign keys
-	sqlDb := sqle.NewSingleTableDatabase(tblName, sch, nil, nil)
+	root, verr = putEmptyTableWithSchema(ctx, tblName, root, sch)
+	if verr != nil {
+		return verr
+	}
+
+	sqlDb := sqle.NewUserSpaceDatabase(root, editor.Options{})
 	sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
 
 	stmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, tblName)
@@ -312,39 +317,6 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	cli.Println(stmt)
 
 	if !apr.Contains(dryRunFlag) {
-		tbl, tblExists, err := root.GetTable(ctx, tblName)
-		if err != nil {
-			return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
-		}
-
-		empty, err := durable.NewEmptyIndex(ctx, root.VRW(), root.NodeStore(), sch)
-		if err != nil {
-			return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
-		}
-
-		var indexSet durable.IndexSet
-		if tblExists {
-			indexSet, err = tbl.GetIndexSet(ctx)
-			if err != nil {
-				return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
-			}
-		} else {
-			indexSet, err = durable.NewIndexSetWithEmptyIndexes(ctx, root.VRW(), root.NodeStore(), sch)
-			if err != nil {
-				return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
-			}
-		}
-
-		tbl, err = doltdb.NewTable(ctx, root.VRW(), root.NodeStore(), sch, empty, indexSet, nil)
-		if err != nil {
-			return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
-		}
-
-		root, err = root.PutTable(ctx, tblName, tbl)
-		if err != nil {
-			return errhand.BuildDError("error: failed to add table.").AddCause(err).Build()
-		}
-
 		err = dEnv.UpdateWorkingRoot(ctx, root)
 		if err != nil {
 			return errhand.BuildDError("error: failed to update the working set.").AddCause(err).Build()
@@ -354,6 +326,43 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	}
 
 	return nil
+}
+
+func putEmptyTableWithSchema(ctx context.Context, tblName string, root *doltdb.RootValue, sch schema.Schema) (*doltdb.RootValue, errhand.VerboseError) {
+	tbl, tblExists, err := root.GetTable(ctx, tblName)
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
+	}
+
+	empty, err := durable.NewEmptyIndex(ctx, root.VRW(), root.NodeStore(), sch)
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
+	}
+
+	var indexSet durable.IndexSet
+	if tblExists {
+		indexSet, err = tbl.GetIndexSet(ctx)
+		if err != nil {
+			return nil, errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
+		}
+	} else {
+		indexSet, err = durable.NewIndexSetWithEmptyIndexes(ctx, root.VRW(), root.NodeStore(), sch)
+		if err != nil {
+			return nil, errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
+		}
+	}
+
+	tbl, err = doltdb.NewTable(ctx, root.VRW(), root.NodeStore(), sch, empty, indexSet, nil)
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
+	}
+
+	root, err = root.PutTable(ctx, tblName, tbl)
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to add table.").AddCause(err).Build()
+	}
+
+	return root, nil
 }
 
 func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, impOpts *importOptions, root *doltdb.RootValue) (schema.Schema, errhand.VerboseError) {

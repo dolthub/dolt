@@ -164,6 +164,9 @@ func (h *commithook) isCaughtUp() bool {
 	if h.role != RolePrimary {
 		return true
 	}
+	if h.nextHead == (hash.Hash{}) {
+		return false
+	}
 	return h.nextHead == h.lastPushedHead
 }
 

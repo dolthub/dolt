@@ -37,7 +37,7 @@ setup() {
 }
 
 teardown() {
-    stop_sql_server
+    stop_sql_server 1
     teardown_common
 }
 
@@ -61,11 +61,12 @@ teardown() {
     [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
     [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
     [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
-    [ "${lines[3]}" = '+-----------------+' ]
-    [ "${lines[4]}" = '| Tables_in_repo1 |' ]
-    [ "${lines[5]}" = '+-----------------+' ]
-    [ "${lines[6]}" = '| test            |' ]
-    [ "${lines[7]}" = '+-----------------+' ]
+    [ "${lines[3]}" = 'Query OK (0.00 sec)' ]
+    [ "${lines[4]}" = '+-----------------+' ]
+    [ "${lines[5]}" = '| Tables_in_repo1 |' ]
+    [ "${lines[6]}" = '+-----------------+' ]
+    [ "${lines[7]}" = '| test            |' ]
+    [ "${lines[8]}" = '+-----------------+' ]
 }
 
 @test "sql-client: --user argument is required" {
@@ -148,8 +149,7 @@ teardown() {
     [[ $output =~ " test_dashes " ]] || false
 }
 
-@test "sql-client: prints accurate query timing" {
-    skiponwindows "Missing dependencies"
+@test "sql-client: select statement prints accurate query timing" {
     cd repo1
     start_sql_server repo1
     cd ../
@@ -158,4 +158,33 @@ USE repo1;
 SELECT SLEEP(2);
 SQL
     [[ $output =~ "1 row in set (2".*" sec)" ]] || false
+}
+
+@test "sql-client: insert/update/delete statements print accurate query timing" {
+    cd repo1
+    start_sql_server repo1
+    cd ../
+    run dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
+    USE repo1;
+    create table t (pk int primary key, c int);
+SQL
+    [[ $output =~ "Query OK (".*" sec)" ]] || false
+
+    run dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
+    USE repo1;
+    insert into t values (1, 2);
+SQL
+    [[ $output =~ "Query OK (".*" sec)" ]] || false
+
+    run dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
+    USE repo1;
+    update t set c = 3 where pk = 1;
+SQL
+    [[ $output =~ "Query OK (".*" sec)" ]] || false
+
+    run dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
+    USE repo1;
+    delete from t where pk = 1;
+SQL
+    [[ $output =~ "Query OK (".*" sec)" ]] || false
 }

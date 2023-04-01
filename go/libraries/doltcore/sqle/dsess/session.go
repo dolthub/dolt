@@ -144,32 +144,19 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 	}
 
 	// TODO: this needs to include the transaction's snapshot of the DB at tx start time
-	var init InitialDbState
-	var err error
 
-	_, val, ok := sql.SystemVariables.GetGlobal(DefaultBranchKey(dbName))
-	initialBranch := ""
-	if ok {
-		initialBranch = val.(string)
-	}
-
-	// First attempt to find a bare database (no revision spec)
-	init, err = d.provider.DbState(ctx, dbName, initialBranch)
-	if err != nil && !sql.ErrDatabaseNotFound.Is(err) {
+	database, ok, err := d.provider.SessionDatabase(ctx, dbName)
+	if err != nil {
 		return nil, false, err
 	}
 
-	// If that doesn't work, attempt to parse the database name as a revision spec
-	if err != nil {
-		init, err = d.provider.RevisionDbState(ctx, dbName)
-		if err != nil {
-			return nil, false, err
-		}
+	if !ok {
+		return nil, false, nil
 	}
 
-	// If we got this far, we have a valid initial database state, so add it to the session for future reuse
-	if err = d.AddDB(ctx, init); err != nil {
-		return nil, ok, err
+	// Add the initial state to the session for future reuse
+	if err = d.addDB(ctx, database); err != nil {
+		return nil, false, err
 	}
 
 	d.mu.Lock()
@@ -236,11 +223,11 @@ func (d *DoltSession) ValidateSession(ctx *sql.Context, dbName string) error {
 		return d.validateErr
 	}
 	sessionState, ok, err := d.LookupDbState(ctx, dbName)
-	if !ok {
-		return nil
-	}
 	if err != nil {
 		return err
+	}
+	if !ok {
+		return nil
 	}
 	if sessionState.WorkingSet == nil {
 		return nil
@@ -279,24 +266,16 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	// Since StartTransaction occurs before even any analysis, it's possible that this session has no state for the
 	// database with the transaction being performed, so we load it here.
 	if !d.HasDB(ctx, dbName) {
-		db, err := d.provider.Database(ctx, dbName)
+		db, ok, err := d.provider.SessionDatabase(ctx, dbName)
 		if err != nil {
 			return nil, err
 		}
 
-		sdb, ok := db.(SessionDatabase)
 		if !ok {
-			return nil, fmt.Errorf("database %s does not support sessions", dbName)
+			return nil, sql.ErrDatabaseNotFound.New(dbName)
 		}
 
-		// TODO: this needs a real branch name
-		init, err := sdb.InitialDBState(ctx, "")
-		if err != nil {
-			return nil, err
-		}
-
-		// TODO: make this take a DB, not a DBState
-		err = d.AddDB(ctx, init)
+		err = d.addDB(ctx, db)
 		if err != nil {
 			return nil, err
 		}
@@ -1113,13 +1092,9 @@ func (d *DoltSession) HasDB(_ *sql.Context, dbName string) bool {
 	return ok
 }
 
-// AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
+// addDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
-// TODO: the session has a database provider, we shouldn't need to add databases to it explicitly, this should be
-//
-//	internal only
-func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
-	db := dbState.Db
+func (d *DoltSession) addDB(ctx *sql.Context, db SessionDatabase) error {
 	DefineSystemVariablesForDB(db.Name())
 
 	sessionState := NewEmptyDatabaseSessionState()
@@ -1128,6 +1103,18 @@ func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	d.mu.Unlock()
 	sessionState.dbName = db.Name()
 	sessionState.db = db
+
+	_, val, ok := sql.SystemVariables.GetGlobal(DefaultBranchKey(db.Name()))
+	initialBranch := ""
+	if ok {
+		initialBranch = val.(string)
+	}
+
+	// TODO: the branch should be already set if the DB was specified with a branch revision string
+	dbState, err := db.InitialDBState(ctx, initialBranch)
+	if err != nil {
+		return err
+	}
 
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
@@ -1148,23 +1135,26 @@ func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	sessionState.readOnly, sessionState.readReplica = dbState.ReadOnly, dbState.ReadReplica
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
+	// Or better yet, get rid of EditOptions from the database, it's a session setting
 	nbf := types.Format_Default
 	if sessionState.dbData.Ddb != nil {
 		nbf = sessionState.dbData.Ddb.Format()
 	}
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
 
-	stateProvider, ok := db.(globalstate.StateProvider)
-	if !ok {
-		return fmt.Errorf("database does not contain global state store")
-	}
-	sessionState.globalState = stateProvider.GetGlobalState()
-
-	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.Err != nil {
 		sessionState.Err = dbState.Err
 	} else if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
+
+		// TODO: this is pretty clunky, there is a silly dependency between InitialDbState and globalstate.StateProvider
+		//  that's hard to express with the current types
+		stateProvider, ok := db.(globalstate.StateProvider)
+		if !ok {
+			return fmt.Errorf("database does not contain global state store")
+		}
+		sessionState.globalState = stateProvider.GetGlobalState()
+
 		tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx)
 		if err != nil {
 			return err
@@ -1173,13 +1163,15 @@ func (d *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 		if err = d.SetWorkingSet(ctx, db.Name(), dbState.WorkingSet); err != nil {
 			return err
 		}
-
-	} else {
+	} else if dbState.HeadCommit != nil {
+		// WorkingSet is nil in the case of a read only, detached head DB
 		headRoot, err := dbState.HeadCommit.GetRootValue(ctx)
 		if err != nil {
 			return err
 		}
 		sessionState.headRoot = headRoot
+	} else if dbState.HeadRoot != nil {
+		sessionState.headRoot = dbState.HeadRoot
 	}
 
 	// This has to happen after SetRoot above, since it does a stale check before its work
@@ -1257,6 +1249,8 @@ func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string) error
 		return err
 	}
 
+	// Different DBs have different requirements for what state is set, so we are maximally permissive on what's expected
+	// in the state object here
 	if state.WorkingSet != nil {
 		headRef, err := state.WorkingSet.Ref().ToHeadRef()
 		if err != nil {
@@ -1271,31 +1265,37 @@ func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string) error
 
 	roots := state.GetRoots()
 
-	h, err := roots.Working.HashOf()
-	if err != nil {
-		return err
-	}
-	err = d.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
-	if err != nil {
-		return err
-	}
-
-	h, err = roots.Staged.HashOf()
-	if err != nil {
-		return err
-	}
-	err = d.Session.SetSessionVariable(ctx, StagedKey(dbName), h.String())
-	if err != nil {
-		return err
+	if roots.Working != nil {
+		h, err := roots.Working.HashOf()
+		if err != nil {
+			return err
+		}
+		err = d.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
+		if err != nil {
+			return err
+		}
 	}
 
-	h, err = state.headCommit.HashOf()
-	if err != nil {
-		return err
+	if roots.Staged != nil {
+		h, err := roots.Staged.HashOf()
+		if err != nil {
+			return err
+		}
+		err = d.Session.SetSessionVariable(ctx, StagedKey(dbName), h.String())
+		if err != nil {
+			return err
+		}
 	}
-	err = d.Session.SetSessionVariable(ctx, HeadKey(dbName), h.String())
-	if err != nil {
-		return err
+
+	if state.headCommit != nil {
+		h, err := state.headCommit.HashOf()
+		if err != nil {
+			return err
+		}
+		err = d.Session.SetSessionVariable(ctx, HeadKey(dbName), h.String())
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1382,14 +1382,17 @@ func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
 func (d *DoltSession) GetBranch() (string, error) {
 	ctx := sql.NewContext(context.Background(), sql.WithSession(d))
 	currentDb := d.Session.GetCurrentDatabase()
+
+	// no branch if there's no current db
+	if currentDb == "" {
+		return "", nil
+	}
+
 	dbState, _, err := d.LookupDbState(ctx, currentDb)
 	if err != nil {
-		if len(currentDb) == 0 && sql.ErrDatabaseNotFound.Is(err) {
-			// Some operations return an empty database (namely tests), so we return an empty branch in such cases
-			return "", nil
-		}
 		return "", err
 	}
+
 	if dbState.WorkingSet != nil {
 		branchRef, err := dbState.WorkingSet.Ref().ToHeadRef()
 		if err != nil {
