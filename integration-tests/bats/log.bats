@@ -640,7 +640,6 @@ teardown() {
     dolt tag commit2
     run dolt log commit1
     [[ !("$output" =~ "HEAD") ]] || false
-    dolt log commit2 | cat
-    run dolt log commit2 | cat
+    run dolt log commit2
     [[ "$output" =~ "HEAD" ]] || false
 }
