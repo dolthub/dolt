@@ -33,7 +33,9 @@ import (
    "github.com/google/shlex"
 )
 
-type Assist struct {}
+type Assist struct {
+	messages []string
+}
 
 var _ cli.Command = Assist{}
 
@@ -46,6 +48,8 @@ func (a Assist) Description() string {
 }
 
 func (a Assist) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	a.messages = make([]string, 0)
+	
 	apiKey, ok := os.LookupEnv("OPENAI_API_KEY")
 	if !ok {
 		cli.PrintErrln("Could not find OpenAI API key. Please set the OPENAI_API_KEY environment variable.")
@@ -59,14 +63,17 @@ func (a Assist) Exec(ctx context.Context, commandStr string, args []string, dEnv
 	query := apr.GetValueOrDefault("query", "what can you tell me about my database?")
 	model := apr.GetValueOrDefault("model", "gpt-3.5-turbo")
 	
-	response, err := queryGpt(ctx, dEnv, apiKey, model, query)
+	response, err := a.queryGpt(ctx, dEnv, apiKey, model, query)
 	if err != nil {
 		return 1
 	}
 	
-	err = handleResponse(ctx, response)
-	if err != nil {
-		return 1
+	cont := true
+	for cont {
+		err = handleResponse(ctx, response)
+		if err != nil {
+			return 1
+		}
 	}
 	
 	return 0
@@ -168,7 +175,7 @@ func textResponse(content string) error {
 	return nil
 }
 
-func queryGpt(ctx context.Context, dEnv *env.DoltEnv, apiKey, modelId, query string) (string, error) {
+func (a Assist) queryGpt(ctx context.Context, dEnv *env.DoltEnv, apiKey, modelId, query string) (string, error) {
 	sqlEng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return "", err
@@ -180,7 +187,7 @@ func queryGpt(ctx context.Context, dEnv *env.DoltEnv, apiKey, modelId, query str
 	}
 	sqlCtx.SetCurrentDatabase(dbName)
 	
-	prompt, err := getJsonPrompt(sqlCtx, sqlEng, dEnv, modelId, query)
+	prompt, err := a.getJsonPrompt(sqlCtx, sqlEng, dEnv, modelId, query)
 	if err != nil {
 		return "", err
 	}
@@ -213,51 +220,76 @@ func queryGpt(ctx context.Context, dEnv *env.DoltEnv, apiKey, modelId, query str
 	return string(body), nil
 }
 
-func getJsonPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.DoltEnv, modelId string, query string) (io.Reader, error) {
+func (a Assist) getJsonPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.DoltEnv, modelId string, query string) (io.Reader, error) {
 	sb := strings.Builder{}
+	
+	if a.messages == nil {
+		var err error
+		a.messages, err = getInitialPrompt(ctx, sqlEngine, dEnv)
+		if err != nil {
+			return nil, err
+		}
+	}
 
+	sb.WriteString(fmt.Sprintf(chatGptJsonHeader, modelId))
+
+	for i, msg := range a.messages {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		sb.WriteString(msg)
+	}
+	
+	msg, err := jsonMessage("user", query)
+	if err != nil {
+		return nil, err
+	}
+	
+	a.messages = append(a.messages, string(msg))
+
+	sb.WriteString(",")
+	sb.WriteString(string(msg))
+	sb.WriteString(chatGptJsonFooter)
+
+	return strings.NewReader(sb.String()), nil
+}
+
+func getInitialPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.DoltEnv) ([]string, error) {
 	createTableStatements, err := getCreateTableStatements(ctx, sqlEngine, dEnv)
 	if err != nil {
 		return nil, err
 	}
-
-	sb.WriteString(fmt.Sprintf(chatGptJsonHeader, modelId))
 	
-	writeJsonMessage(&sb, "system", "You are an expert dolt user who helps other users understand, query, and manage their dolt databases.")
-	sb.WriteRune(',')
-	writeJsonMessage(&sb, "user", "I'm going to give you some information about my database before I ask anything, OK?")
-	sb.WriteRune(',')
-	writeJsonMessage(&sb, "assistant", "I understand. Please tell me the schema of all tables as CREATE TABLE statements.")
-	sb.WriteRune(',')
-	writeJsonMessage(&sb, "user", fmt.Sprintf("CREATE TABLE statements for the database are as follows: %s", createTableStatements))
-	sb.WriteRune(',')
-	writeJsonMessage(&sb, "assistant", fmt.Sprintf("Thank you, I'll refer to these schemas " +
-		"during our talk. Since we are talking over text, for the rest of this conversation, I'll respond in a machine readable " +
-		"format so that you can easily consume it. I'll use JSON for my response like this: " +
-		"{\"action\": \"DOLT_QUERY\", \"content\": \"dolt log -n 1\"}. " +
-		"For example, this response means that I want you to run the dolt command 'dolt log -n 1' and tell me what it says. " +
-		"Let's try a few more. You ask me some questions and I'll give you some responses in JSON. We'll just keep doing" +
-		" that. Go ahead when you're ready."))
+	var messages []string
 
-	sb.WriteRune(',')
-	writeJsonMessage(&sb, "user", fmt.Sprintf("who wrote the most recent commit?"))
-	
-  responseJson, err := json.Marshal(map[string]string{"action": "DOLT_QUERY", "content": "dolt log -n 1"})
+	mustAppendJson(messages,  "system", "You are an expert dolt user who helps other users understand, query, and manage their dolt databases.")
+	mustAppendJson(messages,  "user", "I'm going to give you some information about my database before I ask anything, OK?")
+	mustAppendJson(messages,  "assistant", "I understand. Please tell me the schema of all tables as CREATE TABLE statements.")
+	mustAppendJson(messages,  "user", fmt.Sprintf("CREATE TABLE statements for the database are as follows: %s", createTableStatements))
+	mustAppendJson(messages,  "assistant", fmt.Sprintf("Thank you, I'll refer to these schemas " +
+			"during our talk. Since we are talking over text, for the rest of this conversation, I'll respond in a machine readable " +
+			"format so that you can easily consume it. I'll use JSON for my response like this: " +
+			"{\"action\": \"DOLT_QUERY\", \"content\": \"dolt log -n 1\"}. " +
+			"For example, this response means that I want you to run the dolt command 'dolt log -n 1' and tell me what it says. " +
+			"Let's try a few more. You ask me some questions and I'll give you some responses in JSON. We'll just keep doing" +
+			" that. Go ahead when you're ready."))
+
+	mustAppendJson(messages,  "user", fmt.Sprintf("who wrote the most recent commit?"))
+
+	responseJson, err := json.Marshal(map[string]string{"action": "DOLT_QUERY", "content": "dolt log -n 1"})
 	if err != nil {
 		return nil, err
 	}
-	
-	sb.WriteRune(',')
-	writeJsonMessage(&sb, "assistant", string(responseJson))
-	
+
+	mustAppendJson(messages,  "assistant", string(responseJson))
+
 	logOutput, err := runDolt(ctx, "log -n 1")
 	if err != nil {
 		return nil, err
 	}
 
-	sb.WriteRune(',')
-	writeJsonMessage(&sb, "user", logOutput)
-	
+	mustAppendJson(messages,  "user", logOutput)
+
 	commit, err := dEnv.HeadCommit(ctx)
 	if err != nil {
 		return nil, err
@@ -272,66 +304,55 @@ func getJsonPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.Dolt
 	if err != nil {
 		return nil, err
 	}
-	
-	sb.WriteRune(',')
-	writeJsonMessage(&sb, "assistant", string(responseJson))
 
-	sb.WriteRune(',')
-	writeJsonMessage(&sb, "user", "write a SQL query that shows me the five most recent commits on the current branch")
+	mustAppendJson(messages,  "assistant", string(responseJson))
+
+	mustAppendJson(messages,  "user", "write a SQL query that shows me the five most recent commits on the current branch")
 
 	responseJson, err = json.Marshal(map[string]string{"action": "SQL_QUERY", "content": "SELECT * FROM DOLT_LOG order by date LIMIT 5"})
 	if err != nil {
 		return nil, err
 	}
 
-	sb.WriteRune(',')
-	writeJsonMessage(&sb, "assistant", string(responseJson))
+	mustAppendJson(messages,  "assistant", string(responseJson))
 
-	sb.WriteRune(',')
-	writeJsonMessage(&sb, "user", "check out a new branch named feature2 two commits before the head of the current branch")
+	mustAppendJson(messages,  "user", "check out a new branch named feature2 two commits before the head of the current branch")
 
 	responseJson, err = json.Marshal(map[string]string{"action": "DOLT_EXEC", "content": "dolt checkout -b feature2 HEAD~2"})
 	if err != nil {
 		return nil, err
 	}
-	
-	sb.WriteRune(',')
-	writeJsonMessage(&sb, "assistant", string(responseJson))
+
+	mustAppendJson(messages,  "assistant", string(responseJson))
 
 
-	sb.WriteRune(',')
-	writeJsonMessage(&sb, "user", "what changed in the last 3 commits?")
+	mustAppendJson(messages,  "user", "what changed in the last 3 commits?")
 
 	responseJson, err = json.Marshal(map[string]string{"action": "DOLT_EXEC", "content": "dolt diff HEAD~3 HEAD"})
 	if err != nil {
 		return nil, err
 	}
 
-	sb.WriteRune(',')
-	writeJsonMessage(&sb, "assistant", string(responseJson))
+	mustAppendJson(messages,  "assistant", string(responseJson))
 
-	sb.WriteRune(',')
-	writeJsonMessage(&sb, "user", "create a new table for storing log events")
+	mustAppendJson(messages,  "user", "create a new table for storing log events")
 
 	responseJson, err = json.Marshal(map[string]string{"action": "SQL_QUERY", "content": "CREATE TABLE log_events (id int, event_time timestamp, description varchar(255))"})
 	if err != nil {
 		return nil, err
 	}
 
-	sb.WriteRune(',')
-	writeJsonMessage(&sb, "assistant", string(responseJson))
-	
-	sb.WriteRune(',')
-	userQuery, err := json.Marshal(query)
+	mustAppendJson(messages,  "assistant", string(responseJson))
+
+	return messages, nil
+}
+
+func mustAppendJson(messages []string, role string, content string) {
+	msg, err := jsonMessage(role, content)
 	if err != nil {
-		return nil, err
+		return
 	}
-	
-	writeJsonMessage(&sb, "user", string(userQuery))
-
-	sb.WriteString(chatGptJsonFooter)
-
-	return strings.NewReader(sb.String()), nil
+	messages = append(messages, string(msg))
 }
 
 // TODO: rather than forking a new process and getting its output, instantiate command structs and run in-process here
@@ -351,14 +372,12 @@ func runDolt(ctx context.Context, command string) (string, error) {
 	return string(output), nil
 }
 
-func writeJsonMessage(sb *strings.Builder, role string, content string) error {
+func jsonMessage(role string, content string) ([]byte, error) {
 	jsonString, err := json.Marshal(map[string]string{"role": role, "content": content})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	
-	sb.WriteString(string(jsonString))
-	return nil
+	return jsonString, nil
 }
 
 func getCreateTableStatements(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.DoltEnv) (string, error) {
