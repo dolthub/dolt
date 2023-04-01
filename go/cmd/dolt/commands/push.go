@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/dustin/go-humanize"
 	"google.golang.org/grpc/codes"
@@ -145,15 +144,6 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-const minUpdate = 100 * time.Millisecond
-
-var spinnerSeq = []rune{'|', '/', '-', '\\'}
-
-type TextSpinner struct {
-	seqPos     int
-	lastUpdate time.Time
-}
-
 func printInfoForPushError(err error, remote env.Remote, destRef, remoteRef ref.DoltRef) errhand.VerboseError {
 	switch err {
 	case doltdb.ErrUpToDate:
@@ -181,16 +171,6 @@ func printInfoForPushError(err error, remote env.Remote, destRef, remoteRef ref.
 		return errhand.BuildDError("error: push failed").AddCause(err).Build()
 	}
 	return nil
-}
-
-func (ts *TextSpinner) next() string {
-	now := time.Now()
-	if now.Sub(ts.lastUpdate) > minUpdate {
-		ts.seqPos = (ts.seqPos + 1) % len(spinnerSeq)
-		ts.lastUpdate = now
-	}
-
-	return string([]rune{spinnerSeq[ts.seqPos]})
 }
 
 func pullerProgFunc(ctx context.Context, statsCh chan pull.Stats, language progLanguage) {

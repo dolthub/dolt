@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -139,7 +140,7 @@ func (a *Assist) handleResponse(ctx context.Context, response string) (string, b
 			
 			switch action {
 			case "DOLT_EXEC":
-				return doltExec(ctx, content)
+				return doltExec(ctx, content, true)
 			case "DOLT_QUERY":
 				return doltQuery(ctx, content)
 			case "SQL_QUERY":
@@ -158,8 +159,10 @@ func (a *Assist) handleResponse(ctx context.Context, response string) (string, b
 	return textResponse(fmt.Sprintf("error: couldn't interpret response: %s", response))
 }
 
-func sqlQuery(ctx context.Context, content string) (string, bool, error) {
-	output, _, err := doltExec(ctx, fmt.Sprintf("dolt sql -q \"%s\"", content))
+func sqlQuery(ctx context.Context, query string) (string, bool, error) {
+	cli.Println(fmt.Sprintf("Runnning query \"%s\"...", query))
+	
+	output, _, err := doltExec(ctx, fmt.Sprintf("dolt sql -q \"%s\"", query), false)
 	if err != nil {
 		return "", false, err
 	}
@@ -168,7 +171,7 @@ func sqlQuery(ctx context.Context, content string) (string, bool, error) {
 }
 
 func doltQuery(ctx context.Context, content string) (string, bool, error) {
-	output, _, err := doltExec(ctx, content)
+	output, _, err := doltExec(ctx, content, true)
 	if err != nil {
 		return "", false, err
 	}
@@ -176,7 +179,7 @@ func doltQuery(ctx context.Context, content string) (string, bool, error) {
 	return output, true, nil
 }
 
-func doltExec(ctx context.Context, commandString string) (string, bool, error) {
+func doltExec(ctx context.Context, commandString string, echoCommand bool) (string, bool, error) {
 	command := strings.TrimSpace(commandString)
 	if !strings.HasPrefix(command, "dolt") {
 		return textResponse(commandString)
@@ -185,8 +188,11 @@ func doltExec(ctx context.Context, commandString string) (string, bool, error) {
 
 	output, err := runDolt(ctx, command)
 
-	cli.Println(commandString)
-	cli.Println()
+	if echoCommand {
+		cli.Println(commandString)
+		cli.Println()
+	}
+	
 	cli.Println(output)
 
 	// this is delayed error handling from running the dolt command
@@ -212,8 +218,6 @@ func (a *Assist) queryGpt(ctx context.Context, apiKey, modelId, query string) (s
 
 	url := "https://api.openai.com/v1/chat/completions"
 	client := &http.Client{}
-
-	// TODO: allow cancelation via SIGINT
 	
 	req, err := http.NewRequest("POST", url, prompt)
 	if err != nil {	
@@ -223,17 +227,43 @@ func (a *Assist) queryGpt(ctx context.Context, apiKey, modelId, query string) (s
 	req.Header.Add("Content-Type", `application/json`)
 	req.Header.Add("Authorization", "Bearer " + apiKey)
 
-	response, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
+	respChan := make(chan string)
+	errChan := make(chan error)
+	go func() {
+		response, err := client.Do(req)
+		if err != nil {
+			errChan <- err
+			close(errChan)
+		}
 
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return "", err
-	}
+		body, err := io.ReadAll(response.Body)
+		if err != nil {
+			errChan <- err
+			close(errChan)
+		}
+		
+		respChan <- string(body)
+		close(respChan)
+	}()
+
+	spinner := TextSpinner{}
+	cli.Print(spinner.next())
+	defer func() {
+		cli.DeleteAndPrint(1, "")
+	}()
 	
-	return string(body), nil
+	for {
+		select {
+		case resp := <-respChan:
+			return resp, nil
+		case err := <-errChan:
+			return "", err
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+			cli.DeleteAndPrint(1, spinner.next())
+		}
+	}
 }
 
 func (a *Assist) getJsonPrompt(ctx context.Context, modelId string, query string) (io.Reader, error) {
@@ -413,7 +443,6 @@ func getCreateTableStatements(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEn
 	}
 
 	return sb.String(), nil
-	
 }
 
 func (a Assist) Docs() *cli.CommandDocumentation {
@@ -434,3 +463,24 @@ func (a Assist) ArgParser() *argparser.ArgParser {
 	ap.SupportsString("model", "m", "open AI model id", "The ID of the Open AI model to use for the assistant")
 	return ap
 }
+
+func (ts *TextSpinner) next() string {
+	now := time.Now()
+	if now.Sub(ts.lastUpdate) > minUpdate {
+		ts.seqPos = (ts.seqPos + 1) % len(spinnerSeq)
+		ts.lastUpdate = now
+	}
+
+	return string([]rune{spinnerSeq[ts.seqPos]})
+}
+
+const minUpdate = 100 * time.Millisecond
+
+var spinnerSeq = []rune{'|', '/', '-', '\\'}
+
+type TextSpinner struct {
+	seqPos     int
+	lastUpdate time.Time
+}
+
+
