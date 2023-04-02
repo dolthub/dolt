@@ -75,7 +75,7 @@ func doDoltBackup(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	if apr.NArg() == 0 {
-		return statusErr, fmt.Errorf("listing existing backups endpoints in sql is unimplemented.")
+		return statusErr, fmt.Errorf("listing existing backup endpoints in sql is not currently implemented. Let us know if you need this by opening a GitHub issue: https://github.com/dolthub/dolt/issues")
 
 	}
 	switch apr.Arg(0) {

@@ -46,7 +46,6 @@ teardown() {
     run dolt backup -v
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 0 ]
-
 }
 
 @test "sql-backup: dolt_backup remove cannot remove non-existent backup" {
