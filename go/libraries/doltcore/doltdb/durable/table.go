@@ -668,27 +668,7 @@ func (t nomsTable) DebugString(ctx context.Context) string {
 }
 
 func refFromNomsValue(ctx context.Context, vrw types.ValueReadWriter, val types.Value) (types.Ref, error) {
-	valRef, err := types.NewRef(val, vrw.Format())
-
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	targetVal, err := valRef.TargetValue(ctx, vrw)
-
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	if targetVal == nil {
-		_, err = vrw.WriteValue(ctx, val)
-
-		if err != nil {
-			return types.Ref{}, err
-		}
-	}
-
-	return valRef, err
+	return vrw.WriteValue(ctx, val)
 }
 
 func schemaFromRef(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error) {

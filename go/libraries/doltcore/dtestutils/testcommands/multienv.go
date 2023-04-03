@@ -201,12 +201,7 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 	}
 	defer os.Chdir(wd)
 
-	ddb, err := doltdb.LoadDoltDB(ctx, types.Format_Default, doltdb.LocalDirDoltDB, filesys.LocalFS)
-	if err != nil {
-		mr.Errhand("Failed to initialize environment:" + err.Error())
-	}
-
-	dEnv = env.Load(context.Background(), mr.homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
+	ddb := dEnv.DoltDB
 
 	mr.envs[dbName] = dEnv
 	mr.DoltDBs[dbName] = ddb

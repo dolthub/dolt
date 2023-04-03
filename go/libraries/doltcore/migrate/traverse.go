@@ -61,7 +61,14 @@ func TraverseDAG(ctx context.Context, menv Environment, old, new *doltdb.DoltDB)
 	if err = persistMigratedCommitMapping(ctx, new, m); err != nil {
 		return err
 	}
-	return nil
+
+	if err = old.Close(); err != nil {
+		return err
+	}
+	if err = new.Close(); err != nil {
+		return err
+	}
+	return
 }
 
 func traverseRefHistory(ctx context.Context, menv Environment, r ref.DoltRef, old, new *doltdb.DoltDB, prog *progress) error {

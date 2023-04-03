@@ -15,8 +15,6 @@
 package dsess
 
 import (
-	"context"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -26,11 +24,19 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
+// InitialDbState is the initial state of a database, as returned by SessionDatabase.InitialDBState. It is used to
+// establish the in memory state of the session for every new transaction.
 type InitialDbState struct {
-	Db          sql.Database
-	HeadCommit  *doltdb.Commit
+	Db sql.Database
+	// WorkingSet is the working set for this database. May be nil for databases tied to a detached root value, in which
+	// case HeadCommit must be set
+	WorkingSet *doltdb.WorkingSet
+	// The head commit for this database. May be nil for databases tied to a detached root value, in which case
+	// RootValue must be set.
+	HeadCommit *doltdb.Commit
+	// HeadRoot is the root value for databases without a HeadCommit. Nil for databases with a HeadCommit.
+	HeadRoot    *doltdb.RootValue
 	ReadOnly    bool
-	WorkingSet  *doltdb.WorkingSet
 	DbData      env.DbData
 	ReadReplica *env.Remote
 	Remotes     map[string]env.Remote
@@ -48,7 +54,7 @@ type InitialDbState struct {
 // order for the session to manage it.
 type SessionDatabase interface {
 	sql.Database
-	InitialDBState(ctx context.Context, branch string) (InitialDbState, error)
+	InitialDBState(ctx *sql.Context, branch string) (InitialDbState, error)
 }
 
 type DatabaseSessionState struct {
