@@ -868,16 +868,16 @@ func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {
 	return dEnv.RepoState.Remotes, nil
 }
 
-// Check whether any backups or remotes share the given URL. Returns the first remote if multiple match.
+// CheckRemoteAddressConflict checks whether any backups or remotes share the given URL. Returns the first remote if multiple match.
 // Returns NoRemote and false if none match.
-func checkRemoteAddressConflict(url string, remotes, backups map[string]Remote) (Remote, bool) {
+func CheckRemoteAddressConflict(absUrl string, remotes, backups map[string]Remote) (Remote, bool) {
 	for _, r := range remotes {
-		if r.Url == url {
+		if r.Url == absUrl {
 			return r, true
 		}
 	}
 	for _, r := range backups {
-		if r.Url == url {
+		if r.Url == absUrl {
 			return r, true
 		}
 	}
@@ -899,7 +899,7 @@ func (dEnv *DoltEnv) AddRemote(r Remote) error {
 	}
 
 	// can have multiple remotes with the same address, but no conflicting backups
-	if rem, found := checkRemoteAddressConflict(absRemoteUrl, nil, dEnv.RepoState.Backups); found {
+	if rem, found := CheckRemoteAddressConflict(absRemoteUrl, nil, dEnv.RepoState.Backups); found {
 		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, rem.Name, rem.Url)
 	}
 
@@ -931,7 +931,7 @@ func (dEnv *DoltEnv) AddBackup(r Remote) error {
 	}
 
 	// no conflicting remote or backup addresses
-	if rem, found := checkRemoteAddressConflict(absRemoteUrl, dEnv.RepoState.Remotes, dEnv.RepoState.Backups); found {
+	if rem, found := CheckRemoteAddressConflict(absRemoteUrl, dEnv.RepoState.Remotes, dEnv.RepoState.Backups); found {
 		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, rem.Name, rem.Url)
 	}
 

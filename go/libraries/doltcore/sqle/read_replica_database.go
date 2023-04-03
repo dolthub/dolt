@@ -379,6 +379,9 @@ func pullBranches(
 
 	_, err := rrd.limiter.Run(ctx, "-all", func() (any, error) {
 		pullErr := rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, remoteHashes, nil)
+		if pullErr != nil {
+			return nil, pullErr
+		}
 
 	REFS: // every successful pass through the loop below must end with CONTINUE REFS to get out of the retry loop
 		for _, remoteRef := range remoteRefs {
