@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -148,7 +149,7 @@ func agreeToTerms(scanner *bufio.Scanner) bool {
 	cli.Println(wordWrap("# ", "DISCLAIMER: Use of this tool may send information in your database, including schema, " +
 		"commit history, and rows to OpenAI. If this use of your database information is unacceptable to you, please do " +
 		"not use the tool."))
-	cli.Println("\nContinue? (y/n) > ")
+	cli.Print("\nContinue? (y/n) > ")
 	
 	scanner.Scan()
 	input := strings.TrimSpace(scanner.Text())
@@ -186,13 +187,20 @@ func (a *Assist) handleResponse(ctx context.Context, response string, debug bool
 			innerContent := msg["content"].(string)
 
 			// update our conversation log in case we want to continue it
-			mustAppendJson(a.messages, "assistant", innerContent)
+			a.messages = mustAppendJson(a.messages, "assistant", innerContent)
 
 			// attempt to interpret this as a well formed json command
 			var innerRespJson map[string]interface{}
 			err := json.Unmarshal([]byte(innerContent), &innerRespJson)
+			
 			if err != nil {
-				return textResponse(innerContent)
+				// attempt to salvage the response: sometimes the assistant includes a valid JSON response buffered by
+				// commentary, so attempt to extract it and try again
+				innerRespJson = extractJsonResponse(innerContent)
+				
+				if innerRespJson == nil {
+					return textResponse(innerContent)	
+				}
 			}
 
 			action, ok := innerRespJson["action"].(string)
@@ -225,12 +233,34 @@ func (a *Assist) handleResponse(ctx context.Context, response string, debug bool
 	return textResponse(fmt.Sprintf("error: couldn't interpret response: %s", response))
 }
 
+var jsonRegex = regexp.MustCompile(`(\{.*?\})`)
+
+func extractJsonResponse(content string) map[string]interface{} {
+	matches := jsonRegex.FindAllString(content, -1)
+	if len(matches) != 1 {
+		return nil
+	}
+	
+	var respJson map[string]interface{}
+	err := json.Unmarshal([]byte(matches[0]), &respJson)
+	if err != nil {
+		return nil
+	}
+	
+	return respJson
+}
+
 func sqlQuery(ctx context.Context, query string) (string, bool, error) {
 	cli.Println(fmt.Sprintf("Runnning query \"%s\"...", query))
 
 	output, _, err := doltExec(ctx, fmt.Sprintf("dolt sql -q \"%s\"", query), false)
 	if err != nil {
 		return "", false, err
+	}
+	
+	if strings.TrimSpace(output) == "" {
+		output = "Empty set."
+		cli.Println(output)
 	}
 
 	return output, false, nil
