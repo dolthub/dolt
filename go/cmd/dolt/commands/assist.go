@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/shlex"
@@ -241,8 +242,27 @@ func doltExec(ctx context.Context, commandString string, echoCommand bool) (stri
 }
 
 func textResponse(content string) (string, bool, error) {
-	cli.Println(content)
+	cli.Println(wordWrap(content))
 	return "", false, nil
+}
+
+func wordWrap(content string) string {
+	sb := strings.Builder{}
+	col := 0
+	for _, char := range content {
+		sb.WriteRune(char)
+		col++
+		
+		if char == '\n' {
+			col = 0
+		}
+		if col >= 80 && unicode.IsSpace(char) {
+			col = 0
+			sb.WriteRune('\n')
+		}
+	}
+	
+	return sb.String()
 }
 
 func (a *Assist) queryGpt(ctx context.Context, apiKey, modelId, query string, debug bool) (string, error) {
