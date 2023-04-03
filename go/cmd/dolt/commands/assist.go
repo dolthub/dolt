@@ -88,7 +88,13 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 	scanner := bufio.NewScanner(cli.InStream)
 	if shellMode {
 		cli.Println("# Welcome to the Dolt Assistant, powered by ChatGPT.\n# Type your question or command, or exit to quit.\n")
+		
+		if !agreeToTerms(scanner) {
+			return 0
+		}
+
 		cli.Print("> ")
+		
 		scanner.Scan()
 		input := strings.TrimSpace(scanner.Text())
 		if input == "exit" {
@@ -131,6 +137,28 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 	}
 
 	return 0
+}
+
+func agreeToTerms(scanner *bufio.Scanner) bool {
+	_, ok := os.LookupEnv("DOLT_ASSIST_AGREE")
+	if ok {
+		return true
+	}
+	
+	cli.Println(wordWrap("# ", "DISCLAIMER: Use of this tool may send information in your database, including schema, " +
+		"commit history, and rows to OpenAI. If this use of your database information is unacceptable to you, please do " +
+		"not use the tool."))
+	cli.Println("\nContinue? (y/n) > ")
+	
+	scanner.Scan()
+	input := strings.TrimSpace(scanner.Text())
+	if strings.ToLower(input) == "y" {
+		cli.Println(wordWrap("# ", "You can disable this check in the future by setting the DOLT_ASSIST_AGREE " +
+			"environment variable."))
+		return true
+	}
+	
+	return false
 }
 
 var chatGptJsonHeader = `{
@@ -242,21 +270,25 @@ func doltExec(ctx context.Context, commandString string, echoCommand bool) (stri
 }
 
 func textResponse(content string) (string, bool, error) {
-	cli.Println(wordWrap(content))
+	cli.Println(wordWrap("", content))
 	return "", false, nil
 }
 
-func wordWrap(content string) string {
+func wordWrap(linePrefix string, content string) string {
 	sb := strings.Builder{}
 	col := 0
 	for _, char := range content {
+		if col == 0 {
+			sb.WriteString(linePrefix)
+			col = len(linePrefix)
+		}
+		
 		sb.WriteRune(char)
 		col++
 		
 		if char == '\n' {
 			col = 0
-		}
-		if col >= 80 && unicode.IsSpace(char) {
+		} else if col >= 80 && unicode.IsSpace(char) {
 			col = 0
 			sb.WriteRune('\n')
 		}
