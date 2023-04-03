@@ -17,6 +17,7 @@ package dsess
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -173,7 +174,13 @@ func (s SessionStateAdapter) UpdateBranch(name string, new env.BranchConfig) err
 }
 
 func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
-	s.remotes[remote.Name] = remote
+	if _, ok := s.remotes[remote.Name]; ok {
+		return env.ErrRemoteAlreadyExists
+	}
+
+	if strings.IndexAny(remote.Name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
+		return env.ErrInvalidBackupName
+	}
 
 	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
 	if err != nil {
@@ -184,12 +191,25 @@ func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
 	if err != nil {
 		return err
 	}
+
+	// can have multiple remotes with the same address, but no conflicting backups
+	if rem, found := env.CheckRemoteAddressConflict(remote.Url, nil, repoState.Backups); found {
+		return fmt.Errorf("%w: '%s' -> %s", env.ErrRemoteAddressConflict, rem.Name, rem.Url)
+	}
+
+	s.remotes[remote.Name] = remote
 	repoState.AddRemote(remote)
 	return repoState.Save(fs)
 }
 
 func (s SessionStateAdapter) AddBackup(backup env.Remote) error {
-	s.backups[backup.Name] = backup
+	if _, ok := s.backups[backup.Name]; ok {
+		return env.ErrBackupAlreadyExists
+	}
+
+	if strings.IndexAny(backup.Name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
+		return env.ErrInvalidBackupName
+	}
 
 	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
 	if err != nil {
@@ -201,12 +221,22 @@ func (s SessionStateAdapter) AddBackup(backup env.Remote) error {
 		return err
 	}
 
+	// no conflicting remote or backup addresses
+	if bac, found := env.CheckRemoteAddressConflict(backup.Url, repoState.Remotes, repoState.Backups); found {
+		return fmt.Errorf("%w: '%s' -> %s", env.ErrRemoteAddressConflict, bac.Name, bac.Url)
+	}
+
+	s.backups[backup.Name] = backup
 	repoState.AddBackup(backup)
 	return repoState.Save(fs)
 }
 
 func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error {
-	delete(s.remotes, name)
+	remote, ok := s.remotes[name]
+	if !ok {
+		return env.ErrRemoteNotFound
+	}
+	delete(s.remotes, remote.Name)
 
 	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
 	if err != nil {
@@ -216,13 +246,23 @@ func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error 
 	repoState, err := env.LoadRepoState(fs)
 	if err != nil {
 		return err
+	}
+
+	remote, ok = repoState.Remotes[name]
+	if !ok {
+		// sanity check
+		return env.ErrRemoteNotFound
 	}
 	delete(repoState.Remotes, name)
 	return repoState.Save(fs)
 }
 
 func (s SessionStateAdapter) RemoveBackup(_ context.Context, name string) error {
-	delete(s.backups, name)
+	backup, ok := s.backups[name]
+	if !ok {
+		return env.ErrBackupNotFound
+	}
+	delete(s.backups, backup.Name)
 
 	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
 	if err != nil {
@@ -232,6 +272,12 @@ func (s SessionStateAdapter) RemoveBackup(_ context.Context, name string) error 
 	repoState, err := env.LoadRepoState(fs)
 	if err != nil {
 		return err
+	}
+
+	backup, ok = repoState.Backups[name]
+	if !ok {
+		// sanity check
+		return env.ErrBackupNotFound
 	}
 	delete(repoState.Backups, name)
 	return repoState.Save(fs)

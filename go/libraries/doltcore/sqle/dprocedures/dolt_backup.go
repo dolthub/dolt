@@ -129,7 +129,7 @@ func addBackup(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResul
 		return err
 	}
 
-	r := env.NewRemote(backupName, backupUrl, params)
+	r := env.NewRemote(backupName, absBackupUrl, params)
 	err = dbData.Rsw.AddBackup(r)
 	switch err {
 	case nil:

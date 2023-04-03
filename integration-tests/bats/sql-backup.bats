@@ -25,24 +25,30 @@ teardown() {
     [[ "$output" =~ "the_backup" ]] || false
 }
 
-@test "sql-backup: dolt_backup ass cannot add remote with address of existing backup" {
+@test "sql-backup: dolt_backup add cannot add remote with address of existing backup" {
     mkdir bac1
-    dolt backup add bac1 file://./bac1
-    run dolt remote add rem1 file://./bac1
+    dolt sql -q "call dolt_backup('add','bac1','file://./bac1')"
+    run dolt sql -q "call dolt_backup('add','rem1','file://./bac1')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "address conflict with a remote: 'bac1'" ]] || false
 }
 
+@test "sql-backup: dolt_backup add invalid https backup" {
+    mkdir bac1
+    run dolt sql -q "call dolt_backup('add', 'bac1', 'https://doltremoteapi.dolthub.com/Dolthub/non-existing-repo')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "sync-url does not support http or https backup locations currently" ]] || false
+}
+
 @test "sql-backup: dolt_backup remove" {
     mkdir bac1
-    dolt backup add bac1 file://./bac1
+    dolt sql -q "call dolt_backup('add', 'bac1', 'file://./bac1')"
     run dolt backup -v
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
     [[ "$output" =~ "bac1" ]] || false
 
-    dolt backup remove bac1
-
+    dolt sql -q "call dolt_backup('remove','bac1')"
     run dolt backup -v
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 0 ]
@@ -54,21 +60,20 @@ teardown() {
     [ "${#lines[@]}" -eq 0 ]
     [[ ! "$output" =~ "bac1" ]] || false
 
-    run dolt backup remove bac1
+    run dolt sql -q "call dolt_backup('remove','bac1')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "error: unknown backup: 'bac1'" ]] || false
 }
 
 @test "sql-backup: dolt_backup rm" {
     mkdir bac1
-    dolt backup add bac1 file://./bac1
+    dolt sql -q "call dolt_backup('add', 'bac1', 'file://./bac1')"
     run dolt backup -v
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
     [[ "$output" =~ "bac1" ]] || false
 
-    dolt backup rm bac1
-
+    dolt sql -q "call dolt_backup('rm','bac1')"
     run dolt backup -v
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 0 ]
