@@ -160,7 +160,7 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 
 // Exec implements the import schema command that will take a file and infer it's schema, and then create a table matching that schema.
 // Exec executes the command
-func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, schImportDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
