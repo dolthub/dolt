@@ -101,18 +101,14 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 	return mergeTbl, stats, nil
 }
 
-// mergeProllyTableData three-way merges rows and indexes for a given table. First,
-// the primary row data is merged, then secondary indexes are merged. In the
-// process of merging the primary row data, we may need to perform cell-wise
-// merges. Since a cell-wise merge result neither contains the values from the
-// root branch or the merge branch we also need to update the secondary indexes
-// prior to merging them.
-//
-// Each cell-wise merge reverts the corresponding index entries in the root
-// branch, and modifies index entries in the merge branch. The merge branch's
-// entries are set to values consistent the cell-wise merge result. When the
-// root and merge secondary indexes are merged, they will produce entries
-// consistent with the primary row data.
+// mergeProllyTableData three-way merges the data for a given table. We currently take the left
+// side of the merge and use that data as the starting point to merge in changes from the right
+// side. Eventually, we will need to optimize this to pick the side that needs the least work.
+// We iterate over the calculated diffs using a ThreeWayDiffer instance, and for every change
+// to the right-side, we apply it to the left-side by merging it into the left-side's primary index
+// as well as any secondary indexes, and also checking for unique constraints incrementally. When
+// conflicts are detected, this function attempts to resolve them automatically if possible, and
+// if not, they are recorded as conflicts in the table's artifacts.
 func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger) (*doltdb.Table, *MergeStats, error) {
 	iter, err := threeWayDiffer(ctx, tm, valueMerger)
 	if err != nil {
