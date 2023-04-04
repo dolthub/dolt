@@ -970,33 +970,11 @@ func migrateDataToMergedSchema(ctx context.Context, tm *TableMerger, vm *valueMe
 // conflict occurred. tryMerge should only be called if left and right produce
 // non-identical diffs against base.
 func (m *valueMerger) tryMerge(left, right, base val.Tuple) (val.Tuple, bool) {
-	// If we're merging a keyless table and the keys match, but the values are different, that means that the
-	// row data is the same, but the cardinality must have changed, so we just need to update the cardinality.
+	// If we're merging a keyless table and the keys match, but the values are different,
+	// that means that the row data is the same, but the cardinality has changed, and if the
+	// cardinality has changed in different ways on each merge side, we can't auto resolve.
 	if m.keyless {
-		// The first field of the value contains the cardinality
-		baseCardinality, baseOk := m.vD.GetUint64(0, base)
-		leftCardinality, leftOk := m.vD.GetUint64(0, left)
-		rightCardinality, rightOk := m.vD.GetUint64(0, right)
-
-		if !baseOk || !leftOk || !rightOk {
-			return nil, false
-		}
-
-		leftDelta := int64(leftCardinality) - int64(baseCardinality)
-		rightDelta := int64(rightCardinality) - int64(baseCardinality)
-		newCardinality := int64(baseCardinality) + leftDelta + rightDelta
-
-		// This shouldn't ever happen, but check anyway
-		if newCardinality < 0 {
-			return nil, false
-		}
-
-		builder := val.NewTupleBuilder(m.vD)
-		builder.PutUint64(0, uint64(newCardinality))
-		for i := 1; i < base.Count(); i++ {
-			builder.PutRaw(i, base.GetField(i))
-		}
-		return builder.Build(m.syncPool), true
+		return nil, false
 	}
 
 	if base != nil && (left == nil) != (right == nil) {
