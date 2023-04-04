@@ -1000,14 +1000,19 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		return di.prollySpatialRanges(ranges)
 	}
 
-	pranges := make([]prolly.Range, len(ranges))
-	for k, rng := range ranges {
+	var pranges []prolly.Range
+	for _, rng := range ranges {
 		fields := make([]prolly.RangeField, len(rng))
+		// TODO typing errors could be static
+		var failed bool
 		for j, expr := range rng {
 			if rangeCutIsBinding(expr.LowerBound) {
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(expr.LowerBound, rng[j].Typ)
-				if err != nil {
+				if sql.ErrValueOutOfRange.Is(err) {
+					failed = true
+					break
+				} else if err != nil {
 					return nil, err
 				}
 				nv := di.trimRangeCutValue(j, v)
@@ -1023,6 +1028,9 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				fields[j].Lo = prolly.Bound{}
 			}
 		}
+		if failed {
+			continue
+		}
 		// BuildPermissive() allows nulls in non-null fields
 		tup := tb.BuildPermissive(sharePool)
 		for i := range fields {
@@ -1034,7 +1042,10 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				bound := expr.UpperBound.TypeAsUpperBound()
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(expr.UpperBound, rng[i].Typ)
-				if err != nil {
+				if sql.ErrValueOutOfRange.Is(err) {
+					failed = true
+					break
+				} else if err != nil {
 					return nil, err
 				}
 				nv := di.trimRangeCutValue(i, v)
@@ -1048,6 +1059,9 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 			} else {
 				fields[i].Hi = prolly.Bound{}
 			}
+		}
+		if failed {
+			continue
 		}
 
 		tup = tb.BuildPermissive(sharePool)
@@ -1070,11 +1084,11 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 			cmp := order.CompareValues(i, field.Hi.Value, field.Lo.Value, typ)
 			fields[i].Exact = cmp == 0
 		}
-		pranges[k] = prolly.Range{
+		pranges = append(pranges, prolly.Range{
 			Fields: fields,
 			Desc:   di.keyBld.Desc,
 			Tup:    tup,
-		}
+		})
 	}
 	return pranges, nil
 }

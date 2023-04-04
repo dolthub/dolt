@@ -3,7 +3,7 @@ import shutil
 import sys
 import random
 
-if len(sys.argv) != 7:
+if len(sys.argv) != 8:
     print("usage: python3 data.py <output-dir> <table-num> <row-num> <add-num> <delete-num> <update-num>")
     sys.exit(1)
 
@@ -14,6 +14,7 @@ rows = int(sys.argv[3])
 adds = int(sys.argv[4])
 deletes = int(sys.argv[5])
 updates = int(sys.argv[6])
+unique = "UNIQUE" if int(sys.argv[7]) == 1 else ""
 
 if __name__=="__main__":
     if deletes + updates > rows:
@@ -28,9 +29,9 @@ if __name__=="__main__":
     with open(f"{table_dir}/create.sql", "+w") as f:
         for i in range(tables):
             if i == 0:
-                f.write(f"create table table{i} (x int primary key, y int, z int, key y_idx(y));\n")
+                f.write(f"create table table{i} (x int primary key, y int, z int, {unique} key y_idx(y));\n")
             else:
-                f.write(f"create table table{i} (x int primary key, y int, z int, key y_idx(y), foreign key (y) references table{i-1}(y));\n")
+                f.write(f"create table table{i} (x int primary key, y int, z int, {unique} key y_idx(y), foreign key (y) references table{i-1}(y));\n")
 
 
     for j in range(tables):
@@ -64,7 +65,7 @@ if __name__=="__main__":
                 f.write(f");\n")
 
             if updates > 0:
-                f.write(f"update table{i} set y=y+1 where x in\n")
+                f.write(f"update table{i} set y=y+{rows+adds+updates} where x in\n")
                 for j, y in enumerate(ys[deletes:deletes+updates]):
                     if j == 0:
                         f.write(f" (")
@@ -99,7 +100,7 @@ if __name__=="__main__":
                 f.write(f");\n")
 
             if updates > 0:
-                f.write(f"update table{i} set y=y+1 where y in\n")
+                f.write(f"update table{i} set y=y+{rows+adds+updates} where y in\n")
                 for j, y in enumerate(ys[deletes:deletes+updates]):
                     if j == 0:
                         f.write(f" (")

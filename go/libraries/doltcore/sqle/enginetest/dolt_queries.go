@@ -562,6 +562,19 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 // this slice into others with good names as it grows.
 var DoltScripts = []queries.ScriptTest{
 	{
+		Name: "out of range lookup (https://github.com/dolthub/dolt/issues/5673)",
+		SetUpScript: []string{
+			"create table xy (x int primary key, y int)",
+			"insert into xy values (0,0)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from xy where x = 3982729442;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
 		Name: "test null filtering in secondary indexes (https://github.com/dolthub/dolt/issues/4199)",
 		SetUpScript: []string{
 			"create table t (pk int primary key auto_increment, d datetime, index index1 (d));",
