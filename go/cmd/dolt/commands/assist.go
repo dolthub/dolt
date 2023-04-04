@@ -138,7 +138,7 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 		var userOutput string
 		userOutput, cont, err = a.handleResponse(ctx, response, debug)
 		if err != nil {
-			cli.PrintErrln("An error occurred: %s", err.Error())
+			cli.PrintErrf("An error occurred: %s\n", err.Error())
 		}
 
 		query = userOutput
@@ -511,19 +511,17 @@ func runDolt(ctx context.Context, command string) (string, error) {
 	}
 
 	cmd := exec.CommandContext(ctx, "dolt", args...)
-	
-	outputChan := make(chan []byte)
-	errChan := make(chan error)
+
+	type cmdOutput struct {
+		output []byte
+		err    error
+	}
+	outputChan := make(chan cmdOutput)
 	
 	go func() {
 		defer close (outputChan)
-		defer close (errChan)
 		output, err := cmd.CombinedOutput()
-		if err != nil {
-			errChan <- err
-		} else {
-			outputChan <- output
-		}
+		outputChan <- cmdOutput{output, err}
 	}()
 	
 	spinner := TextSpinner{}
@@ -531,13 +529,11 @@ func runDolt(ctx context.Context, command string) (string, error) {
 	defer func() {
 		cli.DeleteAndPrint(1, "")
 	}()
-
+	
 	for {
 		select {
-		case output := <-outputChan:
-			return string(output), nil
-		case err := <-errChan:
-			return "", err
+		case result := <-outputChan:
+			return string(result.output), result.err
 		case <-ctx.Done():
 			return "", ctx.Err()
 		case <-time.After(50 * time.Millisecond):
@@ -607,7 +603,7 @@ func (ts *TextSpinner) next() string {
 
 const minSpinnerUpdate = 100 * time.Millisecond
 
-var spinnerSeq = []rune{'/', '-', '\\', '|', '/', '-', '\\', '|', '*', '.', '*', '.', '*', '.', '*', '.'}
+var spinnerSeq = []rune{'/', '-', '\\', '|'}
 
 type TextSpinner struct {
 	seqPos     int
