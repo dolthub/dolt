@@ -62,7 +62,6 @@ func (a Assist) Description() string {
 	return "Provides assistance with Dolt commands and queries."
 }
 
-
 func (a Assist) Hidden() bool {
 	return true
 }
@@ -100,21 +99,21 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 	}
 
 	scanner := bufio.NewScanner(cli.InStream)
-		cli.Println("# Welcome to the Dolt Assistant, powered by ChatGPT.\n# Type your question or command, or exit to quit.")
-		cli.Println("")
-		
-		if !agreeToTerms(scanner) {
-			return 0
-		}
+	cli.Println("# Welcome to the Dolt Assistant, powered by ChatGPT.\n# Type your question or command, or exit to quit.")
+	cli.Println("")
 
-		cli.Print("> ")
-		
-		scanner.Scan()
-		input := strings.TrimSpace(scanner.Text())
-		if input == "exit" {
-			return 0
-		}
-		query := input
+	if !agreeToTerms(scanner) {
+		return 0
+	}
+
+	cli.Print("> ")
+
+	scanner.Scan()
+	input := strings.TrimSpace(scanner.Text())
+	if input == "exit" {
+		return 0
+	}
+	query := input
 
 	cont := true
 	for {
@@ -150,20 +149,20 @@ func agreeToTerms(scanner *bufio.Scanner) bool {
 	if ok {
 		return true
 	}
-	
-	cli.Println(wordWrap("# ", "DISCLAIMER: Use of this tool may send information in your database, including schema, " +
-		"commit history, and rows to OpenAI. If this use of your database information is unacceptable to you, please do " +
+
+	cli.Println(wordWrap("# ", "DISCLAIMER: Use of this tool may send information in your database, including schema, "+
+		"commit history, and rows to OpenAI. If this use of your database information is unacceptable to you, please do "+
 		"not use the tool."))
 	cli.Print("\nContinue? (y/n) > ")
-	
+
 	scanner.Scan()
 	input := strings.TrimSpace(scanner.Text())
 	if strings.ToLower(input) == "y" {
-		cli.Println(wordWrap("# ", "You can disable this check in the future by setting the DOLT_ASSIST_AGREE " +
+		cli.Println(wordWrap("# ", "You can disable this check in the future by setting the DOLT_ASSIST_AGREE "+
 			"environment variable."))
 		return true
 	}
-	
+
 	return false
 }
 
@@ -195,14 +194,14 @@ func (a *Assist) handleResponse(ctx context.Context, response string, debug bool
 			// attempt to interpret this as a well formed json command
 			var innerRespJson map[string]interface{}
 			err := json.Unmarshal([]byte(innerContent), &innerRespJson)
-			
+
 			if err != nil {
 				// attempt to salvage the response: sometimes the assistant includes a valid JSON response buffered by
 				// commentary, so attempt to extract it and try again
 				innerRespJson = extractJsonResponse(innerContent)
-				
+
 				if innerRespJson == nil {
-					return textResponse(innerContent)	
+					return textResponse(innerContent)
 				}
 			}
 
@@ -243,13 +242,13 @@ func extractJsonResponse(content string) map[string]interface{} {
 	if len(matches) != 1 {
 		return nil
 	}
-	
+
 	var respJson map[string]interface{}
 	err := json.Unmarshal([]byte(matches[0]), &respJson)
 	if err != nil {
 		return nil
 	}
-	
+
 	return respJson
 }
 
@@ -260,7 +259,7 @@ func sqlQuery(ctx context.Context, query string) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
-	
+
 	if strings.TrimSpace(output) == "" {
 		output = "Empty set."
 		cli.Println(output)
@@ -315,10 +314,10 @@ func wordWrap(linePrefix string, content string) string {
 			sb.WriteString(linePrefix)
 			col = len(linePrefix)
 		}
-		
+
 		sb.WriteRune(char)
 		col++
-		
+
 		if char == '\n' {
 			col = 0
 		} else if col >= 80 && unicode.IsSpace(char) {
@@ -326,7 +325,7 @@ func wordWrap(linePrefix string, content string) string {
 			sb.WriteRune('\n')
 		}
 	}
-	
+
 	return sb.String()
 }
 
@@ -517,19 +516,19 @@ func runDolt(ctx context.Context, command string) (string, error) {
 		err    error
 	}
 	outputChan := make(chan cmdOutput)
-	
+
 	go func() {
-		defer close (outputChan)
+		defer close(outputChan)
 		output, err := cmd.CombinedOutput()
 		outputChan <- cmdOutput{output, err}
 	}()
-	
+
 	spinner := TextSpinner{}
 	cli.Print(spinner.next())
 	defer func() {
 		cli.DeleteAndPrint(1, "")
 	}()
-	
+
 	for {
 		select {
 		case result := <-outputChan:
@@ -584,9 +583,9 @@ func (a Assist) Docs() *cli.CommandDocumentation {
 
 func (a Assist) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsString("model", "m", "open AI model id", 
-		"The ID of the Open AI model to use for the assistant. Defaults to gpt-3.5-turbo. " +
-		"See https://platform.openai.com/docs/models/overview for a full list of models.")
+	ap.SupportsString("model", "m", "open AI model id",
+		"The ID of the Open AI model to use for the assistant. Defaults to gpt-3.5-turbo. "+
+			"See https://platform.openai.com/docs/models/overview for a full list of models.")
 	ap.SupportsFlag("debug", "d", "log API requests to and from the assistant")
 	return ap
 }
