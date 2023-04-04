@@ -37,6 +37,17 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
+var assistDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Assists with dolt commands and queries.",
+	LongDesc: `Assists with dolt commands and queries. Can run dolt commands or SQL queries on your behalf based on your questions or instructions, as well as answer questions about your database.
+
+Powered by OpenAI's chat API. An API key is required. Please set the OPENAI_API_KEY environment variable. 
+`,
+	Synopsis: []string{
+		"[--debug] [--model {{.LessThan}}modelId{{.GreaterThan}}]",
+	},
+}
+
 type Assist struct {
 	messages []string
 }
@@ -49,6 +60,11 @@ func (a Assist) Name() string {
 
 func (a Assist) Description() string {
 	return "Provides assistance with Dolt commands and queries."
+}
+
+
+func (a Assist) Hidden() bool {
+	return true
 }
 
 func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -64,11 +80,8 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 	helpPr, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, addDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, helpPr)
 
-	query := apr.GetValueOrDefault("query", "")
 	model := apr.GetValueOrDefault("model", "gpt-3.5-turbo")
 	debug := apr.Contains("debug")
-
-	shellMode := query == ""
 
 	sqlEng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
@@ -87,8 +100,8 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 	}
 
 	scanner := bufio.NewScanner(cli.InStream)
-	if shellMode {
-		cli.Println("# Welcome to the Dolt Assistant, powered by ChatGPT.\n# Type your question or command, or exit to quit.\n")
+		cli.Println("# Welcome to the Dolt Assistant, powered by ChatGPT.\n# Type your question or command, or exit to quit.")
+		cli.Println("")
 		
 		if !agreeToTerms(scanner) {
 			return 0
@@ -101,13 +114,12 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 		if input == "exit" {
 			return 0
 		}
-		query = input
-	}
+		query := input
 
 	cont := true
-	for cont || shellMode {
-		// In shell mode, prompt for user input if the last response was terminal
-		if shellMode && !cont {
+	for {
+		// Prompt for user input if the last response was terminal
+		if !cont {
 			cli.Print("\n> ")
 			scanner.Scan()
 			input := strings.TrimSpace(scanner.Text())
@@ -126,18 +138,11 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 		var userOutput string
 		userOutput, cont, err = a.handleResponse(ctx, response, debug)
 		if err != nil {
-			if shellMode {
-				cli.PrintErrln("An error occurred: %s", err.Error())
-			} else {
-				cli.PrintErrln(err.Error())
-				return 1
-			}
+			cli.PrintErrln("An error occurred: %s", err.Error())
 		}
 
 		query = userOutput
 	}
-
-	return 0
 }
 
 func agreeToTerms(scanner *bufio.Scanner) bool {
@@ -167,8 +172,6 @@ var chatGptJsonHeader = `{
     "messages": [`
 
 var chatGptJsonFooter = `]}`
-
-var messageJson = `{"role": "%s", "content": "%s"}`
 
 func (a *Assist) handleResponse(ctx context.Context, response string, debug bool) (string, bool, error) {
 	if debug {
@@ -508,13 +511,39 @@ func runDolt(ctx context.Context, command string) (string, error) {
 	}
 
 	cmd := exec.CommandContext(ctx, "dolt", args...)
+	
+	outputChan := make(chan []byte)
+	errChan := make(chan error)
+	
+	go func() {
+		defer close (outputChan)
+		defer close (errChan)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			errChan <- err
+		} else {
+			outputChan <- output
+		}
+	}()
+	
+	spinner := TextSpinner{}
+	cli.Print(spinner.next())
+	defer func() {
+		cli.DeleteAndPrint(1, "")
+	}()
 
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return string(output), err
+	for {
+		select {
+		case output := <-outputChan:
+			return string(output), nil
+		case err := <-errChan:
+			return "", err
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+			cli.DeleteAndPrint(1, spinner.next())
+		}
 	}
-
-	return string(output), nil
 }
 
 func jsonMessage(role string, content string) ([]byte, error) {
@@ -553,28 +582,22 @@ func getCreateTableStatements(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEn
 }
 
 func (a Assist) Docs() *cli.CommandDocumentation {
-	return &cli.CommandDocumentation{
-		CommandStr: "dolt assist",
-		ShortDesc:  "Provides assistance with Dolt commands and queries.",
-		LongDesc:   `{{.EmphasisLeft}}dolt assist{{.EmphasisRight}} provides assistance with Dolt commands and queries.`,
-		Synopsis: []string{
-			"{{.LessThan}}command{{.GreaterThan}}",
-		},
-		ArgParser: a.ArgParser(),
-	}
+	ap := a.ArgParser()
+	return cli.NewCommandDocumentation(assistDocs, ap)
 }
 
 func (a Assist) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsString("query", "q", "query to ask the assistant", "Query to ask the assistant")
-	ap.SupportsString("model", "m", "open AI model id", "The ID of the Open AI model to use for the assistant")
+	ap.SupportsString("model", "m", "open AI model id", 
+		"The ID of the Open AI model to use for the assistant. Defaults to gpt-3.5-turbo. " +
+		"See https://platform.openai.com/docs/models/overview for a full list of models.")
 	ap.SupportsFlag("debug", "d", "log API requests to and from the assistant")
 	return ap
 }
 
 func (ts *TextSpinner) next() string {
 	now := time.Now()
-	if now.Sub(ts.lastUpdate) > minUpdate {
+	if now.Sub(ts.lastUpdate) > minSpinnerUpdate {
 		ts.seqPos = (ts.seqPos + 1) % len(spinnerSeq)
 		ts.lastUpdate = now
 	}
@@ -582,9 +605,9 @@ func (ts *TextSpinner) next() string {
 	return string([]rune{spinnerSeq[ts.seqPos]})
 }
 
-const minUpdate = 100 * time.Millisecond
+const minSpinnerUpdate = 100 * time.Millisecond
 
-var spinnerSeq = []rune{'|', '/', '-', '\\'}
+var spinnerSeq = []rune{'/', '-', '\\', '|', '/', '-', '\\', '|', '*', '.', '*', '.', '*', '.', '*', '.'}
 
 type TextSpinner struct {
 	seqPos     int
