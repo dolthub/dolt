@@ -3544,6 +3544,29 @@ var errTmplNoAutomaticMerge = "table %s can't be automatically merged.\nTo merge
 
 var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
+		Name: "keyless table merge conflicts",
+		AncSetUpScript: []string{
+			"CREATE table t (col1 int, col2 int, col3 int);",
+			"INSERT into t values (1, 10, 100), (1, 10, 100), (1, 10, 100), (1, 10, 100);",
+		},
+		RightSetUpScript: []string{
+			"delete from t where col1=1 and col2=10 and col3=100 limit 2;",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (1, 10, 100), (1, 10, 100), (1, 10, 100), (1, 10, 100);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x0}},
+			},
+			{
+				Query:    "select count(*) from t where col1=1 and col2=10 and col3=100;",
+				Expected: []sql.Row{{6}},
+			},
+		},
+	},
+	{
 		Name: "merge conflicts",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
