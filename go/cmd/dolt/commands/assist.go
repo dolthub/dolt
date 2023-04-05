@@ -291,14 +291,14 @@ func doltExec(ctx context.Context, commandString string, echoCommand bool) (stri
 
 	execFn := func() error {
 		cmdOut, err := runDolt(ctx, args)
-		
+
 		cli.Println(cmdOut)
 		retOutput.WriteString(cmdOut)
 
 		// this is delayed error handling from running the dolt command
 		return err
 	}
-	
+
 	// ChatGPT often chains commands together with &&, so attempt to execute all of them
 	firstToken := true
 	for _, token := range tokens {
@@ -313,21 +313,21 @@ func doltExec(ctx context.Context, commandString string, echoCommand bool) (stri
 				if err != nil {
 					return "", false, err
 				}
-				
+
 				args = args[:0]
 				firstToken = true
 				continue
 			}
-				
+
 			args = append(args, token)
 		}
 	}
-	
+
 	err = execFn()
 	if err != nil {
 		return "", false, err
 	}
-	
+
 	return retOutput.String(), false, nil
 }
 
@@ -394,7 +394,7 @@ func (a *Assist) queryGpt(ctx context.Context, apiKey, modelId, query string, de
 		body, err := io.ReadAll(response.Body)
 		if err != nil {
 			errChan <- err
-			return 
+			return
 		}
 
 		respChan <- string(body)
