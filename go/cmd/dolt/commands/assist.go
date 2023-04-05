@@ -227,9 +227,6 @@ func (a *Assist) handleResponse(ctx context.Context, response string, debug bool
 			default:
 				return textResponse(content)
 			}
-
-			// should only be one choice, but just in case
-			break
 		}
 	}
 
