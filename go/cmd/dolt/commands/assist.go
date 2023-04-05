@@ -290,7 +290,7 @@ func doltExec(ctx context.Context, commandString string, echoCommand bool) (stri
 	retOutput := strings.Builder{}
 	var args []string
 
-	exec := func() error {
+	execFn := func() error {
 		cmdOut, err := runDolt(ctx, args)
 		
 		cli.Println(cmdOut)
@@ -310,7 +310,7 @@ func doltExec(ctx context.Context, commandString string, echoCommand bool) (stri
 			firstToken = false
 		} else {
 			if token == "&&" {
-				err := exec()
+				err := execFn()
 				if err != nil {
 					return "", false, err
 				}
@@ -324,7 +324,7 @@ func doltExec(ctx context.Context, commandString string, echoCommand bool) (stri
 		}
 	}
 	
-	err = exec()
+	err = execFn()
 	if err != nil {
 		return "", false, err
 	}
@@ -384,20 +384,21 @@ func (a *Assist) queryGpt(ctx context.Context, apiKey, modelId, query string, de
 	respChan := make(chan string)
 	errChan := make(chan error)
 	go func() {
+		defer close(respChan)
+		defer close(errChan)
 		response, err := client.Do(req)
 		if err != nil {
 			errChan <- err
-			close(errChan)
+			return
 		}
 
 		body, err := io.ReadAll(response.Body)
 		if err != nil {
 			errChan <- err
-			close(errChan)
+			return 
 		}
 
 		respChan <- string(body)
-		close(respChan)
 	}()
 
 	spinner := TextSpinner{}
