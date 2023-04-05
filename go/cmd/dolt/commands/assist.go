@@ -282,17 +282,17 @@ func doltExec(ctx context.Context, commandString string, echoCommand bool) (stri
 		return "", false, err
 	}
 
+	if echoCommand {
+		cli.Println(commandString)
+		cli.Println()
+	}
+
 	retOutput := strings.Builder{}
 	var args []string
 
 	exec := func() error {
 		cmdOut, err := runDolt(ctx, args)
-
-		if echoCommand {
-			cli.Println("dolt " + strings.Join(args, " "))
-			cli.Println()
-		}
-
+		
 		cli.Println(cmdOut)
 		retOutput.WriteString(cmdOut)
 
