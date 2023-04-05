@@ -323,7 +323,7 @@ func serializeBytesToAddr(ctx context.Context, ns tree.NodeStore, r io.Reader, d
 }
 
 func convJson(v interface{}) (buf []byte, err error) {
-	v, err = types.JSON.Convert(v)
+	v, _, err = types.JSON.Convert(v)
 	if err != nil {
 		return nil, err
 	}

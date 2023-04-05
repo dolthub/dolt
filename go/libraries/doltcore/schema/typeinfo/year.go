@@ -65,7 +65,7 @@ func (ti *yearType) ConvertValueToNomsValue(ctx context.Context, vrw types.Value
 	if v == nil {
 		return types.NullValue, nil
 	}
-	intVal, err := ti.sqlYearType.Convert(v)
+	intVal, _, err := ti.sqlYearType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (ti *yearType) GetTypeParams() map[string]string {
 // IsValid implements TypeInfo interface.
 func (ti *yearType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Int); ok {
-		_, err := ti.sqlYearType.Convert(int64(val))
+		_, _, err := ti.sqlYearType.Convert(int64(val))
 		if err != nil {
 			return false
 		}

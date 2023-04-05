@@ -74,7 +74,7 @@ func (ti *polygonType) ConvertValueToNomsValue(ctx context.Context, vrw types.Va
 	}
 
 	// Convert to sql.PolygonType
-	poly, err := ti.sqlPolygonType.Convert(v)
+	poly, _, err := ti.sqlPolygonType.Convert(v)
 	if err != nil {
 		return nil, err
 	}

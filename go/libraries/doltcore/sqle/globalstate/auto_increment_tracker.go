@@ -116,7 +116,7 @@ func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 	}
 
 	var err error
-	val, err = types.Uint64.Convert(val)
+	val, _, err = types.Uint64.Convert(val)
 	if err != nil {
 		return 0, err
 	}

@@ -74,7 +74,7 @@ func (ti *pointType) ConvertValueToNomsValue(ctx context.Context, vrw types.Valu
 	}
 
 	// Convert to sql.PointType
-	point, err := ti.sqlPointType.Convert(v)
+	point, _, err := ti.sqlPointType.Convert(v)
 	if err != nil {
 		return nil, err
 	}

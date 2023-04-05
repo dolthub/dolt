@@ -837,16 +837,16 @@ func convertSqlTypesValue(ctx *sql.Context, value sqltypes.Value, column *sql.Co
 		if err != nil {
 			return nil, err
 		}
-		convertedValue, err = column.Type.Convert(atoi)
+		convertedValue, _, err = column.Type.Convert(atoi)
 	case types.IsDecimal(column.Type):
 		// Decimal values need to have any leading/trailing whitespace trimmed off
 		// TODO: Consider moving this into DecimalType_.Convert; if DecimalType_.Convert handled trimming
 		//       leading/trailing whitespace, this special case for Decimal types wouldn't be needed.
-		convertedValue, err = column.Type.Convert(strings.TrimSpace(value.ToString()))
+		convertedValue, _, err = column.Type.Convert(strings.TrimSpace(value.ToString()))
 	case types.IsJSON(column.Type):
 		convertedValue, err = convertVitessJsonExpressionString(ctx, value)
 	default:
-		convertedValue, err = column.Type.Convert(value.ToString())
+		convertedValue, _, err = column.Type.Convert(value.ToString())
 	}
 	if err != nil {
 		return nil, fmt.Errorf("unable to convert value %q, for column of type %T: %v", value.ToString(), column.Type, err.Error())

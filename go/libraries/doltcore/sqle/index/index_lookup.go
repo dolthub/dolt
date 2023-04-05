@@ -126,9 +126,7 @@ func newPointPartitionIter(ctx *sql.Context, lookup sql.IndexLookup, idx *doltIn
 	ns := idx.ns
 	for j, expr := range rng {
 		v, err := getRangeCutValue(expr.LowerBound, rng[j].Typ)
-		if sql.ErrValueOutOfRange.Is(err) {
-			return emptyPartition{}, nil
-		} else if err != nil {
+		if err != nil {
 			return nil, err
 		}
 		if err = PutField(ctx, ns, tb, j, v); err != nil {
@@ -223,16 +221,6 @@ type rangePartition struct {
 
 func (rp rangePartition) Key() []byte {
 	return rp.key
-}
-
-type emptyPartition struct{}
-
-func (rp emptyPartition) Next(_ *sql.Context) (sql.Partition, error) {
-	return nil, io.EOF
-}
-
-func (rp emptyPartition) Close(_ *sql.Context) error {
-	return nil
 }
 
 // LookupBuilder generates secondary lookups for partitions and
