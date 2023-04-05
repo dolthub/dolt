@@ -276,27 +276,60 @@ func doltQuery(ctx context.Context, content string) (string, bool, error) {
 }
 
 func doltExec(ctx context.Context, commandString string, echoCommand bool) (string, bool, error) {
-	command := strings.TrimSpace(commandString)
-	if !strings.HasPrefix(command, "dolt") {
-		return textResponse(commandString)
-	}
-	command = strings.TrimPrefix(command, "dolt ")
-
-	output, err := runDolt(ctx, command)
-
-	if echoCommand {
-		cli.Println(commandString)
-		cli.Println()
-	}
-
-	cli.Println(output)
-
-	// this is delayed error handling from running the dolt command
+	commandString = strings.TrimSpace(commandString)
+	tokens, err := shlex.Split(commandString)
 	if err != nil {
 		return "", false, err
 	}
 
-	return output, false, nil
+	retOutput := strings.Builder{}
+	var args []string
+
+	exec := func() error {
+		cmdOut, err := runDolt(ctx, args)
+
+		if echoCommand {
+			cli.Println("dolt " + strings.Join(args, " "))
+			cli.Println()
+		}
+
+		cli.Println(cmdOut)
+		retOutput.WriteString(cmdOut)
+
+		// this is delayed error handling from running the dolt command
+		return err
+	}
+	
+	// ChatGPT often chains commands together with &&, so attempt to execute all of them
+	firstToken := true
+	for _, token := range tokens {
+		if firstToken {
+			if token != "dolt" {
+				return textResponse(commandString)
+			}
+			firstToken = false
+		} else {
+			if token == "&&" {
+				err := exec()
+				if err != nil {
+					return "", false, err
+				}
+				
+				args = args[:0]
+				firstToken = true
+				continue
+			}
+				
+			args = append(args, token)
+		}
+	}
+	
+	err = exec()
+	if err != nil {
+		return "", false, err
+	}
+	
+	return retOutput.String(), false, nil
 }
 
 func textResponse(content string) (string, bool, error) {
@@ -442,7 +475,7 @@ func getInitialPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.D
 
 	messages = mustAppendJson(messages, "assistant", string(responseJson))
 
-	logOutput, err := runDolt(ctx, "log -n 1")
+	logOutput, err := runDolt(ctx, []string{"log", "-n", "1"})
 	if err != nil {
 		return nil, err
 	}
@@ -501,12 +534,7 @@ func mustAppendJson(messages []string, role string, content string) []string {
 }
 
 // TODO: rather than forking a new process and getting its output, instantiate command structs and run in-process here
-func runDolt(ctx context.Context, command string) (string, error) {
-	args, err := shlex.Split(command)
-	if err != nil {
-		return "", err
-	}
-
+func runDolt(ctx context.Context, args []string) (string, error) {
 	cmd := exec.CommandContext(ctx, "dolt", args...)
 
 	type cmdOutput struct {
