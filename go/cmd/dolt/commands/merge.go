@@ -263,13 +263,18 @@ func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError 
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = actions.CheckoutAllTables(ctx, roots, doltEnv.DbData())
+	roots, err = actions.CheckoutAllTables(ctx, roots)
 	if err == nil {
 		err = doltEnv.AbortMerge(ctx)
 
 		if err == nil {
 			return nil
 		}
+	}
+
+	err = doltEnv.UpdateWorkingRoot(ctx, roots.Working)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	return errhand.BuildDError("fatal: failed to revert changes").AddCause(err).Build()

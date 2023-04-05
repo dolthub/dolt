@@ -366,26 +366,6 @@ func UpdateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *d
 	return roots, nil
 }
 
-func checkoutBranchNoDocs(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, rsw env.RepoStateWriter, branchRef ref.BranchRef, force bool) error {
-	roots, err := UpdateRootsForBranch(ctx, roots, branchRoot, force)
-	if err != nil {
-		return err
-	}
-
-	err = rsw.SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
-	if err != nil {
-		return err
-	}
-
-	// TODO: combine into single update
-	err = rsw.UpdateWorkingRoot(ctx, roots.Working)
-	if err != nil {
-		return err
-	}
-
-	return rsw.UpdateStagedRoot(ctx, roots.Staged)
-}
-
 func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
 	branchRef := ref.NewBranchRef(brName)
 	branchHeadRef := dEnv.RepoStateReader().CWBHeadRef()
@@ -428,11 +408,26 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		return err
 	}
 
-	err = checkoutBranchNoDocs(ctx, roots, branchRoot, dEnv.RepoStateWriter(), branchRef, force)
+	roots, err = UpdateRootsForBranch(ctx, roots, branchRoot, force)
 	if err != nil {
 		return err
 	}
 
+	err = dEnv.UpdateWorkingRoot(ctx, roots.Working)
+	if err != nil {
+		return err
+	}
+	
+	err = dEnv.UpdateStagedRoot(ctx, roots.Staged)
+	if err != nil {
+		return err
+	}
+	
+	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
+	if err != nil {
+		return err
+	}
+	
 	if shouldResetWorkingSet {
 		// reset the source branch's working set to the branch head, leaving the source branch unchanged
 		err = ResetHard(ctx, dEnv, "", roots, branchHeadRef, currentWs)
