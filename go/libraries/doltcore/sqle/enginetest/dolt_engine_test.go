@@ -439,7 +439,7 @@ func TestScripts(t *testing.T) {
 	if types.IsFormat_DOLT(types.Format_Default) {
 		skipped = append(skipped, newFormatSkippedScripts...)
 	}
-	h := newDoltHarness(t).WithSkippedQueries(skipped)
+	h := newDoltHarness(t).WithSkippedQueries(skipped).WithParallelism(1)
 	defer h.Close()
 	enginetest.TestScripts(t, h)
 }
@@ -1940,7 +1940,7 @@ func TestScriptsPrepared(t *testing.T) {
 		skipped = append(skipped, newFormatSkippedScripts...)
 	}
 	skipPreparedTests(t)
-	h := newDoltHarness(t).WithSkippedQueries(skipped)
+	h := newDoltHarness(t).WithSkippedQueries(skipped).WithParallelism(1)
 	defer h.Close()
 	enginetest.TestScriptsPrepared(t, h)
 }
