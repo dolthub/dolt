@@ -36,8 +36,6 @@ type RepoStateReader interface {
 
 type RepoStateWriter interface {
 	// TODO: get rid of this
-	UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error
-	// TODO: get rid of this
 	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
 	AddRemote(r Remote) error

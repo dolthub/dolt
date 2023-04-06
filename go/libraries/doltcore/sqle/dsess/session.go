@@ -572,12 +572,18 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 		}
 
 		// TODO: This is not the correct way to write this commit as an amend. While this commit is running
-		// the branch head moves backwards and concurrency control here is not principled.
-		root, err := actions.ResetSoftToRef(ctx, sessionState.dbData, "HEAD~1")
+		//  the branch head moves backwards and concurrency control here is not principled.
+		newRoots, err := actions.ResetSoftToRef(ctx, sessionState.dbData, "HEAD~1")
 		if err != nil {
 			return nil, err
 		}
-		roots.Head = root
+		roots.Head = newRoots.Head
+		roots.Staged = newRoots.Staged
+		
+		err = d.SetWorkingSet(ctx, dbName, sessionState.WorkingSet.WithStagedRoot(newRoots.Staged))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	pendingCommit, err := actions.GetCommitStaged(ctx, roots, sessionState.WorkingSet.MergeActive(), mergeParentCommits, sessionState.dbData.Ddb, props)

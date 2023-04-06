@@ -122,8 +122,15 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 			// This is a valid ref
 			if ok {
-				_, err = actions.ResetSoftToRef(ctx, dEnv.DbData(), apr.Arg(0))
-				return handleResetError(err, usage)
+				newRoots, err := actions.ResetSoftToRef(ctx, dEnv.DbData(), apr.Arg(0))
+				if err != nil {
+					return handleResetError(err, usage)
+				}
+
+				err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
+				if err != nil {
+					return handleResetError(err, usage)
+				}
 			}
 		}
 

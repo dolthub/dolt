@@ -170,7 +170,12 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 			}
 		}
 
-		_, err = actions.ResetSoftToRef(ctx, dEnv.DbData(), "HEAD~1")
+		newRoots, err := actions.ResetSoftToRef(ctx, dEnv.DbData(), "HEAD~1")
+		if err != nil {
+			return handleResetError(err, usage)
+		}
+
+		err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
 		if err != nil {
 			return handleResetError(err, usage)
 		}
@@ -203,9 +208,14 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 	})
 	if err != nil {
 		if apr.Contains(cli.AmendFlag) {
-			_, errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
+			newRoots, errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
 			if errRes != nil {
 				return handleResetError(errRes, usage)
+			}
+			
+			err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
+			if err != nil {
+				return handleResetError(err, usage)
 			}
 		}
 		return handleCommitErr(ctx, dEnv, err, usage)
@@ -222,9 +232,14 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 	)
 	if err != nil {
 		if apr.Contains(cli.AmendFlag) {
-			_, errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
+			newRoots, errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
 			if errRes != nil {
 				return handleResetError(errRes, usage)
+			}
+			
+			err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
+			if err != nil {
+				return handleResetError(err, usage)
 			}
 		}
 		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't commit").AddCause(err).Build(), usage)
