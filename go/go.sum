@@ -170,6 +170,8 @@ github.com/dolthub/go-mysql-server v0.14.1-0.20230405203915-fb8ae9f5f363 h1:H1dI
 github.com/dolthub/go-mysql-server v0.14.1-0.20230405203915-fb8ae9f5f363/go.mod h1:NkVhb0cepWOFh8lkZ8HRc46iG3R7sbhEKC70SG94PGY=
 github.com/dolthub/go-mysql-server v0.14.1-0.20230406224013-ee917e0e5e07 h1:656O/KimrZPMDeJSoA5BA/z3nxaoHY97faGY2wE3MVA=
 github.com/dolthub/go-mysql-server v0.14.1-0.20230406224013-ee917e0e5e07/go.mod h1:NkVhb0cepWOFh8lkZ8HRc46iG3R7sbhEKC70SG94PGY=
+github.com/dolthub/go-mysql-server v0.14.1-0.20230406234811-1f4382990167 h1:ydzaaukckhRQBDrwgWWvVDQSe4AprmFYveOMmRtHPxM=
+github.com/dolthub/go-mysql-server v0.14.1-0.20230406234811-1f4382990167/go.mod h1:aXA7ijVIrkHXgLJs6AOHVsHGwD9XBJB7rW6ipDpXUsU=
 github.com/dolthub/ishell v0.0.0-20221214210346-d7db0b066488 h1:0HHu0GWJH0N6a6keStrHhUAK5/o9LVfkh44pvsV4514=
 github.com/dolthub/ishell v0.0.0-20221214210346-d7db0b066488/go.mod h1:ehexgi1mPxRTk0Mok/pADALuHbvATulTh6gzr7NzZto=
 github.com/dolthub/jsonpath v0.0.0-20210609232853-d49537a30474 h1:xTrR+l5l+1Lfq0NvhiEsctylXinUMFhhsqaEcl414p8=
@@ -182,6 +184,8 @@ github.com/dolthub/swiss v0.1.0 h1:EaGQct3AqeP/MjASHLiH6i4TAmgbG/c4rA6a1bzCOPc=
 github.com/dolthub/swiss v0.1.0/go.mod h1:BeucyB08Vb1G9tumVN3Vp/pyY4AMUnr9p7Rz7wJ7kAQ=
 github.com/dolthub/vitess v0.0.0-20230403203406-3b7bf02e68b3 h1:inZIwt5Jv5X2/tblBMtmyFP6kw/b/8R7BSwuaVEAxKQ=
 github.com/dolthub/vitess v0.0.0-20230403203406-3b7bf02e68b3/go.mod h1:oVFIBdqMFEkt4Xz2fzFJBNtzKhDEjwdCF0dzde39iKs=
+github.com/dolthub/vitess v0.0.0-20230406223939-011b5234783f h1:wSzMlRGaveVkOwRNvw7AJs8rgz/074AfrcbxSZp+kzE=
+github.com/dolthub/vitess v0.0.0-20230406223939-011b5234783f/go.mod h1:IyoysiiOzrIs7QsEHC+yVF0yRQ6W70GXyCXqtI2vVTs=
 github.com/dustin/go-humanize v0.0.0-20171111073723-bb3d318650d4/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/dustin/go-humanize v1.0.0 h1:VSnTsYCnlFHaM2/igO1h6X3HA71jcobQuxemgkq4zYo=
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
@@ -893,6 +897,8 @@ golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f/go.mod h1:oPkhp1MJrh7nUepCBc
 golang.org/x/sys v0.0.0-20220811171246-fbc7d0a398ab/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.5.0 h1:MUK/U/4lj1t1oPg0HfuXDN/Z1wv31ZJ/YcPiGccS4DU=
 golang.org/x/sys v0.5.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.6.0 h1:MVltZSvRTcU2ljQOhs94SXPftV6DCNnZViHeQps87pQ=
+golang.org/x/sys v0.6.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201117132131-f5c789dd3221/go.mod h1:Nr5EML6q2oocZ2LXRh80K7BxOlk5/8JxuGnuhpl+muw=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/term v0.0.0-20210927222741-03fcf44c2211/go.mod h1:jbD1KX2456YbFQfuXm/mYQcufACuNUgVhRMnK/tPxf8=
