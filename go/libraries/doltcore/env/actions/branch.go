@@ -368,7 +368,6 @@ func UpdateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *d
 
 func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
 	branchRef := ref.NewBranchRef(brName)
-	branchHeadRef := dEnv.RepoStateReader().CWBHeadRef()
 
 	db := dEnv.DoltDB
 	hasRef, err := db.HasRef(ctx, branchRef)
@@ -413,6 +412,12 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		return err
 	}
 
+	// Change branches before we mess with the working set
+	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
+	if err != nil {
+		return err
+	}
+
 	err = dEnv.UpdateWorkingRoot(ctx, roots.Working)
 	if err != nil {
 		return err
@@ -422,13 +427,9 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	if err != nil {
 		return err
 	}
-
-	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
-	if err != nil {
-		return err
-	}
-
+	
 	if shouldResetWorkingSet {
+		branchHeadRef := dEnv.RepoStateReader().CWBHeadRef()
 		// reset the source branch's working set to the branch head, leaving the source branch unchanged
 		err = ResetHard(ctx, dEnv, "", roots, branchHeadRef, currentWs)
 		if err != nil {
