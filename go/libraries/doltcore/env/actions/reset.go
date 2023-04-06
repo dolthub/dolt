@@ -202,7 +202,7 @@ func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, roots do
 	return resetStaged(ctx, roots, tables)
 }
 
-// ResetSoftToRef matches the `git reset --soft <REF>` pattern. It returns a new Roots with the Staged and Head values 
+// ResetSoftToRef matches the `git reset --soft <REF>` pattern. It returns a new Roots with the Staged and Head values
 // set to the commit specified by the spec string. The Working root is not set
 func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) (doltdb.Roots, error) {
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
@@ -219,15 +219,15 @@ func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) (do
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
-	
+
 	// Update the head to this commit
 	if err = dbData.Ddb.SetHeadToCommit(ctx, dbData.Rsr.CWBHeadRef(), newHead); err != nil {
 		return doltdb.Roots{}, err
 	}
 
 	return doltdb.Roots{
-		Head:    foundRoot,
-		Staged:  foundRoot,
+		Head:   foundRoot,
+		Staged: foundRoot,
 	}, err
 }
 

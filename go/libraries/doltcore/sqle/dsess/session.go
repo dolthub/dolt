@@ -579,7 +579,7 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 		}
 		roots.Head = newRoots.Head
 		roots.Staged = newRoots.Staged
-		
+
 		err = d.SetWorkingSet(ctx, dbName, sessionState.WorkingSet.WithStagedRoot(newRoots.Staged))
 		if err != nil {
 			return nil, err
