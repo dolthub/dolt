@@ -417,17 +417,17 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	if err != nil {
 		return err
 	}
-	
+
 	err = dEnv.UpdateStagedRoot(ctx, roots.Staged)
 	if err != nil {
 		return err
 	}
-	
+
 	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
 	if err != nil {
 		return err
 	}
-	
+
 	if shouldResetWorkingSet {
 		// reset the source branch's working set to the branch head, leaving the source branch unchanged
 		err = ResetHard(ctx, dEnv, "", roots, branchHeadRef, currentWs)

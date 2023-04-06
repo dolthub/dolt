@@ -274,7 +274,7 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, tables []string) err
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	
+
 	return nil
 }
 

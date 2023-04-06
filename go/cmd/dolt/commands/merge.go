@@ -467,8 +467,9 @@ func handleMergeErr(ctx context.Context, dEnv *env.DoltEnv, mergeErr error, hasC
 // commit after merging. If the merge is not fast-forward, the --no-commit flag is not defined, and there are
 // no conflicts and/or constraint violations, this function will call commit after merging.
 // TODO: forcing a commit with a constraint violation should warn users that subsequent
-//  FF merges will not surface constraint violations on their own; constraint verify --all
-//  is required to reify violations.
+//
+//	FF merges will not surface constraint violations on their own; constraint verify --all
+//	is required to reify violations.
 func performMerge(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec, suggestedMsg string) (map[string]*merge.MergeStats, error) {
 	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
 		return nil, err
@@ -532,11 +533,11 @@ func executeNoFFMergeAndCommit(ctx context.Context, dEnv *env.DoltEnv, spec *mer
 		wsHash,
 		dEnv.NewWorkingSetMeta(msg),
 	)
-	
+
 	if err != nil {
 		return tblToStats, fmt.Errorf("%w; failed to commit", err)
 	}
-	
+
 	return tblToStats, err
 }
 
