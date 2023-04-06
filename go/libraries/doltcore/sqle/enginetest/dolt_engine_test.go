@@ -1940,7 +1940,7 @@ func TestScriptsPrepared(t *testing.T) {
 		skipped = append(skipped, newFormatSkippedScripts...)
 	}
 	skipPreparedTests(t)
-	h := newDoltHarness(t).WithSkippedQueries(skipped)
+	h := newDoltHarness(t).WithSkippedQueries(skipped).WithParallelism(1)
 	defer h.Close()
 	enginetest.TestScriptsPrepared(t, h)
 }
