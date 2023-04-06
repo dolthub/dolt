@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// TODO: change name to ClientStateReader, move out of env package
 type RepoStateReader interface {
 	CWBHeadRef() ref.DoltRef
 	CWBHeadSpec() *doltdb.CommitSpec
