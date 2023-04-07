@@ -293,6 +293,13 @@ func (se *SqlEngine) GetUnderlyingEngine() *gms.Engine {
 }
 
 func (se *SqlEngine) Close() error {
+	dbs := se.provider.AllDatabases(sql.NewEmptyContext())
+	for _, db := range dbs {
+		err := db.(dsqle.Database).DbData().Ddb.Close()
+		if err != nil {
+			return err
+		}
+	}
 	if se.engine != nil {
 		return se.engine.Close()
 	}
