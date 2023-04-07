@@ -437,12 +437,14 @@ func TestTruncate(t *testing.T) {
 func TestConvert(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestConvertPrepared(t, h)}}
+	enginetest.TestConvertPrepared(t, h)
+}
 
 func TestConvertPrepared(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestConvertPrepared(t, h)}
+	enginetest.TestConvertPrepared(t, h)
+}
 
 func TestScripts(t *testing.T) {
 	var skipped []string
