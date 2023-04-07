@@ -36,40 +36,8 @@ type SessionStateAdapter struct {
 	branches map[string]env.BranchConfig
 }
 
-func (s SessionStateAdapter) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
-	sqlCtx, ok := ctx.(*sql.Context)
-	if !ok {
-		return fmt.Errorf("non-sql context passed to SessionStateAdapter")
-	}
-	roots, _ := s.session.GetRoots(sqlCtx, s.dbName)
-	roots.Staged = newRoot
-	return s.session.SetRoots(ctx.(*sql.Context), s.dbName, roots)
-}
-
-func (s SessionStateAdapter) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
-	sqlCtx, ok := ctx.(*sql.Context)
-	if !ok {
-		return fmt.Errorf("non-sql context passed to SessionStateAdapter")
-	}
-	roots, _ := s.session.GetRoots(sqlCtx, s.dbName)
-	roots.Working = newRoot
-	return s.session.SetRoots(ctx.(*sql.Context), s.dbName, roots)
-}
-
 func (s SessionStateAdapter) SetCWBHeadRef(_ context.Context, _ ref.MarshalableRef) error {
 	return fmt.Errorf("Cannot set cwb head ref with a SessionStateAdapter")
-}
-
-func (s SessionStateAdapter) AbortMerge(_ context.Context) error {
-	return fmt.Errorf("Cannot abort merge with a SessionStateAdapter")
-}
-
-func (s SessionStateAdapter) ClearMerge(_ context.Context) error {
-	return nil
-}
-
-func (s SessionStateAdapter) StartMerge(_ context.Context, _ *doltdb.Commit) error {
-	return fmt.Errorf("Cannot start merge with a SessionStateAdapter")
 }
 
 var _ env.RepoStateReader = SessionStateAdapter{}
@@ -116,32 +84,6 @@ func (s SessionStateAdapter) CWBHeadSpec() *doltdb.CommitSpec {
 		panic(err)
 	}
 	return spec
-}
-
-func (s SessionStateAdapter) IsMergeActive(ctx context.Context) (bool, error) {
-	workingSet, err := s.session.WorkingSet(sql.NewContext(context.Background()), s.dbName)
-	if err != nil {
-		return false, err
-	}
-
-	return workingSet.MergeActive(), nil
-}
-
-func (s SessionStateAdapter) GetMergeCommit(ctx context.Context) (*doltdb.Commit, error) {
-	workingSet, err := s.session.WorkingSet(sql.NewContext(context.Background()), s.dbName)
-	if err != nil {
-		return nil, err
-	}
-	return workingSet.MergeState().Commit(), nil
-}
-
-func (s SessionStateAdapter) GetPreMergeWorking(ctx context.Context) (*doltdb.RootValue, error) {
-	workingSet, err := s.session.WorkingSet(sql.NewContext(context.Background()), s.dbName)
-	if err != nil {
-		return nil, err
-	}
-
-	return workingSet.MergeState().PreMergeWorkingRoot(), nil
 }
 
 func (s SessionStateAdapter) GetRemotes() (map[string]env.Remote, error) {
