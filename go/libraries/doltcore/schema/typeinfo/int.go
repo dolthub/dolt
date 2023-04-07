@@ -120,9 +120,12 @@ func (ti *intType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueR
 	if v == nil {
 		return types.NullValue, nil
 	}
-	intVal, _, err := ti.sqlIntType.Convert(v)
+	intVal, inRange, err := ti.sqlIntType.Convert(v)
 	if err != nil {
 		return nil, err
+	}
+	if !inRange {
+		return nil, sql.ErrValueOutOfRange.New(v, ti.sqlIntType)
 	}
 	switch val := intVal.(type) {
 	case int8:
