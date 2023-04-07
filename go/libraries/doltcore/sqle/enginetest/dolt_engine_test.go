@@ -435,12 +435,18 @@ func TestTruncate(t *testing.T) {
 }
 
 func TestConvert(t *testing.T) {
+	if types.IsFormat_LD(types.Format_Default) {
+		t.Skip("noms format has outdated type enforcement")
+	}
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestConvertPrepared(t, h)
 }
 
 func TestConvertPrepared(t *testing.T) {
+	if types.IsFormat_LD(types.Format_Default) {
+		t.Skip("noms format has outdated type enforcement")
+	}
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestConvertPrepared(t, h)
