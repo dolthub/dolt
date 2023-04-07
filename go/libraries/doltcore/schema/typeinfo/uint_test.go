@@ -119,8 +119,8 @@ func TestUintConvertValueToNomsValue(t *testing.T) {
 		{
 			Uint24Type,
 			int32(math.MaxInt32),
-			0,
-			true,
+			1<<24 - 1,
+			false,
 		},
 	}
 
