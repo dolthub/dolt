@@ -427,7 +427,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	if err != nil {
 		return err
 	}
-	
+
 	if shouldResetWorkingSet {
 		branchHeadRef := dEnv.RepoStateReader().CWBHeadRef()
 		// reset the source branch's working set to the branch head, leaving the source branch unchanged

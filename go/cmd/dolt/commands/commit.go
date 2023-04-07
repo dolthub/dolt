@@ -212,7 +212,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 			if errRes != nil {
 				return handleResetError(errRes, usage)
 			}
-			
+
 			err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
 			if err != nil {
 				return handleResetError(err, usage)
@@ -236,7 +236,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 			if errRes != nil {
 				return handleResetError(errRes, usage)
 			}
-			
+
 			err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
 			if err != nil {
 				return handleResetError(err, usage)
