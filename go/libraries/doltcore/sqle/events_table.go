@@ -20,13 +20,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // EventsTableSchema is a fixed dolt schema for the 'dolt_events' table. Has 12 columns.
@@ -321,7 +321,7 @@ func getEventDetailsFromDoltEventRow(row sql.Row) (sql.EventDetails, error) {
 		}
 	}
 
-	if preserve, ok := row[6].(int8); ok {
+	if preserve, ok := row[6].(int8); ok{
 		if preserve == 1 {
 			ed.OnCompletionPreserve = true
 		}
