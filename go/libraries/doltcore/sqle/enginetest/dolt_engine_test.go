@@ -434,6 +434,24 @@ func TestTruncate(t *testing.T) {
 	enginetest.TestTruncate(t, h)
 }
 
+func TestConvert(t *testing.T) {
+	if types.IsFormat_LD(types.Format_Default) {
+		t.Skip("noms format has outdated type enforcement")
+	}
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestConvertPrepared(t, h)
+}
+
+func TestConvertPrepared(t *testing.T) {
+	if types.IsFormat_LD(types.Format_Default) {
+		t.Skip("noms format has outdated type enforcement")
+	}
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestConvertPrepared(t, h)
+}
+
 func TestScripts(t *testing.T) {
 	var skipped []string
 	if types.IsFormat_DOLT(types.Format_Default) {

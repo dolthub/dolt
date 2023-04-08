@@ -129,7 +129,7 @@ func (r *JSONReader) convToSqlRow(rowMap map[string]interface{}) (sql.Row, error
 			return nil, fmt.Errorf("column %s not found in schema", k)
 		}
 
-		v, err := col.TypeInfo.ToSqlType().Convert(v)
+		v, _, err := col.TypeInfo.ToSqlType().Convert(v)
 		if err != nil {
 			return nil, err
 		}

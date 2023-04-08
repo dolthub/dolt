@@ -127,11 +127,11 @@ func (itr *RemoteItr) Next(*sql.Context) (sql.Row, error) {
 
 	remote := itr.remotes[itr.idx]
 
-	fs, err := types.JSON.Convert(remote.FetchSpecs)
+	fs, _, err := types.JSON.Convert(remote.FetchSpecs)
 	if err != nil {
 		return nil, err
 	}
-	params, err := types.JSON.Convert(remote.Params)
+	params, _, err := types.JSON.Convert(remote.Params)
 	if err != nil {
 		return nil, err
 	}

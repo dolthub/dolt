@@ -103,7 +103,7 @@ func (ti *datetimeType) ConvertValueToNomsValue(ctx context.Context, vrw types.V
 	if v == nil {
 		return types.NullValue, nil
 	}
-	timeVal, err := ti.sqlDatetimeType.Convert(v)
+	timeVal, _, err := ti.sqlDatetimeType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func (ti *datetimeType) GetTypeParams() map[string]string {
 // IsValid implements TypeInfo interface.
 func (ti *datetimeType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Timestamp); ok {
-		_, err := ti.sqlDatetimeType.Convert(time.Time(val))
+		_, _, err := ti.sqlDatetimeType.Convert(time.Time(val))
 		if err != nil {
 			return false
 		}

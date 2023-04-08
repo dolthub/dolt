@@ -1057,7 +1057,7 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	convertedVal, err := sqltypes.Int64.Convert(value)
+	convertedVal, _, err := sqltypes.Int64.Convert(value)
 	if err != nil {
 		return err
 	}

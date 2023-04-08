@@ -105,7 +105,7 @@ func (ti *varBinaryType) ConvertValueToNomsValue(ctx context.Context, vrw types.
 	if v == nil {
 		return types.NullValue, nil
 	}
-	strVal, err := ti.sqlBinaryType.Convert(v)
+	strVal, _, err := ti.sqlBinaryType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
