@@ -150,6 +150,7 @@ var writeableSystemTables = []string{
 	SchemasTableName,
 	ProceduresTableName,
 	DocTableName,
+	EventsTableName,
 }
 
 var persistedSystemTables = []string{
@@ -157,6 +158,7 @@ var persistedSystemTables = []string{
 	DoltQueryCatalogTableName,
 	SchemasTableName,
 	ProceduresTableName,
+	EventsTableName,
 }
 
 var generatedSystemTables = []string{
@@ -313,4 +315,33 @@ const (
 	ProceduresTableCreatedAtCol = "created_at"
 	// ProceduresTableModifiedAtCol is the time that the stored procedure was last modified, in UTC.
 	ProceduresTableModifiedAtCol = "modified_at"
+)
+
+const (
+	// EventsTableName is the name of the dolt events table
+	EventsTableName = "dolt_events"
+	// EventsTableEventNameCol is the name of the event. Will always be lowercase.
+	EventsTableEventNameCol = "name"
+	// EventsTableDefinerCol is the definer of the event.
+	EventsTableDefinerCol = "definer"
+	// EventsTableExecuteAtCol is the ON SCHEDULE AT timestamp of the event.
+	EventsTableExecuteAtCol = "execute_at"
+	// EventsTableExecuteEveryCol is the ON SCHEDULE EVERY interval of the event.
+	EventsTableExecuteEveryCol = "execute_every"
+	// EventsTableStartsCol is the ON SCHEDULE EVERY ... STARTS timestamp of the event.
+	EventsTableStartsCol = "starts"
+	// EventsTableEndsCol is the SCHEDULE EVERY ... ENDS timestamp of the event.
+	EventsTableEndsCol = "ends"
+	// EventsTablePreserveCol is the bool on whether to PRESERVE the event after COMPLETION of the event.
+	EventsTablePreserveCol = "preserve"
+	// EventsTableStatusCol is the status of the event.
+	EventsTableStatusCol = "status"
+	// EventsTableCommentCol is the comment of the event.
+	EventsTableCommentCol = "comment"
+	// EventsTableDefinitionCol is the definition of the event, which is also called 'event_body'.
+	EventsTableDefinitionCol = "definition"
+	// EventsTableCreatedCol is the time that the event was created at, in UTC.
+	EventsTableCreatedCol = "created"
+	// EventsTableLastAlteredCol is the time that the event was last altered, in UTC.
+	EventsTableLastAlteredCol = "last_altered"
 )

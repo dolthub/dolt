@@ -937,6 +937,12 @@ func TestStoredProcedures(t *testing.T) {
 	enginetest.TestStoredProcedures(t, h)
 }
 
+func TestEvents(t *testing.T) {
+	doltHarness := newDoltHarness(t)
+	defer doltHarness.Close()
+	enginetest.TestEvents(t, doltHarness)
+}
+
 func TestCallAsOf(t *testing.T) {
 	for _, script := range DoltCallAsOf {
 		func() {

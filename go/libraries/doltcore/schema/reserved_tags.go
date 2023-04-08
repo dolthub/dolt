@@ -108,3 +108,19 @@ const (
 	DoltConflictsOurCardinalityTag
 	DoltConflictsTheirCardinalityTag
 )
+
+// Tags for the events table
+const (
+	DoltEventsNameTag = iota + SystemTableReservedMin + uint64(8000)
+	DoltEventsDefinerTag
+	DoltEventsExecuteAtTag
+	DoltEventsExecuteEveryTag
+	DoltEventsStartsTag
+	DoltEventsEndsTag
+	DoltEventsPreserveTag
+	DoltEventsStatusTag
+	DoltEventsCommentTag
+	DoltEventsDefinitionTag
+	DoltEventsCreatedTag
+	DoltEventsLastAlteredTag
+)

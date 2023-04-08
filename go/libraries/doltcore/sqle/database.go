@@ -85,6 +85,7 @@ var _ sql.TemporaryTableDatabase = Database{}
 var _ sql.TriggerDatabase = Database{}
 var _ sql.VersionedDatabase = Database{}
 var _ sql.ViewDatabase = Database{}
+var _ sql.EventDatabase = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -1174,6 +1175,28 @@ func (db Database) CreateTrigger(ctx *sql.Context, definition sql.TriggerDefinit
 func (db Database) DropTrigger(ctx *sql.Context, name string) error {
 	//TODO: add a sql error and use that as the param error instead
 	return db.dropFragFromSchemasTable(ctx, "trigger", name, sql.ErrTriggerDoesNotExist.New(name))
+}
+
+func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDetails, bool, error) {
+	eventsTbl, err := GetDoltEventsTable(ctx, db)
+	if err != nil {
+		return sql.EventDetails{}, false, err
+	} else if eventsTbl == nil {
+		return sql.EventDetails{}, false, nil
+	}
+	return GetEventFromDoltEvents(ctx, eventsTbl, name)
+}
+
+func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDetails, error) {
+	return GetAllDoltEvents(ctx, db)
+}
+
+func (db Database) SaveEvent(ctx *sql.Context, ed sql.EventDetails) error {
+	return AddEventToDoltEventsTable(ctx, db, ed)
+}
+
+func (db Database) DropEvent(ctx *sql.Context, name string) error {
+	return DropEventFromDoltEventsTable(ctx, db, name)
 }
 
 // GetStoredProcedure implements sql.StoredProcedureDatabase.
