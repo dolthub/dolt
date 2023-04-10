@@ -635,7 +635,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 // This method can fail if another client updates the working set at the same time.
 func (dEnv *DoltEnv) UpdateWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
 	currentWs, err := dEnv.WorkingSet(ctx)
-	if err != nil {
+	if err != doltdb.ErrWorkingSetNotFound && err != nil {
 		return err
 	}
 
