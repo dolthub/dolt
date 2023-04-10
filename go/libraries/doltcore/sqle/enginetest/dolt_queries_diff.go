@@ -1343,6 +1343,49 @@ inner join t on to_pk = t.pk;`,
 			},
 		},
 	},
+	{
+		Name: "diff on dolt_events schema",
+		SetUpScript: []string{
+			"CREATE TABLE messages (id INT PRIMARY KEY AUTO_INCREMENT, message VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL);",
+			"CREATE EVENT IF NOT EXISTS msg_event ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 YEAR DISABLE DO INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 1',NOW());",
+			"CREATE EVENT my_commit ON SCHEDULE EVERY 1 DAY DISABLE DO CALL DOLT_COMMIT('--allow-empty','-am','my daily commit');",
+			"CALL DOLT_ADD('.')",
+			"SET @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'Creating table and events')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT name, definer, execute_every, preserve, status, comment, definition FROM dolt_events;",
+				Expected: []sql.Row{
+					{"msg_event", "`root`@`localhost`", nil, 0, "DISABLE", "", "INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 1',NOW())"},
+					{"my_commit", "`root`@`localhost`", "1 DAY", 0, "DISABLE", "", "CALL DOLT_COMMIT('--allow-empty','-am','my daily commit')"},
+				},
+			},
+			{
+				Query:       "CREATE EVENT msg_event ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 YEAR DISABLE DO INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 2',NOW());",
+				ExpectedErr: sql.ErrEventAlreadyExists,
+			},
+			{
+				Query:            "DROP EVENT msg_event;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "CREATE EVENT msg_event ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 YEAR ON COMPLETION PRESERVE DISABLE DO INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 2',NOW());",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT from_preserve, from_definition, to_preserve, to_definition FROM DOLT_DIFF('HEAD', 'WORKING', 'dolt_events')",
+				Expected: []sql.Row{{0, "INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 1',NOW())", 1, "INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 2',NOW())"}},
+			},
+			{
+				Query: "SELECT name, definer, execute_every, preserve, status, comment, definition FROM dolt_events;",
+				Expected: []sql.Row{
+					{"msg_event", "`root`@`localhost`", nil, 1, "DISABLE", "", "INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 2',NOW())"},
+					{"my_commit", "`root`@`localhost`", "1 DAY", 0, "DISABLE", "", "CALL DOLT_COMMIT('--allow-empty','-am','my daily commit')"},
+				},
+			},
+		},
+	},
 }
 
 var DiffStatTableFunctionScriptTests = []queries.ScriptTest{
