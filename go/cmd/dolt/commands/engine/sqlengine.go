@@ -294,7 +294,17 @@ func (se *SqlEngine) GetUnderlyingEngine() *gms.Engine {
 
 func (se *SqlEngine) Close() error {
 	if se.engine != nil {
-		return se.engine.Close()
+		err := se.engine.Close()
+		if err != nil {
+			return err
+		}
+	}
+	dbs := se.provider.AllDatabases(sql.NewEmptyContext())
+	for _, db := range dbs {
+		err := db.(dsqle.Database).DbData().Ddb.Close()
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
