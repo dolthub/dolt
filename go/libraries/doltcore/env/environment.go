@@ -637,7 +637,12 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 // UpdateWorkingSet updates the working set for the current working branch to the value given.
 // This method can fail if another client updates the working set at the same time.
 func (dEnv *DoltEnv) UpdateWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
-	h, err := ws.HashOf()
+	currentWs, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return err
+	}
+	
+	h, err := currentWs.HashOf()
 	if err != nil {
 		return err
 	}
