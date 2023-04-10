@@ -628,9 +628,6 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 		wsRef = ws.Ref()
 	}
 
-	// TODO: add actual trace logging here
-	// logrus.Infof("Updating working root to %s", newRoot.DebugString(context.Background(), true))
-
 	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, dEnv.workingSetMeta())
 }
 
@@ -642,9 +639,12 @@ func (dEnv *DoltEnv) UpdateWorkingSet(ctx context.Context, ws *doltdb.WorkingSet
 		return err
 	}
 	
-	h, err := currentWs.HashOf()
-	if err != nil {
-		return err
+	var h hash.Hash
+	if currentWs != nil {
+		h, err = currentWs.HashOf()
+		if err != nil {
+			return err
+		}
 	}
 
 	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws, h, dEnv.workingSetMeta())
