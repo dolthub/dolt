@@ -938,10 +938,6 @@ func TestStoredProcedures(t *testing.T) {
 }
 
 func TestEvents(t *testing.T) {
-	// EVENTS are not implemented for old format
-	if types.IsFormat_LD(types.Format_Default) {
-		t.Skip()
-	}
 	doltHarness := newDoltHarness(t)
 	defer doltHarness.Close()
 	enginetest.TestEvents(t, doltHarness)

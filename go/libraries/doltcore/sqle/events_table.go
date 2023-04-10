@@ -16,11 +16,13 @@ package sqle
 
 import (
 	"fmt"
+
 	"io"
 	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -321,11 +323,7 @@ func getEventDetailsFromDoltEventRow(row sql.Row) (sql.EventDetails, error) {
 		}
 	}
 
-	if preserve, ok := row[6].(int8); ok {
-		if preserve == 1 {
-			ed.OnCompletionPreserve = true
-		}
-	} else {
+	if ed.OnCompletionPreserve, err = gmstypes.ConvertToBool(row[6]); err != nil {
 		return sql.EventDetails{}, missingValue.New(doltdb.EventsTablePreserveCol, row)
 	}
 	if status, ok := row[7].(string); ok {
