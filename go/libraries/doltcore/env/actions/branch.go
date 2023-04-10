@@ -421,7 +421,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	}
 
 	ws, err := dEnv.WorkingSet(ctx)
-	// For backwards compatibility we support the branch not having a working set, but generally speaking it already 
+	// For backwards compatibility we support the branch not having a working set, but generally speaking it already
 	// should have one
 	if err == doltdb.ErrWorkingSetNotFound {
 		wsRef, err := ref.WorkingSetRefForHead(branchRef)
