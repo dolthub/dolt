@@ -1357,8 +1357,8 @@ inner join t on to_pk = t.pk;`,
 			{
 				Query: "SELECT name, definer, execute_every, preserve, status, comment, definition FROM dolt_events;",
 				Expected: []sql.Row{
-					{"msg_event", "`root`@`localhost`", nil, 0, "DISABLE", "", "INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 1',NOW())"},
-					{"my_commit", "`root`@`localhost`", "1 DAY", 0, "DISABLE", "", "CALL DOLT_COMMIT('--allow-empty','-am','my daily commit')"},
+					{"msg_event", "`root`@`localhost`", nil, "false", "DISABLE", "", "INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 1',NOW())"},
+					{"my_commit", "`root`@`localhost`", "1 DAY", "false", "DISABLE", "", "CALL DOLT_COMMIT('--allow-empty','-am','my daily commit')"},
 				},
 			},
 			{
@@ -1375,13 +1375,13 @@ inner join t on to_pk = t.pk;`,
 			},
 			{
 				Query:    "SELECT from_preserve, from_definition, to_preserve, to_definition FROM DOLT_DIFF('HEAD', 'WORKING', 'dolt_events')",
-				Expected: []sql.Row{{0, "INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 1',NOW())", 1, "INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 2',NOW())"}},
+				Expected: []sql.Row{{"false", "INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 1',NOW())", "true", "INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 2',NOW())"}},
 			},
 			{
 				Query: "SELECT name, definer, execute_every, preserve, status, comment, definition FROM dolt_events;",
 				Expected: []sql.Row{
-					{"msg_event", "`root`@`localhost`", nil, 1, "DISABLE", "", "INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 2',NOW())"},
-					{"my_commit", "`root`@`localhost`", "1 DAY", 0, "DISABLE", "", "CALL DOLT_COMMIT('--allow-empty','-am','my daily commit')"},
+					{"msg_event", "`root`@`localhost`", nil, "true", "DISABLE", "", "INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 2',NOW())"},
+					{"my_commit", "`root`@`localhost`", "1 DAY", "false", "DISABLE", "", "CALL DOLT_COMMIT('--allow-empty','-am','my daily commit')"},
 				},
 			},
 		},

@@ -39,7 +39,7 @@ func EventsTableSchema() schema.Schema {
 		schema.NewColumn(doltdb.EventsTableExecuteEveryCol, schema.DoltEventsExecuteEveryTag, types.StringKind, false),
 		schema.NewColumn(doltdb.EventsTableStartsCol, schema.DoltEventsStartsTag, types.TimestampKind, false),
 		schema.NewColumn(doltdb.EventsTableEndsCol, schema.DoltEventsEndsTag, types.TimestampKind, false),
-		schema.NewColumn(doltdb.EventsTablePreserveCol, schema.DoltEventsPreserveTag, types.BoolKind, false),
+		schema.NewColumn(doltdb.EventsTablePreserveCol, schema.DoltEventsPreserveTag, types.StringKind, false),
 		schema.NewColumn(doltdb.EventsTableStatusCol, schema.DoltEventsStatusTag, types.StringKind, false),
 		schema.NewColumn(doltdb.EventsTableCommentCol, schema.DoltEventsCommentTag, types.StringKind, false),
 		schema.NewColumn(doltdb.EventsTableDefinitionCol, schema.DoltEventsDefinitionTag, types.StringKind, false),
@@ -263,9 +263,9 @@ func getDoltEventRowFromEventDetails(ed sql.EventDetails) sql.Row {
 		}
 	}
 
-	var preserve = int8(0)
+	var preserve = "false"
 	if ed.OnCompletionPreserve {
-		preserve = 1
+		preserve = "true"
 	}
 
 	return sql.Row{
