@@ -158,12 +158,12 @@ func ResetHard(
 	if err != nil {
 		return err
 	}
-	
+
 	h, err := currentWs.HashOf()
 	if err != nil {
 		return err
 	}
-	
+
 	err = dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws, h, dEnv.NewWorkingSetMeta("reset hard"))
 	if err != nil {
 		return err

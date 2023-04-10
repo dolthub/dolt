@@ -638,7 +638,7 @@ func (dEnv *DoltEnv) UpdateWorkingSet(ctx context.Context, ws *doltdb.WorkingSet
 	if err != nil {
 		return err
 	}
-	
+
 	var h hash.Hash
 	if currentWs != nil {
 		h, err = currentWs.HashOf()

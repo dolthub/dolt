@@ -264,7 +264,7 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	return nil
 }
 
-// InitEmptyClonedRepo inits an empty, newly cloned repo. This would be unnecessary if we properly initialized the 
+// InitEmptyClonedRepo inits an empty, newly cloned repo. This would be unnecessary if we properly initialized the
 // storage for a repository when we created it on dolthub. If we do that, this code can be removed.
 func InitEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 	name := dEnv.Config.GetStringOrDefault(env.UserNameKey, "")

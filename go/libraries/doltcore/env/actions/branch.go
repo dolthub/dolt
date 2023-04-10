@@ -327,7 +327,7 @@ func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoi
 	return CreateBranchOnDB(ctx, dbData.Ddb, newBranch, startingPoint, force, dbData.Rsr.CWBHeadRef())
 }
 
-// RootsForBranch returns the roots needed for a branch checkout. |roots.Head| should be the pre-checkout head. The 
+// RootsForBranch returns the roots needed for a branch checkout. |roots.Head| should be the pre-checkout head. The
 // returned roots struct has |Head| set to |branchRoot|.
 func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, force bool) (doltdb.Roots, error) {
 	conflicts := set.NewStrSet([]string{})
@@ -369,7 +369,7 @@ func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.
 func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
 	branchRef := ref.NewBranchRef(brName)
 	initialHeadRef := dEnv.RepoStateReader().CWBHeadRef()
-	
+
 	db := dEnv.DoltDB
 	hasRef, err := db.HasRef(ctx, branchRef)
 	if err != nil {
@@ -389,7 +389,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	}
 
 	initialWs, err := dEnv.WorkingSet(ctx)
-	
+
 	if err != nil {
 		// working set does not exist, ignore error and skip the compatibility check below
 	} else if !force {
@@ -401,7 +401,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 
 	shouldResetWorkingSet := true
 	initialRoots, err := dEnv.Roots(ctx)
-	
+
 	// roots will be empty/nil if the working set is not set (working set is not set if the current branch was deleted)
 	if errors.Is(err, doltdb.ErrBranchNotFound) || errors.Is(err, doltdb.ErrWorkingSetNotFound) {
 		initialRoots, _ = dEnv.RecoveryRoots(ctx)
@@ -419,17 +419,17 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	if err != nil {
 		return err
 	}
-	
+
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		return err
 	}
-	
+
 	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged))
 	if err != nil {
 		return err
 	}
-	
+
 	if shouldResetWorkingSet {
 		// reset the source branch's working set to the branch head, leaving the source branch unchanged
 		err = ResetHard(ctx, dEnv, "", initialRoots, initialHeadRef, initialWs)
