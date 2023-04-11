@@ -16,31 +16,16 @@ package val
 
 import (
 	"math/rand"
-	"sort"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/stretchr/testify/assert"
 )
 
 var testPool = pool.NewBuffPool()
 
-// todo(andy): randomize test seed
-var testRand = rand.New(rand.NewSource(1))
-
 func TestNewTuple(t *testing.T) {
-	t.Run("test tuple round trip", func(t *testing.T) {
-		roundTripTupleFields(t)
-	})
-	t.Run("test tuple get many", func(t *testing.T) {
-		testTupleGetMany(t)
-	})
-}
-
-func roundTripTupleFields(t *testing.T) {
-	for n := 0; n < 100; n++ {
+	for n := 0; n < 1024; n++ {
 		fields := randomByteFields(t)
 		tup := NewTuple(testPool, fields...)
 		for i, field := range fields {
@@ -49,31 +34,25 @@ func roundTripTupleFields(t *testing.T) {
 	}
 }
 
-func testTupleGetMany(t *testing.T) {
-	for n := 0; n < 1000; n++ {
+func TestTuplePrefix(t *testing.T) {
+	for n := 0; n < 1024; n++ {
 		fields := randomByteFields(t)
-		tup := NewTuple(testPool, fields...)
-
-		// GetManyFields must not be called with indexes that are greater than
-		// or equal to the tuple count.
-		indexes := randomFieldIndexes(fields)
-		for i := len(indexes) - 1; i >= 0; i-- {
-			idx := indexes[i]
-			if idx < tup.Count() {
-				break
-			}
-			require.Equal(t, 0, len(fields[idx]))
-			indexes = indexes[:i]
+		full := NewTuple(testPool, fields...)
+		for i := 0; i <= len(fields); i++ {
+			exp := NewTuple(testPool, fields[:i]...)
+			act := TuplePrefix(testPool, full, i)
+			assert.Equal(t, exp, act)
 		}
-		if len(indexes) == 0 {
-			continue
-		}
+	}
+}
 
-		actual := tup.GetManyFields(indexes, make([][]byte, len(indexes)))
-
-		for k, idx := range indexes {
-			exp := fields[idx]
-			act := actual[k]
+func TestTupleSuffix(t *testing.T) {
+	for n := 0; n < 1024; n++ {
+		fields := randomByteFields(t)
+		full := NewTuple(testPool, fields...)
+		for i := 0; i <= full.Count(); i++ {
+			exp := NewTuple(testPool, fields[i:]...)
+			act := TupleSuffix(testPool, full, full.Count()-i)
 			assert.Equal(t, exp, act)
 		}
 	}
@@ -92,24 +71,4 @@ func randomByteFields(t *testing.T) (fields [][]byte) {
 		rand.Read(fields[i])
 	}
 	return
-}
-
-func randomFieldIndexes(fields [][]byte) []int {
-	indexes := make([]int, len(fields))
-	for i := range indexes {
-		indexes[i] = i
-	}
-
-	k := testRand.Intn(len(indexes))
-	if k == 0 {
-		k++
-	}
-
-	testRand.Shuffle(len(indexes), func(i, j int) {
-		indexes[i], indexes[j] = indexes[j], indexes[i]
-	})
-	indexes = indexes[:k]
-	sort.Ints(indexes)
-
-	return indexes
 }
