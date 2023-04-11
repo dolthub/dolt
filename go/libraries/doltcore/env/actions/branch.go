@@ -327,9 +327,9 @@ func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoi
 	return CreateBranchOnDB(ctx, dbData.Ddb, newBranch, startingPoint, force, dbData.Rsr.CWBHeadRef())
 }
 
-// RootsForBranch returns the roots needed for a branch checkout. |roots.Head| should be the pre-checkout head. The
+// rootsForBranch returns the roots needed for a branch checkout. |roots.Head| should be the pre-checkout head. The
 // returned roots struct has |Head| set to |branchRoot|.
-func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, force bool) (doltdb.Roots, error) {
+func rootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, force bool) (doltdb.Roots, error) {
 	conflicts := set.NewStrSet([]string{})
 	if roots.Head == nil {
 		roots.Working = branchRoot
@@ -352,12 +352,12 @@ func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.
 		return doltdb.Roots{}, CheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
 
-	roots.Working, err = overwriteRoot(ctx, branchRoot, wrkTblHashes)
+	roots.Working, err = writeTableHashes(ctx, branchRoot, wrkTblHashes)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
-	roots.Staged, err = overwriteRoot(ctx, branchRoot, stgTblHashes)
+	roots.Staged, err = writeTableHashes(ctx, branchRoot, stgTblHashes)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -383,7 +383,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		return doltdb.ErrAlreadyOnBranch
 	}
 
-	branchRoot, err := BranchRoot(ctx, db, brName)
+	branchHead, err := branchHeadRoot(ctx, db, brName)
 	if err != nil {
 		return err
 	}
@@ -393,9 +393,8 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	if err != nil {
 		// working set does not exist, ignore error and skip the compatibility check below
 	} else if !force {
-		err = checkWorkingSetCompatibility(ctx, dEnv, branchRef, initialWs)
-		if err != nil {
-			return err
+		if checkoutWouldStompWorkingSetChanges(ctx, dEnv, branchRef, initialWs) {
+			return ErrWorkingSetsOnBothBranches
 		}
 	}
 
@@ -410,10 +409,17 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		return err
 	}
 
-	newRoots, err := RootsForBranch(ctx, initialRoots, branchRoot, force)
+	
+	newRoots, err := rootsForBranch(ctx, initialRoots, branchHead, force)
 	if err != nil {
 		return err
 	}
+	
+	headHash, _ := newRoots.Head.HashOf()
+	stagedHash, _ := newRoots.Staged.HashOf()
+	workingHash, _ := newRoots.Working.HashOf()
+	
+	fmt.Sprintf("CheckoutBranch: %s %s %s %s", headHash.String(), stagedHash.String(), workingHash.String(), branchRef.String())
 
 	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
 	if err != nil {
@@ -449,9 +455,8 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	return nil
 }
 
-// BranchRoot returns the root value at the branch with the name given
-// TODO: this belongs in DoltDB, maybe
-func BranchRoot(ctx context.Context, db *doltdb.DoltDB, brName string) (*doltdb.RootValue, error) {
+// branchHeadRoot returns the root value at the branch head with the name given
+func branchHeadRoot(ctx context.Context, db *doltdb.DoltDB, brName string) (*doltdb.RootValue, error) {
 	cs, err := doltdb.NewCommitSpec(brName)
 	if err != nil {
 		return nil, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
@@ -541,9 +546,9 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot *dolt
 	return resultMap, nil
 }
 
-// overwriteRoot writes new table hash values for the root given and returns it.
+// writeTableHashes writes new table hash values for the root given and returns it.
 // This is an inexpensive and convenient way of replacing all the tables at once.
-func overwriteRoot(ctx context.Context, head *doltdb.RootValue, tblHashes map[string]hash.Hash) (*doltdb.RootValue, error) {
+func writeTableHashes(ctx context.Context, head *doltdb.RootValue, tblHashes map[string]hash.Hash) (*doltdb.RootValue, error) {
 	names, err := head.GetTableNames(ctx)
 	if err != nil {
 		return nil, err
@@ -575,39 +580,33 @@ func overwriteRoot(ctx context.Context, head *doltdb.RootValue, tblHashes map[st
 	return head, nil
 }
 
-// checkWorkingSetCompatibility checks that the current working set is "compatible" with the dest working set.
+// checkoutWouldStompWorkingSetChanges checks that the current working set is "compatible" with the dest working set.
 // This means that if both working sets are present (ie there are changes on both source and dest branches),
 // we check if the changes are identical before allowing a clobbering checkout.
 // Working set errors are ignored by this function, because they are properly handled elsewhere.
-func checkWorkingSetCompatibility(ctx context.Context, dEnv *env.DoltEnv, branchRef ref.BranchRef, currentWs *doltdb.WorkingSet) error {
+func checkoutWouldStompWorkingSetChanges(ctx context.Context, dEnv *env.DoltEnv, branchRef ref.BranchRef, currentWs *doltdb.WorkingSet) bool {
 	db := dEnv.DoltDB
 	destWsRef, err := ref.WorkingSetRefForHead(branchRef)
 	if err != nil {
-		// dest working set does not exist, skip check
-		return nil
+		return false
 	}
+	
 	destWs, err := db.ResolveWorkingSet(ctx, destWsRef)
 	if err != nil {
-		// dest working set does not resolve, skip check
-		return nil
+		return false
 	}
 
 	sourceHasChanges, sourceHash, err := detectWorkingSetChanges(currentWs)
 	if err != nil {
-		// error detecting source changes, skip check
-		return nil
+		return false
 	}
+	
 	destHasChanges, destHash, err := detectWorkingSetChanges(destWs)
 	if err != nil {
-		// error detecting dest changes, skip check
-		return nil
+		return false
 	}
-	areHashesEqual := sourceHash.Equal(destHash)
-
-	if sourceHasChanges && destHasChanges && !areHashesEqual {
-		return ErrWorkingSetsOnBothBranches
-	}
-	return nil
+	
+	return sourceHasChanges && destHasChanges && !sourceHash.Equal(destHash)
 }
 
 // detectWorkingSetChanges returns a boolean indicating whether the working set has changes, and a hash of the changes
