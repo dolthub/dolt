@@ -264,8 +264,9 @@ func resetStaged(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb
 	return roots, nil
 }
 
-// ValidateIsRef validates whether the input parameter is a valid cString
-func ValidateIsRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) bool {
+// IsValidRef validates whether the input parameter is a valid cString
+// TODO: this doesn't belong int his package
+func IsValidRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) bool {
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	if err != nil {
 		return false
