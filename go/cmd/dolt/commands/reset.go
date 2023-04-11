@@ -128,9 +128,7 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				}
 
 				err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
-				if err != nil {
-					return handleResetError(err, usage)
-				}
+				return handleResetError(err, usage)
 			}
 		}
 
