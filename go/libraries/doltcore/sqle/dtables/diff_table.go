@@ -663,7 +663,7 @@ func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	
+
 	toSch, err := dp.to.GetSchema(ctx)
 	if err != nil {
 		return false, err
