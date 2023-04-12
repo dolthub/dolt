@@ -394,7 +394,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	}
 
 	if !force {
-		if checkoutWouldStompWorkingSetChanges(ctx, dEnv, branchRef, initialWs) {
+		if checkoutWouldStompWorkingSetChanges(ctx, dEnv, branchRef) {
 			return ErrWorkingSetsOnBothBranches
 		}
 	}
@@ -410,9 +410,12 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		return err
 	}
 
-	var newRoots doltdb.Roots
-	
 	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
+	if err != nil {
+		return err
+	}
+
+	hasChanges, _, _, err := rootHasUncommittedChanges(initialRoots)
 	if err != nil {
 		return err
 	}
@@ -420,20 +423,41 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	// Only if the current working set has uncommitted changes do we carry them forward to the branch being checked out. 
 	// If this is the case, then the destination branch must *not* have any uncommitted changes, as checked by 
 	// checkoutWouldStompWorkingSetChanges
-	hasChanges, _, err := workingSetHasChanges(initialWs)
-	if err != nil {
-		return err
-	}
 	if !hasChanges {
 		return nil
 	}
 	
-	newRoots, err = rootsForBranch(ctx, initialRoots, branchHead, force)
+	err = transferWorkingChanges(ctx, dEnv, initialRoots, branchHead, branchRef, force)
+	if err != nil {
+		return err
+	}
+
+	if shouldResetWorkingSet {
+		// reset the source branch's working set to the branch head, leaving the source branch unchanged
+		err = ResetHard(ctx, dEnv, "", initialRoots, initialHeadRef, initialWs)
+		if err != nil {
+			return err
+		}
+	}
+	
+	return nil
+}
+
+func transferWorkingChanges(
+		ctx context.Context,
+		dEnv *env.DoltEnv,
+		initialRoots doltdb.Roots,
+		branchHead *doltdb.RootValue,
+		branchRef ref.BranchRef,
+		force bool,
+) error {
+	newRoots, err := rootsForBranch(ctx, initialRoots, branchHead, force)
 	if err != nil {
 		return err
 	}
 
 	ws, err := dEnv.WorkingSet(ctx)
+
 	// For backwards compatibility we support the branch not having a working set, but generally speaking it already
 	// should have one
 	if err == doltdb.ErrWorkingSetNotFound {
@@ -450,15 +474,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	if err != nil {
 		return err
 	}
-
-	if shouldResetWorkingSet {
-		// reset the source branch's working set to the branch head, leaving the source branch unchanged
-		err = ResetHard(ctx, dEnv, "", initialRoots, initialHeadRef, initialWs)
-		if err != nil {
-			return err
-		}
-	}
-
+	
 	return nil
 }
 
@@ -591,43 +607,51 @@ func writeTableHashes(ctx context.Context, head *doltdb.RootValue, tblHashes map
 // This means that if both working sets are present (ie there are changes on both source and dest branches),
 // we check if the changes are identical before allowing a clobbering checkout.
 // Working set errors are ignored by this function, because they are properly handled elsewhere.
-func checkoutWouldStompWorkingSetChanges(ctx context.Context, dEnv *env.DoltEnv, branchRef ref.BranchRef, currentWs *doltdb.WorkingSet) bool {
-	db := dEnv.DoltDB
-	destWsRef, err := ref.WorkingSetRefForHead(branchRef)
+func checkoutWouldStompWorkingSetChanges(ctx context.Context, dEnv *env.DoltEnv, branchRef ref.BranchRef) bool {
+	sourceRoots, err := dEnv.Roots(ctx)
 	if err != nil {
 		return false
 	}
 	
-	destWs, err := db.ResolveWorkingSet(ctx, destWsRef)
+	destRoots, err := dEnv.DoltDB.ResolveBranchRoots(ctx, branchRef)
 	if err != nil {
 		return false
 	}
 
-	sourceHasChanges, sourceHash, err := workingSetHasChanges(currentWs)
+	sourceHasChanges, sourceWorkingHash, sourceStagedHash, err := rootHasUncommittedChanges(sourceRoots)
 	if err != nil {
 		return false
 	}
 	
-	destHasChanges, destHash, err := workingSetHasChanges(destWs)
+	destHasChanges, destWorkingHash, destStagedHash, err := rootHasUncommittedChanges(destRoots)
 	if err != nil {
 		return false
 	}
 	
-	return sourceHasChanges && destHasChanges && !sourceHash.Equal(destHash)
+	// This is a stomping checkout operation if both the source and dest have uncommitted changes, and they're not the
+	// same uncommitted changes
+	return sourceHasChanges && destHasChanges && (sourceWorkingHash != destWorkingHash || sourceStagedHash != destStagedHash)
 }
 
-// workingSetHasChanges returns a boolean indicating whether the working set has changes, and a hash of the changes
-func workingSetHasChanges(ws *doltdb.WorkingSet) (hasChanges bool, wrHash hash.Hash, err error) {
-	wrHash, err = ws.WorkingRoot().HashOf()
+// rootHasUncommittedChanges returns whether the roots given have uncommitted changes, and the hashes of the working and staged roots
+func rootHasUncommittedChanges(roots doltdb.Roots) (hasChanges bool, workingHash hash.Hash, stagedHash hash.Hash, err error) {
+	headHash, err := roots.Head.HashOf()
 	if err != nil {
-		return false, hash.Hash{}, err
+		return false, hash.Hash{}, hash.Hash{}, err
 	}
-	srHash, err := ws.StagedRoot().HashOf()
+
+	workingHash, err = roots.Working.HashOf()
 	if err != nil {
-		return false, hash.Hash{}, err
+		return false, hash.Hash{}, hash.Hash{}, err
 	}
-	hasChanges = !wrHash.Equal(srHash)
-	return hasChanges, wrHash, nil
+
+	stagedHash, err = roots.Staged.HashOf()
+	if err != nil {
+		return false, hash.Hash{}, hash.Hash{}, err
+	}
+
+	hasChanges = workingHash != stagedHash || stagedHash != headHash
+	return hasChanges, workingHash, stagedHash, nil
 }
 
 func IsBranch(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {
