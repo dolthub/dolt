@@ -380,7 +380,7 @@ func (ddb *DoltDB) ResolveBranchRoots(ctx context.Context, branch ref.BranchRef)
 	if err != nil {
 		return Roots{}, err
 	}
-	
+
 	headRoot, err := commitRef.GetRootValue(ctx)
 	if err != nil {
 		return Roots{}, err
@@ -395,14 +395,13 @@ func (ddb *DoltDB) ResolveBranchRoots(ctx context.Context, branch ref.BranchRef)
 	if err != nil {
 		return Roots{}, err
 	}
-	
+
 	return Roots{
 		Head:    headRoot,
 		Working: ws.WorkingRoot(),
 		Staged:  ws.StagedRoot(),
 	}, nil
 }
-
 
 // ResolveTag takes a TagRef and returns the corresponding Tag object.
 func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, error) {

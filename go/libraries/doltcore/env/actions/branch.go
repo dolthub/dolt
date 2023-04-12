@@ -409,19 +409,19 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	} else if err != nil {
 		return err
 	}
-	
+
 	hasChanges, _, _, err := rootHasUncommittedChanges(initialRoots)
 	if err != nil {
 		return err
 	}
 
-	// Only if the current working set has uncommitted changes do we carry them forward to the branch being checked out. 
-	// If this is the case, then the destination branch must *not* have any uncommitted changes, as checked by 
+	// Only if the current working set has uncommitted changes do we carry them forward to the branch being checked out.
+	// If this is the case, then the destination branch must *not* have any uncommitted changes, as checked by
 	// checkoutWouldStompWorkingSetChanges
 	if !hasChanges {
 		return dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
 	}
-	
+
 	err = transferWorkingChanges(ctx, dEnv, initialRoots, branchHead, branchRef, force)
 	if err != nil {
 		return err
@@ -434,30 +434,30 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
 func transferWorkingChanges(
-		ctx context.Context,
-		dEnv *env.DoltEnv,
-		initialRoots doltdb.Roots,
-		branchHead *doltdb.RootValue,
-		branchRef ref.BranchRef,
-		force bool,
+	ctx context.Context,
+	dEnv *env.DoltEnv,
+	initialRoots doltdb.Roots,
+	branchHead *doltdb.RootValue,
+	branchRef ref.BranchRef,
+	force bool,
 ) error {
 	newRoots, err := rootsForBranch(ctx, initialRoots, branchHead, force)
 	if err != nil {
 		return err
 	}
 
-	// important to not update the checked out branch until after we have done the error checking above, otherwise we 
+	// important to not update the checked out branch until after we have done the error checking above, otherwise we
 	// potentially leave the client in a bad state
 	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
 	if err != nil {
 		return err
 	}
-	
+
 	ws, err := dEnv.WorkingSet(ctx)
 
 	// For backwards compatibility we support the branch not having a working set, but generally speaking it already
@@ -476,7 +476,7 @@ func transferWorkingChanges(
 	if err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -614,7 +614,7 @@ func checkoutWouldStompWorkingSetChanges(ctx context.Context, dEnv *env.DoltEnv,
 	if err != nil {
 		return false
 	}
-	
+
 	destRoots, err := dEnv.DoltDB.ResolveBranchRoots(ctx, branchRef)
 	if err != nil {
 		return false
@@ -624,12 +624,12 @@ func checkoutWouldStompWorkingSetChanges(ctx context.Context, dEnv *env.DoltEnv,
 	if err != nil {
 		return false
 	}
-	
+
 	destHasChanges, destWorkingHash, destStagedHash, err := rootHasUncommittedChanges(destRoots)
 	if err != nil {
 		return false
 	}
-	
+
 	// This is a stomping checkout operation if both the source and dest have uncommitted changes, and they're not the
 	// same uncommitted changes
 	return sourceHasChanges && destHasChanges && (sourceWorkingHash != destWorkingHash || sourceStagedHash != destStagedHash)
