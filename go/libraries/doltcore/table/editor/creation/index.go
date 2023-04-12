@@ -186,45 +186,26 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 		secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
 	}
 
-	// create a key builder for index key tuples
-	kd, _ := secondary.Descriptors()
-	keyBld := val.NewTupleBuilder(kd)
-	pkLen, keyMap := GetIndexKeyMapping(sch, idx)
-
+	p := primary.Pool()
 	mut := secondary.Mutate()
+	secondaryBld := index.NewSecondaryKeyBuilder(sch, idx, secondary.KeyDesc(), p)
+
 	iter, err := primary.IterAll(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	for {
-		k, v, err := iter.Next(ctx)
+		var k, v val.Tuple
+		k, v, err = iter.Next(ctx)
 		if err == io.EOF {
 			break
-		}
-		if err != nil {
+		} else if err != nil {
 			return nil, err
 		}
 
-		for to := range keyMap {
-			from := keyMap.MapOrdinal(to)
-			if from < pkLen {
-				keyBld.PutRaw(to, k.GetField(from))
-			} else {
-				from -= pkLen
-				if keyBld.Desc.Types[to].Enc == val.CellEnc {
-					index.PutField(ctx, ns, keyBld, to, v.GetField(from))
-				} else {
-					keyBld.PutRaw(to, v.GetField(from))
-				}
-			}
-		}
-
-		// todo(andy): build permissive?
-		idxKey := keyBld.Build(primary.Pool())
+		idxKey := secondaryBld.SecondaryKeyFromRow(k, v)
 		idxVal := val.EmptyTuple
-
-		// todo(andy): periodic flushing
 		if err = mut.Put(ctx, idxKey, idxVal); err != nil {
 			return nil, err
 		}
@@ -234,7 +215,6 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 	if err != nil {
 		return nil, err
 	}
-
 	return durable.IndexFromProllyMap(secondary), nil
 }
 
@@ -258,70 +238,37 @@ func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, ns t
 	if err != nil {
 		return nil, err
 	}
-
-	// create a key builder for index key tuples
-	kd, _ := secondary.Descriptors()
-	keyBld := val.NewTupleBuilder(kd)
-	pkLen, keyMap := GetIndexKeyMapping(sch, idx)
-
-	// key builder for the indexed columns only which is a prefix of the index key
-	prefixKD := kd.PrefixDesc(idx.Count())
-	prefixKB := val.NewTupleBuilder(prefixKD)
-
 	p := primary.Pool()
+
+	prefixDesc := secondary.KeyDesc().PrefixDesc(idx.Count())
+	secondaryBld := index.NewSecondaryKeyBuilder(sch, idx, secondary.KeyDesc(), p)
 
 	mut := secondary.Mutate()
 	for {
-		k, v, err := iter.Next(ctx)
+		var k, v val.Tuple
+		k, v, err = iter.Next(ctx)
 		if err == io.EOF {
 			break
-		}
-		if err != nil {
+		} else if err != nil {
 			return nil, err
 		}
 
-		foundNullPrefix := false
-		prefixKB.Recycle()
-		for to := range keyMap {
-			from := keyMap.MapOrdinal(to)
-			var f []byte
-			if from < pkLen {
-				f = k.GetField(from)
-			} else {
-				from -= pkLen
-				f = v.GetField(from)
-			}
-			keyBld.PutRaw(to, f)
-			if to < prefixKD.Count() {
-				if f == nil {
-					foundNullPrefix = true
-				} else {
-					prefixKB.PutRaw(to, f)
-				}
-			}
-		}
-
-		idxKey := keyBld.Build(p)
+		idxKey := secondaryBld.SecondaryKeyFromRow(k, v)
 		idxVal := val.EmptyTuple
 
-		if !foundNullPrefix {
-			prefixKey := prefixKB.Build(p)
+		if prefixDesc.HasNulls(idxKey) {
+			continue
+		}
 
-			itr, err := NewPrefixItr(ctx, prefixKey, prefixKD, mut)
-			if err != nil {
-				return nil, err
+		err = mut.GetPrefix(ctx, idxKey, prefixDesc, func(existingKey, _ val.Tuple) error {
+			// register a constraint violation if |idxKey| collides with |existingKey|
+			if existingKey != nil {
+				return cb(ctx, existingKey, idxKey)
 			}
-
-			k, _, err = itr.Next(ctx)
-			if err != nil && err != io.EOF {
-				return nil, err
-			}
-			if err == nil {
-				// We found a duplicate entry so delegate behavior to callback.
-				if err = cb(ctx, k, idxKey); err != nil {
-					return nil, err
-				}
-			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
 
 		if err = mut.Put(ctx, idxKey, idxVal); err != nil {
@@ -333,12 +280,11 @@ func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, ns t
 	if err != nil {
 		return nil, err
 	}
-
 	return durable.IndexFromProllyMap(secondary), nil
 }
 
-// PrefixItr iterates all keys of a given prefix |p| and its descriptor |d| in
-// map |m|.
+// PrefixItr iterates all keys of a given prefix |p| and its descriptor |d| in map |m|.
+// todo(andy): move to pkg prolly
 type PrefixItr struct {
 	itr prolly.MapIter
 	p   val.Tuple
@@ -379,42 +325,6 @@ OUTER:
 
 type rangeIterator interface {
 	IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error)
-}
-
-// GetIndexKeyMapping returns a mapping from primary row data to index data. It can handle keyless schema.
-// todo(andy)
-func GetIndexKeyMapping(sch schema.Schema, idx schema.Index) (keyLen int, m val.OrdinalMapping) {
-	m = make(val.OrdinalMapping, len(idx.AllTags()))
-
-	keyless := schema.IsKeyless(sch)
-
-	if keyless {
-		// the only key is the hash of the values
-		keyLen = 1
-	} else {
-		keyLen = sch.GetPKCols().Size()
-	}
-
-	for i, tag := range idx.AllTags() {
-		j, ok := sch.GetPKCols().TagToIdx[tag]
-		if !ok {
-			if keyless {
-				// Skip cardinality column
-				j = keyLen + 1 + sch.GetNonPKCols().TagToIdx[tag]
-			} else {
-				j = keyLen + sch.GetNonPKCols().TagToIdx[tag]
-			}
-		}
-		m[i] = j
-	}
-
-	if schema.IsKeyless(sch) {
-		// last key in index is hash which is the only column in the key
-		m = append(m, 0)
-		return keyLen, m
-	}
-
-	return keyLen, m
 }
 
 var _ error = (*prollyUniqueKeyErr)(nil)

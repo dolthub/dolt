@@ -113,42 +113,6 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 	return tup
 }
 
-func TuplePrefix(pool pool.BuffPool, tup Tuple, k int) Tuple {
-	cnt := tup.Count()
-	if k >= cnt {
-		return tup
-	}
-	for k > 0 && tup.FieldIsNull(k-1) {
-		k-- // trim NULL suffix
-	}
-	if k == 0 {
-		return EmptyTuple
-	}
-
-	stop, _ := tup.GetOffset(k)
-	prefix, offs := allocateTuple(pool, ByteSize(stop), k)
-	split := ByteSize(len(tup)) - uint16Size*ByteSize(cnt)
-
-	copy(prefix, tup[:stop])
-	copy(offs, tup[split:])
-	return prefix
-}
-
-func TupleSuffix(pool pool.BuffPool, tup Tuple, k int) Tuple {
-	// todo(andy)
-	cnt := tup.Count()
-	if k == 0 {
-		return EmptyTuple
-	} else if k >= cnt {
-		return tup
-	}
-	fields := make([][]byte, k)
-	for i := range fields {
-		fields[i] = tup.GetField((cnt - k) + i)
-	}
-	return NewTuple(pool, fields...)
-}
-
 func trimNullSuffix(values [][]byte) [][]byte {
 	n := len(values)
 	for i := len(values) - 1; i >= 0; i-- {

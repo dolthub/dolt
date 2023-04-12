@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -307,19 +309,13 @@ func (uv uniqValidator) insertArtifact(ctx context.Context, key, value val.Tuple
 }
 
 type uniqIndex struct {
-	def       schema.Index
-	secondary prolly.Map
-	clustered prolly.Map
-	meta      UniqCVMeta
-	// map clustered key-value to
-	// secondary index prefix keys
-	prefixBld    *val.TupleBuilder
-	prefixKeyMap val.OrdinalMapping
-	prefixValMap val.OrdinalMapping
-	// map secondary index keys to
-	// clustered index keys
-	clusteredBld *val.TupleBuilder
-	clusteredMap val.OrdinalMapping
+	def          schema.Index
+	secondary    prolly.Map
+	clustered    prolly.Map
+	meta         UniqCVMeta
+	prefixDesc   val.TupleDesc
+	secondaryBld index.SecondaryKeyBuilder
+	clusteredBld index.ClusteredKeyBuilder
 }
 
 func newUniqIndex(sch schema.Schema, def schema.Index, clusterd, secondary prolly.Map) (uniqIndex, error) {
@@ -331,42 +327,33 @@ func newUniqIndex(sch schema.Schema, def schema.Index, clusterd, secondary proll
 	if schema.IsKeyless(sch) { // todo(andy): sad panda
 		secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
 	}
+	p := clusterd.Pool()
 
-	// map clustered rows to secondary prefixes
-	idxCols := schema.GetIndexedColumns(def)
-	prefixBld := val.NewTupleBuilder(secondary.KeyDesc().PrefixDesc(idxCols.Size()))
-	prefixKeyMap := schema.MakeColumnMapping(sch.GetPKCols(), idxCols)
-	prefixValMap := schema.MakeColumnMapping(sch.GetNonPKCols(), idxCols)
-
-	// map secondary index keys to clustered index keys
-	// todo(andy): keyless schemas
-	allCols := schema.GetAllColumns(def)
-	clusteredBld := val.NewTupleBuilder(clusterd.KeyDesc())
-	clusteredMap := schema.MakeColumnMapping(allCols, sch.GetPKCols())
+	prefixDesc := secondary.KeyDesc().PrefixDesc(def.Count())
+	secondaryBld := index.NewSecondaryKeyBuilder(sch, def, secondary.KeyDesc(), p)
+	clusteredBld := index.NewClusteredKeyBuilder(def, sch, clusterd.KeyDesc(), p)
 
 	return uniqIndex{
 		def:          def,
 		secondary:    secondary,
 		clustered:    clusterd,
 		meta:         meta,
-		prefixBld:    prefixBld,
-		prefixKeyMap: prefixKeyMap,
-		prefixValMap: prefixValMap,
+		prefixDesc:   prefixDesc,
+		secondaryBld: secondaryBld,
 		clusteredBld: clusteredBld,
-		clusteredMap: clusteredMap,
 	}, nil
 }
 
 type collisionFn func(key, value val.Tuple) error
 
 func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, cb collisionFn) error {
-	prefix := idx.secondaryPrefixFromRow(key, value)
-	if keyHasNulls(prefix, idx.prefixBld.Desc) {
+	indexKey := idx.secondaryBld.SecondaryKeyFromRow(key, value)
+	if idx.prefixDesc.HasNulls(indexKey) {
 		return nil // NULLs cannot cause unique violations
 	}
 
 	var collision val.Tuple
-	err := idx.secondary.GetPrefix(ctx, prefix, idx.prefixBld.Desc, func(k, _ val.Tuple) (err error) {
+	err := idx.secondary.GetPrefix(ctx, indexKey, idx.prefixDesc, func(k, _ val.Tuple) (err error) {
 		collision = k
 		return
 	})
@@ -376,10 +363,11 @@ func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, c
 
 	// |prefix| was non-unique, find the clustered index row that
 	// collided with row(|key|, |value|) and pass both to |cb|
-	pk := idx.clusteredKeyFromSecondaryKey(collision)
-	err = idx.clustered.Get(ctx, pk, func(k val.Tuple, v val.Tuple) error {
+	clusteredKey := idx.clusteredBld.ClusteredKeyFromIndexKey(collision)
+	err = idx.clustered.Get(ctx, clusteredKey, func(k val.Tuple, v val.Tuple) error {
 		if k == nil {
-			return fmt.Errorf("failed to find key: %s", idx.clustered.KeyDesc().Format(pk))
+			s := idx.clustered.KeyDesc().Format(clusteredKey)
+			return errors.New("failed to find key: " + s)
 		}
 		return cb(k, v)
 	})
@@ -387,29 +375,6 @@ func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, c
 		return err
 	}
 	return cb(key, value)
-}
-
-func (idx uniqIndex) secondaryPrefixFromRow(key, value val.Tuple) val.Tuple {
-	for to, from := range idx.prefixKeyMap {
-		if from >= 0 {
-			idx.prefixBld.PutRaw(to, key.GetField(from))
-		}
-	}
-	for to, from := range idx.prefixValMap {
-		if from >= 0 {
-			idx.prefixBld.PutRaw(to, value.GetField(from))
-		}
-	}
-	return idx.prefixBld.Build(idx.clustered.Pool())
-}
-
-func (idx uniqIndex) clusteredKeyFromSecondaryKey(key val.Tuple) val.Tuple {
-	for to, from := range idx.clusteredMap {
-		if from >= 0 {
-			idx.clusteredBld.PutRaw(to, key.GetField(from))
-		}
-	}
-	return idx.clusteredBld.Build(idx.clustered.Pool())
 }
 
 func keyHasNulls(key val.Tuple, desc val.TupleDesc) bool {

@@ -41,7 +41,7 @@ func TestTuplePrefix(t *testing.T) {
 		full := NewTuple(testPool, fields...)
 		for i := 0; i <= len(fields); i++ {
 			exp := NewTuple(testPool, fields[:i]...)
-			act := TuplePrefix(testPool, full, i)
+			act := tuplePrefix(testPool, full, i)
 			assert.Equal(t, exp, act)
 		}
 	}
@@ -53,7 +53,7 @@ func TestTupleSuffix(t *testing.T) {
 		full := NewTuple(testPool, fields...)
 		for i := 0; i <= full.Count(); i++ {
 			exp := NewTuple(testPool, fields[i:]...)
-			act := TupleSuffix(testPool, full, full.Count()-i)
+			act := tupleSuffix(testPool, full, full.Count()-i)
 			assert.Equal(t, exp, act)
 		}
 	}
@@ -72,4 +72,40 @@ func randomByteFields(t *testing.T) (fields [][]byte) {
 		rand.Read(fields[i])
 	}
 	return
+}
+
+func tuplePrefix(pool pool.BuffPool, tup Tuple, k int) Tuple {
+	cnt := tup.Count()
+	if k >= cnt {
+		return tup
+	}
+	for k > 0 && tup.FieldIsNull(k-1) {
+		k-- // trim NULL suffix
+	}
+	if k == 0 {
+		return EmptyTuple
+	}
+
+	stop, _ := tup.GetOffset(k)
+	prefix, offs := allocateTuple(pool, ByteSize(stop), k)
+	split := ByteSize(len(tup)) - uint16Size*ByteSize(cnt)
+
+	copy(prefix, tup[:stop])
+	copy(offs, tup[split:])
+	return prefix
+}
+
+func tupleSuffix(pool pool.BuffPool, tup Tuple, k int) Tuple {
+	// todo(andy)
+	cnt := tup.Count()
+	if k == 0 {
+		return EmptyTuple
+	} else if k >= cnt {
+		return tup
+	}
+	fields := make([][]byte, k)
+	for i := range fields {
+		fields[i] = tup.GetField((cnt - k) + i)
+	}
+	return NewTuple(pool, fields...)
 }

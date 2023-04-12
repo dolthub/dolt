@@ -113,36 +113,36 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
+	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "unique key violations should not be thrown for keys with null values",
+			// this won't automatically become a PK because col2 is nullable
+			Name: "unique key violation for keyless table",
 			SetUpScript: []string{
-				"create table t (col1 int not null, col2 int not null, col3 int, primary key (col1, col2));",
-				"alter table t add unique (col2, col3);",
+				"create table t (col1 int not null, col2 int, col3 int);",
+				"alter table t add unique index (col1, col2);",
 				"call dolt_commit('-Am', 'init');",
 
 				"call dolt_checkout('-b', 'right');",
-				"insert into t values (1, 2, null);",
-				"call dolt_commit('-Am', 'right');",
+				"insert into t values (1, null, null);",
+				"insert into t values (3, 3, null);",
+				"call dolt_commit('-Am', 'right cm');",
 
 				"call dolt_checkout('main');",
-				"insert into t values (2, 2, null);",
-				"call dolt_commit('-Am', 'left');",
+				"insert into t values (2, null, null);",
+				"insert into t values (3, 3, 1);",
+				"call dolt_commit('-Am', 'left cm');",
 
 				"set dolt_force_transaction_commit = 1;",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
 					Query:    "call dolt_merge('right');",
-					Expected: []sql.Row{{0, 0}},
+					Expected: []sql.Row{{0, 1}},
 				},
 				{
-					Query:    "select count(*) from dolt_constraint_violations;",
-					Expected: []sql.Row{{0}},
-				},
-				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{1, 2, nil}, {2, 2, nil}},
+					Query:    "select col1, col2, col3 from dolt_constraint_violations_t;",
+					Expected: []sql.Row{{3, 3, nil}, {3, 3, 1}},
 				},
 			},
 		},
