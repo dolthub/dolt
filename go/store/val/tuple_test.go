@@ -18,8 +18,9 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/dolthub/dolt/go/store/pool"
 )
 
 var testPool = pool.NewBuffPool()

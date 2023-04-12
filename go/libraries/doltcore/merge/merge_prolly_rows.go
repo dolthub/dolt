@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -32,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/skip"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -80,8 +77,9 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 	if err != nil {
 		return nil, nil, err
 	}
+
 	// validator shares editor with conflict merge
-	uniq, err := newUniqAddValidator(ctx, finalSch, leftRows, ae, tm)
+	uniq, err := newUniqValidator(ctx, finalSch, tm, ae)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -96,6 +94,12 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 		} else if err != nil {
 			return nil, nil, err
 		}
+
+		cnt, err := uniq.validateDiff(ctx, diff)
+		if err != nil {
+			return nil, nil, err
+		}
+		s.Conflicts += cnt
 
 		switch diff.Op {
 		case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
@@ -118,11 +122,6 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 			if err != nil {
 				return nil, nil, err
 			}
-			cnt, err := uniq.valid(ctx, diff.Op, diff.Key, diff.Right)
-			if err != nil {
-				return nil, nil, err
-			}
-			s.Conflicts += cnt
 		case tree.DiffOpRightModify:
 			s.Modifications++
 			err = pri.merge(ctx, diff)
@@ -133,11 +132,6 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 			if err != nil {
 				return nil, nil, err
 			}
-			cnt, err := uniq.valid(ctx, diff.Op, diff.Key, diff.Right)
-			if err != nil {
-				return nil, nil, err
-			}
-			s.Conflicts += cnt
 		case tree.DiffOpRightDelete:
 			s.Deletes++
 			err = pri.merge(ctx, diff)
@@ -158,11 +152,6 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 			if err != nil {
 				return nil, nil, err
 			}
-			cnt, err := uniq.valid(ctx, diff.Op, diff.Key, diff.Merged)
-			if err != nil {
-				return nil, nil, err
-			}
-			s.Conflicts += cnt
 		case tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify, tree.DiffOpConvergentDelete:
 			if keyless {
 				s.Conflicts++
@@ -184,12 +173,6 @@ func mergeTableData(ctx context.Context, tm TableMerger, finalSch schema.Schema,
 	if err != nil {
 		return nil, nil, err
 	}
-
-	newUniq, err := uniq.finalize(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	s.Conflicts += newUniq
 
 	finalIdxs, err := mergeProllySecondaryIndexes(ctx, tm, leftIdxs, rightIdxs, finalSch, finalRows, conflicts.ae)
 	if err != nil {
@@ -241,241 +224,202 @@ func threeWayDiffer(ctx context.Context, tm TableMerger, finalSch schema.Schema)
 	return tree.NewThreeWayDiffer(ctx, leftRows.NodeStore(), leftRows.Tuples(), rightRows.Tuples(), ancRows.Tuples(), vMerger.tryMerge, vMerger.keyless, leftRows.Tuples().Order)
 }
 
-const uniqAddValidatorPendingSize = 650_000
-
-// uniqAddValidator checks whether new additions from the merge-right
-// duplicate secondary index entries.
-type uniqAddValidator struct {
-	name         string
-	rightRootish doltdb.Rootish
-	ae           *prolly.ArtifactsEditor
-	states       []*validateIndexState
-	leftRows     prolly.Map
-	leftSch      schema.Schema
-	primaryKD    val.TupleDesc
-	primaryKB    *val.TupleBuilder
-	batchSize    int
-	pkLen        int
+type uniqValidator struct {
+	src     doltdb.Rootish
+	srcHash hash.Hash
+	edits   *prolly.ArtifactsEditor
+	indexes []uniqIndex
 }
 
-// validateIndexState carries the state required to validate
-// a single unique index.
-type validateIndexState struct {
-	index     schema.Index
-	leftMap   prolly.Map
-	vInfo     []byte
-	pkMapping val.OrdinalMapping
-	secPkMap  val.OrdinalMapping
-	prefixKD  val.TupleDesc
-	prefixKB  *val.TupleBuilder
-	secKb     *val.TupleBuilder
-	batch     *skip.List
-	secCur    *tree.Cursor
-}
+func newUniqValidator(ctx context.Context, sch schema.Schema, tm TableMerger, edits *prolly.ArtifactsEditor) (uniqValidator, error) {
+	srcHash, err := tm.rightSrc.HashOf()
+	if err != nil {
+		return uniqValidator{}, err
+	}
 
-func newUniqAddValidator(ctx context.Context, finalSch schema.Schema, leftRows prolly.Map, ae *prolly.ArtifactsEditor, tm TableMerger) (*uniqAddValidator, error) {
-	indexes := finalSch.Indexes().AllIndexes()
-	primaryKD, _ := leftRows.Descriptors()
-	primaryKB := val.NewTupleBuilder(primaryKD)
+	uv := uniqValidator{
+		src:     tm.rightSrc,
+		srcHash: srcHash,
+		edits:   edits,
+	}
 
-	var states []*validateIndexState
-	for _, index := range indexes {
-		if !index.IsUnique() || !tm.leftSch.Indexes().Contains(index.Name()) {
+	rows, err := tm.leftTbl.GetRowData(ctx)
+	if err != nil {
+		return uniqValidator{}, err
+	}
+	clustered := durable.ProllyMapFromIndex(rows)
+
+	indexes, err := tm.leftTbl.GetIndexSet(ctx)
+	if err != nil {
+		return uniqValidator{}, err
+	}
+
+	for _, def := range sch.Indexes().AllIndexes() {
+		if !def.IsUnique() {
 			continue
+		} else if !tm.leftSch.Indexes().Contains(def.Name()) {
+			continue // todo: how do we validate in this case?
 		}
 
-		is, err := tm.leftTbl.GetIndexSet(ctx)
-		idx, err := is.GetIndex(ctx, tm.leftSch, index.Name())
+		idx, err := indexes.GetIndex(ctx, sch, def.Name())
 		if err != nil {
-			return nil, err
+			return uniqValidator{}, err
 		}
-		m := durable.ProllyMapFromIndex(idx)
-		if schema.IsKeyless(tm.leftSch) {
-			m = prolly.ConvertToSecondaryKeylessIndex(m)
-		}
+		secondary := durable.ProllyMapFromIndex(idx)
 
-		pkMapping := ordinalMappingFromIndex(index)
-		meta, err := makeUniqViolMeta(finalSch, index)
+		u, err := newUniqIndex(sch, def, clustered, secondary)
 		if err != nil {
-			return nil, err
+			return uniqValidator{}, err
 		}
-		vInfo, err := json.Marshal(meta)
-		if err != nil {
-			return nil, err
-		}
+		uv.indexes = append(uv.indexes, u)
+	}
+	return uv, nil
+}
 
-		kd := index.Schema().GetKeyDescriptor()
-		prefixKD := kd.PrefixDesc(index.Count())
-		prefixKB := val.NewTupleBuilder(prefixKD)
-
-		secKb := val.NewTupleBuilder(m.KeyDesc())
-		_, secPkMap := creation.GetIndexKeyMapping(tm.leftSch, index)
-
-		states = append(states, &validateIndexState{
-			index:     index,
-			leftMap:   m,
-			pkMapping: pkMapping,
-			vInfo:     vInfo,
-			prefixKB:  prefixKB,
-			prefixKD:  prefixKD,
-			secKb:     secKb,
-			secPkMap:  secPkMap,
-			batch: skip.NewSkipList(func(left, right []byte) int {
-				return primaryKD.Compare(left, right)
-			}),
+func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff) (conflicts int, err error) {
+	var value val.Tuple
+	switch diff.Op {
+	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
+		value = diff.Right
+	case tree.DiffOpDivergentModifyResolved:
+		value = diff.Merged
+	default:
+		return
+	}
+	for _, idx := range uv.indexes {
+		err = idx.findCollisions(ctx, diff.Key, value, func(k, v val.Tuple) error {
+			return uv.insertArtifact(ctx, k, v, idx.meta)
 		})
+		if err != nil {
+			break
+		}
+	}
+	return
+}
+
+func (uv uniqValidator) insertArtifact(ctx context.Context, key, value val.Tuple, meta UniqCVMeta) error {
+	vinfo, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+	cvm := prolly.ConstraintViolationMeta{VInfo: vinfo, Value: value}
+	return uv.edits.ReplaceConstraintViolation(ctx, key, uv.srcHash, prolly.ArtifactTypeUniqueKeyViol, cvm)
+}
+
+type uniqIndex struct {
+	def       schema.Index
+	secondary prolly.Map
+	clustered prolly.Map
+	meta      UniqCVMeta
+	// map clustered key-value to
+	// secondary index prefix keys
+	prefixBld    *val.TupleBuilder
+	prefixKeyMap val.OrdinalMapping
+	prefixValMap val.OrdinalMapping
+	// map secondary index keys to
+	// clustered index keys
+	clusteredBld *val.TupleBuilder
+	clusteredMap val.OrdinalMapping
+}
+
+func newUniqIndex(sch schema.Schema, def schema.Index, clusterd, secondary prolly.Map) (uniqIndex, error) {
+	meta, err := makeUniqViolMeta(sch, def)
+	if err != nil {
+		return uniqIndex{}, err
 	}
 
-	pkLen := tm.leftSch.GetPKCols().Size()
-	if schema.IsKeyless(tm.leftSch) {
-		pkLen = 1
+	if schema.IsKeyless(sch) { // todo(andy): sad panda
+		secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
 	}
 
-	return &uniqAddValidator{
-		name:         tm.name,
-		rightRootish: tm.rightSrc,
-		ae:           ae,
-		states:       states,
-		leftRows:     leftRows,
-		leftSch:      tm.leftSch,
-		primaryKB:    primaryKB,
-		primaryKD:    primaryKD,
-		pkLen:        pkLen,
-		batchSize:    uniqAddValidatorPendingSize,
+	// map clustered rows to secondary prefixes
+	idxCols := schema.GetIndexedColumns(def)
+	prefixBld := val.NewTupleBuilder(secondary.KeyDesc().PrefixDesc(idxCols.Size()))
+	prefixKeyMap := schema.MakeColumnMapping(sch.GetPKCols(), idxCols)
+	prefixValMap := schema.MakeColumnMapping(sch.GetNonPKCols(), idxCols)
+
+	// map secondary index keys to clustered index keys
+	// todo(andy): keyless schemas
+	allCols := schema.GetAllColumns(def)
+	clusteredBld := val.NewTupleBuilder(clusterd.KeyDesc())
+	clusteredMap := schema.MakeColumnMapping(allCols, sch.GetPKCols())
+
+	return uniqIndex{
+		def:          def,
+		secondary:    secondary,
+		clustered:    clusterd,
+		meta:         meta,
+		prefixBld:    prefixBld,
+		prefixKeyMap: prefixKeyMap,
+		prefixValMap: prefixValMap,
+		clusteredBld: clusteredBld,
+		clusteredMap: clusteredMap,
 	}, nil
 }
 
-// valid queues primary key changes for unique index validation. Primary keys
-// are converted into secondaries for batching ordered lookups.
-func (v *uniqAddValidator) valid(ctx context.Context, op tree.DiffOp, key, value val.Tuple) (int, error) {
-	switch op {
-	case tree.DiffOpDivergentModifyResolved, tree.DiffOpRightAdd, tree.DiffOpRightModify:
-	default:
-		return 0, fmt.Errorf("invalid unique validator diff type: %s", op)
-	}
-	var conflicts int
-	for i, s := range v.states {
-		secKey, foundNull := v.convertPriToSec(s, key, value)
-		if foundNull {
-			continue
-		}
+type collisionFn func(key, value val.Tuple) error
 
-		s.batch.Put(secKey, value)
-		if s.batch.Count() > v.batchSize {
-			cnt, err := v.flush(ctx, i)
-			conflicts += cnt
-			if err != nil {
-				return 0, err
-			}
-		}
+func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, cb collisionFn) error {
+	prefix := idx.secondaryPrefixFromRow(key, value)
+	if keyHasNulls(prefix, idx.prefixBld.Desc) {
+		return nil // NULLs cannot cause unique violations
 	}
-	return conflicts, nil
+
+	var collision val.Tuple
+	err := idx.secondary.GetPrefix(ctx, prefix, idx.prefixBld.Desc, func(k, _ val.Tuple) (err error) {
+		collision = k
+		return
+	})
+	if err != nil || collision == nil {
+		return err
+	}
+
+	// |prefix| was non-unique, find the clustered index row that
+	// collided with row(|key|, |value|) and pass both to |cb|
+	pk := idx.clusteredKeyFromSecondaryKey(collision)
+	err = idx.clustered.Get(ctx, pk, func(k val.Tuple, v val.Tuple) error {
+		if k == nil {
+			return fmt.Errorf("failed to find key: %s", idx.clustered.KeyDesc().Format(pk))
+		}
+		return cb(k, v)
+	})
+	if err != nil {
+		return err
+	}
+	return cb(key, value)
 }
 
-// convertPriToSec converts a key:value from the primary index into a
-// secondary index key.
-func (v *uniqAddValidator) convertPriToSec(s *validateIndexState, key, value val.Tuple) (val.Tuple, bool) {
-	for to := range s.secPkMap {
-		from := s.secPkMap.MapOrdinal(to)
-		var field []byte
-		if from < v.pkLen {
-			field = key.GetField(from)
-		} else {
-			from -= v.pkLen
-			field = value.GetField(from)
-		}
-		if field == nil {
-			return nil, true
-		}
-		s.secKb.PutRaw(to, field)
-	}
-	return s.secKb.Build(s.leftMap.Pool()), false
-}
-
-// flush performs unique checks on a batch of sorted secondary keys.
-func (v *uniqAddValidator) flush(ctx context.Context, i int) (int, error) {
-	var conflicts int
-	var err error
-
-	s := v.states[i]
-	iter := s.batch.IterAtStart()
-	cur := s.secCur
-	defer s.batch.Truncate()
-	defer func() {
-		s.secCur = nil
-	}()
-
-	var k, value []byte
-	var key val.Tuple
-	for {
-		k, value = iter.Current()
-		key = val.Tuple(k)
-		if key == nil {
-			break
-		}
-		iter.Advance()
-
-		// pluck secondary prefix from secondary key (leading fields)
-		for i := 0; i < s.prefixKD.Count(); i++ {
-			s.prefixKB.PutRaw(i, key.GetField(i))
-		}
-		secKey := s.prefixKB.Build(v.leftRows.Pool())
-
-		if cur == nil {
-			s.secCur, err = tree.NewCursorAtKey(ctx, s.leftMap.NodeStore(), s.leftMap.Node(), val.Tuple(secKey), s.leftMap.KeyDesc())
-			cur = s.secCur
-		}
-
-		err = tree.Seek(ctx, cur, secKey, s.prefixKD)
-		if err != nil {
-			return 0, err
-		}
-		if cur.Valid() {
-			indexK := val.Tuple(cur.CurrentKey())
-			if s.prefixKD.Compare(secKey, indexK) != 0 {
-				continue
-			}
-
-			conflicts++
-
-			// existingPk is the merge-left primary key that
-			// generated the conflicting unique index key
-			existingPK := getPKFromSecondaryKey(v.primaryKB, v.leftRows.Pool(), s.pkMapping, indexK)
-			err = replaceUniqueKeyViolation(ctx, v.ae, v.leftRows, existingPK, v.primaryKD, v.rightRootish, s.vInfo, v.name)
-			if err != nil {
-				return 0, err
-			}
-
-			// newPk is the merge-right primary key whose secondary
-			// index conflicts with existingPk
-			newPK := getPKFromSecondaryKey(v.primaryKB, v.leftRows.Pool(), s.pkMapping, key)
-			err = replaceUniqueKeyViolationWithValue(ctx, v.ae, newPK, value, v.primaryKD, v.rightRootish, s.vInfo, v.name)
-			if err != nil {
-				return 0, err
-			}
+func (idx uniqIndex) secondaryPrefixFromRow(key, value val.Tuple) val.Tuple {
+	for to, from := range idx.prefixKeyMap {
+		if from >= 0 {
+			idx.prefixBld.PutRaw(to, key.GetField(from))
 		}
 	}
-	return conflicts, nil
-}
-func (v *uniqAddValidator) finalize(ctx context.Context) (int, error) {
-	var conflicts int
-	for i, _ := range v.states {
-		cnt, err := v.flush(ctx, i)
-		if err != nil {
-			return 0, err
+	for to, from := range idx.prefixValMap {
+		if from >= 0 {
+			idx.prefixBld.PutRaw(to, value.GetField(from))
 		}
-		conflicts += cnt
 	}
-	return conflicts, nil
+	return idx.prefixBld.Build(idx.clustered.Pool())
 }
 
-type diffMerger interface {
-	merge(context.Context, tree.ThreeWayDiff) error
+func (idx uniqIndex) clusteredKeyFromSecondaryKey(key val.Tuple) val.Tuple {
+	for to, from := range idx.clusteredMap {
+		if from >= 0 {
+			idx.clusteredBld.PutRaw(to, key.GetField(from))
+		}
+	}
+	return idx.clusteredBld.Build(idx.clustered.Pool())
 }
 
-var _ diffMerger = (*conflictMerger)(nil)
-var _ diffMerger = (*primaryMerger)(nil)
-var _ diffMerger = (*secondaryMerger)(nil)
+func keyHasNulls(key val.Tuple, desc val.TupleDesc) bool {
+	for i := range desc.Types {
+		if desc.GetField(i, key) == nil {
+			return true
+		}
+	}
+	return false
+}
 
 // conflictMerger processing primary key diffs
 // with conflict types into artifact table writes.
@@ -556,7 +500,6 @@ type primaryMerger struct {
 	valDesc    val.TupleDesc
 	ns         tree.NodeStore
 	root       tree.Node
-	cur        *tree.Cursor
 	mut        *prolly.MutableMap
 	key, value val.Tuple
 }

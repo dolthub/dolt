@@ -76,7 +76,7 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 		keyDesc, _ := idxMap.Descriptors()
 
 		// mapping from secondary index key to primary key
-		pkMap := makeIndexToIndexMapping(def.Schema().GetPKCols(), sch.GetPKCols())
+		pkMap := schema.MakeColumnMapping(def.Schema().GetPKCols(), sch.GetPKCols())
 		writers[defName] = prollySecondaryIndexWriter{
 			name:          defName,
 			mut:           idxMap.Mutate(),
@@ -376,14 +376,6 @@ func makeOrdinalMapping(from sql.Schema, to *schema.ColCollection) (m val.Ordina
 				m[i] = j
 			}
 		}
-	}
-	return
-}
-
-func makeIndexToIndexMapping(from, to *schema.ColCollection) (m val.OrdinalMapping) {
-	m = make(val.OrdinalMapping, len(to.GetColumns()))
-	for i, col := range to.GetColumns() {
-		m[i] = from.TagToIdx[col.Tag]
 	}
 	return
 }

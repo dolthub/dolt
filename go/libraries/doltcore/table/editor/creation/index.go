@@ -382,6 +382,7 @@ type rangeIterator interface {
 }
 
 // GetIndexKeyMapping returns a mapping from primary row data to index data. It can handle keyless schema.
+// todo(andy)
 func GetIndexKeyMapping(sch schema.Schema, idx schema.Index) (keyLen int, m val.OrdinalMapping) {
 	m = make(val.OrdinalMapping, len(idx.AllTags()))
 

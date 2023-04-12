@@ -332,15 +332,6 @@ func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, theirRootI
 	return wr.mut.Put(ctx, key, value)
 }
 
-type ErrMergeArtifactCollision struct {
-	Key, Val              val.Tuple
-	ExistingInfo, NewInfo []byte
-}
-
-func (e *ErrMergeArtifactCollision) Error() string {
-	return "an existing row was found with different violation info json"
-}
-
 // ReplaceConstraintViolation replaces constraint violations that match the
 // given one but have a different commit hash. If no existing violation exists,
 // the given will be inserted. Returns true if a violation was replaced. If an
@@ -378,12 +369,7 @@ func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKe
 
 		if bytes.Compare(currMeta.Value, meta.Value) == 0 {
 			if bytes.Compare(currMeta.VInfo, meta.VInfo) != 0 {
-				return &ErrMergeArtifactCollision{
-					Key:          srcKey,
-					Val:          currMeta.Value,
-					ExistingInfo: currMeta.VInfo,
-					NewInfo:      meta.VInfo,
-				}
+				return artifactCollisionErr(srcKey, wr.srcKeyDesc, currMeta.VInfo, meta.VInfo)
 			}
 			// Key and Value is the same, so delete this
 			err = wr.Delete(ctx, art.ArtKey)
@@ -406,6 +392,11 @@ func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKe
 	}
 
 	return nil
+}
+
+func artifactCollisionErr(key val.Tuple, desc val.TupleDesc, old, new []byte) error {
+	return fmt.Errorf("error storing constraint violation for primary key (%s): another violation already exists\n"+
+		"new violation: %s old violation: (%s)", desc.Format(key), string(old), string(new))
 }
 
 func (wr *ArtifactsEditor) Delete(ctx context.Context, key val.Tuple) error {

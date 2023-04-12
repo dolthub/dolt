@@ -60,6 +60,24 @@ type Index interface {
 	PrefixLengths() []uint16
 }
 
+func GetIndexedColumns(idx Index) *ColCollection {
+	tags := idx.IndexedColumnTags()
+	cols := make([]Column, len(tags))
+	for i, tag := range tags {
+		cols[i], _ = idx.GetColumn(tag)
+	}
+	return NewColCollection(cols...)
+}
+
+func GetAllColumns(idx Index) *ColCollection {
+	tags := idx.AllTags()
+	cols := make([]Column, len(tags))
+	for i, tag := range tags {
+		cols[i], _ = idx.GetColumn(tag)
+	}
+	return NewColCollection(cols...)
+}
+
 var _ Index = (*indexImpl)(nil)
 
 type indexImpl struct {

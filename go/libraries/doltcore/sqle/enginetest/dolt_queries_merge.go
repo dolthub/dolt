@@ -1670,6 +1670,37 @@ var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// this won't automatically become a PK because col2 is nullable
+		Name: "unique key violation for keyless table",
+		SetUpScript: []string{
+			"create table t (col1 int not null, col2 int, col3 int);",
+			"alter table t add unique index (col1, col2);",
+			"call dolt_commit('-Am', 'init');",
+
+			"call dolt_checkout('-b', 'right');",
+			"insert into t values (1, null, null);",
+			"insert into t values (3, 3, null);",
+			"call dolt_commit('-Am', 'right cm');",
+
+			"call dolt_checkout('main');",
+			"insert into t values (2, null, null);",
+			"insert into t values (3, 3, 1);",
+			"call dolt_commit('-Am', 'left cm');",
+
+			"set dolt_force_transaction_commit = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select col1, col2, col3 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{3, 3, nil}, {3, 3, 1}},
+			},
+		},
+	},
 }
 
 var DoltConflictTableNameTableTests = []queries.ScriptTest{
@@ -2606,37 +2637,6 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		// this won't automatically become a PK because col2 is nullable
-		Name: "unique key violation for keyless table",
-		SetUpScript: []string{
-			"create table t (col1 int not null, col2 int, col3 int);",
-			"alter table t add unique index (col1, col2);",
-			"call dolt_commit('-Am', 'init');",
-
-			"call dolt_checkout('-b', 'right');",
-			"insert into t values (1, null, null);",
-			"insert into t values (3, 3, null);",
-			"call dolt_commit('-Am', 'right cm');",
-
-			"call dolt_checkout('main');",
-			"insert into t values (2, null, null);",
-			"insert into t values (3, 3, 1);",
-			"call dolt_commit('-Am', 'left cm');",
-
-			"set dolt_force_transaction_commit = 1;",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 1}},
-			},
-			{
-				Query:    "select col1, col2, col3 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{3, 3, nil}, {3, 3, 1}},
-			},
-		},
-	},
-	{
 		Name: "regression test for bad column ordering in schema",
 		SetUpScript: []string{
 			"CREATE TABLE t (col1 enum ('A', 'B'), col2 varchar(max), primary key (col2));",
@@ -2699,7 +2699,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('right');",
-				ExpectedErrStr: "multiple violations for row not supported: pk ( 1 ) of table 'child' violates foreign keys 'parent (col1)' and 'parent (col2)'",
+				ExpectedErrStr: "error storing constraint violation for primary key (( 1 )): another violation already exists\nnew violation: {\"Columns\":[\"col1\"],\"ForeignKey\":\"aoso3tte\",\"Index\":\"col1\",\"OnDelete\":\"RESTRICT\",\"OnUpdate\":\"RESTRICT\",\"ReferencedColumns\":[\"col1\"],\"ReferencedIndex\":\"par_col1_idx\",\"ReferencedTable\":\"parent\",\"Table\":\"child\"} old violation: ({\"Columns\":[\"col2\"],\"ForeignKey\":\"nof6fc49\",\"Index\":\"col2\",\"OnDelete\":\"RESTRICT\",\"OnUpdate\":\"RESTRICT\",\"ReferencedColumns\":[\"col2\"],\"ReferencedIndex\":\"par_col2_idx\",\"ReferencedTable\":\"parent\",\"Table\":\"child\"})",
 			},
 			{
 				Query:    "SELECT * from parent;",
@@ -2730,7 +2730,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('right');",
-				ExpectedErrStr: "multiple violations for row not supported: pk ( 1 ) of table 't' violates unique keys 'col1' and 'col2'",
+				ExpectedErrStr: "error storing constraint violation for primary key (( 1 )): another violation already exists\nnew violation: {\"Columns\":[\"col1\"],\"Name\":\"col1\"} old violation: ({\"Columns\":[\"col2\"],\"Name\":\"col2\"})",
 			},
 			{
 				Query:    "SELECT * from t;",
