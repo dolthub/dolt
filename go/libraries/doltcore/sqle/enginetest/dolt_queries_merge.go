@@ -2738,6 +2738,42 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Multiple unique key violations for a given row not supported",
+		SetUpScript: []string{
+			"SET dolt_force_transaction_commit = on;",
+			"CREATE TABLE t (id int NOT NULL, col1 varchar(255), col2 varchar(255), col3 varchar(255), PRIMARY KEY (id), UNIQUE KEY uniq_idx (col1,col2,col3));",
+			"CALL DOLT_ADD('.')",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"INSERT INTO t (id, col1, col2, col3) VALUES (1, 'val1', 'val1', 'val1'), (4, 'val1', 'val1', 'val2')",
+			"CALL DOLT_COMMIT('-am', 'right insert');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t (id, col1, col2, col3) VALUES (2, 'val1', 'val1', 'val1'), (3, 'val1', 'val1', 'val2');",
+			"CALL DOLT_COMMIT('-am', 'left insert');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(4)}},
+			},
+			{
+				Query: "select id, col1, col2, col3 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{
+					{1, "val1", "val1", "val1"},
+					{2, "val1", "val1", "val1"},
+					{3, "val1", "val1", "val2"},
+					{4, "val1", "val1", "val2"},
+				},
+			},
+		},
+	},
 }
 
 // OldFormatMergeConflictsAndCVsScripts tests old format merge behavior
