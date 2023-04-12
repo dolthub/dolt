@@ -409,12 +409,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	} else if err != nil {
 		return err
 	}
-
-	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
-	if err != nil {
-		return err
-	}
-
+	
 	hasChanges, _, _, err := rootHasUncommittedChanges(initialRoots)
 	if err != nil {
 		return err
@@ -424,7 +419,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	// If this is the case, then the destination branch must *not* have any uncommitted changes, as checked by 
 	// checkoutWouldStompWorkingSetChanges
 	if !hasChanges {
-		return nil
+		return dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
 	}
 	
 	err = transferWorkingChanges(ctx, dEnv, initialRoots, branchHead, branchRef, force)
@@ -456,6 +451,13 @@ func transferWorkingChanges(
 		return err
 	}
 
+	// important to not update the checked out branch until after we have done the error checking above, otherwise we 
+	// potentially leave the client in a bad state
+	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
+	if err != nil {
+		return err
+	}
+	
 	ws, err := dEnv.WorkingSet(ctx)
 
 	// For backwards compatibility we support the branch not having a working set, but generally speaking it already

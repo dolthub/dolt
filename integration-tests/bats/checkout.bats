@@ -196,6 +196,11 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Please commit your changes or stash them before you switch branches." ]] || false
 
+    # Still on main
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "branch1" ]] || false
+
     run dolt checkout -f main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Switched to branch 'main'" ]] || false
