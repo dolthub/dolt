@@ -263,13 +263,18 @@ func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError 
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = actions.CheckoutAllTables(ctx, roots, doltEnv.DbData())
+	roots, err = actions.CheckoutAllTables(ctx, roots)
 	if err == nil {
 		err = doltEnv.AbortMerge(ctx)
 
 		if err == nil {
 			return nil
 		}
+	}
+
+	err = doltEnv.UpdateWorkingRoot(ctx, roots.Working)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	return errhand.BuildDError("fatal: failed to revert changes").AddCause(err).Build()
@@ -461,9 +466,10 @@ func handleMergeErr(ctx context.Context, dEnv *env.DoltEnv, mergeErr error, hasC
 // If the merge is a fast-forward merge, but --no-ff has been supplied, the ExecNoFFMerge function will call
 // commit after merging. If the merge is not fast-forward, the --no-commit flag is not defined, and there are
 // no conflicts and/or constraint violations, this function will call commit after merging.
-// TODO (10/6/21 by Max) forcing a commit with a constraint violation should warn users that subsequent
-// FF merges will not surface constraint violations on their own; constraint verify --all
-// is required to reify violations.
+// TODO: forcing a commit with a constraint violation should warn users that subsequent
+//
+//	FF merges will not surface constraint violations on their own; constraint verify --all
+//	is required to reify violations.
 func performMerge(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec, suggestedMsg string) (map[string]*merge.MergeStats, error) {
 	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
 		return nil, err
@@ -508,7 +514,7 @@ func executeNoFFMergeAndCommit(ctx context.Context, dEnv *env.DoltEnv, spec *mer
 		return tblToStats, err
 	}
 
-	_, err = actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
+	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       spec.Date,
 		AllowEmpty: spec.AllowEmpty,
@@ -517,13 +523,19 @@ func executeNoFFMergeAndCommit(ctx context.Context, dEnv *env.DoltEnv, spec *mer
 		Email:      spec.Email,
 	})
 
+	wsHash, err := ws.HashOf()
+	_, err = dEnv.DoltDB.CommitWithWorkingSet(
+		ctx,
+		dEnv.RepoStateReader().CWBHeadRef(),
+		ws.Ref(),
+		pendingCommit,
+		ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),
+		wsHash,
+		dEnv.NewWorkingSetMeta(msg),
+	)
+
 	if err != nil {
 		return tblToStats, fmt.Errorf("%w; failed to commit", err)
-	}
-
-	err = dEnv.ClearMerge(ctx)
-	if err != nil {
-		return tblToStats, err
 	}
 
 	return tblToStats, err

@@ -3214,6 +3214,10 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			// check amended commit
 			{
+				Query:    "SELECT * from t;",
+				Expected: []sql.Row{},
+			},
+			{
 				Query:    "select message from dolt_log limit 1",
 				Expected: []sql.Row{{"update table t"}},
 			},
