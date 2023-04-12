@@ -34,25 +34,47 @@ func NewGlobalStateStoreForDb(ctx context.Context, db *doltdb.DoltDB) (GlobalSta
 		return GlobalState{}, err
 	}
 
-	var wses []*doltdb.WorkingSet
-	for _, b := range branches {
-		wsRef, err := ref.WorkingSetRefForHead(b)
-		if err != nil {
-			return GlobalState{}, err
-		}
-
-		ws, err := db.ResolveWorkingSet(ctx, wsRef)
-		if err == doltdb.ErrWorkingSetNotFound {
-			// skip, continue working on other branches
-			continue
-		} else if err != nil {
-			return GlobalState{}, err
-		}
-
-		wses = append(wses, ws)
+	remotes, err := db.GetRemoteRefs(ctx)
+	if err != nil {
+		return GlobalState{}, err
 	}
 
-	tracker, err := NewAutoIncrementTracker(ctx, wses...)
+	rootRefs := make([]ref.DoltRef, 0, len(branches) + len(remotes))
+	rootRefs = append(rootRefs, branches...)
+	rootRefs = append(rootRefs, remotes...)
+
+	var roots []doltdb.Rootish
+	for _, b := range rootRefs {
+		switch b.GetType() {
+		case ref.BranchRefType:
+			wsRef, err := ref.WorkingSetRefForHead(b)
+			if err != nil {
+				return GlobalState{}, err
+			}
+
+			ws, err := db.ResolveWorkingSet(ctx, wsRef)
+			if err == doltdb.ErrWorkingSetNotFound {
+				// use the branch head if there isn't a working set for it
+				cm, err := db.ResolveCommitRef(ctx, b)
+				if err != nil {
+					return GlobalState{}, err
+				}
+				roots = append(roots, cm)
+			} else if err != nil {
+				return GlobalState{}, err
+			} else {
+				roots = append(roots, ws)
+			}
+		case ref.RemoteRefType:
+			cm, err := db.ResolveCommitRef(ctx, b)
+			if err != nil {
+				return GlobalState{}, err
+			}
+			roots = append(roots, cm)
+		}
+	}
+
+	tracker, err := NewAutoIncrementTracker(ctx, roots...)
 	if err != nil {
 		return GlobalState{}, err
 	}
