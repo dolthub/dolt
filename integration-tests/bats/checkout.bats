@@ -92,11 +92,49 @@ call dolt_reset('--hard');
 insert into test values (3);
 SQL
 
-    # With a dirty working set, dolt checkout should fail
+    # With a dirty working set on the other branch, dolt checkout should fail
     run dolt checkout feature
-
     [ "$status" -eq 1 ]
     [[ "$output" =~ "checkout would overwrite uncommitted changes" ]] || false
+
+    # Same as above, but changes are staged, not in working
+    dolt add .
+    dolt sql  <<SQL
+call dolt_checkout('feature');
+call dolt_reset('--hard');
+insert into test values (3);
+call dolt_add('.');
+SQL
+
+    run dolt checkout feature
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "checkout would overwrite uncommitted changes" ]] || false
+
+    # Same as above, but changes are staged and working
+    dolt add .
+    dolt sql  <<SQL
+call dolt_checkout('feature');
+call dolt_reset('--hard');
+insert into test values (3);
+call dolt_add('.');
+insert into test values (4);
+SQL
+
+
+    run dolt checkout feature
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "checkout would overwrite uncommitted changes" ]] || false
+    
+    dolt reset --hard
+    dolt sql -q "insert into test values (3)"
+    dolt add .
+    dolt sql -q "insert into test values (4)"
+    
+    # with staged changes matching on both branches, permit the checkout
+    dolt checkout feature
+    run dolt sql -q "select count(*) from test"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
 }
 
 @test "checkout: dolt checkout table to restore working tree tables with add and drop foreign key" {
