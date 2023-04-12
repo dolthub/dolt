@@ -500,7 +500,7 @@ var allTypes = []typeDescription{
 		TypeDefinition: "json",
 		Assertions: [2]typeDescriptionAssertion{
 			newTypeDescriptionAssertion("{}"),
-			newTypeDescriptionAssertion("{\"name\":\"BillyBob\",\"os\":\"Mac\",\"resolution\":{\"x\":1920,\"y\":1080}}"),
+			newTypeDescriptionAssertion("{\"os\":\"Mac\",\"name\":\"BillyBob\",\"resolution\":{\"x\":1920,\"y\":1080}}"),
 		},
 	},
 }
