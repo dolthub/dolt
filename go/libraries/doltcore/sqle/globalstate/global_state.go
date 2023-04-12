@@ -39,7 +39,7 @@ func NewGlobalStateStoreForDb(ctx context.Context, db *doltdb.DoltDB) (GlobalSta
 		return GlobalState{}, err
 	}
 
-	rootRefs := make([]ref.DoltRef, 0, len(branches) + len(remotes))
+	rootRefs := make([]ref.DoltRef, 0, len(branches)+len(remotes))
 	rootRefs = append(rootRefs, branches...)
 	rootRefs = append(rootRefs, remotes...)
 
