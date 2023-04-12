@@ -66,12 +66,8 @@ SQL
 
     dolt sql  <<SQL
 call dolt_checkout('feature');
-insert into test values (2), (3), (4);
-commit;
+insert into test values (2);
 SQL
-
-    skip "checkout stomps working set changes made on the feature branch via SQL. Needs to be prevented."
-    skip "See https://github.com/dolthub/dolt/issues/2246"
 
     # With no uncommitted working set changes, this works fine (no
     # working set comes with us, we get the working set of the feature
@@ -81,27 +77,26 @@ SQL
 
     run dolt sql -q "select count(*) from test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "4" ]] || false
+    [[ "$output" =~ "2" ]] || false
 
+    # These working set changes come with us when we change back to main
     dolt checkout main
     run dolt sql -q "select count(*) from test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "4" ]] || false
+    [[ "$output" =~ "2" ]] || false
 
     # Reset our test setup
     dolt sql  <<SQL
 call dolt_checkout('feature');
 call dolt_reset('--hard');
-insert into test values (2), (3), (4);
-commit;
+insert into test values (3);
 SQL
 
     # With a dirty working set, dolt checkout should fail
-    dolt sql -q "insert into test values (5)"
     run dolt checkout feature
 
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "some error" ]] || false
+    [[ "$output" =~ "checkout would overwrite uncommitted changes" ]] || false
 }
 
 @test "checkout: dolt checkout table to restore working tree tables with add and drop foreign key" {
