@@ -637,7 +637,7 @@ func (dp DiffPartition) Key() []byte {
 
 func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, lookup sql.IndexLookup) (sql.RowIter, error) {
 	if types.IsFormat_DOLT(ddb.Format()) {
-		return newProllyDiffIter(ctx, dp, ddb, dp.fromSch, dp.toSch)
+		return newProllyDiffIter(ctx, dp, dp.fromSch, dp.toSch)
 	} else {
 		return newNomsDiffIter(ctx, ddb, joiner, dp, lookup)
 	}
@@ -647,6 +647,13 @@ func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner 
 // If the primary key sets changed between the two commits, it may not be
 // possible to diff them.
 func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
+	// dp.to is nil when a table has been deleted previously. In this case, we return
+	// false, to stop processing diffs, since that previously deleted table is considered
+	// a logically different table and we don't want to mix the diffs together.
+	if dp.to == nil {
+		return false, nil
+	}
+
 	// dp.from is nil when the to commit created a new table
 	if dp.from == nil {
 		return true, nil
@@ -656,14 +663,7 @@ func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-
-	// dp.to is nil when a table has been deleted previously. In this case, we return
-	// false, to stop processing diffs, since that previously deleted table is considered
-	// a logically different table and we don't want to mix the diffs together.
-	if dp.to == nil {
-		return false, nil
-	}
-
+	
 	toSch, err := dp.to.GetSchema(ctx)
 	if err != nil {
 		return false, err
