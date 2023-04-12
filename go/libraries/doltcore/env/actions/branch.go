@@ -327,9 +327,9 @@ func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoi
 	return CreateBranchOnDB(ctx, dbData.Ddb, newBranch, startingPoint, force, dbData.Rsr.CWBHeadRef())
 }
 
-// UpdateRootsForBranch writes the roots needed for a branch checkout and returns the updated roots. |roots.Head|
-// should be the pre-checkout head. The returned roots struct has |Head| set to |branchRoot|.
-func UpdateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, force bool) (doltdb.Roots, error) {
+// RootsForBranch returns the roots needed for a branch checkout. |roots.Head| should be the pre-checkout head. The
+// returned roots struct has |Head| set to |branchRoot|.
+func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, force bool) (doltdb.Roots, error) {
 	conflicts := set.NewStrSet([]string{})
 	if roots.Head == nil {
 		roots.Working = branchRoot
@@ -366,29 +366,9 @@ func UpdateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *d
 	return roots, nil
 }
 
-func checkoutBranchNoDocs(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, rsw env.RepoStateWriter, branchRef ref.BranchRef, force bool) error {
-	roots, err := UpdateRootsForBranch(ctx, roots, branchRoot, force)
-	if err != nil {
-		return err
-	}
-
-	err = rsw.SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
-	if err != nil {
-		return err
-	}
-
-	// TODO: combine into single update
-	err = rsw.UpdateWorkingRoot(ctx, roots.Working)
-	if err != nil {
-		return err
-	}
-
-	return rsw.UpdateStagedRoot(ctx, roots.Staged)
-}
-
 func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
 	branchRef := ref.NewBranchRef(brName)
-	branchHeadRef := dEnv.RepoStateReader().CWBHeadRef()
+	initialHeadRef := dEnv.RepoStateReader().CWBHeadRef()
 
 	db := dEnv.DoltDB
 	hasRef, err := db.HasRef(ctx, branchRef)
@@ -408,34 +388,59 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		return err
 	}
 
-	currentWs, err := dEnv.WorkingSet(ctx)
+	initialWs, err := dEnv.WorkingSet(ctx)
+
 	if err != nil {
 		// working set does not exist, ignore error and skip the compatibility check below
 	} else if !force {
-		err = checkWorkingSetCompatibility(ctx, dEnv, branchRef, currentWs)
+		err = checkWorkingSetCompatibility(ctx, dEnv, branchRef, initialWs)
 		if err != nil {
 			return err
 		}
 	}
 
 	shouldResetWorkingSet := true
-	roots, err := dEnv.Roots(ctx)
+	initialRoots, err := dEnv.Roots(ctx)
+
 	// roots will be empty/nil if the working set is not set (working set is not set if the current branch was deleted)
 	if errors.Is(err, doltdb.ErrBranchNotFound) || errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-		roots, _ = dEnv.RecoveryRoots(ctx)
+		initialRoots, _ = dEnv.RecoveryRoots(ctx)
 		shouldResetWorkingSet = false
 	} else if err != nil {
 		return err
 	}
 
-	err = checkoutBranchNoDocs(ctx, roots, branchRoot, dEnv.RepoStateWriter(), branchRef, force)
+	newRoots, err := RootsForBranch(ctx, initialRoots, branchRoot, force)
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
+	if err != nil {
+		return err
+	}
+
+	ws, err := dEnv.WorkingSet(ctx)
+	// For backwards compatibility we support the branch not having a working set, but generally speaking it already
+	// should have one
+	if err == doltdb.ErrWorkingSetNotFound {
+		wsRef, err := ref.WorkingSetRefForHead(branchRef)
+		if err != nil {
+			return err
+		}
+		ws = doltdb.EmptyWorkingSet(wsRef)
+	} else if err != nil {
+		return err
+	}
+
+	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged))
 	if err != nil {
 		return err
 	}
 
 	if shouldResetWorkingSet {
 		// reset the source branch's working set to the branch head, leaving the source branch unchanged
-		err = ResetHard(ctx, dEnv, "", roots, branchHeadRef, currentWs)
+		err = ResetHard(ctx, dEnv, "", initialRoots, initialHeadRef, initialWs)
 		if err != nil {
 			return err
 		}

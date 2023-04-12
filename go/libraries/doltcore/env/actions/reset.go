@@ -154,7 +154,17 @@ func ResetHard(
 		return err
 	}
 
-	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge())
+	currentWs, err := dEnv.DoltDB.ResolveWorkingSet(ctx, ws.Ref())
+	if err != nil {
+		return err
+	}
+
+	h, err := currentWs.HashOf()
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge(), h, dEnv.NewWorkingSetMeta("reset hard"))
 	if err != nil {
 		return err
 	}
@@ -202,36 +212,33 @@ func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, roots do
 	return resetStaged(ctx, roots, tables)
 }
 
-// ResetSoftToRef matches the `git reset --soft <REF>` pattern. It resets both staged and head to the previous ref
-// and leaves the working unset. The user can then choose to create a commit that contains all changes since the ref.
-func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) (*doltdb.RootValue, error) {
+// ResetSoftToRef matches the `git reset --soft <REF>` pattern. It returns a new Roots with the Staged and Head values
+// set to the commit specified by the spec string. The Working root is not set
+func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) (doltdb.Roots, error) {
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	if err != nil {
-		return nil, err
+		return doltdb.Roots{}, err
 	}
 
 	newHead, err := dbData.Ddb.Resolve(ctx, cs, dbData.Rsr.CWBHeadRef())
 	if err != nil {
-		return nil, err
+		return doltdb.Roots{}, err
 	}
 
 	foundRoot, err := newHead.GetRootValue(ctx)
 	if err != nil {
-		return nil, err
-	}
-
-	// Changed the staged to the old root. Leave the working as is.
-	err = dbData.Rsw.UpdateStagedRoot(ctx, foundRoot)
-	if err != nil {
-		return nil, err
+		return doltdb.Roots{}, err
 	}
 
 	// Update the head to this commit
 	if err = dbData.Ddb.SetHeadToCommit(ctx, dbData.Rsr.CWBHeadRef(), newHead); err != nil {
-		return nil, err
+		return doltdb.Roots{}, err
 	}
 
-	return foundRoot, err
+	return doltdb.Roots{
+		Head:   foundRoot,
+		Staged: foundRoot,
+	}, err
 }
 
 func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot *doltdb.RootValue) ([]string, error) {
@@ -257,8 +264,9 @@ func resetStaged(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb
 	return roots, nil
 }
 
-// ValidateIsRef validates whether the input parameter is a valid cString
-func ValidateIsRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) bool {
+// IsValidRef validates whether the input parameter is a valid cString
+// TODO: this doesn't belong int his package
+func IsValidRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) bool {
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	if err != nil {
 		return false
