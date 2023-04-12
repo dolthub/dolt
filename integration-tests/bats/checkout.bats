@@ -74,7 +74,7 @@ SQL
     # branch instead)
     run dolt checkout feature
     [ "$status" -eq 0 ]
-
+ 
     run dolt sql -q "select count(*) from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2" ]] || false
@@ -98,7 +98,6 @@ SQL
     [[ "$output" =~ "checkout would overwrite uncommitted changes" ]] || false
 
     # Same as above, but changes are staged, not in working
-    dolt add .
     dolt sql  <<SQL
 call dolt_checkout('feature');
 call dolt_reset('--hard');
@@ -119,7 +118,6 @@ insert into test values (3);
 call dolt_add('.');
 insert into test values (4);
 SQL
-
 
     run dolt checkout feature
     [ "$status" -eq 1 ]
