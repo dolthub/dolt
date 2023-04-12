@@ -250,13 +250,35 @@ func DropEventFromDoltEventsTable(ctx *sql.Context, db Database, name string) (r
 	return deleter.Delete(ctx, sql.Row{name})
 }
 
+// UpdateEventInDoltEventsTable updates the event that must exist in the `dolt_event` table in the given db.
+func UpdateEventInDoltEventsTable(ctx *sql.Context, db Database, ed sql.EventDetails) (retErr error) {
+	tbl, err := GetOrCreateDoltEventsTable(ctx, db)
+	if err != nil {
+		return err
+	}
+	oldEd, exists, err := GetEventFromDoltEvents(ctx, tbl, ed.Name)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return sql.ErrEventDoesNotExist.New(ed.Name)
+	}
+	updater := tbl.Updater(ctx)
+	defer func() {
+		err := updater.Close(ctx)
+		if retErr == nil {
+			retErr = err
+		}
+	}()
+	return updater.Update(ctx, getDoltEventRowFromEventDetails(oldEd), getDoltEventRowFromEventDetails(ed))
+}
+
 func getDoltEventRowFromEventDetails(ed sql.EventDetails) sql.Row {
 	var at, every, starts, ends interface{}
 	if ed.HasExecuteAt {
 		at = ed.ExecuteAt
 	} else {
-		val, field := ed.ExecuteEvery.GetIntervalValAndField()
-		every = fmt.Sprintf("%s %s", val, field)
+		every = ed.ExecuteEvery
 		starts = ed.Starts
 		if ed.HasEnds {
 			ends = ed.Ends
@@ -276,7 +298,7 @@ func getDoltEventRowFromEventDetails(ed sql.EventDetails) sql.Row {
 		starts,
 		ends,
 		preserve,
-		ed.Status.String(),
+		ed.Status,
 		ed.Comment,
 		ed.Definition,
 		ed.Created.UTC(),
@@ -302,12 +324,7 @@ func getEventDetailsFromDoltEventRow(row sql.Row) (sql.EventDetails, error) {
 		}
 		ed.HasExecuteAt = true
 	} else {
-		if every, ok := row[3].(string); ok {
-			ed.ExecuteEvery, err = sql.GetEventOnScheduleEveryIntervalFromString(every)
-			if err != nil {
-				return sql.EventDetails{}, err
-			}
-		} else {
+		if ed.ExecuteEvery, ok = row[3].(string); !ok {
 			return sql.EventDetails{}, missingValue.New(doltdb.EventsTableExecuteEveryCol, row)
 		}
 		// STARTS should not be nil because we set it to current_timestamp if it is not defined when created.
@@ -325,12 +342,7 @@ func getEventDetailsFromDoltEventRow(row sql.Row) (sql.EventDetails, error) {
 	if ed.OnCompletionPreserve, err = gmstypes.ConvertToBool(row[6]); err != nil {
 		return sql.EventDetails{}, missingValue.New(doltdb.EventsTablePreserveCol, row)
 	}
-	if status, ok := row[7].(string); ok {
-		ed.Status, err = sql.GetEventStatusFromString(status)
-		if err != nil {
-			return sql.EventDetails{}, err
-		}
-	} else {
+	if ed.Status, ok = row[7].(string); !ok {
 		return sql.EventDetails{}, missingValue.New(doltdb.EventsTableStatusCol, row)
 	}
 	if ed.Comment, ok = row[8].(string); !ok {

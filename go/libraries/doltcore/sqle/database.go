@@ -1177,6 +1177,7 @@ func (db Database) DropTrigger(ctx *sql.Context, name string) error {
 	return db.dropFragFromSchemasTable(ctx, "trigger", name, sql.ErrTriggerDoesNotExist.New(name))
 }
 
+// GetEvent implements sql.EventDatabase.
 func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDetails, bool, error) {
 	eventsTbl, err := GetDoltEventsTable(ctx, db)
 	if err != nil {
@@ -1187,16 +1188,24 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDetails, bo
 	return GetEventFromDoltEvents(ctx, eventsTbl, name)
 }
 
+// GetEvents implements sql.EventDatabase.
 func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDetails, error) {
 	return GetAllDoltEvents(ctx, db)
 }
 
+// SaveEvent implements sql.EventDatabase.
 func (db Database) SaveEvent(ctx *sql.Context, ed sql.EventDetails) error {
 	return AddEventToDoltEventsTable(ctx, db, ed)
 }
 
+// DropEvent implements sql.EventDatabase.
 func (db Database) DropEvent(ctx *sql.Context, name string) error {
 	return DropEventFromDoltEventsTable(ctx, db, name)
+}
+
+// UpdateEvent implements sql.EventDatabase.
+func (db Database) UpdateEvent(ctx *sql.Context, ed sql.EventDetails) error {
+	return UpdateEventInDoltEventsTable(ctx, db, ed)
 }
 
 // GetStoredProcedure implements sql.StoredProcedureDatabase.
