@@ -389,10 +389,11 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	}
 
 	initialWs, err := dEnv.WorkingSet(ctx)
-
 	if err != nil {
-		// working set does not exist, ignore error and skip the compatibility check below
-	} else if !force {
+		return err
+	}
+
+	if !force {
 		if checkoutWouldStompWorkingSetChanges(ctx, dEnv, branchRef, initialWs) {
 			return ErrWorkingSetsOnBothBranches
 		}
@@ -409,19 +410,25 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		return err
 	}
 
+	var newRoots doltdb.Roots
 	
-	newRoots, err := rootsForBranch(ctx, initialRoots, branchHead, force)
+	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
 	if err != nil {
 		return err
 	}
-	
-	headHash, _ := newRoots.Head.HashOf()
-	stagedHash, _ := newRoots.Staged.HashOf()
-	workingHash, _ := newRoots.Working.HashOf()
-	
-	fmt.Sprintf("CheckoutBranch: %s %s %s %s", headHash.String(), stagedHash.String(), workingHash.String(), branchRef.String())
 
-	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
+	// Only if the current working set has uncommitted changes do we carry them forward to the branch being checked out. 
+	// If this is the case, then the destination branch must *not* have any uncommitted changes, as checked by 
+	// checkoutWouldStompWorkingSetChanges
+	hasChanges, _, err := workingSetHasChanges(initialWs)
+	if err != nil {
+		return err
+	}
+	if !hasChanges {
+		return nil
+	}
+	
+	newRoots, err = rootsForBranch(ctx, initialRoots, branchHead, force)
 	if err != nil {
 		return err
 	}
@@ -596,12 +603,12 @@ func checkoutWouldStompWorkingSetChanges(ctx context.Context, dEnv *env.DoltEnv,
 		return false
 	}
 
-	sourceHasChanges, sourceHash, err := detectWorkingSetChanges(currentWs)
+	sourceHasChanges, sourceHash, err := workingSetHasChanges(currentWs)
 	if err != nil {
 		return false
 	}
 	
-	destHasChanges, destHash, err := detectWorkingSetChanges(destWs)
+	destHasChanges, destHash, err := workingSetHasChanges(destWs)
 	if err != nil {
 		return false
 	}
@@ -609,8 +616,8 @@ func checkoutWouldStompWorkingSetChanges(ctx context.Context, dEnv *env.DoltEnv,
 	return sourceHasChanges && destHasChanges && !sourceHash.Equal(destHash)
 }
 
-// detectWorkingSetChanges returns a boolean indicating whether the working set has changes, and a hash of the changes
-func detectWorkingSetChanges(ws *doltdb.WorkingSet) (hasChanges bool, wrHash hash.Hash, err error) {
+// workingSetHasChanges returns a boolean indicating whether the working set has changes, and a hash of the changes
+func workingSetHasChanges(ws *doltdb.WorkingSet) (hasChanges bool, wrHash hash.Hash, err error) {
 	wrHash, err = ws.WorkingRoot().HashOf()
 	if err != nil {
 		return false, hash.Hash{}, err
