@@ -18,10 +18,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -69,10 +68,10 @@ func (m UniqCVMeta) ToString(ctx *sql.Context) (string, error) {
 
 func (m UniqCVMeta) PrettyPrint() string {
 	jsonStr := fmt.Sprintf(`{`+
-		`"Columns": ["%s"], `+
-		`"Name": "%s"}`,
-		strings.Join(m.Columns, `', '`),
-		m.Name)
+		`"Name": "%s", `+
+		`"Columns": ["%s"]}`,
+		m.Name,
+		strings.Join(m.Columns, `', '`))
 	return jsonStr
 }
 
