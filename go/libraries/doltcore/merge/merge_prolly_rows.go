@@ -306,8 +306,6 @@ func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerg
 	return tree.NewThreeWayDiffer(ctx, leftRows.NodeStore(), leftRows.Tuples(), rightRows.Tuples(), ancRows.Tuples(), valueMerger.tryMerge, valueMerger.keyless, leftRows.Tuples().Order)
 }
 
-//const uniqAddValidatorPendingSize = 650_000
-
 // uniqValidator checks whether new additions from the merge-right
 // duplicate secondary index entries.
 type uniqValidator struct {
@@ -530,7 +528,6 @@ func newConflictMerger(ctx context.Context, tm *TableMerger, ae *prolly.Artifact
 	}, nil
 }
 
-// TODO: Do we actually need the schema.Schema var?
 func (m *conflictMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, _ schema.Schema) error {
 	switch diff.Op {
 	case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict,
@@ -552,12 +549,11 @@ func (m *conflictMerger) finalize(ctx context.Context) (durable.ArtifactIndex, e
 // primaryMerger translates three-way diffs
 // on the primary index into merge-left updates.
 type primaryMerger struct {
-	serializer message.ProllyMapSerializer
-	keyDesc    val.TupleDesc
-	valDesc    val.TupleDesc
-	ns         tree.NodeStore
-	root       tree.Node
-
+	serializer  message.ProllyMapSerializer
+	keyDesc     val.TupleDesc
+	valDesc     val.TupleDesc
+	ns          tree.NodeStore
+	root        tree.Node
 	mut         *prolly.MutableMap
 	key, value  val.Tuple
 	valueMerger *valueMerger
