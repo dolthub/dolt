@@ -795,3 +795,25 @@ DELIM
     [[ "$output" =~ "Import completed successfully." ]] || false
 
 }
+
+@test "import-create-tables: created table with force option can be added and committed as modified" {
+    skip "overwritten table cannot be added and committed as modified"
+    run dolt table import -c --pk=id test `batshelper jails.csv`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt add test
+    [ "$status" -eq 0 ]
+    run dolt commit -m 'added table test'
+    [ "$status" -eq 0 ]
+    run dolt table import -c -f --pk=state test `batshelper states.csv`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt add test
+    [ "$status" -eq 0 ]
+    run dolt commit -m 'modified table test'
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "On branch main" ]
+    [ "${lines[1]}" = "nothing to commit, working tree clean" ]
+}

@@ -18,6 +18,8 @@ import (
 	"errors"
 	"sort"
 	"strings"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // ErrColTagCollision is an error that is returned when two columns within a ColCollection have the same tag
@@ -300,4 +302,16 @@ func ColCollectionSetDifference(leftCC, rightCC *ColCollection) (d *ColCollectio
 		return !ok
 	})
 	return d
+}
+
+func MakeColumnMapping(from, to *ColCollection) (m val.OrdinalMapping) {
+	m = make(val.OrdinalMapping, len(to.GetColumns()))
+	var ok bool
+	for i, col := range to.GetColumns() {
+		m[i], ok = from.TagToIdx[col.Tag]
+		if !ok {
+			m[i] = -1
+		}
+	}
+	return
 }
