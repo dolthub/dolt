@@ -446,7 +446,7 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 			{
 				Query: "show create table test",
 				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
-					"  `pk` datetime NOT NULL,\n" +
+					"  `pk` datetime(6) NOT NULL,\n" +
 					"  `v1` bit(20),\n" +
 					"  PRIMARY KEY (`pk`),\n" +
 					"  KEY `v1` (`v1`)\n" +
