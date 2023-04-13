@@ -17,6 +17,7 @@ package dsess
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -35,40 +36,8 @@ type SessionStateAdapter struct {
 	branches map[string]env.BranchConfig
 }
 
-func (s SessionStateAdapter) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
-	sqlCtx, ok := ctx.(*sql.Context)
-	if !ok {
-		return fmt.Errorf("non-sql context passed to SessionStateAdapter")
-	}
-	roots, _ := s.session.GetRoots(sqlCtx, s.dbName)
-	roots.Staged = newRoot
-	return s.session.SetRoots(ctx.(*sql.Context), s.dbName, roots)
-}
-
-func (s SessionStateAdapter) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
-	sqlCtx, ok := ctx.(*sql.Context)
-	if !ok {
-		return fmt.Errorf("non-sql context passed to SessionStateAdapter")
-	}
-	roots, _ := s.session.GetRoots(sqlCtx, s.dbName)
-	roots.Working = newRoot
-	return s.session.SetRoots(ctx.(*sql.Context), s.dbName, roots)
-}
-
 func (s SessionStateAdapter) SetCWBHeadRef(_ context.Context, _ ref.MarshalableRef) error {
 	return fmt.Errorf("Cannot set cwb head ref with a SessionStateAdapter")
-}
-
-func (s SessionStateAdapter) AbortMerge(_ context.Context) error {
-	return fmt.Errorf("Cannot abort merge with a SessionStateAdapter")
-}
-
-func (s SessionStateAdapter) ClearMerge(_ context.Context) error {
-	return nil
-}
-
-func (s SessionStateAdapter) StartMerge(_ context.Context, _ *doltdb.Commit) error {
-	return fmt.Errorf("Cannot start merge with a SessionStateAdapter")
 }
 
 var _ env.RepoStateReader = SessionStateAdapter{}
@@ -117,32 +86,6 @@ func (s SessionStateAdapter) CWBHeadSpec() *doltdb.CommitSpec {
 	return spec
 }
 
-func (s SessionStateAdapter) IsMergeActive(ctx context.Context) (bool, error) {
-	workingSet, err := s.session.WorkingSet(sql.NewContext(context.Background()), s.dbName)
-	if err != nil {
-		return false, err
-	}
-
-	return workingSet.MergeActive(), nil
-}
-
-func (s SessionStateAdapter) GetMergeCommit(ctx context.Context) (*doltdb.Commit, error) {
-	workingSet, err := s.session.WorkingSet(sql.NewContext(context.Background()), s.dbName)
-	if err != nil {
-		return nil, err
-	}
-	return workingSet.MergeState().Commit(), nil
-}
-
-func (s SessionStateAdapter) GetPreMergeWorking(ctx context.Context) (*doltdb.RootValue, error) {
-	workingSet, err := s.session.WorkingSet(sql.NewContext(context.Background()), s.dbName)
-	if err != nil {
-		return nil, err
-	}
-
-	return workingSet.MergeState().PreMergeWorkingRoot(), nil
-}
-
 func (s SessionStateAdapter) GetRemotes() (map[string]env.Remote, error) {
 	return s.remotes, nil
 }
@@ -173,7 +116,13 @@ func (s SessionStateAdapter) UpdateBranch(name string, new env.BranchConfig) err
 }
 
 func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
-	s.remotes[remote.Name] = remote
+	if _, ok := s.remotes[remote.Name]; ok {
+		return env.ErrRemoteAlreadyExists
+	}
+
+	if strings.IndexAny(remote.Name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
+		return env.ErrInvalidBackupName
+	}
 
 	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
 	if err != nil {
@@ -184,16 +133,25 @@ func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
 	if err != nil {
 		return err
 	}
+
+	// can have multiple remotes with the same address, but no conflicting backups
+	if rem, found := env.CheckRemoteAddressConflict(remote.Url, nil, repoState.Backups); found {
+		return fmt.Errorf("%w: '%s' -> %s", env.ErrRemoteAddressConflict, rem.Name, rem.Url)
+	}
+
+	s.remotes[remote.Name] = remote
 	repoState.AddRemote(remote)
 	return repoState.Save(fs)
 }
 
-func (s SessionStateAdapter) AddBackup(_ env.Remote) error {
-	return fmt.Errorf("cannot insert remote in an SQL session")
-}
+func (s SessionStateAdapter) AddBackup(backup env.Remote) error {
+	if _, ok := s.backups[backup.Name]; ok {
+		return env.ErrBackupAlreadyExists
+	}
 
-func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error {
-	delete(s.remotes, name)
+	if strings.IndexAny(backup.Name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
+		return env.ErrInvalidBackupName
+	}
 
 	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
 	if err != nil {
@@ -203,13 +161,68 @@ func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error 
 	repoState, err := env.LoadRepoState(fs)
 	if err != nil {
 		return err
+	}
+
+	// no conflicting remote or backup addresses
+	if bac, found := env.CheckRemoteAddressConflict(backup.Url, repoState.Remotes, repoState.Backups); found {
+		return fmt.Errorf("%w: '%s' -> %s", env.ErrRemoteAddressConflict, bac.Name, bac.Url)
+	}
+
+	s.backups[backup.Name] = backup
+	repoState.AddBackup(backup)
+	return repoState.Save(fs)
+}
+
+func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error {
+	remote, ok := s.remotes[name]
+	if !ok {
+		return env.ErrRemoteNotFound
+	}
+	delete(s.remotes, remote.Name)
+
+	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
+	if err != nil {
+		return err
+	}
+
+	repoState, err := env.LoadRepoState(fs)
+	if err != nil {
+		return err
+	}
+
+	remote, ok = repoState.Remotes[name]
+	if !ok {
+		// sanity check
+		return env.ErrRemoteNotFound
 	}
 	delete(repoState.Remotes, name)
 	return repoState.Save(fs)
 }
 
-func (s SessionStateAdapter) RemoveBackup(_ context.Context, _ string) error {
-	return fmt.Errorf("cannot delete remote in an SQL session")
+func (s SessionStateAdapter) RemoveBackup(_ context.Context, name string) error {
+	backup, ok := s.backups[name]
+	if !ok {
+		return env.ErrBackupNotFound
+	}
+	delete(s.backups, backup.Name)
+
+	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
+	if err != nil {
+		return err
+	}
+
+	repoState, err := env.LoadRepoState(fs)
+	if err != nil {
+		return err
+	}
+
+	backup, ok = repoState.Backups[name]
+	if !ok {
+		// sanity check
+		return env.ErrBackupNotFound
+	}
+	delete(repoState.Backups, name)
+	return repoState.Save(fs)
 }
 
 func (s SessionStateAdapter) TempTableFilesDir() (string, error) {

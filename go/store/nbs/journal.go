@@ -19,9 +19,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/dolthub/fslock"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -39,7 +42,7 @@ type chunkJournal struct {
 	path string
 
 	contents  manifestContents
-	backing   manifest
+	backing   *journalManifest
 	persister *fsTablePersister
 }
 
@@ -49,7 +52,7 @@ var _ manifest = &chunkJournal{}
 var _ manifestGCGenUpdater = &chunkJournal{}
 var _ io.Closer = &chunkJournal{}
 
-func newChunkJournal(ctx context.Context, nbfVers, dir string, m manifest, p *fsTablePersister) (*chunkJournal, error) {
+func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifest, p *fsTablePersister) (*chunkJournal, error) {
 	path, err := filepath.Abs(filepath.Join(dir, chunkJournalName))
 	if err != nil {
 		return nil, err
@@ -138,7 +141,7 @@ func (j *chunkJournal) bootstrapJournalWriter(ctx context.Context) (err error) {
 }
 
 // the journal file is the source of truth for the root hash, true-up persisted manifest
-func trueUpBackingManifest(ctx context.Context, root hash.Hash, backing manifest) (manifestContents, error) {
+func trueUpBackingManifest(ctx context.Context, root hash.Hash, backing *journalManifest) (manifestContents, error) {
 	ok, mc, err := backing.ParseIfExists(ctx, &Stats{}, nil)
 	if err != nil {
 		return manifestContents{}, err
@@ -146,10 +149,15 @@ func trueUpBackingManifest(ctx context.Context, root hash.Hash, backing manifest
 		return manifestContents{}, fmt.Errorf("manifest not found when opening chunk journal")
 	}
 
-	prev := mc.lock
-	next := generateLockHash(root, mc.specs, mc.appendix)
-	mc.lock = next
+	// set our in-memory root to match the journal
 	mc.root = root
+	if backing.readOnly() {
+		return mc, nil
+	}
+
+	prev := mc.lock
+	next := generateLockHash(mc.root, mc.specs, mc.appendix)
+	mc.lock = next
 
 	mc, err = backing.Update(ctx, prev, mc, &Stats{}, nil)
 	if err != nil {
@@ -159,12 +167,15 @@ func trueUpBackingManifest(ctx context.Context, root hash.Hash, backing manifest
 	} else if mc.root != root {
 		return manifestContents{}, errOptimisticLockFailedRoot
 	}
+	// true-up succeeded
 	return mc, nil
 }
 
 // Persist implements tablePersister.
 func (j *chunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
-	if err := j.maybeInit(ctx); err != nil {
+	if j.backing.readOnly() {
+		return nil, errReadOnlyManifest
+	} else if err := j.maybeInit(ctx); err != nil {
 		return nil, err
 	}
 
@@ -191,6 +202,9 @@ func (j *chunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkRea
 
 // ConjoinAll implements tablePersister.
 func (j *chunkJournal) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
+	if j.backing.readOnly() {
+		return nil, nil, errReadOnlyManifest
+	}
 	return j.persister.ConjoinAll(ctx, sources, stats)
 }
 
@@ -212,6 +226,9 @@ func (j *chunkJournal) Exists(ctx context.Context, name addr, chunkCount uint32,
 
 // PruneTableFiles implements tablePersister.
 func (j *chunkJournal) PruneTableFiles(ctx context.Context, keeper func() []addr, mtime time.Time) error {
+	if j.backing.readOnly() {
+		return errReadOnlyManifest
+	}
 	// sanity check that we're not deleting the journal
 	var keepJournal bool
 	for _, a := range keeper() {
@@ -230,6 +247,9 @@ func (j *chunkJournal) Path() string {
 }
 
 func (j *chunkJournal) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, fileSz uint64, chunkCount uint32) error {
+	if j.backing.readOnly() {
+		return errReadOnlyManifest
+	}
 	return j.persister.CopyTableFile(ctx, r, fileId, fileSz, chunkCount)
 }
 
@@ -240,6 +260,10 @@ func (j *chunkJournal) Name() string {
 
 // Update implements manifest.
 func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+	if j.backing.readOnly() {
+		return j.contents, errReadOnlyManifest
+	}
+
 	if j.wr == nil {
 		// pass the update to |j.backing| if the journal is not initialized
 		return j.backing.Update(ctx, lastLock, next, stats, writeHook)
@@ -274,17 +298,12 @@ func (j *chunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 
 // UpdateGCGen implements manifestGCGenUpdater.
 func (j *chunkJournal) UpdateGCGen(ctx context.Context, lastLock addr, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
-	updater, ok := j.backing.(manifestGCGenUpdater)
-	if !ok {
-		return manifestContents{}, fmt.Errorf("manifest (%s) does not support garbage collection", j.backing.Name())
-	}
-
-	if j.wr == nil {
+	if j.backing.readOnly() {
+		return j.contents, errReadOnlyManifest
+	} else if j.wr == nil {
 		// pass the update to |j.backing| if the journal is not initialized
-		return updater.UpdateGCGen(ctx, lastLock, next, stats, writeHook)
-	}
-
-	if j.contents.lock != lastLock {
+		return j.backing.UpdateGCGen(ctx, lastLock, next, stats, writeHook)
+	} else if j.contents.lock != lastLock {
 		return j.contents, nil // |next| is stale
 	}
 
@@ -294,7 +313,7 @@ func (j *chunkJournal) UpdateGCGen(ctx context.Context, lastLock addr, next mani
 		return manifestContents{}, err
 	}
 
-	latest, err := updater.UpdateGCGen(ctx, j.contents.lock, next, stats, writeHook)
+	latest, err := j.backing.UpdateGCGen(ctx, j.contents.lock, next, stats, writeHook)
 	if err != nil {
 		return manifestContents{}, err
 	} else if latest.root == next.root {
@@ -364,19 +383,19 @@ func (j *chunkJournal) maybeInit(ctx context.Context) (err error) {
 
 // Close implements io.Closer
 func (j *chunkJournal) Close() (err error) {
-	ctx := context.Background()
-	_, last, cerr := j.backing.ParseIfExists(ctx, &Stats{}, nil)
-	if cerr != nil {
-		err = cerr
-	} else if !emptyAddr(j.contents.lock) {
-		// best effort update to |backing|, this will
-		// fail if the database has been deleted.
-		// if we spuriously fail, we'll update |backing|
-		// next time we open this chunkJournal
-		_, _ = j.backing.Update(ctx, last.lock, j.contents, &Stats{}, nil)
-	}
 	if j.wr != nil {
 		err = j.wr.Close()
+		// flush the latest root to the backing manifest
+		if !j.backing.readOnly() {
+			cerr := j.flushToBackingManifest(context.Background(), j.contents, &Stats{})
+			if err == nil {
+				err = cerr
+			}
+		}
+	}
+	// close the journal manifest to release the file lock
+	if cerr := j.backing.Close(); err == nil {
+		err = cerr // keep first error
 	}
 	return
 }
@@ -403,7 +422,126 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, ke
 	if err != nil {
 		return nil, nil, err
 	}
-	keepers = append(keepers, stash)
+	if !hash.Hash(stash.name).IsEmpty() {
+		keepers = append(keepers, stash)
+	}
+	return
+}
+
+// newJournalManifest makes a new file manifest.
+func newJournalManifest(ctx context.Context, dir string) (m *journalManifest, err error) {
+	lock := fslock.New(filepath.Join(dir, lockFileName))
+	// try to take the file lock. if we fail, make the manifest read-only.
+	// if we succeed, hold the file lock until we close the journalManifest
+	err = lock.LockWithTimeout(lockFileTimeout)
+	if errors.Is(err, fslock.ErrTimeout) {
+		lock, err = nil, nil // read only
+	} else if err != nil {
+		return nil, err
+	}
+	m = &journalManifest{dir: dir, lock: lock}
+
+	var f *os.File
+	f, err = openIfExists(filepath.Join(dir, manifestFileName))
+	if err != nil {
+		_ = lock.Unlock()
+		return nil, err
+	} else if f == nil {
+		return m, nil
+	}
+	defer func() {
+		if cerr := f.Close(); err == nil {
+			err = cerr // keep first error
+		}
+		if err != nil {
+			_ = lock.Unlock()
+		}
+	}()
+
+	var ok bool
+	ok, _, err = m.ParseIfExists(ctx, &Stats{}, nil)
+	if err != nil {
+		_ = lock.Unlock()
+		return nil, err
+	} else if !ok {
+		_ = lock.Unlock()
+		return nil, ErrUnreadableManifest
+	}
+	return
+}
+
+type journalManifest struct {
+	dir  string
+	lock *fslock.Lock
+}
+
+func (jm *journalManifest) readOnly() bool {
+	return jm.lock == nil
+}
+
+// Name implements manifest.
+func (jm *journalManifest) Name() string {
+	return jm.dir
+}
+
+// ParseIfExists implements manifest.
+func (jm *journalManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error) {
+	t1 := time.Now()
+	defer func() { stats.ReadManifestLatency.SampleTimeSince(t1) }()
+	return parseIfExists(ctx, jm.dir, readHook)
+}
+
+// Update implements manifest.
+func (jm *journalManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+	if jm.readOnly() {
+		_, mc, err = jm.ParseIfExists(ctx, stats, nil)
+		if err != nil {
+			return manifestContents{}, err
+		}
+		// return current contents and sentinel error
+		return mc, errReadOnlyManifest
+	}
+
+	t1 := time.Now()
+	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
+	checker := func(upstream, contents manifestContents) error {
+		if contents.gcGen != upstream.gcGen {
+			return chunks.ErrGCGenerationExpired
+		}
+		return nil
+	}
+	return updateWithChecker(ctx, jm.dir, syncFlush, checker, lastLock, newContents, writeHook)
+}
+
+// UpdateGCGen implements manifest.
+func (jm *journalManifest) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+	if jm.readOnly() {
+		_, mc, err = jm.ParseIfExists(ctx, stats, nil)
+		if err != nil {
+			return manifestContents{}, err
+		}
+		// return current contents and sentinel error
+		return mc, errReadOnlyManifest
+	}
+
+	t1 := time.Now()
+	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
+	checker := func(upstream, contents manifestContents) error {
+		if contents.gcGen == upstream.gcGen {
+			return errors.New("UpdateGCGen() must update the garbage collection generation")
+		} else if contents.root != upstream.root {
+			return errors.New("UpdateGCGen() cannot update the root")
+		}
+		return nil
+	}
+	return updateWithChecker(ctx, jm.dir, syncFlush, checker, lastLock, newContents, writeHook)
+}
+
+func (jm *journalManifest) Close() (err error) {
+	if jm.lock != nil {
+		err = jm.lock.Unlock()
+		jm.lock = nil
+	}
 	return
 }
 

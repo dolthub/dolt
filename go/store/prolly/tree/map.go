@@ -237,6 +237,26 @@ func (t StaticMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K, V
 	return cb(key, value)
 }
 
+func (t StaticMap[K, V, O]) GetPrefix(ctx context.Context, query K, prefixOrder O, cb KeyValueFn[K, V]) (err error) {
+	cur, err := newLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, prefixOrder)
+	if err != nil {
+		return err
+	}
+
+	var key K
+	var value V
+
+	if cur.Valid() {
+		key = K(cur.CurrentKey())
+		if prefixOrder.Compare(query, key) == 0 {
+			value = V(cur.currentValue())
+		} else {
+			key = nil
+		}
+	}
+	return cb(key, value)
+}
+
 func (t StaticMap[K, V, O]) Has(ctx context.Context, query K) (ok bool, err error) {
 	cur, err := newLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, t.Order)
 	if err != nil {

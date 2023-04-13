@@ -1573,6 +1573,39 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "parallel column updates (repro issue #4547)",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			"create table t (rowId int not null, col1 varchar(255), col2 varchar(255), keyCol varchar(60), dataA varchar(255), dataB varchar(255), PRIMARY KEY (rowId), UNIQUE KEY uniqKey (col1, col2, keyCol));",
+			"insert into t (rowId, col1, col2, keyCol, dataA, dataB) values (1, '1', '2', 'key-a', 'test1', 'test2')",
+			"CALL DOLT_COMMIT('-Am', 'new table');",
+
+			"CALL DOLT_CHECKOUT('-b', 'other');",
+			"update t set dataA = 'other'",
+			"CALL DOLT_COMMIT('-am', 'update data other');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"update t set dataB = 'main'",
+			"CALL DOLT_COMMIT('-am', 'update on main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other')",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations_t",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "SELECT * from t",
+				Expected: []sql.Row{
+					{1, "1", "2", "key-a", "other", "main"},
+				},
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
@@ -1668,6 +1701,37 @@ var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT base_col1, base_col2, our_col1, our_col2, their_col1, their_col2 from dolt_conflicts_t;",
 				Expected: []sql.Row{{nil, nil, 1, 1, 1, 1}},
+			},
+		},
+	},
+	{
+		// this won't automatically become a PK because col2 is nullable
+		Name: "unique key violation for keyless table",
+		SetUpScript: []string{
+			"create table t (col1 int not null, col2 int, col3 int);",
+			"alter table t add unique index (col1, col2);",
+			"call dolt_commit('-Am', 'init');",
+
+			"call dolt_checkout('-b', 'right');",
+			"insert into t values (1, null, null);",
+			"insert into t values (3, 3, null);",
+			"call dolt_commit('-Am', 'right cm');",
+
+			"call dolt_checkout('main');",
+			"insert into t values (2, null, null);",
+			"insert into t values (3, 3, 1);",
+			"call dolt_commit('-Am', 'left cm');",
+
+			"set dolt_force_transaction_commit = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select col1, col2, col3 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{3, 3, nil}, {3, 3, 1}},
 			},
 		},
 	},
@@ -2607,37 +2671,6 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		// this won't automatically become a PK because col2 is nullable
-		Name: "unique key violation for keyless table",
-		SetUpScript: []string{
-			"create table t (col1 int not null, col2 int, col3 int);",
-			"alter table t add unique index (col1, col2);",
-			"call dolt_commit('-Am', 'init');",
-
-			"call dolt_checkout('-b', 'right');",
-			"insert into t values (1, null, null);",
-			"insert into t values (3, 3, null);",
-			"call dolt_commit('-Am', 'right cm');",
-
-			"call dolt_checkout('main');",
-			"insert into t values (2, null, null);",
-			"insert into t values (3, 3, 1);",
-			"call dolt_commit('-Am', 'left cm');",
-
-			"set dolt_force_transaction_commit = 1;",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 1}},
-			},
-			{
-				Query:    "select col1, col2, col3 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{3, 3, nil}, {3, 3, 1}},
-			},
-		},
-	},
-	{
 		Name: "regression test for bad column ordering in schema",
 		SetUpScript: []string{
 			"CREATE TABLE t (col1 enum ('A', 'B'), col2 varchar(max), primary key (col2));",
@@ -2700,7 +2733,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('right');",
-				ExpectedErrStr: "multiple violations for row not supported: pk ( 1 ) of table 'child' violates foreign keys 'parent (col1)' and 'parent (col2)'",
+				ExpectedErrStr: "error storing constraint violation for primary key (( 1 )): another violation already exists\nnew violation: {\"Columns\":[\"col1\"],\"ForeignKey\":\"aoso3tte\",\"Index\":\"col1\",\"OnDelete\":\"RESTRICT\",\"OnUpdate\":\"RESTRICT\",\"ReferencedColumns\":[\"col1\"],\"ReferencedIndex\":\"par_col1_idx\",\"ReferencedTable\":\"parent\",\"Table\":\"child\"} old violation: ({\"Columns\":[\"col2\"],\"ForeignKey\":\"nof6fc49\",\"Index\":\"col2\",\"OnDelete\":\"RESTRICT\",\"OnUpdate\":\"RESTRICT\",\"ReferencedColumns\":[\"col2\"],\"ReferencedIndex\":\"par_col2_idx\",\"ReferencedTable\":\"parent\",\"Table\":\"child\"})",
 			},
 			{
 				Query:    "SELECT * from parent;",
@@ -2731,11 +2764,118 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('right');",
-				ExpectedErrStr: "multiple violations for row not supported: pk ( 1 ) of table 't' violates unique keys 'col1' and 'col2'",
+				ExpectedErrStr: "error storing constraint violation for primary key (( 1 )): another violation already exists\nnew violation: {\"Columns\":[\"col1\"],\"Name\":\"col1\"} old violation: ({\"Columns\":[\"col2\"],\"Name\":\"col2\"})",
 			},
 			{
 				Query:    "SELECT * from t;",
 				Expected: []sql.Row{{1, 1, 1}},
+			},
+		},
+	},
+	{
+		Name: "Multiple unique key violations part 1 (repro issue #5719)",
+		SetUpScript: []string{
+			"SET dolt_force_transaction_commit = on;",
+			"CREATE TABLE t (id int NOT NULL, col1 varchar(255), col2 varchar(255), col3 varchar(255), PRIMARY KEY (id), UNIQUE KEY uniq_idx (col1,col2,col3));",
+			"CALL DOLT_ADD('.')",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"INSERT INTO t (id, col1, col2, col3) VALUES (1, 'val1', 'val1', 'val1'), (4, 'val1', 'val1', 'val2')",
+			"CALL DOLT_COMMIT('-am', 'right insert');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t (id, col1, col2, col3) VALUES (2, 'val1', 'val1', 'val1'), (3, 'val1', 'val1', 'val2');",
+			"CALL DOLT_COMMIT('-am', 'left insert');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(4)}},
+			},
+			{
+				Query: "select id, col1, col2, col3 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{
+					{1, "val1", "val1", "val1"},
+					{2, "val1", "val1", "val1"},
+					{3, "val1", "val1", "val2"},
+					{4, "val1", "val1", "val2"},
+				},
+			},
+		},
+	},
+	{
+		Name: "Multiple unique key violations part 2 (repro issue #5719)",
+		SetUpScript: []string{
+			"SET dolt_force_transaction_commit = on;",
+			"CREATE TABLE t (id int NOT NULL, col1 varchar(255), col2 varchar(255), col3 varchar(255), PRIMARY KEY (id), UNIQUE KEY uniq_idx (col1,col2,col3));",
+			"INSERT INTO t (id, col1, col2, col3) VALUES (1, 'val1', 'val1', 'val1'), (2, 'val1', 'val2', 'val1')",
+			"CALL DOLT_ADD('.')",
+			"CALL DOLT_COMMIT('-am', 'new table');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"UPDATE t SET col3 = 'val2'",
+			"CALL DOLT_COMMIT('-am', 'right update');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t (id, col1, col2, col3) VALUES (3, 'val1', 'val1', 'val2');",
+			"CALL DOLT_COMMIT('-am', 'main insert');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(2)}},
+			},
+			{
+				Query: "select id, col1, col2, col3 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{
+					{1, "val1", "val1", "val2"},
+					{3, "val1", "val1", "val2"},
+				},
+			},
+		},
+	},
+	{
+		Name: "Multiple unique key violations part 3 (repro issue #5719)",
+		SetUpScript: []string{
+			"SET dolt_force_transaction_commit = on;",
+			"CREATE TABLE t (id int NOT NULL, col1 varchar(255), col2 varchar(255), col3 varchar(255), PRIMARY KEY (id), UNIQUE KEY uniq_idx (col1,col2,col3));",
+			"INSERT INTO t (id, col1, col2, col3) VALUES (1, 'val1', 'val1', 'val1'), (4, 'val1', 'val2', 'val1')",
+			"CALL DOLT_ADD('.')",
+			"CALL DOLT_COMMIT('-am', 'new table');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"UPDATE t SET col3 = 'val2'",
+			"CALL DOLT_COMMIT('-am', 'right update');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t (id, col1, col2, col3) VALUES (3, 'val1', 'val1', 'val2');",
+			"CALL DOLT_COMMIT('-am', 'main insert');",
+			"CALL DOLT_CHECKOUT('right');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('main');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(2)}},
+			},
+			{
+				Query: "select id, col1, col2, col3 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{
+					{1, "val1", "val1", "val2"},
+					{3, "val1", "val1", "val2"},
+				},
 			},
 		},
 	},

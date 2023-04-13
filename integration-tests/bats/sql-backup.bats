@@ -17,21 +17,67 @@ teardown() {
 }
 
 @test "sql-backup: dolt_backup add" {
-    run dolt sql -q "call dolt_backup('add', 'hostedapidb-0', 'file:///some_directory')"
-    [ "$status" -ne 0 ]
-    run dolt sql -q "CALL dolt_backup('add', 'hostedapidb-0', 'file:///some_directory')"
-    [ "$status" -ne 0 ]
+    mkdir the_backup
+    run dolt sql -q "call dolt_backup('add', 'hostedapidb-0', 'file://./the_backup')"
+    [ "$status" -eq 0 ]
+    run dolt backup -v
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "the_backup" ]] || false
+}
+
+@test "sql-backup: dolt_backup add cannot add remote with address of existing backup" {
+    mkdir bac1
+    dolt sql -q "call dolt_backup('add','bac1','file://./bac1')"
+    run dolt sql -q "call dolt_backup('add','rem1','file://./bac1')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "address conflict with a remote: 'bac1'" ]] || false
+}
+
+@test "sql-backup: dolt_backup add invalid https backup" {
+    mkdir bac1
+    run dolt sql -q "call dolt_backup('add', 'bac1', 'https://doltremoteapi.dolthub.com/Dolthub/non-existing-repo')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "sync-url does not support http or https backup locations currently" ]] || false
+}
+
+@test "sql-backup: dolt_backup remove" {
+    mkdir bac1
+    dolt sql -q "call dolt_backup('add', 'bac1', 'file://./bac1')"
+    run dolt backup -v
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "bac1" ]] || false
+
+    dolt sql -q "call dolt_backup('remove','bac1')"
+    run dolt backup -v
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+}
+
+@test "sql-backup: dolt_backup remove cannot remove non-existent backup" {
+    run dolt backup -v
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+    [[ ! "$output" =~ "bac1" ]] || false
+
+    run dolt sql -q "call dolt_backup('remove','bac1')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: unknown backup: 'bac1'" ]] || false
 }
 
 @test "sql-backup: dolt_backup rm" {
-    run dolt sql -q "call dolt_backup('rm', 'hostedapidb-0')"
-    [ "$status" -ne 0 ]
-    run dolt sql -q "CALL dolt_backup('rm', 'hostedapidb-0')"
-    [ "$status" -ne 0 ]
-    run dolt sql -q "call dolt_backup('remove', 'hostedapidb-0')"
-    [ "$status" -ne 0 ]
-    run dolt sql -q "CALL dolt_backup('remove', 'hostedapidb-0')"
-    [ "$status" -ne 0 ]
+    mkdir bac1
+    dolt sql -q "call dolt_backup('add', 'bac1', 'file://./bac1')"
+    run dolt backup -v
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "bac1" ]] || false
+
+    dolt sql -q "call dolt_backup('rm','bac1')"
+    run dolt backup -v
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+    [[ ! "$output" =~ "bac1" ]] || false
 }
 
 @test "sql-backup: dolt_backup restore" {

@@ -1094,7 +1094,8 @@ func getRangeCutValue(cut sql.RangeCut, typ sql.Type) (interface{}, error) {
 	if _, ok := cut.(sql.AboveNull); ok {
 		return nil, nil
 	}
-	return typ.Convert(sql.GetRangeCutKey(cut))
+	ret, _, err := typ.Convert(sql.GetRangeCutKey(cut))
+	return ret, err
 }
 
 // DropTrailingAllColumnExprs returns the Range with any |AllColumnExprs| at the end of it removed.

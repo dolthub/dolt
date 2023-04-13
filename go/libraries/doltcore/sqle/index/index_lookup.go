@@ -57,7 +57,7 @@ func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 	}
 }
 
-func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, durableState *durableIndexState) (sql.RowIter2, error) {
+func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, durableState *durableIndexState) (sql.RowIter, error) {
 	if projections == nil {
 		projections = idx.Schema().GetAllCols().Tags
 	}
@@ -260,6 +260,7 @@ func NewLookupBuilder(
 		base.sec = durable.ProllyMapFromIndex(s.Secondary)
 		base.secKd, base.secVd = base.sec.Descriptors()
 		base.ns = base.sec.NodeStore()
+		base.prefDesc = base.secKd.PrefixDesc(len(di.columns))
 	}
 
 	switch {
@@ -330,6 +331,7 @@ type baseLookupBuilder struct {
 
 	sec          prolly.Map
 	secKd, secVd val.TupleDesc
+	prefDesc     val.TupleDesc
 	ns           tree.NodeStore
 }
 
@@ -346,7 +348,7 @@ func (lb *baseLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (s
 // every subsequent point lookup. Note that equality joins can have a mix of
 // point lookups on concrete values, and range lookups for null matches.
 func (lb *baseLookupBuilder) newPointLookup(ctx *sql.Context, rang prolly.Range) (iter prolly.MapIter, err error) {
-	err = lb.sec.Get(ctx, rang.Tup, func(key val.Tuple, value val.Tuple) (err error) {
+	err = lb.sec.GetPrefix(ctx, rang.Tup, lb.prefDesc, func(key val.Tuple, value val.Tuple) (err error) {
 		if key != nil && rang.Matches(key) {
 			iter = prolly.NewPointLookup(key, value)
 		} else {

@@ -183,7 +183,7 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 			// first field in |value| is cardinality
 			field := value.GetField(j + 1)
 			if def.IsSpatial() {
-				geom, err := sqltypes.GeometryType{}.Convert(field[:len(field)-1])
+				geom, _, err := sqltypes.GeometryType{}.Convert(field[:len(field)-1])
 				if err != nil {
 					panic(err)
 				}
@@ -247,7 +247,7 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			} else {
 				field := value.GetField(j - pkSize)
 				if def.IsSpatial() {
-					geom, err := sqltypes.GeometryType{}.Convert(field[:len(field)-1])
+					geom, _, err := sqltypes.GeometryType{}.Convert(field[:len(field)-1])
 					if err != nil {
 						panic(err)
 					}

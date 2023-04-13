@@ -11,6 +11,6 @@
   },
   "dependencies": {
     "@actions/core": "^1.9.1",
-    "aws-sdk": "^2.828.0"
+    "aws-sdk": "^2.1354.0"
   }
 }

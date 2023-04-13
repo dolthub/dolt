@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"os"
 
 	"github.com/dolthub/dolt/go/store/types"
 
@@ -84,7 +85,8 @@ func (cmd MigrateCmd) Exec(ctx context.Context, commandStr string, args []string
 		verr := errhand.BuildDError("migration failed").AddCause(err).Build()
 		return HandleVErrAndExitCode(verr, usage)
 	}
-	return 0
+	os.Exit(0)
+	return 0 // unreachable
 }
 
 // MigrateDatabase migrates the NomsBinFormat of |dEnv.DoltDB|.

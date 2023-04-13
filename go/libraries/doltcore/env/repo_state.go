@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// TODO: change name to ClientStateReader, move out of env package
 type RepoStateReader interface {
 	CWBHeadRef() ref.DoltRef
 	CWBHeadSpec() *doltdb.CommitSpec
@@ -34,10 +35,7 @@ type RepoStateReader interface {
 }
 
 type RepoStateWriter interface {
-	// TODO: get rid of this
-	UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error
-	// TODO: get rid of this
-	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
+	// TODO: kill this
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
 	AddRemote(r Remote) error
 	AddBackup(r Remote) error

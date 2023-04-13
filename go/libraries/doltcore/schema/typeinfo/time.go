@@ -37,7 +37,8 @@ var TimeType = &timeType{gmstypes.Time}
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *timeType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Int); ok {
-		return ti.sqlTimeType.Convert(gmstypes.Timespan(val))
+		ret, _, err := ti.sqlTimeType.Convert(gmstypes.Timespan(val))
+		return ret, err
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -51,7 +52,8 @@ func (ti *timeType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (
 	switch k {
 	case types.IntKind:
 		val := reader.ReadInt()
-		return ti.sqlTimeType.Convert(gmstypes.Timespan(val))
+		ret, _, err := ti.sqlTimeType.Convert(gmstypes.Timespan(val))
+		return ret, err
 	case types.NullKind:
 		return nil, nil
 	}
@@ -64,7 +66,7 @@ func (ti *timeType) ConvertValueToNomsValue(ctx context.Context, vrw types.Value
 	if v == nil {
 		return types.NullValue, nil
 	}
-	val, err := ti.sqlTimeType.Convert(v)
+	val, _, err := ti.sqlTimeType.Convert(v)
 	if err != nil {
 		return nil, err
 	}

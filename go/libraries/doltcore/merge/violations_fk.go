@@ -337,7 +337,7 @@ func (f *foreignKeyViolationWriter) ProllyFKViolationFound(ctx context.Context, 
 
 	err := f.artEditor.ReplaceConstraintViolation(ctx, rowKey, f.theirRootIsh, prolly.ArtifactTypeForeignKeyViol, meta)
 	if err != nil {
-		return handleFkMultipleViolForRowErr(err, f.kd, f.currFk.TableName)
+		return err
 	}
 
 	f.violatedTables.Add(f.currFk.TableName)

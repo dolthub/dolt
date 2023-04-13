@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -50,40 +49,13 @@ var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables c
 type SqlDatabase interface {
 	sql.Database
 	dsess.SessionDatabase
+	dsess.RevisionDatabase
 
 	// TODO: get rid of this, it's managed by the session, not the DB
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
 	DbData() env.DbData
 	Flush(*sql.Context) error
 	EditOptions() editor.Options
-}
-
-// AllDbs returns all the databases in the given provider.
-func AllDbs(ctx *sql.Context, pro sql.DatabaseProvider) []SqlDatabase {
-	dbs := pro.AllDatabases(ctx)
-	dsqlDBs := make([]SqlDatabase, 0, len(dbs))
-	for _, db := range dbs {
-		var sqlDb SqlDatabase
-		if sqlDatabase, ok := db.(SqlDatabase); ok {
-			sqlDb = sqlDatabase
-		} else if privDatabase, ok := db.(mysql_db.PrivilegedDatabase); ok {
-			if sqlDatabase, ok := privDatabase.Unwrap().(SqlDatabase); ok {
-				sqlDb = sqlDatabase
-			}
-		}
-		if sqlDb == nil {
-			continue
-		}
-		switch v := sqlDb.(type) {
-		case ReadReplicaDatabase, Database:
-			dsqlDBs = append(dsqlDBs, v)
-		case ReadOnlyDatabase, *UserSpaceDatabase:
-		default:
-			// esoteric analyzer errors occur if we silently drop databases, usually caused by pointer receivers
-			panic("cannot cast to SqlDatabase")
-		}
-	}
-	return dsqlDBs
 }
 
 // Database implements sql.Database for a dolt DB.
@@ -95,6 +67,7 @@ type Database struct {
 	gs       globalstate.GlobalState
 	editOpts editor.Options
 	revision string
+	revType  dsess.RevisionType
 }
 
 var _ SqlDatabase = Database{}
@@ -123,9 +96,22 @@ func (r ReadOnlyDatabase) IsReadOnly() bool {
 	return true
 }
 
+func (r ReadOnlyDatabase) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
+	return initialDBState(ctx, r, branch)
+}
+
 // Revision implements dsess.RevisionDatabase
 func (db Database) Revision() string {
 	return db.revision
+}
+
+func (db Database) RevisionType() dsess.RevisionType {
+	return db.revType
+}
+
+func (db Database) BaseName() string {
+	base, _ := splitRevisionDbName(db)
+	return base
 }
 
 func (db Database) EditOptions() editor.Options {
@@ -149,76 +135,18 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts e
 	}, nil
 }
 
-// GetInitialDBState returns the InitialDbState for |db|.
-func GetInitialDBState(ctx context.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
-	switch db := db.(type) {
-	case *UserSpaceDatabase, *SingleTableInfoDatabase:
-		return getInitialDBStateForUserSpaceDb(ctx, db)
+// initialDBState returns the InitialDbState for |db|. Other implementations of SqlDatabase outside this file should
+// implement their own method for an initial db state and not rely on this method.
+func initialDBState(ctx *sql.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
+	if len(db.Revision()) > 0 {
+		return initialStateForRevisionDb(ctx, db)
 	}
 
-	rsr := db.DbData().Rsr
-	ddb := db.DbData().Ddb
-
-	var r ref.DoltRef
-	if len(branch) > 0 {
-		r = ref.NewBranchRef(branch)
-	} else {
-		r = rsr.CWBHeadRef()
-	}
-
-	var retainedErr error
-
-	headCommit, err := ddb.ResolveCommitRef(ctx, r)
-	if err == doltdb.ErrBranchNotFound {
-		retainedErr = err
-		err = nil
-	}
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	var ws *doltdb.WorkingSet
-	if retainedErr == nil {
-		workingSetRef, err := ref.WorkingSetRefForHead(r)
-		if err != nil {
-			return dsess.InitialDbState{}, err
-		}
-
-		ws, err = db.DbData().Ddb.ResolveWorkingSet(ctx, workingSetRef)
-		if err != nil {
-			return dsess.InitialDbState{}, err
-		}
-	}
-
-	remotes, err := rsr.GetRemotes()
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	backups, err := rsr.GetBackups()
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	branches, err := rsr.GetBranches()
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	return dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     db.DbData(),
-		Remotes:    remotes,
-		Branches:   branches,
-		Backups:    backups,
-		Err:        retainedErr,
-	}, nil
+	return initialDbState(ctx, db, branch)
 }
 
-func (db Database) InitialDBState(ctx context.Context, branch string) (dsess.InitialDbState, error) {
-	return GetInitialDBState(ctx, db, branch)
+func (db Database) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
+	return initialDBState(ctx, db, branch)
 }
 
 // Name returns the name of this database, set at creation time.
@@ -1423,19 +1351,6 @@ func (db Database) SetCollation(ctx *sql.Context, collation sql.CollationID) err
 		return err
 	}
 	return db.SetRoot(ctx, newRoot)
-}
-
-// TODO: this is a hack to make user space DBs appear to the analyzer as full DBs with state etc., but the state is
-// really skeletal. We need to reexamine the DB / session initialization to make this simpler -- most of these things
-// aren't needed at initialization time and for most code paths.
-func getInitialDBStateForUserSpaceDb(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
-	return dsess.InitialDbState{
-		Db: db,
-		DbData: env.DbData{
-			Rsw: noopRepoStateWriter{},
-		},
-		ReadOnly: true,
-	}, nil
 }
 
 // noopRepoStateWriter is a minimal implementation of RepoStateWriter that does nothing

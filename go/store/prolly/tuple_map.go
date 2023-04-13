@@ -246,6 +246,14 @@ func (m Map) Get(ctx context.Context, key val.Tuple, cb tree.KeyValueFn[val.Tupl
 	return m.tuples.Get(ctx, key, cb)
 }
 
+// GetPrefix returns the first key-value pair that matches the prefix key
+// or nil to the callback.
+func (m Map) GetPrefix(ctx context.Context, key val.Tuple, prefDesc val.TupleDesc, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
+	return m.tuples.GetPrefix(ctx, key, prefDesc, cb)
+}
+
+// todo(andy): iter prefix
+
 // Has returns true is |key| is present in the Map.
 func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 	return m.tuples.Has(ctx, key)

@@ -628,18 +628,23 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 		wsRef = ws.Ref()
 	}
 
-	// TODO: add actual trace logging here
-	// logrus.Infof("Updating working root to %s", newRoot.DebugString(context.Background(), true))
-
 	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, dEnv.workingSetMeta())
 }
 
 // UpdateWorkingSet updates the working set for the current working branch to the value given.
 // This method can fail if another client updates the working set at the same time.
 func (dEnv *DoltEnv) UpdateWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
-	h, err := ws.HashOf()
-	if err != nil {
+	currentWs, err := dEnv.WorkingSet(ctx)
+	if err != doltdb.ErrWorkingSetNotFound && err != nil {
 		return err
+	}
+
+	var h hash.Hash
+	if currentWs != nil {
+		h, err = currentWs.HashOf()
+		if err != nil {
+			return err
+		}
 	}
 
 	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws, h, dEnv.workingSetMeta())
@@ -868,16 +873,16 @@ func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {
 	return dEnv.RepoState.Remotes, nil
 }
 
-// Check whether any backups or remotes share the given URL. Returns the first remote if multiple match.
+// CheckRemoteAddressConflict checks whether any backups or remotes share the given URL. Returns the first remote if multiple match.
 // Returns NoRemote and false if none match.
-func checkRemoteAddressConflict(url string, remotes, backups map[string]Remote) (Remote, bool) {
+func CheckRemoteAddressConflict(absUrl string, remotes, backups map[string]Remote) (Remote, bool) {
 	for _, r := range remotes {
-		if r.Url == url {
+		if r.Url == absUrl {
 			return r, true
 		}
 	}
 	for _, r := range backups {
-		if r.Url == url {
+		if r.Url == absUrl {
 			return r, true
 		}
 	}
@@ -899,7 +904,7 @@ func (dEnv *DoltEnv) AddRemote(r Remote) error {
 	}
 
 	// can have multiple remotes with the same address, but no conflicting backups
-	if rem, found := checkRemoteAddressConflict(absRemoteUrl, nil, dEnv.RepoState.Backups); found {
+	if rem, found := CheckRemoteAddressConflict(absRemoteUrl, nil, dEnv.RepoState.Backups); found {
 		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, rem.Name, rem.Url)
 	}
 
@@ -931,7 +936,7 @@ func (dEnv *DoltEnv) AddBackup(r Remote) error {
 	}
 
 	// no conflicting remote or backup addresses
-	if rem, found := checkRemoteAddressConflict(absRemoteUrl, dEnv.RepoState.Remotes, dEnv.RepoState.Backups); found {
+	if rem, found := CheckRemoteAddressConflict(absRemoteUrl, dEnv.RepoState.Remotes, dEnv.RepoState.Backups); found {
 		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, rem.Name, rem.Url)
 	}
 

@@ -660,30 +660,6 @@ func (ddb *DoltDB) Format() *types.NomsBinFormat {
 	return ddb.vrw.Format()
 }
 
-func WriteValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types.Value) (types.Ref, error) {
-	valRef, err := types.NewRef(val, vrw.Format())
-
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	targetVal, err := valRef.TargetValue(ctx, vrw)
-
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	if targetVal == nil {
-		_, err = vrw.WriteValue(ctx, val)
-
-		if err != nil {
-			return types.Ref{}, err
-		}
-	}
-
-	return valRef, err
-}
-
 // ResolveParent returns the n-th ancestor of a given commit (direct parent is index 0). error return value will be
 // non-nil in the case that the commit cannot be resolved, there aren't as many ancestors as requested, or the
 // underlying storage cannot be accessed.
@@ -1108,8 +1084,6 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	if err != nil {
 		return err
 	}
-
-	// logrus.Tracef("Updating working set with root %s", workingSet.RootValue().DebugString(ctx, true))
 
 	workingRootRef, stagedRef, mergeState, err := workingSet.writeValues(ctx, ddb)
 	if err != nil {

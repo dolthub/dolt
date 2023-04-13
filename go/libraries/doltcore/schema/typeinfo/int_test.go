@@ -119,8 +119,8 @@ func TestIntConvertValueToNomsValue(t *testing.T) {
 		{
 			Int24Type,
 			int32(math.MaxInt32),
-			0,
-			true,
+			1<<23 - 1,
+			false,
 		},
 	}
 

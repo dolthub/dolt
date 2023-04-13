@@ -121,7 +121,7 @@ func (ti *blobStringType) ConvertValueToNomsValue(ctx context.Context, vrw types
 	if v == nil {
 		return types.NullValue, nil
 	}
-	strVal, err := ti.sqlStringType.Convert(v)
+	strVal, _, err := ti.sqlStringType.Convert(v)
 	if err != nil {
 		return nil, err
 	}

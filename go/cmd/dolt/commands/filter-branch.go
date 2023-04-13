@@ -306,30 +306,6 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 	parallelism := runtime.GOMAXPROCS(0)
 	azr := analyzer.NewBuilder(pro).WithParallelism(parallelism).Build()
 
-	head := dEnv.RepoStateReader().CWBHeadSpec()
-	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
-	if err != nil {
-		return nil, nil, err
-	}
-
-	ws, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	dbState := dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     dEnv.DbData(),
-		Remotes:    dEnv.RepoState.Remotes,
-	}
-
-	err = sess.AddDB(sqlCtx, dbState)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	root, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return nil, nil, err

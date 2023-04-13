@@ -15,8 +15,6 @@
 package sqle
 
 import (
-	"context"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -78,8 +76,15 @@ func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
 	return resultingTblNames, nil
 }
 
-func (db *UserSpaceDatabase) InitialDBState(ctx context.Context, branch string) (dsess.InitialDbState, error) {
-	return getInitialDBStateForUserSpaceDb(ctx, db)
+func (db *UserSpaceDatabase) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
+	return dsess.InitialDbState{
+		Db:       db,
+		ReadOnly: true,
+		HeadRoot: db.RootValue,
+		DbData: env.DbData{
+			Rsw: noopRepoStateWriter{},
+		},
+	}, nil
 }
 
 func (db *UserSpaceDatabase) GetRoot(*sql.Context) (*doltdb.RootValue, error) {
@@ -100,4 +105,16 @@ func (db *UserSpaceDatabase) Flush(ctx *sql.Context) error {
 
 func (db *UserSpaceDatabase) EditOptions() editor.Options {
 	return db.editOpts
+}
+
+func (db *UserSpaceDatabase) Revision() string {
+	return ""
+}
+
+func (db *UserSpaceDatabase) RevisionType() dsess.RevisionType {
+	return dsess.RevisionTypeNone
+}
+
+func (db *UserSpaceDatabase) BaseName() string {
+	return db.Name()
 }

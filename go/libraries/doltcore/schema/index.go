@@ -253,7 +253,7 @@ func (ix *indexImpl) ToTableTuple(ctx context.Context, fullKey types.Tuple, form
 	return types.NewTuple(format, resVals...)
 }
 
-// GetPrefixLengths implements Index.
+// PrefixLengths implements Index.
 func (ix *indexImpl) PrefixLengths() []uint16 {
 	return ix.prefixLengths
 }

@@ -437,8 +437,8 @@ func TestReadReplica(t *testing.T) {
 	ctx := context.Background()
 
 	multiSetup := testcommands.NewMultiRepoTestSetup(t.Fatal)
-	defer multiSetup.Close()
 	defer os.RemoveAll(multiSetup.Root)
+	defer multiSetup.Close()
 
 	multiSetup.NewDB("read_replica")
 	multiSetup.NewRemote("remote1")
