@@ -145,33 +145,6 @@ func (dtf *DiffTableFunction) Children() []sql.Node {
 	return nil
 }
 
-// RowIter implements the sql.Node interface
-func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
-	// Everything we need to start iterating was cached when we previously determined the schema of the result
-	// TODO: When we add support for joining on table functions, we'll need to evaluate this against the
-	//       specified row. That row is what has the left_table context in a join query.
-	//       This will expand the test cases we need to cover significantly.
-	fromCommitVal, toCommitVal, dotCommitVal, _, err := dtf.evaluateArguments()
-	if err != nil {
-		return nil, err
-	}
-
-	sqledb, ok := dtf.database.(SqlDatabase)
-	if !ok {
-		return nil, fmt.Errorf("unable to get dolt database")
-	}
-
-	fromCommitStr, toCommitStr, err := loadCommitStrings(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
-	if err != nil {
-		return nil, err
-	}
-
-	ddb := sqledb.DbData().Ddb
-	dp := dtables.NewDiffPartition(dtf.tableDelta.ToTable, dtf.tableDelta.FromTable, toCommitStr, fromCommitStr, dtf.toDate, dtf.fromDate, dtf.tableDelta.ToSch, dtf.tableDelta.FromSch)
-
-	return dtables.NewDiffPartitionRowIter(*dp, ddb, dtf.joiner), nil
-}
-
 // findMatchingDelta returns the best matching table delta for the table name
 // given, taking renames into account
 func findMatchingDelta(deltas []diff.TableDelta, tableName string) diff.TableDelta {

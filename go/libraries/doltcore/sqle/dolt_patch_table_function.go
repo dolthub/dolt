@@ -16,13 +16,12 @@ package sqle
 
 import (
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"io"
-	"sort"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
-	"github.com/dolthub/go-mysql-server/sql/plan"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 
@@ -242,58 +241,6 @@ func (p *PatchTableFunction) Name() string {
 	return "dolt_patch"
 }
 
-// RowIter implements the sql.Node interface
-func (p *PatchTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
-	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := p.evaluateArguments()
-	if err != nil {
-		return nil, err
-	}
-
-	sqledb, ok := p.database.(SqlDatabase)
-	if !ok {
-		return nil, fmt.Errorf("unable to get dolt database")
-	}
-
-	fromRefDetails, toRefDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
-	if err != nil {
-		return nil, err
-	}
-
-	tableDeltas, err := diff.GetTableDeltas(ctx, fromRefDetails.root, toRefDetails.root)
-	if err != nil {
-		return nil, err
-	}
-
-	sort.Slice(tableDeltas, func(i, j int) bool {
-		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
-	})
-
-	// If tableNameExpr defined, return a single table patch result
-	if p.tableNameExpr != nil {
-		fromTblExists, err := fromRefDetails.root.HasTable(ctx, tableName)
-		if err != nil {
-			return nil, err
-		}
-		toTblExists, err := toRefDetails.root.HasTable(ctx, tableName)
-		if err != nil {
-			return nil, err
-		}
-		if !fromTblExists && !toTblExists {
-			return nil, sql.ErrTableNotFound.New(tableName)
-		}
-
-		delta := findMatchingDelta(tableDeltas, tableName)
-		tableDeltas = []diff.TableDelta{delta}
-	}
-
-	patches, err := getPatchNodes(ctx, sqledb.DbData(), tableDeltas, fromRefDetails, toRefDetails)
-	if err != nil {
-		return nil, err
-	}
-
-	return newPatchTableFunctionRowIter(patches, fromRefDetails.hashStr, toRefDetails.hashStr), nil
-}
-
 // evaluateArguments returns fromCommitVal, toCommitVal, dotCommitVal, and tableName.
 // It evaluates the argument expressions to turn them into values this PatchTableFunction
 // can use. Note that this method only evals the expressions, and doesn't validate the values.
@@ -465,7 +412,7 @@ func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema
 			return nil, err
 		}
 
-		r, err = plan.ProjectRow(ctx, projections, r)
+		r, err = rowexec.ProjectRow(ctx, projections, r)
 		if err != nil {
 			return nil, err
 		}

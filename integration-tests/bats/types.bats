@@ -380,7 +380,7 @@ SQL
 
     # check information_schema.COLUMNS table
     run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
-    [[ "$output" =~ 'test,v,2,,YES,datetime,,,,,0,,,datetime,"","","insert,references,select,update","","",' ]] || false
+    [[ "$output" =~ 'test,v,2,,YES,datetime,,,,,0,,,datetime(6),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: DEC" {
@@ -1359,7 +1359,7 @@ SQL
 
     # check information_schema.COLUMNS table
     run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
-    [[ "$output" =~ 'test,v,2,,YES,timestamp,,,,,0,,,timestamp,"","","insert,references,select,update","","",' ]] || false
+    [[ "$output" =~ 'test,v,2,,YES,timestamp,,,,,0,,,timestamp(6),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: TINYBLOB" {

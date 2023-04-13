@@ -178,6 +178,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 		if err != nil {
 			return nil, err
 		}
+		e.Analyzer.ExecBuilder = sqle.NewDoltExecBuilder()
 		d.engine = e
 
 		ctx := enginetest.NewContext(d)

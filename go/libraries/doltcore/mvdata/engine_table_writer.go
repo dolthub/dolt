@@ -222,7 +222,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		return err
 	}
 
-	iter, err := insertOrUpdateOperation.RowIter(s.sqlCtx, nil)
+	iter, err := dsqle.NewDoltExecBuilder().Build(s.sqlCtx, insertOrUpdateOperation, nil)
 	if err != nil {
 		return err
 	}
@@ -317,7 +317,7 @@ func (s *SqlEngineTableWriter) createTable() error {
 
 	analyzedQueryProcess := analyzer.StripPassthroughNodes(analyzed.(*plan.QueryProcess))
 
-	ri, err := analyzedQueryProcess.RowIter(s.sqlCtx, nil)
+	ri, err := dsqle.NewDoltExecBuilder().Build(s.sqlCtx, analyzedQueryProcess, nil)
 	if err != nil {
 		return err
 	}

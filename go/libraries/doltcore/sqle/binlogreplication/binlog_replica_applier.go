@@ -885,7 +885,8 @@ func convertVitessJsonExpressionString(ctx *sql.Context, value sqltypes.Value) (
 	if err != nil {
 		return nil, err
 	}
-	rowIter, err := analyze.RowIter(ctx, nil)
+
+	rowIter, err := sqle.NewDoltExecBuilder().Build(ctx, analyze, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -15,7 +15,6 @@
 package sqle
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -27,7 +26,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
 var _ sql.TableFunction = (*DiffStatTableFunction)(nil)
@@ -241,65 +239,6 @@ func (ds *DiffStatTableFunction) WithExpressions(expression ...sql.Expression) (
 	}
 
 	return &newDstf, nil
-}
-
-// RowIter implements the sql.Node interface
-func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
-	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := ds.evaluateArguments()
-	if err != nil {
-		return nil, err
-	}
-
-	sqledb, ok := ds.database.(SqlDatabase)
-	if !ok {
-		return nil, fmt.Errorf("unexpected database type: %T", ds.database)
-	}
-
-	fromRefDetails, toRefDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
-	if err != nil {
-		return nil, err
-	}
-
-	deltas, err := diff.GetTableDeltas(ctx, fromRefDetails.root, toRefDetails.root)
-	if err != nil {
-		return nil, err
-	}
-
-	// If tableNameExpr defined, return a single table diff stat result
-	if ds.tableNameExpr != nil {
-		delta := findMatchingDelta(deltas, tableName)
-		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tableName)
-		if err != nil {
-			return nil, err
-		}
-		if !hasDiff {
-			return NewDiffStatTableFunctionRowIter([]diffStatNode{}), nil
-		}
-		return NewDiffStatTableFunctionRowIter([]diffStatNode{diffStat}), nil
-	}
-
-	var diffStats []diffStatNode
-	for _, delta := range deltas {
-		tblName := delta.ToName
-		if tblName == "" {
-			tblName = delta.FromName
-		}
-		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName)
-		if err != nil {
-			if errors.Is(err, diff.ErrPrimaryKeySetChanged) {
-				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, fmt.Sprintf("stat for table %s cannot be determined. Primary key set changed.", tblName))
-				// Report an empty diff for tables that have primary key set changes
-				diffStats = append(diffStats, diffStatNode{tblName: tblName})
-				continue
-			}
-			return nil, err
-		}
-		if hasDiff {
-			diffStats = append(diffStats, diffStat)
-		}
-	}
-
-	return NewDiffStatTableFunctionRowIter(diffStats), nil
 }
 
 // evaluateArguments returns fromCommitVal, toCommitVal, dotCommitVal, and tableName.
