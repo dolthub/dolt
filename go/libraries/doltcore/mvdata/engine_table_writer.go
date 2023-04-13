@@ -17,6 +17,7 @@ package mvdata
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"io"
 	"sync/atomic"
 
@@ -222,7 +223,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		return err
 	}
 
-	iter, err := dsqle.NewDoltExecBuilder().Build(s.sqlCtx, insertOrUpdateOperation, nil)
+	iter, err := rowexec.DefaultBuilder.Build(s.sqlCtx, insertOrUpdateOperation, nil)
 	if err != nil {
 		return err
 	}
@@ -317,7 +318,7 @@ func (s *SqlEngineTableWriter) createTable() error {
 
 	analyzedQueryProcess := analyzer.StripPassthroughNodes(analyzed.(*plan.QueryProcess))
 
-	ri, err := dsqle.NewDoltExecBuilder().Build(s.sqlCtx, analyzedQueryProcess, nil)
+	ri, err := rowexec.DefaultBuilder.Build(s.sqlCtx, analyzedQueryProcess, nil)
 	if err != nil {
 		return err
 	}

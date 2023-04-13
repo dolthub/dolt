@@ -17,6 +17,7 @@ package enginetest
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"runtime"
 	"strings"
 	"testing"
@@ -178,7 +179,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 		if err != nil {
 			return nil, err
 		}
-		e.Analyzer.ExecBuilder = sqle.NewDoltExecBuilder()
+		e.Analyzer.ExecBuilder = rowexec.DefaultBuilder
 		d.engine = e
 
 		ctx := enginetest.NewContext(d)

@@ -17,6 +17,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"os"
 	"runtime"
 	"strings"
@@ -150,7 +151,7 @@ func NewSqlEngine(
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
 	})
 
-	engine.Analyzer.ExecBuilder = dsqle.NewDoltExecBuilder()
+	engine.Analyzer.ExecBuilder = rowexec.DefaultBuilder
 
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {

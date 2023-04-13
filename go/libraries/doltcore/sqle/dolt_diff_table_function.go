@@ -37,6 +37,7 @@ import (
 var ErrInvalidNonLiteralArgument = errors.NewKind("Invalid argument to %s: %s – only literal values supported")
 
 var _ sql.TableFunction = (*DiffTableFunction)(nil)
+var _ sql.ExecSourceRel = (*DiffTableFunction)(nil)
 
 type DiffTableFunction struct {
 	ctx            *sql.Context

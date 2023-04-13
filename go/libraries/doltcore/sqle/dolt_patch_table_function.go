@@ -37,6 +37,7 @@ import (
 )
 
 var _ sql.TableFunction = (*PatchTableFunction)(nil)
+var _ sql.ExecSourceRel = (*PatchTableFunction)(nil)
 
 type PatchTableFunction struct {
 	ctx *sql.Context

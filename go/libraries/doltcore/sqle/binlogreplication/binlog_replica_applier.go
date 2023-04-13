@@ -16,6 +16,7 @@ package binlogreplication
 
 import (
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"io"
 	"strconv"
 	"strings"
@@ -886,7 +887,7 @@ func convertVitessJsonExpressionString(ctx *sql.Context, value sqltypes.Value) (
 		return nil, err
 	}
 
-	rowIter, err := sqle.NewDoltExecBuilder().Build(ctx, analyze, nil)
+	rowIter, err := rowexec.DefaultBuilder.Build(ctx, analyze, nil)
 	if err != nil {
 		return nil, err
 	}
