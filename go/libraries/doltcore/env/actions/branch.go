@@ -388,8 +388,12 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		return err
 	}
 
+	workingSetExists := true
 	initialWs, err := dEnv.WorkingSet(ctx)
-	if err != nil {
+	if err == doltdb.ErrWorkingSetNotFound {
+		// ignore, but don't reset the working set
+		workingSetExists = false
+	} else if err != nil {
 		return err
 	}
 
@@ -399,38 +403,39 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		}
 	}
 
-	shouldResetWorkingSet := true
 	initialRoots, err := dEnv.Roots(ctx)
 
 	// roots will be empty/nil if the working set is not set (working set is not set if the current branch was deleted)
 	if errors.Is(err, doltdb.ErrBranchNotFound) || errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-		initialRoots, _ = dEnv.RecoveryRoots(ctx)
-		shouldResetWorkingSet = false
+		workingSetExists = false
 	} else if err != nil {
 		return err
 	}
 
-	hasChanges, _, _, err := rootHasUncommittedChanges(initialRoots)
-	if err != nil {
-		return err
+	hasChanges := false
+	if workingSetExists {
+		hasChanges, _, _, err = rootHasUncommittedChanges(initialRoots)
+		if err != nil {
+			return err
+		}
 	}
-
+	
 	// Only if the current working set has uncommitted changes do we carry them forward to the branch being checked out.
 	// If this is the case, then the destination branch must *not* have any uncommitted changes, as checked by
 	// checkoutWouldStompWorkingSetChanges
-	if !hasChanges {
+	if hasChanges {
+		err = transferWorkingChanges(ctx, dEnv, initialRoots, branchHead, branchRef, force)
+		if err != nil {
+			return err
+		}
+	} else {
 		err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
 		if err != nil {
 			return err
 		}
 	}
 
-	err = transferWorkingChanges(ctx, dEnv, initialRoots, branchHead, branchRef, force)
-	if err != nil {
-		return err
-	}
-
-	if shouldResetWorkingSet {
+	if workingSetExists {
 		// reset the source branch's working set to the branch head, leaving the source branch unchanged
 		err = ResetHard(ctx, dEnv, "", initialRoots, initialHeadRef, initialWs)
 		if err != nil {
