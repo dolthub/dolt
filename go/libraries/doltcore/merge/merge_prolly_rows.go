@@ -377,15 +377,6 @@ func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, c
 	return cb(key, value)
 }
 
-func keyHasNulls(key val.Tuple, desc val.TupleDesc) bool {
-	for i := range desc.Types {
-		if desc.GetField(i, key) == nil {
-			return true
-		}
-	}
-	return false
-}
-
 // conflictMerger processing primary key diffs
 // with conflict types into artifact table writes.
 type conflictMerger struct {

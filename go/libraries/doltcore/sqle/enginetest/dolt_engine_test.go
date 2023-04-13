@@ -1290,7 +1290,6 @@ func TestDoltConflictsTableNameTable(t *testing.T) {
 
 // tests new format behavior for keyless merges that create CVs and conflicts
 func TestKeylessDoltMergeCVsAndConflicts(t *testing.T) {
-	t.Skip("todo")
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}

@@ -86,7 +86,7 @@ func NewClusteredKeyBuilder(def schema.Index, sch schema.Schema, keyDesc val.Tup
 	b.pool = p
 	if schema.IsKeyless(sch) {
 		// [16]byte hash key is always final key field
-		b.mapping = val.OrdinalMapping{def.Count() - 1}
+		b.mapping = val.OrdinalMapping{def.Count()}
 		b.builder = val.NewTupleBuilder(val.KeylessTupleDesc)
 		return
 	}
