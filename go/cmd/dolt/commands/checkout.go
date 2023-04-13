@@ -252,8 +252,7 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, tables []string) err
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = actions.CheckoutTables(ctx, roots, dEnv.DbData(), tables)
-
+	roots, err = actions.CheckoutTables(ctx, roots, tables)
 	if err != nil {
 		if doltdb.IsRootValUnreachable(err) {
 			return unreadableRootToVErr(err)
@@ -269,6 +268,11 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, tables []string) err
 			bdr.AddCause(err)
 			return bdr.Build()
 		}
+	}
+
+	err = dEnv.UpdateWorkingRoot(ctx, roots.Working)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	return nil

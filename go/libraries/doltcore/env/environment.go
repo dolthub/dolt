@@ -628,18 +628,23 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 		wsRef = ws.Ref()
 	}
 
-	// TODO: add actual trace logging here
-	// logrus.Infof("Updating working root to %s", newRoot.DebugString(context.Background(), true))
-
 	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, dEnv.workingSetMeta())
 }
 
 // UpdateWorkingSet updates the working set for the current working branch to the value given.
 // This method can fail if another client updates the working set at the same time.
 func (dEnv *DoltEnv) UpdateWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
-	h, err := ws.HashOf()
-	if err != nil {
+	currentWs, err := dEnv.WorkingSet(ctx)
+	if err != doltdb.ErrWorkingSetNotFound && err != nil {
 		return err
+	}
+
+	var h hash.Hash
+	if currentWs != nil {
+		h, err = currentWs.HashOf()
+		if err != nil {
+			return err
+		}
 	}
 
 	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws, h, dEnv.workingSetMeta())

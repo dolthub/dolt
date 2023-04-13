@@ -16,7 +16,6 @@ package merge
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -292,28 +291,6 @@ func createCVForSecIdx(
 	}
 
 	return receiver.ProllyFKViolationFound(ctx, primaryIdxKey, value)
-}
-
-func handleFkMultipleViolForRowErr(err error, kd val.TupleDesc, tblName string) error {
-	if mv, ok := err.(*prolly.ErrMergeArtifactCollision); ok {
-		var e, n FkCVMeta
-		err = json.Unmarshal(mv.ExistingInfo, &e)
-		if err != nil {
-			return err
-		}
-		err = json.Unmarshal(mv.NewInfo, &n)
-		if err != nil {
-			return err
-		}
-		return fmt.Errorf(`%w: pk %s of table '%s' violates foreign keys '%s' and '%s'`,
-			ErrMultipleViolationsForRow,
-			kd.Format(mv.Key), tblName, getRefTblAndCols(e), getRefTblAndCols(n))
-	}
-	return err
-}
-
-func getRefTblAndCols(m FkCVMeta) string {
-	return fmt.Sprintf("%s (%s)", m.ReferencedTable, strings.Join(m.ReferencedColumns, ", "))
 }
 
 func createCVsForPartialKeyMatches(

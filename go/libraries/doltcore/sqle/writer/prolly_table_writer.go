@@ -380,6 +380,7 @@ func makeOrdinalMapping(from sql.Schema, to *schema.ColCollection) (m val.Ordina
 	return
 }
 
+// NB: only works for primary-key tables/indexes
 func makeIndexToIndexMapping(from, to *schema.ColCollection) (m val.OrdinalMapping) {
 	m = make(val.OrdinalMapping, len(to.GetColumns()))
 	for i, col := range to.GetColumns() {

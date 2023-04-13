@@ -159,6 +159,18 @@ func (td TupleDesc) IsNull(i int, tup Tuple) bool {
 	return b == nil
 }
 
+func (td TupleDesc) HasNulls(tup Tuple) bool {
+	if tup.Count() < td.Count() {
+		return true
+	}
+	for i := range td.Types {
+		if tup.FieldIsNull(i) {
+			return true
+		}
+	}
+	return false
+}
+
 // GetFixedAccess returns the FixedAccess for this tuple descriptor.
 func (td TupleDesc) GetFixedAccess() FixedAccess {
 	return td.fast

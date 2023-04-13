@@ -40,13 +40,29 @@ func (m MutableMap[K, V, O]) Get(ctx context.Context, key K, cb KeyValueFn[K, V]
 	value, ok := m.Edits.Get(key)
 	if ok {
 		if value == nil {
-			// there is a pending delete of |key| in |m.Edits|.
-			key = nil
+			key = nil // there is a pending delete of |key| in |m.Edits|.
 		}
 		return cb(key, value)
 	}
 
 	return m.Static.Get(ctx, key, cb)
+}
+
+func (m MutableMap[K, V, O]) GetPrefix(ctx context.Context, key K, prefixOrder O, cb KeyValueFn[K, V]) (err error) {
+	iter := m.Edits.GetIterFromSeekFn(func(k []byte) (advance bool) {
+		if k != nil { // seek until |k| >= |key|
+			advance = prefixOrder.Compare(k, key) < 0
+		}
+		return
+	})
+	k, v := iter.Current()
+	if k != nil && prefixOrder.Compare(k, key) == 0 {
+		if v == nil {
+			k = nil // there is a pending delete of |key| in |m.Edits|.
+		}
+		return cb(k, v)
+	}
+	return m.Static.GetPrefix(ctx, key, prefixOrder, cb)
 }
 
 func (m MutableMap[K, V, O]) Has(ctx context.Context, key K) (present bool, err error) {
@@ -56,6 +72,21 @@ func (m MutableMap[K, V, O]) Has(ctx context.Context, key K) (present bool, err 
 		return
 	}
 	return m.Static.Has(ctx, key)
+}
+
+func (m MutableMap[K, V, O]) HasPrefix(ctx context.Context, key K, prefixOrder O) (present bool, err error) {
+	iter := m.Edits.GetIterFromSeekFn(func(k []byte) (advance bool) {
+		if k != nil { // seek until |k| >= |key|
+			advance = prefixOrder.Compare(k, key) < 0
+		}
+		return
+	})
+	k, v := iter.Current()
+	if k != nil && prefixOrder.Compare(k, key) == 0 {
+		present = v != nil
+		return
+	}
+	return m.Static.HasPrefix(ctx, key, prefixOrder)
 }
 
 func (m MutableMap[K, V, O]) Copy() MutableMap[K, V, O] {
