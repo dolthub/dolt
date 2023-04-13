@@ -1201,9 +1201,6 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition,
 			}, true, nil
 		}
 	}
-	if err != nil {
-		return sql.EventDefinition{}, false, err
-	}
 	return sql.EventDefinition{}, false, nil
 }
 
@@ -1230,10 +1227,6 @@ func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, error) {
 			CreatedAt:       frag.created,
 		})
 	}
-	if err != nil {
-		return nil, err
-	}
-
 	return events, nil
 }
 

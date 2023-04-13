@@ -1344,7 +1344,7 @@ inner join t on to_pk = t.pk;`,
 		},
 	},
 	{
-		Name: "diff on dolt_events schema",
+		Name: "diff on dolt_schemas on events",
 		SetUpScript: []string{
 			"CREATE TABLE messages (id INT PRIMARY KEY AUTO_INCREMENT, message VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL);",
 			"CREATE EVENT IF NOT EXISTS msg_event ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 YEAR DISABLE DO INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 1',NOW());",
@@ -1355,10 +1355,10 @@ inner join t on to_pk = t.pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT name, definer, execute_every, preserve, status, comment, definition FROM dolt_events;",
+				Query: "SELECT type, name FROM dolt_schemas;",
 				Expected: []sql.Row{
-					{"msg_event", "`root`@`localhost`", nil, "false", "DISABLE", "", "INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 1',NOW())"},
-					{"my_commit", "`root`@`localhost`", "1 DAY", "false", "DISABLE", "", "CALL DOLT_COMMIT('--allow-empty','-am','my daily commit')"},
+					{"event", "msg_event"},
+					{"event", "my_commit"},
 				},
 			},
 			{
@@ -1374,14 +1374,14 @@ inner join t on to_pk = t.pk;`,
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "SELECT from_preserve, from_definition, to_preserve, to_definition FROM DOLT_DIFF('HEAD', 'WORKING', 'dolt_events')",
-				Expected: []sql.Row{{"false", "INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 1',NOW())", "true", "INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 2',NOW())"}},
+				Query:    "SELECT from_type, from_name, to_name, diff_type FROM DOLT_DIFF('HEAD', 'WORKING', 'dolt_schemas')",
+				Expected: []sql.Row{{"event", "msg_event", "msg_event", "modified"}},
 			},
 			{
-				Query: "SELECT name, definer, execute_every, preserve, status, comment, definition FROM dolt_events;",
+				Query: "SELECT type, name FROM dolt_schemas;",
 				Expected: []sql.Row{
-					{"msg_event", "`root`@`localhost`", nil, "true", "DISABLE", "", "INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 2',NOW())"},
-					{"my_commit", "`root`@`localhost`", "1 DAY", "false", "DISABLE", "", "CALL DOLT_COMMIT('--allow-empty','-am','my daily commit')"},
+					{"event", "msg_event"},
+					{"event", "my_commit"},
 				},
 			},
 		},

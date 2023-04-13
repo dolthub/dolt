@@ -1537,3 +1537,44 @@ SQL
 
 }
 
+@test "diff: get diff on dolt_schemas table with different result output formats" {
+    dolt add .
+    dolt commit -am "commit 1"
+    dolt sql <<SQL
+CREATE TABLE mytable(pk BIGINT PRIMARY KEY AUTO_INCREMENT, v1 BIGINT);
+CREATE TRIGGER trigger1 BEFORE INSERT ON mytable FOR EACH ROW SET new.v1 = -new.v1;
+CREATE EVENT event1 ON SCHEDULE EVERY '1:2' MINUTE_SECOND DISABLE DO INSERT INTO mytable (v1) VALUES (1);
+SQL
+
+    dolt add .
+    dolt commit -m "commit 2"
+
+    dolt sql <<SQL
+INSERT INTO mytable VALUES (1, 1);
+CREATE VIEW view1 AS SELECT v1 FROM mytable;
+DROP TRIGGER trigger1;
+CREATE TRIGGER trigger1 BEFORE INSERT ON mytable FOR EACH ROW SET new.v1 = -2*new.v1;
+DROP EVENT event1;
+CREATE EVENT event1 ON SCHEDULE EVERY '1:2' MINUTE_SECOND DISABLE DO INSERT INTO mytable (v1) VALUES (2);
+SQL
+
+    run dolt diff -r json
+    [ $status -eq 0 ]
+
+    run dolt diff
+    [ $status -eq 0 ]
+    [[ "$output" =~ "-CREATE DEFINER = \`root\`@\`localhost\` EVENT \`event1\` ON SCHEDULE EVERY '1:2' MINUTE_SECOND STARTS" ]] || false
+    [[ "$output" =~ "+CREATE DEFINER = \`root\`@\`localhost\` EVENT \`event1\` ON SCHEDULE EVERY '1:2' MINUTE_SECOND STARTS" ]] || false
+    [[ "$output" =~ "-CREATE TRIGGER trigger1 BEFORE INSERT ON mytable FOR EACH ROW SET new.v1 = -new.v1;" ]] || false
+    [[ "$output" =~ "+CREATE TRIGGER trigger1 BEFORE INSERT ON mytable FOR EACH ROW SET new.v1 = -2*new.v1;" ]] || false
+    [[ "$output" =~ "+CREATE VIEW view1 AS SELECT v1 FROM mytable;" ]] || false
+
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [[ "$output" =~ "INSERT INTO \`mytable\` (\`pk\`,\`v1\`) VALUES (1,-1);" ]] || false
+    [[ "$output" =~ "DROP EVENT \`event1\`;" ]] || false
+    [[ "$output" =~ "CREATE DEFINER = \`root\`@\`localhost\` EVENT \`event1\` ON SCHEDULE EVERY '1:2' MINUTE_SECOND STARTS" ]] || false
+    [[ "$output" =~ "DROP TRIGGER \`trigger1\`;" ]] || false
+    [[ "$output" =~ "CREATE TRIGGER trigger1 BEFORE INSERT ON mytable FOR EACH ROW SET new.v1 = -2*new.v1;" ]] || false
+    [[ "$output" =~ "CREATE VIEW view1 AS SELECT v1 FROM mytable;" ]] || false
+}

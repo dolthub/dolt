@@ -46,6 +46,8 @@ type diffWriter interface {
 	BeginTable(ctx context.Context, td diff.TableDelta) error
 	// WriteTableSchemaDiff is called to write a schema diff for the table given (if requested by args)
 	WriteTableSchemaDiff(ctx context.Context, fromRoot *doltdb.RootValue, toRoot *doltdb.RootValue, td diff.TableDelta) error
+	// WriteEventDiff is called to write an event diff
+	WriteEventDiff(ctx context.Context, eventName, oldDefn, newDefn string) error
 	// WriteTriggerDiff is called to write a trigger diff
 	WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error
 	// WriteViewDiff is called to write a view diff
@@ -268,6 +270,11 @@ func (t tabularDiffWriter) WriteTableSchemaDiff(ctx context.Context, fromRoot *d
 	return nil
 }
 
+func (t tabularDiffWriter) WriteEventDiff(ctx context.Context, eventName, oldDefn, newDefn string) error {
+	// identical implementation
+	return t.WriteViewDiff(ctx, eventName, oldDefn, newDefn)
+}
+
 func (t tabularDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
 	// identical implementation
 	return t.WriteViewDiff(ctx, triggerName, oldDefn, newDefn)
@@ -308,6 +315,20 @@ func (s sqlDiffWriter) WriteTableSchemaDiff(ctx context.Context, fromRoot *doltd
 
 	for _, stmt := range ddlStatements {
 		cli.Println(stmt)
+	}
+
+	return nil
+}
+
+func (s sqlDiffWriter) WriteEventDiff(ctx context.Context, eventName, oldDefn, newDefn string) error {
+	// definitions will already be semicolon terminated, no need to add additional ones
+	if oldDefn == "" {
+		cli.Println(newDefn)
+	} else if newDefn == "" {
+		cli.Println(fmt.Sprintf("DROP EVENT %s;", sql.QuoteIdentifier(eventName)))
+	} else {
+		cli.Println(fmt.Sprintf("DROP EVENT %s;", sql.QuoteIdentifier(eventName)))
+		cli.Println(newDefn)
 	}
 
 	return nil
@@ -357,6 +378,7 @@ type jsonDiffWriter struct {
 	tablesWritten    int
 	triggersWritten  int
 	viewsWritten     int
+	eventsWritten    int
 }
 
 var _ diffWriter = (*tabularDiffWriter)(nil)
@@ -461,6 +483,57 @@ func (j *jsonDiffWriter) RowWriter(ctx context.Context, td diff.TableDelta, unio
 	return j.rowDiffWriter, err
 }
 
+func (j *jsonDiffWriter) WriteEventDiff(ctx context.Context, eventName, oldDefn, newDefn string) error {
+	err := j.beginDocumentIfNecessary()
+	if err != nil {
+		return err
+	}
+
+	if j.eventsWritten == 0 {
+		// end the table if necessary
+		if j.tablesWritten > 0 {
+			_, err := j.wr.Write([]byte(jsonDataDiffFooter + ","))
+			if err != nil {
+				return err
+			}
+		}
+
+		_, err := j.wr.Write([]byte(`"events":[`))
+		if err != nil {
+			return err
+		}
+	} else {
+		_, err := j.wr.Write([]byte(","))
+		if err != nil {
+			return err
+		}
+	}
+
+	eventNameBytes, err := ejson.Marshal(eventName)
+	if err != nil {
+		return err
+	}
+
+	oldDefnBytes, err := ejson.Marshal(oldDefn)
+	if err != nil {
+		return err
+	}
+
+	newDefnBytes, err := ejson.Marshal(newDefn)
+	if err != nil {
+		return err
+	}
+
+	_, err = j.wr.Write([]byte(fmt.Sprintf(`{"name":%s,"from_definition":%s,"to_definition":%s}`,
+		eventNameBytes, oldDefnBytes, newDefnBytes)))
+	if err != nil {
+		return err
+	}
+
+	j.eventsWritten++
+	return nil
+}
+
 func (j *jsonDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
 	err := j.beginDocumentIfNecessary()
 	if err != nil {
@@ -468,9 +541,14 @@ func (j *jsonDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldD
 	}
 
 	if j.triggersWritten == 0 {
-		// end the table if necessary
-		if j.tablesWritten > 0 {
+		// end the previous block if necessary
+		if j.tablesWritten > 0 && j.eventsWritten == 0 {
 			_, err := j.wr.Write([]byte(jsonDataDiffFooter + ","))
+			if err != nil {
+				return err
+			}
+		} else if j.eventsWritten > 0 {
+			_, err := j.wr.Write([]byte("],"))
 			if err != nil {
 				return err
 			}
@@ -520,20 +598,18 @@ func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, n
 
 	if j.viewsWritten == 0 {
 		// end the previous block if necessary
-		if j.tablesWritten > 0 && j.triggersWritten == 0 {
+		if j.tablesWritten > 0 && j.eventsWritten == 0 && j.triggersWritten == 0 {
 			_, err := j.wr.Write([]byte(jsonDataDiffFooter + ","))
 			if err != nil {
 				return err
 			}
-		} else if j.triggersWritten > 0 {
+		} else if j.eventsWritten > 0 || j.triggersWritten > 0 {
 			_, err := j.wr.Write([]byte("],"))
 			if err != nil {
 				return err
 			}
 		}
-	}
 
-	if j.viewsWritten == 0 {
 		_, err := j.wr.Write([]byte(`"views":[`))
 		if err != nil {
 			return err
