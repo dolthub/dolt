@@ -49,7 +49,6 @@ type prollyIndexIter struct {
 }
 
 var _ sql.RowIter = prollyIndexIter{}
-var _ sql.RowIter2 = prollyIndexIter{}
 
 // NewProllyIndexIter returns a new prollyIndexIter.
 func newProllyIndexIter(
@@ -107,10 +106,6 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 	return r, nil
-}
-
-func (p prollyIndexIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
-	panic("unimplemented")
 }
 
 func (p prollyIndexIter) rowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
@@ -177,7 +172,6 @@ type prollyCoveringIndexIter struct {
 }
 
 var _ sql.RowIter = prollyCoveringIndexIter{}
-var _ sql.RowIter2 = prollyCoveringIndexIter{}
 
 func newProllyCoveringIndexIter(
 	ctx *sql.Context,
@@ -227,15 +221,6 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	return r, nil
-}
-
-func (p prollyCoveringIndexIter) Next2(ctx *sql.Context, f *sql.RowFrame) error {
-	k, v, err := p.indexIter.Next(ctx)
-	if err != nil {
-		return err
-	}
-
-	return p.writeRow2FromTuples(k, v, f)
 }
 
 func (p prollyCoveringIndexIter) writeRowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
@@ -364,7 +349,6 @@ type prollyKeylessIndexIter struct {
 }
 
 var _ sql.RowIter = prollyKeylessIndexIter{}
-var _ sql.RowIter2 = prollyKeylessIndexIter{}
 
 func newProllyKeylessIndexIter(
 	ctx *sql.Context,
@@ -422,10 +406,6 @@ func (p prollyKeylessIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	return nil, io.EOF
-}
-
-func (p prollyKeylessIndexIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
-	panic("unimplemented")
 }
 
 func (p prollyKeylessIndexIter) queueRows(ctx context.Context) error {

@@ -17,6 +17,7 @@ package sqle
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -231,6 +232,63 @@ func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression
 	}
 
 	return &newDstf, nil
+}
+
+// RowIter implements the sql.Node interface
+func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
+	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := ds.evaluateArguments()
+	if err != nil {
+		return nil, err
+	}
+
+	sqledb, ok := ds.database.(SqlDatabase)
+	if !ok {
+		return nil, fmt.Errorf("unexpected database type: %T", ds.database)
+	}
+
+	fromDetails, toDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
+	if err != nil {
+		return nil, err
+	}
+
+	deltas, err := diff.GetTableDeltas(ctx, fromDetails.root, toDetails.root)
+	if err != nil {
+		return nil, err
+	}
+
+	sort.Slice(deltas, func(i, j int) bool {
+		return strings.Compare(deltas[i].ToName, deltas[j].ToName) < 0
+	})
+
+	// If tableNameExpr defined, return a single table diff summary result
+	if ds.tableNameExpr != nil {
+		delta := findMatchingDelta(deltas, tableName)
+
+		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, true)
+		if err != nil {
+			return nil, err
+		}
+
+		summs := []*diff.TableDeltaSummary{}
+		if summ != nil {
+			summs = []*diff.TableDeltaSummary{summ}
+		}
+
+		return NewDiffSummaryTableFunctionRowIter(summs), nil
+	}
+
+	var diffSummaries []*diff.TableDeltaSummary
+	for _, delta := range deltas {
+		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, false)
+		if err != nil {
+			return nil, err
+		}
+		if summ != nil {
+			diffSummaries = append(diffSummaries, summ)
+		}
+	}
+
+	return NewDiffSummaryTableFunctionRowIter(diffSummaries), nil
 }
 
 func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb SqlDatabase, fromDetails, toDetails *refDetails, shouldErrorOnPKChange bool) (*diff.TableDeltaSummary, error) {

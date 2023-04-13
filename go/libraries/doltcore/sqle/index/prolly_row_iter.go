@@ -63,7 +63,6 @@ type prollyRowIter struct {
 }
 
 var _ sql.RowIter = prollyRowIter{}
-var _ sql.RowIter2 = prollyRowIter{}
 
 func NewProllyRowIter(sch schema.Schema, sqlSch sql.Schema, rows prolly.Map, iter prolly.MapIter, projections []uint64) (sql.RowIter, error) {
 	if projections == nil {
