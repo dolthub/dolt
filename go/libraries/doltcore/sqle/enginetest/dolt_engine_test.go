@@ -116,23 +116,34 @@ func TestSingleScript(t *testing.T) {
 	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "dolt_history table filter correctness",
+			Name: "parallel column updates (repro issue #4547)",
 			SetUpScript: []string{
-				"create table xy (x int primary key, y int);",
-				"call dolt_add('.');",
-				"call dolt_commit('-m', 'creating table');",
-				"insert into xy values (0, 1);",
-				"call dolt_commit('-am', 'add data');",
-				"insert into xy values (2, 3);",
-				"call dolt_commit('-am', 'add data');",
-				"insert into xy values (4, 5);",
-				"call dolt_commit('-am', 'add data');",
+				"SET dolt_allow_commit_conflicts = on;",
+				"create table t (rowId int not null, col1 varchar(255), col2 varchar(255), keyCol varchar(60), dataA varchar(255), dataB varchar(255), PRIMARY KEY (rowId), UNIQUE KEY uniqKey (col1, col2, keyCol));",
+				"insert into t (rowId, col1, col2, keyCol, dataA, dataB) values (1, '1', '2', 'key-a', 'test1', 'test2')",
+				"CALL DOLT_COMMIT('-Am', 'new table');",
+
+				"CALL DOLT_CHECKOUT('-b', 'other');",
+				"update t set dataA = 'other'",
+				"CALL DOLT_COMMIT('-am', 'update data other');",
+
+				"CALL DOLT_CHECKOUT('main');",
+				"update t set dataB = 'main'",
+				"CALL DOLT_COMMIT('-am', 'update on main');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "select count(*) from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1)",
+					Query:    "CALL DOLT_MERGE('other')",
+					Expected: []sql.Row{{"child", uint64(1)}},
+				},
+				{
+					Query:    "SELECT * from dolt_constraint_violations_t",
+					Expected: []sql.Row{},
+				},
+				{
+					Query: "SELECT * from t",
 					Expected: []sql.Row{
-						{2},
+						{1, "1", "2", "key-a", "other", "main"},
 					},
 				},
 			},
@@ -1208,7 +1219,7 @@ func TestDoltMerge(t *testing.T) {
 	for _, script := range MergeScripts {
 		// dolt versioning conflicts with reset harness -- use new harness every time
 		func() {
-			h := newDoltHarness(t)
+			h := newDoltHarness(t).WithParallelism(1)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -1217,7 +1228,7 @@ func TestDoltMerge(t *testing.T) {
 	if types.IsFormat_DOLT(types.Format_Default) {
 		for _, script := range Dolt1MergeScripts {
 			func() {
-				h := newDoltHarness(t)
+				h := newDoltHarness(t).WithParallelism(1)
 				defer h.Close()
 				enginetest.TestScript(t, h, script)
 			}()
