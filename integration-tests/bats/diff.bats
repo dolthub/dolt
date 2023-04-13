@@ -1563,8 +1563,8 @@ SQL
 
     run dolt diff
     [ $status -eq 0 ]
-    [[ "$output" =~ "-CREATE DEFINER = \`root\`@\`localhost\` EVENT \`event1\` ON SCHEDULE EVERY '1:2' MINUTE_SECOND STARTS" ]] || false
-    [[ "$output" =~ "+CREATE DEFINER = \`root\`@\`localhost\` EVENT \`event1\` ON SCHEDULE EVERY '1:2' MINUTE_SECOND STARTS" ]] || false
+    [[ "$output" =~ "-CREATE DEFINER = \`root\`@\`localhost\` EVENT \`event1\` ON SCHEDULE EVERY '1:2' MINUTE_SECOND STARTS".*"ON COMPLETION NOT PRESERVE DISABLE DO INSERT INTO mytable (v1) VALUES (1);" ]] || false
+    [[ "$output" =~ "+CREATE DEFINER = \`root\`@\`localhost\` EVENT \`event1\` ON SCHEDULE EVERY '1:2' MINUTE_SECOND STARTS".*"ON COMPLETION NOT PRESERVE DISABLE DO INSERT INTO mytable (v1) VALUES (2);" ]] || false
     [[ "$output" =~ "-CREATE TRIGGER trigger1 BEFORE INSERT ON mytable FOR EACH ROW SET new.v1 = -new.v1;" ]] || false
     [[ "$output" =~ "+CREATE TRIGGER trigger1 BEFORE INSERT ON mytable FOR EACH ROW SET new.v1 = -2*new.v1;" ]] || false
     [[ "$output" =~ "+CREATE VIEW view1 AS SELECT v1 FROM mytable;" ]] || false
@@ -1573,7 +1573,7 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "INSERT INTO \`mytable\` (\`pk\`,\`v1\`) VALUES (1,-1);" ]] || false
     [[ "$output" =~ "DROP EVENT \`event1\`;" ]] || false
-    [[ "$output" =~ "CREATE DEFINER = \`root\`@\`localhost\` EVENT \`event1\` ON SCHEDULE EVERY '1:2' MINUTE_SECOND STARTS" ]] || false
+    [[ "$output" =~ "CREATE DEFINER = \`root\`@\`localhost\` EVENT \`event1\` ON SCHEDULE EVERY '1:2' MINUTE_SECOND STARTS".*"ON COMPLETION NOT PRESERVE DISABLE DO INSERT INTO mytable (v1) VALUES (2);" ]] || false
     [[ "$output" =~ "DROP TRIGGER \`trigger1\`;" ]] || false
     [[ "$output" =~ "CREATE TRIGGER trigger1 BEFORE INSERT ON mytable FOR EACH ROW SET new.v1 = -2*new.v1;" ]] || false
     [[ "$output" =~ "CREATE VIEW view1 AS SELECT v1 FROM mytable;" ]] || false
