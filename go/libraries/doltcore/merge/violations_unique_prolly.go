@@ -68,10 +68,10 @@ func (m UniqCVMeta) ToString(ctx *sql.Context) (string, error) {
 
 func (m UniqCVMeta) PrettyPrint() string {
 	jsonStr := fmt.Sprintf(`{`+
-		`"Columns": ["%s"], `+
-		`"Name": "%s"}`,
-		strings.Join(m.Columns, `', '`),
-		m.Name)
+		`"Name": "%s", `+
+		`"Columns": ["%s"]}`,
+		m.Name,
+		strings.Join(m.Columns, `', '`))
 	return jsonStr
 }
 

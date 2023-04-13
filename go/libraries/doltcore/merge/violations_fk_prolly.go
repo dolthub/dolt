@@ -406,23 +406,23 @@ var _ types.JSONValue = FkCVMeta{}
 // output which includes additional whitespace between keys, values, and array elements.
 func (m FkCVMeta) PrettyPrint() string {
 	jsonStr := fmt.Sprintf(`{`+
-		`"Columns": ["%s"], `+
-		`"ForeignKey": "%s", `+
 		`"Index": "%s", `+
+		`"Table": "%s", `+
+		`"Columns": ["%s"], `+
 		`"OnDelete": "%s", `+
 		`"OnUpdate": "%s", `+
-		`"ReferencedColumns": ["%s"], `+
+		`"ForeignKey": "%s", `+
 		`"ReferencedIndex": "%s", `+
 		`"ReferencedTable": "%s", `+
-		`"Table": "%s"}`,
-		strings.Join(m.Columns, `', '`),
-		m.ForeignKey,
+		`"ReferencedColumns": ["%s"]}`,
 		m.Index,
+		m.Table,
+		strings.Join(m.Columns, `', '`),
 		m.OnDelete,
 		m.OnUpdate,
-		strings.Join(m.ReferencedColumns, `', '`),
+		m.ForeignKey,
 		m.ReferencedIndex,
 		m.ReferencedTable,
-		m.Table)
+		strings.Join(m.ReferencedColumns, `', '`))
 	return jsonStr
 }
