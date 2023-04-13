@@ -1572,6 +1572,39 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "parallel column updates (repro issue #4547)",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			"create table t (rowId int not null, col1 varchar(255), col2 varchar(255), keyCol varchar(60), dataA varchar(255), dataB varchar(255), PRIMARY KEY (rowId), UNIQUE KEY uniqKey (col1, col2, keyCol));",
+			"insert into t (rowId, col1, col2, keyCol, dataA, dataB) values (1, '1', '2', 'key-a', 'test1', 'test2')",
+			"CALL DOLT_COMMIT('-Am', 'new table');",
+
+			"CALL DOLT_CHECKOUT('-b', 'other');",
+			"update t set dataA = 'other'",
+			"CALL DOLT_COMMIT('-am', 'update data other');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"update t set dataB = 'main'",
+			"CALL DOLT_COMMIT('-am', 'update on main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other')",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations_t",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "SELECT * from t",
+				Expected: []sql.Row{
+					{1, "1", "2", "key-a", "other", "main"},
+				},
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{

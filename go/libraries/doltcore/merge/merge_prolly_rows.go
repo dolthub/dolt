@@ -290,6 +290,7 @@ func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 	}
 	for _, idx := range uv.indexes {
 		err = idx.findCollisions(ctx, diff.Key, value, func(k, v val.Tuple) error {
+			conflicts++
 			return uv.insertArtifact(ctx, k, v, idx.meta)
 		})
 		if err != nil {
@@ -361,9 +362,13 @@ func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, c
 		return err
 	}
 
+	clusteredKey := idx.clusteredBld.ClusteredKeyFromIndexKey(collision)
+	if bytes.Equal(key, clusteredKey) {
+		return nil // collided with ourselves
+	}
+
 	// |prefix| was non-unique, find the clustered index row that
 	// collided with row(|key|, |value|) and pass both to |cb|
-	clusteredKey := idx.clusteredBld.ClusteredKeyFromIndexKey(collision)
 	err = idx.clustered.Get(ctx, clusteredKey, func(k val.Tuple, v val.Tuple) error {
 		if k == nil {
 			s := idx.clustered.KeyDesc().Format(clusteredKey)
