@@ -435,9 +435,53 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		}
 	}
 
-	if workingSetExists {
+	if workingSetExists && hasChanges {
 		// reset the source branch's working set to the branch head, leaving the source branch unchanged
 		err = ResetHard(ctx, dEnv, "", initialRoots, initialHeadRef, initialWs)
+		if err != nil {
+			return err
+		}
+
+		// Annoyingly, after the ResetHard above we need to get all the roots again, because the working set has changed
+		cm, err := dEnv.DoltDB.ResolveCommitRef(ctx, initialHeadRef)
+		if err != nil {
+			return err
+		}
+		
+		headRoot, err := cm.ResolveRootValue(ctx)
+		if err != nil {
+			return err
+		}
+
+		workingSet, err := dEnv.DoltDB.ResolveWorkingSet(ctx, initialWs.Ref())
+		if err != nil {
+			return err
+		}
+		
+		resetRoots := doltdb.Roots{
+			Head:    headRoot,
+			Working: workingSet.WorkingRoot(),
+			Staged:  workingSet.StagedRoot(),
+		}
+		
+		// we also have to do a clean, because we the ResetHard won't touch any new tables (tables only in the working set)
+		newRoots, err := CleanUntracked(ctx, resetRoots, []string{}, false)
+		if err != nil {
+			return err
+		}
+		
+		h, err := workingSet.HashOf()
+		if err != nil {
+			return err
+		}
+
+		err = dEnv.DoltDB.UpdateWorkingSet(
+			ctx,
+			initialWs.Ref(),
+			initialWs.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged).ClearMerge(),
+			h,
+			dEnv.NewWorkingSetMeta("reset hard"),
+		)
 		if err != nil {
 			return err
 		}
