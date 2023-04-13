@@ -16,7 +16,6 @@ package binlogreplication
 
 import (
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"io"
 	"strconv"
 	"strings"
@@ -28,6 +27,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/parse"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/sqltypes"
