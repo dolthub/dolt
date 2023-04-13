@@ -419,7 +419,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 			return err
 		}
 	}
-	
+
 	// Only if the current working set has uncommitted changes do we carry them forward to the branch being checked out.
 	// If this is the case, then the destination branch must *not* have any uncommitted changes, as checked by
 	// checkoutWouldStompWorkingSetChanges
@@ -489,11 +489,11 @@ func transferWorkingChanges(
 
 // cleanOldWorkingSet resets the source branch's working set to the branch head, leaving the source branch unchanged
 func cleanOldWorkingSet(
-		ctx context.Context,
-		dEnv *env.DoltEnv,
-		initialRoots doltdb.Roots,
-		initialHeadRef ref.DoltRef,
-		initialWs *doltdb.WorkingSet,
+	ctx context.Context,
+	dEnv *env.DoltEnv,
+	initialRoots doltdb.Roots,
+	initialHeadRef ref.DoltRef,
+	initialWs *doltdb.WorkingSet,
 ) error {
 	// reset the source branch's working set to the branch head, leaving the source branch unchanged
 	err := ResetHard(ctx, dEnv, "", initialRoots, initialHeadRef, initialWs)
