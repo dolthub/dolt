@@ -177,7 +177,6 @@ type prollyCoveringIndexIter struct {
 }
 
 var _ sql.RowIter = prollyCoveringIndexIter{}
-var _ sql.RowIter2 = prollyCoveringIndexIter{}
 
 func newProllyCoveringIndexIter(
 	ctx *sql.Context,
@@ -229,15 +228,6 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return r, nil
 }
 
-func (p prollyCoveringIndexIter) Next2(ctx *sql.Context, f *sql.RowFrame) error {
-	k, v, err := p.indexIter.Next(ctx)
-	if err != nil {
-		return err
-	}
-
-	return p.writeRow2FromTuples(k, v, f)
-}
-
 func (p prollyCoveringIndexIter) writeRowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
 	for i, idx := range p.keyMap {
 		outputIdx := p.ordMap[i]
@@ -253,36 +243,6 @@ func (p prollyCoveringIndexIter) writeRowFromTuples(ctx context.Context, key, va
 		if err != nil {
 			return err
 		}
-	}
-	return
-}
-
-func (p prollyCoveringIndexIter) writeRow2FromTuples(key, value val.Tuple, f *sql.RowFrame) (err error) {
-	// TODO: handle out of order projections
-	for to := range p.keyMap {
-		from := p.keyMap.MapOrdinal(to)
-		if from == -1 {
-			continue
-		}
-
-		enc := p.keyDesc.Types[from].Enc
-		f.Append(sql.Value{
-			Typ: encodingToType[enc],
-			Val: p.keyDesc.GetField(from, key),
-		})
-	}
-
-	for to := range p.valMap {
-		from := p.valMap.MapOrdinal(to)
-		if from == -1 {
-			continue
-		}
-
-		enc := p.valDesc.Types[from].Enc
-		f.Append(sql.Value{
-			Typ: encodingToType[enc],
-			Val: p.valDesc.GetField(from, value),
-		})
 	}
 	return
 }
