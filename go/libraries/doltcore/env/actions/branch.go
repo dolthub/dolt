@@ -419,7 +419,10 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 	// If this is the case, then the destination branch must *not* have any uncommitted changes, as checked by
 	// checkoutWouldStompWorkingSetChanges
 	if !hasChanges {
-		return dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
+		err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
+		if err != nil {
+			return err
+		}
 	}
 
 	err = transferWorkingChanges(ctx, dEnv, initialRoots, branchHead, branchRef, force)
