@@ -333,7 +333,6 @@ type uniqAddValidator struct {
 	pkLen        int
 }
 
-
 func newUniqValidator(ctx context.Context, sch schema.Schema, tm *TableMerger, edits *prolly.ArtifactsEditor) (uniqValidator, error) {
 	srcHash, err := tm.rightSrc.HashOf()
 	if err != nil {
@@ -747,11 +746,11 @@ func (m *conflictMerger) finalize(ctx context.Context) (durable.ArtifactIndex, e
 // primaryMerger translates three-way diffs
 // on the primary index into merge-left updates.
 type primaryMerger struct {
-	serializer  message.ProllyMapSerializer
-	keyDesc     val.TupleDesc
-	valDesc     val.TupleDesc
-	ns          tree.NodeStore
-	root        tree.Node
+	serializer message.ProllyMapSerializer
+	keyDesc    val.TupleDesc
+	valDesc    val.TupleDesc
+	ns         tree.NodeStore
+	root       tree.Node
 
 	mut         *prolly.MutableMap
 	key, value  val.Tuple
