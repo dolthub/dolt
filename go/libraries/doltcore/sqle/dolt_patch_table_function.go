@@ -22,7 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
-	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 
@@ -37,6 +37,7 @@ import (
 )
 
 var _ sql.TableFunction = (*PatchTableFunction)(nil)
+var _ sql.ExecSourceRel = (*PatchTableFunction)(nil)
 
 type PatchTableFunction struct {
 	ctx *sql.Context
@@ -465,7 +466,7 @@ func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema
 			return nil, err
 		}
 
-		r, err = plan.ProjectRow(ctx, projections, r)
+		r, err = rowexec.ProjectRow(ctx, projections, r)
 		if err != nil {
 			return nil, err
 		}

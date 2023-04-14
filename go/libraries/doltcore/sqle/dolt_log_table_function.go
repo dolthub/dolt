@@ -31,6 +31,7 @@ import (
 )
 
 var _ sql.TableFunction = (*LogTableFunction)(nil)
+var _ sql.ExecSourceRel = (*LogTableFunction)(nil)
 
 type LogTableFunction struct {
 	ctx *sql.Context

@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/parse"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -885,7 +886,8 @@ func convertVitessJsonExpressionString(ctx *sql.Context, value sqltypes.Value) (
 	if err != nil {
 		return nil, err
 	}
-	rowIter, err := analyze.RowIter(ctx, nil)
+
+	rowIter, err := rowexec.DefaultBuilder.Build(ctx, analyze, nil)
 	if err != nil {
 		return nil, err
 	}

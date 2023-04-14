@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -223,7 +224,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		return err
 	}
 
-	iter, err := insertOrUpdateOperation.RowIter(s.sqlCtx, nil)
+	iter, err := rowexec.DefaultBuilder.Build(s.sqlCtx, insertOrUpdateOperation, nil)
 	if err != nil {
 		return err
 	}
@@ -318,7 +319,7 @@ func (s *SqlEngineTableWriter) createTable() error {
 
 	analyzedQueryProcess := analyzer.StripPassthroughNodes(analyzed.(*plan.QueryProcess))
 
-	ri, err := analyzedQueryProcess.RowIter(s.sqlCtx, nil)
+	ri, err := rowexec.DefaultBuilder.Build(s.sqlCtx, analyzedQueryProcess, nil)
 	if err != nil {
 		return err
 	}
