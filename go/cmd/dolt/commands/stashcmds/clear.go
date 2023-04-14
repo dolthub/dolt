@@ -53,7 +53,7 @@ func (cmd StashClearCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd StashClearCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(0)
 	return ap
 }
 

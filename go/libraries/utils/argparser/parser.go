@@ -49,15 +49,21 @@ func ValidatorFromStrList(paramName string, validStrList []string) ValidationFun
 }
 
 type ArgParser struct {
+	MaxArgs           int
 	Supported         []*Option
 	nameOrAbbrevToOpt map[string]*Option
 	ArgListHelp       [][2]string
 }
 
-func NewArgParser() *ArgParser {
+func NewArgParserWithVariableArgs() *ArgParser {
+	return NewArgParserWithMaxArgs(-1)
+}
+
+func NewArgParserWithMaxArgs(maxArgs int) *ArgParser {
 	var supported []*Option
 	nameOrAbbrevToOpt := make(map[string]*Option)
 	return &ArgParser{
+		MaxArgs:           maxArgs,
 		Supported:         supported,
 		nameOrAbbrevToOpt: nameOrAbbrevToOpt,
 	}
@@ -253,7 +259,7 @@ func (ap *ArgParser) matchValueOption(arg string, isLongFormFlag bool) (match *O
 // methods. Any unrecognized arguments or incorrect types will result in an appropriate error being returned. If the
 // universal --help or -h flag is found, an ErrHelp error is returned.
 func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
-	list := make([]string, 0, 16)
+	list := make([]string, 0, ap.MaxArgs)
 	results := make(map[string]string)
 
 	i := 0
@@ -336,6 +342,13 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 
 	if i < len(args) {
 		copy(list, args[i:])
+	}
+
+	if ap.MaxArgs == 0 && len(list) > 0 {
+		return nil, fmt.Errorf("error: this command does not take positional arguments, but got %s.", len(list))
+	}
+	if ap.MaxArgs != -1 && len(list) > ap.MaxArgs {
+		return nil, fmt.Errorf("error: too many positional arguments. Expected at most %s, got %s.", ap.MaxArgs, len(list))
 	}
 
 	return &ArgParseResults{results, list, ap}, nil

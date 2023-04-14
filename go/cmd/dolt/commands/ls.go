@@ -65,7 +65,7 @@ func (cmd LsCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd LsCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(1)
 	ap.SupportsFlag(cli.VerboseFlag, "v", "show the hash of the table")
 	ap.SupportsFlag(systemFlag, "s", "show system tables")
 	ap.SupportsFlag(cli.AllFlag, "a", "show system tables")

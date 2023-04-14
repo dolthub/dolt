@@ -103,7 +103,7 @@ func (cmd ConfigCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd ConfigCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs()
 	ap.SupportsFlag(globalParamName, "", "Use global config.")
 	ap.SupportsFlag(localParamName, "", "Use repository local config.")
 	ap.SupportsFlag(addOperationStr, "", "Set the value of one or more config parameters")

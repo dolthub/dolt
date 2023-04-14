@@ -60,7 +60,7 @@ func (cmd StashPopCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd StashPopCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(1)
 	return ap
 }
 
