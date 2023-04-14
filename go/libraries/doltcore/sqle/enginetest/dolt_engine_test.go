@@ -47,7 +47,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 82
+const SkipPreparedsCount = 83
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -946,6 +946,12 @@ func TestStoredProcedures(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestStoredProcedures(t, h)
+}
+
+func TestEvents(t *testing.T) {
+	doltHarness := newDoltHarness(t)
+	defer doltHarness.Close()
+	enginetest.TestEvents(t, doltHarness)
 }
 
 func TestCallAsOf(t *testing.T) {

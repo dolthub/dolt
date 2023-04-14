@@ -1343,6 +1343,49 @@ inner join t on to_pk = t.pk;`,
 			},
 		},
 	},
+	{
+		Name: "diff on dolt_schemas on events",
+		SetUpScript: []string{
+			"CREATE TABLE messages (id INT PRIMARY KEY AUTO_INCREMENT, message VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL);",
+			"CREATE EVENT IF NOT EXISTS msg_event ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 YEAR DISABLE DO INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 1',NOW());",
+			"CREATE EVENT my_commit ON SCHEDULE EVERY 1 DAY DISABLE DO CALL DOLT_COMMIT('--allow-empty','-am','my daily commit');",
+			"CALL DOLT_ADD('.')",
+			"SET @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'Creating table and events')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT type, name FROM dolt_schemas;",
+				Expected: []sql.Row{
+					{"event", "msg_event"},
+					{"event", "my_commit"},
+				},
+			},
+			{
+				Query:       "CREATE EVENT msg_event ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 YEAR DISABLE DO INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 2',NOW());",
+				ExpectedErr: sql.ErrEventAlreadyExists,
+			},
+			{
+				Query:            "DROP EVENT msg_event;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "CREATE EVENT msg_event ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 YEAR ON COMPLETION PRESERVE DISABLE DO INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 2',NOW());",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT from_type, from_name, to_name, diff_type FROM DOLT_DIFF('HEAD', 'WORKING', 'dolt_schemas')",
+				Expected: []sql.Row{{"event", "msg_event", "msg_event", "modified"}},
+			},
+			{
+				Query: "SELECT type, name FROM dolt_schemas;",
+				Expected: []sql.Row{
+					{"event", "msg_event"},
+					{"event", "my_commit"},
+				},
+			},
+		},
+	},
 }
 
 var DiffStatTableFunctionScriptTests = []queries.ScriptTest{
