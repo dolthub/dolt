@@ -20,7 +20,7 @@ your own version of DoltHub, we have [DoltLab](https://www.doltlab.com). If you 
 ask questions, or [check out our roadmap](https://docs.dolthub.com/other/roadmap) 
 to see what we're building next.
 
-[![Dolt Explainer Video](https://img.youtube.com/vi/3F6LwZt6e-A/0.jpg)](https://www.youtube.com/watch?v=3F6LwZt6e-A)
+[![Dolt Explainer Video](https://img.youtube.com/vi/3F6LwZt6e-A/maxresdefault.jpg)](https://www.youtube.com/watch?v=3F6LwZt6e-A)
 
 ## What's it for?
 
