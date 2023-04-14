@@ -32,6 +32,7 @@ import (
 const (
 	viewFragment    = "view"
 	triggerFragment = "trigger"
+	eventFragment   = "event"
 )
 
 type Extra struct {

@@ -31,6 +31,7 @@ import (
 )
 
 var _ sql.TableFunction = (*DiffStatTableFunction)(nil)
+var _ sql.ExecSourceRel = (*DiffStatTableFunction)(nil)
 
 type DiffStatTableFunction struct {
 	ctx *sql.Context

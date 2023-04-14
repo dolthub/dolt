@@ -125,7 +125,7 @@ SQL
     run dolt --feature-version $OLD pull
     [ "$status" -ne 0 ]
     [[ "$output" =~ "visit https://github.com/dolthub/dolt/releases/latest/" ]] || false
-    dolt --feature-version $OLD sql -q "SELECT * FROM test"
+    dolt --feature-version $OLD ls -v
     dolt --feature-version $OLD checkout other
     popd
 }

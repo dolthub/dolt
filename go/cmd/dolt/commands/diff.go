@@ -698,13 +698,18 @@ func diffDoltSchemasTable(
 		}
 
 		switch fragmentType {
-		case "view":
-			err := dw.WriteViewDiff(sqlCtx, fragmentName, oldFragment, newFragment)
+		case "event":
+			err := dw.WriteEventDiff(sqlCtx, fragmentName, oldFragment, newFragment)
 			if err != nil {
 				return nil
 			}
 		case "trigger":
 			err := dw.WriteTriggerDiff(sqlCtx, fragmentName, oldFragment, newFragment)
+			if err != nil {
+				return nil
+			}
+		case "view":
+			err := dw.WriteViewDiff(sqlCtx, fragmentName, oldFragment, newFragment)
 			if err != nil {
 				return nil
 			}

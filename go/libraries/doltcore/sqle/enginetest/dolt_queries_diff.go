@@ -1343,6 +1343,49 @@ inner join t on to_pk = t.pk;`,
 			},
 		},
 	},
+	{
+		Name: "diff on dolt_schemas on events",
+		SetUpScript: []string{
+			"CREATE TABLE messages (id INT PRIMARY KEY AUTO_INCREMENT, message VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL);",
+			"CREATE EVENT IF NOT EXISTS msg_event ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 YEAR DISABLE DO INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 1',NOW());",
+			"CREATE EVENT my_commit ON SCHEDULE EVERY 1 DAY DISABLE DO CALL DOLT_COMMIT('--allow-empty','-am','my daily commit');",
+			"CALL DOLT_ADD('.')",
+			"SET @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'Creating table and events')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT type, name FROM dolt_schemas;",
+				Expected: []sql.Row{
+					{"event", "msg_event"},
+					{"event", "my_commit"},
+				},
+			},
+			{
+				Query:       "CREATE EVENT msg_event ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 YEAR DISABLE DO INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 2',NOW());",
+				ExpectedErr: sql.ErrEventAlreadyExists,
+			},
+			{
+				Query:            "DROP EVENT msg_event;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "CREATE EVENT msg_event ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 YEAR ON COMPLETION PRESERVE DISABLE DO INSERT INTO messages(message,created_at) VALUES('Test Dolt Event 2',NOW());",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT from_type, from_name, to_name, diff_type FROM DOLT_DIFF('HEAD', 'WORKING', 'dolt_schemas')",
+				Expected: []sql.Row{{"event", "msg_event", "msg_event", "modified"}},
+			},
+			{
+				Query: "SELECT type, name FROM dolt_schemas;",
+				Expected: []sql.Row{
+					{"event", "msg_event"},
+					{"event", "my_commit"},
+				},
+			},
+		},
+	},
 }
 
 var DiffStatTableFunctionScriptTests = []queries.ScriptTest{
@@ -4766,6 +4809,54 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_commit_DIFF_t where from_commit=@Commit3 and to_commit=@Commit4;",
 				Expected: []sql.Row{{7, 8, nil, nil, "added"}},
+			},
+		},
+	},
+	{
+		Name: "added and dropped table",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int);",
+			"call dolt_add('.')",
+			"insert into t values (1, 2), (3, 4);",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
+
+			"drop table t",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping table');",
+
+			"create table unrelated (a int primary key);",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-Am', 'created unrelated table');",
+
+			"create table t (pk int primary key, c1 int);",
+			"call dolt_add('.')",
+			"insert into t values (1, 2);",
+			"set @Commit4 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit4, '-Am', 'recreating table t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:                           "select * from dolt_commit_diff_t where from_commit=@Commit2 and to_commit=@Commit3;",
+				ExpectedWarning:                 1105,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "cannot render full diff between commits",
+				Expected:                        []sql.Row{},
+			},
+			{
+				Query:                           "select * from dolt_commit_diff_t where from_commit=@Commit3 and to_commit=@Commit3;",
+				ExpectedWarning:                 1105,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "cannot render full diff between commits",
+				Expected:                        []sql.Row{},
+			},
+			{
+				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_commit_DIFF_t where from_commit=@Commit3 and to_commit=@Commit4;",
+				Expected: []sql.Row{{1, 2, nil, nil, "added"}},
+			},
+			{
+				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_commit_DIFF_t where from_commit=@Commit1 and to_commit=@Commit4;",
+				Expected: []sql.Row{{nil, nil, 3, 4, "removed"}},
 			},
 		},
 	},

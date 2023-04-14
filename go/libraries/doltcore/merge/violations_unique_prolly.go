@@ -16,7 +16,6 @@ package merge
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -69,10 +68,10 @@ func (m UniqCVMeta) ToString(ctx *sql.Context) (string, error) {
 
 func (m UniqCVMeta) PrettyPrint() string {
 	jsonStr := fmt.Sprintf(`{`+
-		`"Columns": ["%s"], `+
-		`"Name": "%s"}`,
-		strings.Join(m.Columns, `', '`),
-		m.Name)
+		`"Name": "%s", `+
+		`"Columns": ["%s"]}`,
+		m.Name,
+		strings.Join(m.Columns, `', '`))
 	return jsonStr
 }
 
@@ -98,20 +97,6 @@ func replaceUniqueKeyViolation(ctx context.Context, edt *prolly.ArtifactsEditor,
 
 	err = edt.ReplaceConstraintViolation(ctx, k, theirsHash, prolly.ArtifactTypeUniqueKeyViol, meta)
 	if err != nil {
-		if mv, ok := err.(*prolly.ErrMergeArtifactCollision); ok {
-			var e, n UniqCVMeta
-			err = json.Unmarshal(mv.ExistingInfo, &e)
-			if err != nil {
-				return err
-			}
-			err = json.Unmarshal(mv.NewInfo, &n)
-			if err != nil {
-				return err
-			}
-			return fmt.Errorf("%w: pk %s of table '%s' violates unique keys '%s' and '%s'",
-				ErrMultipleViolationsForRow,
-				kd.Format(mv.Key), tblName, e.Name, n.Name)
-		}
 		return err
 	}
 
@@ -131,20 +116,6 @@ func replaceUniqueKeyViolationWithValue(ctx context.Context, edt *prolly.Artifac
 
 	err = edt.ReplaceConstraintViolation(ctx, k, theirsHash, prolly.ArtifactTypeUniqueKeyViol, meta)
 	if err != nil {
-		if mv, ok := err.(*prolly.ErrMergeArtifactCollision); ok {
-			var e, n UniqCVMeta
-			err = json.Unmarshal(mv.ExistingInfo, &e)
-			if err != nil {
-				return err
-			}
-			err = json.Unmarshal(mv.NewInfo, &n)
-			if err != nil {
-				return err
-			}
-			return fmt.Errorf("%w: pk %s of table '%s' violates unique keys '%s' and '%s'",
-				ErrMultipleViolationsForRow,
-				kd.Format(mv.Key), tblName, e.Name, n.Name)
-		}
 		return err
 	}
 

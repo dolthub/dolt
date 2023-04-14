@@ -23,8 +23,10 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -94,7 +96,7 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 
 	if se.GetUnderlyingEngine().IsReadOnly {
 		// SqlEngineTableWriter does not respect read only mode
-		return nil, analyzer.ErrReadOnlyDatabase.New(dbName)
+		return nil, analyzererrors.ErrReadOnlyDatabase.New(dbName)
 	}
 
 	sqlCtx, err := se.NewLocalContext(ctx)
@@ -222,7 +224,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		return err
 	}
 
-	iter, err := insertOrUpdateOperation.RowIter(s.sqlCtx, nil)
+	iter, err := rowexec.DefaultBuilder.Build(s.sqlCtx, insertOrUpdateOperation, nil)
 	if err != nil {
 		return err
 	}
@@ -317,7 +319,7 @@ func (s *SqlEngineTableWriter) createTable() error {
 
 	analyzedQueryProcess := analyzer.StripPassthroughNodes(analyzed.(*plan.QueryProcess))
 
-	ri, err := analyzedQueryProcess.RowIter(s.sqlCtx, nil)
+	ri, err := rowexec.DefaultBuilder.Build(s.sqlCtx, analyzedQueryProcess, nil)
 	if err != nil {
 		return err
 	}

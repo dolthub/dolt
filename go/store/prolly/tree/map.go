@@ -238,7 +238,7 @@ func (t StaticMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K, V
 }
 
 func (t StaticMap[K, V, O]) GetPrefix(ctx context.Context, query K, prefixOrder O, cb KeyValueFn[K, V]) (err error) {
-	cur, err := newLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, t.Order)
+	cur, err := newLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, prefixOrder)
 	if err != nil {
 		return err
 	}

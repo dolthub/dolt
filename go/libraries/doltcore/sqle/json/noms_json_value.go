@@ -17,6 +17,8 @@ package json
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -255,25 +257,42 @@ func marshalToString(ctx context.Context, sb *strings.Builder, val types.Value) 
 		sb.WriteRune(']')
 
 	case types.Map:
-		sb.WriteRune('{')
-		seenOne := false
-		err = val.Iter(ctx, func(k, v types.Value) (stop bool, err error) {
-			if seenOne {
-				sb.WriteString(", ")
+		obj := make(map[string]types.Value, val.Len())
+		var keys []string
+		err = val.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+			ks, ok := key.(types.String)
+			if !ok {
+				return false, ErrUnexpectedJSONTypeOut
 			}
-			seenOne = true
-
-			sb.WriteString(k.HumanReadableString())
-			sb.WriteString(": ")
-
-			err = marshalToString(ctx, sb, v)
+			obj[string(ks)] = value
+			keys = append(keys, string(ks))
 			return
 		})
 		if err != nil {
 			return err
 		}
-		sb.WriteRune('}')
+		// JSON map keys are sorted k by length then alphabetically
+		sort.Slice(keys, func(i, j int) bool {
+			if len(keys[i]) != len(keys[j]) {
+				return len(keys[i]) < len(keys[j])
+			}
+			return keys[i] < keys[j]
+		})
 
+		sb.WriteRune('{')
+		seenOne := false
+		for _, k := range keys {
+			if seenOne {
+				sb.WriteString(", ")
+			}
+			seenOne = true
+			sb.WriteString(fmt.Sprintf("\"%s\": ", k))
+			err = marshalToString(ctx, sb, obj[k])
+			if err != nil {
+				return err
+			}
+		}
+		sb.WriteRune('}')
 	default:
 		err = ErrUnexpectedJSONTypeOut
 	}

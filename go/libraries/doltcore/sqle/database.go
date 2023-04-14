@@ -85,6 +85,7 @@ var _ sql.TemporaryTableDatabase = Database{}
 var _ sql.TriggerDatabase = Database{}
 var _ sql.VersionedDatabase = Database{}
 var _ sql.ViewDatabase = Database{}
+var _ sql.EventDatabase = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -1174,6 +1175,84 @@ func (db Database) CreateTrigger(ctx *sql.Context, definition sql.TriggerDefinit
 func (db Database) DropTrigger(ctx *sql.Context, name string) error {
 	//TODO: add a sql error and use that as the param error instead
 	return db.dropFragFromSchemasTable(ctx, "trigger", name, sql.ErrTriggerDoesNotExist.New(name))
+}
+
+// GetEvent implements sql.EventDatabase.
+func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition, bool, error) {
+	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	if err != nil {
+		return sql.EventDefinition{}, false, err
+	}
+	if !ok {
+		return sql.EventDefinition{}, false, nil
+	}
+
+	frags, err := getSchemaFragmentsOfType(ctx, tbl.(*WritableDoltTable), eventFragment)
+	if err != nil {
+		return sql.EventDefinition{}, false, err
+	}
+
+	for _, frag := range frags {
+		if frag.name == strings.ToLower(name) {
+			return sql.EventDefinition{
+				Name:            frag.name,
+				CreateStatement: frag.fragment,
+				CreatedAt:       frag.created,
+			}, true, nil
+		}
+	}
+	return sql.EventDefinition{}, false, nil
+}
+
+// GetEvents implements sql.EventDatabase.
+func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, error) {
+	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+
+	frags, err := getSchemaFragmentsOfType(ctx, tbl.(*WritableDoltTable), eventFragment)
+	if err != nil {
+		return nil, err
+	}
+
+	var events []sql.EventDefinition
+	for _, frag := range frags {
+		events = append(events, sql.EventDefinition{
+			Name:            frag.name,
+			CreateStatement: frag.fragment,
+			CreatedAt:       frag.created,
+		})
+	}
+	return events, nil
+}
+
+// SaveEvent implements sql.EventDatabase.
+func (db Database) SaveEvent(ctx *sql.Context, ed sql.EventDefinition) error {
+	return db.addFragToSchemasTable(ctx,
+		eventFragment,
+		ed.Name,
+		ed.CreateStatement,
+		ed.CreatedAt,
+		sql.ErrEventAlreadyExists.New(ed.Name),
+	)
+}
+
+// DropEvent implements sql.EventDatabase.
+func (db Database) DropEvent(ctx *sql.Context, name string) error {
+	return db.dropFragFromSchemasTable(ctx, eventFragment, name, sql.ErrEventDoesNotExist.New(name))
+}
+
+// UpdateEvent implements sql.EventDatabase.
+func (db Database) UpdateEvent(ctx *sql.Context, ed sql.EventDefinition) error {
+	err := db.DropEvent(ctx, ed.Name)
+	if err != nil {
+		return err
+	}
+	return db.SaveEvent(ctx, ed)
 }
 
 // GetStoredProcedure implements sql.StoredProcedureDatabase.
