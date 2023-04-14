@@ -269,7 +269,7 @@ func (ap *ArgParser) matchValueOption(arg string, isLongFormFlag bool) (match *O
 // methods. Any unrecognized arguments or incorrect types will result in an appropriate error being returned. If the
 // universal --help or -h flag is found, an ErrHelp error is returned.
 func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
-	list := make([]string, 0, ap.MaxArgs)
+	list := make([]string, 0, 16)
 	results := make(map[string]string)
 
 	i := 0
@@ -354,7 +354,7 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 		copy(list, args[i:])
 	}
 
-	if len(list) > ap.MaxArgs {
+	if ap.MaxArgs != -1 && len(list) > ap.MaxArgs {
 		return nil, ap.TooManyArgsError(ap.MaxArgs, list)
 	}
 
