@@ -118,10 +118,6 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, dumpDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.NArg() > 0 {
-		return HandleVErrAndExitCode(errhand.BuildDError("too many arguments").SetPrintUsage().Build(), usage)
-	}
-
 	root, verr := GetWorkingWithVErr(dEnv)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)

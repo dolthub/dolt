@@ -78,11 +78,6 @@ func (cmd StashDropCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 
-	if apr.NArg() > 1 {
-		usage()
-		return 1
-	}
-
 	var idx = 0
 	var err error
 	if apr.NArg() == 1 {

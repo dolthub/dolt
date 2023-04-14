@@ -228,7 +228,10 @@ func CreateCheckoutArgParser() *argparser.ArgParser {
 }
 
 func CreateCherryPickArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithVariableArgs()
+	ap := argparser.NewArgParserWithMaxArgs(1)
+	ap.TooManyArgsError = func(maxArgs int, receivedArgs []string) error {
+		return fmt.Errorf("cherry-picking multiple commits is not supported yet.")
+	}
 	return ap
 }
 

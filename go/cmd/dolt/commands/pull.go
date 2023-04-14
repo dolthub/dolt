@@ -74,11 +74,6 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.NArg() > 2 {
-		verr := errhand.VerboseErrorFromError(actions.ErrInvalidPullArgs)
-		return HandleVErrAndExitCode(verr, usage)
-	}
-
 	var remoteName, remoteRefName string
 	if apr.NArg() == 1 {
 		remoteName = apr.Arg(0)

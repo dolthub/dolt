@@ -100,11 +100,6 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 
-	if apr.NArg() > 0 {
-		usage()
-		return 1
-	}
-
 	err := stashChanges(ctx, dEnv, apr)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)

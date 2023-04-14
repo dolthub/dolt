@@ -126,9 +126,6 @@ func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) 
 	if apr.NArg() == 0 {
 		usage()
 		return nil, errhand.BuildDError("missing required argument").Build()
-	} else if apr.NArg() > 2 {
-		usage()
-		return nil, errhand.BuildDError("too many arguments").Build()
 	}
 
 	tableName := apr.Arg(0)
