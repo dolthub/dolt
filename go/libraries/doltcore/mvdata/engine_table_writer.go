@@ -23,6 +23,7 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/transform"
@@ -94,7 +95,7 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 
 	if se.GetUnderlyingEngine().IsReadOnly {
 		// SqlEngineTableWriter does not respect read only mode
-		return nil, analyzer.ErrReadOnlyDatabase.New(dbName)
+		return nil, analyzererrors.ErrReadOnlyDatabase.New(dbName)
 	}
 
 	sqlCtx, err := se.NewLocalContext(ctx)
