@@ -157,6 +157,9 @@ func CreateConflictsResolveArgParser() *argparser.ArgParser {
 
 func CreateMergeArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(1)
+	ap.TooManyArgsError = func(maxArgs int, receivedArgs []string) error {
+		return fmt.Errorf("Error: Dolt does not support merging from multiple commits. You probably meant to checkout one and then merge from the other.")
+	}
 	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
 	ap.SupportsFlag(SquashParam, "", "Merge changes to the working set without updating the commit history")
 	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
