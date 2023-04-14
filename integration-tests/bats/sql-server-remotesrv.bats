@@ -33,6 +33,7 @@ teardown() {
 
     dolt sql-server --remotesapi-port 50051 &
     srv_pid=$!
+    sleep 2
 
     cd ../
     dolt clone http://localhost:50051/remote repo1

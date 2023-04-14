@@ -120,9 +120,18 @@ func (mut *MutableMap) Get(ctx context.Context, key val.Tuple, cb tree.KeyValueF
 	return mut.tuples.Get(ctx, key, cb)
 }
 
+func (mut *MutableMap) GetPrefix(ctx context.Context, key val.Tuple, prefixDesc val.TupleDesc, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
+	return mut.tuples.GetPrefix(ctx, key, prefixDesc, cb)
+}
+
 // Has returns true if |key| is present in the MutableMap.
 func (mut *MutableMap) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 	return mut.tuples.Has(ctx, key)
+}
+
+// HasPrefix returns true if a key with a matching prefix to |key| is present in the MutableMap.
+func (mut *MutableMap) HasPrefix(ctx context.Context, key val.Tuple, prefixDesc val.TupleDesc) (ok bool, err error) {
+	return mut.tuples.HasPrefix(ctx, key, prefixDesc)
 }
 
 // Checkpoint records a checkpoint that can be reverted to.

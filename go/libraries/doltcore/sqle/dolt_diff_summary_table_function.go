@@ -29,6 +29,7 @@ import (
 )
 
 var _ sql.TableFunction = (*DiffSummaryTableFunction)(nil)
+var _ sql.ExecSourceRel = (*DiffSummaryTableFunction)(nil)
 
 type DiffSummaryTableFunction struct {
 	ctx *sql.Context

@@ -27,6 +27,8 @@ type ChannelRowSource struct {
 	rowChannel chan sql.Row
 }
 
+var _ sql.ExecSourceRel = (*ChannelRowSource)(nil)
+
 // NewChannelRowSource returns a ChannelRowSource object.
 func NewChannelRowSource(schema sql.Schema, rowChannel chan sql.Row) *ChannelRowSource {
 	return &ChannelRowSource{schema: schema, rowChannel: rowChannel}

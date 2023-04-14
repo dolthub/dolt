@@ -136,8 +136,6 @@ type WritableIndexedDoltTable struct {
 	mu           *sync.Mutex
 }
 
-var _ sql.Table2 = (*WritableIndexedDoltTable)(nil)
-
 func (t *WritableIndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	return index.NewRangePartitionIter(ctx, t.DoltTable, lookup, t.isDoltFormat)
 }
@@ -161,14 +159,6 @@ func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Part
 	}
 
 	return t.lb.NewRowIter(ctx, part)
-}
-
-func (t *WritableIndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter2, error) {
-	iter, err := t.PartitionRows(ctx, part)
-	if err != nil {
-		return nil, err
-	}
-	return iter.(sql.RowIter2), nil
 }
 
 // WithProjections implements sql.ProjectedTable

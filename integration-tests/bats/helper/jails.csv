@@ -1,0 +1,2 @@
+id,county,facility_name,facility_address,facility_city,facility_state,facility_zip,is_private,in_urban_area,holds_greater_than_72_hours,holds_less_than_1_yr,felonies_greater_than_1_yr,hold_less_than_72_hours,facility_gender,num_inmates_rated_for
+8d6f8933,Cochise County,ASPC-Douglas,6911 N. BDI Blvd,Douglas,AZ,85607,0,0,1,-1,1,-1,1,1805
