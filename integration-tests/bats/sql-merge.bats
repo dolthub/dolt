@@ -19,6 +19,16 @@ teardown() {
     teardown_common
 }
 
+@test "sql-merge: DOLT_MERGE with multiple branches throws an error" {
+    dolt sql -q "call dolt_checkout('-b', 'branch_1')"
+    dolt sql -q "call dolt_checkout('-b', 'branch_2')"
+
+    run dolt sql -q "call dolt_merge('branch_1', 'branch_2')"
+
+    log_status_eq 1
+    [[ "$output" =~ "Dolt does not support merging from multiple commits." ]]
+}
+
 @test "sql-merge: DOLT_MERGE with unknown branch name throws an error" {
     dolt sql -q "call dolt_commit('-a', '-m', 'Step 1');"
 
