@@ -74,7 +74,7 @@ func (cmd RootsCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd RootsCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(0)
+	ap := argparser.NewArgParser()
 	ap.SupportsInt(numFilesParam, "n", "number", "Number of table files to scan.")
 	return ap
 }

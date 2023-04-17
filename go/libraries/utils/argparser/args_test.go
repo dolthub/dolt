@@ -195,7 +195,7 @@ func TestParsing(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			parser := NewArgParserWithVariableArgs()
+			parser := NewArgParser()
 
 			for _, opt := range test.options {
 				parser.SupportOption(opt)
@@ -215,7 +215,7 @@ func TestParsing(t *testing.T) {
 }
 
 func TestValidation(t *testing.T) {
-	ap := NewArgParserWithVariableArgs()
+	ap := NewArgParser()
 	ap.SupportsString("string", "s", "string_value", "A string")
 	ap.SupportsString("string2", "", "string_value", "Another string")
 	ap.SupportsFlag("flag", "f", "A flag")

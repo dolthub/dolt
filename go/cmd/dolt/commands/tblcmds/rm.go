@@ -60,7 +60,7 @@ func (cmd RmCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd RmCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithVariableArgs()
+	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table to remove"})
 	return ap
 }

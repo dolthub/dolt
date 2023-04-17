@@ -53,7 +53,7 @@ func (cmd StashListCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd StashListCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(0)
+	ap := argparser.NewArgParser()
 	return ap
 }
 
@@ -70,9 +70,14 @@ func (cmd StashListCmd) Exec(ctx context.Context, commandStr string, args []stri
 	}
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, stashListDocs, ap))
-	cli.ParseArgsOrDie(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 	if dEnv.IsLocked() {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
+
+	if apr.NArg() != 0 {
+		usage()
+		return 1
 	}
 
 	err := listStashes(ctx, dEnv)

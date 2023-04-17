@@ -67,7 +67,7 @@ func (cmd SendMetricsCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd SendMetricsCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(0)
+	ap := argparser.NewArgParser()
 	ap.SupportsFlag(outputFlag, "o", "Flush events to stdout.")
 	return ap
 }

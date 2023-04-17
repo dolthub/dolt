@@ -27,16 +27,6 @@ teardown() {
     teardown_common
 }
 
-@test "merge: error when attempting to merge multiple tables" {
-    dolt checkout -b branch_1
-    dolt checkout -b branch_2
-    run dolt merge branch_1 branch_2
-
-    log_status_eq 1
-    [[ "$output" =~ "Dolt does not support merging from multiple commits." ]]
-}
-
-
 @test "merge: three-way merge with longer key on both left and right" {
 
     # Base table has a key length of 2. Left and right will both add a column to

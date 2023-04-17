@@ -58,7 +58,7 @@ func (cmd TagsCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd TagsCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithVariableArgs()
+	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table(s) whose tags will be displayed."})
 	ap.SupportsString(commands.FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json. Defaults to tabular.")
 	return ap

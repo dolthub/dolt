@@ -144,7 +144,7 @@ func (cmd SqlCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(0)
+	ap := argparser.NewArgParser()
 	ap.SupportsString(QueryFlag, "q", "SQL query to run", "Runs a single query and exits.")
 	ap.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, vertical. Defaults to tabular.")
 	ap.SupportsString(saveFlag, "s", "saved query name", "Used with --query, save the query to the query catalog with the name provided. Saved queries can be examined in the dolt_query_catalog system table.")

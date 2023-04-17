@@ -126,6 +126,9 @@ func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) 
 	if apr.NArg() == 0 {
 		usage()
 		return nil, errhand.BuildDError("missing required argument").Build()
+	} else if apr.NArg() > 2 {
+		usage()
+		return nil, errhand.BuildDError("too many arguments").Build()
 	}
 
 	tableName := apr.Arg(0)
@@ -168,7 +171,7 @@ func (cmd ExportCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd ExportCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(2)
+	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table being exported."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being output to."})
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")

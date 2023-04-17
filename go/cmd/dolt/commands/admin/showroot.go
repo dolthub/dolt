@@ -50,7 +50,7 @@ func (cmd ShowRootCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd ShowRootCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(0)
+	ap := argparser.NewArgParser()
 	return ap
 }
 
@@ -61,11 +61,6 @@ func (cmd ShowRootCmd) Hidden() bool {
 // Version displays the version of the running dolt client
 // Exec executes the command
 func (cmd ShowRootCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.ArgParser()
-	usage, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{}, ap))
-
-	cli.ParseArgsOrDie(ap, args, usage)
-
 	db := doltdb.HackDatasDatabaseFromDoltDB(dEnv.DoltDB)
 	dss, err := db.Datasets(ctx)
 	if err != nil {

@@ -72,7 +72,7 @@ func (cmd CatCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd CatCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(2)
+	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table that the given index belongs to."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"index", "The name of the index that belongs to the given table."})
 	ap.SupportsString(formatFlag, "r", "result format", "How to format the resulting output. Valid values are tabular, csv, json. Defaults to tabular.")

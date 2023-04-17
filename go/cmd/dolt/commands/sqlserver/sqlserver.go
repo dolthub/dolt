@@ -130,7 +130,7 @@ func (cmd SqlServerCmd) Docs() *cli.CommandDocumentation {
 func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	serverConfig := DefaultServerConfig()
 
-	ap := argparser.NewArgParserWithMaxArgs(0)
+	ap := argparser.NewArgParser()
 	ap.SupportsString(configFileFlag, "", "file", "When provided configuration is taken from the yaml config file and all command line parameters are ignored.")
 	ap.SupportsString(hostFlag, "H", "host address", fmt.Sprintf("Defines the host address that the server will run on. Defaults to `%v`.", serverConfig.Host()))
 	ap.SupportsUint(portFlag, "P", "port", fmt.Sprintf("Defines the port that the server will run on. Defaults to `%v`.", serverConfig.Port()))
