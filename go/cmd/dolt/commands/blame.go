@@ -54,7 +54,7 @@ func (cmd BlameCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd BlameCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(1)
+	ap := argparser.NewArgParser()
 	return ap
 }
 

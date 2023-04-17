@@ -65,7 +65,7 @@ func (cmd NewCmd) EventType() eventsapi.ClientEventType {
 }
 
 func (cmd NewCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(0)
+	ap := argparser.NewArgParser()
 	return ap
 }
 

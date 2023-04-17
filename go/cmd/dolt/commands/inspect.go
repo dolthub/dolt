@@ -67,7 +67,7 @@ func (cmd InspectCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd InspectCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(0)
+	ap := argparser.NewArgParser()
 	ap.SupportsFlag(tableFileIndexFlag, "i", "Measure distribution error in table file chunk indexes.")
 	return ap
 }

@@ -83,7 +83,7 @@ func (cmd FilterBranchCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd FilterBranchCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithVariableArgs()
+	ap := argparser.NewArgParser()
 	ap.SupportsFlag(cli.VerboseFlag, "v", "logs more information")
 	ap.SupportsFlag(branchesFlag, "b", "filter all branches")
 	ap.SupportsFlag(cli.AllFlag, "a", "filter all branches and tags")

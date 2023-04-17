@@ -60,7 +60,7 @@ func (cmd StashPopCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd StashPopCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(1)
+	ap := argparser.NewArgParser()
 	return ap
 }
 
@@ -80,6 +80,11 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	if dEnv.IsLocked() {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	}
+
+	if apr.NArg() > 1 {
+		usage()
+		return 1
 	}
 
 	var idx = 0

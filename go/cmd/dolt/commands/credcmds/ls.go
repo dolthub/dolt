@@ -68,7 +68,7 @@ func (cmd LsCmd) EventType() eventsapi.ClientEventType {
 }
 
 func (cmd LsCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(0)
+	ap := argparser.NewArgParser()
 	ap.SupportsFlag("verbose", "v", "Verbose output, including key id.")
 	return ap
 }
