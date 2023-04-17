@@ -36,7 +36,7 @@ import (
 
 var NoRemote = Remote{}
 
-var ErrBranchDoesNotMatchUpstream = errors.New("the upstream branch of your current branch does not match the nane if your current branch")
+var ErrBranchDoesNotMatchUpstream = errors.New("the upstream branch of your current branch does not match the name of your current branch")
 var ErrUpstreamBranchAlreadySet = errors.New("upstream branch already set")
 var ErrNoUpstreamForBranch = errors.New("the current branch has no upstream branch")
 var ErrFailedToReadDb = errors.New("failed to read from the db")
