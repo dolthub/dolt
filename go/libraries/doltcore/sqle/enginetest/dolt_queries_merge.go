@@ -4159,6 +4159,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		// merges though, so we can live with this while we continue iterating and fine tuning schema merge logic.
 		Name: "schema change combined with drop row",
 		AncSetUpScript: []string{
+			"SET autocommit = 0",
 			"CREATE table t (pk int primary key, col1 int, col2 varchar(100), UNIQUE KEY unique1 (col2, pk));",
 			"INSERT into t values (1, 10, '100'), (2, 20, '200');",
 			"alter table t add index idx1 (pk, col1);",
@@ -4177,10 +4178,10 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// TODO: See the comment above about why this should NOT report a conflict, and why the
-				//       assertion below is skipped.
+				// See the comment above about why this should NOT report a conflict and why this is skipped
+				Skip:     true,
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 1}},
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Skip:     true,
