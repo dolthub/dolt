@@ -4149,6 +4149,47 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 
+	// Smarter merge conflict detection
+	{
+		// This merge tests reports a conflict on pk=1, because the tuple value is different on the left side, right
+		// side, and base. The value is the base is (10, '100'), on the right is nil, and on the left is ('100'),
+		// because the data migration for the schema change happens before the diff iterator is invoked.
+		// This should NOT be a conflict for a user – Dolt should not conflate the schema merge data migration with
+		// a real data conflict created by a user. Allowing this is still better than completely blocking all schema
+		// merges though, so we can live with this while we continue iterating and fine tuning schema merge logic.
+		Name: "schema change combined with drop row",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100), UNIQUE KEY unique1 (col2, pk));",
+			"INSERT into t values (1, 10, '100'), (2, 20, '200');",
+			"alter table t add index idx1 (pk, col1);",
+			"alter table t add index idx2 (pk, col1, col2);",
+			"alter table t add index idx3 (col1, col2);",
+			"alter table t add index idx4 (pk, col2);",
+			"CREATE INDEX idx5 ON t(col2(2));",
+		},
+		RightSetUpScript: []string{
+			"alter table t drop column col1;",
+			"insert into t values (3, '300'), (4, '400');",
+			"delete from t where pk = 1;",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (5, 50, '500'), (6, 60, '600');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// TODO: See the comment above about why this should NOT report a conflict, and why the
+				//       assertion below is skipped.
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Skip:     true,
+				Query:    "select pk, col2 from t;",
+				Expected: []sql.Row{{2, "200"}, {3, "300"}, {4, "400"}, {5, "500"}, {6, "600"}},
+			},
+		},
+	},
+
 	// Unsupported automatic merge cases
 	{
 		Name: "adding a non-null column to one side",

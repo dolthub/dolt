@@ -592,8 +592,6 @@ func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourc
 	case tree.DiffOpRightDelete:
 		return m.mut.Put(ctx, diff.Key, diff.Right)
 	case tree.DiffOpDivergentModifyResolved:
-		// TODO: This data should have already been mapped for any schema changes by tryMerge, but we
-		//       don't have test coverage yet, so need to add something to trigger this code path.
 		return m.mut.Put(ctx, diff.Key, diff.Merged)
 	default:
 		return fmt.Errorf("unexpected diffOp for editing primary index: %s", diff.Op)
