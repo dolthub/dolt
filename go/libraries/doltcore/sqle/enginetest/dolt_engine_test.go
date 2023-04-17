@@ -2319,24 +2319,46 @@ func TestDoltStorageFormatPrepared(t *testing.T) {
 
 func TestThreeWayMergeWithSchemaChangeScripts(t *testing.T) {
 	skipOldFormat(t)
-	for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
-		func() {
-			h := newDoltHarness(t)
-			defer h.Close()
-			enginetest.TestScript(t, h, convertMergeScriptTest(script))
-		}()
-	}
+	t.Run("right to left merges", func(t *testing.T) {
+		for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
+			func() {
+				h := newDoltHarness(t)
+				defer h.Close()
+				enginetest.TestScript(t, h, convertMergeScriptTest(script, false))
+			}()
+		}
+	})
+	t.Run("left to right merges", func(t *testing.T) {
+		for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
+			func() {
+				h := newDoltHarness(t)
+				defer h.Close()
+				enginetest.TestScript(t, h, convertMergeScriptTest(script, true))
+			}()
+		}
+	})
 }
 
 func TestThreeWayMergeWithSchemaChangeScriptsPrepared(t *testing.T) {
 	skipOldFormat(t)
-	for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
-		func() {
-			h := newDoltHarness(t)
-			defer h.Close()
-			enginetest.TestScriptPrepared(t, h, convertMergeScriptTest(script))
-		}()
-	}
+	t.Run("right to left merges", func(t *testing.T) {
+		for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
+			func() {
+				h := newDoltHarness(t)
+				defer h.Close()
+				enginetest.TestScript(t, h, convertMergeScriptTest(script, false))
+			}()
+		}
+	})
+	t.Run("left to right merges", func(t *testing.T) {
+		for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
+			func() {
+				h := newDoltHarness(t)
+				defer h.Close()
+				enginetest.TestScript(t, h, convertMergeScriptTest(script, true))
+			}()
+		}
+	})
 }
 
 var newFormatSkippedScripts = []string{
