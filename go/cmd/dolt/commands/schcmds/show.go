@@ -61,7 +61,7 @@ func (cmd ShowCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd ShowCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table(s) whose schema is being displayed."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"commit", "commit at which point the schema will be displayed."})
 	return ap

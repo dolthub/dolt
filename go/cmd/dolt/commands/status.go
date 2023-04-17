@@ -56,7 +56,7 @@ func (cmd StatusCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd StatusCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(0)
 	return ap
 }
 

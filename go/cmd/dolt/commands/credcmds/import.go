@@ -82,7 +82,7 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 const noProfileFlag = "no-profile"
 
 func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(1)
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"jwk_filename", "The JWK file. If omitted, import operates on stdin."})
 	ap.SupportsFlag(noProfileFlag, "", "If provided, no attempt will be made to contact doltremoteapi and update user.name and user.email.")
 	return ap

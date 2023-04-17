@@ -64,7 +64,7 @@ func (cmd UploadCmd) Docs() *cli.CommandDocumentation {
 
 // ArgParser implements cli.Command.
 func (cmd UploadCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(2)
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"doc", "Dolt doc name to be updated in the database."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "file to read Dolt doc from."})
 	return ap

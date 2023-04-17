@@ -68,7 +68,7 @@ func (cmd CatCmd) EventType() eventsapi.ClientEventType {
 }
 
 func (cmd CatCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "List of tables to be printed. '.' can be used to print conflicts for all tables."})
 
 	return ap

@@ -53,7 +53,7 @@ func (cmd StashClearCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd StashClearCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(0)
 	return ap
 }
 
@@ -70,14 +70,9 @@ func (cmd StashClearCmd) Exec(ctx context.Context, commandStr string, args []str
 	}
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, stashClearDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, help)
+	cli.ParseArgsOrDie(ap, args, help)
 	if dEnv.IsLocked() {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
-	}
-
-	if apr.NArg() != 0 {
-		usage()
-		return 1
 	}
 
 	err := dEnv.DoltDB.RemoveAllStashes(ctx)

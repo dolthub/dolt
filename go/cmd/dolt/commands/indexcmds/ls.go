@@ -50,19 +50,19 @@ func (cmd LsCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd LsCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(1)
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table to display indexes from. If one is not specified, then all tables' indexes are displayed."})
 	return ap
 }
 
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, lsDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, help)
-
-	if apr.NArg() > 1 {
-		return HandleErr(errhand.BuildDError("Only one table may be provided at a time.").Build(), usage)
+	ap.TooManyArgsError = func(maxArgs int, receivedArgs []string) error {
+		args := strings.Join(receivedArgs, ", ")
+		return fmt.Errorf("Only one table may be provided at a time. Received %d: %s", len(receivedArgs), args)
 	}
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, lsDocs, ap))
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	working, err := dEnv.WorkingRoot(context.Background())
 	if err != nil {

@@ -63,7 +63,7 @@ func (cmd PrintCmd) Docs() *cli.CommandDocumentation {
 
 // ArgParser implements cli.Command.
 func (cmd PrintCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(1)
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"doc", "Dolt doc to be read."})
 	return ap
 }

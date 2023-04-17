@@ -51,7 +51,7 @@ func (cmd RmCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd RmCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs()
 	return ap
 }
 

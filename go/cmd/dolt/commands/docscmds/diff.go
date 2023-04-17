@@ -60,7 +60,7 @@ func (cmd DiffCmd) Docs() *cli.CommandDocumentation {
 
 // ArgParser implements cli.Command.
 func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(1)
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"doc", "Dolt doc to be diffed."})
 	return ap
 }
