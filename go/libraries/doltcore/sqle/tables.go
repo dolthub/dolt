@@ -1315,7 +1315,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 						if !sqltypes.IsText(newColumn.Type) {
 							// drop prefix lengths if column is not a string type
 							prefixLengths[i] = 0
-						} else if uint32(prefixLengths[i]) > newColumn.Type.MaxTextResponseByteLength() {
+						} else if uint32(prefixLengths[i]) > newColumn.Type.MaxTextResponseByteLength(ctx) {
 							// drop prefix length if prefixLength is too long
 							prefixLengths[i] = 0
 						}
