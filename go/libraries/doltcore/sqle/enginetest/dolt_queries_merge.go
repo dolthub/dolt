@@ -2880,6 +2880,18 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 	},
 }
 
+var SchemaConflictScripts = []queries.ScriptTest{
+	{
+		Name: "Schema Conflict smoke test",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_schema_conflicts",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+}
+
 // OldFormatMergeConflictsAndCVsScripts tests old format merge behavior
 // where violations are appended and merges are aborted if there are existing
 // violations and/or conflicts.

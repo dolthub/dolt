@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -32,6 +34,16 @@ type MergeState struct {
 	// the spec string that was used to specify |commit|
 	commitSpecStr   string
 	preMergeWorking *RootValue
+
+	sourceCommit         hash.Hash
+	schemaConflictTables []string
+}
+
+type SchemaConflict struct {
+	ToSch, FromSch    schema.Schema
+	ToFks, FromFks    []ForeignKey
+	ToParentSchemas   map[string]schema.Schema
+	FromParentSchemas map[string]schema.Schema
 }
 
 // TodoWorkingSetMeta returns an incomplete WorkingSetMeta, suitable for methods that don't have the means to construct
@@ -61,6 +73,73 @@ func (m MergeState) CommitSpecStr() string {
 
 func (m MergeState) PreMergeWorkingRoot() *RootValue {
 	return m.preMergeWorking
+}
+
+type SchemaConflictFn func(table string, conflict SchemaConflict) error
+
+func (m MergeState) HasSchemaConflicts() bool {
+	return len(m.schemaConflictTables) > 0
+}
+
+func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb SchemaConflictFn) error {
+	var to, from *RootValue
+
+	to = m.preMergeWorking
+	rcm, err := ddb.ReadCommit(ctx, m.sourceCommit)
+	if err != nil {
+		return err
+	}
+	if from, err = rcm.GetRootValue(ctx); err != nil {
+		return err
+	}
+
+	toFKs, err := to.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return err
+	}
+	toSchemas, err := to.GetAllSchemas(ctx)
+	if err != nil {
+		return err
+	}
+
+	fromFKs, err := from.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return err
+	}
+	fromSchemas, err := from.GetAllSchemas(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, name := range m.schemaConflictTables {
+		var toTbl, fromTbl *Table
+		if toTbl, _, err = to.GetTable(ctx, name); err != nil {
+			return err
+		}
+		// todo: rename resolution
+		if fromTbl, _, err = from.GetTable(ctx, name); err != nil {
+			return err
+		}
+
+		var sc SchemaConflict
+		if sc.ToSch, err = toTbl.GetSchema(ctx); err != nil {
+			return err
+		}
+		if sc.FromSch, err = fromTbl.GetSchema(ctx); err != nil {
+			return err
+		}
+
+		sc.ToFks, _ = toFKs.KeysForTable(name)
+		sc.ToParentSchemas = toSchemas
+
+		sc.FromFks, _ = fromFKs.KeysForTable(name)
+		sc.FromParentSchemas = fromSchemas
+
+		if err = cb(name, sc); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type WorkingSet struct {

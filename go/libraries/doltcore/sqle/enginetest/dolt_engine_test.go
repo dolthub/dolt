@@ -1324,6 +1324,17 @@ func TestDoltMergeArtifacts(t *testing.T) {
 	}
 }
 
+func TestDoltSchemaConflicts(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip()
+	}
+	for _, script := range SchemaConflictScripts {
+		h := newDoltHarness(t)
+		enginetest.TestScript(t, h, script)
+		h.Close()
+	}
+}
+
 // these tests are temporary while there is a difference between the old format
 // and new format merge behaviors.
 func TestOldFormatMergeConflictsAndCVs(t *testing.T) {
