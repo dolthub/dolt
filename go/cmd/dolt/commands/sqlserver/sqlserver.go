@@ -123,14 +123,14 @@ func (cmd SqlServerCmd) Description() string {
 }
 
 func (cmd SqlServerCmd) Docs() *cli.CommandDocumentation {
-	ap := cmd.ArgParser()
+	ap := cmd.ArgParser(cmd.Name())
 	return cli.NewCommandDocumentation(sqlServerDocs, ap)
 }
 
-func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
+func (cmd SqlServerCmd) ArgParser(name string) *argparser.ArgParser {
 	serverConfig := DefaultServerConfig()
 
-	ap := argparser.NewArgParserWithVariableArgs(cmd.Name())
+	ap := argparser.NewArgParserWithVariableArgs(name)
 	ap.SupportsString(configFileFlag, "", "file", "When provided configuration is taken from the yaml config file and all command line parameters are ignored.")
 	ap.SupportsString(hostFlag, "H", "host address", fmt.Sprintf("Defines the host address that the server will run on. Defaults to `%v`.", serverConfig.Host()))
 	ap.SupportsUint(portFlag, "P", "port", fmt.Sprintf("Defines the port that the server will run on. Defaults to `%v`.", serverConfig.Port()))
@@ -183,7 +183,7 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 	if apr.NArg() > 0 {
 		args := strings.Join(apr.Args, ", ")
-		return fmt.Errorf("error: this command does not take positional arguments, but found %d: %s.", apr.NArg(), args)
+		return fmt.Errorf("error: sql-server does not take positional arguments, but found %d: %s", apr.NArg(), args)
 	}
 	_, multiDbDir := apr.GetValue(commands.MultiDBDirFlag)
 	if multiDbDir {
@@ -193,7 +193,8 @@ func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 }
 
 func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
-	ap := SqlServerCmd{}.ArgParser()
+	serverCmd := SqlServerCmd{}
+	ap := serverCmd.ArgParser(serverCmd.Name())
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
 
 	// We need a username and password for many SQL commands, so set defaults if they don't exist
