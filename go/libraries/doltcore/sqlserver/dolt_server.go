@@ -15,31 +15,55 @@
 package sqlserver
 
 import (
+	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/server"
 )
 
-var mySQLServer *server.Server
-var mySQLServerMutex sync.Mutex
+var lockedDetails *serverAndLockfile
+var mutex sync.Mutex
+
+// Struct for holding a *server.Server and a *env.DBLock
+type serverAndLockfile struct {
+	Server   *server.Server
+	Lockfile *env.DBLock
+}
 
 // RunningInServerMode returns true if the current process is running a SQL server.
 func RunningInServerMode() bool {
-	mySQLServerMutex.Lock()
-	defer mySQLServerMutex.Unlock()
-	return mySQLServer != nil
+	mutex.Lock()
+	defer mutex.Unlock()
+	return lockedDetails != nil
 }
 
 // GetRunningServer returns the Server instance running in this process, or nil if no SQL server is running.
-func GetRunningServer() *server.Server {
-	mySQLServerMutex.Lock()
-	defer mySQLServerMutex.Unlock()
-	return mySQLServer
+func GetRunningServer() (*server.Server, *env.DBLock) {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	if lockedDetails == nil {
+		return nil, nil
+	}
+	return lockedDetails.Server, lockedDetails.Lockfile
 }
 
 // SetRunningServer sets the specified Server as the running SQL server for this process.
-func SetRunningServer(server *server.Server) {
-	mySQLServerMutex.Lock()
-	defer mySQLServerMutex.Unlock()
-	mySQLServer = server
+func SetRunningServer(server *server.Server, lockfile *env.DBLock) error {
+	if server == nil || lockfile == nil {
+		return fmt.Errorf("server and lockfile must be non-nil")
+	}
+
+	mutex.Lock()
+	defer mutex.Unlock()
+	lockedDetails = &serverAndLockfile{Server: server, Lockfile: lockfile}
+
+	return nil
+}
+
+func UnsetRunningServer() {
+	mutex.Lock()
+	defer mutex.Unlock()
+	lockedDetails = nil
 }

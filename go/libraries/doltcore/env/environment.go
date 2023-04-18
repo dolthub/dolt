@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -1195,8 +1196,21 @@ func (dEnv *DoltEnv) IsLocked() bool {
 	return FsIsLocked(dEnv.FS)
 }
 
+// DBLock is a struct that contains the pid of the process that created the lockfile and the port that the server is running on
+// The secret is used by dolt to ensure that the contents of the lockfile are required to perform a local server connection
+type DBLock struct {
+	Pid    int
+	Port   int
+	Secret string
+}
+
+// DBLock constructor
+func NewDBLock(port int) DBLock {
+	return DBLock{Pid: os.Getpid(), Port: port, Secret: uuid.New().String()}
+}
+
 // Lock writes this database's lockfile with the pid of the calling process or errors if it already exists
-func (dEnv *DoltEnv) Lock() error {
+func (dEnv *DoltEnv) Lock(lock DBLock) error {
 	if dEnv.IgnoreLockFile {
 		return nil
 	}
@@ -1205,31 +1219,49 @@ func (dEnv *DoltEnv) Lock() error {
 		return ErrActiveServerLock.New(dEnv.LockFile())
 	}
 
-	return WriteLockfile(dEnv.FS)
+	return WriteLockfile(dEnv.FS, lock)
 }
 
-func getProcessFromLockFile(fs filesys.Filesys, lockFile string) (int, error) {
-	// validate that the pid on the lock file is still active
-	rd, err := fs.OpenForRead(lockFile)
+func LoadDBLockFile(fs filesys.Filesys, lockFilePath string) (lock *DBLock, err error) {
+	rd, err := fs.OpenForRead(lockFilePath)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
-	// Technically, the max pid is bounded by int types (~32 bits). That gets
-	// encoded to about 11 bytes. We'll round about just in case.
-	b := make([]byte, 50)
+	b := make([]byte, 256)
 	n, err := rd.Read(b)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
 	data := strings.TrimSpace(string(b[:n]))
-	pid, err := strconv.Atoi(data)
-	if err != nil {
-		return -1, err
+
+	parts := strings.Split(data, ":")
+	if len(parts) == 1 {
+		// Legacy Lock file. We can remove this code path in a couple of months (6/2023)
+		pid, err := strconv.Atoi(parts[0])
+		if err != nil {
+			return nil, err
+		}
+		return &DBLock{Pid: pid, Port: -1, Secret: ""}, nil
+	}
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("invalid lock file format")
 	}
 
-	return pid, nil
+	pid, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return nil, err
+	}
+	port := -1
+	if parts[1] != "-" {
+		port, err = strconv.Atoi(parts[1])
+		if err != nil {
+			return nil, err
+		}
+	}
+	secret := parts[2]
+	return &DBLock{Pid: pid, Port: port, Secret: secret}, nil
 }
 
 // Unlock deletes this database's lockfile
@@ -1242,9 +1274,29 @@ func (dEnv *DoltEnv) Unlock() error {
 }
 
 // WriteLockfile writes a lockfile encoding the pid of the calling process.
-func WriteLockfile(fs filesys.Filesys) error {
+func WriteLockfile(fs filesys.Filesys, lock DBLock) error {
 	lockFile, _ := fs.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
-	return fs.WriteFile(lockFile, []byte(fmt.Sprintf("%d", os.Getpid())))
+
+	portStr := strconv.Itoa(lock.Port)
+	if lock.Port < 0 {
+		portStr = "-"
+	}
+
+	_, err := os.Create(lockFile)
+	if err != nil {
+		return err
+	}
+	err = os.Chmod(lockFile, 0600)
+	if err != nil {
+		return err
+	}
+
+	err = fs.WriteFile(lockFile, []byte(fmt.Sprintf("%d:%s:%s", lock.Pid, portStr, lock.Secret)))
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // FsIsLocked returns true if a lockFile exists with the same pid as
@@ -1257,13 +1309,13 @@ func FsIsLocked(fs filesys.Filesys) bool {
 		return false
 	}
 
-	lockFilePid, err := getProcessFromLockFile(fs, lockFile)
+	loadedLock, err := LoadDBLockFile(fs, lockFile)
 	if err != nil { // if there's any error assume that env is locked since the file exists
 		return true
 	}
 
 	// Check whether the pid that spawned the lock file is still running. Ignore it if not.
-	p, err := ps.FindProcess(lockFilePid)
+	p, err := ps.FindProcess(loadedLock.Pid)
 	if err != nil {
 		return false
 	}

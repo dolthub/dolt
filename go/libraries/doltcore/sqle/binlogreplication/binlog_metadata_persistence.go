@@ -26,7 +26,7 @@ import (
 // persistReplicationConfiguration saves the specified |replicaSourceInfo| to disk; if any problems are encountered
 // while saving to disk, an error is returned.
 func persistReplicationConfiguration(ctx *sql.Context, replicaSourceInfo *mysql_db.ReplicaSourceInfo) error {
-	server := sqlserver.GetRunningServer()
+	server, _ := sqlserver.GetRunningServer()
 	if server == nil {
 		return fmt.Errorf("no SQL server running; " +
 			"replication commands may only be used when running from dolt sql-server, and not from dolt sql")
@@ -43,7 +43,7 @@ func persistReplicationConfiguration(ctx *sql.Context, replicaSourceInfo *mysql_
 
 // loadReplicationConfiguration loads the replication configuration for default channel ("").
 func loadReplicationConfiguration(_ *sql.Context) (*mysql_db.ReplicaSourceInfo, error) {
-	server := sqlserver.GetRunningServer()
+	server, _ := sqlserver.GetRunningServer()
 	if server == nil {
 		return nil, fmt.Errorf("no SQL server running; " +
 			"replication commands may only be used when running from dolt sql-server, and not from dolt sql")
@@ -66,7 +66,7 @@ func loadReplicationConfiguration(_ *sql.Context) (*mysql_db.ReplicaSourceInfo, 
 
 // deleteReplicationConfiguration deletes all replication configuration for the default channel ("").
 func deleteReplicationConfiguration(ctx *sql.Context) error {
-	server := sqlserver.GetRunningServer()
+	server, _ := sqlserver.GetRunningServer()
 	if server == nil {
 		return fmt.Errorf("no SQL server running; " +
 			"replication commands may only be used when running from dolt sql-server, and not from dolt sql")
