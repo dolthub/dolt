@@ -243,8 +243,7 @@ func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 }
 
 func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, cmSpec string, ws *doltdb.WorkingSet, opts editor.Options) (*doltdb.WorkingSet, error) {
-	mergeRoot, mergeStats, err := merge.MergeCommits(ctx, head, cm, opts)
-
+	result, err := merge.MergeCommits(ctx, head, cm, opts)
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:
@@ -255,8 +254,7 @@ func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, cmSpec
 			return nil, err
 		}
 	}
-
-	return mergeRootToWorking(squash, ws, mergeRoot, cm, cmSpec, mergeStats)
+	return mergeRootToWorking(squash, ws, result.Root, cm, cmSpec, result.Stats)
 }
 
 func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.WorkingSet, dbData env.DbData, cm2 *doltdb.Commit) (*doltdb.WorkingSet, error) {

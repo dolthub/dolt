@@ -353,7 +353,7 @@ func (rcv *MergeState) FromCommitSpecStr() []byte {
 	return nil
 }
 
-func (rcv *MergeState) SchemaConflictTables(j int) []byte {
+func (rcv *MergeState) UnmergableTables(j int) []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -362,7 +362,7 @@ func (rcv *MergeState) SchemaConflictTables(j int) []byte {
 	return nil
 }
 
-func (rcv *MergeState) SchemaConflictTablesLength() int {
+func (rcv *MergeState) UnmergableTablesLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -390,10 +390,10 @@ func MergeStateStartFromCommitAddrVector(builder *flatbuffers.Builder, numElems 
 func MergeStateAddFromCommitSpecStr(builder *flatbuffers.Builder, fromCommitSpecStr flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(fromCommitSpecStr), 0)
 }
-func MergeStateAddSchemaConflictTables(builder *flatbuffers.Builder, schemaConflictTables flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(schemaConflictTables), 0)
+func MergeStateAddUnmergableTables(builder *flatbuffers.Builder, unmergableTables flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(unmergableTables), 0)
 }
-func MergeStateStartSchemaConflictTablesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+func MergeStateStartUnmergableTablesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func MergeStateEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {

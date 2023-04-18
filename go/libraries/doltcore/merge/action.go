@@ -182,18 +182,22 @@ func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[
 		return nil, err
 	}
 	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: tmpDir}
-	mergedRoot, tblToStats, err := MergeCommits(ctx, spec.HeadC, spec.MergeC, opts)
+	result, err := MergeCommits(ctx, spec.HeadC, spec.MergeC, opts)
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:
-			return tblToStats, fmt.Errorf("already up to date; %w", err)
+			return result.Stats, fmt.Errorf("already up to date; %w", err)
 		case ErrFastForward:
 			panic("fast forward merge")
 		}
-		return tblToStats, err
+		return result.Stats, err
 	}
 
-	return tblToStats, mergedRootToWorking(ctx, spec.Squash, dEnv, mergedRoot, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr, tblToStats)
+	err = mergedRootToWorking(ctx, spec.Squash, dEnv, result.Root, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr, result.Stats)
+	if err != nil {
+		return nil, err
+	}
+	return result.Stats, nil
 }
 
 // TODO: change this to be functional and not write to repo state

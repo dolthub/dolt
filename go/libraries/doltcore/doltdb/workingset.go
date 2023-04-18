@@ -35,10 +35,11 @@ type MergeState struct {
 	commitSpecStr   string
 	preMergeWorking *RootValue
 
-	sourceCommit         hash.Hash
-	schemaConflictTables []string
+	sourceCommit     hash.Hash
+	unmergableTables []string
 }
 
+// todo(andy): this might make more sense in pkg merge
 type SchemaConflict struct {
 	ToSch, FromSch    schema.Schema
 	ToFks, FromFks    []ForeignKey
@@ -78,7 +79,7 @@ func (m MergeState) PreMergeWorkingRoot() *RootValue {
 type SchemaConflictFn func(table string, conflict SchemaConflict) error
 
 func (m MergeState) HasSchemaConflicts() bool {
-	return len(m.schemaConflictTables) > 0
+	return len(m.unmergableTables) > 0
 }
 
 func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb SchemaConflictFn) error {
@@ -111,7 +112,7 @@ func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb Sch
 		return err
 	}
 
-	for _, name := range m.schemaConflictTables {
+	for _, name := range m.unmergableTables {
 		var toTbl, fromTbl *Table
 		if toTbl, _, err = to.GetTable(ctx, name); err != nil {
 			return err
@@ -286,10 +287,16 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			return nil, err
 		}
 
+		unmergableTables, err := dsws.MergeState.UnmergableTables(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
+
 		mergeState = &MergeState{
-			commit:          commit,
-			commitSpecStr:   commitSpec,
-			preMergeWorking: preMergeWorkingRoot,
+			commit:           commit,
+			commitSpecStr:    commitSpec,
+			preMergeWorking:  preMergeWorkingRoot,
+			unmergableTables: unmergableTables,
 		}
 	}
 

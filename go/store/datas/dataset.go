@@ -164,6 +164,7 @@ type MergeState struct {
 	preMergeWorkingAddr *hash.Hash
 	fromCommitAddr      *hash.Hash
 	fromCommitSpec      string
+	unmergableTables    []string
 
 	nomsMergeStateRef *types.Ref
 	nomsMergeState    *types.Struct
@@ -253,6 +254,13 @@ func (ms *MergeState) FromCommitSpec(ctx context.Context, vr types.ValueReader) 
 	}
 
 	return string(commitSpecStr.(types.String)), nil
+}
+
+func (ms *MergeState) UnmergableTables(ctx context.Context, vr types.ValueReader) ([]string, error) {
+	if vr.Format().UsesFlatbuffers() {
+		return ms.unmergableTables, nil
+	}
+	return nil, errors.New("schema conflicts only supported for fmt __DOLT__")
 }
 
 type dsHead interface {
@@ -369,6 +377,10 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		}
 		*ret.MergeState.preMergeWorkingAddr = hash.New(mergeState.PreWorkingRootAddrBytes())
 		*ret.MergeState.fromCommitAddr = hash.New(mergeState.FromCommitAddrBytes())
+		ret.MergeState.unmergableTables = make([]string, mergeState.UnmergableTablesLength())
+		for i := range ret.MergeState.unmergableTables {
+			ret.MergeState.unmergableTables[i] = string(mergeState.UnmergableTables(i))
+		}
 	}
 	return &ret, nil
 }

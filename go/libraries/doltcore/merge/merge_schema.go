@@ -45,15 +45,18 @@ type SchemaConflict struct {
 	ChkConflicts []ChkConflict
 }
 
-var EmptySchConflicts = SchemaConflict{}
+var _ error = SchemaConflict{}
 
 func (sc SchemaConflict) Count() int {
 	return len(sc.ColConflicts) + len(sc.IdxConflicts) + len(sc.ChkConflicts)
 }
 
-func (sc SchemaConflict) AsError() error {
+func (sc SchemaConflict) Error() string {
+
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("schema conflicts for table %s:\n", sc.TableName))
+	b.WriteString("merge aborted: schema conflict found for table ")
+	b.WriteString(sc.TableName)
+	b.WriteString("\n please resolve schema conflicts before merging")
 	for _, c := range sc.ColConflicts {
 		b.WriteString(fmt.Sprintf("\t%s\n", c.String()))
 	}
@@ -63,7 +66,7 @@ func (sc SchemaConflict) AsError() error {
 	for _, c := range sc.ChkConflicts {
 		b.WriteString(fmt.Sprintf("\t%s\n", c.String()))
 	}
-	return fmt.Errorf(b.String())
+	return b.String()
 }
 
 type ColConflict struct {
@@ -136,7 +139,7 @@ func SchemaMerge(ctx context.Context, format *types.NomsBinFormat, ourSch, their
 	var mergedCC *schema.ColCollection
 	mergedCC, sc.ColConflicts, err = mergeColumns(ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
 	if err != nil {
-		return nil, EmptySchConflicts, err
+		return nil, SchemaConflict{}, err
 	}
 	if len(sc.ColConflicts) > 0 {
 		return nil, sc, nil
@@ -168,7 +171,7 @@ func SchemaMerge(ctx context.Context, format *types.NomsBinFormat, ourSch, their
 	var mergedChks []schema.Check
 	mergedChks, sc.ChkConflicts, err = mergeChecks(ctx, ourSch.Checks(), theirSch.Checks(), ancSch.Checks())
 	if err != nil {
-		return nil, EmptySchConflicts, err
+		return nil, SchemaConflict{}, err
 	}
 	if len(sc.ChkConflicts) > 0 {
 		return nil, sc, nil

@@ -126,10 +126,9 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	mergeSch, schConflicts, err := SchemaMerge(ctx, tm.vrw.Format(), tm.leftSch, tm.rightSch, tm.ancSch, tblName)
 	if err != nil {
 		return nil, nil, err
-	}
-	if schConflicts.Count() != 0 {
-		// error on schema conflicts for now
-		return nil, nil, fmt.Errorf("%w.\n%s", ErrSchemaConflict, schConflicts.AsError().Error())
+	} else if schConflicts.Count() > 0 {
+		// handle schema conflicts above
+		return nil, nil, schConflicts
 	}
 
 	if types.IsFormat_DOLT(tm.vrw.Format()) {

@@ -37,7 +37,7 @@ table MergeState {
   // for backwards compatibility.
   from_commit_spec_str:string;
 
-  schema_conflict_tables:[string];
+  unmergable_tables:[string];
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

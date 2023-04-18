@@ -162,10 +162,12 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 		prerootaddroff := builder.CreateByteVector((*mergeState.preMergeWorkingAddr)[:])
 		fromaddroff := builder.CreateByteVector((*mergeState.fromCommitAddr)[:])
 		fromspecoff := builder.CreateString(mergeState.fromCommitSpec)
+		unmergableoff := SerializeStringVector(builder, mergeState.unmergableTables)
 		serial.MergeStateStart(builder)
 		serial.MergeStateAddPreWorkingRootAddr(builder, prerootaddroff)
 		serial.MergeStateAddFromCommitAddr(builder, fromaddroff)
 		serial.MergeStateAddFromCommitSpecStr(builder, fromspecoff)
+		serial.MergeStateAddUnmergableTables(builder, unmergableoff)
 		mergeStateOff = serial.MergeStateEnd(builder)
 	}
 
