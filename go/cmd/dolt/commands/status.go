@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/fatih/color"
 	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -91,6 +92,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return handleStatusVErr(err)
 	}
 
+	fmt.Fprintf(color.Output, "DUSTIN: status")
 	return 0
 }
 
