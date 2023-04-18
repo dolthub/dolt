@@ -33,7 +33,7 @@ type GenZshCompCmd struct {
 }
 
 func (z GenZshCompCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(0)
+	ap := argparser.NewArgParserWithMaxArgs(z.Name(), 0)
 	ap.SupportsString(fileParamName, "", "file", "The file to write zsh comp file to")
 	ap.SupportsFlag("includeHidden", "", "Include hidden commands")
 	return ap

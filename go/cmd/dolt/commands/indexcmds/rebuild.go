@@ -52,7 +52,7 @@ func (cmd RebuildCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd RebuildCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(2)
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 2)
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table that the given index belongs to."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"index", "The name of the index to rebuild."})
 	return ap

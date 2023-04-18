@@ -77,7 +77,7 @@ func (cmd StashCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd StashCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(0)
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(IncludeUntrackedFlag, "u", "All untracked files (added tables) are also stashed.")
 	return ap
 }

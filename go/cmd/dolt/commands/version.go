@@ -53,7 +53,7 @@ func (cmd VersionCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd VersionCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(0)
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(featureVersionFlag, "f", "query the feature version of this repository.")
 	return ap
 }

@@ -608,7 +608,7 @@ func (a Assist) Docs() *cli.CommandDocumentation {
 }
 
 func (a Assist) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(0)
+	ap := argparser.NewArgParserWithMaxArgs(a.Name(), 0)
 	ap.SupportsString("model", "m", "open AI model id",
 		"The ID of the Open AI model to use for the assistant. Defaults to gpt-3.5-turbo. "+
 			"See https://platform.openai.com/docs/models/overview for a full list of models.")

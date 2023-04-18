@@ -49,31 +49,31 @@ func ValidatorFromStrList(paramName string, validStrList []string) ValidationFun
 }
 
 type ArgParser struct {
+	Name              string
 	MaxArgs           int
-	TooManyArgsError  func(maxArgs int, receivedArgs []string) error
+	TooManyArgsError  func(receivedArgs []string) error
 	Supported         []*Option
 	nameOrAbbrevToOpt map[string]*Option
 	ArgListHelp       [][2]string
 }
 
-func generateTooManyArgsError(maxArgs int, receivedArgs []string) error {
-	args := strings.Join(receivedArgs, ", ")
-	if maxArgs == 0 {
-		return fmt.Errorf("error: this command does not take positional arguments, but found %d: %s.", len(receivedArgs), args)
+func NewArgParserWithVariableArgs(name string) *ArgParser {
+	return NewArgParserWithMaxArgs(name, -1)
+}
+
+func NewArgParserWithMaxArgs(name string, maxArgs int) *ArgParser {
+	tooManyArgsErrorGenerator := func(receivedArgs []string) error {
+		args := strings.Join(receivedArgs, ", ")
+		if maxArgs == 0 {
+			return fmt.Errorf("error: %s does not take positional arguments, but found %d: %s", name, len(receivedArgs), args)
+		}
+		return fmt.Errorf("error: %s has many positional arguments. Expected at most %d, found %d: %s", name, maxArgs, len(receivedArgs), args)
 	}
-	return fmt.Errorf("error: too many positional arguments. Expected at most %d, found %d: %s.", maxArgs, len(receivedArgs), args)
-}
-
-func NewArgParserWithVariableArgs() *ArgParser {
-	return NewArgParserWithMaxArgs(-1)
-}
-
-func NewArgParserWithMaxArgs(maxArgs int) *ArgParser {
 	var supported []*Option
 	nameOrAbbrevToOpt := make(map[string]*Option)
 	return &ArgParser{
 		MaxArgs:           maxArgs,
-		TooManyArgsError:  generateTooManyArgsError,
+		TooManyArgsError:  tooManyArgsErrorGenerator,
 		Supported:         supported,
 		nameOrAbbrevToOpt: nameOrAbbrevToOpt,
 	}
@@ -355,7 +355,7 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 	}
 
 	if ap.MaxArgs != -1 && len(list) > ap.MaxArgs {
-		return nil, ap.TooManyArgsError(ap.MaxArgs, list)
+		return nil, ap.TooManyArgsError(list)
 	}
 
 	return &ArgParseResults{results, list, ap}, nil

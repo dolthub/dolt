@@ -62,7 +62,7 @@ func (cmd ExportCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd ExportCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(2)
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 2)
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table whose schema is being exported."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "the file to which the schema will be exported."})
 	return ap

@@ -69,7 +69,7 @@ func (cmd ShowCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd ShowCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithVariableArgs()
+	ap := argparser.NewArgParserWithVariableArgs(cmd.Name())
 	// Flags inherited from Log
 	ap.SupportsFlag(cli.ParentsFlag, "", "Shows all parents of each commit in the log.")
 	ap.SupportsString(cli.DecorateFlag, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")

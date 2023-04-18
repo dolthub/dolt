@@ -143,7 +143,7 @@ func (cmd DiffCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithVariableArgs()
+	ap := argparser.NewArgParserWithVariableArgs(cmd.Name())
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
 	ap.SupportsFlag(StatFlag, "", "Show stats of data changes")

@@ -54,7 +54,7 @@ func (cmd MergeBaseCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd MergeBaseCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(2)
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 2)
 	//ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"start-point", "A commit that a new branch should point at."})
 	return ap
 }

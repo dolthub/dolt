@@ -50,7 +50,7 @@ func (cmd ShowRootCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd ShowRootCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(0)
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	return ap
 }
 
