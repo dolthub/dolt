@@ -82,7 +82,7 @@ func (cmd SqlClientCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd SqlClientCmd) ArgParser() *argparser.ArgParser {
-	ap := SqlServerCmd{}.ArgParser(cmd.Name())
+	ap := SqlServerCmd{}.ArgParserWithName(cmd.Name())
 	ap.SupportsFlag(sqlClientDualFlag, "d", "Causes this command to spawn a dolt server that is automatically connected to.")
 	ap.SupportsString(sqlClientQueryFlag, "q", "string", "Sends the given query to the server and immediately exits.")
 	ap.SupportsString(sqlClientUseDbFlag, "", "db_name", fmt.Sprintf("Selects the given database before executing a query. "+
