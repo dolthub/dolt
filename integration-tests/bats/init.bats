@@ -157,7 +157,7 @@ teardown() {
 
   run dolt init invalid
   [ "$status" -eq 1 ]
-  [[ "$output" =~ "error: this command does not take positional arguments, but found 1" ]] || false
+  [[ "$output" =~ "does not take positional arguments, but found 1" ]] || false
 
   run dolt init --invalid
   [ "$status" -eq 1 ]
