@@ -349,15 +349,35 @@ func rootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.
 	}
 
 	if conflicts.Size() > 0 {
-		return doltdb.Roots{}, CheckoutWouldOverwrite{conflicts.AsSlice()}
+		return doltdb.Roots{}, ErrCheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
-
+	
 	roots.Working, err = writeTableHashes(ctx, branchRoot, wrkTblHashes)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
 	roots.Staged, err = writeTableHashes(ctx, branchRoot, stgTblHashes)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	workingForeignKeys, err := moveForeignKeys(ctx, roots.Head, branchRoot, roots.Working, force)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	stagedForeignKeys, err := moveForeignKeys(ctx, roots.Head, branchRoot, roots.Staged, force)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+	
+	roots.Working, err = roots.Working.PutForeignKeyCollection(ctx, workingForeignKeys)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+	
+	roots.Staged, err = roots.Staged.PutForeignKeyCollection(ctx, stagedForeignKeys)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -636,6 +656,51 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot *dolt
 	}
 
 	return resultMap, nil
+}
+
+// moveForeignKeys returns the foreign key collection that should be used for the new working set.
+func moveForeignKeys(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.RootValue, force bool) (*doltdb.ForeignKeyCollection, error) {
+	newFks, err := newRoot.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	changedFks, err := changedRoot.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	oldFks, err := oldRoot.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	
+	newHash, err := newFks.HashOf(ctx, newRoot.VRW())
+	if err != nil {
+		return nil, err
+	}
+
+	oldHash, err := oldFks.HashOf(ctx, oldRoot.VRW())
+	if err != nil {
+		return nil, err
+	}
+
+	changedHash, err := changedFks.HashOf(ctx, changedRoot.VRW())
+	if err != nil {
+		return nil, err
+	}
+
+	if oldHash == changedHash {
+		return newFks, nil
+	} else if oldHash == newHash {
+		return changedFks, nil
+	} else if newHash == changedHash {
+		return oldFks, nil
+	} else if force {
+		return newFks, nil
+	} else {
+		return nil, ErrCheckoutWouldOverwrite{[]string{"foreign keys"}}
+	}
 }
 
 // writeTableHashes writes new table hash values for the root given and returns it.

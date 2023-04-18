@@ -86,21 +86,21 @@ func GetTablesForError(err error) []string {
 	return te.tables
 }
 
-type CheckoutWouldOverwrite struct {
+type ErrCheckoutWouldOverwrite struct {
 	tables []string
 }
 
-func (cwo CheckoutWouldOverwrite) Error() string {
+func (cwo ErrCheckoutWouldOverwrite) Error() string {
 	return "local changes would be overwritten by overwrite"
 }
 
 func IsCheckoutWouldOverwrite(err error) bool {
-	_, ok := err.(CheckoutWouldOverwrite)
+	_, ok := err.(ErrCheckoutWouldOverwrite)
 	return ok
 }
 
 func CheckoutWouldOverwriteTables(err error) []string {
-	cwo, ok := err.(CheckoutWouldOverwrite)
+	cwo, ok := err.(ErrCheckoutWouldOverwrite)
 
 	if !ok {
 		panic("Must validate with IsCheckoutWouldOverwrite before calling CheckoutWouldOverwriteTables")
