@@ -21,10 +21,11 @@ If you find a bug in `dolt`, we would love a skipped bats test PR in addition to
 ```
 npm install -g bats
 ```
-2. Install `dolt` and `noms`
+2. Install `dolt` and its utilities.
 ```
 cd go/cmd/dolt && go install . && cd -
 cd go/store/cmd/noms && go install . && cd -
+cd go/utils/remotesrv && go install . && cd -
 ````
 
 3. Make sure you have `python3` installed.
