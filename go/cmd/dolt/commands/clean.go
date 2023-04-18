@@ -84,7 +84,7 @@ func (cmd CleanCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	roots, err = actions.CleanUntracked(ctx, roots, apr.Args, apr.Contains(DryrunCleanParam))
+	roots, err = actions.CleanUntracked(ctx, roots, apr.Args, apr.Contains(DryrunCleanParam), false)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

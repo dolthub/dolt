@@ -374,6 +374,35 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Comm
 	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
 }
 
+// ResolveBranchRoots returns the Roots for the branch given
+func (ddb *DoltDB) ResolveBranchRoots(ctx context.Context, branch ref.BranchRef) (Roots, error) {
+	commitRef, err := ddb.ResolveCommitRef(ctx, branch)
+	if err != nil {
+		return Roots{}, err
+	}
+
+	headRoot, err := commitRef.GetRootValue(ctx)
+	if err != nil {
+		return Roots{}, err
+	}
+
+	wsRef, err := ref.WorkingSetRefForHead(branch)
+	if err != nil {
+		return Roots{}, err
+	}
+
+	ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
+	if err != nil {
+		return Roots{}, err
+	}
+
+	return Roots{
+		Head:    headRoot,
+		Working: ws.WorkingRoot(),
+		Staged:  ws.StagedRoot(),
+	}, nil
+}
+
 // ResolveTag takes a TagRef and returns the corresponding Tag object.
 func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, error) {
 	ds, err := ddb.db.GetDataset(ctx, tagRef.String())
