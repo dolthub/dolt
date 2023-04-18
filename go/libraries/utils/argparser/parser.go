@@ -67,7 +67,7 @@ func NewArgParserWithMaxArgs(name string, maxArgs int) *ArgParser {
 		if maxArgs == 0 {
 			return fmt.Errorf("error: %s does not take positional arguments, but found %d: %s", name, len(receivedArgs), args)
 		}
-		return fmt.Errorf("error: %s has many positional arguments. Expected at most %d, found %d: %s", name, maxArgs, len(receivedArgs), args)
+		return fmt.Errorf("error: %s has too many positional arguments. Expected at most %d, found %d: %s", name, maxArgs, len(receivedArgs), args)
 	}
 	var supported []*Option
 	nameOrAbbrevToOpt := make(map[string]*Option)
