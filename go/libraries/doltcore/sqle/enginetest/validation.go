@@ -200,6 +200,15 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 			return err
 		}
 		if !ok {
+			fmt.Printf("Secondary index contents:\n")
+			iterAll, _ := secondary.IterAll(ctx)
+			for {
+				k, _, err := iterAll.Next(ctx)
+				if err == io.EOF {
+					break
+				}
+				fmt.Printf("  - k: %v \n", k)
+			}
 			return fmt.Errorf("index key %s not found in index %s", builder.Desc.Format(k), def.Name())
 		}
 	}
@@ -210,6 +219,22 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 	idxDesc, _ := secondary.Descriptors()
 	builder := val.NewTupleBuilder(idxDesc)
 	mapping := ordinalMappingsForSecondaryIndex(sch, def)
+
+	// Before we walk through the primary index data and validate that every row in the primary index exists in the
+	// secondary index, we also check that the primary index and secondary index have the same number of rows.
+	// Otherwise, we won't catch if the secondary index has extra, bogus data in it.
+	totalSecondaryCount, err := secondary.Count()
+	if err != nil {
+		return err
+	}
+	totalPrimaryCount, err := primary.Count()
+	if err != nil {
+		return err
+	}
+	if totalSecondaryCount != totalPrimaryCount {
+		return fmt.Errorf("primary index row count (%d) does not match secondary index row count (%d)",
+			totalPrimaryCount, totalSecondaryCount)
+	}
 
 	kd, _ := primary.Descriptors()
 	pkSize := kd.Count()
@@ -252,6 +277,15 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			return err
 		}
 		if !ok {
+			fmt.Printf("Secondary index contents:\n")
+			iterAll, _ := secondary.IterAll(ctx)
+			for {
+				k, _, err := iterAll.Next(ctx)
+				if err == io.EOF {
+					break
+				}
+				fmt.Printf("  - k: %v \n", k)
+			}
 			return fmt.Errorf("index key %v not found in index %s", builder.Desc.Format(k), def.Name())
 		}
 	}

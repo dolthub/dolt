@@ -190,8 +190,9 @@ EOF
     run dolt version
     if [[ $output =~ "__DOLT__" ]]; then
         run dolt merge other
-        [ $status -ne 0 ]
-        [[ $output =~ "table abc can't be automatically merged" ]] || false
+        [ $status -eq 0 ]
+        [[ $output =~ "Merge conflict in abc" ]] || false
+        [[ $output =~ "Automatic merge failed" ]] || false
     else
         # throws a conflict
         dolt merge other

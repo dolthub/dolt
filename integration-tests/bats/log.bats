@@ -632,3 +632,14 @@ teardown() {
     run dolt commit --allow-empty -m "% should be escaped"
     [[ "$output" =~ "% should be escaped" ]] || false
 }
+
+@test "log: identify HEAD" {
+    dolt commit --allow-empty -m "commit 1"
+    dolt tag commit1
+    dolt commit --allow-empty -m "commit 2"
+    dolt tag commit2
+    run dolt log commit1
+    [[ !("$output" =~ "HEAD") ]] || false
+    run dolt log commit2
+    [[ "$output" =~ "HEAD" ]] || false
+}

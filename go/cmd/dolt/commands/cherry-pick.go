@@ -87,6 +87,8 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 	if apr.NArg() == 0 {
 		usage()
 		return 1
+	} else if apr.NArg() > 1 {
+		return HandleVErrAndExitCode(errhand.BuildDError("cherry-picking multiple commits is not supported yet").SetPrintUsage().Build(), usage)
 	}
 
 	cherryStr := apr.Arg(0)

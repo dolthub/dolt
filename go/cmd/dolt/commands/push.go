@@ -71,7 +71,10 @@ func (cmd PushCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd PushCmd) ArgParser() *argparser.ArgParser {
-	return cli.CreatePushArgParser()
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(cli.SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} and other commands.")
+	ap.SupportsFlag(cli.ForceFlag, "f", "Update the remote with local history, overwriting any conflicting history in the remote.")
+	return ap
 }
 
 // EventType returns the type of the event to log
