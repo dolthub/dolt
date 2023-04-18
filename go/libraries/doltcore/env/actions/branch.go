@@ -352,6 +352,16 @@ func rootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.
 		return doltdb.Roots{}, ErrCheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
 	
+	workingForeignKeys, err := moveForeignKeys(ctx, roots.Head, branchRoot, roots.Working, force)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	stagedForeignKeys, err := moveForeignKeys(ctx, roots.Head, branchRoot, roots.Staged, force)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
 	roots.Working, err = writeTableHashes(ctx, branchRoot, wrkTblHashes)
 	if err != nil {
 		return doltdb.Roots{}, err
@@ -362,16 +372,6 @@ func rootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.
 		return doltdb.Roots{}, err
 	}
 
-	workingForeignKeys, err := moveForeignKeys(ctx, roots.Head, branchRoot, roots.Working, force)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	stagedForeignKeys, err := moveForeignKeys(ctx, roots.Head, branchRoot, roots.Staged, force)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-	
 	roots.Working, err = roots.Working.PutForeignKeyCollection(ctx, workingForeignKeys)
 	if err != nil {
 		return doltdb.Roots{}, err

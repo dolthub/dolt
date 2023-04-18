@@ -1363,7 +1363,6 @@ SQL
 
     run dolt schema show child
     [ "$status" -eq "0" ]
-    skip "foreign keys don't travel with the working set when checking out a new branch"
     [[ "$output" =~ "fk_v1" ]] || false
 }
 
