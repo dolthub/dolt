@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -36,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
@@ -139,17 +141,17 @@ func Serve(
 
 	// Create SQL Engine with users
 	config := &engine.SqlEngineConfig{
-		InitialDb:          "",
-		IsReadOnly:         serverConfig.ReadOnly(),
-		PrivFilePath:       serverConfig.PrivilegeFilePath(),
-		BranchCtrlFilePath: serverConfig.BranchControlFilePath(),
-		DoltCfgDirPath:     serverConfig.CfgDir(),
-		ServerUser:         serverConfig.User(),
-		ServerPass:         serverConfig.Password(),
-		ServerHost:         serverConfig.Host(),
-		Autocommit:         serverConfig.AutoCommit(),
-		JwksConfig:         serverConfig.JwksConfig(),
-		ClusterController:  clusterController,
+		IsReadOnly:              serverConfig.ReadOnly(),
+		PrivFilePath:            serverConfig.PrivilegeFilePath(),
+		BranchCtrlFilePath:      serverConfig.BranchControlFilePath(),
+		DoltCfgDirPath:          serverConfig.CfgDir(),
+		ServerUser:              serverConfig.User(),
+		ServerPass:              serverConfig.Password(),
+		ServerHost:              serverConfig.Host(),
+		Autocommit:              serverConfig.AutoCommit(),
+		JwksConfig:              serverConfig.JwksConfig(),
+		ClusterController:       clusterController,
+		BinlogReplicaController: binlogreplication.DoltBinlogReplicaController,
 	}
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,
@@ -202,12 +204,14 @@ func Serve(
 		)
 	}
 
-	if startError != nil {
+	if errors.Is(startError, server.UnixSocketInUseError) {
+		lgr.Warn("unix socket set up failed: file already in use: ", serverConf.Socket)
+		startError = nil
+	} else if startError != nil {
 		cli.PrintErr(startError)
 		return
-	} else {
-		sqlserver.SetRunningServer(mySQLServer)
 	}
+	sqlserver.SetRunningServer(mySQLServer)
 
 	var metSrv *http.Server
 	if serverConfig.MetricsHost() != "" && serverConfig.MetricsPort() > 0 {
@@ -226,28 +230,30 @@ func Serve(
 
 	var remoteSrv *remotesrv.Server
 	if serverConfig.RemotesapiPort() != nil {
-		if remoteSrvSqlCtx, err := sqlEngine.NewContext(context.Background()); err == nil {
+		port := *serverConfig.RemotesapiPort()
+		if remoteSrvSqlCtx, err := sqlEngine.NewDefaultContext(ctx); err == nil {
+			listenaddr := fmt.Sprintf(":%d", port)
 			args := sqle.RemoteSrvServerArgs(remoteSrvSqlCtx, remotesrv.ServerArgs{
-				Logger:   logrus.NewEntry(lgr),
-				ReadOnly: true,
-				HttpPort: *serverConfig.RemotesapiPort(),
-				GrpcPort: *serverConfig.RemotesapiPort(),
+				Logger:         logrus.NewEntry(lgr),
+				ReadOnly:       true,
+				HttpListenAddr: listenaddr,
+				GrpcListenAddr: listenaddr,
 			})
+			args = sqle.WithUserPasswordAuth(args, remotesrv.UserAuth{User: serverConfig.User(), Password: serverConfig.Password()})
+			args.TLSConfig = serverConf.TLSConfig
 			remoteSrv, err = remotesrv.NewServer(args)
 			if err != nil {
-				lgr.Errorf("error creating remotesapi server on port %d: %v", *serverConfig.RemotesapiPort(), err)
+				lgr.Errorf("error creating remotesapi server on port %d: %v", port, err)
 				startError = err
 				return
 			}
 			listeners, err := remoteSrv.Listeners()
 			if err != nil {
-				lgr.Errorf("error starting remotesapi server listeners on port %d: %v", *serverConfig.RemotesapiPort(), err)
+				lgr.Errorf("error starting remotesapi server listeners on port %d: %v", port, err)
 				startError = err
 				return
 			} else {
-				go func() {
-					remoteSrv.Serve(listeners)
-				}()
+				go remoteSrv.Serve(listeners)
 			}
 		} else {
 			lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
@@ -258,7 +264,7 @@ func Serve(
 
 	var clusterRemoteSrv *remotesrv.Server
 	if clusterController != nil {
-		if remoteSrvSqlCtx, err := sqlEngine.NewContext(context.Background()); err == nil {
+		if remoteSrvSqlCtx, err := sqlEngine.NewDefaultContext(ctx); err == nil {
 			args := clusterController.RemoteSrvServerArgs(remoteSrvSqlCtx, remotesrv.ServerArgs{
 				Logger: logrus.NewEntry(lgr),
 			})
@@ -280,14 +286,13 @@ func Serve(
 
 			listeners, err := clusterRemoteSrv.Listeners()
 			if err != nil {
-				lgr.Errorf("error starting remotesapi server listeners for cluster config on port %d: %v", clusterController.RemoteSrvPort(), err)
+				lgr.Errorf("error starting remotesapi server listeners for cluster config on %s: %v", clusterController.RemoteSrvListenAddr(), err)
 				startError = err
 				return
-			} else {
-				go func() {
-					clusterRemoteSrv.Serve(listeners)
-				}()
 			}
+
+			go clusterRemoteSrv.Serve(listeners)
+			go clusterController.Run()
 
 			clusterController.ManageQueryConnections(
 				mySQLServer.SessionManager().Iter,
@@ -320,6 +325,9 @@ func Serve(
 		}
 		if clusterRemoteSrv != nil {
 			clusterRemoteSrv.GracefulStop()
+		}
+		if clusterController != nil {
+			clusterController.GracefulStop()
 		}
 
 		return mySQLServer.Close()
@@ -391,7 +399,7 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 
 		varsForUser := userToSessionVars[conn.User]
 		if len(varsForUser) > 0 {
-			sqlCtx, err := se.NewContext(ctx)
+			sqlCtx, err := se.NewContext(ctx, dsess)
 			if err != nil {
 				return nil, err
 			}
@@ -446,6 +454,8 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 	serverConf.MaxConnections = serverConfig.MaxConnections()
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
+	serverConf.MaxLoggedQueryLen = serverConfig.MaxLoggedQueryLen()
+	serverConf.EncodeLoggedQuery = serverConfig.ShouldEncodeLoggedQuery()
 
 	return serverConf, nil, nil
 }

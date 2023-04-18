@@ -16,9 +16,11 @@ package dtables
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/zeebo/xxh3"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -34,7 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func newProllyConflictsTable(ctx *sql.Context, tbl *doltdb.Table, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+func newProllyConflictsTable(ctx *sql.Context, tbl *doltdb.Table, sourceUpdatableTbl sql.UpdatableTable, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
 	arts, err := tbl.GetArtifacts(ctx)
 	if err != nil {
 		return nil, err
@@ -45,7 +47,7 @@ func newProllyConflictsTable(ctx *sql.Context, tbl *doltdb.Table, tblName string
 	if err != nil {
 		return nil, err
 	}
-	confSch, err := CalculateConflictSchema(baseSch, ourSch, theirSch)
+	confSch, versionMappings, err := calculateConflictSchema(baseSch, ourSch, theirSch)
 	if err != nil {
 		return nil, err
 	}
@@ -55,15 +57,17 @@ func newProllyConflictsTable(ctx *sql.Context, tbl *doltdb.Table, tblName string
 	}
 
 	return ProllyConflictsTable{
-		tblName:  tblName,
-		sqlSch:   sqlSch,
-		baseSch:  baseSch,
-		ourSch:   ourSch,
-		theirSch: theirSch,
-		root:     root,
-		tbl:      tbl,
-		rs:       rs,
-		artM:     m,
+		tblName:         tblName,
+		sqlSch:          sqlSch,
+		baseSch:         baseSch,
+		ourSch:          ourSch,
+		theirSch:        theirSch,
+		root:            root,
+		tbl:             tbl,
+		rs:              rs,
+		artM:            m,
+		sqlTable:        sourceUpdatableTbl,
+		versionMappings: versionMappings,
 	}, nil
 }
 
@@ -77,7 +81,12 @@ type ProllyConflictsTable struct {
 	tbl                       *doltdb.Table
 	rs                        RootSetter
 	artM                      prolly.ArtifactMap
+	sqlTable                  sql.UpdatableTable
+	versionMappings           *versionMappings
 }
+
+var _ sql.UpdatableTable = ProllyConflictsTable{}
+var _ sql.DeletableTable = ProllyConflictsTable{}
 
 func (ct ProllyConflictsTable) Name() string {
 	return doltdb.DoltConfTablePrefix + ct.tblName
@@ -101,6 +110,11 @@ func (ct ProllyConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, 
 
 func (ct ProllyConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	return newProllyConflictRowIter(ctx, ct)
+}
+
+func (ct ProllyConflictsTable) Updater(ctx *sql.Context) sql.RowUpdater {
+	ourUpdater := ct.sqlTable.Updater(ctx)
+	return newProllyConflictOurTableUpdater(ourUpdater, ct.versionMappings, ct.baseSch, ct.ourSch, ct.theirSch)
 }
 
 func (ct ProllyConflictsTable) Deleter(ctx *sql.Context) sql.RowDeleter {
@@ -127,7 +141,7 @@ type prollyConflictRowIter struct {
 	theirRows           prolly.Map
 }
 
-var _ sql.RowIter = &prollyConflictRowIter{}
+var _ sql.RowIter = (*prollyConflictRowIter)(nil)
 
 // base_cols, our_cols, our_diff_type, their_cols, their_diff_type
 func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*prollyConflictRowIter, error) {
@@ -154,11 +168,11 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 	if !keyless {
 		o = b + kd.Count() + baseVD.Count()
 		t = o + kd.Count() + oursVD.Count() + 1
-		n = t + kd.Count() + theirsVD.Count() + 1
+		n = t + kd.Count() + theirsVD.Count() + 2
 	} else {
 		o = b + baseVD.Count() - 1
 		t = o + oursVD.Count()
-		n = t + theirsVD.Count() + 3
+		n = t + theirsVD.Count() + 4
 	}
 
 	return &prollyConflictRowIter{
@@ -211,6 +225,7 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			return nil, err
 		}
 	} else {
+
 		err = itr.putKeylessConflictRowVals(ctx, c, r)
 		if err != nil {
 			return nil, err
@@ -252,6 +267,7 @@ func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r
 		}
 	}
 	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()] = getDiffType(c.bV, c.tV)
+	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()+1] = c.id
 
 	return nil
 }
@@ -326,6 +342,7 @@ func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c 
 
 	o := itr.t + itr.theirsVD.Count() - 1
 	r[o] = getDiffType(c.bV, c.tV)
+	r[itr.n-4] = c.id
 
 	return nil
 }
@@ -333,6 +350,7 @@ func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c 
 type conf struct {
 	k, bV, oV, tV val.Tuple
 	h             hash.Hash
+	id            string
 }
 
 func (itr *prollyConflictRowIter) nextConflictVals(ctx *sql.Context) (c conf, err error) {
@@ -342,6 +360,10 @@ func (itr *prollyConflictRowIter) nextConflictVals(ctx *sql.Context) (c conf, er
 	}
 	c.k = ca.Key
 	c.h = ca.TheirRootIsh
+
+	// To ensure that the conflict id is unique, we hash both TheirRootIsh and the key of the table.
+	b := xxh3.Hash128(append(ca.Key, c.h[:]...)).Bytes()
+	c.id = base64.RawStdEncoding.EncodeToString(b[:])
 
 	err = itr.loadTableMaps(ctx, ca.Metadata.BaseRootIsh, ca.TheirRootIsh)
 	if err != nil {
@@ -429,11 +451,95 @@ func (itr *prollyConflictRowIter) Close(ctx *sql.Context) error {
 	return nil
 }
 
+// prollyConflictOurTableUpdater allows users to update the "our table" by
+// modifying rows in the conflict table. Any updates to the conflict table our
+// columns are applied on the source table.
+type prollyConflictOurTableUpdater struct {
+	baseSch, ourSch, theirSch schema.Schema
+	srcUpdater                sql.RowUpdater
+	versionMappings           *versionMappings
+	pkOrdinals                []int
+	schemaOK                  bool
+}
+
+func newProllyConflictOurTableUpdater(ourUpdater sql.RowUpdater, versionMappings *versionMappings, baseSch, ourSch, theirSch schema.Schema) *prollyConflictOurTableUpdater {
+	// The schema columns need to be all equal in order for us to reliably build the PKs
+	schemaOK := schema.ColCollsAreEqual(baseSch.GetAllCols(), ourSch.GetAllCols()) &&
+		schema.ColCollsAreEqual(ourSch.GetAllCols(), theirSch.GetAllCols())
+
+	return &prollyConflictOurTableUpdater{
+		srcUpdater:      ourUpdater,
+		versionMappings: versionMappings,
+		pkOrdinals:      ourSch.GetPkOrdinals(),
+		schemaOK:        schemaOK,
+	}
+}
+
+// Update implements sql.RowUpdater. It translates updates on the conflict table to the source table.
+func (cu *prollyConflictOurTableUpdater) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
+	if !cu.schemaOK {
+		return fmt.Errorf("the source table cannot be automatically updated through the conflict table since the base, our, and their schemas are not equal")
+	}
+
+	// Apply updates to columns prefixed with our_
+	// Updates to other columns are no-ops.
+	ourOldRow := make(sql.Row, len(cu.versionMappings.ourMapping))
+	ourNewRow := make(sql.Row, len(cu.versionMappings.ourMapping))
+	for i, j := range cu.versionMappings.ourMapping {
+		ourOldRow[i] = oldRow[j]
+	}
+	for i, j := range cu.versionMappings.ourMapping {
+		ourNewRow[i] = newRow[j]
+	}
+
+	// Are we keyed?
+	if len(cu.pkOrdinals) > 0 {
+		// If so, set the PKs for the old row from either the base, ours, or theirs versions.
+		// This is necessary to allow updates to the conflict table to insert rows against the source table.
+		firstPkOrd := cu.pkOrdinals[0]
+
+		var mapping val.OrdinalMapping
+		if oldRow[cu.versionMappings.ourMapping[firstPkOrd]] != nil {
+			mapping = cu.versionMappings.ourMapping
+		} else if oldRow[cu.versionMappings.theirMapping[firstPkOrd]] != nil {
+			mapping = cu.versionMappings.theirMapping
+		} else {
+			mapping = cu.versionMappings.baseMapping
+		}
+
+		for _, ord := range cu.pkOrdinals {
+			ourOldRow[ord] = oldRow[mapping[ord]]
+		}
+	}
+
+	return cu.srcUpdater.Update(ctx, ourOldRow, ourNewRow)
+}
+
+// StatementBegin implements sql.RowUpdater.
+func (cu *prollyConflictOurTableUpdater) StatementBegin(ctx *sql.Context) {
+	cu.srcUpdater.StatementBegin(ctx)
+}
+
+// DiscardChanges implements sql.RowUpdater.
+func (cu *prollyConflictOurTableUpdater) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	return cu.srcUpdater.DiscardChanges(ctx, errorEncountered)
+}
+
+// StatementComplete implements sql.RowUpdater.
+func (cu *prollyConflictOurTableUpdater) StatementComplete(ctx *sql.Context) error {
+	return cu.srcUpdater.StatementComplete(ctx)
+}
+
+// Close implements sql.RowUpdater.
+func (cu *prollyConflictOurTableUpdater) Close(c *sql.Context) error {
+	return cu.srcUpdater.Close(c)
+}
+
 type prollyConflictDeleter struct {
 	kd, vd         val.TupleDesc
 	kB, vB         *val.TupleBuilder
 	pool           pool.BuffPool
-	ed             prolly.ArtifactsEditor
+	ed             *prolly.ArtifactsEditor
 	ct             ProllyConflictsTable
 	rs             RootSetter
 	ourDiffTypeIdx int
@@ -583,9 +689,14 @@ func (cd *prollyConflictDeleter) Close(ctx *sql.Context) error {
 	return cd.ct.rs.SetRoot(ctx, updatedRoot)
 }
 
-func CalculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, error) {
+type versionMappings struct {
+	ourMapping, theirMapping, baseMapping val.OrdinalMapping
+}
+
+// returns the schema of the rows returned by the conflicts table and a mappings between each version and the source table.
+func calculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, *versionMappings, error) {
 	keyless := schema.IsKeyless(ours)
-	n := 3 + ours.GetAllCols().Size() + theirs.GetAllCols().Size() + base.GetAllCols().Size()
+	n := 4 + ours.GetAllCols().Size() + theirs.GetAllCols().Size() + base.GetAllCols().Size()
 	if keyless {
 		n += 3
 	}
@@ -596,46 +707,61 @@ func CalculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, e
 	cols[0] = schema.NewColumn("from_root_ish", 0, types.StringKind, false)
 
 	i := 1
-	putWithPrefix := func(prefix string, sch schema.Schema) error {
+	putWithPrefix := func(prefix string, sch schema.Schema, stripConstraints bool) (val.OrdinalMapping, error) {
+		allCols := sch.GetAllCols()
+		mapping := make(val.OrdinalMapping, allCols.Size())
 		err := sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			c, err := schema.NewColumnWithTypeInfo(prefix+col.Name, uint64(i), col.TypeInfo, false, col.Default, false, col.Comment)
+			var cons []schema.ColConstraint
+			if !stripConstraints {
+				cons = col.Constraints
+			}
+			c, err := schema.NewColumnWithTypeInfo(prefix+col.Name, uint64(i), col.TypeInfo, false, col.Default, false, col.Comment, cons...)
 			if err != nil {
 				return true, err
 			}
 			cols[i] = c
+			mapping[allCols.TagToIdx[tag]] = i
 			i++
 			return false, nil
 		})
 		if err != nil {
-			return err
+			return nil, err
 		}
 		err = sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			c, err := schema.NewColumnWithTypeInfo(prefix+col.Name, uint64(i), col.TypeInfo, false, col.Default, false, col.Comment)
+			var cons []schema.ColConstraint
+			if !stripConstraints {
+				cons = col.Constraints
+			}
+			c, err := schema.NewColumnWithTypeInfo(prefix+col.Name, uint64(i), col.TypeInfo, false, col.Default, false, col.Comment, cons...)
 			if err != nil {
 				return true, err
 			}
 			cols[i] = c
+			mapping[allCols.TagToIdx[tag]] = i
 			i++
 			return false, nil
 		})
-		return err
+		return mapping, err
 	}
 
-	err := putWithPrefix("base_", base)
+	baseColMapping, err := putWithPrefix("base_", base, true)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	err = putWithPrefix("our_", ours)
+	ourColMapping, err := putWithPrefix("our_", ours, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	cols[i] = schema.NewColumn("our_diff_type", uint64(i), types.StringKind, false)
 	i++
-	err = putWithPrefix("their_", theirs)
+	theirColMapping, err := putWithPrefix("their_", theirs, true)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	cols[i] = schema.NewColumn("their_diff_type", uint64(i), types.StringKind, false)
+	i++
+
+	cols[i] = schema.NewColumn("dolt_conflict_id", uint64(i), types.StringKind, false)
 	i++
 
 	if keyless {
@@ -647,5 +773,15 @@ func CalculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, e
 		i++
 	}
 
-	return schema.UnkeyedSchemaFromCols(schema.NewColCollection(cols...)), nil
+	sch, err := schema.NewSchema(schema.NewColCollection(cols...), nil, schema.Collation_Default, nil, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return sch,
+		&versionMappings{
+			ourMapping:   ourColMapping,
+			theirMapping: theirColMapping,
+			baseMapping:  baseColMapping},
+		nil
 }

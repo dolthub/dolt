@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -34,20 +35,26 @@ const (
 // namespaceSchema is the schema for the "dolt_branch_namespace_control" table.
 var namespaceSchema = sql.Schema{
 	&sql.Column{
+		Name:       "database",
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
+		Source:     NamespaceTableName,
+		PrimaryKey: true,
+	},
+	&sql.Column{
 		Name:       "branch",
-		Type:       sql.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
 		Source:     NamespaceTableName,
 		PrimaryKey: true,
 	},
 	&sql.Column{
 		Name:       "user",
-		Type:       sql.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_bin),
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_bin),
 		Source:     NamespaceTableName,
 		PrimaryKey: true,
 	},
 	&sql.Column{
 		Name:       "host",
-		Type:       sql.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
 		Source:     NamespaceTableName,
 		PrimaryKey: true,
 	},
@@ -107,6 +114,7 @@ func (tbl BranchNamespaceControlTable) PartitionRows(context *sql.Context, parti
 	var rows []sql.Row
 	for _, value := range tbl.Values {
 		rows = append(rows, sql.Row{
+			value.Database,
 			value.Branch,
 			value.User,
 			value.Host,
@@ -157,18 +165,21 @@ func (tbl BranchNamespaceControlTable) Insert(ctx *sql.Context, row sql.Row) err
 	tbl.RWMutex.Lock()
 	defer tbl.RWMutex.Unlock()
 
-	// Branch and Host are case-insensitive, while user is case-sensitive
-	branch := strings.ToLower(branch_control.FoldExpression(row[0].(string)))
-	user := branch_control.FoldExpression(row[1].(string))
-	host := strings.ToLower(branch_control.FoldExpression(row[2].(string)))
+	// Database, Branch, and Host are case-insensitive, while user is case-sensitive
+	database := strings.ToLower(branch_control.FoldExpression(row[0].(string)))
+	branch := strings.ToLower(branch_control.FoldExpression(row[1].(string)))
+	user := branch_control.FoldExpression(row[2].(string))
+	host := strings.ToLower(branch_control.FoldExpression(row[3].(string)))
 
 	// Verify that the lengths of each expression fit within an uint16
-	if len(branch) > math.MaxUint16 || len(user) > math.MaxUint16 || len(host) > math.MaxUint16 {
-		return branch_control.ErrExpressionsTooLong.New(branch, user, host)
+	if len(database) > math.MaxUint16 || len(branch) > math.MaxUint16 || len(user) > math.MaxUint16 || len(host) > math.MaxUint16 {
+		return branch_control.ErrExpressionsTooLong.New(database, branch, user, host)
 	}
 
 	// A nil session means we're not in the SQL context, so we allow the insertion in such a case
-	if branchAwareSession := branch_control.GetBranchAwareSession(ctx); branchAwareSession != nil {
+	if branchAwareSession := branch_control.GetBranchAwareSession(ctx); branchAwareSession != nil &&
+		// Having the correct database privileges also allows the insertion
+		!branch_control.HasDatabasePrivileges(branchAwareSession, database) {
 		// Need to acquire a read lock on the Access table since we have to read from it
 		tbl.Access().RWMutex.RLock()
 		defer tbl.Access().RWMutex.RUnlock()
@@ -177,13 +188,13 @@ func (tbl BranchNamespaceControlTable) Insert(ctx *sql.Context, row sql.Row) err
 		insertHost := branchAwareSession.GetHost()
 		// As we've folded the branch expression, we can use it directly as though it were a normal branch name to
 		// determine if the user attempting the insertion has permission to perform the insertion.
-		_, modPerms := tbl.Access().Match(branch, insertUser, insertHost)
+		_, modPerms := tbl.Access().Match(database, branch, insertUser, insertHost)
 		if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
-			return branch_control.ErrInsertingRow.New(insertUser, insertHost, branch, user, host)
+			return branch_control.ErrInsertingNamespaceRow.New(insertUser, insertHost, database, branch, user, host)
 		}
 	}
 
-	return tbl.insert(ctx, branch, user, host)
+	return tbl.insert(ctx, database, branch, user, host)
 }
 
 // Update implements the interface sql.RowUpdater.
@@ -191,26 +202,28 @@ func (tbl BranchNamespaceControlTable) Update(ctx *sql.Context, old sql.Row, new
 	tbl.RWMutex.Lock()
 	defer tbl.RWMutex.Unlock()
 
-	// Branch and Host are case-insensitive, while user is case-sensitive
-	oldBranch := strings.ToLower(branch_control.FoldExpression(old[0].(string)))
-	oldUser := branch_control.FoldExpression(old[1].(string))
-	oldHost := strings.ToLower(branch_control.FoldExpression(old[2].(string)))
-	newBranch := strings.ToLower(branch_control.FoldExpression(new[0].(string)))
-	newUser := branch_control.FoldExpression(new[1].(string))
-	newHost := strings.ToLower(branch_control.FoldExpression(new[2].(string)))
+	// Database, Branch, and Host are case-insensitive, while User is case-sensitive
+	oldDatabase := strings.ToLower(branch_control.FoldExpression(old[0].(string)))
+	oldBranch := strings.ToLower(branch_control.FoldExpression(old[1].(string)))
+	oldUser := branch_control.FoldExpression(old[2].(string))
+	oldHost := strings.ToLower(branch_control.FoldExpression(old[3].(string)))
+	newDatabase := strings.ToLower(branch_control.FoldExpression(new[0].(string)))
+	newBranch := strings.ToLower(branch_control.FoldExpression(new[1].(string)))
+	newUser := branch_control.FoldExpression(new[2].(string))
+	newHost := strings.ToLower(branch_control.FoldExpression(new[3].(string)))
 
 	// Verify that the lengths of each expression fit within an uint16
-	if len(newBranch) > math.MaxUint16 || len(newUser) > math.MaxUint16 || len(newHost) > math.MaxUint16 {
-		return branch_control.ErrExpressionsTooLong.New(newBranch, newUser, newHost)
+	if len(newDatabase) > math.MaxUint16 || len(newBranch) > math.MaxUint16 || len(newUser) > math.MaxUint16 || len(newHost) > math.MaxUint16 {
+		return branch_control.ErrExpressionsTooLong.New(newDatabase, newBranch, newUser, newHost)
 	}
 
 	// If we're not updating the same row, then we pre-emptively check for a row violation
-	if oldBranch != newBranch || oldUser != newUser || oldHost != newHost {
-		if tblIndex := tbl.GetIndex(newBranch, newUser, newHost); tblIndex != -1 {
+	if oldDatabase != newDatabase || oldBranch != newBranch || oldUser != newUser || oldHost != newHost {
+		if tblIndex := tbl.GetIndex(newDatabase, newBranch, newUser, newHost); tblIndex != -1 {
 			return sql.NewUniqueKeyErr(
-				fmt.Sprintf(`[%q, %q, %q]`, newBranch, newUser, newHost),
+				fmt.Sprintf(`[%q, %q, %q, %q]`, newDatabase, newBranch, newUser, newHost),
 				true,
-				sql.Row{newBranch, newUser, newHost})
+				sql.Row{newDatabase, newBranch, newUser, newHost})
 		}
 	}
 
@@ -222,25 +235,30 @@ func (tbl BranchNamespaceControlTable) Update(ctx *sql.Context, old sql.Row, new
 
 		insertUser := branchAwareSession.GetUser()
 		insertHost := branchAwareSession.GetHost()
-		// As we've folded the branch expression, we can use it directly as though it were a normal branch name to
-		// determine if the user attempting the update has permission to perform the update on the old branch name.
-		_, modPerms := tbl.Access().Match(oldBranch, insertUser, insertHost)
-		if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
-			return branch_control.ErrUpdatingRow.New(insertUser, insertHost, oldBranch, oldUser, oldHost)
+		if !branch_control.HasDatabasePrivileges(branchAwareSession, oldDatabase) {
+			// As we've folded the branch expression, we can use it directly as though it were a normal branch name to
+			// determine if the user attempting the update has permission to perform the update on the old branch name.
+			_, modPerms := tbl.Access().Match(oldDatabase, oldBranch, insertUser, insertHost)
+			if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
+				return branch_control.ErrUpdatingRow.New(insertUser, insertHost, oldDatabase, oldBranch, oldUser, oldHost)
+			}
 		}
-		// Now we check if the user has permission use the new branch name
-		_, modPerms = tbl.Access().Match(newBranch, insertUser, insertHost)
-		if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
-			return branch_control.ErrUpdatingToRow.New(insertUser, insertHost, oldBranch, oldUser, oldHost, newBranch)
+		if !branch_control.HasDatabasePrivileges(branchAwareSession, newDatabase) {
+			// Similar to the block above, we check if the user has permission to use the new branch name
+			_, modPerms := tbl.Access().Match(newDatabase, newBranch, insertUser, insertHost)
+			if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
+				return branch_control.ErrUpdatingToRow.
+					New(insertUser, insertHost, oldDatabase, oldBranch, oldUser, oldHost, newDatabase, newBranch)
+			}
 		}
 	}
 
-	if tblIndex := tbl.GetIndex(oldBranch, oldUser, oldHost); tblIndex != -1 {
-		if err := tbl.delete(ctx, oldBranch, oldUser, oldHost); err != nil {
+	if tblIndex := tbl.GetIndex(oldDatabase, oldBranch, oldUser, oldHost); tblIndex != -1 {
+		if err := tbl.delete(ctx, oldDatabase, oldBranch, oldUser, oldHost); err != nil {
 			return err
 		}
 	}
-	return tbl.insert(ctx, newBranch, newUser, newHost)
+	return tbl.insert(ctx, newDatabase, newBranch, newUser, newHost)
 }
 
 // Delete implements the interface sql.RowDeleter.
@@ -248,13 +266,16 @@ func (tbl BranchNamespaceControlTable) Delete(ctx *sql.Context, row sql.Row) err
 	tbl.RWMutex.Lock()
 	defer tbl.RWMutex.Unlock()
 
-	// Branch and Host are case-insensitive, while user is case-sensitive
-	branch := strings.ToLower(branch_control.FoldExpression(row[0].(string)))
-	user := branch_control.FoldExpression(row[1].(string))
-	host := strings.ToLower(branch_control.FoldExpression(row[2].(string)))
+	// Database, Branch, and Host are case-insensitive, while User is case-sensitive
+	database := strings.ToLower(branch_control.FoldExpression(row[0].(string)))
+	branch := strings.ToLower(branch_control.FoldExpression(row[1].(string)))
+	user := branch_control.FoldExpression(row[2].(string))
+	host := strings.ToLower(branch_control.FoldExpression(row[3].(string)))
 
 	// A nil session means we're not in the SQL context, so we allow the deletion in such a case
-	if branchAwareSession := branch_control.GetBranchAwareSession(ctx); branchAwareSession != nil {
+	if branchAwareSession := branch_control.GetBranchAwareSession(ctx); branchAwareSession != nil &&
+		// Having the correct database privileges also allows the deletion
+		!branch_control.HasDatabasePrivileges(branchAwareSession, database) {
 		// Need to acquire a read lock on the Access table since we have to read from it
 		tbl.Access().RWMutex.RLock()
 		defer tbl.Access().RWMutex.RUnlock()
@@ -263,13 +284,13 @@ func (tbl BranchNamespaceControlTable) Delete(ctx *sql.Context, row sql.Row) err
 		insertHost := branchAwareSession.GetHost()
 		// As we've folded the branch expression, we can use it directly as though it were a normal branch name to
 		// determine if the user attempting the deletion has permission to perform the deletion.
-		_, modPerms := tbl.Access().Match(branch, insertUser, insertHost)
+		_, modPerms := tbl.Access().Match(database, branch, insertUser, insertHost)
 		if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
-			return branch_control.ErrDeletingRow.New(insertUser, insertHost, branch, user, host)
+			return branch_control.ErrDeletingRow.New(insertUser, insertHost, database, branch, user, host)
 		}
 	}
 
-	return tbl.delete(ctx, branch, user, host)
+	return tbl.delete(ctx, database, branch, user, host)
 }
 
 // Close implements the interface sql.Closer.
@@ -279,57 +300,63 @@ func (tbl BranchNamespaceControlTable) Close(context *sql.Context) error {
 
 // insert adds the given branch, user, and host expression strings to the table. Assumes that the expressions have
 // already been folded.
-func (tbl BranchNamespaceControlTable) insert(ctx context.Context, branch string, user string, host string) error {
+func (tbl BranchNamespaceControlTable) insert(ctx context.Context, database, branch, user, host string) error {
 	// If we already have this in the table, then we return a duplicate PK error
-	if tblIndex := tbl.GetIndex(branch, user, host); tblIndex != -1 {
+	if tblIndex := tbl.GetIndex(database, branch, user, host); tblIndex != -1 {
 		return sql.NewUniqueKeyErr(
-			fmt.Sprintf(`[%q, %q, %q]`, branch, user, host),
+			fmt.Sprintf(`[%q, %q, %q, %q]`, database, branch, user, host),
 			true,
-			sql.Row{branch, user, host})
+			sql.Row{database, branch, user, host})
 	}
 
 	// Add an entry to the binlog
-	tbl.GetBinlog().Insert(branch, user, host, 0)
+	tbl.GetBinlog().Insert(database, branch, user, host, 0)
 	// Add the expressions to their respective slices
+	databaseExpr := branch_control.ParseExpression(database, sql.Collation_utf8mb4_0900_ai_ci)
 	branchExpr := branch_control.ParseExpression(branch, sql.Collation_utf8mb4_0900_ai_ci)
 	userExpr := branch_control.ParseExpression(user, sql.Collation_utf8mb4_0900_bin)
 	hostExpr := branch_control.ParseExpression(host, sql.Collation_utf8mb4_0900_ai_ci)
 	nextIdx := uint32(len(tbl.Values))
+	tbl.Databases = append(tbl.Databases, branch_control.MatchExpression{CollectionIndex: nextIdx, SortOrders: databaseExpr})
 	tbl.Branches = append(tbl.Branches, branch_control.MatchExpression{CollectionIndex: nextIdx, SortOrders: branchExpr})
 	tbl.Users = append(tbl.Users, branch_control.MatchExpression{CollectionIndex: nextIdx, SortOrders: userExpr})
 	tbl.Hosts = append(tbl.Hosts, branch_control.MatchExpression{CollectionIndex: nextIdx, SortOrders: hostExpr})
 	tbl.Values = append(tbl.Values, branch_control.NamespaceValue{
-		Branch: branch,
-		User:   user,
-		Host:   host,
+		Database: database,
+		Branch:   branch,
+		User:     user,
+		Host:     host,
 	})
 	return nil
 }
 
 // delete removes the given branch, user, and host expression strings from the table. Assumes that the expressions have
 // already been folded.
-func (tbl BranchNamespaceControlTable) delete(ctx context.Context, branch string, user string, host string) error {
+func (tbl BranchNamespaceControlTable) delete(ctx context.Context, database, branch, user, host string) error {
 	// If we don't have this in the table, then we just return
-	tblIndex := tbl.GetIndex(branch, user, host)
+	tblIndex := tbl.GetIndex(database, branch, user, host)
 	if tblIndex == -1 {
 		return nil
 	}
 
 	endIndex := len(tbl.Values) - 1
 	// Add an entry to the binlog
-	tbl.GetBinlog().Delete(branch, user, host, 0)
+	tbl.GetBinlog().Delete(database, branch, user, host, 0)
 	// Remove the matching row from all slices by first swapping with the last element
+	tbl.Databases[tblIndex], tbl.Databases[endIndex] = tbl.Databases[endIndex], tbl.Databases[tblIndex]
 	tbl.Branches[tblIndex], tbl.Branches[endIndex] = tbl.Branches[endIndex], tbl.Branches[tblIndex]
 	tbl.Users[tblIndex], tbl.Users[endIndex] = tbl.Users[endIndex], tbl.Users[tblIndex]
 	tbl.Hosts[tblIndex], tbl.Hosts[endIndex] = tbl.Hosts[endIndex], tbl.Hosts[tblIndex]
 	tbl.Values[tblIndex], tbl.Values[endIndex] = tbl.Values[endIndex], tbl.Values[tblIndex]
 	// Then we remove the last element
+	tbl.Databases = tbl.Databases[:endIndex]
 	tbl.Branches = tbl.Branches[:endIndex]
 	tbl.Users = tbl.Users[:endIndex]
 	tbl.Hosts = tbl.Hosts[:endIndex]
 	tbl.Values = tbl.Values[:endIndex]
 	// Then we update the index for the match expressions
 	if tblIndex != endIndex {
+		tbl.Databases[tblIndex].CollectionIndex = uint32(tblIndex)
 		tbl.Branches[tblIndex].CollectionIndex = uint32(tblIndex)
 		tbl.Users[tblIndex].CollectionIndex = uint32(tblIndex)
 		tbl.Hosts[tblIndex].CollectionIndex = uint32(tblIndex)

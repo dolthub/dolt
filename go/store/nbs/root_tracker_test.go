@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -47,7 +48,7 @@ func TestChunkStoreZeroValue(t *testing.T) {
 	h, err := store.Root(context.Background())
 	require.NoError(t, err)
 	assert.Equal(hash.Hash{}, h)
-	assert.Equal(constants.NomsVersion, store.Version())
+	assert.Equal(constants.FormatLD1String, store.Version())
 }
 
 func TestChunkStoreVersion(t *testing.T) {
@@ -57,10 +58,15 @@ func TestChunkStoreVersion(t *testing.T) {
 		require.NoError(t, store.Close())
 	}()
 
-	assert.Equal(constants.NomsVersion, store.Version())
-	newRoot := hash.Of([]byte("new root"))
+	assert.Equal(constants.FormatLD1String, store.Version())
+	newChunk := chunks.NewChunk([]byte("new root"))
+	require.NoError(t, store.Put(context.Background(), newChunk, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+		return nil, nil
+	}))
+	newRoot := newChunk.Hash()
+
 	if assert.True(store.Commit(context.Background(), newRoot, hash.Hash{})) {
-		assert.Equal(constants.NomsVersion, store.Version())
+		assert.Equal(constants.FormatLD1String, store.Version())
 	}
 }
 
@@ -68,16 +74,14 @@ func TestChunkStoreRebase(t *testing.T) {
 	assert := assert.New(t)
 	fm, p, q, store := makeStoreWithFakes(t)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
-	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	h, err := store.Root(context.Background())
 	require.NoError(t, err)
 	assert.Equal(hash.Hash{}, h)
-	assert.Equal(constants.NomsVersion, store.Version())
+	assert.Equal(constants.FormatLD1String, store.Version())
 
 	// Simulate another process writing a manifest behind store's back.
 	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
@@ -87,7 +91,7 @@ func TestChunkStoreRebase(t *testing.T) {
 	h, err = store.Root(context.Background())
 	require.NoError(t, err)
 	assert.Equal(hash.Hash{}, h)
-	assert.Equal(constants.NomsVersion, store.Version())
+	assert.Equal(constants.FormatLD1String, store.Version())
 
 	err = store.Rebase(context.Background())
 	require.NoError(t, err)
@@ -96,7 +100,7 @@ func TestChunkStoreRebase(t *testing.T) {
 	h, err = store.Root(context.Background())
 	require.NoError(t, err)
 	assert.Equal(newRoot, h)
-	assert.Equal(constants.NomsVersion, store.Version())
+	assert.Equal(constants.FormatLD1String, store.Version())
 	assertDataInStore(chunks, store, assert)
 }
 
@@ -104,10 +108,8 @@ func TestChunkStoreCommit(t *testing.T) {
 	assert := assert.New(t)
 	_, _, q, store := makeStoreWithFakes(t)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
-	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	h, err := store.Root(context.Background())
@@ -116,7 +118,7 @@ func TestChunkStoreCommit(t *testing.T) {
 
 	newRootChunk := chunks.NewChunk([]byte("new root"))
 	newRoot := newRootChunk.Hash()
-	err = store.Put(context.Background(), newRootChunk)
+	err = store.Put(context.Background(), newRootChunk, noopGetAddrs)
 	require.NoError(t, err)
 	success, err := store.Commit(context.Background(), newRoot, hash.Hash{})
 	require.NoError(t, err)
@@ -131,7 +133,7 @@ func TestChunkStoreCommit(t *testing.T) {
 
 	secondRootChunk := chunks.NewChunk([]byte("newer root"))
 	secondRoot := secondRootChunk.Hash()
-	err = store.Put(context.Background(), secondRootChunk)
+	err = store.Put(context.Background(), secondRootChunk, noopGetAddrs)
 	require.NoError(t, err)
 	success, err = store.Commit(context.Background(), secondRoot, newRoot)
 	require.NoError(t, err)
@@ -152,16 +154,14 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 	assert := assert.New(t)
 	fm, p, q, store := makeStoreWithFakes(t)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
-	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	h, err := store.Root(context.Background())
 	require.NoError(t, err)
 	assert.Equal(hash.Hash{}, h)
-	assert.Equal(constants.NomsVersion, store.Version())
+	assert.Equal(constants.FormatLD1String, store.Version())
 
 	// Simulate another process writing a manifest behind store's back.
 	interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
@@ -170,7 +170,7 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 	h, err = store.Root(context.Background())
 	require.NoError(t, err)
 	assert.Equal(hash.Hash{}, h)
-	assert.Equal(constants.NomsVersion, store.Version())
+	assert.Equal(constants.FormatLD1String, store.Version())
 }
 
 func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
@@ -187,7 +187,7 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 	require.NoError(t, err)
 
-	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, q, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.FormatLD1String, mm, p, q, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, store.Close())
@@ -196,7 +196,7 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	h, err := store.Root(context.Background())
 	require.NoError(t, err)
 	assert.Equal(newRoot, h)
-	assert.Equal(constants.NomsVersion, store.Version())
+	assert.Equal(constants.FormatLD1String, store.Version())
 	assertDataInStore(chunks, store, assert)
 }
 
@@ -204,21 +204,23 @@ func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 	assert := assert.New(t)
 	fm, p, q, store := makeStoreWithFakes(t)
 	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
-	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	// Simulate another process writing a manifest behind store's back.
-	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
+	newRoot, chks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 	require.NoError(t, err)
 
-	newRoot2 := hash.Of([]byte("new root 2"))
+	newChunk := chunks.NewChunk([]byte("new root 2"))
+	require.NoError(t, store.Put(context.Background(), newChunk, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+		return nil, nil
+	}))
+	newRoot2 := newChunk.Hash()
 	success, err := store.Commit(context.Background(), newRoot2, hash.Hash{})
 	require.NoError(t, err)
 	assert.False(success)
-	assertDataInStore(chunks, store, assert)
+	assertDataInStore(chks, store, assert)
 	success, err = store.Commit(context.Background(), newRoot2, newRoot)
 	require.NoError(t, err)
 	assert.True(success)
@@ -229,34 +231,32 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	fm := &fakeManifest{}
 	mm := manifestManager{fm, newManifestCache(defaultManifestCacheSize), newManifestLocks()}
 	q := NewUnlimitedMemQuotaProvider()
-	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
 	p := newFakeTablePersister(q)
 
 	c := inlineConjoiner{defaultMaxTables}
 
-	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, q, c, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.FormatLD1String, mm, p, q, c, defaultMemTableSize)
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	// Simulate another goroutine writing a manifest behind store's back.
-	interloper, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, q, c, defaultMemTableSize)
+	interloper, err := newNomsBlockStore(context.Background(), constants.FormatLD1String, mm, p, q, c, defaultMemTableSize)
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, interloper.Close())
 	}()
 
 	chunk := chunks.NewChunk([]byte("hello"))
-	err = interloper.Put(context.Background(), chunk)
+	err = interloper.Put(context.Background(), chunk, noopGetAddrs)
 	require.NoError(t, err)
 	assert.True(interloper.Commit(context.Background(), chunk.Hash(), hash.Hash{}))
 
 	// Try to land a new chunk in store, which should fail AND not persist the contents of store.mt
 	chunk = chunks.NewChunk([]byte("goodbye"))
-	err = store.Put(context.Background(), chunk)
+	err = store.Put(context.Background(), chunk, noopGetAddrs)
 	require.NoError(t, err)
 	assert.NotNil(store.mt)
 	assert.False(store.Commit(context.Background(), chunk.Hash(), hash.Hash{}))
@@ -272,7 +272,7 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	h, err = store.Root(context.Background())
 	require.NoError(t, err)
 	assert.Equal(chunk.Hash(), h)
-	assert.Equal(constants.NomsVersion, store.Version())
+	assert.Equal(constants.FormatLD1String, store.Version())
 }
 
 func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
@@ -281,16 +281,14 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 	upm := &updatePreemptManifest{manifest: fm}
 	mm := manifestManager{upm, newManifestCache(defaultManifestCacheSize), newManifestLocks()}
 	q := NewUnlimitedMemQuotaProvider()
-	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
 	p := newFakeTablePersister(q)
 	c := inlineConjoiner{defaultMaxTables}
 
-	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, q, c, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.FormatLD1String, mm, p, q, c, defaultMemTableSize)
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	// store.Commit() should lock out calls to mm.Fetch()
@@ -301,13 +299,13 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			var err error
-			_, fetched, err = mm.Fetch(context.Background(), nil)
+			_, fetched, _, err = mm.Fetch(context.Background(), nil)
 			require.NoError(t, err)
 		}()
 	}
 
 	rootChunk := chunks.NewChunk([]byte("new root"))
-	err = store.Put(context.Background(), rootChunk)
+	err = store.Put(context.Background(), rootChunk, noopGetAddrs)
 	require.NoError(t, err)
 	h, err := store.Root(context.Background())
 	require.NoError(t, err)
@@ -328,17 +326,15 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	mc := newManifestCache(defaultManifestCacheSize)
 	l := newManifestLocks()
 	q := NewUnlimitedMemQuotaProvider()
-	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
 	p := newFakeTablePersister(q)
 
 	c := inlineConjoiner{defaultMaxTables}
 
-	store, err := newNomsBlockStore(context.Background(), constants.Format718String, manifestManager{upm, mc, l}, p, q, c, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.FormatLD1String, manifestManager{upm, mc, l}, p, q, c, defaultMemTableSize)
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, store.Close())
+		require.EqualValues(t, 0, q.Usage())
 	}()
 
 	storeChunk := chunks.NewChunk([]byte("store"))
@@ -347,7 +343,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 
 	interloper, err := newNomsBlockStore(
 		context.Background(),
-		constants.Format718String,
+		constants.FormatLD1String,
 		manifestManager{
 			updatePreemptManifest{fm, func() { updateCount++ }}, mc, l,
 		},
@@ -365,7 +361,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := interloper.Put(context.Background(), interloperChunk)
+			err := interloper.Put(context.Background(), interloperChunk, noopGetAddrs)
 			require.NoError(t, err)
 			h, err := interloper.Root(context.Background())
 			require.NoError(t, err)
@@ -377,7 +373,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 		updateCount++
 	}
 
-	err = store.Put(context.Background(), storeChunk)
+	err = store.Put(context.Background(), storeChunk, noopGetAddrs)
 	require.NoError(t, err)
 	h, err := store.Root(context.Background())
 	require.NoError(t, err)
@@ -396,7 +392,7 @@ func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, q Mem
 	mm := manifestManager{fm, newManifestCache(0), newManifestLocks()}
 	q = NewUnlimitedMemQuotaProvider()
 	p = newFakeTablePersister(q)
-	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, q, inlineConjoiner{defaultMaxTables}, 0)
+	store, err := newNomsBlockStore(context.Background(), constants.FormatLD1String, mm, p, q, inlineConjoiner{defaultMaxTables}, 0)
 	require.NoError(t, err)
 	return
 }
@@ -408,12 +404,15 @@ func interloperWrite(fm *fakeManifest, p tablePersister, rootChunk []byte, chunk
 
 	var src chunkSource
 	src, err = p.Persist(context.Background(), createMemTable(persisted), nil, &Stats{})
-
 	if err != nil {
 		return hash.Hash{}, nil, err
 	}
 
-	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{mustAddr(src.hash()), uint32(len(chunks) + 1)}}, nil)
+	fm.set(constants.FormatLD1String, newLock, newRoot, []tableSpec{{src.hash(), uint32(len(chunks) + 1)}}, nil)
+
+	if err = src.close(); err != nil {
+		return [20]byte{}, nil, err
+	}
 	return
 }
 
@@ -497,12 +496,12 @@ func newFakeTableSet(q MemoryQuotaProvider) tableSet {
 }
 
 func newFakeTablePersister(q MemoryQuotaProvider) fakeTablePersister {
-	return fakeTablePersister{q, map[addr]tableReader{}, map[addr]bool{}, map[addr]bool{}, &sync.RWMutex{}}
+	return fakeTablePersister{q, map[addr][]byte{}, map[addr]bool{}, map[addr]bool{}, &sync.RWMutex{}}
 }
 
 type fakeTablePersister struct {
 	q             MemoryQuotaProvider
-	sources       map[addr]tableReader
+	sources       map[addr][]byte
 	sourcesToFail map[addr]bool
 	opened        map[addr]bool
 	mu            *sync.RWMutex
@@ -511,57 +510,55 @@ type fakeTablePersister struct {
 var _ tablePersister = fakeTablePersister{}
 
 func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
-	if mustUint32(mt.count()) > 0 {
-		name, data, chunkCount, err := mt.write(haver, stats)
-
-		if err != nil {
-			return emptyChunkSource{}, err
-		}
-
-		if chunkCount > 0 {
-			ftp.mu.Lock()
-			defer ftp.mu.Unlock()
-			ti, err := parseTableIndexByCopy(data, ftp.q)
-
-			if err != nil {
-				return nil, err
-			}
-
-			s, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
-			if err != nil {
-				return emptyChunkSource{}, err
-			}
-			ftp.sources[name] = s
-			return chunkSourceAdapter{ftp.sources[name], name}, nil
-		}
+	if mustUint32(mt.count()) == 0 {
+		return emptyChunkSource{}, nil
 	}
-	return emptyChunkSource{}, nil
-}
 
-func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
-	name, data, chunkCount, err := compactSourcesToBuffer(sources)
+	name, data, chunkCount, err := mt.write(haver, stats)
+	if err != nil {
+		return emptyChunkSource{}, err
+	} else if chunkCount == 0 {
+		return emptyChunkSource{}, nil
+	}
 
+	ftp.mu.Lock()
+	ftp.sources[name] = data
+	ftp.mu.Unlock()
+
+	ti, err := parseTableIndexByCopy(ctx, data, ftp.q)
 	if err != nil {
 		return nil, err
 	}
 
-	if chunkCount > 0 {
-		ftp.mu.Lock()
-		defer ftp.mu.Unlock()
-		ti, err := parseTableIndexByCopy(data, ftp.q)
-
-		if err != nil {
-			return nil, err
-		}
-
-		s, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
-		if err != nil {
-			return nil, err
-		}
-		ftp.sources[name] = s
-		return chunkSourceAdapter{ftp.sources[name], name}, nil
+	cs, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	if err != nil {
+		return emptyChunkSource{}, err
 	}
-	return emptyChunkSource{}, nil
+	return chunkSourceAdapter{cs, name}, nil
+}
+
+func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
+	name, data, chunkCount, err := compactSourcesToBuffer(sources)
+	if err != nil {
+		return nil, nil, err
+	} else if chunkCount == 0 {
+		return emptyChunkSource{}, func() {}, nil
+	}
+
+	ftp.mu.Lock()
+	defer ftp.mu.Unlock()
+	ftp.sources[name] = data
+
+	ti, err := parseTableIndexByCopy(ctx, data, ftp.q)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cs, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	if err != nil {
+		return nil, nil, err
+	}
+	return chunkSourceAdapter{cs, name}, func() {}, nil
 }
 
 func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunkCount uint32, err error) {
@@ -588,7 +585,7 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 				ch <- rec
 			})
 			if err != nil {
-				ch <- extractRecord{a: mustAddr(src.hash()), err: err}
+				ch <- extractRecord{a: src.hash(), err: err}
 			}
 		}()
 
@@ -617,15 +614,38 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	ftp.mu.Lock()
 	defer ftp.mu.Unlock()
+
 	if _, ok := ftp.sourcesToFail[name]; ok {
 		return nil, errors.New("intentional failure")
 	}
+	data := ftp.sources[name]
 	ftp.opened[name] = true
-	return chunkSourceAdapter{ftp.sources[name], name}, nil
+
+	ti, err := parseTableIndexByCopy(ctx, data, ftp.q)
+	if err != nil {
+		return nil, err
+	}
+
+	cs, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	if err != nil {
+		return emptyChunkSource{}, err
+	}
+	return chunkSourceAdapter{cs, name}, nil
 }
 
-func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ manifestContents) error {
+func (ftp fakeTablePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
+	if _, ok := ftp.sourcesToFail[name]; ok {
+		return false, errors.New("intentional failure")
+	}
+	return true, nil
+}
+
+func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ func() []addr, _ time.Time) error {
 	return chunks.ErrUnsupportedOperation
+}
+
+func (ftp fakeTablePersister) Close() error {
+	return nil
 }
 
 func extractAllChunks(ctx context.Context, src chunkSource, cb func(rec extractRecord)) (err error) {
@@ -635,8 +655,8 @@ func extractAllChunks(ctx context.Context, src chunkSource, cb func(rec extractR
 	}
 
 	var a addr
-	for i := uint32(0); i < index.ChunkCount(); i++ {
-		_, err = index.IndexEntry(i, &a)
+	for i := uint32(0); i < index.chunkCount(); i++ {
+		_, err = index.indexEntry(i, &a)
 		if err != nil {
 			return err
 		}

@@ -159,9 +159,9 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			}
 
 			suggestedMsg := fmt.Sprintf("Merge branch '%s' into %s", commitSpecStr, dEnv.RepoStateReader().CWBHeadRef().GetPath())
-			msg, err := getCommitMessage(ctx, apr, dEnv, suggestedMsg)
-			if err != nil {
-				return handleCommitErr(ctx, dEnv, err, usage)
+			msg := ""
+			if m, ok := apr.GetValue(cli.MessageArg); ok {
+				msg = m
 			}
 
 			if apr.Contains(cli.NoCommitFlag) && apr.Contains(cli.CommitFlag) {
@@ -214,25 +214,6 @@ func getUnmergedTableCount(ctx context.Context, root *doltdb.RootValue) (int, er
 	return unmergedTableCount, nil
 }
 
-// getCommitMessage returns commit message depending on whether user defined commit message and/or no-ff flag.
-// If user defined message, it will use that. If not, and no-ff flag is defined, it will ask user for commit message from editor.
-// If none of commit message or no-ff flag is defined, it will return suggested message.
-func getCommitMessage(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, suggestedMsg string) (string, errhand.VerboseError) {
-	if m, ok := apr.GetValue(cli.MessageArg); ok {
-		return m, nil
-	}
-
-	if apr.Contains(cli.NoFFParam) {
-		msg, err := getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, "", apr.Contains(cli.NoEditFlag))
-		if err != nil {
-			return "", errhand.VerboseErrorFromError(err)
-		}
-		return msg, nil
-	}
-
-	return "", nil
-}
-
 func validateMergeSpec(ctx context.Context, spec *merge.MergeSpec) errhand.VerboseError {
 	if spec.HeadH == spec.MergeH {
 		//TODO - why is this different for merge/pull?
@@ -282,13 +263,18 @@ func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError 
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = actions.CheckoutAllTables(ctx, roots, doltEnv.DbData())
+	roots, err = actions.CheckoutAllTables(ctx, roots)
 	if err == nil {
 		err = doltEnv.AbortMerge(ctx)
 
 		if err == nil {
 			return nil
 		}
+	}
+
+	err = doltEnv.UpdateWorkingRoot(ctx, roots.Working)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	return errhand.BuildDError("fatal: failed to revert changes").AddCause(err).Build()
@@ -480,42 +466,128 @@ func handleMergeErr(ctx context.Context, dEnv *env.DoltEnv, mergeErr error, hasC
 // If the merge is a fast-forward merge, but --no-ff has been supplied, the ExecNoFFMerge function will call
 // commit after merging. If the merge is not fast-forward, the --no-commit flag is not defined, and there are
 // no conflicts and/or constraint violations, this function will call commit after merging.
-// TODO (10/6/21 by Max) forcing a commit with a constraint violation should warn users that subsequent
-// FF merges will not surface constraint violations on their own; constraint verify --all
-// is required to reify violations.
+// TODO: forcing a commit with a constraint violation should warn users that subsequent
+//
+//	FF merges will not surface constraint violations on their own; constraint verify --all
+//	is required to reify violations.
 func performMerge(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec, suggestedMsg string) (map[string]*merge.MergeStats, error) {
-	var tblStats map[string]*merge.MergeStats
 	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
 		return nil, err
 	} else if ok {
 		if spec.Noff {
-			tblStats, err = merge.ExecNoFFMerge(ctx, dEnv, spec)
-			return tblStats, err
+			return executeNoFFMergeAndCommit(ctx, dEnv, spec, suggestedMsg)
 		}
 		return nil, merge.ExecuteFFMerge(ctx, dEnv, spec)
 	}
-	tblStats, err := merge.ExecuteMerge(ctx, dEnv, spec)
+	return executeMergeAndCommit(ctx, dEnv, spec, suggestedMsg)
+}
+
+func executeNoFFMergeAndCommit(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec, suggestedMsg string) (map[string]*merge.MergeStats, error) {
+	tblToStats, err := merge.ExecNoFFMerge(ctx, dEnv, spec)
 	if err != nil {
-		return tblStats, err
+		return tblToStats, err
 	}
 
-	if !spec.NoCommit && !hasConflictOrViolations(tblStats) {
-		msg := spec.Msg
-		if spec.Msg == "" {
-			msg, err = getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, "", spec.NoEdit)
-			if err != nil {
-				return nil, err
-			}
-		}
-		author := fmt.Sprintf("%s <%s>", spec.Name, spec.Email)
-
-		res := performCommit(ctx, "commit", []string{"-m", msg, "--author", author}, dEnv)
-		if res != 0 {
-			return nil, fmt.Errorf("dolt commit failed after merging")
-		}
+	if spec.NoCommit {
+		cli.Println("Automatic merge went well; stopped before committing as requested")
+		return tblToStats, nil
 	}
 
-	return tblStats, nil
+	// Reload roots since the above method writes new values to the working set
+	roots, err := dEnv.Roots(ctx)
+	if err != nil {
+		return tblToStats, err
+	}
+
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return tblToStats, err
+	}
+
+	var mergeParentCommits []*doltdb.Commit
+	if ws.MergeActive() {
+		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
+	}
+
+	msg, err := getCommitMsgForMerge(ctx, dEnv, spec.Msg, suggestedMsg, spec.NoEdit)
+	if err != nil {
+		return tblToStats, err
+	}
+
+	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
+		Message:    msg,
+		Date:       spec.Date,
+		AllowEmpty: spec.AllowEmpty,
+		Force:      spec.Force,
+		Name:       spec.Name,
+		Email:      spec.Email,
+	})
+
+	wsHash, err := ws.HashOf()
+	_, err = dEnv.DoltDB.CommitWithWorkingSet(
+		ctx,
+		dEnv.RepoStateReader().CWBHeadRef(),
+		ws.Ref(),
+		pendingCommit,
+		ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),
+		wsHash,
+		dEnv.NewWorkingSetMeta(msg),
+	)
+
+	if err != nil {
+		return tblToStats, fmt.Errorf("%w; failed to commit", err)
+	}
+
+	return tblToStats, err
+}
+
+func executeMergeAndCommit(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec, suggestedMsg string) (map[string]*merge.MergeStats, error) {
+	tblToStats, err := merge.ExecuteMerge(ctx, dEnv, spec)
+	if err != nil {
+		return tblToStats, err
+	}
+
+	if hasConflictOrViolations(tblToStats) {
+		return tblToStats, nil
+	}
+
+	if spec.NoCommit {
+		cli.Println("Automatic merge went well; stopped before committing as requested")
+		return tblToStats, nil
+	}
+
+	msg, err := getCommitMsgForMerge(ctx, dEnv, spec.Msg, suggestedMsg, spec.NoEdit)
+	if err != nil {
+		return tblToStats, err
+	}
+
+	author := fmt.Sprintf("%s <%s>", spec.Name, spec.Email)
+
+	res := performCommit(ctx, "commit", []string{"-m", msg, "--author", author}, dEnv)
+	if res != 0 {
+		return nil, fmt.Errorf("dolt commit failed after merging")
+	}
+
+	return tblToStats, nil
+}
+
+// getCommitMsgForMerge returns user defined message if exists; otherwise, get the commit message from editor.
+func getCommitMsgForMerge(ctx context.Context, dEnv *env.DoltEnv, userDefinedMsg, suggestedMsg string, noEdit bool) (string, error) {
+	if userDefinedMsg != "" {
+		return userDefinedMsg, nil
+	}
+
+	msg, err := getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, "", noEdit)
+	if err != nil {
+		return msg, err
+	}
+
+	if msg == "" {
+		return msg, fmt.Errorf("error: Empty commit message.\n" +
+			"Not committing merge; use 'dolt commit' to complete the merge.")
+	}
+
+	return msg, nil
 }
 
 // hasConflictOrViolations checks for conflicts or constraint violation regardless of a table being modified

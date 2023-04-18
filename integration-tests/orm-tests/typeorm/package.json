@@ -1,0 +1,20 @@
+{
+   "name": "typeorm-smoketest",
+   "version": "0.0.1",
+   "description": "DoltDB smoke test for TypeORM integration",
+   "type": "commonjs",
+   "devDependencies": {
+      "ts-node": "^10.7.0",
+      "@types/node": "^16.11.10",
+      "typescript": "^4.5.2"
+   },
+   "dependencies": {
+      "typeorm": "^0.3.10",
+      "reflect-metadata": "^0.1.13",
+      "mysql": "^2.14.1"
+   },
+   "scripts": {
+      "start": "ts-node src/index.ts",
+      "typeorm": "typeorm-ts-node-commonjs"
+   }
+}

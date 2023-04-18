@@ -20126,13 +20126,14 @@ INSERT INTO join_result VALUES ('stock','ZYNE','us','2017-11-01',9.7,9.93,9.41,9
 `
 
 func TestCreateTables(t *testing.T) {
-	sqle.SkipByDefaultInCI(t)
+	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqle.ExecuteSql(t, dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
 	table, _, err := root.GetTable(ctx, "daily_summary")
@@ -20148,16 +20149,17 @@ func TestInserts(t *testing.T) {
 	if types.Format_Default != types.Format_LD_1 {
 		t.Skip() // todo: convert to enginetests
 	}
-	sqle.SkipByDefaultInCI(t)
+	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqle.ExecuteSql(t, dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
-	root, err = sqle.ExecuteSql(t, dEnv, root, insertRows)
+	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
 	require.NoError(t, err)
 
 	table, _, err := root.GetTable(ctx, "daily_summary")
@@ -20177,19 +20179,20 @@ func TestInsertsWithIndexes(t *testing.T) {
 	if types.Format_Default != types.Format_LD_1 {
 		t.Skip() // todo: convert to enginetests
 	}
-	sqle.SkipByDefaultInCI(t)
+	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqle.ExecuteSql(t, dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
-	root, err = sqle.ExecuteSql(t, dEnv, root, createIndexes)
+	root, err = sqle.ExecuteSql(dEnv, root, createIndexes)
 	require.NoError(t, err)
 
-	root, err = sqle.ExecuteSql(t, dEnv, root, insertRows)
+	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
 	require.NoError(t, err)
 
 	table, _, err := root.GetTable(ctx, "daily_summary")
@@ -20212,24 +20215,25 @@ func TestInsertsWithIndexes(t *testing.T) {
 }
 
 func TestJoin(t *testing.T) {
-	sqle.SkipByDefaultInCI(t)
+	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqle.ExecuteSql(t, dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
-	root, err = sqle.ExecuteSql(t, dEnv, root, insertRows)
+	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
 	require.NoError(t, err)
 
-	rows, err := sqle.ExecuteSelect(t, dEnv, root, `select Type, d.Symbol, Country, TradingDate, Open, High, Low, Close, Volume, OpenInt, Name, Sector, IPOYear
+	rows, err := sqle.ExecuteSelect(dEnv, root, `select Type, d.Symbol, Country, TradingDate, Open, High, Low, Close, Volume, OpenInt, Name, Sector, IPOYear
 						from daily_summary d join symbols t on d.Symbol = t.Symbol order by d.Symbol, Country, TradingDate`)
 	require.NoError(t, err)
 	assert.Equal(t, 5210, len(rows))
 
-	expectedJoinRows, err := sqle.ExecuteSelect(t, dEnv, root, `select * from join_result order by symbol, country, TradingDate`)
+	expectedJoinRows, err := sqle.ExecuteSelect(dEnv, root, `select * from join_result order by symbol, country, TradingDate`)
 	require.NoError(t, err)
 	assertResultRowsEqual(t, expectedJoinRows, rows)
 }
@@ -20260,30 +20264,41 @@ func assertResultRowsEqual(t *testing.T, expected, actual []sql.Row) {
 }
 
 func TestExplain(t *testing.T) {
-	sqle.SkipByDefaultInCI(t)
+	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqle.ExecuteSql(t, dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
-	rows, err := sqle.ExecuteSelect(t, dEnv, root, "explain select * from daily_summary d join symbols t on d.Symbol = t.Symbol")
+	// insert test data to generate a realistic plan
+	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
+	require.NoError(t, err)
+
+	rows, err := sqle.ExecuteSelect(dEnv, root, "explain select * from daily_summary d join symbols t on d.Symbol = t.Symbol")
 	require.NoError(t, err)
 	rowStrings := make([]string, len(rows))
 	for i, row := range rows {
 		rowStrings[i] = row[0].(string)
 	}
 
-	expectedExplain := "HashJoin(d.Symbol = t.Symbol)\n" +
-		" ├─ TableAlias(d)\n" +
-		" │   └─ Table(daily_summary)\n" +
-		" │       └─ columns: [type symbol country tradingdate open high low close volume openint]\n" +
-		" └─ HashLookup(child: (t.Symbol), lookup: (d.Symbol))\n" +
-		"     └─ CachedResults\n" +
-		"         └─ TableAlias(t)\n" +
-		"             └─ Table(symbols)\n" +
-		"                 └─ columns: [symbol name sector ipoyear]"
+	expectedExplain := "Project\n" +
+		" ├─ columns: [d.Type, d.Symbol, d.Country, d.TradingDate, d.Open, d.High, d.Low, d.Close, d.Volume, d.OpenInt, t.Symbol, t.Name, t.Sector, t.IPOYear]\n" +
+		" └─ MergeJoin\n" +
+		"     ├─ cmp: (t.Symbol = d.Symbol)\n" +
+		"     ├─ TableAlias(t)\n" +
+		"     │   └─ IndexedTableAccess(symbols)\n" +
+		"     │       ├─ index: [symbols.Symbol]\n" +
+		"     │       ├─ filters: [{[NULL, ∞)}]\n" +
+		"     │       └─ columns: [symbol name sector ipoyear]\n" +
+		"     └─ TableAlias(d)\n" +
+		"         └─ IndexedTableAccess(daily_summary)\n" +
+		"             ├─ index: [daily_summary.Symbol,daily_summary.Country,daily_summary.TradingDate]\n" +
+		"             ├─ filters: [{[NULL, ∞), [NULL, ∞), [NULL, ∞)}]\n" +
+		"             └─ columns: [type symbol country tradingdate open high low close volume openint]"
+
 	assert.Equal(t, expectedExplain, strings.Join(rowStrings, "\n"))
 }

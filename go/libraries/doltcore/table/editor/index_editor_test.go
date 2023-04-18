@@ -62,7 +62,7 @@ func TestIndexEditorConcurrency(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	index, err := tableSch.Indexes().AddIndexByColNames("idx_concurrency", []string{"v1"}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	index, err := tableSch.Indexes().AddIndexByColNames("idx_concurrency", []string{"v1"}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
 	require.NoError(t, err)
 	indexSch := index.Schema()
 	emptyMap, err := types.NewMap(context.Background(), vrw)
@@ -158,7 +158,7 @@ func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	index, err := tableSch.Indexes().AddIndexByColNames("idx_concurrency", []string{"v1"}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	index, err := tableSch.Indexes().AddIndexByColNames("idx_concurrency", []string{"v1"}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
 	require.NoError(t, err)
 	indexSch := index.Schema()
 	emptyMap, err := types.NewMap(context.Background(), vrw)
@@ -250,7 +250,7 @@ func TestIndexEditorUniqueMultipleNil(t *testing.T) {
 		schema.NewColumn("v1", 1, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	index, err := tableSch.Indexes().AddIndexByColNames("idx_unique", []string{"v1"}, schema.IndexProperties{IsUnique: true, Comment: ""})
+	index, err := tableSch.Indexes().AddIndexByColNames("idx_unique", []string{"v1"}, nil, schema.IndexProperties{IsUnique: true, Comment: ""})
 	require.NoError(t, err)
 	indexSch := index.Schema()
 	emptyMap, err := types.NewMap(context.Background(), vrw)
@@ -297,7 +297,7 @@ func TestIndexEditorWriteAfterFlush(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	index, err := tableSch.Indexes().AddIndexByColNames("idx_concurrency", []string{"v1"}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	index, err := tableSch.Indexes().AddIndexByColNames("idx_concurrency", []string{"v1"}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
 	require.NoError(t, err)
 	indexSch := index.Schema()
 	emptyMap, err := types.NewMap(context.Background(), vrw)
@@ -365,7 +365,7 @@ func TestIndexEditorUniqueErrorDoesntPersist(t *testing.T) {
 		schema.NewColumn("v1", 1, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	index, err := tableSch.Indexes().AddIndexByColNames("idx_unq", []string{"v1"}, schema.IndexProperties{IsUnique: true, Comment: ""})
+	index, err := tableSch.Indexes().AddIndexByColNames("idx_unq", []string{"v1"}, nil, schema.IndexProperties{IsUnique: true, Comment: ""})
 	require.NoError(t, err)
 	indexSch := index.Schema()
 	emptyMap, err := types.NewMap(context.Background(), vrw)
@@ -618,7 +618,7 @@ func TestIndexRebuildingUniqueSuccessOneCol(t *testing.T) {
 	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), vrw, ns, sch, rowData)
 	require.NoError(t, err)
 
-	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2}, schema.IndexProperties{IsUnique: true, Comment: ""})
+	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2}, nil, schema.IndexProperties{IsUnique: true, Comment: ""})
 	require.NoError(t, err)
 	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
 	require.NoError(t, err)
@@ -649,7 +649,7 @@ func TestIndexRebuildingUniqueSuccessTwoCol(t *testing.T) {
 	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), vrw, ns, sch, rowData)
 	require.NoError(t, err)
 
-	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2, 3}, schema.IndexProperties{IsUnique: true, Comment: ""})
+	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2, 3}, nil, schema.IndexProperties{IsUnique: true, Comment: ""})
 	require.NoError(t, err)
 	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
 	require.NoError(t, err)
@@ -680,7 +680,7 @@ func TestIndexRebuildingUniqueFailOneCol(t *testing.T) {
 	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), vrw, ns, sch, rowData)
 	require.NoError(t, err)
 
-	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2}, schema.IndexProperties{IsUnique: true, Comment: ""})
+	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2}, nil, schema.IndexProperties{IsUnique: true, Comment: ""})
 	require.NoError(t, err)
 	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
 	require.NoError(t, err)
@@ -712,7 +712,7 @@ func TestIndexRebuildingUniqueFailTwoCol(t *testing.T) {
 	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), vrw, ns, sch, rowData)
 	require.NoError(t, err)
 
-	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2, 3}, schema.IndexProperties{IsUnique: true, Comment: ""})
+	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2, 3}, nil, schema.IndexProperties{IsUnique: true, Comment: ""})
 	require.NoError(t, err)
 	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
 	require.NoError(t, err)
@@ -738,13 +738,13 @@ func TestIndexEditorCapacityExceeded(t *testing.T) {
 		schema.NewColumn("v1", 1, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	index, err := tableSch.Indexes().AddIndexByColNames("idx_cap", []string{"v1"}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	index, err := tableSch.Indexes().AddIndexByColNames("idx_cap", []string{"v1"}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
 	require.NoError(t, err)
 	indexSch := index.Schema()
 	emptyMap, err := types.NewMap(ctx, vrw)
 	require.NoError(t, err)
 
-	opts := Options{Deaf: NewInMemDeafWithMaxCapacity(format, 224)}
+	opts := Options{Deaf: NewInMemDeafWithMaxCapacity(vrw, 224)}
 	indexEditor := NewIndexEditor(ctx, index, emptyMap, tableSch, opts)
 	for i := 0; i < 3; i++ {
 		dRow, err := row.New(format, indexSch, row.TaggedValues{
@@ -837,9 +837,9 @@ func createTestSchema(t *testing.T) schema.Schema {
 	)
 	sch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexName, []uint64{firstTag, lastTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexName, []uint64{firstTag, lastTag}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
 	require.NoError(t, err)
-	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexAge, []uint64{ageTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexAge, []uint64{ageTag}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
 	require.NoError(t, err)
 	return sch
 }

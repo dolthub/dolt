@@ -27,10 +27,14 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"errors"
+	"io"
 	"sort"
+	"time"
 )
 
 var errCacheMiss = errors.New("index cache miss")
+
+type cleanupFunc func()
 
 // tablePersister allows interaction with persistent storage. It provides
 // primitives for pushing the contents of a memTable to persistent storage,
@@ -43,86 +47,51 @@ type tablePersister interface {
 	Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error)
 
 	// ConjoinAll conjoins all chunks in |sources| into a single, new
-	// chunkSource.
-	ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error)
+	// chunkSource. It returns a |cleanupFunc| which can be called to
+	// potentially release resources associated with the |sources| once
+	// they are no longer needed.
+	ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error)
 
 	// Open a table named |name|, containing |chunkCount| chunks.
 	Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error)
 
-	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
-	PruneTableFiles(ctx context.Context, contents manifestContents) error
+	// Exists checks if a table named |name| exists.
+	Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error)
+
+	// PruneTableFiles deletes table files which the persister would normally be responsible for and
+	// which are not in the included |keeper| set and have not be written or modified more recently
+	// than the provided |mtime|.
+	PruneTableFiles(ctx context.Context, keeper func() []addr, mtime time.Time) error
+
+	io.Closer
 }
 
-type chunkSourcesByAscendingCount struct {
-	sources chunkSources
-	err     error
+type tableFilePersister interface {
+	tablePersister
+
+	// CopyTableFile copies the table file with the given fileId from the reader to the TableFileStore.
+	CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, fileSz uint64, chunkCount uint32) error
+
+	// Path returns the file system path. Use CopyTableFile instead of Path to
+	// copy a file to the TableFileStore. Path cannot be removed because it's used
+	// in remotesrv.
+	Path() string
 }
 
-func (csbc chunkSourcesByAscendingCount) Len() int { return len(csbc.sources) }
-func (csbc chunkSourcesByAscendingCount) Less(i, j int) bool {
-	srcI, srcJ := csbc.sources[i], csbc.sources[j]
-	cntI, err := srcI.count()
-
-	if err != nil {
-		csbc.err = err
-		return false
-	}
-
-	cntJ, err := srcJ.count()
-
-	if err != nil {
-		csbc.err = err
-		return false
-	}
-
-	if cntI == cntJ {
-		hi, err := srcI.hash()
-
-		if err != nil {
-			csbc.err = err
-			return false
-		}
-
-		hj, err := srcJ.hash()
-
-		if err != nil {
-			csbc.err = err
-			return false
-		}
-
-		return bytes.Compare(hi[:], hj[:]) < 0
-	}
-
-	return cntI < cntJ
-}
-
-func (csbc chunkSourcesByAscendingCount) Swap(i, j int) {
-	csbc.sources[i], csbc.sources[j] = csbc.sources[j], csbc.sources[i]
+type movingTableFilePersister interface {
+	TryMoveCmpChunkTableWriter(ctx context.Context, filename string, w *CmpChunkTableWriter) error
 }
 
 type chunkSourcesByDescendingDataSize struct {
 	sws []sourceWithSize
-	err error
 }
 
 func (csbds chunkSourcesByDescendingDataSize) Len() int { return len(csbds.sws) }
 func (csbds chunkSourcesByDescendingDataSize) Less(i, j int) bool {
 	swsI, swsJ := csbds.sws[i], csbds.sws[j]
 	if swsI.dataLen == swsJ.dataLen {
-		hi, err := swsI.source.hash()
-
-		if err != nil {
-			csbds.err = err
-			return false
-		}
-
-		hj, err := swsJ.source.hash()
-
-		if err != nil {
-			csbds.err = err
-			return false
-		}
-
+		hi := swsI.source.hash()
+		hj := swsJ.source.hash()
 		return bytes.Compare(hi[:], hj[:]) < 0
 	}
 	return swsI.dataLen > swsJ.dataLen
@@ -148,34 +117,46 @@ func (cp compactionPlan) suffixes() []byte {
 	return cp.mergedIndex[suffixesStart : suffixesStart+uint64(cp.chunkCount)*addrSuffixSize]
 }
 
-func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err error) {
-	var totalUncompressedData uint64
+// planRangeCopyConjoin computes a conjoin plan for tablePersisters that can conjoin
+// chunkSources using range copies (copy only chunk records, not chunk indexes).
+func planRangeCopyConjoin(sources chunkSources, stats *Stats) (compactionPlan, error) {
+	var sized []sourceWithSize
 	for _, src := range sources {
-		var uncmp uint64
-		uncmp, err = src.uncompressedLen()
-
-		if err != nil {
-			return compactionPlan{}, err
-		}
-
-		totalUncompressedData += uncmp
 		index, err := src.index()
-
 		if err != nil {
 			return compactionPlan{}, err
 		}
-
-		plan.chunkCount += index.ChunkCount()
-
 		// Calculate the amount of chunk data in |src|
-		chunkDataLen := calcChunkDataLen(index)
-		plan.sources.sws = append(plan.sources.sws, sourceWithSize{src, chunkDataLen})
-		plan.totalCompressedData += chunkDataLen
+		sized = append(sized, sourceWithSize{src, calcChunkRangeSize(index)})
 	}
+	return planConjoin(sized, stats)
+}
+
+// calcChunkRangeSize computes the size of the chunk records for a table file.
+func calcChunkRangeSize(index tableIndex) uint64 {
+	return index.tableFileSize() - indexSize(index.chunkCount()) - footerSize
+}
+
+func planConjoin(sources []sourceWithSize, stats *Stats) (plan compactionPlan, err error) {
+	// place largest chunk sources at the beginning of the conjoin
+	plan.sources = chunkSourcesByDescendingDataSize{sws: sources}
 	sort.Sort(plan.sources)
 
-	if plan.sources.err != nil {
-		return compactionPlan{}, plan.sources.err
+	var totalUncompressedData uint64
+	for _, s := range sources {
+		var uncmp uint64
+		if uncmp, err = s.source.uncompressedLen(); err != nil {
+			return compactionPlan{}, err
+		}
+		totalUncompressedData += uncmp
+
+		index, err := s.source.index()
+		if err != nil {
+			return compactionPlan{}, err
+		}
+		// Calculate the amount of chunk data in |src|
+		plan.totalCompressedData += s.dataLen
+		plan.chunkCount += index.chunkCount()
 	}
 
 	lengthsPos := lengthsOffset(plan.chunkCount)
@@ -192,18 +173,19 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			return compactionPlan{}, err
 		}
 
-		ordinals, err := index.Ordinals()
+		ordinals, err := index.ordinals()
 		if err != nil {
 			return compactionPlan{}, err
 		}
-		prefixes, err := index.Prefixes()
+		prefixes, err := index.prefixes()
 		if err != nil {
 			return compactionPlan{}, err
 		}
 
 		// Add all the prefix tuples from this index to the list of all prefixIndexRecs, modifying the ordinals such that all entries from the 1st item in sources come after those in the 0th and so on.
 		for j, prefix := range prefixes {
-			rec := prefixIndexRec{prefix: prefix, order: ordinalOffset + ordinals[j]}
+			rec := prefixIndexRec{order: ordinalOffset + ordinals[j]}
+			binary.BigEndian.PutUint64(rec.addr[:], prefix)
 			prefixIndexRecs = append(prefixIndexRecs, rec)
 		}
 
@@ -219,16 +201,16 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 		if onHeap, ok := index.(onHeapTableIndex); ok {
 			// TODO: copy the lengths and suffixes as a byte-copy from src BUG #3438
 			// Bring over the lengths block, in order
-			for ord := uint32(0); ord < onHeap.chunkCount; ord++ {
+			for ord := uint32(0); ord < onHeap.chunkCount(); ord++ {
 				e := onHeap.getIndexEntry(ord)
 				binary.BigEndian.PutUint32(plan.mergedIndex[lengthsPos:], e.Length())
 				lengthsPos += lengthSize
 			}
 
 			// Bring over the suffixes block, in order
-			n := copy(plan.mergedIndex[suffixesPos:], onHeap.suffixB)
+			n := copy(plan.mergedIndex[suffixesPos:], onHeap.suffixes)
 
-			if n != len(onHeap.suffixB) {
+			if n != len(onHeap.suffixes) {
 				return compactionPlan{}, errors.New("failed to copy all data")
 			}
 
@@ -237,7 +219,7 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			// Build up the index one entry at a time.
 			var a addr
 			for i := 0; i < len(ordinals); i++ {
-				e, err := index.IndexEntry(uint32(i), &a)
+				e, err := index.indexEntry(uint32(i), &a)
 				if err != nil {
 					return compactionPlan{}, err
 				}
@@ -255,7 +237,7 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 	sort.Sort(prefixIndexRecs)
 	var pfxPos uint64
 	for _, pi := range prefixIndexRecs {
-		binary.BigEndian.PutUint64(plan.mergedIndex[pfxPos:], pi.prefix)
+		binary.BigEndian.PutUint64(plan.mergedIndex[pfxPos:], pi.addr.Prefix())
 		pfxPos += addrPrefixSize
 		binary.BigEndian.PutUint32(plan.mergedIndex[pfxPos:], pi.order)
 		pfxPos += ordinalSize
@@ -275,8 +257,4 @@ func nameFromSuffixes(suffixes []byte) (name addr) {
 	h = sha.Sum(h) // Appends hash to h
 	copy(name[:], h)
 	return
-}
-
-func calcChunkDataLen(index tableIndex) uint64 {
-	return index.TableFileSize() - indexSize(index.ChunkCount()) - footerSize
 }

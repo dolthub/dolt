@@ -316,7 +316,7 @@ var BasicInsertTests = []InsertTest{
 		SelectQuery: "select id, first_name, last_name, is_married, age, rating from people where id = 7 ORDER BY id",
 		ExpectedRows: ToSqlRows(
 			CompressSchema(SubsetSchema(PeopleTestSchema, "id", "first_name", "last_name", "is_married", "age", "rating")),
-			NewResultSetRow(types.Int(7), types.String("Maggie"), types.String("Simpson"), types.Int(0), types.Int(1), types.Float(5.1)),
+			NewResultSetRow(types.Int(7), types.String("Maggie"), types.String("Simpson"), types.Int(1), types.Int(1), types.Float(5.1)),
 		),
 		ExpectedSchema: CompressSchema(SubsetSchema(PeopleTestSchema, "id", "first_name", "last_name", "is_married", "age", "rating")),
 	},
@@ -397,13 +397,13 @@ var systemTableInsertTests = []InsertTest{
 	},
 	{
 		Name:            "insert into dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemasTableSchema(), ""),
-		InsertQuery:     "insert into dolt_schemas (id, type, name, fragment) values (1, 'view', 'name', 'select 2+2 from dual')",
-		SelectQuery:     "select * from dolt_schemas ORDER BY id",
-		ExpectedRows: ToSqlRows(CompressSchema(SchemasTableSchema()),
-			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual"), types.Int(1)),
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, schemaTableSchema, ""),
+		InsertQuery:     "insert into dolt_schemas (type, name, fragment) values ('view', 'name', 'create view name as select 2+2 from dual')",
+		SelectQuery:     "select * from dolt_schemas ORDER BY name",
+		ExpectedRows: ToSqlRows(CompressSchema(schemaTableSchema),
+			NewRow(types.String("view"), types.String("name"), types.String("create view name as select 2+2 from dual")),
 		),
-		ExpectedSchema: CompressSchema(SchemasTableSchema()),
+		ExpectedSchema: CompressSchema(schemaTableSchema),
 	},
 }
 
@@ -430,13 +430,14 @@ func testInsertQuery(t *testing.T, test InsertTest) {
 		t.Skip("Skipping test broken on SQL engine")
 	}
 
-	dEnv := CreateEmptyTestDatabase(t)
+	dEnv, err := CreateEmptyTestDatabase()
+	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	var err error
 	root, _ := dEnv.WorkingRoot(context.Background())
 	root, err = executeModify(t, context.Background(), dEnv, root, test.InsertQuery)
 	if len(test.ExpectedErr) > 0 {

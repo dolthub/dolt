@@ -252,6 +252,8 @@ DELIM
 
 @test "schema-import: --update adds new columns" {
     dolt table import -c -pk=pk test abc.csv
+    dolt sql -q 'delete from test'
+
     dolt add test
     dolt commit -m "added table"
     run dolt schema import -pks=pk -u test abc-xyz.csv
@@ -268,13 +270,26 @@ DELIM
     run dolt sql -r csv -q 'select * from test'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "pk,a,b,c,x,y,z" ]] || false
-    skip "schema import --update is currently deleting table data"
-    [[ "$output" =~ "0,red,1.1,true,,," ]] || false
-    [[ "$output" =~ "1,blue,2.2,false,,," ]] || false
+}
+
+@test "schema-import: --update blocked on non-empty table" {
+    dolt table import -c -pk=pk test abc.csv
+    dolt add test
+    dolt commit -m "added table"
+    
+    run dolt schema import -pks=pk -u test abc-xyz.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "will delete all row data" ]] || false
+    [[ "$output" =~ "dolt sql -q 'delete from test'" ]] || false
+
+    dolt sql -q 'delete from test'
+    dolt schema import -pks=pk -u test abc-xyz.csv
 }
 
 @test "schema-import: --replace adds new columns" {
     dolt table import -c -pk=pk test abc.csv
+    dolt sql -q 'delete from test'
+
     dolt add test
     dolt commit -m "added table"
     run dolt schema import -pks=pk -r test abc-xyz.csv
@@ -294,6 +309,20 @@ DELIM
     [[ "$output" =~ "0" ]] || false
 }
 
+@test "schema-import: --replace blocked on non-empty table" {
+    dolt table import -c -pk=pk test abc.csv
+    dolt add test
+    dolt commit -m "added table"
+
+    run dolt schema import -pks=pk -r test abc-xyz.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "will delete all row data" ]] || false
+    [[ "$output" =~ "dolt sql -q 'delete from test'" ]] || false
+
+    dolt sql -q 'delete from test'    
+    dolt schema import -pks=pk -u test abc-xyz.csv
+}
+
 @test "schema-import: --replace drops missing columns" {
     cat <<DELIM > xyz.csv
 pk,x,y,z
@@ -302,6 +331,8 @@ pk,x,y,z
 DELIM
     dolt table import -c -pk=pk test abc-xyz.csv
     dolt add test
+    dolt sql -q 'delete from test'
+
     dolt commit -m "added test"
     run dolt schema import -pks=pk -r test xyz.csv
     [ "$status" -eq 0 ]

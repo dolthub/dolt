@@ -15,7 +15,6 @@
 package index_test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -27,7 +26,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
@@ -42,7 +40,7 @@ func TestMergeableIndexes(t *testing.T) {
 		t.Skip() // this test is specific to Noms ranges
 	}
 
-	engine, denv, root, db, indexTuples := setupIndexes(t, "test", `INSERT INTO test VALUES
+	engine, sqlCtx, indexTuples := setupIndexes(t, "test", `INSERT INTO test VALUES
 		(-3, NULL, NULL),
 		(-2, NULL, NULL),
 		(-1, NULL, NULL),
@@ -1316,16 +1314,6 @@ func TestMergeableIndexes(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.whereStmt, func(t *testing.T) {
-			ctx := context.Background()
-			sqlCtx := NewTestSQLCtx(ctx)
-			session := dsess.DSessFromSess(sqlCtx.Session)
-			dbState := getDbState(t, db, denv)
-			err := session.AddDB(sqlCtx, dbState)
-			require.NoError(t, err)
-			sqlCtx.SetCurrentDatabase(db.Name())
-			err = session.SetRoot(sqlCtx, db.Name(), root)
-			require.NoError(t, err)
-
 			query := fmt.Sprintf(`SELECT pk FROM test WHERE %s ORDER BY 1`, test.whereStmt)
 
 			finalRanges, err := ReadRangesFromQuery(sqlCtx, engine, query)
@@ -1382,7 +1370,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		t.Skip() // this test is specific to Noms ranges
 	}
 
-	engine, denv, root, db, indexTuples := setupIndexes(t, "test", `INSERT INTO test VALUES
+	engine, sqlCtx, indexTuples := setupIndexes(t, "test", `INSERT INTO test VALUES
 		(0, 10, 20),
 		(1, 11, 21),
 		(2, NULL, NULL),
@@ -1532,16 +1520,6 @@ func TestMergeableIndexesNulls(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.whereStmt, func(t *testing.T) {
-			ctx := context.Background()
-			sqlCtx := NewTestSQLCtx(ctx)
-			session := dsess.DSessFromSess(sqlCtx.Session)
-			dbState := getDbState(t, db, denv)
-			err := session.AddDB(sqlCtx, dbState)
-			require.NoError(t, err)
-			sqlCtx.SetCurrentDatabase(db.Name())
-			err = session.SetRoot(sqlCtx, db.Name(), root)
-			require.NoError(t, err)
-
 			query := fmt.Sprintf(`SELECT pk FROM test WHERE %s ORDER BY 1`, test.whereStmt)
 
 			finalRanges, err := ReadRangesFromQuery(sqlCtx, engine, query)

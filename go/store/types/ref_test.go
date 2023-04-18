@@ -54,7 +54,7 @@ func TestRefInSet(t *testing.T) {
 	require.NoError(t, err)
 	r, err := NewRef(s, vs.Format())
 	require.NoError(t, err)
-	se, err := s.Edit().Insert(r)
+	se, err := s.Edit().Insert(context.Background(), r)
 	require.NoError(t, err)
 	s, err = se.Set(context.Background())
 	require.NoError(t, err)

@@ -1,0 +1,18 @@
+opts:
+  seed: 0
+tests:
+- name: "row count"
+  repos:
+  - name: repo1
+    server:
+      port: 3308
+      args: [ "--port", "3308" ]
+  tables:
+  - name: "400k"
+    fmt: "csv"
+    rows: 40000
+    schema: |
+      create table xy (
+        x int primary key,
+        y varchar(30)
+      );

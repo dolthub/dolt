@@ -1,4 +1,4 @@
-// Copyright 2020 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,9 +21,11 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const HashOfFuncName = "hashof"
@@ -31,6 +33,8 @@ const HashOfFuncName = "hashof"
 type HashOf struct {
 	expression.UnaryExpression
 }
+
+var _ sql.FunctionExpression = (*HashOf)(nil)
 
 // NewHashOf creates a new HashOf expression.
 func NewHashOf(e sql.Expression) sql.Expression {
@@ -77,12 +81,21 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	} else {
 		ref, err := ddb.GetRefByNameInsensitive(ctx, name)
 		if err != nil {
-			return nil, err
-		}
-
-		cm, err = ddb.ResolveCommitRef(ctx, ref)
-		if err != nil {
-			return nil, err
+			hsh, parsed := hash.MaybeParse(name)
+			if parsed {
+				orgErr := err
+				cm, err = ddb.ReadCommit(ctx, hsh)
+				if err != nil {
+					return nil, orgErr
+				}
+			} else {
+				return nil, err
+			}
+		} else {
+			cm, err = ddb.ResolveCommitRef(ctx, ref)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -104,6 +117,16 @@ func (t *HashOf) String() string {
 	return fmt.Sprintf("HASHOF(%s)", t.Child.String())
 }
 
+// FunctionName implements the FunctionExpression interface
+func (t *HashOf) FunctionName() string {
+	return HashOfFuncName
+}
+
+// Description implements the FunctionExpression interface
+func (t *HashOf) Description() string {
+	return "returns the commit hash of a branch or other commit spec"
+}
+
 // IsNullable implements the Expression interface.
 func (t *HashOf) IsNullable() bool {
 	return t.Child.IsNullable()
@@ -119,5 +142,5 @@ func (t *HashOf) WithChildren(children ...sql.Expression) (sql.Expression, error
 
 // Type implements the Expression interface.
 func (t *HashOf) Type() sql.Type {
-	return sql.Text
+	return types.Text
 }

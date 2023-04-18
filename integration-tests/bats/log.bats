@@ -40,101 +40,200 @@ teardown() {
     [[ ! "$output" =~ "BRANCH1" ]] || false
 }
 
-@test "log: two dot log" {
+@test "log: two and three dot log" {
     dolt sql -q "create table testtable (pk int PRIMARY KEY)"
     dolt add .
     dolt commit -m "commit 1 MAIN"
     dolt commit	--allow-empty -m "commit 2 MAIN"
-    dolt checkout -b branch1
-    dolt commit	--allow-empty -m "commit 1 BRANCH1"
-    dolt commit --allow-empty -m "commit 2 BRANCH1"
-    dolt commit --allow-empty -m "commit 3 BRANCH1"
+    dolt checkout -b branchA
+    dolt commit	--allow-empty -m "commit 1 BRANCHA"
+    dolt commit --allow-empty -m "commit 2 BRANCHA"
+    dolt checkout -b branchB
+    dolt commit --allow-empty -m "commit 1 BRANCHB"
+    dolt checkout branchA
+    dolt commit --allow-empty -m "commit 3 BRANCHA"
 
-    run dolt log branch1
+    run dolt log branchA
     [ $status -eq 0 ]
     [[ "$output" =~ "MAIN" ]] || false
-    [[ "$output" =~ "BRANCH1" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
     run dolt log main 
     [ $status -eq 0 ]
     [[ "$output" =~ "MAIN" ]] || false
-    [[ ! "$output" =~ "BRANCH1" ]] || false
+    [[ ! "$output" =~ "BRANCHA" ]] || false
     dolt checkout main
     dolt commit	--allow-empty -m "commit 3 AFTER"
     
+    # # # # # # # # # # # # # # # # # # # # # # #
+    #                                           #
+    #                         1B (branchB)      #
+    #                        /                  #
+    #                  1A - 2A - 3A (branchA)   #
+    #                 /                         #
+    # (init) - 1M - 2M - 3M (main)              #
+    #                                           #
+    # # # # # # # # # # # # # # # # # # # # # # # 
+    
     # Valid two dot
-    run dolt log main..branch1
+    run dolt log main..branchA
     [ $status -eq 0 ]
     [[ ! "$output" =~ "MAIN" ]] || false
     [[ ! "$output" =~ "AFTER" ]] || false
-    [[ "$output" =~ "BRANCH1" ]] || false
-    run dolt log ^main branch1
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log ^main branchA
     [ $status -eq 0 ]
     [[ ! "$output" =~ "MAIN" ]] || false
     [[ ! "$output" =~ "AFTER" ]] || false
-    [[ "$output" =~ "BRANCH1" ]] || false
-    run dolt log branch1 ^main
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log branchA ^main
     [ $status -eq 0 ]
     [[ ! "$output" =~ "MAIN" ]] || false
     [[ ! "$output" =~ "AFTER" ]] || false
-    [[ "$output" =~ "BRANCH1" ]] || false
-    run dolt log branch1 --not main
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log branchA --not main
     [ $status -eq 0 ]
     [[ ! "$output" =~ "MAIN" ]] || false
     [[ ! "$output" =~ "AFTER" ]] || false
-    [[ "$output" =~ "BRANCH1" ]] || false
-    run dolt log branch1..main
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log branchA..main
     [ $status -eq 0 ]
     [[ ! "$output" =~ "MAIN" ]] || false
     [[ "$output" =~ "AFTER" ]] || false
-    [[ ! "$output" =~ "BRANCH1" ]] || false
+    [[ ! "$output" =~ "BRANCHA" ]] || false
     run dolt log main..main
     [ $status -eq 0 ]
     
-    run dolt log main^..branch1
+    run dolt log main^..branchA
     [ $status -eq 0 ]
     [[ ! "$output" =~ "MAIN" ]] || false
     [[ ! "$output" =~ "AFTER" ]] || false
-    [[ "$output" =~ "BRANCH1" ]] || false
-    run dolt log ^main^ branch1
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log ^main^ branchA
     [ $status -eq 0 ]
     [[ ! "$output" =~ "MAIN" ]] || false
     [[ ! "$output" =~ "AFTER" ]] || false
-    [[ "$output" =~ "BRANCH1" ]] || false
-    run dolt log branch1 --not main^
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log branchA --not main^
     [ $status -eq 0 ]
     [[ ! "$output" =~ "MAIN" ]] || false
     [[ ! "$output" =~ "AFTER" ]] || false
-    [[ "$output" =~ "BRANCH1" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log ^main ^branchA
+    [ $status -eq 0 ]
 
-    # Invalid two dot
-    run dolt log main..branch1 testtable
+    # Valid three dot
+    run dolt log main...branchA
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log branchA...main
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log main branchA --not $(dolt merge-base main branchA)
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    run dolt log branchB...branchA
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+
+    # Multiple refs
+    run dolt log branchB branchA
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+    run dolt log main branchA
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    [[ ! "$output" =~ "BRANCHB" ]] || false
+    run dolt log main branchB branchA
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+    run dolt log branchB main ^branchA
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ ! "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+    run dolt log branchB main --not branchA
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ ! "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+    run dolt log branchB main --not branchA --oneline
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "AFTER" ]] || false
+    [[ ! "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+    run dolt log branchB main ^branchA ^main
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ ! "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+    run dolt log branchB main --not branchA main
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ ! "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+    run dolt log branchB main --not branchA main --oneline
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "AFTER" ]] || false
+    [[ ! "$output" =~ "BRANCHA" ]] || false
+    [[ "$output" =~ "BRANCHB" ]] || false
+
+    # Invalid
+    run dolt log main..branchA testtable
     [ $status -eq 1 ]
-    run dolt log testtable main..branch1 
+    run dolt log testtable main..branchA 
     [ $status -eq 1 ]
-    run dolt log ^main branch1 testtable
+    run dolt log main...branchA testtable
     [ $status -eq 1 ]
-    run dolt log branch1 testtable --not main
+    run dolt log testtable main...branchA 
     [ $status -eq 1 ]
-    run dolt log main..branch1 main
+    run dolt log ^main branchA testtable
     [ $status -eq 1 ]
-     run dolt log main main..branch1
+    run dolt log branchA testtable --not main
     [ $status -eq 1 ]
-    run dolt log ^main ^branch1
+    run dolt log main..branchA main
     [ $status -eq 1 ]
-    run dolt log main branch1
+     run dolt log main main..branchA
+    [ $status -eq 1 ]
+    run dolt log main...branchA main
+    [ $status -eq 1 ]
+     run dolt log main main...branchA
     [ $status -eq 1 ]
     run dolt log ^main testtable
     [ $status -eq 1 ]
-    run dolt log ^branch1 --not main
+    run dolt log testtable ^main
     [ $status -eq 1 ]
-    run dolt log main..branch1 --not main
+    run dolt log ^branchA --not main
     [ $status -eq 1 ]
-    run dolt log branch1 --not main branch1
+    run dolt log main..branchA --not main
     [ $status -eq 1 ]
-    run dolt log branch1 --not main --not branch1
+    run dolt log main..branchA --not ^main
     [ $status -eq 1 ]
-
-    run dolt log main...branch1
+    run dolt log main...branchA --not main
+    [ $status -eq 1 ]
+    run dolt log main...branchA --not ^main
     [ $status -eq 1 ]
 }
 
@@ -527,4 +626,20 @@ teardown() {
 
     run expect $BATS_TEST_DIRNAME/log.expect
     [ "$status" -eq 0 ]
+}
+
+@test "log: string formatting characters are escaped" {
+    run dolt commit --allow-empty -m "% should be escaped"
+    [[ "$output" =~ "% should be escaped" ]] || false
+}
+
+@test "log: identify HEAD" {
+    dolt commit --allow-empty -m "commit 1"
+    dolt tag commit1
+    dolt commit --allow-empty -m "commit 2"
+    dolt tag commit2
+    run dolt log commit1
+    [[ !("$output" =~ "HEAD") ]] || false
+    run dolt log commit2
+    [[ "$output" =~ "HEAD" ]] || false
 }

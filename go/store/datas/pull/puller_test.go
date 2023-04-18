@@ -36,6 +36,41 @@ import (
 	"github.com/dolthub/dolt/go/store/util/clienttest"
 )
 
+func TestNbsPuller(t *testing.T) {
+	testPuller(t, func(ctx context.Context) (types.ValueReadWriter, datas.Database) {
+		dir := filepath.Join(os.TempDir(), uuid.New().String())
+		err := os.MkdirAll(dir, os.ModePerm)
+		require.NoError(t, err)
+
+		nbf := types.Format_Default.VersionString()
+		q := nbs.NewUnlimitedMemQuotaProvider()
+		st, err := nbs.NewLocalStore(ctx, nbf, dir, clienttest.DefaultMemTableSize, q)
+		require.NoError(t, err)
+
+		ns := tree.NewNodeStore(st)
+		vs := types.NewValueStore(st)
+		return vs, datas.NewTypesDatabase(vs, ns)
+	})
+}
+
+func TestChunkJournalPuller(t *testing.T) {
+	testPuller(t, func(ctx context.Context) (types.ValueReadWriter, datas.Database) {
+		dir := filepath.Join(os.TempDir(), uuid.New().String())
+		err := os.MkdirAll(dir, os.ModePerm)
+		require.NoError(t, err)
+
+		nbf := types.Format_Default.VersionString()
+		q := nbs.NewUnlimitedMemQuotaProvider()
+
+		st, err := nbs.NewLocalJournalingStore(ctx, nbf, dir, q)
+		require.NoError(t, err)
+
+		ns := tree.NewNodeStore(st)
+		vs := types.NewValueStore(st)
+		return vs, datas.NewTypesDatabase(vs, ns)
+	})
+}
+
 func addTableValues(ctx context.Context, vrw types.ValueReadWriter, m types.Map, tableName string, alternatingKeyVals ...types.Value) (types.Map, error) {
 	val, ok, err := m.MaybeGet(ctx, types.String(tableName))
 
@@ -124,29 +159,12 @@ func deleteTableValues(ctx context.Context, vrw types.ValueReadWriter, m types.M
 	return me.Map(ctx)
 }
 
-func tempDirDB(ctx context.Context) (types.ValueReadWriter, datas.Database, error) {
-	dir := filepath.Join(os.TempDir(), uuid.New().String())
-	err := os.MkdirAll(dir, os.ModePerm)
+type datasFactory func(context.Context) (types.ValueReadWriter, datas.Database)
 
-	if err != nil {
-		return nil, nil, err
-	}
-
-	st, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), dir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
-	if err != nil {
-		return nil, nil, err
-	}
-
-	ns := tree.NewNodeStore(st)
-	vs := types.NewValueStore(st)
-
-	return vs, datas.NewTypesDatabase(vs, ns), nil
-}
-
-func TestPuller(t *testing.T) {
+func testPuller(t *testing.T, makeDB datasFactory) {
 	ctx := context.Background()
-	vs, db, err := tempDirDB(ctx)
-	require.NoError(t, err)
+	vs, db := makeDB(ctx)
+	defer db.Close()
 
 	deltas := []struct {
 		name       string
@@ -307,15 +325,15 @@ func TestPuller(t *testing.T) {
 				}
 			}()
 
-			sinkvs, sinkdb, err := tempDirDB(ctx)
-			require.NoError(t, err)
+			sinkvs, sinkdb := makeDB(ctx)
+			defer sinkdb.Close()
 
 			tmpDir := filepath.Join(os.TempDir(), uuid.New().String())
 			err = os.MkdirAll(tmpDir, os.ModePerm)
 			require.NoError(t, err)
 			waf, err := types.WalkAddrsForChunkStore(datas.ChunkStoreFromDatabase(db))
 			require.NoError(t, err)
-			plr, err := NewPuller(ctx, tmpDir, 128, datas.ChunkStoreFromDatabase(db), datas.ChunkStoreFromDatabase(sinkdb), waf, rootAddr, statsCh)
+			plr, err := NewPuller(ctx, tmpDir, 128, datas.ChunkStoreFromDatabase(db), datas.ChunkStoreFromDatabase(sinkdb), waf, []hash.Hash{rootAddr}, statsCh)
 			require.NoError(t, err)
 
 			err = plr.Pull(ctx)
@@ -335,7 +353,6 @@ func TestPuller(t *testing.T) {
 			eq, err := pullerAddrEquality(ctx, rootAddr, sinkRootAddr, vs, sinkvs)
 			require.NoError(t, err)
 			assert.True(t, eq)
-
 		})
 	}
 }

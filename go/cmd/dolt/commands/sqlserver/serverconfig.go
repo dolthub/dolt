@@ -59,6 +59,8 @@ const (
 	defaultMetricsPort             = -1
 	defaultAllowCleartextPasswords = false
 	defaultUnixSocketFilePath      = "/tmp/mysql.sock"
+	defaultMaxLoggedQueryLen       = 0
+	defaultEncodeLoggedQuery       = false
 )
 
 const (
@@ -124,6 +126,14 @@ type ServerConfig interface {
 	TLSCert() string
 	// RequireSecureTransport is true if the server should reject non-TLS connections.
 	RequireSecureTransport() bool
+	// MaxLoggedQueryLen is the max length of queries written to the logs.  Queries longer than this number are truncated.
+	// If this value is 0 then the query is not truncated and will be written to the logs in its entirety.  If the value
+	// is less than 0 then the queries will be omitted from the logs completely
+	MaxLoggedQueryLen() int
+	// ShouldEncodeLoggedQuery determines if logged queries are base64 encoded.
+	// If true, queries will be logged as base64 encoded strings.
+	// If false (default behavior), queries will be logged as strings, but newlines and tabs will be replaced with spaces.
+	ShouldEncodeLoggedQuery() bool
 	// PersistenceBehavior is "load" if we include persisted system globals on server init
 	PersistenceBehavior() string
 	// DisableClientMultiStatements is true if we want the server to not
@@ -180,6 +190,8 @@ type commandLineServerConfig struct {
 	tlsKey                  string
 	tlsCert                 string
 	requireSecureTransport  bool
+	maxLoggedQueryLen       int
+	shouldEncodeLoggedQuery bool
 	persistenceBehavior     string
 	privilegeFilePath       string
 	branchControlFilePath   string
@@ -264,6 +276,20 @@ func (cfg *commandLineServerConfig) TLSCert() string {
 // RequireSecureTransport is true if the server should reject non-TLS connections.
 func (cfg *commandLineServerConfig) RequireSecureTransport() bool {
 	return cfg.requireSecureTransport
+}
+
+// MaxLoggedQueryLen is the max length of queries written to the logs.  Queries longer than this number are truncated.
+// If this value is 0 then the query is not truncated and will be written to the logs in its entirety.  If the value
+// is less than 0 then the queries will be omitted from the logs completely
+func (cfg *commandLineServerConfig) MaxLoggedQueryLen() int {
+	return cfg.maxLoggedQueryLen
+}
+
+// ShouldEncodeLoggedQuery determines if logged queries are base64 encoded.
+// If true, queries will be logged as base64 encoded strings.
+// If false (default behavior), queries will be logged as strings, but newlines and tabs will be replaced with spaces.
+func (cfg *commandLineServerConfig) ShouldEncodeLoggedQuery() bool {
+	return cfg.shouldEncodeLoggedQuery
 }
 
 // DisableClientMultiStatements is true if we want the server to not
@@ -475,6 +501,7 @@ func DefaultServerConfig() *commandLineServerConfig {
 		privilegeFilePath:       filepath.Join(defaultDataDir, defaultCfgDir, defaultPrivilegeFilePath),
 		branchControlFilePath:   filepath.Join(defaultDataDir, defaultCfgDir, defaultBranchControlFilePath),
 		allowCleartextPasswords: defaultAllowCleartextPasswords,
+		maxLoggedQueryLen:       defaultMaxLoggedQueryLen,
 	}
 }
 

@@ -12,11 +12,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:50052/{database}
+            remote_url_template: https://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 50051
+            port: 3851
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -40,11 +40,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:50051/{database}
+            remote_url_template: https://localhost:3851/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 50052
+            port: 3852
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -79,11 +79,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:50052/{database}
+            remote_url_template: https://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 50051
+            port: 3851
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -107,11 +107,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:50051/{database}
+            remote_url_template: https://localhost:3851/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 50052
+            port: 3852
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -146,11 +146,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:50052/{database}
+            remote_url_template: https://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 50051
+            port: 3851
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -175,11 +175,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:50051/{database}
+            remote_url_template: https://localhost:3851/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 50052
+            port: 3852
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -214,11 +214,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:50052/{database}
+            remote_url_template: https://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 50051
+            port: 3851
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -243,11 +243,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:50051/{database}
+            remote_url_template: https://localhost:3851/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 50052
+            port: 3852
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -282,11 +282,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:50052/{database}
+            remote_url_template: https://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 50051
+            port: 3851
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -310,11 +310,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:50051/{database}
+            remote_url_template: https://localhost:3851/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 50052
+            port: 3852
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -389,11 +389,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:50052/{database}
+            remote_url_template: https://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 50051
+            port: 3851
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -419,11 +419,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:50051/{database}
+            remote_url_template: https://localhost:3851/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 50052
+            port: 3852
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem

@@ -41,6 +41,14 @@ teardown() {
     [[ "$output" =~ "v1" ]] || false
 }
 
+@test "sql-tags: DOLT_TAG works with author arg defined" {
+    run dolt sql -q "CALL DOLT_TAG('v1', '--author', 'Jane Doe <jane@doe.com>')"
+    [ $status -eq 0 ]
+    run dolt tag -v
+    [[ "$output" =~ "v1" ]] || false
+    [[ "$output" =~ "Tagger: Jane Doe <jane@doe.com>" ]] || false
+}
+
 @test "sql-tags: create tag v1.2.3" {
     skip "Noms doesn't support '.' in dataset names"
     run dolt sql -q "CALL DOLT_TAG('v1.2.3')"

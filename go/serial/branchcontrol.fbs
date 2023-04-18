@@ -21,6 +21,7 @@ table BranchControl {
 
 table BranchControlAccess {
   binlog: BranchControlBinlog;
+  databases: [BranchControlMatchExpression];
   branches: [BranchControlMatchExpression];
   users: [BranchControlMatchExpression];
   hosts: [BranchControlMatchExpression];
@@ -28,6 +29,7 @@ table BranchControlAccess {
 }
 
 table BranchControlAccessValue {
+  database: string;
   branch: string;
   user: string;
   host: string;
@@ -36,6 +38,7 @@ table BranchControlAccessValue {
 
 table BranchControlNamespace {
   binlog: BranchControlBinlog;
+  databases: [BranchControlMatchExpression];
   branches: [BranchControlMatchExpression];
   users: [BranchControlMatchExpression];
   hosts: [BranchControlMatchExpression];
@@ -43,6 +46,7 @@ table BranchControlNamespace {
 }
 
 table BranchControlNamespaceValue {
+  database: string;
   branch: string;
   user: string;
   host: string;
@@ -54,6 +58,7 @@ table BranchControlBinlog {
 
 table BranchControlBinlogRow {
   is_insert: bool;
+  database: string;
   branch: string;
   user: string;
   host: string;

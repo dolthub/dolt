@@ -62,8 +62,8 @@ var indexSchema schema.Index
 var compositeIndexSchema schema.Index
 
 func init() {
-	indexSchema, _ = sch.Indexes().AddIndexByColTags("idx_col1", []uint64{col1Tag}, schema.IndexProperties{IsUnique: false, Comment: ""})
-	compositeIndexSchema, _ = sch.Indexes().AddIndexByColTags("idx_col1_col2", []uint64{col1Tag, col2Tag}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	indexSchema, _ = sch.Indexes().AddIndexByColTags("idx_col1", []uint64{col1Tag}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
+	compositeIndexSchema, _ = sch.Indexes().AddIndexByColTags("idx_col1_col2", []uint64{col1Tag, col2Tag}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
 }
 
 type rowV struct {
@@ -305,7 +305,8 @@ func TestMergeCommits(t *testing.T) {
 		t.Skip()
 	}
 
-	vrw, ns, rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedArtifacts := setupMergeTest(t)
+	ddb, vrw, ns, rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedArtifacts := setupMergeTest(t)
+	defer ddb.Close()
 	merger, err := NewMerger(root, mergeRoot, ancRoot, rightCommitHash, ancCommitHash, vrw, ns)
 	if err != nil {
 		t.Fatal(err)
@@ -336,14 +337,14 @@ func TestMergeCommits(t *testing.T) {
 	artifacts := durable.ProllyMapFromArtifactIndex(artIdx)
 	MustEqualArtifactMap(t, expectedArtifacts, artifacts)
 
-	MustEqualProlly(t, durable.ProllyMapFromIndex(expectedRows), durable.ProllyMapFromIndex(mergedRows))
+	MustEqualProlly(t, tableName, durable.ProllyMapFromIndex(expectedRows), durable.ProllyMapFromIndex(mergedRows))
 
 	for _, index := range sch.Indexes().AllIndexes() {
 		mergedIndexRows, err := merged.GetIndexRowData(context.Background(), index.Name())
 		require.NoError(t, err)
 		expectedIndexRows, err := expected.GetIndexRowData(context.Background(), index.Name())
 		require.NoError(t, err)
-		MustEqualProlly(t, durable.ProllyMapFromIndex(expectedIndexRows), durable.ProllyMapFromIndex(mergedIndexRows))
+		MustEqualProlly(t, index.Name(), durable.ProllyMapFromIndex(expectedIndexRows), durable.ProllyMapFromIndex(mergedIndexRows))
 	}
 
 	h, err := merged.HashOf()
@@ -422,7 +423,7 @@ func sortTests(t []testRow) {
 	})
 }
 
-func setupMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index, prolly.ArtifactMap) {
+func setupMergeTest(t *testing.T) (*doltdb.DoltDB, types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index, prolly.ArtifactMap) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
 	ns := ddb.NodeStore()
@@ -511,7 +512,6 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, doltdb
 
 	for _, testCase := range testRows {
 		if testCase.conflict {
-
 			err = artEditor.Add(context.Background(), key(testCase.key), rightCmHash, prolly.ArtifactTypeConflict, d)
 			require.NoError(t, err)
 		}
@@ -520,7 +520,7 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, doltdb
 	expectedArtifacts, err := artEditor.Flush(context.Background())
 	require.NoError(t, err)
 
-	return vrw, ns, rightCm, baseCm, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedArtifacts
+	return ddb, vrw, ns, rightCm, baseCm, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedArtifacts
 }
 
 func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, types.Map, types.Map, *MergeStats) {
@@ -820,9 +820,9 @@ func MustDebugFormatProlly(t *testing.T, m prolly.Map) string {
 	return s
 }
 
-func MustEqualProlly(t *testing.T, expected prolly.Map, actual prolly.Map) {
+func MustEqualProlly(t *testing.T, name string, expected, actual prolly.Map) {
 	require.Equal(t, expected.HashOf(), actual.HashOf(),
-		"hashes differed. expected: %s\nactual: %s", MustDebugFormatProlly(t, expected), MustDebugFormatProlly(t, actual))
+		"hashes differed for %s. expected: %s\nactual: %s", name, MustDebugFormatProlly(t, expected), MustDebugFormatProlly(t, actual))
 }
 
 func MustEqualArtifactMap(t *testing.T, expected prolly.ArtifactMap, actual prolly.ArtifactMap) {

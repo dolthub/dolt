@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -59,7 +60,7 @@ func CreateSetTypeFromParams(params map[string]string) (TypeInfo, error) {
 	} else {
 		return nil, fmt.Errorf(`create set type info is missing param "%v"`, setTypeParam_Values)
 	}
-	sqlSetType, err := sql.CreateSetType(values, collation)
+	sqlSetType, err := gmstypes.CreateSetType(values, collation)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +96,7 @@ func (ti *setType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueR
 	if v == nil {
 		return types.NullValue, nil
 	}
-	val, err := ti.sqlSetType.Convert(v)
+	val, _, err := ti.sqlSetType.Convert(v)
 	if err != nil {
 		return nil, err
 	}

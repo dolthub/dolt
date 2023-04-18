@@ -87,6 +87,20 @@ func wrapReplayRootFn(fn ReplayRootFn) ReplayCommitFn {
 	}
 }
 
+// AllBranchesAndTags rewrites the history of all branches and tags in the repo using the |replay| function.
+func AllBranchesAndTags(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
+	branches, err := dEnv.DoltDB.GetBranches(ctx)
+	if err != nil {
+		return err
+	}
+
+	tags, err := dEnv.DoltDB.GetTags(ctx)
+	if err != nil {
+		return err
+	}
+	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, append(branches, tags...)...)
+}
+
 // AllBranches rewrites the history of all branches in the repo using the |replay| function.
 func AllBranches(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
 	branches, err := dEnv.DoltDB.GetBranches(ctx)
@@ -121,11 +135,6 @@ func CurrentBranchByRoot(ctx context.Context, dEnv *env.DoltEnv, replay ReplayRo
 
 func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {
 	ddb := dbData.Ddb
-	rsr := dbData.Rsr
-	rsw := dbData.Rsw
-
-	cwbRef := rsr.CWBHeadRef()
-
 	heads := make([]*doltdb.Commit, len(refs))
 	for i, dRef := range refs {
 		var err error
@@ -140,41 +149,30 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 		return err
 	}
 
-	for i, dRef := range refs {
-
-		switch dRef.(type) {
+	for i, r := range refs {
+		switch dRef := r.(type) {
 		case ref.BranchRef:
 			err = ddb.NewBranchAtCommit(ctx, dRef, newHeads[i])
-			if err != nil {
+
+		case ref.TagRef:
+			// rewrite tag with new commit
+			var tag *doltdb.Tag
+			if tag, err = ddb.ResolveTag(ctx, dRef); err != nil {
 				return err
 			}
+			if err = ddb.DeleteTag(ctx, dRef); err != nil {
+				return err
+			}
+			err = ddb.NewTagAtCommit(ctx, dRef, newHeads[i], tag.Meta)
 
 		default:
 			return fmt.Errorf("cannot rebase ref: %s", ref.String(dRef))
 		}
-
 		if err != nil {
 			return err
 		}
 	}
-
-	cm, err := ddb.ResolveCommitRef(ctx, cwbRef)
-	if err != nil {
-		return err
-	}
-
-	r, err := cm.GetRootValue(ctx)
-	if err != nil {
-		return err
-	}
-
-	// TODO: this should be a single update to repo state, not two
-	err = rsw.UpdateStagedRoot(ctx, r)
-	if err != nil {
-		return err
-	}
-
-	return rsw.UpdateWorkingRoot(ctx, r)
+	return nil
 }
 
 func rebase(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommitFn, nerf NeedsRebaseFn, origins ...*doltdb.Commit) ([]*doltdb.Commit, error) {

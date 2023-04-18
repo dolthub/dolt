@@ -44,8 +44,10 @@ func TestStats(t *testing.T) {
 
 	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
+	defer file.RemoveAll(dir)
 	store, err := NewLocalStore(context.Background(), constants.FormatDefaultString, dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
 	require.NoError(t, err)
+	defer store.Close()
 
 	assert.EqualValues(1, stats(store).OpenLatency.Samples())
 
@@ -57,11 +59,11 @@ func TestStats(t *testing.T) {
 	c1, c2, c3, c4, c5 := chunks.NewChunk(i1), chunks.NewChunk(i2), chunks.NewChunk(i3), chunks.NewChunk(i4), chunks.NewChunk(i5)
 
 	// These just go to mem table, only operation stats
-	err = store.Put(context.Background(), c1)
+	err = store.Put(context.Background(), c1, noopGetAddrs)
 	require.NoError(t, err)
-	err = store.Put(context.Background(), c2)
+	err = store.Put(context.Background(), c2, noopGetAddrs)
 	require.NoError(t, err)
-	err = store.Put(context.Background(), c3)
+	err = store.Put(context.Background(), c3, noopGetAddrs)
 	require.NoError(t, err)
 	assert.Equal(uint64(3), stats(store).PutLatency.Samples())
 	assert.Equal(uint64(0), stats(store).PersistLatency.Samples())
@@ -131,14 +133,14 @@ func TestStats(t *testing.T) {
 
 	// Force a conjoin
 	store.c = inlineConjoiner{2}
-	err = store.Put(context.Background(), c4)
+	err = store.Put(context.Background(), c4, noopGetAddrs)
 	require.NoError(t, err)
 	h, err = store.Root(context.Background())
 	require.NoError(t, err)
 	_, err = store.Commit(context.Background(), h, h)
 	require.NoError(t, err)
 
-	err = store.Put(context.Background(), c5)
+	err = store.Put(context.Background(), c5, noopGetAddrs)
 	require.NoError(t, err)
 	h, err = store.Root(context.Background())
 	require.NoError(t, err)
@@ -147,7 +149,4 @@ func TestStats(t *testing.T) {
 
 	assert.Equal(uint64(1), stats(store).ConjoinLatency.Samples())
 	// TODO: Once random conjoin hack is out, test other conjoin stats
-
-	defer store.Close()
-	defer file.RemoveAll(dir)
 }

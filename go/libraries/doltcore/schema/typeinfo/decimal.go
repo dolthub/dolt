@@ -20,6 +20,7 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -59,7 +60,7 @@ func CreateDecimalTypeFromParams(params map[string]string) (TypeInfo, error) {
 	} else {
 		return nil, fmt.Errorf(`create decimal type info is missing param "%v"`, decimalTypeParam_Scale)
 	}
-	sqlDecimalType, err := sql.CreateDecimalType(precision, scale)
+	sqlDecimalType, err := gmstypes.CreateColumnDecimalType(precision, scale)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +109,7 @@ func (ti *decimalType) ConvertValueToNomsValue(ctx context.Context, vrw types.Va
 	if !decVal.Valid {
 		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a null value from embedded type`, ti.String())
 	}
-	dec, err := ti.sqlDecimalType.BoundsCheck(decVal.Decimal)
+	dec, _, err := ti.sqlDecimalType.BoundsCheck(decVal.Decimal)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +161,7 @@ func (ti *decimalType) GetTypeParams() map[string]string {
 // IsValid implements TypeInfo interface.
 func (ti *decimalType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Decimal); ok {
-		_, err := ti.sqlDecimalType.Convert(decimal.Decimal(val))
+		_, _, err := ti.sqlDecimalType.Convert(decimal.Decimal(val))
 		if err != nil {
 			return false
 		}
@@ -232,7 +233,7 @@ func decimalTypeConverter(ctx context.Context, src *decimalType, destTi TypeInfo
 			if !ok {
 				return nil, fmt.Errorf("unexpected type converting decimal to enum: %T", v)
 			}
-			uintVal, err := sql.Uint64.Convert(decimal.Decimal(val))
+			uintVal, _, err := gmstypes.Uint64.Convert(decimal.Decimal(val))
 			if err != nil {
 				return nil, err
 			}
@@ -328,7 +329,7 @@ func decimalTypeConverter(ctx context.Context, src *decimalType, destTi TypeInfo
 			if !ok {
 				return nil, fmt.Errorf("unexpected type converting decimal to year: %T", v)
 			}
-			intVal, err := sql.Int64.Convert(decimal.Decimal(val))
+			intVal, _, err := gmstypes.Int64.Convert(decimal.Decimal(val))
 			if err != nil {
 				return nil, err
 			}

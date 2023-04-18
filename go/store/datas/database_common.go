@@ -97,7 +97,7 @@ func (db *database) loadDatasetsNomsMap(ctx context.Context, rootHash hash.Hash)
 	}
 
 	if val == nil {
-		return types.EmptyMap, errors.New("Root hash doesn't exist")
+		return types.EmptyMap, fmt.Errorf("Root hash doesn't exist: %v", rootHash)
 	}
 
 	return val.(types.Map), nil
@@ -114,7 +114,7 @@ func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) 
 	}
 
 	if val == nil {
-		return prolly.AddressMap{}, errors.New("Root hash doesn't exist")
+		return prolly.AddressMap{}, fmt.Errorf("Root hash doesn't exist: %v", rootHash)
 	}
 
 	return parse_storeroot([]byte(val.(types.SerialMessage)), db.nodeStore())
@@ -221,7 +221,7 @@ func (db *database) datasetFromMap(ctx context.Context, datasetID string, dsmap 
 				return Dataset{}, err
 			}
 		}
-		return newDataset(db, datasetID, head, headAddr)
+		return newDataset(ctx, db, datasetID, head, headAddr)
 	} else if rmdsmap, ok := dsmap.(refmapDatasetsMap); ok {
 		var err error
 		curr, err := rmdsmap.am.Get(ctx, datasetID)
@@ -235,7 +235,7 @@ func (db *database) datasetFromMap(ctx context.Context, datasetID string, dsmap 
 				return Dataset{}, err
 			}
 		}
-		return newDataset(db, datasetID, head, curr)
+		return newDataset(ctx, db, datasetID, head, curr)
 	} else {
 		return Dataset{}, errors.New("unimplemented or unsupported DatasetsMap type")
 	}
@@ -246,7 +246,7 @@ func (db *database) readHead(ctx context.Context, addr hash.Hash) (dsHead, error
 	if err != nil {
 		return nil, err
 	}
-	return newHead(head, addr)
+	return newHead(ctx, head, addr)
 }
 
 func (db *database) Close() error {
@@ -268,7 +268,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 	headType := newHead.TypeName()
 	switch headType {
 	case commitName:
-		iscommit, err := IsCommit(newVal)
+		iscommit, err := IsCommit(ctx, newVal)
 		if err != nil {
 			return err
 		}
@@ -276,7 +276,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 			return fmt.Errorf("SetHead failed: reffered to value is not a commit:")
 		}
 	case tagName:
-		istag, err := IsTag(newVal)
+		istag, err := IsTag(ctx, newVal)
 		if err != nil {
 			return err
 		}
@@ -291,12 +291,12 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 		if err != nil {
 			return err
 		}
-		iscommit, err := IsCommit(commitval)
+		iscommit, err := IsCommit(ctx, commitval)
 		if err != nil {
 			return err
 		}
 		if !iscommit {
-			return fmt.Errorf("SetHead failed: reffered to value is not a tag:")
+			return fmt.Errorf("SetHead failed: referred to value is not a tag:")
 		}
 	default:
 		return fmt.Errorf("Unrecognized dataset value: %s", headType)
@@ -376,7 +376,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 	}
 
 	v := newHead.value()
-	iscommit, err := IsCommit(v)
+	iscommit, err := IsCommit(ctx, v)
 	if err != nil {
 		return err
 	}
@@ -412,16 +412,38 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 	return err
 }
 
+func (db *database) BuildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error) {
+	if len(opts.Parents) == 0 {
+		headAddr, ok := ds.MaybeHeadAddr()
+		if ok {
+			opts.Parents = []hash.Hash{headAddr}
+		}
+	} else {
+		curr, ok := ds.MaybeHeadAddr()
+		if ok {
+			if !hasParentHash(opts, curr) {
+				return nil, ErrMergeNeeded
+			}
+		}
+	}
+
+	return newCommitForValue(ctx, ds.db.chunkStore(), ds.db, ds.db.nodeStore(), v, opts)
+}
+
 func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
-	currentAddr, _ := ds.MaybeHeadAddr()
-	commit, err := buildNewCommit(ctx, ds, v, opts)
+	commit, err := db.BuildNewCommit(ctx, ds, v, opts)
 	if err != nil {
 		return Dataset{}, err
 	}
+	return db.WriteCommit(ctx, ds, commit)
+}
+
+func (db *database) WriteCommit(ctx context.Context, ds Dataset, commit *Commit) (Dataset, error) {
+	currentAddr, _ := ds.MaybeHeadAddr()
 
 	val := commit.NomsValue()
 
-	_, err = db.WriteValue(ctx, val)
+	_, err := db.WriteValue(ctx, val)
 	if err != nil {
 		return Dataset{}, err
 	}
@@ -544,6 +566,28 @@ func (db *database) doTag(ctx context.Context, datasetID string, tagAddr hash.Ha
 	})
 }
 
+// UpdateStashList updates the stash list dataset only with given address hash to the updated stash list.
+// The new/updated stash list address should be obtained before calling this function depending on
+// whether add or remove a stash actions have been performed. This function does not perform any actions
+// on the stash list itself.
+func (db *database) UpdateStashList(ctx context.Context, ds Dataset, stashListAddr hash.Hash) (Dataset, error) {
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
+		// TODO: this function needs concurrency control for using stash in SQL context
+		// this will update the dataset for stashes address map
+		return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
+			// this is for old format, so this should not happen
+			return datasets, errors.New("UpdateStashList: stash is not supported for old storage format")
+		}, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+			ae := am.Editor()
+			err := ae.Update(ctx, ds.ID(), stashListAddr)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			return ae.Flush(ctx)
+		})
+	})
+}
+
 func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet WorkingSetSpec, prevHash hash.Hash) (Dataset, error) {
 	return db.doHeadUpdate(
 		ctx,
@@ -635,7 +679,7 @@ func (db *database) CommitWithWorkingSet(
 		}
 	}
 
-	commit, err := buildNewCommit(ctx, commitDS, val, opts)
+	commit, err := db.BuildNewCommit(ctx, commitDS, val, opts)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
 	}
@@ -833,8 +877,8 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 }
 
 // GC traverses the database starting at the Root and removes all unreferenced data from persistent storage.
-func (db *database) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet) error {
-	return db.ValueStore.GC(ctx, oldGenRefs, newGenRefs)
+func (db *database) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet, safepointF func() error) error {
+	return db.ValueStore.GC(ctx, oldGenRefs, newGenRefs, safepointF)
 }
 
 func (db *database) tryCommitChunks(ctx context.Context, newRootHash hash.Hash, currentRootHash hash.Hash) error {
@@ -855,41 +899,23 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 		return types.Struct{}, fmt.Errorf("validateRefAsCommit: unable to validate ref; %s not found", r.TargetHash().String())
 	}
 	if rHead.TypeName() != commitName {
-		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred valus is not a commit")
+		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred values is not a commit")
 	}
 
 	var v types.Value
 	v = rHead.(nomsHead).st
 
-	is, err := IsCommit(v)
+	is, err := IsCommit(ctx, v)
 
 	if err != nil {
 		return types.Struct{}, err
 	}
 
 	if !is {
-		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred valus is not a commit")
+		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred values is not a commit")
 	}
 
 	return v.(types.Struct), nil
-}
-
-func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error) {
-	if len(opts.Parents) == 0 {
-		headAddr, ok := ds.MaybeHeadAddr()
-		if ok {
-			opts.Parents = []hash.Hash{headAddr}
-		}
-	} else {
-		curr, ok := ds.MaybeHeadAddr()
-		if ok {
-			if !hasParentHash(opts, curr) {
-				return nil, ErrMergeNeeded
-			}
-		}
-	}
-
-	return newCommitForValue(ctx, ds.db.chunkStore(), ds.db, ds.db.nodeStore(), v, opts)
 }
 
 func hasParentHash(opts CommitOptions, curr hash.Hash) bool {

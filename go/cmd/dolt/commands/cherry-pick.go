@@ -88,7 +88,7 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		usage()
 		return 1
 	} else if apr.NArg() > 1 {
-		return HandleVErrAndExitCode(errhand.BuildDError("multiple commits not supported yet.").SetPrintUsage().Build(), usage)
+		return HandleVErrAndExitCode(errhand.BuildDError("cherry-picking multiple commits is not supported yet").SetPrintUsage().Build(), usage)
 	}
 
 	cherryStr := apr.Arg(0)
@@ -97,17 +97,12 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	authorStr := ""
-	if as, ok := apr.GetValue(cli.AuthorParam); ok {
-		authorStr = as
-	}
-
-	verr := cherryPick(ctx, dEnv, cherryStr, authorStr)
+	verr := cherryPick(ctx, dEnv, cherryStr)
 	return HandleVErrAndExitCode(verr, usage)
 }
 
 // cherryPick returns error if any step of cherry-picking fails. It receives cherry-picked commit and performs cherry-picking and commits.
-func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cherryStr, authorStr string) errhand.VerboseError {
+func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cherryStr string) errhand.VerboseError {
 	// check for clean working state
 	headRoot, err := dEnv.HeadRoot(ctx)
 	if err != nil {
@@ -166,12 +161,7 @@ func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cherryStr, authorStr str
 		return errhand.BuildDError("dolt add failed").AddCause(err).Build()
 	}
 
-	// Pass in the final parameters for the author string.
 	commitParams := []string{"-m", commitMsg}
-	if authorStr != "" {
-		commitParams = append(commitParams, "--author", authorStr)
-	}
-
 	res = CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv)
 	if res != 0 {
 		return errhand.BuildDError("dolt commit failed").AddCause(err).Build()

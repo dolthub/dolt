@@ -24,45 +24,50 @@ import (
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
-	"github.com/dolthub/go-mysql-server/sql/information_schema"
+	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
+	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	dblr "github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
 type SqlEngine struct {
-	dbs            map[string]dsqle.SqlDatabase
-	contextFactory func(ctx context.Context) (*sql.Context, error)
-	dsessFactory   func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error)
+	provider       sql.DatabaseProvider
+	contextFactory contextFactory
+	dsessFactory   sessionFactory
 	engine         *gms.Engine
 	resultFormat   PrintResultFormat
 }
 
+type sessionFactory func(mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (*dsess.DoltSession, error)
+type contextFactory func(ctx context.Context, session sql.Session) (*sql.Context, error)
+
 type SqlEngineConfig struct {
-	InitialDb          string
-	IsReadOnly         bool
-	IsServerLocked     bool
-	DoltCfgDirPath     string
-	PrivFilePath       string
-	BranchCtrlFilePath string
-	ServerUser         string
-	ServerPass         string
-	ServerHost         string
-	Autocommit         bool
-	Bulk               bool
-	JwksConfig         []JwksConfig
-	ClusterController  *cluster.Controller
+	IsReadOnly              bool
+	IsServerLocked          bool
+	DoltCfgDirPath          string
+	PrivFilePath            string
+	BranchCtrlFilePath      string
+	ServerUser              string
+	ServerPass              string
+	ServerHost              string
+	Autocommit              bool
+	Bulk                    bool
+	JwksConfig              []JwksConfig
+	ClusterController       *cluster.Controller
+	BinlogReplicaController binlogreplication.BinlogReplicaController
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -72,16 +77,22 @@ func NewSqlEngine(
 	format PrintResultFormat,
 	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
-
 	if ok, _ := mrEnv.IsLocked(); ok {
 		config.IsServerLocked = true
 	}
 
-	parallelism := runtime.GOMAXPROCS(0)
-
 	dbs, locations, err := CollectDBs(ctx, mrEnv, config.Bulk)
 	if err != nil {
 		return nil, err
+	}
+
+	nbf := types.Format_Default
+	if len(dbs) > 0 {
+		nbf = dbs[0].DbData().Ddb.Format()
+	}
+	parallelism := runtime.GOMAXPROCS(0)
+	if types.IsFormat_DOLT(nbf) {
+		parallelism = 1
 	}
 
 	bThreads := sql.NewBackgroundThreads()
@@ -97,13 +108,11 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	infoDB := information_schema.NewInformationSchemaDatabase()
-	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
-	locations = append(locations, nil)
+	all := append(dbs)
 
 	clusterDB := config.ClusterController.ClusterDatabase()
 	if clusterDB != nil {
-		all = append(all, clusterDB)
+		all = append(all, clusterDB.(dsqle.SqlDatabase))
 		locations = append(locations, nil)
 	}
 
@@ -130,8 +139,6 @@ func NewSqlEngine(
 	if bcController, err = branch_control.LoadData(config.BranchCtrlFilePath, config.DoltCfgDirPath); err != nil {
 		return nil, err
 	}
-	// Set the server's super user
-	branch_control.SetSuperUser(config.ServerUser, config.ServerHost)
 
 	// Set up engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
@@ -143,6 +150,8 @@ func NewSqlEngine(
 	engine.Analyzer.Catalog.MySQLDb.SetPlugins(map[string]mysql_db.PlaintextAuthPlugin{
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
 	})
+
+	engine.Analyzer.ExecBuilder = rowexec.DefaultBuilder
 
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {
@@ -156,92 +165,81 @@ func NewSqlEngine(
 		}
 	}
 
-	nameToDB := make(map[string]dsqle.SqlDatabase)
-	var dbStates []dsess.InitialDbState
-	for _, db := range dbs {
-		nameToDB[db.Name()] = db
-
-		dbState, err := dsqle.GetInitialDBState(ctx, db)
-		if err != nil {
-			return nil, err
-		}
-
-		dbStates = append(dbStates, dbState)
-	}
-
-	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, mrEnv.Config(), bcController, dbStates...)
-	if err != nil {
-		return nil, err
-	}
-
 	// this is overwritten only for server sessions
 	for _, db := range dbs {
 		db.DbData().Ddb.SetCommitHookLogger(ctx, cli.CliOut)
 	}
 
-	// TODO: this should just be the session default like it is with MySQL
-	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, config.Autocommit)
-	if err != nil {
-		return nil, err
+	sessionFactory := doltSessionFactory(pro, mrEnv.Config(), bcController, config.Autocommit)
+
+	if config.BinlogReplicaController != nil {
+		binLogSession, err := sessionFactory(sql.NewBaseSession(), pro)
+		if err != nil {
+			return nil, err
+		}
+
+		err = configureBinlogReplicaController(config, engine, binLogSession)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &SqlEngine{
-		dbs:            nameToDB,
-		contextFactory: newSqlContext(sess, config.InitialDb),
-		dsessFactory:   newDoltSession(pro, mrEnv.Config(), config.Autocommit, bcController),
+		provider:       pro,
+		contextFactory: sqlContextFactory(),
+		dsessFactory:   sessionFactory,
 		engine:         engine,
 		resultFormat:   format,
 	}, nil
 }
 
 // NewRebasedSqlEngine returns a smalled rebased engine primarily used in filterbranch.
+// TODO: migrate to provider
 func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsqle.SqlDatabase) *SqlEngine {
 	return &SqlEngine{
-		dbs:    dbs,
 		engine: engine,
 	}
 }
 
-// IterDBs iterates over the set of databases the engine wraps.
-func (se *SqlEngine) IterDBs(cb func(name string, db dsqle.SqlDatabase) (stop bool, err error)) error {
-	for name, db := range se.dbs {
-		stop, err := cb(name, db)
-
-		if err != nil {
-			return err
-		}
-
-		if stop {
-			break
-		}
+// Databases returns a slice of all databases in the engine
+func (se *SqlEngine) Databases(ctx *sql.Context) []dsqle.SqlDatabase {
+	databases := se.provider.AllDatabases(ctx)
+	dbs := make([]dsqle.SqlDatabase, len(databases))
+	for i := range databases {
+		dbs[i] = databases[i].(dsqle.SqlDatabase)
 	}
 
 	return nil
 }
 
-// GetRoots returns the underlying roots values the engine read/writes to.
-func (se *SqlEngine) GetRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue, error) {
-	newRoots := make(map[string]*doltdb.RootValue)
-	for name, db := range se.dbs {
-		var err error
-		newRoots[name], err = db.GetRoot(sqlCtx)
+// NewContext returns a new sql.Context with the given session.
+func (se *SqlEngine) NewContext(ctx context.Context, session sql.Session) (*sql.Context, error) {
+	return se.contextFactory(ctx, session)
+}
 
-		if err != nil {
-			return nil, err
-		}
+// NewDefaultContext returns a new sql.Context with a new default dolt session.
+func (se *SqlEngine) NewDefaultContext(ctx context.Context) (*sql.Context, error) {
+	session, err := se.NewDoltSession(ctx, sql.NewBaseSession())
+	if err != nil {
+		return nil, err
+	}
+	return se.contextFactory(ctx, session)
+}
+
+// NewLocalContext returns a new |sql.Context| with its client set to |root|
+func (se *SqlEngine) NewLocalContext(ctx context.Context) (*sql.Context, error) {
+	sqlCtx, err := se.NewDefaultContext(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	return newRoots, nil
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	return sqlCtx, nil
 }
 
-// NewContext converts a context.Context to a sql.Context.
-func (se *SqlEngine) NewContext(ctx context.Context) (*sql.Context, error) {
-	return se.contextFactory(ctx)
-}
-
-func (se *SqlEngine) NewDoltSession(ctx context.Context, mysqlSess *sql.BaseSession) (*dsess.DoltSession, error) {
-	tempCtx := sql.NewContext(ctx, sql.WithSession(mysqlSess))
-	return se.dsessFactory(ctx, mysqlSess, se.engine.Analyzer.Catalog.AllDatabases(tempCtx))
+// NewDoltSession creates a new DoltSession from a BaseSession
+func (se *SqlEngine) NewDoltSession(_ context.Context, mysqlSess *sql.BaseSession) (*dsess.DoltSession, error) {
+	return se.dsessFactory(mysqlSess, se.provider)
 }
 
 // GetResultFormat returns the printing format of the engine. The format isn't used by the engine internally, only
@@ -272,8 +270,8 @@ func (se *SqlEngine) Dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query strin
 
 	if action == sqlparser.DropStr {
 		// Should not be allowed to delete repo name and information schema
-		if dbddl.DBName == information_schema.InformationSchemaDatabaseName {
-			return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", information_schema.InformationSchemaDatabaseName)
+		if dbddl.DBName == sql.InformationSchemaDatabaseName {
+			return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", sql.InformationSchemaDatabaseName)
 		}
 	}
 
@@ -304,46 +302,39 @@ func (se *SqlEngine) Close() error {
 	return nil
 }
 
-func dsqleDBsAsSqlDBs(dbs []dsqle.SqlDatabase) []sql.Database {
-	sqlDbs := make([]sql.Database, 0, len(dbs))
-	for _, db := range dbs {
-		sqlDbs = append(sqlDbs, db)
+// configureBinlogReplicaController configures the binlog replication controller with the |engine|.
+func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engine, session *dsess.DoltSession) error {
+	contextFactory := sqlContextFactory()
+
+	executionCtx, err := contextFactory(context.Background(), session)
+	if err != nil {
+		return err
 	}
-	return sqlDbs
+	dblr.DoltBinlogReplicaController.SetExecutionContext(executionCtx)
+	engine.Analyzer.BinlogReplicaController = config.BinlogReplicaController
+
+	return nil
 }
 
-func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.Context) (*sql.Context, error) {
-	return func(ctx context.Context) (*sql.Context, error) {
-		sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
-
-		// If the session was already updated with a database then continue using it in the new session. Otherwise
-		// use the initial one.
-		if sessionDB := sess.GetCurrentDatabase(); sessionDB != "" {
-			sqlCtx.SetCurrentDatabase(sessionDB)
-		} else {
-			sqlCtx.SetCurrentDatabase(initialDb)
-		}
-
+// sqlContextFactory returns a contextFactory that creates a new sql.Context with the initial database provided
+func sqlContextFactory() contextFactory {
+	return func(ctx context.Context, session sql.Session) (*sql.Context, error) {
+		sqlCtx := sql.NewContext(ctx, sql.WithSession(session))
 		return sqlCtx, nil
 	}
 }
 
-func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig,
-	autocommit bool, bc *branch_control.Controller) func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
-	return func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
-		ddbs := dsqle.DbsAsDSQLDBs(dbs)
-		states, err := getDbStates(ctx, ddbs)
+// doltSessionFactory returns a sessionFactory that creates a new DoltSession
+func doltSessionFactory(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig, bc *branch_control.Controller, autocommit bool) sessionFactory {
+	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
+		dsess, err := dsess.NewDoltSession(mysqlSess, pro, config, bc)
 		if err != nil {
 			return nil, err
 		}
 
-		dsess, err := dsess.NewDoltSession(sql.NewEmptyContext(), mysqlSess, pro, config, bc, states...)
-		if err != nil {
-			return nil, err
-		}
-
-		// TODO: this should just be the session default like it is with MySQL
-		err = dsess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, autocommit)
+		// nil ctx is actually fine in this context, not used in setting a session variable. Creating a new context isn't
+		// free, and would be throwaway work, since we need to create a session before creating a sql.Context for user work.
+		err = dsess.SetSessionVariable(nil, sql.AutoCommitSessionVar, autocommit)
 		if err != nil {
 			return nil, err
 		}
@@ -352,100 +343,23 @@ func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfi
 	}
 }
 
-func getDbStates(ctx context.Context, dbs []dsqle.SqlDatabase) ([]dsess.InitialDbState, error) {
-	dbStates := make([]dsess.InitialDbState, len(dbs))
-	for i, db := range dbs {
-		var init dsess.InitialDbState
-		var err error
-
-		_, val, ok := sql.SystemVariables.GetGlobal(dsess.DefaultBranchKey(db.Name()))
-		if ok && val != "" {
-			init, err = getInitialDBStateWithDefaultBranch(ctx, db, val.(string))
-		} else {
-			init, err = dsqle.GetInitialDBState(ctx, db)
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		dbStates[i] = init
-	}
-
-	return dbStates, nil
-}
-
-func getInitialDBStateWithDefaultBranch(ctx context.Context, db dsqle.SqlDatabase, branch string) (dsess.InitialDbState, error) {
-	init, err := dsqle.GetInitialDBState(ctx, db)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	ddb := init.DbData.Ddb
-	r := ref.NewBranchRef(branch)
-
-	head, err := ddb.ResolveCommitRef(ctx, r)
-	if err != nil {
-		init.Err = fmt.Errorf("failed to connect to database default branch: '%s/%s'; %w", db.Name(), branch, err)
-	} else {
-		init.Err = nil
-	}
-	init.HeadCommit = head
-
-	if init.Err == nil {
-		workingSetRef, err := ref.WorkingSetRefForHead(r)
-		if err != nil {
-			return dsess.InitialDbState{}, err
-		}
-
-		ws, err := init.DbData.Ddb.ResolveWorkingSet(ctx, workingSetRef)
-		if err != nil {
-			return dsess.InitialDbState{}, err
-		}
-		init.WorkingSet = ws
-	}
-
-	return init, nil
-}
-
-// NewSqlEngineForEnv returns a SqlEngine configured for the environment provided, with a single root user
-func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, error) {
+// NewSqlEngineForEnv returns a SqlEngine configured for the environment provided, with a single root user.
+// Returns the new engine, the first database name, and any error that occurred.
+func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, string, error) {
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
-	var dbName string
-	err = mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
-		dbName = name
-		return true, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return NewSqlEngine(
+	engine, err := NewSqlEngine(
 		ctx,
 		mrEnv,
 		FormatCsv,
 		&SqlEngineConfig{
-			InitialDb:  dbName,
-			IsReadOnly: false,
 			ServerUser: "root",
-			ServerPass: "",
 			ServerHost: "localhost",
-			Autocommit: false,
 		},
 	)
-}
 
-// NewLocalSqlContext returns a new |sql.Context| using the engine provided, with its client set to |root|
-func NewLocalSqlContext(ctx context.Context, se *SqlEngine) (*sql.Context, error) {
-	sqlCtx, err := se.NewContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
-	return sqlCtx, nil
+	return engine, mrEnv.GetFirstDatabase(), err
 }

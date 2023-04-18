@@ -18,7 +18,9 @@ import (
 	"context"
 	"crypto/sha512"
 	"encoding/base32"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"time"
 
 	"golang.org/x/crypto/ed25519"
@@ -40,8 +42,9 @@ const (
 	B32EncodedPubKeyLen = 52
 	B32EncodedKeyIdLen  = 45
 
-	JWTKIDHeader = "kid"
-	JWTAlgHeader = "alg"
+	JWTKIDHeader           = "kid"
+	JWTAlgHeader           = "alg"
+	DoltTokenVersionHeader = "dolt_token_version"
 )
 
 var B32CredsByteSet = set.NewByteSet([]byte(B32CharEncoding))
@@ -117,43 +120,94 @@ func (dc DoltCreds) Sign(data []byte) []byte {
 	return ed25519.Sign(dc.PrivKey, data)
 }
 
-func (dc DoltCreds) toBearerToken() (string, error) {
-	b32KIDStr := dc.KeyIDBase32Str()
-	key := jose.SigningKey{Algorithm: jose.EdDSA, Key: ed25519.PrivateKey(dc.PrivKey)}
+type RPCCreds struct {
+	PrivKey    ed25519.PrivateKey
+	KeyID      string
+	Audience   string
+	Issuer     string
+	Subject    string
+	RequireTLS bool
+}
+
+func (c *RPCCreds) toBearerToken() (string, error) {
+	key := jose.SigningKey{Algorithm: jose.EdDSA, Key: c.PrivKey}
 	opts := &jose.SignerOptions{ExtraHeaders: map[jose.HeaderKey]interface{}{
-		JWTKIDHeader: b32KIDStr,
+		JWTKIDHeader:           c.KeyID,
+		DoltTokenVersionHeader: "2023.01",
 	}}
 
 	signer, err := jose.NewSigner(key, opts)
-
 	if err != nil {
 		return "", err
 	}
 
-	// Shouldn't be hard coded
 	jwtBuilder := jwt.Signed(signer)
 	jwtBuilder = jwtBuilder.Claims(jwt.Claims{
-		Audience: []string{"dolthub-remote-api.liquidata.co"},
-		Issuer:   "dolt-client.liquidata.co",
-		Subject:  "doltClientCredentials/" + b32KIDStr,
+		Audience: []string{c.Audience},
+		Issuer:   c.Issuer,
+		Subject:  c.Subject,
 		Expiry:   jwt.NewNumericDate(datetime.Now().Add(30 * time.Second)),
 	})
 
 	return jwtBuilder.CompactSerialize()
 }
 
-func (dc DoltCreds) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	t, err := dc.toBearerToken()
-
+func (c *RPCCreds) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	t, err := c.toBearerToken()
 	if err != nil {
 		return nil, err
 	}
-
 	return map[string]string{
 		"authorization": "Bearer " + t,
 	}, nil
 }
 
-func (dc DoltCreds) RequireTransportSecurity() bool {
-	return false
+func (c *RPCCreds) RequireTransportSecurity() bool {
+	return c.RequireTLS
+}
+
+const ClientIssuer = "dolt-client.dolthub.com"
+
+func (dc DoltCreds) RPCCreds(audience string) *RPCCreds {
+	b32KIDStr := dc.KeyIDBase32Str()
+	return &RPCCreds{
+		PrivKey:    ed25519.PrivateKey(dc.PrivKey),
+		KeyID:      b32KIDStr,
+		Audience:   audience,
+		Issuer:     ClientIssuer,
+		Subject:    "doltClientCredentials/" + b32KIDStr,
+		RequireTLS: false,
+	}
+}
+
+type DoltCredsForPass struct {
+	Username string
+	Password string
+}
+
+type RPCCredsForPass struct {
+	RequireTLS       bool
+	UserPassContents string
+}
+
+func (dcp DoltCredsForPass) ToBase64Str() string {
+	bStr := []byte(fmt.Sprintf("%s:%s", dcp.Username, dcp.Password))
+	return base64.StdEncoding.EncodeToString(bStr)
+}
+
+func (dc DoltCredsForPass) RPCCreds() *RPCCredsForPass {
+	return &RPCCredsForPass{
+		RequireTLS:       false,
+		UserPassContents: dc.ToBase64Str(),
+	}
+}
+
+func (c *RPCCredsForPass) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return map[string]string{
+		"authorization": "Basic " + c.UserPassContents,
+	}, nil
+}
+
+func (c *RPCCredsForPass) RequireTransportSecurity() bool {
+	return c.RequireTLS
 }

@@ -97,46 +97,66 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	if apr.ContainsAll(HardResetParam, SoftResetParam) {
 		verr := errhand.BuildDError("error: --%s and --%s are mutually exclusive options.", HardResetParam, SoftResetParam).Build()
-		HandleVErrAndExitCode(verr, usage)
+		return HandleVErrAndExitCode(verr, usage)
 	} else if apr.Contains(HardResetParam) {
-		arg := ""
-		if apr.NArg() > 1 {
-			return handleResetError(fmt.Errorf("--hard supports at most one additional param"), usage)
-		} else if apr.NArg() == 1 {
-			arg = apr.Arg(0)
-		}
-
-		err = actions.ResetHard(ctx, dEnv, arg, roots)
+		return handleResetHard(ctx, apr, usage, dEnv, roots)
 	} else {
-		// Check whether the input argument is a ref.
 		if apr.NArg() == 1 {
-			argToCheck := apr.Arg(0)
-
-			ok := actions.ValidateIsRef(ctx, argToCheck, dEnv.DoltDB, dEnv.RepoStateReader())
-
-			// This is a valid ref
-			if ok {
-				err = actions.ResetSoftToRef(ctx, dEnv.DbData(), apr.Arg(0))
-				return handleResetError(err, usage)
+			ref := apr.Arg(0)
+			if actions.IsValidRef(ctx, ref, dEnv.DoltDB, dEnv.RepoStateReader()) {
+				return handleResetSoftToRef(ctx, dEnv, ref, usage)
 			}
 		}
 
-		tables := apr.Args
+		return handleResetSoftTables(ctx, apr.Args, roots, dEnv, usage)
+	}
+}
 
-		roots, err = actions.ResetSoft(ctx, dEnv.DbData(), tables, roots)
-		if err != nil {
-			return handleResetError(err, usage)
-		}
-
-		err = dEnv.UpdateRoots(ctx, roots)
-		if err != nil {
-			return handleResetError(err, usage)
-		}
-
-		printNotStaged(ctx, dEnv, roots.Staged)
+func handleResetSoftTables(ctx context.Context, tables []string, roots doltdb.Roots, dEnv *env.DoltEnv, usage cli.UsagePrinter) int {
+	roots, err := actions.ResetSoft(ctx, dEnv.DbData(), tables, roots)
+	if err != nil {
+		return handleResetError(err, usage)
 	}
 
+	err = dEnv.UpdateRoots(ctx, roots)
+	if err != nil {
+		return handleResetError(err, usage)
+	}
+
+	printNotStaged(ctx, dEnv, roots.Staged)
+	return 0
+}
+
+func handleResetSoftToRef(ctx context.Context, dEnv *env.DoltEnv, ref string, usage cli.UsagePrinter) int {
+	newRoots, err := actions.ResetSoftToRef(ctx, dEnv.DbData(), ref)
+	if err != nil {
+		return handleResetError(err, usage)
+	}
+
+	err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
 	return handleResetError(err, usage)
+}
+
+func handleResetHard(ctx context.Context, apr *argparser.ArgParseResults, usage cli.UsagePrinter, dEnv *env.DoltEnv, roots doltdb.Roots) int {
+	arg := ""
+	if apr.NArg() > 1 {
+		return handleResetError(fmt.Errorf("--hard supports at most one additional param"), usage)
+	} else if apr.NArg() == 1 {
+		arg = apr.Arg(0)
+	}
+
+	headRef := dEnv.RepoStateReader().CWBHeadRef()
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	err = actions.ResetHard(ctx, dEnv, arg, roots, headRef, ws)
+	if err != nil {
+		return handleResetError(err, usage)
+	}
+
+	return 0
 }
 
 var tblDiffTypeToShortLabel = map[diff.TableDiffType]string{

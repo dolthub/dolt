@@ -57,8 +57,8 @@ func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 	}
 }
 
-func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, durableState *durableIndexState) (sql.RowIter2, error) {
-	if len(projections) == 0 {
+func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, durableState *durableIndexState) (sql.RowIter, error) {
+	if projections == nil {
 		projections = idx.Schema().GetAllCols().Tags
 	}
 
@@ -80,7 +80,7 @@ func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRa
 		columns = idx.Schema().GetAllCols().Tags
 	}
 	m := durable.NomsMapFromIndex(durableState.Secondary)
-	nrr := noms.NewNomsRangeReader(idx.IndexSchema(), m, ranges)
+	nrr := noms.NewNomsRangeReader(idx.valueReadWriter(), idx.IndexSchema(), m, ranges)
 
 	covers := idx.coversColumns(durableState, columns)
 	if covers || idx.ID() == "PRIMARY" {
@@ -240,7 +240,7 @@ func NewLookupBuilder(
 	pkSch sql.PrimaryKeySchema,
 	isDoltFormat bool,
 ) (LookupBuilder, error) {
-	if len(projections) == 0 {
+	if projections == nil {
 		projections = idx.Schema().GetAllCols().Tags
 	}
 
@@ -260,6 +260,7 @@ func NewLookupBuilder(
 		base.sec = durable.ProllyMapFromIndex(s.Secondary)
 		base.secKd, base.secVd = base.sec.Descriptors()
 		base.ns = base.sec.NodeStore()
+		base.prefDesc = base.secKd.PrefixDesc(len(di.columns))
 	}
 
 	switch {
@@ -330,9 +331,8 @@ type baseLookupBuilder struct {
 
 	sec          prolly.Map
 	secKd, secVd val.TupleDesc
+	prefDesc     val.TupleDesc
 	ns           tree.NodeStore
-
-	cur *tree.Cursor
 }
 
 func (lb *baseLookupBuilder) Key() doltdb.DataCacheKey {
@@ -347,36 +347,16 @@ func (lb *baseLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (s
 // newPointLookup will create a cursor once, and then use the same cursor for
 // every subsequent point lookup. Note that equality joins can have a mix of
 // point lookups on concrete values, and range lookups for null matches.
-func (lb *baseLookupBuilder) newPointLookup(ctx *sql.Context, rang prolly.Range) (prolly.MapIter, error) {
-	if lb.cur == nil {
-		cur, err := tree.NewCursorAtKey(ctx, lb.sec.NodeStore(), lb.sec.Node(), rang.Tup, lb.secKd)
-		if err != nil {
-			return nil, err
+func (lb *baseLookupBuilder) newPointLookup(ctx *sql.Context, rang prolly.Range) (iter prolly.MapIter, err error) {
+	err = lb.sec.GetPrefix(ctx, rang.Tup, lb.prefDesc, func(key val.Tuple, value val.Tuple) (err error) {
+		if key != nil && rang.Matches(key) {
+			iter = prolly.NewPointLookup(key, value)
+		} else {
+			iter = prolly.EmptyPointLookup
 		}
-		if !cur.Valid() {
-			// map does not contain |rng|
-			return prolly.EmptyPointLookup, nil
-		}
-
-		lb.cur = cur
-	}
-
-	err := tree.Seek(ctx, lb.cur, rang.Tup, lb.secKd)
-	if err != nil {
-		return nil, err
-	}
-	if !lb.cur.Valid() {
-		return prolly.EmptyPointLookup, nil
-	}
-
-	key := val.Tuple(lb.cur.CurrentKey())
-	value := val.Tuple(lb.cur.CurrentValue())
-
-	if !rang.Matches(key) {
-		return prolly.EmptyPointLookup, nil
-	}
-
-	return prolly.NewPointLookup(key, value), nil
+		return
+	})
+	return
 }
 
 func (lb *baseLookupBuilder) rangeIter(ctx *sql.Context, part sql.Partition) (prolly.MapIter, error) {
@@ -515,7 +495,7 @@ var _ noms.InRangeCheck = nomsRangeCheck{}
 
 // Between returns whether the given types.Value is between the bounds. In addition, this returns if the value is outside
 // the bounds and above the upperbound.
-func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, val types.Value) (ok bool, over bool, err error) {
+func (cb columnBounds) Between(ctx context.Context, vr types.ValueReader, val types.Value) (ok bool, over bool, err error) {
 	// Only boundCase_isNull matches NULL values,
 	// otherwise we terminate the range scan.
 	// This is checked early to bypass unpredictable
@@ -529,58 +509,58 @@ func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, va
 	case boundsCase_infinity_infinity:
 		return true, false, nil
 	case boundsCase_infinity_lessEquals:
-		ok, err := cb.upperbound.Less(nbf, val)
+		ok, err := cb.upperbound.Less(ctx, vr.Format(), val)
 		if err != nil || ok {
 			return false, true, err
 		}
 	case boundsCase_infinity_less:
-		ok, err := val.Less(nbf, cb.upperbound)
+		ok, err := val.Less(ctx, vr.Format(), cb.upperbound)
 		if err != nil || !ok {
 			return false, true, err
 		}
 	case boundsCase_greaterEquals_infinity:
-		ok, err := val.Less(nbf, cb.lowerbound)
+		ok, err := val.Less(ctx, vr.Format(), cb.lowerbound)
 		if err != nil || ok {
 			return false, false, err
 		}
 	case boundsCase_greaterEquals_lessEquals:
-		ok, err := val.Less(nbf, cb.lowerbound)
+		ok, err := val.Less(ctx, vr.Format(), cb.lowerbound)
 		if err != nil || ok {
 			return false, false, err
 		}
-		ok, err = cb.upperbound.Less(nbf, val)
+		ok, err = cb.upperbound.Less(ctx, vr.Format(), val)
 		if err != nil || ok {
 			return false, true, err
 		}
 	case boundsCase_greaterEquals_less:
-		ok, err := val.Less(nbf, cb.lowerbound)
+		ok, err := val.Less(ctx, vr.Format(), cb.lowerbound)
 		if err != nil || ok {
 			return false, false, err
 		}
-		ok, err = val.Less(nbf, cb.upperbound)
+		ok, err = val.Less(ctx, vr.Format(), cb.upperbound)
 		if err != nil || !ok {
 			return false, true, err
 		}
 	case boundsCase_greater_infinity:
-		ok, err := cb.lowerbound.Less(nbf, val)
+		ok, err := cb.lowerbound.Less(ctx, vr.Format(), val)
 		if err != nil || !ok {
 			return false, false, err
 		}
 	case boundsCase_greater_lessEquals:
-		ok, err := cb.lowerbound.Less(nbf, val)
+		ok, err := cb.lowerbound.Less(ctx, vr.Format(), val)
 		if err != nil || !ok {
 			return false, false, err
 		}
-		ok, err = cb.upperbound.Less(nbf, val)
+		ok, err = cb.upperbound.Less(ctx, vr.Format(), val)
 		if err != nil || ok {
 			return false, true, err
 		}
 	case boundsCase_greater_less:
-		ok, err := cb.lowerbound.Less(nbf, val)
+		ok, err := cb.lowerbound.Less(ctx, vr.Format(), val)
 		if err != nil || !ok {
 			return false, false, err
 		}
-		ok, err = val.Less(nbf, cb.upperbound)
+		ok, err = val.Less(ctx, vr.Format(), cb.upperbound)
 		if err != nil || !ok {
 			return false, true, err
 		}
@@ -616,14 +596,13 @@ func (cb columnBounds) Equals(otherBounds columnBounds) bool {
 }
 
 // Check implements the interface noms.InRangeCheck.
-func (nrc nomsRangeCheck) Check(ctx context.Context, tuple types.Tuple) (valid bool, skip bool, err error) {
+func (nrc nomsRangeCheck) Check(ctx context.Context, vr types.ValueReader, tuple types.Tuple) (valid bool, skip bool, err error) {
 	itr := types.TupleItrPool.Get().(*types.TupleIterator)
 	defer types.TupleItrPool.Put(itr)
 	err = itr.InitForTuple(tuple)
 	if err != nil {
 		return false, false, err
 	}
-	nbf := tuple.Format()
 
 	for i := 0; i < len(nrc) && itr.HasMore(); i++ {
 		if err := itr.Skip(); err != nil {
@@ -637,7 +616,7 @@ func (nrc nomsRangeCheck) Check(ctx context.Context, tuple types.Tuple) (valid b
 			break
 		}
 
-		ok, over, err := nrc[i].Between(ctx, nbf, val)
+		ok, over, err := nrc[i].Between(ctx, vr, val)
 		if err != nil {
 			return false, false, err
 		}

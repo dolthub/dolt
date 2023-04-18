@@ -33,10 +33,12 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 0 ]
     [[ ! "$output" =~ 'pk' ]] || false
+
     run dolt diff
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "diff --dolt a/test b/test" ]
     [ "${lines[1]}" = "added table" ]
+    
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Untracked files" ]]

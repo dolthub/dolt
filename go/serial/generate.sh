@@ -31,6 +31,8 @@ fi
   prolly.fbs \
   rootvalue.fbs \
   schema.fbs \
+  stash.fbs \
+  stashlist.fbs \
   storeroot.fbs \
   table.fbs \
   tag.fbs \

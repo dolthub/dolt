@@ -61,6 +61,8 @@ const (
 	commitName          = "Commit"
 )
 
+var ErrCommitNotFound = errors.New("target commit not found")
+
 type Commit struct {
 	val    types.Value
 	addr   hash.Hash
@@ -311,7 +313,7 @@ func LoadCommitRef(ctx context.Context, vr types.ValueReader, r types.Ref) (*Com
 		return nil, err
 	}
 	if v == nil {
-		return nil, errors.New("target commit not found")
+		return nil, ErrCommitNotFound
 	}
 	return commitPtr(vr.Format(), v, &r)
 }
@@ -363,7 +365,7 @@ func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 *Commit, vr1
 // FindCommonAncestor returns the most recent common ancestor of c1 and c2, if
 // one exists, setting ok to true. If there is no common ancestor, ok is set
 // to false. Refs of |c1| are dereferenced through |vr1|, while refs of |c2|
-// are dereference through |vr2|.
+// are dereferenced through |vr2|.
 //
 // This implementation makes use of the parents_closure field on the commit
 // struct.  If the commit does not have a materialized parents_closure, this
@@ -393,7 +395,7 @@ func FindCommonAncestor(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.Valu
 			}
 			return h1, true, nil
 		}
-		if pi1.Less(vr1.Format(), pi2) {
+		if pi1.Less(ctx, vr1.Format(), pi2) {
 			// TODO: Should pi2.Seek(pi1.curr), but MapIterator does not expose Seek yet.
 			if !pi2.Next(ctx) {
 				return hash.Hash{}, false, firstError(pi1.Err(), pi2.Err())
@@ -443,6 +445,9 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 			return nil, errors.New("GetCommitParents: provided value is not a commit.")
 		}
 		addrs, err := types.SerialCommitParentAddrs(vr.Format(), sm)
+		if err != nil {
+			return nil, err
+		}
 		vals, err := vr.ReadManyValues(ctx, addrs)
 		if err != nil {
 			return nil, err
@@ -483,6 +488,9 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 			refs = append(refs, v.(types.Ref))
 			return nil
 		})
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		ps, ok, err = c.MaybeGet(parentsField)
 		if err != nil {
@@ -494,6 +502,9 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 				refs = append(refs, v.(types.Ref))
 				return nil
 			})
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	hashes := make([]hash.Hash, len(refs))
@@ -684,13 +695,9 @@ func firstError(l, r error) error {
 	return r
 }
 
-func IsCommitType(nbf *types.NomsBinFormat, t *types.Type) bool {
-	return types.IsSubtype(nbf, valueCommitType, t)
-}
-
-func IsCommit(v types.Value) (bool, error) {
+func IsCommit(ctx context.Context, v types.Value) (bool, error) {
 	if s, ok := v.(types.Struct); ok {
-		return types.IsValueSubtypeOf(s.Format(), v, valueCommitType)
+		return types.IsValueSubtypeOf(ctx, s.Format(), v, valueCommitType)
 	} else if sm, ok := v.(types.SerialMessage); ok {
 		data := []byte(sm)
 		return serial.GetFileID(data) == serial.CommitFileID, nil

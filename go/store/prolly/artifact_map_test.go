@@ -37,13 +37,16 @@ func TestArtifactMapEditing(t *testing.T) {
 	am, err := NewArtifactMapFromTuples(ctx, ns, srcKd)
 	require.NoError(t, err)
 
+	addr, err := ns.Write(ctx, tree.NewEmptyTestNode())
+	require.NoError(t, err)
+
 	for _, n := range []int{10, 100, 1000} {
 		t.Run(fmt.Sprintf("%d inserts", n), func(t *testing.T) {
 			edt := am.Editor()
 			for i := 0; i < n; i++ {
 				srcKb.PutInt16(0, int16(i))
 				key1 := srcKb.Build(sharedPool)
-				err = edt.Add(ctx, key1, hash.Of([]byte("left")), ArtifactTypeConflict, []byte("{}"))
+				err = edt.Add(ctx, key1, addr, ArtifactTypeConflict, []byte("{}"))
 				require.NoError(t, err)
 			}
 			nm, err := edt.Flush(ctx)
@@ -89,26 +92,29 @@ func TestMergeArtifactMaps(t *testing.T) {
 	expected, err := NewArtifactMapFromTuples(ctx, ns, srcKd)
 	require.NoError(t, err)
 
+	addr, err := ns.Write(ctx, tree.NewEmptyTestNode())
+	require.NoError(t, err)
+
 	leftEdt := left.Editor()
 	rightEdt := right.Editor()
 
 	srcKb.PutInt16(0, 1)
 	key1 := srcKb.Build(sharedPool)
-	err = leftEdt.Add(ctx, key1, hash.Of([]byte("left")), ArtifactTypeConflict, []byte("{}"))
+	err = leftEdt.Add(ctx, key1, addr, ArtifactTypeConflict, []byte("{}"))
 	require.NoError(t, err)
 	left, err = leftEdt.Flush(ctx)
 	require.NoError(t, err)
 
 	srcKb.PutInt16(0, 2)
 	key2 := srcKb.Build(sharedPool)
-	err = rightEdt.Add(ctx, key2, hash.Of([]byte("right")), ArtifactTypeConflict, []byte("{}"))
+	err = rightEdt.Add(ctx, key2, addr, ArtifactTypeConflict, []byte("{}"))
 	require.NoError(t, err)
 	right, err = rightEdt.Flush(ctx)
 
 	expectedEdt := expected.Editor()
-	err = expectedEdt.Add(ctx, key1, hash.Of([]byte("left")), ArtifactTypeConflict, []byte("{}"))
+	err = expectedEdt.Add(ctx, key1, addr, ArtifactTypeConflict, []byte("{}"))
 	require.NoError(t, err)
-	err = expectedEdt.Add(ctx, key2, hash.Of([]byte("right")), ArtifactTypeConflict, []byte("{}"))
+	err = expectedEdt.Add(ctx, key2, addr, ArtifactTypeConflict, []byte("{}"))
 	require.NoError(t, err)
 	expected, err = expectedEdt.Flush(ctx)
 

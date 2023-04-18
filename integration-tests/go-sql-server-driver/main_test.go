@@ -14,12 +14,14 @@
 
 package main
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestConfig(t *testing.T) {
 	RunTestsFile(t, "tests/sql-server-config.yaml")
+}
+
+func TestJWTAuth(t *testing.T) {
+	RunTestsFile(t, "tests/sql-server-jwt-auth.yaml")
 }
 
 func TestCluster(t *testing.T) {

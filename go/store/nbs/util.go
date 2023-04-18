@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"context"
 	"io"
 	"math"
 
@@ -24,8 +25,8 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func IterChunks(rd io.ReadSeeker, cb func(chunk chunks.Chunk) (stop bool, err error)) error {
-	idx, err := readTableIndexByCopy(rd, &noopQuotaProvider{})
+func IterChunks(ctx context.Context, rd io.ReadSeeker, cb func(chunk chunks.Chunk) (stop bool, err error)) error {
+	idx, err := readTableIndexByCopy(ctx, rd, &UnlimitedQuotaProvider{})
 	if err != nil {
 		return err
 	}
@@ -33,9 +34,9 @@ func IterChunks(rd io.ReadSeeker, cb func(chunk chunks.Chunk) (stop bool, err er
 	defer idx.Close()
 
 	seen := make(map[addr]bool)
-	for i := uint32(0); i < idx.ChunkCount(); i++ {
+	for i := uint32(0); i < idx.chunkCount(); i++ {
 		var a addr
-		ie, err := idx.IndexEntry(i, &a)
+		ie, err := idx.indexEntry(i, &a)
 		if err != nil {
 			return err
 		}
@@ -68,8 +69,8 @@ func IterChunks(rd io.ReadSeeker, cb func(chunk chunks.Chunk) (stop bool, err er
 	return nil
 }
 
-func GetTableIndexPrefixes(rd io.ReadSeeker) (prefixes []uint64, err error) {
-	idx, err := readTableIndexByCopy(rd, &noopQuotaProvider{})
+func GetTableIndexPrefixes(ctx context.Context, rd io.ReadSeeker) (prefixes []uint64, err error) {
+	idx, err := readTableIndexByCopy(ctx, rd, &UnlimitedQuotaProvider{})
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +81,11 @@ func GetTableIndexPrefixes(rd io.ReadSeeker) (prefixes []uint64, err error) {
 		}
 	}()
 
-	return idx.Prefixes()
+	prefixes, err = idx.prefixes()
+	if err != nil {
+		return nil, err
+	}
+	return
 }
 
 func GuessPrefixOrdinal(prefix uint64, n uint32) int {

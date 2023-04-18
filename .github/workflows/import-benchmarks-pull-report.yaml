@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [validate-commentor, check-comments]
     if: ${{ needs.check-comments.outputs.benchmark == 'true' }}
-    name: Trigger Benchmark Import K8s Workflow
+    name: Trigger Benchmark Import Workflow
     steps:
       - uses: dolthub/pull-request-comment-branch@v3
         id: comment-branch
@@ -61,4 +61,13 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-import
-          client-payload: '{"from_server": "dolt", "from_version": "${{ github.sha }}", "to_server": "dolt", "to_version": "${{ steps.comment-branch.outputs.head_sha }}", "mode": "pullRequest", "issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "actor": "${{ github.actor }}", "template_script": "./.github/scripts/import-benchmarking/get-dolt-dolt-job-json.sh"}'
+          client-payload: |
+            {
+              "version": "${{ steps.comment-branch.outputs.head_sha }}",
+              "run_file": "ci.yaml",
+              "summary": "summary.sql",
+              "report": "three_way_compare.sql",
+              "commit_to_branch": "${{ steps.comment-branch.outputs.head_sha }}",
+              "actor": "${{ github.actor }}",
+              "issue_id": "${{ steps.get_pull_number.outputs.pull_number }}"
+            }

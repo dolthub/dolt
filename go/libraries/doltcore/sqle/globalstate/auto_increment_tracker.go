@@ -20,7 +20,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -31,16 +31,23 @@ type AutoIncrementTracker struct {
 	mu        *sync.Mutex
 }
 
-// NewAutoIncrementTracker returns a new autoincrement tracker for the working sets given. All working sets must be
+// NewAutoIncrementTracker returns a new autoincrement tracker for the roots given. All roots sets must be
 // considered because the auto increment value for a table is tracked globally, across all branches.
-func NewAutoIncrementTracker(ctx context.Context, wses ...*doltdb.WorkingSet) (AutoIncrementTracker, error) {
+// Roots provided should be the working sets when available, or the branches when they are not (e.g. for remote
+// branches that don't have a local working set)
+func NewAutoIncrementTracker(ctx context.Context, roots ...doltdb.Rootish) (AutoIncrementTracker, error) {
 	ait := AutoIncrementTracker{
 		sequences: make(map[string]uint64),
 		mu:        &sync.Mutex{},
 	}
 
-	for _, ws := range wses {
-		err := ws.WorkingRoot().IterTables(ctx, func(tableName string, table *doltdb.Table, sch schema.Schema) (bool, error) {
+	for _, ws := range roots {
+		root, err := ws.ResolveRootValue(ctx)
+		if err != nil {
+			return AutoIncrementTracker{}, err
+		}
+
+		err = root.IterTables(ctx, func(tableName string, table *doltdb.Table, sch schema.Schema) (bool, error) {
 			ok := schema.HasAutoIncrement(sch)
 			if !ok {
 				return false, nil
@@ -116,7 +123,7 @@ func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 	}
 
 	var err error
-	val, err = sql.Uint64.Convert(val)
+	val, _, err = types.Uint64.Convert(val)
 	if err != nil {
 		return 0, err
 	}

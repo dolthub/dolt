@@ -31,39 +31,39 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
-var readDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Reads Dolt Docs from the file system into the database",
-	LongDesc:  "Reads Dolt Docs from the file system into the database",
+var uploadDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Uploads Dolt Docs from the file system into the database",
+	LongDesc:  "Uploads Dolt Docs from the file system into the database",
 	Synopsis: []string{
 		"{{.LessThan}}doc{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
 }
 
-type ReadCmd struct{}
+type UploadCmd struct{}
 
 // Name implements cli.Command.
-func (cmd ReadCmd) Name() string {
-	return "read"
+func (cmd UploadCmd) Name() string {
+	return "upload"
 }
 
 // Description implements cli.Command.
-func (cmd ReadCmd) Description() string {
-	return readDocs.ShortDesc
+func (cmd UploadCmd) Description() string {
+	return uploadDocs.ShortDesc
 }
 
 // RequiresRepo implements cli.Command.
-func (cmd ReadCmd) RequiresRepo() bool {
+func (cmd UploadCmd) RequiresRepo() bool {
 	return true
 }
 
 // Docs implements cli.Command.
-func (cmd ReadCmd) Docs() *cli.CommandDocumentation {
+func (cmd UploadCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.NewCommandDocumentation(readDocs, ap)
+	return cli.NewCommandDocumentation(uploadDocs, ap)
 }
 
 // ArgParser implements cli.Command.
-func (cmd ReadCmd) ArgParser() *argparser.ArgParser {
+func (cmd UploadCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"doc", "Dolt doc name to be updated in the database."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "file to read Dolt doc from."})
@@ -71,9 +71,9 @@ func (cmd ReadCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec implements cli.Command.
-func (cmd ReadCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd UploadCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, writeDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, uploadDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() != 2 {
@@ -114,58 +114,51 @@ func readDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName, fileName strin
 		return err
 	}
 
-	eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return err
 	}
 
-	root, err := writeDocToTable(ctx, eng, docName, string(update))
+	err = writeDocToTable(ctx, eng, dbName, docName, string(update))
 	if err != nil {
 		return err
 	}
 
-	return dEnv.UpdateWorkingRoot(ctx, root)
+	return nil
 }
 
 const (
 	writeDocTemplate = `REPLACE INTO dolt_docs VALUES ("%s", "%s")`
 )
 
-func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, docName, content string) (*doltdb.RootValue, error) {
+func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, dbName, docName, content string) error {
 	var (
-		sctx  *sql.Context
-		err   error
-		roots map[string]*doltdb.RootValue
+		sctx *sql.Context
+		err  error
 	)
 
-	sctx, err = eng.NewContext(ctx)
+	sctx, err = eng.NewDefaultContext(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
+
+	sctx.SetCurrentDatabase(dbName)
+
+	err = sctx.Session.SetSessionVariable(sctx, sql.AutoCommitSessionVar, 1)
+	if err != nil {
+		return err
+	}
+
 	sctx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	if err = execQuery(sctx, eng, doltdb.DocsMaybeCreateTableStmt); err != nil {
-		return nil, err
+		return err
 	}
 
 	content = strings.ReplaceAll(content, `"`, `\"`)
 	update := fmt.Sprintf(writeDocTemplate, docName, content)
 
-	if err = execQuery(sctx, eng, update); err != nil {
-		return nil, err
-	}
-
-	if roots, err = eng.GetRoots(sctx); err != nil {
-		return nil, err
-	}
-	if len(roots) != 1 {
-		return nil, fmt.Errorf("cannot access docs in multi-database mode")
-	}
-
-	for _, rv := range roots {
-		return rv, nil
-	}
-	panic("unreachable")
+	return execQuery(sctx, eng, update)
 }
 
 func execQuery(sctx *sql.Context, eng *engine.SqlEngine, q string) (err error) {

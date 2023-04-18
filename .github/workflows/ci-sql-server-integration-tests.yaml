@@ -23,11 +23,16 @@ jobs:
       matrix:
         os:  [ ubuntu-22.04, macos-latest ] # [ ubuntu-22.04, macos-latest, windows-latest ]
         dolt_fmt: [ "__DOLT__", "__LD_1__" ]
+        journal_store: [ "" ]
         exclude:
           - os: "macos-latest"
             dolt_fmt: ["__LD_1__" ]
           - os: "windows-latest"
             dolt_fmt: ["__LD_1__" ]
+        include:
+          - os: "ubuntu-22.04"
+            dolt_fmt: "__DOLT__"
+            journal_store: "true"
     steps:
       - name: Setup Go 1.x
         uses: actions/setup-go@v3
@@ -45,6 +50,7 @@ jobs:
       - name: Test all
         env:
           DOLT_FMT: ${{ matrix.dolt_fmt }}
+          DOLT_ENABLE_CHUNK_JOURNAL: ${{ matrix.journal_store }}
         run: |
           if [ -n "$DOLT_FMT" ]; then export DOLT_DEFAULT_BIN_FORMAT="$DOLT_FMT"; fi
           export DOLT_BIN_PATH="$(pwd)/../../.ci_bin/dolt"

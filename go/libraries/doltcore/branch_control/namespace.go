@@ -31,41 +31,50 @@ type Namespace struct {
 	access *Access
 	binlog *Binlog
 
-	Branches []MatchExpression
-	Users    []MatchExpression
-	Hosts    []MatchExpression
-	Values   []NamespaceValue
-	RWMutex  *sync.RWMutex
+	Databases []MatchExpression
+	Branches  []MatchExpression
+	Users     []MatchExpression
+	Hosts     []MatchExpression
+	Values    []NamespaceValue
+	RWMutex   *sync.RWMutex
 }
 
 // NamespaceValue contains the user-facing values of a particular row.
 type NamespaceValue struct {
-	Branch string
-	User   string
-	Host   string
+	Database string
+	Branch   string
+	User     string
+	Host     string
 }
 
 // newNamespace returns a new Namespace.
 func newNamespace(accessTbl *Access) *Namespace {
 	return &Namespace{
-		binlog:   NewNamespaceBinlog(nil),
-		access:   accessTbl,
-		Branches: nil,
-		Users:    nil,
-		Hosts:    nil,
-		Values:   nil,
-		RWMutex:  &sync.RWMutex{},
+		binlog:    NewNamespaceBinlog(nil),
+		access:    accessTbl,
+		Databases: nil,
+		Branches:  nil,
+		Users:     nil,
+		Hosts:     nil,
+		Values:    nil,
+		RWMutex:   &sync.RWMutex{},
 	}
 }
 
-// CanCreate checks the given branch, and returns whether the given user and host combination is able to create that
-// branch. Handles the super user case.
-func (tbl *Namespace) CanCreate(branch string, user string, host string) bool {
-	// Super user can always create branches
-	if IsSuperUser(user, host) {
+// CanCreate checks the given database and branch, and returns whether the given user and host combination is able to
+// create that branch. Handles the super user case.
+func (tbl *Namespace) CanCreate(database string, branch string, user string, host string) bool {
+	filteredIndexes := Match(tbl.Databases, database, sql.Collation_utf8mb4_0900_ai_ci)
+	// If there are no database entries, then the Namespace is unrestricted
+	if len(filteredIndexes) == 0 {
+		indexPool.Put(filteredIndexes)
 		return true
 	}
-	matchedSet := Match(tbl.Branches, branch, sql.Collation_utf8mb4_0900_ai_ci)
+
+	filteredBranches := tbl.filterBranches(filteredIndexes)
+	indexPool.Put(filteredIndexes)
+	matchedSet := Match(filteredBranches, branch, sql.Collation_utf8mb4_0900_ai_ci)
+	matchExprPool.Put(filteredBranches)
 	// If there are no branch entries, then the Namespace is unrestricted
 	if len(matchedSet) == 0 {
 		indexPool.Put(matchedSet)
@@ -74,7 +83,7 @@ func (tbl *Namespace) CanCreate(branch string, user string, host string) bool {
 
 	// We take either the longest match, or the set of longest matches if multiple matches have the same length
 	longest := -1
-	filteredIndexes := indexPool.Get().([]uint32)[:0]
+	filteredIndexes = indexPool.Get().([]uint32)[:0]
 	for _, matched := range matchedSet {
 		matchedValue := tbl.Values[matched]
 		// If we've found a longer match, then we reset the slice. We append to it in the following if statement.
@@ -102,11 +111,11 @@ func (tbl *Namespace) CanCreate(branch string, user string, host string) bool {
 	return result
 }
 
-// GetIndex returns the index of the given branch, user, and host expressions. If the expressions cannot be found,
-// returns -1. Assumes that the given expressions have already been folded.
-func (tbl *Namespace) GetIndex(branchExpr string, userExpr string, hostExpr string) int {
+// GetIndex returns the index of the given database, branch, user, and host expressions. If the expressions cannot be
+// found, returns -1. Assumes that the given expressions have already been folded.
+func (tbl *Namespace) GetIndex(databaseExpr string, branchExpr string, userExpr string, hostExpr string) int {
 	for i, value := range tbl.Values {
-		if value.Branch == branchExpr && value.User == userExpr && value.Host == hostExpr {
+		if value.Database == databaseExpr && value.Branch == branchExpr && value.User == userExpr && value.Host == hostExpr {
 			return i
 		}
 	}
@@ -131,11 +140,15 @@ func (tbl *Namespace) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 	// Serialize the binlog
 	binlog := tbl.binlog.Serialize(b)
 	// Initialize field offset slices
+	databaseOffsets := make([]flatbuffers.UOffsetT, len(tbl.Databases))
 	branchOffsets := make([]flatbuffers.UOffsetT, len(tbl.Branches))
 	userOffsets := make([]flatbuffers.UOffsetT, len(tbl.Users))
 	hostOffsets := make([]flatbuffers.UOffsetT, len(tbl.Hosts))
 	valueOffsets := make([]flatbuffers.UOffsetT, len(tbl.Values))
 	// Get field offsets
+	for i, matchExpr := range tbl.Databases {
+		databaseOffsets[i] = matchExpr.Serialize(b)
+	}
 	for i, matchExpr := range tbl.Branches {
 		branchOffsets[i] = matchExpr.Serialize(b)
 	}
@@ -149,6 +162,11 @@ func (tbl *Namespace) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 		valueOffsets[i] = val.Serialize(b)
 	}
 	// Get the field vectors
+	serial.BranchControlNamespaceStartDatabasesVector(b, len(databaseOffsets))
+	for i := len(databaseOffsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(databaseOffsets[i])
+	}
+	databases := b.EndVector(len(databaseOffsets))
 	serial.BranchControlNamespaceStartBranchesVector(b, len(branchOffsets))
 	for i := len(branchOffsets) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(branchOffsets[i])
@@ -172,6 +190,7 @@ func (tbl *Namespace) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 	// Write the table
 	serial.BranchControlNamespaceStart(b)
 	serial.BranchControlNamespaceAddBinlog(b, binlog)
+	serial.BranchControlNamespaceAddDatabases(b, databases)
 	serial.BranchControlNamespaceAddBranches(b, branches)
 	serial.BranchControlNamespaceAddUsers(b, users)
 	serial.BranchControlNamespaceAddHosts(b, hosts)
@@ -189,7 +208,10 @@ func (tbl *Namespace) Deserialize(fb *serial.BranchControlNamespace) error {
 		return fmt.Errorf("cannot deserialize to a non-empty namespace table")
 	}
 	// Verify that all fields have the same length
-	if fb.BranchesLength() != fb.UsersLength() || fb.UsersLength() != fb.HostsLength() || fb.HostsLength() != fb.ValuesLength() {
+	if fb.DatabasesLength() != fb.BranchesLength() ||
+		fb.BranchesLength() != fb.UsersLength() ||
+		fb.UsersLength() != fb.HostsLength() ||
+		fb.HostsLength() != fb.ValuesLength() {
 		return fmt.Errorf("cannot deserialize a namespace table with differing field lengths")
 	}
 	// Read the binlog
@@ -201,10 +223,17 @@ func (tbl *Namespace) Deserialize(fb *serial.BranchControlNamespace) error {
 		return err
 	}
 	// Initialize every slice
+	tbl.Databases = make([]MatchExpression, fb.DatabasesLength())
 	tbl.Branches = make([]MatchExpression, fb.BranchesLength())
 	tbl.Users = make([]MatchExpression, fb.UsersLength())
 	tbl.Hosts = make([]MatchExpression, fb.HostsLength())
 	tbl.Values = make([]NamespaceValue, fb.ValuesLength())
+	// Read the databases
+	for i := 0; i < fb.DatabasesLength(); i++ {
+		serialMatchExpr := &serial.BranchControlMatchExpression{}
+		fb.Databases(serialMatchExpr, i)
+		tbl.Databases[i] = deserializeMatchExpression(serialMatchExpr)
+	}
 	// Read the branches
 	for i := 0; i < fb.BranchesLength(); i++ {
 		serialMatchExpr := &serial.BranchControlMatchExpression{}
@@ -228,12 +257,25 @@ func (tbl *Namespace) Deserialize(fb *serial.BranchControlNamespace) error {
 		serialNamespaceValue := &serial.BranchControlNamespaceValue{}
 		fb.Values(serialNamespaceValue, i)
 		tbl.Values[i] = NamespaceValue{
-			Branch: string(serialNamespaceValue.Branch()),
-			User:   string(serialNamespaceValue.User()),
-			Host:   string(serialNamespaceValue.Host()),
+			Database: string(serialNamespaceValue.Database()),
+			Branch:   string(serialNamespaceValue.Branch()),
+			User:     string(serialNamespaceValue.User()),
+			Host:     string(serialNamespaceValue.Host()),
 		}
 	}
 	return nil
+}
+
+// filterDatabases returns all databases that match the given collection indexes.
+func (tbl *Namespace) filterDatabases(filters []uint32) []MatchExpression {
+	if len(filters) == 0 {
+		return nil
+	}
+	matchExprs := matchExprPool.Get().([]MatchExpression)[:0]
+	for _, filter := range filters {
+		matchExprs = append(matchExprs, tbl.Databases[filter])
+	}
+	return matchExprs
 }
 
 // filterBranches returns all branches that match the given collection indexes.
@@ -274,11 +316,13 @@ func (tbl *Namespace) filterHosts(filters []uint32) []MatchExpression {
 
 // Serialize returns the offset for the NamespaceValue written to the given builder.
 func (val *NamespaceValue) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
-	branch := b.CreateString(val.Branch)
-	user := b.CreateString(val.User)
-	host := b.CreateString(val.Host)
+	database := b.CreateSharedString(val.Database)
+	branch := b.CreateSharedString(val.Branch)
+	user := b.CreateSharedString(val.User)
+	host := b.CreateSharedString(val.Host)
 
 	serial.BranchControlNamespaceValueStart(b)
+	serial.BranchControlNamespaceValueAddDatabase(b, database)
 	serial.BranchControlNamespaceValueAddBranch(b, branch)
 	serial.BranchControlNamespaceValueAddUser(b, user)
 	serial.BranchControlNamespaceValueAddHost(b, host)

@@ -199,7 +199,7 @@ var systemTableDeleteTests = []DeleteTest{
 	{
 		Name: "delete dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
-			"INSERT INTO dolt_query_catalog VALUES ('abc123', 1, 'example', 'select 2+2 from dual', 'description')"),
+			"INSERT INTO dolt_query_catalog VALUES ('abc123', 1, 'example', 'create view example as select 2+2 from dual', 'description')"),
 		DeleteQuery:    "delete from dolt_query_catalog",
 		SelectQuery:    "select * from dolt_query_catalog",
 		ExpectedRows:   ToSqlRows(dtables.DoltQueryCatalogSchema),
@@ -207,12 +207,12 @@ var systemTableDeleteTests = []DeleteTest{
 	},
 	{
 		Name: "delete dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemasTableSchema(),
-			"INSERT INTO dolt_schemas (type, name, fragment, id) VALUES ('view', 'name', 'select 2+2 from dual', 1)"),
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, schemaTableSchema,
+			"INSERT INTO dolt_schemas (type, name, fragment) VALUES ('view', 'name', 'create view name as select 2+2 from dual')"),
 		DeleteQuery:    "delete from dolt_schemas",
 		SelectQuery:    "select * from dolt_schemas",
 		ExpectedRows:   ToSqlRows(dtables.DoltQueryCatalogSchema),
-		ExpectedSchema: SchemasTableSchema(),
+		ExpectedSchema: schemaTableSchema,
 	},
 }
 
@@ -227,12 +227,14 @@ func testDeleteQuery(t *testing.T, test DeleteTest) {
 		t.Skip("Skipping tests until " + singleDeleteQueryTest)
 	}
 
-	dEnv := CreateTestDatabase(t)
+	dEnv, err := CreateTestDatabase()
+	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
+
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	var err error
 	root, _ := dEnv.WorkingRoot(context.Background())
 	root, err = executeModify(t, context.Background(), dEnv, root, test.DeleteQuery)
 	if len(test.ExpectedErr) > 0 {

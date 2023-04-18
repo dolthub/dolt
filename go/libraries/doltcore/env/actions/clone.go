@@ -32,14 +32,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/strhelp"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
-	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 var ErrRepositoryExists = errors.New("data repository already exists")
-var ErrFailedToInitRepo = errors.New("")
 var ErrFailedToCreateDirectory = errors.New("unable to create directories")
 var ErrFailedToAccessDir = errors.New("unable to access directories")
 var ErrFailedToCreateRepoStateWithRemote = errors.New("unable to create repo state with remote")
@@ -76,7 +75,7 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 	dEnv := env.Load(ctx, homeProvider, newFs, doltdb.LocalDirDoltDB, version)
 	err = dEnv.InitRepoWithNoData(ctx, nbf)
 	if err != nil {
-		return nil, fmt.Errorf("%w; %s", ErrFailedToInitRepo, err.Error())
+		return nil, fmt.Errorf("failed to init repo: %w", err)
 	}
 
 	dEnv.RSLoadErr = nil
@@ -92,11 +91,11 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 
 func cloneProg(eventCh <-chan pull.TableFileEvent) {
 	var (
-		chunks            int64
+		chunksC           int64
 		chunksDownloading int64
 		chunksDownloaded  int64
 		currStats         = make(map[string]iohelp.ReadStats)
-		tableFiles        = make(map[string]*nbs.TableFile)
+		tableFiles        = make(map[string]*chunks.TableFile)
 	)
 
 	p := cli.NewEphemeralPrinter()
@@ -110,7 +109,7 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 			for _, tf := range tblFEvt.TableFiles {
 				c := tf
 				tableFiles[c.FileID()] = &c
-				chunks += int64(tf.NumChunks())
+				chunksC += int64(tf.NumChunks())
 			}
 		case pull.DownloadStart:
 			for _, tf := range tblFEvt.TableFiles {
@@ -135,7 +134,7 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 		}
 
 		p.Printf("%s of %s chunks complete. %s chunks being downloaded currently.\n",
-			strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunks), strhelp.CommaIfy(chunksDownloading))
+			strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunksC), strhelp.CommaIfy(chunksDownloading))
 		for _, fileId := range sortedKeys(currStats) {
 			s := currStats[fileId]
 			bps := float64(s.Read) / s.Elapsed.Seconds()
@@ -265,8 +264,8 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	return nil
 }
 
-// Inits an empty, newly cloned repo. This would be unnecessary if we properly initialized the storage for a repository
-// when we created it on dolthub. If we do that, this code can be removed.
+// InitEmptyClonedRepo inits an empty, newly cloned repo. This would be unnecessary if we properly initialized the
+// storage for a repository when we created it on dolthub. If we do that, this code can be removed.
 func InitEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 	name := dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
 	email := dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
@@ -280,7 +279,7 @@ func InitEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 
 	err := dEnv.InitDBWithTime(ctx, types.Format_Default, name, email, initBranch, datas.CommitNowFunc())
 	if err != nil {
-		return ErrFailedToInitRepo
+		return fmt.Errorf("failed to init repo: %w", err)
 	}
 
 	return nil

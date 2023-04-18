@@ -58,7 +58,7 @@ func (v GeomColl) Equals(other Value) bool {
 	return true
 }
 
-func (v GeomColl) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (v GeomColl) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	// Compare types
 	v2, ok := other.(GeomColl)
 	if !ok {
@@ -80,7 +80,7 @@ func (v GeomColl) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	// Compare each polygon until there is one that is less
 	for i := 0; i < n; i++ {
 		if !v.Geometries[i].Equals(v2.Geometries[i]) {
-			return v.Geometries[i].Less(nbf, v2.Geometries[i])
+			return v.Geometries[i].Less(ctx, nbf, v2.Geometries[i])
 		}
 	}
 	// Determine based off length

@@ -18,6 +18,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
@@ -45,7 +46,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ create table t(pk int primary key);",
-				Expected: []sql.Row{{sql.OkResult{}}},
+				Expected: []sql.Row{{types.OkResult{}}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from t;",
@@ -62,7 +63,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ insert into t values (2, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:       "/* client b */ insert into t values (2, 2)",
@@ -87,11 +88,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ insert into t values (2, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into t values (2, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -128,11 +129,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ insert into t values (2, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into t values (2, 3)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -169,7 +170,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "/* client a */ update t set y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -179,7 +180,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update t set y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(0),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -214,7 +215,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client a */ update t set y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -224,7 +225,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update t set y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -267,7 +268,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client a */ update t set y = 3",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(2),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -277,7 +278,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update t set y = 4",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(2),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -328,7 +329,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client a */ update t set y = 3 where x = 1",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -338,7 +339,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update t set y = 4 where x = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -381,7 +382,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client a */ update t set y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -391,7 +392,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update t set z = 3",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(2),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -426,11 +427,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ delete from t where y = 2",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ delete from t where y = 2",
-				Expected: []sql.Row{{sql.NewOkResult(0)}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
@@ -459,11 +460,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ delete from t where y = 2",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ delete from t where y = 2",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -500,11 +501,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ delete from t where y = 2",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ delete from t where y = 3",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -541,7 +542,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client a */ update t set y = 3 where y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -551,7 +552,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ delete from t where y = 2",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -592,15 +593,15 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ delete from t where y = 1",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ delete from t",
-				Expected: []sql.Row{{sql.NewOkResult(2)}},
+				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "/* client b */ insert into t values (1,1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -641,7 +642,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client a */ update t set y = 3 where y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -651,11 +652,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ delete from t where y = 1",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query: "/* client c */ update t set z = 4 where y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -714,7 +715,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client a */ update test set y = 3 where y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -724,7 +725,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update test set y = 5 where y = 2",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -763,7 +764,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
+			"CALL DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -784,11 +785,11 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -814,7 +815,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
+			"CALL DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -835,11 +836,11 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -865,7 +866,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
+			"CALL DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -886,11 +887,11 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -916,7 +917,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
+			"CALL DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -937,7 +938,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
@@ -949,7 +950,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
@@ -975,7 +976,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
 				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: 1,
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -985,7 +986,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ delete from dolt_conflicts_test",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ commit",
@@ -1007,7 +1008,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
+			"CALL DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1028,7 +1029,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
@@ -1040,7 +1041,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
@@ -1064,7 +1065,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
 				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
-				Expected: []sql.Row{{sql.OkResult{
+				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: 1,
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -1074,7 +1075,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ delete from dolt_conflicts_test",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ commit",
@@ -1096,7 +1097,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
+			"CALL DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1117,7 +1118,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
@@ -1129,7 +1130,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
@@ -1149,7 +1150,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ insert into test values (2, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:          "/* client b */ commit",
@@ -1201,11 +1202,11 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			// They are needed to trigger a three-way transaction merge
 			{
 				Query:    "/* client a */ INSERT into t VALUES (2, 2);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT into t VALUES (3, 3);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ SET dolt_allow_commit_conflicts = on;",
@@ -1222,7 +1223,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ INSERT into t VALUES (3, 3);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query: "/* client b */ COMMIT;",
@@ -1250,19 +1251,19 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ UPDATE t SET col1 = -100 where pk = 1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query:    "/* client b */ UPDATE t SET col1 = 100 where pk = 1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query:    "/* client a */ INSERT into KEYLESS VALUES (1);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT into KEYLESS VALUES (1), (1);",
-				Expected: []sql.Row{{sql.NewOkResult(2)}},
+				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
@@ -1305,19 +1306,19 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ UPDATE t SET col1 = -100 where pk = 1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query:    "/* client b */ UPDATE t SET col1 = 100 where pk = 1;",
-				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query:    "/* client a */ INSERT into KEYLESS VALUES (1);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT into KEYLESS VALUES (1), (1);",
-				Expected: []sql.Row{{sql.NewOkResult(2)}},
+				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "/* client b */ COMMIT;",
@@ -1343,21 +1344,21 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 	},
 }
 
-var DoltSqlFuncTransactionTests = []queries.TransactionTest{
+var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 	{
 		Name: "committed conflicts are seen by other sessions",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (1, 1);",
 			"UPDATE test SET val=1000 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
-			"SELECT DOLT_CHECKOUT('main');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"CALL DOLT_CHECKOUT('main');",
 			"UPDATE test SET val=1001 WHERE pk=0;",
-			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
+			"CALL DOLT_COMMIT('-a', '-m', 'update a value');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1369,8 +1370,8 @@ var DoltSqlFuncTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ SELECT DOLT_MERGE('feature-branch')",
-				Expected: []sql.Row{{1}},
+				Query:    "/* client a */ CALL DOLT_MERGE('feature-branch')",
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",
@@ -1401,8 +1402,8 @@ var DoltSqlFuncTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ SELECT DOLT_MERGE('--abort')",
-				Expected: []sql.Row{{0}},
+				Query:    "/* client a */ CALL DOLT_MERGE('--abort')",
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -1417,7 +1418,7 @@ var DoltSqlFuncTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{{}},
 			},
 			{
-				Query:          "/* client a */ SELECT DOLT_MERGE('feature-branch')",
+				Query:          "/* client a */ CALL DOLT_MERGE('feature-branch')",
 				ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
 			},
 			{ // client rolled back on merge with conflicts
@@ -1431,6 +1432,522 @@ var DoltSqlFuncTransactionTests = []queries.TransactionTest{
 			{
 				Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
 				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "dolt_commit with one table, no merge conflict, no unstaged changes",
+		SetUpScript: []string{
+			"create table users (id int primary key, name varchar(32))",
+			"insert into users values (1, 'tim'), (2, 'jim')",
+			"call dolt_commit('-A', '-m', 'initial commit')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ update users set name = 'tim2' where name = 'tim'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update users set name = 'jim2' where name = 'jim'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ call dolt_commit('-A', '-m', 'update tim')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-A', '-m', 'update jim')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select count(*) from dolt_status", // clean working set
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ select count(*) from dolt_status", // clean working set
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ select * from users order by id",
+				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+			},
+			{
+				Query:    "/* client b */ select * from users order by id",
+				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+			},
+		},
+	},
+	{
+		Name: "mix of dolt_commit and normal commit",
+		SetUpScript: []string{
+			"create table users (id int primary key, name varchar(32))",
+			"insert into users values (1, 'tim'), (2, 'jim')",
+			"call dolt_commit('-A', '-m', 'initial commit')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ update users set name = 'tim2' where name = 'tim'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update users set name = 'jim2' where name = 'jim'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ commit",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-A', '-m', 'update jim')",
+				SkipResultsCheck: true,
+			},
+			{
+				// dirty working set: client a's changes were not committed to head
+				Query:    "/* client a */ select * from dolt_status",
+				Expected: []sql.Row{{"users", false, "modified"}},
+			},
+			{
+				// dirty working set: client a's changes were not committed to head, but are visible to client b
+				Query:    "/* client b */ select * from dolt_status",
+				Expected: []sql.Row{{"users", false, "modified"}},
+			},
+			{
+				Query:    "/* client a */ select * from users order by id",
+				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+			},
+			{
+				Query:    "/* client b */ select * from users order by id",
+				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+			},
+			{
+				// changes from client a are in the working set, but not in HEAD
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
+				Expected: []sql.Row{
+					{1, 1, "tim", "tim2"},
+				},
+			},
+			{
+				Query: "/* client b */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
+				Expected: []sql.Row{
+					{1, 1, "tim", "tim2"},
+				},
+			},
+		},
+	},
+	{
+		Name: "staged change in working set",
+		SetUpScript: []string{
+			"create table users (id int primary key, name varchar(32))",
+			"insert into users values (1, 'tim'), (2, 'jim')",
+			"call dolt_commit('-A', '-m', 'initial commit')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ update users set name = 'tim2' where name = 'tim'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update users set name = 'jim2' where name = 'jim'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ call dolt_add('users')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ call dolt_add('users')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ commit",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ commit",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select * from users order by id",
+				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+			},
+			{
+				Query:    "/* client b */ select * from users order by id",
+				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+			},
+			{
+				// dirty working set: modifications are staged
+				Query: "/* client a */ select * from dolt_status",
+				Expected: []sql.Row{
+					{"users", true, "modified"},
+				},
+			},
+			{
+				// dirty working set: modifications are staged
+				Query: "/* client b */ select * from dolt_status",
+				Expected: []sql.Row{
+					{"users", true, "modified"},
+				},
+			},
+			{
+				// staged changes include changes from both A and B
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
+				Expected: []sql.Row{
+					{1, 1, "tim", "tim2"},
+					{2, 2, "jim", "jim2"},
+				},
+			},
+			{
+				// staged changes include changes from both A and B
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
+				Expected: []sql.Row{
+					{1, 1, "tim", "tim2"},
+					{2, 2, "jim", "jim2"},
+				},
+			},
+		},
+	},
+	{
+		Name: "staged and unstaged changes in working set",
+		SetUpScript: []string{
+			"create table users (id int primary key, name varchar(32))",
+			"insert into users values (1, 'tim'), (2, 'jim')",
+			"call dolt_commit('-A', '-m', 'initial commit')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ update users set name = 'tim2' where name = 'tim'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update users set name = 'jim2' where name = 'jim'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ call dolt_add('users')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ call dolt_add('users')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ update users set name = 'tim3' where name = 'tim2'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update users set name = 'jim3' where name = 'jim2'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ commit",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ commit",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select * from users order by id",
+				Expected: []sql.Row{{1, "tim3"}, {2, "jim3"}},
+			},
+			{
+				Query:    "/* client b */ select * from users order by id",
+				Expected: []sql.Row{{1, "tim3"}, {2, "jim3"}},
+			},
+			{
+				// dirty working set: modifications are staged and unstaged
+				Query: "/* client a */ select * from dolt_status",
+				Expected: []sql.Row{
+					{"users", true, "modified"},
+					{"users", false, "modified"},
+				},
+			},
+			{
+				// dirty working set: modifications are staged and unstaged
+				Query: "/* client b */ select * from dolt_status",
+				Expected: []sql.Row{
+					{"users", true, "modified"},
+					{"users", false, "modified"},
+				},
+			},
+			{
+				// staged changes include changes from both A and B at staged revision of data
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
+				Expected: []sql.Row{
+					{1, 1, "tim", "tim2"},
+					{2, 2, "jim", "jim2"},
+				},
+			},
+			{
+				// staged changes include changes from both A and B at staged revision of data
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
+				Expected: []sql.Row{
+					{1, 1, "tim", "tim2"},
+					{2, 2, "jim", "jim2"},
+				},
+			},
+			{
+				// working changes include changes from both A and B at working revision of data
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
+				Expected: []sql.Row{
+					{1, 1, "tim", "tim3"},
+					{2, 2, "jim", "jim3"},
+				},
+			},
+			{
+				// working changes include changes from both A and B at working revision of data
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
+				Expected: []sql.Row{
+					{1, 1, "tim", "tim3"},
+					{2, 2, "jim", "jim3"},
+				},
+			},
+			{
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('STAGED', 'WORKING', 'users') order by from_id, to_id",
+				Expected: []sql.Row{
+					{1, 1, "tim2", "tim3"},
+					{2, 2, "jim2", "jim3"},
+				},
+			},
+			{
+				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('STAGED', 'WORKING', 'users') order by from_id, to_id",
+				Expected: []sql.Row{
+					{1, 1, "tim2", "tim3"},
+					{2, 2, "jim2", "jim3"},
+				},
+			},
+		},
+	},
+	{
+		Name: "staged changes in working set, dolt_add and dolt_commit on top of it",
+		SetUpScript: []string{
+			"create table users (id int primary key, name varchar(32))",
+			"insert into users values (1, 'tim'), (2, 'jim')",
+			"call dolt_commit('-A', '-m', 'initial commit')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ update users set name = 'tim2' where name = 'tim'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update users set name = 'jim2' where name = 'jim'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ call dolt_add('users')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ commit",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ call dolt_add('users')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from users order by id",
+				Expected: []sql.Row{{1, "tim"}, {2, "jim2"}},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-m', 'jim2 commit')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from users order by id",
+				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+			},
+			{
+				Query:    "/* client b */ select * from users as of 'HEAD' order by id",
+				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+			},
+			{
+				Query:    "/* client b */ select * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
+				Expected: []sql.Row{},
+			},
+			{
+				// staged changes include changes from both A and B at staged revision of data
+				Query:    "/* client b */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "call dolt_commit commits staged stuff, merges with working set and branch head",
+		SetUpScript: []string{
+			"create table t1 (id int primary key, val int)",
+			"create table t2 (id int primary key, val int)",
+			"insert into t1 values (1, 1), (2, 2)",
+			"insert into t2 values (1, 1), (2, 2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ set autocommit = off",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ call dolt_add('t1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:            "/* client a */ call dolt_commit('-m', 'initial commit of t1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ set autocommit = off",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t1 values (3, 3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into t1 values (4, 4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into t2 values (3, 3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into t2 values (4, 4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ call dolt_add('t1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ call dolt_add('t1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ insert into t1 values (5, 5)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into t1 values (6, 6)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client c */ insert into t2 values (6, 6)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:            "/* client a */ call dolt_commit('-m', 'add 3 to t1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select * from t2 order by id asc",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {6, 6}},
+			},
+			{
+				Query:    "/* client a */ select * from t1 order by id asc",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {5, 5}},
+			},
+			{
+				Query:    "/* client a */ select * from t1 as of 'HEAD' order by id asc",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-m', 'add 4 to t1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from t2 order by id asc",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {6, 6}},
+			},
+			{
+				Query:    "/* client b */ select * from t1 order by id asc",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}},
+			},
+			{
+				Query:    "/* client b */ select * from t1 as of 'HEAD' order by id asc",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+			},
+			{
+				// working set has t2 new, t1 modified, nothing staged
+				Query: "/* client a */ select * from dolt_status",
+				Expected: []sql.Row{
+					{"t2", false, "new table"},
+					{"t1", false, "modified"},
+				},
+			},
+			{
+				// working set has t2 new, t1 modified, nothing staged
+				Query: "/* client b */ select * from dolt_status",
+				Expected: []sql.Row{
+					{"t2", false, "new table"},
+					{"t1", false, "modified"},
+				},
+			},
+			{
+				// client a has a stale view of t1 from before the commit, so it's missing the row with 4 in its session's working set
+				Query: "/* client a */ select from_id, to_id, from_val, to_val from dolt_diff('HEAD', 'WORKING', 't1') order by from_id",
+				Expected: []sql.Row{
+					{nil, 5, nil, 5},
+					{4, nil, 4, nil},
+				},
+			},
+			{
+				Query: "/* client b */ select from_id, to_id, from_val, to_val from dolt_diff('HEAD', 'WORKING', 't1') order by from_id",
+				Expected: []sql.Row{
+					{nil, 5, nil, 5},
+					{nil, 6, nil, 6},
+				},
 			},
 		},
 	},
@@ -1463,11 +1980,11 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ DELETE FROM parent where pk = 1;",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO child VALUES (1, 1);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
@@ -1541,7 +2058,7 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ DELETE FROM PARENT where v1 = 2;",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
@@ -1575,11 +2092,11 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ DELETE FROM PARENT where v1 = 2;",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO parent VALUES (30, 3);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
@@ -1594,4 +2111,46 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 		},
 	},
+	//	{
+	//		Name:        "Run GC concurrently with other transactions",
+	//		SetUpScript: gcSetup(),
+	//		Assertions: []queries.ScriptTestAssertion{
+	//			{
+	//				Query:    "/* client a */ SELECT count(*) FROM t;",
+	//				Expected: []sql.Row{{250}},
+	//			},
+	//			{
+	//				Query:    "/* client a */ START TRANSACTION",
+	//				Expected: []sql.Row{},
+	//			},
+	//			{
+	//				Query:    "/* client b */ START TRANSACTION",
+	//				Expected: []sql.Row{},
+	//			},
+	//			{
+	//				Query:    "/* client a */ CALL DOLT_GC();",
+	//				Expected: []sql.Row{{1}},
+	//			},
+	//			{
+	//				Query:    "/* client b */ INSERT into t VALUES (300);",
+	//				Expected: []sql.Row{{types.NewOkResult(1)}},
+	//			},
+	//			{
+	//				Query:    "/* client a */ COMMIT;",
+	//				Expected: []sql.Row{},
+	//			},
+	//			{
+	//				Query:    "/* client b */ COMMIT;",
+	//				Expected: []sql.Row{},
+	//			},
+	//			{
+	//				Query:    "/* client a */ SELECT count(*) FROM t;",
+	//				Expected: []sql.Row{{251}},
+	//			},
+	//			{
+	//				Query:    "/* client b */ SELECT count(*) FROM t;",
+	//				Expected: []sql.Row{{251}},
+	//			},
+	//		},
+	//	},
 }

@@ -15,8 +15,12 @@ setup() {
 
 teardown() {
     teardown_common
+    stop_remotesrv
+}
+
+stop_remotesrv() {
     if [ -n "$remotesrv_pid" ]; then
-        kill $remotesrv_pid
+        kill $remotesrv_pid || :
     fi
 }
 
@@ -40,9 +44,13 @@ teardown() {
     run dolt sql -q 'select count(*) from vals'
     [[ "$output" =~ "5" ]] || false
 
+    stop_remotesrv
     cd ../remote
     dolt sql -q 'insert into vals (i) values (6), (7), (8), (9), (10);'
     dolt commit -am 'add some vals'
+
+    remotesrv --http-port 1234 --repo-mode &
+    remotesrv_pid=$!
 
     cd ../repo1
     dolt pull
@@ -68,6 +76,7 @@ teardown() {
     dolt commit -am 'insert some values'
     dolt push origin main:main
 
+    stop_remotesrv
     cd ../remote
     # Have to reset the working set, which was not updated by the push...
     dolt reset --hard

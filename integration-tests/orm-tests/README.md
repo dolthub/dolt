@@ -1,18 +1,20 @@
 ## ORM Client Tests
 
-Different ORMs come with test packages that run against a standard MySQL database. These
-tests run an ORM's test suite against Dolt to continously test MySQL
-capabilities. 
+These tests verify that various ORM libraries that support MySQL are compatible with Dolt. Ideally,
+we use the same test suite that the ORM provides to test their support with MySQL, but in some
+cases we may start with a smaller smoke test to get some quick, initial coverage. 
 
-These tests can be run locally using Docker. From the root directory of this
-repo, run:
+These tests can be run locally using Docker. Before you can build the image, you also need to copy the go folder
+into the integration-tests folder; unfortunately just symlinking doesn't seem to work. From the
+integration-tests directory of the dolt repo, run:
 
 ```bash
-$ docker build -t orm-tests -f ORMDockerfile
+$ cp -r ../go . 
+$ docker build -t orm-tests -f ORMDockerfile . 
 $ docker run orm-tests:latest
 ```
 
-Running the containter should produce output like:
+Running the container should produce output like:
 
 ```bash
 Updating dolt config for tests:
@@ -24,3 +26,8 @@ Running orm-tests:
 1..1
 not ok 1 peewee client test
 ```
+
+### Future ORM Libraries to Test
+- typeorm
+- mikro-orm
+- hibernate

@@ -23,30 +23,43 @@ jobs:
       matrix:
         os: [ ubuntu-22.04, macos-latest ]
         dolt_fmt: [ "__DOLT__", "__LD_1__" ]
+        journal: [ "" ]
+        include:
+          - os: "ubuntu-22.04"
+            dolt_fmt: "__DOLT__"
+            journal: "true"
         exclude:
           - os: "macos-latest"
             dolt_fmt: "__LD_1__"
+            journal: ""
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:
       - name: Conditionally Set ENV VARS for AWS tests
+        env:
+          DOLT_FMT: ${{ matrix.dolt_fmt }}
+          DOLT_ENABLE_CHUNK_JOURNAL: ${{ matrix.journal }}
         run: |
           if [[ $use_credentials == true ]]; then
             echo "AWS_SDK_LOAD_CONFIG=1" >> $GITHUB_ENV
             echo "AWS_REGION=us-west-2" >> $GITHUB_ENV
             echo "DOLT_BATS_AWS_TABLE=dolt-ci-bats-manifests-us-west-2" >> $GITHUB_ENV
             echo "DOLT_BATS_AWS_BUCKET=dolt-ci-bats-chunks-us-west-2" >> $GITHUB_ENV
-            echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests" >> $GITHUB_ENV
+            if [[ "$DOLT_FMT" == "__DOLT__" ]]; then
+                echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests__dolt__" >> $GITHUB_ENV
+            else
+                echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests" >> $GITHUB_ENV
+            fi
           fi
       - name: Configure AWS Credentials
         if: ${{ env.use_credentials == 'true' }}
-        uses: aws-actions/configure-aws-credentials@v1-node16
+        uses: aws-actions/configure-aws-credentials@567d4149d67f15f52b09796bea6573fc32952783
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          role-duration-seconds: 3600
+          role-duration-seconds: 10800 # 3 hours D:
       - name: Setup Go 1.x
         uses: actions/setup-go@v3
         with:
@@ -55,7 +68,7 @@ jobs:
       - name: Setup Python 3.x
         uses: actions/setup-python@v4
         with:
-          python-version: ^3.6
+          python-version: "3.10"
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
@@ -91,9 +104,9 @@ jobs:
       - name: Install Maven
         working-directory: ./.ci_bin
         run: |
-          curl -LO https://dlcdn.apache.org/maven/maven-3/3.8.6/binaries/apache-maven-3.8.6-bin.tar.gz
-          tar -xf apache-maven-3.8.6-bin.tar.gz
-          echo "$(pwd)/apache-maven-3.8.6/bin" >> $GITHUB_PATH
+          curl -LO https://dlcdn.apache.org/maven/maven-3/3.9.1/binaries/apache-maven-3.9.1-bin.tar.gz
+          tar -xf apache-maven-3.9.1-bin.tar.gz
+          echo "$(pwd)/apache-maven-3.9.1/bin" >> $GITHUB_PATH
       - name: Install Hadoop
         working-directory: ./.ci_bin
         run: |
@@ -104,10 +117,11 @@ jobs:
         id: parquet_cli
         working-directory: ./.ci_bin
         run: |
-          git clone https://github.com/apache/parquet-mr.git
-          cd parquet-mr/parquet-cli
+          curl -OL https://github.com/apache/parquet-mr/archive/refs/tags/apache-parquet-1.12.3.tar.gz
+          tar zxvf apache-parquet-1.12.3.tar.gz
+          cd parquet-mr-apache-parquet-1.12.3/parquet-cli
           mvn clean install -DskipTests
-          runtime_jar="$(pwd)"/target/parquet-cli-1.13.0-SNAPSHOT-runtime.jar
+          runtime_jar="$(pwd)"/target/parquet-cli-1.12.3-runtime.jar
           echo "runtime_jar=$runtime_jar" >> $GITHUB_OUTPUT
       - name: Check expect
         run: expect -v

@@ -61,6 +61,34 @@ var nonPkCols = []Column{
 
 var allCols = append(append([]Column(nil), pkCols...), nonPkCols...)
 
+func TestNewSchema(t *testing.T) {
+	allColColl := NewColCollection(allCols...)
+	pkColColl := NewColCollection()
+
+	indexCol := NewIndexCollection(allColColl, pkColColl)
+
+	checkCol := NewCheckCollection()
+	_, err := checkCol.AddCheck("chk_age", "age > 0", true)
+	require.NoError(t, err)
+
+	// Nil ordinals
+	sch, err := NewSchema(allColColl, nil, Collation_Default, indexCol, checkCol)
+	require.NoError(t, err)
+	require.Equal(t, []int{0, 1}, sch.GetPkOrdinals())
+	require.Equal(t, Collation_Default, sch.GetCollation())
+	require.True(t, sch.Indexes().Equals(indexCol))
+	require.True(t, sch.Checks().Equals(checkCol))
+
+	// Set ordinals explicitly
+	indexCol.(*indexCollectionImpl).pks = []uint64{fnColTag, lnColTag}
+	sch, err = NewSchema(allColColl, []int{1, 0}, Collation_Default, indexCol, checkCol)
+	require.NoError(t, err)
+	require.Equal(t, []int{1, 0}, sch.GetPkOrdinals())
+	require.Equal(t, Collation_Default, sch.GetCollation())
+	require.True(t, sch.Indexes().Equals(indexCol))
+	require.True(t, sch.Checks().Equals(checkCol))
+}
+
 func TestSchema(t *testing.T) {
 	colColl := NewColCollection(allCols...)
 	schFromCols, err := SchemaFromCols(colColl)

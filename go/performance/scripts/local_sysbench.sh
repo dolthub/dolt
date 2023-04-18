@@ -13,10 +13,6 @@ while test $# -gt 0
 do
     case "$1" in
 
-        # benchmark with new NomsBinFmt
-        --new-nbf) export DOLT_DEFAULT_BIN_FORMAT="__DOLT__"
-            ;;
-
         --new-new) export DOLT_DEFAULT_BIN_FORMAT="__DOLT__" &&
             export ENABLE_ROW_ITER_2=true
             ;;
@@ -33,6 +29,9 @@ do
             ;;
 
         --row2) export ENABLE_ROW_ITER_2=true
+            ;;
+
+        --journal) export DOLT_ENABLE_CHUNK_JOURNAL=true
             ;;
 
         # specify sysbench benchmark
@@ -123,11 +122,15 @@ sysbench \
   --db-ps-mode=disable \
   "$SYSBENCH_TEST" run
 
+unset DOLT_ENABLE_CHUNK_JOURNAL
 unset DOLT_DEFAULT_BIN_FORMAT
 unset ENABLE_ROW_ITER_2
 unset SINGLE_THREAD_FEATURE_FLAG
 unset GOMAXPROCS
 
 echo "benchmark $SYSBENCH_TEST complete at $WORKING_DIR"
-echo "DOLT_FORMAT_FEATURE_FLAG='$DOLT_FORMAT_FEATURE_FLAG'"
+if [ "$PPROF" -eq 1 ]; then
+  # parse run.log to output the profile location
+  head -n1 "$WORKING_DIR/run.log" | cut -d ":" -f 4
+fi
 echo ""

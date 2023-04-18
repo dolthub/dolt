@@ -137,7 +137,7 @@ SQL
 }
 
 @test "revert: SQL HEAD" {
-    dolt sql -q "SELECT DOLT_REVERT('HEAD')"
+    dolt sql -q "call dolt_revert('HEAD')"
     run dolt sql -q "SELECT * FROM test" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1" ]] || false
@@ -167,7 +167,7 @@ SQL
 }
 
 @test "revert: SQL HEAD~1" {
-    dolt sql -q "SELECT DOLT_REVERT('HEAD~1')"
+    dolt sql -q "call dolt_revert('HEAD~1')"
     run dolt sql -q "SELECT * FROM test" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1" ]] || false
@@ -187,7 +187,7 @@ SQL
 }
 
 @test "revert: SQL HEAD & HEAD~1" {
-    dolt sql -q "SELECT DOLT_REVERT('HEAD', 'HEAD~1')"
+    dolt sql -q "call dolt_revert('HEAD', 'HEAD~1')"
     run dolt sql -q "SELECT * FROM test" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1" ]] || false
@@ -206,7 +206,7 @@ SQL
 
 @test "revert: SQL has changes in the working set" {
     dolt sql -q "INSERT INTO test VALUES (4, 4)"
-    run dolt sql -q "SELECT DOLT_REVERT('HEAD')"
+    run dolt sql -q "call dolt_revert('HEAD')"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "changes" ]] || false
 }
@@ -225,7 +225,7 @@ SQL
     dolt sql -q "REPLACE INTO test VALUES (4, 5)"
     dolt add -A
     dolt commit -m "Updated 4"
-    run dolt sql -q "SELECT DOLT_REVERT('HEAD~1')"
+    run dolt sql -q "call dolt_revert('HEAD~1')"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "conflict" ]] || false
 }
@@ -257,7 +257,7 @@ SQL
     dolt sql -q "DELETE FROM parent WHERE pk = 20"
     dolt add -A
     dolt commit -m "MC3"
-    run dolt sql -q "SELECT DOLT_REVERT('HEAD~1')"
+    run dolt sql -q "call dolt_revert('HEAD~1')"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "constraint violation" ]] || false
 }
@@ -283,7 +283,7 @@ SQL
 }
 
 @test "revert: SQL too far back" {
-    run dolt sql -q "SELECT DOLT_REVERT('HEAD~10')"
+    run dolt sql -q "call dolt_revert('HEAD~10')"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "ancestor" ]] || false
 }
@@ -295,7 +295,7 @@ SQL
 }
 
 @test "revert: SQL revert init commit" {
-    run dolt sql -q "SELECT DOLT_REVERT('HEAD~4')"
+    run dolt sql -q "call dolt_revert('HEAD~4')"
     [ "$status" -ne "0" ]
     [[ "$output" =~ "cannot revert commit with no parents" ]] || false
 }
@@ -307,7 +307,7 @@ SQL
 }
 
 @test "revert: SQL invalid hash" {
-    run dolt sql -q "SELECT DOLT_REVERT('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')"
+    run dolt sql -q "call dolt_revert('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "target commit not found" ]] || false
 }
@@ -319,7 +319,7 @@ SQL
 }
 
 @test "revert: SQL HEAD with author" {
-    dolt sql -q "SELECT DOLT_REVERT('HEAD', '--author', 'john doe <johndoe@gmail.com>')"
+    dolt sql -q "call dolt_revert('HEAD', '--author', 'john doe <johndoe@gmail.com>')"
     run dolt sql -q "SELECT * FROM test" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1" ]] || false
@@ -345,7 +345,7 @@ SQL
 }
 
 @test "revert: SQL HEAD & HEAD~1 with author" {
-    dolt sql -q "SELECT DOLT_REVERT('HEAD', 'HEAD~1', '--author', 'john doe <johndoe@gmail.com>')"
+    dolt sql -q "call dolt_revert('HEAD', 'HEAD~1', '--author', 'john doe <johndoe@gmail.com>')"
     run dolt sql -q "SELECT * FROM test" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1" ]] || false

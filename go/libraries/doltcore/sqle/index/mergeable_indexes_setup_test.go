@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -32,21 +31,18 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *env.DoltEnv, *doltdb.RootValue, dsqle.Database, []*indexTuple) {
+func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *sql.Context, []*indexTuple) {
 	dEnv := dtestutils.CreateTestEnv()
-	root, err := dEnv.WorkingRoot(context.Background())
-	require.NoError(t, err)
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
 	db, err := dsqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := dsqle.NewTestEngine(t, dEnv, context.Background(), db, root)
+	engine, sqlCtx, err := dsqle.NewTestEngine(dEnv, context.Background(), db)
 	require.NoError(t, err)
 
 	_, iter, err := engine.Query(sqlCtx, fmt.Sprintf(`CREATE TABLE %s (
@@ -104,21 +100,11 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 	b := env.GetDefaultInitBranch(dEnv.Config)
 	pro, err := dsqle.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS)
 	if err != nil {
-		return nil, nil, nil, dsqle.Database{}, nil
+		return nil, nil, nil
 	}
 
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 	engine = sqle.NewDefault(pro)
-
-	// Get an updated root to use for the rest of the test
-	ctx := sql.NewEmptyContext()
-	controller := branch_control.CreateDefaultController()
-	sess, err := dsess.NewDoltSession(ctx, ctx.Session.(*sql.BaseSession), pro, config.NewEmptyMapConfig(),
-		controller, getDbState(t, db, dEnv))
-	require.NoError(t, err)
-	roots, ok := sess.GetRoots(ctx, db.Name())
-	require.True(t, ok)
-	err = sess.SetRoot(sqlCtx, db.Name(), roots.Working)
 
 	it := []*indexTuple{
 		idxv1ToTuple,
@@ -129,7 +115,7 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 		},
 	}
 
-	return engine, dEnv, roots.Working, db, it
+	return engine, sqlCtx, it
 }
 
 // indexTuple converts integers into the appropriate tuple for comparison against ranges

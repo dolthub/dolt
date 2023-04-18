@@ -196,6 +196,22 @@ SQL
     [[ "$output" =~ "An error occurred while moving data" ]] || false
 }
 
+@test "import-replace-tables: import table with unexpected JSON format" {
+    dolt sql <<SQL
+CREATE TABLE employees (
+  id INTEGER,
+  first_name VARCHAR(20) NOT NULL,
+  PRIMARY KEY (id)
+);
+SQL
+
+echo "[{\"id\": 1,\"first_name\":\"Wednesday\"},{\"id\": 2,\"first_name\":\"Monday\"}]" > unexpected.json
+    run dolt table import -r employees unexpected.json
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "An error occurred while moving data" ]] || false
+    [[ "$output" =~ "unexpected JSON format received, expected format: { \"rows\": [ json_row_objects... ] }" ]] || false
+}
+
 @test "import-replace-tables: replace table using xlsx file" {
     dolt sql <<SQL
 CREATE TABLE employees (
@@ -308,7 +324,7 @@ SQL
     dolt add .
     dolt commit --allow-empty -m "update table from parquet file"
 
-    run dolt diff --summary main new_branch
+    run dolt diff --stat main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }

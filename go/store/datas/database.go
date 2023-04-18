@@ -28,7 +28,6 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -62,6 +61,12 @@ type Database interface {
 	GetDataset(ctx context.Context, datasetID string) (Dataset, error)
 
 	GetDatasetsByRootHash(ctx context.Context, rootHash hash.Hash) (DatasetsMap, error)
+
+	// BuildNewCommit creates a new Commit struct for the provided dataset,
+	// but does not modify the dataset. This allows the commit to be inspected
+	// if necessary before any update is performed.
+	BuildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error)
+
 	// Commit updates the Commit that ds.ID() in this database points at. All
 	// Values that have been written to this Database are guaranteed to be
 	// persistent after Commit() returns successfully.
@@ -76,12 +81,22 @@ type Database interface {
 	// an 'ErrMergeNeeded' error.
 	Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error)
 
+	// WriteCommit has the same behavior as Commit but accepts an already-constructed Commit
+	// instead of constructing one from a Value and CommitOptions
+	WriteCommit(ctx context.Context, ds Dataset, commit *Commit) (Dataset, error)
+
 	// Tag stores an immutable reference to a Commit. It takes a Hash to
 	// the Commit and a Dataset whose head must be nil (ie a newly created
 	// Dataset).  The new Tag struct is constructed pointing at
 	// |commitAddr| and metadata about the tag contained in the struct
 	// `opts.Meta`.
 	Tag(ctx context.Context, ds Dataset, commitAddr hash.Hash, opts TagOptions) (Dataset, error)
+
+	// UpdateStashList updates the stash list dataset only with given address hash to the updated stash list.
+	// The new/updated stash list address should be obtained before calling this function depending on
+	// whether add or remove a stash actions have been performed. This function does not perform any actions
+	// on the stash list itself.
+	UpdateStashList(ctx context.Context, ds Dataset, stashListAddr hash.Hash) (Dataset, error)
 
 	// UpdateWorkingSet updates the dataset given, setting its value to a new
 	// working set value object with the ref and meta given. If the dataset given
@@ -160,14 +175,14 @@ type GarbageCollector interface {
 
 	// GC traverses the database starting at the Root and removes
 	// all unreferenced data from persistent storage.
-	GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet) error
+	GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet, safepointF func() error) error
 }
 
 // CanUsePuller returns true if a datas.Puller can be used to pull data from one Database into another.  Not all
 // Databases support this yet.
 func CanUsePuller(db Database) bool {
 	cs := db.chunkStore()
-	if tfs, ok := cs.(nbs.TableFileStore); ok {
+	if tfs, ok := cs.(chunks.TableFileStore); ok {
 		ops := tfs.SupportedOperations()
 		return ops.CanRead && ops.CanWrite
 	}

@@ -187,6 +187,18 @@ func (hs HashSet) InsertAll(other HashSet) {
 	}
 }
 
+func (hs HashSet) Equals(other HashSet) bool {
+	if hs.Size() != other.Size() {
+		return false
+	}
+	for h := range hs {
+		if !other.Has(h) {
+			return false
+		}
+	}
+	return true
+}
+
 func (hs HashSet) Empty() {
 	for h := range hs {
 		delete(hs, h)

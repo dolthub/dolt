@@ -377,12 +377,12 @@ var systemTableUpdateTests = []UpdateTest{
 	},
 	{
 		Name: "update dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemasTableSchema(),
-			`INSERT INTO dolt_schemas VALUES ('view', 'name', 'select 2+2 from dual', 1, NULL)`),
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, schemaTableSchema,
+			`INSERT INTO dolt_schemas VALUES ('view', 'name', 'create view name as select 2+2 from dual', NULL)`),
 		UpdateQuery:    "update dolt_schemas set type = 'not a view'",
 		SelectQuery:    "select * from dolt_schemas",
-		ExpectedRows:   []sql.Row{{"not a view", "name", "select 2+2 from dual", int64(1), nil}},
-		ExpectedSchema: CompressSchema(SchemasTableSchema()),
+		ExpectedRows:   []sql.Row{{"not a view", "name", "create view name as select 2+2 from dual", nil}},
+		ExpectedSchema: CompressSchema(schemaTableSchema),
 	},
 }
 
@@ -397,12 +397,14 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 		t.Skip("Skipping tests until " + singleUpdateQueryTest)
 	}
 
-	dEnv := CreateTestDatabase(t)
+	dEnv, err := CreateTestDatabase()
+	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
+
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	var err error
 	root, _ := dEnv.WorkingRoot(context.Background())
 	root, err = executeModify(t, context.Background(), dEnv, root, test.UpdateQuery)
 	if len(test.ExpectedErr) > 0 {

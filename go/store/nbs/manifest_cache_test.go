@@ -128,4 +128,15 @@ func TestSizeCache(t *testing.T) {
 		assert.False(t, ok)
 	})
 
+	t.Run("Delete", func(t *testing.T) {
+		c := newManifestCache(1 * defSize)
+		err := c.Put("db", manifestContents{}, time.Now())
+		require.NoError(t, err)
+		_, _, ok := c.Get("db")
+		assert.True(t, ok)
+		c.Delete("db")
+		_, _, ok = c.Get("db")
+		assert.False(t, ok)
+	})
+
 }

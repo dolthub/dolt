@@ -20,6 +20,7 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -27,12 +28,12 @@ import (
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type multilinestringType struct {
-	sqlMultiLineStringType sql.MultiLineStringType
+	sqlMultiLineStringType gmstypes.MultiLineStringType
 }
 
 var _ TypeInfo = (*multilinestringType)(nil)
 
-var MultiLineStringType = &multilinestringType{sql.MultiLineStringType{}}
+var MultiLineStringType = &multilinestringType{gmstypes.MultiLineStringType{}}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *multilinestringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
@@ -73,12 +74,12 @@ func (ti *multilinestringType) ConvertValueToNomsValue(ctx context.Context, vrw 
 	}
 
 	// Convert to sql.MultiLineString
-	mline, err := ti.sqlMultiLineStringType.Convert(v)
+	mline, _, err := ti.sqlMultiLineStringType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
 
-	return types.ConvertSQLMultiLineStringToTypesMultiLineString(mline.(sql.MultiLineString)), nil
+	return types.ConvertSQLMultiLineStringToTypesMultiLineString(mline.(gmstypes.MultiLineString)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -135,7 +136,7 @@ func (ti *multilinestringType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *multilinestringType) Promote() TypeInfo {
-	return &multilinestringType{ti.sqlMultiLineStringType.Promote().(sql.MultiLineStringType)}
+	return &multilinestringType{ti.sqlMultiLineStringType.Promote().(gmstypes.MultiLineStringType)}
 }
 
 // String implements TypeInfo interface.
@@ -227,5 +228,5 @@ func CreateMultiLineStringTypeFromParams(params map[string]string) (TypeInfo, er
 		}
 	}
 
-	return &multilinestringType{sqlMultiLineStringType: sql.MultiLineStringType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
+	return &multilinestringType{sqlMultiLineStringType: gmstypes.MultiLineStringType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

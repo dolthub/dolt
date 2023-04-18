@@ -1,4 +1,4 @@
-<img height="100" src="./docs/Dolt-Logo@3x.svg"/>
+<img height="100" src="./images/Dolt-Logo@3x.svg"/>
 
 # Dolt is Git for Data!
 
@@ -20,11 +20,20 @@ your own version of DoltHub, we have [DoltLab](https://www.doltlab.com). If you 
 ask questions, or [check out our roadmap](https://docs.dolthub.com/other/roadmap) 
 to see what we're building next.
 
+# Video Introduction
+
+[![Dolt Explainer Video](https://img.youtube.com/vi/3F6LwZt6e-A/maxresdefault.jpg)](https://www.youtube.com/watch?v=3F6LwZt6e-A)
+
 ## What's it for?
 
 Lots of things! Dolt is a generally useful tool with countless
 applications. But if you want some ideas, [here's how people are using
 it so far](https://www.dolthub.com/blog/2022-07-11-dolt-case-studies/).
+
+Dolt can be [set up as a replica of your existing MySQL or MariaDB](https://www.dolthub.com/blog/2023-02-17-binlog-replication-preview/)
+database using standard MySQL binlog replication. Every write becomes
+a Dolt commit. This is a great way to get the version control benefits 
+of Dolt and keep an existing MySQL or MariaDB database. 
 
 # Dolt CLI
 
@@ -136,6 +145,14 @@ You can install `dolt` using [Chocolatey](https://chocolatey.org/):
 choco install dolt
 ```
 
+#### Docker
+
+There are following official Docker images for Dolt:
+
+* [`dolthub/dolt`](https://hub.docker.com/r/dolthub/dolt) for running Dolt
+as CLI tool.
+* [`dolthub/dolt-sql-server`](https://hub.docker.com/r/dolthub/dolt-sql-server) for running Dolt in server mode.
+
 ## From Source
 
 Make sure you have Go installed, and that `go` is in your path.
@@ -179,6 +196,8 @@ Dolt needs a place to store your databases. I'm going to put my databases in `~/
 
 Any databases you create will be stored in this directory. So, for this example, a directory named `getting_started` will be created here once you run `create database getting_started`. Navigating to `~/dolt/getting_started` will allow you to access this database using the Dolt command line.
 
+NOTE: For this example, the `getting_started` directory will be created after you run `create database getting_started;` in a SQL shell in the [Create a schema section](#create-a-schema). Don't do anything except make the directory and navigate to it just yet.
+
 ## Start a MySQL-compatible database server
 
 Dolt ships with a MySQL compatible database server built in. To start it you use the command `dolt sql-server`. Running this command starts the server on port 3306. 
@@ -195,7 +214,7 @@ Your terminal will just hang there. This means the server is running. Any errors
 In the new terminal, we will now connect to the running database server using a client. Dolt also ships with a MySQL compatible client. 
 
 ```bash
-% dolt sql-client
+% dolt sql-client -u root
 # Welcome to the Dolt MySQL client.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.
@@ -511,11 +530,11 @@ Hate the command line? Let's use [Tableplus](https://tableplus.com/) to make som
 
 Now, to connect you must select MySQL as the connection type. Then enter a name for your connection, `getting_started` as your database, and `root` as your user.
 
-![Tableplus Connection](./docs/getting-started-tp-connect.png)
+![Tableplus Connection](./images/getting-started-tp-connect.png)
 
 Click connect and you'll be presented with a familiar database workbench GUI.
 
-![Tableplus](./docs/getting-started-tp.png)
+![Tableplus](./images/getting-started-tp.png)
 
 ## Make changes on a branch
 
@@ -534,7 +553,7 @@ call dolt_commit('-am', 'Modifications on a branch');
 
 Here's the result in Tableplus.
 
-![New Updates](./docs/getting-started-new-updates.png)
+![New Updates](./images/getting-started-new-updates.png)
 
 Back in my terminal, I cannot see the table modifications made in Tableplus because they happened on a different branch than the one I have checked out in my session. 
 

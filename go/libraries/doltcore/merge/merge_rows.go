@@ -18,7 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -104,6 +105,7 @@ func NewMerger(
 }
 
 // MergeTable merges schema and table data for the table tblName.
+// TODO: this code will loop infinitely when merging certain schema changes
 func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*doltdb.Table, *MergeStats, error) {
 	tm, err := rm.makeTableMerger(ctx, tblName)
 	if err != nil {
@@ -120,6 +122,7 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 		return nil, nil, errors.New(fmt.Sprintf("schema changes not supported: %s table schema does not match in current HEAD and cherry-pick commit.", tblName))
 	}
 
+	// Calculate a merge of the schemas, but don't apply it yet
 	mergeSch, schConflicts, err := SchemaMerge(ctx, tm.vrw.Format(), tm.leftSch, tm.rightSch, tm.ancSch, tblName)
 	if err != nil {
 		return nil, nil, err
@@ -129,97 +132,14 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 		return nil, nil, fmt.Errorf("%w.\n%s", ErrSchemaConflict, schConflicts.AsError().Error())
 	}
 
-	mergeTbl, err := tm.leftTbl.UpdateSchema(ctx, mergeSch)
-	if err != nil {
-		return nil, nil, err
+	if types.IsFormat_DOLT(tm.vrw.Format()) {
+		return mergeProllyTable(ctx, tm, mergeSch)
+	} else {
+		return mergeNomsTable(ctx, tm, mergeSch, rm.vrw, opts)
 	}
-
-	if types.IsFormat_DOLT(mergeTbl.Format()) {
-		mergeTbl, err = mergeTableArtifacts(ctx, tm, mergeTbl)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		var stats *MergeStats
-		mergeTbl, stats, err = mergeTableData(ctx, tm, mergeSch, mergeTbl)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		n, err := mergeTbl.NumRowsInConflict(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		stats.Conflicts = int(n)
-
-		mergeTbl, err = mergeAutoIncrementValues(ctx, tm.leftTbl, tm.rightTbl, mergeTbl)
-		if err != nil {
-			return nil, nil, err
-		}
-		return mergeTbl, stats, nil
-	}
-
-	// If any indexes were added during the merge, then we need to generate their row data to add to our updated table.
-	addedIndexesSet := make(map[string]string)
-	for _, index := range mergeSch.Indexes().AllIndexes() {
-		addedIndexesSet[strings.ToLower(index.Name())] = index.Name()
-	}
-	for _, index := range tm.leftSch.Indexes().AllIndexes() {
-		delete(addedIndexesSet, strings.ToLower(index.Name()))
-	}
-	for _, addedIndex := range addedIndexesSet {
-		newIndexData, err := editor.RebuildIndex(ctx, mergeTbl, addedIndex, opts)
-		if err != nil {
-			return nil, nil, err
-		}
-		mergeTbl, err = mergeTbl.SetNomsIndexRows(ctx, addedIndex, newIndexData)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	updatedTblEditor, err := editor.NewTableEditor(ctx, mergeTbl, mergeSch, tblName, opts)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rows, err := tm.leftTbl.GetNomsRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	mergeRows, err := tm.rightTbl.GetNomsRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	ancRows, err := tm.ancTbl.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	resultTbl, cons, stats, err := mergeNomsTableData(ctx, rm.vrw, tblName, mergeSch, rows, mergeRows, durable.NomsMapFromIndex(ancRows), updatedTblEditor)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if cons.Len() > 0 {
-		resultTbl, err = setConflicts(ctx, durable.ConflictIndexFromNomsMap(cons, rm.vrw), tm.leftTbl, tm.rightTbl, tm.ancTbl, resultTbl)
-		if err != nil {
-			return nil, nil, err
-		}
-		stats.Conflicts = int(cons.Len())
-	}
-
-	resultTbl, err = mergeAutoIncrementValues(ctx, tm.leftTbl, tm.rightTbl, resultTbl)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return resultTbl, stats, nil
 }
 
-func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (TableMerger, error) {
+func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (*TableMerger, error) {
 	tm := TableMerger{
 		name:        tblName,
 		rightSrc:    rm.rightSrc,
@@ -233,45 +153,45 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (Tabl
 
 	tm.leftTbl, ok, err = rm.left.GetTable(ctx, tblName)
 	if err != nil {
-		return TableMerger{}, err
+		return nil, err
 	}
 	if ok {
 		if tm.leftSch, err = tm.leftTbl.GetSchema(ctx); err != nil {
-			return TableMerger{}, err
+			return nil, err
 		}
 	}
 
 	tm.rightTbl, ok, err = rm.right.GetTable(ctx, tblName)
 	if err != nil {
-		return TableMerger{}, err
+		return nil, err
 	}
 	if ok {
 		if tm.rightSch, err = tm.rightTbl.GetSchema(ctx); err != nil {
-			return TableMerger{}, err
+			return nil, err
 		}
 	}
 
 	tm.ancTbl, ok, err = rm.anc.GetTable(ctx, tblName)
 	if err != nil {
-		return TableMerger{}, err
+		return nil, err
 	}
 	if ok {
 		if tm.ancSch, err = tm.ancTbl.GetSchema(ctx); err != nil {
-			return TableMerger{}, err
+			return nil, err
 		}
 	} else if schema.SchemasAreEqual(tm.leftSch, tm.rightSch) && tm.leftTbl != nil {
 		// If left & right added the same table, fill tm.anc with an empty table
 		tm.ancSch = tm.leftSch
 		tm.ancTbl, err = doltdb.NewEmptyTable(ctx, rm.vrw, rm.ns, tm.ancSch)
 		if err != nil {
-			return TableMerger{}, err
+			return nil, err
 		}
 	}
 
-	return tm, nil
+	return &tm, nil
 }
 
-func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm TableMerger, opts MergeOpts) (*doltdb.Table, *MergeStats, error) {
+func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm *TableMerger, opts MergeOpts) (*doltdb.Table, *MergeStats, error) {
 	rootHash, mergeHash, ancHash, err := tm.tableHashes()
 	if err != nil {
 		return nil, nil, err
@@ -296,7 +216,7 @@ func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm TableMerger, opt
 	if !ancExists {
 		if rightExists && leftExists {
 			if !schema.SchemasAreEqual(tm.leftSch, tm.rightSch) {
-				return nil, nil, ErrSameTblAddedTwice
+				return nil, nil, ErrSameTblAddedTwice.New(tm.name)
 			}
 		} else if leftExists {
 			// fast-forward
@@ -353,6 +273,61 @@ func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm TableMerger, opt
 	return nil, nil, nil
 }
 
+func validateTupleFields(existingSch schema.Schema, targetSch schema.Schema) (bool, error) {
+	existingVD := existingSch.GetValueDescriptor()
+	targetVD := targetSch.GetValueDescriptor()
+
+	_, valMapping, err := schema.MapSchemaBasedOnTagAndName(existingSch, targetSch)
+	if err != nil {
+		return false, err
+	}
+
+	for existingIndex, targetIndex := range valMapping {
+		// If the column was dropped, continue to the next column targetIndex
+		if targetIndex == -1 {
+			continue
+		}
+
+		// If the field types have changed between existing and target, bail.
+		if existingVD.Types[existingIndex].Enc != targetVD.Types[targetIndex].Enc {
+			return false, nil
+		}
+
+		// If a not-null constraint was added, bail.
+		if existingVD.Types[existingIndex].Nullable && !targetVD.Types[targetIndex].Nullable {
+			return false, nil
+		}
+
+		// If the collation was changed, bail.
+		// Different collations will affect the ordering of any secondary indexes using this column.
+		existingStr, ok1 := existingSch.GetNonPKCols().GetByIndex(existingIndex).TypeInfo.ToSqlType().(sql.StringType)
+		targetStr, ok2 := targetSch.GetNonPKCols().GetByIndex(targetIndex).TypeInfo.ToSqlType().(sql.StringType)
+
+		if ok1 && ok2 && !existingStr.Collation().Equals(targetStr.Collation()) {
+			return false, nil
+		}
+	}
+
+	_, valMapping, err = schema.MapSchemaBasedOnTagAndName(targetSch, existingSch)
+	if err != nil {
+		return false, err
+	}
+
+	for i, j := range valMapping {
+		if i == j {
+			continue
+		}
+
+		// If we haven't bailed so far, then these fields were added at the end.
+		// If they are not-null bail.
+		if !targetVD.Types[i].Nullable {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
 func setConflicts(ctx context.Context, cons durable.ConflictIndex, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
 	ancSch, err := ancTbl.GetSchema(ctx)
 	if err != nil {
@@ -403,10 +378,10 @@ func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltd
 	}
 
 	ae := atomicerr.New()
-	ch := make(chan diff.DiffSummaryProgress)
+	ch := make(chan diff.DiffStatProgress)
 	go func() {
 		defer close(ch)
-		err := diff.Summary(ctx, ch, rows, mergeRows, sch, mergeSch)
+		err := diff.Stat(ctx, ch, rows, mergeRows, sch, mergeSch)
 
 		ae.SetIfError(err)
 	}()

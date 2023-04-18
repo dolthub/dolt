@@ -24,6 +24,7 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"testing"
 
@@ -89,7 +90,7 @@ func TestMemTableAddHasGetChunk(t *testing.T) {
 	}
 
 	for _, c := range chunks {
-		assert.True(mt.addChunk(computeAddr(c), c))
+		assert.Equal(mt.addChunk(computeAddr(c), c), chunkAdded)
 	}
 
 	assertChunksInReader(chunks, mt, assert)
@@ -114,9 +115,9 @@ func TestMemTableAddOverflowChunk(t *testing.T) {
 	{
 		bigAddr := computeAddr(big)
 		mt := newMemTable(memTableSize)
-		assert.True(mt.addChunk(bigAddr, big))
+		assert.Equal(mt.addChunk(bigAddr, big), chunkAdded)
 		assert.True(mt.has(bigAddr))
-		assert.False(mt.addChunk(computeAddr(little), little))
+		assert.Equal(mt.addChunk(computeAddr(little), little), chunkNotAdded)
 		assert.False(mt.has(computeAddr(little)))
 	}
 
@@ -124,17 +125,18 @@ func TestMemTableAddOverflowChunk(t *testing.T) {
 		big := big[:memTableSize-1]
 		bigAddr := computeAddr(big)
 		mt := newMemTable(memTableSize)
-		assert.True(mt.addChunk(bigAddr, big))
+		assert.Equal(mt.addChunk(bigAddr, big), chunkAdded)
 		assert.True(mt.has(bigAddr))
-		assert.True(mt.addChunk(computeAddr(little), little))
+		assert.Equal(mt.addChunk(computeAddr(little), little), chunkAdded)
 		assert.True(mt.has(computeAddr(little)))
 		other := []byte("o")
-		assert.False(mt.addChunk(computeAddr(other), other))
+		assert.Equal(mt.addChunk(computeAddr(other), other), chunkNotAdded)
 		assert.False(mt.has(computeAddr(other)))
 	}
 }
 
 func TestMemTableWrite(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 	mt := newMemTable(1024)
 
@@ -145,48 +147,64 @@ func TestMemTableWrite(t *testing.T) {
 	}
 
 	for _, c := range chunks {
-		assert.True(mt.addChunk(computeAddr(c), c))
+		assert.Equal(mt.addChunk(computeAddr(c), c), chunkAdded)
 	}
 
 	td1, _, err := buildTable(chunks[1:2])
 	require.NoError(t, err)
-	ti1, err := parseTableIndexByCopy(td1, &noopQuotaProvider{})
+	ti1, err := parseTableIndexByCopy(ctx, td1, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr1, err := newTableReader(ti1, tableReaderAtFromBytes(td1), fileBlockSize)
 	require.NoError(t, err)
+	defer tr1.close()
 	assert.True(tr1.has(computeAddr(chunks[1])))
 
 	td2, _, err := buildTable(chunks[2:])
 	require.NoError(t, err)
-	ti2, err := parseTableIndexByCopy(td2, &noopQuotaProvider{})
+	ti2, err := parseTableIndexByCopy(ctx, td2, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr2, err := newTableReader(ti2, tableReaderAtFromBytes(td2), fileBlockSize)
 	require.NoError(t, err)
+	defer tr2.close()
 	assert.True(tr2.has(computeAddr(chunks[2])))
 
 	_, data, count, err := mt.write(chunkReaderGroup{tr1, tr2}, &Stats{})
 	require.NoError(t, err)
 	assert.Equal(uint32(1), count)
 
-	ti, err := parseTableIndexByCopy(data, &noopQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, data, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	outReader, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
 	require.NoError(t, err)
+	defer outReader.close()
 	assert.True(outReader.has(computeAddr(chunks[0])))
 	assert.False(outReader.has(computeAddr(chunks[1])))
 	assert.False(outReader.has(computeAddr(chunks[2])))
 }
 
 type tableReaderAtAdapter struct {
-	*bytes.Reader
+	br *bytes.Reader
 }
 
 func tableReaderAtFromBytes(b []byte) tableReaderAt {
 	return tableReaderAtAdapter{bytes.NewReader(b)}
 }
 
+func (adapter tableReaderAtAdapter) Close() error {
+	return nil
+}
+
+func (adapter tableReaderAtAdapter) clone() (tableReaderAt, error) {
+	return adapter, nil
+}
+
+func (adapter tableReaderAtAdapter) Reader(ctx context.Context) (io.ReadCloser, error) {
+	r := *adapter.br
+	return io.NopCloser(&r), nil
+}
+
 func (adapter tableReaderAtAdapter) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
-	return adapter.ReadAt(p, off)
+	return adapter.br.ReadAt(p, off)
 }
 
 func TestMemTableSnappyWriteOutOfLine(t *testing.T) {
@@ -200,7 +218,7 @@ func TestMemTableSnappyWriteOutOfLine(t *testing.T) {
 	}
 
 	for _, c := range chunks {
-		assert.True(mt.addChunk(computeAddr(c), c))
+		assert.Equal(mt.addChunk(computeAddr(c), c), chunkAdded)
 	}
 	mt.snapper = &outOfLineSnappy{[]bool{false, true, false}} // chunks[1] should trigger a panic
 

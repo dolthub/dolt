@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -91,9 +92,9 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	var headerSchema = sql.Schema{
-		{Name: "table", Type: sql.Text, Default: nil},
-		{Name: "column", Type: sql.Text, Default: nil},
-		{Name: "tag", Type: sql.Uint64, Default: nil},
+		{Name: "table", Type: types.Text, Default: nil},
+		{Name: "column", Type: types.Text, Default: nil},
+		{Name: "tag", Type: types.Uint64, Default: nil},
 	}
 
 	rows := make([]sql.Row, 0)

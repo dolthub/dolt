@@ -164,13 +164,13 @@ func (t JSON) isPrimitive() bool {
 }
 
 // Less implements the LesserValuable interface.
-func (t JSON) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (t JSON) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	otherJSONDoc, ok := other.(JSON)
 	if !ok {
 		return JSONKind < other.Kind(), nil
 	}
 
-	cmp, err := t.Compare(otherJSONDoc)
+	cmp, err := t.Compare(ctx, otherJSONDoc)
 	if err != nil {
 		return false, err
 	}
@@ -179,7 +179,7 @@ func (t JSON) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 }
 
 // Compare implements MySQL JSON type compare semantics.
-func (t JSON) Compare(other JSON) (int, error) {
+func (t JSON) Compare(ctx context.Context, other JSON) (int, error) {
 	left, err := t.Inner()
 	if err != nil {
 		return 0, err
@@ -190,7 +190,7 @@ func (t JSON) Compare(other JSON) (int, error) {
 		return 0, err
 	}
 
-	return compareJSON(left, right)
+	return compareJSON(ctx, left, right)
 }
 
 func (t JSON) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
@@ -214,7 +214,7 @@ func (t JSON) HumanReadableString() string {
 	return fmt.Sprintf("JSON(%s)", h.String())
 }
 
-func compareJSON(a, b Value) (int, error) {
+func compareJSON(ctx context.Context, a, b Value) (int, error) {
 	aNull := a.Kind() == NullKind
 	bNull := b.Kind() == NullKind
 	if aNull && bNull {
@@ -229,9 +229,9 @@ func compareJSON(a, b Value) (int, error) {
 	case Bool:
 		return compareJSONBool(a, b)
 	case List:
-		return compareJSONArray(a, b)
+		return compareJSONArray(ctx, a, b)
 	case Map:
-		return compareJSONObject(a, b)
+		return compareJSONObject(ctx, a, b)
 	case String:
 		return compareJSONString(a, b)
 	case Float:
@@ -262,7 +262,7 @@ func compareJSONBool(a Bool, b Value) (int, error) {
 	}
 }
 
-func compareJSONArray(a List, b Value) (int, error) {
+func compareJSONArray(ctx context.Context, a List, b Value) (int, error) {
 	switch b := b.(type) {
 	case Bool:
 		// a is lower precedence
@@ -274,7 +274,7 @@ func compareJSONArray(a List, b Value) (int, error) {
 		// where there is a difference. The array with the smaller value in that position is ordered first.
 
 		// TODO(andy): this diverges from GMS
-		aLess, err := a.Less(a.format(), b)
+		aLess, err := a.Less(ctx, a.format(), b)
 		if err != nil {
 			return 0, err
 		}
@@ -282,7 +282,7 @@ func compareJSONArray(a List, b Value) (int, error) {
 			return -1, nil
 		}
 
-		bLess, err := b.Less(b.format(), a)
+		bLess, err := b.Less(ctx, a.format(), a)
 		if err != nil {
 			return 0, err
 		}
@@ -298,7 +298,7 @@ func compareJSONArray(a List, b Value) (int, error) {
 	}
 }
 
-func compareJSONObject(a Map, b Value) (int, error) {
+func compareJSONObject(ctx context.Context, a Map, b Value) (int, error) {
 	switch b := b.(type) {
 	case
 		Bool,
@@ -311,7 +311,7 @@ func compareJSONObject(a Map, b Value) (int, error) {
 		// objects. The order of two objects that are not equal is unspecified but deterministic.
 
 		// TODO(andy): this diverges from GMS
-		aLess, err := a.Less(a.format(), b)
+		aLess, err := a.Less(ctx, a.format(), b)
 		if err != nil {
 			return 0, err
 		}
@@ -319,7 +319,7 @@ func compareJSONObject(a Map, b Value) (int, error) {
 			return -1, nil
 		}
 
-		bLess, err := b.Less(b.format(), a)
+		bLess, err := b.Less(ctx, b.format(), a)
 		if err != nil {
 			return 0, err
 		}

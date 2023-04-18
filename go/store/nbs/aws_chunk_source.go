@@ -22,14 +22,38 @@
 package nbs
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"time"
 )
 
+func tableExistsInChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (bool, error) {
+	if al.tableMayBeInDynamo(chunkCount) {
+		data, err := ddb.ReadTable(ctx, name, nil)
+		if err != nil {
+			return false, err
+		}
+		if data == nil {
+			return false, nil
+		}
+		return true, nil
+	}
+
+	magic := make([]byte, magicNumberSize)
+	n, _, err := s3.ReadFromEnd(ctx, name, magic, stats)
+	if err != nil {
+		return false, err
+	}
+	if n != len(magic) {
+		return false, errors.New("failed to read all data")
+	}
+	return bytes.Equal(magic, []byte(magicNumber)), nil
+}
+
 func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 	var tra tableReaderAt
-	index, err := loadTableIndex(stats, chunkCount, q, func(p []byte) error {
+	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
 		if al.tableMayBeInDynamo(chunkCount) {
 			data, err := ddb.ReadTable(ctx, name, stats)
 			if data == nil && err == nil { // There MUST be either data or an error
@@ -71,17 +95,25 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 	return &chunkSourceAdapter{tr, name}, nil
 }
 
-func loadTableIndex(stats *Stats, cnt uint32, q MemoryQuotaProvider, loadIndexBytes func(p []byte) error) (tableIndex, error) {
+func loadTableIndex(ctx context.Context, stats *Stats, cnt uint32, q MemoryQuotaProvider, loadIndexBytes func(p []byte) error) (tableIndex, error) {
 	idxSz := int(indexSize(cnt) + footerSize)
 	offsetSz := int((cnt - (cnt / 2)) * offsetSize)
-	buf := make([]byte, idxSz+offsetSz)
+	buf, err := q.AcquireQuotaBytes(ctx, idxSz+offsetSz)
+	if err != nil {
+		return nil, err
+	}
 
 	t1 := time.Now()
 	if err := loadIndexBytes(buf[:idxSz]); err != nil {
+		q.ReleaseQuotaBytes(len(buf))
 		return nil, err
 	}
 	stats.IndexReadLatency.SampleTimeSince(t1)
 	stats.IndexBytesPerRead.Sample(uint64(len(buf)))
 
-	return parseTableIndexWithOffsetBuff(buf[:idxSz], buf[idxSz:], q)
+	idx, err := parseTableIndexWithOffsetBuff(buf[:idxSz], buf[idxSz:], q)
+	if err != nil {
+		q.ReleaseQuotaBytes(len(buf))
+	}
+	return idx, err
 }

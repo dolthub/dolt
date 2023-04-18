@@ -16,16 +16,21 @@ package blobstore
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"path"
 	"strconv"
 
 	"cloud.google.com/go/storage"
+	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/googleapi"
 )
 
 const (
 	precondFailCode = 412
+
+	composeBatch = 32
 )
 
 // GCSBlobstore provides a GCS implementation of the Blobstore interface
@@ -35,7 +40,9 @@ type GCSBlobstore struct {
 	prefix     string
 }
 
-// NewGCSBlobstore creates a new instance of a GCSBlobstare
+var _ Blobstore = &GCSBlobstore{}
+
+// NewGCSBlobstore creates a new instance of a GCSBlobstore
 func NewGCSBlobstore(gcs *storage.Client, bucketName, prefix string) *GCSBlobstore {
 	for len(prefix) > 0 && prefix[0] == '/' {
 		prefix = prefix[1:]
@@ -43,6 +50,10 @@ func NewGCSBlobstore(gcs *storage.Client, bucketName, prefix string) *GCSBlobsto
 
 	bucket := gcs.Bucket(bucketName)
 	return &GCSBlobstore{bucket, bucketName, prefix}
+}
+
+func (bs *GCSBlobstore) Path() string {
+	return path.Join(bs.bucketName, bs.prefix)
 }
 
 // Exists returns true if a blob exists for the given key, and false if it does not.
@@ -65,7 +76,17 @@ func (bs *GCSBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 func (bs *GCSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, string, error) {
 	absKey := path.Join(bs.prefix, key)
 	oh := bs.bucket.Object(absKey)
-	attrs, err := oh.Attrs(ctx)
+	var reader *storage.Reader
+	var err error
+	if br.isAllRange() {
+		reader, err = oh.NewReader(ctx)
+	} else {
+		offset, length := br.offset, br.length
+		if offset < 0 {
+			length = -1
+		}
+		reader, err = oh.NewRangeReader(ctx, offset, length)
+	}
 
 	if err == storage.ErrObjectNotExist {
 		return nil, "", NotFound{"gs://" + path.Join(bs.bucketName, absKey)}
@@ -73,21 +94,10 @@ func (bs *GCSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.R
 		return nil, "", err
 	}
 
+	attrs := reader.Attrs
 	generation := attrs.Generation
 
-	var reader *storage.Reader
-	if br.isAllRange() {
-		reader, err = oh.Generation(generation).NewReader(ctx)
-	} else {
-		posBr := br.positiveRange(attrs.Size)
-		reader, err = oh.Generation(generation).NewRangeReader(ctx, posBr.offset, posBr.length)
-	}
-
-	if err != nil {
-		return nil, "", err
-	}
-
-	return reader, strconv.FormatInt(generation, 16), nil
+	return reader, fmtGeneration(generation), nil
 }
 
 func writeObj(writer *storage.Writer, reader io.Reader) (string, error) {
@@ -108,7 +118,7 @@ func writeObj(writer *storage.Writer, reader io.Reader) (string, error) {
 
 	generation := writer.Attrs().Generation
 
-	return strconv.FormatInt(generation, 16), nil
+	return fmtGeneration(generation), nil
 }
 
 // Put sets the blob and the version for a key
@@ -154,4 +164,80 @@ func (bs *GCSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key st
 	}
 
 	return ver, err
+}
+
+func (bs *GCSBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
+	// GCS compose has a batch size limit,
+	// recursively compose sources
+	for len(sources) > composeBatch {
+		// compose subsets of |sources| in batches,
+		// store tmp composite objects in |next|
+		var next []string
+		var batches [][]string
+		for len(sources) > 0 {
+			k := min(composeBatch, len(sources))
+			batches = append(batches, sources[:k])
+			next = append(next, uuid.New().String())
+			sources = sources[k:]
+		}
+		// execute compose calls concurrently
+		eg, ectx := errgroup.WithContext(ctx)
+		for i := 0; i < len(batches); i++ {
+			idx := i
+			eg.Go(func() (err error) {
+				_, err = bs.composeObjects(ectx, next[idx], batches[idx])
+				return
+			})
+		}
+		if err := eg.Wait(); err != nil {
+			return "", err
+		}
+		sources = next
+	}
+	return bs.composeObjects(ctx, key, sources)
+}
+
+func (bs *GCSBlobstore) composeObjects(ctx context.Context, composite string, sources []string) (gen string, err error) {
+	if len(sources) > composeBatch {
+		return "", fmt.Errorf("too many objects to compose (%d > %d)", len(sources), composeBatch)
+	}
+
+	objects := make([]*storage.ObjectHandle, len(sources))
+	eg, ectx := errgroup.WithContext(ctx)
+	for i := range objects {
+		idx := i
+		eg.Go(func() (err error) {
+			var a *storage.ObjectAttrs
+			oh := bs.bucket.Object(path.Join(bs.prefix, sources[idx]))
+			if a, err = oh.Attrs(ectx); err != nil {
+				return err
+			}
+			objects[idx] = oh.Generation(a.Generation)
+			return
+		})
+	}
+	if err = eg.Wait(); err != nil {
+		return "", err
+	}
+
+	// compose |objects| into |c|
+	var a *storage.ObjectAttrs
+	c := bs.bucket.Object(path.Join(bs.prefix, composite))
+	if a, err = c.ComposerFrom(objects...).Run(ctx); err != nil {
+		return "", err
+	}
+	return fmtGeneration(a.Generation), nil
+}
+
+func fmtGeneration(g int64) string {
+	return strconv.FormatInt(g, 16)
+}
+
+func min(l, r int) (m int) {
+	if l < r {
+		m = l
+	} else {
+		m = r
+	}
+	return
 }

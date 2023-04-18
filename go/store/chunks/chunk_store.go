@@ -31,6 +31,8 @@ import (
 
 var ErrNothingToCollect = errors.New("no changes since last gc")
 
+type GetAddrsCb func(ctx context.Context, c Chunk) (hash.HashSet, error)
+
 // ChunkStore is the core storage abstraction in noms. We can put data
 // anyplace we have a ChunkStore implementation for.
 type ChunkStore interface {
@@ -54,10 +56,11 @@ type ChunkStore interface {
 	// Put caches c in the ChunkSource. Upon return, c must be visible to
 	// subsequent Get and Has calls, but must not be persistent until a call
 	// to Flush(). Put may be called concurrently with other calls to Put(),
-	// Get(), GetMany(), Has() and HasMany().
-	Put(ctx context.Context, c Chunk) error
+	// Get(), GetMany(), Has() and HasMany(). Will return an error if the
+	// addrs returned by `getAddrs` are absent from the chunk store.
+	Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb) error
 
-	// Returns the NomsVersion with which this ChunkSource is compatible.
+	// Returns the NomsBinFormat with which this ChunkSource is compatible.
 	Version() string
 
 	// Rebase brings this ChunkStore into sync with the persistent storage's
@@ -99,16 +102,47 @@ type LoggingChunkStore interface {
 	SetLogger(logger DebugLogger)
 }
 
+// The sentinel error returned by BeginGC(addChunk) implementations
+// indicating that the store must wait until the GC is over and then
+// ensure that the attempted write makes it into the new data for the chunk
+// store.
+
+var ErrAddChunkMustBlock = errors.New("chunk keeper: add chunk must block")
+
 // ChunkStoreGarbageCollector is a ChunkStore that supports garbage collection.
 type ChunkStoreGarbageCollector interface {
 	ChunkStore
 
-	// MarkAndSweepChunks expects |keepChunks| to receive the chunk hashes
-	// that should be kept in the chunk store. Once |keepChunks| is closed
-	// and MarkAndSweepChunks returns, the chunk store will only have the
-	// chunks sent on |keepChunks| and will have removed all other content
-	// from the ChunkStore.
-	MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest ChunkStore) error
+	// After BeginGC returns, every newly written chunk or root should be
+	// passed to the provided |addChunk| function. This behavior must
+	// persist until EndGC is called. MarkAndSweepChunks will only ever
+	// be called bracketed between a BeginGC and an EndGC call.
+	//
+	// If during processing the |addChunk| function returns the
+	// |true|, then the ChunkStore must block the write until |EndGC| is
+	// called. At that point, the ChunkStore is responsible for ensuring
+	// that the chunk which it was attempting to write makes it into chunk
+	// store.
+	//
+	// This function should not block indefinitely and should return an
+	// error if a GC is already in progress.
+	BeginGC(addChunk func(hash.Hash) bool) error
+
+	// EndGC indicates that the GC is over. The previously provided
+	// addChunk function must not be called after this function function.
+	EndGC()
+
+	// MarkAndSweepChunks is expected to read chunk addresses off of
+	// |hashes|, which represent chunks which should be copied into the
+	// provided |dest| store.  Once |hashes| is closed,
+	// MarkAndSweepChunks is expected to update the contents of the store
+	// to only include the chunk whose addresses which were sent along on
+	// |hashes|.
+	//
+	// This behavior is a little different for ValueStore.GC()'s
+	// interactions with generational stores. See ValueStore and
+	// NomsBlockStore/GenerationalNBS for details.
+	MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore) error
 }
 
 type PrefixChunkStore interface {

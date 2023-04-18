@@ -20,6 +20,7 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -40,11 +41,11 @@ type uintType struct {
 
 var _ TypeInfo = (*uintType)(nil)
 var (
-	Uint8Type  = &uintType{sql.Uint8}
-	Uint16Type = &uintType{sql.Uint16}
-	Uint24Type = &uintType{sql.Uint24}
-	Uint32Type = &uintType{sql.Uint32}
-	Uint64Type = &uintType{sql.Uint64}
+	Uint8Type  = &uintType{gmstypes.Uint8}
+	Uint16Type = &uintType{gmstypes.Uint16}
+	Uint24Type = &uintType{gmstypes.Uint24}
+	Uint32Type = &uintType{gmstypes.Uint32}
+	Uint64Type = &uintType{gmstypes.Uint64}
 )
 
 func CreateUintTypeFromParams(params map[string]string) (TypeInfo, error) {
@@ -71,15 +72,15 @@ func CreateUintTypeFromParams(params map[string]string) (TypeInfo, error) {
 func (ti *uintType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Uint); ok {
 		switch ti.sqlUintType {
-		case sql.Uint8:
+		case gmstypes.Uint8:
 			return uint8(val), nil
-		case sql.Uint16:
+		case gmstypes.Uint16:
 			return uint16(val), nil
-		case sql.Uint24:
+		case gmstypes.Uint24:
 			return uint32(val), nil
-		case sql.Uint32:
+		case gmstypes.Uint32:
 			return uint32(val), nil
-		case sql.Uint64:
+		case gmstypes.Uint64:
 			return uint64(val), nil
 		}
 	}
@@ -96,15 +97,15 @@ func (ti *uintType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (
 	case types.UintKind:
 		val := reader.ReadUint()
 		switch ti.sqlUintType {
-		case sql.Uint8:
+		case gmstypes.Uint8:
 			return uint8(val), nil
-		case sql.Uint16:
+		case gmstypes.Uint16:
 			return uint16(val), nil
-		case sql.Uint24:
+		case gmstypes.Uint24:
 			return uint32(val), nil
-		case sql.Uint32:
+		case gmstypes.Uint32:
 			return uint32(val), nil
-		case sql.Uint64:
+		case gmstypes.Uint64:
 			return val, nil
 		}
 	case types.NullKind:
@@ -119,7 +120,7 @@ func (ti *uintType) ConvertValueToNomsValue(ctx context.Context, vrw types.Value
 	if v == nil {
 		return types.NullValue, nil
 	}
-	uintVal, err := ti.sqlUintType.Convert(v)
+	uintVal, _, err := ti.sqlUintType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +204,7 @@ func (ti *uintType) GetTypeParams() map[string]string {
 // IsValid implements TypeInfo interface.
 func (ti *uintType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Uint); ok {
-		_, err := ti.sqlUintType.Convert(uint64(val))
+		_, _, err := ti.sqlUintType.Convert(uint64(val))
 		if err != nil {
 			return false
 		}

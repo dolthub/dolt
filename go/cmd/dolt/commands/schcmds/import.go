@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
@@ -145,7 +146,7 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Name of the table to be created."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being used to infer the schema."})
 	ap.SupportsFlag(createFlag, "c", "Create a table with the schema inferred from the {{.LessThan}}file{{.GreaterThan}} provided.")
-	ap.SupportsFlag(updateFlag, "u", "Update a table to match the inferred schema of the {{.LessThan}}file{{.GreaterThan}} provided")
+	ap.SupportsFlag(updateFlag, "u", "Update a table to match the inferred schema of the {{.LessThan}}file{{.GreaterThan}} provided. All previous data will be lost.")
 	ap.SupportsFlag(replaceFlag, "r", "Replace a table with a new schema that has the inferred schema from the {{.LessThan}}file{{.GreaterThan}} provided. All previous data will be lost.")
 	ap.SupportsFlag(dryRunFlag, "", "Print the sql statement that would be run if executed without the flag.")
 	ap.SupportsFlag(keepTypesParam, "", "When a column already exists in the table, and it's also in the {{.LessThan}}file{{.GreaterThan}} provided, use the type from the table.")
@@ -219,6 +220,23 @@ func getSchemaImportArgs(ctx context.Context, apr *argparser.ArgParseResults, dE
 		return nil, errhand.BuildDError("error: failed to create table.").AddDetails("A table named '%s' already exists.", tblName).AddDetails("Use --replace or --update instead of --create.").Build()
 	}
 
+	if op != CreateOp {
+		rows, err := tbl.GetRowData(ctx)
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+
+		rowCnt, err := rows.Count()
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+
+		if rowCnt > 0 {
+			return nil, errhand.BuildDError("This operation will delete all row data. If this is your intent, "+
+				"run dolt sql -q 'delete from %s' to delete all row data, then re-run this command.", tblName).Build()
+		}
+	}
+
 	var existingSch schema.Schema = schema.EmptySchema
 	if tblExists {
 		existingSch, err = tbl.GetSchema(ctx)
@@ -284,8 +302,12 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	}
 
 	tblName := impArgs.tableName
-	// inferred schemas have no foreign keys
-	sqlDb := sqle.NewSingleTableDatabase(tblName, sch, nil, nil)
+	root, verr = putEmptyTableWithSchema(ctx, tblName, root, sch)
+	if verr != nil {
+		return verr
+	}
+
+	sqlDb := sqle.NewUserSpaceDatabase(root, editor.Options{})
 	sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
 
 	stmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, tblName)
@@ -295,39 +317,6 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	cli.Println(stmt)
 
 	if !apr.Contains(dryRunFlag) {
-		tbl, tblExists, err := root.GetTable(ctx, tblName)
-		if err != nil {
-			return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
-		}
-
-		empty, err := durable.NewEmptyIndex(ctx, root.VRW(), root.NodeStore(), sch)
-		if err != nil {
-			return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
-		}
-
-		var indexSet durable.IndexSet
-		if tblExists {
-			indexSet, err = tbl.GetIndexSet(ctx)
-			if err != nil {
-				return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
-			}
-		} else {
-			indexSet, err = durable.NewIndexSetWithEmptyIndexes(ctx, root.VRW(), root.NodeStore(), sch)
-			if err != nil {
-				return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
-			}
-		}
-
-		tbl, err = doltdb.NewTable(ctx, root.VRW(), root.NodeStore(), sch, empty, indexSet, nil)
-		if err != nil {
-			return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
-		}
-
-		root, err = root.PutTable(ctx, tblName, tbl)
-		if err != nil {
-			return errhand.BuildDError("error: failed to add table.").AddCause(err).Build()
-		}
-
 		err = dEnv.UpdateWorkingRoot(ctx, root)
 		if err != nil {
 			return errhand.BuildDError("error: failed to update the working set.").AddCause(err).Build()
@@ -337,6 +326,43 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	}
 
 	return nil
+}
+
+func putEmptyTableWithSchema(ctx context.Context, tblName string, root *doltdb.RootValue, sch schema.Schema) (*doltdb.RootValue, errhand.VerboseError) {
+	tbl, tblExists, err := root.GetTable(ctx, tblName)
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
+	}
+
+	empty, err := durable.NewEmptyIndex(ctx, root.VRW(), root.NodeStore(), sch)
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
+	}
+
+	var indexSet durable.IndexSet
+	if tblExists {
+		indexSet, err = tbl.GetIndexSet(ctx)
+		if err != nil {
+			return nil, errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
+		}
+	} else {
+		indexSet, err = durable.NewIndexSetWithEmptyIndexes(ctx, root.VRW(), root.NodeStore(), sch)
+		if err != nil {
+			return nil, errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
+		}
+	}
+
+	tbl, err = doltdb.NewTable(ctx, root.VRW(), root.NodeStore(), sch, empty, indexSet, nil)
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
+	}
+
+	root, err = root.PutTable(ctx, tblName, tbl)
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to add table.").AddCause(err).Build()
+	}
+
+	return root, nil
 }
 
 func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, impOpts *importOptions, root *doltdb.RootValue) (schema.Schema, errhand.VerboseError) {

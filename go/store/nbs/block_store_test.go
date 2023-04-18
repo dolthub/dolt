@@ -25,7 +25,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -37,6 +36,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
+	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/d"
@@ -45,22 +45,44 @@ import (
 
 const testMemTableSize = 1 << 8
 
-func TestBlockStoreSuite(t *testing.T) {
-	suite.Run(t, &BlockStoreSuite{})
+func TestLocalStoreSuite(t *testing.T) {
+	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
+		nbf := constants.FormatDefaultString
+		qp := NewUnlimitedMemQuotaProvider()
+		return NewLocalStore(ctx, nbf, dir, testMemTableSize, qp)
+	}
+	suite.Run(t, &BlockStoreSuite{factory: fn})
+}
+
+func TestBlobstoreSuite(t *testing.T) {
+	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
+		nbf := constants.FormatDefaultString
+		qp := NewUnlimitedMemQuotaProvider()
+		bs := blobstore.NewLocalBlobstore(dir)
+		return NewBSStore(ctx, nbf, bs, testMemTableSize, qp)
+	}
+	suite.Run(t, &BlockStoreSuite{factory: fn})
 }
 
 type BlockStoreSuite struct {
 	suite.Suite
 	dir        string
 	store      *NomsBlockStore
+	factory    nbsFactory
 	putCountFn func() int
+
+	// if true, skip interloper tests
+	skipInterloper bool
 }
+
+type nbsFactory func(ctx context.Context, dir string) (*NomsBlockStore, error)
 
 func (suite *BlockStoreSuite) SetupTest() {
 	var err error
 	suite.dir, err = os.MkdirTemp("", "")
 	suite.NoError(err)
-	suite.store, err = NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
+	ctx := context.Background()
+	suite.store, err = suite.factory(ctx, suite.dir)
 	suite.NoError(err)
 	suite.putCountFn = func() int {
 		return int(suite.store.putCount)
@@ -69,7 +91,9 @@ func (suite *BlockStoreSuite) SetupTest() {
 
 func (suite *BlockStoreSuite) TearDownTest() {
 	err := suite.store.Close()
-	suite.NoError(err)
+	if !osutil.IsWindowsSharingViolation(err) {
+		suite.NoError(err)
+	}
 	err = file.RemoveAll(suite.dir)
 	if !osutil.IsWindowsSharingViolation(err) {
 		suite.NoError(err)
@@ -84,17 +108,22 @@ func (suite *BlockStoreSuite) TestChunkStoreMissingDir() {
 
 func (suite *BlockStoreSuite) TestChunkStoreNotDir() {
 	existingFile := filepath.Join(suite.dir, "path-exists-but-is-a-file")
-	_, err := os.Create(existingFile)
+	f, err := os.Create(existingFile)
 	suite.NoError(err)
+	defer f.Close()
 
 	_, err = NewLocalStore(context.Background(), constants.FormatDefaultString, existingFile, testMemTableSize, NewUnlimitedMemQuotaProvider())
 	suite.Error(err)
 }
 
+func noopGetAddrs(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+	return nil, nil
+}
+
 func (suite *BlockStoreSuite) TestChunkStorePut() {
 	input := []byte("abc")
 	c := chunks.NewChunk(input)
-	err := suite.store.Put(context.Background(), c)
+	err := suite.store.Put(context.Background(), c, noopGetAddrs)
 	suite.NoError(err)
 	h := c.Hash()
 
@@ -115,7 +144,7 @@ func (suite *BlockStoreSuite) TestChunkStorePut() {
 
 	// Re-writing the same data should cause a second put
 	c = chunks.NewChunk(input)
-	err = suite.store.Put(context.Background(), c)
+	err = suite.store.Put(context.Background(), c, noopGetAddrs)
 	suite.NoError(err)
 	suite.Equal(h, c.Hash())
 	assertInputInStore(input, h, suite.store, suite.Assert())
@@ -127,14 +156,25 @@ func (suite *BlockStoreSuite) TestChunkStorePut() {
 	if suite.putCountFn != nil {
 		suite.Equal(2, suite.putCountFn())
 	}
+
+	// Put chunk with dangling ref should error on Commit
+	nc := chunks.NewChunk([]byte("bcd"))
+	err = suite.store.Put(context.Background(), nc, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+		return hash.NewHashSet(hash.Of([]byte("lorem ipsum"))), nil
+	})
+	suite.NoError(err)
+	root, err := suite.store.Root(context.Background())
+	suite.NoError(err)
+	_, err = suite.store.Commit(context.Background(), root, root)
+	suite.Error(err)
 }
 
 func (suite *BlockStoreSuite) TestChunkStorePutMany() {
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
-	err := suite.store.Put(context.Background(), c1)
+	err := suite.store.Put(context.Background(), c1, noopGetAddrs)
 	suite.NoError(err)
-	err = suite.store.Put(context.Background(), c2)
+	err = suite.store.Put(context.Background(), c2, noopGetAddrs)
 	suite.NoError(err)
 
 	rt, err := suite.store.Root(context.Background())
@@ -154,9 +194,9 @@ func (suite *BlockStoreSuite) TestChunkStorePutMany() {
 func (suite *BlockStoreSuite) TestChunkStoreStatsSummary() {
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
-	err := suite.store.Put(context.Background(), c1)
+	err := suite.store.Put(context.Background(), c1, noopGetAddrs)
 	suite.NoError(err)
-	err = suite.store.Put(context.Background(), c2)
+	err = suite.store.Put(context.Background(), c2, noopGetAddrs)
 	suite.NoError(err)
 
 	rt, err := suite.store.Root(context.Background())
@@ -177,9 +217,9 @@ func (suite *BlockStoreSuite) TestChunkStorePutMoreThanMemTable() {
 	_, err = rand.Read(input2)
 	suite.NoError(err)
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
-	err = suite.store.Put(context.Background(), c1)
+	err = suite.store.Put(context.Background(), c1, noopGetAddrs)
 	suite.NoError(err)
-	err = suite.store.Put(context.Background(), c2)
+	err = suite.store.Put(context.Background(), c2, noopGetAddrs)
 	suite.NoError(err)
 
 	rt, err := suite.store.Root(context.Background())
@@ -194,9 +234,9 @@ func (suite *BlockStoreSuite) TestChunkStorePutMoreThanMemTable() {
 	if suite.putCountFn != nil {
 		suite.Equal(2, suite.putCountFn())
 	}
-	specs, err := suite.store.tables.toSpecs()
+	sz, err := suite.store.tables.physicalLen()
 	suite.NoError(err)
-	suite.Len(specs, 2)
+	suite.True(sz > testMemTableSize)
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
@@ -208,7 +248,7 @@ func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
 	chnx := make([]chunks.Chunk, len(inputs))
 	for i, data := range inputs {
 		chnx[i] = chunks.NewChunk(data)
-		err = suite.store.Put(context.Background(), chnx[i])
+		err = suite.store.Put(context.Background(), chnx[i], noopGetAddrs)
 		suite.NoError(err)
 	}
 
@@ -248,7 +288,7 @@ func (suite *BlockStoreSuite) TestChunkStoreHasMany() {
 		chunks.NewChunk([]byte("def")),
 	}
 	for _, c := range chnx {
-		err := suite.store.Put(context.Background(), c)
+		err := suite.store.Put(context.Background(), c, noopGetAddrs)
 		suite.NoError(err)
 	}
 
@@ -271,14 +311,18 @@ func (suite *BlockStoreSuite) TestChunkStoreHasMany() {
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
+	if suite.skipInterloper {
+		suite.T().Skip()
+	}
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
 	root, err := suite.store.Root(context.Background())
 	suite.NoError(err)
 
-	interloper, err := NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
+	interloper, err := suite.factory(context.Background(), suite.dir)
 	suite.NoError(err)
-	err = interloper.Put(context.Background(), c1)
+	defer interloper.Close()
+	err = interloper.Put(context.Background(), c1, noopGetAddrs)
 	suite.NoError(err)
 	h, err := interloper.Root(context.Background())
 	suite.NoError(err)
@@ -286,7 +330,7 @@ func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 	suite.NoError(err)
 	suite.True(success)
 
-	err = suite.store.Put(context.Background(), c2)
+	err = suite.store.Put(context.Background(), c2, noopGetAddrs)
 	suite.NoError(err)
 	h, err = suite.store.Root(context.Background())
 	suite.NoError(err)
@@ -319,12 +363,16 @@ func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
+	if suite.skipInterloper {
+		suite.T().Skip()
+	}
 	input1 := []byte("abc")
 	c1 := chunks.NewChunk(input1)
 
-	interloper, err := NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
+	interloper, err := suite.factory(context.Background(), suite.dir)
 	suite.NoError(err)
-	err = interloper.Put(context.Background(), c1)
+	defer interloper.Close()
+	err = interloper.Put(context.Background(), c1, noopGetAddrs)
 	suite.NoError(err)
 	root, err := interloper.Root(context.Background())
 	suite.NoError(err)
@@ -353,14 +401,18 @@ func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
 }
 
 func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
+	if suite.skipInterloper {
+		suite.T().Skip()
+	}
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
 	root, err := suite.store.Root(context.Background())
 	suite.NoError(err)
 
-	interloper, err := NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
+	interloper, err := suite.factory(context.Background(), suite.dir)
 	suite.NoError(err)
-	err = interloper.Put(context.Background(), c1)
+	defer interloper.Close()
+	err = interloper.Put(context.Background(), c1, noopGetAddrs)
 	suite.NoError(err)
 	h, err := interloper.Root(context.Background())
 	suite.NoError(err)
@@ -368,7 +420,7 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 	suite.NoError(err)
 	suite.True(success)
 
-	err = suite.store.Put(context.Background(), c2)
+	err = suite.store.Put(context.Background(), c2, noopGetAddrs)
 	suite.NoError(err)
 
 	// Reading c2 via the API should work pre-rebase
@@ -414,14 +466,32 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 }
 
 func TestBlockStoreConjoinOnCommit(t *testing.T) {
-	stats := &Stats{}
+	t.Run("fake table persister", func(t *testing.T) {
+		testBlockStoreConjoinOnCommit(t, func(t *testing.T) tablePersister {
+			q := NewUnlimitedMemQuotaProvider()
+			return newFakeTablePersister(q)
+		})
+	})
+	t.Run("in memory blobstore persister", func(t *testing.T) {
+		testBlockStoreConjoinOnCommit(t, func(t *testing.T) tablePersister {
+			return &blobstorePersister{
+				bs:        blobstore.NewInMemoryBlobstore(""),
+				blockSize: 4096,
+				q:         &UnlimitedQuotaProvider{},
+			}
+		})
+	})
+}
+
+func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tablePersister) {
 	assertContainAll := func(t *testing.T, store chunks.ChunkStore, sources ...chunkSource) {
 		ctx := context.Background()
 		for _, src := range sources {
 			err := extractAllChunks(ctx, src, func(rec extractRecord) {
 				ok, err := store.Has(context.Background(), hash.Hash(rec.a))
 				require.NoError(t, err)
-				assert.True(t, ok)
+				assert.True(t, ok, "chunk %s from chunkSource %s not found in store",
+					rec.a.String(), src.hash().String())
 			})
 			require.NoError(t, err)
 		}
@@ -439,7 +509,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		defer func() {
 			require.EqualValues(t, 0, q.Usage())
 		}()
-		p := newFakeTablePersister(q)
+		p := factory(t)
 
 		c := &fakeConjoiner{}
 
@@ -449,7 +519,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		root, err := smallTableStore.Root(context.Background())
 		require.NoError(t, err)
-		err = smallTableStore.Put(context.Background(), newChunk)
+		err = smallTableStore.Put(context.Background(), newChunk, noopGetAddrs)
 		require.NoError(t, err)
 		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
 		require.NoError(t, err)
@@ -460,30 +530,19 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		assert.True(t, ok)
 	})
 
-	makeCanned := func(conjoinees, keepers []tableSpec, p tablePersister) cannedConjoin {
-		srcs := chunkSources{}
-		for _, sp := range conjoinees {
-			cs, err := p.Open(context.Background(), sp.name, sp.chunkCount, nil)
-			require.NoError(t, err)
-			srcs = append(srcs, cs)
-		}
-		conjoined, err := p.ConjoinAll(context.Background(), srcs, stats)
-		require.NoError(t, err)
-		cannedSpecs := []tableSpec{{mustAddr(conjoined.hash()), mustUint32(conjoined.count())}}
-		return cannedConjoin{true, append(cannedSpecs, keepers...)}
-	}
-
 	t.Run("ConjoinSuccess", func(t *testing.T) {
-		fm := &fakeManifest{}
 		q := NewUnlimitedMemQuotaProvider()
-		p := newFakeTablePersister(q)
+		fm := &fakeManifest{}
+		p := factory(t)
 
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7}, p)
 		upstream, err := toSpecs(srcs)
 		require.NoError(t, err)
-		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
+		fm.set(constants.FormatLD1String, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
 		c := &fakeConjoiner{
-			[]cannedConjoin{makeCanned(upstream[:2], upstream[2:], p)},
+			[]cannedConjoin{
+				{conjoinees: upstream[:2], keepers: upstream[2:]},
+			},
 		}
 
 		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, makeManifestManager(fm), p, q, c, testMemTableSize)
@@ -492,7 +551,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		root, err := smallTableStore.Root(context.Background())
 		require.NoError(t, err)
-		err = smallTableStore.Put(context.Background(), newChunk)
+		err = smallTableStore.Put(context.Background(), newChunk, noopGetAddrs)
 		require.NoError(t, err)
 		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
 		require.NoError(t, err)
@@ -510,16 +569,16 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	t.Run("ConjoinRetry", func(t *testing.T) {
 		fm := &fakeManifest{}
 		q := NewUnlimitedMemQuotaProvider()
-		p := newFakeTablePersister(q)
+		p := factory(t)
 
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7, 13}, p)
 		upstream, err := toSpecs(srcs)
 		require.NoError(t, err)
-		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
+		fm.set(constants.FormatLD1String, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
 		c := &fakeConjoiner{
 			[]cannedConjoin{
-				makeCanned(upstream[:2], upstream[2:], p),
-				makeCanned(upstream[:4], upstream[4:], p),
+				{conjoinees: upstream[:2], keepers: upstream[2:]},
+				{conjoinees: upstream[:4], keepers: upstream[4:]},
 			},
 		}
 
@@ -529,7 +588,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		root, err := smallTableStore.Root(context.Background())
 		require.NoError(t, err)
-		err = smallTableStore.Put(context.Background(), newChunk)
+		err = smallTableStore.Put(context.Background(), newChunk, noopGetAddrs)
 		require.NoError(t, err)
 		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
 		require.NoError(t, err)
@@ -546,50 +605,36 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 }
 
 type cannedConjoin struct {
-	should bool
-	specs  []tableSpec // Must name tables that are already persisted
+	// Must name tables that are already persisted
+	conjoinees, keepers []tableSpec
 }
 
 type fakeConjoiner struct {
 	canned []cannedConjoin
 }
 
-func (fc *fakeConjoiner) ConjoinRequired(ts tableSet) bool {
+func (fc *fakeConjoiner) conjoinRequired(ts tableSet) bool {
 	if len(fc.canned) == 0 {
 		return false
 	}
-	return fc.canned[0].should
+	return true
 }
 
-func (fc *fakeConjoiner) Conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, error) {
+func (fc *fakeConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees, keepers []tableSpec, err error) {
 	d.PanicIfTrue(len(fc.canned) == 0)
-	canned := fc.canned[0]
+	cur := fc.canned[0]
 	fc.canned = fc.canned[1:]
-
-	newContents := manifestContents{
-		nbfVers: constants.NomsVersion,
-		root:    upstream.root,
-		specs:   canned.specs,
-		lock:    generateLockHash(upstream.root, canned.specs, []tableSpec{}),
-	}
-
-	var err error
-	upstream, err = mm.Update(context.Background(), upstream.lock, newContents, stats, nil)
-
-	if err != nil {
-		return manifestContents{}, err
-	}
-
-	if upstream.lock != newContents.lock {
-		return manifestContents{}, errors.New("lock failed")
-	}
-
-	return upstream, err
+	conjoinees, keepers = cur.conjoinees, cur.keepers
+	return
 }
 
 func assertInputInStore(input []byte, h hash.Hash, s chunks.ChunkStore, assert *assert.Assertions) {
-	c, err := s.Get(context.Background(), h)
+	ctx := context.Background()
+	c, err := s.Get(ctx, h)
 	assert.NoError(err)
+	if c.IsEmpty() {
+		c, err = s.Get(ctx, h)
+	}
 	assert.False(c.IsEmpty(), "Shouldn't get empty chunk for %s", h.String())
 	assert.Zero(bytes.Compare(input, c.Data()), "%s != %s", string(input), string(c.Data()))
 }

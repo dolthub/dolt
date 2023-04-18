@@ -17,10 +17,10 @@ package sqle
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 // UserSpaceDatabase in an implementation of sql.Database for root values. Does not expose any of the internal dolt tables.
@@ -76,6 +76,17 @@ func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
 	return resultingTblNames, nil
 }
 
+func (db *UserSpaceDatabase) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
+	return dsess.InitialDbState{
+		Db:       db,
+		ReadOnly: true,
+		HeadRoot: db.RootValue,
+		DbData: env.DbData{
+			Rsw: noopRepoStateWriter{},
+		},
+	}, nil
+}
+
 func (db *UserSpaceDatabase) GetRoot(*sql.Context) (*doltdb.RootValue, error) {
 	return db.RootValue, nil
 }
@@ -88,14 +99,22 @@ func (db *UserSpaceDatabase) DbData() env.DbData {
 	panic("UserSpaceDatabase does not have dbdata")
 }
 
-func (db *UserSpaceDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
-	panic("UserSpaceDatabase does not support transactions")
-}
-
 func (db *UserSpaceDatabase) Flush(ctx *sql.Context) error {
 	panic("UserSpaceDatabase cannot flush")
 }
 
 func (db *UserSpaceDatabase) EditOptions() editor.Options {
-	return editor.Options{}
+	return db.editOpts
+}
+
+func (db *UserSpaceDatabase) Revision() string {
+	return ""
+}
+
+func (db *UserSpaceDatabase) RevisionType() dsess.RevisionType {
+	return dsess.RevisionTypeNone
+}
+
+func (db *UserSpaceDatabase) BaseName() string {
+	return db.Name()
 }

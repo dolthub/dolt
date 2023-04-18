@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-// doltTag is the stored procedure version of the CLI `dolt tag` command
+// doltTag is the stored procedure version for the CLI command `dolt tag`.
 func doltTag(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltTag(ctx, args)
 	if err != nil {
@@ -73,8 +73,17 @@ func doDoltTag(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("create tag takes at most two args")
 	}
 
-	name := dSess.Username()
-	email := dSess.Email()
+	var name, email string
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		name, email, err = cli.ParseAuthor(authorStr)
+		if err != nil {
+			return 1, err
+		}
+	} else {
+		name = dSess.Username()
+		email = dSess.Email()
+	}
+
 	msg, _ := apr.GetValue(cli.MessageArg)
 
 	props := actions.TagProps{

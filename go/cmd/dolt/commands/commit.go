@@ -40,7 +40,7 @@ import (
 )
 
 var commitDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Record changes to the repository",
+	ShortDesc: "Record changes to the database",
 	LongDesc: `
 Stores the current contents of the staged tables in a new commit along with a log message from the user describing the changes.
 
@@ -170,7 +170,12 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 			}
 		}
 
-		err = actions.ResetSoftToRef(ctx, dEnv.DbData(), "HEAD~1")
+		newRoots, err := actions.ResetSoftToRef(ctx, dEnv.DbData(), "HEAD~1")
+		if err != nil {
+			return handleResetError(err, usage)
+		}
+
+		err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
 		if err != nil {
 			return handleResetError(err, usage)
 		}
@@ -203,9 +208,14 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 	})
 	if err != nil {
 		if apr.Contains(cli.AmendFlag) {
-			errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
+			newRoots, errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
 			if errRes != nil {
 				return handleResetError(errRes, usage)
+			}
+
+			err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
+			if err != nil {
+				return handleResetError(err, usage)
 			}
 		}
 		return handleCommitErr(ctx, dEnv, err, usage)
@@ -222,9 +232,14 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 	)
 	if err != nil {
 		if apr.Contains(cli.AmendFlag) {
-			errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
+			newRoots, errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
 			if errRes != nil {
 				return handleResetError(errRes, usage)
+			}
+
+			err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
+			if err != nil {
+				return handleResetError(err, usage)
 			}
 		}
 		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't commit").AddCause(err).Build(), usage)
@@ -286,13 +301,7 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggeste
 		return suggestedMsg, nil
 	}
 
-	isTerminal := false
-	cli.ExecuteWithStdioRestored(func() {
-		if goisatty.IsTerminal(os.Stdout.Fd()) {
-			isTerminal = true
-		}
-	})
-	if !isTerminal {
+	if !checkIsTerminal() {
 		return suggestedMsg, nil
 	}
 
@@ -321,12 +330,21 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggeste
 		finalMsg = parseCommitMessage(commitMsg)
 	})
 
-	// if editor could not be opened or the message received is empty, use auto-generated/suggested msg.
-	if err != nil || finalMsg == "" {
-		return suggestedMsg, nil
+	if err != nil {
+		return "", fmt.Errorf("Failed to open commit editor: %v \n Check your `EDITOR` environment variable with `echo $EDITOR` or your dolt config with `dolt config --list` to ensure that your editor is valid", err)
 	}
 
 	return finalMsg, nil
+}
+
+func checkIsTerminal() bool {
+	isTerminal := false
+	cli.ExecuteWithStdioRestored(func() {
+		if goisatty.IsTerminal(os.Stdout.Fd()) || os.Getenv("DOLT_TEST_FORCE_OPEN_EDITOR") == "1" {
+			isTerminal = true
+		}
+	})
+	return isTerminal
 }
 
 func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg string) (string, error) {

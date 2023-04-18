@@ -1,0 +1,11 @@
+dbDriver: mysql
+host: 127.0.0.1
+port: 3309
+user: root
+password:
+seed: 1
+tableSize: 10000
+randType: uniform
+eventCnt: 1500
+time: 120
+histogram: true

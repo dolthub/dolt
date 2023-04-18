@@ -18,29 +18,20 @@ import (
 	"context"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
-func CheckoutAllTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData) error {
+func CheckoutAllTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
 	tbls, err := doltdb.UnionTableNames(ctx, roots.Working, roots.Staged, roots.Head)
 	if err != nil {
-		return err
+		return doltdb.Roots{}, err
 	}
 
-	return checkoutTables(ctx, dbData, roots, tbls)
+	return MoveTablesFromHeadToWorking(ctx, roots, tbls)
 }
 
 // CheckoutTables takes in a set of tables and docs and checks them out to another branch.
-func CheckoutTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData, tables []string) error {
-	return checkoutTables(ctx, dbData, roots, tables)
-}
-
-func checkoutTables(ctx context.Context, dbData env.DbData, roots doltdb.Roots, tbls []string) error {
-	roots, err := MoveTablesFromHeadToWorking(ctx, roots, tbls)
-	if err != nil {
-		return err
-	}
-	return dbData.Rsw.UpdateWorkingRoot(ctx, roots.Working)
+func CheckoutTables(ctx context.Context, roots doltdb.Roots, tables []string) (doltdb.Roots, error) {
+	return MoveTablesFromHeadToWorking(ctx, roots, tables)
 }
 
 // MoveTablesFromHeadToWorking replaces the tables named from the given head to the given working root, overwriting any
@@ -49,14 +40,21 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 	var unknownTbls []string
 	for _, tblName := range tbls {
 		tbl, ok, err := roots.Staged.GetTable(ctx, tblName)
-
+		if err != nil {
+			return doltdb.Roots{}, err
+		}
+		fkc, err := roots.Staged.GetForeignKeyCollection(ctx)
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
 
 		if !ok {
 			tbl, ok, err = roots.Head.GetTable(ctx, tblName)
+			if err != nil {
+				return doltdb.Roots{}, err
+			}
 
+			fkc, err = roots.Head.GetForeignKeyCollection(ctx)
 			if err != nil {
 				return doltdb.Roots{}, err
 			}
@@ -68,7 +66,11 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 		}
 
 		roots.Working, err = roots.Working.PutTable(ctx, tblName, tbl)
+		if err != nil {
+			return doltdb.Roots{}, err
+		}
 
+		roots.Working, err = roots.Working.PutForeignKeyCollection(ctx, fkc)
 		if err != nil {
 			return doltdb.Roots{}, err
 		}

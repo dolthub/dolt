@@ -17,13 +17,18 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/parse"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -32,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -42,7 +48,10 @@ const (
 	directoryFlag    = "directory"
 	filenameFlag     = "file-name"
 	batchFlag        = "batch"
+	noBatchFlag      = "no-batch"
 	noAutocommitFlag = "no-autocommit"
+	schemaOnlyFlag   = "schema-only"
+	noCreateDbFlag   = "no-create-db"
 
 	sqlFileExt     = "sql"
 	csvFileExt     = "csv"
@@ -62,13 +71,13 @@ csv,json or parquet file.
 `,
 
 	Synopsis: []string{
-		"[-f] [-r {{.LessThan}}result-format{{.GreaterThan}}] [-fn {{.LessThan}}file_name{{.GreaterThan}}]  [-d {{.LessThan}}directory{{.GreaterThan}}] [--batch] [--no-autocommit] ",
+		"[-f] [-r {{.LessThan}}result-format{{.GreaterThan}}] [-fn {{.LessThan}}file_name{{.GreaterThan}}]  [-d {{.LessThan}}directory{{.GreaterThan}}] [--batch] [--no-batch] [--no-autocommit] [--no-create-db] ",
 	},
 }
 
 type DumpCmd struct{}
 
-// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd DumpCmd) Name() string {
 	return "dump"
 }
@@ -90,8 +99,11 @@ func (cmd DumpCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(filenameFlag, "fn", "file_name", "Define file name for dump file. Defaults to `doltdump.sql`.")
 	ap.SupportsString(directoryFlag, "d", "directory_name", "Define directory name to dump the files in. Defaults to `doltdump/`.")
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
-	ap.SupportsFlag(batchFlag, "", "Returns batch insert statements wherever possible.")
-	ap.SupportsFlag(noAutocommitFlag, "na", "Turns off autocommit for each dumped table. Used to speed up loading of outputted sql file")
+	ap.SupportsFlag(batchFlag, "", "Return batch insert statements wherever possible, enabled by default.")
+	ap.SupportsFlag(noBatchFlag, "", "Emit one row per statement, instead of batching multiple rows into each statement.")
+	ap.SupportsFlag(noAutocommitFlag, "na", "Turn off autocommit for each dumped table. Useful for speeding up loading of output SQL file.")
+	ap.SupportsFlag(schemaOnlyFlag, "", "Dump a table's schema, without including any data, to the output SQL file.")
+	ap.SupportsFlag(noCreateDbFlag, "", "Do not write `CREATE DATABASE` statements in SQL files.")
 	return ap
 }
 
@@ -125,70 +137,68 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	force := apr.Contains(forceParam)
+	schemaOnly := apr.Contains(schemaOnlyFlag)
 	resFormat, _ := apr.GetValue(FormatFlag)
 	resFormat = strings.TrimPrefix(resFormat, ".")
 
-	name, vErr := validateArgs(apr)
+	outputFileOrDirName, vErr := validateArgs(apr)
 	if vErr != nil {
 		return HandleVErrAndExitCode(vErr, usage)
 	}
 
-	// Look for schemas and procedures table, and add to tblNames only for sql dumps
-	if resFormat == emptyFileExt || resFormat == sqlFileExt {
-		sysTblNames, err := doltdb.GetSystemTableNames(ctx, root)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-		for _, tblName := range sysTblNames {
-			switch tblName {
-			case doltdb.SchemasTableName:
-				tblNames = append(tblNames, doltdb.SchemasTableName)
-			case doltdb.ProceduresTableName:
-				tblNames = append(tblNames, doltdb.ProceduresTableName)
-			}
-		}
-	}
-
 	switch resFormat {
 	case emptyFileExt, sqlFileExt:
-		if name == emptyStr {
-			name = fmt.Sprintf("doltdump.sql")
+		var defaultName string
+		if schemaOnly {
+			defaultName = fmt.Sprintf("doltdump_schema_only.sql")
 		} else {
-			if !strings.HasSuffix(name, ".sql") {
-				name = fmt.Sprintf("%s.sql", name)
+			defaultName = fmt.Sprintf("doltdump.sql")
+		}
+
+		if outputFileOrDirName == emptyStr {
+			outputFileOrDirName = defaultName
+		} else {
+			if !strings.HasSuffix(outputFileOrDirName, ".sql") {
+				outputFileOrDirName = fmt.Sprintf("%s.sql", outputFileOrDirName)
 			}
 		}
 
-		dumpOpts := getDumpOptions(name, resFormat)
-		fPath, err := checkAndCreateOpenDestFile(ctx, root, dEnv, force, dumpOpts, name)
+		dumpOpts := getDumpOptions(outputFileOrDirName, resFormat, schemaOnly)
+		fPath, err := checkAndCreateOpenDestFile(ctx, root, dEnv, force, dumpOpts, outputFileOrDirName)
 		if err != nil {
 			return HandleVErrAndExitCode(err, usage)
 		}
 
-		err2 := addBulkLoadingParadigms(dEnv, fPath)
-		if err2 != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err2), usage)
+		if !apr.Contains(noCreateDbFlag) {
+			dbName, err := getActiveDatabaseName(ctx, dEnv)
+			if err != nil {
+				return HandleVErrAndExitCode(err, usage)
+			}
+			err = addCreateDatabaseHeader(dEnv, fPath, dbName)
+			if err != nil {
+				return HandleVErrAndExitCode(err, usage)
+			}
+		}
+
+		err = addBulkLoadingParadigms(dEnv, fPath)
+		if err != nil {
+			return HandleVErrAndExitCode(err, usage)
 		}
 
 		for _, tbl := range tblNames {
-			tblOpts := newTableArgs(tbl, dumpOpts.dest, apr.Contains(batchFlag), apr.Contains(noAutocommitFlag))
+			tblOpts := newTableArgs(tbl, dumpOpts.dest, !apr.Contains(noBatchFlag), apr.Contains(noAutocommitFlag), schemaOnly)
 			err = dumpTable(ctx, dEnv, tblOpts, fPath)
 			if err != nil {
 				return HandleVErrAndExitCode(err, usage)
 			}
 		}
-	case csvFileExt:
-		err = dumpTables(ctx, root, dEnv, force, tblNames, csvFileExt, name, false)
+
+		err = dumpSchemaElements(ctx, dEnv, fPath)
 		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			return HandleVErrAndExitCode(err, usage)
 		}
-	case jsonFileExt:
-		err = dumpTables(ctx, root, dEnv, force, tblNames, jsonFileExt, name, false)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-	case parquetFileExt:
-		err = dumpTables(ctx, root, dEnv, force, tblNames, parquetFileExt, name, false)
+	case csvFileExt, jsonFileExt, parquetFileExt:
+		err = dumpNonSqlTables(ctx, root, dEnv, force, tblNames, resFormat, outputFileOrDirName, false)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -201,13 +211,219 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	return 0
 }
 
+// dumpSchemaElements writes the non-table schema elements (views, triggers, procedures) to the file path given
+func dumpSchemaElements(ctx context.Context, dEnv *env.DoltEnv, path string) errhand.VerboseError {
+	writer, err := dEnv.FS.OpenForWriteAppend(path, os.ModePerm)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	engine, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	sqlCtx, err := engine.NewLocalContext(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+	sqlCtx.SetCurrentDatabase(dbName)
+
+	root, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	err = dumpViews(sqlCtx, engine, root, writer)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	err = dumpTriggers(sqlCtx, engine, root, writer)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	err = dumpProcedures(sqlCtx, engine, root, writer)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	err = writer.Close()
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	return nil
+}
+
+func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValue, writer io.WriteCloser) (rerr error) {
+	_, _, ok, err := root.GetTableInsensitive(sqlCtx, doltdb.ProceduresTableName)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return nil
+	}
+
+	sch, iter, err := engine.Query(sqlCtx, "select * from "+doltdb.ProceduresTableName)
+	if err != nil {
+		return err
+	}
+
+	stmtColIdx := sch.IndexOfColName(doltdb.ProceduresTableCreateStmtCol)
+
+	defer func(iter sql.RowIter, context *sql.Context) {
+		err := iter.Close(context)
+		if rerr == nil && err != nil {
+			rerr = err
+		}
+	}(iter, sqlCtx)
+
+	for {
+		row, err := iter.Next(sqlCtx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		err = iohelp.WriteLine(writer, fmt.Sprintf("delimiter END_PROCEDURE"))
+		if err != nil {
+			return err
+		}
+
+		err = iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[stmtColIdx]))
+		if err != nil {
+			return err
+		}
+
+		err = iohelp.WriteLine(writer, fmt.Sprintf("END_PROCEDURE\ndelimiter ;"))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValue, writer io.WriteCloser) (rerr error) {
+	_, _, ok, err := root.GetTableInsensitive(sqlCtx, doltdb.SchemasTableName)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return nil
+	}
+
+	sch, iter, err := engine.Query(sqlCtx, "select * from "+doltdb.SchemasTableName)
+	if err != nil {
+		return err
+	}
+
+	typeColIdx := sch.IndexOfColName(doltdb.SchemasTablesTypeCol)
+	fragColIdx := sch.IndexOfColName(doltdb.SchemasTablesFragmentCol)
+
+	defer func(iter sql.RowIter, context *sql.Context) {
+		err := iter.Close(context)
+		if rerr == nil && err != nil {
+			rerr = err
+		}
+	}(iter, sqlCtx)
+
+	for {
+		row, err := iter.Next(sqlCtx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		if row[typeColIdx] != "trigger" {
+			continue
+		}
+
+		err = iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[fragColIdx]))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValue, writer io.WriteCloser) (rerr error) {
+	_, _, ok, err := root.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return nil
+	}
+
+	sch, iter, err := engine.Query(ctx, "select * from "+doltdb.SchemasTableName)
+	if err != nil {
+		return err
+	}
+
+	typeColIdx := sch.IndexOfColName(doltdb.SchemasTablesTypeCol)
+	fragColIdx := sch.IndexOfColName(doltdb.SchemasTablesFragmentCol)
+	nameColIdx := sch.IndexOfColName(doltdb.SchemasTablesNameCol)
+
+	defer func(iter sql.RowIter, context *sql.Context) {
+		err := iter.Close(context)
+		if rerr == nil && err != nil {
+			rerr = err
+		}
+	}(iter, ctx)
+
+	for {
+		row, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		if row[typeColIdx] != "view" {
+			continue
+		}
+
+		// We used to store just the SELECT part of a view, but now we store the entire CREATE VIEW statement
+		cv, err := parse.Parse(ctx, row[fragColIdx].(string))
+		if err != nil {
+			return err
+		}
+
+		_, ok := cv.(*plan.CreateView)
+		if ok {
+			err := iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[fragColIdx]))
+			if err != nil {
+				return err
+			}
+		} else {
+			err := iohelp.WriteLine(writer, fmt.Sprintf("CREATE VIEW %s AS %s;", row[nameColIdx], row[fragColIdx]))
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 type dumpOptions struct {
-	format string
-	dest   mvdata.DataLocation
+	format     string
+	schemaOnly bool
+	dest       mvdata.DataLocation
 }
 
 type tableOptions struct {
 	tableName     string
+	schemaOnly    bool
 	dest          mvdata.DataLocation
 	batched       bool
 	autocommitOff bool
@@ -255,8 +471,17 @@ func dumpTable(ctx context.Context, dEnv *env.DoltEnv, tblOpts *tableOptions, fi
 		return errhand.BuildDError("Error creating writer for %s.", tblOpts.SrcName()).AddCause(err).Build()
 	}
 
-	pipeline := mvdata.NewDataMoverPipeline(ctx, rd, wr)
-	err = pipeline.Execute()
+	if tblOpts.schemaOnly {
+		// table schema can be exported to only sql file.
+		if sqlExpWr, ok := wr.(*sqlexport.SqlExportWriter); ok {
+			err = sqlExpWr.WriteDropCreateOnly(ctx)
+		} else {
+			err = errhand.BuildDError("Cannot export table schemas to non-sql output file").Build()
+		}
+	} else {
+		pipeline := mvdata.NewDataMoverPipeline(ctx, rd, wr)
+		err = pipeline.Execute()
+	}
 
 	if err != nil {
 		return errhand.BuildDError("Error with dumping %s.", tblOpts.SrcName()).AddCause(err).Build()
@@ -361,6 +586,7 @@ func validateArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseError)
 	rf = strings.TrimPrefix(rf, ".")
 	fn, fnOk := apr.GetValue(filenameFlag)
 	dn, dnOk := apr.GetValue(directoryFlag)
+	snOk := apr.Contains(schemaOnlyFlag)
 
 	if fnOk && dnOk {
 		return emptyStr, errhand.BuildDError("cannot pass both directory and file names").SetPrintUsage().Build()
@@ -371,19 +597,12 @@ func validateArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseError)
 			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", directoryFlag, sqlFileExt).SetPrintUsage().Build()
 		}
 		return fn, nil
-	case csvFileExt:
+	case csvFileExt, jsonFileExt, parquetFileExt:
 		if fnOk {
-			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", filenameFlag, csvFileExt).SetPrintUsage().Build()
+			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", filenameFlag, rf).SetPrintUsage().Build()
 		}
-		return dn, nil
-	case jsonFileExt:
-		if fnOk {
-			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", filenameFlag, jsonFileExt).SetPrintUsage().Build()
-		}
-		return dn, nil
-	case parquetFileExt:
-		if fnOk {
-			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", filenameFlag, parquetFileExt).SetPrintUsage().Build()
+		if snOk {
+			return emptyStr, errhand.BuildDError("%s dump is not supported for %s exports", schemaOnlyFlag, rf).SetPrintUsage().Build()
 		}
 		return dn, nil
 	default:
@@ -392,29 +611,34 @@ func validateArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseError)
 }
 
 // getDumpArgs returns dumpOptions of result format and dest file location corresponding to the input parameters
-func getDumpOptions(fileName string, rf string) *dumpOptions {
+func getDumpOptions(fileName string, rf string, schemaOnly bool) *dumpOptions {
 	fileLoc := getDumpDestination(fileName)
 
 	return &dumpOptions{
-		format: rf,
-		dest:   fileLoc,
+		format:     rf,
+		schemaOnly: schemaOnly,
+		dest:       fileLoc,
 	}
 }
 
 // newTableArgs returns tableOptions of table name and src table location and dest file location
 // corresponding to the input parameters
-func newTableArgs(tblName string, destination mvdata.DataLocation, batched bool, autocommitOff bool) *tableOptions {
+func newTableArgs(tblName string, destination mvdata.DataLocation, batched, autocommitOff, schemaOnly bool) *tableOptions {
+	if schemaOnly {
+		batched = false
+	}
 	return &tableOptions{
 		tableName:     tblName,
+		schemaOnly:    schemaOnly,
 		dest:          destination,
 		batched:       batched,
 		autocommitOff: autocommitOff,
 	}
 }
 
-// dumpTables returns nil if all tables is dumped successfully, and it returns err if there is one.
+// dumpNonSqlTables returns nil if all tables is dumped successfully, and it returns err if there is one.
 // It handles only csv and json file types(rf).
-func dumpTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, force bool, tblNames []string, rf string, dirName string, batched bool) errhand.VerboseError {
+func dumpNonSqlTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, force bool, tblNames []string, rf string, dirName string, batched bool) errhand.VerboseError {
 	var fName string
 	if dirName == emptyStr {
 		dirName = fmt.Sprintf("doltdump/")
@@ -426,14 +650,14 @@ func dumpTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, 
 
 	for _, tbl := range tblNames {
 		fName = fmt.Sprintf("%s%s.%s", dirName, tbl, rf)
-		dumpOpts := getDumpOptions(fName, rf)
+		dumpOpts := getDumpOptions(fName, rf, false)
 
 		fPath, err := checkAndCreateOpenDestFile(ctx, root, dEnv, force, dumpOpts, fName)
 		if err != nil {
 			return err
 		}
 
-		tblOpts := newTableArgs(tbl, dumpOpts.dest, batched, false)
+		tblOpts := newTableArgs(tbl, dumpOpts.dest, batched, false, false)
 
 		err = dumpTable(ctx, dEnv, tblOpts, fPath)
 		if err != nil {
@@ -447,21 +671,62 @@ func dumpTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, 
 // cc. https://dev.mysql.com/doc/refman/8.0/en/optimizing-innodb-bulk-data-loading.html
 // This includes turning off FOREIGN_KEY_CHECKS and UNIQUE_CHECKS off at the beginning of the file.
 // Note that the standard mysqldump program turns these variables off.
-func addBulkLoadingParadigms(dEnv *env.DoltEnv, fPath string) error {
+func addBulkLoadingParadigms(dEnv *env.DoltEnv, fPath string) errhand.VerboseError {
 	writer, err := dEnv.FS.OpenForWriteAppend(fPath, os.ModePerm)
 	if err != nil {
-		return err
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	_, err = writer.Write([]byte("SET FOREIGN_KEY_CHECKS=0;\n"))
 	if err != nil {
-		return err
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	_, err = writer.Write([]byte("SET UNIQUE_CHECKS=0;\n"))
 	if err != nil {
-		return err
+		return errhand.VerboseErrorFromError(err)
 	}
 
-	return writer.Close()
+	_ = writer.Close()
+
+	return nil
+}
+
+// addCreateDatabaseHeader adds a CREATE DATABASE header to prevent `no database selected` errors on dump file ingestion.
+func addCreateDatabaseHeader(dEnv *env.DoltEnv, fPath, dbName string) errhand.VerboseError {
+	writer, err := dEnv.FS.OpenForWriteAppend(fPath, os.ModePerm)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	str := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%[1]s`; USE `%[1]s`; \n", dbName)
+	_, err = writer.Write([]byte(str))
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	_ = writer.Close()
+
+	return nil
+}
+
+// TODO: find a more elegant way to get database name, possibly implement a method in DoltEnv
+// getActiveDatabaseName returns the name of the current active database
+func getActiveDatabaseName(ctx context.Context, dEnv *env.DoltEnv) (string, errhand.VerboseError) {
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	if err != nil {
+		return "", errhand.VerboseErrorFromError(err)
+	}
+
+	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
+	var dbName string
+	err = mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
+		dbName = name
+		return true, nil
+	})
+	if err != nil {
+		return "", errhand.VerboseErrorFromError(err)
+	}
+
+	return dbName, nil
 }

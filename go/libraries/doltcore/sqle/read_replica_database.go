@@ -28,6 +28,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -47,7 +49,7 @@ var _ sql.TemporaryTableCreator = ReadReplicaDatabase{}
 var _ sql.TableRenamer = ReadReplicaDatabase{}
 var _ sql.TriggerDatabase = &ReadReplicaDatabase{}
 var _ sql.StoredProcedureDatabase = ReadReplicaDatabase{}
-var _ sql.TransactionDatabase = ReadReplicaDatabase{}
+var _ dsess.RemoteReadReplicaDatabase = ReadReplicaDatabase{}
 
 var ErrFailedToLoadReplicaDB = errors.New("failed to load replica database")
 var ErrInvalidReplicateHeadsSetting = errors.New("invalid replicate heads setting")
@@ -86,20 +88,16 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 	}, nil
 }
 
-func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
-	if rrd.srcDB != nil {
-		err := rrd.PullFromRemote(ctx)
-		if err != nil {
-			err = fmt.Errorf("replication failed: %w", err)
-			if !SkipReplicationWarnings() {
-				return nil, err
-			}
-			ctx.GetLogger().Warn(err.Error())
-		}
-	} else {
-		ctx.GetLogger().Warn("replication failed; dolt_replication_remote value is misconfigured")
-	}
-	return rrd.Database.StartTransaction(ctx, tCharacteristic)
+func (rrd ReadReplicaDatabase) ValidReplicaState(ctx *sql.Context) bool {
+	// srcDB will be nil in the case the remote was specified incorrectly and startup errors are suppressed
+	return rrd.srcDB != nil
+}
+
+// InitialDBState implements dsess.SessionDatabase
+// This seems like a pointless override from the embedded Database implementation, but it's necessary to pass the
+// correct pointer type to the session initializer.
+func (rrd ReadReplicaDatabase) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
+	return initialDBState(ctx, rrd, branch)
 }
 
 func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
@@ -120,44 +118,153 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	currentBranchRef, err := dSess.CWBHeadRef(ctx, rrd.name)
-	if err != nil {
+	if err != nil && !dsess.IgnoreReplicationErrors() {
 		return err
+	} else if err != nil {
+		dsess.WarnReplicationError(ctx, err)
+		return nil
 	}
+
+	err = rrd.srcDB.Rebase(ctx)
+	if err != nil && !dsess.IgnoreReplicationErrors() {
+		return err
+	} else if err != nil {
+		dsess.WarnReplicationError(ctx, err)
+		return nil
+	}
+
+	remoteRefs, localRefs, toDelete, err := getReplicationRefs(ctx, rrd)
+	if err != nil && !dsess.IgnoreReplicationErrors() {
+		return err
+	} else if err != nil {
+		dsess.WarnReplicationError(ctx, err)
+		return nil
+	}
+
 	switch {
-	case headsArg != "" && allHeads == SysVarTrue:
+	case headsArg != "" && allHeads == dsess.SysVarTrue:
 		return fmt.Errorf("%w; cannot set both 'dolt_replicate_heads' and 'dolt_replicate_all_heads'", ErrInvalidReplicateHeadsSetting)
 	case headsArg != "":
 		heads, ok := headsArg.(string)
 		if !ok {
 			return sql.ErrInvalidSystemVariableValue.New(dsess.ReplicateHeads)
 		}
-		branches := parseBranches(heads)
-		err := rrd.srcDB.Rebase(ctx)
-		if err != nil {
-			return err
+		branches := strings.Split(heads, ",")
+		branchesToPull := make(map[string]bool)
+		for _, branch := range branches {
+			branchesToPull[branch] = true
 		}
-		err = pullBranches(ctx, rrd, branches, currentBranchRef, behavior)
-		if err != nil {
-			return err
+
+		// Reduce the remote branch list to only the ones configured to replicate
+		prunedRefs := make([]doltdb.RefWithHash, len(branchesToPull))
+		pruneI := 0
+		for _, remoteBranch := range remoteRefs {
+			if remoteBranch.Ref.GetType() == ref.BranchRefType && branchesToPull[remoteBranch.Ref.GetPath()] {
+				prunedRefs[pruneI] = remoteBranch
+				pruneI++
+			}
+			delete(branchesToPull, remoteBranch.Ref.GetPath())
 		}
+
+		if len(branchesToPull) > 0 {
+			// just use the first not-found branch as the error string
+			var branch string
+			for b := range branchesToPull {
+				branch = b
+				break
+			}
+
+			err := fmt.Errorf("unable to find %q on %q; branch not found", branch, rrd.remote.Name)
+			if err != nil && !dsess.IgnoreReplicationErrors() {
+				return err
+			} else if err != nil {
+				dsess.WarnReplicationError(ctx, err)
+				return nil
+			}
+		}
+
+		remoteRefs = prunedRefs
+		err = pullBranchesAndUpdateWorkingSet(ctx, rrd, remoteRefs, localRefs, currentBranchRef, behavior)
+
+		if err != nil && !dsess.IgnoreReplicationErrors() {
+			return err
+		} else if err != nil {
+			dsess.WarnReplicationError(ctx, err)
+			return nil
+		}
+
 	case allHeads == int8(1):
-		err := rrd.srcDB.Rebase(ctx)
-		if err != nil {
+		err = pullBranchesAndUpdateWorkingSet(ctx, rrd, remoteRefs, localRefs, currentBranchRef, behavior)
+		if err != nil && !dsess.IgnoreReplicationErrors() {
 			return err
+		} else if err != nil {
+			dsess.WarnReplicationError(ctx, err)
+			return nil
 		}
-		toPull, toDelete, err := getReplicationBranches(ctx, rrd)
-		err = pullBranches(ctx, rrd, toPull, currentBranchRef, behavior)
-		if err != nil {
+
+		err = deleteBranches(ctx, rrd, toDelete)
+		if err != nil && !dsess.IgnoreReplicationErrors() {
 			return err
-		}
-		err = deleteBranches(ctx, rrd, toDelete, currentBranchRef)
-		if err != nil {
-			return err
+		} else if err != nil {
+			dsess.WarnReplicationError(ctx, err)
+			return nil
 		}
 	default:
 		return fmt.Errorf("%w: dolt_replicate_heads not set", ErrInvalidReplicateHeadsSetting)
 	}
+
 	return nil
+}
+
+// CreateLocalBranchFromRemote pulls the given branch from the remote database and creates a local tracking branch for
+// it. This is only used for initializing a new local branch being pulled from a remote during connection
+// initialization, and doesn't do the full work of remote synchronization that happens on transaction start.
+func (rrd ReadReplicaDatabase) CreateLocalBranchFromRemote(ctx *sql.Context, branchRef ref.BranchRef) error {
+	_, err := rrd.limiter.Run(ctx, "pullNewBranch", func() (any, error) {
+		// because several clients can queue up waiting to create the same local branch, double check to see if this
+		// work was already done and bail early if so
+		_, branchExists, err := rrd.ddb.HasBranch(ctx, branchRef.GetPath())
+		if err != nil {
+			return nil, err
+		}
+
+		if branchExists {
+			return nil, nil
+		}
+
+		cm, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, branchRef, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+		if err != nil {
+			return nil, err
+		}
+
+		cmHash, err := cm.HashOf()
+		if err != nil {
+			return nil, err
+		}
+
+		// create refs/heads/branch dataset
+		err = rrd.ddb.NewBranchAtCommit(ctx, branchRef, cm)
+		if err != nil {
+			return nil, err
+		}
+
+		err = rrd.srcDB.Rebase(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = pullBranches(ctx, rrd, []doltdb.RefWithHash{{
+			Ref:  branchRef,
+			Hash: cmHash,
+		}}, nil, pullBehavior_fastForward)
+		if err != nil {
+			return nil, err
+		}
+
+		return nil, err
+	})
+
+	return err
 }
 
 type pullBehavior bool
@@ -165,141 +272,249 @@ type pullBehavior bool
 const pullBehavior_fastForward pullBehavior = false
 const pullBehavior_forcePull pullBehavior = true
 
-func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string, currentBranchRef ref.DoltRef, behavior pullBehavior) error {
-	refSpecs, err := env.ParseRSFromArgs(rrd.remote.Name, branches)
+// pullBranchesAndUpdateWorkingSet pulls the remote branches named. If a corresponding local branch exists, it will be
+// fast-forwarded. If it doesn't exist, it will be created. Afterward, the working set of the current branch is
+// updated if the current branch ref was updated by the pull.
+func pullBranchesAndUpdateWorkingSet(
+	ctx *sql.Context,
+	rrd ReadReplicaDatabase,
+	remoteRefs []doltdb.RefWithHash,
+	localRefs []doltdb.RefWithHash,
+	currentBranchRef ref.DoltRef,
+	behavior pullBehavior,
+) error {
+
+	remoteRefsByPath, err := pullBranches(ctx, rrd, remoteRefs, localRefs, behavior)
 	if err != nil {
 		return err
 	}
 
-	for i, refSpec := range refSpecs {
-		branch := ref.NewBranchRef(branches[i])
-		rtRef := refSpec.DestRef(branch)
-
-		fetchCtx := ctx.Context
-
-		srcDBCommitA, err := rrd.limiter.Run(ctx, branch.String(), func() (any, error) {
-			// fetch remote tracking ref only
-			var srcDBCommit *doltdb.Commit
-			{
-				srcDBCommit, err = actions.FetchRemoteBranch(fetchCtx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, branch, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
-				if err != nil {
-					return nil, err
-				}
-
-				if behavior == pullBehavior_forcePull {
-					commitHash, herr := srcDBCommit.HashOf()
-					if herr != nil {
-						return nil, err
-					}
-					err = rrd.ddb.SetHead(fetchCtx, rtRef, commitHash)
-				} else {
-					err = rrd.ddb.FastForward(fetchCtx, rtRef, srcDBCommit)
-				}
-				if err != nil {
-					return nil, err
-				}
+	// update the current working set if necessary
+	if remoteRef, ok := remoteRefsByPath[currentBranchRef.GetPath()]; ok {
+		// Loop on optimistic lock failures.
+		for {
+			wsRef, err := ref.WorkingSetRefForHead(currentBranchRef)
+			if err != nil {
+				return err
+			}
+			ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
+			if err != nil {
+				return err
+			}
+			prevHash, err := ws.HashOf()
+			if err != nil {
+				return err
+			}
+			wsWorkingRootHash, err := ws.WorkingRoot().HashOf()
+			if err != nil {
+				return err
+			}
+			wsStagedRootHash, err := ws.StagedRoot().HashOf()
+			if err != nil {
+				return err
 			}
 
-			// either ff or create local tracking branch
-			{
-				branchExists, err := rrd.ddb.HasBranch(fetchCtx, branch.GetPath())
-				switch {
-				case err != nil:
-				case branchExists:
-					if behavior == pullBehavior_forcePull {
-						commitHash, herr := srcDBCommit.HashOf()
-						if herr != nil {
-							return nil, err
-						}
-						err = rrd.ddb.SetHead(fetchCtx, branch, commitHash)
-					} else {
-						err = rrd.ddb.FastForward(fetchCtx, branch, srcDBCommit)
-					}
-				default:
-					err = rrd.ddb.NewBranchAtCommit(fetchCtx, branch, srcDBCommit)
-				}
-				if err != nil {
-					return nil, err
-				}
+			// The branch heads could have moved since we pulled
+			// them. We re-resolve the upstream ref every time to
+			// ensure we don't go backwards if another thread moves
+			// our working set due to read replication.
+			cm, err := rrd.srcDB.ResolveCommitRef(ctx, remoteRef.Ref)
+			if err != nil {
+				return err
 			}
-			return srcDBCommit, nil
-		})
-		if err != nil {
-			return err
-		}
+			commitRoot, err := cm.GetRootValue(ctx)
+			if err != nil {
+				return err
+			}
+			commitRootHash, err := commitRoot.HashOf()
+			if err != nil {
+				return err
+			}
 
-		srcDBCommit := srcDBCommitA.(*doltdb.Commit)
-
-		// if ref is active head, update the current working set
-		{
-			if branch == currentBranchRef {
-				wsRef, err := ref.WorkingSetRefForHead(branch)
-				if err != nil {
-					return err
-				}
-
-				ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
-				if err != nil {
-					return err
-				}
-
-				commitRoot, err := srcDBCommit.GetRootValue(ctx)
-				if err != nil {
-					return err
-				}
-
+			if commitRootHash != wsWorkingRootHash || commitRootHash != wsStagedRootHash {
 				ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-				h, err := ws.HashOf()
-				if err != nil {
+
+				err = rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, prevHash, doltdb.TodoWorkingSetMeta())
+				if err == nil {
+					return nil
+				}
+				if !errors.Is(err, datas.ErrOptimisticLockFailed) {
 					return err
 				}
-
-				rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
+			} else {
+				return nil
 			}
 		}
-	}
-
-	_, err = rrd.limiter.Run(ctx, "___tags", func() (any, error) {
-		tmpDir, err := rrd.rsw.TempTableFilesDir()
-		if err != nil {
-			return nil, err
-		}
-		// TODO: Not sure about this; see comment about the captured ctx below.
-		return nil, actions.FetchFollowTags(ctx, tmpDir, rrd.srcDB, rrd.ddb, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
-	})
-	if err != nil {
-		return err
 	}
 
 	return nil
 }
 
-func getReplicationBranches(ctx *sql.Context, rrd ReadReplicaDatabase) (allBranches []string, deletedBranches []ref.DoltRef, err error) {
-	remRefs, err := rrd.srcDB.GetBranches(ctx)
+// pullBranches pulls the remote branches named and returns the map of their hashes keyed by branch path.
+func pullBranches(
+	ctx *sql.Context,
+	rrd ReadReplicaDatabase,
+	remoteRefs []doltdb.RefWithHash,
+	localRefs []doltdb.RefWithHash,
+	behavior pullBehavior,
+) (map[string]doltdb.RefWithHash, error) {
+	localRefsByPath := make(map[string]doltdb.RefWithHash)
+	remoteRefsByPath := make(map[string]doltdb.RefWithHash)
+	remoteHashes := make([]hash.Hash, len(remoteRefs))
+
+	for i, b := range remoteRefs {
+		remoteRefsByPath[b.Ref.GetPath()] = b
+		remoteHashes[i] = b.Hash
+	}
+
+	for _, b := range localRefs {
+		localRefsByPath[b.Ref.GetPath()] = b
+	}
+
+	// XXX: Our view of which remote branches to pull and what to set the
+	// local branches to was computed outside of the limiter, concurrently
+	// with other possible attempts to pull from the remote. Now we are
+	// applying changes based on that view. This seems capable of rolling
+	// back changes which were applied from another thread.
+
+	_, err := rrd.limiter.Run(ctx, "-all", func() (any, error) {
+		pullErr := rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, remoteHashes, nil)
+		if pullErr != nil {
+			return nil, pullErr
+		}
+
+	REFS: // every successful pass through the loop below must end with CONTINUE REFS to get out of the retry loop
+		for _, remoteRef := range remoteRefs {
+			trackingRef := ref.NewRemoteRef(rrd.remote.Name, remoteRef.Ref.GetPath())
+			localRef, localRefExists := localRefsByPath[remoteRef.Ref.GetPath()]
+
+			// loop on optimistic lock failures
+		OPTIMISTIC_RETRY:
+			for {
+				if pullErr != nil || localRefExists {
+					pullErr = nil
+
+					// TODO: this should work for workspaces too but doesn't, only branches
+					if localRef.Ref.GetType() == ref.BranchRefType {
+						err := rrd.pullLocalBranch(ctx, localRef, remoteRef, trackingRef, behavior)
+						if errors.Is(err, datas.ErrOptimisticLockFailed) {
+							continue OPTIMISTIC_RETRY
+						} else if err != nil {
+							return nil, err
+						}
+					}
+
+					continue REFS
+				} else {
+					switch remoteRef.Ref.GetType() {
+					case ref.BranchRefType:
+						err := rrd.createNewBranchFromRemote(ctx, remoteRef, trackingRef)
+						if errors.Is(err, datas.ErrOptimisticLockFailed) {
+							continue OPTIMISTIC_RETRY
+						} else if err != nil {
+							return nil, err
+						}
+
+						// TODO: Establish upstream tracking for this new branch
+						continue REFS
+					case ref.TagRefType:
+						err := rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
+						if errors.Is(err, datas.ErrOptimisticLockFailed) {
+							continue OPTIMISTIC_RETRY
+						} else if err != nil {
+							return nil, err
+						}
+
+						continue REFS
+					default:
+						ctx.GetLogger().Warnf("skipping replication for unhandled remote ref %s", remoteRef.Ref.String())
+						continue REFS
+					}
+				}
+			}
+		}
+		return nil, nil
+	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	localRefs, err := rrd.Database.ddb.GetBranches(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	deletedBranches = branchesToDelete(remRefs, localRefs)
-	allBranches = make([]string, len(remRefs))
-	for i := range remRefs {
-		allBranches[i] = remRefs[i].GetPath()
-	}
-
-	return allBranches, deletedBranches, nil
+	return remoteRefsByPath, nil
 }
 
-func branchesToDelete(remRefs, localRefs []ref.DoltRef) []ref.DoltRef {
-	toDelete := make([]ref.DoltRef, 0, len(localRefs))
+func (rrd ReadReplicaDatabase) createNewBranchFromRemote(ctx *sql.Context, remoteRef doltdb.RefWithHash, trackingRef ref.RemoteRef) error {
+	ctx.GetLogger().Tracef("creating local branch %s", remoteRef.Ref.GetPath())
+
+	// If a local branch isn't present for the remote branch, create a new branch for it. We need to use
+	// NewBranchAtCommit so that the branch has its associated working set created at the same time. Creating
+	// branch refs without associate working sets causes errors in other places.
+	spec, err := doltdb.NewCommitSpec(remoteRef.Hash.String())
+	if err != nil {
+		return err
+	}
+
+	cm, err := rrd.ddb.Resolve(ctx, spec, nil)
+	if err != nil {
+		return err
+	}
+
+	err = rrd.ddb.NewBranchAtCommit(ctx, remoteRef.Ref, cm)
+	err = rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
+	if err != nil {
+		return err
+	}
+
+	return rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
+}
+
+func (rrd ReadReplicaDatabase) pullLocalBranch(ctx *sql.Context, localRef doltdb.RefWithHash, remoteRef doltdb.RefWithHash, trackingRef ref.RemoteRef, behavior pullBehavior) error {
+	if localRef.Hash != remoteRef.Hash {
+		if behavior == pullBehavior_forcePull {
+			err := rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
+			if err != nil {
+				return err
+			}
+		} else {
+			err := rrd.ddb.FastForwardToHash(ctx, remoteRef.Ref, remoteRef.Hash)
+			if err != nil {
+				return err
+			}
+		}
+
+		err := rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func getReplicationRefs(ctx *sql.Context, rrd ReadReplicaDatabase) (
+	remoteRefs []doltdb.RefWithHash,
+	localRefs []doltdb.RefWithHash,
+	deletedRefs []doltdb.RefWithHash,
+	err error,
+) {
+	remoteRefs, err = rrd.srcDB.GetRefsWithHashes(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	localRefs, err = rrd.Database.ddb.GetRefsWithHashes(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	deletedRefs = refsToDelete(remoteRefs, localRefs)
+	return remoteRefs, localRefs, deletedRefs, nil
+}
+
+func refsToDelete(remRefs, localRefs []doltdb.RefWithHash) []doltdb.RefWithHash {
+	toDelete := make([]doltdb.RefWithHash, 0, len(localRefs))
 	var i, j int
 	for i < len(remRefs) && j < len(localRefs) {
-		rem := remRefs[i].GetPath()
-		local := localRefs[j].GetPath()
+		rem := remRefs[i].Ref.GetPath()
+		local := localRefs[j].Ref.GetPath()
 		if rem == local {
 			i++
 			j++
@@ -317,9 +532,9 @@ func branchesToDelete(remRefs, localRefs []ref.DoltRef) []ref.DoltRef {
 	return toDelete
 }
 
-func deleteBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []ref.DoltRef, currentBranchRef ref.DoltRef) error {
+func deleteBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []doltdb.RefWithHash) error {
 	for _, b := range branches {
-		err := rrd.ddb.DeleteBranch(ctx, b)
+		err := rrd.ddb.DeleteBranch(ctx, b.Ref)
 		if errors.Is(err, doltdb.ErrBranchNotFound) {
 			continue
 		} else if err != nil {
@@ -327,15 +542,6 @@ func deleteBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []ref.Do
 		}
 	}
 	return nil
-}
-
-func parseBranches(arg string) []string {
-	heads := strings.Split(arg, ",")
-	branches := make([]string, 0, len(heads))
-	for _, head := range heads {
-		branches = append(branches, head)
-	}
-	return branches
 }
 
 type res struct {

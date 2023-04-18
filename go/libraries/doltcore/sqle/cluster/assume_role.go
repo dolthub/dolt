@@ -18,6 +18,7 @@ import (
 	"errors"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
@@ -30,7 +31,7 @@ func newAssumeRoleProcedure(controller *Controller) sql.ExternalStoredProcedureD
 		Schema: sql.Schema{
 			&sql.Column{
 				Name:     "status",
-				Type:     sql.Int64,
+				Type:     types.Int64,
 				Nullable: false,
 			},
 		},

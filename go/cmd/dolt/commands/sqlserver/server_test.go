@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -61,6 +62,11 @@ var (
 
 func TestServerArgs(t *testing.T) {
 	serverController := NewServerController()
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB.Close())
+	}()
 	go func() {
 		startServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"-H", "localhost",
@@ -70,9 +76,9 @@ func TestServerArgs(t *testing.T) {
 			"-t", "5",
 			"-l", "info",
 			"-r",
-		}, sqle.CreateEnvWithSeedData(t), serverController)
+		}, dEnv, serverController)
 	}()
-	err := serverController.WaitForStart()
+	err = serverController.WaitForStart()
 	require.NoError(t, err)
 	conn, err := dbr.Open("mysql", "username:password@tcp(localhost:15200)/", nil)
 	require.NoError(t, err)
@@ -100,15 +106,20 @@ listener:
     read_timeout_millis: 5000
     write_timeout_millis: 5000
 `
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB.Close())
+	}()
 	serverController := NewServerController()
 	go func() {
-		dEnv := sqle.CreateEnvWithSeedData(t)
+
 		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig))
 		startServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"--config", "config.yaml",
 		}, dEnv, serverController)
 	}()
-	err := serverController.WaitForStart()
+	err = serverController.WaitForStart()
 	require.NoError(t, err)
 	conn, err := dbr.Open("mysql", "username:password@tcp(localhost:15200)/", nil)
 	require.NoError(t, err)
@@ -120,7 +131,11 @@ listener:
 }
 
 func TestServerBadArgs(t *testing.T) {
-	env := sqle.CreateEnvWithSeedData(t)
+	env, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, env.DoltDB.Close())
+	}()
 
 	tests := [][]string{
 		{"-H", "127.0.0.0.1"},
@@ -148,7 +163,11 @@ func TestServerBadArgs(t *testing.T) {
 }
 
 func TestServerGoodParams(t *testing.T) {
-	env := sqle.CreateEnvWithSeedData(t)
+	env, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, env.DoltDB.Close())
+	}()
 
 	tests := []ServerConfig{
 		DefaultServerConfig(),
@@ -186,7 +205,12 @@ func TestServerGoodParams(t *testing.T) {
 }
 
 func TestServerSelect(t *testing.T) {
-	env := sqle.CreateEnvWithSeedData(t)
+	env, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, env.DoltDB.Close())
+	}()
+
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15300)
 
 	sc := NewServerController()
@@ -194,7 +218,7 @@ func TestServerSelect(t *testing.T) {
 	go func() {
 		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, env)
 	}()
-	err := sc.WaitForStart()
+	err = sc.WaitForStart()
 	require.NoError(t, err)
 
 	const dbName = "dolt"
@@ -243,7 +267,18 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 		Addr:    ":15200",
 		Handler: http.DefaultServeMux,
 	}
-	go server.ListenAndServe()
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB.Close())
+	}()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		server.ListenAndServe()
+	}()
 	go func() {
 		startServer(context.Background(), "test", "dolt sql-server", []string{
 			"-H", "localhost",
@@ -253,15 +288,22 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 			"-t", "5",
 			"-l", "info",
 			"-r",
-		}, sqle.CreateEnvWithSeedData(t), serverController)
+		}, dEnv, serverController)
 	}()
-	err := serverController.WaitForStart()
+
+	err = serverController.WaitForStart()
 	require.Error(t, err)
 	server.Close()
+	wg.Wait()
 }
 
 func TestServerSetDefaultBranch(t *testing.T) {
-	dEnv := sqle.CreateEnvWithSeedData(t)
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB.Close())
+	}()
+
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15302)
 
 	sc := NewServerController()
@@ -269,7 +311,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	go func() {
 		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, dEnv)
 	}()
-	err := sc.WaitForStart()
+	err = sc.WaitForStart()
 	require.NoError(t, err)
 
 	const dbName = "dolt"
@@ -297,11 +339,11 @@ func TestServerSetDefaultBranch(t *testing.T) {
 			expectedRes: []testBranch{{defaultBranch}},
 		},
 		{
-			query:       sess.Select("dolt_checkout('-b', 'new')"),
+			query:       sess.SelectBySql("call dolt_checkout('-b', 'new')"),
 			expectedRes: []testBranch{{""}},
 		},
 		{
-			query:       sess.Select("dolt_checkout('main')"),
+			query:       sess.SelectBySql("call dolt_checkout('main')"),
 			expectedRes: []testBranch{{""}},
 		},
 	}
@@ -392,8 +434,11 @@ func TestReadReplica(t *testing.T) {
 	}
 	defer os.Chdir(cwd)
 
+	ctx := context.Background()
+
 	multiSetup := testcommands.NewMultiRepoTestSetup(t.Fatal)
 	defer os.RemoveAll(multiSetup.Root)
+	defer multiSetup.Close()
 
 	multiSetup.NewDB("read_replica")
 	multiSetup.NewRemote("remote1")
@@ -403,12 +448,12 @@ func TestReadReplica(t *testing.T) {
 	readReplicaDbName := multiSetup.DbNames[0]
 	sourceDbName := multiSetup.DbNames[1]
 
-	localCfg, ok := multiSetup.MrEnv.GetEnv(readReplicaDbName).Config.GetConfig(env.LocalConfig)
+	localCfg, ok := multiSetup.GetEnv(readReplicaDbName).Config.GetConfig(env.LocalConfig)
 	if !ok {
 		t.Fatal("local config does not exist")
 	}
 	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{dsess.ReadReplicaRemote: "remote1", dsess.ReplicateHeads: "main,feature"})
-	dsess.InitPersistedSystemVars(multiSetup.MrEnv.GetEnv(readReplicaDbName))
+	dsess.InitPersistedSystemVars(multiSetup.GetEnv(readReplicaDbName))
 
 	// start server as read replica
 	sc := NewServerController()
@@ -420,7 +465,7 @@ func TestReadReplica(t *testing.T) {
 	func() {
 		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
 		go func() {
-			_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, multiSetup.MrEnv.GetEnv(readReplicaDbName))
+			_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, multiSetup.GetEnv(readReplicaDbName))
 		}()
 		err = sc.WaitForStart()
 		require.NoError(t, err)
@@ -428,7 +473,7 @@ func TestReadReplica(t *testing.T) {
 	defer sc.StopServer()
 
 	replicatedTable := "new_table"
-	multiSetup.CreateTable(sourceDbName, replicatedTable)
+	multiSetup.CreateTable(ctx, sourceDbName, replicatedTable)
 	multiSetup.StageAll(sourceDbName)
 	_ = multiSetup.CommitWithWorkingSet(sourceDbName)
 	multiSetup.PushToRemote(sourceDbName, "remote1", "main")
@@ -446,9 +491,9 @@ func TestReadReplica(t *testing.T) {
 
 		var res []int
 
-		q := sess.SelectBySql(fmt.Sprintf("select dolt_checkout('%s')", newBranch))
+		q := sess.SelectBySql(fmt.Sprintf("call dolt_checkout('%s')", newBranch))
 		_, err = q.LoadContext(context.Background(), &res)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.ElementsMatch(t, res, []int{0})
 	})
 }

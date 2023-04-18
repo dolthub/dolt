@@ -51,6 +51,9 @@ const (
 
 	// WorkspaceRefType is a reference to a workspace
 	WorkspaceRefType RefType = "workspaces"
+
+	// StashRefType is a reference to a stashes
+	StashRefType RefType = "stashes"
 )
 
 // HeadRefTypes are the ref types that point to a HEAD and contain a Commit struct. These are the types that are
@@ -62,6 +65,7 @@ var HeadRefTypes = map[RefType]struct{}{
 	InternalRefType:  {},
 	TagRefType:       {},
 	WorkspaceRefType: {},
+	StashRefType:     {},
 }
 
 // PrefixForType returns what a reference string for a given type should start with
@@ -155,6 +159,8 @@ func Parse(str string) (DoltRef, error) {
 				return NewTagRef(str), nil
 			case WorkspaceRefType:
 				return NewWorkspaceRef(str), nil
+			case StashRefType:
+				return NewStashRef(), nil
 			default:
 				panic("unknown type " + rType)
 			}

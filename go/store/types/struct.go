@@ -617,7 +617,7 @@ func verifyFields(fs structTypeFields) {
 	for i, f := range fs {
 		verifyFieldName(f.Name)
 		if i > 0 && strings.Compare(fs[i-1].Name, f.Name) >= 0 {
-			d.Chk.Fail("Field names must be unique and ordered alphabetically")
+			d.Panic("Field names must be unique and ordered alphabetically")
 		}
 	}
 }

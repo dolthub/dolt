@@ -14,7 +14,11 @@
 
 package edits
 
-import "github.com/dolthub/dolt/go/store/types"
+import (
+	"context"
+
+	"github.com/dolthub/dolt/go/store/types"
+)
 
 // KVPCollection is a collection of sorted KVPs
 type KVPCollection struct {
@@ -22,20 +26,20 @@ type KVPCollection struct {
 	numSlices int
 	totalSize int64
 	slices    []types.KVPSlice
-	nbf       *types.NomsBinFormat
+	vr        types.ValueReader
 }
 
 // NewKVPCollection creates a new KVPCollection from a sorted KVPSlice
-func NewKVPCollection(nbf *types.NomsBinFormat, sl types.KVPSlice) *KVPCollection {
-	return newKVPColl(nbf, cap(sl), 1, int64(len(sl)), []types.KVPSlice{sl})
+func NewKVPCollection(vr types.ValueReader, sl types.KVPSlice) *KVPCollection {
+	return newKVPColl(vr, cap(sl), 1, int64(len(sl)), []types.KVPSlice{sl})
 }
 
-func newKVPColl(nbf *types.NomsBinFormat, maxSize, numSlices int, totalSize int64, slices []types.KVPSlice) *KVPCollection {
+func newKVPColl(vr types.ValueReader, maxSize, numSlices int, totalSize int64, slices []types.KVPSlice) *KVPCollection {
 	if slices == nil {
 		panic("invalid params")
 	}
 
-	return &KVPCollection{maxSize, numSlices, totalSize, slices, nbf}
+	return &KVPCollection{maxSize, numSlices, totalSize, slices, vr}
 }
 
 // Size returns the total number of elements in the collection
@@ -45,20 +49,20 @@ func (coll *KVPCollection) Size() int64 {
 
 // Iterator returns an iterator that will iterate over the KVPs in the collection in order.
 func (coll *KVPCollection) Iterator() *KVPCollItr {
-	return NewItr(coll.nbf, coll)
+	return NewItr(coll.vr, coll)
 }
 
 // DestructiveMerge merges two KVPCollections into a new collection.  This KVPCollection and the
 // collection it is being merged with will no longer be valid once this method is called.  A
 // new KVPCollection will be returned which holds the merged collections.
-func (left *KVPCollection) DestructiveMerge(right *KVPCollection) (*KVPCollection, error) {
+func (left *KVPCollection) DestructiveMerge(ctx context.Context, right *KVPCollection) (*KVPCollection, error) {
 	if left.buffSize != right.buffSize {
 		panic("Cannot merge collections with varying buffer sizes.")
 	}
 
 	lItr := left.Iterator()
 	rItr := right.Iterator()
-	resBuilder := NewKVPCollBuilder(left.buffSize, left.nbf)
+	resBuilder := NewKVPCollBuilder(left.vr, left.buffSize)
 
 	var done bool
 	var kvp *types.KVP
@@ -68,7 +72,7 @@ func (left *KVPCollection) DestructiveMerge(right *KVPCollection) (*KVPCollectio
 
 	for !done {
 		currItr, otherItr = lItr, rItr
-		isLess, err := rItr.Less(lItr)
+		isLess, err := rItr.Less(ctx, lItr)
 
 		if err != nil {
 			return nil, err

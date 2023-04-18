@@ -41,7 +41,7 @@ teardown() {
 
 @test "sql-pull: dolt_pull main" {
     cd repo2
-    dolt sql -q "select dolt_pull('origin')"
+    dolt sql -q "call dolt_pull('origin')"
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -71,7 +71,7 @@ teardown() {
 
 @test "sql-pull: dolt_pull custom remote" {
     cd repo2
-    dolt sql -q "select dolt_pull('test-remote')"
+    dolt sql -q "call dolt_pull('test-remote')"
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -92,7 +92,7 @@ teardown() {
 @test "sql-pull: dolt_pull default origin" {
     cd repo2
     dolt remote remove test-remote
-    dolt sql -q "select dolt_pull()"
+    dolt sql -q "call dolt_pull()"
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -114,7 +114,7 @@ teardown() {
 @test "sql-pull: dolt_pull default custom remote" {
     cd repo2
     dolt remote remove origin
-    dolt sql -q "select dolt_pull()"
+    dolt sql -q "call dolt_pull()"
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -135,8 +135,8 @@ teardown() {
 
 @test "sql-pull: dolt_pull up to date does not error" {
     cd repo2
-    dolt sql -q "select dolt_pull('origin')"
-    dolt sql -q "select dolt_pull('origin')"
+    dolt sql -q "call dolt_pull('origin')"
+    dolt sql -q "call dolt_pull('origin')"
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -157,7 +157,7 @@ teardown() {
 
 @test "sql-pull: dolt_pull unknown remote fails" {
     cd repo2
-    run dolt sql -q "select dolt_pull('unknown')"
+    run dolt sql -q "call dolt_pull('unknown')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unknown remote" ]] || false
     [[ ! "$output" =~ "panic" ]] || false
@@ -174,7 +174,7 @@ teardown() {
 @test "sql-pull: dolt_pull unknown feature branch fails" {
     cd repo2
     dolt checkout feature
-    run dolt sql -q "select dolt_pull('origin')"
+    run dolt sql -q "call dolt_pull('origin')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "You asked to pull from the remote 'origin', but did not specify a branch" ]] || false
     [[ ! "$output" =~ "panic" ]] || false
@@ -203,7 +203,7 @@ teardown() {
     dolt push
 
     cd ../repo2
-    dolt sql -q "select dolt_pull('origin')"
+    dolt sql -q "call dolt_pull('origin')"
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -265,12 +265,12 @@ teardown() {
     dolt push -f origin main
 
     cd ../repo2
-    run dolt sql -q "select dolt_pull('origin')"
+    run dolt sql -q "call dolt_pull('origin')"
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
     [[ "$output" =~ "fetch failed; dataset head is not ancestor of commit" ]] || false
 
-    dolt sql -q "select dolt_pull('-f', 'origin')"
+    dolt sql -q "call dolt_pull('-f', 'origin')"
 
     run dolt log -n 1
     [ "$status" -eq 0 ]
@@ -314,7 +314,7 @@ teardown() {
 @test "sql-pull: dolt_pull squash" {
     skip "todo: support dolt pull --squash (cli too)"
     cd repo2
-    dolt sql -q "select dolt_pull('--squash', 'origin')"
+    dolt sql -q "call dolt_pull('--squash', 'origin')"
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -335,7 +335,7 @@ teardown() {
 
 @test "sql-pull: dolt_pull --noff flag" {
     cd repo2
-    dolt sql -q "select dolt_pull('--no-ff', 'origin')"
+    dolt sql -q "call dolt_pull('--no-ff', 'origin')"
     dolt status
     run dolt log -n 1
     [ "$status" -eq 0 ]
@@ -367,7 +367,7 @@ teardown() {
 
 @test "sql-pull: empty remote name does not panic" {
     cd repo2
-    dolt sql -q "select dolt_pull('')"
+    dolt sql -q "call dolt_pull('')"
 }
 
 @test "sql-pull: empty remote name does not panic on CALL" {
@@ -378,7 +378,7 @@ teardown() {
 @test "sql-pull: dolt_pull dirty working set fails" {
     cd repo2
     dolt sql -q "create table t2 (a int)"
-    run dolt sql -q "select dolt_pull('origin')"
+    run dolt sql -q "call dolt_pull('origin')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "cannot merge with uncommitted changes" ]] || false
 }
@@ -398,7 +398,7 @@ teardown() {
     dolt tag
 
     cd ../repo2
-    dolt sql -q "select dolt_pull('origin')"
+    dolt sql -q "call dolt_pull('origin')"
     run dolt tag
     [ "$status" -eq 0 ]
     [[ "$output" =~ "v1" ]] || false
@@ -432,7 +432,7 @@ teardown() {
     dolt push origin v3
 
     cd ../repo2
-    dolt sql -q "select dolt_pull('origin')"
+    dolt sql -q "call dolt_pull('origin')"
     run dolt tag
     [ "$status" -eq 0 ]
     [[ "$output" =~ "v1" ]] || false
@@ -524,7 +524,7 @@ teardown() {
     dolt push
 
     cd ../repo2
-    dolt sql -q "select dolt_pull()"
+    dolt sql -q "call dolt_pull()"
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -563,7 +563,7 @@ teardown() {
 
     dolt sql -q "insert into t1 values (2, 3)"
     dolt commit -am "add (2,3) to t1"
-    run dolt sql -q "select dolt_pull()"
+    run dolt sql -q "call dolt_pull()"
     [ "$status" -eq 0 ]
 
     run dolt log --oneline -n 1

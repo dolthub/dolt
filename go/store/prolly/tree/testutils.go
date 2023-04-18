@@ -21,6 +21,7 @@ import (
 	"math"
 	"math/rand"
 	"sort"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -153,6 +154,10 @@ func ShuffleTuplePairs(items [][2]val.Tuple) {
 	})
 }
 
+func NewEmptyTestNode() Node {
+	return newLeafNode(nil, nil)
+}
+
 func newLeafNode(keys, values []Item) Node {
 	kk := make([][]byte, len(keys))
 	for i := range keys {
@@ -208,16 +213,16 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type, ns NodeStore) {
 		v := uint16(testRand.Intn(math.MaxUint16))
 		tb.PutUint16(idx, v)
 	case val.Int32Enc:
-		v := int32(testRand.Intn(math.MaxInt32) * neg)
+		v := testRand.Int31() * int32(neg)
 		tb.PutInt32(idx, v)
 	case val.Uint32Enc:
-		v := uint32(testRand.Intn(math.MaxUint32))
+		v := testRand.Uint32()
 		tb.PutUint32(idx, v)
 	case val.Int64Enc:
-		v := int64(testRand.Intn(math.MaxInt64) * neg)
+		v := testRand.Int63() * int64(neg)
 		tb.PutInt64(idx, v)
 	case val.Uint64Enc:
-		v := uint64(testRand.Uint64())
+		v := testRand.Uint64()
 		tb.PutUint64(idx, v)
 	case val.Float32Enc:
 		tb.PutFloat32(idx, testRand.Float32())
@@ -240,13 +245,16 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type, ns NodeStore) {
 		testRand.Read(buf)
 		tb.PutCommitAddr(idx, hash.New(buf))
 	case val.BytesAddrEnc, val.StringAddrEnc, val.JSONAddrEnc:
-		buf := make([]byte, (testRand.Int63()%40)+10)
+		len := (testRand.Int63() % 40) + 10
+		buf := make([]byte, len)
 		testRand.Read(buf)
-		tree, err := NewImmutableTreeFromReader(context.Background(), bytes.NewReader(buf), ns, DefaultFixedChunkLength)
+		bb := ns.BlobBuilder()
+		bb.Init(int(len))
+		_, addr, err := bb.Chunk(context.Background(), bytes.NewReader(buf))
 		if err != nil {
 			panic("failed to write bytes tree")
 		}
-		tb.PutBytesAddr(idx, tree.Addr)
+		tb.PutBytesAddr(idx, addr)
 	default:
 		panic("unknown encoding")
 	}
@@ -255,11 +263,13 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type, ns NodeStore) {
 func NewTestNodeStore() NodeStore {
 	ts := &chunks.TestStorage{}
 	ns := NewNodeStore(ts.NewViewWithFormat(types.Format_DOLT.VersionString()))
-	return nodeStoreValidator{ns: ns}
+	bb := &blobBuilderPool
+	return nodeStoreValidator{ns: ns, bb: bb}
 }
 
 type nodeStoreValidator struct {
 	ns NodeStore
+	bb *sync.Pool
 }
 
 func (v nodeStoreValidator) Read(ctx context.Context, ref hash.Hash) (Node, error) {
@@ -307,6 +317,14 @@ func (v nodeStoreValidator) Write(ctx context.Context, nd Node) (hash.Hash, erro
 
 func (v nodeStoreValidator) Pool() pool.BuffPool {
 	return v.ns.Pool()
+}
+
+func (v nodeStoreValidator) BlobBuilder() *BlobBuilder {
+	bb := v.bb.Get().(*BlobBuilder)
+	if bb.ns == nil {
+		bb.SetNodeStore(v)
+	}
+	return bb
 }
 
 func (v nodeStoreValidator) Format() *types.NomsBinFormat {

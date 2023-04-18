@@ -219,7 +219,7 @@ func printRemoteRefTrackingInfo(ctx context.Context, dEnv *env.DoltEnv) error {
 // countCommitsInRange returns the number of commits between the given starting point to trace back to the given target point.
 // The starting commit must be a descendant of the target commit. Target commit must be a common ancestor commit.
 func countCommitsInRange(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash, targetCommitHash hash.Hash) (int, error) {
-	itr, iErr := commitwalk.GetTopologicalOrderIterator(ctx, ddb, startCommitHash, nil)
+	itr, iErr := commitwalk.GetTopologicalOrderIterator(ctx, ddb, []hash.Hash{startCommitHash}, nil)
 	if iErr != nil {
 		return 0, iErr
 	}

@@ -16,19 +16,20 @@ package sqle
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/transform"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -47,16 +48,15 @@ const (
 
 var (
 	// CommitHashColType is the sql type of the commit hash column
-	CommitHashColType = sql.MustCreateString(sqltypes.Char, 32, sql.Collation_ascii_bin)
+	CommitHashColType = types.MustCreateString(sqltypes.Char, 32, sql.Collation_ascii_bin)
 
 	// CommitterColType is the sql type of the committer column
-	CommitterColType = sql.MustCreateString(sqltypes.VarChar, 1024, sql.Collation_ascii_bin)
+	CommitterColType = types.MustCreateString(sqltypes.VarChar, 1024, sql.Collation_ascii_bin)
 )
 
 var _ sql.Table = (*HistoryTable)(nil)
 var _ sql.FilteredTable = (*HistoryTable)(nil)
 var _ sql.IndexAddressableTable = (*HistoryTable)(nil)
-var _ sql.ParallelizedIndexAddressableTable = (*HistoryTable)(nil)
 var _ sql.IndexedTable = (*HistoryTable)(nil)
 
 // HistoryTable is a system table that shows the history of rows over time
@@ -64,12 +64,9 @@ type HistoryTable struct {
 	doltTable     *DoltTable
 	commitFilters []sql.Expression
 	cmItr         doltdb.CommitItr
+	commitCheck   doltdb.CommitFilter
 	indexLookup   sql.IndexLookup
 	projectedCols []uint64
-}
-
-func (ht *HistoryTable) ShouldParallelizeAccess() bool {
-	return false
 }
 
 func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
@@ -80,14 +77,57 @@ func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 
 	// For index pushdown to work, we need to represent the indexes from the underlying table as belonging to this one
 	// Our results will also not be ordered, so we need to declare them as such
-	return index.DoltHistoryIndexesFromTable(ctx, ht.doltTable.db.Name(), ht.Name(), tbl)
+	return index.DoltHistoryIndexesFromTable(ctx, ht.doltTable.db.Name(), ht.Name(), tbl, ht.doltTable.db.DbData().Ddb)
 }
 
-func (ht *HistoryTable) IndexedAccess(i sql.Index) sql.IndexedTable {
-	return ht
+func (ht *HistoryTable) IndexedAccess(_ sql.IndexLookup) sql.IndexedTable {
+	ret := *ht
+	return &ret
 }
 
 func (ht *HistoryTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	if lookup.Index.ID() == index.CommitHashIndexId {
+		hs, ok := index.LookupToPointSelectStr(lookup)
+		if !ok {
+			return nil, fmt.Errorf("failed to parse commit hash lookup: %s", sql.DebugString(lookup.Ranges))
+		}
+
+		var hashes []hash.Hash
+		var commits []*doltdb.Commit
+		var metas []*datas.CommitMeta
+		for _, hs := range hs {
+			if hs == doltdb.Working {
+
+			}
+			h, ok := hash.MaybeParse(hs)
+			if !ok {
+				continue
+			}
+			hashes = append(hashes, h)
+
+			cm, err := doltdb.HashToCommit(ctx, ht.doltTable.db.DbData().Ddb.ValueReadWriter(), ht.doltTable.db.DbData().Ddb.NodeStore(), h)
+			if err != nil {
+				return nil, err
+			}
+			commits = append(commits, cm)
+
+			meta, err := cm.GetCommitMeta(ctx)
+			if err != nil {
+				return nil, err
+			}
+			metas = append(metas, meta)
+		}
+		if len(hashes) == 0 {
+			return sql.PartitionsToPartitionIter(), nil
+		}
+
+		iter, err := ht.filterIter(ctx, doltdb.NewCommitSliceIter(commits, hashes))
+		if err != nil {
+			return nil, err
+		}
+		return &commitPartitioner{cmItr: iter}, nil
+
+	}
 	ht.indexLookup = lookup
 	return ht.Partitions(ctx)
 }
@@ -95,6 +135,7 @@ func (ht *HistoryTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLooku
 // NewHistoryTable creates a history table
 func NewHistoryTable(table *DoltTable, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	cmItr := doltdb.CommitItrForRoots(ddb, head)
+
 	h := &HistoryTable{
 		doltTable: table,
 		cmItr:     cmItr,
@@ -128,7 +169,7 @@ func historyTableSchema(tableName string, table *DoltTable) sql.Schema {
 		&sql.Column{
 			Name:   CommitDateCol,
 			Source: tableName,
-			Type:   sql.Datetime,
+			Type:   types.Datetime,
 		},
 	)
 	return newSch
@@ -147,20 +188,47 @@ func (ht *HistoryTable) Filters() []sql.Expression {
 
 // WithFilters returns a new sql.Table instance with the filters applied. We handle filters on any commit columns.
 func (ht *HistoryTable) WithFilters(ctx *sql.Context, filters []sql.Expression) sql.Table {
-	if ht.commitFilters == nil {
-		ht.commitFilters = dtables.FilterFilters(filters, dtables.ColumnPredicate(historyTableCommitMetaCols))
-	}
+	ret := *ht
+	ret.commitFilters = dtables.FilterFilters(filters, dtables.ColumnPredicate(historyTableCommitMetaCols))
+	return &ret
+}
 
+func (ht *HistoryTable) filterIter(ctx *sql.Context, iter doltdb.CommitItr) (doltdb.CommitItr, error) {
 	if len(ht.commitFilters) > 0 {
-		commitCheck, err := commitFilterForExprs(ctx, ht.commitFilters)
+		r, err := ht.doltTable.db.GetRoot(ctx)
 		if err != nil {
-			return sqlutil.NewStaticErrorTable(ht, err)
+			return doltdb.FilteringCommitItr{}, err
+		}
+		h, err := r.HashOf()
+		if err != nil {
+			return doltdb.FilteringCommitItr{}, err
+		}
+		filters := substituteWorkingHash(h, ht.commitFilters)
+		check, err := commitFilterForExprs(ctx, filters)
+		if err != nil {
+			return doltdb.FilteringCommitItr{}, err
 		}
 
-		ht.cmItr = doltdb.NewFilteringCommitItr(ht.cmItr, commitCheck)
+		return doltdb.NewFilteringCommitItr(iter, check), nil
 	}
+	return iter, nil
+}
 
-	return ht
+func substituteWorkingHash(h hash.Hash, f []sql.Expression) []sql.Expression {
+	ret := make([]sql.Expression, len(f))
+	for i, e := range f {
+		ret[i], _, _ = transform.Expr(e, func(e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
+			switch e := e.(type) {
+			case *expression.Literal:
+				if e.Value() == doltdb.Working {
+					return expression.NewLiteral(h.String(), e.Type()), transform.NewTree, nil
+				}
+			default:
+			}
+			return e, transform.SameTree, nil
+		})
+	}
+	return ret
 }
 
 var historyTableCommitMetaCols = set.NewStrSet([]string{CommitHashCol, CommitDateCol, CommitterCol})
@@ -243,6 +311,11 @@ func (ht *HistoryTable) WithProjections(colNames []string) sql.Table {
 }
 
 func (ht *HistoryTable) Projections() []string {
+	// The semantics of nil v. zero length is important when displaying explain plans
+	if ht.projectedCols == nil {
+		return nil
+	}
+
 	names := make([]string, len(ht.projectedCols))
 	cols := ht.doltTable.sch.GetAllCols()
 	for i := range ht.projectedCols {
@@ -264,6 +337,14 @@ func (ht *HistoryTable) Projections() []string {
 	return names
 }
 
+func (ht *HistoryTable) ProjectedTags() []uint64 {
+	if ht.projectedCols != nil {
+		return ht.projectedCols
+	}
+	// Otherwise (no projection), return the tags for the underlying table with the extra meta tags appended
+	return append(ht.doltTable.ProjectedTags(), schema.HistoryCommitHashTag, schema.HistoryCommitterTag, schema.HistoryCommitDateTag)
+}
+
 // Name returns the name of the history table
 func (ht *HistoryTable) Name() string {
 	return doltdb.DoltHistoryTablePrefix + ht.doltTable.Name()
@@ -277,7 +358,7 @@ func (ht *HistoryTable) String() string {
 // Schema returns the schema for the history table
 func (ht *HistoryTable) Schema() sql.Schema {
 	sch := historyTableSchema(ht.Name(), ht.doltTable)
-	if len(ht.projectedCols) == 0 {
+	if ht.projectedCols == nil {
 		return sch
 	}
 
@@ -303,7 +384,7 @@ func (ht *HistoryTable) Schema() sql.Schema {
 			projectedSch[i] = &sql.Column{
 				Name:   CommitDateCol,
 				Source: ht.Name(),
-				Type:   sql.Datetime,
+				Type:   types.Datetime,
 			}
 		} else {
 			panic("column not found")
@@ -319,14 +400,17 @@ func (ht *HistoryTable) Collation() sql.CollationID {
 
 // Partitions returns a PartitionIter which will be used in getting partitions each of which is used to create RowIter.
 func (ht *HistoryTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return &commitPartitioner{ht.cmItr}, nil
+	iter, err := ht.filterIter(ctx, ht.cmItr)
+	if err != nil {
+		return nil, err
+	}
+	return &commitPartitioner{cmItr: iter}, nil
 }
 
 // PartitionRows takes a partition and returns a row iterator for that partition
 func (ht *HistoryTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	cp := part.(*commitPartition)
-
-	return newRowItrForTableAtCommit(ctx, ht.Name(), ht.doltTable, cp.h, cp.cm, ht.indexLookup, ht.projectedCols)
+	return newRowItrForTableAtCommit(ctx, ht.doltTable, cp.h, cp.cm, ht.indexLookup, ht.ProjectedTags())
 }
 
 // commitPartition is a single commit
@@ -369,8 +453,8 @@ type historyIter struct {
 	nonExistentTable bool
 }
 
-func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTable, h hash.Hash, cm *doltdb.Commit, lookup sql.IndexLookup, projections []uint64) (*historyIter, error) {
-	targetSchema := table.Schema().Copy()
+func newRowItrForTableAtCommit(ctx *sql.Context, table *DoltTable, h hash.Hash, cm *doltdb.Commit, lookup sql.IndexLookup, projections []uint64) (*historyIter, error) {
+	targetSchema := table.Schema()
 
 	root, err := cm.GetRootValue(ctx)
 	if err != nil {
@@ -404,13 +488,15 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 		}
 		for _, idx := range indexes {
 			if idx.ID() == lookup.Index.ID() {
-				histTable = table.IndexedAccess(idx)
-				newLookup := sql.IndexLookup{Index: idx, Ranges: lookup.Ranges}
-				partIter, err = histTable.(sql.IndexedTable).LookupPartitions(ctx, newLookup)
-				if err != nil {
-					return nil, err
+				histTable = table.IndexedAccess(lookup)
+				if histTable != nil {
+					newLookup := sql.IndexLookup{Index: idx, Ranges: lookup.Ranges}
+					partIter, err = histTable.(sql.IndexedTable).LookupPartitions(ctx, newLookup)
+					if err != nil {
+						return nil, err
+					}
+					break
 				}
-				break
 			}
 		}
 	}
@@ -421,7 +507,8 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 			return nil, err
 		}
 	}
-	converter := rowConverter(histTable.Schema(), targetSchema, h, meta, projections)
+
+	converter := rowConverter(table.Schema(), targetSchema, h, meta, projections)
 	return &historyIter{
 		table:           histTable,
 		tablePartitions: partIter,
@@ -494,7 +581,6 @@ func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.C
 					r[j] = row[i]
 				}
 			}
-			i++
 		}
 		return r
 	}

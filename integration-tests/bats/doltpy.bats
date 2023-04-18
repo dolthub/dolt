@@ -11,7 +11,7 @@ CREATE TABLE foo (
 );
 INSERT INTO foo VALUES (0,0), (1,1);
 CALL DOLT_ADD('.');
-SELECT DOLT_COMMIT('-am', 'Initialize table');
+call dolt_commit('-am', 'Initialize table');
 SQL
 }
 

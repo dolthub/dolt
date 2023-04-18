@@ -35,54 +35,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFSTableCacheOnOpen(t *testing.T) {
-	assert := assert.New(t)
-	dir := makeTempDir(t)
-	defer file.RemoveAll(dir)
-
-	names := []addr{}
-	cacheSize := 2
-	fc := newFDCache(cacheSize)
-	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
-
-	// Create some tables manually, load them into the cache
-	func() {
-		for i := 0; i < cacheSize; i++ {
-			name, err := writeTableData(dir, []byte{byte(i)})
-			require.NoError(t, err)
-			names = append(names, name)
-		}
-		for _, name := range names {
-			_, err := fts.Open(context.Background(), name, 1, nil)
-			require.NoError(t, err)
-		}
-	}()
-
-	// Tables should still be cached and on disk
-	for i, name := range names {
-		src, err := fts.Open(context.Background(), name, 1, nil)
-		require.NoError(t, err)
-		h := computeAddr([]byte{byte(i)})
-		assert.True(src.has(h))
-	}
-
-	// Kick a table out of the cache
-	name, err := writeTableData(dir, []byte{0xff})
-	require.NoError(t, err)
-	_, err = fts.Open(context.Background(), name, 1, nil)
-	require.NoError(t, err)
-
-	present := fc.reportEntries()
-	// Since 0 refcount entries are evicted randomly, the only thing we can validate is that fc remains at its target size
-	assert.Len(present, cacheSize)
-
-	err = fc.ShrinkCache()
-	require.NoError(t, err)
-	err = removeTables(dir, names...)
-	require.NoError(t, err)
-}
-
 func makeTempDir(t *testing.T) string {
 	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
@@ -115,22 +67,23 @@ func removeTables(dir string, names ...addr) error {
 }
 
 func TestFSTablePersisterPersist(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
-	fc := newFDCache(defaultMaxTables)
-	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
+	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{})
 
 	src, err := persistTableData(fts, testChunks...)
 	require.NoError(t, err)
+	defer src.close()
 	if assert.True(mustUint32(src.count()) > 0) {
-		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
+		buff, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
 		require.NoError(t, err)
-		ti, err := parseTableIndexByCopy(buff, &noopQuotaProvider{})
+		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
 		require.NoError(t, err)
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		require.NoError(t, err)
+		defer tr.close()
 		assertChunksInReader(testChunks, tr, assert)
 	}
 }
@@ -138,7 +91,7 @@ func TestFSTablePersisterPersist(t *testing.T) {
 func persistTableData(p tablePersister, chunx ...[]byte) (src chunkSource, err error) {
 	mt := newMemTable(testMemTableSize)
 	for _, c := range chunx {
-		if !mt.addChunk(computeAddr(c), c) {
+		if mt.addChunk(computeAddr(c), c) == chunkNotAdded {
 			return nil, fmt.Errorf("memTable too full to add %s", computeAddr(c))
 		}
 	}
@@ -151,66 +104,31 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 	existingTable := newMemTable(testMemTableSize)
 
 	for _, c := range testChunks {
-		assert.True(mt.addChunk(computeAddr(c), c))
-		assert.True(existingTable.addChunk(computeAddr(c), c))
+		assert.Equal(mt.addChunk(computeAddr(c), c), chunkAdded)
+		assert.Equal(existingTable.addChunk(computeAddr(c), c), chunkAdded)
 	}
 
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
-	fc := newFDCache(defaultMaxTables)
-	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
+	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{})
 
 	src, err := fts.Persist(context.Background(), mt, existingTable, &Stats{})
 	require.NoError(t, err)
 	assert.True(mustUint32(src.count()) == 0)
 
-	_, err = os.Stat(filepath.Join(dir, mustAddr(src.hash()).String()))
+	_, err = os.Stat(filepath.Join(dir, src.hash().String()))
 	assert.True(os.IsNotExist(err), "%v", err)
 }
 
-func TestFSTablePersisterCacheOnPersist(t *testing.T) {
-	assert := assert.New(t)
-	dir := makeTempDir(t)
-	fc := newFDCache(1)
-	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
-	defer file.RemoveAll(dir)
-
-	var name addr
-	func() {
-		src, err := persistTableData(fts, testChunks...)
-		require.NoError(t, err)
-		name = mustAddr(src.hash())
-	}()
-
-	// Table should still be cached
-	src, err := fts.Open(context.Background(), name, uint32(len(testChunks)), nil)
-	require.NoError(t, err)
-	assertChunksInReader(testChunks, src, assert)
-
-	// Evict |name| from cache
-	_, err = persistTableData(fts, []byte{0xff})
-	require.NoError(t, err)
-
-	present := fc.reportEntries()
-	// Since 0 refcount entries are evicted randomly, the only thing we can validate is that fc remains at its target size
-	assert.Len(present, 1)
-
-	err = removeTables(dir, name)
-	require.NoError(t, err)
-}
-
 func TestFSTablePersisterConjoinAll(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 	assert.True(len(testChunks) > 1, "Whoops, this test isn't meaningful")
 	sources := make(chunkSources, len(testChunks))
 
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
-	fc := newFDCache(len(sources))
-	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
+	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{})
 
 	for i, c := range testChunks {
 		randChunk := make([]byte, (i+1)*13)
@@ -218,59 +136,72 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 		require.NoError(t, err)
 		name, err := writeTableData(dir, c, randChunk)
 		require.NoError(t, err)
-		sources[i], err = fts.Open(context.Background(), name, 2, nil)
+		sources[i], err = fts.Open(ctx, name, 2, nil)
 		require.NoError(t, err)
 	}
+	defer func() {
+		for _, s := range sources {
+			s.close()
+		}
+	}()
 
-	src, err := fts.ConjoinAll(context.Background(), sources, &Stats{})
+	src, _, err := fts.ConjoinAll(ctx, sources, &Stats{})
 	require.NoError(t, err)
+	defer src.close()
 
 	if assert.True(mustUint32(src.count()) > 0) {
-		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
+		buff, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
 		require.NoError(t, err)
-		ti, err := parseTableIndexByCopy(buff, &noopQuotaProvider{})
+		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
 		require.NoError(t, err)
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		require.NoError(t, err)
+		defer tr.close()
 		assertChunksInReader(testChunks, tr, assert)
 	}
-
-	present := fc.reportEntries()
-	// Since 0 refcount entries are evicted randomly, the only thing we can validate is that fc remains at its target size
-	assert.Len(present, len(sources))
 }
 
 func TestFSTablePersisterConjoinAllDups(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
-	fc := newFDCache(defaultMaxTables)
-	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
+	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{})
 
 	reps := 3
 	sources := make(chunkSources, reps)
-	for i := 0; i < reps; i++ {
-		mt := newMemTable(1 << 10)
-		for _, c := range testChunks {
-			mt.addChunk(computeAddr(c), c)
-		}
-
-		var err error
-		sources[i], err = fts.Persist(context.Background(), mt, nil, &Stats{})
-		require.NoError(t, err)
+	mt := newMemTable(1 << 10)
+	for _, c := range testChunks {
+		mt.addChunk(computeAddr(c), c)
 	}
 
-	src, err := fts.ConjoinAll(context.Background(), sources, &Stats{})
+	var err error
+	sources[0], err = fts.Persist(ctx, mt, nil, &Stats{})
+	require.NoError(t, err)
+	sources[1], err = sources[0].clone()
+	require.NoError(t, err)
+	sources[2], err = sources[0].clone()
 	require.NoError(t, err)
 
+	src, cleanup, err := fts.ConjoinAll(ctx, sources, &Stats{})
+	require.NoError(t, err)
+	defer src.close()
+
+	// After ConjoinAll runs, we can close the sources and
+	// call the cleanup func.
+	for _, s := range sources {
+		s.close()
+	}
+	cleanup()
+
 	if assert.True(mustUint32(src.count()) > 0) {
-		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
+		buff, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
 		require.NoError(t, err)
-		ti, err := parseTableIndexByCopy(buff, &noopQuotaProvider{})
+		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
 		require.NoError(t, err)
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		require.NoError(t, err)
+		defer tr.close()
 		assertChunksInReader(testChunks, tr, assert)
 		assert.EqualValues(reps*len(testChunks), mustUint32(tr.count()))
 	}

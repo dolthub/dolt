@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -32,37 +33,37 @@ const (
 var accessBinlogSchema = sql.Schema{
 	&sql.Column{
 		Name:       "index",
-		Type:       sql.Int64,
+		Type:       types.Int64,
 		Source:     AccessBinlogTableName,
 		PrimaryKey: true,
 	},
 	&sql.Column{
 		Name:       "operation",
-		Type:       sql.MustCreateEnumType([]string{"insert", "delete"}, sql.Collation_utf8mb4_0900_bin),
+		Type:       types.MustCreateEnumType([]string{"insert", "delete"}, sql.Collation_utf8mb4_0900_bin),
 		Source:     AccessBinlogTableName,
 		PrimaryKey: false,
 	},
 	&sql.Column{
 		Name:       "branch",
-		Type:       sql.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
 		Source:     AccessBinlogTableName,
 		PrimaryKey: false,
 	},
 	&sql.Column{
 		Name:       "user",
-		Type:       sql.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_bin),
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_bin),
 		Source:     AccessBinlogTableName,
 		PrimaryKey: false,
 	},
 	&sql.Column{
 		Name:       "host",
-		Type:       sql.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
 		Source:     AccessBinlogTableName,
 		PrimaryKey: false,
 	},
 	&sql.Column{
 		Name:       "permissions",
-		Type:       sql.MustCreateSetType(PermissionsStrings, sql.Collation_utf8mb4_0900_ai_ci),
+		Type:       types.MustCreateSetType(PermissionsStrings, sql.Collation_utf8mb4_0900_ai_ci),
 		Source:     AccessBinlogTableName,
 		PrimaryKey: false,
 	},
@@ -72,31 +73,31 @@ var accessBinlogSchema = sql.Schema{
 var namespaceBinlogSchema = sql.Schema{
 	&sql.Column{
 		Name:       "index",
-		Type:       sql.Int64,
+		Type:       types.Int64,
 		Source:     NamespaceBinlogTableName,
 		PrimaryKey: true,
 	},
 	&sql.Column{
 		Name:       "operation",
-		Type:       sql.MustCreateEnumType([]string{"insert", "delete"}, sql.Collation_utf8mb4_0900_bin),
+		Type:       types.MustCreateEnumType([]string{"insert", "delete"}, sql.Collation_utf8mb4_0900_bin),
 		Source:     NamespaceBinlogTableName,
 		PrimaryKey: false,
 	},
 	&sql.Column{
 		Name:       "branch",
-		Type:       sql.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
 		Source:     NamespaceBinlogTableName,
 		PrimaryKey: false,
 	},
 	&sql.Column{
 		Name:       "user",
-		Type:       sql.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_bin),
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_bin),
 		Source:     NamespaceBinlogTableName,
 		PrimaryKey: false,
 	},
 	&sql.Column{
 		Name:       "host",
-		Type:       sql.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
 		Source:     NamespaceBinlogTableName,
 		PrimaryKey: false,
 	},

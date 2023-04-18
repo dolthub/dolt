@@ -53,6 +53,9 @@ func TestEndToEnd(t *testing.T) {
 		"  CONSTRAINT `test-check` CHECK ((`age` < 123))\n" +
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"
 
+	sch, err := dtestutils.Schema()
+	require.NoError(t, err)
+
 	type test struct {
 		name           string
 		rows           []sql.Row
@@ -67,7 +70,7 @@ func TestEndToEnd(t *testing.T) {
 				{"00000000-0000-0000-0000-000000000000", "some guy", 100, 0, "normie"},
 				{"00000000-0000-0000-0000-000000000000", "guy personson", 0, 1, "officially a person"},
 			},
-			sch: dtestutils.TypedSchema,
+			sch: sch,
 			expectedOutput: dropCreateStatement + "\n" +
 				"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
 				`VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,0,'normie');` + "\n" +
@@ -76,7 +79,7 @@ func TestEndToEnd(t *testing.T) {
 		},
 		{
 			name:           "no rows",
-			sch:            dtestutils.TypedSchema,
+			sch:            sch,
 			expectedOutput: dropCreateStatement + "\n",
 		},
 	}
@@ -85,6 +88,7 @@ func TestEndToEnd(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
+			defer dEnv.DoltDB.Close()
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 

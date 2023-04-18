@@ -191,12 +191,6 @@ func (tup Tuple) GetField(i int) []byte {
 	return tup[start:stop]
 }
 
-// GetManyFields takes a sorted slice of ordinals |indexes| and returns the requested
-// tuple fields. It populates field data into |slices| to avoid allocating.
-func (tup Tuple) GetManyFields(indexes []int, slices [][]byte) [][]byte {
-	return sliceManyFields(tup, indexes, slices)
-}
-
 func (tup Tuple) FieldIsNull(i int) bool {
 	return tup.GetField(i) == nil
 }
@@ -217,56 +211,6 @@ func sizeOf(val []byte) ByteSize {
 func writeFieldCount(tup Tuple, count int) {
 	sl := tup[len(tup)-int(countSize):]
 	WriteUint16(sl, uint16(count))
-}
-
-func sliceManyFields(tuple Tuple, indexes []int, slices [][]byte) [][]byte {
-	cnt := tuple.Count()
-	sz := ByteSize(len(tuple))
-	split := sz - uint16Size*ByteSize(cnt)
-
-	data := tuple[:split]
-	offs := offsets(tuple[split : sz-countSize])
-
-	// if count is 1, we assume |indexes| is [0]
-	if cnt == 1 {
-		slices[0] = data
-		if len(data) == 0 {
-			slices[0] = nil
-		}
-		return slices
-	}
-
-	subset := slices
-	// we don't have a "stop" offset for the last field
-	n := len(slices)
-	if indexes[n-1] == cnt-1 {
-		o := ReadUint16(offs[len(offs)-2:])
-		slices[n-1] = data[o:]
-		indexes = indexes[:n-1]
-		subset = subset[:n-1]
-	}
-
-	// we don't have a "start" offset for the first field
-	if len(indexes) > 0 && indexes[0] == 0 {
-		o := ReadUint16(offs[:2])
-		slices[0] = data[:o]
-		indexes = indexes[1:]
-		subset = subset[1:]
-	}
-
-	for i, k := range indexes {
-		start := ReadUint16(offs[(k-1)*2 : k*2])
-		stop := ReadUint16(offs[k*2 : (k+1)*2])
-		subset[i] = tuple[start:stop]
-	}
-
-	for i := range slices {
-		if len(slices[i]) == 0 {
-			slices[i] = nil
-		}
-	}
-
-	return slices
 }
 
 type offsets []byte

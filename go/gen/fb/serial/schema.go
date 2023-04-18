@@ -1,4 +1,4 @@
-// Copyright 2022 Dolthub, Inc.
+// Copyright 2022-2023 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -649,7 +649,45 @@ func (rcv *Index) MutateSystemDefined(n bool) bool {
 	return rcv._tab.MutateBoolSlot(18, n)
 }
 
-const IndexNumFields = 8
+func (rcv *Index) PrefixLengths(j int) uint16 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetUint16(a + flatbuffers.UOffsetT(j*2))
+	}
+	return 0
+}
+
+func (rcv *Index) PrefixLengthsLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *Index) MutatePrefixLengths(j int, n uint16) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateUint16(a+flatbuffers.UOffsetT(j*2), n)
+	}
+	return false
+}
+
+func (rcv *Index) SpatialKey() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(22))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Index) MutateSpatialKey(n bool) bool {
+	return rcv._tab.MutateBoolSlot(22, n)
+}
+
+const IndexNumFields = 10
 
 func IndexStart(builder *flatbuffers.Builder) {
 	builder.StartObject(IndexNumFields)
@@ -686,6 +724,15 @@ func IndexAddUniqueKey(builder *flatbuffers.Builder, uniqueKey bool) {
 }
 func IndexAddSystemDefined(builder *flatbuffers.Builder, systemDefined bool) {
 	builder.PrependBoolSlot(7, systemDefined, false)
+}
+func IndexAddPrefixLengths(builder *flatbuffers.Builder, prefixLengths flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(8, flatbuffers.UOffsetT(prefixLengths), 0)
+}
+func IndexStartPrefixLengthsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(2, numElems, 2)
+}
+func IndexAddSpatialKey(builder *flatbuffers.Builder, spatialKey bool) {
+	builder.PrependBoolSlot(9, spatialKey, false)
 }
 func IndexEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

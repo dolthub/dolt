@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
@@ -174,15 +174,15 @@ var typesTests = []struct {
 }
 
 var (
-	typesTableRow1 = sql.Row{int32(-3), uint64(1), mustTime("2020-05-14 12:00:00"), mustDecimal("-3.30000"), uint16(2), -3.3, uint64(1), sql.Timespan(-183000000), "a", int16(1980)}
-	typesTableRow2 = sql.Row{int32(-1), uint64(2), mustTime("2020-05-14 12:00:01"), mustDecimal("-1.10000"), uint16(3), -1.1, uint64(3), sql.Timespan(-61000000), "b", int16(1990)}
-	typesTableRow3 = sql.Row{int32(0), uint64(3), mustTime("2020-05-14 12:00:02"), mustDecimal("0.00000"), uint16(4), 0.0, uint64(4), sql.Timespan(0), "c", int16(2000)}
-	typesTableRow4 = sql.Row{int32(1), uint64(4), mustTime("2020-05-14 12:00:03"), mustDecimal("1.10000"), uint16(5), 1.1, uint64(5), sql.Timespan(61000000), "d", int16(2010)}
-	typesTableRow5 = sql.Row{int32(3), uint64(5), mustTime("2020-05-14 12:00:04"), mustDecimal("3.30000"), uint16(6), 3.3, uint64(6), sql.Timespan(183000000), "e", int16(2020)}
+	typesTableRow1 = sql.Row{int32(-3), uint64(1), mustTime("2020-05-14 12:00:00"), mustDecimal("-3.30000"), uint16(2), -3.3, uint64(1), types.Timespan(-183000000), "a", int16(1980)}
+	typesTableRow2 = sql.Row{int32(-1), uint64(2), mustTime("2020-05-14 12:00:01"), mustDecimal("-1.10000"), uint16(3), -1.1, uint64(3), types.Timespan(-61000000), "b", int16(1990)}
+	typesTableRow3 = sql.Row{int32(0), uint64(3), mustTime("2020-05-14 12:00:02"), mustDecimal("0.00000"), uint16(4), 0.0, uint64(4), types.Timespan(0), "c", int16(2000)}
+	typesTableRow4 = sql.Row{int32(1), uint64(4), mustTime("2020-05-14 12:00:03"), mustDecimal("1.10000"), uint16(5), 1.1, uint64(5), types.Timespan(61000000), "d", int16(2010)}
+	typesTableRow5 = sql.Row{int32(3), uint64(5), mustTime("2020-05-14 12:00:04"), mustDecimal("3.30000"), uint16(6), 3.3, uint64(6), types.Timespan(183000000), "e", int16(2020)}
 )
 
 func TestDoltIndexEqual(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	root, indexMap := doltIndexSetup(t)
 
 	tests := []doltIndexTestCase{
 		{
@@ -296,6 +296,7 @@ func TestDoltIndexEqual(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s|%v", test.indexName, test.keys), func(t *testing.T) {
+			ctx := sql.NewEmptyContext()
 			idx, ok := indexMap[test.indexName]
 			require.True(t, ok)
 			testDoltIndex(t, ctx, root, test.keys, test.expectedRows, idx, indexComp_Eq)
@@ -304,7 +305,7 @@ func TestDoltIndexEqual(t *testing.T) {
 }
 
 func TestDoltIndexGreaterThan(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	root, indexMap := doltIndexSetup(t)
 
 	tests := []struct {
 		indexName    string
@@ -437,6 +438,7 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s|%v", test.indexName, test.keys), func(t *testing.T) {
+			ctx := sql.NewEmptyContext()
 			index, ok := indexMap[test.indexName]
 			require.True(t, ok)
 			testDoltIndex(t, ctx, root, test.keys, test.expectedRows, index, indexComp_Gt)
@@ -445,7 +447,7 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 }
 
 func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	root, indexMap := doltIndexSetup(t)
 
 	tests := []struct {
 		indexName    string
@@ -574,6 +576,7 @@ func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s|%v", test.indexName, test.keys), func(t *testing.T) {
+			ctx := sql.NewEmptyContext()
 			index, ok := indexMap[test.indexName]
 			require.True(t, ok)
 			testDoltIndex(t, ctx, root, test.keys, test.expectedRows, index, indexComp_GtE)
@@ -582,7 +585,7 @@ func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
 }
 
 func TestDoltIndexLessThan(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	root, indexMap := doltIndexSetup(t)
 
 	tests := []struct {
 		indexName    string
@@ -720,6 +723,7 @@ func TestDoltIndexLessThan(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s|%v", test.indexName, test.keys), func(t *testing.T) {
+			ctx := sql.NewEmptyContext()
 			index, ok := indexMap[test.indexName]
 			require.True(t, ok)
 			testDoltIndex(t, ctx, root, test.keys, test.expectedRows, index, indexComp_Lt)
@@ -728,7 +732,7 @@ func TestDoltIndexLessThan(t *testing.T) {
 }
 
 func TestDoltIndexLessThanOrEqual(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	root, indexMap := doltIndexSetup(t)
 
 	tests := []struct {
 		indexName    string
@@ -867,6 +871,7 @@ func TestDoltIndexLessThanOrEqual(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s|%v", test.indexName, test.keys), func(t *testing.T) {
+			ctx := sql.NewEmptyContext()
 			index, ok := indexMap[test.indexName]
 			require.True(t, ok)
 			testDoltIndex(t, ctx, root, test.keys, test.expectedRows, index, indexComp_LtE)
@@ -875,7 +880,7 @@ func TestDoltIndexLessThanOrEqual(t *testing.T) {
 }
 
 func TestDoltIndexBetween(t *testing.T) {
-	ctx, root, indexMap := doltIndexSetup(t)
+	root, indexMap := doltIndexSetup(t)
 
 	tests := []doltIndexBetweenTestCase{
 		{
@@ -1045,6 +1050,8 @@ func TestDoltIndexBetween(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s|%v%v", test.indexName, test.greaterThanOrEqual, test.lessThanOrEqual), func(t *testing.T) {
+			ctx := sql.NewEmptyContext()
+
 			idx, ok := indexMap[test.indexName]
 			require.True(t, ok)
 
@@ -1285,6 +1292,7 @@ func requireUnorderedRowsEqual(t *testing.T, s sql.Schema, rows1, rows2 []sql.Ro
 }
 
 func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys []interface{}, expectedRows []sql.Row, idx index.DoltIndex, cmp indexComp) {
+	ctx = sql.NewEmptyContext()
 	exprs := idx.Expressions()
 	builder := sql.NewIndexBuilder(idx)
 	for i, key := range keys {
@@ -1328,14 +1336,14 @@ func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys 
 	requireUnorderedRowsEqual(t, pkSch.Schema, convertSqlRowToInt64(expectedRows), readRows)
 }
 
-func doltIndexSetup(t *testing.T) (*sql.Context, *doltdb.RootValue, map[string]index.DoltIndex) {
-	ctx := NewTestSQLCtx(context.Background())
+func doltIndexSetup(t *testing.T) (*doltdb.RootValue, map[string]index.DoltIndex) {
+	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		panic(err)
 	}
-	root, err = sqle.ExecuteSql(t, dEnv, root, `
+	root, err = sqle.ExecuteSql(dEnv, root, `
 CREATE TABLE onepk (
   pk1 BIGINT PRIMARY KEY,
   v1 BIGINT,
@@ -1401,17 +1409,7 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 		}
 	}
 
-	return ctx, root, indexMap
-}
-
-func NewTestSQLCtx(ctx context.Context) *sql.Context {
-	s := dsess.DefaultSession(dsess.EmptyDatabaseProvider())
-	sqlCtx := sql.NewContext(
-		ctx,
-		sql.WithSession(s),
-	).WithCurrentDB("dolt")
-
-	return sqlCtx
+	return root, indexMap
 }
 
 func mustTime(timeString string) time.Time {
@@ -1470,7 +1468,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 	})
 
 	t.Run("ThreeColumnNoNullsRange", func(t *testing.T) {
-		r := sql.Range{sql.LessThanRangeColumnExpr(10, sql.Int8), sql.GreaterThanRangeColumnExpr(16, sql.Int8), sql.NotNullRangeColumnExpr(sql.Int8)}
+		r := sql.Range{sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8), sql.NotNullRangeColumnExpr(types.Int8)}
 		rs, err := index.SplitNullsFromRange(r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
@@ -1480,7 +1478,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 	})
 
 	t.Run("LastColumnOnlyNull", func(t *testing.T) {
-		r := sql.Range{sql.LessThanRangeColumnExpr(10, sql.Int8), sql.GreaterThanRangeColumnExpr(16, sql.Int8), sql.NullRangeColumnExpr(sql.Int8)}
+		r := sql.Range{sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8), sql.NullRangeColumnExpr(types.Int8)}
 		rs, err := index.SplitNullsFromRange(r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
@@ -1490,7 +1488,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 	})
 
 	t.Run("LastColumnAll", func(t *testing.T) {
-		r := sql.Range{sql.LessThanRangeColumnExpr(10, sql.Int8), sql.GreaterThanRangeColumnExpr(16, sql.Int8), sql.AllRangeColumnExpr(sql.Int8)}
+		r := sql.Range{sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8), sql.AllRangeColumnExpr(types.Int8)}
 		rs, err := index.SplitNullsFromRange(r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
@@ -1499,12 +1497,12 @@ func TestSplitNullsFromRange(t *testing.T) {
 		assert.Len(t, rs[1], 3)
 		assert.Equal(t, r[:2], rs[0][:2])
 		assert.Equal(t, r[:2], rs[1][:2])
-		assert.Equal(t, sql.NullRangeColumnExpr(sql.Int8), rs[0][2])
-		assert.Equal(t, sql.NotNullRangeColumnExpr(sql.Int8), rs[1][2])
+		assert.Equal(t, sql.NullRangeColumnExpr(types.Int8), rs[0][2])
+		assert.Equal(t, sql.NotNullRangeColumnExpr(types.Int8), rs[1][2])
 	})
 
 	t.Run("FirstColumnAll", func(t *testing.T) {
-		r := sql.Range{sql.AllRangeColumnExpr(sql.Int8), sql.LessThanRangeColumnExpr(10, sql.Int8), sql.GreaterThanRangeColumnExpr(16, sql.Int8)}
+		r := sql.Range{sql.AllRangeColumnExpr(types.Int8), sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8)}
 		rs, err := index.SplitNullsFromRange(r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
@@ -1513,12 +1511,12 @@ func TestSplitNullsFromRange(t *testing.T) {
 		assert.Len(t, rs[1], 3)
 		assert.Equal(t, r[1:], rs[0][1:])
 		assert.Equal(t, r[1:], rs[1][1:])
-		assert.Equal(t, sql.NullRangeColumnExpr(sql.Int8), rs[0][0])
-		assert.Equal(t, sql.NotNullRangeColumnExpr(sql.Int8), rs[1][0])
+		assert.Equal(t, sql.NullRangeColumnExpr(types.Int8), rs[0][0])
+		assert.Equal(t, sql.NotNullRangeColumnExpr(types.Int8), rs[1][0])
 	})
 
 	t.Run("AllColumnAll", func(t *testing.T) {
-		r := sql.Range{sql.AllRangeColumnExpr(sql.Int8), sql.AllRangeColumnExpr(sql.Int8), sql.AllRangeColumnExpr(sql.Int8)}
+		r := sql.Range{sql.AllRangeColumnExpr(types.Int8), sql.AllRangeColumnExpr(types.Int8), sql.AllRangeColumnExpr(types.Int8)}
 		rs, err := index.SplitNullsFromRange(r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)

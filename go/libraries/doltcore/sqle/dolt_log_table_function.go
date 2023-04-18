@@ -19,16 +19,19 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var _ sql.TableFunction = (*LogTableFunction)(nil)
+var _ sql.ExecSourceRel = (*LogTableFunction)(nil)
 
 type LogTableFunction struct {
 	ctx *sql.Context
@@ -45,11 +48,11 @@ type LogTableFunction struct {
 }
 
 var logTableSchema = sql.Schema{
-	&sql.Column{Name: "commit_hash", Type: sql.Text},
-	&sql.Column{Name: "committer", Type: sql.Text},
-	&sql.Column{Name: "email", Type: sql.Text},
-	&sql.Column{Name: "date", Type: sql.Datetime},
-	&sql.Column{Name: "message", Type: sql.Text},
+	&sql.Column{Name: "commit_hash", Type: types.Text},
+	&sql.Column{Name: "committer", Type: types.Text},
+	&sql.Column{Name: "email", Type: types.Text},
+	&sql.Column{Name: "date", Type: types.Datetime},
+	&sql.Column{Name: "message", Type: types.Text},
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -74,12 +77,13 @@ func (ltf *LogTableFunction) Database() sql.Database {
 
 // WithDatabase implements the sql.Databaser interface
 func (ltf *LogTableFunction) WithDatabase(database sql.Database) (sql.Node, error) {
-	ltf.database = database
-	return ltf, nil
+	nltf := *ltf
+	nltf.database = database
+	return &nltf, nil
 }
 
-// FunctionName implements the sql.TableFunction interface
-func (ltf *LogTableFunction) FunctionName() string {
+// Name implements the sql.TableFunction interface
+func (ltf *LogTableFunction) Name() string {
 	return "dolt_log"
 }
 
@@ -134,10 +138,10 @@ func (ltf *LogTableFunction) Schema() sql.Schema {
 	logSchema := logTableSchema
 
 	if ltf.showParents {
-		logSchema = append(logSchema, &sql.Column{Name: "parents", Type: sql.Text})
+		logSchema = append(logSchema, &sql.Column{Name: "parents", Type: types.Text})
 	}
 	if shouldDecorateWithRefs(ltf.decoration) {
-		logSchema = append(logSchema, &sql.Column{Name: "refs", Type: sql.Text})
+		logSchema = append(logSchema, &sql.Column{Name: "refs", Type: types.Text})
 	}
 
 	return logSchema
@@ -185,7 +189,7 @@ func (ltf *LogTableFunction) Expressions() []sql.Expression {
 
 // getDoltArgs builds an argument string from sql expressions so that we can
 // later parse the arguments with the same util as the CLI
-func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, functionName string) ([]string, error) {
+func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, name string) ([]string, error) {
 	var args []string
 
 	for _, expr := range expressions {
@@ -194,11 +198,11 @@ func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, functionName st
 			return nil, err
 		}
 
-		if !sql.IsText(expr.Type()) {
-			return args, sql.ErrInvalidArgumentDetails.New(functionName, expr.String())
+		if !types.IsText(expr.Type()) {
+			return args, sql.ErrInvalidArgumentDetails.New(name, expr.String())
 		}
 
-		text, err := sql.Text.Convert(childVal)
+		text, _, err := types.Text.Convert(childVal)
 		if err != nil {
 			return nil, err
 		}
@@ -212,14 +216,14 @@ func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, functionName st
 }
 
 func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
-	args, err := getDoltArgs(ltf.ctx, expression, ltf.FunctionName())
+	args, err := getDoltArgs(ltf.ctx, expression, ltf.Name())
 	if err != nil {
 		return err
 	}
 
 	apr, err := cli.CreateLogArgParser().Parse(args)
 	if err != nil {
-		return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), err.Error())
+		return sql.ErrInvalidArgumentDetails.New(ltf.Name(), err.Error())
 	}
 
 	if notRevisionStr, ok := apr.GetValue(cli.NotFlag); ok {
@@ -238,7 +242,7 @@ func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
 	switch decorateOption {
 	case "short", "full", "auto", "no":
 	default:
-		return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), fmt.Sprintf("invalid --decorate option: %s", decorateOption))
+		return sql.ErrInvalidArgumentDetails.New(ltf.Name(), fmt.Sprintf("invalid --decorate option: %s", decorateOption))
 	}
 	ltf.decoration = decorateOption
 
@@ -249,11 +253,16 @@ func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
 func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
 	for _, expr := range expression {
 		if !expr.Resolved() {
-			return nil, ErrInvalidNonLiteralArgument.New(ltf.FunctionName(), expr.String())
+			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
+		}
+		// prepared statements resolve functions beforehand, so above check fails
+		if _, ok := expr.(sql.FunctionExpression); ok {
+			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
 		}
 	}
 
-	if err := ltf.addOptions(expression); err != nil {
+	newLtf := *ltf
+	if err := newLtf.addOptions(expression); err != nil {
 		return nil, err
 	}
 
@@ -266,26 +275,26 @@ func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.
 	}
 
 	if len(filteredExpressions) > 2 {
-		return nil, sql.ErrInvalidArgumentNumber.New(ltf.FunctionName(), "0 to 2", len(filteredExpressions))
+		return nil, sql.ErrInvalidArgumentNumber.New(newLtf.Name(), "0 to 2", len(filteredExpressions))
 	}
 
 	exLen := len(filteredExpressions)
 	if exLen > 0 {
-		ltf.revisionExpr = filteredExpressions[0]
+		newLtf.revisionExpr = filteredExpressions[0]
 	}
 	if exLen == 2 {
-		ltf.secondRevisionExpr = filteredExpressions[1]
+		newLtf.secondRevisionExpr = filteredExpressions[1]
 	}
 
-	if err := ltf.validateRevisionExpressions(); err != nil {
+	if err := newLtf.validateRevisionExpressions(); err != nil {
 		return nil, err
 	}
 
-	return ltf, nil
+	return &newLtf, nil
 }
 
 func (ltf *LogTableFunction) invalidArgDetailsErr(expr sql.Expression, reason string) *errors.Error {
-	return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), fmt.Sprintf("%s - %s", expr.String(), reason))
+	return sql.ErrInvalidArgumentDetails.New(ltf.Name(), fmt.Sprintf("%s - %s", expr.String(), reason))
 }
 
 func (ltf *LogTableFunction) validateRevisionExpressions() error {
@@ -296,27 +305,27 @@ func (ltf *LogTableFunction) validateRevisionExpressions() error {
 
 	if ltf.revisionExpr != nil {
 		revisionStr = mustExpressionToString(ltf.ctx, ltf.revisionExpr)
-		if !sql.IsText(ltf.revisionExpr.Type()) {
-			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.revisionExpr.String())
+		if !types.IsText(ltf.revisionExpr.Type()) {
+			return sql.ErrInvalidArgumentDetails.New(ltf.Name(), ltf.revisionExpr.String())
 		}
 		if ltf.secondRevisionExpr == nil && strings.HasPrefix(revisionStr, "^") {
 			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "second revision must exist if first revision contains '^'")
 		}
 		if strings.Contains(revisionStr, "..") && strings.HasPrefix(revisionStr, "^") {
-			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "revision cannot contain both '..' and '^'")
+			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "revision cannot contain both '..' or '...' and '^'")
 		}
 	}
 
 	if ltf.secondRevisionExpr != nil {
 		secondRevisionStr = mustExpressionToString(ltf.ctx, ltf.secondRevisionExpr)
-		if !sql.IsText(ltf.secondRevisionExpr.Type()) {
-			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), ltf.secondRevisionExpr.String())
+		if !types.IsText(ltf.secondRevisionExpr.Type()) {
+			return sql.ErrInvalidArgumentDetails.New(ltf.Name(), ltf.secondRevisionExpr.String())
 		}
 		if strings.Contains(secondRevisionStr, "..") {
-			return ltf.invalidArgDetailsErr(ltf.secondRevisionExpr, "second revision cannot contain '..'")
+			return ltf.invalidArgDetailsErr(ltf.secondRevisionExpr, "second revision cannot contain '..' or '...'")
 		}
 		if strings.Contains(revisionStr, "..") {
-			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "revision cannot contain '..' if second revision exists")
+			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "revision cannot contain '..' or '...' if second revision exists")
 		}
 	}
 
@@ -334,16 +343,16 @@ func (ltf *LogTableFunction) validateRevisionExpressions() error {
 			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "must have revision in order to use --not")
 		}
 		if ltf.revisionExpr != nil && (strings.Contains(revisionStr, "..") || strings.HasPrefix(revisionStr, "^")) {
-			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "cannot use --not if '..' or '^' present in revision")
+			return ltf.invalidArgDetailsErr(ltf.revisionExpr, "cannot use --not if dots or '^' present in revision")
 		}
 		if ltf.secondRevisionExpr != nil && strings.HasPrefix(secondRevisionStr, "^") {
 			return ltf.invalidArgDetailsErr(ltf.secondRevisionExpr, "cannot use --not if '^' present in second revision")
 		}
 		if strings.Contains(ltf.notRevision, "..") {
-			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), fmt.Sprintf("%s - %s", ltf.notRevision, "--not revision cannot contain '..'"))
+			return sql.ErrInvalidArgumentDetails.New(ltf.Name(), fmt.Sprintf("%s - %s", ltf.notRevision, "--not revision cannot contain '..'"))
 		}
 		if strings.HasPrefix(ltf.notRevision, "^") {
-			return sql.ErrInvalidArgumentDetails.New(ltf.FunctionName(), fmt.Sprintf("%s - %s", ltf.notRevision, "--not revision cannot contain '^'"))
+			return sql.ErrInvalidArgumentDetails.New(ltf.Name(), fmt.Sprintf("%s - %s", ltf.notRevision, "--not revision cannot contain '^'"))
 		}
 	}
 
@@ -352,12 +361,12 @@ func (ltf *LogTableFunction) validateRevisionExpressions() error {
 
 // RowIter implements the sql.Node interface
 func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
-	revisionVal, excludingRevisionVal, err := ltf.evaluateArguments()
+	revisionVal, secondRevisionVal, threeDot, err := ltf.evaluateArguments()
 	if err != nil {
 		return nil, err
 	}
 
-	sqledb, ok := ltf.database.(Database)
+	sqledb, ok := ltf.database.(SqlDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unexpected database type: %T", ltf.database)
 	}
@@ -371,13 +380,13 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 			return nil, err
 		}
 
-		commit, err = sqledb.ddb.Resolve(ctx, cs, nil)
+		commit, err = sqledb.DbData().Ddb.Resolve(ctx, cs, nil)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		// If revisionExpr not defined, use session head
-		commit, err = sess.GetHeadCommit(ctx, sqledb.name)
+		commit, err = sess.GetHeadCommit(ctx, sqledb.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -387,26 +396,48 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		return commit.NumParents() >= ltf.minParents, nil
 	}
 
-	cHashToRefs, err := getCommitHashToRefs(ctx, sqledb.ddb, ltf.decoration)
+	cHashToRefs, err := getCommitHashToRefs(ctx, sqledb.DbData().Ddb, ltf.decoration)
 	if err != nil {
 		return nil, err
 	}
 
-	// Two dot log
-	if len(excludingRevisionVal) > 0 {
-		exCs, err := doltdb.NewCommitSpec(excludingRevisionVal)
+	// Two and three dot log
+	if len(secondRevisionVal) > 0 {
+		secondCs, err := doltdb.NewCommitSpec(secondRevisionVal)
 		if err != nil {
 			return nil, err
 		}
 
-		excludingCommit, err := sqledb.ddb.Resolve(ctx, exCs, nil)
+		secondCommit, err := sqledb.DbData().Ddb.Resolve(ctx, secondCs, nil)
 		if err != nil {
 			return nil, err
 		}
-		return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.ddb, commit, excludingCommit, matchFunc, cHashToRefs)
+
+		if threeDot {
+			mergeBase, err := merge.MergeBase(ctx, commit, secondCommit)
+			if err != nil {
+				return nil, err
+			}
+
+			mergeCs, err := doltdb.NewCommitSpec(mergeBase.String())
+			if err != nil {
+				return nil, err
+			}
+
+			// Use merge base as excluding commit
+			mergeCommit, err := sqledb.DbData().Ddb.Resolve(ctx, mergeCs, nil)
+			if err != nil {
+				return nil, err
+			}
+
+			return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, []*doltdb.Commit{commit, secondCommit}, mergeCommit, matchFunc, cHashToRefs)
+		}
+
+		return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, []*doltdb.Commit{commit}, secondCommit, matchFunc, cHashToRefs)
+
 	}
 
-	return ltf.NewLogTableFunctionRowIter(ctx, sqledb.ddb, commit, matchFunc, cHashToRefs)
+	return ltf.NewLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commit, matchFunc, cHashToRefs)
 }
 
 func getCommitHashToRefs(ctx *sql.Context, ddb *doltdb.DoltDB, decoration string) (map[hash.Hash][]string, error) {
@@ -455,39 +486,40 @@ func getCommitHashToRefs(ctx *sql.Context, ddb *doltdb.DoltDB, decoration string
 	return cHashToRefs, nil
 }
 
-// evaluateArguments returns revisionValStr and excludingRevisionValStr.
+// evaluateArguments returns revisionValStr, secondRevisionValStr, and three dot boolean.
 // It evaluates the argument expressions to turn them into values this LogTableFunction
 // can use. Note that this method only evals the expressions, and doesn't validate the values.
-func (ltf *LogTableFunction) evaluateArguments() (string, string, error) {
+func (ltf *LogTableFunction) evaluateArguments() (string, string, bool, error) {
 	var revisionValStr string
-	var excludingRevisionValStr string
+	var secondRevisionValStr string
 	var err error
+	threeDot := false
 
 	if ltf.revisionExpr != nil {
-		revisionValStr, excludingRevisionValStr, err = getRevisionsFromExpr(ltf.ctx, ltf.revisionExpr, true)
+		revisionValStr, secondRevisionValStr, threeDot, err = getRevisionsFromExpr(ltf.ctx, ltf.revisionExpr, true)
 		if err != nil {
-			return "", "", err
+			return "", "", false, err
 		}
 	}
 
 	if ltf.secondRevisionExpr != nil {
-		rvs, ervs, err := getRevisionsFromExpr(ltf.ctx, ltf.secondRevisionExpr, false)
+		rvs, srvs, _, err := getRevisionsFromExpr(ltf.ctx, ltf.secondRevisionExpr, false)
 		if err != nil {
-			return "", "", err
+			return "", "", false, err
 		}
 		if len(rvs) > 0 {
 			revisionValStr = rvs
 		}
-		if len(ervs) > 0 {
-			excludingRevisionValStr = ervs
+		if len(srvs) > 0 {
+			secondRevisionValStr = srvs
 		}
 	}
 
 	if len(ltf.notRevision) > 0 {
-		excludingRevisionValStr = ltf.notRevision
+		secondRevisionValStr = ltf.notRevision
 	}
 
-	return revisionValStr, excludingRevisionValStr, nil
+	return revisionValStr, secondRevisionValStr, threeDot, nil
 }
 
 func mustExpressionToString(ctx *sql.Context, expr sql.Expression) string {
@@ -512,23 +544,28 @@ func expressionToString(ctx *sql.Context, expr sql.Expression) (string, error) {
 	return valStr, nil
 }
 
-// Gets revisionName and/or excludingRevisionName from sql expression
-func getRevisionsFromExpr(ctx *sql.Context, expr sql.Expression, canDot bool) (string, string, error) {
+// getRevisionsFromExpr returns the revisionName and/or secondRevisionName, as
+// well as a threeDot boolean from sql expression
+func getRevisionsFromExpr(ctx *sql.Context, expr sql.Expression, canDot bool) (string, string, bool, error) {
 	revisionValStr, err := expressionToString(ctx, expr)
 	if err != nil {
-		return "", "", err
+		return "", "", false, err
 	}
 
 	if canDot && strings.Contains(revisionValStr, "..") {
+		if strings.Contains(revisionValStr, "...") {
+			refs := strings.Split(revisionValStr, "...")
+			return refs[0], refs[1], true, nil
+		}
 		refs := strings.Split(revisionValStr, "..")
-		return refs[1], refs[0], nil
+		return refs[1], refs[0], false, nil
 	}
 
 	if strings.HasPrefix(revisionValStr, "^") {
-		return "", strings.TrimPrefix(revisionValStr, "^"), nil
+		return "", strings.TrimPrefix(revisionValStr, "^"), false, nil
 	}
 
-	return revisionValStr, "", nil
+	return revisionValStr, "", false, nil
 }
 
 //------------------------------------
@@ -547,12 +584,12 @@ type logTableFunctionRowIter struct {
 }
 
 func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error), cHashToRefs map[hash.Hash][]string) (*logTableFunctionRowIter, error) {
-	hash, err := commit.HashOf()
+	h, err := commit.HashOf()
 	if err != nil {
 		return nil, err
 	}
 
-	child, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash, matchFn)
+	child, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, []hash.Hash{h}, matchFn)
 	if err != nil {
 		return nil, err
 	}
@@ -562,14 +599,19 @@ func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *d
 		showParents: ltf.showParents,
 		decoration:  ltf.decoration,
 		cHashToRefs: cHashToRefs,
-		headHash:    hash,
+		headHash:    h,
 	}, nil
 }
 
-func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit, excludingCommit *doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error), cHashToRefs map[hash.Hash][]string) (*logTableFunctionRowIter, error) {
-	hash, err := commit.HashOf()
-	if err != nil {
-		return nil, err
+func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commits []*doltdb.Commit, excludingCommit *doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error), cHashToRefs map[hash.Hash][]string) (*logTableFunctionRowIter, error) {
+	hashes := make([]hash.Hash, len(commits))
+
+	for i, commit := range commits {
+		h, err := commit.HashOf()
+		if err != nil {
+			return nil, err
+		}
+		hashes[i] = h
 	}
 
 	exHash, err := excludingCommit.HashOf()
@@ -577,9 +619,15 @@ func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, 
 		return nil, err
 	}
 
-	child, err := commitwalk.GetDotDotRevisionsIterator(ctx, ddb, hash, exHash, matchFn)
+	child, err := commitwalk.GetDotDotRevisionsIterator(ctx, ddb, hashes, ddb, []hash.Hash{exHash}, matchFn)
 	if err != nil {
 		return nil, err
+	}
+
+	var headHash hash.Hash
+
+	if len(hashes) == 1 {
+		headHash = hashes[0]
 	}
 
 	return &logTableFunctionRowIter{
@@ -587,7 +635,7 @@ func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, 
 		showParents: ltf.showParents,
 		decoration:  ltf.decoration,
 		cHashToRefs: cHashToRefs,
-		headHash:    hash,
+		headHash:    headHash,
 	}, nil
 }
 

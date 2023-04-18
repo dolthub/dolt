@@ -26,8 +26,9 @@ import (
 )
 
 const (
-	singleMatch = -1 // Equivalent to the single match character '_'
-	anyMatch    = -2 // Equivalent to the any-length match character '%'
+	singleMatch  = -1 // Equivalent to the single match character '_'
+	anyMatch     = -2 // Equivalent to the any-length match character '%'
+	columnMarker = -3 // Marks the start of a new column
 )
 
 // invalidMatchExpression is a match expression that does not match anything
@@ -224,6 +225,9 @@ func (matchExpr MatchExpression) Matches(sortOrder int32) (matched bool, next Ma
 	}
 	switch matchExpr.SortOrders[0] {
 	case singleMatch:
+		if sortOrder < singleMatch {
+			return false, invalidMatchExpression, invalidMatchExpression
+		}
 		return true, MatchExpression{matchExpr.CollectionIndex, matchExpr.SortOrders[1:]}, invalidMatchExpression
 	case anyMatch:
 		if len(matchExpr.SortOrders) > 1 && matchExpr.SortOrders[1] == sortOrder {

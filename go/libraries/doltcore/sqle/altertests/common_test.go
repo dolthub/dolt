@@ -46,6 +46,7 @@ func RunModifyTypeTests(t *testing.T, tests []ModifyTypeTest) {
 		if len(name) > 200 {
 			name = name[:200]
 		}
+		test := test
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			ctx := context.Background()
@@ -122,7 +123,7 @@ func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 	db, err := sqle.NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := sqle.NewTestEngine(t, dEnv, ctx, db, root)
+	engine, sqlCtx, err := sqle.NewTestEngine(dEnv, ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +156,7 @@ func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 	db, err := sqle.NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := sqle.NewTestEngine(t, dEnv, ctx, db, root)
+	engine, sqlCtx, err := sqle.NewTestEngine(dEnv, ctx, db)
 	if err != nil {
 		return nil, err
 	}

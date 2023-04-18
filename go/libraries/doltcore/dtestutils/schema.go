@@ -15,16 +15,6 @@
 package dtestutils
 
 import (
-	"context"
-	"math"
-	"testing"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/require"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
@@ -38,7 +28,7 @@ func CreateSchema(columns ...schema.Column) schema.Schema {
 	return sch
 }
 
-// Creates a row with the schema given, having the values given. Starts at tag 0 and counts up.
+// NewRow creates a row with the schema given, having the values given. Starts at tag 0 and counts up.
 func NewRow(sch schema.Schema, values ...types.Value) row.Row {
 	taggedVals := make(row.TaggedValues)
 	for i := range values {
@@ -63,58 +53,6 @@ func AddColumnToSchema(sch schema.Schema, col schema.Column) schema.Schema {
 	newSch := schema.MustSchemaFromCols(columns)
 	newSch.SetCollation(sch.GetCollation())
 	return newSch
-}
-
-// RemoveColumnFromSchema returns a new schema with the given tag missing, but otherwise identical. At least one
-// primary column must remain.
-func RemoveColumnFromSchema(sch schema.Schema, tagToRemove uint64) schema.Schema {
-	var newCols []schema.Column
-	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if tag != tagToRemove {
-			newCols = append(newCols, col)
-		}
-		return false, nil
-	})
-
-	if err != nil {
-		panic(err)
-	}
-
-	columns := schema.NewColCollection(newCols...)
-	newSch := schema.MustSchemaFromCols(columns)
-	newSch.SetCollation(sch.GetCollation())
-	return newSch
-}
-
-// Compares two noms Floats for approximate equality
-var FloatComparer = cmp.Comparer(func(x, y types.Float) bool {
-	return math.Abs(float64(x)-float64(y)) < .001
-})
-
-var TimestampComparer = cmp.Comparer(func(x, y types.Timestamp) bool {
-	return x.Equals(y)
-})
-
-// CreateEmptyTestTable creates a new test table with the name, schema, and rows given.
-func CreateEmptyTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch schema.Schema) {
-	ctx := context.Background()
-	root, err := dEnv.WorkingRoot(ctx)
-	require.NoError(t, err)
-
-	vrw := dEnv.DoltDB.ValueReadWriter()
-	ns := dEnv.DoltDB.NodeStore()
-
-	rows, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
-	require.NoError(t, err)
-	indexSet, err := durable.NewIndexSetWithEmptyIndexes(ctx, vrw, ns, sch)
-	require.NoError(t, err)
-
-	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, rows, indexSet, nil)
-	require.NoError(t, err)
-	newRoot, err := root.PutTable(ctx, tableName, tbl)
-	require.NoError(t, err)
-	err = dEnv.UpdateWorkingRoot(ctx, newRoot)
-	require.NoError(t, err)
 }
 
 // MustSchema takes a variable number of columns and returns a schema.

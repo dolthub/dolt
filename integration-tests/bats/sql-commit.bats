@@ -20,10 +20,10 @@ teardown() {
 }
 
 @test "sql-commit: DOLT_COMMIT without a message throws error" {
-    run dolt sql -q "SELECT DOLT_ADD('.')"
+    run dolt sql -q "call dolt_add('.')"
     [ $status -eq 0 ]
 
-    run dolt sql -q "SELECT DOLT_COMMIT()"
+    run dolt sql -q "call dolt_commit()"
     [ $status -eq 1 ]
     run dolt log
     [ $status -eq 0 ]
@@ -56,10 +56,10 @@ teardown() {
 }
 
 @test "sql-commit: DOLT_COMMIT with just a message reads session parameters" {
-    run dolt sql -q "SELECT DOLT_ADD('.')"
+    run dolt sql -q "call dolt_add('.')"
     [ $status -eq 0 ]
 
-    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+    run dolt sql -q "call dolt_commit('-m', 'Commit1')"
     [ $status -eq 0 ]
     run dolt log
     [ $status -eq 0 ]
@@ -82,7 +82,7 @@ teardown() {
 }
 
 @test "sql-commit: DOLT_COMMIT with the all flag performs properly" {
-    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+    run dolt sql -q "call dolt_commit('-a', '-m', 'Commit1')"
 
     # Check that everything was added
     run dolt diff
@@ -112,9 +112,9 @@ teardown() {
 }
 
 @test "sql-commit: DOLT_COMMIT with all flag, message and author" {
-    run dolt sql -r csv -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1', '--author', 'John Doe <john@doe.com>') as commit_hash"
+    run dolt sql -r csv -q "call dolt_commit('-a', '-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
     [ $status -eq 0 ]
-    DCOMMIT=$output
+    DCOMMIT=$(echo "$output" | grep -E -o '[a-zA-Z0-9_]{32}')
 
     # Check that everything was added
     run dolt diff
@@ -141,11 +141,11 @@ teardown() {
     dolt config --global --unset user.name
     dolt config --global --unset user.email
 
-    run dolt sql -q "SELECT DOLT_ADD('.')"
+    run dolt sql -q "call dolt_add('.')"
 
-    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1', '--author', 'John Doe <john@doe.com>') as commit_hash"
+    run dolt sql -q "call dolt_commit('-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
     [ "$status" -eq 0 ]
-    DCOMMIT=$output
+    DCOMMIT=$(echo "$output" | grep -E -o '[a-zA-Z0-9_]{32}')
 
     run dolt log
     [ "$status" -eq 0 ]
@@ -169,7 +169,7 @@ teardown() {
 
 @test "sql-commit: DOLT_COMMIT immediately updates dolt log system table." {
     run dolt sql << SQL
-SELECT DOLT_COMMIT('-a', '-m', 'Commit1');
+call dolt_commit('-a', '-m', 'Commit1');
 SELECT * FROM dolt_log;
 SQL
 
@@ -190,7 +190,7 @@ SQL
 @test "sql-commit: DOLT_COMMIT immediately updates dolt diff system table." {
     original_hash=$(get_head_commit)
     run dolt sql << SQL
-SELECT DOLT_COMMIT('-a', '-m', 'Commit1');
+call dolt_commit('-a', '-m', 'Commit1');
 SELECT from_commit FROM dolt_diff_test WHERE to_commit = hashof('head');
 SQL
 
@@ -215,7 +215,7 @@ SQL
     head_variable=@@dolt_repo_$$_head
     head_commit=$(get_head_commit)
     run dolt sql << SQL
-SELECT DOLT_COMMIT('-a', '-m', 'Commit1');
+call dolt_commit('-a', '-m', 'Commit1');
 SELECT $head_variable = HASHOF('head');
 SELECT $head_variable
 SQL
@@ -258,8 +258,8 @@ SQL
 CREATE TABLE test2 (
     pk int primary key
 );
-SELECT DOLT_ADD('test');
-SELECT DOLT_COMMIT('-m', '0, 1, 2 in test');
+call dolt_add('test');
+call dolt_commit('-m', '0, 1, 2 in test');
 SELECT $head_variable = HASHOF('head');
 SQL
 
@@ -284,9 +284,9 @@ SQL
 
     # Now another partial commit
     run dolt sql << SQL
-SELECT DOLT_ADD('test2');
+call dolt_add('test2');
 insert into test values (20);
-SELECT DOLT_COMMIT('-m', 'added test2 table');
+call dolt_commit('-m', 'added test2 table');
 SELECT $head_variable = HASHOF('head');
 SQL
 
@@ -390,7 +390,7 @@ CREATE TABLE objects (
 
 INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');
 
-SELECT DOLT_COMMIT('-fam', 'Commit1');
+call dolt_commit('-fam', 'Commit1');
 SQL
 
     [ $status -eq 0 ]
@@ -440,7 +440,7 @@ SQL
 }
 
 @test "sql-commit: missing message does not panic and throws an error" {
-    run dolt sql -q "SELECT DOLT_COMMIT('--allow-empty', '-fam')"
+    run dolt sql -q "call dolt_commit('--allow-empty', '-fam')"
     [ $status -eq 1 ]
     ! [[ "$output" =~ 'panic' ]] || false
     [[ "$output" =~ 'error: no value for option `message' ]] || false

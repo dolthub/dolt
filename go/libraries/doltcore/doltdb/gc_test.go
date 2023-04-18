@@ -31,6 +31,17 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+func TestGarbageCollection(t *testing.T) {
+	require.True(t, true)
+	assert.True(t, true)
+
+	for _, gct := range gcTests {
+		t.Run(gct.name, func(t *testing.T) {
+			testGarbageCollection(t, gct)
+		})
+	}
+}
+
 type stage struct {
 	commands     []testCommand
 	preStageFunc func(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB, prevRes interface{}) interface{}
@@ -96,20 +107,10 @@ var gcSetupCommon = []testCommand{
 	{commands.CommitCmd{}, []string{"-m", "created test table"}},
 }
 
-func TestGarbageCollection(t *testing.T) {
-	require.True(t, true)
-	assert.True(t, true)
-
-	for _, gct := range gcTests {
-		t.Run(gct.name, func(t *testing.T) {
-			testGarbageCollection(t, gct)
-		})
-	}
-}
-
 func testGarbageCollection(t *testing.T, test gcTest) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 
 	for _, c := range gcSetupCommon {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
@@ -125,20 +126,14 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 		}
 	}
 
-	working, err := dEnv.WorkingRoot(ctx)
-	require.NoError(t, err)
-	h, err := working.HashOf()
-	require.NoError(t, err)
-	// save working root during GC
-
-	err = dEnv.DoltDB.GC(ctx, h)
+	err := dEnv.DoltDB.GC(ctx, nil)
 	require.NoError(t, err)
 	test.postGCFunc(ctx, t, dEnv.DoltDB, res)
 
-	working, err = dEnv.WorkingRoot(ctx)
+	working, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 	// assert all out rows are present after gc
-	actual, err := sqle.ExecuteSelect(t, dEnv, working, test.query)
+	actual, err := sqle.ExecuteSelect(dEnv, working, test.query)
 	require.NoError(t, err)
 	assert.Equal(t, test.expected, actual)
 }

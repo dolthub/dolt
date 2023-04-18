@@ -22,11 +22,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -42,8 +40,6 @@ type tableEditorTest struct {
 	selectQuery string
 	// The rows this query should return, nil if an error is expected
 	expectedRows []sql.Row
-	// Expected error string, if any
-	expectedErr string
 }
 
 func TestTableEditor(t *testing.T) {
@@ -60,7 +56,6 @@ func TestTableEditor(t *testing.T) {
 	fatTony := sqle.NewPeopleRow(16, "Fat", "Tony", false, 53, 5.0)
 	troyMclure := sqle.NewPeopleRow(17, "Troy", "McClure", false, 58, 7.0)
 
-	var expectedErr error
 	// Some of these are pretty exotic use cases, but since we support all these operations it's nice to know they work
 	// in tandem.
 	testCases := []tableEditorTest{
@@ -159,23 +154,18 @@ func TestTableEditor(t *testing.T) {
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			expectedErr = nil
+			dEnv, err := sqle.CreateTestDatabase()
+			require.NoError(t, err)
 
-			dEnv := sqle.CreateTestDatabase(t)
-			ctx := sqle.NewTestSQLCtx(context.Background())
-			root, _ := dEnv.WorkingRoot(context.Background())
 			tmpDir, err := dEnv.TempTableFilesDir()
 			require.NoError(t, err)
 			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-			db, err := sqle.NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
+			db, err := sqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
 			require.NoError(t, err)
 
-			err = dsess.DSessFromSess(ctx.Session).AddDB(ctx, getDbState(t, db, dEnv))
+			engine, ctx, err := sqle.NewTestEngine(dEnv, context.Background(), db)
 			require.NoError(t, err)
 
-			ctx.SetCurrentDatabase(db.Name())
-			err = db.SetRoot(ctx, root)
-			require.NoError(t, err)
 			peopleTable, _, err := db.GetTableInsensitive(ctx, "people")
 			require.NoError(t, err)
 
@@ -183,20 +173,18 @@ func TestTableEditor(t *testing.T) {
 			ed := dt.Updater(ctx).(writer.TableWriter)
 
 			test.setup(ctx, t, ed)
-			if len(test.expectedErr) > 0 {
-				require.Error(t, expectedErr)
-				assert.Contains(t, expectedErr.Error(), test.expectedErr)
-				return
-			} else {
-				require.NoError(t, ed.Close(ctx))
-			}
+			require.NoError(t, ed.Close(ctx))
 
-			root, err = db.GetRoot(ctx)
+			root, err := db.GetRoot(ctx)
 			require.NoError(t, err)
 
+			// TODO: not clear why this is necessary, the call to ed.Close should update the working set already
 			require.NoError(t, dEnv.UpdateWorkingRoot(context.Background(), root))
 
-			actualRows, err := sqle.ExecuteSelect(t, dEnv, root, test.selectQuery)
+			sch, rowIter, err := engine.Query(ctx, test.selectQuery)
+			require.NoError(t, err)
+
+			actualRows, err := sql.RowIterToRows(ctx, sch, rowIter)
 			require.NoError(t, err)
 
 			assert.Equal(t, test.expectedRows, actualRows)
@@ -210,23 +198,4 @@ func r(r row.Row, sch schema.Schema) sql.Row {
 		panic(err)
 	}
 	return sqlRow
-}
-
-func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
-	ctx := context.Background()
-
-	head := dEnv.RepoStateReader().CWBHeadSpec()
-	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
-	require.NoError(t, err)
-
-	ws, err := dEnv.WorkingSet(ctx)
-	require.NoError(t, err)
-
-	return dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     dEnv.DbData(),
-		Remotes:    dEnv.RepoState.Remotes,
-	}
 }

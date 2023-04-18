@@ -104,6 +104,12 @@ func TestDatetimeConvertValueToNomsValue(t *testing.T) {
 			false,
 		},
 		{
+			DatetimeType,
+			time.Date(5, 1, 2, 4, 6, 3, 472382485, time.UTC),
+			types.Timestamp(time.Date(5, 1, 2, 4, 6, 3, 472382485, time.UTC)),
+			false,
+		},
+		{
 			TimestampType,
 			time.Date(2039, 1, 2, 4, 6, 3, 472382485, time.UTC),
 			types.Timestamp{},
@@ -111,7 +117,7 @@ func TestDatetimeConvertValueToNomsValue(t *testing.T) {
 		},
 		{
 			DatetimeType,
-			time.Date(5, 1, 2, 4, 6, 3, 472382485, time.UTC),
+			time.Date(-2022, 1, 2, 4, 6, 3, 472382485, time.UTC),
 			types.Timestamp{},
 			true,
 		},
@@ -215,14 +221,14 @@ func TestDatetimeConversion(t *testing.T) {
 			false,
 		},
 		{
-			TimestampType,
-			"2039-01-02 04:06:03.472382",
-			types.Timestamp{},
-			true,
-		},
-		{
 			DatetimeType,
 			"0005-01-02 04:06:03.472382",
+			types.Timestamp(time.Date(5, 1, 2, 4, 6, 3, 472382000, time.UTC)),
+			false,
+		},
+		{
+			TimestampType,
+			"2039-01-02 04:06:03.472382",
 			types.Timestamp{},
 			true,
 		},

@@ -24,6 +24,7 @@ package chunks
 import (
 	"context"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/store/constants"
@@ -35,16 +36,34 @@ type ChunkStoreTestSuite struct {
 	Factory *memoryStoreFactory
 }
 
+func noopGetAddrs(ctx context.Context, c Chunk) (hash.HashSet, error) {
+	return nil, nil
+}
+
 func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
-	store := suite.Factory.CreateStore(context.Background(), "ns")
+	ctx := context.Background()
+	store := suite.Factory.CreateStore(ctx, "ns")
 	input := "abc"
 	c := NewChunk([]byte(input))
-	err := store.Put(context.Background(), c)
+	err := store.Put(ctx, c, noopGetAddrs)
 	suite.NoError(err)
 	h := c.Hash()
 
 	// Reading it via the API should work.
 	assertInputInStore(input, h, store, suite.Assert())
+
+	// Put chunk with dangling ref should error on Commit
+	data := []byte("bcd")
+	nc := NewChunk(data)
+	err = store.Put(ctx, nc, func(ctx context.Context, c Chunk) (hash.HashSet, error) {
+		return hash.NewHashSet(hash.Of([]byte("nonsense"))), nil
+	})
+	suite.NoError(err)
+	root, err := store.Root(ctx)
+	suite.NoError(err)
+
+	_, err = store.Commit(ctx, root, root)
+	suite.Error(err)
 }
 
 func (suite *ChunkStoreTestSuite) TestChunkStoreRoot() {
@@ -72,7 +91,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreCommitPut() {
 	store := suite.Factory.CreateStore(context.Background(), name)
 	input := "abc"
 	c := NewChunk([]byte(input))
-	err := store.Put(context.Background(), c)
+	err := store.Put(context.Background(), c, noopGetAddrs)
 	suite.NoError(err)
 	h := c.Hash()
 
@@ -107,14 +126,14 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreVersion() {
 	suite.NoError(err)
 	suite.True(success)
 
-	suite.Equal(constants.NomsVersion, store.Version())
+	suite.Equal(constants.FormatLD1String, store.Version())
 }
 
 func (suite *ChunkStoreTestSuite) TestChunkStoreCommitUnchangedRoot() {
 	store1, store2 := suite.Factory.CreateStore(context.Background(), "ns"), suite.Factory.CreateStore(context.Background(), "ns")
 	input := "abc"
 	c := NewChunk([]byte(input))
-	err := store1.Put(context.Background(), c)
+	err := store1.Put(context.Background(), c, noopGetAddrs)
 	suite.NoError(err)
 	h := c.Hash()
 
@@ -135,4 +154,17 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreCommitUnchangedRoot() {
 
 	// Now, reading c from store2 via the API should work...
 	assertInputInStore(input, h, store2, suite.Assert())
+}
+
+func assertInputInStore(input string, h hash.Hash, s ChunkStore, assert *assert.Assertions) {
+	chunk, err := s.Get(context.Background(), h)
+	assert.NoError(err)
+	assert.False(chunk.IsEmpty(), "Shouldn't get empty chunk for %s", h.String())
+	assert.Equal(input, string(chunk.Data()))
+}
+
+func assertInputNotInStore(input string, h hash.Hash, s ChunkStore, assert *assert.Assertions) {
+	chunk, err := s.Get(context.Background(), h)
+	assert.NoError(err)
+	assert.True(chunk.IsEmpty(), "Shouldn't get non-empty chunk for %s: %v", h.String(), chunk)
 }

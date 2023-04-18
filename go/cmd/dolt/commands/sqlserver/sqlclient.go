@@ -26,6 +26,7 @@ import (
 
 	"github.com/abiosoft/readline"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/ishell"
 	"github.com/fatih/color"
 	mysqlDriver "github.com/go-sql-driver/mysql"
@@ -182,7 +183,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			cli.PrintErrln(color.RedString(err.Error()))
 			return 1
 		}
-		dbToUse = filepath.Base(directory)
+		dbToUse = strings.Replace(filepath.Base(directory), "-", "_", -1)
 	}
 	format := engine.FormatTabular
 	if hasResultFormat {
@@ -322,6 +323,9 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			return
 		}
 
+		// grab time for query timing
+		startTime := time.Now()
+
 		rows, err := conn.Query(query)
 		if err != nil {
 			shell.Println(color.RedString(err.Error()))
@@ -335,7 +339,14 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			}
 			if wrapper.HasMoreRows() {
 				sqlCtx := sql.NewContext(ctx)
+				sqlCtx.SetQueryTime(startTime)
 				err = engine.PrettyPrintResultsExtended(sqlCtx, engine.FormatTabular, wrapper.Schema(), wrapper)
+				if err != nil {
+					shell.Println(color.RedString(err.Error()))
+					return
+				}
+			} else {
+				err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("Query OK (%.2f sec)", secondsSince(startTime, time.Now())))
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 					return
@@ -390,7 +401,7 @@ func NewMysqlRowWrapper(rows *mysql.Rows) (*MysqlRowWrapper, error) {
 	for i, colName := range colNames {
 		schema[i] = &sql.Column{
 			Name:     colName,
-			Type:     sql.LongText,
+			Type:     types.LongText,
 			Nullable: true,
 		}
 		iRow[i] = &vRow[i]
@@ -432,4 +443,13 @@ func (s *MysqlRowWrapper) HasMoreRows() bool {
 
 func (s *MysqlRowWrapper) Close(*sql.Context) error {
 	return s.rows.Close()
+}
+
+// secondsSince returns the number of full and partial seconds since the time given
+func secondsSince(start time.Time, end time.Time) float64 {
+	runTime := end.Sub(start)
+	seconds := runTime / time.Second
+	milliRemainder := (runTime - seconds*time.Second) / time.Millisecond
+	timeDisplay := float64(seconds) + float64(milliRemainder)*.001
+	return timeDisplay
 }

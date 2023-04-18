@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/source"
 	"github.com/xitongsys/parquet-go/writer"
@@ -108,12 +109,12 @@ func (pwr *ParquetWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 			switch colT.TypeInfo.GetTypeIdentifier() {
 			case typeinfo.DatetimeTypeIdentifier:
 				val = val.(time.Time).UnixMicro()
-				sqlType = sql.Int64
+				sqlType = types.Int64
 			case typeinfo.TimeTypeIdentifier:
-				val = int64(val.(sql.Timespan).AsTimeDuration())
-				sqlType = sql.Int64
+				val = int64(val.(types.Timespan).AsTimeDuration())
+				sqlType = types.Int64
 			case typeinfo.BitTypeIdentifier:
-				sqlType = sql.Uint64
+				sqlType = types.Uint64
 			}
 			v, err := sqlutil.SqlColToStr(sqlType, val)
 			if err != nil {

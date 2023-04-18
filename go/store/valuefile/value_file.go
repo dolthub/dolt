@@ -218,7 +218,7 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 
 	if err != nil {
 		if err == io.EOF {
-			err = fmt.Errorf("EOF read while tring to get nbf format len - %w", ErrCorruptNVF)
+			err = fmt.Errorf("EOF read while trying to get nbf format len - %w", ErrCorruptNVF)
 		}
 
 		return hash.Hash{}, nil, err
@@ -228,7 +228,7 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 
 	if err != nil {
 		if err == io.EOF {
-			err = fmt.Errorf("EOF read while tring to get nbf format string - %w", ErrCorruptNVF)
+			err = fmt.Errorf("EOF read while trying to get nbf format string - %w", ErrCorruptNVF)
 		}
 
 		return hash.Hash{}, nil, err
@@ -236,12 +236,8 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 
 	var nbf *types.NomsBinFormat
 	switch string(data) {
-	case types.Format_7_18.VersionString():
-		nbf = types.Format_7_18
 	case types.Format_LD_1.VersionString():
 		nbf = types.Format_LD_1
-	case types.Format_DOLT_DEV.VersionString():
-		nbf = types.Format_DOLT_DEV
 	case types.Format_DOLT.VersionString():
 		nbf = types.Format_DOLT
 	default:
@@ -307,7 +303,9 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 			return hash.Hash{}, nil, errors.New("data corrupted")
 		}
 
-		err = store.Put(ctx, ch)
+		err = store.Put(ctx, ch, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
+			return nil, nil
+		})
 
 		if err != nil {
 			return hash.Hash{}, nil, err

@@ -23,6 +23,7 @@ import (
 	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -354,7 +355,7 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 	}
 
 	typeType, err := typeinfo.FromSqlType(
-		sql.MustCreateEnumType([]string{"foreign key", "unique index", "check constraint"}, sql.Collation_Default))
+		gmstypes.MustCreateEnumType([]string{"foreign key", "unique index", "check constraint"}, sql.Collation_Default))
 	if err != nil {
 		return nil, err
 	}
@@ -372,11 +373,16 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 	if t.Format() == types.Format_DOLT {
 		// the commit hash or working set hash of the right side during merge
 		colColl = colColl.Append(schema.NewColumn("from_root_ish", 0, types.StringKind, false))
+		colColl = colColl.Append(typeCol)
+		colColl = colColl.Append(sch.GetPKCols().GetColumns()...)
+		colColl = colColl.Append(sch.GetNonPKCols().GetColumns()...)
+		colColl = colColl.Append(infoCol)
+	} else {
+		colColl = colColl.Append(typeCol)
+		colColl = colColl.Append(sch.GetAllCols().GetColumns()...)
+		colColl = colColl.Append(infoCol)
 	}
 
-	colColl = colColl.Append(typeCol)
-	colColl = colColl.Append(sch.GetAllCols().GetColumns()...)
-	colColl = colColl.Append(infoCol)
 	return schema.SchemaFromCols(colColl)
 }
 
@@ -466,6 +472,15 @@ func (t *Table) GetNomsRowData(ctx context.Context) (types.Map, error) {
 // GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
 func (t *Table) GetRowData(ctx context.Context) (durable.Index, error) {
 	return t.table.GetTableRows(ctx)
+}
+
+// GetRowDataHash returns the hash.Hash of the row data index.
+func (t *Table) GetRowDataHash(ctx context.Context) (hash.Hash, error) {
+	idx, err := t.table.GetTableRows(ctx)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	return idx.HashOf()
 }
 
 // ResolveConflicts resolves conflicts for this table.

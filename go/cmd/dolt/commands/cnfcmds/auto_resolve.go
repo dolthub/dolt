@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type AutoResolveStrategy int
@@ -126,14 +125,16 @@ func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 		return err
 	}
 
-	eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return err
 	}
-	sqlCtx, err := engine.NewLocalSqlContext(ctx, eng)
+
+	sqlCtx, err := eng.NewLocalContext(ctx)
 	if err != nil {
 		return err
 	}
+	sqlCtx.SetCurrentDatabase(dbName)
 
 	v, err := getFirstColumn(sqlCtx, eng, "SELECT @@DOLT_ALLOW_COMMIT_CONFLICTS;")
 	if err != nil {
@@ -443,8 +444,7 @@ func validateConstraintViolations(ctx context.Context, before, after *doltdb.Roo
 		return err
 	}
 
-	// todo: this is an expensive way to compute this
-	_, violators, err := merge.AddForeignKeyViolations(ctx, after, before, set.NewStrSet(tables), hash.Of(nil))
+	violators, err := merge.GetForeignKeyViolatedTables(ctx, after, before, set.NewStrSet(tables))
 	if err != nil {
 		return err
 	}

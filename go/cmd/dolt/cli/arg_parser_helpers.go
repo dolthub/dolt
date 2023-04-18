@@ -112,6 +112,10 @@ const (
 	MinParentsFlag   = "min-parents"
 	DecorateFlag     = "decorate"
 	OneLineFlag      = "oneline"
+	ShallowFlag      = "shallow"
+	CachedFlag       = "cached"
+	ListFlag         = "list"
+	UserParam        = "user"
 )
 
 const (
@@ -128,7 +132,9 @@ var mergeAbortDetails = `Abort the current conflict resolution process, and try 
 If there were uncommitted working set changes present when the merge started, {{.EmphasisLeft}}dolt merge --abort{{.EmphasisRight}} will be unable to reconstruct these changes. It is therefore recommended to always commit or stash your changes before running dolt merge.
 `
 
-// Creates the argparser shared dolt commit cli and DOLT_COMMIT.
+var branchForceFlagDesc = "Reset {{.LessThan}}branchname{{.GreaterThan}} to {{.LessThan}}startpoint{{.GreaterThan}}, even if {{.LessThan}}branchname{{.GreaterThan}} exists already. Without {{.EmphasisLeft}}-f{{.EmphasisRight}}, {{.EmphasisLeft}}dolt branch{{.EmphasisRight}} refuses to change an existing branch. In combination with {{.EmphasisLeft}}-d{{.EmphasisRight}} (or {{.EmphasisLeft}}--delete{{.EmphasisRight}}), allow deleting the branch irrespective of its merged status. In combination with -m (or {{.EmphasisLeft}}--move{{.EmphasisRight}}), allow renaming the branch even if the new branch name already exists, the same applies for {{.EmphasisLeft}}-c{{.EmphasisRight}} (or {{.EmphasisLeft}}--copy{{.EmphasisRight}})."
+
+// CreateCommitArgParser creates the argparser shared dolt commit cli and DOLT_COMMIT.
 func CreateCommitArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
@@ -173,7 +179,7 @@ func CreatePushArgParser() *argparser.ArgParser {
 func CreateAddArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."})
-	ap.SupportsFlag("all", "A", "Stages any and all changes (adds, deletes, and modifications).")
+	ap.SupportsFlag(AllFlag, "A", "Stages any and all changes (adds, deletes, and modifications).")
 	return ap
 }
 
@@ -187,6 +193,7 @@ func CreateCloneArgParser() *argparser.ArgParser {
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use.")
 	ap.SupportsString(dbfactory.OSSCredsFileParam, "", "file", "OSS credentials file.")
 	ap.SupportsString(dbfactory.OSSCredsProfile, "", "profile", "OSS profile to use.")
+	ap.SupportsString(UserParam, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
 	return ap
 }
 
@@ -227,7 +234,7 @@ func CreateCherryPickArgParser() *argparser.ArgParser {
 
 func CreateFetchArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(ForceFlag, "f", "Update refs to remote branches with the current state of the remote, overwriting any conflicting history.")
+	ap.SupportsString(UserParam, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
 	return ap
 }
 
@@ -250,16 +257,18 @@ func CreatePullArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(CommitFlag, "", "Perform the merge and commit the result. This is the default option, but can be overridden with the --no-commit flag. Note that this option does not affect fast-forward merges, which don't create a new merge commit, and if any merge conflicts or constraint violations are detected, no commit will be attempted.")
 	ap.SupportsFlag(NoCommitFlag, "", "Perform the merge and stop just before creating a merge commit. Note this will not prevent a fast-forward merge; use the --no-ff arg together with the --no-commit arg to prevent both fast-forwards and merge commits.")
 	ap.SupportsFlag(NoEditFlag, "", "Use an auto-generated commit message when creating a merge commit. The default for interactive CLI sessions is to open an editor.")
+	ap.SupportsString(UserParam, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
 	return ap
 }
 
 func CreateBranchArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
+	ap.SupportsFlag(ForceFlag, "f", branchForceFlagDesc)
 	ap.SupportsFlag(CopyFlag, "c", "Create a copy of a branch.")
 	ap.SupportsFlag(MoveFlag, "m", "Move/rename a branch")
 	ap.SupportsFlag(DeleteFlag, "d", "Delete a branch. The branch must be fully merged in its upstream branch.")
 	ap.SupportsFlag(DeleteForceFlag, "", "Shortcut for {{.EmphasisLeft}}--delete --force{{.EmphasisRight}}.")
+	ap.SupportsString(TrackFlag, "t", "", "When creating a new branch, set up 'upstream' configuration.")
 
 	return ap
 }
@@ -270,6 +279,7 @@ func CreateTagArgParser() *argparser.ArgParser {
 	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the tag message.")
 	ap.SupportsFlag(VerboseFlag, "v", "list tags along with their metadata.")
 	ap.SupportsFlag(DeleteFlag, "d", "Delete a tag.")
+	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
 	return ap
 }
 
@@ -302,7 +312,13 @@ func CreateLogArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(ParentsFlag, "", "Shows all parents of each commit in the log.")
 	ap.SupportsString(DecorateFlag, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
 	ap.SupportsFlag(OneLineFlag, "", "Shows logs in a compact format.")
-	ap.SupportsString(NotFlag, "", "revision", "Excludes commits from revision.")
+	ap.SupportsStringList(NotFlag, "", "revision", "Excludes commits from revision.")
+	return ap
+}
+
+func CreateGCArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(ShallowFlag, "s", "perform a fast, but incomplete garbage collection pass")
 	return ap
 }
 

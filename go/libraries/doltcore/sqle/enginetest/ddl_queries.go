@@ -17,6 +17,7 @@ package enginetest
 import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
@@ -296,6 +297,19 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "alter, rename primary key column",
+		SetUpScript: []string{
+			"create table t (pk1 varchar(100), pk2 varchar(50), PRIMARY KEY (pk1, pk2))",
+			"alter table t change column pk2 pkTwo varchar(20)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "show create table t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `pk1` varchar(100) NOT NULL,\n  `pkTwo` varchar(20) NOT NULL,\n  PRIMARY KEY (`pk1`,`pkTwo`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
 }
 
 var ModifyColumnTypeScripts = []queries.ScriptTest{
@@ -432,7 +446,7 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 			{
 				Query: "show create table test",
 				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
-					"  `pk` datetime NOT NULL,\n" +
+					"  `pk` datetime(6) NOT NULL,\n" +
 					"  `v1` bit(20),\n" +
 					"  PRIMARY KEY (`pk`),\n" +
 					"  KEY `v1` (`v1`)\n" +
@@ -453,7 +467,7 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:       "alter table test modify column pk datetime",
-				ExpectedErr: sql.ErrConvertingToTime,
+				ExpectedErr: types.ErrConvertingToTime,
 			},
 		},
 	},
@@ -703,6 +717,52 @@ var AddIndexScripts = []queries.ScriptTest{
 			{
 				Query:       "create unique index m on test (uk);",
 				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+		},
+	},
+}
+
+var AddDropPrimaryKeysScripts = []queries.ScriptTest{
+	{
+		Name: "drop primary key blocked when foreign key present",
+		SetUpScript: []string{
+			"create table parent (a int primary key )",
+			"create table child (b int primary key, c int, key (c))",
+			"alter table child add constraint fk1 foreign key (c) references parent (a)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "alter table parent drop primary key",
+				ExpectedErr: sql.ErrCantDropIndex,
+			},
+		},
+	},
+	{
+		Name: "drop primary key succeeds when foreign key present on other column",
+		SetUpScript: []string{
+			"create table parent (a int primary key, d int, key (d))",
+			"create table child (b int primary key, c int, key (c))",
+			"alter table child add constraint fk1 foreign key (c) references parent (d)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table parent drop primary key",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0x0, InsertID: 0x0}}},
+			},
+		},
+	},
+	{
+		Name: "drop primary key succeeds when foreign key present on other table",
+		SetUpScript: []string{
+			"create table unrelated (a int primary key, d int)",
+			"create table parent (a int primary key)",
+			"create table child (b int primary key, c int, key (c))",
+			"alter table child add constraint fk1 foreign key (c) references parent (a)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table unrelated drop primary key",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0x0, InsertID: 0x0}}},
 			},
 		},
 	},

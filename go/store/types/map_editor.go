@@ -28,7 +28,7 @@ import (
 )
 
 // CreateEditAcc defines a factory method for EditAccumulator creation
-type CreateEditAcc func(nbf *NomsBinFormat) EditAccumulator
+type CreateEditAcc func(ValueReader) EditAccumulator
 
 // CreateEditAccForMapEdits allows users to define the EditAccumulator that should be used when creating a MapEditor via
 // the Map.Edit method.  In most cases you should call:
@@ -51,7 +51,7 @@ type EditAccumulator interface {
 
 	// FinishedEditing should be called when all edits have been added to get an EditProvider which provides the
 	// edits in sorted order. Adding more edits after calling FinishedEditing is an error.
-	FinishedEditing() (EditProvider, error)
+	FinishedEditing(context.Context) (EditProvider, error)
 
 	// Close ensures that the accumulator is closed. Repeat calls are allowed. Not guaranteed to be thread-safe, thus
 	// requires external synchronization.
@@ -66,13 +66,12 @@ type MapEditor struct {
 }
 
 func NewMapEditor(m Map) *MapEditor {
-	return &MapEditor{m, 0, CreateEditAccForMapEdits(m.format())}
+	return &MapEditor{m, 0, CreateEditAccForMapEdits(m.valueReadWriter())}
 }
 
 // Map applies all edits and returns a newly updated Map
 func (med *MapEditor) Map(ctx context.Context) (Map, error) {
-	edits, err := med.acc.FinishedEditing()
-
+	edits, err := med.acc.FinishedEditing(ctx)
 	if err != nil {
 		return EmptyMap, err
 	}

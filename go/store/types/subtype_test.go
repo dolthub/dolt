@@ -35,7 +35,7 @@ import (
 )
 
 func assertSubtype(ctx context.Context, nbf *NomsBinFormat, t *Type, v Value) {
-	is, err := IsValueSubtypeOf(nbf, v, t)
+	is, err := IsValueSubtypeOf(ctx, nbf, v, t)
 	d.PanicIfError(err)
 
 	if !is {
@@ -582,7 +582,7 @@ func makeTestStructTypeFromFieldNames(s string) (*Type, error) {
 	return MakeStructType("", fields...)
 }
 
-func makeTestStructFromFieldNames(nbf *NomsBinFormat, s string) (Struct, error) {
+func makeTestStructFromFieldNames(tt *testing.T, nbf *NomsBinFormat, s string) (Struct, error) {
 	t, err := makeTestStructTypeFromFieldNames(s)
 
 	if err != nil {
@@ -590,7 +590,7 @@ func makeTestStructFromFieldNames(nbf *NomsBinFormat, s string) (Struct, error) 
 	}
 
 	fields := t.Desc.(StructDesc).fields
-	d.Chk.NotEmpty(fields)
+	require.NotEmpty(tt, fields)
 
 	fieldNames := make([]string, len(fields))
 	for i, field := range fields {
@@ -652,11 +652,11 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	vs := newTestValueStore()
 
 	assertTrue := func(v Value, t *Type) {
-		assert.True(IsValueSubtypeOf(vs.Format(), v, t))
+		assert.True(IsValueSubtypeOf(context.Background(), vs.Format(), v, t))
 	}
 
 	assertFalse := func(v Value, t *Type) {
-		assert.False(IsValueSubtypeOf(vs.Format(), v, t))
+		assert.False(IsValueSubtypeOf(context.Background(), vs.Format(), v, t))
 	}
 
 	allTypes := []struct {
@@ -967,11 +967,11 @@ func TestIsValueSubtypeOfDetails(tt *testing.T) {
 	a := assert.New(tt)
 
 	test := func(vString, tString string, exp1, exp2 bool) {
-		v, err := makeTestStructFromFieldNames(vs.Format(), vString)
+		v, err := makeTestStructFromFieldNames(tt, vs.Format(), vString)
 		require.NoError(tt, err)
 		t, err := makeTestStructTypeFromFieldNames(tString)
 		require.NoError(tt, err)
-		isSub, hasExtra, err := IsValueSubtypeOfDetails(vs.Format(), v, t)
+		isSub, hasExtra, err := IsValueSubtypeOfDetails(context.Background(), vs.Format(), v, t)
 		require.NoError(tt, err)
 		a.Equal(exp1, isSub, "expected %t for IsSub, received: %t", exp1, isSub)
 		if isSub {

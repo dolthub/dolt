@@ -20,6 +20,7 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -27,12 +28,12 @@ import (
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type multipolygonType struct {
-	sqlMultiPolygonType sql.MultiPolygonType
+	sqlMultiPolygonType gmstypes.MultiPolygonType
 }
 
 var _ TypeInfo = (*multipolygonType)(nil)
 
-var MultiPolygonType = &multipolygonType{sql.MultiPolygonType{}}
+var MultiPolygonType = &multipolygonType{gmstypes.MultiPolygonType{}}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *multipolygonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
@@ -73,12 +74,12 @@ func (ti *multipolygonType) ConvertValueToNomsValue(ctx context.Context, vrw typ
 	}
 
 	// Convert to sql.MultiPolygon
-	mpoly, err := ti.sqlMultiPolygonType.Convert(v)
+	mpoly, _, err := ti.sqlMultiPolygonType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
 
-	return types.ConvertSQLMultiPolygonToTypesMultiPolygon(mpoly.(sql.MultiPolygon)), nil
+	return types.ConvertSQLMultiPolygonToTypesMultiPolygon(mpoly.(gmstypes.MultiPolygon)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -135,7 +136,7 @@ func (ti *multipolygonType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *multipolygonType) Promote() TypeInfo {
-	return &multipolygonType{ti.sqlMultiPolygonType.Promote().(sql.MultiPolygonType)}
+	return &multipolygonType{ti.sqlMultiPolygonType.Promote().(gmstypes.MultiPolygonType)}
 }
 
 // String implements TypeInfo interface.
@@ -227,5 +228,5 @@ func CreateMultiPolygonTypeFromParams(params map[string]string) (TypeInfo, error
 		}
 	}
 
-	return &multipolygonType{sqlMultiPolygonType: sql.MultiPolygonType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
+	return &multipolygonType{sqlMultiPolygonType: gmstypes.MultiPolygonType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

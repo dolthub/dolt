@@ -204,14 +204,14 @@ SQL
     [[ "${#lines[@]}" = "13" ]] || false
 }
 
-@test "keyless: diff --summary" {
+@test "keyless: diff --stat" {
 
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 0;
 INSERT INTO keyless VALUES (8,8);
 UPDATE keyless SET c1 = 9 WHERE c0 = 1;
 SQL
-    run dolt diff --summary
+    run dolt diff --stat
     [ $status -eq 0 ]
     [[ "$output" =~ "3 Rows Added" ]] || false
     [[ "$output" =~ "3 Rows Deleted" ]] || false
@@ -1224,7 +1224,7 @@ SQL
     [[ "${lines[0]}" = "count" ]] || false
     [[ "${lines[1]}" = "1" ]] || false
 
-    run dolt index cat mytable v1v2 -r csv
+    run dolt index cat mytable ux -r csv
     [[ "${lines[0]}" = "v1,v2" ]] || false
     [[ "${lines[1]}" = "2,2" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
@@ -1264,7 +1264,7 @@ SQL
     [[ "${lines[1]}" = "1,2,2" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
 
-    run dolt index cat mytable v1 -r csv
+    run dolt index cat mytable ux -r csv
     [[ "${lines[0]}" = "v1" ]] || false
     [[ "${lines[1]}" = "2" ]] || false
     [[ "${lines[2]}" = "3" ]] || false
@@ -1295,7 +1295,7 @@ SQL
     [[ "${lines[1]}" = "1,2,2" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
 
-    run dolt index cat mytable v1 -r csv
+    run dolt index cat mytable ux -r csv
     [ $status -eq 0 ]
     [[ "${lines[0]}" = "v1" ]] || false
     [[ "${lines[1]}" = "2" ]] || false

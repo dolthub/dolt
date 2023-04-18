@@ -82,7 +82,7 @@ func (l List) ToSet(ctx context.Context) (Set, error) {
 	}
 	e := s.Edit()
 	err = l.IterAll(ctx, func(v Value, idx uint64) error {
-		se, err := e.Insert(v)
+		se, err := e.Insert(ctx, v)
 		e = se
 		return err
 	})
@@ -477,7 +477,7 @@ func newListChunker(nbf *NomsBinFormat, salt byte) sequenceSplitter {
 }
 
 func makeListLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
-	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64, error) {
+	return func(ctx context.Context, level uint64, items []sequenceItem) (Collection, orderedKey, uint64, error) {
 		d.PanicIfFalse(level == 0)
 		values := make([]Value, len(items))
 

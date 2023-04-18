@@ -243,11 +243,13 @@ func translateStringField(ctx context.Context, ns tree.NodeStore, value types.St
 	case val.StringAddrEnc:
 		// note: previously, TEXT fields were serialized as types.String
 		rd := strings.NewReader(string(value))
-		t, err := tree.NewImmutableTreeFromReader(ctx, rd, ns, tree.DefaultFixedChunkLength)
+		bb := ns.BlobBuilder()
+		bb.Init(len(value))
+		_, addr, err := bb.Chunk(ctx, rd)
 		if err != nil {
 			return err
 		}
-		b.PutStringAddr(idx, t.Addr)
+		b.PutStringAddr(idx, addr)
 
 	default:
 		panic(fmt.Sprintf("unexpected encoding for string (%d)", typ.Enc))
@@ -310,11 +312,13 @@ func translateJSONField(ctx context.Context, ns tree.NodeStore, value types.JSON
 	}
 	buf := bytes.NewBuffer([]byte(s))
 
-	t, err := tree.NewImmutableTreeFromReader(ctx, buf, ns, tree.DefaultFixedChunkLength)
+	bb := ns.BlobBuilder()
+	bb.Init(len(s))
+	_, addr, err := bb.Chunk(ctx, buf)
 	if err != nil {
 		return err
 	}
-	b.PutJSONAddr(idx, t.Addr)
+	b.PutJSONAddr(idx, addr)
 	return nil
 }
 
@@ -338,7 +342,9 @@ func translateBlobField(ctx context.Context, ns tree.NodeStore, value types.Blob
 		return err
 	}
 
-	t, err := tree.NewImmutableTreeFromReader(ctx, bytes.NewReader(buf), ns, tree.DefaultFixedChunkLength)
+	bb := ns.BlobBuilder()
+	bb.Init(int(value.Len()))
+	_, addr, err := bb.Chunk(ctx, bytes.NewReader(buf))
 	if err != nil {
 		return err
 	}
@@ -346,9 +352,9 @@ func translateBlobField(ctx context.Context, ns tree.NodeStore, value types.Blob
 	typ := b.Desc.Types[idx]
 	switch typ.Enc {
 	case val.BytesAddrEnc:
-		b.PutBytesAddr(idx, t.Addr)
+		b.PutBytesAddr(idx, addr)
 	case val.StringAddrEnc:
-		b.PutStringAddr(idx, t.Addr)
+		b.PutStringAddr(idx, addr)
 	}
 	return nil
 }

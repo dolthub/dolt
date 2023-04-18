@@ -6,11 +6,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo1
+        url: http://localhost:3852/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo2
+        url: http://localhost:3852/repo2
     with_files:
     - name: standby_server.yaml
       contents: |
@@ -21,11 +21,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50052/{database}
+            remote_url_template: http://localhost:3852/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
-            port: 50051
+            port: 3851
     - name: primary_server.yaml
       contents: |
         log_level: trace
@@ -35,11 +35,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50052/{database}
+            remote_url_template: http://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 15
           remotesapi:
-            port: 50051
+            port: 3851
     server:
       args: ["--config", "standby_server.yaml"]
       port: 3309
@@ -74,11 +74,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo1
+        url: http://localhost:3852/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo2
+        url: http://localhost:3852/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -89,11 +89,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50052/{database}
+            remote_url_template: http://localhost:3852/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
-            port: 50051
+            port: 3851
     server:
       args: ["--config", "server.yaml"]
       port: 3309
@@ -151,11 +151,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo1
+        url: http://localhost:3852/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo2
+        url: http://localhost:3852/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -166,11 +166,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50052/{database}
+            remote_url_template: http://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 50051
+            port: 3851
     server:
       args: ["--config", "server.yaml"]
       port: 3309
@@ -182,7 +182,7 @@ tests:
     - query: "select name, url from dolt_remotes"
       result:
         columns: ["name","url"]
-        rows: [["standby","http://localhost:50052/a_new_database"]]
+        rows: [["standby","http://localhost:3852/a_new_database"]]
 - name: fails to start if a configured remote is missing
   multi_repos:
   - name: server1
@@ -190,7 +190,7 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo1
+        url: http://localhost:3852/repo1
     - name: repo2
       with_remotes:
     with_files:
@@ -203,11 +203,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50052/{database}
+            remote_url_template: http://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 50051
+            port: 3851
     server:
       args: ["--config", "server.yaml"]
       port: 3309
@@ -220,11 +220,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo1
+        url: http://localhost:3852/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo2
+        url: http://localhost:3852/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -235,11 +235,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50052/{database}
+            remote_url_template: http://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 50051
+            port: 3851
     server:
       args: ["--port", "3309"]
       port: 3309
@@ -248,11 +248,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50051/repo1
+        url: http://localhost:3851/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50051/repo2
+        url: http://localhost:3851/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -263,11 +263,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50051/{database}
+            remote_url_template: http://localhost:3851/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
-            port: 50052
+            port: 3852
     server:
       args: ["--config", "server.yaml"]
       port: 3310
@@ -303,11 +303,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo1
+        url: http://localhost:3852/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo2
+        url: http://localhost:3852/repo2
     with_files:
     - name: standby_server.yaml
       contents: |
@@ -318,11 +318,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50052/{database}
+            remote_url_template: http://localhost:3852/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
-            port: 50051
+            port: 3851
     server:
       args: ["--config", "standby_server.yaml"]
       port: 3309
@@ -339,11 +339,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo1
+        url: http://localhost:3852/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo2
+        url: http://localhost:3852/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -354,11 +354,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50052/{database}
+            remote_url_template: http://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 50051
+            port: 3851
     server:
       args: ["--config", "server.yaml"]
       port: 3309
@@ -374,11 +374,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo1
+        url: http://localhost:3852/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo2
+        url: http://localhost:3852/repo2
     with_files:
     - name: standby_server.yaml
       contents: |
@@ -389,11 +389,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50052/{database}
+            remote_url_template: http://localhost:3852/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
-            port: 50051
+            port: 3851
     server:
       args: ["--config", "standby_server.yaml"]
       port: 3309
@@ -422,11 +422,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo1
+        url: http://localhost:3852/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo2
+        url: http://localhost:3852/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -437,11 +437,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50052/{database}
+            remote_url_template: http://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 50051
+            port: 3851
     server:
       args: ["--config", "server.yaml"]
       port: 3309
@@ -450,11 +450,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50051/repo1
+        url: http://localhost:3851/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50051/repo2
+        url: http://localhost:3851/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -465,11 +465,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50051/{database}
+            remote_url_template: http://localhost:3851/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
-            port: 50052
+            port: 3852
     server:
       args: ["--config", "server.yaml"]
       port: 3310
@@ -499,11 +499,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo1
+        url: http://localhost:3852/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo2
+        url: http://localhost:3852/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -514,11 +514,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50052/{database}
+            remote_url_template: http://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 50051
+            port: 3851
     server:
       args: ["--config", "server.yaml"]
       port: 3309
@@ -527,11 +527,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50051/repo1
+        url: http://localhost:3851/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50051/repo2
+        url: http://localhost:3851/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -542,11 +542,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50051/{database}
+            remote_url_template: http://localhost:3851/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 50052
+            port: 3852
     server:
       args: ["--config", "server.yaml"]
       port: 3310
@@ -562,6 +562,7 @@ tests:
     - exec: "create table more_vals (i int primary key)"
       error_match: "repo1 is read-only"
   - on: server2
+    retry_attempts: 100
     queries:
     - query: "SELECT @@GLOBAL.dolt_cluster_role,@@GLOBAL.dolt_cluster_role_epoch"
       result:
@@ -577,11 +578,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo1
+        url: http://localhost:3852/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo2
+        url: http://localhost:3852/repo2
     with_files:
     - name: preserver.yaml
       contents: |
@@ -598,11 +599,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50052/{database}
+            remote_url_template: http://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 15
           remotesapi:
-            port: 50051
+            port: 3851
     server:
       args: ["--config", "preserver.yaml"]
       port: 3309
@@ -611,11 +612,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50051/repo1
+        url: http://localhost:3851/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50051/repo2
+        url: http://localhost:3851/repo2
     with_files:
     - name: preserver.yaml
       contents: |
@@ -632,11 +633,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50051/{database}
+            remote_url_template: http://localhost:3851/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 50052
+            port: 3852
     server:
       args: ["--config", "preserver.yaml"]
       port: 3310
@@ -688,11 +689,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo1
+        url: http://localhost:3852/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo2
+        url: http://localhost:3852/repo2
     with_files:
     - name: preserver.yaml
       contents: |
@@ -709,11 +710,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50052/{database}
+            remote_url_template: http://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 50051
+            port: 3851
     server:
       args: ["--config", "preserver.yaml"]
       port: 3309
@@ -722,11 +723,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50051/repo1
+        url: http://localhost:3851/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50051/repo2
+        url: http://localhost:3851/repo2
     with_files:
     - name: preserver.yaml
       contents: |
@@ -743,11 +744,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50051/{database}
+            remote_url_template: http://localhost:3851/{database}
           bootstrap_role: primary
           bootstrap_epoch: 15
           remotesapi:
-            port: 50052
+            port: 3852
     server:
       args: ["--config", "preserver.yaml"]
       port: 3310
@@ -804,11 +805,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo1
+        url: http://localhost:3852/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:50052/repo2
+        url: http://localhost:3852/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -819,11 +820,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50052/{database}
+            remote_url_template: http://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 50051
+            port: 3851
     server:
       args: ["--config", "server.yaml"]
       port: 3309
@@ -848,11 +849,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50052/{database}
+            remote_url_template: http://localhost:3852/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 50051
+            port: 3851
     server:
       args: ["--config", "server.yaml"]
       port: 3309
@@ -867,11 +868,11 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:50051/{database}
+            remote_url_template: http://localhost:3851/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 50052
+            port: 3852
     server:
       args: ["--config", "server.yaml"]
       port: 3310

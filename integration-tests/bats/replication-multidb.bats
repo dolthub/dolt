@@ -70,13 +70,13 @@ teardown() {
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote remote1
     dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
     dolt sql --data-dir=dbs1 -b -q "use repo1; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo1; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo1; call dolt_commit('-am', 'cm')"
     dolt sql --data-dir=dbs1 -b -q "use repo2; create table t2 (a int primary key)"
     dolt sql --data-dir=dbs1 -b -q "use repo2; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo2; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo2; call dolt_commit('-am', 'cm')"
     dolt sql --data-dir=dbs1 -b -q "use repo3; create table t3 (a int primary key)"
     dolt sql --data-dir=dbs1 -b -q "use repo3; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo3; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo3; call dolt_commit('-am', 'cm')"
     
     clone_helper $TMPDIRS
     run dolt sql --data-dir=dbs2 -b -q "use repo1; show tables" -r csv
@@ -200,13 +200,13 @@ SQL
     push_helper $TMPDIRS
     dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
     dolt sql --data-dir=dbs1 -b -q "use repo1; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo1; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo1; call dolt_commit('-am', 'cm')"
     dolt sql --data-dir=dbs1 -b -q "use repo2; create table t2 (a int primary key)"
     dolt sql --data-dir=dbs1 -b -q "use repo2; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo2; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo2; call dolt_commit('-am', 'cm')"
     dolt sql --data-dir=dbs1 -b -q "use repo3; create table t3 (a int primary key)"
     dolt sql --data-dir=dbs1 -b -q "use repo3; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo3; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo3; call dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
     push_helper $TMPDIRS
@@ -328,13 +328,13 @@ SQL
     push_helper $TMPDIRS
     dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
     dolt sql --data-dir=dbs1 -b -q "use repo1; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo1; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo1; call dolt_commit('-am', 'cm')"
     dolt sql --data-dir=dbs1 -b -q "use repo2; create table t2 (a int primary key)"
     dolt sql --data-dir=dbs1 -b -q "use repo2; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo2; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo2; call dolt_commit('-am', 'cm')"
     dolt sql --data-dir=dbs1 -b -q "use repo3; create table t3 (a int primary key)"
     dolt sql --data-dir=dbs1 -b -q "use repo3; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo3; select dolt_commit('-am', 'cm')"
+    dolt sql --data-dir=dbs1 -b -q "use repo3; call dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
     push_helper $TMPDIRS

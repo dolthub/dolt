@@ -60,7 +60,10 @@ func TestSqlBatchInserts(t *testing.T) {
 		})
 
 	ctx := context.Background()
-	dEnv := CreateTestDatabase(t)
+	dEnv, err := CreateTestDatabase()
+	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
+
 	root, err := dEnv.WorkingRoot(ctx)
 
 	tmpDir, err := dEnv.TempTableFilesDir()
@@ -69,7 +72,7 @@ func TestSqlBatchInserts(t *testing.T) {
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
 	require.NoError(t, err)
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
@@ -155,7 +158,10 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	dEnv := CreateTestDatabase(t)
+	dEnv, err := CreateTestDatabase()
+	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
+
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 
@@ -165,7 +171,7 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
 	require.NoError(t, err)
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
@@ -198,9 +204,9 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 
 func TestSqlBatchInsertErrors(t *testing.T) {
 	ctx := context.Background()
-	dEnv := CreateTestDatabase(t)
-	root, err := dEnv.WorkingRoot(ctx)
+	dEnv, err := CreateTestDatabase()
 	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
 
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
@@ -208,7 +214,7 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
 	require.NoError(t, err)
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 

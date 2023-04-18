@@ -278,6 +278,7 @@ func TestConfig(t *testing.T) {
 	ctx := context.TODO()
 	dEnv := createTestEnv()
 
+	// test setting global config with --add
 	configCmd := ConfigCmd{}
 	ret := configCmd.Exec(ctx, "dolt config", []string{"-global", "--add", "name", "bheni"}, dEnv)
 	ret += configCmd.Exec(ctx, "dolt config", []string{"-global", "--add", "title", "dufus"}, dEnv)
@@ -293,6 +294,21 @@ func TestConfig(t *testing.T) {
 		t.Error("config -add did not yield expected global results")
 	}
 
+	// test setting global config with --set
+	ret = configCmd.Exec(ctx, "dolt config", []string{"-global", "--set", "name", "steph"}, dEnv)
+
+	expectedGlobal = map[string]string{
+		"name":  "steph",
+		"title": "dufus",
+	}
+
+	if ret != 0 {
+		t.Error("Failed to set global config")
+	} else if cfg, ok := dEnv.Config.GetConfig(env.GlobalConfig); !ok || !config.Equals(cfg, expectedGlobal) {
+		t.Error("config -set did not yield expected global results")
+	}
+
+	// test setting local config with --add
 	ret = configCmd.Exec(ctx, "dolt config", []string{"-local", "--add", "title", "senior dufus"}, dEnv)
 
 	expectedLocal := map[string]string{
@@ -305,6 +321,22 @@ func TestConfig(t *testing.T) {
 		t.Error("config -add did not yield expected local results")
 	} else if val, err := cfg.GetString("title"); err != nil || val != "senior dufus" {
 		t.Error("Unexpected value of \"title\" retrieved from the config hierarchy")
+	}
+
+	// test setting local config with --set
+	ret = configCmd.Exec(ctx, "dolt config", []string{"-local", "--set", "name", "steph"}, dEnv)
+
+	expectedLocal = map[string]string{
+		"name":  "steph",
+		"title": "senior dufus",
+	}
+
+	if ret != 0 {
+		t.Error("Failed to set local config")
+	} else if cfg, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok || !config.Equals(cfg, expectedLocal) {
+		t.Error("config -set did not yield expected local results")
+	} else if val, err := cfg.GetString("name"); err != nil || val != "steph" {
+		t.Error("Unexpected value of \"name\" retrieved from the config hierarchy")
 	}
 
 	ret = configCmd.Exec(ctx, "dolt config", []string{"-global", "--unset", "name"}, dEnv)
@@ -331,7 +363,7 @@ func TestConfig(t *testing.T) {
 		t.Error("listOperation did not yield expected global results")
 	}
 
-	expectedLocal = map[string]string{"title": "senior dufus"}
+	expectedLocal = map[string]string{"name": "steph", "title": "senior dufus"}
 	localProperties := map[string]string{}
 	ret = listOperation(dEnv, localCfg, []string{}, func() {}, func(k string, v string) {
 		localProperties[k] = v

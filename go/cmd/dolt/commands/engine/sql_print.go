@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -67,7 +68,7 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 		}
 	}()
 
-	start := time.Now()
+	start := ctx.QueryTime()
 
 	// TODO: this isn't appropriate for JSON, CSV, other structured result formats
 	if isOkResult(sqlSch) {
@@ -78,24 +79,14 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 
 	switch resultFormat {
 	case FormatCsv:
-		// TODO: provide a CSV writer that takes a sql schema
-		sch, err := sqlutil.ToDoltResultSchema(sqlSch)
-		if err != nil {
-			return err
-		}
-
-		wr, err = csv.NewCSVWriter(iohelp.NopWrCloser(cli.CliOut), sch, csv.NewCSVInfo())
+		var err error
+		wr, err = csv.NewCSVSqlWriter(iohelp.NopWrCloser(cli.CliOut), sqlSch, csv.NewCSVInfo())
 		if err != nil {
 			return err
 		}
 	case FormatJson:
-		// TODO: provide a JSON writer that takes a sql schema
-		sch, err := sqlutil.ToDoltResultSchema(sqlSch)
-		if err != nil {
-			return err
-		}
-
-		wr, err = json.NewJSONWriter(iohelp.NopWrCloser(cli.CliOut), sch)
+		var err error
+		wr, err = json.NewJSONSqlWriter(iohelp.NopWrCloser(cli.CliOut), sqlSch)
 		if err != nil {
 			return err
 		}
@@ -110,6 +101,11 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 	numRows, err := writeResultSet(ctx, rowIter, wr)
 	if err != nil {
 		return err
+	}
+
+	// if there is no row data and result format is JSON, then create empty JSON.
+	if resultFormat == FormatJson && numRows == 0 {
+		iohelp.WriteLine(cli.CliOut, "{}")
 	}
 
 	if summary == PrintRowCountAndTiming {
@@ -139,7 +135,7 @@ func printResultSetSummary(numRows int, start time.Time) error {
 		noun = "row"
 	}
 
-	secondsSinceStart := secondsSince(start)
+	secondsSinceStart := secondsSince(start, time.Now())
 	err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("%d %s in set (%.2f sec)", numRows, noun, secondsSinceStart))
 	if err != nil {
 		return err
@@ -176,10 +172,10 @@ func writeResultSet(ctx *sql.Context, rowIter sql.RowIter, wr table.SqlRowWriter
 }
 
 // secondsSince returns the number of full and partial seconds since the time given
-func secondsSince(start time.Time) float64 {
-	runTime := time.Since(start)
+func secondsSince(start time.Time, end time.Time) float64 {
+	runTime := end.Sub(start)
 	seconds := runTime / time.Second
-	milliRemainder := (runTime - seconds) / time.Millisecond
+	milliRemainder := (runTime - seconds*time.Second) / time.Millisecond
 	timeDisplay := float64(seconds) + float64(milliRemainder)*.001
 	return timeDisplay
 }
@@ -191,7 +187,7 @@ func (n nullWriter) WriteSqlRow(ctx context.Context, r sql.Row) error { return n
 func (n nullWriter) Close(ctx context.Context) error                  { return nil }
 
 func printEmptySetResult(start time.Time) {
-	seconds := secondsSince(start)
+	seconds := secondsSince(start, time.Now())
 	cli.Printf("Empty set (%.2f sec)\n", seconds)
 }
 
@@ -201,13 +197,13 @@ func printOKResult(ctx *sql.Context, iter sql.RowIter, start time.Time) error {
 		return err
 	}
 
-	if okResult, ok := row[0].(sql.OkResult); ok {
+	if okResult, ok := row[0].(types.OkResult); ok {
 		rowNoun := "row"
 		if okResult.RowsAffected != 1 {
 			rowNoun = "rows"
 		}
 
-		seconds := secondsSince(start)
+		seconds := secondsSince(start, time.Now())
 		cli.Printf("Query OK, %d %s affected (%.2f sec)\n", okResult.RowsAffected, rowNoun, seconds)
 
 		if okResult.Info != nil {
@@ -219,7 +215,7 @@ func printOKResult(ctx *sql.Context, iter sql.RowIter, start time.Time) error {
 }
 
 func isOkResult(sch sql.Schema) bool {
-	return sch.Equals(sql.OkResultSchema)
+	return sch.Equals(types.OkResultSchema)
 }
 
 type verticalRowWriter struct {

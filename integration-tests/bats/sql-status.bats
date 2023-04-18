@@ -34,6 +34,30 @@ teardown() {
     [[ "$output" =~ 'test,true,new table' ]] || false
 }
 
+@test "sql-status: status properly works with table rename" {
+    # Test is staged
+    dolt add test
+    run dolt sql -r csv -q "select * from dolt_status"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'test,true,new table' ]] || false
+
+    # Rename test to test2
+    run dolt sql -r csv -q "alter table test rename to test2"
+    [ "$status" -eq 0 ]
+
+    # Confirm table is now marked as renamed, test still staged
+    run dolt sql -r csv -q "select * from dolt_status"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'test,true,new table' ]] || false
+    [[ "$output" =~ 'test -> test2,false,renamed' ]] || false
+
+    # Confirm table is now marked as staged
+    dolt add test2
+    run dolt sql -r csv -q "select * from dolt_status"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'test2,true,new table' ]] || false
+}
+
 @test "sql-status: table that has staged and unstaged changes shows up twice" {
     # Stage one set of changes.
     dolt add test
@@ -50,9 +74,9 @@ teardown() {
 
 @test "sql-status: status properly works with docs" {
     echo readme-text > README.md
-    dolt docs read README.md README.md
+    dolt docs upload README.md README.md
     echo license-text > LICENSE.md
-    dolt docs read LICENSE.md LICENSE.md
+    dolt docs upload LICENSE.md LICENSE.md
 
     dolt sql -r csv -q "select * from dolt_status ORDER BY table_name"
     run dolt sql -r csv -q "select * from dolt_status ORDER BY table_name"
@@ -85,7 +109,7 @@ teardown() {
 
 @test "sql-status: status works properly with working docs in conflict" {
      echo "a readme" > README.md
-     dolt docs read README.md README.md
+     dolt docs upload README.md README.md
      dolt add .
      dolt commit -m "Committing initial docs"
 
@@ -94,17 +118,17 @@ teardown() {
 
      dolt checkout test-a
      echo test-a branch > README.md
-     dolt docs read README.md README.md
+     dolt docs upload README.md README.md
      dolt add .
      dolt commit -m "Changed README.md on test-a branch"
 
      dolt checkout test-b
-     run dolt docs write README.md
+     run dolt docs print README.md
      [[ $output =~ "a readme" ]] || false
      [[ ! $output =~ "test-a branch" ]] || false
 
      echo test-b branch > README.md
-     dolt docs read README.md README.md
+     dolt docs upload README.md README.md
      dolt add .
      dolt commit -m "Changed README.md on test-a branch"
      dolt checkout main
@@ -113,7 +137,7 @@ teardown() {
      run dolt merge test-a
      [ "$status" -eq 0 ]
      [[ $output =~ "Fast-forward" ]] || false
-     run dolt docs write README.md
+     run dolt docs print README.md
      [[ "$output" =~ "test-a branch" ]] || false
 
      # A merge with conflicts does not change the working root.

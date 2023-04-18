@@ -19,12 +19,16 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -55,6 +59,15 @@ type TableDelta struct {
 	ToFks            []doltdb.ForeignKey
 	ToFksParentSch   map[string]schema.Schema
 	FromFksParentSch map[string]schema.Schema
+}
+
+type TableDeltaSummary struct {
+	DiffType      string
+	DataChange    bool
+	SchemaChange  bool
+	TableName     string
+	FromTableName string
+	ToTableName   string
 }
 
 // GetStagedUnstagedTableDeltas represents staged and unstaged changes as TableDelta slices.
@@ -145,6 +158,14 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 	if err != nil {
 		return nil, err
 	}
+
+	// Make sure we always return the same order of deltas
+	sort.Slice(deltas, func(i, j int) bool {
+		if deltas[i].FromName == deltas[j].FromName {
+			return deltas[i].ToName < deltas[j].ToName
+		}
+		return deltas[i].FromName < deltas[j].FromName
+	})
 
 	return deltas, nil
 }
@@ -307,6 +328,10 @@ func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 
+	if td.HasFKChanges() {
+		return true, nil
+	}
+
 	fromSchemaHash, err := td.FromTable.GetSchemaHash(ctx)
 	if err != nil {
 		return false, err
@@ -317,7 +342,38 @@ func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
-	return fromSchemaHash != toSchemaHash, nil
+	return !fromSchemaHash.Equal(toSchemaHash), nil
+}
+
+func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
+	if td.IsAdd() {
+		isEmpty, err := isTableDataEmpty(ctx, td.ToTable)
+		if err != nil {
+			return false, err
+		}
+
+		return !isEmpty, nil
+	}
+
+	if td.IsDrop() {
+		isEmpty, err := isTableDataEmpty(ctx, td.FromTable)
+		if err != nil {
+			return false, err
+		}
+		return !isEmpty, nil
+	}
+
+	fromRowDataHash, err := td.FromTable.GetRowDataHash(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	toRowDataHash, err := td.ToTable.GetRowDataHash(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return !fromRowDataHash.Equal(toRowDataHash), nil
 }
 
 func (td TableDelta) HasPrimaryKeySetChanged() bool {
@@ -387,6 +443,72 @@ func (td TableDelta) IsKeyless(ctx context.Context) (bool, error) {
 	}
 }
 
+// isTableDataEmpty return true if the table does not contain any data
+func isTableDataEmpty(ctx context.Context, table *doltdb.Table) (bool, error) {
+	rowData, err := table.GetRowData(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return rowData.Empty()
+}
+
+// GetSummary returns a summary of the table delta.
+func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error) {
+	dataChange, err := td.HasDataChanged(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Dropping a table is always a schema change, and also a data change if the table contained data
+	if td.IsDrop() {
+		return &TableDeltaSummary{
+			TableName:     td.FromName,
+			FromTableName: td.FromName,
+			DataChange:    dataChange,
+			SchemaChange:  true,
+			DiffType:      "dropped",
+		}, nil
+	}
+
+	// Creating a table is always a schema change, and also a data change if data was inserted
+	if td.IsAdd() {
+		return &TableDeltaSummary{
+			TableName:    td.ToName,
+			ToTableName:  td.ToName,
+			DataChange:   dataChange,
+			SchemaChange: true,
+			DiffType:     "added",
+		}, nil
+	}
+
+	// Renaming a table is always a schema change, and also a data change if the table data differs
+	if td.IsRename() {
+		return &TableDeltaSummary{
+			TableName:     td.ToName,
+			FromTableName: td.FromName,
+			ToTableName:   td.ToName,
+			DataChange:    dataChange,
+			SchemaChange:  true,
+			DiffType:      "renamed",
+		}, nil
+	}
+
+	schemaChange, err := td.HasSchemaChanged(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TableDeltaSummary{
+		TableName:     td.FromName,
+		FromTableName: td.FromName,
+		ToTableName:   td.ToName,
+		DataChange:    dataChange,
+		SchemaChange:  schemaChange,
+		DiffType:      "modified",
+	}, nil
+}
+
 // GetRowData returns the table's row data at the fromRoot and toRoot, or an empty map if the table did not exist.
 func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, err error) {
 	if td.FromTable == nil && td.ToTable == nil {
@@ -433,5 +555,205 @@ func fkSlicesAreEqual(from, to []doltdb.ForeignKey) bool {
 			return false
 		}
 	}
+	return true
+}
+
+// SqlSchemaDiff returns a slice of DDL statements that will transform the schema in the from delta to the schema in
+// the to delta.
+func SqlSchemaDiff(ctx context.Context, td TableDelta, toSchemas map[string]schema.Schema) ([]string, error) {
+	fromSch, toSch, err := td.GetSchemas(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("cannot retrieve schema for table %s, cause: %s", td.ToName, err.Error())
+	}
+
+	var ddlStatements []string
+	if td.IsDrop() {
+		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(td.FromName))
+	} else if td.IsAdd() {
+		toPkSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
+		if err != nil {
+			return nil, err
+		}
+		stmt, err := GenerateCreateTableStatement(td.ToName, td.ToSch, toPkSch, td.ToFks, td.ToFksParentSch)
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+		ddlStatements = append(ddlStatements, stmt)
+	} else {
+		stmts, err := GetNonCreateNonDropTableSqlSchemaDiff(td, toSchemas, fromSch, toSch)
+		if err != nil {
+			return nil, err
+		}
+		ddlStatements = append(ddlStatements, stmts...)
+	}
+
+	return ddlStatements, nil
+}
+
+// GetNonCreateNonDropTableSqlSchemaDiff returns any schema diff in SQL statements that is NEITHER 'CREATE TABLE' NOR 'DROP TABLE' statements.
+func GetNonCreateNonDropTableSqlSchemaDiff(td TableDelta, toSchemas map[string]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
+	if td.IsAdd() || td.IsDrop() {
+		// use add and drop specific methods
+		return nil, nil
+	}
+
+	var ddlStatements []string
+	if td.FromName != td.ToName {
+		ddlStatements = append(ddlStatements, sqlfmt.RenameTableStmt(td.FromName, td.ToName))
+	}
+
+	eq := schema.SchemasAreEqual(fromSch, toSch)
+	if eq && !td.HasFKChanges() {
+		return ddlStatements, nil
+	}
+
+	colDiffs, unionTags := DiffSchColumns(fromSch, toSch)
+	for _, tag := range unionTags {
+		cd := colDiffs[tag]
+		switch cd.DiffType {
+		case SchDiffNone:
+		case SchDiffAdded:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.GenerateCreateTableColumnDefinition(*cd.New)))
+		case SchDiffRemoved:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
+		case SchDiffModified:
+			// Ignore any primary key set changes here
+			if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
+				continue
+			}
+			if cd.Old.Name != cd.New.Name {
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
+			}
+		}
+	}
+
+	// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
+	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
+		ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropPks(td.ToName))
+		if toSch.GetPKCols().Size() > 0 {
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddPrimaryKeys(td.ToName, toSch.GetPKCols()))
+		}
+	}
+
+	for _, idxDiff := range DiffSchIndexes(fromSch, toSch) {
+		switch idxDiff.DiffType {
+		case SchDiffNone:
+		case SchDiffAdded:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+		case SchDiffRemoved:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
+		case SchDiffModified:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+		}
+	}
+
+	for _, fkDiff := range DiffForeignKeys(td.FromFks, td.ToFks) {
+		switch fkDiff.DiffType {
+		case SchDiffNone:
+		case SchDiffAdded:
+			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+		case SchDiffRemoved:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
+		case SchDiffModified:
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
+
+			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+		}
+	}
+
+	return ddlStatements, nil
+}
+
+// GetDataDiffStatement returns any data diff in SQL statements for given table including INSERT, UPDATE and DELETE row statements.
+func GetDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowDiffType ChangeType, colDiffTypes []ChangeType) (string, error) {
+	if len(row) != len(colDiffTypes) {
+		return "", fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
+	}
+
+	switch rowDiffType {
+	case Added:
+		return sqlfmt.SqlRowAsInsertStmt(row, tableName, sch)
+	case Removed:
+		return sqlfmt.SqlRowAsDeleteStmt(row, tableName, sch, 0)
+	case ModifiedNew:
+		updatedCols := set.NewEmptyStrSet()
+		for i, diffType := range colDiffTypes {
+			if diffType != None {
+				updatedCols.Add(sch.GetAllCols().GetByIndex(i).Name)
+			}
+		}
+		return sqlfmt.SqlRowAsUpdateStmt(row, tableName, sch, updatedCols)
+	case ModifiedOld:
+		// do nothing, we only issue UPDATE for ModifiedNew
+		return "", nil
+	default:
+		return "", fmt.Errorf("unexpected row diff type: %v", rowDiffType)
+	}
+}
+
+// GenerateCreateTableStatement returns CREATE TABLE statement for given table. This function was made to share the same
+// 'create table' statement logic as GMS. We initially were running `SHOW CREATE TABLE` query to get the statement;
+// however, it cannot be done for cases that need this statement in sql shell mode. Dolt uses its own Schema and
+// Column and other object types which are not directly compatible with GMS, so we try to use as much shared logic
+// as possible with GMS to get 'create table' statement in Dolt.
+func GenerateCreateTableStatement(tblName string, sch schema.Schema, pkSchema sql.PrimaryKeySchema, fks []doltdb.ForeignKey, fksParentSch map[string]schema.Schema) (string, error) {
+	sqlSch := pkSchema.Schema
+	colStmts := make([]string, len(sqlSch))
+
+	// Statement creation parts for each column
+	for i, col := range sch.GetAllCols().GetColumns() {
+		colStmts[i] = sqlfmt.GenerateCreateTableIndentedColumnDefinition(col)
+	}
+
+	primaryKeyCols := sch.GetPKCols().GetColumnNames()
+	if len(primaryKeyCols) > 0 {
+		primaryKey := sql.GenerateCreateTablePrimaryKeyDefinition(primaryKeyCols)
+		colStmts = append(colStmts, primaryKey)
+	}
+
+	indexes := sch.Indexes().AllIndexes()
+	for _, index := range indexes {
+		// The primary key may or may not be declared as an index by the table. Don't print it twice if it's here.
+		if isPrimaryKeyIndex(index, sch) {
+			continue
+		}
+		colStmts = append(colStmts, sqlfmt.GenerateCreateTableIndexDefinition(index))
+	}
+
+	for _, fk := range fks {
+		colStmts = append(colStmts, sqlfmt.GenerateCreateTableForeignKeyDefinition(fk, sch, fksParentSch[fk.ReferencedTableName]))
+	}
+
+	for _, check := range sch.Checks().AllChecks() {
+		colStmts = append(colStmts, sqlfmt.GenerateCreateTableCheckConstraintClause(check))
+	}
+
+	coll := sql.CollationID(sch.GetCollation())
+	createTableStmt := sql.GenerateCreateTableStatement(tblName, colStmts, coll.CharacterSet().Name(), coll.Name())
+	return fmt.Sprintf("%s;", createTableStmt), nil
+}
+
+// isPrimaryKeyIndex returns whether the index given matches the table's primary key columns. Order is not considered.
+func isPrimaryKeyIndex(index schema.Index, sch schema.Schema) bool {
+	var pks = sch.GetPKCols().GetColumns()
+	var pkMap = make(map[string]struct{})
+	for _, c := range pks {
+		pkMap[c.Name] = struct{}{}
+	}
+
+	indexCols := index.ColumnNames()
+	if len(indexCols) != len(pks) {
+		return false
+	}
+
+	for _, c := range index.ColumnNames() {
+		if _, ok := pkMap[c]; !ok {
+			return false
+		}
+	}
+
 	return true
 }

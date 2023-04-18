@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -34,6 +35,7 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 	// In this test, we're setting only one client to match transaction commits to dolt commits.
 	// Autocommit is disabled for the enabled client, as it's the recommended way to use this feature.
 	harness := newDoltHarness(t)
+	defer harness.Close()
 	harness.Setup(setup.MydbData)
 	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "dolt commit on transaction commit one client",
@@ -77,11 +79,11 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 			},
 			{
 				Query:    "/* client a */ INSERT INTO x VALUES (2,2);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO x VALUES (3,3);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ SELECT * FROM x ORDER BY y;",
@@ -175,6 +177,7 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 	// In this test, we're setting both clients to match transaction commits to dolt commits.
 	// Autocommit is disabled, as it's the recommended way to use this feature.
 	harness := newDoltHarness(t)
+	defer harness.Close()
 	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "dolt commit on transaction commit two clients",
 		SetUpScript: []string{
@@ -199,6 +202,22 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 				Query:    "/* client b */ START TRANSACTION;",
 				Expected: []sql.Row{},
 			},
+			// Concurrent with the two transactions which are going to (dolt_)commit changes, we
+			// have a transaction which only modifies the working set. At the end of this
+			// sequence, the changes to the working set should not be committed.
+			{
+				Query:    "/* client c */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client c */ INSERT INTO x values (4, 4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client c */ COMMIT",
+				Expected: []sql.Row{},
+			},
+			// Now we have the two concurrent transactions commit their changes.
 			{
 				Query:    "/* client a */ SET @@dolt_transaction_commit=1;",
 				Expected: []sql.Row{{}},
@@ -217,11 +236,11 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 			},
 			{
 				Query:    "/* client a */ INSERT INTO x VALUES (2,2);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO x VALUES (3,3);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ SELECT * FROM x ORDER BY y;",
@@ -261,15 +280,25 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 			},
 			{
 				Query:    "/* client a */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 			},
 			{
 				Query:    "/* client b */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 			},
 			{
 				Query:    "/* client c */ SELECT * FROM x ORDER BY y;",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+			},
+			{
+				Query:    "/* client c */ SELECT * FROM x AS OF 'HEAD' ORDER BY y;",
 				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+			// After we commit both transactions, our working set should still have the change which
+			// was never dolt_committed.
+			{
+				Query:    "/* client c */ SELECT COUNT(*) FROM DOLT_DIFF('HEAD', 'WORKING', 'x');",
+				Expected: []sql.Row{{1}},
 			},
 		},
 	})
@@ -309,6 +338,7 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 	// In this test, each insertion from both clients cause a commit as autocommit is enabled.
 	// Not the recommended way to use the feature, but it's permitted.
 	harness := newDoltHarness(t)
+	defer harness.Close()
 	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "dolt commit with autocommit",
 		SetUpScript: []string{
@@ -327,11 +357,11 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 			},
 			{
 				Query:    "/* client a */ INSERT INTO x VALUES (2,2);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO x VALUES (3,3);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ SELECT * FROM x ORDER BY y;",
@@ -387,6 +417,7 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 
 func TestDoltTransactionCommitLateFkResolution(t *testing.T) {
 	harness := newDoltHarness(t)
+	defer harness.Close()
 	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "delayed foreign key resolution with transaction commits",
 		SetUpScript: []string{
@@ -415,11 +446,11 @@ func TestDoltTransactionCommitLateFkResolution(t *testing.T) {
 			},
 			{
 				Query:    "/* client a */ INSERT INTO child VALUES (1, 1);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO child VALUES (2, 2);",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",

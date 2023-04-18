@@ -48,22 +48,33 @@ func DifferFromRoots[K ~[]byte, O Ordering[K]](
 	from, to Node,
 	order O,
 ) (Differ[K, O], error) {
-	fc, err := NewCursorAtStart(ctx, fromNs, from)
+	var fc, tc *Cursor
+	var err error
+
+	if !from.empty() {
+		fc, err = newCursorAtStart(ctx, fromNs, from)
+		if err != nil {
+			return Differ[K, O]{}, err
+		}
+	} else {
+		fc = &Cursor{}
+	}
+
+	if !to.empty() {
+		tc, err = newCursorAtStart(ctx, toNs, to)
+		if err != nil {
+			return Differ[K, O]{}, err
+		}
+	} else {
+		tc = &Cursor{}
+	}
+
+	fs, err := newCursorPastEnd(ctx, fromNs, from)
 	if err != nil {
 		return Differ[K, O]{}, err
 	}
 
-	tc, err := NewCursorAtStart(ctx, toNs, to)
-	if err != nil {
-		return Differ[K, O]{}, err
-	}
-
-	fs, err := NewCursorPastEnd(ctx, fromNs, from)
-	if err != nil {
-		return Differ[K, O]{}, err
-	}
-
-	ts, err := NewCursorPastEnd(ctx, toNs, to)
+	ts, err := newCursorPastEnd(ctx, toNs, to)
 	if err != nil {
 		return Differ[K, O]{}, err
 	}
@@ -78,10 +89,28 @@ func DifferFromRoots[K ~[]byte, O Ordering[K]](
 }
 
 func DifferFromCursors[K ~[]byte, O Ordering[K]](
-	fromStart, toStart,
-	fromStop, toStop *Cursor,
+	ctx context.Context,
+	fromRoot, toRoot Node,
+	findStart, findStop SearchFn,
+	fromStore, toStore NodeStore,
 	order O,
 ) (Differ[K, O], error) {
+	fromStart, err := newCursorFromSearchFn(ctx, fromStore, fromRoot, findStart)
+	if err != nil {
+		return Differ[K, O]{}, err
+	}
+	toStart, err := newCursorFromSearchFn(ctx, toStore, toRoot, findStart)
+	if err != nil {
+		return Differ[K, O]{}, err
+	}
+	fromStop, err := newCursorFromSearchFn(ctx, fromStore, fromRoot, findStop)
+	if err != nil {
+		return Differ[K, O]{}, err
+	}
+	toStop, err := newCursorFromSearchFn(ctx, toStore, toRoot, findStop)
+	if err != nil {
+		return Differ[K, O]{}, err
+	}
 	return Differ[K, O]{
 		from:     fromStart,
 		to:       toStart,
@@ -92,7 +121,7 @@ func DifferFromCursors[K ~[]byte, O Ordering[K]](
 }
 
 func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
-	for td.from.Valid() && td.from.Compare(td.fromStop) < 0 && td.to.Valid() && td.to.Compare(td.toStop) < 0 {
+	for td.from.Valid() && td.from.compare(td.fromStop) < 0 && td.to.Valid() && td.to.compare(td.toStop) < 0 {
 
 		f := td.from.CurrentKey()
 		t := td.to.CurrentKey()
@@ -106,7 +135,7 @@ func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
 			return sendAdded(ctx, td.to)
 
 		case cmp == 0:
-			if !equalCursorValues(td.from, td.to) {
+			if !equalcursorValues(td.from, td.to) {
 				return sendModified(ctx, td.from, td.to)
 			}
 
@@ -117,10 +146,10 @@ func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
 		}
 	}
 
-	if td.from.Valid() && td.from.Compare(td.fromStop) < 0 {
+	if td.from.Valid() && td.from.compare(td.fromStop) < 0 {
 		return sendRemoved(ctx, td.from)
 	}
-	if td.to.Valid() && td.to.Compare(td.toStop) < 0 {
+	if td.to.Valid() && td.to.compare(td.toStop) < 0 {
 		return sendAdded(ctx, td.to)
 	}
 
@@ -131,10 +160,10 @@ func sendRemoved(ctx context.Context, from *Cursor) (diff Diff, err error) {
 	diff = Diff{
 		Type: RemovedDiff,
 		Key:  from.CurrentKey(),
-		From: from.CurrentValue(),
+		From: from.currentValue(),
 	}
 
-	if err = from.Advance(ctx); err != nil {
+	if err = from.advance(ctx); err != nil {
 		return Diff{}, err
 	}
 	return
@@ -144,10 +173,10 @@ func sendAdded(ctx context.Context, to *Cursor) (diff Diff, err error) {
 	diff = Diff{
 		Type: AddedDiff,
 		Key:  to.CurrentKey(),
-		To:   to.CurrentValue(),
+		To:   to.currentValue(),
 	}
 
-	if err = to.Advance(ctx); err != nil {
+	if err = to.advance(ctx); err != nil {
 		return Diff{}, err
 	}
 	return
@@ -157,14 +186,14 @@ func sendModified(ctx context.Context, from, to *Cursor) (diff Diff, err error) 
 	diff = Diff{
 		Type: ModifiedDiff,
 		Key:  from.CurrentKey(),
-		From: from.CurrentValue(),
-		To:   to.CurrentValue(),
+		From: from.currentValue(),
+		To:   to.currentValue(),
 	}
 
-	if err = from.Advance(ctx); err != nil {
+	if err = from.advance(ctx); err != nil {
 		return Diff{}, err
 	}
-	if err = to.Advance(ctx); err != nil {
+	if err = to.advance(ctx); err != nil {
 		return Diff{}, err
 	}
 	return
@@ -198,10 +227,10 @@ func skipCommon(ctx context.Context, from, to *Cursor) (err error) {
 		// case we need to Compare parents again.
 		parentsAreNew = from.atNodeEnd() || to.atNodeEnd()
 
-		if err = from.Advance(ctx); err != nil {
+		if err = from.advance(ctx); err != nil {
 			return err
 		}
-		if err = to.Advance(ctx); err != nil {
+		if err = to.advance(ctx); err != nil {
 			return err
 		}
 	}
@@ -239,7 +268,7 @@ func skipCommonParents(ctx context.Context, from, to *Cursor) (err error) {
 // todo(andy): assumes equal byte representations
 func equalItems(from, to *Cursor) bool {
 	return bytes.Equal(from.CurrentKey(), to.CurrentKey()) &&
-		bytes.Equal(from.CurrentValue(), to.CurrentValue())
+		bytes.Equal(from.currentValue(), to.currentValue())
 }
 
 func equalParents(from, to *Cursor) (eq bool) {
@@ -249,6 +278,6 @@ func equalParents(from, to *Cursor) (eq bool) {
 	return
 }
 
-func equalCursorValues(from, to *Cursor) bool {
-	return bytes.Equal(from.CurrentValue(), to.CurrentValue())
+func equalcursorValues(from, to *Cursor) bool {
+	return bytes.Equal(from.currentValue(), to.currentValue())
 }

@@ -15,12 +15,12 @@
 package dtables
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -38,26 +38,32 @@ var PermissionsStrings = []string{"admin", "write"}
 // accessSchema is the schema for the "dolt_branch_control" table.
 var accessSchema = sql.Schema{
 	&sql.Column{
+		Name:       "database",
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
+		Source:     AccessTableName,
+		PrimaryKey: true,
+	},
+	&sql.Column{
 		Name:       "branch",
-		Type:       sql.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
 		Source:     AccessTableName,
 		PrimaryKey: true,
 	},
 	&sql.Column{
 		Name:       "user",
-		Type:       sql.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_bin),
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_bin),
 		Source:     AccessTableName,
 		PrimaryKey: true,
 	},
 	&sql.Column{
 		Name:       "host",
-		Type:       sql.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
+		Type:       types.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_utf8mb4_0900_ai_ci),
 		Source:     AccessTableName,
 		PrimaryKey: true,
 	},
 	&sql.Column{
 		Name:       "permissions",
-		Type:       sql.MustCreateSetType(PermissionsStrings, sql.Collation_utf8mb4_0900_ai_ci),
+		Type:       types.MustCreateSetType(PermissionsStrings, sql.Collation_utf8mb4_0900_ai_ci),
 		Source:     AccessTableName,
 		PrimaryKey: false,
 	},
@@ -114,11 +120,10 @@ func (tbl BranchControlTable) PartitionRows(context *sql.Context, partition sql.
 	defer tbl.RWMutex.RUnlock()
 
 	var rows []sql.Row
-	if superUser := tbl.GetSuperUser(); len(superUser) > 0 {
-		rows = append(rows, sql.Row{"%", superUser, tbl.GetSuperHost(), uint64(branch_control.Permissions_Admin)})
-	}
-	for _, value := range tbl.Values {
+	rowIter := tbl.Iter()
+	for value, ok := rowIter.Next(); ok; value, ok = rowIter.Next() {
 		rows = append(rows, sql.Row{
+			value.Database,
 			value.Branch,
 			value.User,
 			value.Host,
@@ -170,43 +175,46 @@ func (tbl BranchControlTable) Insert(ctx *sql.Context, row sql.Row) error {
 	tbl.RWMutex.Lock()
 	defer tbl.RWMutex.Unlock()
 
-	// Branch and Host are case-insensitive, while user is case-sensitive
-	branch := strings.ToLower(branch_control.FoldExpression(row[0].(string)))
-	user := branch_control.FoldExpression(row[1].(string))
-	host := strings.ToLower(branch_control.FoldExpression(row[2].(string)))
-	perms := branch_control.Permissions(row[3].(uint64))
+	// Database, Branch, and Host are case-insensitive, while user is case-sensitive
+	database := strings.ToLower(branch_control.FoldExpression(row[0].(string)))
+	branch := strings.ToLower(branch_control.FoldExpression(row[1].(string)))
+	user := branch_control.FoldExpression(row[2].(string))
+	host := strings.ToLower(branch_control.FoldExpression(row[3].(string)))
+	perms := branch_control.Permissions(row[4].(uint64))
 
 	// Verify that the lengths of each expression fit within an uint16
-	if len(branch) > math.MaxUint16 || len(user) > math.MaxUint16 || len(host) > math.MaxUint16 {
-		return branch_control.ErrExpressionsTooLong.New(branch, user, host)
+	if len(database) > math.MaxUint16 || len(branch) > math.MaxUint16 || len(user) > math.MaxUint16 || len(host) > math.MaxUint16 {
+		return branch_control.ErrExpressionsTooLong.New(database, branch, user, host)
 	}
 
 	// A nil session means we're not in the SQL context, so we allow the insertion in such a case
-	if branchAwareSession := branch_control.GetBranchAwareSession(ctx); branchAwareSession != nil {
+	if branchAwareSession := branch_control.GetBranchAwareSession(ctx); branchAwareSession != nil &&
+		// Having the correct database privileges also allows the insertion
+		!branch_control.HasDatabasePrivileges(branchAwareSession, database) {
 		insertUser := branchAwareSession.GetUser()
 		insertHost := branchAwareSession.GetHost()
 		// As we've folded the branch expression, we can use it directly as though it were a normal branch name to
 		// determine if the user attempting the insertion has permission to perform the insertion.
-		_, modPerms := tbl.Match(branch, insertUser, insertHost)
+		_, modPerms := tbl.Match(database, branch, insertUser, insertHost)
 		if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
-			permStr, _ := accessSchema[3].Type.(sql.SetType).BitsToString(uint64(perms))
-			return branch_control.ErrInsertingRow.New(insertUser, insertHost, branch, user, host, permStr)
+			permStr, _ := accessSchema[4].Type.(sql.SetType).BitsToString(uint64(perms))
+			return branch_control.ErrInsertingAccessRow.New(insertUser, insertHost, database, branch, user, host, permStr)
 		}
 	}
 
 	// We check if we're inserting a subset of an already-existing row. If we are, we deny the insertion as the existing
 	// row will already match against ALL possible values for this row.
-	_, modPerms := tbl.Match(branch, user, host)
-	if modPerms&branch_control.Permissions_Admin == branch_control.Permissions_Admin {
+	if ok, modPerms := tbl.Match(database, branch, user, host); ok {
 		permBits := uint64(modPerms)
-		permStr, _ := accessSchema[3].Type.(sql.SetType).BitsToString(permBits)
+		permStr, _ := accessSchema[4].Type.(sql.SetType).BitsToString(permBits)
 		return sql.NewUniqueKeyErr(
-			fmt.Sprintf(`[%q, %q, %q, %q]`, branch, user, host, permStr),
+			fmt.Sprintf(`[%q, %q, %q, %q, %q]`, database, branch, user, host, permStr),
 			true,
-			sql.Row{branch, user, host, permBits})
+			sql.Row{database, branch, user, host, permBits})
 	}
 
-	return tbl.insert(ctx, branch, user, host, perms)
+	tbl.Access.Insert(database, branch, user, host, perms)
+	return nil
 }
 
 // Update implements the interface sql.RowUpdater.
@@ -214,29 +222,31 @@ func (tbl BranchControlTable) Update(ctx *sql.Context, old sql.Row, new sql.Row)
 	tbl.RWMutex.Lock()
 	defer tbl.RWMutex.Unlock()
 
-	// Branch and Host are case-insensitive, while user is case-sensitive
-	oldBranch := strings.ToLower(branch_control.FoldExpression(old[0].(string)))
-	oldUser := branch_control.FoldExpression(old[1].(string))
-	oldHost := strings.ToLower(branch_control.FoldExpression(old[2].(string)))
-	newBranch := strings.ToLower(branch_control.FoldExpression(new[0].(string)))
-	newUser := branch_control.FoldExpression(new[1].(string))
-	newHost := strings.ToLower(branch_control.FoldExpression(new[2].(string)))
-	newPerms := branch_control.Permissions(new[3].(uint64))
+	// Database, Branch, and Host are case-insensitive, while User is case-sensitive
+	oldDatabase := strings.ToLower(branch_control.FoldExpression(old[0].(string)))
+	oldBranch := strings.ToLower(branch_control.FoldExpression(old[1].(string)))
+	oldUser := branch_control.FoldExpression(old[2].(string))
+	oldHost := strings.ToLower(branch_control.FoldExpression(old[3].(string)))
+	newDatabase := strings.ToLower(branch_control.FoldExpression(new[0].(string)))
+	newBranch := strings.ToLower(branch_control.FoldExpression(new[1].(string)))
+	newUser := branch_control.FoldExpression(new[2].(string))
+	newHost := strings.ToLower(branch_control.FoldExpression(new[3].(string)))
+	newPerms := branch_control.Permissions(new[4].(uint64))
 
 	// Verify that the lengths of each expression fit within an uint16
-	if len(newBranch) > math.MaxUint16 || len(newUser) > math.MaxUint16 || len(newHost) > math.MaxUint16 {
-		return branch_control.ErrExpressionsTooLong.New(newBranch, newUser, newHost)
+	if len(newDatabase) > math.MaxUint16 || len(newBranch) > math.MaxUint16 || len(newUser) > math.MaxUint16 || len(newHost) > math.MaxUint16 {
+		return branch_control.ErrExpressionsTooLong.New(newDatabase, newBranch, newUser, newHost)
 	}
 
-	// If we're not updating the same row, then we pre-emptively check for a row violation
-	if oldBranch != newBranch || oldUser != newUser || oldHost != newHost {
-		if tblIndex := tbl.GetIndex(newBranch, newUser, newHost); tblIndex != -1 {
-			permBits := uint64(tbl.Values[tblIndex].Permissions)
-			permStr, _ := accessSchema[3].Type.(sql.SetType).BitsToString(permBits)
+	// If we're not updating the same row, then we check for a row violation
+	if oldDatabase != newDatabase || oldBranch != newBranch || oldUser != newUser || oldHost != newHost {
+		if ok, modPerms := tbl.Match(newDatabase, newBranch, newUser, newHost); ok {
+			permBits := uint64(modPerms)
+			permStr, _ := accessSchema[4].Type.(sql.SetType).BitsToString(permBits)
 			return sql.NewUniqueKeyErr(
-				fmt.Sprintf(`[%q, %q, %q, %q]`, newBranch, newUser, newHost, permStr),
+				fmt.Sprintf(`[%q, %q, %q, %q, %q]`, newDatabase, newBranch, newUser, newHost, permStr),
 				true,
-				sql.Row{newBranch, newUser, newHost, permBits})
+				sql.Row{newDatabase, newBranch, newUser, newHost, permBits})
 		}
 	}
 
@@ -244,37 +254,27 @@ func (tbl BranchControlTable) Update(ctx *sql.Context, old sql.Row, new sql.Row)
 	if branchAwareSession := branch_control.GetBranchAwareSession(ctx); branchAwareSession != nil {
 		insertUser := branchAwareSession.GetUser()
 		insertHost := branchAwareSession.GetHost()
-		// As we've folded the branch expression, we can use it directly as though it were a normal branch name to
-		// determine if the user attempting the update has permission to perform the update on the old branch name.
-		_, modPerms := tbl.Match(oldBranch, insertUser, insertHost)
-		if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
-			return branch_control.ErrUpdatingRow.New(insertUser, insertHost, oldBranch, oldUser, oldHost)
+		if !branch_control.HasDatabasePrivileges(branchAwareSession, oldDatabase) {
+			// As we've folded the branch expression, we can use it directly as though it were a normal branch name to
+			// determine if the user attempting the update has permission to perform the update on the old branch name.
+			_, modPerms := tbl.Match(oldDatabase, oldBranch, insertUser, insertHost)
+			if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
+				return branch_control.ErrUpdatingRow.New(insertUser, insertHost, oldDatabase, oldBranch, oldUser, oldHost)
+			}
 		}
-		// Now we check if the user has permission use the new branch name
-		_, modPerms = tbl.Match(newBranch, insertUser, insertHost)
-		if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
-			return branch_control.ErrUpdatingToRow.New(insertUser, insertHost, oldBranch, oldUser, oldHost, newBranch)
+		if !branch_control.HasDatabasePrivileges(branchAwareSession, newDatabase) {
+			// Similar to the block above, we check if the user has permission to use the new branch name
+			_, modPerms := tbl.Match(newDatabase, newBranch, insertUser, insertHost)
+			if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
+				return branch_control.ErrUpdatingToRow.
+					New(insertUser, insertHost, oldDatabase, oldBranch, oldUser, oldHost, newDatabase, newBranch)
+			}
 		}
 	}
 
-	// We check if we're updating to a subset of an already-existing row. If we are, we deny the update as the existing
-	// row will already match against ALL possible values for this updated row.
-	_, modPerms := tbl.Match(newBranch, newUser, newHost)
-	if modPerms&branch_control.Permissions_Admin == branch_control.Permissions_Admin {
-		permBits := uint64(modPerms)
-		permStr, _ := accessSchema[3].Type.(sql.SetType).BitsToString(permBits)
-		return sql.NewUniqueKeyErr(
-			fmt.Sprintf(`[%q, %q, %q, %q]`, newBranch, newUser, newHost, permStr),
-			true,
-			sql.Row{newBranch, newUser, newHost, permBits})
-	}
-
-	if tblIndex := tbl.GetIndex(oldBranch, oldUser, oldHost); tblIndex != -1 {
-		if err := tbl.delete(ctx, oldBranch, oldUser, oldHost); err != nil {
-			return err
-		}
-	}
-	return tbl.insert(ctx, newBranch, newUser, newHost, newPerms)
+	tbl.Access.Delete(oldDatabase, oldBranch, oldUser, oldHost)
+	tbl.Access.Insert(newDatabase, newBranch, newUser, newHost, newPerms)
+	return nil
 }
 
 // Delete implements the interface sql.RowDeleter.
@@ -282,90 +282,31 @@ func (tbl BranchControlTable) Delete(ctx *sql.Context, row sql.Row) error {
 	tbl.RWMutex.Lock()
 	defer tbl.RWMutex.Unlock()
 
-	// Branch and Host are case-insensitive, while user is case-sensitive
-	branch := strings.ToLower(branch_control.FoldExpression(row[0].(string)))
-	user := branch_control.FoldExpression(row[1].(string))
-	host := strings.ToLower(branch_control.FoldExpression(row[2].(string)))
+	// Database, Branch, and Host are case-insensitive, while User is case-sensitive
+	database := strings.ToLower(branch_control.FoldExpression(row[0].(string)))
+	branch := strings.ToLower(branch_control.FoldExpression(row[1].(string)))
+	user := branch_control.FoldExpression(row[2].(string))
+	host := strings.ToLower(branch_control.FoldExpression(row[3].(string)))
 
 	// A nil session means we're not in the SQL context, so we allow the deletion in such a case
-	if branchAwareSession := branch_control.GetBranchAwareSession(ctx); branchAwareSession != nil {
+	if branchAwareSession := branch_control.GetBranchAwareSession(ctx); branchAwareSession != nil &&
+		// Having the correct database privileges also allows the deletion
+		!branch_control.HasDatabasePrivileges(branchAwareSession, database) {
 		insertUser := branchAwareSession.GetUser()
 		insertHost := branchAwareSession.GetHost()
 		// As we've folded the branch expression, we can use it directly as though it were a normal branch name to
 		// determine if the user attempting the deletion has permission to perform the deletion.
-		_, modPerms := tbl.Match(branch, insertUser, insertHost)
+		_, modPerms := tbl.Match(database, branch, insertUser, insertHost)
 		if modPerms&branch_control.Permissions_Admin != branch_control.Permissions_Admin {
-			return branch_control.ErrDeletingRow.New(insertUser, insertHost, branch, user, host)
+			return branch_control.ErrDeletingRow.New(insertUser, insertHost, database, branch, user, host)
 		}
 	}
 
-	return tbl.delete(ctx, branch, user, host)
+	tbl.Access.Delete(database, branch, user, host)
+	return nil
 }
 
 // Close implements the interface sql.Closer.
 func (tbl BranchControlTable) Close(context *sql.Context) error {
 	return branch_control.SaveData(context)
-}
-
-// insert adds the given branch, user, and host expression strings to the table. Assumes that the expressions have
-// already been folded.
-func (tbl BranchControlTable) insert(ctx context.Context, branch string, user string, host string, perms branch_control.Permissions) error {
-	// If we already have this in the table, then we return a duplicate PK error
-	if tblIndex := tbl.GetIndex(branch, user, host); tblIndex != -1 {
-		permBits := uint64(tbl.Values[tblIndex].Permissions)
-		permStr, _ := accessSchema[3].Type.(sql.SetType).BitsToString(permBits)
-		return sql.NewUniqueKeyErr(
-			fmt.Sprintf(`[%q, %q, %q, %q]`, branch, user, host, permStr),
-			true,
-			sql.Row{branch, user, host, permBits})
-	}
-
-	// Add an entry to the binlog
-	tbl.GetBinlog().Insert(branch, user, host, uint64(perms))
-	// Add the expressions to their respective slices
-	branchExpr := branch_control.ParseExpression(branch, sql.Collation_utf8mb4_0900_ai_ci)
-	userExpr := branch_control.ParseExpression(user, sql.Collation_utf8mb4_0900_bin)
-	hostExpr := branch_control.ParseExpression(host, sql.Collation_utf8mb4_0900_ai_ci)
-	nextIdx := uint32(len(tbl.Values))
-	tbl.Branches = append(tbl.Branches, branch_control.MatchExpression{CollectionIndex: nextIdx, SortOrders: branchExpr})
-	tbl.Users = append(tbl.Users, branch_control.MatchExpression{CollectionIndex: nextIdx, SortOrders: userExpr})
-	tbl.Hosts = append(tbl.Hosts, branch_control.MatchExpression{CollectionIndex: nextIdx, SortOrders: hostExpr})
-	tbl.Values = append(tbl.Values, branch_control.AccessValue{
-		Branch:      branch,
-		User:        user,
-		Host:        host,
-		Permissions: perms,
-	})
-	return nil
-}
-
-// delete removes the given branch, user, and host expression strings from the table. Assumes that the expressions have
-// already been folded.
-func (tbl BranchControlTable) delete(ctx context.Context, branch string, user string, host string) error {
-	// If we don't have this in the table, then we just return
-	tblIndex := tbl.GetIndex(branch, user, host)
-	if tblIndex == -1 {
-		return nil
-	}
-
-	endIndex := len(tbl.Values) - 1
-	// Add an entry to the binlog
-	tbl.GetBinlog().Delete(branch, user, host, uint64(tbl.Values[endIndex].Permissions))
-	// Remove the matching row from all slices by first swapping with the last element
-	tbl.Branches[tblIndex], tbl.Branches[endIndex] = tbl.Branches[endIndex], tbl.Branches[tblIndex]
-	tbl.Users[tblIndex], tbl.Users[endIndex] = tbl.Users[endIndex], tbl.Users[tblIndex]
-	tbl.Hosts[tblIndex], tbl.Hosts[endIndex] = tbl.Hosts[endIndex], tbl.Hosts[tblIndex]
-	tbl.Values[tblIndex], tbl.Values[endIndex] = tbl.Values[endIndex], tbl.Values[tblIndex]
-	// Then we remove the last element
-	tbl.Branches = tbl.Branches[:endIndex]
-	tbl.Users = tbl.Users[:endIndex]
-	tbl.Hosts = tbl.Hosts[:endIndex]
-	tbl.Values = tbl.Values[:endIndex]
-	// Then we update the index for the match expressions
-	if tblIndex != endIndex {
-		tbl.Branches[tblIndex].CollectionIndex = uint32(tblIndex)
-		tbl.Users[tblIndex].CollectionIndex = uint32(tblIndex)
-		tbl.Hosts[tblIndex].CollectionIndex = uint32(tblIndex)
-	}
-	return nil
 }

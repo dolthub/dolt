@@ -261,7 +261,7 @@ teardown() {
 
     run dolt merge test -m "merge other"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'error: cannot merge two tables with different primary key sets' ]] || false
+    [[ "$output" =~ 'error: cannot merge two tables with different primary keys' ]] || false
 }
 
 @test "primary-key-changes: merge on branch with primary key added throws an error" {
@@ -288,7 +288,7 @@ teardown() {
 
     run dolt merge test -m "merge other"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'error: cannot merge two tables with different primary key sets' ]] || false
+    [[ "$output" =~ 'error: cannot merge two tables with different primary keys' ]] || false
 }
 
 @test "primary-key-changes: diff on primary key schema change shows schema level diff but does not show row level diff" {
@@ -311,7 +311,7 @@ teardown() {
     dolt diff --data
     run dolt diff --data
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Primary key sets differ between revisions for table t, skipping data diff" ]] || false
+    [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
 }
 
 @test "primary-key-changes: diff on composite schema" {
@@ -334,15 +334,15 @@ teardown() {
     [[ "$output" =~ '+  `val` int NOT NULL,' ]] || false
     [[ "$output" =~ '+  PRIMARY KEY (`pk`,`val`)' ]] || false
 
-    # Make sure there is not a data diff or summary diff
+    # Make sure there is not a data diff or stat diff
     dolt diff --data
     run dolt diff --data
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Primary key sets differ between revisions for table t, skipping data diff" ]] || false
+    [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
 
-    run dolt diff --summary
+    run dolt diff --stat
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "diff summary will not compute due to primary key set change with table t" ]] || false
+    [[ "$output" =~ "failed to compute diff stat for table t: primary key set changed" ]] || false
 
     dolt add .
 
@@ -455,7 +455,7 @@ SQL
 
     run dolt sql -q "ALTER TABLE child DROP PRIMARY KEY"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: can't drop index 'PRIMARY': needed in a foreign key constraint" ]] || false
+    [[ "$output" =~ "error: can't drop index 'PRIMARY': needed in foreign key constraint" ]] || false
 }
 
 @test "primary-key-changes: dolt constraints verify works gracefully with schema violations" {
@@ -527,11 +527,11 @@ SQL
 
     run dolt merge test -m "merge other"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'error: cannot merge two tables with different primary key sets' ]] || false
+    [[ "$output" =~ 'error: cannot merge two tables with different primary keys' ]] || false
 
-    run dolt sql -q "SELECT DOLT_MERGE('test')"
+    run dolt sql -q "call dolt_merge('test')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'error: cannot merge two tables with different primary key sets' ]] || false
+    [[ "$output" =~ 'error: cannot merge two tables with different primary keys' ]] || false
 
     skip "Dolt doesn't correctly store primary key order if it doesn't match the column order"
 }
@@ -671,7 +671,7 @@ SQL
 
 @test "primary-key-changes: can add and drop primary keys on keyless db.table named tables" {
     dolt sql -q "CREATE DATABASE mydb"
-    dolt sql -q "CREATE TABLE mydb.test(pk INT, c1 LONGTEXT, c2 BIGINT, c3 INT)"
+    dolt sql -q "CREATE TABLE mydb.test(pk INT, c1 VARCHAR(10), c2 BIGINT, c3 INT)"
     dolt sql -q "ALTER TABLE mydb.test ADD PRIMARY KEY(pk, c1)"
     run dolt sql -q "SHOW CREATE TABLE mydb.test"
     [ $status -eq 0 ]

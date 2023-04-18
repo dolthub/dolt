@@ -134,7 +134,8 @@ func TestExists(t *testing.T) {
 		//NewDataLocation("file.nbf", ""),
 	}
 
-	_, root, fs := createRootAndFS()
+	ddb, root, fs := createRootAndFS()
+	defer ddb.Close()
 
 	for _, loc := range testLocations {
 		t.Run(loc.String(), func(t *testing.T) {
@@ -193,6 +194,7 @@ func TestCreateRdWr(t *testing.T) {
 	}
 
 	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB.Close()
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
 	dEnv.FS.WriteFile(testSchemaFileName, []byte(testSchema))

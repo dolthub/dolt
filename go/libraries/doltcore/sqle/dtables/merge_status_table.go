@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -43,11 +44,11 @@ func (s MergeStatusTable) String() string {
 
 func (s MergeStatusTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "is_merging", Type: sql.Boolean, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: false},
-		{Name: "source", Type: sql.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true},
-		{Name: "source_commit", Type: sql.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true},
-		{Name: "target", Type: sql.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true},
-		{Name: "unmerged_tables", Type: sql.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true},
+		{Name: "is_merging", Type: types.Boolean, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: false},
+		{Name: "source", Type: types.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true},
+		{Name: "source_commit", Type: types.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true},
+		{Name: "target", Type: types.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true},
+		{Name: "unmerged_tables", Type: types.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true},
 	}
 }
 

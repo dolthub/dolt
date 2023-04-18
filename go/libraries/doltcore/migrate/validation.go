@@ -24,6 +24,7 @@ import (
 	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"golang.org/x/sync/errgroup"
 
@@ -41,7 +42,7 @@ func validateBranchMapping(ctx context.Context, old, new *doltdb.DoltDB) error {
 
 	var ok bool
 	for _, bref := range branches {
-		ok, err = new.HasBranch(ctx, bref.GetPath())
+		_, ok, err = new.HasBranch(ctx, bref.GetPath())
 		if err != nil {
 			return err
 		}
@@ -164,7 +165,7 @@ func validateTableDataPartition(ctx context.Context, name string, old, new *dolt
 }
 
 func equalRows(old, new sql.Row, sch sql.Schema) (bool, error) {
-	if len(new) != len(new) || len(new) != len(sch) {
+	if len(new) != len(old) || len(new) != len(sch) {
 		return false, nil
 	}
 
@@ -183,23 +184,25 @@ func equalRows(old, new sql.Row, sch sql.Schema) (bool, error) {
 		// special case time comparison to account
 		// for precision changes between formats
 		if _, ok := old[i].(time.Time); ok {
-			if old[i], err = sql.Int64.Convert(old[i]); err != nil {
+			var o, n interface{}
+			if o, _, err = gmstypes.Int64.Convert(old[i]); err != nil {
 				return false, err
 			}
-			if new[i], err = sql.Int64.Convert(new[i]); err != nil {
+			if n, _, err = gmstypes.Int64.Convert(new[i]); err != nil {
 				return false, err
 			}
-			cmp, err = sql.Int64.Compare(old[i], new[i])
+			if cmp, err = gmstypes.Int64.Compare(o, n); err != nil {
+				return false, err
+			}
 		} else {
-			cmp, err = sch[i].Type.Compare(old[i], new[i])
+			if cmp, err = sch[i].Type.Compare(old[i], new[i]); err != nil {
+				return false, err
+			}
 		}
-		if err != nil {
-			return false, err
-		} else if cmp != 0 {
+		if cmp != 0 {
 			return false, nil
 		}
 	}
-
 	return true, nil
 }
 

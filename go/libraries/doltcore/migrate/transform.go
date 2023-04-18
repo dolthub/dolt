@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"golang.org/x/sync/errgroup"
 
@@ -41,18 +42,23 @@ var (
 	flushRef = ref.NewInternalRef("migration-flush")
 )
 
-func migrateWorkingSet(ctx context.Context, brRef ref.BranchRef, wsRef ref.WorkingSetRef, old, new *doltdb.DoltDB) error {
-	oldWs, err := old.ResolveWorkingSet(ctx, wsRef)
-	if err != nil {
-		return err
-	}
-
+func migrateWorkingSet(ctx context.Context, menv Environment, brRef ref.BranchRef, wsRef ref.WorkingSetRef, old, new *doltdb.DoltDB) error {
 	oldHead, err := old.ResolveCommitRef(ctx, brRef)
 	if err != nil {
 		return err
 	}
 	oldHeadRoot, err := oldHead.GetRootValue(ctx)
 	if err != nil {
+		return err
+	}
+
+	oldWs, err := old.ResolveWorkingSet(ctx, wsRef)
+	if err == doltdb.ErrWorkingSetNotFound {
+		// If a branch was created prior to dolt version 0.26.10, no working set will exist for it.
+		// In this case, we will pretend it exists with the same root as the head commit.
+		oldWs = doltdb.EmptyWorkingSet(wsRef)
+		oldWs = oldWs.WithWorkingRoot(oldHeadRoot).WithStagedRoot(oldHeadRoot)
+	} else if err != nil {
 		return err
 	}
 
@@ -65,12 +71,12 @@ func migrateWorkingSet(ctx context.Context, brRef ref.BranchRef, wsRef ref.Worki
 		return err
 	}
 
-	wr, err := migrateRoot(ctx, oldHeadRoot, oldWs.WorkingRoot(), newHeadRoot)
+	wr, err := migrateRoot(ctx, menv, oldHeadRoot, oldWs.WorkingRoot(), newHeadRoot)
 	if err != nil {
 		return err
 	}
 
-	sr, err := migrateRoot(ctx, oldHeadRoot, oldWs.StagedRoot(), newHeadRoot)
+	sr, err := migrateRoot(ctx, menv, oldHeadRoot, oldWs.StagedRoot(), newHeadRoot)
 	if err != nil {
 		return err
 	}
@@ -90,7 +96,7 @@ func migrateWorkingSet(ctx context.Context, brRef ref.BranchRef, wsRef ref.Worki
 	return new.UpdateWorkingSet(ctx, wsRef, newWs, hash.Hash{}, oldWs.Meta())
 }
 
-func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
+func migrateCommit(ctx context.Context, menv Environment, oldCm *doltdb.Commit, new *doltdb.DoltDB, prog *progress) error {
 	oldHash, err := oldCm.HashOf()
 	if err != nil {
 		return err
@@ -107,7 +113,8 @@ func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB
 		return migrateInitCommit(ctx, oldCm, new, prog)
 	}
 
-	prog.Log(ctx, "migrating commit %s", oldHash.String())
+	hs := oldHash.String()
+	prog.Log(ctx, "migrating commit %s", hs)
 
 	oldRoot, err := oldCm.GetRootValue(ctx)
 	if err != nil {
@@ -147,7 +154,7 @@ func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB
 		return err
 	}
 
-	mRoot, err := migrateRoot(ctx, oldParentRoot, oldRoot, newParentRoot)
+	mRoot, err := migrateRoot(ctx, menv, oldParentRoot, oldRoot, newParentRoot)
 	if err != nil {
 		return err
 	}
@@ -197,7 +204,7 @@ func migrateCommit(ctx context.Context, oldCm *doltdb.Commit, new *doltdb.DoltDB
 	return nil
 }
 
-func migrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog Progress) error {
+func migrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltDB, prog *progress) error {
 	oldHash, err := cm.HashOf()
 	if err != nil {
 		return err
@@ -237,7 +244,7 @@ func migrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltD
 	return prog.Put(ctx, oldHash, newHash)
 }
 
-func migrateCommitOptions(ctx context.Context, oldCm *doltdb.Commit, prog Progress) (datas.CommitOptions, error) {
+func migrateCommitOptions(ctx context.Context, oldCm *doltdb.Commit, prog *progress) (datas.CommitOptions, error) {
 	parents, err := oldCm.ParentHashes(ctx)
 	if err != nil {
 		return datas.CommitOptions{}, err
@@ -265,7 +272,7 @@ func migrateCommitOptions(ctx context.Context, oldCm *doltdb.Commit, prog Progre
 	}, nil
 }
 
-func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.RootValue) (*doltdb.RootValue, error) {
+func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newParent *doltdb.RootValue) (*doltdb.RootValue, error) {
 	migrated := newParent
 
 	fkc, err := oldRoot.GetForeignKeyCollection(ctx)
@@ -292,7 +299,7 @@ func migrateRoot(ctx context.Context, oldParent, oldRoot, newParent *doltdb.Root
 		ok, err := oldTbl.HasConflicts(ctx)
 		if err != nil {
 			return true, err
-		} else if ok {
+		} else if ok && !menv.DropConflicts {
 			return true, fmt.Errorf("cannot migrate table with conflicts (%s)", name)
 		}
 
@@ -407,6 +414,7 @@ func migrateTable(ctx context.Context, newSch schema.Schema, oldParentTbl, oldTb
 
 	var newRows durable.Index
 	var newSet durable.IndexSet
+	originalCtx := ctx
 	eg, ctx := errgroup.WithContext(ctx)
 
 	eg.Go(func() error {
@@ -426,13 +434,13 @@ func migrateTable(ctx context.Context, newSch schema.Schema, oldParentTbl, oldTb
 		return nil, err
 	}
 
-	ai, err := oldTbl.GetAutoIncrementValue(ctx)
+	ai, err := oldTbl.GetAutoIncrementValue(originalCtx)
 	if err != nil {
 		return nil, err
 	}
 	autoInc := types.Uint(ai)
 
-	return doltdb.NewTable(ctx, vrw, ns, newSch, newRows, newSet, autoInc)
+	return doltdb.NewTable(originalCtx, vrw, ns, newSch, newRows, newSet, autoInc)
 }
 
 func migrateSchema(ctx context.Context, tableName string, existing schema.Schema) (schema.Schema, error) {
@@ -450,7 +458,15 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 			}
 		}
 		if patched {
-			return schema.SchemaFromCols(schema.NewColCollection(cols...))
+			allCols := schema.NewColCollection(cols...)
+			schema.NewIndexCollection(allCols, existing.GetPKCols())
+			return schema.NewSchema(
+				allCols,
+				existing.GetPkOrdinals(),
+				existing.GetCollation(),
+				existing.Indexes(),
+				existing.Checks(),
+			)
 		}
 		return existing, nil
 	}
@@ -496,9 +512,9 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 		var err error
 		switch st.Type() {
 		case query.Type_CHAR, query.Type_VARCHAR, query.Type_TEXT:
-			st, err = sql.CreateString(st.Type(), st.Length(), sql.Collation_utf8mb4_0900_bin)
+			st, err = gmstypes.CreateString(st.Type(), st.Length(), sql.Collation_utf8mb4_0900_bin)
 		case query.Type_BINARY, query.Type_VARBINARY, query.Type_BLOB:
-			st, err = sql.CreateString(st.Type(), st.Length(), sql.Collation_binary)
+			st, err = gmstypes.CreateString(st.Type(), st.Length(), sql.Collation_binary)
 		}
 		if err != nil {
 			return nil, err
@@ -521,14 +537,17 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 		return existing, nil
 	}
 
-	sch, err := schema.SchemaFromCols(schema.NewColCollection(cols...))
+	sch, err := schema.NewSchema(
+		schema.NewColCollection(cols...),
+		existing.GetPkOrdinals(),
+		existing.GetCollation(),
+		existing.Indexes(),
+		existing.Checks(),
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = sch.SetPkOrdinals(existing.GetPkOrdinals()); err != nil {
-		return nil, err
-	}
 	return sch, nil
 }
 
@@ -665,36 +684,32 @@ func translateTuples(ctx context.Context, kt, vt translator, differ <-chan types
 	}
 }
 
-func writeProllyMap(ctx context.Context, prev prolly.Map, writer <-chan val.Tuple) (prolly.Map, error) {
-	return prolly.MutateMapWithTupleIter(ctx, prev, channelProvider{tuples: writer})
-}
-
-type channelProvider struct {
-	tuples <-chan val.Tuple
-}
-
-var _ prolly.TupleIter = channelProvider{}
-
-func (p channelProvider) Next(ctx context.Context) (val.Tuple, val.Tuple) {
+func writeProllyMap(ctx context.Context, prev prolly.Map, writer <-chan val.Tuple) (m prolly.Map, err error) {
 	var (
 		k, v val.Tuple
 		ok   bool
 	)
 
-	select {
-	case k, ok = <-p.tuples:
-		if !ok {
-			return nil, nil // done
+	mut := prev.Mutate()
+	for {
+		select {
+		case k, ok = <-writer:
+			if !ok {
+				m, err = mut.Map(ctx)
+				return // done
+			}
+		case <-ctx.Done():
+			return
 		}
-	case _ = <-ctx.Done():
-		return nil, nil
-	}
 
-	select {
-	case v, ok = <-p.tuples:
-		assertTrue(ok)
-	case _ = <-ctx.Done():
-		return nil, nil
+		select {
+		case v, ok = <-writer:
+			assertTrue(ok)
+		case <-ctx.Done():
+			return
+		}
+		if err = mut.Put(ctx, k, v); err != nil {
+			return
+		}
 	}
-	return k, v
 }

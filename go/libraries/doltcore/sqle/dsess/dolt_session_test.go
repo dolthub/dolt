@@ -15,23 +15,29 @@
 package dsess
 
 import (
+	"context"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/src-d/go-errors.v1"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestDoltSessionInit(t *testing.T) {
-	dsess := DefaultSession(EmptyDatabaseProvider())
+	dsess := DefaultSession(emptyDatabaseProvider())
 	conf := config.NewMapConfig(make(map[string]string))
 	assert.Equal(t, conf, dsess.globalsConf)
 }
 
 func TestNewPersistedSystemVariables(t *testing.T) {
-	dsess := DefaultSession(EmptyDatabaseProvider())
+	dsess := DefaultSession(emptyDatabaseProvider())
 	conf := config.NewMapConfig(map[string]string{"max_connections": "1000"})
 	dsess = dsess.WithGlobals(conf)
 
@@ -235,4 +241,56 @@ func TestGetPersistedValue(t *testing.T) {
 			}
 		})
 	}
+}
+
+func emptyDatabaseProvider() DoltDatabaseProvider {
+	return emptyRevisionDatabaseProvider{}
+}
+
+type emptyRevisionDatabaseProvider struct {
+	sql.DatabaseProvider
+}
+
+func (e emptyRevisionDatabaseProvider) DbState(ctx *sql.Context, dbName string, defaultBranch string) (InitialDbState, error) {
+	return InitialDbState{}, sql.ErrDatabaseNotFound.New(dbName)
+}
+
+func (e emptyRevisionDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
+	return nil
+}
+
+func (e emptyRevisionDatabaseProvider) GetRevisionForRevisionDatabase(_ *sql.Context, _ string) (string, string, error) {
+	return "", "", nil
+}
+
+func (e emptyRevisionDatabaseProvider) IsRevisionDatabase(_ *sql.Context, _ string) (bool, error) {
+	return false, nil
+}
+
+func (e emptyRevisionDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
+	return nil, nil
+}
+
+func (e emptyRevisionDatabaseProvider) FileSystem() filesys.Filesys {
+	return nil
+}
+
+func (e emptyRevisionDatabaseProvider) FileSystemForDatabase(dbname string) (filesys.Filesys, error) {
+	return nil, nil
+}
+
+func (e emptyRevisionDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error {
+	return nil
+}
+
+func (e emptyRevisionDatabaseProvider) CreateDatabase(ctx *sql.Context, dbName string) error {
+	return nil
+}
+
+func (e emptyRevisionDatabaseProvider) RevisionDbState(_ *sql.Context, revDB string) (InitialDbState, error) {
+	return InitialDbState{}, sql.ErrDatabaseNotFound.New(revDB)
+}
+
+func (e emptyRevisionDatabaseProvider) SessionDatabase(ctx *sql.Context, dbName string) (SessionDatabase, bool, error) {
+	return nil, false, nil
 }

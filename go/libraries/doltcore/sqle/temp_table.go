@@ -170,6 +170,14 @@ func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoo
 	}
 }
 
+func (t *TempTable) RowCount(ctx *sql.Context) (uint64, error) {
+	rows, err := t.table.GetRowData(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return rows.Count()
+}
+
 func (t *TempTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return index.DoltIndexesFromTable(ctx, t.dbName, t.tableName, t.table)
 }
@@ -223,16 +231,6 @@ func (t *TempTable) DataLength(ctx *sql.Context) (uint64, error) {
 	return idx.Count()
 }
 
-// AnalyzeTable implements the sql.StatisticsTable interface.
-func (t *TempTable) AnalyzeTable(ctx *sql.Context) error {
-	return nil
-}
-
-// Statistics implements the sql.StatisticsTable interface.
-func (t *TempTable) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
-	return nil, nil
-}
-
 func (t *TempTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
 	return t.table, nil
 }
@@ -254,27 +252,29 @@ func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 	}
 }
 
-func (t *TempTable) IndexedAccess(idx sql.Index) sql.IndexedTable {
+func (t *TempTable) IndexedAccess(_ sql.IndexLookup) sql.IndexedTable {
 	return t
 }
 
-func (t *TempTable) CreateIndex(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn, comment string) error {
-	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
-		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
+func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
+	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique && idx.Constraint != sql.IndexConstraint_Spatial {
+		return fmt.Errorf("only the following types of index constraints are supported: none, unique, spatial")
 	}
-	cols := make([]string, len(columns))
-	for i, c := range columns {
+	cols := make([]string, len(idx.Columns))
+	for i, c := range idx.Columns {
 		cols[i] = c.Name
 	}
 
 	ret, err := creation.CreateIndex(
 		ctx,
 		t.table,
-		indexName,
+		idx.Name,
 		cols,
-		constraint == sql.IndexConstraint_Unique,
+		allocatePrefixLengths(idx.Columns),
+		idx.Constraint == sql.IndexConstraint_Unique,
+		idx.Constraint == sql.IndexConstraint_Spatial,
 		true,
-		comment,
+		idx.Comment,
 		t.opts,
 	)
 	if err != nil {
@@ -331,7 +331,7 @@ func (t *TempTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKey
 	return nil, nil
 }
 
-func (t *TempTable) CreateIndexForForeignKey(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn) error {
+func (t *TempTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
 	return sql.ErrTemporaryTablesForeignKeySupport.New()
 }
 
@@ -347,7 +347,7 @@ func (t *TempTable) DropForeignKey(ctx *sql.Context, fkName string) error {
 	return sql.ErrTemporaryTablesForeignKeySupport.New()
 }
 
-func (t *TempTable) GetForeignKeyUpdater(ctx *sql.Context) sql.ForeignKeyUpdater {
+func (t *TempTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
 	return nil
 }
 

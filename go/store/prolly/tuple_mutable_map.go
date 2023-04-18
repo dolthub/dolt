@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	maxPending = 64 * 1024
+	defaultMaxPending = 64 * 1024
 )
 
 // MutableMap is an ordered collection of val.Tuple backed by a Prolly Tree.
@@ -45,14 +45,18 @@ type MutableMap struct {
 
 	// keyDesc and valDesc are tuples descriptors for the map.
 	keyDesc, valDesc val.TupleDesc
+
+	// buffer size
+	maxPending int
 }
 
 // newMutableMap returns a new MutableMap.
 func newMutableMap(m Map) *MutableMap {
 	return &MutableMap{
-		tuples:  m.tuples.Mutate(),
-		keyDesc: m.keyDesc,
-		valDesc: m.valDesc,
+		tuples:     m.tuples.Mutate(),
+		keyDesc:    m.keyDesc,
+		valDesc:    m.valDesc,
+		maxPending: defaultMaxPending,
 	}
 }
 
@@ -63,11 +67,7 @@ func (mut *MutableMap) Map(ctx context.Context) (Map, error) {
 }
 
 func (mut *MutableMap) flushWithSerializer(ctx context.Context, s message.Serializer) (Map, error) {
-	if err := mut.Checkpoint(ctx); err != nil {
-		return Map{}, err
-	}
-
-	sm := mut.tuples.StaticMap
+	sm := mut.tuples.Static
 	fn := tree.ApplyMutations[val.Tuple, val.TupleDesc, message.Serializer]
 
 	root, err := fn(ctx, sm.NodeStore, sm.Root, mut.keyDesc, s, mut.tuples.Mutations())
@@ -86,9 +86,16 @@ func (mut *MutableMap) flushWithSerializer(ctx context.Context, s message.Serial
 	}, nil
 }
 
+// WithMaxPending returns a MutableMap with a new pending buffer size.
+func (mut *MutableMap) WithMaxPending(max int) *MutableMap {
+	ret := *mut
+	ret.maxPending = max
+	return &ret
+}
+
 // NodeStore returns the map's NodeStore
 func (mut *MutableMap) NodeStore() tree.NodeStore {
-	return mut.tuples.StaticMap.NodeStore
+	return mut.tuples.Static.NodeStore
 }
 
 // Put adds the Tuple pair |key|, |value| to the MutableMap.
@@ -96,7 +103,7 @@ func (mut *MutableMap) Put(ctx context.Context, key, value val.Tuple) error {
 	if err := mut.tuples.Put(ctx, key, value); err != nil {
 		return err
 	}
-	if mut.tuples.Edits.Count() > maxPending {
+	if mut.tuples.Edits.Count() > mut.maxPending {
 		return mut.flushPending(ctx)
 	}
 	return nil
@@ -113,9 +120,18 @@ func (mut *MutableMap) Get(ctx context.Context, key val.Tuple, cb tree.KeyValueF
 	return mut.tuples.Get(ctx, key, cb)
 }
 
+func (mut *MutableMap) GetPrefix(ctx context.Context, key val.Tuple, prefixDesc val.TupleDesc, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
+	return mut.tuples.GetPrefix(ctx, key, prefixDesc, cb)
+}
+
 // Has returns true if |key| is present in the MutableMap.
 func (mut *MutableMap) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 	return mut.tuples.Has(ctx, key)
+}
+
+// HasPrefix returns true if a key with a matching prefix to |key| is present in the MutableMap.
+func (mut *MutableMap) HasPrefix(ctx context.Context, key val.Tuple, prefixDesc val.TupleDesc) (ok bool, err error) {
+	return mut.tuples.HasPrefix(ctx, key, prefixDesc)
 }
 
 // Checkpoint records a checkpoint that can be reverted to.
@@ -129,8 +145,8 @@ func (mut *MutableMap) Checkpoint(context.Context) error {
 // Revert discards writes made since the last checkpoint.
 func (mut *MutableMap) Revert(context.Context) {
 	// if we've accumulated a large number of writes
-	// since we check-pointed, our stash may
-	// be stashed in a separate tree.MutableMap
+	// since we check-pointed, our last checkpoint
+	// may be stashed in a separate tree.MutableMap
 	if mut.stash != nil {
 		mut.tuples = *mut.stash
 		return
@@ -140,7 +156,7 @@ func (mut *MutableMap) Revert(context.Context) {
 
 func (mut *MutableMap) flushPending(ctx context.Context) error {
 	stash := mut.stash
-	// if our in-memory edit set contains a stash, we
+	// if our in-memory edit set contains a checkpoint, we
 	// must stash a copy of |mut.tuples| we can revert to.
 	if mut.tuples.Edits.HasCheckpoint() {
 		cp := mut.tuples.Copy()
@@ -151,7 +167,8 @@ func (mut *MutableMap) flushPending(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	mut.tuples = sm.Mutate().tuples
+	mut.tuples.Static = sm.tuples
+	mut.tuples.Edits.Truncate() // reuse skip list
 	mut.stash = stash
 	return nil
 }
@@ -164,7 +181,7 @@ func (mut *MutableMap) IterAll(ctx context.Context) (MapIter, error) {
 
 // IterRange returns a MapIter that iterates over a Range.
 func (mut *MutableMap) IterRange(ctx context.Context, rng Range) (MapIter, error) {
-	treeIter, err := treeIterFromRange(ctx, mut.tuples.StaticMap.Root, mut.tuples.StaticMap.NodeStore, rng)
+	treeIter, err := treeIterFromRange(ctx, mut.tuples.Static.Root, mut.tuples.Static.NodeStore, rng)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +242,7 @@ func debugFormat(ctx context.Context, m *MutableMap) (string, error) {
 	kd, vd := m.keyDesc, m.valDesc
 
 	editIter := m.tuples.Edits.IterAtStart()
-	iter, err := m.tuples.StaticMap.IterAll(ctx)
+	iter, err := m.tuples.Static.IterAll(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -249,7 +266,7 @@ func debugFormat(ctx context.Context, m *MutableMap) (string, error) {
 	}
 	sb.WriteString("\t},\n")
 
-	ci, err := m.tuples.StaticMap.Count()
+	ci, err := m.tuples.Static.Count()
 	if err != nil {
 		return "", err
 	}

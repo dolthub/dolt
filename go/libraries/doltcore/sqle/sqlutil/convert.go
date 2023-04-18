@@ -109,16 +109,15 @@ func ToDoltSchema(
 		return nil, err
 	}
 
-	sch, err := schema.SchemaFromCols(colColl)
+	sch, err := schema.NewSchema(colColl,
+		sqlSchema.PkOrdinals,
+		schema.Collation(collation),
+		nil,
+		nil,
+	)
 	if err != nil {
 		return nil, err
 	}
-
-	err = sch.SetPkOrdinals(sqlSchema.PkOrdinals)
-	if err != nil {
-		return nil, err
-	}
-	sch.SetCollation(schema.Collation(collation))
 
 	return sch, nil
 }

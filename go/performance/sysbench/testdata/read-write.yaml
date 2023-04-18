@@ -1,0 +1,47 @@
+tests:
+  - name: "read"
+    repos:
+      - name: dolt
+        server:
+          port: 3309
+          args: [ "--port", "3309", "--password", "password"]
+      - name: mysql
+        external-server:
+          name: test
+          host: 127.0.0.1
+          user: root
+          password:
+          port: 3309
+    scripts:
+      - covering_index_scan.lua
+      - groupby_scan.lua
+      - index_join.lua
+      - index_join_scan.lua
+      - index_scan.lua
+      - oltp_point_select
+      - oltp_read_only
+      - select_random_points
+      - select_random_ranges
+      - table_scan.lua
+      - types_table_scan.lua
+  - name: "write"
+    repos:
+      - name: dolt
+        server:
+          port: 3308
+          args: [ "--port", "3308" ]
+      - name: mysql
+        external-server:
+          name: test
+          host: 127.0.0.1
+          user: root
+          password:
+          port: 3309
+    scripts:
+      - oltp_delete_insert.lua
+      - oltp_insert
+      - oltp_read_write
+      - oltp_update_index
+      - oltp_update_non_index
+      - oltp_write_only
+      - types_delete_insert.lua

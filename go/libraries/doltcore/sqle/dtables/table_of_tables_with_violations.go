@@ -19,6 +19,7 @@ import (
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
@@ -49,8 +50,8 @@ func (totwv *TableOfTablesWithViolations) String() string {
 // Schema implements the interface sql.Table.
 func (totwv *TableOfTablesWithViolations) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "table", Type: sql.Text, Source: doltdb.TableOfTablesWithViolationsName, PrimaryKey: true},
-		{Name: "num_violations", Type: sql.Uint64, Source: doltdb.TableOfTablesWithViolationsName, PrimaryKey: false},
+		{Name: "table", Type: types.Text, Source: doltdb.TableOfTablesWithViolationsName, PrimaryKey: true},
+		{Name: "num_violations", Type: types.Uint64, Source: doltdb.TableOfTablesWithViolationsName, PrimaryKey: false},
 	}
 }
 

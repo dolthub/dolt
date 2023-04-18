@@ -38,12 +38,12 @@ func NewNBSMetricWrapper(nbs *NomsBlockStore) *NBSMetricWrapper {
 	}
 }
 
-var _ TableFileStore = &NBSMetricWrapper{}
+var _ chunks.TableFileStore = &NBSMetricWrapper{}
 var _ chunks.ChunkStoreGarbageCollector = &NBSMetricWrapper{}
 
 // Sources retrieves the current root hash, a list of all the table files,
 // and a list of the appendix table files.
-func (nbsMW *NBSMetricWrapper) Sources(ctx context.Context) (hash.Hash, []TableFile, []TableFile, error) {
+func (nbsMW *NBSMetricWrapper) Sources(ctx context.Context) (hash.Hash, []chunks.TableFile, []chunks.TableFile, error) {
 	return nbsMW.nbs.Sources(ctx)
 }
 
@@ -67,12 +67,20 @@ func (nbsMW *NBSMetricWrapper) SetRootChunk(ctx context.Context, root, previous 
 }
 
 // Forwards SupportedOperations to wrapped block store.
-func (nbsMW *NBSMetricWrapper) SupportedOperations() TableFileStoreOps {
+func (nbsMW *NBSMetricWrapper) SupportedOperations() chunks.TableFileStoreOps {
 	return nbsMW.nbs.SupportedOperations()
 }
 
-func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest chunks.ChunkStore) error {
-	return nbsMW.nbs.MarkAndSweepChunks(ctx, last, keepChunks, dest)
+func (nbsMW *NBSMetricWrapper) BeginGC(keeper func(hash.Hash) bool) error {
+	return nbsMW.nbs.BeginGC(keeper)
+}
+
+func (nbsMW *NBSMetricWrapper) EndGC() {
+	nbsMW.nbs.EndGC()
+}
+
+func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest chunks.ChunkStore) error {
+	return nbsMW.nbs.MarkAndSweepChunks(ctx, hashes, dest)
 }
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.

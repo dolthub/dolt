@@ -44,10 +44,6 @@ With a {{.EmphasisLeft}}-d{{.EmphasisRight}}, {{.LessThan}}tagname{{.GreaterThan
 	},
 }
 
-const (
-	tagMessageArg = "message"
-)
-
 type TagCmd struct{}
 
 // Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -61,18 +57,12 @@ func (cmd TagCmd) Description() string {
 }
 
 func (cmd TagCmd) Docs() *cli.CommandDocumentation {
-	ap := cmd.ArgParser()
+	ap := cli.CreateTagArgParser()
 	return cli.NewCommandDocumentation(tagDocs, ap)
 }
 
 func (cmd TagCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	// todo: docs
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"ref", "A commit ref that the tag should point at."})
-	ap.SupportsString(tagMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the tag message.")
-	ap.SupportsFlag(verboseFlag, "v", "list tags along with their metadata.")
-	ap.SupportsFlag(deleteFlag, "d", "Delete a tag.")
-	return ap
+	return cli.CreateTagArgParser()
 }
 
 // EventType returns the type of the event to log
@@ -82,16 +72,16 @@ func (cmd TagCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.ArgParser()
+	ap := cli.CreateTagArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tagDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	// list tags
 	if len(apr.Args) == 0 {
 		var verr errhand.VerboseError
-		if apr.Contains(deleteFlag) {
+		if apr.Contains(cli.DeleteFlag) {
 			verr = errhand.BuildDError("must specify a tag name to delete").Build()
-		} else if apr.Contains(messageFlag) {
+		} else if apr.Contains(cli.MessageArg) {
 			verr = errhand.BuildDError("must specify a tag name to create").Build()
 		} else {
 			verr = listTags(ctx, dEnv, apr)
@@ -100,11 +90,11 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	// delete tag
-	if apr.Contains(deleteFlag) {
+	if apr.Contains(cli.DeleteFlag) {
 		var verr errhand.VerboseError
-		if apr.Contains(messageFlag) {
+		if apr.Contains(cli.MessageArg) {
 			verr = errhand.BuildDError("delete and tag message options are incompatible").Build()
-		} else if apr.Contains(verboseFlag) {
+		} else if apr.Contains(cli.VerboseFlag) {
 			verr = errhand.BuildDError("delete and verbose options are incompatible").Build()
 		} else {
 			err := actions.DeleteTags(ctx, dEnv, apr.Args...)
@@ -117,7 +107,7 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	// create tag
 	var verr errhand.VerboseError
-	if apr.Contains(verboseFlag) {
+	if apr.Contains(cli.VerboseFlag) {
 		verr = errhand.BuildDError("verbose flag can only be used with tag listing").Build()
 	} else if len(apr.Args) > 2 {
 		verr = errhand.BuildDError("create tag takes at most two args").Build()
@@ -142,12 +132,17 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 }
 
 func getTagProps(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (props actions.TagProps, err error) {
-	name, email, err := env.GetNameAndEmail(dEnv.Config)
+	var name, email string
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		name, email, err = cli.ParseAuthor(authorStr)
+	} else {
+		name, email, err = env.GetNameAndEmail(dEnv.Config)
+	}
 	if err != nil {
 		return props, err
 	}
 
-	msg, _ := apr.GetValue(tagMessageArg)
+	msg, _ := apr.GetValue(cli.MessageArg)
 
 	props = actions.TagProps{
 		TaggerName:  name,
@@ -160,7 +155,7 @@ func getTagProps(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (props actio
 
 func listTags(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	var err error
-	if apr.Contains(verboseFlag) {
+	if apr.Contains(cli.VerboseFlag) {
 		err = actions.IterResolvedTags(ctx, dEnv.DoltDB, func(tag *doltdb.Tag) (bool, error) {
 			verboseTagPrint(tag)
 			return false, nil

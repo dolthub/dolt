@@ -272,12 +272,12 @@ var systemTableReplaceTests = []ReplaceTest{
 	},
 	{
 		Name: "replace into dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemasTableSchema(),
-			"INSERT INTO dolt_schemas VALUES ('view', 'name', 'select 2+2 from dual', 1, NULL)"),
-		ReplaceQuery:   "replace into dolt_schemas (id, type, name, fragment) values ('1', 'view', 'name', 'select 1+1 from dual')",
-		SelectQuery:    "select type, name, fragment, id, extra from dolt_schemas",
-		ExpectedRows:   []sql.Row{{"view", "name", "select 1+1 from dual", int64(1), nil}},
-		ExpectedSchema: CompressSchema(SchemasTableSchema()),
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, schemaTableSchema,
+			"INSERT INTO dolt_schemas VALUES ('view', 'name', 'create view name as select 2+2 from dual', NULL)"),
+		ReplaceQuery:   "replace into dolt_schemas (type, name, fragment) values ('view', 'name', 'create view name as select 1+1 from dual')",
+		SelectQuery:    "select type, name, fragment, extra from dolt_schemas",
+		ExpectedRows:   []sql.Row{{"view", "name", "create view name as select 1+1 from dual", nil}},
+		ExpectedSchema: CompressSchema(schemaTableSchema),
 	},
 }
 
@@ -300,13 +300,14 @@ func testReplaceQuery(t *testing.T, test ReplaceTest) {
 		t.Skip("Skipping tests until " + singleReplaceQueryTest)
 	}
 
-	dEnv := CreateEmptyTestDatabase(t)
+	dEnv, err := CreateEmptyTestDatabase()
+	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	var err error
 	root, _ := dEnv.WorkingRoot(context.Background())
 	root, err = executeModify(t, context.Background(), dEnv, root, test.ReplaceQuery)
 	if len(test.ExpectedErr) > 0 {

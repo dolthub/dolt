@@ -17,7 +17,6 @@ package remotesrv
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -36,10 +35,11 @@ type Server struct {
 	wg       sync.WaitGroup
 	stopChan chan struct{}
 
-	grpcPort int
-	grpcSrv  *grpc.Server
-	httpPort int
-	httpSrv  http.Server
+	grpcListenAddr string
+	httpListenAddr string
+
+	grpcSrv *grpc.Server
+	httpSrv http.Server
 
 	tlsConfig *tls.Config
 }
@@ -52,12 +52,16 @@ func (s *Server) GracefulStop() {
 type ServerArgs struct {
 	Logger   *logrus.Entry
 	HttpHost string
-	HttpPort int
-	GrpcPort int
+
+	HttpListenAddr string
+	GrpcListenAddr string
+
 	FS       filesys.Filesys
 	DBCache  DBCache
 	ReadOnly bool
 	Options  []grpc.ServerOption
+
+	HttpInterceptor func(http.Handler) http.Handler
 
 	// If supplied, the listener(s) returned from Listeners() will be TLS
 	// listeners. The scheme used in the URLs returned from the gRPC server
@@ -85,7 +89,7 @@ func NewServer(args ServerArgs) (*Server, error) {
 	s.tlsConfig = args.TLSConfig
 
 	s.wg.Add(2)
-	s.grpcPort = args.GrpcPort
+	s.grpcListenAddr = args.GrpcListenAddr
 	s.grpcSrv = grpc.NewServer(append([]grpc.ServerOption{grpc.MaxRecvMsgSize(128 * 1024 * 1024)}, args.Options...)...)
 	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(args.Logger, args.HttpHost, args.DBCache, args.FS, scheme, sealer)
 	if args.ReadOnly {
@@ -94,15 +98,18 @@ func NewServer(args ServerArgs) (*Server, error) {
 	remotesapi.RegisterChunkStoreServiceServer(s.grpcSrv, chnkSt)
 
 	var handler http.Handler = newFileHandler(args.Logger, args.DBCache, args.FS, args.ReadOnly, sealer)
-	if args.HttpPort == args.GrpcPort {
+	if args.HttpInterceptor != nil {
+		handler = args.HttpInterceptor(handler)
+	}
+	if args.HttpListenAddr == args.GrpcListenAddr {
 		handler = grpcMultiplexHandler(s.grpcSrv, handler)
 	} else {
 		s.wg.Add(2)
 	}
 
-	s.httpPort = args.HttpPort
+	s.httpListenAddr = args.HttpListenAddr
 	s.httpSrv = http.Server{
-		Addr:    fmt.Sprintf(":%d", args.HttpPort),
+		Addr:    args.HttpListenAddr,
 		Handler: handler,
 	}
 
@@ -131,20 +138,20 @@ func (s *Server) Listeners() (Listeners, error) {
 	var grpcListener net.Listener
 	var err error
 	if s.tlsConfig != nil {
-		httpListener, err = tls.Listen("tcp", fmt.Sprintf(":%d", s.httpPort), s.tlsConfig)
+		httpListener, err = tls.Listen("tcp", s.httpListenAddr, s.tlsConfig)
 	} else {
-		httpListener, err = net.Listen("tcp", fmt.Sprintf(":%d", s.httpPort))
+		httpListener, err = net.Listen("tcp", s.httpListenAddr)
 	}
 	if err != nil {
 		return Listeners{}, err
 	}
-	if s.httpPort == s.grpcPort {
+	if s.httpListenAddr == s.grpcListenAddr {
 		return Listeners{http: httpListener}, nil
 	}
 	if s.tlsConfig != nil {
-		grpcListener, err = tls.Listen("tcp", fmt.Sprintf(":%d", s.grpcPort), s.tlsConfig)
+		grpcListener, err = tls.Listen("tcp", s.grpcListenAddr, s.tlsConfig)
 	} else {
-		grpcListener, err = net.Listen("tcp", fmt.Sprintf(":%d", s.grpcPort))
+		grpcListener, err = net.Listen("tcp", s.grpcListenAddr)
 	}
 	if err != nil {
 		httpListener.Close()
@@ -157,7 +164,7 @@ func (s *Server) Serve(listeners Listeners) {
 	if listeners.grpc != nil {
 		go func() {
 			defer s.wg.Done()
-			logrus.Println("Starting grpc server on port", s.grpcPort)
+			logrus.Println("Starting grpc server on", s.grpcListenAddr)
 			err := s.grpcSrv.Serve(listeners.grpc)
 			logrus.Println("grpc server exited. error:", err)
 		}()
@@ -170,7 +177,7 @@ func (s *Server) Serve(listeners Listeners) {
 
 	go func() {
 		defer s.wg.Done()
-		logrus.Println("Starting http server on port", s.httpPort)
+		logrus.Println("Starting http server on", s.httpListenAddr)
 		err := s.httpSrv.Serve(listeners.http)
 		logrus.Println("http server exited. exit error:", err)
 	}()

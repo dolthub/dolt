@@ -17,8 +17,8 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
-	"time"
 
 	"github.com/dustin/go-humanize"
 	"google.golang.org/grpc/codes"
@@ -88,7 +88,13 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, pushDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	opts, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
+	autoSetUpRemote := dEnv.Config.GetStringOrDefault(env.PushAutoSetupRemote, "false")
+	pushAutoSetUpRemote, err := strconv.ParseBool(autoSetUpRemote)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	opts, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag), pushAutoSetUpRemote)
 	if err != nil {
 		var verr errhand.VerboseError
 		switch err {
@@ -100,7 +106,10 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			}
 			verr = errhand.BuildDError("fatal: The current branch " + currentBranch.GetPath() + " has no upstream branch.\n" +
 				"To push the current branch and set the remote as upstream, use\n" +
-				"\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath()).Build()
+				"\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath() + "\n" +
+				"To have this happen automatically for branches without a tracking\n" +
+				"upstream, see 'push.autoSetupRemote' in 'dolt config --help'.").Build()
+
 		case env.ErrInvalidSetUpstreamArgs:
 			verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
 		default:
@@ -135,15 +144,6 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-const minUpdate = 100 * time.Millisecond
-
-var spinnerSeq = []rune{'|', '/', '-', '\\'}
-
-type TextSpinner struct {
-	seqPos     int
-	lastUpdate time.Time
-}
-
 func printInfoForPushError(err error, remote env.Remote, destRef, remoteRef ref.DoltRef) errhand.VerboseError {
 	switch err {
 	case doltdb.ErrUpToDate:
@@ -171,16 +171,6 @@ func printInfoForPushError(err error, remote env.Remote, destRef, remoteRef ref.
 		return errhand.BuildDError("error: push failed").AddCause(err).Build()
 	}
 	return nil
-}
-
-func (ts *TextSpinner) next() string {
-	now := time.Now()
-	if now.Sub(ts.lastUpdate) > minUpdate {
-		ts.seqPos = (ts.seqPos + 1) % len(spinnerSeq)
-		ts.lastUpdate = now
-	}
-
-	return string([]rune{spinnerSeq[ts.seqPos]})
 }
 
 func pullerProgFunc(ctx context.Context, statsCh chan pull.Stats, language progLanguage) {
@@ -212,41 +202,6 @@ func pullerProgFunc(ctx context.Context, statsCh chan pull.Stats, language progL
 	}
 }
 
-func progFunc(ctx context.Context, progChan chan pull.PullProgress) {
-	var latest pull.PullProgress
-	last := time.Now().UnixNano() - 1
-	done := false
-	p := cli.NewEphemeralPrinter()
-	for !done {
-		if ctx.Err() != nil {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case progress, ok := <-progChan:
-			if !ok {
-				done = true
-			}
-			latest = progress
-		case <-time.After(250 * time.Millisecond):
-			break
-		}
-
-		nowUnix := time.Now().UnixNano()
-		deltaTime := time.Duration(nowUnix - last)
-		halfSec := 500 * time.Millisecond
-		if done || deltaTime > halfSec {
-			last = nowUnix
-			if latest.KnownCount > 0 {
-				p.Printf("Counted chunks: %d, Buffered chunks: %d)\n", latest.KnownCount, latest.DoneCount)
-				p.Display()
-			}
-		}
-	}
-	p.Display()
-}
-
 // progLanguage is the language to use when displaying progress for a pull from a src db to a sink db.
 type progLanguage int
 
@@ -256,16 +211,9 @@ const (
 )
 
 func buildProgStarter(language progLanguage) actions.ProgStarter {
-	return func(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.Stats) {
+	return func(ctx context.Context) (*sync.WaitGroup, chan pull.Stats) {
 		statsCh := make(chan pull.Stats, 128)
-		progChan := make(chan pull.PullProgress, 128)
 		wg := &sync.WaitGroup{}
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			progFunc(ctx, progChan)
-		}()
 
 		wg.Add(1)
 		go func() {
@@ -273,13 +221,12 @@ func buildProgStarter(language progLanguage) actions.ProgStarter {
 			pullerProgFunc(ctx, statsCh, language)
 		}()
 
-		return wg, progChan, statsCh
+		return wg, statsCh
 	}
 }
 
-func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, statsCh chan pull.Stats) {
+func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, statsCh chan pull.Stats) {
 	cancel()
-	close(progChan)
 	close(statsCh)
 	wg.Wait()
 }

@@ -93,7 +93,7 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 }
 
 func getJWKHandler(dEnv *env.DoltEnv) func(string, int64, bool) bool {
-	current, valid, _ := dEnv.UserRPCCreds()
+	current, valid, _ := dEnv.UserDoltCreds()
 	first := false
 	return func(path string, size int64, isDir bool) (stop bool) {
 		if strings.HasSuffix(path, creds.JWKFileExtension) {

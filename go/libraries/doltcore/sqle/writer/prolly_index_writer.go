@@ -244,9 +244,10 @@ func (m prollyIndexWriter) uniqueKeyError(ctx context.Context, keyStr string, ke
 }
 
 type prollySecondaryIndexWriter struct {
-	name   string
-	mut    *prolly.MutableMap
-	unique bool
+	name          string
+	mut           *prolly.MutableMap
+	unique        bool
+	prefixLengths []uint16
 
 	// number of indexed cols
 	idxCols int
@@ -283,10 +284,34 @@ func (m prollySecondaryIndexWriter) ValidateKeyViolations(ctx context.Context, s
 	return nil
 }
 
+// trimKeyPart will trim entry into the sql.Row depending on the prefixLengths
+func (m prollySecondaryIndexWriter) trimKeyPart(to int, keyPart interface{}) interface{} {
+	var prefixLength uint16
+	if len(m.prefixLengths) > to {
+		prefixLength = m.prefixLengths[to]
+	}
+	if prefixLength != 0 {
+		switch kp := keyPart.(type) {
+		case string:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
+			keyPart = kp[:prefixLength]
+		case []uint8:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
+			keyPart = kp[:prefixLength]
+		}
+	}
+	return keyPart
+}
+
 func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
+		keyPart := m.trimKeyPart(to, sqlRow[from])
+		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
 			return nil, err
 		}
 	}
@@ -311,7 +336,8 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 			m.keyBld.Recycle()
 			return nil
 		}
-		if err := index.PutField(ctx, ns, m.keyBld, to, sqlRow[from]); err != nil {
+		keyPart := m.trimKeyPart(to, sqlRow[from])
+		if err := index.PutField(ctx, ns, m.keyBld, to, keyPart); err != nil {
 			return err
 		}
 	}

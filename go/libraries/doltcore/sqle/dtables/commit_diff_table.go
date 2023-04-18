@@ -264,7 +264,7 @@ func (dt *CommitDiffTable) HandledFilters(filters []sql.Expression) []sql.Expres
 
 // Filters returns the list of filters that are applied to this table.
 func (dt *CommitDiffTable) Filters() []sql.Expression {
-	if dt.toCommitFilter == nil || dt.fromCommitFilter == nil {
+	if dt.toCommitFilter == nil && dt.fromCommitFilter == nil {
 		return nil
 	}
 

@@ -43,6 +43,8 @@ type Index interface {
 	IndexedColumnTags() []uint64
 	// IsUnique returns whether the given index has the UNIQUE constraint.
 	IsUnique() bool
+	// IsSpatial returns whether the given index has the SPATIAL constraint.
+	IsSpatial() bool
 	// IsUserDefined returns whether the given index was created by a user or automatically generated.
 	IsUserDefined() bool
 	// Name returns the name of the index.
@@ -54,6 +56,8 @@ type Index interface {
 	// ToTableTuple returns a tuple that may be used to retrieve the original row from the indexed table when given
 	// a full index key (and not a partial index key).
 	ToTableTuple(ctx context.Context, fullKey types.Tuple, format *types.NomsBinFormat) (types.Tuple, error)
+	// PrefixLengths returns the prefix lengths for the index
+	PrefixLengths() []uint16
 }
 
 var _ Index = (*indexImpl)(nil)
@@ -64,8 +68,10 @@ type indexImpl struct {
 	allTags       []uint64
 	indexColl     *indexCollectionImpl
 	isUnique      bool
+	isSpatial     bool
 	isUserDefined bool
 	comment       string
+	prefixLengths []uint16
 }
 
 func NewIndex(name string, tags, allTags []uint64, indexColl IndexCollection, props IndexProperties) Index {
@@ -80,6 +86,7 @@ func NewIndex(name string, tags, allTags []uint64, indexColl IndexCollection, pr
 		allTags:       allTags,
 		indexColl:     indexCollImpl,
 		isUnique:      props.IsUnique,
+		isSpatial:     props.IsSpatial,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
 	}
@@ -164,6 +171,11 @@ func (ix *indexImpl) IsUnique() bool {
 	return ix.isUnique
 }
 
+// IsSpatial implements Index.
+func (ix *indexImpl) IsSpatial() bool {
+	return ix.isSpatial
+}
+
 // IsUserDefined implements Index.
 func (ix *indexImpl) IsUserDefined() bool {
 	return ix.isUserDefined
@@ -241,6 +253,11 @@ func (ix *indexImpl) ToTableTuple(ctx context.Context, fullKey types.Tuple, form
 	return types.NewTuple(format, resVals...)
 }
 
+// PrefixLengths implements Index.
+func (ix *indexImpl) PrefixLengths() []uint16 {
+	return ix.prefixLengths
+}
+
 // copy returns an exact copy of the calling index.
 func (ix *indexImpl) copy() *indexImpl {
 	newIx := *ix
@@ -248,5 +265,9 @@ func (ix *indexImpl) copy() *indexImpl {
 	_ = copy(newIx.tags, ix.tags)
 	newIx.allTags = make([]uint64, len(ix.allTags))
 	_ = copy(newIx.allTags, ix.allTags)
+	if len(ix.prefixLengths) > 0 {
+		newIx.prefixLengths = make([]uint16, len(ix.prefixLengths))
+		_ = copy(newIx.prefixLengths, ix.prefixLengths)
+	}
 	return &newIx
 }

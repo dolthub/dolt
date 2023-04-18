@@ -77,6 +77,10 @@ func TestMigration(t *testing.T) {
 					query:    "SELECT count(*) FROM dolt_log",
 					expected: []sql.Row{{int64(2)}},
 				},
+				{
+					query:    "SELECT count(*) FROM `dolt/dolt_migrated_commits`.dolt_commit_mapping",
+					expected: []sql.Row{{int64(2)}},
+				},
 			},
 		},
 		{
@@ -104,8 +108,38 @@ func TestMigration(t *testing.T) {
 					expected: []sql.Row{
 						{"pk", "varchar(16383)", "NO", "PRI", "NULL", ""},
 						{"c0", "int", "YES", "", "NULL", ""},
-						{"c1", "varbinary(16383)", "YES", "", "NULL", ""},
+						{"c1", "varbinary(16383)", "YES", "MUL", "NULL", ""},
 					},
+				},
+			},
+		},
+		{
+			name: "create more commits",
+			setup: []string{
+				"CREATE TABLE test (pk int primary key)",
+				"INSERT INTO test VALUES (1),(2),(3)",
+				"CALL dolt_commit('-Am', 'new table')",
+				"INSERT INTO test VALUES (4)",
+				"CALL dolt_commit('-am', 'added row 4')",
+				"INSERT INTO test VALUES (5)",
+				"CALL dolt_commit('-am', 'added row 5')",
+			},
+			asserts: []assertion{
+				{
+					query:    "SELECT count(*) FROM dolt_log",
+					expected: []sql.Row{{int64(4)}},
+				},
+				{
+					query:    "SELECT count(*) FROM `dolt/dolt_migrated_commits`.dolt_commit_mapping",
+					expected: []sql.Row{{int64(4)}},
+				},
+				{
+					query:    "SELECT count(*) FROM `dolt/dolt_migrated_commits`.dolt_commit_mapping WHERE new_commit_hash IN (SELECT commit_hash FROM dolt_log)",
+					expected: []sql.Row{{int64(4)}},
+				},
+				{
+					query:    "SELECT count(*) FROM `dolt/dolt_migrated_commits`.dolt_commit_mapping WHERE new_commit_hash NOT IN (SELECT commit_hash FROM dolt_log)",
+					expected: []sql.Row{{int64(0)}},
 				},
 			},
 		},
@@ -119,7 +153,7 @@ func TestMigration(t *testing.T) {
 			root, err := postEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 			for _, a := range test.asserts {
-				actual, err := sqle.ExecuteSelect(t, postEnv, root, a.query)
+				actual, err := sqle.ExecuteSelect(postEnv, root, a.query)
 				assert.NoError(t, err)
 				assert.Equal(t, a.expected, actual)
 			}
@@ -154,7 +188,7 @@ func SetupHookRefKeys(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, err
 	if err != nil {
 		return nil, err
 	}
-	_, err = sch.Indexes().AddIndexByColNames("blob_idx", []string{"c1"}, schema.IndexProperties{IsUserDefined: true})
+	_, err = sch.Indexes().AddIndexByColNames("blob_idx", []string{"c1"}, nil, schema.IndexProperties{IsUserDefined: true})
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +218,7 @@ func runMigration(t *testing.T, ctx context.Context, preEnv *env.DoltEnv) (postE
 		DoltDB:    ddb,
 	}
 
-	err = migrate.TraverseDAG(ctx, preEnv.DoltDB, postEnv.DoltDB)
+	err = migrate.TraverseDAG(ctx, migrate.Environment{}, preEnv.DoltDB, postEnv.DoltDB)
 	assert.NoError(t, err)
 	return
 }

@@ -35,12 +35,6 @@ type Map struct {
 	valDesc val.TupleDesc
 }
 
-type DiffSummary struct {
-	Adds, Removes        uint64
-	Changes, CellChanges uint64
-	NewSize, OldSize     uint64
-}
-
 // NewMap creates an empty prolly Tree Map
 func NewMap(node tree.Node, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc) Map {
 	tuples := tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
@@ -118,40 +112,23 @@ func MutateMapWithTupleIter(ctx context.Context, m Map, iter TupleIter) (Map, er
 }
 
 func DiffMaps(ctx context.Context, from, to Map, cb tree.DiffFn) error {
-	return tree.DiffOrderedTrees(ctx, from.tuples, to.tuples, cb)
+	return tree.DiffOrderedTrees(ctx, from.tuples, to.tuples, makeDiffCallBack(from, to, cb))
 }
 
 // RangeDiffMaps returns diffs within a Range. See Range for which diffs are
 // returned.
 func RangeDiffMaps(ctx context.Context, from, to Map, rng Range, cb tree.DiffFn) error {
-	fns, tns := from.tuples.NodeStore, to.tuples.NodeStore
-
-	fromStart, err := tree.NewCursorFromSearchFn(ctx, fns, from.tuples.Root, rangeStartSearchFn(rng))
-	if err != nil {
-		return err
-	}
-	toStart, err := tree.NewCursorFromSearchFn(ctx, tns, to.tuples.Root, rangeStartSearchFn(rng))
-	if err != nil {
-		return err
-	}
-
-	fromStop, err := tree.NewCursorFromSearchFn(ctx, fns, from.tuples.Root, rangeStopSearchFn(rng))
-	if err != nil {
-		return err
-	}
-	toStop, err := tree.NewCursorFromSearchFn(ctx, tns, to.tuples.Root, rangeStopSearchFn(rng))
-	if err != nil {
-		return err
-	}
-
 	differ, err := tree.DifferFromCursors[val.Tuple, val.TupleDesc](
-		fromStart, toStart,
-		fromStop, toStop,
+		ctx, from.tuples.Root, to.tuples.Root,
+		rangeStartSearchFn(rng), rangeStopSearchFn(rng),
+		from.NodeStore(), to.NodeStore(),
 		from.tuples.Order,
 	)
 	if err != nil {
 		return err
 	}
+
+	dcb := makeDiffCallBack(from, to, cb)
 
 	for {
 		var diff tree.Diff
@@ -159,7 +136,7 @@ func RangeDiffMaps(ctx context.Context, from, to Map, rng Range, cb tree.DiffFn)
 			break
 		}
 
-		if err = cb(ctx, diff); err != nil {
+		if err = dcb(ctx, diff); err != nil {
 			break
 		}
 	}
@@ -170,7 +147,23 @@ func RangeDiffMaps(ctx context.Context, from, to Map, rng Range, cb tree.DiffFn)
 // specified by |start| and |stop|. If |start| and/or |stop| is null, then the
 // range is unbounded towards that end.
 func DiffMapsKeyRange(ctx context.Context, from, to Map, start, stop val.Tuple, cb tree.DiffFn) error {
-	return tree.DiffKeyRangeOrderedTrees(ctx, from.tuples, to.tuples, start, stop, cb)
+	return tree.DiffKeyRangeOrderedTrees(ctx, from.tuples, to.tuples, start, stop, makeDiffCallBack(from, to, cb))
+}
+
+func makeDiffCallBack(from, to Map, innerCb tree.DiffFn) tree.DiffFn {
+	if !from.valDesc.Equals(to.valDesc) {
+		return innerCb
+	}
+
+	return func(ctx context.Context, diff tree.Diff) error {
+		// Skip diffs produced by non-canonical tuples. A canonical-tuple is a
+		// tuple where any null suffixes have been trimmed.
+		if diff.Type == tree.ModifiedDiff &&
+			from.valDesc.Compare(val.Tuple(diff.From), val.Tuple(diff.To)) == 0 {
+			return nil
+		}
+		return innerCb(ctx, diff)
+	}
 }
 
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, tree.MergeStats, error) {
@@ -187,9 +180,27 @@ func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) 
 	}, stats, nil
 }
 
+// VisitMapLevelOrder visits each internal node of the tree in level order and calls the provided callback `cb` on each hash
+// encountered. This function is used primarily for building appendix table files for databases to help optimize reads.
+func VisitMapLevelOrder(ctx context.Context, m Map, cb func(h hash.Hash) (int64, error)) error {
+	return tree.VisitMapLevelOrder(ctx, m.tuples, cb)
+}
+
 // NodeStore returns the map's NodeStore
 func (m Map) NodeStore() tree.NodeStore {
 	return m.tuples.NodeStore
+}
+
+func (m Map) Tuples() tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc] {
+	return m.tuples
+}
+
+func (m Map) ValDesc() val.TupleDesc {
+	return m.valDesc
+}
+
+func (m Map) KeyDesc() val.TupleDesc {
+	return m.keyDesc
 }
 
 // Mutate makes a MutableMap from a Map.
@@ -235,13 +246,21 @@ func (m Map) Get(ctx context.Context, key val.Tuple, cb tree.KeyValueFn[val.Tupl
 	return m.tuples.Get(ctx, key, cb)
 }
 
+// GetPrefix returns the first key-value pair that matches the prefix key
+// or nil to the callback.
+func (m Map) GetPrefix(ctx context.Context, key val.Tuple, prefDesc val.TupleDesc, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
+	return m.tuples.GetPrefix(ctx, key, prefDesc, cb)
+}
+
+// todo(andy): iter prefix
+
 // Has returns true is |key| is present in the Map.
 func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 	return m.tuples.Has(ctx, key)
 }
 
-func (m Map) Last(ctx context.Context) (key, value val.Tuple, err error) {
-	return m.tuples.Last(ctx)
+func (m Map) LastKey(ctx context.Context) val.Tuple {
+	return m.tuples.LastKey(ctx)
 }
 
 // IterAll returns a MapIter that iterates over the entire Map.
@@ -265,12 +284,20 @@ func (m Map) FetchOrdinalRange(ctx context.Context, start, stop uint64) (MapIter
 	return m.tuples.FetchOrdinalRange(ctx, start, stop)
 }
 
+// HasPrefix returns true if the Map contains any key matching |preKey|.
+func (m Map) HasPrefix(ctx context.Context, preKey val.Tuple, preDesc val.TupleDesc) (bool, error) {
+	// todo(andy): we should compute our own |prefixDesc| here, but
+	//  we can't do that efficiently with the current TupleDesc.
+	if preKey.Count() < preDesc.Count() {
+		return false, fmt.Errorf("invalid prefix key (%d < %d)", preKey.Count(), preDesc.Count())
+	} else if m.keyDesc.Count() < preDesc.Count() {
+		return false, fmt.Errorf("invalid TupleDesc prefix (%d < %d)", m.keyDesc.Count(), preDesc.Count())
+	}
+	return m.tuples.HasPrefix(ctx, preKey, preDesc)
+}
+
 // IterRange returns a mutableMapIter that iterates over a Range.
 func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
-	if rng.IsPointLookup(m.keyDesc) {
-		return m.pointLookupFromRange(ctx, rng)
-	}
-
 	iter, err := treeIterFromRange(ctx, m.tuples.Root, m.tuples.NodeStore, rng)
 	if err != nil {
 		return nil, err
@@ -310,49 +337,14 @@ func (m Map) CompareItems(left, right tree.Item) int {
 	return m.keyDesc.Compare(val.Tuple(left), val.Tuple(right))
 }
 
-func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup, error) {
-	cur, err := tree.NewCursorFromSearchFn(ctx, m.tuples.NodeStore, m.tuples.Root, rangeStartSearchFn(rng))
-	if err != nil {
-		return nil, err
-	}
-	if !cur.Valid() {
-		// map does not contain |rng|
-		return &pointLookup{}, nil
-	}
-
-	key := val.Tuple(cur.CurrentKey())
-	value := val.Tuple(cur.CurrentValue())
-
-	if !rng.Matches(key) {
-		return &pointLookup{}, nil
-	}
-
-	return &pointLookup{k: key, v: value}, nil
-}
-
 func treeIterFromRange(
 	ctx context.Context,
 	root tree.Node,
 	ns tree.NodeStore,
 	rng Range,
 ) (*tree.OrderedTreeIter[val.Tuple, val.Tuple], error) {
-	var (
-		err   error
-		start *tree.Cursor
-		stop  *tree.Cursor
-	)
-
-	start, err = tree.NewCursorFromSearchFn(ctx, ns, root, rangeStartSearchFn(rng))
-	if err != nil {
-		return nil, err
-	}
-
-	stop, err = tree.NewCursorFromSearchFn(ctx, ns, root, rangeStopSearchFn(rng))
-	if err != nil {
-		return nil, err
-	}
-
-	return tree.OrderedTreeIterFromCursors[val.Tuple, val.Tuple](start, stop), nil
+	findStart, findStop := rangeStartSearchFn(rng), rangeStopSearchFn(rng)
+	return tree.OrderedTreeIterFromCursors[val.Tuple, val.Tuple](ctx, root, ns, findStart, findStop)
 }
 
 func NewPointLookup(k, v val.Tuple) *pointLookup {

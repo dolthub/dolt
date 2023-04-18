@@ -25,11 +25,11 @@ type IndexCollection interface {
 	// It does not perform any kind of checking, and is intended for schema modifications.
 	AddIndex(indexes ...Index)
 	// AddIndexByColNames adds an index with the given name and columns (in index order).
-	AddIndexByColNames(indexName string, cols []string, props IndexProperties) (Index, error)
+	AddIndexByColNames(indexName string, cols []string, prefixLengths []uint16, props IndexProperties) (Index, error)
 	// AddIndexByColTags adds an index with the given name and column tags (in index order).
-	AddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error)
+	AddIndexByColTags(indexName string, tags []uint64, prefixLengths []uint16, props IndexProperties) (Index, error)
 	// todo: this method is trash, clean up this interface
-	UnsafeAddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error)
+	UnsafeAddIndexByColTags(indexName string, tags []uint64, prefixLengths []uint16, props IndexProperties) (Index, error)
 	// AllIndexes returns a slice containing all of the indexes in this collection.
 	AllIndexes() []Index
 	// Contains returns whether the given index name already exists for this table.
@@ -68,6 +68,7 @@ type IndexCollection interface {
 
 type IndexProperties struct {
 	IsUnique      bool
+	IsSpatial     bool
 	IsUserDefined bool
 	Comment       string
 }
@@ -125,15 +126,15 @@ func (ixc *indexCollectionImpl) AddIndex(indexes ...Index) {
 	}
 }
 
-func (ixc *indexCollectionImpl) AddIndexByColNames(indexName string, cols []string, props IndexProperties) (Index, error) {
+func (ixc *indexCollectionImpl) AddIndexByColNames(indexName string, cols []string, prefixLengths []uint16, props IndexProperties) (Index, error) {
 	tags, ok := ixc.columnNamesToTags(cols)
 	if !ok {
 		return nil, fmt.Errorf("the table does not contain at least one of the following columns: `%v`", cols)
 	}
-	return ixc.AddIndexByColTags(indexName, tags, props)
+	return ixc.AddIndexByColTags(indexName, tags, prefixLengths, props)
 }
 
-func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error) {
+func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint64, prefixLengths []uint16, props IndexProperties) (Index, error) {
 	if strings.HasPrefix(indexName, "dolt_") {
 		return nil, fmt.Errorf("indexes cannot be prefixed with `dolt_`")
 	}
@@ -159,8 +160,10 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		tags:          tags,
 		allTags:       combineAllTags(tags, ixc.pks),
 		isUnique:      props.IsUnique,
+		isSpatial:     props.IsSpatial,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
+		prefixLengths: prefixLengths,
 	}
 	ixc.indexes[indexName] = index
 	for _, tag := range tags {
@@ -171,21 +174,20 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 
 // validateColumnIndexable returns an error if the column given cannot be used in an index
 func validateColumnIndexable(c Column) error {
-	if IsColSpatialType(c) {
-		return fmt.Errorf("cannot create an index over spatial type columns")
-	}
 	return nil
 }
 
-func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error) {
+func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags []uint64, prefixLengths []uint16, props IndexProperties) (Index, error) {
 	index := &indexImpl{
 		indexColl:     ixc,
 		name:          indexName,
 		tags:          tags,
 		allTags:       combineAllTags(tags, ixc.pks),
 		isUnique:      props.IsUnique,
+		isSpatial:     props.IsSpatial,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
+		prefixLengths: prefixLengths,
 	}
 	ixc.indexes[indexName] = index
 	for _, tag := range tags {
@@ -323,8 +325,10 @@ func (ixc *indexCollectionImpl) Merge(indexes ...Index) {
 				tags:          tags,
 				indexColl:     ixc,
 				isUnique:      index.IsUnique(),
+				isSpatial:     index.IsSpatial(),
 				isUserDefined: index.IsUserDefined(),
 				comment:       index.Comment(),
+				prefixLengths: index.PrefixLengths(),
 			}
 			ixc.AddIndex(newIndex)
 		}

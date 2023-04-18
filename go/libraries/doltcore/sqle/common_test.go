@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // SetupFunc can be run to perform additional setup work before a test case
@@ -46,7 +45,7 @@ func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -77,7 +76,7 @@ func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
-	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
 
 	if err != nil {
 		return nil, err
@@ -127,19 +126,6 @@ func equalSchemas(t *testing.T, expectedSch schema.Schema, sch schema.Schema) {
 		col := cols[i]
 		col.Tag = expectedCol.Tag
 		assert.Equal(t, expectedCol, col)
-	}
-}
-
-// TODO: this shouldn't be here
-func CreateWorkingRootUpdate() map[string]TableUpdate {
-	return map[string]TableUpdate{
-		TableWithHistoryName: {
-			RowUpdates: []row.Row{
-				mustRow(row.New(types.Format_Default, ReaddAgeAt5HistSch, row.TaggedValues{
-					0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"),
-				})),
-			},
-		},
 	}
 }
 
@@ -203,7 +189,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	require.NoError(t, err)
 	err = dEnv.UpdateWorkingRoot(ctx, root)
 	require.NoError(t, err)
-	root, err = ExecuteSql(t, dEnv, root, queries)
+	root, err = ExecuteSql(dEnv, root, queries)
 	require.NoError(t, err)
 	err = dEnv.UpdateWorkingRoot(ctx, root)
 	require.NoError(t, err)
@@ -213,7 +199,7 @@ func ExecuteSetupSQL(ctx context.Context, queries string) SetupFn {
 	return func(t *testing.T, dEnv *env.DoltEnv) {
 		root, err := dEnv.WorkingRoot(ctx)
 		require.NoError(t, err)
-		root, err = ExecuteSql(t, dEnv, root, queries)
+		root, err = ExecuteSql(dEnv, root, queries)
 		require.NoError(t, err)
 		err = dEnv.UpdateWorkingRoot(ctx, root)
 		require.NoError(t, err)

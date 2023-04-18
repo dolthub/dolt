@@ -77,16 +77,16 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 
 		// mapping from secondary index key to primary key
 		pkMap := makeIndexToIndexMapping(def.Schema().GetPKCols(), sch.GetPKCols())
-
 		writers[defName] = prollySecondaryIndexWriter{
-			name:    defName,
-			mut:     idxMap.Mutate(),
-			unique:  def.IsUnique(),
-			idxCols: def.Count(),
-			keyMap:  keyMap,
-			keyBld:  val.NewTupleBuilder(keyDesc),
-			pkMap:   pkMap,
-			pkBld:   val.NewTupleBuilder(pkDesc),
+			name:          defName,
+			mut:           idxMap.Mutate(),
+			unique:        def.IsUnique(),
+			prefixLengths: def.PrefixLengths(),
+			idxCols:       def.Count(),
+			keyMap:        keyMap,
+			keyBld:        val.NewTupleBuilder(keyDesc),
+			pkMap:         pkMap,
+			pkBld:         val.NewTupleBuilder(pkDesc),
 		}
 	}
 
@@ -115,14 +115,16 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 		keyDesc, _ := m.Descriptors()
 
 		writers[defName] = prollyKeylessSecondaryWriter{
-			name:      defName,
-			mut:       m.Mutate(),
-			primary:   primary,
-			unique:    def.IsUnique(),
-			keyBld:    val.NewTupleBuilder(keyDesc),
-			prefixBld: val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count())),
-			hashBld:   val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc})),
-			keyMap:    keyMap,
+			name:          defName,
+			mut:           m.Mutate(),
+			primary:       primary,
+			unique:        def.IsUnique(),
+			spatial:       def.IsSpatial(),
+			prefixLengths: def.PrefixLengths(),
+			keyBld:        val.NewTupleBuilder(keyDesc),
+			prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count())),
+			hashBld:       val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc})),
+			keyMap:        keyMap,
 		}
 	}
 
@@ -131,26 +133,26 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 
 // Insert implements TableWriter.
 func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
-	if err := w.primary.ValidateKeyViolations(ctx, sqlRow); err != nil {
+	if err = w.primary.ValidateKeyViolations(ctx, sqlRow); err != nil {
 		return err
 	}
 	for _, wr := range w.secondary {
-		if err := wr.ValidateKeyViolations(ctx, sqlRow); err != nil {
+		if err = wr.ValidateKeyViolations(ctx, sqlRow); err != nil {
 			if uke, ok := err.(secondaryUniqueKeyError); ok {
 				return w.primary.(primaryIndexErrBuilder).errForSecondaryUniqueKeyError(ctx, uke)
 			}
 		}
 	}
-	if err := w.primary.Insert(ctx, sqlRow); err != nil {
-		return err
-	}
 	for _, wr := range w.secondary {
-		if err := wr.Insert(ctx, sqlRow); err != nil {
+		if err = wr.Insert(ctx, sqlRow); err != nil {
 			if uke, ok := err.(secondaryUniqueKeyError); ok {
 				return w.primary.(primaryIndexErrBuilder).errForSecondaryUniqueKeyError(ctx, uke)
 			}
 			return err
 		}
+	}
+	if err = w.primary.Insert(ctx, sqlRow); err != nil {
+		return err
 	}
 	return nil
 }
@@ -255,8 +257,8 @@ func (w *prollyTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 }
 
 // IndexedAccess implements sql.IndexAddressableTable.
-func (w *prollyTableWriter) IndexedAccess(i sql.Index) sql.IndexedTable {
-	idx := index.DoltIndexFromSqlIndex(i)
+func (w *prollyTableWriter) IndexedAccess(i sql.IndexLookup) sql.IndexedTable {
+	idx := index.DoltIndexFromSqlIndex(i.Index)
 	return &prollyFkIndexer{
 		writer: w,
 		index:  idx,
@@ -378,6 +380,7 @@ func makeOrdinalMapping(from sql.Schema, to *schema.ColCollection) (m val.Ordina
 	return
 }
 
+// NB: only works for primary-key tables/indexes
 func makeIndexToIndexMapping(from, to *schema.ColCollection) (m val.OrdinalMapping) {
 	m = make(val.OrdinalMapping, len(to.GetColumns()))
 	for i, col := range to.GetColumns() {

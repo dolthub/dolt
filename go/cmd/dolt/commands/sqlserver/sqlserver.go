@@ -16,7 +16,6 @@ package sqlserver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -402,27 +401,15 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	}
 
 	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
-		serverConfig.withLogLevel(LogLevel(logLevel))
+		serverConfig.withLogLevel(LogLevel(strings.ToLower(logLevel)))
 	}
 
 	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
-		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, dataDir)
-
-		if err != nil {
-			return nil, errors.New("failed to read databases in path specified by --data-dir. error: " + err.Error())
-		}
-
-		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(dataDir)
+		serverConfig.withDataDir(dataDir)
 	}
 
 	if dataDir, ok := apr.GetValue(commands.DataDirFlag); ok {
-		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, dataDir)
-
-		if err != nil {
-			return nil, errors.New("failed to read databases in path specified by --data-dir. error: " + err.Error())
-		}
-
-		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(dataDir)
+		serverConfig.withDataDir(dataDir)
 	}
 
 	if queryParallelism, ok := apr.GetInt(queryParallelismFlag); ok {

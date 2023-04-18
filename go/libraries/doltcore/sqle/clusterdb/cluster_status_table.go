@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 type ReplicaStatus struct {
@@ -111,12 +112,12 @@ func replicaStatusToRow(rs ReplicaStatus) sql.Row {
 
 func (t ClusterStatusTable) Schema() sql.Schema {
 	return sql.Schema{
-		{Name: "database", Type: sql.Text, Source: StatusTableName, PrimaryKey: true, Nullable: false},
-		{Name: "standby_remote", Type: sql.Text, Source: StatusTableName, PrimaryKey: true, Nullable: false},
-		{Name: "role", Type: sql.Text, Source: StatusTableName, PrimaryKey: false, Nullable: false},
-		{Name: "epoch", Type: sql.Int64, Source: StatusTableName, PrimaryKey: false, Nullable: false},
-		{Name: "replication_lag_millis", Type: sql.Int64, Source: StatusTableName, PrimaryKey: false, Nullable: true},
-		{Name: "last_update", Type: sql.Datetime, Source: StatusTableName, PrimaryKey: false, Nullable: true},
-		{Name: "current_error", Type: sql.Text, Source: StatusTableName, PrimaryKey: false, Nullable: true},
+		{Name: "database", Type: types.Text, Source: StatusTableName, PrimaryKey: true, Nullable: false},
+		{Name: "standby_remote", Type: types.Text, Source: StatusTableName, PrimaryKey: true, Nullable: false},
+		{Name: "role", Type: types.Text, Source: StatusTableName, PrimaryKey: false, Nullable: false},
+		{Name: "epoch", Type: types.Int64, Source: StatusTableName, PrimaryKey: false, Nullable: false},
+		{Name: "replication_lag_millis", Type: types.Int64, Source: StatusTableName, PrimaryKey: false, Nullable: true},
+		{Name: "last_update", Type: types.Datetime, Source: StatusTableName, PrimaryKey: false, Nullable: true},
+		{Name: "current_error", Type: types.Text, Source: StatusTableName, PrimaryKey: false, Nullable: true},
 	}
 }

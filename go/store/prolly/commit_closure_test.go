@@ -17,7 +17,6 @@ package prolly
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"testing"
 
@@ -70,10 +69,12 @@ func TestCommitClosure(t *testing.T) {
 	t.Run("Insert", func(t *testing.T) {
 		cc, err := NewEmptyCommitClosure(ns)
 		require.NoError(t, err)
+		addr, err := ns.Write(ctx, tree.NewEmptyTestNode())
+		require.NoError(t, err)
 		e := cc.Editor()
-		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 0, hash.Parse("00000000000000000000000000000000")))
+		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 0, addr))
 		assert.NoError(t, err)
-		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 1, hash.Parse("00000000000000000000000000000000")))
+		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 1, addr))
 		assert.NoError(t, err)
 		cc, err = e.Flush(ctx)
 		assert.NoError(t, err)
@@ -94,9 +95,9 @@ func TestCommitClosure(t *testing.T) {
 		assert.True(t, errors.Is(err, io.EOF))
 
 		e = cc.Editor()
-		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 0, hash.Parse("00000000000000000000000000000000")))
+		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 0, addr))
 		assert.NoError(t, err)
-		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 1, hash.Parse("00000000000000000000000000000000")))
+		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 1, addr))
 		assert.NoError(t, err)
 		cc, err = e.Flush(ctx)
 		assert.NoError(t, err)
@@ -108,10 +109,12 @@ func TestCommitClosure(t *testing.T) {
 	t.Run("Diff", func(t *testing.T) {
 		ccl, err := NewEmptyCommitClosure(ns)
 		require.NoError(t, err)
+		addr, err := ns.Write(ctx, tree.NewEmptyTestNode())
+		require.NoError(t, err)
 		e := ccl.Editor()
-		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 0, hash.Parse("00000000000000000000000000000000")))
+		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 0, addr))
 		assert.NoError(t, err)
-		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 1, hash.Parse("00000000000000000000000000000000")))
+		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 1, addr))
 		assert.NoError(t, err)
 		ccl, err = e.Flush(ctx)
 		assert.NoError(t, err)
@@ -122,19 +125,19 @@ func TestCommitClosure(t *testing.T) {
 		ccr, err := NewEmptyCommitClosure(ns)
 		require.NoError(t, err)
 		e = ccr.Editor()
-		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 0, hash.Parse("00000000000000000000000000000000")))
+		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 0, addr))
 		assert.NoError(t, err)
-		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 1, hash.Parse("00000000000000000000000000000000")))
+		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 1, addr))
 		assert.NoError(t, err)
-		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 1, hash.Parse("00000000000000000000000000000001")))
+		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 1, addr))
 		assert.NoError(t, err)
-		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 2, hash.Parse("00000000000000000000000000000000")))
+		err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), 2, addr))
 		assert.NoError(t, err)
 		ccr, err = e.Flush(ctx)
 		assert.NoError(t, err)
 		ccrc, err := ccr.Count()
 		require.NoError(t, err)
-		assert.Equal(t, 4, ccrc)
+		assert.Equal(t, 3, ccrc)
 
 		var numadds, numdels int
 		err = DiffCommitClosures(ctx, ccl, ccr, func(ctx context.Context, d tree.Diff) error {
@@ -147,7 +150,7 @@ func TestCommitClosure(t *testing.T) {
 		})
 		assert.Error(t, err)
 		assert.True(t, errors.Is(err, io.EOF))
-		assert.Equal(t, 2, numadds)
+		assert.Equal(t, 1, numadds)
 		assert.Equal(t, 0, numdels)
 	})
 
@@ -156,7 +159,9 @@ func TestCommitClosure(t *testing.T) {
 		require.NoError(t, err)
 		e := cc.Editor()
 		for i := 0; i < 4096; i++ {
-			err := e.Add(ctx, NewCommitClosureKey(ns.Pool(), uint64(i), hash.Parse(fmt.Sprintf("%0.32d", i))))
+			addr, err := ns.Write(ctx, tree.NewEmptyTestNode())
+			require.NoError(t, err)
+			err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), uint64(i), addr))
 			require.NoError(t, err)
 		}
 		cc, err = e.Flush(ctx)
@@ -190,7 +195,9 @@ func TestCommitClosure(t *testing.T) {
 		require.NoError(t, err)
 		e := cc.Editor()
 		for i := 0; i < 4096; i++ {
-			err := e.Add(ctx, NewCommitClosureKey(ns.Pool(), uint64(i), hash.Parse(fmt.Sprintf("%0.32d", i))))
+			addr, err := ns.Write(ctx, tree.NewEmptyTestNode())
+			require.NoError(t, err)
+			err = e.Add(ctx, NewCommitClosureKey(ns.Pool(), uint64(i), addr))
 			require.NoError(t, err)
 		}
 		cc, err = e.Flush(ctx)

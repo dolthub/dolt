@@ -24,7 +24,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -45,6 +44,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/indexcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/schcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/stashcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -53,11 +53,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const (
-	Version = "0.50.12"
+	Version = "0.75.12"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -75,6 +76,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.LogCmd{},
+	commands.ShowCmd{},
 	commands.BranchCmd{},
 	commands.CheckoutCmd{},
 	commands.MergeCmd{},
@@ -110,6 +112,8 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	dumpDocsCommand,
 	dumpZshCommand,
 	docscmds.Commands,
+	stashcmds.StashCommands,
+	&commands.Assist{},
 })
 
 func init() {
@@ -142,6 +146,10 @@ func main() {
 
 func runMain() int {
 	args := os.Args[1:]
+
+	if os.Getenv("DOLT_VERBOSE_ASSERT_TABLE_FILES_CLOSED") == "" {
+		nbs.TableIndexGCFinalizerWithStackTrace = false
+	}
 
 	csMetrics := false
 	ignoreLockFile := false
@@ -187,7 +195,7 @@ func runMain() int {
 					cli.Println(cyanStar, "  /trace: A trace of execution of the current program. You can specify the duration in the seconds GET parameter. After you get the trace file, use the go tool trace command to investigate the trace.")
 					cli.Println()
 
-					err := http.ListenAndServe("localhost:6060", nil)
+					err := http.ListenAndServe("0.0.0.0:6060", nil)
 
 					if err != nil {
 						cli.Println(color.YellowString("pprof server exited with error: %v", err))
@@ -255,7 +263,7 @@ func runMain() int {
 			case stdOutFlag, stdErrFlag, stdOutAndErrFlag:
 				filename := args[1]
 
-				f, err := os.OpenFile(filename, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, os.ModePerm)
+				f, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, os.ModePerm)
 				if err != nil {
 					cli.PrintErrln("Failed to open", filename, "for writing:", err.Error())
 					return 1
@@ -307,6 +315,10 @@ func runMain() int {
 	warnIfMaxFilesTooLow()
 
 	ctx := context.Background()
+	if ok, exit := interceptSendMetrics(ctx, args); ok {
+		return exit
+	}
+
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 	dEnv.IgnoreLockFile = ignoreLockFile
 
@@ -390,11 +402,16 @@ func runMain() int {
 	}
 
 	start := time.Now()
-	var wg sync.WaitGroup
 	ctx, stop := context.WithCancel(ctx)
 	res := doltCommand.Exec(ctx, "dolt", args, dEnv)
 	stop()
-	wg.Wait()
+
+	if err = dbfactory.CloseAllLocalDatabases(); err != nil {
+		cli.PrintErrln(err)
+		if res == 0 {
+			res = 1
+		}
+	}
 
 	if csMetrics && dEnv.DoltDB != nil {
 		metricsSummary := dEnv.DoltDB.CSMetricsSummary()
@@ -440,4 +457,12 @@ func processEventsDir(args []string, dEnv *env.DoltEnv) error {
 	}
 
 	return nil
+}
+
+func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
+	if len(args) < 1 || args[0] != commands.SendMetricsCommand {
+		return false, 0
+	}
+	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, Version)
+	return true, doltCommand.Exec(ctx, "dolt", args, dEnv)
 }

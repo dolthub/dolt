@@ -23,8 +23,10 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -73,22 +75,11 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 		return nil, err
 	}
 
-	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
-	var dbName string
-	mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
-		dbName = name
-		return true, nil
-	})
-
 	// Simplest path would have our import path be a layer over load data
 	config := &engine.SqlEngineConfig{
-		InitialDb:    dbName,
-		IsReadOnly:   false,
-		PrivFilePath: "",
-		ServerUser:   "root",
-		ServerPass:   "",
-		Autocommit:   false, // We set autocommit == false to ensure to improve performance. Bulk import should not commit on each row.
-		Bulk:         true,
+		ServerUser: "root",
+		Autocommit: false, // We set autocommit == false to ensure to improve performance. Bulk import should not commit on each row.
+		Bulk:       true,
 	}
 	se, err := engine.NewSqlEngine(
 		ctx,
@@ -101,18 +92,18 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	}
 	defer se.Close()
 
+	dbName := mrEnv.GetFirstDatabase()
+
 	if se.GetUnderlyingEngine().IsReadOnly {
 		// SqlEngineTableWriter does not respect read only mode
-		return nil, analyzer.ErrReadOnlyDatabase.New(dbName)
+		return nil, analyzererrors.ErrReadOnlyDatabase.New(dbName)
 	}
 
-	sqlCtx, err := se.NewContext(ctx)
+	sqlCtx, err := se.NewLocalContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	// Add root client
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	sqlCtx.SetCurrentDatabase(dbName)
 
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
@@ -233,7 +224,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		return err
 	}
 
-	iter, err := insertOrUpdateOperation.RowIter(s.sqlCtx, nil)
+	iter, err := rowexec.DefaultBuilder.Build(s.sqlCtx, insertOrUpdateOperation, nil)
 	if err != nil {
 		return err
 	}
@@ -328,7 +319,7 @@ func (s *SqlEngineTableWriter) createTable() error {
 
 	analyzedQueryProcess := analyzer.StripPassthroughNodes(analyzed.(*plan.QueryProcess))
 
-	ri, err := analyzedQueryProcess.RowIter(s.sqlCtx, nil)
+	ri, err := rowexec.DefaultBuilder.Build(s.sqlCtx, analyzedQueryProcess, nil)
 	if err != nil {
 		return err
 	}

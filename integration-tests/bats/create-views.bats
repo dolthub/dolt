@@ -35,12 +35,96 @@ SQL
     run dolt sql -q "select name from dolt_schemas" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ 'four' ]] || false
+
     run dolt sql -q "drop table dolt_schemas"
-    skip "dropping dolt_schemas is currently unprotected"
     [ "$status" -ne 0 ]
     run dolt sql -q "select name from dolt_schemas" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ 'four' ]] || false
+}
+
+@test "create-views: can't alter dolt_schemas" {
+    run dolt sql -q "create view four as select 2+2 as res from dual;"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "select name from dolt_schemas" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ 'four' ]] || false
+
+    run dolt sql -q "alter table dolt_schemas add column newcol int"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "cannot be altered" ]] || false
+    
+    run dolt sql -q "select name from dolt_schemas" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ 'four' ]] || false
+}
+
+@test "create-views: drop and create same view" {
+    dolt sql -q "create view four as select 2+2 as res from dual;"
+    dolt sql -q "create view six as select 3+3 as res from dual;"
+    
+    run dolt sql -q "select name from dolt_schemas order by name" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ 'four' ]] || false
+    [[ "${lines[2]}" =~ 'six' ]] || false
+
+    dolt commit -Am "new views"
+    dolt sql -q "drop view four"
+
+    run dolt sql -q "create view four as select 2+2 as res from dual;"
+    [ "$status" -eq 0 ]
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+}
+
+@test "create-views: drop all views" {
+    dolt sql -q "create view four as select 2+2 as res from dual;"
+    dolt sql -q "create view six as select 3+3 as res from dual;"
+    
+    run dolt sql -q "select name from dolt_schemas order by name" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ 'four' ]] || false
+    [[ "${lines[2]}" =~ 'six' ]] || false
+
+    dolt commit -Am "new views"
+    dolt sql -q "drop view four"
+
+    run dolt ls --all
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_schemas" ]] || false
+
+    dolt diff
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "-create view four as select 2+2 as res from dual" ]] || false
+    [[ ! "$output" =~ "dolt_schemas" ]] || false
+
+    dolt commit -Am "dropped a view"
+    dolt sql -q "drop view six"
+
+    # Dropping all views should result in the dolt_schemas table deleting itself
+    run dolt ls --all
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_schemas" ]] || false
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "-create view six as select 3+3 as res from dual" ]] || false
+    [[ ! "$output" =~ "deleted table" ]] || false
+
+    dolt commit -Am "no views left"
+
+    # Creating and then dropping a bunch of views should produce no diff
+    dolt sql -q "create view four as select 2+2 as res from dual;"
+    dolt sql -q "create view six as select 3+3 as res from dual;"
+    dolt sql -q "drop view four"
+    dolt sql -q "drop view six"
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]    
 }
 
 @test "create-views: join two views" {
@@ -107,6 +191,11 @@ SQL
     [[ "${lines[4]}" =~ ' 1 ' ]] || false
     [[ "${lines[5]}" =~ ' 2 ' ]] || false
     [[ "${lines[6]}" =~ ' 3 ' ]] || false
+
+    # check information_schema.VIEWS table
+    # TODO: view_definition should be "select `mybin`.`my_users`.`id` AS `id` from `mybin`.`my_users` order by `mybin`.`my_users`.`id`"
+    run dolt sql -q "select * from information_schema.VIEWS;" -r csv
+    [[ "$output" =~ "def,dolt_repo_$$,my_users_view,select id from my_users order by id asc,NONE,YES,root@localhost,DEFINER,utf8mb4,utf8mb4_0900_bin" ]] || false
 }
 
 @test "create-views: view referencing table selects values inserted after it was created" {
@@ -241,19 +330,19 @@ SQL
 create table t1 (a int primary key, b int);
 call dolt_add('.');
 insert into t1 values (1,1);
-select dolt_commit('-am', 'table with one row');
-select dolt_branch('onerow');
+call dolt_commit('-am', 'table with one row');
+call dolt_branch('onerow');
 insert into t1 values (2,2);
-select dolt_commit('-am', 'table with two rows');
-select dolt_branch('tworows');
+call dolt_commit('-am', 'table with two rows');
+call dolt_branch('tworows');
 create view v1 as select * from t1;
 call dolt_add('.');
-select dolt_commit('-am', 'view with select *');
-select dolt_branch('view');
+call dolt_commit('-am', 'view with select *');
+call dolt_branch('view');
 insert into t1 values (3,3);
 call dolt_add('.');
-select dolt_commit('-am', 'table with three rows');
-select dolt_branch('threerows');
+call dolt_commit('-am', 'table with three rows');
+call dolt_branch('threerows');
 drop view v1;
 create view v1 as select a+10, b+10 from t1;
 SQL

@@ -59,7 +59,6 @@ const (
 
 var zeroHashStr = (hash.Hash{}).String()
 
-var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
 var ErrStateUpdate = errors.New("error updating local data repo state")
 var ErrMarshallingSchema = errors.New("error marshalling schema")
 var ErrInvalidCredsFile = errors.New("invalid creds file")
@@ -97,41 +96,56 @@ type DoltEnv struct {
 	hdp    HomeDirProvider
 
 	IgnoreLockFile bool
+	UserPassConfig *creds.DoltCredsForPass
+}
+
+func (dEnv *DoltEnv) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote, withCaching bool) (*doltdb.DoltDB, error) {
+	if withCaching {
+		return r.GetRemoteDB(ctx, format, dEnv)
+	} else {
+		return r.GetRemoteDBWithoutCaching(ctx, format, dEnv)
+	}
+}
+
+func LoadWithoutDB(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, version string) *DoltEnv {
+	cfg, cfgErr := LoadDoltCliConfig(hdp, fs)
+	repoState, rsErr := LoadRepoState(fs)
+
+	// deep copy remotes and backups ¯\_(ツ)_/¯ (see commit c59cbead)
+	if repoState != nil {
+		remotes := make(map[string]Remote, len(repoState.Remotes))
+		for n, r := range repoState.Remotes {
+			remotes[n] = r
+		}
+		repoState.Remotes = remotes
+
+		backups := make(map[string]Remote, len(repoState.Backups))
+		for n, r := range repoState.Backups {
+			backups[n] = r
+		}
+		repoState.Backups = backups
+	}
+
+	return &DoltEnv{
+		Version:    version,
+		Config:     cfg,
+		CfgLoadErr: cfgErr,
+		RepoState:  repoState,
+		RSLoadErr:  rsErr,
+		FS:         fs,
+		hdp:        hdp,
+	}
 }
 
 // Load loads the DoltEnv for the .dolt directory determined by resolving the specified urlStr with the specified Filesys.
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
-	cfg, cfgErr := LoadDoltCliConfig(hdp, fs)
-	repoState, rsErr := LoadRepoState(fs)
+	dEnv := LoadWithoutDB(ctx, hdp, fs, version)
 
 	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr, fs)
 
-	dEnv := &DoltEnv{
-		Version:     version,
-		Config:      cfg,
-		CfgLoadErr:  cfgErr,
-		RepoState:   repoState,
-		RSLoadErr:   rsErr,
-		DoltDB:      ddb,
-		DBLoadError: dbLoadErr,
-		FS:          fs,
-		urlStr:      urlStr,
-		hdp:         hdp,
-	}
-
-	if dEnv.RepoState != nil {
-		remotes := make(map[string]Remote, len(dEnv.RepoState.Remotes))
-		for n, r := range dEnv.RepoState.Remotes {
-			remotes[n] = r
-		}
-		dEnv.RepoState.Remotes = remotes
-
-		backups := make(map[string]Remote, len(dEnv.RepoState.Backups))
-		for n, r := range dEnv.RepoState.Backups {
-			backups[n] = r
-		}
-		dEnv.RepoState.Backups = backups
-	}
+	dEnv.DoltDB = ddb
+	dEnv.DBLoadError = dbLoadErr
+	dEnv.urlStr = urlStr
 
 	if dbLoadErr == nil && dEnv.HasDoltDir() {
 		if !dEnv.HasDoltTempTableDir() {
@@ -165,7 +179,7 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr s
 		}
 	}
 
-	if rsErr == nil && dbLoadErr == nil {
+	if dEnv.RSLoadErr == nil && dbLoadErr == nil {
 		// If the working set isn't present in the DB, create it from the repo state. This step can be removed post 1.0.
 		_, err := dEnv.WorkingSet(ctx)
 		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
@@ -185,7 +199,7 @@ func GetDefaultInitBranch(cfg config.ReadableConfig) string {
 // Valid returns whether this environment has been properly initialized. This is useful because although every command
 // gets a DoltEnv, not all of them require it, and we allow invalid dolt envs to be passed around for this reason.
 func (dEnv *DoltEnv) Valid() bool {
-	return dEnv.CfgLoadErr == nil && dEnv.DBLoadError == nil && dEnv.HasDoltDir() && dEnv.HasDoltDataDir()
+	return dEnv != nil && dEnv.CfgLoadErr == nil && dEnv.DBLoadError == nil && dEnv.HasDoltDir() && dEnv.HasDoltDataDir()
 }
 
 // initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.
@@ -335,6 +349,10 @@ func (dEnv *DoltEnv) InitRepo(ctx context.Context, nbf *types.NomsBinFormat, nam
 }
 
 func (dEnv *DoltEnv) InitRepoWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email, branchName string, t time.Time) error { // should remove name and email args
+	return dEnv.InitRepoWithCommitMetaGenerator(ctx, nbf, branchName, datas.MakeCommitMetaGenerator(name, email, t))
+}
+
+func (dEnv *DoltEnv) InitRepoWithCommitMetaGenerator(ctx context.Context, nbf *types.NomsBinFormat, branchName string, commitMeta datas.CommitMetaGenerator) error {
 	doltDir, err := dEnv.createDirectories(".")
 
 	if err != nil {
@@ -344,7 +362,7 @@ func (dEnv *DoltEnv) InitRepoWithTime(ctx context.Context, nbf *types.NomsBinFor
 	err = dEnv.configureRepo(doltDir)
 
 	if err == nil {
-		err = dEnv.InitDBAndRepoState(ctx, nbf, name, email, branchName, t)
+		err = dEnv.InitDBAndRepoStateWithCommitMetaGenerator(ctx, nbf, branchName, commitMeta)
 	}
 
 	if err != nil {
@@ -389,7 +407,7 @@ func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
 	}
 
 	if dEnv.hasDoltDir(dir) {
-		return "", ErrPreexistingDoltDir
+		return "", fmt.Errorf(".dolt directory already exists at '%s'", dir)
 	}
 
 	absDataDir := filepath.Join(absPath, dbfactory.DoltDataDir)
@@ -425,7 +443,11 @@ func (dEnv *DoltEnv) configureRepo(doltDir string) error {
 // Inits the dolt DB of this environment with an empty commit at the time given and writes default docs to disk.
 // Writes new repo state with a main branch and current root hash.
 func (dEnv *DoltEnv) InitDBAndRepoState(ctx context.Context, nbf *types.NomsBinFormat, name, email, branchName string, t time.Time) error {
-	err := dEnv.InitDBWithTime(ctx, nbf, name, email, branchName, t)
+	return dEnv.InitDBAndRepoStateWithCommitMetaGenerator(ctx, nbf, branchName, datas.MakeCommitMetaGenerator(name, email, t))
+}
+
+func (dEnv *DoltEnv) InitDBAndRepoStateWithCommitMetaGenerator(ctx context.Context, nbf *types.NomsBinFormat, branchName string, commitMeta datas.CommitMetaGenerator) error {
+	err := dEnv.InitDBWithCommitMetaGenerator(ctx, nbf, branchName, commitMeta)
 	if err != nil {
 		return err
 	}
@@ -436,13 +458,17 @@ func (dEnv *DoltEnv) InitDBAndRepoState(ctx context.Context, nbf *types.NomsBinF
 // Inits the dolt DB of this environment with an empty commit at the time given and writes default docs to disk.
 // Does not update repo state.
 func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email, branchName string, t time.Time) error {
+	return dEnv.InitDBWithCommitMetaGenerator(ctx, nbf, branchName, datas.MakeCommitMetaGenerator(name, email, t))
+}
+
+func (dEnv *DoltEnv) InitDBWithCommitMetaGenerator(ctx context.Context, nbf *types.NomsBinFormat, branchName string, commitMeta datas.CommitMetaGenerator) error {
 	var err error
 	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, dEnv.FS)
 	if err != nil {
 		return err
 	}
 
-	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, branchName, name, email, t)
+	err = dEnv.DoltDB.WriteEmptyRepoWithCommitMetaGenerator(ctx, branchName, commitMeta)
 	if err != nil {
 		return fmt.Errorf("%w: %v", doltdb.ErrNomsIO, err)
 	}
@@ -602,18 +628,23 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 		wsRef = ws.Ref()
 	}
 
-	// TODO: add actual trace logging here
-	// logrus.Infof("Updating working root to %s", newRoot.DebugString(context.Background(), true))
-
 	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, dEnv.workingSetMeta())
 }
 
 // UpdateWorkingSet updates the working set for the current working branch to the value given.
 // This method can fail if another client updates the working set at the same time.
 func (dEnv *DoltEnv) UpdateWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
-	h, err := ws.HashOf()
-	if err != nil {
+	currentWs, err := dEnv.WorkingSet(ctx)
+	if err != doltdb.ErrWorkingSetNotFound && err != nil {
 		return err
+	}
+
+	var h hash.Hash
+	if currentWs != nil {
+		h, err = currentWs.HashOf()
+		if err != nil {
+			return err
+		}
 	}
 
 	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws, h, dEnv.workingSetMeta())
@@ -811,7 +842,7 @@ func (dEnv *DoltEnv) CredsDir() (string, error) {
 	return getCredsDir(dEnv.hdp)
 }
 
-func (dEnv *DoltEnv) UserRPCCreds() (creds.DoltCreds, bool, error) {
+func (dEnv *DoltEnv) UserDoltCreds() (creds.DoltCreds, bool, error) {
 	kid, err := dEnv.Config.GetString(UserCreds)
 
 	if err == nil && kid != "" {
@@ -826,7 +857,7 @@ func (dEnv *DoltEnv) UserRPCCreds() (creds.DoltCreds, bool, error) {
 		return c, c.IsPrivKeyValid() && c.IsPubKeyValid(), err
 	}
 
-	return creds.EmptyCreds, false, nil
+	return creds.DoltCreds{}, false, nil
 }
 
 // GetGRPCDialParams implements dbfactory.GRPCDialProvider
@@ -842,16 +873,16 @@ func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {
 	return dEnv.RepoState.Remotes, nil
 }
 
-// Check whether any backups or remotes share the given URL. Returns the first remote if multiple match.
+// CheckRemoteAddressConflict checks whether any backups or remotes share the given URL. Returns the first remote if multiple match.
 // Returns NoRemote and false if none match.
-func checkRemoteAddressConflict(url string, remotes, backups map[string]Remote) (Remote, bool) {
+func CheckRemoteAddressConflict(absUrl string, remotes, backups map[string]Remote) (Remote, bool) {
 	for _, r := range remotes {
-		if r.Url == url {
+		if r.Url == absUrl {
 			return r, true
 		}
 	}
 	for _, r := range backups {
-		if r.Url == url {
+		if r.Url == absUrl {
 			return r, true
 		}
 	}
@@ -873,7 +904,7 @@ func (dEnv *DoltEnv) AddRemote(r Remote) error {
 	}
 
 	// can have multiple remotes with the same address, but no conflicting backups
-	if rem, found := checkRemoteAddressConflict(absRemoteUrl, nil, dEnv.RepoState.Backups); found {
+	if rem, found := CheckRemoteAddressConflict(absRemoteUrl, nil, dEnv.RepoState.Backups); found {
 		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, rem.Name, rem.Url)
 	}
 
@@ -905,7 +936,7 @@ func (dEnv *DoltEnv) AddBackup(r Remote) error {
 	}
 
 	// no conflicting remote or backup addresses
-	if rem, found := checkRemoteAddressConflict(absRemoteUrl, dEnv.RepoState.Remotes, dEnv.RepoState.Backups); found {
+	if rem, found := CheckRemoteAddressConflict(absRemoteUrl, dEnv.RepoState.Remotes, dEnv.RepoState.Backups); found {
 		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, rem.Name, rem.Url)
 	}
 
@@ -923,7 +954,7 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 	ddb := dEnv.DoltDB
 	refs, err := ddb.GetRemoteRefs(ctx)
 	if err != nil {
-		return ErrFailedToReadFromDb
+		return fmt.Errorf("%w: %s", ErrFailedToReadFromDb, err.Error())
 	}
 
 	for _, r := range refs {
@@ -977,6 +1008,11 @@ func (dEnv *DoltEnv) UpdateBranch(name string, new BranchConfig) error {
 	}
 
 	dEnv.RepoState.Branches[name] = new
+
+	err := dEnv.RepoState.Save(dEnv.FS)
+	if err != nil {
+		return ErrFailedToWriteRepoState
+	}
 	return nil
 }
 
@@ -1130,63 +1166,6 @@ func (dEnv *DoltEnv) TempTableFilesDir() (string, error) {
 	return absPath, nil
 }
 
-// GetGCKeepers returns the hashes of all the objects in the environment provided that should be perserved during GC.
-// TODO: this should be unnecessary since we now store the working set in a noms dataset, remove it
-func GetGCKeepers(ctx context.Context, env *DoltEnv) ([]hash.Hash, error) {
-	workingRoot, err := env.WorkingRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	workingHash, err := workingRoot.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	stagedRoot, err := env.StagedRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	stagedHash, err := stagedRoot.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	keepers := []hash.Hash{
-		workingHash,
-		stagedHash,
-	}
-
-	mergeActive, err := env.IsMergeActive(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if mergeActive {
-		ws, err := env.WorkingSet(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		cm := ws.MergeState().Commit()
-		ch, err := cm.HashOf()
-		if err != nil {
-			return nil, err
-		}
-
-		pmw := ws.MergeState().PreMergeWorkingRoot()
-		pmwh, err := pmw.HashOf()
-		if err != nil {
-			return nil, err
-		}
-
-		keepers = append(keepers, ch, pmwh)
-	}
-
-	return keepers, nil
-}
-
 func (dEnv *DoltEnv) DbEaFactory() editor.DbEaFactory {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
@@ -1200,7 +1179,7 @@ func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
 	if err != nil {
 		return nil
 	}
-	return editor.NewBulkImportTEAFactory(dEnv.DoltDB.Format(), dEnv.DoltDB.ValueReadWriter(), tmpDir)
+	return editor.NewBulkImportTEAFactory(dEnv.DoltDB.ValueReadWriter(), tmpDir)
 }
 
 func (dEnv *DoltEnv) LockFile() string {

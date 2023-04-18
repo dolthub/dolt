@@ -22,6 +22,7 @@ import (
 	"unsafe"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -42,7 +43,7 @@ type inlineBlobType struct {
 var _ TypeInfo = (*inlineBlobType)(nil)
 
 var (
-	VarbinaryDefaultType = &inlineBlobType{sql.MustCreateBinary(sqltypes.VarBinary, 16383)}
+	VarbinaryDefaultType = &inlineBlobType{gmstypes.MustCreateBinary(sqltypes.VarBinary, 16383)}
 )
 
 func CreateInlineBlobTypeFromParams(params map[string]string) (TypeInfo, error) {
@@ -60,9 +61,9 @@ func CreateInlineBlobTypeFromParams(params map[string]string) (TypeInfo, error) 
 		var sqlType sql.StringType
 		switch sqlStr {
 		case inlineBlobTypeParam_SQL_Binary:
-			sqlType, err = sql.CreateBinary(sqltypes.Binary, length)
+			sqlType, err = gmstypes.CreateBinary(sqltypes.Binary, length)
 		case inlineBlobTypeParam_SQL_VarBinary:
-			sqlType, err = sql.CreateBinary(sqltypes.VarBinary, length)
+			sqlType, err = gmstypes.CreateBinary(sqltypes.VarBinary, length)
 		default:
 			return nil, fmt.Errorf(`create inlineblob type info has "%v" param with value "%v"`, inlineBlobTypeParam_SQL, sqlStr)
 		}
@@ -105,7 +106,7 @@ func (ti *inlineBlobType) ConvertValueToNomsValue(ctx context.Context, vrw types
 	if v == nil {
 		return types.NullValue, nil
 	}
-	strVal, err := ti.sqlBinaryType.Convert(v)
+	strVal, _, err := ti.sqlBinaryType.Convert(v)
 	if err != nil {
 		return nil, err
 	}

@@ -106,7 +106,7 @@ func (cmd InspectCmd) measureChunkIndexDistribution(ctx context.Context, dEnv *e
 			break
 		}
 
-		summary, err := cmd.processTableFile(path, dEnv.FS)
+		summary, err := cmd.processTableFile(ctx, path, dEnv.FS)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -120,7 +120,7 @@ func (cmd InspectCmd) measureChunkIndexDistribution(ctx context.Context, dEnv *e
 	return nil
 }
 
-func (cmd InspectCmd) processTableFile(path string, fs filesys.Filesys) (sum *chunkIndexSummary, err error) {
+func (cmd InspectCmd) processTableFile(ctx context.Context, path string, fs filesys.Filesys) (sum *chunkIndexSummary, err error) {
 	var rdr io.ReadCloser
 	rdr, err = fs.OpenForRead(path)
 	if err != nil {
@@ -134,7 +134,7 @@ func (cmd InspectCmd) processTableFile(path string, fs filesys.Filesys) (sum *ch
 	}()
 
 	var prefixes []uint64
-	prefixes, err = nbs.GetTableIndexPrefixes(rdr.(io.ReadSeeker))
+	prefixes, err = nbs.GetTableIndexPrefixes(ctx, rdr.(io.ReadSeeker))
 	if err != nil {
 		return sum, err
 	}

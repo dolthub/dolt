@@ -166,8 +166,8 @@ func (a addr) Prefix() uint64 {
 	return binary.BigEndian.Uint64(a[:])
 }
 
-func (a addr) Checksum() uint32 {
-	return binary.BigEndian.Uint32(a[addrSize-checksumSize:])
+func (a addr) Suffix() []byte {
+	return a[addrPrefixSize:]
 }
 
 func parseAddr(str string) (addr, error) {
@@ -225,12 +225,28 @@ type extractRecord struct {
 }
 
 type chunkReader interface {
+	// has returns true if a chunk with addr |h| is present.
 	has(h addr) (bool, error)
+
+	// hasMany sets hasRecord.has to true for each present hasRecord query, it returns
+	// true if any hasRecord query was not found in this chunkReader.
 	hasMany(addrs []hasRecord) (bool, error)
+
+	// get returns the chunk data for a chunk with addr |h| if present, and nil otherwise.
 	get(ctx context.Context, h addr, stats *Stats) ([]byte, error)
+
+	// getMany sets getRecord.found to true, and calls |found| for each present getRecord query.
+	// It returns true if any getRecord query was not found in this chunkReader.
 	getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error)
+
+	// getManyCompressed sets getRecord.found to true, and calls |found| for each present getRecord query.
+	// It returns true if any getRecord query was not found in this chunkReader.
 	getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error)
+
+	// count returns the chunk count for this chunkReader.
 	count() (uint32, error)
+
+	// uncompressedLen returns the total uncompressed length this chunkReader.
 	uncompressedLen() (uint64, error)
 
 	// close releases resources retained by the |chunkReader|.
@@ -241,13 +257,13 @@ type chunkSource interface {
 	chunkReader
 
 	// hash returns the hash address of this chunkSource.
-	hash() (addr, error)
+	hash() addr
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
-	reader(context.Context) (io.Reader, error)
+	reader(context.Context) (io.ReadCloser, uint64, error)
 
-	// size returns the total size of the chunkSource: chunks, index, and footer
-	size() (uint64, error)
+	// getRecordRanges sets getRecord.found to true, and returns a Range for each present getRecord query.
+	getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error)
 
 	// index returns the tableIndex of this chunkSource.
 	index() (tableIndex, error)
@@ -258,56 +274,19 @@ type chunkSource interface {
 	// retained in two objects with independent life-cycle, it should be
 	// |Clone|d first.
 	clone() (chunkSource, error)
+
+	// currentSize returns the current total physical size of the chunkSource.
+	currentSize() uint64
 }
 
 type chunkSources []chunkSource
 
-// TableFile is an interface for working with an existing table file
-type TableFile interface {
-	// FileID gets the id of the file
-	FileID() string
+type chunkSourceSet map[addr]chunkSource
 
-	// NumChunks returns the number of chunks in a table file
-	NumChunks() int
-
-	// Open returns an io.ReadCloser which can be used to read the bytes of a
-	// table file. It also returns the content length of the table file.
-	Open(ctx context.Context) (io.ReadCloser, uint64, error)
-}
-
-// Describes what is possible to do with TableFiles in a TableFileStore.
-type TableFileStoreOps struct {
-	// True is the TableFileStore supports reading table files.
-	CanRead bool
-	// True is the TableFileStore supports writing table files.
-	CanWrite bool
-	// True is the TableFileStore supports pruning unused table files.
-	CanPrune bool
-	// True is the TableFileStore supports garbage collecting chunks.
-	CanGC bool
-}
-
-// TableFileStore is an interface for interacting with table files directly
-type TableFileStore interface {
-	// Sources retrieves the current root hash, a list of all the table files (which may include appendix table files),
-	// and a second list containing only appendix table files.
-	Sources(ctx context.Context) (hash.Hash, []TableFile, []TableFile, error)
-
-	// Size  returns the total size, in bytes, of the table files in this Store.
-	Size(ctx context.Context) (uint64, error)
-
-	// WriteTableFile will read a table file from the provided reader and write it to the TableFileStore.
-	WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error
-
-	// AddTableFilesToManifest adds table files to the manifest
-	AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int) error
-
-	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
-	PruneTableFiles(ctx context.Context) error
-
-	// SetRootChunk changes the root chunk hash from the previous value to the new root.
-	SetRootChunk(ctx context.Context, root, previous hash.Hash) error
-
-	// SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
-	SupportedOperations() TableFileStoreOps
+func copyChunkSourceSet(s chunkSourceSet) (cp chunkSourceSet) {
+	cp = make(chunkSourceSet, len(s))
+	for k, v := range s {
+		cp[k] = v
+	}
+	return
 }

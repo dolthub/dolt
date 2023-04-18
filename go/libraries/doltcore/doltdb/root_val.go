@@ -61,6 +61,12 @@ type RootValue struct {
 	hash hash.Hash             // cache first load
 }
 
+func (root *RootValue) ResolveRootValue(ctx context.Context) (*RootValue, error) {
+	return root, nil
+}
+
+var _ Rootish = &RootValue{}
+
 type tableEdit struct {
 	name string
 	ref  *types.Ref
@@ -1090,6 +1096,9 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 		}
 		return false, nil
 	})
+	if err != nil {
+		return err
+	}
 	if len(ee) > 0 {
 		return fmt.Errorf(strings.Join(ee, "\n"))
 	}

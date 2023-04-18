@@ -23,7 +23,9 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/go-mysql-server/sql/parse"
+	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -37,6 +39,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names must match the regular expression " + doltdb.TableNameRegexStr)
@@ -45,39 +48,14 @@ var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables c
 
 type SqlDatabase interface {
 	sql.Database
+	dsess.SessionDatabase
+	dsess.RevisionDatabase
+
+	// TODO: get rid of this, it's managed by the session, not the DB
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
 	DbData() env.DbData
-	Name() string
-
-	StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error)
 	Flush(*sql.Context) error
 	EditOptions() editor.Options
-}
-
-func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
-	dsqlDBs := make([]SqlDatabase, 0, len(dbs))
-	for _, db := range dbs {
-		var sqlDb SqlDatabase
-		if sqlDatabase, ok := db.(SqlDatabase); ok {
-			sqlDb = sqlDatabase
-		} else if privDatabase, ok := db.(mysql_db.PrivilegedDatabase); ok {
-			if sqlDatabase, ok := privDatabase.Unwrap().(SqlDatabase); ok {
-				sqlDb = sqlDatabase
-			}
-		}
-		if sqlDb == nil {
-			continue
-		}
-		switch v := sqlDb.(type) {
-		case ReadReplicaDatabase, Database:
-			dsqlDBs = append(dsqlDBs, v)
-		case ReadOnlyDatabase, *UserSpaceDatabase:
-		default:
-			// esoteric analyzer errors occur if we silently drop databases, usually caused by pointer receivers
-			panic("cannot cast to SqlDatabase")
-		}
-	}
-	return dsqlDBs
 }
 
 // Database implements sql.Database for a dolt DB.
@@ -89,6 +67,7 @@ type Database struct {
 	gs       globalstate.GlobalState
 	editOpts editor.Options
 	revision string
+	revType  dsess.RevisionType
 }
 
 var _ SqlDatabase = Database{}
@@ -98,14 +77,15 @@ var _ sql.CollatedDatabase = Database{}
 var _ sql.Database = Database{}
 var _ sql.StoredProcedureDatabase = Database{}
 var _ sql.TableCreator = Database{}
+var _ sql.IndexedTableCreator = Database{}
 var _ sql.TableDropper = Database{}
 var _ sql.TableRenamer = Database{}
 var _ sql.TemporaryTableCreator = Database{}
 var _ sql.TemporaryTableDatabase = Database{}
-var _ sql.TransactionDatabase = Database{}
 var _ sql.TriggerDatabase = Database{}
 var _ sql.VersionedDatabase = Database{}
 var _ sql.ViewDatabase = Database{}
+var _ sql.EventDatabase = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -117,52 +97,22 @@ func (r ReadOnlyDatabase) IsReadOnly() bool {
 	return true
 }
 
-func (db Database) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
-	dsession := dsess.DSessFromSess(ctx.Session)
-
-	if !dsession.HasDB(ctx, db.Name()) {
-		init, err := GetInitialDBState(ctx, db)
-		if err != nil {
-			return nil, err
-		}
-
-		err = dsession.AddDB(ctx, init)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return dsession.StartTransaction(ctx, db.Name(), tCharacteristic)
-}
-
-func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
-	dsession := dsess.DSessFromSess(ctx.Session)
-	return dsession.CommitTransaction(ctx, db.name, tx)
-}
-
-func (db Database) Rollback(ctx *sql.Context, tx sql.Transaction) error {
-	dsession := dsess.DSessFromSess(ctx.Session)
-	return dsession.RollbackTransaction(ctx, db.name, tx)
-}
-
-func (db Database) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
-	dsession := dsess.DSessFromSess(ctx.Session)
-	return dsession.CreateSavepoint(ctx, name, db.name, tx)
-}
-
-func (db Database) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
-	dsession := dsess.DSessFromSess(ctx.Session)
-	return dsession.RollbackToSavepoint(ctx, name, db.name, tx)
-}
-
-func (db Database) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
-	dsession := dsess.DSessFromSess(ctx.Session)
-	return dsession.ReleaseSavepoint(ctx, name, db.name, tx)
+func (r ReadOnlyDatabase) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
+	return initialDBState(ctx, r, branch)
 }
 
 // Revision implements dsess.RevisionDatabase
 func (db Database) Revision() string {
 	return db.revision
+}
+
+func (db Database) RevisionType() dsess.RevisionType {
+	return db.revType
+}
+
+func (db Database) BaseName() string {
+	base, _ := splitRevisionDbName(db)
+	return base
 }
 
 func (db Database) EditOptions() editor.Options {
@@ -186,60 +136,18 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts e
 	}, nil
 }
 
-// GetInitialDBState returns the InitialDbState for |db|.
-func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
-	switch db := db.(type) {
-	case *UserSpaceDatabase, *SingleTableInfoDatabase:
-		return getInitialDBStateForUserSpaceDb(ctx, db)
+// initialDBState returns the InitialDbState for |db|. Other implementations of SqlDatabase outside this file should
+// implement their own method for an initial db state and not rely on this method.
+func initialDBState(ctx *sql.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
+	if len(db.Revision()) > 0 {
+		return initialStateForRevisionDb(ctx, db)
 	}
 
-	rsr := db.DbData().Rsr
-	ddb := db.DbData().Ddb
+	return initialDbState(ctx, db, branch)
+}
 
-	var retainedErr error
-
-	headCommit, err := ddb.Resolve(ctx, rsr.CWBHeadSpec(), rsr.CWBHeadRef())
-	if err == doltdb.ErrBranchNotFound {
-		retainedErr = err
-		err = nil
-	}
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	var ws *doltdb.WorkingSet
-	if retainedErr == nil {
-		ws, err = env.WorkingSet(ctx, ddb, rsr)
-		if err != nil {
-			return dsess.InitialDbState{}, err
-		}
-	}
-
-	remotes, err := rsr.GetRemotes()
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	backups, err := rsr.GetBackups()
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	branches, err := rsr.GetBranches()
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	return dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     db.DbData(),
-		Remotes:    remotes,
-		Branches:   branches,
-		Backups:    backups,
-		Err:        retainedErr,
-	}, nil
+func (db Database) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
+	return initialDBState(ctx, db, branch)
 }
 
 // Name returns the name of this database, set at creation time.
@@ -403,7 +311,13 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
 		suffix := tblName[len(doltdb.DoltConfTablePrefix):]
-		dt, err := dtables.NewConflictsTable(ctx, suffix, root, dtables.RootSetter(db))
+		srcTable, ok, err := db.getTableInsensitive(ctx, head, ds, root, suffix)
+		if err != nil {
+			return nil, false, err
+		} else if !ok {
+			return nil, false, nil
+		}
+		dt, err := dtables.NewConflictsTable(ctx, suffix, srcTable, root, dtables.RootSetter(db))
 		if err != nil {
 			return nil, false, err
 		}
@@ -440,13 +354,25 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 
-		dt, found = dtables.NewUnscopedDiffTable(ctx, db.ddb, head), true
+		dt, found = dtables.NewUnscopedDiffTable(ctx, db.name, db.ddb, head), true
+	case doltdb.ColumnDiffTableName:
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.Name())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
+		dt, found = dtables.NewColumnDiffTable(ctx, db.name, db.ddb, head), true
 	case doltdb.TableOfTablesInConflictName:
 		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.name, db.ddb), true
 	case doltdb.TableOfTablesWithViolationsName:
 		dt, found = dtables.NewTableOfTablesConstraintViolations(ctx, root), true
 	case doltdb.BranchesTableName:
 		dt, found = dtables.NewBranchesTable(ctx, db.ddb), true
+	case doltdb.RemoteBranchesTableName:
+		dt, found = dtables.NewRemoteBranchesTable(ctx, db.ddb), true
 	case doltdb.RemotesTableName:
 		dt, found = dtables.NewRemotesTable(ctx, db.ddb), true
 	case doltdb.CommitsTableName:
@@ -480,6 +406,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 	}
+
 	if found {
 		return dt, found, nil
 	}
@@ -511,12 +438,12 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 		return nil, nil, err
 	}
 
-	hash, err := cm.HashOf()
+	h, err := cm.HashOf()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	cmItr, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash, nil)
+	cmItr, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, []hash.Hash{h}, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -548,7 +475,7 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 func resolveAsOfCommitRef(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, commitRef string) (*doltdb.Commit, *doltdb.RootValue, error) {
 	if commitRef == doltdb.Working || commitRef == doltdb.Staged {
 		sess := dsess.DSessFromSess(ctx.Session)
-		root, _, err := sess.ResolveRootForRef(ctx, ctx.GetCurrentDatabase(), commitRef)
+		root, _, _, err := sess.ResolveRootForRef(ctx, ctx.GetCurrentDatabase(), commitRef)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -745,10 +672,15 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	if doltdb.IsReadOnlySystemTable(tableName) {
+	if doltdb.IsNonAlterableSystemTable(tableName) {
 		return ErrSystemTableAlter.New(tableName)
 	}
 
+	return db.dropTable(ctx, tableName)
+}
+
+// dropTable drops the table with the name given, without any business logic checks
+func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 	ds := dsess.DSessFromSess(ctx.Session)
 	if _, ok := ds.GetTemporaryTable(ctx, db.Name(), tableName); ok {
 		ds.DropTemporaryTable(ctx, db.Name(), tableName)
@@ -849,7 +781,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 	}
 	if strings.ToLower(tableName) == doltdb.DocTableName {
 		// validate correct schema
-		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) {
+		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) && !dtables.OldDoltDocsSqlSchema.Equals(sch.Schema) {
 			return fmt.Errorf("incorrect schema for dolt_docs table")
 		}
 	} else if doltdb.HasDoltPrefix(tableName) {
@@ -861,6 +793,27 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 	}
 
 	return db.createSqlTable(ctx, tableName, sch, collation)
+}
+
+// CreateIndexedTable creates a table with the name and schema given.
+func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
+	if strings.ToLower(tableName) == doltdb.DocTableName {
+		// validate correct schema
+		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) && !dtables.OldDoltDocsSqlSchema.Equals(sch.Schema) {
+			return fmt.Errorf("incorrect schema for dolt_docs table")
+		}
+	} else if doltdb.HasDoltPrefix(tableName) {
+		return ErrReservedTableName.New(tableName)
+	}
+
+	if !doltdb.IsValidTableName(tableName) {
+		return ErrInvalidTableName.New(tableName)
+	}
+
+	return db.createIndexedSqlTable(ctx, tableName, sch, idxDef, collation)
 }
 
 // Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.
@@ -890,6 +843,56 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 	// Prevent any tables that use Spatial Types as Primary Key from being created
 	if schema.IsUsingSpatialColAsKey(doltSch) {
 		return schema.ErrUsingSpatialKey.New(tableName)
+	}
+
+	// Prevent any tables that use BINARY, CHAR, VARBINARY, VARCHAR prefixes
+
+	if schema.HasAutoIncrement(doltSch) {
+		ait, err := db.gs.GetAutoIncrementTracker(ctx)
+		if err != nil {
+			return err
+		}
+		ait.AddNewTable(tableName)
+	}
+
+	return db.createDoltTable(ctx, tableName, root, doltSch)
+}
+
+// Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.
+func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID) error {
+	ws, err := db.GetWorkingSet(ctx)
+	if err != nil {
+		return err
+	}
+	root := ws.WorkingRoot()
+
+	if exists, err := root.HasTable(ctx, tableName); err != nil {
+		return err
+	} else if exists {
+		return sql.ErrTableAlreadyExists.New(tableName)
+	}
+
+	headRoot, err := db.GetHeadRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	doltSch, err := sqlutil.ToDoltSchema(ctx, root, tableName, sch, headRoot, collation)
+	if err != nil {
+		return err
+	}
+
+	// Prevent any tables that use Spatial Types as Primary Key from being created
+	if schema.IsUsingSpatialColAsKey(doltSch) {
+		return schema.ErrUsingSpatialKey.New(tableName)
+	}
+
+	// Prevent any tables that use BINARY, CHAR, VARBINARY, VARCHAR prefixes in Primary Key
+	for _, idxCol := range idxDef.Columns {
+		col := sch.Schema[sch.Schema.IndexOfColName(idxCol.Name)]
+		if col.PrimaryKey && types.IsText(col.Type) && idxCol.Length > 0 {
+			return sql.ErrUnsupportedIndexPrefix.New(col.Name)
+		}
 	}
 
 	if schema.HasAutoIncrement(doltSch) {
@@ -967,7 +970,7 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 		return err
 	}
 
-	if doltdb.IsReadOnlySystemTable(oldName) {
+	if doltdb.IsNonAlterableSystemTable(oldName) {
 		return ErrSystemTableAlter.New(oldName)
 	}
 
@@ -1008,11 +1011,11 @@ func (db Database) Flush(ctx *sql.Context) error {
 	return db.SetRoot(ctx, ws.WorkingRoot())
 }
 
-// GetView implements sql.ViewDatabase
-func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, error) {
+// GetViewDefinition implements sql.ViewDatabase
+func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.ViewDefinition, bool, error) {
 	root, err := db.GetRoot(ctx)
 	if err != nil {
-		return "", false, err
+		return sql.ViewDefinition{}, false, err
 	}
 
 	lwrViewName := strings.ToLower(viewName)
@@ -1020,60 +1023,77 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 	case strings.HasPrefix(lwrViewName, doltdb.DoltBlameViewPrefix):
 		tableName := lwrViewName[len(doltdb.DoltBlameViewPrefix):]
 
-		view, err := dtables.NewBlameView(ctx, tableName, root)
+		blameViewTextDef, err := dtables.NewBlameView(ctx, tableName, root)
 		if err != nil {
-			return "", false, err
+			return sql.ViewDefinition{}, false, err
 		}
-		return view, true, nil
+		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", viewName, blameViewTextDef)}, true, nil
 	}
 
 	key, err := doltdb.NewDataCacheKey(root)
 	if err != nil {
-		return "", false, err
+		return sql.ViewDefinition{}, false, err
 	}
 
 	ds := dsess.DSessFromSess(ctx.Session)
 	dbState, _, err := ds.LookupDbState(ctx, db.name)
 	if err != nil {
-		return "", false, err
+		return sql.ViewDefinition{}, false, err
 	}
 
 	if dbState.SessionCache().ViewsCached(key) {
-		view, ok := dbState.SessionCache().GetCachedView(key, viewName)
+		view, ok := dbState.SessionCache().GetCachedViewDefinition(key, viewName)
 		return view, ok, nil
 	}
 
 	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
-		return "", false, err
+		return sql.ViewDefinition{}, false, err
 	}
 	if !ok {
-		dbState.SessionCache().CacheViews(key, nil, nil)
-		return "", false, nil
+		dbState.SessionCache().CacheViews(key, nil)
+		return sql.ViewDefinition{}, false, nil
 	}
 
-	fragments, err := getSchemaFragmentsOfType(ctx, tbl.(*WritableDoltTable), viewFragment)
+	views, viewDef, found, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, tbl.(*WritableDoltTable), viewName)
 	if err != nil {
-		return "", false, err
+		return sql.ViewDefinition{}, false, err
 	}
 
-	found := false
-	viewDef := ""
-	viewNames := make([]string, len(fragments))
-	viewDefs := make([]string, len(fragments))
-	for i, fragment := range fragments {
-		if strings.ToLower(fragment.name) == strings.ToLower(viewName) {
-			found = true
-			viewDef = fragments[i].fragment
-		}
-
-		viewNames[i] = fragments[i].name
-		viewDefs[i] = fragments[i].fragment
-	}
-
-	dbState.SessionCache().CacheViews(key, viewNames, viewDefs)
+	dbState.SessionCache().CacheViews(key, views)
 
 	return viewDef, found, nil
+}
+
+func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableDoltTable, viewName string) ([]sql.ViewDefinition, sql.ViewDefinition, bool, error) {
+	fragments, err := getSchemaFragmentsOfType(ctx, tbl, viewFragment)
+	if err != nil {
+		return nil, sql.ViewDefinition{}, false, err
+	}
+
+	var found = false
+	var viewDef sql.ViewDefinition
+	var views = make([]sql.ViewDefinition, len(fragments))
+	for i, fragment := range fragments {
+		cv, err := parse.Parse(ctx, fragments[i].fragment)
+		if err != nil {
+			return nil, sql.ViewDefinition{}, false, err
+		}
+
+		createView, ok := cv.(*plan.CreateView)
+		if ok {
+			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: createView.Definition.TextDefinition, CreateViewStatement: fragments[i].fragment}
+		} else {
+			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: fragments[i].fragment, CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", fragments[i].name, fragments[i].fragment)}
+		}
+
+		if strings.ToLower(fragment.name) == strings.ToLower(viewName) {
+			found = true
+			viewDef = views[i]
+		}
+	}
+
+	return views, viewDef, found, nil
 }
 
 // AllViews implements sql.ViewDatabase
@@ -1086,18 +1106,7 @@ func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 		return nil, nil
 	}
 
-	frags, err := getSchemaFragmentsOfType(ctx, tbl.(*WritableDoltTable), viewFragment)
-	if err != nil {
-		return nil, err
-	}
-
-	var views []sql.ViewDefinition
-	for _, frag := range frags {
-		views = append(views, sql.ViewDefinition{
-			Name:           frag.name,
-			TextDefinition: frag.fragment,
-		})
-	}
+	views, _, _, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, tbl.(*WritableDoltTable), "")
 	if err != nil {
 		return nil, err
 	}
@@ -1108,9 +1117,9 @@ func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 // CreateView implements sql.ViewCreator. Persists the view in the dolt database, so
 // it can exist in a sql session later. Returns sql.ErrExistingView if a view
 // with that name already exists.
-func (db Database) CreateView(ctx *sql.Context, name string, definition string) error {
+func (db Database) CreateView(ctx *sql.Context, name string, selectStatement, createViewStmt string) error {
 	err := sql.ErrExistingView.New(db.name, name)
-	return db.addFragToSchemasTable(ctx, "view", name, definition, time.Unix(0, 0).UTC(), err)
+	return db.addFragToSchemasTable(ctx, "view", name, createViewStmt, time.Unix(0, 0).UTC(), err)
 }
 
 // DropView implements sql.ViewDropper. Removes a view from persistence in the
@@ -1168,9 +1177,99 @@ func (db Database) DropTrigger(ctx *sql.Context, name string) error {
 	return db.dropFragFromSchemasTable(ctx, "trigger", name, sql.ErrTriggerDoesNotExist.New(name))
 }
 
+// GetEvent implements sql.EventDatabase.
+func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition, bool, error) {
+	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	if err != nil {
+		return sql.EventDefinition{}, false, err
+	}
+	if !ok {
+		return sql.EventDefinition{}, false, nil
+	}
+
+	frags, err := getSchemaFragmentsOfType(ctx, tbl.(*WritableDoltTable), eventFragment)
+	if err != nil {
+		return sql.EventDefinition{}, false, err
+	}
+
+	for _, frag := range frags {
+		if frag.name == strings.ToLower(name) {
+			return sql.EventDefinition{
+				Name:            frag.name,
+				CreateStatement: frag.fragment,
+				CreatedAt:       frag.created,
+			}, true, nil
+		}
+	}
+	return sql.EventDefinition{}, false, nil
+}
+
+// GetEvents implements sql.EventDatabase.
+func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, error) {
+	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+
+	frags, err := getSchemaFragmentsOfType(ctx, tbl.(*WritableDoltTable), eventFragment)
+	if err != nil {
+		return nil, err
+	}
+
+	var events []sql.EventDefinition
+	for _, frag := range frags {
+		events = append(events, sql.EventDefinition{
+			Name:            frag.name,
+			CreateStatement: frag.fragment,
+			CreatedAt:       frag.created,
+		})
+	}
+	return events, nil
+}
+
+// SaveEvent implements sql.EventDatabase.
+func (db Database) SaveEvent(ctx *sql.Context, ed sql.EventDefinition) error {
+	return db.addFragToSchemasTable(ctx,
+		eventFragment,
+		ed.Name,
+		ed.CreateStatement,
+		ed.CreatedAt,
+		sql.ErrEventAlreadyExists.New(ed.Name),
+	)
+}
+
+// DropEvent implements sql.EventDatabase.
+func (db Database) DropEvent(ctx *sql.Context, name string) error {
+	return db.dropFragFromSchemasTable(ctx, eventFragment, name, sql.ErrEventDoesNotExist.New(name))
+}
+
+// UpdateEvent implements sql.EventDatabase.
+func (db Database) UpdateEvent(ctx *sql.Context, ed sql.EventDefinition) error {
+	err := db.DropEvent(ctx, ed.Name)
+	if err != nil {
+		return err
+	}
+	return db.SaveEvent(ctx, ed)
+}
+
+// GetStoredProcedure implements sql.StoredProcedureDatabase.
+func (db Database) GetStoredProcedure(ctx *sql.Context, name string) (sql.StoredProcedureDetails, bool, error) {
+	procedures, err := DoltProceduresGetAll(ctx, db, strings.ToLower(name))
+	if err != nil {
+		return sql.StoredProcedureDetails{}, false, nil
+	}
+	if len(procedures) == 1 {
+		return procedures[0], true, nil
+	}
+	return sql.StoredProcedureDetails{}, false, nil
+}
+
 // GetStoredProcedures implements sql.StoredProcedureDatabase.
 func (db Database) GetStoredProcedures(ctx *sql.Context) ([]sql.StoredProcedureDetails, error) {
-	return DoltProceduresGetAll(ctx, db)
+	return DoltProceduresGetAll(ctx, db, "")
 }
 
 // SaveStoredProcedure implements sql.StoredProcedureDatabase.
@@ -1193,7 +1292,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
+	tbl, err := getOrCreateDoltSchemasTable(ctx, db)
 	if err != nil {
 		return err
 	}
@@ -1204,24 +1303,6 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 	}
 	if exists {
 		return existingErr
-	}
-
-	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, _, err := sess.LookupDbState(ctx, db.Name())
-	if err != nil {
-		return err
-	}
-	ts := dbState.WriteSession
-
-	ws, err := ts.Flush(ctx)
-	if err != nil {
-		return err
-	}
-
-	// If rows exist, then grab the highest id and add 1 to get the new id
-	idx, err := nextSchemasTableIndex(ctx, ws.WorkingRoot())
-	if err != nil {
-		return err
 	}
 
 	// Insert the new row into the db
@@ -1240,13 +1321,15 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 	if err != nil {
 		return err
 	}
-	return inserter.Insert(ctx, sql.Row{fragType, name, definition, idx, extraJSON})
+
+	return inserter.Insert(ctx, sql.Row{fragType, name, definition, extraJSON})
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
+
 	stbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
@@ -1269,7 +1352,46 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 		return err
 	}
 
-	return deleter.Close(ctx)
+	err = deleter.Close(ctx)
+	if err != nil {
+		return err
+	}
+
+	// If the dolt schemas table is now empty, drop it entirely. This is necessary to prevent the creation and
+	// immediate dropping of views or triggers, when none previously existed, from changing the database state.
+	return db.dropTableIfEmpty(ctx, doltdb.SchemasTableName)
+}
+
+// dropTableIfEmpty drops the table named if it exists and has at least one row.
+func (db Database) dropTableIfEmpty(ctx *sql.Context, tableName string) error {
+	stbl, found, err := db.GetTableInsensitive(ctx, tableName)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return nil
+	}
+
+	table, err := stbl.(*WritableDoltTable).DoltTable.DoltTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	rows, err := table.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+
+	numRows, err := rows.Count()
+	if err != nil {
+		return err
+	}
+
+	if numRows == 0 {
+		return db.dropTable(ctx, tableName)
+	}
+
+	return nil
 }
 
 // GetAllTemporaryTables returns all temporary tables
@@ -1308,18 +1430,6 @@ func (db Database) SetCollation(ctx *sql.Context, collation sql.CollationID) err
 		return err
 	}
 	return db.SetRoot(ctx, newRoot)
-}
-
-// TODO: this is a hack to make user space DBs appear to the analyzer as full DBs with state etc., but the state is
-// really skeletal. We need to reexamine the DB / session initialization to make this simpler -- most of these things
-// aren't needed at initialization time and for most code paths.
-func getInitialDBStateForUserSpaceDb(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
-	return dsess.InitialDbState{
-		Db: db,
-		DbData: env.DbData{
-			Rsw: noopRepoStateWriter{},
-		},
-	}, nil
 }
 
 // noopRepoStateWriter is a minimal implementation of RepoStateWriter that does nothing

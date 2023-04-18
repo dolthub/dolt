@@ -18,10 +18,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -136,7 +136,17 @@ func ResetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 	return resetHardTables(ctx, dbData, cSpecStr, roots)
 }
 
-func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, roots doltdb.Roots) error {
+// ResetHard resets the working, staged, and head to the ones in the provided roots and head ref.
+// The reset can be performed on a non-current branch and working set.
+// Returns an error if the reset fails.
+func ResetHard(
+	ctx context.Context,
+	dEnv *env.DoltEnv,
+	cSpecStr string,
+	roots doltdb.Roots,
+	headRef ref.DoltRef,
+	ws *doltdb.WorkingSet,
+) error {
 	dbData := dEnv.DbData()
 
 	newHead, roots, err := resetHardTables(ctx, dbData, cSpecStr, roots)
@@ -144,18 +154,23 @@ func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, roots do
 		return err
 	}
 
-	ws, err := dEnv.WorkingSet(ctx)
+	currentWs, err := dEnv.DoltDB.ResolveWorkingSet(ctx, ws.Ref())
 	if err != nil {
 		return err
 	}
 
-	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge())
+	h, err := currentWs.HashOf()
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge(), h, dEnv.NewWorkingSetMeta("reset hard"))
 	if err != nil {
 		return err
 	}
 
 	if newHead != nil {
-		err = dEnv.DoltDB.SetHeadToCommit(ctx, dEnv.RepoStateReader().CWBHeadRef(), newHead)
+		err = dEnv.DoltDB.SetHeadToCommit(ctx, headRef, newHead)
 		if err != nil {
 			return err
 		}
@@ -197,36 +212,33 @@ func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, roots do
 	return resetStaged(ctx, roots, tables)
 }
 
-// ResetSoftToRef matches the `git reset --soft <REF>` pattern. It resets both staged and head to the previous ref
-// and leaves the working unset. The user can then choose to create a commit that contains all changes since the ref.
-func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) error {
+// ResetSoftToRef matches the `git reset --soft <REF>` pattern. It returns a new Roots with the Staged and Head values
+// set to the commit specified by the spec string. The Working root is not set
+func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) (doltdb.Roots, error) {
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	if err != nil {
-		return err
+		return doltdb.Roots{}, err
 	}
 
 	newHead, err := dbData.Ddb.Resolve(ctx, cs, dbData.Rsr.CWBHeadRef())
 	if err != nil {
-		return err
+		return doltdb.Roots{}, err
 	}
 
 	foundRoot, err := newHead.GetRootValue(ctx)
 	if err != nil {
-		return err
-	}
-
-	// Changed the staged to the old root. Leave the working as is.
-	err = dbData.Rsw.UpdateStagedRoot(ctx, foundRoot)
-	if err != nil {
-		return err
+		return doltdb.Roots{}, err
 	}
 
 	// Update the head to this commit
 	if err = dbData.Ddb.SetHeadToCommit(ctx, dbData.Rsr.CWBHeadRef(), newHead); err != nil {
-		return err
+		return doltdb.Roots{}, err
 	}
 
-	return err
+	return doltdb.Roots{
+		Head:   foundRoot,
+		Staged: foundRoot,
+	}, err
 }
 
 func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot *doltdb.RootValue) ([]string, error) {
@@ -252,8 +264,9 @@ func resetStaged(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb
 	return roots, nil
 }
 
-// ValidateIsRef validates whether the input parameter is a valid cString
-func ValidateIsRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) bool {
+// IsValidRef validates whether the input parameter is a valid cString
+// TODO: this doesn't belong int his package
+func IsValidRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) bool {
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	if err != nil {
 		return false
@@ -269,7 +282,7 @@ func ValidateIsRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr
 
 // CleanUntracked deletes untracked tables from the working root.
 // Evaluates untracked tables as: all working tables - all staged tables.
-func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dryrun bool) (doltdb.Roots, error) {
+func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dryrun bool, force bool) (doltdb.Roots, error) {
 	untrackedTables := make(map[string]struct{})
 
 	var err error
@@ -305,7 +318,7 @@ func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dr
 		toDelete = append(toDelete, t)
 	}
 
-	newRoot, err = newRoot.RemoveTables(ctx, false, false, toDelete...)
+	newRoot, err = newRoot.RemoveTables(ctx, force, force, toDelete...)
 	if err != nil {
 		return doltdb.Roots{}, fmt.Errorf("failed to remove tables; %w", err)
 	}

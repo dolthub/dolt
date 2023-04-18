@@ -66,9 +66,9 @@ func (cmd LsCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd LsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(verboseFlag, "v", "show the hash of the table")
+	ap.SupportsFlag(cli.VerboseFlag, "v", "show the hash of the table")
 	ap.SupportsFlag(systemFlag, "s", "show system tables")
-	ap.SupportsFlag(allFlag, "a", "show system tables")
+	ap.SupportsFlag(cli.AllFlag, "a", "show system tables")
 	return ap
 }
 
@@ -83,8 +83,8 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, lsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.Contains(systemFlag) && apr.Contains(allFlag) {
-		verr := errhand.BuildDError("--%s and --%s are mutually exclusive", systemFlag, allFlag).SetPrintUsage().Build()
+	if apr.Contains(systemFlag) && apr.Contains(cli.AllFlag) {
+		verr := errhand.BuildDError("--%s and --%s are mutually exclusive", systemFlag, cli.AllFlag).SetPrintUsage().Build()
 		HandleVErrAndExitCode(verr, usage)
 	}
 
@@ -99,13 +99,13 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	}
 
 	if verr == nil {
-		if !apr.Contains(systemFlag) || apr.Contains(allFlag) {
-			verr = printUserTables(ctx, root, label, apr.Contains(verboseFlag))
+		if !apr.Contains(systemFlag) || apr.Contains(cli.AllFlag) {
+			verr = printUserTables(ctx, root, label, apr.Contains(cli.VerboseFlag))
 			cli.Println()
 		}
 
-		if verr == nil && (apr.Contains(systemFlag) || apr.Contains(allFlag)) {
-			verr = printSystemTables(ctx, root, dEnv.DoltDB, apr.Contains(verboseFlag))
+		if verr == nil && (apr.Contains(systemFlag) || apr.Contains(cli.AllFlag)) {
+			verr = printSystemTables(ctx, root, dEnv.DoltDB, apr.Contains(cli.VerboseFlag))
 			cli.Println()
 		}
 	}

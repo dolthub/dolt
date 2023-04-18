@@ -20,6 +20,7 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -27,12 +28,12 @@ import (
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type multipointType struct {
-	sqlMultiPointType sql.MultiPointType
+	sqlMultiPointType gmstypes.MultiPointType
 }
 
 var _ TypeInfo = (*multipointType)(nil)
 
-var MultiPointType = &multipointType{sql.MultiPointType{}}
+var MultiPointType = &multipointType{gmstypes.MultiPointType{}}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *multipointType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
@@ -73,12 +74,12 @@ func (ti *multipointType) ConvertValueToNomsValue(ctx context.Context, vrw types
 	}
 
 	// Convert to sql.MultiPointType
-	multipoint, err := ti.sqlMultiPointType.Convert(v)
+	multipoint, _, err := ti.sqlMultiPointType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
 
-	return types.ConvertSQLMultiPointToTypesMultiPoint(multipoint.(sql.MultiPoint)), nil
+	return types.ConvertSQLMultiPointToTypesMultiPoint(multipoint.(gmstypes.MultiPoint)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -135,7 +136,7 @@ func (ti *multipointType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *multipointType) Promote() TypeInfo {
-	return &multipointType{ti.sqlMultiPointType.Promote().(sql.MultiPointType)}
+	return &multipointType{ti.sqlMultiPointType.Promote().(gmstypes.MultiPointType)}
 }
 
 // String implements TypeInfo interface.
@@ -226,5 +227,5 @@ func CreateMultiPointTypeFromParams(params map[string]string) (TypeInfo, error) 
 			return nil, err
 		}
 	}
-	return &multipointType{sqlMultiPointType: sql.MultiPointType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
+	return &multipointType{sqlMultiPointType: gmstypes.MultiPointType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

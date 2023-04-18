@@ -15,39 +15,39 @@
 package types
 
 import (
-	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 const (
-	CartesianSRID  = sql.CartesianSRID
-	GeoSpatialSRID = sql.GeoSpatialSRID
+	CartesianSRID  = types.CartesianSRID
+	GeoSpatialSRID = types.GeoSpatialSRID
 )
 
 const (
-	SRIDSize       = sql.SRIDSize
-	EndianSize     = sql.EndianSize
-	TypeSize       = sql.TypeSize
-	EWKBHeaderSize = sql.EWKBHeaderSize
+	SRIDSize       = types.SRIDSize
+	EndianSize     = types.EndianSize
+	TypeSize       = types.TypeSize
+	EWKBHeaderSize = types.EWKBHeaderSize
 
-	PointSize = sql.PointSize
-	CountSize = sql.CountSize
+	PointSize = types.PointSize
+	CountSize = types.CountSize
 )
 
 const (
-	WKBUnknown      = sql.WKBUnknown
-	WKBPointID      = sql.WKBPointID
-	WKBLineID       = sql.WKBLineID
-	WKBPolyID       = sql.WKBPolyID
-	WKBMultiPointID = sql.WKBMultiPointID
-	WKBMultiLineID  = sql.WKBMultiLineID
-	WKBMultiPolyID  = sql.WKBMultiPolyID
-	WKBGeomCollID   = sql.WKBGeomCollID
+	WKBUnknown      = types.WKBUnknown
+	WKBPointID      = types.WKBPointID
+	WKBLineID       = types.WKBLineID
+	WKBPolyID       = types.WKBPolyID
+	WKBMultiPointID = types.WKBMultiPointID
+	WKBMultiLineID  = types.WKBMultiLineID
+	WKBMultiPolyID  = types.WKBMultiPolyID
+	WKBGeomCollID   = types.WKBGeomCollID
 )
 
 // TODO: all methods here just defer to their SQL equivalents, and assume we always receive good data
 
 func WriteEWKBHeader(buf []byte, srid, typ uint32) {
-	sql.WriteEWKBHeader(buf, srid, typ)
+	types.WriteEWKBHeader(buf, srid, typ)
 }
 
 func SerializePoint(p Point) []byte {

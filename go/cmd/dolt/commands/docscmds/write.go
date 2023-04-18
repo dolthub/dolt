@@ -30,48 +30,48 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
-var writeDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Writes Dolt Docs to stdout",
-	LongDesc:  "Writes Dolt Docs to stdout",
+var printDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Prints Dolt Docs to stdout",
+	LongDesc:  "Prints Dolt Docs to stdout",
 	Synopsis: []string{
 		"{{.LessThan}}doc{{.GreaterThan}}",
 	},
 }
 
-type WriteCmd struct{}
+type PrintCmd struct{}
 
 // Name implements cli.Command.
-func (cmd WriteCmd) Name() string {
-	return "write"
+func (cmd PrintCmd) Name() string {
+	return "print"
 }
 
 // Description implements cli.Command.
-func (cmd WriteCmd) Description() string {
-	return writeDocs.ShortDesc
+func (cmd PrintCmd) Description() string {
+	return printDocs.ShortDesc
 }
 
 // RequiresRepo implements cli.Command.
-func (cmd WriteCmd) RequiresRepo() bool {
+func (cmd PrintCmd) RequiresRepo() bool {
 	return true
 }
 
 // Docs implements cli.Command.
-func (cmd WriteCmd) Docs() *cli.CommandDocumentation {
+func (cmd PrintCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.NewCommandDocumentation(writeDocs, ap)
+	return cli.NewCommandDocumentation(printDocs, ap)
 }
 
 // ArgParser implements cli.Command.
-func (cmd WriteCmd) ArgParser() *argparser.ArgParser {
+func (cmd PrintCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"doc", "Dolt doc to be read."})
 	return ap
 }
 
 // Exec implements cli.Command.
-func (cmd WriteCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd PrintCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, writeDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, printDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() != 1 {
@@ -88,12 +88,12 @@ func (cmd WriteCmd) Exec(ctx context.Context, commandStr string, args []string, 
 }
 
 func writeDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName string) error {
-	eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return err
 	}
 
-	doc, err := readDocFromTable(ctx, eng, docName)
+	doc, err := readDocFromTable(ctx, eng, dbName, docName)
 	if err != nil {
 		return err
 	}
@@ -107,11 +107,11 @@ const (
 		"FROM dolt_docs %s WHERE " + doltdb.DocPkColumnName + " = '%s'"
 )
 
-func readDocFromTable(ctx context.Context, eng *engine.SqlEngine, docName string) (string, error) {
-	return readDocFromTableAsOf(ctx, eng, docName, "")
+func readDocFromTable(ctx context.Context, eng *engine.SqlEngine, dbName, docName string) (string, error) {
+	return readDocFromTableAsOf(ctx, eng, dbName, docName, "")
 }
 
-func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, docName, asOf string) (doc string, err error) {
+func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, dbName, docName, asOf string) (doc string, err error) {
 	var (
 		sctx *sql.Context
 		iter sql.RowIter
@@ -123,11 +123,11 @@ func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, docName, a
 	}
 	query := fmt.Sprintf(readDocTemplate, asOf, docName)
 
-	sctx, err = eng.NewContext(ctx)
+	sctx, err = eng.NewLocalContext(ctx)
 	if err != nil {
 		return "", err
 	}
-	sctx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	sctx.SetCurrentDatabase(dbName)
 
 	_, iter, err = eng.Query(sctx, query)
 	if sql.ErrTableNotFound.Is(err) {

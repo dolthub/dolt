@@ -21,6 +21,14 @@ inputs:
     required: false
     description: 'path to email data file'
     default: ''
+  bodyPath:
+    required: false
+    description: 'path to email body file'
+    default: ''
+  subject:
+    required: false
+    description: 'path to email subject'
+    default: ''
   toAddresses:
     description: 'json string list of to addresses'
     required: true

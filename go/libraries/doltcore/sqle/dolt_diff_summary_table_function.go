@@ -17,18 +17,19 @@ package sqle
 import (
 	"fmt"
 	"io"
-	"math"
+	"sort"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
 var _ sql.TableFunction = (*DiffSummaryTableFunction)(nil)
+var _ sql.ExecSourceRel = (*DiffSummaryTableFunction)(nil)
 
 type DiffSummaryTableFunction struct {
 	ctx *sql.Context
@@ -41,18 +42,11 @@ type DiffSummaryTableFunction struct {
 }
 
 var diffSummaryTableSchema = sql.Schema{
-	&sql.Column{Name: "table_name", Type: sql.LongText, Nullable: false},
-	&sql.Column{Name: "rows_unmodified", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "rows_added", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "rows_deleted", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "rows_modified", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "cells_added", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "cells_deleted", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "cells_modified", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "old_row_count", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "new_row_count", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "old_cell_count", Type: sql.Int64, Nullable: true},
-	&sql.Column{Name: "new_cell_count", Type: sql.Int64, Nullable: true},
+	&sql.Column{Name: "from_table_name", Type: types.LongText, Nullable: false},
+	&sql.Column{Name: "to_table_name", Type: types.LongText, Nullable: false},
+	&sql.Column{Name: "diff_type", Type: types.Text, Nullable: false},
+	&sql.Column{Name: "data_change", Type: types.Boolean, Nullable: false},
+	&sql.Column{Name: "schema_change", Type: types.Boolean, Nullable: false},
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -77,12 +71,13 @@ func (ds *DiffSummaryTableFunction) Database() sql.Database {
 
 // WithDatabase implements the sql.Databaser interface
 func (ds *DiffSummaryTableFunction) WithDatabase(database sql.Database) (sql.Node, error) {
-	ds.database = database
-	return ds, nil
+	nds := *ds
+	nds.database = database
+	return &nds, nil
 }
 
-// FunctionName implements the sql.TableFunction interface
-func (ds *DiffSummaryTableFunction) FunctionName() string {
+// Name implements the sql.TableFunction interface
+func (ds *DiffSummaryTableFunction) Name() string {
 	return "dolt_diff_summary"
 }
 
@@ -136,7 +131,7 @@ func (ds *DiffSummaryTableFunction) WithChildren(children ...sql.Node) (sql.Node
 // CheckPrivileges implements the interface sql.Node.
 func (ds *DiffSummaryTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
 	if ds.tableNameExpr != nil {
-		if !sql.IsText(ds.tableNameExpr.Type()) {
+		if !types.IsText(ds.tableNameExpr.Type()) {
 			return false
 		}
 
@@ -184,55 +179,60 @@ func (ds *DiffSummaryTableFunction) Expressions() []sql.Expression {
 // WithExpressions implements the sql.Expressioner interface.
 func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
 	if len(expression) < 1 {
-		return nil, sql.ErrInvalidArgumentNumber.New(ds.FunctionName(), "1 to 3", len(expression))
+		return nil, sql.ErrInvalidArgumentNumber.New(ds.Name(), "1 to 3", len(expression))
 	}
 
 	for _, expr := range expression {
 		if !expr.Resolved() {
-			return nil, ErrInvalidNonLiteralArgument.New(ds.FunctionName(), expr.String())
+			return nil, ErrInvalidNonLiteralArgument.New(ds.Name(), expr.String())
+		}
+		// prepared statements resolve functions beforehand, so above check fails
+		if _, ok := expr.(sql.FunctionExpression); ok {
+			return nil, ErrInvalidNonLiteralArgument.New(ds.Name(), expr.String())
 		}
 	}
 
+	newDstf := *ds
 	if strings.Contains(expression[0].String(), "..") {
 		if len(expression) < 1 || len(expression) > 2 {
-			return nil, sql.ErrInvalidArgumentNumber.New(ds.FunctionName(), "1 or 2", len(expression))
+			return nil, sql.ErrInvalidArgumentNumber.New(newDstf.Name(), "1 or 2", len(expression))
 		}
-		ds.dotCommitExpr = expression[0]
+		newDstf.dotCommitExpr = expression[0]
 		if len(expression) == 2 {
-			ds.tableNameExpr = expression[1]
+			newDstf.tableNameExpr = expression[1]
 		}
 	} else {
 		if len(expression) < 2 || len(expression) > 3 {
-			return nil, sql.ErrInvalidArgumentNumber.New(ds.FunctionName(), "2 or 3", len(expression))
+			return nil, sql.ErrInvalidArgumentNumber.New(newDstf.Name(), "2 or 3", len(expression))
 		}
-		ds.fromCommitExpr = expression[0]
-		ds.toCommitExpr = expression[1]
+		newDstf.fromCommitExpr = expression[0]
+		newDstf.toCommitExpr = expression[1]
 		if len(expression) == 3 {
-			ds.tableNameExpr = expression[2]
+			newDstf.tableNameExpr = expression[2]
 		}
 	}
 
 	// validate the expressions
-	if ds.dotCommitExpr != nil {
-		if !sql.IsText(ds.dotCommitExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.dotCommitExpr.String())
+	if newDstf.dotCommitExpr != nil {
+		if !types.IsText(newDstf.dotCommitExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.dotCommitExpr.String())
 		}
 	} else {
-		if !sql.IsText(ds.fromCommitExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.fromCommitExpr.String())
+		if !types.IsText(newDstf.fromCommitExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.fromCommitExpr.String())
 		}
-		if !sql.IsText(ds.toCommitExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.toCommitExpr.String())
-		}
-	}
-
-	if ds.tableNameExpr != nil {
-		if !sql.IsText(ds.tableNameExpr.Type()) {
-			return nil, sql.ErrInvalidArgumentDetails.New(ds.FunctionName(), ds.tableNameExpr.String())
+		if !types.IsText(newDstf.toCommitExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.toCommitExpr.String())
 		}
 	}
 
-	return ds, nil
+	if newDstf.tableNameExpr != nil {
+		if !types.IsText(newDstf.tableNameExpr.Type()) {
+			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.tableNameExpr.String())
+		}
+	}
+
+	return &newDstf, nil
 }
 
 // RowIter implements the sql.Node interface
@@ -242,61 +242,76 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		return nil, err
 	}
 
-	sqledb, ok := ds.database.(Database)
+	sqledb, ok := ds.database.(SqlDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unexpected database type: %T", ds.database)
 	}
 
-	fromCommitStr, toCommitStr, err := loadCommitStrings(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
+	fromDetails, toDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
 	if err != nil {
 		return nil, err
 	}
 
-	sess := dsess.DSessFromSess(ctx.Session)
-	fromRoot, _, err := sess.ResolveRootForRef(ctx, sqledb.Name(), fromCommitStr)
+	deltas, err := diff.GetTableDeltas(ctx, fromDetails.root, toDetails.root)
 	if err != nil {
 		return nil, err
 	}
 
-	toRoot, _, err := sess.ResolveRootForRef(ctx, sqledb.Name(), toCommitStr)
-	if err != nil {
-		return nil, err
-	}
-
-	deltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
-	if err != nil {
-		return nil, err
-	}
+	sort.Slice(deltas, func(i, j int) bool {
+		return strings.Compare(deltas[i].ToName, deltas[j].ToName) < 0
+	})
 
 	// If tableNameExpr defined, return a single table diff summary result
 	if ds.tableNameExpr != nil {
 		delta := findMatchingDelta(deltas, tableName)
-		diffSum, hasDiff, err := getDiffSummaryNodeFromDelta(ctx, delta, fromRoot, toRoot, tableName)
+
+		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, true)
 		if err != nil {
 			return nil, err
 		}
-		if !hasDiff {
-			return NewDiffSummaryTableFunctionRowIter([]diffSummaryNode{}), nil
+
+		summs := []*diff.TableDeltaSummary{}
+		if summ != nil {
+			summs = []*diff.TableDeltaSummary{summ}
 		}
-		return NewDiffSummaryTableFunctionRowIter([]diffSummaryNode{diffSum}), nil
+
+		return NewDiffSummaryTableFunctionRowIter(summs), nil
 	}
 
-	var diffSummaries []diffSummaryNode
+	var diffSummaries []*diff.TableDeltaSummary
 	for _, delta := range deltas {
-		tblName := delta.ToName
-		if tblName == "" {
-			tblName = delta.FromName
-		}
-		diffSum, hasDiff, err := getDiffSummaryNodeFromDelta(ctx, delta, fromRoot, toRoot, tblName)
+		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, false)
 		if err != nil {
 			return nil, err
 		}
-		if hasDiff {
-			diffSummaries = append(diffSummaries, diffSum)
+		if summ != nil {
+			diffSummaries = append(diffSummaries, summ)
 		}
 	}
 
 	return NewDiffSummaryTableFunctionRowIter(diffSummaries), nil
+}
+
+func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb SqlDatabase, fromDetails, toDetails *refDetails, shouldErrorOnPKChange bool) (*diff.TableDeltaSummary, error) {
+	if delta.FromTable == nil && delta.ToTable == nil {
+		return nil, nil
+	}
+
+	if !schema.ArePrimaryKeySetsDiffable(delta.Format(), delta.FromSch, delta.ToSch) {
+		if shouldErrorOnPKChange {
+			return nil, fmt.Errorf("failed to compute diff summary for table %s: %w", delta.CurName(), diff.ErrPrimaryKeySetChanged)
+		}
+
+		ctx.Warn(dtables.PrimaryKeyChangeWarningCode, fmt.Sprintf(dtables.PrimaryKeyChangeWarning, fromDetails.hashStr, toDetails.hashStr))
+		return nil, nil
+	}
+
+	summ, err := delta.GetSummary(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return summ, nil
 }
 
 // evaluateArguments returns fromCommitVal, toCommitVal, dotCommitVal, and tableName.
@@ -338,102 +353,6 @@ func (ds *DiffSummaryTableFunction) evaluateArguments() (interface{}, interface{
 	return fromCommitVal, toCommitVal, nil, tableName, nil
 }
 
-// getDiffSummaryNodeFromDelta returns diffSummaryNode object and whether there is data diff or not. It gets tables
-// from roots and diff summary if there is a valid table exists in both fromRoot and toRoot.
-func getDiffSummaryNodeFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRoot, toRoot *doltdb.RootValue, tableName string) (diffSummaryNode, bool, error) {
-	var oldColLen int
-	var newColLen int
-	fromTable, _, fromTableExists, err := fromRoot.GetTableInsensitive(ctx, tableName)
-	if err != nil {
-		return diffSummaryNode{}, false, err
-	}
-
-	if fromTableExists {
-		fromSch, err := fromTable.GetSchema(ctx)
-		if err != nil {
-			return diffSummaryNode{}, false, err
-		}
-		oldColLen = len(fromSch.GetAllCols().GetColumns())
-	}
-
-	toTable, _, toTableExists, err := toRoot.GetTableInsensitive(ctx, tableName)
-	if err != nil {
-		return diffSummaryNode{}, false, err
-	}
-
-	if toTableExists {
-		toSch, err := toTable.GetSchema(ctx)
-		if err != nil {
-			return diffSummaryNode{}, false, err
-		}
-		newColLen = len(toSch.GetAllCols().GetColumns())
-	}
-
-	if !fromTableExists && !toTableExists {
-		return diffSummaryNode{}, false, sql.ErrTableNotFound.New(tableName)
-	}
-
-	// no diff from tableDelta
-	if delta.FromTable == nil && delta.ToTable == nil {
-		return diffSummaryNode{}, false, nil
-	}
-
-	diffSum, hasDiff, keyless, err := getDiffSummary(ctx, delta)
-	if err != nil {
-		return diffSummaryNode{}, false, err
-	}
-
-	return diffSummaryNode{tableName, diffSum, oldColLen, newColLen, keyless}, hasDiff, nil
-}
-
-// getDiffSummary returns diff.DiffSummaryProgress object and whether there is a data diff or not.
-func getDiffSummary(ctx *sql.Context, td diff.TableDelta) (diff.DiffSummaryProgress, bool, bool, error) {
-	// got this method from diff_output.go
-	// todo: use errgroup.Group
-	ae := atomicerr.New()
-	ch := make(chan diff.DiffSummaryProgress)
-	go func() {
-		defer close(ch)
-		err := diff.SummaryForTableDelta(ctx, ch, td)
-
-		ae.SetIfError(err)
-	}()
-
-	acc := diff.DiffSummaryProgress{}
-	var count int64
-	for p := range ch {
-		if ae.IsSet() {
-			break
-		}
-
-		acc.Adds += p.Adds
-		acc.Removes += p.Removes
-		acc.Changes += p.Changes
-		acc.CellChanges += p.CellChanges
-		acc.NewRowSize += p.NewRowSize
-		acc.OldRowSize += p.OldRowSize
-		acc.NewCellSize += p.NewCellSize
-		acc.OldCellSize += p.OldCellSize
-
-		count++
-	}
-
-	if err := ae.Get(); err != nil {
-		return diff.DiffSummaryProgress{}, false, false, err
-	}
-
-	keyless, err := td.IsKeyless(ctx)
-	if err != nil {
-		return diff.DiffSummaryProgress{}, false, keyless, err
-	}
-
-	if (acc.Adds+acc.Removes+acc.Changes) == 0 && (acc.OldCellSize-acc.NewCellSize) == 0 {
-		return diff.DiffSummaryProgress{}, false, keyless, nil
-	}
-
-	return acc, true, keyless, nil
-}
-
 //------------------------------------
 // diffSummaryTableFunctionRowIter
 //------------------------------------
@@ -441,113 +360,48 @@ func getDiffSummary(ctx *sql.Context, td diff.TableDelta) (diff.DiffSummaryProgr
 var _ sql.RowIter = &diffSummaryTableFunctionRowIter{}
 
 type diffSummaryTableFunctionRowIter struct {
-	diffSums []diffSummaryNode
-	diffIdx  int
+	summaries []*diff.TableDeltaSummary
+	diffIdx   int
 }
 
 func (d *diffSummaryTableFunctionRowIter) incrementIndexes() {
 	d.diffIdx++
-	if d.diffIdx >= len(d.diffSums) {
+	if d.diffIdx >= len(d.summaries) {
 		d.diffIdx = 0
-		d.diffSums = nil
+		d.summaries = nil
 	}
 }
 
-type diffSummaryNode struct {
-	tblName     string
-	diffSummary diff.DiffSummaryProgress
-	oldColLen   int
-	newColLen   int
-	keyless     bool
-}
-
-func NewDiffSummaryTableFunctionRowIter(ds []diffSummaryNode) sql.RowIter {
+func NewDiffSummaryTableFunctionRowIter(ds []*diff.TableDeltaSummary) sql.RowIter {
 	return &diffSummaryTableFunctionRowIter{
-		diffSums: ds,
+		summaries: ds,
 	}
 }
 
 func (d *diffSummaryTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	defer d.incrementIndexes()
-	if d.diffIdx >= len(d.diffSums) {
+	if d.diffIdx >= len(d.summaries) {
 		return nil, io.EOF
 	}
 
-	if d.diffSums == nil {
+	if d.summaries == nil {
 		return nil, io.EOF
 	}
 
-	ds := d.diffSums[d.diffIdx]
-	return getRowFromDiffSummary(ds.tblName, ds.diffSummary, ds.newColLen, ds.oldColLen, ds.keyless), nil
+	ds := d.summaries[d.diffIdx]
+	return getRowFromSummary(ds), nil
 }
 
 func (d *diffSummaryTableFunctionRowIter) Close(context *sql.Context) error {
 	return nil
 }
 
-// getRowFromDiffSummary takes diff.DiffSummaryProgress and calculates the row_modified, cell_added, cell_deleted.
-// If the number of cell change from old to new cell count does not equal to cell_added and/or cell_deleted, there
-// must be schema changes that affects cell_added and cell_deleted value addition to the row count * col length number.
-func getRowFromDiffSummary(tblName string, dsp diff.DiffSummaryProgress, newColLen, oldColLen int, keyless bool) sql.Row {
-	// if table is keyless table, match current CLI command result
-	if keyless {
-		return sql.Row{
-			tblName,            // table_name
-			nil,                // rows_unmodified
-			int64(dsp.Adds),    // rows_added
-			int64(dsp.Removes), // rows_deleted
-			nil,                // rows_modified
-			nil,                // cells_added
-			nil,                // cells_deleted
-			nil,                // cells_modified
-			nil,                // old_row_count
-			nil,                // new_row_count
-			nil,                // old_cell_count
-			nil,                // new_cell_count
-		}
-	}
-
-	numCellInserts, numCellDeletes := GetCellsAddedAndDeleted(dsp, newColLen)
-	rowsUnmodified := dsp.OldRowSize - dsp.Changes - dsp.Removes
-
+func getRowFromSummary(ds *diff.TableDeltaSummary) sql.Row {
 	return sql.Row{
-		tblName,                // table_name
-		int64(rowsUnmodified),  // rows_unmodified
-		int64(dsp.Adds),        // rows_added
-		int64(dsp.Removes),     // rows_deleted
-		int64(dsp.Changes),     // rows_modified
-		int64(numCellInserts),  // cells_added
-		int64(numCellDeletes),  // cells_deleted
-		int64(dsp.CellChanges), // cells_modified
-		int64(dsp.OldRowSize),  // old_row_count
-		int64(dsp.NewRowSize),  // new_row_count
-		int64(dsp.OldCellSize), // old_cell_count
-		int64(dsp.NewCellSize), // new_cell_count
+		ds.FromTableName, // from_table_name
+		ds.ToTableName,   // to_table_name
+		ds.DiffType,      // diff_type
+		ds.DataChange,    // data_change
+		ds.SchemaChange,  // schema_change
 	}
-}
-
-// GetCellsAddedAndDeleted calculates cells added and deleted given diff.DiffSummaryProgress and toCommit table
-// column length. We use rows added and deleted to calculate cells added and deleted, but it does not include
-// cells added and deleted from schema changes. Here we fill those in using total number of cells in each commit table.
-func GetCellsAddedAndDeleted(acc diff.DiffSummaryProgress, newColLen int) (uint64, uint64) {
-	var numCellInserts, numCellDeletes float64
-	rowToCellInserts := float64(acc.Adds) * float64(newColLen)
-	rowToCellDeletes := float64(acc.Removes) * float64(newColLen)
-	cellDiff := float64(acc.NewCellSize) - float64(acc.OldCellSize)
-	if cellDiff > 0 {
-		numCellInserts = cellDiff + rowToCellDeletes
-		numCellDeletes = rowToCellDeletes
-	} else if cellDiff < 0 {
-		numCellInserts = rowToCellInserts
-		numCellDeletes = math.Abs(cellDiff) + rowToCellInserts
-	} else {
-		if rowToCellInserts != rowToCellDeletes {
-			numCellDeletes = math.Max(rowToCellDeletes, rowToCellInserts)
-			numCellInserts = math.Max(rowToCellDeletes, rowToCellInserts)
-		} else {
-			numCellDeletes = rowToCellDeletes
-			numCellInserts = rowToCellInserts
-		}
-	}
-	return uint64(numCellInserts), uint64(numCellDeletes)
 }

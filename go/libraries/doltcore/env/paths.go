@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 const (
@@ -42,7 +43,7 @@ type HomeDirProvider func() (string, error)
 // provide a different directory where the root .dolt directory should be located and global state will be stored there.
 func GetCurrentUserHomeDir() (string, error) {
 	if doltRootPath, ok := os.LookupEnv(doltRootPathEnvVar); ok && doltRootPath != "" {
-		return doltRootPath, nil
+		return filesys.LocalFS.Abs(doltRootPath)
 	}
 
 	var home string

@@ -159,6 +159,18 @@ func (td TupleDesc) IsNull(i int, tup Tuple) bool {
 	return b == nil
 }
 
+func (td TupleDesc) HasNulls(tup Tuple) bool {
+	if tup.Count() < td.Count() {
+		return true
+	}
+	for i := range td.Types {
+		if tup.FieldIsNull(i) {
+			return true
+		}
+	}
+	return false
+}
+
 // GetFixedAccess returns the FixedAccess for this tuple descriptor.
 func (td TupleDesc) GetFixedAccess() FixedAccess {
 	return td.fast
@@ -468,6 +480,16 @@ func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 	panic("incorrect value encoding")
 }
 
+func (td TupleDesc) GetCell(i int, tup Tuple) (v Cell, ok bool) {
+	td.expectEncoding(i, CellEnc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v = readCell(b)
+		ok = true
+	}
+	return
+}
+
 // Format prints a Tuple as a string.
 func (td TupleDesc) Format(tup Tuple) string {
 	if tup == nil || tup.Count() == 0 {
@@ -561,6 +583,8 @@ func formatValue(enc Encoding, value []byte) string {
 	case BytesAddrEnc:
 		return hex.EncodeToString(value)
 	case CommitAddrEnc:
+		return hex.EncodeToString(value)
+	case CellEnc:
 		return hex.EncodeToString(value)
 	default:
 		return string(value)

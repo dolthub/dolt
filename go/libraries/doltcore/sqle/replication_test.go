@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/buffer"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -28,7 +29,10 @@ import (
 )
 
 func TestCommitHooksNoErrors(t *testing.T) {
-	dEnv := CreateEnvWithSeedData(t)
+	dEnv, err := CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer dEnv.DoltDB.Close()
+
 	AddDoltSystemVariables()
 	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
 	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemote, "unknown")
@@ -80,18 +84,18 @@ func TestReplicationBranches(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		remoteRefs := make([]ref.DoltRef, len(tt.remote))
+		remoteRefs := make([]doltdb.RefWithHash, len(tt.remote))
 		for i := range tt.remote {
-			remoteRefs[i] = ref.NewRemoteRef("", tt.remote[i])
+			remoteRefs[i] = doltdb.RefWithHash{Ref: ref.NewRemoteRef("", tt.remote[i])}
 		}
-		localRefs := make([]ref.DoltRef, len(tt.local))
+		localRefs := make([]doltdb.RefWithHash, len(tt.local))
 		for i := range tt.local {
-			localRefs[i] = ref.NewBranchRef(tt.local[i])
+			localRefs[i] = doltdb.RefWithHash{Ref: ref.NewBranchRef(tt.local[i])}
 		}
-		diff := branchesToDelete(remoteRefs, localRefs)
+		diff := refsToDelete(remoteRefs, localRefs)
 		diffNames := make([]string, len(diff))
 		for i := range diff {
-			diffNames[i] = diff[i].GetPath()
+			diffNames[i] = diff[i].Ref.GetPath()
 		}
 		assert.Equal(t, diffNames, tt.expToDelete)
 	}

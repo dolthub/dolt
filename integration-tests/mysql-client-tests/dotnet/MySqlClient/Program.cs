@@ -82,13 +82,13 @@ public class DoltSQL
     public static void DoltSqlTest(MySqlConnection conn)
     {
         string[] queries = new string[] {
-            "select dolt_add('-A');",
-            "select dolt_commit('-m', 'my commit')",
-            "select dolt_checkout('-b', 'mybranch')",
+            "call dolt_add('-A');",
+            "call dolt_commit('-m', 'my commit')",
+            "call dolt_checkout('-b', 'mybranch')",
             "insert into test (pk, `value`) values (1,1)",
-            "select dolt_commit('-a', '-m', 'my commit2')",
-            "select dolt_checkout('main')",
-            "select dolt_merge('mybranch')",
+            "call dolt_commit('-a', '-m', 'my commit2')",
+            "call dolt_checkout('main')",
+            "call dolt_merge('mybranch')",
         };
 
         for (int i = 0; i < queries.Length ; i++) {

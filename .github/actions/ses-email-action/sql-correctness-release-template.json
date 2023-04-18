@@ -1,8 +1,0 @@
-{
-  "Template": {
-    "TemplateName": "SqlCorrectnessReleaseTemplate",
-    "SubjectPart": "SQL Correctness for {{format}} {{version}}",
-    "HtmlPart": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>Dolt {{format}} {{version}} Performance Results</title>\n  <style>\n    table {\n      border: 1px solid black;\n      letter-spacing: 1px;\n      font-family: sans-serif;\n      font-size: .8rem;\n      padding: 5px;\n      margin: 5px;\n    }\n    th {\n      border: 1px solid rgb(190, 190, 190);\n      padding: 10px;\n    }\n    td {\n      padding: 5px;\n    }\n    tr:nth-child(even) {background-color: #f2f2f2;}\n  </style>\n</head><body>{{results}}</body></html>",
-    "TextPart": "Dolt {{format}} {{version}} SQL correctness,\r\n{{results}}"
-  }
-}

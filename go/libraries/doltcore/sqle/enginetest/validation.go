@@ -21,12 +21,14 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -141,6 +143,13 @@ func validateIndexConsistency(
 	def schema.Index,
 	primary, secondary prolly.Map,
 ) error {
+	// TODO: the descriptors in the primary key are different
+	// than the ones in the secondary key; this test assumes
+	// they're the same
+	if len(def.PrefixLengths()) > 0 {
+		return nil
+	}
+
 	if schema.IsKeyless(sch) {
 		return validateKeylessIndex(ctx, sch, def, primary, secondary)
 	}
@@ -172,7 +181,16 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 		for i := range mapping {
 			j := mapping.MapOrdinal(i)
 			// first field in |value| is cardinality
-			builder.PutRaw(i, value.GetField(j+1))
+			field := value.GetField(j + 1)
+			if def.IsSpatial() {
+				geom, _, err := sqltypes.GeometryType{}.Convert(field[:len(field)-1])
+				if err != nil {
+					panic(err)
+				}
+				cell := index.ZCell(geom.(sqltypes.GeometryValue))
+				field = cell[:]
+			}
+			builder.PutRaw(i, field)
 		}
 		builder.PutRaw(idxDesc.Count()-1, hashId.GetField(0))
 		k := builder.Build(primary.Pool())
@@ -182,6 +200,15 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 			return err
 		}
 		if !ok {
+			fmt.Printf("Secondary index contents:\n")
+			iterAll, _ := secondary.IterAll(ctx)
+			for {
+				k, _, err := iterAll.Next(ctx)
+				if err == io.EOF {
+					break
+				}
+				fmt.Printf("  - k: %v \n", k)
+			}
 			return fmt.Errorf("index key %s not found in index %s", builder.Desc.Format(k), def.Name())
 		}
 	}
@@ -192,6 +219,22 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 	idxDesc, _ := secondary.Descriptors()
 	builder := val.NewTupleBuilder(idxDesc)
 	mapping := ordinalMappingsForSecondaryIndex(sch, def)
+
+	// Before we walk through the primary index data and validate that every row in the primary index exists in the
+	// secondary index, we also check that the primary index and secondary index have the same number of rows.
+	// Otherwise, we won't catch if the secondary index has extra, bogus data in it.
+	totalSecondaryCount, err := secondary.Count()
+	if err != nil {
+		return err
+	}
+	totalPrimaryCount, err := primary.Count()
+	if err != nil {
+		return err
+	}
+	if totalSecondaryCount != totalPrimaryCount {
+		return fmt.Errorf("primary index row count (%d) does not match secondary index row count (%d)",
+			totalPrimaryCount, totalSecondaryCount)
+	}
 
 	kd, _ := primary.Descriptors()
 	pkSize := kd.Count()
@@ -215,7 +258,16 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			if j < pkSize {
 				builder.PutRaw(i, key.GetField(j))
 			} else {
-				builder.PutRaw(i, value.GetField(j-pkSize))
+				field := value.GetField(j - pkSize)
+				if def.IsSpatial() {
+					geom, _, err := sqltypes.GeometryType{}.Convert(field[:len(field)-1])
+					if err != nil {
+						panic(err)
+					}
+					cell := index.ZCell(geom.(sqltypes.GeometryValue))
+					field = cell[:]
+				}
+				builder.PutRaw(i, field)
 			}
 		}
 		k := builder.Build(primary.Pool())
@@ -225,7 +277,16 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			return err
 		}
 		if !ok {
-			return fmt.Errorf("index key %v not found in index %s", k, def.Name())
+			fmt.Printf("Secondary index contents:\n")
+			iterAll, _ := secondary.IterAll(ctx)
+			for {
+				k, _, err := iterAll.Next(ctx)
+				if err == io.EOF {
+					break
+				}
+				fmt.Printf("  - k: %v \n", k)
+			}
+			return fmt.Errorf("index key %v not found in index %s", builder.Desc.Format(k), def.Name())
 		}
 	}
 }

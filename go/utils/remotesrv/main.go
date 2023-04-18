@@ -82,12 +82,12 @@ func main() {
 	}
 
 	server, err := remotesrv.NewServer(remotesrv.ServerArgs{
-		HttpHost: *httpHostParam,
-		HttpPort: *httpPortParam,
-		GrpcPort: *grpcPortParam,
-		FS:       fs,
-		DBCache:  dbCache,
-		ReadOnly: *readOnlyParam,
+		HttpHost:       *httpHostParam,
+		HttpListenAddr: fmt.Sprintf(":%d", *httpPortParam),
+		GrpcListenAddr: fmt.Sprintf(":%d", *grpcPortParam),
+		FS:             fs,
+		DBCache:        dbCache,
+		ReadOnly:       *readOnlyParam,
 	})
 	if err != nil {
 		log.Fatalf("error creating remotesrv Server: %v\n", err)

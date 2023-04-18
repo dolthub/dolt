@@ -28,7 +28,7 @@ import (
 type SessionCache struct {
 	indexes map[doltdb.DataCacheKey]map[string][]sql.Index
 	tables  map[doltdb.DataCacheKey]map[string]sql.Table
-	views   map[doltdb.DataCacheKey]map[string]string
+	views   map[doltdb.DataCacheKey]map[string]sql.ViewDefinition
 
 	mu sync.RWMutex
 }
@@ -125,23 +125,23 @@ func (c *SessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName string)
 }
 
 // CacheViews caches all views in a database for the cache key given
-func (c *SessionCache) CacheViews(key doltdb.DataCacheKey, viewNames []string, viewDefs []string) {
+func (c *SessionCache) CacheViews(key doltdb.DataCacheKey, views []sql.ViewDefinition) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.views == nil {
-		c.views = make(map[doltdb.DataCacheKey]map[string]string)
+		c.views = make(map[doltdb.DataCacheKey]map[string]sql.ViewDefinition)
 	}
 
 	viewsForKey, ok := c.views[key]
 	if !ok {
-		viewsForKey = make(map[string]string)
+		viewsForKey = make(map[string]sql.ViewDefinition)
 		c.views[key] = viewsForKey
 	}
 
-	for i := range viewNames {
-		viewName := strings.ToLower(viewNames[i])
-		viewsForKey[viewName] = viewDefs[i]
+	for i := range views {
+		viewName := strings.ToLower(views[i].Name)
+		viewsForKey[viewName] = views[i]
 	}
 }
 
@@ -158,19 +158,19 @@ func (c *SessionCache) ViewsCached(key doltdb.DataCacheKey) bool {
 	return ok
 }
 
-// GetCachedView returns the cached view named, and whether the cache was present
-func (c *SessionCache) GetCachedView(key doltdb.DataCacheKey, viewName string) (string, bool) {
+// GetCachedViewDefinition returns the cached view named, and whether the cache was present
+func (c *SessionCache) GetCachedViewDefinition(key doltdb.DataCacheKey, viewName string) (sql.ViewDefinition, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	viewName = strings.ToLower(viewName)
 	if c.views == nil {
-		return "", false
+		return sql.ViewDefinition{}, false
 	}
 
 	viewsForKey, ok := c.views[key]
 	if !ok {
-		return "", false
+		return sql.ViewDefinition{}, false
 	}
 
 	table, ok := viewsForKey[viewName]

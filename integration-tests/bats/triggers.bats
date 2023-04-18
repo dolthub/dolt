@@ -63,18 +63,18 @@ SQL
     [[ "$output" =~ "y" ]] || false
     [[ "$output" =~ "4" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
-    run dolt sql -q "SELECT * FROM dolt_schemas ORDER BY id" -r=csv
+    run dolt sql -q "SELECT * FROM dolt_schemas ORDER BY name" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "type,name,fragment,id" ]] || false
-    [[ "$output" =~ "trigger,trigger1,CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v1 = -new.v1,1" ]] || false
-    [[ "$output" =~ "view,view1,SELECT v1 FROM test,2" ]] || false
-    [[ "$output" =~ "view,view2,SELECT y FROM b,3" ]] || false
-    [[ "$output" =~ "trigger,trigger2,CREATE TRIGGER trigger2 AFTER INSERT ON a FOR EACH ROW INSERT INTO b VALUES (new.x * 2),4" ]] || false
+    [[ "$output" =~ "type,name,fragment" ]] || false
+    [[ "$output" =~ "trigger,trigger1,CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v1 = -new.v1" ]] || false
+    [[ "$output" =~ "view,view1,CREATE VIEW view1 AS SELECT v1 FROM test" ]] || false
+    [[ "$output" =~ "view,view2,CREATE VIEW view2 AS SELECT y FROM b" ]] || false
+    [[ "$output" =~ "trigger,trigger2,CREATE TRIGGER trigger2 AFTER INSERT ON a FOR EACH ROW INSERT INTO b VALUES (new.x * 2)" ]] || false
     [[ "${#lines[@]}" = "5" ]] || false
 }
 
 @test "triggers: Order preservation" {
-    skip "DROP TRIGGER not yet implemented and broken otherwise"
+    skip "DROP TRIGGER with dependencies not implemented"
     dolt sql <<SQL
 CREATE TABLE x (a BIGINT PRIMARY KEY);
 CREATE TRIGGER trigger1 BEFORE INSERT ON x FOR EACH ROW SET new.a = new.a + 1;
@@ -113,12 +113,16 @@ SQL
     [[ "$output" =~ "2,3" ]] || false
     [[ "$output" =~ "3,4" ]] || false
     [[ "${#lines[@]}" = "4" ]] || false
+
+    # check information_schema.TRIGGERS table
+    run dolt sql -q "select trigger_name, event_manipulation, event_object_table, action_order, action_condition, action_statement, action_timing, definer, character_set_client, collation_connection, database_collation from information_schema.TRIGGERS;" -r csv
+    [[ "$output" =~ "trigger1,INSERT,test,1,,SET new.v1 = new.v1 + 1,BEFORE,root@localhost,utf8mb4,utf8mb4_0900_bin,utf8mb4_0900_bin" ]] || false
 }
 
 @test "triggers: Writing directly into dolt_schemas" {
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);"
     dolt sql -q "CREATE VIEW view1 AS SELECT v1 FROM test;"
-    dolt sql -q "INSERT INTO dolt_schemas VALUES ('trigger', 'trigger1', 'CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v1 = -new.v1;', 2, json_object('CreatedAt', 1));"
+    dolt sql -q "INSERT INTO dolt_schemas VALUES ('trigger', 'trigger1', 'CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v1 = -new.v1;', json_object('CreatedAt', 1));"
     dolt sql -q "INSERT INTO test VALUES (1, 1);"
     run dolt sql -q "SELECT * FROM test" -r=csv
     [ "$status" -eq "0" ]
@@ -127,7 +131,7 @@ SQL
     [[ "${#lines[@]}" = "2" ]] || false
 }
 
-@test "triggers: Merge with manual resolution" {
+@test "triggers: Merge triggers on different branches, no conflict" {
     dolt sql <<SQL
 CREATE TABLE x(a BIGINT PRIMARY KEY);
 CREATE TRIGGER trigger1 BEFORE INSERT ON x FOR EACH ROW SET new.a = new.a + 1;
@@ -143,7 +147,6 @@ SQL
     dolt sql <<SQL
 CREATE TRIGGER trigger3 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 100;
 CREATE TRIGGER trigger4 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 1000;
-UPDATE dolt_schemas SET id = id + 1 WHERE name = 'trigger4';
 SQL
     dolt add -A
     dolt commit -m "On other"
@@ -152,36 +155,18 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ "CREATE TRIGGER trigger2 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 10" ]] || false
     [[ "$output" =~ "CREATE TRIGGER trigger3 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 100" ]] || false
+
     dolt merge other --no-commit
     dolt add dolt_schemas
-    run dolt commit -am "can't commit conflicts"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "dolt_schemas" ]] || false
-    run dolt conflicts cat dolt_schemas
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "CREATE TRIGGER trigger2 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 10" ]] || false
-    [[ "$output" =~ "CREATE TRIGGER trigger3 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 100" ]] || false
-
-    skip "SQL conflict resolution not working below"
-    
-    dolt sql  <<SQL
-    INSERT INTO dolt_schemas VALUES ('trigger', 'trigger3', 'CREATE TRIGGER trigger3 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 100', 3);
-    DELETE FROM dolt_conflicts_dolt_schemas;
-    commit;
-SQL
-
-    run dolt conflicts cat dolt_schemas
-    [ "$status" -eq "0" ]
-    ! [[ "$output" =~ "CREATE TRIGGER" ]] || false
-    dolt add dolt_schemas
     dolt commit -m "Merged other table"
+
     run dolt sql -q "SELECT * FROM dolt_schemas" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "type,name,fragment,id" ]] || false
-    [[ "$output" =~ "trigger,trigger1,CREATE TRIGGER trigger1 BEFORE INSERT ON x FOR EACH ROW SET new.a = new.a + 1,1" ]] || false
-    [[ "$output" =~ "trigger,trigger2,CREATE TRIGGER trigger2 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 10,2" ]] || false
-    [[ "$output" =~ "trigger,trigger3,CREATE TRIGGER trigger3 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 100,3" ]] || false
-    [[ "$output" =~ "trigger,trigger4,CREATE TRIGGER trigger4 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 1000,4" ]] || false
+    [[ "$output" =~ "type,name,fragment" ]] || false
+    [[ "$output" =~ "trigger,trigger1,CREATE TRIGGER trigger1 BEFORE INSERT ON x FOR EACH ROW SET new.a = new.a + 1" ]] || false
+    [[ "$output" =~ "trigger,trigger2,CREATE TRIGGER trigger2 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 10" ]] || false
+    [[ "$output" =~ "trigger,trigger3,CREATE TRIGGER trigger3 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 100" ]] || false
+    [[ "$output" =~ "trigger,trigger4,CREATE TRIGGER trigger4 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 1000" ]] || false
     [[ "${#lines[@]}" = "5" ]] || false
 }
 
@@ -205,7 +190,7 @@ SQL
     # creating a new view/trigger will recreate the dolt_schemas table
     dolt sql -q "CREATE VIEW view2 AS SELECT 3+3 FROM dual;"
 
-    skip "broken with new diff"
+    skip "diff is broken on schema change"
     run dolt diff
     [ "$status" -eq "0" ]
     [[ "$output" =~ "deleted table" ]] || false
@@ -214,8 +199,8 @@ SQL
     run dolt sql -q "SELECT * FROM dolt_schemas" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "type,name,fragment,id" ]] || false
-    [[ "$output" =~ "view,view1,SELECT 2+2 FROM dual,1" ]] || false
-    [[ "$output" =~ "view,view2,SELECT 3+3 FROM dual,2" ]] || false
+    [[ "$output" =~ "view,view1,CREATE VIEW view1 AS SELECT 2+2 FROM dual,1" ]] || false
+    [[ "$output" =~ "view,view2,CREATE VIEW view2 AS SELECT 3+3 FROM dual,2" ]] || false
     [[ "${#lines[@]}" = "3" ]] || false
 
     run dolt sql -q "SELECT * FROM view1" -r=csv

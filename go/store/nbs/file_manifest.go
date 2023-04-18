@@ -28,6 +28,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -42,6 +43,7 @@ import (
 const (
 	manifestFileName = "manifest"
 	lockFileName     = "LOCK"
+	lockFileTimeout  = time.Millisecond * 100
 
 	storageVersion4 = "4"
 
@@ -85,7 +87,7 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 		return nil
 	}
 
-	_, err = updateWithChecker(ctx, dir, check, contents.lock, contents, nil)
+	_, err = updateWithChecker(ctx, dir, syncFlush, check, contents.lock, contents, nil)
 
 	if err != nil {
 		return false, err
@@ -94,52 +96,46 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 	return true, err
 }
 
-// parse the manifest in its given format
-func getFileManifest(ctx context.Context, dir string) (manifest, error) {
-	f, err := openIfExists(filepath.Join(dir, manifestFileName))
+// getFileManifest makes a new file manifest.
+func getFileManifest(ctx context.Context, dir string, mode updateMode) (m manifest, err error) {
+	lock := fslock.New(filepath.Join(dir, lockFileName))
+	m = fileManifest{dir: dir, mode: mode, lock: lock}
+
+	var f *os.File
+	f, err = openIfExists(filepath.Join(dir, manifestFileName))
 	if err != nil {
 		return nil, err
-	}
-	if f == nil {
-		return fileManifest{dir}, nil
+	} else if f == nil {
+		return m, nil
 	}
 	defer func() {
-		err = f.Close()
+		// keep first error
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
 	}()
 
-	fm := fileManifest{dir}
-	ok, _, err := fm.ParseIfExists(ctx, &Stats{}, nil)
-	if ok && err == nil {
-		return fm, nil
+	var ok bool
+	ok, _, err = m.ParseIfExists(ctx, &Stats{}, nil)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, ErrUnreadableManifest
 	}
-
-	return nil, ErrUnreadableManifest
+	return
 }
+
+type updateMode byte
+
+const (
+	asyncFlush updateMode = 0
+	syncFlush  updateMode = 1
+)
 
 type fileManifest struct {
-	dir string
-}
-
-func newLock(dir string) *fslock.Lock {
-	lockPath := filepath.Join(dir, lockFileName)
-	return fslock.New(lockPath)
-}
-
-func lockFileExists(dir string) (bool, error) {
-	lockPath := filepath.Join(dir, lockFileName)
-	info, err := os.Stat(lockPath)
-
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-
-		return false, errors.New("failed to determine if lock file exists")
-	} else if info.IsDir() {
-		return false, errors.New("lock file is a directory")
-	}
-
-	return true, nil
+	dir  string
+	mode updateMode
+	lock *fslock.Lock
 }
 
 // Returns nil if path does not exist
@@ -150,7 +146,6 @@ func openIfExists(path string) (*os.File, error) {
 	} else if err != nil {
 		return nil, err
 	}
-
 	return f, err
 }
 
@@ -170,16 +165,25 @@ func (fm fileManifest) ParseIfExists(
 	readHook func() error,
 ) (exists bool, contents manifestContents, err error) {
 	t1 := time.Now()
-	defer func() {
-		stats.ReadManifestLatency.SampleTimeSince(t1)
-	}()
+	defer func() { stats.ReadManifestLatency.SampleTimeSince(t1) }()
 
+	// no file lock on the read path
 	return parseIfExists(ctx, fm.dir, readHook)
 }
 
 func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
+
+	// hold the file lock while we update
+	if err = tryFileLock(fm.lock); err != nil {
+		return manifestContents{}, err
+	}
+	defer func() {
+		if cerr := fm.lock.Unlock(); err == nil {
+			err = cerr // keep first error
+		}
+	}()
 
 	checker := func(upstream, contents manifestContents) error {
 		if contents.gcGen != upstream.gcGen {
@@ -188,25 +192,33 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 		return nil
 	}
 
-	return updateWithChecker(ctx, fm.dir, checker, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, fm.dir, fm.mode, checker, lastLock, newContents, writeHook)
 }
 
 func (fm fileManifest) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 
+	// hold the file lock while we update
+	if err = tryFileLock(fm.lock); err != nil {
+		return manifestContents{}, err
+	}
+	defer func() {
+		if cerr := fm.lock.Unlock(); err == nil {
+			err = cerr // keep first error
+		}
+	}()
+
 	checker := func(upstream, contents manifestContents) error {
 		if contents.gcGen == upstream.gcGen {
 			return errors.New("UpdateGCGen() must update the garbage collection generation")
-		}
-
-		if contents.root != upstream.root {
+		} else if contents.root != upstream.root {
 			return errors.New("UpdateGCGen() cannot update the root")
 		}
 		return nil
 	}
 
-	return updateWithChecker(ctx, fm.dir, checker, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, fm.dir, fm.mode, checker, lastLock, newContents, writeHook)
 }
 
 // parseV5Manifest parses the v5 manifest from the Reader given. Assumes the first field (the manifest version and
@@ -333,72 +345,36 @@ func parseV4Manifest(r io.Reader) (manifestContents, error) {
 	}, nil
 }
 
+// parseIfExists parses the manifest file if it exists, callers must hold the file lock.
 func parseIfExists(_ context.Context, dir string, readHook func() error) (exists bool, contents manifestContents, err error) {
-	var locked bool
-	locked, err = lockFileExists(dir)
+	if readHook != nil {
+		if err = readHook(); err != nil {
+			return false, manifestContents{}, err
+		}
+	}
 
-	if err != nil {
+	var f *os.File
+	if f, err = openIfExists(filepath.Join(dir, manifestFileName)); err != nil {
 		return false, manifestContents{}, err
+	} else if f == nil {
+		return false, manifestContents{}, nil
 	}
-
-	// !exists(lockFileName) => uninitialized store
-	if locked {
-		var f *os.File
-		err = func() (ferr error) {
-			lck := newLock(dir)
-			ferr = lck.Lock()
-			if ferr != nil {
-				return ferr
-			}
-
-			defer func() {
-				unlockErr := lck.Unlock()
-				if ferr == nil {
-					ferr = unlockErr
-				}
-			}()
-
-			if readHook != nil {
-				ferr = readHook()
-
-				if ferr != nil {
-					return ferr
-				}
-			}
-
-			f, ferr = openIfExists(filepath.Join(dir, manifestFileName))
-			if ferr != nil {
-				return ferr
-			}
-			return nil
-		}()
-
-		if err != nil {
-			return exists, contents, err
+	defer func() {
+		if cerr := f.Close(); err == nil {
+			err = cerr // keep first error
 		}
+	}()
 
-		if f != nil {
-			defer func() {
-				closeErr := f.Close()
-
-				if err == nil {
-					err = closeErr
-				}
-			}()
-
-			exists = true
-
-			contents, err = parseManifest(f)
-
-			if err != nil {
-				return false, contents, err
-			}
-		}
+	contents, err = parseManifest(f)
+	if err != nil {
+		return false, contents, err
 	}
-	return exists, contents, nil
+	exists = true
+	return
 }
 
-func updateWithChecker(_ context.Context, dir string, validate manifestChecker, lastLock addr, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
+// updateWithChecker updates the manifest if |validate| is satisfied, callers must hold the file lock.
+func updateWithChecker(_ context.Context, dir string, mode updateMode, validate manifestChecker, lastLock addr, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
 	var tempManifestPath string
 
 	// Write a temporary manifest file, to be renamed over manifestFileName upon success.
@@ -406,7 +382,6 @@ func updateWithChecker(_ context.Context, dir string, validate manifestChecker, 
 	tempManifestPath, err = func() (name string, ferr error) {
 		var temp *os.File
 		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(dir, "nbs_manifest_")
-
 		if ferr != nil {
 			return "", ferr
 		}
@@ -420,9 +395,14 @@ func updateWithChecker(_ context.Context, dir string, validate manifestChecker, 
 		}()
 
 		ferr = writeManifest(temp, newContents)
-
 		if ferr != nil {
 			return "", ferr
+		}
+
+		if mode == syncFlush {
+			if ferr = temp.Sync(); ferr != nil {
+				return "", ferr
+			}
 		}
 
 		return temp.Name(), nil
@@ -433,22 +413,6 @@ func updateWithChecker(_ context.Context, dir string, validate manifestChecker, 
 	}
 
 	defer file.Remove(tempManifestPath) // If we rename below, this will be a no-op
-
-	// Take manifest file lock
-	lck := newLock(dir)
-	err = lck.Lock()
-
-	if err != nil {
-		return manifestContents{}, err
-	}
-
-	defer func() {
-		unlockErr := lck.Unlock()
-
-		if err == nil {
-			err = unlockErr
-		}
-	}()
 
 	// writeHook is for testing, allowing other code to slip in and try to do stuff while we hold the lock.
 	if writeHook != nil {
@@ -514,5 +478,31 @@ func updateWithChecker(_ context.Context, dir string, validate manifestChecker, 
 		return manifestContents{}, err
 	}
 
+	if mode == syncFlush {
+		if err = syncDirectoryHandle(dir); err != nil {
+			return manifestContents{}, err
+		}
+	}
+
 	return newContents, nil
+}
+
+func syncDirectoryHandle(dir string) (err error) {
+	if runtime.GOOS == "windows" {
+		// directory sync not supported on Windows
+		return
+	}
+	var d *os.File
+	if d, err = os.Open(dir); err != nil {
+		return err
+	}
+	return d.Sync()
+}
+
+func tryFileLock(lock *fslock.Lock) (err error) {
+	err = lock.LockWithTimeout(lockFileTimeout)
+	if errors.Is(err, fslock.ErrTimeout) {
+		err = errors.New("timed out reading database manifest")
+	}
+	return
 }

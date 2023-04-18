@@ -17,7 +17,7 @@ package json
 import (
 	"context"
 
-	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -29,7 +29,7 @@ func MustNomsJSON(str string) NomsJSON {
 
 func MustNomsJSONWithVRW(vrw types.ValueReadWriter, str string) NomsJSON {
 	ctx := context.Background()
-	doc := sql.MustJSON(str)
+	doc := gmstypes.MustJSON(str)
 	noms, err := NomsJSONFromJSONValue(ctx, vrw, doc)
 	if err != nil {
 		panic(err)

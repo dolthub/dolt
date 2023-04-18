@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -30,9 +29,10 @@ import (
 
 var ErrAlreadyExists = errors.New("already exists")
 var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
-var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into its parent; use `-f` to force")
+var ErrUnmergedBranch = errors.New("branch is not fully merged")
+var ErrWorkingSetsOnBothBranches = errors.New("checkout would overwrite uncommitted changes on target branch")
 
-func RenameBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliConfig, oldBranch, newBranch string, force bool) error {
+func RenameBranch(ctx context.Context, dbData env.DbData, oldBranch, newBranch string, remoteDbPro env.RemoteDbProvider, force bool) error {
 	oldRef := ref.NewBranchRef(oldBranch)
 	newRef := ref.NewBranchRef(newBranch)
 
@@ -67,7 +67,7 @@ func RenameBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliCon
 		}
 	}
 
-	return DeleteBranch(ctx, dbData, config, oldBranch, DeleteOptions{Force: true})
+	return DeleteBranch(ctx, dbData, oldBranch, DeleteOptions{Force: true}, remoteDbPro)
 }
 
 func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
@@ -113,27 +113,27 @@ type DeleteOptions struct {
 	Remote bool
 }
 
-func DeleteBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliConfig, brName string, opts DeleteOptions) error {
-	var dref ref.DoltRef
+func DeleteBranch(ctx context.Context, dbData env.DbData, brName string, opts DeleteOptions, remoteDbPro env.RemoteDbProvider) error {
+	var branchRef ref.DoltRef
 	if opts.Remote {
 		var err error
-		dref, err = ref.NewRemoteRefFromPathStr(brName)
+		branchRef, err = ref.NewRemoteRefFromPathStr(brName)
 		if err != nil {
 			return err
 		}
 	} else {
-		dref = ref.NewBranchRef(brName)
-		if ref.Equals(dbData.Rsr.CWBHeadRef(), dref) {
+		branchRef = ref.NewBranchRef(brName)
+		if ref.Equals(dbData.Rsr.CWBHeadRef(), branchRef) {
 			return ErrCOBranchDelete
 		}
 	}
 
-	return DeleteBranchOnDB(ctx, dbData, config, dref, opts)
+	return DeleteBranchOnDB(ctx, dbData, branchRef, opts, remoteDbPro)
 }
 
-func DeleteBranchOnDB(ctx context.Context, dbData env.DbData, config *env.DoltCliConfig, dref ref.DoltRef, opts DeleteOptions) error {
-	ddb := dbData.Ddb
-	hasRef, err := ddb.HasRef(ctx, dref)
+func DeleteBranchOnDB(ctx context.Context, dbdata env.DbData, branchRef ref.DoltRef, opts DeleteOptions, pro env.RemoteDbProvider) error {
+	ddb := dbdata.Ddb
+	hasRef, err := ddb.HasRef(ctx, branchRef)
 
 	if err != nil {
 		return err
@@ -142,36 +142,27 @@ func DeleteBranchOnDB(ctx context.Context, dbData env.DbData, config *env.DoltCl
 	}
 
 	if !opts.Force && !opts.Remote {
-		ms, err := doltdb.NewCommitSpec(env.GetDefaultInitBranch(config))
+		// check to see if the branch is fully merged into its parent
+		trackedBranches, err := dbdata.Rsr.GetBranches()
 		if err != nil {
 			return err
 		}
 
-		init, err := ddb.Resolve(ctx, ms, nil)
-		if err != nil {
-			return err
-		}
-
-		cs, err := doltdb.NewCommitSpec(dref.String())
-		if err != nil {
-			return err
-		}
-
-		cm, err := ddb.Resolve(ctx, cs, nil)
-		if err != nil {
-			return err
-		}
-
-		isMerged, _ := init.CanFastReverseTo(ctx, cm)
-		if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
-			return err
-		}
-		if !isMerged {
-			return ErrUnmergedBranchDelete
+		trackedBranch, hasUpstream := trackedBranches[branchRef.GetPath()]
+		if hasUpstream {
+			err = validateBranchMergedIntoUpstream(ctx, dbdata, branchRef, trackedBranch.Remote, pro)
+			if err != nil {
+				return err
+			}
+		} else {
+			err = validateBranchMergedIntoCurrentWorkingBranch(ctx, dbdata, branchRef)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
-	wsRef, err := ref.WorkingSetRefForHead(dref)
+	wsRef, err := ref.WorkingSetRefForHead(branchRef)
 	if err != nil {
 		if !errors.Is(err, ref.ErrWorkingSetUnsupported) {
 			return err
@@ -183,7 +174,98 @@ func DeleteBranchOnDB(ctx context.Context, dbData env.DbData, config *env.DoltCl
 		}
 	}
 
-	return ddb.DeleteBranch(ctx, dref)
+	return ddb.DeleteBranch(ctx, branchRef)
+}
+
+// validateBranchMergedIntoCurrentWorkingBranch returns an error if the given branch is not fully merged into the HEAD of the current branch.
+func validateBranchMergedIntoCurrentWorkingBranch(ctx context.Context, dbdata env.DbData, branch ref.DoltRef) error {
+	branchSpec, err := doltdb.NewCommitSpec(branch.GetPath())
+	if err != nil {
+		return err
+	}
+
+	branchHead, err := dbdata.Ddb.Resolve(ctx, branchSpec, nil)
+	if err != nil {
+		return err
+	}
+
+	cwbCs, err := doltdb.NewCommitSpec("HEAD")
+	if err != nil {
+		return err
+	}
+
+	cwbHead, err := dbdata.Ddb.Resolve(ctx, cwbCs, dbdata.Rsr.CWBHeadRef())
+	if err != nil {
+		return err
+	}
+
+	isMerged, err := branchHead.CanFastForwardTo(ctx, cwbHead)
+	if err != nil {
+		if errors.Is(err, doltdb.ErrUpToDate) {
+			return nil
+		}
+		if errors.Is(err, doltdb.ErrIsAhead) {
+			return ErrUnmergedBranch
+		}
+
+		return err
+	}
+
+	if !isMerged {
+		return ErrUnmergedBranch
+	}
+
+	return nil
+}
+
+// validateBranchMergedIntoUpstream returns an error if the branch provided is not fully merged into its upstream
+func validateBranchMergedIntoUpstream(ctx context.Context, dbdata env.DbData, branch ref.DoltRef, remoteName string, pro env.RemoteDbProvider) error {
+	remotes, err := dbdata.Rsr.GetRemotes()
+	if err != nil {
+		return err
+	}
+	remote, ok := remotes[remoteName]
+	if !ok {
+		// TODO: skip error?
+		return fmt.Errorf("remote %s not found", remoteName)
+	}
+
+	remoteDb, err := pro.GetRemoteDB(ctx, dbdata.Ddb.ValueReadWriter().Format(), remote, false)
+	if err != nil {
+		return err
+	}
+
+	cs, err := doltdb.NewCommitSpec(branch.GetPath())
+	if err != nil {
+		return err
+	}
+
+	remoteBranchHead, err := remoteDb.Resolve(ctx, cs, nil)
+	if err != nil {
+		return err
+	}
+
+	localBranchHead, err := dbdata.Ddb.Resolve(ctx, cs, nil)
+	if err != nil {
+		return err
+	}
+
+	canFF, err := localBranchHead.CanFastForwardTo(ctx, remoteBranchHead)
+	if err != nil {
+		if errors.Is(err, doltdb.ErrUpToDate) {
+			return nil
+		}
+		if errors.Is(err, doltdb.ErrIsAhead) {
+			return ErrUnmergedBranch
+		}
+		return err
+	}
+
+	if !canFF {
+		return ErrUnmergedBranch
+	}
+
+	return nil
 }
 
 func CreateBranchWithStartPt(ctx context.Context, dbData env.DbData, newBranch, startPt string, force bool) error {
@@ -245,9 +327,9 @@ func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoi
 	return CreateBranchOnDB(ctx, dbData.Ddb, newBranch, startingPoint, force, dbData.Rsr.CWBHeadRef())
 }
 
-// UpdateRootsForBranch writes the roots needed for a branch checkout and returns the updated roots. |roots.Head|
-// should be the pre-checkout head. The returned roots struct has |Head| set to |branchRoot|.
-func UpdateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, force bool) (doltdb.Roots, error) {
+// rootsForBranch returns the roots needed for a branch checkout. |roots.Head| should be the pre-checkout head. The
+// returned roots struct has |Head| set to |branchRoot|.
+func rootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, force bool) (doltdb.Roots, error) {
 	conflicts := set.NewStrSet([]string{})
 	if roots.Head == nil {
 		roots.Working = branchRoot
@@ -270,12 +352,12 @@ func UpdateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *d
 		return doltdb.Roots{}, CheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
 
-	roots.Working, err = overwriteRoot(ctx, branchRoot, wrkTblHashes)
+	roots.Working, err = writeTableHashes(ctx, branchRoot, wrkTblHashes)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
-	roots.Staged, err = overwriteRoot(ctx, branchRoot, stgTblHashes)
+	roots.Staged, err = writeTableHashes(ctx, branchRoot, stgTblHashes)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -284,28 +366,9 @@ func UpdateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *d
 	return roots, nil
 }
 
-func checkoutBranchNoDocs(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, rsw env.RepoStateWriter, branchRef ref.BranchRef, force bool) error {
-	roots, err := UpdateRootsForBranch(ctx, roots, branchRoot, force)
-	if err != nil {
-		return err
-	}
-
-	err = rsw.SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
-	if err != nil {
-		return err
-	}
-
-	// TODO: combine into single update
-	err = rsw.UpdateWorkingRoot(ctx, roots.Working)
-	if err != nil {
-		return err
-	}
-
-	return rsw.UpdateStagedRoot(ctx, roots.Staged)
-}
-
 func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
 	branchRef := ref.NewBranchRef(brName)
+	initialHeadRef := dEnv.RepoStateReader().CWBHeadRef()
 
 	db := dEnv.DoltDB
 	hasRef, err := db.HasRef(ctx, branchRef)
@@ -320,25 +383,172 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		return doltdb.ErrAlreadyOnBranch
 	}
 
-	branchRoot, err := BranchRoot(ctx, db, brName)
+	branchHead, err := branchHeadRoot(ctx, db, brName)
 	if err != nil {
 		return err
 	}
 
-	roots, err := dEnv.Roots(ctx)
-	// roots will be empty/nil if the working set is not set (working set is not set if the current branch was deleted)
-	if errors.Is(err, doltdb.ErrBranchNotFound) || errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-		roots, err = dEnv.RecoveryRoots(ctx)
+	workingSetExists := true
+	initialWs, err := dEnv.WorkingSet(ctx)
+	if err == doltdb.ErrWorkingSetNotFound {
+		// ignore, but don't reset the working set
+		workingSetExists = false
 	} else if err != nil {
 		return err
 	}
 
-	return checkoutBranchNoDocs(ctx, roots, branchRoot, dEnv.RepoStateWriter(), branchRef, force)
+	if !force {
+		if checkoutWouldStompWorkingSetChanges(ctx, dEnv, branchRef) {
+			return ErrWorkingSetsOnBothBranches
+		}
+	}
+
+	initialRoots, err := dEnv.Roots(ctx)
+
+	// roots will be empty/nil if the working set is not set (working set is not set if the current branch was deleted)
+	if errors.Is(err, doltdb.ErrBranchNotFound) || errors.Is(err, doltdb.ErrWorkingSetNotFound) {
+		workingSetExists = false
+	} else if err != nil {
+		return err
+	}
+
+	hasChanges := false
+	if workingSetExists {
+		hasChanges, _, _, err = rootHasUncommittedChanges(initialRoots)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Only if the current working set has uncommitted changes do we carry them forward to the branch being checked out.
+	// If this is the case, then the destination branch must *not* have any uncommitted changes, as checked by
+	// checkoutWouldStompWorkingSetChanges
+	if hasChanges {
+		err = transferWorkingChanges(ctx, dEnv, initialRoots, branchHead, branchRef, force)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
+		if err != nil {
+			return err
+		}
+	}
+
+	if workingSetExists && hasChanges {
+		err = cleanOldWorkingSet(ctx, dEnv, initialRoots, initialHeadRef, initialWs)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
-// BranchRoot returns the root value at the branch with the name given
-// TODO: this belongs in DoltDB, maybe
-func BranchRoot(ctx context.Context, db *doltdb.DoltDB, brName string) (*doltdb.RootValue, error) {
+func transferWorkingChanges(
+	ctx context.Context,
+	dEnv *env.DoltEnv,
+	initialRoots doltdb.Roots,
+	branchHead *doltdb.RootValue,
+	branchRef ref.BranchRef,
+	force bool,
+) error {
+	newRoots, err := rootsForBranch(ctx, initialRoots, branchHead, force)
+	if err != nil {
+		return err
+	}
+
+	// important to not update the checked out branch until after we have done the error checking above, otherwise we
+	// potentially leave the client in a bad state
+	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
+	if err != nil {
+		return err
+	}
+
+	ws, err := dEnv.WorkingSet(ctx)
+
+	// For backwards compatibility we support the branch not having a working set, but generally speaking it already
+	// should have one
+	if err == doltdb.ErrWorkingSetNotFound {
+		wsRef, err := ref.WorkingSetRefForHead(branchRef)
+		if err != nil {
+			return err
+		}
+		ws = doltdb.EmptyWorkingSet(wsRef)
+	} else if err != nil {
+		return err
+	}
+
+	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// cleanOldWorkingSet resets the source branch's working set to the branch head, leaving the source branch unchanged
+func cleanOldWorkingSet(
+	ctx context.Context,
+	dEnv *env.DoltEnv,
+	initialRoots doltdb.Roots,
+	initialHeadRef ref.DoltRef,
+	initialWs *doltdb.WorkingSet,
+) error {
+	// reset the source branch's working set to the branch head, leaving the source branch unchanged
+	err := ResetHard(ctx, dEnv, "", initialRoots, initialHeadRef, initialWs)
+	if err != nil {
+		return err
+	}
+
+	// Annoyingly, after the ResetHard above we need to get all the roots again, because the working set has changed
+	cm, err := dEnv.DoltDB.ResolveCommitRef(ctx, initialHeadRef)
+	if err != nil {
+		return err
+	}
+
+	headRoot, err := cm.ResolveRootValue(ctx)
+	if err != nil {
+		return err
+	}
+
+	workingSet, err := dEnv.DoltDB.ResolveWorkingSet(ctx, initialWs.Ref())
+	if err != nil {
+		return err
+	}
+
+	resetRoots := doltdb.Roots{
+		Head:    headRoot,
+		Working: workingSet.WorkingRoot(),
+		Staged:  workingSet.StagedRoot(),
+	}
+
+	// we also have to do a clean, because we the ResetHard won't touch any new tables (tables only in the working set)
+	newRoots, err := CleanUntracked(ctx, resetRoots, []string{}, false, true)
+	if err != nil {
+		return err
+	}
+
+	h, err := workingSet.HashOf()
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.DoltDB.UpdateWorkingSet(
+		ctx,
+		initialWs.Ref(),
+		initialWs.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged).ClearMerge(),
+		h,
+		dEnv.NewWorkingSetMeta("reset hard"),
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// branchHeadRoot returns the root value at the branch head with the name given
+func branchHeadRoot(ctx context.Context, db *doltdb.DoltDB, brName string) (*doltdb.RootValue, error) {
 	cs, err := doltdb.NewCommitSpec(brName)
 	if err != nil {
 		return nil, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
@@ -428,9 +638,9 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot *dolt
 	return resultMap, nil
 }
 
-// overwriteRoot writes new table hash values for the root given and returns it.
+// writeTableHashes writes new table hash values for the root given and returns it.
 // This is an inexpensive and convenient way of replacing all the tables at once.
-func overwriteRoot(ctx context.Context, head *doltdb.RootValue, tblHashes map[string]hash.Hash) (*doltdb.RootValue, error) {
+func writeTableHashes(ctx context.Context, head *doltdb.RootValue, tblHashes map[string]hash.Hash) (*doltdb.RootValue, error) {
 	names, err := head.GetTableNames(ctx)
 	if err != nil {
 		return nil, err
@@ -460,6 +670,57 @@ func overwriteRoot(ctx context.Context, head *doltdb.RootValue, tblHashes map[st
 	}
 
 	return head, nil
+}
+
+// checkoutWouldStompWorkingSetChanges checks that the current working set is "compatible" with the dest working set.
+// This means that if both working sets are present (ie there are changes on both source and dest branches),
+// we check if the changes are identical before allowing a clobbering checkout.
+// Working set errors are ignored by this function, because they are properly handled elsewhere.
+func checkoutWouldStompWorkingSetChanges(ctx context.Context, dEnv *env.DoltEnv, branchRef ref.BranchRef) bool {
+	sourceRoots, err := dEnv.Roots(ctx)
+	if err != nil {
+		return false
+	}
+
+	destRoots, err := dEnv.DoltDB.ResolveBranchRoots(ctx, branchRef)
+	if err != nil {
+		return false
+	}
+
+	sourceHasChanges, sourceWorkingHash, sourceStagedHash, err := rootHasUncommittedChanges(sourceRoots)
+	if err != nil {
+		return false
+	}
+
+	destHasChanges, destWorkingHash, destStagedHash, err := rootHasUncommittedChanges(destRoots)
+	if err != nil {
+		return false
+	}
+
+	// This is a stomping checkout operation if both the source and dest have uncommitted changes, and they're not the
+	// same uncommitted changes
+	return sourceHasChanges && destHasChanges && (sourceWorkingHash != destWorkingHash || sourceStagedHash != destStagedHash)
+}
+
+// rootHasUncommittedChanges returns whether the roots given have uncommitted changes, and the hashes of the working and staged roots
+func rootHasUncommittedChanges(roots doltdb.Roots) (hasChanges bool, workingHash hash.Hash, stagedHash hash.Hash, err error) {
+	headHash, err := roots.Head.HashOf()
+	if err != nil {
+		return false, hash.Hash{}, hash.Hash{}, err
+	}
+
+	workingHash, err = roots.Working.HashOf()
+	if err != nil {
+		return false, hash.Hash{}, hash.Hash{}, err
+	}
+
+	stagedHash, err = roots.Staged.HashOf()
+	if err != nil {
+		return false, hash.Hash{}, hash.Hash{}, err
+	}
+
+	hasChanges = workingHash != stagedHash || stagedHash != headHash
+	return hasChanges, workingHash, stagedHash, nil
 }
 
 func IsBranch(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {

@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -41,8 +42,8 @@ type floatType struct {
 
 var _ TypeInfo = (*floatType)(nil)
 var (
-	Float32Type = &floatType{sql.Float32}
-	Float64Type = &floatType{sql.Float64}
+	Float32Type = &floatType{gmstypes.Float32}
+	Float64Type = &floatType{gmstypes.Float64}
 )
 
 func CreateFloatTypeFromParams(params map[string]string) (TypeInfo, error) {
@@ -63,9 +64,9 @@ func CreateFloatTypeFromParams(params map[string]string) (TypeInfo, error) {
 func (ti *floatType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Float); ok {
 		switch ti.sqlFloatType {
-		case sql.Float32:
+		case gmstypes.Float32:
 			return float32(val), nil
-		case sql.Float64:
+		case gmstypes.Float64:
 			return float64(val), nil
 		}
 	}
@@ -82,9 +83,9 @@ func (ti *floatType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader
 	case types.FloatKind:
 		f := reader.ReadFloat(nbf)
 		switch ti.sqlFloatType {
-		case sql.Float32:
+		case gmstypes.Float32:
 			return float32(f), nil
-		case sql.Float64:
+		case gmstypes.Float64:
 			return f, nil
 		}
 	case types.NullKind:
@@ -99,7 +100,7 @@ func (ti *floatType) ConvertValueToNomsValue(ctx context.Context, vrw types.Valu
 	if v == nil {
 		return types.NullValue, nil
 	}
-	fltVal, err := ti.sqlFloatType.Convert(v)
+	fltVal, _, err := ti.sqlFloatType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +168,7 @@ func (ti *floatType) GetTypeParams() map[string]string {
 // IsValid implements TypeInfo interface.
 func (ti *floatType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Float); ok {
-		_, err := ti.sqlFloatType.Convert(float64(val))
+		_, _, err := ti.sqlFloatType.Convert(float64(val))
 		if err != nil {
 			return false
 		}
@@ -219,7 +220,7 @@ func floatTypeConverter(ctx context.Context, src *floatType, destTi TypeInfo) (t
 				return nil, fmt.Errorf("unexpected type converting float to enum: %T", v)
 			}
 			fltVal := floatTypeRoundToZero(float64(val))
-			intVal, err := sql.Int64.Convert(fltVal)
+			intVal, _, err := gmstypes.Int64.Convert(fltVal)
 			if err != nil {
 				return nil, err
 			}

@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -265,11 +264,16 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 				tags[i] = newCol.Tag
 			}
 		}
-		_, err = newSch.Indexes().AddIndexByColTags(index.Name(), tags, schema.IndexProperties{
-			IsUnique:      index.IsUnique(),
-			IsUserDefined: index.IsUserDefined(),
-			Comment:       index.Comment(),
-		})
+		_, err = newSch.Indexes().AddIndexByColTags(
+			index.Name(),
+			tags,
+			index.PrefixLengths(),
+			schema.IndexProperties{
+				IsUnique:      index.IsUnique(),
+				IsSpatial:     index.IsSpatial(),
+				IsUserDefined: index.IsUserDefined(),
+				Comment:       index.Comment(),
+			})
 		if err != nil {
 			return nil, err
 		}
@@ -330,60 +334,39 @@ var ErrKeylessAltTbl = errors.New("schema alterations not supported for keyless 
 // backupFkcIndexesForKeyDrop finds backup indexes to cover foreign key references during a primary
 // key drop. If multiple indexes are valid, we sort by unique and select the first.
 // This will not work with a non-pk index drop without an additional index filter argument.
-func backupFkcIndexesForPkDrop(ctx *sql.Context, sch schema.Schema, fkc *doltdb.ForeignKeyCollection) ([]doltdb.FkIndexUpdate, error) {
-	indexes := sch.Indexes().AllIndexes()
+func backupFkcIndexesForPkDrop(ctx *sql.Context, tbl string, sch schema.Schema, fkc *doltdb.ForeignKeyCollection) ([]doltdb.FkIndexUpdate, error) {
+	fkUpdates := make([]doltdb.FkIndexUpdate, 0)
 
-	// pkBackups is a mapping from the table's PK tags to potentially compensating indexes
-	pkBackups := make(map[uint64][]schema.Index, len(sch.GetPKCols().TagToIdx))
-	for tag, _ := range sch.GetPKCols().TagToIdx {
-		pkBackups[tag] = nil
+	declared, referenced := fkc.KeysForTable(tbl)
+	for _, fk := range declared {
+		if fk.TableIndex == "" {
+			// pk used in fk definition on |tbl|
+			return nil, sql.ErrCantDropIndex.New("PRIMARY", fk.Name)
+		}
 	}
-
-	// prefer unique key backups
-	sort.Slice(indexes[:], func(i, j int) bool {
-		return indexes[i].IsUnique() && !indexes[j].IsUnique()
-	})
-
-	for _, idx := range indexes {
-		if !idx.IsUserDefined() {
+	for _, fk := range referenced {
+		if fk.ReferencedTableIndex != "" {
+			// if an index doesn't reference primary key, it is unaffected
 			continue
 		}
+		// pk reference by fk definition on |fk.TableName|
 
-		for _, tag := range idx.AllTags() {
-			if _, ok := pkBackups[tag]; ok {
-				pkBackups[tag] = append(pkBackups[tag], idx)
-			}
+		// get column names from tags in foreign key
+		fkParentCols := make([]string, len(fk.ReferencedTableColumns))
+		for i, colTag := range fk.ReferencedTableColumns {
+			col, _ := sch.GetPKCols().GetByTag(colTag)
+			fkParentCols[i] = col.Name
 		}
-	}
 
-	fkUpdates := make([]doltdb.FkIndexUpdate, 0)
-	for _, fk := range fkc.AllKeys() {
-		// check if this FK references a parent PK tag we are trying to change
-		if backups, ok := pkBackups[fk.ReferencedTableColumns[0]]; ok {
-			covered := false
-			for _, idx := range backups {
-				idxTags := idx.AllTags()
-				if len(fk.TableColumns) > len(idxTags) {
-					continue
-				}
-				failed := false
-				for i := 0; i < len(fk.ReferencedTableColumns); i++ {
-					if idxTags[i] != fk.ReferencedTableColumns[i] {
-						failed = true
-						break
-					}
-				}
-				if failed {
-					continue
-				}
-				fkUpdates = append(fkUpdates, doltdb.FkIndexUpdate{FkName: fk.Name, FromIdx: fk.ReferencedTableIndex, ToIdx: idx.Name()})
-				covered = true
-				break
-			}
-			if !covered {
-				return nil, sql.ErrCantDropIndex.New("PRIMARY")
-			}
+		// find suitable secondary index
+		newIdx, ok, err := findIndexWithPrefix(sch, sch.GetPKCols().GetColumnNames())
+		if err != nil {
+			return nil, err
+		} else if !ok {
+			return nil, sql.ErrCantDropIndex.New("PRIMARY", fk.Name)
 		}
+
+		fkUpdates = append(fkUpdates, doltdb.FkIndexUpdate{FkName: fk.Name, FromIdx: fk.ReferencedTableIndex, ToIdx: newIdx.Name()})
 	}
 	return fkUpdates, nil
 }

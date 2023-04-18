@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"os"
 	"path"
 	"strings"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -100,6 +102,11 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		return verr
 	}
 
+	dEnv.UserPassConfig, verr = getRemoteUserAndPassConfig(apr)
+	if verr != nil {
+		return verr
+	}
+
 	userDirExists, _ := dEnv.FS.Exists(dir)
 
 	// Check for a valid dolthub url and replace the urlStr with the parsed repoName.
@@ -163,11 +170,6 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = clonedEnv.RepoState.Save(clonedEnv.FS)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
 	return nil
 }
 
@@ -191,7 +193,7 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 		if dir == "." {
 			dir = path.Dir(urlStr)
 		} else if dir == "/" {
-			return "", "", errhand.BuildDError("Could not infer repo name.  Please explicitily define a directory for this url").Build()
+			return "", "", errhand.BuildDError("Could not infer repo name.  Please explicitly define a directory for this url").Build()
 		}
 	}
 
@@ -232,4 +234,18 @@ func validateAndParseDolthubUrl(urlStr string) (string, bool) {
 	}
 
 	return "", false
+}
+
+func getRemoteUserAndPassConfig(apr *argparser.ArgParseResults) (*creds.DoltCredsForPass, errhand.VerboseError) {
+	if !apr.Contains(cli.UserParam) {
+		return nil, nil
+	}
+	pass, found := os.LookupEnv("DOLT_REMOTE_PASSWORD")
+	if !found {
+		return nil, errhand.BuildDError("error: must set DOLT_REMOTE_PASSWORD environment variable to use --user param").Build()
+	}
+	return &creds.DoltCredsForPass{
+		Username: apr.GetValueOrDefault(cli.UserParam, ""),
+		Password: pass,
+	}, nil
 }

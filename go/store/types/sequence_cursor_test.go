@@ -108,11 +108,11 @@ func (ts testSequence) kvTuples(from, to uint64, dest []Tuple) ([]Tuple, error) 
 	panic("not reached")
 }
 
-func (ts testSequence) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (ts testSequence) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	panic("not reached")
 }
 
-func (ts testSequence) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error) {
+func (ts testSequence) Compare(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (int, error) {
 	panic("not reached")
 }
 

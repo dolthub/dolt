@@ -33,24 +33,33 @@ import (
 
 type fileTableReader struct {
 	tableReader
-	fc *fdCache
-	h  addr
+	h addr
 }
 
 const (
 	fileBlockSize = 1 << 12
 )
 
-func newFileTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProvider, fc *fdCache) (cs chunkSource, err error) {
+func tableFileExists(ctx context.Context, dir string, h addr) (bool, error) {
+	path := filepath.Join(dir, h.String())
+	_, err := os.Stat(path)
+
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+
+	return err == nil, err
+}
+
+func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint32, q MemoryQuotaProvider) (cs chunkSource, err error) {
 	path := filepath.Join(dir, h.String())
 
-	index, err := func() (ti onHeapTableIndex, err error) {
-
+	var f *os.File
+	index, sz, err := func() (ti onHeapTableIndex, sz int64, err error) {
 		// Be careful with how |f| is used below. |RefFile| returns a cached
 		// os.File pointer so the code needs to use f in a concurrency-safe
 		// manner. Moving the file offset is BAD.
-		var f *os.File
-		f, err = fc.RefFile(path)
+		f, err = os.Open(path)
 		if err != nil {
 			return
 		}
@@ -70,91 +79,108 @@ func newFileTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProv
 			return
 		}
 
-		indexSize := int64(indexSize(chunkCount) + footerSize)
-		indexOffset := fi.Size() - indexSize
-		r := io.NewSectionReader(f, indexOffset, indexSize)
-		b := make([]byte, indexSize)
+		idxSz := int64(indexSize(chunkCount) + footerSize)
+		sz = fi.Size()
+		indexOffset := sz - idxSz
+		r := io.NewSectionReader(f, indexOffset, idxSz)
 
-		_, err = io.ReadFull(r, b)
+		if int64(int(idxSz)) != idxSz {
+			err = fmt.Errorf("table file %s/%s is too large to read on this platform. index size %d > max int.", dir, h.String(), idxSz)
+			return
+		}
+
+		var b []byte
+		b, err = q.AcquireQuotaBytes(ctx, int(idxSz))
 		if err != nil {
 			return
 		}
 
-		defer func() {
-			unrefErr := fc.UnrefFile(path)
-
-			if unrefErr != nil {
-				err = unrefErr
-			}
-		}()
-
-		ti, err = parseTableIndex(b, q)
+		_, err = io.ReadFull(r, b)
 		if err != nil {
+			q.ReleaseQuotaBytes(len(b))
+			return
+		}
+
+		ti, err = parseTableIndex(ctx, b, q)
+		if err != nil {
+			q.ReleaseQuotaBytes(len(b))
 			return
 		}
 
 		return
 	}()
 	if err != nil {
+		if f != nil {
+			f.Close()
+		}
 		return nil, err
 	}
 
-	if chunkCount != index.chunkCount {
+	if chunkCount != index.chunkCount() {
+		index.Close()
+		f.Close()
 		return nil, errors.New("unexpected chunk count")
 	}
 
-	tr, err := newTableReader(index, &cacheReaderAt{path, fc}, fileBlockSize)
+	tr, err := newTableReader(index, &fileReaderAt{f, path, sz}, fileBlockSize)
 	if err != nil {
+		index.Close()
+		f.Close()
 		return nil, err
 	}
 	return &fileTableReader{
 		tr,
-		fc,
 		h,
 	}, nil
 }
 
-func (mmtr *fileTableReader) hash() (addr, error) {
-	return mmtr.h, nil
+func (ftr *fileTableReader) hash() addr {
+	return ftr.h
 }
 
-func (mmtr *fileTableReader) close() error {
-	return mmtr.tableReader.close()
+func (ftr *fileTableReader) Close() error {
+	return ftr.tableReader.close()
 }
 
-func (mmtr *fileTableReader) clone() (chunkSource, error) {
-	tr, err := mmtr.tableReader.clone()
+func (ftr *fileTableReader) clone() (chunkSource, error) {
+	tr, err := ftr.tableReader.clone()
 	if err != nil {
 		return &fileTableReader{}, err
 	}
-	return &fileTableReader{tr, mmtr.fc, mmtr.h}, nil
+	return &fileTableReader{tr, ftr.h}, nil
 }
 
-type cacheReaderAt struct {
+type fileReaderAt struct {
+	f    *os.File
 	path string
-	fc   *fdCache
+	sz   int64
 }
 
-func (cra *cacheReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
-	var r io.ReaderAt
-	t1 := time.Now()
-
-	if r, err = cra.fc.RefFile(cra.path); err != nil {
-		return
+func (fra *fileReaderAt) clone() (tableReaderAt, error) {
+	f, err := os.Open(fra.path)
+	if err != nil {
+		return nil, err
 	}
+	return &fileReaderAt{
+		f,
+		fra.path,
+		fra.sz,
+	}, nil
+}
 
+func (fra *fileReaderAt) Close() error {
+	return fra.f.Close()
+}
+
+func (fra *fileReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {
+	return os.Open(fra.path)
+}
+
+func (fra *fileReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
+	t1 := time.Now()
 	defer func() {
 		stats.FileBytesPerRead.Sample(uint64(len(p)))
 		stats.FileReadLatency.SampleTimeSince(t1)
 	}()
-
-	defer func() {
-		unrefErr := cra.fc.UnrefFile(cra.path)
-
-		if err == nil {
-			err = unrefErr
-		}
-	}()
-
-	return r.ReadAt(p, off)
+	return fra.f.ReadAt(p, off)
 }

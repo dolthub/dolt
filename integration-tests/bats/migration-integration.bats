@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     skip_nbf_dolt
-    skip_nbf_dolt_dev
 
     setup_common
     TARGET_NBF="__DOLT__"
@@ -21,7 +20,7 @@ teardown() {
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
-    [[ ! "$output" =~ "tdkt7s7805k1ml4hu37pm688g5i0b8ie" ]] || false
+    [[ ! "$output" =~ "4v7c07ht4o7eshlcmgc9ciop0780lerv" ]] || false
 
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
@@ -29,7 +28,7 @@ teardown() {
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "tdkt7s7805k1ml4hu37pm688g5i0b8ie" ]] || false
+    [[ "$output" =~ "4v7c07ht4o7eshlcmgc9ciop0780lerv" ]] || false
     [[ ! "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
 
     # validate TEXT migration
@@ -47,7 +46,7 @@ teardown() {
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
-    [[ ! "$output" =~ "tdkt7s7805k1ml4hu37pm688g5i0b8ie" ]] || false
+    [[ ! "$output" =~ "4v7c07ht4o7eshlcmgc9ciop0780lerv" ]] || false
 
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
@@ -55,7 +54,7 @@ teardown() {
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "tdkt7s7805k1ml4hu37pm688g5i0b8ie" ]] || false
+    [[ "$output" =~ "4v7c07ht4o7eshlcmgc9ciop0780lerv" ]] || false
     [[ ! "$output" =~ "r9jv07tf9un3fm1fg72v7ad9er89oeo7" ]] || false
 
     # validate TEXT migration
@@ -72,7 +71,7 @@ teardown() {
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "u8s83gapv7ghnbmrtpm8q5es0dbl7lpd" ]] || false
-    [[ ! "$output" =~ "apdp3stea20mmm80oiu2ipo07a7v1hvb" ]] || false
+    [[ ! "$output" =~ "nm1ubfu85p4c082bhertltrhkkeffaqg" ]] || false
 
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
@@ -80,6 +79,6 @@ teardown() {
     dolt tag -v
     run dolt tag -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "apdp3stea20mmm80oiu2ipo07a7v1hvb" ]] || false
+    [[ "$output" =~ "nm1ubfu85p4c082bhertltrhkkeffaqg" ]] || false
     [[ ! "$output" =~ "u8s83gapv7ghnbmrtpm8q5es0dbl7lpd" ]] || false
 }

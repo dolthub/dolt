@@ -1,4 +1,4 @@
-// Copyright 2022 Dolthub, Inc.
+// Copyright 2022-2023 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@ const (
 	EncodingCommitAddr Encoding = 22
 	EncodingStringAddr Encoding = 23
 	EncodingJSONAddr   Encoding = 24
+	EncodingCell       Encoding = 25
 	EncodingString     Encoding = 128
 	EncodingBytes      Encoding = 129
 	EncodingDecimal    Encoding = 130
@@ -77,6 +78,7 @@ var EnumNamesEncoding = map[Encoding]string{
 	EncodingCommitAddr: "CommitAddr",
 	EncodingStringAddr: "StringAddr",
 	EncodingJSONAddr:   "JSONAddr",
+	EncodingCell:       "Cell",
 	EncodingString:     "String",
 	EncodingBytes:      "Bytes",
 	EncodingDecimal:    "Decimal",
@@ -108,6 +110,7 @@ var EnumValuesEncoding = map[string]Encoding{
 	"CommitAddr": EncodingCommitAddr,
 	"StringAddr": EncodingStringAddr,
 	"JSONAddr":   EncodingJSONAddr,
+	"Cell":       EncodingCell,
 	"String":     EncodingString,
 	"Bytes":      EncodingBytes,
 	"Decimal":    EncodingDecimal,

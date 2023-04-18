@@ -107,7 +107,9 @@ func DoltProceduresGetTable(ctx *sql.Context, db Database) (*WritableDoltTable, 
 	}
 }
 
-func DoltProceduresGetAll(ctx *sql.Context, db Database) ([]sql.StoredProcedureDetails, error) {
+// DoltProceduresGetAll returns all stored procedures for the database if the procedureName is blank (and empty string),
+// or it returns only the procedure with the matching name if one is given. The name is not case-sensitive.
+func DoltProceduresGetAll(ctx *sql.Context, db Database, procedureName string) ([]sql.StoredProcedureDetails, error) {
 	tbl, err := DoltProceduresGetTable(ctx, db)
 	if err != nil {
 		return nil, err
@@ -129,7 +131,12 @@ func DoltProceduresGetAll(ctx *sql.Context, db Database) ([]sql.StoredProcedureD
 	}
 	nameExpr := idx.Expressions()[0]
 
-	lookup, err := sql.NewIndexBuilder(idx).IsNotNull(ctx, nameExpr).Build(ctx)
+	var lookup sql.IndexLookup
+	if procedureName == "" {
+		lookup, err = sql.NewIndexBuilder(idx).IsNotNull(ctx, nameExpr).Build(ctx)
+	} else {
+		lookup, err = sql.NewIndexBuilder(idx).Equals(ctx, nameExpr, procedureName).Build(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +216,7 @@ func DoltProceduresAddProcedure(ctx *sql.Context, db Database, spd sql.StoredPro
 // DoltProceduresDropProcedure removes the stored procedure from the `dolt_procedures` table. The procedure named must
 // exist.
 func DoltProceduresDropProcedure(ctx *sql.Context, db Database, name string) (retErr error) {
-	strings.ToLower(name)
+	name = strings.ToLower(name)
 	tbl, err := DoltProceduresGetTable(ctx, db)
 	if err != nil {
 		return err
@@ -249,8 +256,7 @@ func DoltProceduresGetDetails(ctx *sql.Context, tbl *WritableDoltTable, name str
 		}
 	}
 	if fragNameIndex == nil {
-		return sql.StoredProcedureDetails{}, false, fmt.Errorf("could not find primary key index on system table `%s`",
-			doltdb.SchemasTableName)
+		return sql.StoredProcedureDetails{}, false, fmt.Errorf("could not find primary key index on system table `%s`", doltdb.ProceduresTableName)
 	}
 
 	indexLookup, err := sql.NewIndexBuilder(fragNameIndex).Equals(ctx, fragNameIndex.Expressions()[0], name).Build(ctx)

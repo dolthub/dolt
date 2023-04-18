@@ -16,15 +16,14 @@ package sqle
 
 import (
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+
+	_ "github.com/dolthub/go-mysql-server/sql/variables"
 )
 
-const (
-	SysVarFalse = int8(0)
-	SysVarTrue  = int8(1)
-)
-
+// TODO: get rid of me, use an integration point to define new sysvars
 func init() {
 	AddDoltSystemVariables()
 }
@@ -36,7 +35,7 @@ func AddDoltSystemVariables() {
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dsess.ReplicateToRemote),
+			Type:              types.NewSystemStringType(dsess.ReplicateToRemote),
 			Default:           "",
 		},
 		{
@@ -44,7 +43,7 @@ func AddDoltSystemVariables() {
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dsess.ReplicationRemoteURLTemplate),
+			Type:              types.NewSystemStringType(dsess.ReplicationRemoteURLTemplate),
 			Default:           "",
 		},
 		{
@@ -52,7 +51,7 @@ func AddDoltSystemVariables() {
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dsess.ReadReplicaRemote),
+			Type:              types.NewSystemStringType(dsess.ReadReplicaRemote),
 			Default:           "",
 		},
 		{
@@ -60,7 +59,7 @@ func AddDoltSystemVariables() {
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dsess.ReadReplicaForcePull),
+			Type:              types.NewSystemStringType(dsess.ReadReplicaForcePull),
 			Default:           int8(0),
 		},
 		{
@@ -68,7 +67,7 @@ func AddDoltSystemVariables() {
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(dsess.SkipReplicationErrors),
+			Type:              types.NewSystemBoolType(dsess.SkipReplicationErrors),
 			Default:           int8(0),
 		},
 		{
@@ -76,7 +75,7 @@ func AddDoltSystemVariables() {
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dsess.ReplicateHeads),
+			Type:              types.NewSystemStringType(dsess.ReplicateHeads),
 			Default:           "",
 		},
 		{
@@ -84,7 +83,7 @@ func AddDoltSystemVariables() {
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(dsess.ReplicateAllHeads),
+			Type:              types.NewSystemBoolType(dsess.ReplicateAllHeads),
 			Default:           int8(0),
 		},
 		{
@@ -92,7 +91,7 @@ func AddDoltSystemVariables() {
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(dsess.AsyncReplication),
+			Type:              types.NewSystemBoolType(dsess.AsyncReplication),
 			Default:           int8(0),
 		},
 		{ // If true, causes a Dolt commit to occur when you commit a transaction.
@@ -100,7 +99,7 @@ func AddDoltSystemVariables() {
 			Scope:             sql.SystemVariableScope_Both,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(dsess.DoltCommitOnTransactionCommit),
+			Type:              types.NewSystemBoolType(dsess.DoltCommitOnTransactionCommit),
 			Default:           int8(0),
 		},
 		{
@@ -108,7 +107,7 @@ func AddDoltSystemVariables() {
 			Scope:             sql.SystemVariableScope_Session,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(dsess.TransactionsDisabledSysVar),
+			Type:              types.NewSystemBoolType(dsess.TransactionsDisabledSysVar),
 			Default:           int8(0),
 		},
 		{ // If true, disables the conflict and constraint violation check when you commit a transaction.
@@ -116,7 +115,7 @@ func AddDoltSystemVariables() {
 			Scope:             sql.SystemVariableScope_Both,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(dsess.ForceTransactionCommit),
+			Type:              types.NewSystemBoolType(dsess.ForceTransactionCommit),
 			Default:           int8(0),
 		},
 		{
@@ -124,7 +123,7 @@ func AddDoltSystemVariables() {
 			Scope:             sql.SystemVariableScope_Session,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemIntType(dsess.CurrentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
+			Type:              types.NewSystemIntType(dsess.CurrentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
 			Default:           int64(0),
 		},
 		{ // If true, disables the conflict violation check when you commit a transaction.
@@ -132,7 +131,7 @@ func AddDoltSystemVariables() {
 			Scope:             sql.SystemVariableScope_Session,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(dsess.AllowCommitConflicts),
+			Type:              types.NewSystemBoolType(dsess.AllowCommitConflicts),
 			Default:           int8(0),
 		},
 		{
@@ -140,7 +139,7 @@ func AddDoltSystemVariables() {
 			Scope:             sql.SystemVariableScope_Session,
 			Dynamic:           false,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dsess.AwsCredsFile),
+			Type:              types.NewSystemStringType(dsess.AwsCredsFile),
 			Default:           nil,
 		},
 		{
@@ -148,7 +147,7 @@ func AddDoltSystemVariables() {
 			Scope:             sql.SystemVariableScope_Session,
 			Dynamic:           false,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dsess.AwsCredsProfile),
+			Type:              types.NewSystemStringType(dsess.AwsCredsProfile),
 			Default:           nil,
 		},
 		{
@@ -156,18 +155,18 @@ func AddDoltSystemVariables() {
 			Scope:             sql.SystemVariableScope_Session,
 			Dynamic:           false,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dsess.AwsCredsRegion),
+			Type:              types.NewSystemStringType(dsess.AwsCredsRegion),
 			Default:           nil,
 		},
+		{
+			Name:              dsess.ShowBranchDatabases,
+			Scope:             sql.SystemVariableScope_Both,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemBoolType(dsess.ShowBranchDatabases),
+			Default:           int8(0),
+		},
 	})
-}
-
-func SkipReplicationWarnings() bool {
-	_, skip, ok := sql.SystemVariables.GetGlobal(dsess.SkipReplicationErrors)
-	if !ok {
-		panic("dolt system variables not loaded")
-	}
-	return skip == SysVarTrue
 }
 
 func ReadReplicaForcePull() bool {
@@ -175,5 +174,5 @@ func ReadReplicaForcePull() bool {
 	if !ok {
 		panic("dolt system variables not loaded")
 	}
-	return forcePull == SysVarTrue
+	return forcePull == dsess.SysVarTrue
 }

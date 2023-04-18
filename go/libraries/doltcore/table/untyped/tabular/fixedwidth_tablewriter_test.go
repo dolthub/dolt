@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -39,9 +40,9 @@ func (*StringBuilderCloser) Close() error {
 
 func TestFixedWidthWriter(t *testing.T) {
 	sch := sql.Schema{
-		{Name: nameColName, Type: sql.Text},
-		{Name: ageColName, Type: sql.Int64},
-		{Name: titleColName, Type: sql.Text},
+		{Name: nameColName, Type: types.Text},
+		{Name: ageColName, Type: types.Int64},
+		{Name: titleColName, Type: types.Text},
 	}
 
 	names := []interface{}{
@@ -128,7 +129,7 @@ func TestFixedWidthWriter(t *testing.T) {
 		assert.Equal(t, expectedTableString, stringWr.String())
 	})
 
-	t.Run("Sample size smaller than num rows, overflow", func(t *testing.T) {
+	t.Run("Sample size smaller than initial buffer, resets buffer", func(t *testing.T) {
 		var stringWr StringBuilderCloser
 		tableWr := NewFixedWidthTableWriter(sch, &stringWr, 2)
 
@@ -138,15 +139,55 @@ func TestFixedWidthWriter(t *testing.T) {
 +---------------+-----+------------------+
 | Michael Scott | 43  | Regional Manager |
 | Pam Beasley   | 25  | Secretary        |
-| Dwight Schrute | 29  | Assistant to the Regional Manager |
-| Jim Halpêrt   | NULL | NULL             |
-+---------------+-----+------------------+
+| Dwight Schrute | 29   | Assistant to the Regional Manager |
+| Jim Halpêrt    | NULL | NULL                              |
++----------------+------+-----------------------------------+
 `
 		// strip off the first newline, inserted for nice printing
 		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
 
 		for _, r := range rows {
 			err := tableWr.WriteSqlRow(context.Background(), r)
+			assert.NoError(t, err)
+		}
+
+		err := tableWr.Close(context.Background())
+		assert.NoError(t, err)
+
+		assert.Equal(t, expectedTableString, stringWr.String())
+	})
+
+	t.Run("Multiline string", func(t *testing.T) {
+		var stringWr StringBuilderCloser
+		tableWr := NewFixedWidthTableWriter(sch, &stringWr, 100)
+
+		var expectedTableString = `
++---------+------+-----------+
+| name    | age  | title     |
++---------+------+-----------+
+| Michael | 43   | Regional  |
+| Scott   |      | Manager   |
+| Pam     | 25   | Secretary |
+| Beasley |      |           |
+| Dwight  | 29   | Assistant |
+| Schrute |      | to        |
+|         |      | the       |
+|         |      | Regional  |
+|         |      | Manager   |
+| Jim     | NULL | NULL      |
+| Halpêrt |      |           |
++---------+------+-----------+
+`
+		// strip off the first newline, inserted for nice printing
+		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
+
+		for i := range ages {
+			name := strings.Replace(names[i].(string), " ", "\n", -1)
+			title := titles[i]
+			if title != nil {
+				title = strings.Replace(title.(string), " ", "\n", -1)
+			}
+			err := tableWr.WriteSqlRow(context.Background(), sql.Row{name, ages[i], title})
 			assert.NoError(t, err)
 		}
 

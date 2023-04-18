@@ -2,8 +2,6 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    skip_nbf_dolt_dev
-
     TARGET_NBF="__DOLT__"
     setup_no_dolt_init
     dolt init --old-format
@@ -41,6 +39,11 @@ SQL
 
     run dolt sql -q "SELECT count(*) FROM dolt_commits" -r csv
     [ $status -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+
+    dolt checkout dolt_migrated_commits
+    run dolt sql -q "SELECT count(*) FROM dolt_commit_mapping" -r csv
+    [ $status -eq 0 ]
     [[ "$output" =~ "2" ]] || false
 }
 
@@ -62,12 +65,14 @@ SQL
     pushd db_one
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
+    dolt branch -D dolt_migrated_commits
     ONE=$(dolt branch -av)
     popd
 
     pushd db_two
     dolt migrate
     [[ $(cat ./.dolt/noms/manifest | cut -f 2 -d :) = "$TARGET_NBF" ]] || false
+    dolt branch -D dolt_migrated_commits
     TWO=$(dolt branch -av)
     popd
 
@@ -123,7 +128,7 @@ SQL
 
     run dolt sql -q "SELECT count(*) FROM dolt_commits" -r csv
     [ $status -eq 0 ]
-    [[ "$output" =~ "5" ]] || false
+    [[ "$output" =~ "6" ]] || false
 }
 
 @test "migrate: tag and working set" {
@@ -167,7 +172,7 @@ INSERT INTO test VALUES (0,0,0);
 CALL dadd('-A');
 CALL dcommit('-am', 'added table test');
 SQL
-    dolt docs read README.md README.md
+    dolt docs upload README.md README.md
     dolt add .
     dolt commit -am "added a README"
 
@@ -178,7 +183,7 @@ SQL
     [[ "$output" =~ "c0,c1" ]] || false
     [[ "$output" =~ "0,0" ]] || false
 
-    run dolt docs write README.md
+    run dolt docs print README.md
     [[ "$output" = $(cat README.md) ]] || false
 }
 
@@ -265,4 +270,80 @@ SQL
     [[ "$output" =~ "zulu" ]] || false
     [[ ! "$output" =~ "alpha" ]] || false
     [[ ! "$output" =~ "beta" ]] || false
+}
+
+@test "migrate: --drop-conflicts drops conflicts on migrate" {
+    dolt sql <<SQL
+CREATE TABLE test (pk int primary key, c0 int, c1 int);
+INSERT INTO test VALUES (0,0,0);
+CALL dcommit('-Am', 'added table test');
+CALL dcheckout('-b', 'other');
+CALL dbranch('third');
+INSERT INTO test VALUES (1, 2, 3);
+CALL dcommit('-am', 'added row on branch other');
+CALL dcheckout('main');
+INSERT INTO test VALUES (1, -2, -3);
+CALL dcommit('-am', 'added row on branch main');
+SET @@dolt_allow_commit_conflicts = 1;
+CALL dmerge('other');
+INSERT INTO test VALUES (9,9,9);
+SET @@dolt_allow_commit_conflicts = 1;
+SET @@dolt_force_transaction_commit = 1;
+CALL dcommit( '--force', '-am', 'commit conflicts');
+CALL dcheckout('third');
+SQL
+    dolt migrate --drop-conflicts
+}
+
+@test "migrate: no panic for migration on migrated database" {
+    dolt sql <<SQL
+CREATE TABLE test (pk int primary key, c0 int, c1 int);
+INSERT INTO test VALUES (0,0,0);
+CALL dadd('-A');
+CALL dcommit('-am', 'added table test');
+SQL
+    dolt migrate
+    run dolt migrate
+    [ $status -eq 0 ]
+    [[ "$output" =~ "already migrated" ]] || false
+}
+
+@test "migrate: changing primary key ordinals should migrate" {
+    dolt sql -q "create table t (col1 int, col2 int, col3 enum('a', 'b'), primary key (col1, col2, col3))"
+    dolt sql -q "insert into t values (1, 2, 'a'), (2, 3, 'b'), (3, 4, 'a');"
+    dolt commit -Am "initial"
+
+    dolt sql -q "alter table t drop primary key;"
+    dolt sql -q "alter table t add primary key (col3, col2, col1);"
+    dolt commit -am "change primary key order"
+
+    dolt sql -q "insert into t values (5, 6, 'b');"
+    dolt commit -am "add new row"
+
+    dolt migrate
+    run dolt sql -r csv -q "select * from t order by col1 asc;"
+    [ $status -eq 0 ]
+    [[ $output =~ "col1,col2,col3" ]]
+    [[ $output =~ "1,2,a" ]]
+    [[ $output =~ "2,3,b" ]]
+    [[ $output =~ "3,4,a" ]]
+    [[ $output =~ "5,6,b" ]]
+}
+
+@test "migrate: indexes, collation, and checks should be preserved" {
+   dolt sql -q "create table t (i int primary key, j int, v varchar(100), index (j), constraint j_chk check (j = 0)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;"
+   run dolt sql -q "show create table t"
+   [ $status -eq 0 ]
+   [[ $output =~ "KEY \`j\` (\`j\`)" ]] || false
+   [[ $output =~ "CONSTRAINT \`j_chk\` CHECK ((\`j\` = 0))" ]] || false
+   [[ $output =~ ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci" ]] || false
+
+   dolt commit -Am "create table"
+
+   dolt migrate
+   run dolt sql -q "show create table t"
+   [ $status -eq 0 ]
+   [[ $output =~ "KEY \`j\` (\`j\`)" ]] || false
+   [[ $output =~ "CONSTRAINT \`j_chk\` CHECK ((\`j\` = 0))" ]] || false
+   [[ $output =~ ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci" ]] || false
 }

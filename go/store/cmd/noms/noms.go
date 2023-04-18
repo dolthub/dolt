@@ -44,10 +44,9 @@ var commands = []*util.Command{
 	nomsDs,
 	nomsRoot,
 	nomsShow,
-	nomsSync,
-	nomsVersion,
 	nomsManifest,
 	nomsCat,
+	nomsWalk,
 }
 
 var kingpinCommands = []util.KingpinCommand{
@@ -213,13 +212,12 @@ See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spell
 	show.Flag("tz", "display formatted date comments in specified timezone, must be: local or utc").Enum("local", "utc")
 	show.Arg("object", "a noms object").Required().String()
 
-	// sync
-	sync := noms.Command("sync", `Moves datasets between or within databases
-See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the object and dataset arguments.
+	// walk
+	walk := noms.Command("walk", `Walks references contained in an object.
+See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the object argument.
 `)
-	sync.Flag("parallelism", "").Short('p').Default("512").Int()
-	sync.Arg("source-object", "a noms source object").Required().String()
-	sync.Arg("dest-dataset", "a noms dataset").Required().String()
+	walk.Arg("object", "a noms object").String()
+	walk.Flag("quiet", "If true, prints only dangling refs, not the paths of all refs").Bool()
 
 	// version
 	noms.Command("version", "Print the noms version")

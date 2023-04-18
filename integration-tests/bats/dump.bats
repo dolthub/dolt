@@ -31,11 +31,15 @@ teardown() {
 
     run grep INSERT doltdump.sql
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
+    [ "${#lines[@]}" -eq 3 ]
 
     run grep CREATE doltdump.sql
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    [ "${#lines[@]}" -eq 4 ]
+
+    run grep "DATABASE IF NOT EXISTS" doltdump.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
 
     run grep FOREIGN_KEY_CHECKS=0 doltdump.sql
     [ "$status" -eq 0 ]
@@ -62,6 +66,47 @@ teardown() {
     [[ "$output" =~ "Rows inserted: 6 Rows updated: 0 Rows deleted: 0" ]] || false
 }
 
+@test "dump: SQL type - no-create-db flag" {
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
+    dolt sql -q "INSERT INTO new_table VALUES (1);"
+    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
+    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
+    dolt sql -q "create table enums (a varchar(10) primary key, b enum('one','two','three'))"
+    dolt sql -q "insert into enums values ('abc', 'one'), ('def', 'two')"
+
+    run dolt dump --no-create-db
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump.sql ]
+
+    run grep "CREATE DATABASE" doltdump.sql
+    [ "$status" -eq 1 ]
+}
+
+@test "dump: SQL type - database name is reserved word/keyword" {
+    dolt sql -q "CREATE DATABASE \`interval\`;"
+    cd interval
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
+    dolt sql -q "INSERT INTO new_table VALUES (1);"
+    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
+    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
+    dolt sql -q "create table enums (a varchar(10) primary key, b enum('one','two','three'))"
+    dolt sql -q "insert into enums values ('abc', 'one'), ('def', 'two')"
+
+    run dolt dump
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump.sql ]
+
+    run grep "CREATE DATABASE IF NOT EXISTS \`interval\`" doltdump.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+
+    run dolt sql -b < doltdump.sql
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows inserted: 6 Rows updated: 0 Rows deleted: 0" ]] || false
+}
+
 @test "dump: SQL type - compare tables in database with tables imported file " {
     dolt branch new_branch
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
@@ -82,12 +127,12 @@ teardown() {
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
-    run dolt diff --summary main new_branch
+    run dolt diff --stat main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
 
-@test "dump: SQL type (batched) - compare tables in database with tables imported file " {
+@test "dump: SQL type (no-batch) - compare tables in database with tables imported file " {
     dolt branch new_branch
 
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
@@ -101,21 +146,45 @@ teardown() {
     dolt add .
     dolt commit -m "create tables"
 
-    run dolt dump --batch
+    run dolt dump --no-batch
     [ "$status" -eq 0 ]
     [ -f doltdump.sql ]
 
     run cat doltdump.sql
-    [[ "$output" =~ "VALUES (1,'UPS'), (2,'TV'), (3,'Table')" ]] || false
+    [[ "$output" =~ "VALUES (1,'UPS');" ]] || false
 
     dolt checkout new_branch
     dolt sql < doltdump.sql
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
-    run dolt diff --summary main new_branch
+    run dolt diff --stat main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
+}
+
+@test "dump: SQL type (batch is no-op) - compare tables in database with tables imported file " {
+  dolt branch new_branch
+
+    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
+    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
+
+    dolt add .
+    dolt commit -m "create tables"
+
+    run dolt dump
+    [ "$status" -eq 0 ]
+    [ -f doltdump.sql ]
+
+    run cat doltdump.sql
+    [[ "$output" =~ "VALUES (1,'UPS'), (2,'TV'), (3,'Table')" ]] || false
+
+    run dolt dump -f --batch
+    [ "$status" -eq 0 ]
+    [ -f doltdump.sql ]
+
+    run cat doltdump.sql
+    [[ "$output" =~ "VALUES (1,'UPS'), (2,'TV'), (3,'Table')" ]] || false
 }
 
 @test "dump: SQL type - with Indexes" {
@@ -173,17 +242,44 @@ teardown() {
     dolt sql -q "CREATE TRIGGER trigger3 AFTER INSERT ON a FOR EACH ROW FOLLOWS trigger2 INSERT INTO b VALUES (new.x * 2);"
     dolt sql -q "CREATE TRIGGER trigger4 AFTER INSERT ON a FOR EACH ROW PRECEDES trigger3 INSERT INTO b VALUES (new.x * 2);"
     dolt sql -q "CREATE PROCEDURE p1 (in x int) select x from dual"
+    dolt sql <<SQL
+delimiter //
+CREATE PROCEDURE dorepeat(p1 INT)
+       BEGIN
+          SET @x = 0;
+          REPEAT SET @x = @x + 1; UNTIL @x > p1 END REPEAT;
+       END
+//
+SQL
 
+    dolt sql <<SQL
+delimiter //
+CREATE PROCEDURE dorepeat2(p2 INT)
+       BEGIN
+          SET @x = 0;
+          REPEAT SET @x = @x + 1; UNTIL @x > p2 END REPEAT;
+       END
+//
+SQL
+
+    # decoy database in this directory to make sure we export the correct database's triggers etc.
+    dolt sql -q "create database aadecoy"
+    
     dolt add .
     dolt commit -m "create tables"
 
-    run dolt dump
+    run dolt dump --no-batch
     [ "$status" -eq 0 ]
     [ -f doltdump.sql ]
 
     rm -rf ./.dolt
     dolt init
 
+    # We should not have literally dumped the dolt_schemas table, but equivalent DDL statements
+    run grep dolt_schemas doltdump.sql
+    [ "$status" -ne 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+    
     run dolt sql < doltdump.sql
     [ "$status" -eq 0 ]
 
@@ -210,31 +306,39 @@ teardown() {
 
     run dolt sql -q "show create view view1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE VIEW `view1` AS select v1 from test' ]] || false
+    [[ "$output" =~ 'AS SELECT v1 FROM test' ]] || false
 
     run dolt sql -q "show create view view2"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE VIEW `view2` AS select y from b' ]] || false
+    [[ "$output" =~ 'AS SELECT y FROM b' ]] || false
 
     run dolt sql -q "show create trigger trigger1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE TRIGGER `trigger1` before insert on test for each row set new.v1 = -new.v1' ]] || false
+    [[ "$output" =~ 'BEFORE INSERT ON test FOR EACH ROW SET new.v1 = -new.v1' ]] || false
 
     run dolt sql -q "show create trigger trigger2"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE TRIGGER `trigger2` after insert on a for each row insert into b values (new.x * 2)' ]] || false
+    [[ "$output" =~ 'AFTER INSERT ON a FOR EACH ROW INSERT INTO b VALUES (new.x * 2)' ]] || false
 
     run dolt sql -q "show create trigger trigger3"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE TRIGGER `trigger3` after insert on a for each row follows trigger2 insert into b values (new.x * 2)' ]] || false
+    [[ "$output" =~ 'AFTER INSERT ON a FOR EACH ROW FOLLOWS trigger2 INSERT INTO b VALUES (new.x * 2)' ]] || false
 
     run dolt sql -q "show create trigger trigger4"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE TRIGGER `trigger4` after insert on a for each row precedes trigger3 insert into b values (new.x * 2)' ]] || false
+    [[ "$output" =~ 'AFTER INSERT ON a FOR EACH ROW PRECEDES trigger3 INSERT INTO b VALUES (new.x * 2)' ]] || false
 
     run dolt sql -q "show create procedure p1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE PROCEDURE `p1` (in x int) select x' ]] || false
+    [[ "$output" =~ 'CREATE PROCEDURE p1 (in x int) select x' ]] || false
+
+    run dolt sql -q "show create procedure dorepeat"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'CREATE PROCEDURE dorepeat(p1' ]] || false
+
+    run dolt sql -q "show create procedure dorepeat2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'CREATE PROCEDURE dorepeat2(p2' ]] || false
 }
 
 @test "dump: SQL type - with keyless tables" {
@@ -290,7 +394,7 @@ teardown() {
 
     run grep CREATE doltdump.sql
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
+    [ "${#lines[@]}" -eq 3 ]
 
     run grep INSERT doltdump.sql
     [ "$status" -eq 1 ]
@@ -312,11 +416,11 @@ teardown() {
 
     run grep INSERT dumpfile.sql
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
+    [ "${#lines[@]}" -eq 3 ]
 
     run grep CREATE dumpfile.sql
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    [ "${#lines[@]}" -eq 4 ]
 }
 
 @test "dump: SQL type - with directory name given" {
@@ -396,7 +500,7 @@ teardown() {
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
-    run dolt diff --summary main new_branch
+    run dolt diff --stat main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
@@ -422,7 +526,7 @@ teardown() {
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
-    run dolt diff --summary main new_branch
+    run dolt diff --stat main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
@@ -536,7 +640,7 @@ teardown() {
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
-    run dolt diff --summary main new_branch
+    run dolt diff --stat main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
@@ -561,7 +665,7 @@ teardown() {
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
-    run dolt diff --summary main new_branch
+    run dolt diff --stat main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
@@ -614,6 +718,30 @@ teardown() {
     [ ! -f dumps/warehouse.json ]
 }
 
+@test "dump: dump with schema-only flag" {
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
+    dolt sql -q "INSERT INTO new_table VALUES (1), (2);"
+    run dolt dump --schema-only
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump_schema_only.sql ]
+
+    run grep 'CREATE TABLE' doltdump_schema_only.sql
+    [ "${#lines[@]}" -eq 1 ]
+
+    run grep 'INSERT' doltdump_schema_only.sql
+    [ "${#lines[@]}" -eq 0 ]
+}
+
+@test "dump: dump with schema-only flag errors with non-sql output file" {
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
+    dolt sql -q "INSERT INTO new_table VALUES (1), (2);"
+    run dolt dump --schema-only -r csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "schema-only dump is not supported for csv exports" ]] || false
+    [ ! -f doltdump_schema_only.csv ]
+}
+
 @test "dump: JSON type - export tables with types, longtext and blob" {
     skip "export table in json with these types not working"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
@@ -640,7 +768,7 @@ teardown() {
     dolt add .
     dolt commit --allow-empty -m "create tables from dump files"
 
-    run dolt diff --summary main new_branch
+    run dolt diff --stat main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }

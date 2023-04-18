@@ -18,6 +18,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/dolthub/dolt/go/store/prolly/message"
+
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -44,12 +46,15 @@ type NodeStore interface {
 
 	// Format returns the types.NomsBinFormat of this NodeStore.
 	Format() *types.NomsBinFormat
+
+	BlobBuilder() *BlobBuilder
 }
 
 type nodeStore struct {
 	store chunks.ChunkStore
 	cache nodeCache
 	bp    pool.BuffPool
+	bbp   *sync.Pool
 }
 
 var _ NodeStore = nodeStore{}
@@ -58,12 +63,19 @@ var sharedCache = newChunkCache(cacheSize)
 
 var sharedPool = pool.NewBuffPool()
 
+var blobBuilderPool = sync.Pool{
+	New: func() any {
+		return mustNewBlobBuilder(DefaultFixedChunkLength)
+	},
+}
+
 // NewNodeStore makes a new NodeStore.
 func NewNodeStore(cs chunks.ChunkStore) NodeStore {
 	return nodeStore{
 		store: cs,
 		cache: sharedCache,
 		bp:    sharedPool,
+		bbp:   &blobBuilderPool,
 	}
 }
 
@@ -137,7 +149,16 @@ func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 	c := chunks.NewChunk(nd.bytes())
 	assertTrue(c.Size() > 0, "cannot write empty chunk to ChunkStore")
 
-	if err := ns.store.Put(ctx, c); err != nil {
+	getAddrs := func(ctx context.Context, ch chunks.Chunk) (addrs hash.HashSet, err error) {
+		addrs = hash.NewHashSet()
+		err = message.WalkAddresses(ctx, ch.Data(), func(ctx context.Context, a hash.Hash) error {
+			addrs.Insert(a)
+			return nil
+		})
+		return
+	}
+
+	if err := ns.store.Put(ctx, c, getAddrs); err != nil {
 		return hash.Hash{}, err
 	}
 	ns.cache.insert(c.Hash(), nd)
@@ -147,6 +168,15 @@ func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 // Pool implements NodeStore.
 func (ns nodeStore) Pool() pool.BuffPool {
 	return ns.bp
+}
+
+// BlobBuilder implements NodeStore.
+func (ns nodeStore) BlobBuilder() *BlobBuilder {
+	bb := ns.bbp.Get().(*BlobBuilder)
+	if bb.ns == nil {
+		bb.SetNodeStore(ns)
+	}
+	return bb
 }
 
 func (ns nodeStore) Format() *types.NomsBinFormat {

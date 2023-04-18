@@ -22,16 +22,25 @@
 package nbs
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
-	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 )
+
+// Returned when a chunk with a reference to a non-existence chunk is
+// persisted into the ChunkStore. The sanity check is done when we
+// flush the memtable, which means that a ChunkStore interaction which
+// sees this error is not necessarily responsible for the dangling ref.
+// Regardless, all pending writes in the memtable are thrown away when
+// any chunk in the memtable has a dangling ref.
+var ErrDanglingRef = errors.New("dangling ref")
 
 const concurrentCompactions = 5
 
@@ -41,14 +50,14 @@ func newTableSet(p tablePersister, q MemoryQuotaProvider) tableSet {
 
 // tableSet is an immutable set of persistable chunkSources.
 type tableSet struct {
-	novel, upstream chunkSources
+	novel, upstream chunkSourceSet
 	p               tablePersister
 	q               MemoryQuotaProvider
 	rl              chan struct{}
 }
 
 func (ts tableSet) has(h addr) (bool, error) {
-	f := func(css chunkSources) (bool, error) {
+	f := func(css chunkSourceSet) (bool, error) {
 		for _, haver := range css {
 			has, err := haver.has(h)
 
@@ -77,7 +86,7 @@ func (ts tableSet) has(h addr) (bool, error) {
 }
 
 func (ts tableSet) hasMany(addrs []hasRecord) (bool, error) {
-	f := func(css chunkSources) (bool, error) {
+	f := func(css chunkSourceSet) (bool, error) {
 		for _, haver := range css {
 			has, err := haver.hasMany(addrs)
 
@@ -105,7 +114,10 @@ func (ts tableSet) hasMany(addrs []hasRecord) (bool, error) {
 }
 
 func (ts tableSet) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
-	f := func(css chunkSources) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	f := func(css chunkSourceSet) ([]byte, error) {
 		for _, haver := range css {
 			data, err := haver.get(ctx, h, stats)
 
@@ -135,7 +147,7 @@ func (ts tableSet) get(ctx context.Context, h addr, stats *Stats) ([]byte, error
 }
 
 func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (remaining bool, err error) {
-	f := func(css chunkSources) bool {
+	f := func(css chunkSourceSet) bool {
 		for _, haver := range css {
 			remaining, err = haver.getMany(ctx, eg, reqs, found, stats)
 			if err != nil {
@@ -152,7 +164,7 @@ func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRe
 }
 
 func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (remaining bool, err error) {
-	f := func(css chunkSources) bool {
+	f := func(css chunkSourceSet) bool {
 		for _, haver := range css {
 			remaining, err = haver.getManyCompressed(ctx, eg, reqs, found, stats)
 			if err != nil {
@@ -170,7 +182,7 @@ func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, re
 }
 
 func (ts tableSet) count() (uint32, error) {
-	f := func(css chunkSources) (count uint32, err error) {
+	f := func(css chunkSourceSet) (count uint32, err error) {
 		for _, haver := range css {
 			thisCount, err := haver.count()
 
@@ -199,7 +211,7 @@ func (ts tableSet) count() (uint32, error) {
 }
 
 func (ts tableSet) uncompressedLen() (uint64, error) {
-	f := func(css chunkSources) (data uint64, err error) {
+	f := func(css chunkSourceSet) (data uint64, err error) {
 		for _, haver := range css {
 			uncmpLen, err := haver.uncompressedLen()
 
@@ -228,13 +240,9 @@ func (ts tableSet) uncompressedLen() (uint64, error) {
 }
 
 func (ts tableSet) physicalLen() (uint64, error) {
-	f := func(css chunkSources) (data uint64, err error) {
+	f := func(css chunkSourceSet) (data uint64, err error) {
 		for _, haver := range css {
-			index, err := haver.index()
-			if err != nil {
-				return 0, err
-			}
-			data += index.TableFileSize()
+			data += haver.currentSize()
 		}
 		return
 	}
@@ -276,27 +284,38 @@ func (ts tableSet) Size() int {
 	return len(ts.novel) + len(ts.upstream)
 }
 
-// prepend adds a memTable to an existing tableSet, compacting |mt| and
+// append adds a memTable to an existing tableSet, compacting |mt| and
 // returning a new tableSet with newly compacted table added.
-func (ts tableSet) prepend(ctx context.Context, mt *memTable, stats *Stats) tableSet {
+func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, stats *Stats) (tableSet, error) {
+	sort.Sort(hasRecordByPrefix(mt.pendingRefs))
+	absent, err := checker(mt.pendingRefs)
+	if err != nil {
+		return tableSet{}, err
+	} else if absent.Size() > 0 {
+		return tableSet{}, fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
+	}
+
+	cs, err := ts.p.Persist(ctx, mt, ts, stats)
+	if err != nil {
+		return tableSet{}, err
+	}
+
 	newTs := tableSet{
-		novel:    make(chunkSources, len(ts.novel)+1),
-		upstream: make(chunkSources, len(ts.upstream)),
+		novel:    copyChunkSourceSet(ts.novel),
+		upstream: copyChunkSourceSet(ts.upstream),
 		p:        ts.p,
 		q:        ts.q,
 		rl:       ts.rl,
 	}
-	newTs.novel[0] = newPersistingChunkSource(ctx, mt, ts, ts.p, ts.rl, stats)
-	copy(newTs.novel[1:], ts.novel)
-	copy(newTs.upstream, ts.upstream)
-	return newTs
+	newTs.novel[cs.hash()] = cs
+	return newTs, nil
 }
 
 // flatten returns a new tableSet with |upstream| set to the union of ts.novel
 // and ts.upstream.
 func (ts tableSet) flatten(ctx context.Context) (tableSet, error) {
 	flattened := tableSet{
-		upstream: make(chunkSources, 0, ts.Size()),
+		upstream: copyChunkSourceSet(ts.upstream),
 		p:        ts.p,
 		q:        ts.q,
 		rl:       ts.rl,
@@ -304,185 +323,140 @@ func (ts tableSet) flatten(ctx context.Context) (tableSet, error) {
 
 	for _, src := range ts.novel {
 		cnt, err := src.count()
-
 		if err != nil {
 			return tableSet{}, err
-		}
-
-		if cnt > 0 {
-			flattened.upstream = append(flattened.upstream, src)
+		} else if cnt > 0 {
+			flattened.upstream[src.hash()] = src
 		}
 	}
-
-	flattened.upstream = append(flattened.upstream, ts.upstream...)
 	return flattened, nil
 }
 
 // rebase returns a new tableSet holding the novel tables managed by |ts| and
 // those specified by |specs|.
 func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) (tableSet, error) {
-	merged := tableSet{
-		novel: make(chunkSources, 0, len(ts.novel)),
-		p:     ts.p,
-		q:     ts.q,
-		rl:    ts.rl,
+	// deduplicate |specs|
+	orig := specs
+	specs = make([]tableSpec, 0, len(orig))
+	seen := map[addr]struct{}{}
+	for _, spec := range orig {
+		if _, ok := seen[spec.name]; ok {
+			continue
+		}
+		seen[spec.name] = struct{}{}
+		// keep specs in order to play nicely with
+		// manifest appendix optimization
+		specs = append(specs, spec)
 	}
 
-	// Rebase the novel tables, skipping those that are actually empty (usually due to de-duping during table compaction)
+	// copy |ts.novel|, skipping empty chunkSources
+	// (usually due to de-duping during table compaction)
+	novel := make(chunkSourceSet, len(ts.novel))
 	for _, t := range ts.novel {
 		cnt, err := t.count()
-
+		if err != nil {
+			return tableSet{}, err
+		} else if cnt == 0 {
+			continue
+		}
+		t2, err := t.clone()
 		if err != nil {
 			return tableSet{}, err
 		}
+		novel[t2.hash()] = t2
+	}
 
-		if cnt > 0 {
-			t2, err := t.clone()
+	eg, ctx := errgroup.WithContext(ctx)
+	mu := new(sync.Mutex)
+	upstream := make(chunkSourceSet, len(specs))
+	for _, s := range specs {
+		// clone tables that we have already opened
+		if cs, ok := ts.upstream[s.name]; ok {
+			cl, err := cs.clone()
 			if err != nil {
+				_ = eg.Wait()
+				for _, cs := range upstream {
+					// close any opened chunkSources
+					_ = cs.close()
+				}
 				return tableSet{}, err
 			}
-			merged.novel = append(merged.novel, t2)
+			mu.Lock()
+			upstream[cl.hash()] = cl
+			mu.Unlock()
+			continue
 		}
-	}
-
-	// Create a list of tables to open so we can open them in parallel.
-	tablesToOpen := []tableSpec{} // keep specs in order to play nicely with manifest appendix optimization
-	presents := map[addr]tableSpec{}
-	for _, spec := range specs {
-		if _, present := presents[spec.name]; !present { // Filter out dups
-			tablesToOpen = append(tablesToOpen, spec)
-			presents[spec.name] = spec
-		}
-	}
-
-	merged.upstream = make([]chunkSource, len(tablesToOpen))
-
-	type openOp struct {
-		idx  int
-		spec tableSpec
-	}
-	var openOps []openOp
-	var memoryNeeded uint64
-
-	// Clone tables that we have already opened
-OUTER:
-	for idx, spec := range tablesToOpen {
-		for _, existing := range ts.upstream {
-			h, err := existing.hash()
+		// open missing tables in parallel
+		spec := s
+		eg.Go(func() error {
+			cs, err := ts.p.Open(ctx, spec.name, spec.chunkCount, stats)
 			if err != nil {
-				return tableSet{}, err
+				return err
 			}
-			if spec.name == h {
-				c, err := existing.clone()
-				if err != nil {
-					return tableSet{}, err
-				}
-				merged.upstream[idx] = c
-				continue OUTER
-			}
-		}
-		openOps = append(openOps, openOp{idx, spec})
-		memoryNeeded += indexMemSize(spec.chunkCount)
+			mu.Lock()
+			upstream[cs.hash()] = cs
+			mu.Unlock()
+			return nil
+		})
 	}
 
-	err := ts.q.AcquireQuota(ctx, memoryNeeded)
-	if err != nil {
-		return tableSet{}, err
-	}
-
-	var rp atomic.Value
-	group, ctx := errgroup.WithContext(ctx)
-
-	mu := sync.Mutex{}
-	var opened []chunkSource
-
-	for _, op := range openOps {
-		idx, spec := op.idx, op.spec
-		group.Go(
-			func() (err error) {
-				defer func() {
-					if r := recover(); r != nil {
-						rp.Store(r)
-						err = errors.New("panicked")
-					}
-				}()
-				cs, err := ts.p.Open(ctx, spec.name, spec.chunkCount, stats)
-				if err != nil {
-					return err
-				}
-				merged.upstream[idx] = cs
-				mu.Lock()
-				opened = append(opened, cs)
-				mu.Unlock()
-				return nil
-			},
-		)
-	}
-
-	err = group.Wait()
-	if err != nil {
-		// Close any opened chunkSources
-		for _, cs := range opened {
+	if err := eg.Wait(); err != nil {
+		for _, cs := range upstream {
+			// close any opened chunkSources
 			_ = cs.close()
 		}
-
-		if r := rp.Load(); r != nil {
-			panic(r)
-		}
 		return tableSet{}, err
 	}
 
-	return merged, nil
+	return tableSet{
+		novel:    novel,
+		upstream: upstream,
+		p:        ts.p,
+		q:        ts.q,
+		rl:       ts.rl,
+	}, nil
 }
 
 func (ts tableSet) toSpecs() ([]tableSpec, error) {
 	tableSpecs := make([]tableSpec, 0, ts.Size())
-	for _, src := range ts.novel {
-		cnt, err := src.count()
-
-		if err != nil {
-			return nil, err
+	for a, src := range ts.novel {
+		if _, ok := ts.upstream[a]; ok {
+			continue
 		}
 
-		if cnt > 0 {
-			h, err := src.hash()
-
-			if err != nil {
-				return nil, err
-			}
-
+		cnt, err := src.count()
+		if err != nil {
+			return nil, err
+		} else if cnt > 0 {
+			h := src.hash()
 			tableSpecs = append(tableSpecs, tableSpec{h, cnt})
 		}
 	}
 	for _, src := range ts.upstream {
 		cnt, err := src.count()
-
 		if err != nil {
 			return nil, err
-		}
-
-		if cnt <= 0 {
+		} else if cnt <= 0 {
 			return nil, errors.New("no upstream chunks")
 		}
-
-		h, err := src.hash()
-
-		if err != nil {
-			return nil, err
-		}
-
+		h := src.hash()
 		tableSpecs = append(tableSpecs, tableSpec{h, cnt})
 	}
+	sort.Slice(tableSpecs, func(i, j int) bool {
+		return bytes.Compare(tableSpecs[i].name[:], tableSpecs[j].name[:]) < 0
+	})
 	return tableSpecs, nil
 }
 
 func tableSetCalcReads(ts tableSet, reqs []getRecord, blockSize uint64) (reads int, split, remaining bool, err error) {
-	all := append(ts.novel, ts.upstream...)
+	all := copyChunkSourceSet(ts.upstream)
+	for a, cs := range ts.novel {
+		all[a] = cs
+	}
 	for _, tbl := range all {
 		rdr, ok := tbl.(*fileTableReader)
 		if !ok {
-			h, _ := tbl.hash()
-			err = fmt.Errorf("chunkSource %s is not a fileTableReader", h.String())
+			err = fmt.Errorf("chunkSource %s is not a fileTableReader", tbl.hash().String())
 			return
 		}
 

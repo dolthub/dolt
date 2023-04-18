@@ -30,22 +30,22 @@ type KVPCollItr struct {
 	currSl     types.KVPSlice
 	currSlSize int
 	currKey    types.LesserValuable
-	nbf        *types.NomsBinFormat
+	vr         types.ValueReader
 
 	read int64
 }
 
 // NewItr creates a new KVPCollItr from a KVPCollection
-func NewItr(nbf *types.NomsBinFormat, coll *KVPCollection) *KVPCollItr {
+func NewItr(vr types.ValueReader, coll *KVPCollection) *KVPCollItr {
 	firstSl := coll.slices[0]
 	firstKey := firstSl[0].Key
 	slSize := len(firstSl)
 
-	return &KVPCollItr{coll: coll, currSl: firstSl, currSlSize: slSize, currKey: firstKey, nbf: nbf}
+	return &KVPCollItr{coll: coll, currSl: firstSl, currSlSize: slSize, currKey: firstKey, vr: vr}
 }
 
 // Less returns whether the current key this iterator is less than the current key for another iterator
-func (itr *KVPCollItr) Less(other *KVPCollItr) (bool, error) {
+func (itr *KVPCollItr) Less(ctx context.Context, other *KVPCollItr) (bool, error) {
 	if other.currKey == nil {
 		return true, nil
 	}
@@ -54,7 +54,7 @@ func (itr *KVPCollItr) Less(other *KVPCollItr) (bool, error) {
 		return false, nil
 	}
 
-	return itr.currKey.Less(itr.nbf, other.currKey)
+	return itr.currKey.Less(ctx, itr.vr.Format(), other.currKey)
 }
 
 // returns the next kvp, the slice it was read from when that slice is empty, and whether or not iteration is complete.
@@ -92,7 +92,7 @@ func (itr *KVPCollItr) nextForDestructiveMerge() (nextKVP *types.KVP, sliceIfExh
 
 // Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
 // in key sorted order.  Once all KVPs have been read io.EOF will be returned.
-func (itr *KVPCollItr) Next() (*types.KVP, error) {
+func (itr *KVPCollItr) Next(ctx context.Context) (*types.KVP, error) {
 	kvp, _, _ := itr.nextForDestructiveMerge()
 
 	if kvp == nil {

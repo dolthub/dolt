@@ -1,0 +1,43 @@
+tests:
+- name: jwt auth from config
+  repos:
+  - name: repo1
+    with_files:
+    - name: chain_key.pem
+      source_path: testdata/rsa_key.pem
+    - name: chain_cert.pem
+      source_path: testdata/rsa_chain.pem
+    - name: test_jwks.json
+      source_path: testdata/test_jwks.json
+    - name: server.yaml
+      contents: |
+        listener:
+          tls_key: chain_key.pem
+          tls_cert: chain_cert.pem
+          require_secure_transport: true
+        jwks:
+        - name: jwksname
+          location_url: file:///test_jwks.json
+          claims: 
+            alg: RS256
+            aud: my_resource
+            sub: test_jwt_user
+            iss: dolthub.com
+          fields_to_log: [on_behalf_of,id]
+    server:
+      args: ["--config", "server.yaml"]
+  connections:
+  - on: repo1
+    queries:
+    - exec: "CREATE USER test_jwt_user@'127.0.0.1' IDENTIFIED WITH authentication_dolt_jwt AS 'jwks=jwksname,sub=test_jwt_user,iss=dolthub.com,aud=my_resource'"
+    - exec: "GRANT ALL ON *.* TO test_jwt_user@'127.0.0.1' WITH GRANT OPTION"
+  - on: repo1
+    user: test_jwt_user
+    password_file: testdata/token.jwt
+    driver_params:
+      allowCleartextPasswords: "true"
+    queries:
+    - query: "select 2+2 from dual"
+      result:
+        columns: ["2+2"]
+        rows: [["4"]]

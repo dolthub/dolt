@@ -50,7 +50,7 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
     dolt sql -q "create table t1 (a int primary key)"
     dolt sql -q "call dolt_add('.')"
-    dolt sql -q "select dolt_commit('-am', 'cm')"
+    dolt sql -q "call dolt_commit('-am', 'cm')"
 
     cd ..
     dolt clone file://./bac1 repo2
@@ -130,6 +130,32 @@ teardown() {
     [[ ! "$output" =~ "feature" ]] || false
 }
 
+@test "replication: table functions work" {
+    cd repo1
+    dolt sql <<SQL
+create table t1 (a int primary key);
+call dolt_commit("-Am", "new table");
+insert into t1 values (1);
+call dolt_commit("-Am", "first row");
+insert into t1 values (2);
+call dolt_commit("-Am", "second row");
+SQL
+
+    dolt push remote1 main
+
+    cd ..
+    dolt clone file://./rem1 repo2
+
+    cd repo2
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote origin
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+
+    dolt sql -q "select * from t1"
+    dolt sql -q "select count(*) from dolt_diff('HEAD~', 'HEAD', 't1')"
+    dolt sql -q "select count(*) from dolt_diff_stat('HEAD', 'HEAD~', 't1')"
+    dolt sql -q "select count(*) from dolt_log()"
+}
+
 @test "replication: tag does not trigger replication" {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
@@ -179,6 +205,26 @@ teardown() {
     [[ "$output" =~ "remotes/origin/new_branch" ]] || false
 }
 
+@test "replication: push on call dolt_branch(-c..." {
+    cd repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_branch
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "call dolt_add('.')"
+    dolt sql -q "call dolt_commit('-am', 'commit')"
+    dolt sql -q "call dolt_branch('-c', 'main', 'new_branch')"
+
+    cd ..
+    dolt clone file://./bac1 repo2
+    cd repo2
+    run dolt branch -av
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "remotes/origin/main" ]] || false
+    [[ "$output" =~ "remotes/origin/new_branch" ]] || false
+}
+
+
 @test "replication: push on call dolt_checkout(-b..." {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
@@ -200,20 +246,22 @@ teardown() {
 
 @test "replication: push on call dolt_merge, fast-forward merge" {
     cd repo1
-    dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
-    dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_branch
-    dolt sql -q "create table t1 (a int primary key)"
-    dolt sql -q "call dolt_add('.')"
-    dolt sql -q "call dolt_commit('-am', 'commit')"
-    dolt sql -q "call dolt_checkout('-b', 'new_branch')"
-    dolt sql -q "create table t2 (b int primary key)"
-    dolt sql -q "call dolt_add('.')"
-    dolt sql -q "call dolt_commit('-am', 'commit')"
-    dolt sql -q "call dolt_checkout('main')"
-    dolt sql -q "call dolt_merge('new_branch')"
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+    dolt sql <<SQL 
+create table t1 (a int primary key);
+call dolt_add('.');
+call dolt_commit('-am', 'commit');
+call dolt_checkout('-b', 'new_branch');
+create table t2 (b int primary key);
+call dolt_add('.');
+call dolt_commit('-am', 'commit');
+call dolt_checkout('main');
+call dolt_merge('new_branch');
+SQL
 
     cd ..
-    dolt clone file://./bac1 repo2
+    dolt clone file://./rem1 repo2
     cd repo2
     run dolt ls
     [ "$status" -eq 0 ]
@@ -301,9 +349,10 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_heads main,unknown
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
     run dolt sql -q "show tables"
+   
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "replication failed: unable to find 'unknown' on 'remote1'; branch not found" ]] || false
+    [[ "$output" =~ 'unable to find "unknown" on "remote1"; branch not found' ]] || false
 }
 
 @test "replication: pull multiple heads, one invalid branch name" {
@@ -318,7 +367,7 @@ teardown() {
     run dolt sql -q "show tables"
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "unable to find 'unknown' on 'remote1'; branch not found" ]] || false
+    [[ "$output" =~ "branch not found" ]] || false
 }
 
 @test "replication: pull with no head configuration fails" {
@@ -361,10 +410,11 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_skip_replication_errors 1
     dolt config --local --add sqlserver.global.dolt_replicate_heads unknown
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+
     run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "replication failed: unable to find 'unknown' on 'remote1'; branch not found" ]] || false
+    [[ "$output" =~ "branch not found" ]] || false
 
     run dolt checkout new_feature
     [ "$status" -eq 1 ]
@@ -443,13 +493,61 @@ SQL
     [[ "$output" =~ "v1" ]] || false
 }
 
+@test "replication: pull creates remote tracking branches" {
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt sql -q "create table t1 (a int primary key);"
+    dolt commit -Am "new table"
+    dolt branch b1
+    dolt branch b2
+    dolt push origin b1
+    dolt push origin b2
+
+    cd ../repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+
+    run dolt sql -q 'USE `repo1/b2`; show tables;' -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "t1" ]] || false
+
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ "remotes/remote1/b1" ]] || false
+    [[ "$output" =~ "remotes/remote1/b2" ]] || false    
+}
+
+@test "replication: connect to a branch not on the remote" {
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt sql -q "create table t1 (a int primary key);"
+    dolt commit -Am "new table"
+    dolt branch b1
+    dolt push origin b1
+
+    cd ../repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+
+    run dolt sql -q 'USE `repo1/B1`; show tables;' -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "t1" ]] || false
+
+    run dolt sql -q 'USE `repo1/notfound`;' -r csv
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "database not found" ]] || false
+}
+
 @test "replication: push feature head" {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
     dolt checkout -b new_feature
     dolt sql -q "create table t1 (a int primary key)"
     dolt sql -q "call dolt_add('.')"
-    dolt sql -q "select dolt_commit('-am', 'cm')"
+    dolt sql -q "call dolt_commit('-am', 'cm')"
 
     cd ..
     dolt clone file://./rem1 repo2
@@ -477,10 +575,9 @@ SQL
 
     dolt add .
 
-    run dolt sql -q "select dolt_commit('-am', 'cm')"
+    run dolt sql -q "call dolt_commit('-am', 'cm')"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
-    [[ "$output" =~ "dolt_commit('-am', 'cm')" ]] || false
 }
 
 @test "replication: bad source doesn't error during non-transactional commands" {
@@ -577,7 +674,6 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "panic" ]]
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
-    [[ "$output" =~ "dolt_replication_remote value is misconfigured" ]] || false
 }
 
 @test "replication: use database syntax fetches missing branch" {
@@ -627,14 +723,16 @@ SQL
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
     dolt config --local --add sqlserver.global.dolt_async_replication 1
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+
     dolt sql -q "create table t1 (a int primary key)"
     dolt sql -q "call dolt_add('.')"
-    dolt sql -q "select dolt_commit('-am', 'cm')"
-    sleep 5
+    dolt sql -q "call dolt_commit('-am', 'cm')"
 
     cd ..
     dolt clone file://./rem1 repo2
     cd repo2
+    
     run dolt ls
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]

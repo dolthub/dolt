@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
@@ -90,6 +91,12 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 
+	var verr errhand.VerboseError
+	dEnv.UserPassConfig, verr = getRemoteUserAndPassConfig(apr)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
 	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -112,10 +119,10 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 	// Fetch all references
 	branchRefs, err := srcDB.GetHeadRefs(ctx)
 	if err != nil {
-		return env.ErrFailedToReadDb
+		return fmt.Errorf("%w: %s", env.ErrFailedToReadDb, err.Error())
 	}
 
-	hasBranch, err := srcDB.HasBranch(ctx, pullSpec.Branch.GetPath())
+	_, hasBranch, err := srcDB.HasBranch(ctx, pullSpec.Branch.GetPath())
 	if err != nil {
 		return err
 	}
@@ -147,7 +154,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				return fmt.Errorf("fetch failed; %w", err)
 			}
 
-			// Only merge iff branch is current branch and there is an upstream set (pullSpec.Branch is set to nil if there is no upstream)
+			// Merge iff branch is current branch and there is an upstream set (pullSpec.Branch is set to nil if there is no upstream)
 			if branchRef != pullSpec.Branch {
 				continue
 			}
@@ -181,7 +188,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 			// If configurations are not set and a ff merge are not possible throw an error.
 			if configErr != nil {
 				canFF, err := mergeSpec.HeadC.CanFastForwardTo(ctx, mergeSpec.MergeC)
-				if err != nil {
+				if err != nil && err != doltdb.ErrUpToDate {
 					return err
 				}
 

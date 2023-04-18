@@ -23,6 +23,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/url"
 	"strconv"
@@ -72,17 +73,17 @@ type fakeS3Multipart struct {
 	etags    []string
 }
 
-func (m *fakeS3) readerForTable(name addr) (chunkReader, error) {
+func (m *fakeS3) readerForTable(ctx context.Context, name addr) (chunkReader, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if buff, present := m.data[name.String()]; present {
-		ti, err := parseTableIndexByCopy(buff, &noopQuotaProvider{})
-
+		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
 		if err != nil {
 			return nil, err
 		}
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize)
 		if err != nil {
+			ti.Close()
 			return nil, err
 		}
 		return tr, nil
@@ -90,7 +91,7 @@ func (m *fakeS3) readerForTable(name addr) (chunkReader, error) {
 	return nil, nil
 }
 
-func (m *fakeS3) readerForTableWithNamespace(ns string, name addr) (chunkReader, error) {
+func (m *fakeS3) readerForTableWithNamespace(ctx context.Context, ns string, name addr) (chunkReader, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	key := name.String()
@@ -98,7 +99,7 @@ func (m *fakeS3) readerForTableWithNamespace(ns string, name addr) (chunkReader,
 		key = ns + "/" + key
 	}
 	if buff, present := m.data[key]; present {
-		ti, err := parseTableIndexByCopy(buff, &noopQuotaProvider{})
+		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
 
 		if err != nil {
 			return nil, err

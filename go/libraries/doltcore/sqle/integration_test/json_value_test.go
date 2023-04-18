@@ -48,7 +48,7 @@ func TestJsonValues(t *testing.T) {
 		t.Skip() // todo: convert to enginetests
 	}
 
-	sqle.SkipByDefaultInCI(t)
+	SkipByDefaultInCI(t)
 	setupCommon := []testCommand{
 		{cmd.SqlCmd{}, args{"-q", `create table js (pk int primary key, js json);`}},
 	}
@@ -136,7 +136,7 @@ func testJsonValue(t *testing.T, test jsonValueTest, setupCommon []testCommand) 
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 
-	actRows, err := sqle.ExecuteSelect(t, dEnv, root, test.query)
+	actRows, err := sqle.ExecuteSelect(dEnv, root, test.query)
 	require.NoError(t, err)
 
 	require.Equal(t, len(test.rows), len(actRows))
@@ -163,7 +163,7 @@ func TestLargeJsonObjects(t *testing.T) {
 		t.Skip() // todo: convert to enginetests
 	}
 
-	sqle.SkipByDefaultInCI(t)
+	SkipByDefaultInCI(t)
 	setupCommon := []testCommand{
 		{cmd.SqlCmd{}, args{"-q", `create table js (pk int primary key, js json);`}},
 	}

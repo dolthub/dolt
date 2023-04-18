@@ -22,16 +22,25 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
+)
+
+const (
+	CommitHashIndexId = "commit_hash"
+	ToCommitIndexId   = "to_commit"
+	FromCommitIndexId = "from_commit"
 )
 
 type DoltTableable interface {
@@ -47,11 +56,50 @@ type DoltIndex interface {
 	Format() *types.NomsBinFormat
 	IsPrimaryKey() bool
 
+	valueReadWriter() types.ValueReadWriter
+
 	getDurableState(*sql.Context, DoltTableable) (*durableIndexState, error)
 	coversColumns(s *durableIndexState, columns []uint64) bool
 	sqlRowConverter(*durableIndexState, []uint64) *KVToSqlRowConverter
 	lookupTags(s *durableIndexState) map[uint64]int
 }
+
+func NewCommitIndex(i *doltIndex) *CommitIndex {
+	return &CommitIndex{doltIndex: i}
+}
+
+type CommitIndex struct {
+	*doltIndex
+}
+
+func (p *CommitIndex) CanSupport(ranges ...sql.Range) bool {
+	var selects []string
+	for _, r := range ranges {
+		if len(r) != 1 {
+			return false
+		}
+		lb, ok := r[0].LowerBound.(sql.Below)
+		if !ok {
+			return false
+		}
+		lk, ok := lb.Key.(string)
+		if !ok {
+			return false
+		}
+		ub, ok := r[0].UpperBound.(sql.Above)
+		if !ok {
+			return false
+		}
+		uk, ok := ub.Key.(string)
+		if uk != lk {
+			return false
+		}
+		selects = append(selects, uk)
+	}
+	return true
+}
+
+var _ DoltIndex = (*CommitIndex)(nil)
 
 func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
 	sch, err := t.GetSchema(ctx)
@@ -64,14 +112,12 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		return nil, nil
 	}
 
-	// TODO: do this for other indexes?
 	tableRows, err := t.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 	keyBld := maybeGetKeyBuilder(tableRows)
 
-	// TODO: two primary keys???
 	cols := sch.GetPKCols().GetColumns()
 
 	// add to_ prefix
@@ -98,9 +144,68 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		constrainedToLookupExpression: false,
 	}
 
-	// TODO: need to add from_ columns
+	indexes = append(indexes, &toIndex)
+	if types.IsFormat_DOLT(t.Format()) {
+		indexes = append(indexes, NewCommitIndex(&doltIndex{
+			id:      ToCommitIndexId,
+			tblName: doltdb.DoltDiffTablePrefix + tbl,
+			dbName:  db,
+			columns: []schema.Column{
+				schema.NewColumn(ToCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
+			},
+			indexSch:                      sch,
+			tableSch:                      sch,
+			unique:                        true,
+			comment:                       "",
+			vrw:                           t.ValueReadWriter(),
+			ns:                            t.NodeStore(),
+			order:                         sql.IndexOrderNone,
+			constrainedToLookupExpression: false,
+		}),
+			NewCommitIndex(&doltIndex{
+				id:      FromCommitIndexId,
+				tblName: doltdb.DoltDiffTablePrefix + tbl,
+				dbName:  db,
+				columns: []schema.Column{
+					schema.NewColumn(FromCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
+				},
+				indexSch:                      sch,
+				tableSch:                      sch,
+				unique:                        true,
+				comment:                       "",
+				vrw:                           t.ValueReadWriter(),
+				ns:                            t.NodeStore(),
+				order:                         sql.IndexOrderNone,
+				constrainedToLookupExpression: false,
+			}),
+		)
+	}
+	return indexes, nil
+}
 
-	return append(indexes, &toIndex), nil
+func DoltCommitIndexes(tab string, db *doltdb.DoltDB, unique bool) (indexes []sql.Index, err error) {
+	if !types.IsFormat_DOLT(db.Format()) {
+		return nil, nil
+	}
+
+	return []sql.Index{
+		NewCommitIndex(&doltIndex{
+			id:      CommitHashIndexId,
+			tblName: tab,
+			dbName:  "",
+			columns: []schema.Column{
+				schema.NewColumn(CommitHashIndexId, 0, types.StringKind, false),
+			},
+			indexSch:                      nil,
+			tableSch:                      nil,
+			unique:                        unique,
+			comment:                       "",
+			vrw:                           db.ValueReadWriter(),
+			ns:                            db.NodeStore(),
+			order:                         sql.IndexOrderNone,
+			constrainedToLookupExpression: false,
+		}),
+	}, nil
 }
 
 func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
@@ -177,7 +282,7 @@ func indexesMatch(a sql.Index, b sql.Index) bool {
 	return true
 }
 
-func DoltHistoryIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) ([]sql.Index, error) {
+func DoltHistoryIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table, ddb *doltdb.DoltDB) ([]sql.Index, error) {
 	indexes, err := DoltIndexesFromTable(ctx, db, tbl, t)
 	if err != nil {
 		return nil, err
@@ -192,6 +297,12 @@ func DoltHistoryIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.
 		di.constrainedToLookupExpression = false
 		unorderedIndexes[i] = di
 	}
+
+	cmIdx, err := DoltCommitIndexes(tbl, ddb, false)
+	if err != nil {
+		return nil, err
+	}
+	unorderedIndexes = append(unorderedIndexes, cmIdx...)
 
 	return unorderedIndexes, nil
 }
@@ -247,6 +358,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		indexSch:                      idx.Schema(),
 		tableSch:                      sch,
 		unique:                        idx.IsUnique(),
+		spatial:                       idx.IsSpatial(),
 		isPk:                          false,
 		comment:                       idx.Comment(),
 		vrw:                           vrw,
@@ -255,6 +367,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
 		doltBinFormat:                 types.IsFormat_DOLT(vrw.Format()),
+		prefixLengths:                 idx.PrefixLengths(),
 	}, nil
 }
 
@@ -374,6 +487,7 @@ type doltIndex struct {
 	indexSch schema.Schema
 	tableSch schema.Schema
 	unique   bool
+	spatial  bool
 	isPk     bool
 	comment  string
 	order    sql.IndexOrder
@@ -386,6 +500,8 @@ type doltIndex struct {
 
 	cache         cachedDurableIndexes
 	doltBinFormat bool
+
+	prefixLengths []uint16
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
@@ -458,12 +574,18 @@ func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durab
 	return ret, nil
 }
 
-func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, iranges ...sql.Range) ([]prolly.Range, error) {
+func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, ranges ...sql.Range) ([]prolly.Range, error) {
 	//todo(max): it is important that *doltIndexLookup maintains a reference
 	// to empty sqlRanges, otherwise the analyzer will dismiss the index and
 	// chose a less optimal lookup index. This is a GMS concern, so GMS should
 	// really not rely on the integrator to maintain this tenuous relationship.
-	ranges, err := pruneEmptyRanges(iranges)
+	var err error
+	if !di.spatial {
+		ranges, err = pruneEmptyRanges(ranges)
+		if err != nil {
+			return nil, err
+		}
+	}
 	pranges, err := di.prollyRangesFromSqlRanges(ctx, ns, ranges, di.keyBld)
 	if err != nil {
 		return nil, err
@@ -587,8 +709,16 @@ func (di *doltIndex) lookupTags(s *durableIndexState) map[uint64]int {
 }
 
 func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
-	if len(cols) == 0 {
+	if cols == nil {
 		return s.coversAllColumns(di)
+	}
+
+	if len(di.prefixLengths) > 0 {
+		return false
+	}
+
+	if di.IsSpatial() {
+		return false
 	}
 
 	var idxCols *schema.ColCollection
@@ -621,6 +751,11 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
 
 func (di *doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
 	if !di.constrainedToLookupExpression {
+		return nil
+	}
+
+	// filters on indexes with prefix lengths are not completely handled
+	if len(di.prefixLengths) > 0 {
 		return nil
 	}
 
@@ -662,6 +797,11 @@ func (di *doltIndex) IsUnique() bool {
 	return di.unique
 }
 
+// IsSpatial implements sql.Index
+func (di *doltIndex) IsSpatial() bool {
+	return di.spatial
+}
+
 // IsPrimaryKey implements DoltIndex.
 func (di *doltIndex) IsPrimaryKey() bool {
 	return di.isPk
@@ -670,6 +810,11 @@ func (di *doltIndex) IsPrimaryKey() bool {
 // Comment implements sql.Index
 func (di *doltIndex) Comment() string {
 	return di.comment
+}
+
+// PrefixLengths implements sql.Index
+func (di *doltIndex) PrefixLengths() []uint16 {
+	return di.prefixLengths
 }
 
 // IndexType implements sql.Index
@@ -761,30 +906,118 @@ func pruneEmptyRanges(sqlRanges []sql.Range) (pruned []sql.Range, err error) {
 	return pruned, nil
 }
 
+// trimRangeCutValue will trim the key value retrieved, depending on its type and prefix length
+// TODO: this is just the trimKeyPart in the SecondaryIndexWriters, maybe find a different place
+func (di *doltIndex) trimRangeCutValue(to int, keyPart interface{}) interface{} {
+	var prefixLength uint16
+	if len(di.prefixLengths) > to {
+		prefixLength = di.prefixLengths[to]
+	}
+	if prefixLength != 0 {
+		switch kp := keyPart.(type) {
+		case string:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
+			keyPart = kp[:prefixLength]
+		case []uint8:
+			if prefixLength > uint16(len(kp)) {
+				prefixLength = uint16(len(kp))
+			}
+			keyPart = kp[:prefixLength]
+		}
+	}
+	return keyPart
+}
+
+func (di *doltIndex) valueReadWriter() types.ValueReadWriter {
+	return di.vrw
+}
+
+func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, error) {
+	// should be exactly one range
+	rng := ranges[0][0]
+	lower, upper := sql.GetRangeCutKey(rng.LowerBound), sql.GetRangeCutKey(rng.UpperBound)
+
+	minPoint, ok := lower.(sqltypes.Point)
+	if !ok {
+		return nil, fmt.Errorf("spatial index bounding box using non-point type")
+	}
+	maxPoint, ok := upper.(sqltypes.Point)
+	if !ok {
+		return nil, fmt.Errorf("spatial index bounding box using non-point type")
+	}
+
+	var pRanges []prolly.Range
+	zMin := ZValue(minPoint)
+	zMax := ZValue(maxPoint)
+	zRanges := SplitZRanges(ZRange{zMin, zMax})
+	for level := byte(0); level < 65; level++ {
+		// For example, at highest level, we'll just look at origin point multiple times
+		var prevMinCell, prevMaxCell val.Cell
+		for i, zRange := range zRanges {
+			minCell := ZMask(level, zRange[0])
+			maxCell := ZMask(level, zRange[1])
+			if i != 0 && minCell == prevMinCell && maxCell == prevMaxCell {
+				continue
+			}
+			prevMinCell = minCell
+			prevMaxCell = maxCell
+			field := prolly.RangeField{
+				Exact: false,
+				Lo: prolly.Bound{
+					Binding:   true,
+					Inclusive: true,
+					Value:     minCell[:],
+				},
+				Hi: prolly.Bound{
+					Binding:   true,
+					Inclusive: true,
+					Value:     maxCell[:],
+				},
+			}
+			pRange := prolly.Range{
+				Fields: []prolly.RangeField{field},
+				Desc:   di.keyBld.Desc,
+			}
+			pRanges = append(pRanges, pRange)
+		}
+	}
+
+	return pRanges, nil
+}
+
 func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.NodeStore, ranges []sql.Range, tb *val.TupleBuilder) ([]prolly.Range, error) {
-	ranges, err := pruneEmptyRanges(ranges)
-	if err != nil {
-		return nil, err
+	var err error
+	if !di.spatial {
+		ranges, err = pruneEmptyRanges(ranges)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if di.spatial {
+		return di.prollySpatialRanges(ranges)
 	}
 
 	pranges := make([]prolly.Range, len(ranges))
-
 	for k, rng := range ranges {
 		fields := make([]prolly.RangeField, len(rng))
 		for j, expr := range rng {
 			if rangeCutIsBinding(expr.LowerBound) {
-				bound := expr.LowerBound.TypeAsLowerBound()
-				fields[j].Lo = prolly.Bound{
-					Binding:   true,
-					Inclusive: bound == sql.Closed,
-				}
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(expr.LowerBound, rng[j].Typ)
 				if err != nil {
 					return nil, err
 				}
-				if err = PutField(ctx, ns, tb, j, v); err != nil {
+				nv := di.trimRangeCutValue(j, v)
+				if err = PutField(ctx, ns, tb, j, nv); err != nil {
 					return nil, err
+				}
+				bound := expr.LowerBound.TypeAsLowerBound()
+				fields[j].Lo = prolly.Bound{
+					Binding:   true,
+					Inclusive: bound == sql.Closed,
 				}
 			} else {
 				fields[j].Lo = prolly.Bound{}
@@ -799,17 +1032,18 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		for i, expr := range rng {
 			if rangeCutIsBinding(expr.UpperBound) {
 				bound := expr.UpperBound.TypeAsUpperBound()
-				fields[i].Hi = prolly.Bound{
-					Binding:   true,
-					Inclusive: bound == sql.Closed,
-				}
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(expr.UpperBound, rng[i].Typ)
 				if err != nil {
 					return nil, err
 				}
-				if err = PutField(ctx, ns, tb, i, v); err != nil {
+				nv := di.trimRangeCutValue(i, v)
+				if err = PutField(ctx, ns, tb, i, nv); err != nil {
 					return nil, err
+				}
+				fields[i].Hi = prolly.Bound{
+					Binding:   true,
+					Inclusive: bound == sql.Closed || nv != v, // TODO (james): this might panic for []byte
 				}
 			} else {
 				fields[i].Hi = prolly.Bound{}
@@ -823,6 +1057,11 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 
 		order := di.keyBld.Desc.Comparator()
 		for i, field := range fields {
+			// lookups on non-unique indexes can't be point lookups
+			if !di.unique {
+				fields[i].Exact = false
+				continue
+			}
 			if !field.Hi.Binding || !field.Lo.Binding {
 				fields[i].Exact = false
 				continue
@@ -855,7 +1094,8 @@ func getRangeCutValue(cut sql.RangeCut, typ sql.Type) (interface{}, error) {
 	if _, ok := cut.(sql.AboveNull); ok {
 		return nil, nil
 	}
-	return typ.Convert(sql.GetRangeCutKey(cut))
+	ret, _, err := typ.Convert(sql.GetRangeCutKey(cut))
+	return ret, err
 }
 
 // DropTrailingAllColumnExprs returns the Range with any |AllColumnExprs| at the end of it removed.
@@ -932,4 +1172,111 @@ func SplitNullsFromRanges(rs []sql.Range) ([]sql.Range, error) {
 		ret = append(ret, nr...)
 	}
 	return ret, nil
+}
+
+// LookupToPointSelectStr converts a set of point lookups on string
+// fields, returning a nil list and false if any expression failed
+// to convert.
+func LookupToPointSelectStr(lookup sql.IndexLookup) ([]string, bool) {
+	var selects []string
+	for _, r := range lookup.Ranges {
+		if len(r) != 1 {
+			return nil, false
+		}
+		lb, ok := r[0].LowerBound.(sql.Below)
+		if !ok {
+			return nil, false
+		}
+		if lb.Key == nil {
+			continue
+		}
+		lk, ok := lb.Key.(string)
+		if !ok {
+			return nil, false
+		}
+		ub, ok := r[0].UpperBound.(sql.Above)
+		if !ok {
+			return nil, false
+		}
+		if ub.Key == nil {
+			continue
+		}
+		uk, ok := ub.Key.(string)
+		if uk != lk {
+			return nil, false
+		}
+		selects = append(selects, uk)
+	}
+	return selects, true
+}
+
+// HashesToCommits converts a set of strings into hashes, commits,
+// and commit metadata. Strings that are invalid hashes, or do
+// not refer to commits are filtered from the return lists.
+//
+// The doltdb.Working edge case is handled specially depending on
+// whether we are: 1) interested in converting "WORKING" into a
+// commit hash (or leave it as "WORKING"), and 2) whether we want
+// to attempt to load a commit if WORKING == HEAD. The commit and
+// metadata for a working hash will be nil if indicated.
+func HashesToCommits(
+	ctx *sql.Context,
+	ddb *doltdb.DoltDB,
+	hashStrs []string,
+	head *doltdb.Commit,
+	convertWorkingToCommit bool,
+) ([]hash.Hash, []*doltdb.Commit, []*datas.CommitMeta) {
+	var hashes []hash.Hash
+	var commits []*doltdb.Commit
+	var metas []*datas.CommitMeta
+	var err error
+	var ok bool
+	for _, hs := range hashStrs {
+		var h hash.Hash
+		var cm *doltdb.Commit
+		var meta *datas.CommitMeta
+		switch hs {
+		case doltdb.Working:
+			if head == nil {
+				continue
+			}
+			h, err = head.HashOf()
+			if err != nil {
+				continue
+			}
+
+			if convertWorkingToCommit {
+				cm, err = doltdb.HashToCommit(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), h)
+				if err != nil {
+					cm = nil
+				} else {
+					cm = head
+					meta, err = cm.GetCommitMeta(ctx)
+					if err != nil {
+						continue
+					}
+				}
+			}
+		default:
+			h, ok = hash.MaybeParse(hs)
+			if !ok {
+				continue
+			}
+			cm, err = doltdb.HashToCommit(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), h)
+			if err != nil {
+				continue
+			}
+			meta, err = cm.GetCommitMeta(ctx)
+			if err != nil {
+				continue
+			}
+		}
+		if err != nil {
+			continue
+		}
+		hashes = append(hashes, h)
+		commits = append(commits, cm)
+		metas = append(metas, meta)
+	}
+	return hashes, commits, metas
 }

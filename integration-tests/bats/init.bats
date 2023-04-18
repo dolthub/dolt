@@ -152,6 +152,18 @@ teardown() {
   [ "$status" -eq 1 ]
 }
 
+@test "init: running init with invalid argument or option fails" {
+  set_dolt_user "baz", "baz@bash.com"
+
+  run dolt init invalid
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "error: invalid arguments" ]] || false
+
+  run dolt init --invalid
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "error: unknown option" ]] || false
+}
+
 @test "init: running init with the new format, creates a new format database" {
     set_dolt_user "baz", "baz@bash.com"
 
@@ -283,6 +295,14 @@ teardown() {
     run dolt version
     [ "$status" -eq 0 ]
     [[ "$output" =~ "__DOLT__" ]] || false
+}
+
+@test "init: fun flag produces an initial commit with the right hash" {
+    set_dolt_user "baz", "baz@bash.com"	
+    dolt init --fun
+    run dolt log
+    [ $status -eq 0 ]
+    [[ $output =~ "commit dolt" ]] || [[ $output =~ "commit do1t" ]] || [[ $output =~ "commit d0lt" ]] || [[ $output =~ "commit d01t" ]] || false
 }
 
 assert_valid_repository () {

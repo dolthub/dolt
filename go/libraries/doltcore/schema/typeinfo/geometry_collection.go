@@ -20,6 +20,7 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -27,12 +28,12 @@ import (
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type geomcollType struct {
-	sqlGeomCollType sql.GeomCollType
+	sqlGeomCollType gmstypes.GeomCollType
 }
 
 var _ TypeInfo = (*geomcollType)(nil)
 
-var GeomCollType = &geomcollType{sql.GeomCollType{}}
+var GeomCollType = &geomcollType{gmstypes.GeomCollType{}}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *geomcollType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
@@ -73,12 +74,12 @@ func (ti *geomcollType) ConvertValueToNomsValue(ctx context.Context, vrw types.V
 	}
 
 	// Convert to sql.GeomColl
-	geomColl, err := ti.sqlGeomCollType.Convert(v)
+	geomColl, _, err := ti.sqlGeomCollType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
 
-	return types.ConvertSQLGeomCollToTypesGeomColl(geomColl.(sql.GeomColl)), nil
+	return types.ConvertSQLGeomCollToTypesGeomColl(geomColl.(gmstypes.GeomColl)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -135,7 +136,7 @@ func (ti *geomcollType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *geomcollType) Promote() TypeInfo {
-	return &geomcollType{ti.sqlGeomCollType.Promote().(sql.GeomCollType)}
+	return &geomcollType{ti.sqlGeomCollType.Promote().(gmstypes.GeomCollType)}
 }
 
 // String implements TypeInfo interface.
@@ -227,5 +228,5 @@ func CreateGeomCollTypeFromParams(params map[string]string) (TypeInfo, error) {
 		}
 	}
 
-	return &geomcollType{sqlGeomCollType: sql.GeomCollType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
+	return &geomcollType{sqlGeomCollType: gmstypes.GeomCollType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

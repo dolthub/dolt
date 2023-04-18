@@ -16,23 +16,35 @@ package cluster
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
+	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/jwtauth"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -60,6 +72,12 @@ type Controller struct {
 	iterSessions   IterSessions
 	killQuery      func(uint32)
 	killConnection func(uint32) error
+
+	jwks      *jwtauth.MultiJWKS
+	tlsCfg    *tls.Config
+	grpcCreds credentials.PerRPCCredentials
+	pub       ed25519.PublicKey
+	priv      ed25519.PrivateKey
 }
 
 type sqlvars interface {
@@ -79,6 +97,8 @@ type procedurestore interface {
 const (
 	DoltClusterRoleVariable      = "dolt_cluster_role"
 	DoltClusterRoleEpochVariable = "dolt_cluster_role_epoch"
+	// Since we fetch the keys from the other replicas we’re going to use a fixed string here.
+	DoltClusterRemoteApiAudience = "dolt-cluster-remote-api.dolthub.com"
 )
 
 func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) (*Controller, error) {
@@ -107,7 +127,47 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 	ret.cinterceptor.lgr = lgr.WithFields(logrus.Fields{})
 	ret.cinterceptor.setRole(role, epoch)
 	ret.cinterceptor.roleSetter = roleSetter
+
+	ret.tlsCfg, err = ret.outboundTlsConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	ret.pub, ret.priv, err = ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+
+	keyID := creds.PubKeyToKID(ret.pub)
+	keyIDStr := creds.B32CredsEncoding.EncodeToString(keyID)
+	ret.grpcCreds = &creds.RPCCreds{
+		PrivKey:    ret.priv,
+		Audience:   DoltClusterRemoteApiAudience,
+		Issuer:     creds.ClientIssuer,
+		KeyID:      keyIDStr,
+		RequireTLS: false,
+	}
+
+	ret.jwks = ret.standbyRemotesJWKS()
+	ret.sinterceptor.keyProvider = ret.jwks
+	ret.sinterceptor.jwtExpected = JWTExpectations()
+
 	return ret, nil
+}
+
+func (c *Controller) Run() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.jwks.Run()
+	}()
+	wg.Wait()
+}
+
+func (c *Controller) GracefulStop() error {
+	c.jwks.GracefulStop()
+	return nil
 }
 
 func (c *Controller) ManageSystemVariables(variables sqlvars) {
@@ -193,7 +253,7 @@ func (c *Controller) applyCommitHooks(ctx context.Context, name string, bt *sql.
 }
 
 func (c *Controller) gRPCDialProvider(denv *env.DoltEnv) dbfactory.GRPCDialProvider {
-	return grpcDialProvider{env.NewGRPCDialProviderFromDoltEnv(denv), &c.cinterceptor, c.cfg}
+	return grpcDialProvider{env.NewGRPCDialProviderFromDoltEnv(denv), &c.cinterceptor, c.tlsCfg, c.grpcCreds}
 }
 
 func (c *Controller) RegisterStoredProcedures(store procedurestore) {
@@ -210,11 +270,11 @@ func (c *Controller) ClusterDatabase() sql.Database {
 	return clusterdb.NewClusterDatabase(c)
 }
 
-func (c *Controller) RemoteSrvPort() int {
+func (c *Controller) RemoteSrvListenAddr() string {
 	if c == nil {
-		return -1
+		return ""
 	}
-	return c.cfg.RemotesAPIConfig().Port()
+	return fmt.Sprintf("%s:%d", c.cfg.RemotesAPIConfig().Address(), c.cfg.RemotesAPIConfig().Port())
 }
 
 func (c *Controller) ServerOptions() []grpc.ServerOption {
@@ -228,14 +288,14 @@ func (c *Controller) refreshSystemVars() {
 			Name:    DoltClusterRoleVariable,
 			Dynamic: false,
 			Scope:   sql.SystemVariableScope_Persist,
-			Type:    sql.NewSystemStringType(DoltClusterRoleVariable),
+			Type:    gmstypes.NewSystemStringType(DoltClusterRoleVariable),
 			Default: role,
 		},
 		{
 			Name:    DoltClusterRoleEpochVariable,
 			Dynamic: false,
 			Scope:   sql.SystemVariableScope_Persist,
-			Type:    sql.NewSystemIntType(DoltClusterRoleEpochVariable, 0, 9223372036854775807, false),
+			Type:    gmstypes.NewSystemIntType(DoltClusterRoleEpochVariable, 0, 9223372036854775807, false),
 			Default: epoch,
 		},
 	}
@@ -322,8 +382,15 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool, save
 		var err error
 		if role == string(RoleStandby) {
 			if graceful {
+				beforeRole, beforeEpoch := c.role, c.epoch
 				err = c.gracefulTransitionToStandby(saveConnID)
+				if err == nil && (beforeRole != c.role || beforeEpoch != c.epoch) {
+					// The role or epoch moved out from under us while we were unlocked and transitioning to standby.
+					err = fmt.Errorf("error assuming role '%s' at epoch %d: the role configuration changed while we were replicating to our standbys. Please try again", role, epoch)
+				}
 				if err != nil {
+					c.setProviderIsStandby(c.role != RolePrimary)
+					c.killRunningQueries(saveConnID)
 					return false, err
 				}
 			} else {
@@ -401,11 +468,17 @@ func (c *Controller) recordSuccessfulRemoteSrvCommit(name string) {
 }
 
 func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.ServerArgs) remotesrv.ServerArgs {
-	args.HttpPort = c.RemoteSrvPort()
-	args.GrpcPort = c.RemoteSrvPort()
+	listenaddr := c.RemoteSrvListenAddr()
+	args.HttpListenAddr = listenaddr
+	args.GrpcListenAddr = listenaddr
 	args.Options = c.ServerOptions()
 	args = sqle.RemoteSrvServerArgs(ctx, args)
 	args.DBCache = remotesrvStoreCache{args.DBCache, c}
+
+	keyID := creds.PubKeyToKID(c.pub)
+	keyIDStr := creds.B32CredsEncoding.EncodeToString(keyID)
+	args.HttpInterceptor = JWKSHandlerInterceptor(keyIDStr, c.pub)
+
 	return args
 }
 
@@ -425,12 +498,9 @@ func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.Server
 func (c *Controller) gracefulTransitionToStandby(saveConnID int) error {
 	c.setProviderIsStandby(true)
 	c.killRunningQueries(saveConnID)
-	// TODO: this can block with c.mu held, although we are not too
-	// interested in the server proceeding gracefully while this is
-	// happening.
+	// waitForHooksToReplicate will release the lock while it
+	// blocks, but will return with the lock held.
 	if err := c.waitForHooksToReplicate(); err != nil {
-		c.setProviderIsStandby(false)
-		c.killRunningQueries(saveConnID)
 		return err
 	}
 	return nil
@@ -493,25 +563,30 @@ const waitForHooksToReplicateTimeout = 10 * time.Second
 //
 // called with c.mu held
 func (c *Controller) waitForHooksToReplicate() error {
-	caughtup := make([]bool, len(c.commithooks))
+	commithooks := make([]*commithook, len(c.commithooks))
+	copy(commithooks, c.commithooks)
+	caughtup := make([]bool, len(commithooks))
 	var wg sync.WaitGroup
-	wg.Add(len(c.commithooks))
-	for li, lch := range c.commithooks {
+	wg.Add(len(commithooks))
+	for li, lch := range commithooks {
 		i := li
 		ch := lch
-		if ch.isCaughtUpLocking() {
-			caughtup[i] = true
-			wg.Done()
-		} else {
-			ch.setWaitNotify(func() {
-				// called with ch.mu locked.
-				if !caughtup[i] && ch.isCaughtUp() {
-					caughtup[i] = true
-					wg.Done()
-				}
-			})
+		ok := ch.setWaitNotify(func() {
+			// called with ch.mu locked.
+			if !caughtup[i] && ch.isCaughtUp() {
+				caughtup[i] = true
+				wg.Done()
+			}
+		})
+		if !ok {
+			for j := li - 1; j >= 0; j-- {
+				commithooks[j].setWaitNotify(nil)
+			}
+			c.lgr.Warnf("cluster/controller: failed to wait for graceful transition to standby; there were concurrent attempts to transition..")
+			return errors.New("cluster/controller: failed to transition from primary to standby gracefully; did not gain exclusive access to commithooks.")
 		}
 	}
+	c.mu.Unlock()
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -524,20 +599,150 @@ func (c *Controller) waitForHooksToReplicate() error {
 	case <-time.After(waitForHooksToReplicateTimeout):
 		success = false
 	}
-	for _, ch := range c.commithooks {
+	c.mu.Lock()
+	for _, ch := range commithooks {
 		ch.setWaitNotify(nil)
 	}
-	// make certain we don't leak the wg.Wait goroutine in the failure case.
-	for _, b := range caughtup {
-		if !b {
-			wg.Done()
+	if !success {
+		// make certain we don't leak the wg.Wait goroutine in the failure case.
+		// at this point, none of the callbacks will ever be called again and
+		// ch.setWaitNotify grabs a lock and so establishes the happens before.
+		for _, b := range caughtup {
+			if !b {
+				wg.Done()
+			}
 		}
-	}
-	if success {
-		c.lgr.Tracef("cluster/controller: successfully replicated all databases to all standbys; transitioning to standby.")
-		return nil
-	} else {
+		<-done
 		c.lgr.Warnf("cluster/controller: failed to replicate all databases to all standbys; not transitioning to standby.")
 		return errors.New("cluster/controller: failed to transition from primary to standby gracefully; could not replicate databases to standby in a timely manner.")
+	} else {
+		c.lgr.Tracef("cluster/controller: successfully replicated all databases to all standbys; transitioning to standby.")
+		return nil
 	}
+}
+
+// Within a cluster, if remotesapi is configured with a tls_ca, we take the
+// following semantics:
+// * The configured tls_ca file holds a set of PEM encoded x509 certificates,
+// all of which are trusted roots for the outbound connections the
+// remotestorage client establishes.
+// * The certificate chain presented by the server must validate to a root
+// which was present in tls_ca. In particular, every certificate in the chain
+// must be within its validity window, the signatures must be valid, key usage
+// and isCa must be correctly set for the roots and the intermediates, and the
+// leaf must have extended key usage server auth.
+// * On the other hand, no verification is done against the SAN or the Subject
+// of the certificate.
+//
+// We use these TLS semantics for both connections to the gRPC endpoint which
+// is the actual remotesapi, and for connections to any HTTPS endpoints to
+// which the gRPC service returns URLs. For now, this works perfectly for our
+// use case, but it's tightly coupled to `cluster:` deployment topologies and
+// the likes.
+//
+// If tls_ca is not set then default TLS handling is performed. In particular,
+// if the remotesapi endpoints is HTTPS, then the system roots are used and
+// ServerName is verified against the presented URL SANs of the certificates.
+//
+// This tls Config is used for fetching JWKS, for outbound GRPC connections and
+// for outbound https connections on the URLs that the GRPC services return.
+func (c *Controller) outboundTlsConfig() (*tls.Config, error) {
+	tlsCA := c.cfg.RemotesAPIConfig().TLSCA()
+	if tlsCA == "" {
+		return nil, nil
+	}
+	urlmatches := c.cfg.RemotesAPIConfig().ServerNameURLMatches()
+	dnsmatches := c.cfg.RemotesAPIConfig().ServerNameDNSMatches()
+	pem, err := os.ReadFile(tlsCA)
+	if err != nil {
+		return nil, err
+	}
+	roots := x509.NewCertPool()
+	if ok := roots.AppendCertsFromPEM(pem); !ok {
+		return nil, errors.New("error loading ca roots from " + tlsCA)
+	}
+	verifyFunc := func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+		certs := make([]*x509.Certificate, len(rawCerts))
+		var err error
+		for i, asn1Data := range rawCerts {
+			certs[i], err = x509.ParseCertificate(asn1Data)
+			if err != nil {
+				return err
+			}
+		}
+		keyUsages := []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+		opts := x509.VerifyOptions{
+			Roots:         roots,
+			CurrentTime:   time.Now(),
+			Intermediates: x509.NewCertPool(),
+			KeyUsages:     keyUsages,
+		}
+		for _, cert := range certs[1:] {
+			opts.Intermediates.AddCert(cert)
+		}
+		_, err = certs[0].Verify(opts)
+		if err != nil {
+			return err
+		}
+		if len(urlmatches) > 0 {
+			found := false
+			for _, n := range urlmatches {
+				for _, cn := range certs[0].URIs {
+					if n == cn.String() {
+						found = true
+					}
+					break
+				}
+				if found {
+					break
+				}
+			}
+			if !found {
+				return errors.New("expected certificate to match something in server_name_urls, but it did not")
+			}
+		}
+		if len(dnsmatches) > 0 {
+			found := false
+			for _, n := range dnsmatches {
+				for _, cn := range certs[0].DNSNames {
+					if n == cn {
+						found = true
+					}
+					break
+				}
+				if found {
+					break
+				}
+			}
+			if !found {
+				return errors.New("expected certificate to match something in server_name_dns, but it did not")
+			}
+		}
+		return nil
+	}
+	return &tls.Config{
+		// We have to InsecureSkipVerify because ServerName is always
+		// set by the grpc dial provider and golang tls.Config does not
+		// have good support for performing certificate validation
+		// without server name validation.
+		InsecureSkipVerify: true,
+
+		VerifyPeerCertificate: verifyFunc,
+
+		NextProtos: []string{"h2"},
+	}, nil
+}
+
+func (c *Controller) standbyRemotesJWKS() *jwtauth.MultiJWKS {
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig:   c.tlsCfg,
+			ForceAttemptHTTP2: true,
+		},
+	}
+	urls := make([]string, len(c.cfg.StandbyRemotes()))
+	for i, r := range c.cfg.StandbyRemotes() {
+		urls[i] = strings.Replace(r.RemoteURLTemplate(), dsess.URLTemplateDatabasePlaceholder, ".well-known/jwks.json", -1)
+	}
+	return jwtauth.NewMultiJWKS(c.lgr.WithFields(logrus.Fields{"component": "jwks-key-provider"}), urls, client)
 }

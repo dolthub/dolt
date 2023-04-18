@@ -123,6 +123,12 @@ teardown() {
     [[ "${lines[4]}" =~ "| 1  | asdf | 1.1 | 0 | 122 |" ]] || false
     [[ "${lines[5]}" =~ "| 4  | data | 1.1 | 0 | 122 |" ]] || false
 
+    # This breaks because the newly-created working sets (created on repo load)
+    # don't match head on either branch because they add a feature version,
+    # which previous releases of Dolt did not have. This is only a problem in
+    # the case that someone clones a very, very old repository (2+ years)
+    # created before Dolt stored working sets in the database.
+    skip "Breaks working set stomp check"
     dolt checkout "$DEFAULT_BRANCH"
 }
 
@@ -187,8 +193,16 @@ EOF
 }
 
 @test "dolt merge other into $DEFAULT_BRANCH" {
-    # throws a conflict
-    dolt merge other
+    run dolt version
+    if [[ $output =~ "__DOLT__" ]]; then
+        run dolt merge other
+        [ $status -eq 0 ]
+        [[ $output =~ "Merge conflict in abc" ]] || false
+        [[ $output =~ "Automatic merge failed" ]] || false
+    else
+        # throws a conflict
+        dolt merge other
+    fi
 }
 
 @test "dolt table import" {
@@ -200,11 +214,23 @@ EOF
 }
 
 @test "dolt_schemas" {
-    run dolt sql -q "select * from dolt_schemas"
-    [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "| type | name  | fragment             |" ]] || false
-    [[ "${lines[2]}" =~ "+------+-------+----------------------+" ]] || false
-    [[ "${lines[3]}" =~ "| view | view1 | SELECT 2+2 FROM dual |" ]] || false
+    dolt_version=$( echo $DOLT_VERSION | sed -e "s/^v//" )
+    echo $dolt_version
+
+    if [[ ! -z $dolt_version ]]; then
+        run dolt sql -q "select * from dolt_schemas"
+        [ "$status" -eq 0 ]
+        [[ "${lines[1]}" =~ "| type | name  | fragment             |" ]] || false
+        [[ "${lines[2]}" =~ "+------+-------+----------------------+" ]] || false
+        [[ "${lines[3]}" =~ "| view | view1 | SELECT 2+2 FROM dual |" ]] || false
+    else
+        run dolt sql -q "select * from dolt_schemas"
+        [ "$status" -eq 0 ]
+        [[ "${lines[1]}" =~ "| type | name  | fragment                                  |" ]] || false
+        [[ "${lines[2]}" =~ "+------+-------+-------------------------------------------+" ]] || false
+        [[ "${lines[3]}" =~ "| view | view1 | CREATE VIEW view1 AS SELECT 2+2 FROM dual |" ]] || false
+    fi
+
     run dolt sql -q 'select * from view1'
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "2+2" ]] || false

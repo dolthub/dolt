@@ -22,6 +22,7 @@
 package nbs
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,12 +30,15 @@ import (
 )
 
 func TestPlanCompaction(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 	tableContents := [][][]byte{
 		{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")},
 		{[]byte("red"), []byte("blue")},
 		{[]byte("solo")},
 	}
+
+	q := &UnlimitedQuotaProvider{}
 
 	var sources chunkSources
 	var dataLens []uint64
@@ -45,7 +49,7 @@ func TestPlanCompaction(t *testing.T) {
 		}
 		data, name, err := buildTable(content)
 		require.NoError(t, err)
-		ti, err := parseTableIndexByCopy(data, &noopQuotaProvider{})
+		ti, err := parseTableIndexByCopy(ctx, data, q)
 		require.NoError(t, err)
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
 		require.NoError(t, err)
@@ -53,8 +57,13 @@ func TestPlanCompaction(t *testing.T) {
 		dataLens = append(dataLens, uint64(len(data))-indexSize(mustUint32(src.count()))-footerSize)
 		sources = append(sources, src)
 	}
+	defer func() {
+		for _, s := range sources {
+			s.close()
+		}
+	}()
 
-	plan, err := planConjoin(sources, &Stats{})
+	plan, err := planRangeCopyConjoin(sources, &Stats{})
 	require.NoError(t, err)
 
 	var totalChunks uint32
@@ -63,14 +72,15 @@ func TestPlanCompaction(t *testing.T) {
 		totalChunks += mustUint32(src.count())
 	}
 
-	idx, err := parseTableIndex(plan.mergedIndex, &noopQuotaProvider{})
+	idx, err := parseTableIndexByCopy(ctx, plan.mergedIndex, q)
 	require.NoError(t, err)
 
-	assert.Equal(totalChunks, idx.chunkCount)
-	assert.Equal(totalUnc, idx.totalUncompressedData)
+	assert.Equal(totalChunks, idx.chunkCount())
+	assert.Equal(totalUnc, idx.totalUncompressedData())
 
 	tr, err := newTableReader(idx, tableReaderAtFromBytes(nil), fileBlockSize)
 	require.NoError(t, err)
+	defer tr.close()
 	for _, content := range tableContents {
 		assertChunksInReader(content, tr, assert)
 	}

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -38,9 +39,9 @@ type datetimeType struct {
 
 var _ TypeInfo = (*datetimeType)(nil)
 var (
-	DateType      = &datetimeType{sql.Date}
-	DatetimeType  = &datetimeType{sql.Datetime}
-	TimestampType = &datetimeType{sql.Timestamp}
+	DateType      = &datetimeType{gmstypes.Date}
+	DatetimeType  = &datetimeType{gmstypes.Datetime}
+	TimestampType = &datetimeType{gmstypes.Timestamp}
 )
 
 func CreateDatetimeTypeFromParams(params map[string]string) (TypeInfo, error) {
@@ -102,7 +103,7 @@ func (ti *datetimeType) ConvertValueToNomsValue(ctx context.Context, vrw types.V
 	if v == nil {
 		return types.NullValue, nil
 	}
-	timeVal, err := ti.sqlDatetimeType.Convert(v)
+	timeVal, _, err := ti.sqlDatetimeType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +171,7 @@ func (ti *datetimeType) GetTypeParams() map[string]string {
 // IsValid implements TypeInfo interface.
 func (ti *datetimeType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Timestamp); ok {
-		_, err := ti.sqlDatetimeType.Convert(time.Time(val))
+		_, _, err := ti.sqlDatetimeType.Convert(time.Time(val))
 		if err != nil {
 			return false
 		}

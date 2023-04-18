@@ -17,19 +17,18 @@ package main
 import (
 	"bytes"
 	"context"
-	"io"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"database/sql"
+
+	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
+	yaml "gopkg.in/yaml.v3"
 )
 
-// TestDef is the top-level definition of tests to run.
 type TestDef struct {
 	Tests []Test `yaml:"tests"`
 }
@@ -38,167 +37,13 @@ type TestDef struct {
 // any Servers defined within them will be started. The interactions and
 // assertions defined in Conns will be run.
 type Test struct {
-	Name       string       `yaml:"name"`
-	Repos      []TestRepo   `yaml:"repos"`
-	MultiRepos []MultiRepo  `yaml:"multi_repos"`
-	Conns      []Connection `yaml:"connections"`
+	Name        string              `yaml:"name"`
+	Repos       []driver.TestRepo   `yaml:"repos"`
+	MultiRepos  []driver.MultiRepo  `yaml:"multi_repos"`
+	Conns       []driver.Connection `yaml:"connections"`
 
 	// Skip the entire test with this reason.
 	Skip string `yaml:"skip"`
-}
-
-// |Connection| represents a single connection to a sql-server instance defined
-// in the test. The connection will be established and every |Query| in
-// |Queries| will be run against it. At the end, the connection will be torn down.
-// If |RestartServer| is non-nil, the server which the connection targets will
-// be restarted after the connection is terminated.
-type Connection struct {
-	On            string       `yaml:"on"`
-	Queries       []Query      `yaml:"queries"`
-	RestartServer *RestartArgs `yaml:"restart_server"`
-
-	// Rarely needed, allows the entire connection assertion to be retried
-	// on an assertion failure. Use this is only for idempotent connection
-	// interactions and only if the sql-server is prone to tear down the
-	// connection based on things that are happening, such as cluster role
-	// transitions.
-	RetryAttempts int `yaml:"retry_attempts"`
-}
-
-// |RestartArgs| are possible arguments, to change the arguments which are
-// provided to the sql-server process when it is restarted. This is used, for
-// example, to change server config on a restart.
-type RestartArgs struct {
-	Args *[]string `yaml:"args"`
-}
-
-// |TestRepo| represents an init'd dolt repository that is available to a
-// server instance. It can be created with some files and with remotes defined.
-// |Name| can include path components separated by `/`, which will create the
-// repository in a subdirectory.
-type TestRepo struct {
-	Name        string       `yaml:"name"`
-	WithFiles   []WithFile   `yaml:"with_files"`
-	WithRemotes []WithRemote `yaml:"with_remotes"`
-
-	// Only valid on Test.Repos, not in Test.MultiRepos.Repos. If set, a
-	// sql-server process will be run against this TestRepo. It will be
-	// available as TestRepo.Name.
-	Server *Server `yaml:"server"`
-}
-
-// |MultiRepo| is a subdirectory where many |TestRepo|s can be defined. You can
-// start a sql-server on a |MultiRepo|, in which case there will be no default
-// database to connect to.
-type MultiRepo struct {
-	Name      string     `yaml:"name"`
-	Repos     []TestRepo `yaml:"repos"`
-	WithFiles []WithFile `yaml:"with_files"`
-
-	// If set, a sql-server process will be run against this TestRepo. It
-	// will be available as MultiRepo.Name.
-	Server *Server `yaml:"server"`
-}
-
-// |WithRemote| defines remotes which should be defined on the repository
-// before the sql-server is started.
-type WithRemote struct {
-	Name string `yaml:"name"`
-	URL  string `yaml:"url"`
-}
-
-// |WithFile| defines a file and its contents to be created in a |Repo| or
-// |MultiRepo| before the servers are started.
-type WithFile struct {
-	Name string `yaml:"name"`
-
-	// The contents of the file, provided inline in the YAML.
-	Contents string `yaml:"contents"`
-
-	// A source file path to copy to |Name|. Mutually exclusive with
-	// Contents.
-	SourcePath string `yaml:"source_path"`
-}
-
-// |Server| defines a sql-server process to start. |Name| must match the
-// top-level |Name| of a |TestRepo| or |MultiRepo|.
-type Server struct {
-	Name string   `yaml:"name"`
-	Args []string `yaml:"args"`
-
-	// The |Port| which the server will be running on. For now, it is up to
-	// the |Args| to make sure this is true. Defaults to 3308.
-	Port int `yaml:"port"`
-
-	// Assertions to be run against the log output of the server process
-	// after the server process successfully terminates.
-	LogMatches []string `yaml:"log_matches"`
-
-	// Assertions to be run against the log output of the server process
-	// after the server process exits with an error. If |ErrorMatches| is
-	// defined, then the server process must exit with a non-0 exit code
-	// after it is launched. This will be asserted before any |Connections|
-	// interactions are performed.
-	ErrorMatches []string `yaml:"error_matches"`
-}
-
-// The primary interaction of a |Connection|. Either |Query| or |Exec| should
-// be set, not both.
-type Query struct {
-	// Run a query against the connection.
-	Query string `yaml:"query"`
-
-	// Run a command against the connection.
-	Exec string `yaml:"exec"`
-
-	// Args to be passed as query parameters to either Query or Exec.
-	Args []string `yaml:"args"`
-
-	// This can only be non-empty for a |Query|. Asserts the results of the
-	// |Query|.
-	Result QueryResult `yaml:"result"`
-
-	// If this is non-empty, asserts the the |Query| or the |Exec|
-	// generates an error that matches this string.
-	ErrorMatch string `yaml:"error_match"`
-
-	// If this is non-zero, it represents the number of times to try the
-	// |Query| or the |Exec| and to check its assertions before we fail the
-	// test as a result of failed assertions. When interacting with queries
-	// that introspect things like replication state, this can be used to
-	// wait for quiescence in an inherently racey process. Interactions
-	// will be delayed slightly between each failure.
-	RetryAttempts int `yaml:"retry_attempts"`
-}
-
-// |QueryResult| specifies assertions on the results of a |Query|. Columns must
-// be specified for a |Query| and the query results must fully match. If Rows
-// are ommited, anything is allowed as long as all rows are read successfully.
-// All assertions here are string equality.
-type QueryResult struct {
-	Columns []string   `yaml:"columns"`
-	Rows    ResultRows `yaml:"rows"`
-}
-
-type ResultRows struct {
-	Or *[][][]string
-}
-
-func (r *ResultRows) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind == yaml.SequenceNode {
-		res := make([][][]string, 1)
-		r.Or = &res
-		return value.Decode(&(*r.Or)[0])
-	}
-	var or struct {
-		Or *[][][]string `yaml:"or"`
-	}
-	err := value.Decode(&or)
-	if err != nil {
-		return err
-	}
-	r.Or = or.Or
-	return nil
 }
 
 func ParseTestsFile(path string) (TestDef, error) {
@@ -213,35 +58,11 @@ func ParseTestsFile(path string) (TestDef, error) {
 	return res, err
 }
 
-func (f WithFile) WriteAtDir(dir string) error {
-	path := filepath.Join(dir, f.Name)
-	d := filepath.Dir(path)
-	err := os.MkdirAll(d, 0750)
-	if err != nil {
-		return err
-	}
-	if f.SourcePath != "" {
-		source, err := os.Open(f.SourcePath)
-		if err != nil {
-			return err
-		}
-		defer source.Close()
-		dest, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0550)
-		if err != nil {
-			return err
-		}
-		_, err = io.Copy(dest, source)
-		return err
-	} else {
-		return os.WriteFile(path, []byte(f.Contents), 0550)
-	}
-}
-
-func MakeRepo(t *testing.T, rs RepoStore, r TestRepo) Repo {
+func MakeRepo(t *testing.T, rs driver.RepoStore, r driver.TestRepo) driver.Repo {
 	repo, err := rs.MakeRepo(r.Name)
 	require.NoError(t, err)
 	for _, f := range r.WithFiles {
-		require.NoError(t, f.WriteAtDir(repo.dir))
+		require.NoError(t, f.WriteAtDir(repo.Dir))
 	}
 	for _, remote := range r.WithRemotes {
 		require.NoError(t, repo.CreateRemote(remote.Name, remote.URL))
@@ -249,15 +70,15 @@ func MakeRepo(t *testing.T, rs RepoStore, r TestRepo) Repo {
 	return repo
 }
 
-func MakeServer(t *testing.T, dc DoltCmdable, s *Server) *SqlServer {
+func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server) *driver.SqlServer {
 	if s == nil {
 		return nil
 	}
-	opts := []SqlServerOpt{WithArgs(s.Args...)}
+	opts := []driver.SqlServerOpt{driver.WithArgs(s.Args...), driver.WithEnvs(s.Envs...)}
 	if s.Port != 0 {
-		opts = append(opts, WithPort(s.Port))
+		opts = append(opts, driver.WithPort(s.Port))
 	}
-	server, err := StartSqlServer(dc, opts...)
+	server, err := driver.StartSqlServer(dc, opts...)
 	require.NoError(t, err)
 	if len(s.ErrorMatches) > 0 {
 		err := server.ErrorStop()
@@ -289,12 +110,15 @@ func (test Test) Run(t *testing.T) {
 		t.Skip(test.Skip)
 	}
 
-	u, err := NewDoltUser()
+	u, err := driver.NewDoltUser()
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		u.Cleanup()
+	})
 	rs, err := u.MakeRepoStore()
 	require.NoError(t, err)
 
-	servers := make(map[string]*SqlServer)
+	servers := make(map[string]*driver.SqlServer)
 
 	for _, r := range test.Repos {
 		repo := MakeRepo(t, rs, r)
@@ -307,15 +131,18 @@ func (test Test) Run(t *testing.T) {
 	}
 	for _, mr := range test.MultiRepos {
 		// Each MultiRepo gets its own dolt config --global.
-		u, err := NewDoltUser()
+		u, err := driver.NewDoltUser()
 		require.NoError(t, err)
+		t.Cleanup(func() {
+			u.Cleanup()
+		})
 		rs, err = u.MakeRepoStore()
 		require.NoError(t, err)
 		for _, r := range mr.Repos {
 			MakeRepo(t, rs, r)
 		}
 		for _, f := range mr.WithFiles {
-			require.NoError(t, f.WriteAtDir(rs.dir))
+			require.NoError(t, f.WriteAtDir(rs.Dir))
 		}
 
 		server := MakeServer(t, rs, mr.Server)
@@ -329,7 +156,7 @@ func (test Test) Run(t *testing.T) {
 		require.NotNilf(t, server, "error in test spec: could not find server %s for connection %d", c.On, i)
 		if c.RetryAttempts > 1 {
 			RetryTestRun(t, c.RetryAttempts, func(t require.TestingT) {
-				db, err := server.DB()
+				db, err := server.DB(c)
 				require.NoError(t, err)
 				defer db.Close()
 
@@ -343,7 +170,7 @@ func (test Test) Run(t *testing.T) {
 			})
 		} else {
 			func() {
-				db, err := server.DB()
+				db, err := server.DB(c)
 				require.NoError(t, err)
 				defer db.Close()
 
@@ -357,7 +184,7 @@ func (test Test) Run(t *testing.T) {
 			}()
 		}
 		if c.RestartServer != nil {
-			err := server.Restart(c.RestartServer.Args)
+			err := server.Restart(c.RestartServer.Args, c.RestartServer.Envs)
 			require.NoError(t, err)
 		}
 	}
@@ -396,7 +223,7 @@ func (r *retryTestingT) try(attempts int, test func(require.TestingT)) {
 		r.errorfArgs = nil
 		r.failNow = false
 		if i != 0 {
-			time.Sleep(RetrySleepDuration)
+			time.Sleep(driver.RetrySleepDuration)
 		}
 		func() {
 			defer func() {
@@ -429,24 +256,26 @@ func RetryTestRun(t *testing.T, attempts int, test func(require.TestingT)) {
 	rtt.try(attempts, test)
 }
 
-func RunQuery(t *testing.T, conn *sql.Conn, q Query) {
+func RunQuery(t *testing.T, conn *sql.Conn, q driver.Query) {
 	RetryTestRun(t, q.RetryAttempts, func(t require.TestingT) {
 		RunQueryAttempt(t, conn, q)
 	})
 }
 
-func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q Query) {
+func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q driver.Query) {
 	args := make([]any, len(q.Args))
 	for i := range q.Args {
 		args[i] = q.Args[i]
 	}
 	if q.Query != "" {
-		rows, err := conn.QueryContext(context.Background(), q.Query, args...)
+		ctx, c := context.WithTimeout(context.Background(), 20*time.Second)
+		defer c()
+		rows, err := conn.QueryContext(ctx, q.Query, args...)
 		if err == nil {
 			defer rows.Close()
 		}
 		if q.ErrorMatch != "" {
-			require.Error(t, err)
+			require.Error(t, err, "expected error running query %s", q.Query)
 			require.Regexp(t, q.ErrorMatch, err.Error())
 			return
 		}
@@ -462,9 +291,11 @@ func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q Query) {
 			require.Contains(t, *q.Result.Rows.Or, rowstrings)
 		}
 	} else if q.Exec != "" {
-		_, err := conn.ExecContext(context.Background(), q.Exec, args...)
+		ctx, c := context.WithTimeout(context.Background(), 20*time.Second)
+		defer c()
+		_, err := conn.ExecContext(ctx, q.Exec, args...)
 		if q.ErrorMatch == "" {
-			require.NoError(t, err)
+			require.NoError(t, err, "error running query %s: %v", q.Exec, err)
 		} else {
 			require.Error(t, err)
 			require.Regexp(t, q.ErrorMatch, err.Error())

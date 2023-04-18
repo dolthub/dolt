@@ -27,13 +27,9 @@ import (
 )
 
 type TableWriter interface {
-	sql.RowReplacer
-	sql.RowUpdater
-	sql.RowInserter
-	sql.RowDeleter
-	sql.ForeignKeyUpdater
-	sql.AutoIncrementSetter
-	GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error)
+	sql.TableEditor
+	sql.ForeignKeyEditor
+	sql.AutoIncrementEditor
 }
 
 // SessionRootSetter sets the root value for the session.
@@ -143,8 +139,8 @@ func (te *nomsTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) e
 	return te.flush(ctx)
 }
 
-func (te *nomsTableWriter) IndexedAccess(i sql.Index) sql.IndexedTable {
-	idx := index.DoltIndexFromSqlIndex(i)
+func (te *nomsTableWriter) IndexedAccess(i sql.IndexLookup) sql.IndexedTable {
+	idx := index.DoltIndexFromSqlIndex(i.Index)
 	return &nomsFkIndexer{
 		writer:  te,
 		idxName: idx.ID(),

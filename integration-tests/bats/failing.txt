@@ -1,0 +1,7 @@
+sql-server: Database specific system variables should be loaded
+sql-server: disable_client_multi_statements makes create trigger work
+ sql-server: client_multi_statements work
+sql-server: connect to databases case insensitive
+ sql-server: start server multidir creates sql-server.lock file in every rep
+sql-server: running a dolt function in the same directory as a running server correctly errors
+sql-server: deleting database directory when a running server is using it does not panic

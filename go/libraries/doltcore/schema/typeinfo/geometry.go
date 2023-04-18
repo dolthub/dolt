@@ -20,6 +20,7 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -27,12 +28,12 @@ import (
 // This is a dolt implementation of the MySQL type Geometry, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type geometryType struct {
-	sqlGeometryType sql.GeometryType // References the corresponding GeometryType in GMS
+	sqlGeometryType gmstypes.GeometryType // References the corresponding GeometryType in GMS
 }
 
 var _ TypeInfo = (*geometryType)(nil)
 
-var GeometryType = &geometryType{sql.GeometryType{}}
+var GeometryType = &geometryType{gmstypes.GeometryType{}}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
@@ -122,7 +123,7 @@ func (ti *geometryType) ConvertValueToNomsValue(ctx context.Context, vrw types.V
 	}
 
 	// Convert accordingly
-	geom, err := ti.sqlGeometryType.Convert(v)
+	geom, _, err := ti.sqlGeometryType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
@@ -318,5 +319,5 @@ func CreateGeometryTypeFromParams(params map[string]string) (TypeInfo, error) {
 		}
 	}
 
-	return &geometryType{sqlGeometryType: sql.GeometryType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
+	return &geometryType{sqlGeometryType: gmstypes.GeometryType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

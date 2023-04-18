@@ -100,7 +100,7 @@ type ListenerYAMLConfig struct {
 	// AllowCleartextPasswords enables use of cleartext passwords.
 	AllowCleartextPasswords *bool `yaml:"allow_cleartext_passwords"`
 	// Socket is unix socket file path
-	Socket *string `yaml:"socket"`
+	Socket *string `yaml:"socket,omitempty"`
 }
 
 // PerformanceYAMLConfig contains configuration parameters for performance tweaking
@@ -115,11 +115,11 @@ type MetricsYAMLConfig struct {
 }
 
 type RemotesapiYAMLConfig struct {
-	Port_field *int `yaml:"port"`
+	Port_ *int `yaml:"port"`
 }
 
 func (r RemotesapiYAMLConfig) Port() int {
-	return *r.Port_field
+	return *r.Port_
 }
 
 type UserSessionVars struct {
@@ -129,22 +129,24 @@ type UserSessionVars struct {
 
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
-	LogLevelStr       *string               `yaml:"log_level"`
+	LogLevelStr       *string               `yaml:"log_level,omitempty"`
+	MaxQueryLenInLogs *int                  `yaml:"max_logged_query_len,omitempty"`
+	EncodeLoggedQuery *bool                 `yaml:"encode_logged_query,omitempty"`
 	BehaviorConfig    BehaviorYAMLConfig    `yaml:"behavior"`
 	UserConfig        UserYAMLConfig        `yaml:"user"`
 	ListenerConfig    ListenerYAMLConfig    `yaml:"listener"`
 	DatabaseConfig    []DatabaseYAMLConfig  `yaml:"databases"`
 	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
-	DataDirStr        *string               `yaml:"data_dir"`
-	CfgDirStr         *string               `yaml:"cfg_dir"`
+	DataDirStr        *string               `yaml:"data_dir,omitempty"`
+	CfgDirStr         *string               `yaml:"cfg_dir,omitempty"`
 	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
 	RemotesapiConfig  RemotesapiYAMLConfig  `yaml:"remotesapi"`
-	ClusterCfg        *ClusterYAMLConfig    `yaml:"cluster"`
-	PrivilegeFile     *string               `yaml:"privilege_file"`
-	BranchControlFile *string               `yaml:"branch_control_file"`
+	ClusterCfg        *ClusterYAMLConfig    `yaml:"cluster,omitempty"`
+	PrivilegeFile     *string               `yaml:"privilege_file,omitempty"`
+	BranchControlFile *string               `yaml:"branch_control_file,omitempty"`
 	Vars              []UserSessionVars     `yaml:"user_session_vars"`
 	Jwks              []engine.JwksConfig   `yaml:"jwks"`
-	GoldenMysqlConn   *string               `yaml:"golden_mysql_conn"`
+	GoldenMysqlConn   *string               `yaml:"golden_mysql_conn,omitempty"`
 }
 
 var _ ServerConfig = YAMLConfig{}
@@ -153,6 +155,10 @@ var _ validatingServerConfig = YAMLConfig{}
 func NewYamlConfig(configFileData []byte) (YAMLConfig, error) {
 	var cfg YAMLConfig
 	err := yaml.UnmarshalStrict(configFileData, &cfg)
+	if cfg.LogLevelStr != nil {
+		loglevel := strings.ToLower(*cfg.LogLevelStr)
+		cfg.LogLevelStr = &loglevel
+	}
 	return cfg, err
 }
 
@@ -349,7 +355,7 @@ func (cfg YAMLConfig) MetricsPort() int {
 }
 
 func (cfg YAMLConfig) RemotesapiPort() *int {
-	return cfg.RemotesapiConfig.Port_field
+	return cfg.RemotesapiConfig.Port_
 }
 
 // PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
@@ -426,6 +432,25 @@ func (cfg YAMLConfig) RequireSecureTransport() bool {
 	return *cfg.ListenerConfig.RequireSecureTransport
 }
 
+// MaxLoggedQueryLen is the max length of queries written to the logs.  Queries longer than this number are truncated.
+// If this value is 0 then the query is not truncated and will be written to the logs in its entirety.  If the value
+// is less than 0 then the queries will be omitted from the logs completely
+func (cfg YAMLConfig) MaxLoggedQueryLen() int {
+	if cfg.MaxQueryLenInLogs == nil {
+		return defaultMaxLoggedQueryLen
+	}
+
+	return *cfg.MaxQueryLenInLogs
+}
+
+func (cfg YAMLConfig) ShouldEncodeLoggedQuery() bool {
+	if cfg.EncodeLoggedQuery == nil {
+		return defaultEncodeLoggedQuery
+	}
+
+	return *cfg.EncodeLoggedQuery
+}
+
 // PersistenceBehavior is "load" if we include persisted system globals on server init
 func (cfg YAMLConfig) PersistenceBehavior() string {
 	if cfg.BehaviorConfig.PersistenceBehavior == nil {
@@ -477,46 +502,47 @@ func (cfg YAMLConfig) ClusterConfig() cluster.Config {
 }
 
 type ClusterYAMLConfig struct {
-	StandbyRemotes_field []standbyRemoteYAMLConfig   `yaml:"standby_remotes"`
-	BootstrapRole_field  string                      `yaml:"bootstrap_role"`
-	BootstrapEpoch_field int                         `yaml:"bootstrap_epoch"`
-	Remotesapi           clusterRemotesAPIYAMLConfig `yaml:"remotesapi"`
+	StandbyRemotes_ []StandbyRemoteYAMLConfig   `yaml:"standby_remotes"`
+	BootstrapRole_  string                      `yaml:"bootstrap_role"`
+	BootstrapEpoch_ int                         `yaml:"bootstrap_epoch"`
+	RemotesAPI      ClusterRemotesAPIYAMLConfig `yaml:"remotesapi"`
 }
 
-type standbyRemoteYAMLConfig struct {
-	Name_field              string `yaml:"name"`
-	RemoteURLTemplate_field string `yaml:"remote_url_template"`
+type StandbyRemoteYAMLConfig struct {
+	Name_              string `yaml:"name"`
+	RemoteURLTemplate_ string `yaml:"remote_url_template"`
 }
 
-func (c standbyRemoteYAMLConfig) Name() string {
-	return c.Name_field
+func (c StandbyRemoteYAMLConfig) Name() string {
+	return c.Name_
 }
 
-func (c standbyRemoteYAMLConfig) RemoteURLTemplate() string {
-	return c.RemoteURLTemplate_field
+func (c StandbyRemoteYAMLConfig) RemoteURLTemplate() string {
+	return c.RemoteURLTemplate_
 }
 
 func (c *ClusterYAMLConfig) StandbyRemotes() []cluster.StandbyRemoteConfig {
-	ret := make([]cluster.StandbyRemoteConfig, len(c.StandbyRemotes_field))
-	for i := range c.StandbyRemotes_field {
-		ret[i] = c.StandbyRemotes_field[i]
+	ret := make([]cluster.StandbyRemoteConfig, len(c.StandbyRemotes_))
+	for i := range c.StandbyRemotes_ {
+		ret[i] = c.StandbyRemotes_[i]
 	}
 	return ret
 }
 
 func (c *ClusterYAMLConfig) BootstrapRole() string {
-	return c.BootstrapRole_field
+	return c.BootstrapRole_
 }
 
 func (c *ClusterYAMLConfig) BootstrapEpoch() int {
-	return c.BootstrapEpoch_field
+	return c.BootstrapEpoch_
 }
 
 func (c *ClusterYAMLConfig) RemotesAPIConfig() cluster.RemotesAPIConfig {
-	return c.Remotesapi
+	return c.RemotesAPI
 }
 
-type clusterRemotesAPIYAMLConfig struct {
+type ClusterRemotesAPIYAMLConfig struct {
+	Addr_      string   `yaml:"address"`
 	Port_      int      `yaml:"port"`
 	TLSKey_    string   `yaml:"tls_key"`
 	TLSCert_   string   `yaml:"tls_cert"`
@@ -525,26 +551,30 @@ type clusterRemotesAPIYAMLConfig struct {
 	DNSMatches []string `yaml:"server_name_dns"`
 }
 
-func (c clusterRemotesAPIYAMLConfig) Port() int {
+func (c ClusterRemotesAPIYAMLConfig) Address() string {
+	return c.Addr_
+}
+
+func (c ClusterRemotesAPIYAMLConfig) Port() int {
 	return c.Port_
 }
 
-func (c clusterRemotesAPIYAMLConfig) TLSKey() string {
+func (c ClusterRemotesAPIYAMLConfig) TLSKey() string {
 	return c.TLSKey_
 }
 
-func (c clusterRemotesAPIYAMLConfig) TLSCert() string {
+func (c ClusterRemotesAPIYAMLConfig) TLSCert() string {
 	return c.TLSCert_
 }
 
-func (c clusterRemotesAPIYAMLConfig) TLSCA() string {
+func (c ClusterRemotesAPIYAMLConfig) TLSCA() string {
 	return c.TLSCA_
 }
 
-func (c clusterRemotesAPIYAMLConfig) ServerNameURLMatches() []string {
+func (c ClusterRemotesAPIYAMLConfig) ServerNameURLMatches() []string {
 	return c.URLMatches
 }
 
-func (c clusterRemotesAPIYAMLConfig) ServerNameDNSMatches() []string {
+func (c ClusterRemotesAPIYAMLConfig) ServerNameDNSMatches() []string {
 	return c.DNSMatches
 }

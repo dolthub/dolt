@@ -31,9 +31,30 @@ const (
 // It's used to construct index tuples from another index's tuples.
 type OrdinalMapping []int
 
+// NewIdentityOrdinalMapping returns a new OrdinalMapping that maps every ordinal to itself.
+func NewIdentityOrdinalMapping(size int) OrdinalMapping {
+	newMapping := make(OrdinalMapping, size)
+	for i := 0; i < size; i++ {
+		newMapping[i] = i
+	}
+	return newMapping
+}
+
+// MapOrdinal returns the ordinal of the field in the source tuple that maps to the |to| ordinal in the destination tuple.
 func (om OrdinalMapping) MapOrdinal(to int) (from int) {
 	from = om[to]
 	return
+}
+
+// IsIdentityMapping returns true if this mapping is the identity mapping (i.e. every position is mapped
+// to the same position and no columns are reordered).
+func (om OrdinalMapping) IsIdentityMapping() bool {
+	for i, mapping := range om {
+		if i != mapping {
+			return false
+		}
+	}
+	return true
 }
 
 type TupleBuilder struct {
@@ -365,4 +386,13 @@ func (tb *TupleBuilder) ensureCapacity(sz ByteSize) {
 			tb.buf = append(tb.buf, byte(0))
 		}
 	}
+}
+
+// PutCell writes a Cell to the ith field of the Tuple being built.
+func (tb *TupleBuilder) PutCell(i int, v Cell) {
+	tb.Desc.expectEncoding(i, CellEnc)
+	tb.ensureCapacity(cellSize)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+cellSize]
+	writeCell(tb.fields[i], v)
+	tb.pos += cellSize
 }

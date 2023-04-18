@@ -1,0 +1,42 @@
+opts:
+  seed: 0
+tests:
+- name: "sql"
+  repos:
+  - name: dolt
+    server:
+      port: 3308
+      args: [ "--port", "3308" ]
+  - name: mysql # mysqld --port 3308 --local-infile=1 --socket=/tmp/mysqld2.sock
+    external-server:
+      name: test
+      host: 127.0.0.1
+      user: root
+      password:
+      port: 3309
+  tables:
+  - name: "LOAD DATA"
+    fmt: "csv"
+    rows: 10000
+    schema: |
+      create table xy (
+        x int primary key,
+        y varchar(30)
+      );
+  - name: "batch sql"
+    fmt: "sql"
+    rows: 10000
+    batch: true
+    schema: |
+      create table xy (
+        x int primary key,
+        y varchar(30)
+      );
+  - name: "by line sql"
+    fmt: "sql"
+    rows: 10000
+    schema: |
+      create table xy (
+        x int primary key,
+        y varchar(30)
+      );

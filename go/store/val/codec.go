@@ -63,6 +63,7 @@ const (
 	commitAddrEnc ByteSize = hash.ByteLen
 	stringAddrEnc ByteSize = hash.ByteLen
 	jsonAddrEnc   ByteSize = hash.ByteLen
+	cellSize      ByteSize = 17
 )
 
 type Encoding byte
@@ -92,6 +93,7 @@ const (
 	CommitAddrEnc = Encoding(serial.EncodingCommitAddr)
 	StringAddrEnc = Encoding(serial.EncodingStringAddr)
 	JSONAddrEnc   = Encoding(serial.EncodingJSONAddr)
+	CellEnc       = Encoding(serial.EncodingCell)
 
 	sentinel Encoding = 127
 )
@@ -430,15 +432,33 @@ func compareDecimal(l, r decimal.Decimal) int {
 }
 
 const minYear int16 = 1901
+const maxYear int16 = 2155
+const zeroToken uint8 = 255
 
 func readYear(val []byte) int16 {
 	expectSize(val, yearSize)
-	return int16(readUint8(val)) + minYear
+	v := readUint8(val)
+	if v == zeroToken {
+		return int16(0)
+	}
+	offset := int16(v)
+	return offset + minYear
 }
 
+// writeYear encodes the year |val| as an offset from the minimum year 1901.
+// |val| must be within 1901 - 2155. If val == 0, 255 is written as a special
+// token value.
 func writeYear(buf []byte, val int16) {
 	expectSize(buf, yearSize)
-	writeUint8(buf, uint8(val-minYear))
+	if val == 0 {
+		writeUint8(buf, zeroToken)
+		return
+	}
+	if val < minYear || val > maxYear {
+		panic("year is outside of allowed range [1901, 2155]")
+	}
+	offset := uint8(val - minYear)
+	writeUint8(buf, offset)
 }
 
 func compareYear(l, r int16) int {
@@ -603,4 +623,26 @@ func expectSize(buf []byte, sz ByteSize) {
 // stringFromBytes converts a []byte to string without a heap allocation.
 func stringFromBytes(b []byte) string {
 	return *(*string)(unsafe.Pointer(&b))
+}
+
+// Cell is a representation of a subregion for Spatial Indexes
+// The first byte encodes the level, which is the size of the region
+// The highest level (the square covering all values floats) is 64
+// The lowest level (a point) is 0
+// The next 16 bytes is the z-value encoding of the minimum point of that subregion
+type Cell [cellSize]byte
+
+func compareCell(l, r Cell) int {
+	return bytes.Compare(l[:], r[:])
+}
+
+func readCell(val []byte) (res Cell) {
+	expectSize(val, cellSize)
+	copy(res[:], val[:])
+	return
+}
+
+func writeCell(buf []byte, v Cell) {
+	expectSize(buf, cellSize)
+	copy(buf[:], v[:])
 }

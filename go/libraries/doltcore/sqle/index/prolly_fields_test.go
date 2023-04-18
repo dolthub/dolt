@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression/function"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -201,17 +201,17 @@ func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 
 func mustParseGeometryType(t *testing.T, s string) (v interface{}) {
 	// Determine type, and get data
-	geomType, data, _, err := function.ParseWKTHeader(s)
+	geomType, data, _, err := spatial.ParseWKTHeader(s)
 	require.NoError(t, err)
 
 	srid, order := uint32(0), false
 	switch geomType {
 	case "point":
-		v, err = function.WKTToPoint(data, srid, order)
+		v, err = spatial.WKTToPoint(data, srid, order)
 	case "linestring":
-		v, err = function.WKTToLine(data, srid, order)
+		v, err = spatial.WKTToLine(data, srid, order)
 	case "polygon":
-		v, err = function.WKTToPoly(data, srid, order)
+		v, err = spatial.WKTToPoly(data, srid, order)
 	default:
 		panic("unknown geometry type")
 	}
@@ -219,11 +219,11 @@ func mustParseGeometryType(t *testing.T, s string) (v interface{}) {
 	return
 }
 
-func mustParseJson(t *testing.T, s string) sql.JSONDocument {
+func mustParseJson(t *testing.T, s string) types.JSONDocument {
 	var v interface{}
 	err := json.Unmarshal([]byte(s), &v)
 	require.NoError(t, err)
-	return sql.JSONDocument{Val: v}
+	return types.JSONDocument{Val: v}
 }
 
 func mustParseDecimal(s string) decimal.Decimal {
@@ -234,8 +234,8 @@ func mustParseDecimal(s string) decimal.Decimal {
 	return d
 }
 
-func mustParseTime(t *testing.T, s string) sql.Timespan {
-	val, err := sql.Time.ConvertToTimespan(s)
+func mustParseTime(t *testing.T, s string) types.Timespan {
+	val, err := types.Time.ConvertToTimespan(s)
 	require.NoError(t, err)
 	return val
 }

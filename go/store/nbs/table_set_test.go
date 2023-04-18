@@ -23,17 +23,23 @@ package nbs
 
 import (
 	"context"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var testChunks = [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
 
+var hasManyHasAll = func([]hasRecord) (hash.HashSet, error) {
+	return hash.HashSet{}, nil
+}
+
 func TestTableSetPrependEmpty(t *testing.T) {
-	ts := newFakeTableSet(&noopQuotaProvider{}).prepend(context.Background(), newMemTable(testMemTableSize), &Stats{})
+	ts, err := newFakeTableSet(&UnlimitedQuotaProvider{}).append(context.Background(), newMemTable(testMemTableSize), hasManyHasAll, &Stats{})
+	require.NoError(t, err)
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(t, specs)
@@ -41,13 +47,17 @@ func TestTableSetPrependEmpty(t *testing.T) {
 
 func TestTableSetPrepend(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet(&noopQuotaProvider{})
+	ts := newFakeTableSet(&UnlimitedQuotaProvider{})
 	specs, err := ts.toSpecs()
+	defer func() {
+		ts.close()
+	}()
 	require.NoError(t, err)
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	require.NoError(t, err)
 
 	firstSpecs, err := ts.toSpecs()
 	require.NoError(t, err)
@@ -56,31 +66,38 @@ func TestTableSetPrepend(t *testing.T) {
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	require.NoError(t, err)
 
 	secondSpecs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Len(secondSpecs, 2)
-	assert.Equal(firstSpecs, secondSpecs[1:])
+	assert.Equal(firstSpecs[0], secondSpecs[0])
 }
 
 func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet(&noopQuotaProvider{})
+	ts := newFakeTableSet(&UnlimitedQuotaProvider{})
+	defer func() {
+		ts.close()
+	}()
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	require.NoError(t, err)
 
 	specs, err = ts.toSpecs()
 	require.NoError(t, err)
@@ -89,21 +106,27 @@ func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 
 func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet(&noopQuotaProvider{})
+	ts := newFakeTableSet(&UnlimitedQuotaProvider{})
+	defer func() {
+		ts.close()
+	}()
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	require.NoError(t, err)
 
 	ts, err = ts.flatten(context.Background())
 	require.NoError(t, err)
@@ -114,24 +137,24 @@ func persist(t *testing.T, p tablePersister, chunks ...[]byte) {
 	for _, c := range chunks {
 		mt := newMemTable(testMemTableSize)
 		mt.addChunk(computeAddr(c), c)
-		_, err := p.Persist(context.Background(), mt, nil, &Stats{})
+		cs, err := p.Persist(context.Background(), mt, nil, &Stats{})
 		require.NoError(t, err)
+		require.NoError(t, cs.close())
 	}
 }
 
 func TestTableSetRebase(t *testing.T) {
 	assert := assert.New(t)
 	q := NewUnlimitedMemQuotaProvider()
-	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
 	persister := newFakeTablePersister(q)
 
 	insert := func(ts tableSet, chunks ...[]byte) tableSet {
+		var err error
 		for _, c := range chunks {
 			mt := newMemTable(testMemTableSize)
 			mt.addChunk(computeAddr(c), c)
-			ts = ts.prepend(context.Background(), mt, &Stats{})
+			ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+			require.NoError(t, err)
 		}
 		return ts
 	}
@@ -168,18 +191,23 @@ func TestTableSetRebase(t *testing.T) {
 
 func TestTableSetPhysicalLen(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet(&noopQuotaProvider{})
+	ts := newFakeTableSet(&UnlimitedQuotaProvider{})
+	defer func() {
+		ts.close()
+	}()
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts = ts.prepend(context.Background(), mt, &Stats{})
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	require.NoError(t, err)
 
 	assert.True(mustUint64(ts.physicalLen()) > indexSize(mustUint32(ts.count())))
 }
@@ -189,28 +217,22 @@ func TestTableSetClosesOpenedChunkSourcesOnErr(t *testing.T) {
 	p := newFakeTablePersister(q)
 	persist(t, p, testChunks...)
 
-	var mem uint64 = 0
-	var sources []addr
-	for addr := range p.sources {
-		sources = append(sources, addr)
-		mem += indexMemSize(1)
-	}
-
-	idx := rand.Intn(len(testChunks))
-	addrToFail := sources[idx]
-	p.sourcesToFail[addrToFail] = true
-
+	once := true
 	var specs []tableSpec
-	for _, addr := range sources {
-		specs = append(specs, tableSpec{addr, 1})
+	for a := range p.sources {
+		if once {
+			// map iteration is randomized
+			p.sourcesToFail[a] = true
+		}
+		once = false
+		specs = append(specs, tableSpec{a, 1})
 	}
 
-	ts := tableSet{p: p, q: q, rl: make(chan struct{}, 1)}
-	_, err := ts.rebase(context.Background(), specs, &Stats{})
+	ts := newTableSet(p, q)
+	ts2, err := ts.rebase(context.Background(), specs, &Stats{})
 	require.Error(t, err)
 
-	for _ = range p.opened {
-		mem -= indexMemSize(1)
-	}
-	require.EqualValues(t, mem, q.Usage())
+	assert.NoError(t, ts.close())
+	assert.NoError(t, ts2.close())
+	assert.Equal(t, 0, int(q.Usage()))
 }

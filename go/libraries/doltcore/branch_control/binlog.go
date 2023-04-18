@@ -35,6 +35,7 @@ type Binlog struct {
 // BinlogRow is a row within the Binlog.
 type BinlogRow struct {
 	IsInsert    bool
+	Database    string
 	Branch      string
 	User        string
 	Host        string
@@ -50,11 +51,12 @@ type BinlogOverlay struct {
 
 // NewAccessBinlog returns a new Binlog that represents the construction of the given Access values. May be used to
 // truncate the Binlog's history.
-func NewAccessBinlog(vals []AccessValue) *Binlog {
+func NewAccessBinlog(vals []AccessRow) *Binlog {
 	rows := make([]BinlogRow, len(vals))
 	for i, val := range vals {
 		rows[i] = BinlogRow{
 			IsInsert:    true,
+			Database:    val.Database,
 			Branch:      val.Branch,
 			User:        val.User,
 			Host:        val.Host,
@@ -74,6 +76,7 @@ func NewNamespaceBinlog(vals []NamespaceValue) *Binlog {
 	for i, val := range vals {
 		rows[i] = BinlogRow{
 			IsInsert:    true,
+			Database:    val.Database,
 			Branch:      val.Branch,
 			User:        val.User,
 			Host:        val.Host,
@@ -126,6 +129,7 @@ func (binlog *Binlog) Deserialize(fb *serial.BranchControlBinlog) error {
 		fb.Rows(serialBinlogRow, i)
 		binlog.rows[i] = BinlogRow{
 			IsInsert:    serialBinlogRow.IsInsert(),
+			Database:    string(serialBinlogRow.Database()),
 			Branch:      string(serialBinlogRow.Branch()),
 			User:        string(serialBinlogRow.User()),
 			Host:        string(serialBinlogRow.Host()),
@@ -163,12 +167,13 @@ func (binlog *Binlog) MergeOverlay(overlay *BinlogOverlay) error {
 }
 
 // Insert adds an insert entry to the Binlog.
-func (binlog *Binlog) Insert(branch string, user string, host string, permissions uint64) {
+func (binlog *Binlog) Insert(database string, branch string, user string, host string, permissions uint64) {
 	binlog.RWMutex.Lock()
 	defer binlog.RWMutex.Unlock()
 
 	binlog.rows = append(binlog.rows, BinlogRow{
 		IsInsert:    true,
+		Database:    database,
 		Branch:      branch,
 		User:        user,
 		Host:        host,
@@ -177,12 +182,13 @@ func (binlog *Binlog) Insert(branch string, user string, host string, permission
 }
 
 // Delete adds a delete entry to the Binlog.
-func (binlog *Binlog) Delete(branch string, user string, host string, permissions uint64) {
+func (binlog *Binlog) Delete(database string, branch string, user string, host string, permissions uint64) {
 	binlog.RWMutex.Lock()
 	defer binlog.RWMutex.Unlock()
 
 	binlog.rows = append(binlog.rows, BinlogRow{
 		IsInsert:    false,
+		Database:    database,
 		Branch:      branch,
 		User:        user,
 		Host:        host,
@@ -197,12 +203,14 @@ func (binlog *Binlog) Rows() []BinlogRow {
 
 // Serialize returns the offset for the BinlogRow written to the given builder.
 func (row *BinlogRow) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
-	branch := b.CreateString(row.Branch)
-	user := b.CreateString(row.User)
-	host := b.CreateString(row.Host)
+	database := b.CreateSharedString(row.Database)
+	branch := b.CreateSharedString(row.Branch)
+	user := b.CreateSharedString(row.User)
+	host := b.CreateSharedString(row.Host)
 
 	serial.BranchControlBinlogRowStart(b)
 	serial.BranchControlBinlogRowAddIsInsert(b, row.IsInsert)
+	serial.BranchControlBinlogRowAddDatabase(b, database)
 	serial.BranchControlBinlogRowAddBranch(b, branch)
 	serial.BranchControlBinlogRowAddUser(b, user)
 	serial.BranchControlBinlogRowAddHost(b, host)
@@ -211,9 +219,10 @@ func (row *BinlogRow) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 }
 
 // Insert adds an insert entry to the BinlogOverlay.
-func (overlay *BinlogOverlay) Insert(branch string, user string, host string, permissions uint64) {
+func (overlay *BinlogOverlay) Insert(database string, branch string, user string, host string, permissions uint64) {
 	overlay.rows = append(overlay.rows, BinlogRow{
 		IsInsert:    true,
+		Database:    database,
 		Branch:      branch,
 		User:        user,
 		Host:        host,
@@ -222,9 +231,10 @@ func (overlay *BinlogOverlay) Insert(branch string, user string, host string, pe
 }
 
 // Delete adds a delete entry to the BinlogOverlay.
-func (overlay *BinlogOverlay) Delete(branch string, user string, host string, permissions uint64) {
+func (overlay *BinlogOverlay) Delete(database string, branch string, user string, host string, permissions uint64) {
 	overlay.rows = append(overlay.rows, BinlogRow{
 		IsInsert:    false,
+		Database:    database,
 		Branch:      branch,
 		User:        user,
 		Host:        host,

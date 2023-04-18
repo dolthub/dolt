@@ -1,4 +1,4 @@
-// Copyright 2022 Dolthub, Inc.
+// Copyright 2022-2023 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -210,7 +210,7 @@ func (rcv *BranchControlAccess) TryBinlog(obj *BranchControlBinlog) (*BranchCont
 	return nil, nil
 }
 
-func (rcv *BranchControlAccess) Branches(obj *BranchControlMatchExpression, j int) bool {
+func (rcv *BranchControlAccess) Databases(obj *BranchControlMatchExpression, j int) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
@@ -222,8 +222,43 @@ func (rcv *BranchControlAccess) Branches(obj *BranchControlMatchExpression, j in
 	return false
 }
 
-func (rcv *BranchControlAccess) TryBranches(obj *BranchControlMatchExpression, j int) (bool, error) {
+func (rcv *BranchControlAccess) TryDatabases(obj *BranchControlMatchExpression, j int) (bool, error) {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		x := rcv._tab.Vector(o)
+		x += flatbuffers.UOffsetT(j) * 4
+		x = rcv._tab.Indirect(x)
+		obj.Init(rcv._tab.Bytes, x)
+		if BranchControlMatchExpressionNumFields < obj.Table().NumFields() {
+			return false, flatbuffers.ErrTableHasUnknownFields
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func (rcv *BranchControlAccess) DatabasesLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *BranchControlAccess) Branches(obj *BranchControlMatchExpression, j int) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		x := rcv._tab.Vector(o)
+		x += flatbuffers.UOffsetT(j) * 4
+		x = rcv._tab.Indirect(x)
+		obj.Init(rcv._tab.Bytes, x)
+		return true
+	}
+	return false
+}
+
+func (rcv *BranchControlAccess) TryBranches(obj *BranchControlMatchExpression, j int) (bool, error) {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -238,7 +273,7 @@ func (rcv *BranchControlAccess) TryBranches(obj *BranchControlMatchExpression, j
 }
 
 func (rcv *BranchControlAccess) BranchesLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -246,7 +281,7 @@ func (rcv *BranchControlAccess) BranchesLength() int {
 }
 
 func (rcv *BranchControlAccess) Users(obj *BranchControlMatchExpression, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -258,7 +293,7 @@ func (rcv *BranchControlAccess) Users(obj *BranchControlMatchExpression, j int) 
 }
 
 func (rcv *BranchControlAccess) TryUsers(obj *BranchControlMatchExpression, j int) (bool, error) {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -273,7 +308,7 @@ func (rcv *BranchControlAccess) TryUsers(obj *BranchControlMatchExpression, j in
 }
 
 func (rcv *BranchControlAccess) UsersLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -281,7 +316,7 @@ func (rcv *BranchControlAccess) UsersLength() int {
 }
 
 func (rcv *BranchControlAccess) Hosts(obj *BranchControlMatchExpression, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -293,7 +328,7 @@ func (rcv *BranchControlAccess) Hosts(obj *BranchControlMatchExpression, j int) 
 }
 
 func (rcv *BranchControlAccess) TryHosts(obj *BranchControlMatchExpression, j int) (bool, error) {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -308,7 +343,7 @@ func (rcv *BranchControlAccess) TryHosts(obj *BranchControlMatchExpression, j in
 }
 
 func (rcv *BranchControlAccess) HostsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -316,7 +351,7 @@ func (rcv *BranchControlAccess) HostsLength() int {
 }
 
 func (rcv *BranchControlAccess) Values(obj *BranchControlAccessValue, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -328,7 +363,7 @@ func (rcv *BranchControlAccess) Values(obj *BranchControlAccessValue, j int) boo
 }
 
 func (rcv *BranchControlAccess) TryValues(obj *BranchControlAccessValue, j int) (bool, error) {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -343,14 +378,14 @@ func (rcv *BranchControlAccess) TryValues(obj *BranchControlAccessValue, j int) 
 }
 
 func (rcv *BranchControlAccess) ValuesLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
 	return 0
 }
 
-const BranchControlAccessNumFields = 5
+const BranchControlAccessNumFields = 6
 
 func BranchControlAccessStart(builder *flatbuffers.Builder) {
 	builder.StartObject(BranchControlAccessNumFields)
@@ -358,26 +393,32 @@ func BranchControlAccessStart(builder *flatbuffers.Builder) {
 func BranchControlAccessAddBinlog(builder *flatbuffers.Builder, binlog flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(binlog), 0)
 }
+func BranchControlAccessAddDatabases(builder *flatbuffers.Builder, databases flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(databases), 0)
+}
+func BranchControlAccessStartDatabasesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
+}
 func BranchControlAccessAddBranches(builder *flatbuffers.Builder, branches flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(branches), 0)
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(branches), 0)
 }
 func BranchControlAccessStartBranchesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func BranchControlAccessAddUsers(builder *flatbuffers.Builder, users flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(users), 0)
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(users), 0)
 }
 func BranchControlAccessStartUsersVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func BranchControlAccessAddHosts(builder *flatbuffers.Builder, hosts flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(hosts), 0)
+	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(hosts), 0)
 }
 func BranchControlAccessStartHostsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func BranchControlAccessAddValues(builder *flatbuffers.Builder, values flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(values), 0)
+	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(values), 0)
 }
 func BranchControlAccessStartValuesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
@@ -430,7 +471,7 @@ func (rcv *BranchControlAccessValue) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *BranchControlAccessValue) Branch() []byte {
+func (rcv *BranchControlAccessValue) Database() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -438,7 +479,7 @@ func (rcv *BranchControlAccessValue) Branch() []byte {
 	return nil
 }
 
-func (rcv *BranchControlAccessValue) User() []byte {
+func (rcv *BranchControlAccessValue) Branch() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -446,7 +487,7 @@ func (rcv *BranchControlAccessValue) User() []byte {
 	return nil
 }
 
-func (rcv *BranchControlAccessValue) Host() []byte {
+func (rcv *BranchControlAccessValue) User() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -454,8 +495,16 @@ func (rcv *BranchControlAccessValue) Host() []byte {
 	return nil
 }
 
-func (rcv *BranchControlAccessValue) Permissions() uint64 {
+func (rcv *BranchControlAccessValue) Host() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *BranchControlAccessValue) Permissions() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.GetUint64(o + rcv._tab.Pos)
 	}
@@ -463,25 +512,28 @@ func (rcv *BranchControlAccessValue) Permissions() uint64 {
 }
 
 func (rcv *BranchControlAccessValue) MutatePermissions(n uint64) bool {
-	return rcv._tab.MutateUint64Slot(10, n)
+	return rcv._tab.MutateUint64Slot(12, n)
 }
 
-const BranchControlAccessValueNumFields = 4
+const BranchControlAccessValueNumFields = 5
 
 func BranchControlAccessValueStart(builder *flatbuffers.Builder) {
 	builder.StartObject(BranchControlAccessValueNumFields)
 }
+func BranchControlAccessValueAddDatabase(builder *flatbuffers.Builder, database flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(database), 0)
+}
 func BranchControlAccessValueAddBranch(builder *flatbuffers.Builder, branch flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(branch), 0)
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(branch), 0)
 }
 func BranchControlAccessValueAddUser(builder *flatbuffers.Builder, user flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(user), 0)
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(user), 0)
 }
 func BranchControlAccessValueAddHost(builder *flatbuffers.Builder, host flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(host), 0)
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(host), 0)
 }
 func BranchControlAccessValueAddPermissions(builder *flatbuffers.Builder, permissions uint64) {
-	builder.PrependUint64Slot(3, permissions, 0)
+	builder.PrependUint64Slot(4, permissions, 0)
 }
 func BranchControlAccessValueEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
@@ -560,7 +612,7 @@ func (rcv *BranchControlNamespace) TryBinlog(obj *BranchControlBinlog) (*BranchC
 	return nil, nil
 }
 
-func (rcv *BranchControlNamespace) Branches(obj *BranchControlMatchExpression, j int) bool {
+func (rcv *BranchControlNamespace) Databases(obj *BranchControlMatchExpression, j int) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
@@ -572,8 +624,43 @@ func (rcv *BranchControlNamespace) Branches(obj *BranchControlMatchExpression, j
 	return false
 }
 
-func (rcv *BranchControlNamespace) TryBranches(obj *BranchControlMatchExpression, j int) (bool, error) {
+func (rcv *BranchControlNamespace) TryDatabases(obj *BranchControlMatchExpression, j int) (bool, error) {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		x := rcv._tab.Vector(o)
+		x += flatbuffers.UOffsetT(j) * 4
+		x = rcv._tab.Indirect(x)
+		obj.Init(rcv._tab.Bytes, x)
+		if BranchControlMatchExpressionNumFields < obj.Table().NumFields() {
+			return false, flatbuffers.ErrTableHasUnknownFields
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func (rcv *BranchControlNamespace) DatabasesLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *BranchControlNamespace) Branches(obj *BranchControlMatchExpression, j int) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		x := rcv._tab.Vector(o)
+		x += flatbuffers.UOffsetT(j) * 4
+		x = rcv._tab.Indirect(x)
+		obj.Init(rcv._tab.Bytes, x)
+		return true
+	}
+	return false
+}
+
+func (rcv *BranchControlNamespace) TryBranches(obj *BranchControlMatchExpression, j int) (bool, error) {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -588,7 +675,7 @@ func (rcv *BranchControlNamespace) TryBranches(obj *BranchControlMatchExpression
 }
 
 func (rcv *BranchControlNamespace) BranchesLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -596,7 +683,7 @@ func (rcv *BranchControlNamespace) BranchesLength() int {
 }
 
 func (rcv *BranchControlNamespace) Users(obj *BranchControlMatchExpression, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -608,7 +695,7 @@ func (rcv *BranchControlNamespace) Users(obj *BranchControlMatchExpression, j in
 }
 
 func (rcv *BranchControlNamespace) TryUsers(obj *BranchControlMatchExpression, j int) (bool, error) {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -623,7 +710,7 @@ func (rcv *BranchControlNamespace) TryUsers(obj *BranchControlMatchExpression, j
 }
 
 func (rcv *BranchControlNamespace) UsersLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -631,7 +718,7 @@ func (rcv *BranchControlNamespace) UsersLength() int {
 }
 
 func (rcv *BranchControlNamespace) Hosts(obj *BranchControlMatchExpression, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -643,7 +730,7 @@ func (rcv *BranchControlNamespace) Hosts(obj *BranchControlMatchExpression, j in
 }
 
 func (rcv *BranchControlNamespace) TryHosts(obj *BranchControlMatchExpression, j int) (bool, error) {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -658,7 +745,7 @@ func (rcv *BranchControlNamespace) TryHosts(obj *BranchControlMatchExpression, j
 }
 
 func (rcv *BranchControlNamespace) HostsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -666,7 +753,7 @@ func (rcv *BranchControlNamespace) HostsLength() int {
 }
 
 func (rcv *BranchControlNamespace) Values(obj *BranchControlNamespaceValue, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -678,7 +765,7 @@ func (rcv *BranchControlNamespace) Values(obj *BranchControlNamespaceValue, j in
 }
 
 func (rcv *BranchControlNamespace) TryValues(obj *BranchControlNamespaceValue, j int) (bool, error) {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -693,14 +780,14 @@ func (rcv *BranchControlNamespace) TryValues(obj *BranchControlNamespaceValue, j
 }
 
 func (rcv *BranchControlNamespace) ValuesLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
 	return 0
 }
 
-const BranchControlNamespaceNumFields = 5
+const BranchControlNamespaceNumFields = 6
 
 func BranchControlNamespaceStart(builder *flatbuffers.Builder) {
 	builder.StartObject(BranchControlNamespaceNumFields)
@@ -708,26 +795,32 @@ func BranchControlNamespaceStart(builder *flatbuffers.Builder) {
 func BranchControlNamespaceAddBinlog(builder *flatbuffers.Builder, binlog flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(binlog), 0)
 }
+func BranchControlNamespaceAddDatabases(builder *flatbuffers.Builder, databases flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(databases), 0)
+}
+func BranchControlNamespaceStartDatabasesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
+}
 func BranchControlNamespaceAddBranches(builder *flatbuffers.Builder, branches flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(branches), 0)
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(branches), 0)
 }
 func BranchControlNamespaceStartBranchesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func BranchControlNamespaceAddUsers(builder *flatbuffers.Builder, users flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(users), 0)
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(users), 0)
 }
 func BranchControlNamespaceStartUsersVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func BranchControlNamespaceAddHosts(builder *flatbuffers.Builder, hosts flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(hosts), 0)
+	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(hosts), 0)
 }
 func BranchControlNamespaceStartHostsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func BranchControlNamespaceAddValues(builder *flatbuffers.Builder, values flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(values), 0)
+	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(values), 0)
 }
 func BranchControlNamespaceStartValuesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
@@ -780,7 +873,7 @@ func (rcv *BranchControlNamespaceValue) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *BranchControlNamespaceValue) Branch() []byte {
+func (rcv *BranchControlNamespaceValue) Database() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -788,7 +881,7 @@ func (rcv *BranchControlNamespaceValue) Branch() []byte {
 	return nil
 }
 
-func (rcv *BranchControlNamespaceValue) User() []byte {
+func (rcv *BranchControlNamespaceValue) Branch() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -796,7 +889,7 @@ func (rcv *BranchControlNamespaceValue) User() []byte {
 	return nil
 }
 
-func (rcv *BranchControlNamespaceValue) Host() []byte {
+func (rcv *BranchControlNamespaceValue) User() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -804,19 +897,30 @@ func (rcv *BranchControlNamespaceValue) Host() []byte {
 	return nil
 }
 
-const BranchControlNamespaceValueNumFields = 3
+func (rcv *BranchControlNamespaceValue) Host() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+const BranchControlNamespaceValueNumFields = 4
 
 func BranchControlNamespaceValueStart(builder *flatbuffers.Builder) {
 	builder.StartObject(BranchControlNamespaceValueNumFields)
 }
+func BranchControlNamespaceValueAddDatabase(builder *flatbuffers.Builder, database flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(database), 0)
+}
 func BranchControlNamespaceValueAddBranch(builder *flatbuffers.Builder, branch flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(branch), 0)
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(branch), 0)
 }
 func BranchControlNamespaceValueAddUser(builder *flatbuffers.Builder, user flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(user), 0)
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(user), 0)
 }
 func BranchControlNamespaceValueAddHost(builder *flatbuffers.Builder, host flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(host), 0)
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(host), 0)
 }
 func BranchControlNamespaceValueEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
@@ -972,7 +1076,7 @@ func (rcv *BranchControlBinlogRow) MutateIsInsert(n bool) bool {
 	return rcv._tab.MutateBoolSlot(4, n)
 }
 
-func (rcv *BranchControlBinlogRow) Branch() []byte {
+func (rcv *BranchControlBinlogRow) Database() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -980,7 +1084,7 @@ func (rcv *BranchControlBinlogRow) Branch() []byte {
 	return nil
 }
 
-func (rcv *BranchControlBinlogRow) User() []byte {
+func (rcv *BranchControlBinlogRow) Branch() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -988,7 +1092,7 @@ func (rcv *BranchControlBinlogRow) User() []byte {
 	return nil
 }
 
-func (rcv *BranchControlBinlogRow) Host() []byte {
+func (rcv *BranchControlBinlogRow) User() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -996,8 +1100,16 @@ func (rcv *BranchControlBinlogRow) Host() []byte {
 	return nil
 }
 
-func (rcv *BranchControlBinlogRow) Permissions() uint64 {
+func (rcv *BranchControlBinlogRow) Host() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *BranchControlBinlogRow) Permissions() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		return rcv._tab.GetUint64(o + rcv._tab.Pos)
 	}
@@ -1005,10 +1117,10 @@ func (rcv *BranchControlBinlogRow) Permissions() uint64 {
 }
 
 func (rcv *BranchControlBinlogRow) MutatePermissions(n uint64) bool {
-	return rcv._tab.MutateUint64Slot(12, n)
+	return rcv._tab.MutateUint64Slot(14, n)
 }
 
-const BranchControlBinlogRowNumFields = 5
+const BranchControlBinlogRowNumFields = 6
 
 func BranchControlBinlogRowStart(builder *flatbuffers.Builder) {
 	builder.StartObject(BranchControlBinlogRowNumFields)
@@ -1016,17 +1128,20 @@ func BranchControlBinlogRowStart(builder *flatbuffers.Builder) {
 func BranchControlBinlogRowAddIsInsert(builder *flatbuffers.Builder, isInsert bool) {
 	builder.PrependBoolSlot(0, isInsert, false)
 }
+func BranchControlBinlogRowAddDatabase(builder *flatbuffers.Builder, database flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(database), 0)
+}
 func BranchControlBinlogRowAddBranch(builder *flatbuffers.Builder, branch flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(branch), 0)
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(branch), 0)
 }
 func BranchControlBinlogRowAddUser(builder *flatbuffers.Builder, user flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(user), 0)
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(user), 0)
 }
 func BranchControlBinlogRowAddHost(builder *flatbuffers.Builder, host flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(host), 0)
+	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(host), 0)
 }
 func BranchControlBinlogRowAddPermissions(builder *flatbuffers.Builder, permissions uint64) {
-	builder.PrependUint64Slot(4, permissions, 0)
+	builder.PrependUint64Slot(5, permissions, 0)
 }
 func BranchControlBinlogRowEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

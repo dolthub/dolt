@@ -151,10 +151,8 @@ func TestCompareGreater(t *testing.T) {
 }
 
 func init() {
-	avg, std := 4096.0, 1024.0
 	for i := range benchData {
-		sz := int(rand.NormFloat64()*std + avg)
-		benchData[i] = make([]byte, sz)
+		benchData[i] = make([]byte, 100)
 		rand.Read(benchData[i])
 	}
 }

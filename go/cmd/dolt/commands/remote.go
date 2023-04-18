@@ -85,15 +85,11 @@ func (cmd RemoteCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd RemoteCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := cli.CreateRemoteArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"region", "cloud provider region associated with this remote."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds-type", "credential type.  Valid options are role, env, and file.  See the help section for additional details."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"profile", "AWS profile to use."})
-	ap.SupportsFlag(verboseFlag, "v", "When printing the list of remotes adds additional details.")
-	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
-	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
-	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
-	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
+	ap.SupportsFlag(cli.VerboseFlag, "v", "When printing the list of remotes adds additional details.")
 	ap.SupportsString(dbfactory.OSSCredsFileParam, "", "file", "OSS credentials file")
 	ap.SupportsString(dbfactory.OSSCredsProfile, "", "profile", "OSS profile to use")
 	return ap
@@ -216,7 +212,7 @@ func printRemotes(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ver
 	}
 
 	for _, r := range remotes {
-		if apr.Contains(verboseFlag) {
+		if apr.Contains(cli.VerboseFlag) {
 			paramStr := make([]byte, 0)
 			if len(r.Params) > 0 {
 				paramStr, _ = json.Marshal(r.Params)

@@ -165,6 +165,7 @@ func serializeClusteredIndex(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 	serial.IndexAddValueColumns(b, vo)
 	serial.IndexAddPrimaryKey(b, true)
 	serial.IndexAddUniqueKey(b, true)
+	serial.IndexAddSpatialKey(b, false)
 	serial.IndexAddSystemDefined(b, false)
 	return serial.IndexEnd(b)
 }
@@ -333,6 +334,14 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		}
 		ko := b.EndVector(len(tags))
 
+		// serialize prefix lengths
+		prefixLengths := idx.PrefixLengths()
+		serial.IndexStartPrefixLengthsVector(b, len(prefixLengths))
+		for j := len(prefixLengths) - 1; j >= 0; j-- {
+			b.PrependUint16(prefixLengths[j])
+		}
+		po := b.EndVector(len(prefixLengths))
+
 		serial.IndexStart(b)
 		serial.IndexAddName(b, no)
 		serial.IndexAddComment(b, co)
@@ -341,6 +350,8 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		serial.IndexAddPrimaryKey(b, false)
 		serial.IndexAddUniqueKey(b, idx.IsUnique())
 		serial.IndexAddSystemDefined(b, !idx.IsUserDefined())
+		serial.IndexAddPrefixLengths(b, po)
+		serial.IndexAddSpatialKey(b, idx.IsSpatial())
 		offs[i] = serial.IndexEnd(b)
 	}
 
@@ -361,6 +372,7 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 		name := string(idx.Name())
 		props := schema.IndexProperties{
 			IsUnique:      idx.UniqueKey(),
+			IsSpatial:     idx.SpatialKey(),
 			IsUserDefined: !idx.SystemDefined(),
 			Comment:       string(idx.Comment()),
 		}
@@ -372,7 +384,16 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 			tags[j] = col.Tag()
 		}
 
-		_, err := sch.Indexes().AddIndexByColTags(name, tags, props)
+		var prefixLengths []uint16
+		prefixLengthsLength := idx.PrefixLengthsLength()
+		if prefixLengthsLength > 0 {
+			prefixLengths = make([]uint16, prefixLengthsLength)
+			for j := range prefixLengths {
+				prefixLengths[j] = idx.PrefixLengths(j)
+			}
+		}
+
+		_, err := sch.Indexes().AddIndexByColTags(name, tags, prefixLengths, props)
 		if err != nil {
 			return err
 		}

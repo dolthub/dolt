@@ -25,6 +25,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"math/rand"
 	"sort"
 	"testing"
 
@@ -67,6 +68,7 @@ func mustGetString(assert *assert.Assertions, ctx context.Context, tr tableReade
 }
 
 func TestSimple(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 
 	chunks := [][]byte{
@@ -77,10 +79,11 @@ func TestSimple(t *testing.T) {
 
 	tableData, _, err := buildTable(chunks)
 	require.NoError(t, err)
-	ti, err := parseTableIndexByCopy(tableData, &noopQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
+	defer tr.close()
 
 	assertChunksInReader(chunks, tr, assert)
 
@@ -114,6 +117,7 @@ func assertChunksNotInReader(chunks [][]byte, r chunkReader, assert *assert.Asse
 }
 
 func TestHasMany(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 
 	chunks := [][]byte{
@@ -124,10 +128,11 @@ func TestHasMany(t *testing.T) {
 
 	tableData, _, err := buildTable(chunks)
 	require.NoError(t, err)
-	ti, err := parseTableIndexByCopy(tableData, &noopQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
+	defer tr.close()
 
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	hasAddrs := []hasRecord{
@@ -145,6 +150,7 @@ func TestHasMany(t *testing.T) {
 }
 
 func TestHasManySequentialPrefix(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 
 	// Use bogus addrs so we can generate the case of sequentially non-unique prefixes in the index
@@ -175,10 +181,11 @@ func TestHasManySequentialPrefix(t *testing.T) {
 	require.NoError(t, err)
 	buff = buff[:length]
 
-	ti, err := parseTableIndexByCopy(buff, &noopQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 	require.NoError(t, err)
+	defer tr.close()
 
 	hasAddrs := make([]hasRecord, 2)
 	// Leave out the first address
@@ -193,7 +200,73 @@ func TestHasManySequentialPrefix(t *testing.T) {
 	}
 }
 
+func BenchmarkHasMany(b *testing.B) {
+	const cnt = 64 * 1024
+	chnks := make([][]byte, cnt)
+	addrs := make(addrSlice, cnt)
+	hrecs := make([]hasRecord, cnt)
+	sparse := make([]hasRecord, cnt/1024)
+
+	data := make([]byte, cnt*16)
+	rand.Read(data)
+	for i := range chnks {
+		chnks[i] = data[i*16 : (i+1)*16]
+	}
+	for i := range addrs {
+		addrs[i] = computeAddr(chnks[i])
+	}
+	for i := range hrecs {
+		hrecs[i] = hasRecord{
+			a:      &addrs[i],
+			prefix: prefixOf(addrs[i]),
+			order:  i,
+		}
+	}
+	for i := range sparse {
+		j := i * 64
+		hrecs[i] = hasRecord{
+			a:      &addrs[j],
+			prefix: prefixOf(addrs[j]),
+			order:  j,
+		}
+	}
+	sort.Sort(hasRecordByPrefix(hrecs))
+	sort.Sort(hasRecordByPrefix(sparse))
+
+	ctx := context.Background()
+	tableData, _, err := buildTable(chnks)
+	require.NoError(b, err)
+	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
+	require.NoError(b, err)
+	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	require.NoError(b, err)
+	defer tr.close()
+
+	b.ResetTimer()
+	b.Run("dense has many", func(b *testing.B) {
+		var ok bool
+		for i := 0; i < b.N; i++ {
+			ok, err = tr.hasMany(hrecs)
+		}
+		assert.False(b, ok)
+		assert.NoError(b, err)
+	})
+	b.Run("sparse has many", func(b *testing.B) {
+		var ok bool
+		for i := 0; i < b.N; i++ {
+			ok, err = tr.hasMany(sparse)
+		}
+		assert.True(b, ok)
+		assert.NoError(b, err)
+	})
+}
+
+func prefixOf(a addr) uint64 {
+	return binary.BigEndian.Uint64(a[:addrPrefixSize])
+}
+
 func TestGetMany(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 
 	data := [][]byte{
@@ -204,10 +277,11 @@ func TestGetMany(t *testing.T) {
 
 	tableData, _, err := buildTable(data)
 	require.NoError(t, err)
-	ti, err := parseTableIndexByCopy(tableData, &noopQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
+	defer tr.close()
 
 	addrs := addrSlice{computeAddr(data[0]), computeAddr(data[1]), computeAddr(data[2])}
 	getBatch := []getRecord{
@@ -228,6 +302,7 @@ func TestGetMany(t *testing.T) {
 }
 
 func TestCalcReads(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 
 	chunks := [][]byte{
@@ -238,10 +313,11 @@ func TestCalcReads(t *testing.T) {
 
 	tableData, _, err := buildTable(chunks)
 	require.NoError(t, err)
-	ti, err := parseTableIndexByCopy(tableData, &noopQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), 0)
 	require.NoError(t, err)
+	defer tr.close()
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	getBatch := []getRecord{
 		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:addrPrefixSize]), false},
@@ -265,6 +341,7 @@ func TestCalcReads(t *testing.T) {
 }
 
 func TestExtract(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 
 	chunks := [][]byte{
@@ -275,10 +352,11 @@ func TestExtract(t *testing.T) {
 
 	tableData, _, err := buildTable(chunks)
 	require.NoError(t, err)
-	ti, err := parseTableIndexByCopy(tableData, &noopQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
+	defer tr.close()
 
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 
@@ -299,6 +377,7 @@ func TestExtract(t *testing.T) {
 }
 
 func Test65k(t *testing.T) {
+	ctx := context.Background()
 	assert := assert.New(t)
 
 	count := 1 << 16
@@ -314,10 +393,11 @@ func Test65k(t *testing.T) {
 
 	tableData, _, err := buildTable(chunks)
 	require.NoError(t, err)
-	ti, err := parseTableIndexByCopy(tableData, &noopQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
+	defer tr.close()
 
 	for i := 0; i < count; i++ {
 		data := dataFn(i)
@@ -353,6 +433,7 @@ func computeAddrCommonPrefix(data []byte) addr {
 }
 
 func doTestNGetMany(t *testing.T, count int) {
+	ctx := context.Background()
 	assert := assert.New(t)
 
 	data := make([][]byte, count)
@@ -367,10 +448,11 @@ func doTestNGetMany(t *testing.T, count int) {
 
 	tableData, _, err := buildTable(data)
 	require.NoError(t, err)
-	ti, err := parseTableIndexByCopy(tableData, &noopQuotaProvider{})
+	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
+	defer tr.close()
 
 	getBatch := make([]getRecord, len(data))
 	for i := 0; i < count; i++ {

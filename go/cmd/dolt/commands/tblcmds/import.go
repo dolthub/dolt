@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
@@ -62,9 +63,24 @@ const (
 	primaryKeyParam   = "pk"
 	fileTypeParam     = "file-type"
 	delimParam        = "delim"
-	ignoreSkippedRows = "ignore-skipped-rows"
+	quiet             = "quiet"
+	ignoreSkippedRows = "ignore-skipped-rows" // alias for quiet
 	disableFkChecks   = "disable-fk-checks"
 )
+
+var jsonInputFileHelp = "The expected JSON input file format is:" + `
+
+	{ "rows":
+		[
+			{
+				"column_name":"value"
+				...
+			}, ...
+		]
+	}
+
+where column_name is the name of a column of the table being imported and value is the data for that column in the table.
+`
 
 var importDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Imports data into a dolt table`,
@@ -74,7 +90,7 @@ The schema for the new table can be specified explicitly by providing a SQL sche
 
 If {{.EmphasisLeft}}--update-table | -u{{.EmphasisRight}} is given the operation will update {{.LessThan}}table{{.GreaterThan}} with the contents of file. The table's existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
-During import, if there is an error importing any row, the import will be aborted by default. Use the {{.EmphasisLeft}}--continue{{.EmphasisRight}} flag to continue importing when an error is encountered. You can add the {{.EmphasisLeft}}--ignore-skipped-rows{{.EmphasisRight}} flag to prevent the import utility from printing all the skipped rows. 
+During import, if there is an error importing any row, the import will be aborted by default. Use the {{.EmphasisLeft}}--continue{{.EmphasisRight}} flag to continue importing when an error is encountered. You can add the {{.EmphasisLeft}}--quiet{{.EmphasisRight}} flag to prevent the import utility from printing all the skipped rows. 
 
 If {{.EmphasisLeft}}--replace-table | -r{{.EmphasisRight}} is given the operation will replace {{.LessThan}}table{{.GreaterThan}} with the contents of the file. The table's existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
@@ -84,11 +100,13 @@ A mapping file can be used to map fields between the file being imported and the
 
 ` + schcmds.MappingFileHelp +
 		`
+` + jsonInputFileHelp +
+		`
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimiter`,
 
 	Synopsis: []string{
-		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue]  [--ignore-skipped-rows] [--disable-fk-checks] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
-		"-u [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--ignore-skipped-rows] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue]  [--quiet] [--disable-fk-checks] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"-u [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--quiet] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 		"-r [--map {{.LessThan}}file{{.GreaterThan}}] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
 }
@@ -96,17 +114,17 @@ In create, update, and replace scenarios the file's extension is used to infer t
 var bitTypeRegex = regexp.MustCompile(`(?m)b\'(\d+)\'`)
 
 type importOptions struct {
-	operation         mvdata.TableImportOp
-	destTableName     string
-	contOnErr         bool
-	force             bool
-	schFile           string
-	primaryKeys       []string
-	nameMapper        rowconv.NameMapper
-	src               mvdata.DataLocation
-	srcOptions        interface{}
-	ignoreSkippedRows bool
-	disableFkChecks   bool
+	operation       mvdata.TableImportOp
+	destTableName   string
+	contOnErr       bool
+	force           bool
+	schFile         string
+	primaryKeys     []string
+	nameMapper      rowconv.NameMapper
+	src             mvdata.DataLocation
+	srcOptions      interface{}
+	quiet           bool
+	disableFkChecks bool
 }
 
 func (m importOptions) IsBatched() bool {
@@ -168,7 +186,7 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 	schemaFile, _ := apr.GetValue(schemaParam)
 	force := apr.Contains(forceParam)
 	contOnErr := apr.Contains(contOnErrParam)
-	ignore := apr.Contains(ignoreSkippedRows)
+	quiet := apr.Contains(quiet)
 	disableFks := apr.Contains(disableFkChecks)
 
 	val, _ := apr.GetValue(primaryKeyParam)
@@ -238,17 +256,17 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 	}
 
 	return &importOptions{
-		operation:         moveOp,
-		destTableName:     tableName,
-		contOnErr:         contOnErr,
-		force:             force,
-		schFile:           schemaFile,
-		nameMapper:        colMapper,
-		primaryKeys:       pks,
-		src:               srcLoc,
-		srcOptions:        srcOpts,
-		ignoreSkippedRows: ignore,
-		disableFkChecks:   disableFks,
+		operation:       moveOp,
+		destTableName:   tableName,
+		contOnErr:       contOnErr,
+		force:           force,
+		schFile:         schemaFile,
+		nameMapper:      colMapper,
+		primaryKeys:     pks,
+		src:             srcLoc,
+		srcOptions:      srcOpts,
+		quiet:           quiet,
+		disableFkChecks: disableFks,
 	}, nil
 
 }
@@ -337,7 +355,8 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
-	ap.SupportsFlag(ignoreSkippedRows, "", "Ignore the skipped rows printed by the --continue flag.")
+	ap.SupportsFlag(quiet, "", "Suppress any warning messages about invalid rows when using the --continue flag.")
+	ap.SupportsAlias(ignoreSkippedRows, quiet)
 	ap.SupportsFlag(disableFkChecks, "", "Disables foreign key checks.")
 	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
 	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
@@ -524,8 +543,8 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 			return true
 		}
 
-		// Don't log the skipped rows when the ignore-skipped-rows param is specified.
-		if options.ignoreSkippedRows {
+		// Don't log the skipped rows when asked to suppress warning output
+		if options.quiet {
 			return false
 		}
 
@@ -735,7 +754,7 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 
 		// Bit types need additional verification due to the differing values they can take on. "4", "0x04", b'100' should
 		// be interpreted in the correct manner.
-		if _, ok := col.Type.(sql.BitType); ok {
+		if _, ok := col.Type.(gmstypes.BitType); ok {
 			colAsString, ok := row[i].(string)
 			if !ok {
 				return nil, fmt.Errorf("error: column value should be of type string")

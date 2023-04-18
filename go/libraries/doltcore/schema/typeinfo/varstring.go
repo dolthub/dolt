@@ -22,6 +22,7 @@ import (
 	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -48,8 +49,12 @@ type varStringType struct {
 var _ TypeInfo = (*varStringType)(nil)
 
 var (
-	StringDefaultType = &varStringType{sql.MustCreateStringWithDefaults(sqltypes.VarChar, 16383)}
+	StringDefaultType = &varStringType{gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 16383)}
 )
+
+func CreateVarStringTypeFromSqlType(stringType sql.StringType) TypeInfo {
+	return &varStringType{stringType}
+}
 
 func CreateVarStringTypeFromParams(params map[string]string) (TypeInfo, error) {
 	var length int64
@@ -76,11 +81,11 @@ func CreateVarStringTypeFromParams(params map[string]string) (TypeInfo, error) {
 		var sqlType sql.StringType
 		switch sqlStr {
 		case varStringTypeParam_SQL_Char:
-			sqlType, err = sql.CreateString(sqltypes.Char, length, collation)
+			sqlType, err = gmstypes.CreateString(sqltypes.Char, length, collation)
 		case varStringTypeParam_SQL_VarChar:
-			sqlType, err = sql.CreateString(sqltypes.VarChar, length, collation)
+			sqlType, err = gmstypes.CreateString(sqltypes.VarChar, length, collation)
 		case varStringTypeParam_SQL_Text:
-			sqlType, err = sql.CreateString(sqltypes.Text, length, collation)
+			sqlType, err = gmstypes.CreateString(sqltypes.Text, length, collation)
 		default:
 			return nil, fmt.Errorf(`create varstring type info has "%v" param with value "%v"`, varStringTypeParam_SQL, sqlStr)
 		}
@@ -137,7 +142,7 @@ func (ti *varStringType) ConvertValueToNomsValue(ctx context.Context, vrw types.
 	if v == nil {
 		return types.NullValue, nil
 	}
-	strVal, err := ti.sqlStringType.Convert(v)
+	strVal, _, err := ti.sqlStringType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +211,7 @@ func (ti *varStringType) GetTypeParams() map[string]string {
 // IsValid implements TypeInfo interface.
 func (ti *varStringType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.String); ok {
-		_, err := ti.sqlStringType.Convert(string(val))
+		_, _, err := ti.sqlStringType.Convert(string(val))
 		if err != nil {
 			return false
 		}

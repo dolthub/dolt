@@ -18,7 +18,6 @@ import (
 	"context"
 	goerrors "errors"
 	"fmt"
-	"net"
 	"os"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -29,22 +28,25 @@ import (
 )
 
 var (
-	ErrIncorrectPermissions = errors.NewKind("`%s`@`%s` does not have the correct permissions on branch `%s`")
-	ErrCannotCreateBranch   = errors.NewKind("`%s`@`%s` cannot create a branch named `%s`")
-	ErrCannotDeleteBranch   = errors.NewKind("`%s`@`%s` cannot delete the branch `%s`")
-	ErrExpressionsTooLong   = errors.NewKind("expressions are too long [%q, %q, %q]")
-	ErrInsertingRow         = errors.NewKind("`%s`@`%s` cannot add the row [%q, %q, %q, %q]")
-	ErrUpdatingRow          = errors.NewKind("`%s`@`%s` cannot update the row [%q, %q, %q]")
-	ErrUpdatingToRow        = errors.NewKind("`%s`@`%s` cannot update the row [%q, %q, %q] to the new branch expression %q")
-	ErrDeletingRow          = errors.NewKind("`%s`@`%s` cannot delete the row [%q, %q, %q]")
-	ErrMissingController    = errors.NewKind("a context has a non-nil session but is missing its branch controller")
+	ErrIncorrectPermissions  = errors.NewKind("`%s`@`%s` does not have the correct permissions on branch `%s`")
+	ErrCannotCreateBranch    = errors.NewKind("`%s`@`%s` cannot create a branch named `%s`")
+	ErrCannotDeleteBranch    = errors.NewKind("`%s`@`%s` cannot delete the branch `%s`")
+	ErrExpressionsTooLong    = errors.NewKind("expressions are too long [%q, %q, %q, %q]")
+	ErrInsertingAccessRow    = errors.NewKind("`%s`@`%s` cannot add the row [%q, %q, %q, %q, %q]")
+	ErrInsertingNamespaceRow = errors.NewKind("`%s`@`%s` cannot add the row [%q, %q, %q, %q]")
+	ErrUpdatingRow           = errors.NewKind("`%s`@`%s` cannot update the row [%q, %q, %q, %q]")
+	ErrUpdatingToRow         = errors.NewKind("`%s`@`%s` cannot update the row [%q, %q, %q, %q] to the new branch expression [%q, %q]")
+	ErrDeletingRow           = errors.NewKind("`%s`@`%s` cannot delete the row [%q, %q, %q, %q]")
+	ErrMissingController     = errors.NewKind("a context has a non-nil session but is missing its branch controller")
 )
 
 // Context represents the interface that must be inherited from the context.
 type Context interface {
 	GetBranch() (string, error)
+	GetCurrentDatabase() string
 	GetUser() string
 	GetHost() string
+	GetPrivilegeSet() (sql.PrivilegeSet, uint64)
 	GetController() *Controller
 }
 
@@ -55,50 +57,6 @@ type Controller struct {
 
 	branchControlFilePath string
 	doltConfigDirPath     string
-}
-
-var (
-	// superUser is the server-wide user that has full, irrevocable permission to do whatever they want to any branch and table
-	superUser string
-	// superHost is the host counterpart of the superUser
-	superHost string
-	// superHostIsLoopback states whether the superHost is a loopback address
-	superHostIsLoopback bool
-)
-
-var enabled = false
-
-func init() {
-	if os.Getenv("DOLT_ENABLE_BRANCH_CONTROL") != "" {
-		enabled = true
-	}
-}
-
-// SetEnabled is a TEMPORARY function just used for testing (so that we don't have to set the env variable)
-func SetEnabled(value bool) {
-	enabled = value
-}
-
-// SetSuperUser sets the server-wide super user to the given user and host combination. The super user has full,
-// irrevocable permission to do whatever they want to any branch and table.
-func SetSuperUser(user string, host string) {
-	superUser = user
-	// Check if superHost is a loopback
-	if host == "localhost" || net.ParseIP(host).IsLoopback() {
-		superHost = "localhost"
-		superHostIsLoopback = true
-	} else {
-		superHost = host
-		superHostIsLoopback = false
-	}
-}
-
-// IsSuperUser returns whether the given user and host combination is the super user.
-func IsSuperUser(user string, host string) bool {
-	if user == superUser && ((host == superHost) || (superHostIsLoopback && net.ParseIP(host).IsLoopback())) {
-		return true
-	}
-	return false
 }
 
 // CreateDefaultController returns a default controller, which only has a single entry allowing all users to have write
@@ -115,9 +73,6 @@ func CreateDefaultController() *Controller {
 // LoadData loads the data from the given location and returns a controller. Returns the default controller if the
 // `branchControlFilePath` is empty.
 func LoadData(branchControlFilePath string, doltConfigDirPath string) (*Controller, error) {
-	if !enabled {
-		return nil, nil
-	}
 	accessTbl := newAccess()
 	controller := &Controller{
 		Access:                accessTbl,
@@ -161,7 +116,7 @@ func LoadData(branchControlFilePath string, doltConfigDirPath string) (*Controll
 	}
 	// The Deserialize functions acquire write locks, so we don't acquire them here
 	if err = controller.Access.Deserialize(access); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to deserialize config at '%s': %w", branchControlFilePath, err)
 	}
 	if err = controller.Namespace.Deserialize(namespace); err != nil {
 		return nil, err
@@ -171,9 +126,6 @@ func LoadData(branchControlFilePath string, doltConfigDirPath string) (*Controll
 
 // SaveData saves the data from the context's controller to the location pointed by it.
 func SaveData(ctx context.Context) error {
-	if !enabled {
-		return nil
-	}
 	branchAwareSession := GetBranchAwareSession(ctx)
 	// A nil session means we're not in the SQL context, so we've got nothing to serialize
 	if branchAwareSession == nil {
@@ -206,7 +158,10 @@ func SaveData(ctx context.Context) error {
 	serial.BranchControlAddAccessTbl(b, accessOffset)
 	serial.BranchControlAddNamespaceTbl(b, namespaceOffset)
 	root := serial.BranchControlEnd(b)
-	data := serial.FinishMessage(b, root, []byte(serial.BranchControlFileID))
+	// serial.FinishMessage() limits files to 2^24 bytes, so this works around it while maintaining read compatibility
+	b.Prep(1, flatbuffers.SizeInt32+4+serial.MessagePrefixSz)
+	b.FinishWithFileIdentifier(root, []byte(serial.BranchControlFileID))
+	data := b.Bytes[b.Head()-serial.MessagePrefixSz:]
 	return os.WriteFile(controller.branchControlFilePath, data, 0777)
 }
 
@@ -216,9 +171,6 @@ func SaveData(ctx context.Context) error {
 // the context. In these cases, CheckAccess will pass as we want to allow all local commands to ignore branch
 // permissions.
 func CheckAccess(ctx context.Context, flags Permissions) error {
-	if !enabled {
-		return nil
-	}
 	branchAwareSession := GetBranchAwareSession(ctx)
 	// A nil session means we're not in the SQL context, so we allow all operations
 	if branchAwareSession == nil {
@@ -234,12 +186,13 @@ func CheckAccess(ctx context.Context, flags Permissions) error {
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
+	database := branchAwareSession.GetCurrentDatabase()
 	branch, err := branchAwareSession.GetBranch()
 	if err != nil {
 		return err
 	}
 	// Get the permissions for the branch, user, and host combination
-	_, perms := controller.Access.Match(branch, user, host)
+	_, perms := controller.Access.Match(database, branch, user, host)
 	// If either the flags match or the user is an admin for this branch, then we allow access
 	if (perms&flags == flags) || (perms&Permissions_Admin == Permissions_Admin) {
 		return nil
@@ -252,9 +205,6 @@ func CheckAccess(ctx context.Context, flags Permissions) error {
 // However, not all CLI commands use *sql.Context, and therefore will not have any user associated with the context. In
 // these cases, CanCreateBranch will pass as we want to allow all local commands to freely create branches.
 func CanCreateBranch(ctx context.Context, branchName string) error {
-	if !enabled {
-		return nil
-	}
 	branchAwareSession := GetBranchAwareSession(ctx)
 	// A nil session means we're not in the SQL context, so we allow the create operation
 	if branchAwareSession == nil {
@@ -270,7 +220,8 @@ func CanCreateBranch(ctx context.Context, branchName string) error {
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
-	if controller.Namespace.CanCreate(branchName, user, host) {
+	database := branchAwareSession.GetCurrentDatabase()
+	if controller.Namespace.CanCreate(database, branchName, user, host) {
 		return nil
 	}
 	return ErrCannotCreateBranch.New(user, host, branchName)
@@ -281,9 +232,6 @@ func CanCreateBranch(ctx context.Context, branchName string) error {
 // However, not all CLI commands use *sql.Context, and therefore will not have any user associated with the context. In
 // these cases, CanDeleteBranch will pass as we want to allow all local commands to freely delete branches.
 func CanDeleteBranch(ctx context.Context, branchName string) error {
-	if !enabled {
-		return nil
-	}
 	branchAwareSession := GetBranchAwareSession(ctx)
 	// A nil session means we're not in the SQL context, so we allow the delete operation
 	if branchAwareSession == nil {
@@ -299,8 +247,9 @@ func CanDeleteBranch(ctx context.Context, branchName string) error {
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
+	database := branchAwareSession.GetCurrentDatabase()
 	// Get the permissions for the branch, user, and host combination
-	_, perms := controller.Access.Match(branchName, user, host)
+	_, perms := controller.Access.Match(database, branchName, user, host)
 	// If the user has the write or admin flags, then we allow access
 	if (perms&Permissions_Write == Permissions_Write) || (perms&Permissions_Admin == Permissions_Admin) {
 		return nil
@@ -312,9 +261,6 @@ func CanDeleteBranch(ctx context.Context, branchName string) error {
 // context is missing some functionality that is needed to perform the addition, such as a user or the Controller, then
 // this simply returns.
 func AddAdminForContext(ctx context.Context, branchName string) error {
-	if !enabled {
-		return nil
-	}
 	branchAwareSession := GetBranchAwareSession(ctx)
 	if branchAwareSession == nil {
 		return nil
@@ -326,15 +272,16 @@ func AddAdminForContext(ctx context.Context, branchName string) error {
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
+	database := branchAwareSession.GetCurrentDatabase()
 	// Check if we already have admin permissions for the given branch, as there's no need to do another insertion if so
 	controller.Access.RWMutex.RLock()
-	_, modPerms := controller.Access.Match(branchName, user, host)
+	_, modPerms := controller.Access.Match(database, branchName, user, host)
 	controller.Access.RWMutex.RUnlock()
 	if modPerms&Permissions_Admin == Permissions_Admin {
 		return nil
 	}
 	controller.Access.RWMutex.Lock()
-	controller.Access.insert(branchName, user, host, Permissions_Admin)
+	controller.Access.Insert(database, branchName, user, host, Permissions_Admin)
 	controller.Access.RWMutex.Unlock()
 	return SaveData(ctx)
 }
@@ -350,4 +297,30 @@ func GetBranchAwareSession(ctx context.Context) Context {
 		return bas
 	}
 	return nil
+}
+
+// HasDatabasePrivileges returns whether the given context's user has the correct privileges to modify any table entries
+// that match the given database. The following are the required privileges:
+//
+// Global Space:   SUPER, GRANT
+// Global Space:   CREATE, ALTER, DROP, INSERT, UPDATE, DELETE, EXECUTE, GRANT
+// Database Space: CREATE, ALTER, DROP, INSERT, UPDATE, DELETE, EXECUTE, GRANT
+//
+// Any user that may grant SUPER is considered to be a super user. In addition, any user that may grant the suite of
+// alteration privileges is also considered a super user. The SUPER privilege does not exist at the database level, it
+// is a global privilege only.
+func HasDatabasePrivileges(ctx Context, database string) bool {
+	if ctx == nil {
+		return true
+	}
+	privSet, counter := ctx.GetPrivilegeSet()
+	if counter == 0 {
+		return false
+	}
+	hasSuper := privSet.Has(sql.PrivilegeType_Super, sql.PrivilegeType_GrantOption)
+	isGlobalAdmin := privSet.Has(sql.PrivilegeType_Create, sql.PrivilegeType_Alter, sql.PrivilegeType_Drop,
+		sql.PrivilegeType_Insert, sql.PrivilegeType_Update, sql.PrivilegeType_Delete, sql.PrivilegeType_Execute, sql.PrivilegeType_GrantOption)
+	isDatabaseAdmin := privSet.Database(database).Has(sql.PrivilegeType_Create, sql.PrivilegeType_Alter, sql.PrivilegeType_Drop,
+		sql.PrivilegeType_Insert, sql.PrivilegeType_Update, sql.PrivilegeType_Delete, sql.PrivilegeType_Execute, sql.PrivilegeType_GrantOption)
+	return hasSuper || isGlobalAdmin || isDatabaseAdmin
 }

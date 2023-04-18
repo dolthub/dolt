@@ -20,6 +20,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -33,6 +35,25 @@ const (
 
 var ErrSystemTableCannotBeModified = errors.New("system tables cannot be dropped or altered")
 
+var OldDocsSchema = schema.MustSchemaFromCols(schema.NewColCollection(
+	schema.NewColumn(DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn(DocTextColumnName, schema.DocTextTag, types.StringKind, false),
+))
+
+var DocsSchema schema.Schema
+
+func init() {
+	docTextCol, err := schema.NewColumnWithTypeInfo(DocTextColumnName, schema.DocTextTag, typeinfo.LongTextType, false, "", false, "")
+	if err != nil {
+		panic(err)
+	}
+	doltDocsColumns := schema.NewColCollection(
+		schema.NewColumn(DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
+		docTextCol,
+	)
+	DocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
+}
+
 // HasDoltPrefix returns a boolean whether or not the provided string is prefixed with the DoltNamespace. Users should
 // not be able to create tables in this reserved namespace.
 func HasDoltPrefix(s string) bool {
@@ -43,6 +64,12 @@ func HasDoltPrefix(s string) bool {
 // output (e.g. dolt status) by default.
 func IsReadOnlySystemTable(name string) bool {
 	return HasDoltPrefix(name) && !set.NewStrSet(writeableSystemTables).Contains(name)
+}
+
+// IsNonAlterableSystemTable returns whether the table name given is a system table that cannot be dropped or altered
+// by the user.
+func IsNonAlterableSystemTable(name string) bool {
+	return IsReadOnlySystemTable(name) || strings.ToLower(name) == SchemasTableName
 }
 
 // GetNonSystemTableNames gets non-system table names
@@ -134,6 +161,7 @@ var persistedSystemTables = []string{
 
 var generatedSystemTables = []string{
 	BranchesTableName,
+	RemoteBranchesTableName,
 	LogTableName,
 	TableOfTablesInConflictName,
 	TableOfTablesWithViolationsName,
@@ -162,16 +190,10 @@ const (
 	ReadmeDoc = "README.md"
 )
 
-var doltDocsColumns = schema.NewColCollection(
-	schema.NewColumn(DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
-	schema.NewColumn(DocTextColumnName, schema.DocTextTag, types.StringKind, false),
-)
-var DocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
-
 var DocsMaybeCreateTableStmt = `
 CREATE TABLE IF NOT EXISTS dolt_docs (
   doc_name varchar(16383) NOT NULL,
-  doc_text varchar(16383),
+  doc_text longtext,
   PRIMARY KEY (doc_name)
 );`
 
@@ -208,17 +230,19 @@ const (
 	// SchemasTableName is the name of the dolt schema fragment table
 	SchemasTableName = "dolt_schemas"
 	// SchemasTablesIdCol is an incrementing integer that represents the insertion index.
+	// Deprecated: This column is no longer used and will be removed in a future release.
 	SchemasTablesIdCol = "id"
-	// Currently: `view` or `trigger`.
+	// SchemasTablesTypeCol is the name of the column that stores the type of a schema fragment  in the dolt_schemas table
 	SchemasTablesTypeCol = "type"
-	// The name of the database entity.
+	// SchemasTablesNameCol The name of the column that stores the name of a schema fragment in the dolt_schemas table
 	SchemasTablesNameCol = "name"
-	// The schema fragment associated with the database entity.
-	// For example, the SELECT statement for a CREATE VIEW.
+	// SchemasTablesFragmentCol The name of the column that stores the SQL fragment of a schema element in the
+	// dolt_schemas table
 	SchemasTablesFragmentCol = "fragment"
-	// The extra information for schema; currently contains creation time for triggers and views
+	// SchemasTablesExtraCol The name of the column that stores extra information about a schema element in the
+	// dolt_schemas table
 	SchemasTablesExtraCol = "extra"
-	// The name of the index that is on the table.
+	//
 	SchemasTablesIndexName = "fragment_name"
 )
 
@@ -244,6 +268,9 @@ const (
 	// DiffTableName is the name of the table with a map of commits to tables changed
 	DiffTableName = "dolt_diff"
 
+	// ColumnDiffTableName is the name of the table with a map of commits to tables and columns changed
+	ColumnDiffTableName = "dolt_column_diff"
+
 	// TableOfTablesInConflictName is the conflicts system table name
 	TableOfTablesInConflictName = "dolt_conflicts"
 
@@ -252,6 +279,9 @@ const (
 
 	// BranchesTableName is the branches system table name
 	BranchesTableName = "dolt_branches"
+
+	// RemoteBranchesTableName is the all-branches system table name
+	RemoteBranchesTableName = "dolt_remote_branches"
 
 	// RemotesTableName is the remotes system table name
 	RemotesTableName = "dolt_remotes"

@@ -23,6 +23,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"sync/atomic"
 	"testing"
 
@@ -52,11 +53,11 @@ func makeFakeDDB(t *testing.T) *fakeDDB {
 	}
 }
 
-func (m *fakeDDB) readerForTable(name addr) (chunkReader, error) {
+func (m *fakeDDB) readerForTable(ctx context.Context, name addr) (chunkReader, error) {
 	if i, present := m.data[fmtTableName(name)]; present {
 		buff, ok := i.([]byte)
 		assert.True(m.t, ok)
-		ti, err := parseTableIndex(buff, &noopQuotaProvider{})
+		ti, err := parseTableIndex(ctx, buff, &UnlimitedQuotaProvider{})
 
 		if err != nil {
 			return nil, err
@@ -124,7 +125,7 @@ func (m *fakeDDB) PutItemWithContext(ctx aws.Context, input *dynamodb.PutItemInp
 
 	assert.NotNil(m.t, input.Item[versAttr], "%s should have been present", versAttr)
 	assert.NotNil(m.t, input.Item[versAttr].S, "nbsVers should have been a String: %+v", input.Item[versAttr])
-	assert.Equal(m.t, constants.NomsVersion, *input.Item[versAttr].S)
+	assert.Equal(m.t, constants.FormatLD1String, *input.Item[versAttr].S)
 
 	assert.NotNil(m.t, input.Item[lockAttr], "%s should have been present", lockAttr)
 	assert.NotNil(m.t, input.Item[lockAttr].B, "lock should have been a blob: %+v", input.Item[lockAttr])
@@ -155,7 +156,7 @@ func (m *fakeDDB) PutItemWithContext(ctx aws.Context, input *dynamodb.PutItemInp
 		return nil, mockAWSError("ConditionalCheckFailedException")
 	}
 
-	m.putRecord(key, lock, root, constants.NomsVersion, specs, apps)
+	m.putRecord(key, lock, root, constants.FormatLD1String, specs, apps)
 
 	atomic.AddInt64(&m.numPuts, 1)
 	return &dynamodb.PutItemOutput{}, nil

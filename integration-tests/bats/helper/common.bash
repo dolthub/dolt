@@ -64,16 +64,23 @@ assert_feature_version() {
 }
 
 skip_nbf_dolt() {
-  if [ ! "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ] &&
-    [ ! "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT_DEV__" ];
+  if [ ! "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ]
   then
     skip "skipping test for nomsBinFormat __DOLT__"
   fi
 }
 
-skip_nbf_dolt_dev() {
-  if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT_DEV__" ]; then
-    skip "skipping test for nomsBinFormat __DOLT_DEV__"
+skip_nbf_not_dolt() {
+  if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ]
+  then
+    skip "skipping test since nomsBinFormat != __DOLT__"
+  fi
+}
+
+skip_nbf_ld_1() {
+  if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ];
+  then
+    skip "skipping test for nomsBinFormat __LD_1__"
   fi
 }
 
@@ -83,7 +90,13 @@ setup_common() {
 }
 
 teardown_common() {
+    # rm -rf can fail with a "directory not empty" error in some cases. This seems to be a misleading
+    # error message; the real error is that a file is still in use. Instead of waiting longer for
+    # any processes to finish, we just ignore any error removing temp files and use 'true' as the last
+    # command in this function to ensure that teardown_common doesn't fail a test just because we
+    # couldn't delete any temporary test files.
     rm -rf "$BATS_TMPDIR/dolt-repo-$$"
+    true
 }
 
 log_status_eq() {

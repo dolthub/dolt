@@ -50,6 +50,8 @@ const (
 	MetricsHost     = "metrics.host"
 	MetricsPort     = "metrics.port"
 	MetricsInsecure = "metrics.insecure"
+
+	PushAutoSetupRemote = "push.autosetupremote"
 )
 
 var LocalConfigWhitelist = set.NewStrSet([]string{UserNameKey, UserEmailKey})

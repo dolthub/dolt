@@ -27,6 +27,43 @@ teardown() {
     teardown_common
 }
 
+@test "merge: three-way merge with longer key on both left and right" {
+
+    # Base table has a key length of 2. Left and right will both add a column to
+    # the key, and the keys for all rows will differ in the last column.
+    dolt sql <<SQL
+create table t1 (a int, b int, c int, primary key (a,b));
+insert into t1 values (1,1,1), (2,2,2);
+call dolt_commit('-Am', 'new table');
+call dolt_branch('b1');
+call dolt_branch('b2');
+
+call dolt_checkout('b1');
+alter table t1 add column d int not null default 4;
+alter table t1 drop primary key;
+alter table t1 add primary key (a,b,d);
+update t1 set d = 5;
+call dolt_commit('-Am', 'added a column to the primary key with value 5');
+
+call dolt_checkout('b2');
+alter table t1 add column d int not null default 4;
+alter table t1 drop primary key;
+alter table t1 add primary key (a,b,d);
+update t1 set d = 6;
+call dolt_commit('-Am', 'added a column to the primary key with value 6');
+
+SQL
+
+    dolt merge b1
+
+    skip "merge hangs"
+        
+    run dolt merge b2
+    log_status_eq 1
+    [[ "$output" =~ "cause: error: cannot merge table t1 because its different primary keys differ" ]]
+}
+
+
 @test "merge: 3way merge doesn't stomp working changes" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,2)"
@@ -378,12 +415,12 @@ SQL
     dolt checkout main
     run dolt merge other --no-commit
     log_status_eq 0
-    [[ "$output" =~ "CONFLICT" ]] || false
-    run dolt conflicts resolve --theirs dolt_schemas
-    log_status_eq 0
+    [[ ! "$output" =~ "CONFLICT" ]] || false
+
     run dolt sql -q "select name from dolt_schemas" -r csv
     log_status_eq 0
     [[ "$output" =~ "c1c1" ]] || false
+    [[ "$output" =~ "pkpk" ]] || false
 }
 
 @test "merge: Add views on two branches, merge with stored procedure" {
@@ -398,12 +435,12 @@ SQL
     dolt checkout main
     run dolt merge other --no-commit
     log_status_eq 0
-    [[ "$output" =~ "CONFLICT" ]] || false
-    run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'dolt_schemas')"
-    log_status_eq 0
+    [[ ! "$output" =~ "CONFLICT" ]] || false
+    
     run dolt sql -q "select name from dolt_schemas" -r csv
     log_status_eq 0
     [[ "$output" =~ "c1c1" ]] || false
+    [[ "$output" =~ "pkpk" ]] || false
 }
 
 @test "merge: Add views on two branches, merge without conflicts" {
@@ -929,6 +966,27 @@ SQL
     [[ "$output" =~ "merge other" ]] || false
     [[ ! "$output" =~ "add (1,2) to t1" ]] || false
     [[ ! "$output" =~ "add (2,3) to t1" ]] || false
+}
+
+@test "merge: dolt merge does not ff and not commit with --no-ff and --no-commit" {
+    dolt branch other
+    dolt sql -q "INSERT INTO test1 VALUES (1,2,3)"
+    dolt commit -am "add (1,2,3) to test1";
+
+    dolt checkout other
+    run dolt sql -q "select * from test1;" -r csv
+    [[ ! "$output" =~ "1,2,3" ]] || false
+
+    run dolt merge other --no-ff --no-commit
+    log_status_eq 0
+    [[ "$output" =~ "Automatic merge went well; stopped before committing as requested" ]] || false
+
+    run dolt log --oneline -n 1
+    [[ "$output" =~ "added tables" ]] || false
+    [[ ! "$output" =~ "add (1,2,3) to test1" ]] || false
+
+    run dolt commit -m "merge main"
+    log_status_eq 0
 }
 
 @test "merge: specify ---author for merge that's used for creating commit" {
