@@ -300,6 +300,8 @@ const (
 
 	// TagsTableName is the tags table name
 	TagsTableName = "dolt_tags"
+
+	IgnoreTableName = "dolt_ignore"
 )
 
 const (
