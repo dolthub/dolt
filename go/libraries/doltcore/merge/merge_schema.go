@@ -324,9 +324,7 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColColle
 				oursChanged := !anc.Equals(*ours)
 				theirsChanged := !anc.Equals(*theirs)
 				if oursChanged && theirsChanged {
-					// This is a schema change conflict and should have already been caught before this point
-					return nil, nil, fmt.Errorf("unable to merge conflicting column (%s) "+
-						"that changed on both sides of merge", ours.Name)
+					// This is a schema change conflict and has already been handled by checkSchemaConflicts
 				} else if theirsChanged {
 					mergedColumns = append(mergedColumns, *theirs)
 				} else {
@@ -335,16 +333,12 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColColle
 			} else if ours.Equals(*theirs) {
 				// if the columns are identical, just use ours
 				mergedColumns = append(mergedColumns, *ours)
-			} else {
-				// This is a schema change conflict and should have already been caught before this point
-				return nil, nil, fmt.Errorf("unable to merge conflicting column (%s) "+
-					"that changed on both sides of merge", ours.Name)
 			}
 		}
 	}
 
 	// Check that there are no duplicate column names or tags in the merged column set
-	conflicts = checkForColumnConflicts(mergedColumns)
+	conflicts = append(conflicts, checkForColumnConflicts(mergedColumns)...)
 	if conflicts != nil {
 		return nil, conflicts, nil
 	}
@@ -355,28 +349,29 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColColle
 // checkForColumnConflicts iterates over |mergedColumns|, checks for duplicate column names or column tags, and returns
 // a slice of ColConflicts for any conflicts found.
 func checkForColumnConflicts(mergedColumns []schema.Column) []ColConflict {
-	columnNameSet := map[string]struct{}{}
-	columnTagSet := map[uint64]struct{}{}
+	columnNameSet := map[string]schema.Column{}
+	columnTagSet := map[uint64]schema.Column{}
 	var conflicts []ColConflict
 
 	for _, col := range mergedColumns {
-		if _, ok := columnNameSet[col.Name]; ok {
+		normalizedName := strings.ToLower(col.Name)
+		if _, ok := columnNameSet[normalizedName]; ok {
 			conflicts = append(conflicts, ColConflict{
 				Kind:   NameCollision,
 				Ours:   col,
-				Theirs: col, // TODO: This isn't right...
+				Theirs: columnNameSet[normalizedName],
 			})
 		}
-		columnNameSet[col.Name] = struct{}{}
+		columnNameSet[normalizedName] = col
 
 		if _, ok := columnTagSet[col.Tag]; ok {
 			conflicts = append(conflicts, ColConflict{
 				Kind:   TagCollision,
 				Ours:   col,
-				Theirs: col, // TODO: This isn't right...
+				Theirs: columnTagSet[col.Tag],
 			})
 		}
-		columnTagSet[col.Tag] = struct{}{}
+		columnTagSet[col.Tag] = col
 	}
 
 	return conflicts
@@ -425,9 +420,8 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 			case theirs != nil && anc == nil:
 				// Column exists on both sides, but not in ancestor
 				// col added on our branch and their branch with different def
-				// TODO: Do we have test coverage over this?
 				conflicts = append(conflicts, ColConflict{
-					Kind:   TagCollision,
+					Kind:   NameCollision, // TODO: WHy is this a NameCollision?
 					Ours:   *ours,
 					Theirs: *theirs,
 				})
@@ -453,7 +447,6 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 						//       rework this anyway, so might not be worth putting much thought into right now.
 						Kind:   ColumnCollision,
 						Theirs: *theirs,
-						//Ours: ours,
 					})
 				}
 
