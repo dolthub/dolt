@@ -71,10 +71,11 @@ func NewArgParserWithMaxArgs(name string, maxArgs int) *ArgParser {
 	var supported []*Option
 	nameOrAbbrevToOpt := make(map[string]*Option)
 	return &ArgParser{
-		MaxArgs:           maxArgs,
-		TooManyArgsError:  tooManyArgsErrorGenerator,
-		Supported:         supported,
-		nameOrAbbrevToOpt: nameOrAbbrevToOpt,
+		Name:                 name,
+		MaxArgs:              maxArgs,
+		TooManyArgsErrorFunc: tooManyArgsErrorGenerator,
+		Supported:            supported,
+		nameOrAbbrevToOpt:    nameOrAbbrevToOpt,
 	}
 }
 
@@ -360,7 +361,7 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 	}
 
 	if ap.MaxArgs != -1 && len(list) > ap.MaxArgs {
-		return nil, ap.TooManyArgsError(list)
+		return nil, ap.TooManyArgsErrorFunc(list)
 	}
 
 	return &ArgParseResults{results, list, ap}, nil
