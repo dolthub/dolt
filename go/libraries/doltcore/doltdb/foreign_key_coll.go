@@ -161,7 +161,7 @@ func (fk ForeignKey) HashOf() hash.Hash {
 	return hash.Of(bb.Bytes())
 }
 
-// CombinedHash returns a combined hash value for all foreign keys in the slice provided. 
+// CombinedHash returns a combined hash value for all foreign keys in the slice provided.
 // An empty slice has a zero hash.
 func CombinedHash(fks []ForeignKey) hash.Hash {
 	if len(fks) == 0 {

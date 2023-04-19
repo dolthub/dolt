@@ -1358,8 +1358,7 @@ SQL
     dolt branch other
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);"
 
-    run dolt checkout other
-    [ "$status" -eq "0" ]
+    dolt checkout other
 
     run dolt schema show child
     [ "$status" -eq "0" ]
@@ -1370,6 +1369,35 @@ SQL
     run dolt schema show child
     [ "$status" -eq "0" ]
     [[ "$output" =~ "fk_v1" ]] || false
+
+    # Same test, but a table not found on the other branch
+    dolt sql <<SQL
+CREATE TABLE parent2 (
+    id int PRIMARY KEY,
+    v1 int,
+    v2 int,
+    INDEX v1 (v1),
+    INDEX v2 (v2)
+);
+CREATE TABLE child2 (
+    id int primary key,
+    v1 int,
+    v2 int
+);
+SQL
+
+    dolt add . && dolt commit -m "new tables"
+    dolt sql -q "ALTER TABLE child2 ADD CONSTRAINT fk_v2 FOREIGN KEY (v1) REFERENCES parent2(v1);"
+
+    run dolt schema show child2
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "fk_v2" ]] || false
+
+    dolt checkout main
+    
+    run dolt schema show child2
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "fk_v2" ]] || false    
 }
 
 @test "foreign-keys: non-overlapping changes in working set and target branch during checkout" {

@@ -715,7 +715,7 @@ func mergeForeignKeyChanges(
 		changedFks *doltdb.ForeignKeyCollection,
 		force bool,
 ) (*doltdb.ForeignKeyCollection, error) {
-	resultMap := make(map[string][]doltdb.ForeignKey)
+	fksByTable := make(map[string][]doltdb.ForeignKey)
 
 	conflicts := set.NewEmptyStrSet()
 	tblNames, err := newRoot.GetTableNames(ctx)
@@ -733,13 +733,13 @@ func mergeForeignKeyChanges(
 		changedHash := doltdb.CombinedHash(changedFksForTable)
 		
 		if oldHash == changedHash {
-			resultMap[tblName] = append(resultMap[tblName], newFksForTable...)
+			fksByTable[tblName] = append(fksByTable[tblName], newFksForTable...)
 		} else if oldHash == newHash {
-			resultMap[tblName] = append(resultMap[tblName], changedFksForTable...)
+			fksByTable[tblName] = append(fksByTable[tblName], changedFksForTable...)
 		} else if newHash == changedHash {
-			resultMap[tblName] = append(resultMap[tblName], oldFksForTable...)
+			fksByTable[tblName] = append(fksByTable[tblName], oldFksForTable...)
 		} else if force {
-			resultMap[tblName] = append(resultMap[tblName], newFksForTable...)
+			fksByTable[tblName] = append(fksByTable[tblName], newFksForTable...)
 		} else {
 			conflicts.Add(tblName)
 		}
@@ -751,7 +751,7 @@ func mergeForeignKeyChanges(
 	}
 
 	for _, tblName := range tblNames {
-		if _, exists := resultMap[tblName]; !exists {
+		if _, exists := fksByTable[tblName]; !exists {
 			oldKeys, _ := oldFks.KeysForTable(tblName)
 			oldHash := doltdb.CombinedHash(oldKeys)
 
@@ -759,9 +759,9 @@ func mergeForeignKeyChanges(
 			changedHash := doltdb.CombinedHash(changedKeys)
 
 			if oldHash == emptyHash {
-				resultMap[tblName] = append(resultMap[tblName], changedKeys...)
+				fksByTable[tblName] = append(fksByTable[tblName], changedKeys...)
 			} else if force {
-				resultMap[tblName] = append(resultMap[tblName], oldKeys...)
+				fksByTable[tblName] = append(fksByTable[tblName], oldKeys...)
 			} else if oldHash != changedHash {
 				conflicts.Add(tblName)
 			}
@@ -773,7 +773,7 @@ func mergeForeignKeyChanges(
 	}
 	
 	fks := make([]doltdb.ForeignKey, 0)
-	for _, v := range resultMap {
+	for _, v := range fksByTable {
 		fks = append(fks, v...)
 	}
 	
