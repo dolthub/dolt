@@ -21,7 +21,7 @@ import (
 	"os"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	flatbuffers "github.com/google/flatbuffers/go"
+	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
