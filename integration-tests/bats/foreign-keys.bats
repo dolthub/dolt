@@ -1389,23 +1389,20 @@ SQL
     dolt add . && dolt commit -m "new tables"
     dolt sql -q "ALTER TABLE child2 ADD CONSTRAINT fk_v2 FOREIGN KEY (v1) REFERENCES parent2(v1);"
 
-    dolt checkout other
+    # this is an error: modifying a table that isn't tracked on another branch prevents checkout
+    run dolt checkout other
+    [ "$status" -ne "0" ]
+    [[ "$output" =~ "Your local changes to the following tables would be overwritten by checkout" ]] || false
+    [[ "$output" =~ "child" ]] || false
     
-    run dolt schema show child2
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "fk_v2" ]] || false
-
-    dolt checkout main
-    
-    run dolt schema show child2
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "fk_v2" ]] || false
-
     # Removing a foreign key constraint
-    dolt reset --hard
+    dolt reset --hard HEAD~
+    dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);"
+    dolt commit -am "added fk constraint"
+    dolt branch b2
+    
     dolt sql -q "alter table child drop constraint fk_v1"
-
-    dolt checkout other
+    dolt checkout b2
 
     dolt schema show child
     run dolt schema show child
