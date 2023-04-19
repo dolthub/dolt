@@ -66,7 +66,7 @@ func (cmd *DumpDocsCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd *DumpDocsCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsString(fileParamName, "", "file", "The file to write CLI docs to")
 	return ap
 }

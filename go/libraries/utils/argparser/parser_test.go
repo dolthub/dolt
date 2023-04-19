@@ -15,6 +15,7 @@
 package argparser
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,65 +31,72 @@ func TestArgParser(t *testing.T) {
 		expectedArgs    []string
 	}{
 		{
-			NewArgParser(),
+			NewArgParserWithVariableArgs("test"),
 			[]string{},
 			nil,
 			map[string]string{},
 			[]string{},
 		},
 		{
-			NewArgParser(),
+			NewArgParserWithVariableArgs("test"),
 			[]string{"arg1", "arg2"},
 			nil,
 			map[string]string{},
 			[]string{"arg1", "arg2"},
 		},
 		{
-			NewArgParser(),
+			NewArgParserWithVariableArgs("test"),
 			[]string{"--unknown_flag"},
 			UnknownArgumentParam{"unknown_flag"},
 			map[string]string{},
 			[]string{},
 		},
 		{
-			NewArgParser(),
+			NewArgParserWithVariableArgs("test"),
 			[]string{"--help"},
 			ErrHelp,
 			map[string]string{},
 			[]string{},
 		},
 		{
-			NewArgParser(),
+			NewArgParserWithVariableArgs("test"),
 			[]string{"-h"},
 			ErrHelp,
 			map[string]string{},
 			[]string{},
 		},
 		{
-			NewArgParser(),
+			NewArgParserWithVariableArgs("test"),
 			[]string{"help"},
 			nil,
 			map[string]string{},
 			[]string{"help"},
 		},
 		{
-			NewArgParser().SupportsString("param", "p", "", ""),
+			NewArgParserWithVariableArgs("test").SupportsString("param", "p", "", ""),
 			[]string{"--param", "value", "arg1"},
 			nil,
 			map[string]string{"param": "value"},
 			[]string{"arg1"},
 		},
 		{
-			NewArgParser().SupportsString("param", "p", "", ""),
+			NewArgParserWithVariableArgs("test").SupportsString("param", "p", "", ""),
 			[]string{"-pvalue"},
 			nil,
 			map[string]string{"param": "value"},
 			[]string{},
 		},
 		{
-			NewArgParser().SupportsString("param", "p", "", ""),
+			NewArgParserWithVariableArgs("test").SupportsString("param", "p", "", ""),
 			[]string{"--paramvalue"},
 			UnknownArgumentParam{"paramvalue"},
+			map[string]string{},
+			[]string{},
+		},
+		{
+			NewArgParserWithMaxArgs("test", 1),
+			[]string{"foo", "bar"},
+			errors.New("error: test has too many positional arguments. Expected at most 1, found 2: foo, bar"),
 			map[string]string{},
 			[]string{},
 		},

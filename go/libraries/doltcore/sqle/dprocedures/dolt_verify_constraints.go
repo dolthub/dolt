@@ -54,7 +54,7 @@ func doDoltConstraintsVerify(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 
-	apr, err := cli.CreateVerifyConstraintsArgParser().Parse(args)
+	apr, err := cli.CreateVerifyConstraintsArgParser("doltVerifyConstraints").Parse(args)
 	if err != nil {
 		return 1, err
 	}
