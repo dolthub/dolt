@@ -49,12 +49,12 @@ func ValidatorFromStrList(paramName string, validStrList []string) ValidationFun
 }
 
 type ArgParser struct {
-	Name              string
-	MaxArgs           int
-	TooManyArgsError  func(receivedArgs []string) error
-	Supported         []*Option
-	nameOrAbbrevToOpt map[string]*Option
-	ArgListHelp       [][2]string
+	Name                 string
+	MaxArgs              int
+	TooManyArgsErrorFunc func(receivedArgs []string) error
+	Supported            []*Option
+	nameOrAbbrevToOpt    map[string]*Option
+	ArgListHelp          [][2]string
 }
 
 func NewArgParserWithVariableArgs(name string) *ArgParser {

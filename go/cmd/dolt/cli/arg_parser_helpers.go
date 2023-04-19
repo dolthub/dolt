@@ -157,7 +157,7 @@ func CreateConflictsResolveArgParser() *argparser.ArgParser {
 
 func CreateMergeArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("merge", 1)
-	ap.TooManyArgsError = func(receivedArgs []string) error {
+	ap.TooManyArgsErrorFunc = func(receivedArgs []string) error {
 		return fmt.Errorf("Error: Dolt does not support merging from multiple commits. You probably meant to checkout one and then merge from the other.")
 	}
 	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
@@ -232,7 +232,7 @@ func CreateCheckoutArgParser() *argparser.ArgParser {
 
 func CreateCherryPickArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("cherrypick", 1)
-	ap.TooManyArgsError = func(receivedArgs []string) error {
+	ap.TooManyArgsErrorFunc = func(receivedArgs []string) error {
 		return fmt.Errorf("cherry-picking multiple commits is not supported yet.")
 	}
 	return ap
