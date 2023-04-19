@@ -91,7 +91,7 @@ type ErrCheckoutWouldOverwrite struct {
 }
 
 func (cwo ErrCheckoutWouldOverwrite) Error() string {
-	return "local changes would be overwritten by overwrite"
+	return "local changes would be overwritten by checkout"
 }
 
 func IsCheckoutWouldOverwrite(err error) bool {

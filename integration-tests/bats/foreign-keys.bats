@@ -1366,6 +1366,44 @@ SQL
     [[ "$output" =~ "fk_v1" ]] || false
 }
 
+@test "foreign-keys: conflict on checkout" {
+    dolt add . && dolt commit -m "added parent and child tables"
+
+    dolt checkout -b other
+    dolt sql <<SQL
+CREATE TABLE parent2 (
+    id int PRIMARY KEY,
+    v1 int,
+    v2 int,
+    INDEX v1 (v1),
+    INDEX v2 (v2)
+);
+CREATE TABLE child2 (
+    id int primary key,
+    v1 int,
+    v2 int
+);
+SQL
+    dolt sql -q "ALTER TABLE child2 ADD CONSTRAINT fk_v2 FOREIGN KEY (v1) REFERENCES parent2(v1);"
+    dolt commit -Am "parent2 and child2, with constraint"
+
+    dolt checkout main
+    dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);"
+
+    skip "conflict on any foreign key change on destination branch"
+    
+    run dolt checkout other
+    [ "$status" -eq "0" ]
+
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "fk_v2" ]] || false
+
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "fk_v2" ]] || false
+}
+
 @test "foreign-keys: extended names supported" {
     dolt sql <<SQL
 CREATE TABLE parent2 (

@@ -9,7 +9,6 @@ teardown() {
     teardown_common
 }
 
-# Create a single primary key table and do stuff
 @test "checkout: dolt checkout takes working set changes with you" {
     dolt sql <<SQL
 create table test(a int primary key);
@@ -52,6 +51,28 @@ SQL
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "modified" ]] || false
+}
+
+@test "checkout: checkout would overwrite local changes" {
+    dolt sql <<SQL
+create table test(a int primary key);
+insert into test values (1);
+SQL
+    dolt add .
+
+    dolt commit -am "Initial table with one row"
+    dolt checkout -b feature
+
+    dolt sql -q "insert into test values (2)"
+    dolt commit -am "inserted a value"
+    dolt checkout main
+
+    dolt sql -q "insert into test values (3)"
+    run dolt checkout feature
+
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Your local changes to the following tables would be overwritten by checkout" ]] || false
+    [[ "$output" =~ "test" ]] || false 
 }
 
 @test "checkout: dolt checkout doesn't stomp working set changes on other branch" {
