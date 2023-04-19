@@ -1282,16 +1282,18 @@ func WriteLockfile(fs filesys.Filesys, lock DBLock) error {
 		portStr = "-"
 	}
 
-	_, err := os.Create(lockFile)
-	if err != nil {
-		return err
-	}
-	err = os.Chmod(lockFile, 0600)
-	if err != nil {
-		return err
+	if filesys.LocalFS == fs {
+		_, err := os.Create(lockFile)
+		if err != nil {
+			return err
+		}
+		err = os.Chmod(lockFile, 0600)
+		if err != nil {
+			return err
+		}
 	}
 
-	err = fs.WriteFile(lockFile, []byte(fmt.Sprintf("%d:%s:%s", lock.Pid, portStr, lock.Secret)))
+	err := fs.WriteFile(lockFile, []byte(fmt.Sprintf("%d:%s:%s", lock.Pid, portStr, lock.Secret)))
 	if err != nil {
 		return err
 	}
