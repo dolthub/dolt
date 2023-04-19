@@ -282,7 +282,7 @@ func IsValidRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr en
 
 // CleanUntracked deletes untracked tables from the working root.
 // Evaluates untracked tables as: all working tables - all staged tables.
-func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dryrun bool) (doltdb.Roots, error) {
+func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dryrun bool, force bool) (doltdb.Roots, error) {
 	untrackedTables := make(map[string]struct{})
 
 	var err error
@@ -318,7 +318,7 @@ func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dr
 		toDelete = append(toDelete, t)
 	}
 
-	newRoot, err = newRoot.RemoveTables(ctx, false, false, toDelete...)
+	newRoot, err = newRoot.RemoveTables(ctx, force, force, toDelete...)
 	if err != nil {
 		return doltdb.Roots{}, fmt.Errorf("failed to remove tables; %w", err)
 	}

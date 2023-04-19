@@ -40,7 +40,7 @@ type confVals struct {
 // and returns its updated value.
 func mergeProllySecondaryIndexes(
 	ctx context.Context,
-	tm TableMerger,
+	tm *TableMerger,
 	leftSet, rightSet durable.IndexSet,
 	finalSch schema.Schema,
 	finalRows durable.Index,
@@ -76,7 +76,6 @@ func mergeProllySecondaryIndexes(
 
 	// Schema merge can introduce new constraints/uniqueness checks.
 	for _, index := range finalSch.Indexes().AllIndexes() {
-
 		left, rootOK, err := tryGetIdx(tm.leftSch, leftSet, index.Name())
 		if err != nil {
 			return nil, err

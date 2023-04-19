@@ -77,7 +77,7 @@ func (cmd StashCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd StashCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(IncludeUntrackedFlag, "u", "All untracked files (added tables) are also stashed.")
 	return ap
 }
@@ -98,11 +98,6 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	if dEnv.IsLocked() {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
-	}
-
-	if apr.NArg() > 0 {
-		usage()
-		return 1
 	}
 
 	err := stashChanges(ctx, dEnv, apr)

@@ -16,6 +16,7 @@ package enginetest
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -3714,28 +3715,217 @@ var errTmplNoAutomaticMerge = "table %s can't be automatically merged.\nTo merge
 
 var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
-		Name: "dropping columns",
+		Name: "merge conflicts",
 		AncSetUpScript: []string{
-			"CREATE table t (pk int primary key, col1 int, col2 int);",
-			"INSERT into t values (1, 10, 100), (2, 20, 200);",
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100), col3 varchar(50), " +
+				"col4 varchar(20), UNIQUE KEY unique1 (col2, pk));",
+			"INSERT into t values (1, 10, '100', '1', '11'), (2, 20, '200', '2', '22');",
+			"alter table t add index idx1 (col4, col1);",
 		},
 		RightSetUpScript: []string{
-			"alter table t drop column col1;",
-			"insert into t values (3, 300), (4, 400);",
+			"alter table t drop column col3;",
+			"update t set col1=-100, col2='-100' where pk = 1;",
 		},
 		LeftSetUpScript: []string{
-			"insert into t values (5, 50, 500), (6, 60, 600);",
+			"update t set col1=-1000 where t.pk = 1;",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "call dolt_merge('right');",
-				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x1}},
 			},
-			// desired behavior
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{{"t", uint(1)}},
+			},
+			{
+				Query: "select base_pk, base_col1, base_col2, base_col3, base_col4, " +
+					"our_pk, our_col1, our_col2, our_col4, " +
+					"their_pk, their_col1, their_col2, their_col4 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{
+						1, 10, "100", "1", "11",
+						1, -1000, "100", "11",
+						1, -100, "-100", "11",
+					},
+				},
+			},
+		},
+	},
+	{
+		Name: "unique constraint violation",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk varchar(100) primary key, col1 int, col2 varchar(100), UNIQUE KEY unique1 (col2));",
+			"INSERT into t values ('0', 0, '');",
+			"alter table t add index idx1 (pk, col2);",
+		},
+		RightSetUpScript: []string{
+			"alter table t drop column col1;",
+			"INSERT into t (pk, col2) values ('10', 'same');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values ('1', 10, 'same');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x1}},
+			},
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint(2)}},
+			},
+			{
+				Query: "select violation_type, pk, col2, violation_info from dolt_constraint_violations_t;",
+				Expected: []sql.Row{
+					{uint(2), "1", "same", types.JSONDocument{Val: merge.UniqCVMeta{Columns: []string{"col2"}, Name: "unique1"}}},
+					{uint(2), "10", "same", types.JSONDocument{Val: merge.UniqCVMeta{Columns: []string{"col2"}, Name: "unique1"}}},
+				},
+			},
+			{
+				Query: "select pk, col2 from t;",
+				Expected: []sql.Row{
+					{"0", ""},
+					{"1", "same"},
+					{"10", "same"},
+				},
+			},
+		},
+	},
+	{
+		Name: "dropping columns",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100), UNIQUE KEY unique1 (col2, pk));",
+			"INSERT into t values (1, 10, '100'), (2, 20, '200');",
+			"alter table t add index idx1 (pk, col1);",
+			"alter table t add index idx2 (pk, col1, col2);",
+			"alter table t add index idx3 (col1, col2);",
+			"alter table t add index idx4 (pk, col2);",
+			"CREATE INDEX idx5 ON t(col2(2));",
+		},
+		RightSetUpScript: []string{
+			"alter table t drop column col1;",
+			"insert into t values (3, '300'), (4, '400');",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (5, 50, '500'), (6, 60, '600');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
 			{
 				Query:    "select pk, col2 from t;",
-				Expected: []sql.Row{{1, 100}, {2, 200}, {3, 300}, {4, 400}, {5, 500}, {6, 600}},
-				Skip:     true,
+				Expected: []sql.Row{{1, "100"}, {2, "200"}, {3, "300"}, {4, "400"}, {5, "500"}, {6, "600"}},
+			},
+		},
+	},
+	{
+		Name: "renaming a column",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+			"INSERT into t values (1, 10, '100'), (2, 20, '200');",
+			"alter table t add index idx1 (pk, col1);",
+			"alter table t add index idx2 (col1, pk);",
+			"alter table t add index idx3 (pk, col1, col2);",
+			"alter table t add index idx4 (col1, col2);",
+		},
+		RightSetUpScript: []string{
+			"alter table t rename column col1 to col11;",
+			"insert into t values (3, 30, '300'), (4, 40, '400');",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (5, 50, '500'), (6, 60, '600');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, 10, "100"}, {2, 20, "200"},
+					{3, 30, "300"}, {4, 40, "400"},
+					{5, 50, "500"}, {6, 60, "600"},
+				},
+			},
+		},
+	},
+	{
+		Name: "renaming and reordering a column",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+			"INSERT into t values (1, 10, '100'), (2, 20, '200');",
+			"alter table t add index idx1 (pk, col1);",
+			"alter table t add index idx2 (col2);",
+			"alter table t add index idx3 (pk, col1, col2);",
+			"alter table t add index idx4 (col1, col2);",
+			"alter table t add index idx5 (col2, col1);",
+			"alter table t add index idx6 (col2, pk, col1);",
+			// TODO: This duplicate index causes a race condition in the merge code
+			//"alter table t add index idx7 (col2);",
+		},
+		RightSetUpScript: []string{
+			"alter table t rename column col1 to col11;",
+			"alter table t modify col11 int after col2;",
+			"insert into t values (3, '300', 30), (4, '400', 40);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (5, 50, '500'), (6, 60, '600');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query: "select pk, col11, col2 from t;",
+				Expected: []sql.Row{
+					{1, 10, "100"}, {2, 20, "200"},
+					{3, 30, "300"}, {4, 40, "400"},
+					{5, 50, "500"}, {6, 60, "600"},
+				},
+			},
+		},
+	},
+	{
+		Name: "reordering a column",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+			"INSERT into t values (1, 10, '100'), (2, 20, '200');",
+			"alter table t add index idx1 (pk, col1);",
+			"alter table t add index idx2 (col2);",
+			"alter table t add index idx3 (pk, col1, col2);",
+			"alter table t add index idx4 (col1, col2);",
+			"alter table t add index idx5 (col2, col1);",
+			"alter table t add index idx6 (col2, pk, col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify col1 int after col2;",
+			"insert into t (pk, col1, col2) values (3, 30, '300'), (4, 40, '400');",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (5, 50, '500'), (6, 60, '600');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query: "select pk, col1, col2 from t;",
+				Expected: []sql.Row{
+					{1, 10, "100"}, {2, 20, "200"},
+					{3, 30, "300"}, {4, 40, "400"},
+					{5, 50, "500"}, {6, 60, "600"}},
 			},
 		},
 	},
@@ -3744,6 +3934,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		AncSetUpScript: []string{
 			"create table t (pk int primary key, col1 int);",
 			"insert into t values (1, 1);",
+			"alter table t add index idx1 (col1, pk);",
+			"alter table t add index idx2 (col1);",
 		},
 		RightSetUpScript: []string{
 			"alter table t add column col2 int;",
@@ -3765,6 +3957,273 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "adding different columns to both sides",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1), (2);",
+			"alter table t add index idx1 (pk);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 varchar(100);",
+			"insert into t values (3, '300'), (4, '400');",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col1 int;",
+			"insert into t values (5, 50), (6, 60);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query: "select pk, col1, col2 from t;",
+				Expected: []sql.Row{
+					{1, nil, nil},
+					{2, nil, nil},
+					{3, nil, "300"},
+					{4, nil, "400"},
+					{5, 50, nil},
+					{6, 60, nil},
+				},
+			},
+		},
+	},
+	{
+		// TODO: Need another test with a different type for the same column name, and verify it's an error?
+		Name: "dropping and adding a column with the same name",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key, col1 int, col2 varchar(100));",
+			"insert into t values (1, 10, '100'), (2, 20, '200');",
+			"alter table t add index idx1 (col1, pk);",
+			"alter table t add index idx2 (col2, pk);",
+			"alter table t add index idx3 (col2, col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t drop column col1;",
+			"alter table t add column col1 int;",
+			"insert into t values (3, '300', 30), (4, '400', 40);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (5, 50, '500'), (6, 60, '600');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				// NOTE: If we can't find an exact tag mapping, then we fall back to
+				//       matching by name and exact type.
+				Query: "select pk, col1, col2 from t order by pk;",
+				Expected: []sql.Row{
+					{1, nil, "100"},
+					{2, nil, "200"},
+					{3, 30, "300"},
+					{4, 40, "400"},
+					{5, 50, "500"},
+					{6, 60, "600"},
+				},
+			},
+		},
+	},
+	{
+		Name: "removing a not-null constraint",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key, col1 int not null);",
+			"insert into t values (1, 1), (2, 2);",
+			"alter table t add index idx1 (col1, pk);",
+			"alter table t add index idx2 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify col1 int;",
+			"insert into t values (3, null);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (4, 4);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, nil},
+					{4, 4},
+				},
+			},
+		},
+	},
+	{
+		Name: "adding a foreign key to one side, with fk constraint violation",
+		AncSetUpScript: []string{
+			"create table parent (pk int primary key);",
+			"create table child (pk int primary key, p_fk int);",
+			"insert into parent values (1);",
+			"insert into child values (1, 1);",
+			"set DOLT_FORCE_TRANSACTION_COMMIT = true;",
+			"alter table child add index idx1 (p_fk, pk);",
+		},
+		RightSetUpScript: []string{
+			"alter table child add constraint fk_parent foreign key (p_fk) references parent(pk);",
+			"alter table child add column col1 int after pk;",
+		},
+		LeftSetUpScript: []string{
+			"insert into child values (2, 2);",
+			"update child set p_fk = 3 where pk = 1;",
+			"alter table child add column col2 varchar(100) after pk;",
+			"update child set col2 = '1col2' where pk = 1;",
+			"update child set col2 = '2col2' where pk = 2;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select pk, p_fk, col1, col2 from child order by pk;",
+				Expected: []sql.Row{{1, 3, nil, "1col2"}, {2, 2, nil, "2col2"}},
+			},
+			{
+				Query:    "select pk, p_fk, col1, col2 from dolt_constraint_violations_child order by pk;",
+				Expected: []sql.Row{{1, 3, nil, "1col2"}, {2, 2, nil, "2col2"}},
+			},
+		},
+	},
+	{
+		Name: "dropping a foreign key",
+		AncSetUpScript: []string{
+			"create table parent (pk int primary key);",
+			"create table child (pk int primary key, p_fk int, CONSTRAINT parent_fk FOREIGN KEY (p_fk) REFERENCES parent (pk));",
+			"insert into parent values (1);",
+			"insert into child values (1, 1);",
+		},
+		RightSetUpScript: []string{
+			"alter table child drop constraint parent_fk;",
+			"delete from parent;",
+		},
+		LeftSetUpScript: []string{
+			"insert into child values (2, 1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select * from parent;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from child;",
+				Expected: []sql.Row{{1, 1}, {2, 1}},
+			},
+		},
+	},
+	{
+		Name: "adding a unique key, with unique key violation",
+		AncSetUpScript: []string{
+			"create table t (pk int, col1 int);",
+			"insert into t values (1, 1);",
+			"set DOLT_FORCE_TRANSACTION_COMMIT = 1;",
+		},
+		RightSetUpScript: []string{
+			"alter table t add unique (col1);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (2, 1);",
+			"insert into t values (3, 1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select pk, col1 from t;",
+				Expected: []sql.Row{{1, 1}, {2, 1}, {3, 1}},
+			},
+			{
+				Query:    "select pk, col1 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{1, 1}, {2, 1}, {3, 1}},
+			},
+		},
+	},
+	{
+		Name: "dropping a unique key",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key, col1 int UNIQUE);",
+			"insert into t values (1, 1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t drop col1;",
+			"alter table t add col1 int;",
+			"update t set col1 = 1 where pk = 1;",
+			"insert into t values (2, 1);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (3, 3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1}, {2, 1}, {3, 3}},
+			},
+		},
+	},
+
+	// Smarter merge conflict detection
+	{
+		// This merge tests reports a conflict on pk=1, because the tuple value is different on the left side, right
+		// side, and base. The value is the base is (10, '100'), on the right is nil, and on the left is ('100'),
+		// because the data migration for the schema change happens before the diff iterator is invoked.
+		// This should NOT be a conflict for a user – Dolt should not conflate the schema merge data migration with
+		// a real data conflict created by a user. Allowing this is still better than completely blocking all schema
+		// merges though, so we can live with this while we continue iterating and fine tuning schema merge logic.
+		Name: "schema change combined with drop row",
+		AncSetUpScript: []string{
+			"SET autocommit = 0",
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100), UNIQUE KEY unique1 (col2, pk));",
+			"INSERT into t values (1, 10, '100'), (2, 20, '200');",
+			"alter table t add index idx1 (pk, col1);",
+			"alter table t add index idx2 (pk, col1, col2);",
+			"alter table t add index idx3 (col1, col2);",
+			"alter table t add index idx4 (pk, col2);",
+			"CREATE INDEX idx5 ON t(col2(2));",
+		},
+		RightSetUpScript: []string{
+			"alter table t drop column col1;",
+			"insert into t values (3, '300'), (4, '400');",
+			"delete from t where pk = 1;",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (5, 50, '500'), (6, 60, '600');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// See the comment above about why this should NOT report a conflict and why this is skipped
+				Skip:     true,
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Skip:     true,
+				Query:    "select pk, col2 from t;",
+				Expected: []sql.Row{{2, "200"}, {3, "300"}, {4, "400"}, {5, "500"}, {6, "600"}},
+			},
+		},
+	},
+
+	// Unsupported automatic merge cases
+	{
 		Name: "adding a non-null column to one side",
 		AncSetUpScript: []string{
 			"create table t (pk int primary key, col1 int);",
@@ -3785,76 +4244,9 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
 			},
 			{
+				Skip:     true,
 				Query:    "select * from t;",
 				Expected: []sql.Row{{1, 1, 1, nil}, {2, 2, 2, nil}, {3, 3, 0, nil}},
-				Skip:     true,
-			},
-		},
-	},
-	{
-		Name: "adding different columns to both sides",
-		AncSetUpScript: []string{
-			"create table t (pk int primary key);",
-			"insert into t values (1), (2);",
-		},
-		RightSetUpScript: []string{
-			"alter table t add column col2 int;",
-			"insert into t values (3, 300), (4, 400);",
-		},
-		LeftSetUpScript: []string{
-			"alter table t add column col1 int;",
-			"insert into t values (5, 50), (6, 60);",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:          "call dolt_merge('right');",
-				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
-			},
-			{
-				Query: "select pk, col1, col2 from t;",
-				Expected: []sql.Row{
-					{1, nil, nil},
-					{2, nil, nil},
-					{3, nil, 300},
-					{4, nil, 400},
-					{5, 50, nil},
-					{6, 60, nil},
-				},
-				Skip: true,
-			},
-		},
-	},
-	{
-		Name: "re-ordering columns",
-		AncSetUpScript: []string{
-			"create table t (pk int primary key, col1 int, col2 int);",
-			"insert into t values (1, 10, 100), (2, 20, 200);",
-		},
-		RightSetUpScript: []string{
-			"alter table t drop column col1;",
-			"alter table t add column col1 int;",
-			"insert into t values (3, 300, 30), (40, 400, 40);",
-		},
-		LeftSetUpScript: []string{
-			"insert into t values (5, 50, 500), (6, 60, 600);",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:          "call dolt_merge('right');",
-				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
-			},
-			// desired behavior
-			{
-				Query: "select pk, col1, col2 form t;",
-				Expected: []sql.Row{
-					{1, nil, 100},
-					{2, nil, 200},
-					{3, 30, 300},
-					{4, 40, 400},
-					{5, 50, 500},
-					{6, 60, 600},
-				},
-				Skip: true,
 			},
 		},
 	},
@@ -3943,6 +4335,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
 			},
 			{
+				Skip:  true,
 				Query: "select pk, col1 from t;",
 				Expected: []sql.Row{
 					{1, 9999},
@@ -3952,7 +4345,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 					{5, 9999},
 					{6, 9999},
 				},
-				Skip: true,
 			},
 		},
 	},
@@ -3977,151 +4369,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 	{
-		Name: "removing a not-null constraint from one side should not trigger an error",
-		AncSetUpScript: []string{
-			"create table t (pk int primary key, col1 int not null);",
-			"insert into t values (1, 1), (2, 2);",
-		},
-		RightSetUpScript: []string{
-			"alter table t modify col1 int;",
-			"insert into t values (3, null);",
-		},
-		LeftSetUpScript: []string{
-			"insert into t values (4, 4);",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0}},
-			},
-			{
-				Query: "select * from t;",
-				Expected: []sql.Row{
-					{1, 1},
-					{2, 2},
-					{3, nil},
-					{4, 4},
-				},
-			},
-		},
-	},
-	{
-		Name: "adding a foreign key to one side is allowed. Constraint violation gets thrown if violated across the merge.",
-		AncSetUpScript: []string{
-			"create table parent (pk int primary key);",
-			"create table child (pk int primary key, p_fk int);",
-			"insert into parent values (1);",
-			"insert into child values (1, 1);",
-			"set DOLT_FORCE_TRANSACTION_COMMIT = true;",
-		},
-		RightSetUpScript: []string{
-			"alter table child add constraint fk_parent foreign key (p_fk) references parent(pk);",
-		},
-		LeftSetUpScript: []string{
-			"insert into child values (2, 2);",
-			"update child set p_fk = 3 where pk = 1;",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 1}},
-			},
-			{
-				Query:    "select * from child order by pk;",
-				Expected: []sql.Row{{1, 3}, {2, 2}},
-			},
-			{
-				Query:    "select pk, p_fk from dolt_constraint_violations_child order by pk;",
-				Expected: []sql.Row{{1, 3}, {2, 2}},
-			},
-		},
-	},
-	{
-		Name: "dropping a foreign key is allowed",
-		AncSetUpScript: []string{
-			"create table parent (pk int primary key);",
-			"create table child (pk int primary key, p_fk int, CONSTRAINT parent_fk FOREIGN KEY (p_fk) REFERENCES parent (pk));",
-			"insert into parent values (1);",
-			"insert into child values (1, 1);",
-		},
-		RightSetUpScript: []string{
-			"alter table child drop constraint parent_fk;",
-			"delete from parent;",
-		},
-		LeftSetUpScript: []string{
-			"insert into child values (2, 1);",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0}},
-			},
-			{
-				Query:    "select * from parent;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "select * from child;",
-				Expected: []sql.Row{{1, 1}, {2, 1}},
-			},
-		},
-	},
-	{
-		Name: "adding a unique key to one side is allowed. Unique key violation gets thrown if violated across the merge.",
-		AncSetUpScript: []string{
-			"create table t (pk int, col1 int);",
-			"insert into t values (1, 1);",
-			"set DOLT_FORCE_TRANSACTION_COMMIT = 1;",
-		},
-		RightSetUpScript: []string{
-			"alter table t add unique (col1);",
-		},
-		LeftSetUpScript: []string{
-			"insert into t values (2, 1);",
-			"insert into t values (3, 1);",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 1}},
-			},
-			{
-				Query:    "select pk, col1 from t;",
-				Expected: []sql.Row{{1, 1}, {2, 1}, {3, 1}},
-			},
-			{
-				Query:    "select pk, col1 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{1, 1}, {2, 1}, {3, 1}},
-			},
-		},
-	},
-	{
-		Name: "dropping a unique key is allowed",
-		AncSetUpScript: []string{
-			"create table t (pk int primary key, col1 int UNIQUE);",
-			"insert into t values (1, 1);",
-		},
-		RightSetUpScript: []string{
-			"alter table t drop col1;",
-			"alter table t add col1 int;",
-			"update t set col1 = 1 where pk = 1;",
-			"insert into t values (2, 1);",
-		},
-		LeftSetUpScript: []string{
-			"insert into t values (3, 3);",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0}},
-			},
-			{
-				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 1}, {2, 1}, {3, 3}},
-			},
-		},
-	},
-	{
 		// It would make sense if we table-scanned for check constraints during merge
 		// and flagged failing constraints as violations in `dolt_constraint_violations`.
 		Name: "adding a check-constraint should abort the merge.",
@@ -4138,9 +4385,9 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Skip:           true,
 				Query:          "call dolt_merge('right');",
 				ExpectedErrStr: "some schema error",
-				Skip:           true,
 			},
 		},
 	},
@@ -4166,40 +4413,66 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	},
 }
 
-func convertMergeScriptTest(mst MergeScriptTest) queries.ScriptTest {
-	n := 5 + len(mst.AncSetUpScript) + len(mst.RightSetUpScript) + len(mst.LeftSetUpScript)
-	setupScript := make([]string, n)
+// convertMergeScriptTest converts a MergeScriptTest into a standard ScriptTest. If flipSides is true, then the
+// left and right setup is swapped (i.e. left setup is done on right branch and right setup is done on main branch).
+// This enables us to test merges in both directions, since the merge code is asymmetric and some code paths currently
+// only run on the left side of the merge.
+func convertMergeScriptTest(mst MergeScriptTest, flipSides bool) queries.ScriptTest {
+	setupScript := make([]string, 100)
 
-	o := 0
-	for i, s := range mst.AncSetUpScript {
-		setupScript[o+i] = s
-	}
-	o += len(mst.AncSetUpScript)
-	setupScript[o] = "CALL DOLT_COMMIT('-Am', 'ancestor commit');"
-	setupScript[o+1] = "CALL DOLT_CHECKOUT('-b', 'right');"
-	o += 2
+	// Ancestor setup
+	setupScript = append(setupScript, mst.AncSetUpScript...)
+	setupScript = append(setupScript, "CALL DOLT_COMMIT('-Am', 'ancestor commit');")
+	setupScript = append(setupScript, "CALL DOLT_BRANCH('right');")
 
-	for i, s := range mst.RightSetUpScript {
-		setupScript[o+i] = s
+	// Right-side setup
+	if flipSides {
+		setupScript = append(setupScript, "CALL DOLT_CHECKOUT('main');")
+	} else {
+		setupScript = append(setupScript, "CALL DOLT_CHECKOUT('right');")
 	}
-	o += len(mst.RightSetUpScript)
-	setupScript[o] = "CALL DOLT_COMMIT('-Am', 'right commit');"
-	setupScript[o+1] = "CALL DOLT_CHECKOUT('main');"
-	o += 2
+	setupScript = append(setupScript, mst.RightSetUpScript...)
+	setupScript = append(setupScript, "CALL DOLT_COMMIT('-Am', 'right commit');")
 
-	for i, s := range mst.LeftSetUpScript {
-		setupScript[o+i] = s
+	// Left-side setup
+	if flipSides {
+		setupScript = append(setupScript, "CALL DOLT_CHECKOUT('right');")
+	} else {
+		setupScript = append(setupScript, "CALL DOLT_CHECKOUT('main');")
 	}
-	o += len(mst.LeftSetUpScript)
-	setupScript[o] = "CALL DOLT_COMMIT('-Am', 'left commit');"
+	setupScript = append(setupScript, mst.LeftSetUpScript...)
+	setupScript = append(setupScript, "CALL DOLT_COMMIT('-Am', 'left commit');")
+
+	// Always run the tests with the main branch checked out
+	if flipSides {
+		setupScript = append(setupScript, "CALL DOLT_CHECKOUT('main');")
+	}
+
+	// Any assertions referencing our_ or their_ need to be flipped
+	assertions := make([]queries.ScriptTestAssertion, len(mst.Assertions))
+	copy(assertions, mst.Assertions)
+	if flipSides {
+		for i, assertion := range assertions {
+			assertions[i].Query = flipStatement(assertion.Query)
+		}
+	}
 
 	return queries.ScriptTest{
 		Name:         mst.Name,
 		SetUpScript:  setupScript,
-		Assertions:   mst.Assertions,
+		Assertions:   assertions,
 		Query:        mst.Query,
 		Expected:     mst.Expected,
 		ExpectedErr:  mst.ExpectedErr,
 		SkipPrepared: mst.SkipPrepared,
 	}
+}
+
+// flipStatement replaces "our_" with "their_" and vice versa in the given query |s| so that the
+// query can be re-used to test a merge in the opposite direction.
+func flipStatement(s string) string {
+	newS := strings.ReplaceAll(s, "our_", "temp_")
+	newS = strings.ReplaceAll(newS, "their_", "our_")
+	newS = strings.ReplaceAll(newS, "temp_", "their_")
+	return newS
 }

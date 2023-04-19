@@ -41,10 +41,26 @@ func GetMutableSecondaryIdxs(ctx context.Context, sch schema.Schema, indexes dur
 	return mods, nil
 }
 
-// GetMutableSecondaryIdxsWithPending returns a MutableSecondaryIdx for each secondary index in |indexes|.
+// GetMutableSecondaryIdxsWithPending returns a MutableSecondaryIdx for each secondary index in |indexes|. If an index
+// is listed in the given |sch|, but does not exist in the given |indexes|, then it is skipped. This is useful when
+// merging a schema that has a new index, but the index does not exist on the index set being modified.
 func GetMutableSecondaryIdxsWithPending(ctx context.Context, sch schema.Schema, indexes durable.IndexSet, pendingSize int) ([]MutableSecondaryIdx, error) {
-	mods := make([]MutableSecondaryIdx, sch.Indexes().Count())
-	for i, index := range sch.Indexes().AllIndexes() {
+	mods := make([]MutableSecondaryIdx, 0, sch.Indexes().Count())
+	for _, index := range sch.Indexes().AllIndexes() {
+
+		// If an index isn't found on the left side, we know it must be a new index added on the right side,
+		// so just skip it, and we'll rebuild the full index at the end of merging when we notice it's missing.
+		// TODO: GetMutableSecondaryIdxs should get this same treatment, or we should have a flag that
+		//       allows skipping over missing indexes. Seems like we could refactor this code to remove
+		//       the duplication.
+		hasIndex, err := indexes.HasIndex(ctx, index.Name())
+		if err != nil {
+			return nil, err
+		}
+		if !hasIndex {
+			continue
+		}
+
 		idx, err := indexes.GetIndex(ctx, sch, index.Name())
 		if err != nil {
 			return nil, err
@@ -53,8 +69,9 @@ func GetMutableSecondaryIdxsWithPending(ctx context.Context, sch schema.Schema, 
 		if schema.IsKeyless(sch) {
 			m = prolly.ConvertToSecondaryKeylessIndex(m)
 		}
-		mods[i] = NewMutableSecondaryIdx(m, sch, index)
-		mods[i].mut = mods[i].mut.WithMaxPending(pendingSize)
+		newMutableSecondaryIdx := NewMutableSecondaryIdx(m, sch, index)
+		newMutableSecondaryIdx.mut = newMutableSecondaryIdx.mut.WithMaxPending(pendingSize)
+		mods = append(mods, newMutableSecondaryIdx)
 	}
 	return mods, nil
 }

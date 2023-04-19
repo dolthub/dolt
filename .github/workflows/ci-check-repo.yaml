@@ -3,6 +3,8 @@ name: Check Formatting, Committers and Generated Code
 on:
   pull_request:
     branches: [ main ]
+  pull_request_target:
+    types: [opened, edited, reopened]
 
 concurrency:
   group: ci-check-repo-${{ github.event.pull_request.number || github.ref }}
@@ -12,6 +14,8 @@ jobs:
   verify:
     name: Verify format and committers
     runs-on: ubuntu-22.04
+    outputs:
+      format: ${{ steps.should_format.outputs.format }}
     steps:
       - name: Setup Go 1.x
         uses: actions/setup-go@v3
@@ -21,16 +25,23 @@ jobs:
         with:
           submodules: true
       - name: Check all
+        id: should_format
         working-directory: ./go
         # Keep this in sync with //go/utils/prepr/prepr.sh.
         run: |
           GOFLAGS="-mod=readonly" go build ./...
           go vet -mod=readonly ./...
           go run -mod=readonly ./utils/copyrightshdrs/
-          ./utils/repofmt/check_fmt.sh
           ./Godeps/verify.sh
           ./utils/repofmt/check_bats_fmt.sh
           ./utils/repofmt/check_prepared_tests.sh
+          
+          if ./utils/repofmt/check_fmt.sh ; then
+            echo "code is formatted"
+          else
+            echo "code is not formatted"
+            echo "format=true" >> $GITHUB_OUTPUT
+          fi
         env:
           BRANCH_NAME: ${{ github.head_ref }}
           CHANGE_TARGET: ${{ github.base_ref }}
@@ -62,3 +73,45 @@ jobs:
              echo "$diff"
              exit 1
           fi
+  format:
+    needs: verify
+    if: ${{ needs.verify.outputs.format == 'true' }}
+    name: Format PR
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v3
+        with:
+          go-version: ^1.19
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run go mod tidy
+        run: go mod tidy
+        working-directory: ./go
+      - name: Install goimports
+        run: go install golang.org/x/tools/cmd/goimports@latest
+      - name: Format repo and update licenses
+        working-directory: ./go
+        run: |
+          ./utils/repofmt/format_repo.sh
+          ./Godeps/update.sh
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+          CHANGE_TARGET: ${{ github.base_ref }}
+      - name: Changes detected
+        id: detect-changes
+        run: |
+          changes=$(git status --porcelain)
+          if [ ! -z "$changes" ]; then
+             echo "has-changes=true" >> $GITHUB_OUTPUT
+          fi
+      - uses: EndBug/add-and-commit@v9.1.1
+        if: ${{ steps.detect-changes.outputs.has-changes == 'true' }}
+        with:
+          message: "[ga-format-pr] Run go/utils/repofmt/format_repo.sh and go/Godeps/update.sh"
+          add: "."
+          cwd: "."
+          pull: "--ff"

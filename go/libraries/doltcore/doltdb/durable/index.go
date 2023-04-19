@@ -60,6 +60,9 @@ type IndexSet interface {
 	// GetIndex gets an index from the set.
 	GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error)
 
+	// HasIndex returns true if an index with the specified name exists in the set.
+	HasIndex(ctx context.Context, name string) (bool, error)
+
 	// PutIndex puts an index into the set.
 	PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error)
 
@@ -377,6 +380,15 @@ func (s nomsIndexSet) HashOf() (hash.Hash, error) {
 	return s.indexes.Hash(s.vrw.Format())
 }
 
+// HasIndex implements IndexSet.
+func (s nomsIndexSet) HasIndex(ctx context.Context, name string) (bool, error) {
+	_, ok, err := s.indexes.MaybeGet(ctx, types.String(name))
+	if err != nil {
+		return false, err
+	}
+	return ok, nil
+}
+
 // GetIndex implements IndexSet.
 func (s nomsIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error) {
 	v, ok, err := s.indexes.MaybeGet(ctx, types.String(name))
@@ -457,6 +469,17 @@ var _ IndexSet = doltDevIndexSet{}
 
 func (is doltDevIndexSet) HashOf() (hash.Hash, error) {
 	return is.am.HashOf(), nil
+}
+
+func (is doltDevIndexSet) HasIndex(ctx context.Context, name string) (bool, error) {
+	addr, err := is.am.Get(ctx, name)
+	if err != nil {
+		return false, err
+	}
+	if addr.IsEmpty() {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (is doltDevIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error) {

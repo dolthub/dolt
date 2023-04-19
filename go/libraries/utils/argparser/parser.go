@@ -49,18 +49,40 @@ func ValidatorFromStrList(paramName string, validStrList []string) ValidationFun
 }
 
 type ArgParser struct {
-	Supported         []*Option
-	nameOrAbbrevToOpt map[string]*Option
-	ArgListHelp       [][2]string
+	Name                 string
+	MaxArgs              int
+	TooManyArgsErrorFunc func(receivedArgs []string) error
+	Supported            []*Option
+	nameOrAbbrevToOpt    map[string]*Option
+	ArgListHelp          [][2]string
 }
 
-func NewArgParser() *ArgParser {
+// NewArgParserWithMaxArgs creates a new ArgParser for a named command that limits how many positional arguments it
+// will accept. If additional arguments are provided, parsing will return an error with a detailed error message,
+// using the provided command name.
+func NewArgParserWithMaxArgs(name string, maxArgs int) *ArgParser {
+	tooManyArgsErrorGenerator := func(receivedArgs []string) error {
+		args := strings.Join(receivedArgs, ", ")
+		if maxArgs == 0 {
+			return fmt.Errorf("error: %s does not take positional arguments, but found %d: %s", name, len(receivedArgs), args)
+		}
+		return fmt.Errorf("error: %s has too many positional arguments. Expected at most %d, found %d: %s", name, maxArgs, len(receivedArgs), args)
+	}
 	var supported []*Option
 	nameOrAbbrevToOpt := make(map[string]*Option)
 	return &ArgParser{
-		Supported:         supported,
-		nameOrAbbrevToOpt: nameOrAbbrevToOpt,
+		Name:                 name,
+		MaxArgs:              maxArgs,
+		TooManyArgsErrorFunc: tooManyArgsErrorGenerator,
+		Supported:            supported,
+		nameOrAbbrevToOpt:    nameOrAbbrevToOpt,
 	}
+}
+
+// NewArgParserWithVariableArgs creates a new ArgParser for a named command
+// that accepts any number of positional arguments.
+func NewArgParserWithVariableArgs(name string) *ArgParser {
+	return NewArgParserWithMaxArgs(name, -1)
 }
 
 // SupportOption adds support for a new argument with the option given. Options must have a unique name and abbreviated name.
@@ -336,6 +358,10 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 
 	if i < len(args) {
 		copy(list, args[i:])
+	}
+
+	if ap.MaxArgs != -1 && len(list) > ap.MaxArgs {
+		return nil, ap.TooManyArgsErrorFunc(list)
 	}
 
 	return &ArgParseResults{results, list, ap}, nil
