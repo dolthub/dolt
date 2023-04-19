@@ -53,6 +53,63 @@ SQL
     [[ "$output" =~ "modified" ]] || false
 }
 
+@test "checkout: dolt checkout takes working set changes with you on new table" {
+    dolt sql <<SQL
+create table test(a int primary key);
+insert into test values (1);
+SQL
+    dolt add . && dolt commit -am "Initial table with one row"
+    dolt branch feature
+
+    dolt sql -q "create table t2(b int primary key)"
+    dolt sql -q "insert into t2 values (1);"
+
+    dolt checkout feature
+
+    run dolt sql -q "select count(*) from t2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
+    dolt status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new table" ]] || false
+
+    dolt checkout main
+
+    run dolt sql -q "select count(*) from t2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new table" ]] || false
+
+    # Now check the table into main and make additoinal changes
+    dolt add . && dolt commit -m "new table"
+    dolt sql -q "insert into t2 values (2);"
+
+    dolt checkout feature
+
+    run dolt sql -q "select count(*) from t2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "modified" ]] || false
+
+    dolt checkout main
+
+    run dolt sql -q "select count(*) from t2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "modified" ]] || false    
+}
+
 @test "checkout: checkout would overwrite local changes" {
     dolt sql <<SQL
 create table test(a int primary key);

@@ -1389,6 +1389,8 @@ SQL
     dolt add . && dolt commit -m "new tables"
     dolt sql -q "ALTER TABLE child2 ADD CONSTRAINT fk_v2 FOREIGN KEY (v1) REFERENCES parent2(v1);"
 
+    dolt checkout other
+    
     run dolt schema show child2
     [ "$status" -eq "0" ]
     [[ "$output" =~ "fk_v2" ]] || false
@@ -1397,7 +1399,24 @@ SQL
     
     run dolt schema show child2
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "fk_v2" ]] || false    
+    [[ "$output" =~ "fk_v2" ]] || false
+
+    # Removing a foreign key constraint
+    dolt reset --hard
+    dolt sql -q "alter table child drop constraint fk_v1"
+
+    dolt checkout other
+
+    dolt schema show child
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ ! "$output" =~ "fk_v1" ]] || false
+
+    dolt checkout main
+    
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ ! "$output" =~ "fk_v1" ]] || false
 }
 
 @test "foreign-keys: non-overlapping changes in working set and target branch during checkout" {
