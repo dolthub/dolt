@@ -161,6 +161,22 @@ func (fk ForeignKey) HashOf() hash.Hash {
 	return hash.Of(bb.Bytes())
 }
 
+// CombinedHash returns a combined hash value for all foreign keys in the slice provided. 
+// An empty slice has a zero hash.
+func CombinedHash(fks []ForeignKey) hash.Hash {
+	if len(fks) == 0 {
+		return hash.Hash{}
+	}
+	
+	var bb bytes.Buffer
+	for _, fk := range fks {
+		h := fk.HashOf()
+		bb.Write(h[:])
+	}
+
+	return hash.Of(bb.Bytes())
+}
+
 // IsSelfReferential returns whether the table declaring the foreign key is also referenced by the foreign key.
 func (fk ForeignKey) IsSelfReferential() bool {
 	return strings.ToLower(fk.TableName) == strings.ToLower(fk.ReferencedTableName)

@@ -1366,7 +1366,7 @@ SQL
     [[ "$output" =~ "fk_v1" ]] || false
 }
 
-@test "foreign-keys: conflict on checkout" {
+@test "foreign-keys: non-overlapping changes in working set and target branch during checkout " {
     dolt add . && dolt commit -m "added parent and child tables"
 
     dolt checkout -b other
@@ -1390,8 +1390,6 @@ SQL
     dolt checkout main
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);"
 
-    skip "conflict on any foreign key change on destination branch"
-    
     run dolt checkout other
     [ "$status" -eq "0" ]
 
@@ -1402,6 +1400,40 @@ SQL
     run dolt schema show child
     [ "$status" -eq "0" ]
     [[ "$output" =~ "fk_v2" ]] || false
+}
+
+@test "foreign-keys: conflict during checkout " {
+    dolt add . && dolt commit -m "added parent and child tables"
+
+    dolt checkout -b other
+    dolt sql <<SQL
+CREATE TABLE parent2 (
+    id int PRIMARY KEY,
+    v1 int,
+    v2 int,
+    INDEX v1 (v1),
+    INDEX v2 (v2)
+);
+CREATE TABLE child2 (
+    id int primary key,
+    v1 int,
+    v2 int
+);
+SQL
+    dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_v2 FOREIGN KEY (v2) REFERENCES parent2(v2);"
+    dolt commit -Am "added a FK constraint"
+
+    dolt checkout main
+    dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);"
+
+    run dolt checkout other
+    [ "$status" -ne "0" ]
+    [[ "$output" =~ "Your local changes to the following tables would be overwritten by checkout" ]] || false
+    [[ "$output" =~ "test" ]] || false
+
+    run dolt status
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "main" ]] || false
 }
 
 @test "foreign-keys: extended names supported" {

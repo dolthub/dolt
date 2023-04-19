@@ -660,6 +660,11 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot *dolt
 
 // moveForeignKeys returns the foreign key collection that should be used for the new working set.
 func moveForeignKeys(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.RootValue, force bool) (*doltdb.ForeignKeyCollection, error) {
+	oldFks, err := oldRoot.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	newFks, err := newRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -670,21 +675,16 @@ func moveForeignKeys(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.
 		return nil, err
 	}
 
-	oldFks, err := oldRoot.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-	
-	newHash, err := newFks.HashOf(ctx, newRoot.VRW())
-	if err != nil {
-		return nil, err
-	}
-
 	oldHash, err := oldFks.HashOf(ctx, oldRoot.VRW())
 	if err != nil {
 		return nil, err
 	}
 
+	newHash, err := newFks.HashOf(ctx, newRoot.VRW())
+	if err != nil {
+		return nil, err
+	}
+	
 	changedHash, err := changedFks.HashOf(ctx, changedRoot.VRW())
 	if err != nil {
 		return nil, err
@@ -696,11 +696,88 @@ func moveForeignKeys(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.
 		return changedFks, nil
 	} else if newHash == changedHash {
 		return oldFks, nil
-	} else if force {
-		return newFks, nil
 	} else {
-		return nil, ErrCheckoutWouldOverwrite{[]string{"foreign keys"}}
+		// Both roots have modified the foreign keys. We need to do more work to merge them together into a new foreign 
+		// key collection.
+		return mergeForeignKeyChanges(ctx, oldFks, newRoot, newFks, changedRoot, changedFks, force)
 	}
+}
+
+// mergeForeignKeyChanges merges the foreign key changes from the old and changed roots into a new foreign key 
+// collection, or returns an error if the changes are incompatible. Changes are incompatible if the changed root 
+// and new root both altered foreign keys on the same table.
+func mergeForeignKeyChanges(
+		ctx context.Context,
+		oldFks *doltdb.ForeignKeyCollection,
+		newRoot *doltdb.RootValue,
+		newFks *doltdb.ForeignKeyCollection,
+		changedRoot *doltdb.RootValue,
+		changedFks *doltdb.ForeignKeyCollection,
+		force bool,
+) (*doltdb.ForeignKeyCollection, error) {
+	resultMap := make(map[string][]doltdb.ForeignKey)
+
+	conflicts := set.NewEmptyStrSet()
+	tblNames, err := newRoot.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, tblName := range tblNames {
+		oldFksForTable, _ := oldFks.KeysForTable(tblName)
+		newFksForTable, _ := newFks.KeysForTable(tblName)
+		changedFksForTable, _ := changedFks.KeysForTable(tblName)
+
+		oldHash := doltdb.CombinedHash(oldFksForTable)
+		newHash := doltdb.CombinedHash(newFksForTable)
+		changedHash := doltdb.CombinedHash(changedFksForTable)
+		
+		if oldHash == changedHash {
+			resultMap[tblName] = append(resultMap[tblName], newFksForTable...)
+		} else if oldHash == newHash {
+			resultMap[tblName] = append(resultMap[tblName], changedFksForTable...)
+		} else if newHash == changedHash {
+			resultMap[tblName] = append(resultMap[tblName], oldFksForTable...)
+		} else if force {
+			resultMap[tblName] = append(resultMap[tblName], newFksForTable...)
+		} else {
+			conflicts.Add(tblName)
+		}
+	}
+	
+	tblNames, err = changedRoot.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, tblName := range tblNames {
+		if _, exists := resultMap[tblName]; !exists {
+			oldKeys, _ := oldFks.KeysForTable(tblName)
+			oldHash := doltdb.CombinedHash(oldKeys)
+
+			changedKeys, _ := changedFks.KeysForTable(tblName)
+			changedHash := doltdb.CombinedHash(changedKeys)
+
+			if oldHash == emptyHash {
+				resultMap[tblName] = append(resultMap[tblName], changedKeys...)
+			} else if force {
+				resultMap[tblName] = append(resultMap[tblName], oldKeys...)
+			} else if oldHash != changedHash {
+				conflicts.Add(tblName)
+			}
+		}
+	}
+
+	if conflicts.Size() > 0 {
+		return nil, ErrCheckoutWouldOverwrite{conflicts.AsSlice()}
+	}
+	
+	fks := make([]doltdb.ForeignKey, 0)
+	for _, v := range resultMap {
+		fks = append(fks, v...)
+	}
+	
+	return doltdb.NewForeignKeyCollection(fks...)
 }
 
 // writeTableHashes writes new table hash values for the root given and returns it.
