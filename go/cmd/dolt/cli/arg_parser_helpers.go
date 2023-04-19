@@ -136,7 +136,7 @@ var branchForceFlagDesc = "Reset {{.LessThan}}branchname{{.GreaterThan}} to {{.L
 
 // CreateCommitArgParser creates the argparser shared dolt commit cli and DOLT_COMMIT.
 func CreateCommitArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs("commit", 0)
 	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
 	ap.SupportsFlag(AllowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
 	ap.SupportsString(DateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
@@ -149,14 +149,17 @@ func CreateCommitArgParser() *argparser.ArgParser {
 }
 
 func CreateConflictsResolveArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs("conflicts resolve")
 	ap.SupportsFlag(OursFlag, "", "For all conflicts, take the version from our branch and resolve the conflict")
 	ap.SupportsFlag(TheirsFlag, "", "For all conflicts, take the version from their branch and resolve the conflict")
 	return ap
 }
 
 func CreateMergeArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs("merge", 1)
+	ap.TooManyArgsError = func(receivedArgs []string) error {
+		return fmt.Errorf("Error: Dolt does not support merging from multiple commits. You probably meant to checkout one and then merge from the other.")
+	}
 	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
 	ap.SupportsFlag(SquashParam, "", "Merge changes to the working set without updating the commit history")
 	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
@@ -170,21 +173,21 @@ func CreateMergeArgParser() *argparser.ArgParser {
 }
 
 func CreatePushArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs("push", 2)
 	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} and other commands.")
 	ap.SupportsFlag(ForceFlag, "f", "Update the remote with local history, overwriting any conflicting history in the remote.")
 	return ap
 }
 
 func CreateAddArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs("add")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."})
 	ap.SupportsFlag(AllFlag, "A", "Stages any and all changes (adds, deletes, and modifications).")
 	return ap
 }
 
 func CreateCloneArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs("clone", 2)
 	ap.SupportsString(RemoteParam, "", "name", "Name of the remote to be added to the cloned database. The default is 'origin'.")
 	ap.SupportsString(BranchParam, "b", "branch", "The branch to be cloned. If not specified all branches will be cloned.")
 	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
@@ -198,14 +201,14 @@ func CreateCloneArgParser() *argparser.ArgParser {
 }
 
 func CreateResetArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs("reset")
 	ap.SupportsFlag(HardResetParam, "", "Resets the working tables and staged tables. Any changes to tracked tables in the working tree since {{.LessThan}}commit{{.GreaterThan}} are discarded.")
 	ap.SupportsFlag(SoftResetParam, "", "Does not touch the working tables, but removes all tables staged to be committed.")
 	return ap
 }
 
 func CreateRemoteArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs("remote")
 	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
 	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
@@ -214,13 +217,13 @@ func CreateRemoteArgParser() *argparser.ArgParser {
 }
 
 func CreateCleanArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs("clean")
 	ap.SupportsFlag(DryRunFlag, "", "Tests removing untracked tables without modifying the working set.")
 	return ap
 }
 
 func CreateCheckoutArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs("checkout")
 	ap.SupportsString(CheckoutCoBranch, "", "branch", "Create a new branch named {{.LessThan}}new_branch{{.GreaterThan}} and start it at {{.LessThan}}start_point{{.GreaterThan}}.")
 	ap.SupportsFlag(ForceFlag, "f", "If there is any changes in working set, the force flag will wipe out the current changes and checkout the new branch.")
 	ap.SupportsString(TrackFlag, "t", "", "When creating a new branch, set up 'upstream' configuration.")
@@ -228,18 +231,21 @@ func CreateCheckoutArgParser() *argparser.ArgParser {
 }
 
 func CreateCherryPickArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs("cherrypick", 1)
+	ap.TooManyArgsError = func(receivedArgs []string) error {
+		return fmt.Errorf("cherry-picking multiple commits is not supported yet.")
+	}
 	return ap
 }
 
 func CreateFetchArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs("fetch")
 	ap.SupportsString(UserParam, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
 	return ap
 }
 
 func CreateRevertArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs("revert")
 	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"revision",
 		"The commit revisions. If multiple revisions are given, they're applied in the order given."})
@@ -248,7 +254,7 @@ func CreateRevertArgParser() *argparser.ArgParser {
 }
 
 func CreatePullArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs("pull", 2)
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"remote", "The name of the remote to pull from."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"remoteBranch", "The name of a branch on the specified remote to be merged into the current working set."})
 	ap.SupportsFlag(SquashParam, "", "Merge changes to the working set without updating the commit history")
@@ -262,7 +268,7 @@ func CreatePullArgParser() *argparser.ArgParser {
 }
 
 func CreateBranchArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs("branch")
 	ap.SupportsFlag(ForceFlag, "f", branchForceFlagDesc)
 	ap.SupportsFlag(CopyFlag, "c", "Create a copy of a branch.")
 	ap.SupportsFlag(MoveFlag, "m", "Move/rename a branch")
@@ -274,7 +280,7 @@ func CreateBranchArgParser() *argparser.ArgParser {
 }
 
 func CreateTagArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs("tag")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"ref", "A commit ref that the tag should point at."})
 	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the tag message.")
 	ap.SupportsFlag(VerboseFlag, "v", "list tags along with their metadata.")
@@ -284,7 +290,7 @@ func CreateTagArgParser() *argparser.ArgParser {
 }
 
 func CreateBackupArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs("backup")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"region", "cloud provider region associated with this backup."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds-type", "credential type.  Valid options are role, env, and file.  See the help section for additional details."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"profile", "AWS profile to use."})
@@ -296,8 +302,8 @@ func CreateBackupArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func CreateVerifyConstraintsArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+func CreateVerifyConstraintsArgParser(name string) *argparser.ArgParser {
+	ap := argparser.NewArgParserWithVariableArgs(name)
 	ap.SupportsFlag(AllFlag, "a", "Verifies that all rows in the database do not violate constraints instead of just rows modified or inserted in the working set.")
 	ap.SupportsFlag(OutputOnlyFlag, "o", "Disables writing violated constraints to the constraint violations table.")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table(s) to check constraints on. If omitted, checks all tables."})
@@ -305,7 +311,7 @@ func CreateVerifyConstraintsArgParser() *argparser.ArgParser {
 }
 
 func CreateLogArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs("log")
 	ap.SupportsInt(NumberFlag, "n", "num_commits", "Limit the number of commits to output.")
 	ap.SupportsInt(MinParentsFlag, "", "parent_count", "The minimum number of parents a commit must have to be included in the log.")
 	ap.SupportsFlag(MergesFlag, "", "Equivalent to min-parents == 2, this will limit the log to commits with 2 or more parents.")
@@ -317,7 +323,7 @@ func CreateLogArgParser() *argparser.ArgParser {
 }
 
 func CreateGCArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs("gc", 0)
 	ap.SupportsFlag(ShallowFlag, "s", "perform a fast, but incomplete garbage collection pass")
 	return ap
 }

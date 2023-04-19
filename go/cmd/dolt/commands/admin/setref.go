@@ -50,7 +50,7 @@ func (cmd SetRefCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd SetRefCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsOptionalString("branch", "", "branch name", "the branch ref to set")
 	ap.SupportsOptionalString("remote-name", "", "remote name", "the remote name, e.g. origin, of the remote ref to set")
 	ap.SupportsOptionalString("remote-branch", "", "remote branch name", "the remote branch name of the remote ref set")

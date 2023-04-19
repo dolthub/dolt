@@ -49,15 +49,31 @@ func ValidatorFromStrList(paramName string, validStrList []string) ValidationFun
 }
 
 type ArgParser struct {
+	Name              string
+	MaxArgs           int
+	TooManyArgsError  func(receivedArgs []string) error
 	Supported         []*Option
 	nameOrAbbrevToOpt map[string]*Option
 	ArgListHelp       [][2]string
 }
 
-func NewArgParser() *ArgParser {
+func NewArgParserWithVariableArgs(name string) *ArgParser {
+	return NewArgParserWithMaxArgs(name, -1)
+}
+
+func NewArgParserWithMaxArgs(name string, maxArgs int) *ArgParser {
+	tooManyArgsErrorGenerator := func(receivedArgs []string) error {
+		args := strings.Join(receivedArgs, ", ")
+		if maxArgs == 0 {
+			return fmt.Errorf("error: %s does not take positional arguments, but found %d: %s", name, len(receivedArgs), args)
+		}
+		return fmt.Errorf("error: %s has too many positional arguments. Expected at most %d, found %d: %s", name, maxArgs, len(receivedArgs), args)
+	}
 	var supported []*Option
 	nameOrAbbrevToOpt := make(map[string]*Option)
 	return &ArgParser{
+		MaxArgs:           maxArgs,
+		TooManyArgsError:  tooManyArgsErrorGenerator,
 		Supported:         supported,
 		nameOrAbbrevToOpt: nameOrAbbrevToOpt,
 	}
@@ -336,6 +352,10 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 
 	if i < len(args) {
 		copy(list, args[i:])
+	}
+
+	if ap.MaxArgs != -1 && len(list) > ap.MaxArgs {
+		return nil, ap.TooManyArgsError(list)
 	}
 
 	return &ArgParseResults{results, list, ap}, nil

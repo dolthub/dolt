@@ -128,9 +128,13 @@ func (cmd SqlServerCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
+	return cmd.ArgParserWithName(cmd.Name())
+}
+
+func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
 	serverConfig := DefaultServerConfig()
 
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs(name)
 	ap.SupportsString(configFileFlag, "", "file", "When provided configuration is taken from the yaml config file and all command line parameters are ignored.")
 	ap.SupportsString(hostFlag, "H", "host address", fmt.Sprintf("Defines the host address that the server will run on. Defaults to `%v`.", serverConfig.Host()))
 	ap.SupportsUint(portFlag, "P", "port", fmt.Sprintf("Defines the port that the server will run on. Defaults to `%v`.", serverConfig.Port()))
@@ -181,6 +185,10 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 }
 
 func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
+	if apr.NArg() > 0 {
+		args := strings.Join(apr.Args, ", ")
+		return fmt.Errorf("error: sql-server does not take positional arguments, but found %d: %s", apr.NArg(), args)
+	}
 	_, multiDbDir := apr.GetValue(commands.MultiDBDirFlag)
 	if multiDbDir {
 		cli.PrintErrln("WARNING: --multi-db-dir is deprecated, use --data-dir instead")

@@ -139,8 +139,7 @@ force_delete_main_branch_on_sqlserver() {
     make_it
     start_sql_server "dolt_repo_$$"
 
-    dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT \
-      -q "SET @@GLOBAL.dolt_repo_$$_default_branch = 'this_branch_does_not_exist'" ""
+    dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "SET @@GLOBAL.dolt_repo_$$_default_branch = 'this_branch_does_not_exist'"
 
     # We are able to use a database branch revision in the connection string
     dolt sql-client --use-db "dolt_repo_$$/main" -u dolt -P $PORT -q "SELECT * FROM test;"
@@ -171,7 +170,7 @@ force_delete_main_branch_on_sqlserver() {
     dolt branch -c to_keep to_checkout
     start_sql_server "dolt_repo_$$"
 
-    dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "SET @@GLOBAL.dolt_repo_$$_default_branch = 'to_keep'" ""
+    dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT -q "SET @@GLOBAL.dolt_repo_$$_default_branch = 'to_keep'"
 
     force_delete_main_branch_on_sqlserver
 
