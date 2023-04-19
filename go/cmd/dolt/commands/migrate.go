@@ -64,7 +64,7 @@ func (cmd MigrateCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd MigrateCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(migrateDropConflictsFlag, "", "Drop any conflicts visited during the migration")
 	return ap
 }

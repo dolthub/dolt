@@ -64,7 +64,7 @@ func (cmd VerifyConstraintsCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd VerifyConstraintsCmd) ArgParser() *argparser.ArgParser {
-	return cli.CreateVerifyConstraintsArgParser()
+	return cli.CreateVerifyConstraintsArgParser(cmd.Name())
 }
 
 func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {

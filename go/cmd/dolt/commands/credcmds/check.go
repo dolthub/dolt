@@ -71,7 +71,7 @@ func (cmd CheckCmd) EventType() eventsapi.ClientEventType {
 }
 
 func (cmd CheckCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsString("endpoint", "", "", "API endpoint, otherwise taken from config.")
 	ap.SupportsString("creds", "", "", "Public Key ID or Public Key for credentials, otherwise taken from config.")
 	return ap
