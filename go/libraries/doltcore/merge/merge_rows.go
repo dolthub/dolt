@@ -35,7 +35,8 @@ import (
 )
 
 type MergeOpts struct {
-	IsCherryPick bool
+	IsCherryPick        bool
+	KeepSchemaConflicts bool
 }
 
 type TableMerger struct {
@@ -105,9 +106,14 @@ func NewMerger(
 	}, nil
 }
 
+type MergedTable struct {
+	table    *doltdb.Table
+	conflict SchemaConflict
+}
+
 // MergeTable merges schema and table data for the table tblName.
 // TODO: this code will loop infinitely when merging certain schema changes
-func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*doltdb.Table, *MergeStats, error) {
+func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*MergedTable, *MergeStats, error) {
 	tm, err := rm.makeTableMerger(ctx, tblName)
 	if err != nil {
 		return nil, nil, err
@@ -116,7 +122,7 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	// short-circuit here if we can
 	finished, stats, err := rm.maybeShortCircuit(ctx, tm, mergeOpts)
 	if finished != nil || stats != nil || err != nil {
-		return finished, stats, err
+		return &MergedTable{table: finished}, stats, err
 	}
 
 	if mergeOpts.IsCherryPick && !schema.SchemasAreEqual(tm.leftSch, tm.rightSch) {
@@ -126,9 +132,17 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	mergeSch, schConflicts, err := SchemaMerge(ctx, tm.vrw.Format(), tm.leftSch, tm.rightSch, tm.ancSch, tblName)
 	if err != nil {
 		return nil, nil, err
-	} else if schConflicts.Count() > 0 {
+	}
+	if schConflicts.Count() > 0 {
+		if !mergeOpts.KeepSchemaConflicts {
+			return nil, nil, schConflicts
+		}
 		// handle schema conflicts above
-		return nil, nil, schConflicts
+		mt := &MergedTable{
+			table:    tm.leftTbl,
+			conflict: schConflicts,
+		}
+		return mt, &MergeStats{}, nil
 	}
 
 	if types.IsFormat_DOLT(tm.vrw.Format()) {
@@ -165,7 +179,7 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 		if err != nil {
 			return nil, nil, err
 		}
-		return mergeTbl, stats, nil
+		return &MergedTable{table: mergeTbl}, stats, nil
 	}
 
 	// If any indexes were added during the merge, then we need to generate their row data to add to our updated table.
@@ -225,7 +239,7 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 		return nil, nil, err
 	}
 
-	return resultTbl, stats, nil
+	return &MergedTable{table: resultTbl}, stats, nil
 }
 
 func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (TableMerger, error) {

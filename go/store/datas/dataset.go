@@ -260,7 +260,7 @@ func (ms *MergeState) UnmergableTables(ctx context.Context, vr types.ValueReader
 	if vr.Format().UsesFlatbuffers() {
 		return ms.unmergableTables, nil
 	}
-	return nil, errors.New("schema conflicts only supported for fmt __DOLT__")
+	return nil, nil
 }
 
 type dsHead interface {

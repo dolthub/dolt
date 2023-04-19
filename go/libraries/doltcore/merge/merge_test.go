@@ -58,14 +58,6 @@ var colColl = schema.NewColCollection(
 )
 var sch = schema.MustSchemaFromCols(colColl)
 
-var indexSchema schema.Index
-var compositeIndexSchema schema.Index
-
-func init() {
-	indexSchema, _ = sch.Indexes().AddIndexByColTags("idx_col1", []uint64{col1Tag}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
-	compositeIndexSchema, _ = sch.Indexes().AddIndexByColTags("idx_col1_col2", []uint64{col1Tag, col2Tag}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
-}
-
 type rowV struct {
 	col1, col2 int
 }
@@ -329,10 +321,10 @@ func TestMergeCommits(t *testing.T) {
 	expected, err = expected.SetArtifacts(context.Background(), durable.ArtifactIndexFromProllyMap(expectedArtifacts))
 	require.NoError(t, err)
 
-	mergedRows, err := merged.GetRowData(context.Background())
+	mergedRows, err := merged.table.GetRowData(context.Background())
 	assert.NoError(t, err)
 
-	artIdx, err := merged.GetArtifacts(context.Background())
+	artIdx, err := merged.table.GetArtifacts(context.Background())
 	require.NoError(t, err)
 	artifacts := durable.ProllyMapFromArtifactIndex(artIdx)
 	MustEqualArtifactMap(t, expectedArtifacts, artifacts)
@@ -340,14 +332,14 @@ func TestMergeCommits(t *testing.T) {
 	MustEqualProlly(t, tableName, durable.ProllyMapFromIndex(expectedRows), durable.ProllyMapFromIndex(mergedRows))
 
 	for _, index := range sch.Indexes().AllIndexes() {
-		mergedIndexRows, err := merged.GetIndexRowData(context.Background(), index.Name())
+		mergedIndexRows, err := merged.table.GetIndexRowData(context.Background(), index.Name())
 		require.NoError(t, err)
 		expectedIndexRows, err := expected.GetIndexRowData(context.Background(), index.Name())
 		require.NoError(t, err)
 		MustEqualProlly(t, index.Name(), durable.ProllyMapFromIndex(expectedIndexRows), durable.ProllyMapFromIndex(mergedIndexRows))
 	}
 
-	h, err := merged.HashOf()
+	h, err := merged.table.HashOf()
 	require.NoError(t, err)
 	eh, err := expected.HashOf()
 	require.NoError(t, err)
@@ -385,9 +377,9 @@ func TestNomsMergeCommits(t *testing.T) {
 	expected, err = expected.SetConflicts(context.Background(), conflictSchema, durable.ConflictIndexFromNomsMap(expectedConflicts, vrw))
 	assert.NoError(t, err)
 
-	mergedRows, err := merged.GetNomsRowData(context.Background())
+	mergedRows, err := merged.table.GetNomsRowData(context.Background())
 	assert.NoError(t, err)
-	_, confIdx, err := merged.GetConflicts(context.Background())
+	_, confIdx, err := merged.table.GetConflicts(context.Background())
 	assert.NoError(t, err)
 	conflicts := durable.NomsMapFromConflictIndex(confIdx)
 
@@ -399,7 +391,7 @@ func TestNomsMergeCommits(t *testing.T) {
 	}
 
 	for _, index := range sch.Indexes().AllIndexes() {
-		mergedIndexRows, err := merged.GetNomsIndexRowData(context.Background(), index.Name())
+		mergedIndexRows, err := merged.table.GetNomsIndexRowData(context.Background(), index.Name())
 		assert.NoError(t, err)
 		expectedIndexRows, err := expected.GetNomsIndexRowData(context.Background(), index.Name())
 		assert.NoError(t, err)
@@ -410,7 +402,7 @@ func TestNomsMergeCommits(t *testing.T) {
 			mustString(types.EncodedValue(context.Background(), mergedIndexRows)))
 	}
 
-	h, err := merged.HashOf()
+	h, err := merged.table.HashOf()
 	assert.NoError(t, err)
 	eh, err := expected.HashOf()
 	assert.NoError(t, err)

@@ -38,6 +38,17 @@ const (
 	DeletedCheckCollision
 )
 
+func SchemaConflictErr(cc ...SchemaConflict) error {
+	var sb strings.Builder
+	sb.WriteString("merge aborted: schema conflict found for tables: \n")
+	for i := range cc {
+		sb.WriteRune('\t')
+		sb.WriteString(cc[i].TableName)
+		sb.WriteRune('\n')
+	}
+	return errors.New(sb.String())
+}
+
 type SchemaConflict struct {
 	TableName    string
 	ColConflicts []ColConflict
@@ -52,7 +63,6 @@ func (sc SchemaConflict) Count() int {
 }
 
 func (sc SchemaConflict) Error() string {
-
 	var b strings.Builder
 	b.WriteString("merge aborted: schema conflict found for table ")
 	b.WriteString(sc.TableName)

@@ -64,13 +64,30 @@ func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit, opts 
 	if err != nil {
 		return nil, err
 	}
-	return MergeRoots(ctx, ourRoot, theirRoot, ancRoot, mergeCommit, ancCommit, opts, MergeOpts{IsCherryPick: false})
+
+	mo := MergeOpts{
+		IsCherryPick:        false,
+		KeepSchemaConflicts: true,
+	}
+	return MergeRoots(ctx, ourRoot, theirRoot, ancRoot, mergeCommit, ancCommit, opts, mo)
 }
 
 type Result struct {
 	Root            *doltdb.RootValue
-	SchemaConflicts []string
+	SchemaConflicts []SchemaConflict
 	Stats           map[string]*MergeStats
+}
+
+func (r Result) HasSchemaConflicts() bool {
+	return len(r.SchemaConflicts) > 0
+}
+
+func SchemaConflictTableNames(sc []SchemaConflict) (tables []string) {
+	tables = make([]string, len(sc))
+	for i := range sc {
+		tables[i] = sc[i].TableName
+	}
+	return
 }
 
 // MergeRoots three-way merges |ourRoot|, |theirRoot|, and |ancRoot| and returns
@@ -93,10 +110,15 @@ func MergeRoots(
 	opts editor.Options,
 	mergeOpts MergeOpts,
 ) (*Result, error) {
-	var conflictStash *conflictStash
-	var violationStash *violationStash
-	var err error
-	if !types.IsFormat_DOLT(ourRoot.VRW().Format()) {
+	var (
+		conflictStash  *conflictStash
+		violationStash *violationStash
+		nbf            *types.NomsBinFormat
+		err            error
+	)
+
+	nbf = ourRoot.VRW().Format()
+	if !types.IsFormat_DOLT(nbf) {
 		ourRoot, conflictStash, err = stashConflicts(ctx, ourRoot)
 		if err != nil {
 			return nil, err
@@ -134,19 +156,25 @@ func MergeRoots(
 		return nil, err
 	}
 
-	var schConflictTables []string
+	var schConflicts []SchemaConflict
 	for _, tblName := range tblNames {
 		mergedTable, stats, err := merger.MergeTable(ctx, tblName, opts, mergeOpts)
-
-		schConflictTables, err = filterSchemaConflicts(schConflictTables, err)
 		if err != nil {
 			return nil, err
+		}
+		if mergedTable.conflict.Count() > 0 {
+			if types.IsFormat_DOLT(nbf) {
+				schConflicts = append(schConflicts, mergedTable.conflict)
+			} else {
+				// return schema conflict as error
+				return nil, mergedTable.conflict
+			}
 		}
 
 		if mergedTable != nil {
 			tblToStats[tblName] = stats
 
-			mergedRoot, err = mergedRoot.PutTable(ctx, tblName, mergedTable)
+			mergedRoot, err = mergedRoot.PutTable(ctx, tblName, mergedTable.table)
 			if err != nil {
 				return nil, err
 			}
@@ -207,7 +235,7 @@ func MergeRoots(
 
 		return &Result{
 			Root:            mergedRoot,
-			SchemaConflicts: schConflictTables,
+			SchemaConflicts: schConflicts,
 			Stats:           tblToStats,
 		}, nil
 	}
@@ -234,17 +262,9 @@ func MergeRoots(
 
 	return &Result{
 		Root:            mergedRoot,
-		SchemaConflicts: schConflictTables,
+		SchemaConflicts: schConflicts,
 		Stats:           tblToStats,
 	}, nil
-}
-
-func filterSchemaConflicts(conflicts []string, err error) ([]string, error) {
-	if sc, ok := err.(SchemaConflict); ok {
-		conflicts = append(conflicts, sc.TableName)
-		err = nil
-	}
-	return conflicts, err
 }
 
 // mergeCVsWithStash merges the table constraint violations in |stash| with |root|.

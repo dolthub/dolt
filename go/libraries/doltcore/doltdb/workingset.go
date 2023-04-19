@@ -32,10 +32,8 @@ type MergeState struct {
 	// the source commit
 	commit *Commit
 	// the spec string that was used to specify |commit|
-	commitSpecStr   string
-	preMergeWorking *RootValue
-
-	sourceCommit     hash.Hash
+	commitSpecStr    string
+	preMergeWorking  *RootValue
 	unmergableTables []string
 }
 
@@ -82,15 +80,11 @@ func (m MergeState) HasSchemaConflicts() bool {
 	return len(m.unmergableTables) > 0
 }
 
-func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb SchemaConflictFn) error {
+func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb SchemaConflictFn) (err error) {
 	var to, from *RootValue
 
 	to = m.preMergeWorking
-	rcm, err := ddb.ReadCommit(ctx, m.sourceCommit)
-	if err != nil {
-		return err
-	}
-	if from, err = rcm.GetRootValue(ctx); err != nil {
+	if from, err = m.commit.GetRootValue(ctx); err != nil {
 		return err
 	}
 
@@ -173,6 +167,11 @@ func (ws WorkingSet) WithWorkingRoot(workingRoot *RootValue) *WorkingSet {
 
 func (ws WorkingSet) WithMergeState(mergeState *MergeState) *WorkingSet {
 	ws.mergeState = mergeState
+	return &ws
+}
+
+func (ws WorkingSet) WithUnmergableTables(tables []string) *WorkingSet {
+	ws.mergeState.unmergableTables = tables
 	return &ws
 }
 
@@ -372,7 +371,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 			return types.Ref{}, types.Ref{}, nil, err
 		}
 
-		mergeState, err = datas.NewMergeState(ctx, db.vrw, preMergeWorking, dCommit, ws.mergeState.commitSpecStr)
+		mergeState, err = datas.NewMergeState(ctx, db.vrw, preMergeWorking, dCommit, ws.mergeState.commitSpecStr, ws.mergeState.unmergableTables)
 		if err != nil {
 			return types.Ref{}, types.Ref{}, nil, err
 		}

@@ -195,12 +195,20 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 	return serial.FinishMessage(builder, serial.WorkingSetEnd(builder), []byte(serial.WorkingSetFileID))
 }
 
-func NewMergeState(ctx context.Context, vrw types.ValueReadWriter, preMergeWorking types.Ref, commit *Commit, commitSpecStr string) (*MergeState, error) {
+func NewMergeState(
+	ctx context.Context,
+	vrw types.ValueReadWriter,
+	preMergeWorking types.Ref,
+	commit *Commit,
+	commitSpecStr string,
+	unmergableTables []string,
+) (*MergeState, error) {
 	if vrw.Format().UsesFlatbuffers() {
 		ms := &MergeState{
 			preMergeWorkingAddr: new(hash.Hash),
 			fromCommitAddr:      new(hash.Hash),
 			fromCommitSpec:      commitSpecStr,
+			unmergableTables:    unmergableTables,
 		}
 		*ms.preMergeWorkingAddr = preMergeWorking.TargetHash()
 		*ms.fromCommitAddr = commit.Addr()

@@ -116,15 +116,14 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 
 func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
 	mergedRoot, err := spec.MergeC.GetRootValue(ctx)
-
 	if err != nil {
 		return nil, ErrFailedToReadDatabase
 	}
+	result := &Result{Root: mergedRoot, Stats: make(map[string]*MergeStats)}
 
-	tblToStats := make(map[string]*MergeStats)
-	err = mergedRootToWorking(ctx, false, dEnv, mergedRoot, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr, tblToStats)
+	err = mergedRootToWorking(ctx, false, dEnv, result, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr)
 
-	return tblToStats, err
+	return result.Stats, err
 }
 
 func applyChanges(ctx context.Context, root *doltdb.RootValue, workingDiffs map[string]hash.Hash) (*doltdb.RootValue, error) {
@@ -193,7 +192,7 @@ func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[
 		return result.Stats, err
 	}
 
-	err = mergedRootToWorking(ctx, spec.Squash, dEnv, result.Root, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr, result.Stats)
+	err = mergedRootToWorking(ctx, spec.Squash, dEnv, result, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr)
 	if err != nil {
 		return nil, err
 	}
@@ -205,17 +204,16 @@ func mergedRootToWorking(
 	ctx context.Context,
 	squash bool,
 	dEnv *env.DoltEnv,
-	mergedRoot *doltdb.RootValue,
+	result *Result,
 	workingDiffs map[string]hash.Hash,
 	cm2 *doltdb.Commit,
 	cm2SpecStr string,
-	tblToStats map[string]*MergeStats,
 ) error {
 	var err error
 
-	workingRoot := mergedRoot
+	workingRoot := result.Root
 	if len(workingDiffs) > 0 {
-		workingRoot, err = applyChanges(ctx, mergedRoot, workingDiffs)
+		workingRoot, err = applyChanges(ctx, result.Root, workingDiffs)
 
 		if err != nil {
 			return err
@@ -224,10 +222,10 @@ func mergedRootToWorking(
 
 	if !squash {
 		err = dEnv.StartMerge(ctx, cm2, cm2SpecStr)
-
 		if err != nil {
 			return actions.ErrFailedToSaveRepoState
 		}
+		// todo: update merge state with schema conflicts
 	}
 
 	err = dEnv.UpdateWorkingRoot(context.Background(), workingRoot)
@@ -235,12 +233,12 @@ func mergedRootToWorking(
 		return err
 	}
 
-	conflicts, constraintViolations := conflictsAndViolations(tblToStats)
+	conflicts, constraintViolations := conflictsAndViolations(result.Stats)
 	if len(conflicts) > 0 || len(constraintViolations) > 0 {
 		return err
 	}
 
-	return dEnv.UpdateStagedRoot(context.Background(), mergedRoot)
+	return dEnv.UpdateStagedRoot(context.Background(), result.Root)
 }
 
 // conflictsAndViolations returns array of conflicts and constraintViolations
