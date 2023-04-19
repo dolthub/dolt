@@ -57,10 +57,9 @@ type ArgParser struct {
 	ArgListHelp          [][2]string
 }
 
-func NewArgParserWithVariableArgs(name string) *ArgParser {
-	return NewArgParserWithMaxArgs(name, -1)
-}
-
+// NewArgParserWithMaxArgs creates a new ArgParser for a named command that limits how many positional arguments it
+// will accept. If additional arguments are provided, parsing will return an error with a detailed error message,
+// using the provided command name.
 func NewArgParserWithMaxArgs(name string, maxArgs int) *ArgParser {
 	tooManyArgsErrorGenerator := func(receivedArgs []string) error {
 		args := strings.Join(receivedArgs, ", ")
@@ -77,6 +76,12 @@ func NewArgParserWithMaxArgs(name string, maxArgs int) *ArgParser {
 		Supported:         supported,
 		nameOrAbbrevToOpt: nameOrAbbrevToOpt,
 	}
+}
+
+// NewArgParserWithVariableArgs creates a new ArgParser for a named command
+// that accepts any number of positional arguments.
+func NewArgParserWithVariableArgs(name string) *ArgParser {
+	return NewArgParserWithMaxArgs(name, -1)
 }
 
 // SupportOption adds support for a new argument with the option given. Options must have a unique name and abbreviated name.
