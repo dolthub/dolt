@@ -73,10 +73,6 @@ func init() {
 	}
 }
 
-type projected interface {
-	Project() []string
-}
-
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
 	tableName    string
@@ -123,7 +119,7 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 // LockedToRoot returns a version of this table with its root value locked to the given value. The table's values will
 // not change as the session's root value changes. Appropriate for AS OF queries, or other use cases where the table's
 // values should not change throughout execution of a session.
-func (t DoltTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (*DoltTable, error) {
+func (t *DoltTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (*DoltTable, error) {
 	tbl, ok, err := root.GetTable(ctx, t.tableName)
 	if err != nil {
 		return nil, err
@@ -175,18 +171,14 @@ type doltReadOnlyTableInterface interface {
 }
 
 var _ doltReadOnlyTableInterface = (*DoltTable)(nil)
-
-// projected tables disabled for now.  Looks like some work needs to be done in the analyzer as there are cases
-// where the projected columns do not contain every column needed.  Seed this with natural and other joins.  There
-// may be other cases.
-//var _ sql.ProjectedTable = (*DoltTable)(nil)
+var _ sql.ProjectedTable = (*DoltTable)(nil)
 
 // IndexedAccess implements sql.IndexAddressableTable
 func (t *DoltTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	return NewIndexedDoltTable(t, lookup.Index.(index.DoltIndex))
 }
 
-// doltTable returns the underlying doltTable from the current session
+// DoltTable returns the underlying doltTable from the current session
 func (t *DoltTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
 	root, err := t.workingRoot(ctx)
 	if err != nil {
@@ -889,27 +881,27 @@ func (t *DoltTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKey
 }
 
 // CreateIndexForForeignKey implements sql.ForeignKeyTable
-func (t DoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
+func (t *DoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
 	return fmt.Errorf("no foreign key operations on a read-only table")
 }
 
 // AddForeignKey implements sql.ForeignKeyTable
-func (t DoltTable) AddForeignKey(ctx *sql.Context, fk sql.ForeignKeyConstraint) error {
+func (t *DoltTable) AddForeignKey(ctx *sql.Context, fk sql.ForeignKeyConstraint) error {
 	return fmt.Errorf("no foreign key operations on a read-only table")
 }
 
 // DropForeignKey implements sql.ForeignKeyTable
-func (t DoltTable) DropForeignKey(ctx *sql.Context, fkName string) error {
+func (t *DoltTable) DropForeignKey(ctx *sql.Context, fkName string) error {
 	return fmt.Errorf("no foreign key operations on a read-only table")
 }
 
 // UpdateForeignKey implements sql.ForeignKeyTable
-func (t DoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, fk sql.ForeignKeyConstraint) error {
+func (t *DoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, fk sql.ForeignKeyConstraint) error {
 	return fmt.Errorf("no foreign key operations on a read-only table")
 }
 
 // GetForeignKeyEditor implements sql.ForeignKeyTable
-func (t DoltTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
+func (t *DoltTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
 	return nil
 }
 
