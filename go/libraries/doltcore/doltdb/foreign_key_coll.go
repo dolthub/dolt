@@ -167,7 +167,7 @@ func CombinedHash(fks []ForeignKey) hash.Hash {
 	if len(fks) == 0 {
 		return hash.Hash{}
 	}
-	
+
 	var bb bytes.Buffer
 	for _, fk := range fks {
 		h := fk.HashOf()
@@ -299,7 +299,7 @@ func (fkc *ForeignKeyCollection) HashOf(ctx context.Context, vrw types.ValueRead
 	if err != nil {
 		return hash.Hash{}, err
 	}
-	
+
 	return serialized.Hash(vrw.Format())
 }
 

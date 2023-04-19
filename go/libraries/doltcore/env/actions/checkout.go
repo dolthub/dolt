@@ -237,12 +237,12 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 }
 
 func transferWorkingChanges(
-		ctx context.Context,
-		dEnv *env.DoltEnv,
-		initialRoots doltdb.Roots,
-		branchHead *doltdb.RootValue,
-		branchRef ref.BranchRef,
-		force bool,
+	ctx context.Context,
+	dEnv *env.DoltEnv,
+	initialRoots doltdb.Roots,
+	branchHead *doltdb.RootValue,
+	branchRef ref.BranchRef,
+	force bool,
 ) error {
 	newRoots, err := rootsForBranch(ctx, initialRoots, branchHead, force)
 	if err != nil {
@@ -280,11 +280,11 @@ func transferWorkingChanges(
 
 // cleanOldWorkingSet resets the source branch's working set to the branch head, leaving the source branch unchanged
 func cleanOldWorkingSet(
-		ctx context.Context,
-		dEnv *env.DoltEnv,
-		initialRoots doltdb.Roots,
-		initialHeadRef ref.DoltRef,
-		initialWs *doltdb.WorkingSet,
+	ctx context.Context,
+	dEnv *env.DoltEnv,
+	initialRoots doltdb.Roots,
+	initialHeadRef ref.DoltRef,
+	initialWs *doltdb.WorkingSet,
 ) error {
 	// reset the source branch's working set to the branch head, leaving the source branch unchanged
 	err := ResetHard(ctx, dEnv, "", initialRoots, initialHeadRef, initialWs)
@@ -466,23 +466,23 @@ func moveForeignKeys(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.
 	} else if newHash == changedHash {
 		return oldFks, nil
 	} else {
-		// Both roots have modified the foreign keys. We need to do more work to merge them together into a new foreign 
+		// Both roots have modified the foreign keys. We need to do more work to merge them together into a new foreign
 		// key collection.
 		return mergeForeignKeyChanges(ctx, oldFks, newRoot, newFks, changedRoot, changedFks, force)
 	}
 }
 
-// mergeForeignKeyChanges merges the foreign key changes from the old and changed roots into a new foreign key 
-// collection, or returns an error if the changes are incompatible. Changes are incompatible if the changed root 
+// mergeForeignKeyChanges merges the foreign key changes from the old and changed roots into a new foreign key
+// collection, or returns an error if the changes are incompatible. Changes are incompatible if the changed root
 // and new root both altered foreign keys on the same table.
 func mergeForeignKeyChanges(
-		ctx context.Context,
-		oldFks *doltdb.ForeignKeyCollection,
-		newRoot *doltdb.RootValue,
-		newFks *doltdb.ForeignKeyCollection,
-		changedRoot *doltdb.RootValue,
-		changedFks *doltdb.ForeignKeyCollection,
-		force bool,
+	ctx context.Context,
+	oldFks *doltdb.ForeignKeyCollection,
+	newRoot *doltdb.RootValue,
+	newFks *doltdb.ForeignKeyCollection,
+	changedRoot *doltdb.RootValue,
+	changedFks *doltdb.ForeignKeyCollection,
+	force bool,
 ) (*doltdb.ForeignKeyCollection, error) {
 	fksByTable := make(map[string][]doltdb.ForeignKey)
 
@@ -633,4 +633,3 @@ func rootHasUncommittedChanges(roots doltdb.Roots) (hasChanges bool, workingHash
 	hasChanges = workingHash != stagedHash || stagedHash != headHash
 	return hasChanges, workingHash, stagedHash, nil
 }
-
