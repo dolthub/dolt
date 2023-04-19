@@ -243,7 +243,7 @@ SQL
     # check that dolt_commit throws an error when there are no changes to commit
     run dolt sql-client -P $PORT -u dolt --no-auto-commit -q "CALL DOLT_COMMIT('-a', '-m', 'Commit1')"
     [ $status -ne 0 ]
-    [[ "$output" =~ "nothing to commit" ]] || false 
+    [[ "$output" =~ "nothing to commit" ]] || false
 
     run dolt ls
     [ "$status" -eq 0 ]
@@ -1076,6 +1076,7 @@ END""")
 
     # Make sure the sql-server lock file is set for a newly created database
     [[ -f "$PWD/test1/.dolt/sql-server.lock" ]] || false
+    [[ $(stat -f "%Lp" "$PWD/test1/.dolt/sql-server.lock") == "600" ]] || false
 
     dolt sql-client -P $PORT -u dolt --use-db 'test1' -q "create table a(x int)"
     dolt sql-client -P $PORT -u dolt --use-db 'test1' -q "call dolt_add('.')"
@@ -1446,6 +1447,14 @@ databases:
     [ "$status" -eq 1 ]
 }
 
+@test "sql-server: sql-server sets permissions on sql-server.lock" {
+    cd repo1
+    ! [[ -f "$PWD/.dolt/sql-server.lock" ]] || false
+    start_sql_server
+    [[ -f "$PWD/.dolt/sql-server.lock" ]] || false
+    [[ $(stat -f "%Lp" "$PWD/.dolt/sql-server.lock") == "600" ]] || false
+}
+
 @test "sql-server: multi dir sql-server locks out children" {
     start_sql_server
     cd repo2
@@ -1470,6 +1479,7 @@ databases:
 
     # Make sure the sql-server lock file is set for the new database
     [[ -f "$PWD/newdb/.dolt/sql-server.lock" ]] || false
+    [[ $(stat -f "%Lp" "$PWD/newdb/.dolt/sql-server.lock") == "600" ]] || false
 
     # Verify that we can't start a sql-server from the new database dir
     cd newdb
