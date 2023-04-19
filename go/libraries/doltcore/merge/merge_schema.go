@@ -300,9 +300,6 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColColle
 	if err != nil {
 		return nil, nil, err
 	}
-	if conflicts != nil {
-		return nil, conflicts, nil
-	}
 
 	// After we've checked for schema conflicts, merge the columns together
 	var mergedColumns []schema.Column
