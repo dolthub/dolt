@@ -64,6 +64,7 @@ SQL
     dolt sql -q "create table t2(b int primary key)"
     dolt sql -q "insert into t2 values (1);"
 
+    # This is fine for an untracked table, takes it to the new branch with you
     dolt checkout feature
 
     run dolt sql -q "select count(*) from t2"
@@ -85,29 +86,16 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table" ]] || false
 
-    # Now check the table into main and make additoinal changes
+    # Now check the table into main and make additonal changes
     dolt add . && dolt commit -m "new table"
     dolt sql -q "insert into t2 values (2);"
 
-    dolt checkout feature
-
-    run dolt sql -q "select count(*) from t2"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "2" ]] || false
-
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "modified" ]] || false
-
-    dolt checkout main
-
-    run dolt sql -q "select count(*) from t2"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "2" ]] || false
-
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "modified" ]] || false    
+    # This is an error, matching git (cannot check out a branch that lacks a
+    # file you have modified)
+    run dolt checkout feature
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Your local changes to the following tables would be overwritten by checkout" ]] || false
+    [[ "$output" =~ "t2" ]] || false 
 }
 
 @test "checkout: checkout would overwrite local changes" {
