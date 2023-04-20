@@ -40,6 +40,11 @@ jobs:
             echo "code is formatted"
           else
             echo "code is not formatted"
+            if [ "${{ github.repository }}" != "dolthub/dolt" ]; then
+              echo "Pull requests from forks must be manually formatted."
+              echo "Please run dolt/go/utils/repofmt/format_repo.sh to format this pull request."
+              exit 1;
+            fi
             echo "format=true" >> $GITHUB_OUTPUT
           fi
         env:
