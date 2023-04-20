@@ -309,9 +309,14 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColColle
 		anc := mapping.anc
 
 		switch {
-		case ours == nil && theirs != nil:
+		case anc == nil && ours == nil && theirs != nil:
+			// if an ancestor does not exist, and the column exists only on one side, use that side
+			// (if an ancestor DOES exist, this means the column was deleted, so it's a no-op)
 			mergedColumns = append(mergedColumns, *theirs)
-		case ours != nil && theirs == nil:
+		case anc == nil && ours != nil && theirs == nil:
+			// if an ancestor does not exist, and the column exists only on one side, use that side
+			// (if an ancestor DOES exist, this means the column was deleted, so it's a no-op)
+			// TODO: Can we combine these two cases to make this easier to read?
 			mergedColumns = append(mergedColumns, *ours)
 		case ours == nil && theirs == nil:
 			// if the column is deleted on both sides... just let it fall out
