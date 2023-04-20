@@ -64,7 +64,7 @@ type Command interface {
 	// Description returns a description of the command
 	Description() string
 	// Exec executes the command
-	Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
+	Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *CliContext) int
 	// Docs returns the documentation for this command, or nil if it's undocumented
 	Docs() *CommandDocumentation
 	// ArgParser returns the arg parser for this command
@@ -169,7 +169,7 @@ func (hc SubCommandHandler) Hidden() bool {
 	return hc.hidden
 }
 
-func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *CliContext) int {
 	if len(args) < 1 && hc.Unspecified == nil {
 		hc.printUsage(commandStr)
 		return 1
@@ -234,7 +234,7 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string
 		return 1
 	}
 
-	ret := cmd.Exec(ctx, commandStr, args, dEnv)
+	ret := cmd.Exec(ctx, commandStr, args, dEnv, nil)
 
 	if evt != nil {
 		events.GlobalCollector.CloseEventAndAdd(evt)

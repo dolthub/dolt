@@ -173,7 +173,7 @@ func setupMigrationTest(t *testing.T, ctx context.Context, test migrationTest) *
 
 	cmd := commands.SqlCmd{}
 	for _, query := range test.setup {
-		code := cmd.Exec(ctx, cmd.Name(), []string{"-q", query}, dEnv)
+		code := cmd.Exec(ctx, cmd.Name(), []string{"-q", query}, dEnv, nil)
 		require.Equal(t, 0, code)
 	}
 	return dEnv

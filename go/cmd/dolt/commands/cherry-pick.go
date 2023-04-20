@@ -71,7 +71,7 @@ func (cmd CherryPickCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command.
-func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
 	ap := cli.CreateCherryPickArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cherryPickDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -156,13 +156,13 @@ func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cherryStr string) errhan
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	res := AddCmd{}.Exec(ctx, "add", []string{"-A"}, dEnv)
+	res := AddCmd{}.Exec(ctx, "add", []string{"-A"}, dEnv, nil)
 	if res != 0 {
 		return errhand.BuildDError("dolt add failed").AddCause(err).Build()
 	}
 
 	commitParams := []string{"-m", commitMsg}
-	res = CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv)
+	res = CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv, nil)
 	if res != 0 {
 		return errhand.BuildDError("dolt commit failed").AddCause(err).Build()
 	}
