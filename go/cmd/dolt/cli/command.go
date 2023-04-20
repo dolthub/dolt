@@ -183,11 +183,11 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 	for _, cmd := range hc.Subcommands {
 		lwrName := strings.ToLower(cmd.Name())
 		if lwrName == subCommandStr {
-			return hc.handleCommand(ctx, commandStr+" "+subCommandStr, cmd, args[1:], dEnv)
+			return hc.handleCommand(ctx, commandStr+" "+subCommandStr, cmd, args[1:], dEnv, cliCtx)
 		}
 	}
 	if hc.Unspecified != nil {
-		return hc.handleCommand(ctx, commandStr, hc.Unspecified, args, dEnv)
+		return hc.handleCommand(ctx, commandStr, hc.Unspecified, args, dEnv, cliCtx)
 	}
 
 	if !isHelp(subCommandStr) {
@@ -199,7 +199,7 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 	return 0
 }
 
-func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string, cmd Command, args []string, dEnv *env.DoltEnv) int {
+func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string, cmd Command, args []string, dEnv *env.DoltEnv, cliCtx CliContext) int {
 	cmdRequiresRepo := true
 	if rnrCmd, ok := cmd.(RepoNotRequiredCommand); ok {
 		cmdRequiresRepo = rnrCmd.RequiresRepo()
@@ -234,7 +234,7 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string
 		return 1
 	}
 
-	ret := cmd.Exec(ctx, commandStr, args, dEnv, nil)
+	ret := cmd.Exec(ctx, commandStr, args, dEnv, cliCtx)
 
 	if evt != nil {
 		events.GlobalCollector.CloseEventAndAdd(evt)
