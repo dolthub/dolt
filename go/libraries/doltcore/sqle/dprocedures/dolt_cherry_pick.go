@@ -182,7 +182,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 
 	var tablesWithConflict []string
 	for tbl, stats := range result.Stats {
-		if stats.Conflicts > 0 {
+		if stats.HasConflicts() {
 			tablesWithConflict = append(tablesWithConflict, tbl)
 		}
 	}

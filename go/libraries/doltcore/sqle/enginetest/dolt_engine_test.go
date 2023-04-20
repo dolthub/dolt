@@ -1322,12 +1322,6 @@ func TestDoltMergeArtifacts(t *testing.T) {
 			enginetest.TestScript(t, h, script)
 		}()
 	}
-}
-
-func TestDoltSchemaConflicts(t *testing.T) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip()
-	}
 	for _, script := range SchemaConflictScripts {
 		h := newDoltHarness(t)
 		enginetest.TestScript(t, h, script)

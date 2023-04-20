@@ -82,6 +82,18 @@ func (r Result) HasSchemaConflicts() bool {
 	return len(r.SchemaConflicts) > 0
 }
 
+func (r Result) HasMergeArtifacts() bool {
+	if r.HasSchemaConflicts() {
+		return true
+	}
+	for _, stats := range r.Stats {
+		if stats.HasArtifacts() {
+			return true
+		}
+	}
+	return false
+}
+
 func SchemaConflictTableNames(sc []SchemaConflict) (tables []string) {
 	tables = make([]string, len(sc))
 	for i := range sc {
@@ -307,7 +319,7 @@ func mergeCVsWithStash(ctx context.Context, root *doltdb.RootValue, stash *viola
 // checks if a conflict occurred during the merge
 func checkForConflicts(tblToStats map[string]*MergeStats) bool {
 	for _, stat := range tblToStats {
-		if stat.Conflicts > 0 {
+		if stat.HasConflicts() {
 			return true
 		}
 	}

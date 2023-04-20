@@ -308,13 +308,13 @@ func printConflictsAndViolations(tblToStats map[string]*merge.MergeStats) (confl
 	hasConflicts := false
 	hasConstraintViolations := false
 	for tblName, stats := range tblToStats {
-		if stats.Operation == merge.TableModified && (stats.Conflicts > 0 || stats.ConstraintViolations > 0) {
+		if stats.HasArtifacts() {
 			cli.Println("Auto-merging", tblName)
-			if stats.Conflicts > 0 {
+			if stats.HasConflicts() {
 				cli.Println("CONFLICT (content): Merge conflict in", tblName)
 				hasConflicts = true
 			}
-			if stats.ConstraintViolations > 0 {
+			if stats.HasConstraintViolations() {
 				cli.Println("CONSTRAINT VIOLATION (content): Merge created constraint violation in", tblName)
 				hasConstraintViolations = true
 			}
@@ -332,10 +332,10 @@ func printModifications(tblToStats map[string]*merge.MergeStats) {
 	rowsChanged := 0
 	var tbls []string
 	for tblName, stats := range tblToStats {
-		if stats.Operation == merge.TableModified && stats.Conflicts == 0 && stats.ConstraintViolations == 0 {
+		if stats.Operation == merge.TableModified && stats.DataConflicts == 0 && stats.ConstraintViolations == 0 {
 			tbls = append(tbls, tblName)
 			nameLen := len(tblName)
-			modCount := stats.Adds + stats.Modifications + stats.Deletes + stats.Conflicts
+			modCount := stats.Adds + stats.Modifications + stats.Deletes + stats.DataConflicts
 
 			if nameLen > maxNameLen {
 				maxNameLen = nameLen
@@ -346,7 +346,7 @@ func printModifications(tblToStats map[string]*merge.MergeStats) {
 			}
 
 			rowsAdded += stats.Adds
-			rowsChanged += stats.Modifications + stats.Conflicts
+			rowsChanged += stats.Modifications + stats.DataConflicts
 			rowsDeleted += stats.Deletes
 		}
 	}
@@ -362,7 +362,7 @@ func printModifications(tblToStats map[string]*merge.MergeStats) {
 	for _, tbl := range tbls {
 		stats := tblToStats[tbl]
 		if stats.Operation == merge.TableModified {
-			modCount := stats.Adds + stats.Modifications + stats.Deletes + stats.Conflicts
+			modCount := stats.Adds + stats.Modifications + stats.Deletes + stats.DataConflicts
 			modCountStr := strconv.FormatInt(int64(modCount), 10)
 			visualizedChanges := visualizeChangeTypes(stats, maxModCount)
 
@@ -593,7 +593,7 @@ func getCommitMsgForMerge(ctx context.Context, dEnv *env.DoltEnv, userDefinedMsg
 // hasConflictOrViolations checks for conflicts or constraint violation regardless of a table being modified
 func hasConflictOrViolations(tblToStats map[string]*merge.MergeStats) bool {
 	for _, tblStats := range tblToStats {
-		if tblStats.Conflicts > 0 || tblStats.ConstraintViolations > 0 {
+		if tblStats.HasArtifacts() {
 			return true
 		}
 	}

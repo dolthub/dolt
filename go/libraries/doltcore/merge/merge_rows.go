@@ -142,7 +142,11 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 			table:    tm.leftTbl,
 			conflict: schConflicts,
 		}
-		return mt, &MergeStats{}, nil
+		stats = &MergeStats{
+			Operation:       TableModified,
+			SchemaConflicts: schConflicts.Count(),
+		}
+		return mt, stats, nil
 	}
 
 	var tbl *doltdb.Table

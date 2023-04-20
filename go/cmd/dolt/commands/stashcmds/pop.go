@@ -155,7 +155,7 @@ func applyStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, curWorkingRoot *dol
 
 	var tablesWithConflict []string
 	for tbl, stats := range result.Stats {
-		if stats.Conflicts > 0 {
+		if stats.HasConflicts() {
 			tablesWithConflict = append(tablesWithConflict, tbl)
 		}
 	}

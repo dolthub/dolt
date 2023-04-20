@@ -409,7 +409,7 @@ func mergeRootToWorking(
 	}
 
 	ws = ws.WithWorkingRoot(merged.Root).WithStagedRoot(merged.Root)
-	if checkForMergeArtifacts(merged) {
+	if merged.HasMergeArtifacts() {
 		// this error is recoverable in-session, so we return the new ws along with the error
 		return ws, doltdb.ErrUnresolvedConflictsOrViolations
 	}
@@ -433,21 +433,4 @@ func checkForUncommittedChanges(ctx *sql.Context, root *doltdb.RootValue, headRo
 		return ErrUncommittedChanges.New()
 	}
 	return nil
-}
-
-func checkForMergeArtifacts(result *merge.Result) bool {
-	if result.HasSchemaConflicts() {
-		return true
-	}
-	for _, stats := range result.Stats {
-		if stats.Operation == merge.TableModified && stats.Conflicts > 0 {
-			return true
-		}
-	}
-	for _, stats := range result.Stats {
-		if stats.ConstraintViolations > 0 {
-			return true
-		}
-	}
-	return false
 }

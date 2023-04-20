@@ -39,9 +39,8 @@ type testCommand struct {
 	args args
 }
 
-func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) {
-	exitCode := tc.cmd.Exec(ctx, tc.cmd.Name(), tc.args, dEnv)
-	require.Equal(t, 0, exitCode)
+func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) int {
+	return tc.cmd.Exec(ctx, tc.cmd.Name(), tc.args, dEnv)
 }
 
 type args []string
@@ -562,10 +561,12 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	ctx := context.Background()
 
 	for _, c := range setupCommon {
-		c.exec(t, ctx, dEnv)
+		exit := c.exec(t, ctx, dEnv)
+		require.Equal(t, 0, exit)
 	}
 	for _, c := range test.setup {
-		c.exec(t, ctx, dEnv)
+		exit := c.exec(t, ctx, dEnv)
+		require.Equal(t, 0, exit)
 	}
 
 	// assert that we're on main
@@ -605,13 +606,15 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 	for _, c := range setupCommon {
-		c.exec(t, ctx, dEnv)
+		exit := c.exec(t, ctx, dEnv)
+		require.Equal(t, 0, exit)
 	}
 
 	ancSch := getSchema(t, dEnv)
 
 	for _, c := range test.setup {
-		c.exec(t, ctx, dEnv)
+		exit := c.exec(t, ctx, dEnv)
+		require.Equal(t, 0, exit)
 	}
 
 	// assert that we're on main
@@ -660,14 +663,16 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 	for _, c := range setupForeignKeyTests {
-		c.exec(t, ctx, dEnv)
+		exit := c.exec(t, ctx, dEnv)
+		require.Equal(t, 0, exit)
 	}
 
 	ancRoot, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 
 	for _, c := range test.setup {
-		c.exec(t, ctx, dEnv)
+		exit := c.exec(t, ctx, dEnv)
+		require.Equal(t, 0, exit)
 	}
 
 	// assert that we're on main

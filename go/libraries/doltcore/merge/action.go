@@ -233,25 +233,9 @@ func mergedRootToWorking(
 		return err
 	}
 
-	conflicts, constraintViolations := conflictsAndViolations(result.Stats)
-	if len(conflicts) > 0 || len(constraintViolations) > 0 {
-		return err
+	if result.HasMergeArtifacts() {
+		return doltdb.ErrUnresolvedConflictsOrViolations
 	}
 
 	return dEnv.UpdateStagedRoot(context.Background(), result.Root)
-}
-
-// conflictsAndViolations returns array of conflicts and constraintViolations
-func conflictsAndViolations(tblToStats map[string]*MergeStats) (conflicts []string, constraintViolations []string) {
-	for tblName, stats := range tblToStats {
-		if stats.Operation == TableModified && (stats.Conflicts > 0 || stats.ConstraintViolations > 0) {
-			if stats.Conflicts > 0 {
-				conflicts = append(conflicts, tblName)
-			}
-			if stats.ConstraintViolations > 0 {
-				constraintViolations = append(constraintViolations, tblName)
-			}
-		}
-	}
-	return
 }

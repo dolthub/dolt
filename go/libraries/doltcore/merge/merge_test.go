@@ -684,7 +684,7 @@ func calcExpectedStats(t *testing.T) *MergeStats {
 			// (DeleteAction, UpdateAction),
 			// (UpdateAction, UpdateAction) with conflict,
 			// (InsertAction, InsertAction) with conflict
-			s.Conflicts++
+			s.DataConflicts++
 			continue
 		}
 
