@@ -19,7 +19,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	fb "github.com/google/flatbuffers/go"
+	fb "github.com/dolthub/flatbuffers/v23/go"
 )
 
 func TestBinlogRowSerialization(t *testing.T) {
