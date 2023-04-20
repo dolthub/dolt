@@ -70,14 +70,14 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		ret := &strings.Builder{}
 		mapbytes := msg.AddressMapBytes()
 		printWithIndendationLevel(level, ret, "StoreRoot{%s}",
-			SerialMessage(mapbytes).humanReadableStringAtIndentationLevel(level+2))
+			SerialMessage(mapbytes).humanReadableStringAtIndentationLevel(level+1))
 		return ret.String()
 	case serial.StashListFileID:
 		msg := serial.GetRootAsStashList([]byte(sm), serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		mapbytes := msg.AddressMapBytes()
 		printWithIndendationLevel(level, ret, "StashList{%s}",
-			SerialMessage(mapbytes).humanReadableStringAtIndentationLevel(level+2))
+			SerialMessage(mapbytes).humanReadableStringAtIndentationLevel(level+1))
 		return ret.String()
 	case serial.StashFileID:
 		msg := serial.GetRootAsStash(sm, serial.MessagePrefixSz)
@@ -145,9 +145,9 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "{\n")
 		printWithIndendationLevel(level, ret, "\tFeatureVersion: %d\n", msg.FeatureVersion())
 		printWithIndendationLevel(level, ret, "\tForeignKeys: #%s\n", hash.New(msg.ForeignKeyAddrBytes()).String())
-		printWithIndendationLevel(level, ret, "\tTables: {\n%s",
-			SerialMessage(msg.TablesBytes()).humanReadableStringAtIndentationLevel(level+2))
-		printWithIndendationLevel(level, ret, "\t}\n")
+		printWithIndendationLevel(level, ret, "\tTables: %s\n",
+			SerialMessage(msg.TablesBytes()).humanReadableStringAtIndentationLevel(level+1))
+		//printWithIndendationLevel(level, ret, "\t}\n")
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.TableFileID:
@@ -165,7 +165,7 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "\tPrimary index: prolly tree\n")
 
 		printWithIndendationLevel(level, ret, "\tSecondary indexes: {\n%s\n",
-			SerialMessage(msg.SecondaryIndexesBytes()).humanReadableStringAtIndentationLevel(level+2))
+			SerialMessage(msg.SecondaryIndexesBytes()).humanReadableStringAtIndentationLevel(level+1))
 		printWithIndendationLevel(level, ret, "\t}\n")
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
@@ -175,8 +175,7 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 			return fmt.Sprintf("error in HumanReadString(): %s", err)
 		}
 		var b strings.Builder
-		b.Write([]byte(strings.Repeat("\t", level)))
-		b.Write([]byte("AddressMap{\n"))
+		b.Write([]byte("AddressMap {\n"))
 		for i := uint16(0); i < cnt; i++ {
 			name := keys.GetItem(int(i), serial.Message(sm))
 			addr := values.GetItem(int(i), serial.Message(sm))
