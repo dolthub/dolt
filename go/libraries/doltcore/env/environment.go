@@ -18,13 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	ps "github.com/mitchellh/go-ps"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 

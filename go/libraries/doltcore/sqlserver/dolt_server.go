@@ -16,8 +16,9 @@ package sqlserver
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"sync"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 
 	"github.com/dolthub/go-mysql-server/server"
 )
@@ -25,7 +26,7 @@ import (
 var lockedDetails *serverAndLockfile
 var mutex sync.Mutex
 
-// serverAndLockfile holds a *server.Server and a *env.DBLock for a running server 
+// serverAndLockfile holds a *server.Server and a *env.DBLock for a running server
 type serverAndLockfile struct {
 	Server   *server.Server
 	Lockfile *env.DBLock
