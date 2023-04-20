@@ -1055,6 +1055,62 @@ func UnionTableNames(ctx context.Context, roots ...*RootValue) ([]string, error)
 	return tblNames, nil
 }
 
+// FilterIgnoredTables takes a list of table names and removes any that are specified by dolt_ignore.
+func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) ([]string, error) {
+	filteredTables := []string{}
+	workingSet := roots.Working
+	table, found, err := workingSet.GetTable(ctx, "_dolt_ignore")
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		// dolt_ignore doesn't exist, so don't filter any tables.
+		return tables, nil
+	}
+	// TODO, add check for noms format.
+	index, err := table.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ignoreTableSchema, err := table.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	keyDesc, valueDesc := ignoreTableSchema.GetMapDescriptors()
+	ignoreTableMap, err := durable.ProllyMapFromIndex(index).IterAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var ignorePatterns []ignorePattern
+	for {
+		keyTuple, valueTuple, err := ignoreTableMap.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if keyTuple == nil {
+			break
+		}
+		// TODO, assert schema is what we expect.
+		pattern, ok := keyDesc.GetString(0, keyTuple)
+		if !ok {
+			return nil, fmt.Errorf("could not read pattern")
+		}
+		ignore, ok := valueDesc.GetBool(0, valueTuple)
+		ignorePatterns = append(ignorePatterns, ignorePattern{pattern, ignore})
+	}
+	for _, tableName := range tables {
+		ignored, err := isTableNameIgnored(ignorePatterns, tableName)
+		if err != nil {
+			return nil, err
+		}
+		if !ignored {
+			filteredTables = append(filteredTables, tableName)
+		}
+	}
+
+	return filteredTables, nil
+}
+
 // validateTagUniqueness checks for tag collisions between the given table and the set of tables in then given root.
 func validateTagUniqueness(ctx context.Context, root *RootValue, tableName string, table *Table) error {
 	prev, ok, err := root.GetTable(ctx, tableName)

@@ -31,6 +31,11 @@ func StageAllTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, erro
 		return doltdb.Roots{}, err
 	}
 
+	tbls, err = doltdb.FilterIgnoredTables(ctx, tbls, roots)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
 	return stageTables(ctx, roots, tbls)
 }
 
