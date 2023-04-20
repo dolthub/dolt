@@ -57,8 +57,8 @@ func (dt *SchemaConflictsTable) String() string {
 func (dt *SchemaConflictsTable) Schema() sql.Schema {
 	return []*sql.Column{
 		{Name: "table", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: true},
-		{Name: "from_schema", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false},
-		{Name: "to_schema", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false},
+		{Name: "our_schema", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false},
+		{Name: "their_schema", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false},
 		{Name: "description", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false},
 	}
 }
