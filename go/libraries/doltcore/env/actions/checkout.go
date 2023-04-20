@@ -388,8 +388,6 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot *dolt
 			resultMap[tblName] = newHash
 		} else if oldHash == newHash {
 			resultMap[tblName] = changedHash
-		} else if newHash == changedHash {
-			resultMap[tblName] = oldHash
 		} else if force {
 			resultMap[tblName] = newHash
 		} else {
@@ -463,8 +461,6 @@ func moveForeignKeys(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.
 		return newFks, nil
 	} else if oldHash == newHash {
 		return changedFks, nil
-	} else if newHash == changedHash {
-		return oldFks, nil
 	} else {
 		// Both roots have modified the foreign keys. We need to do more work to merge them together into a new foreign
 		// key collection.
@@ -505,8 +501,6 @@ func mergeForeignKeyChanges(
 			fksByTable[tblName] = append(fksByTable[tblName], newFksForTable...)
 		} else if oldHash == newHash {
 			fksByTable[tblName] = append(fksByTable[tblName], changedFksForTable...)
-		} else if newHash == changedHash {
-			fksByTable[tblName] = append(fksByTable[tblName], oldFksForTable...)
 		} else if force {
 			fksByTable[tblName] = append(fksByTable[tblName], newFksForTable...)
 		} else {

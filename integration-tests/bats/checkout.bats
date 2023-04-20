@@ -71,7 +71,6 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1" ]] || false
 
-    dolt status
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table" ]] || false
