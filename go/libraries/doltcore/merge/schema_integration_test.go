@@ -40,7 +40,7 @@ type testCommand struct {
 }
 
 func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) int {
-	return tc.cmd.Exec(ctx, tc.cmd.Name(), tc.args, dEnv)
+	return tc.cmd.Exec(ctx, tc.cmd.Name(), tc.args, dEnv, nil)
 }
 
 type args []string
@@ -570,11 +570,11 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	}
 
 	// assert that we're on main
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv)
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, nil)
 	require.Equal(t, 0, exitCode)
 
 	// merge branches
-	exitCode = commands.MergeCmd{}.Exec(ctx, "merge", []string{"other"}, dEnv)
+	exitCode = commands.MergeCmd{}.Exec(ctx, "merge", []string{"other"}, dEnv, nil)
 	assert.Equal(t, 0, exitCode)
 
 	wr, err := dEnv.WorkingRoot(ctx)
@@ -618,12 +618,12 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 	}
 
 	// assert that we're on main
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv)
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, nil)
 	require.Equal(t, 0, exitCode)
 
 	mainSch := getSchema(t, dEnv)
 
-	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv)
+	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv, nil)
 	require.Equal(t, 0, exitCode)
 
 	otherSch := getSchema(t, dEnv)
@@ -676,14 +676,14 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	}
 
 	// assert that we're on main
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv)
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, nil)
 	require.Equal(t, 0, exitCode)
 
 	mainWS, err := dEnv.WorkingSet(ctx)
 	require.NoError(t, err)
 	mainRoot := mainWS.WorkingRoot()
 
-	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv)
+	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv, nil)
 	require.Equal(t, 0, exitCode)
 
 	otherWS, err := dEnv.WorkingSet(ctx)

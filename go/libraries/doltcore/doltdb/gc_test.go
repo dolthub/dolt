@@ -113,7 +113,7 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 	defer dEnv.DoltDB.Close()
 
 	for _, c := range gcSetupCommon {
-		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
+		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, nil)
 		require.Equal(t, 0, exitCode)
 	}
 
@@ -121,7 +121,7 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 	for _, stage := range test.stages {
 		res = stage.preStageFunc(ctx, t, dEnv.DoltDB, res)
 		for _, c := range stage.commands {
-			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
+			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, nil)
 			require.Equal(t, 0, exitCode)
 		}
 	}

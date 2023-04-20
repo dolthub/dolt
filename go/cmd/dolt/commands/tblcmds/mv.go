@@ -72,7 +72,7 @@ func (cmd MvCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tblMvDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -95,5 +95,5 @@ func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		fmt.Sprintf("--%s", commands.BatchFlag),
 		fmt.Sprintf(`--%s`, commands.QueryFlag),
 		queryStr,
-	}, dEnv)
+	}, dEnv, nil)
 }

@@ -73,7 +73,7 @@ func (cmd UseCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd UseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd UseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, useDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
