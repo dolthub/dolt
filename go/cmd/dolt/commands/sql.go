@@ -207,8 +207,12 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	var cfgDirPath string
 	var dataDir string
 	if multiDbDir, ok := apr.GetValue(MultiDBDirFlag); ok {
+		// When GlobalArgs migration is complete, drop this flag.
 		dataDir = multiDbDir
 	} else if dataDirPath, ok := apr.GetValue(DataDirFlag); ok {
+		// TODO: remove this once we remove the deprecated passing of data dir directly to subcommand.
+		dataDir = dataDirPath
+	} else if dataDirPath, ok := (*cliCtx).GlobalArgs().GetValue(DataDirFlag); ok {
 		dataDir = dataDirPath
 	}
 
