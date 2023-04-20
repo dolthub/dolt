@@ -33,7 +33,7 @@ type conflictKind byte
 const (
 	TagCollision conflictKind = iota
 	NameCollision
-	ColumnCollision
+	ColumnCheckCollision
 	InvalidCheckCollision
 	DeletedCheckCollision
 )
@@ -104,7 +104,7 @@ func (c ChkConflict) String() string {
 	switch c.Kind {
 	case NameCollision:
 		return fmt.Sprintf("two checks with the name '%s' but different definitions", c.Ours.Name())
-	case ColumnCollision:
+	case ColumnCheckCollision:
 		return fmt.Sprintf("our check '%s' and their check '%s' both reference the same column(s)", c.Ours.Name(), c.Theirs.Name())
 	case InvalidCheckCollision:
 		return fmt.Sprintf("check '%s' references a column that will be deleted after merge", c.Ours.Name())
@@ -287,9 +287,6 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 // conflicting changes to the columns in |ourCC| and |theirCC|, then a set of ColConflict instances are returned
 // describing the conflicts. If any other, unexpected error occurs, then that error is returned and the other response
 // fields should be ignored.
-// TODO: We don't currently detect all column position changes; the returned merged columns are always based on
-//
-//	their position in |ourCC|, with any new columns from |theirCC| added at the end of the column collection.
 func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, error) {
 	columnMappings, err := mapColumns(ourCC, theirCC, ancCC)
 	if err != nil {
@@ -302,6 +299,8 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColColle
 	}
 
 	// After we've checked for schema conflicts, merge the columns together
+	// TODO: We don't currently preserve all column position changes; the returned merged columns are always based on
+	//	     their position in |ourCC|, with any new columns from |theirCC| added at the end of the column collection.
 	var mergedColumns []schema.Column
 	for _, mapping := range columnMappings {
 		ours := mapping.ours
@@ -316,7 +315,6 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColColle
 		case anc == nil && ours != nil && theirs == nil:
 			// if an ancestor does not exist, and the column exists only on one side, use that side
 			// (if an ancestor DOES exist, this means the column was deleted, so it's a no-op)
-			// TODO: Can we combine these two cases to make this easier to read?
 			mergedColumns = append(mergedColumns, *ours)
 		case ours == nil && theirs == nil:
 			// if the column is deleted on both sides... just let it fall out
@@ -403,9 +401,7 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 				if !anc.Equals(*ours) {
 					// col altered on our branch and deleted on their branch
 					conflicts = append(conflicts, ColConflict{
-						// TODO: This probably isn't the right conflict kind to set, but seems like Andy is going to
-						//       rework this anyway, so might not be worth putting much thought into right now.
-						Kind: ColumnCollision,
+						Kind: NameCollision,
 						Ours: *ours,
 					})
 				}
@@ -423,12 +419,12 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 				// Column exists on both sides, but not in ancestor
 				// col added on our branch and their branch with different def
 				conflicts = append(conflicts, ColConflict{
-					Kind:   NameCollision, // TODO: WHy is this a NameCollision?
+					Kind:   NameCollision,
 					Ours:   *ours,
 					Theirs: *theirs,
 				})
 			case theirs == nil && anc == nil:
-				// just for completeness... if the column is invalid on theirs and in anc, then there is no conflict
+				// column doesn't exist on theirs or in anc – no conflict
 			}
 		}
 
@@ -445,9 +441,7 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 				if !anc.Equals(*theirs) {
 					// col deleted on our branch and altered on their branch
 					conflicts = append(conflicts, ColConflict{
-						// TODO: This probably isn't the right conflict kind to set, but seems like Andy is going to
-						//       rework this anyway, so might not be worth putting much thought into right now.
-						Kind:   ColumnCollision,
+						Kind:   NameCollision,
 						Theirs: *theirs,
 					})
 				}
@@ -472,6 +466,9 @@ type columnMapping struct {
 	theirs *schema.Column
 }
 
+// newColumnMapping returns a new columnMapping instance, populated with the specified columns. If |anc|, |ours|,
+// or |theirs| is schema.InvalidColumn (checked by looking for schema.InvalidTag), then the returned mapping will
+// hold a nil value instead of schema.InvalidColumn.
 func newColumnMapping(anc, ours, theirs schema.Column) columnMapping {
 	var pAnc, pOurs, pTheirs *schema.Column
 	if anc.Tag != schema.InvalidTag {
@@ -516,8 +513,8 @@ func (c columnMappings) DebugString() string {
 	return sb.String()
 }
 
-// TODO: Test this with some cases where we can't identify the column and see what happens...
-// TODO: Godocs
+// mapColumns returns a columnMappings instance that describes how the columns in |ourCC|, |theirCC|, and |ancCC|
+// map to each other.
 func mapColumns(ourCC, theirCC, ancCC *schema.ColCollection) (columnMappings, error) {
 	// Make a copy of theirCC so we can modify it to track which their columns we've matched
 	theirCC = schema.NewColCollection(theirCC.GetColumns()...)
@@ -540,14 +537,6 @@ func mapColumns(ourCC, theirCC, ancCC *schema.ColCollection) (columnMappings, er
 
 		delete(theirTagsToCols, theirCol.Tag)
 		columnMappings = append(columnMappings, newColumnMapping(ancCol, ourCol, theirCol))
-
-		// TODO: What if we didn't find a tag match and we didn't find a name match?
-		//       That could mean that there is NOT a mapping! i.e. the column was added or removed
-		//       Or it could mean that the column was renamed and changed its type. In this case, we wouldn't
-		//       be able to match as a rename, so it would just look like a column was added.
-		// TODO: Potentially in the future, we could look at the column data and calculate if it was logically
-		//       the same column, but this is a heuristic at best.
-
 		return false, nil
 	})
 
@@ -1021,7 +1010,7 @@ func mergeChecks(ctx context.Context, ourChks, theirChks, ancChks schema.CheckCo
 				if _, ok := theirNewChkColsMap[col][ourChk]; !ok {
 					for k := range theirNewChkColsMap[col] {
 						conflicts = append(conflicts, ChkConflict{
-							Kind:   ColumnCollision,
+							Kind:   ColumnCheckCollision,
 							Ours:   ourChk,
 							Theirs: k,
 						})
