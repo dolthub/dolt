@@ -25,7 +25,7 @@ import (
 var lockedDetails *serverAndLockfile
 var mutex sync.Mutex
 
-// Struct for holding a *server.Server and a *env.DBLock
+// serverAndLockfile holds a *server.Server and a *env.DBLock for a running server 
 type serverAndLockfile struct {
 	Server   *server.Server
 	Lockfile *env.DBLock
