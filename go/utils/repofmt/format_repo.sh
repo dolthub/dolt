@@ -2,6 +2,10 @@
 
 set -eo pipefail
 
+
+echo "THIS SHOULD ALSO NOT RUN"
+exit 1;
+
 script_dir=$(dirname "$0")
 cd $script_dir/../..
 

@@ -41,6 +41,7 @@ type Package struct {
 }
 
 func main() {
+	panic("THIS SHOULD NOT RUN")
 	var verifyFilename *string
 	if len(os.Args) > 1 {
 		if os.Args[1] == "-verify" {
