@@ -18,7 +18,7 @@ import (
 	"encoding/binary"
 	"unsafe"
 
-	fb "github.com/google/flatbuffers/go"
+	fb "github.com/dolthub/flatbuffers/v23/go"
 )
 
 // KEEP THESE IN SYNC WITH .fbs FILES!

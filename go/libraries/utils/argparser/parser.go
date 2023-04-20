@@ -49,18 +49,17 @@ func ValidatorFromStrList(paramName string, validStrList []string) ValidationFun
 }
 
 type ArgParser struct {
-	Name              string
-	MaxArgs           int
-	TooManyArgsError  func(receivedArgs []string) error
-	Supported         []*Option
-	nameOrAbbrevToOpt map[string]*Option
-	ArgListHelp       [][2]string
+	Name                 string
+	MaxArgs              int
+	TooManyArgsErrorFunc func(receivedArgs []string) error
+	Supported            []*Option
+	nameOrAbbrevToOpt    map[string]*Option
+	ArgListHelp          [][2]string
 }
 
-func NewArgParserWithVariableArgs(name string) *ArgParser {
-	return NewArgParserWithMaxArgs(name, -1)
-}
-
+// NewArgParserWithMaxArgs creates a new ArgParser for a named command that limits how many positional arguments it
+// will accept. If additional arguments are provided, parsing will return an error with a detailed error message,
+// using the provided command name.
 func NewArgParserWithMaxArgs(name string, maxArgs int) *ArgParser {
 	tooManyArgsErrorGenerator := func(receivedArgs []string) error {
 		args := strings.Join(receivedArgs, ", ")
@@ -72,11 +71,18 @@ func NewArgParserWithMaxArgs(name string, maxArgs int) *ArgParser {
 	var supported []*Option
 	nameOrAbbrevToOpt := make(map[string]*Option)
 	return &ArgParser{
-		MaxArgs:           maxArgs,
-		TooManyArgsError:  tooManyArgsErrorGenerator,
-		Supported:         supported,
-		nameOrAbbrevToOpt: nameOrAbbrevToOpt,
+		Name:                 name,
+		MaxArgs:              maxArgs,
+		TooManyArgsErrorFunc: tooManyArgsErrorGenerator,
+		Supported:            supported,
+		nameOrAbbrevToOpt:    nameOrAbbrevToOpt,
 	}
+}
+
+// NewArgParserWithVariableArgs creates a new ArgParser for a named command
+// that accepts any number of positional arguments.
+func NewArgParserWithVariableArgs(name string) *ArgParser {
+	return NewArgParserWithMaxArgs(name, -1)
 }
 
 // SupportOption adds support for a new argument with the option given. Options must have a unique name and abbreviated name.
@@ -355,7 +361,7 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 	}
 
 	if ap.MaxArgs != -1 && len(list) > ap.MaxArgs {
-		return nil, ap.TooManyArgsError(list)
+		return nil, ap.TooManyArgsErrorFunc(list)
 	}
 
 	return &ArgParseResults{results, list, ap}, nil

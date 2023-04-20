@@ -57,7 +57,7 @@ func (cmd LsCmd) ArgParser() *argparser.ArgParser {
 
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	ap.TooManyArgsError = func(receivedArgs []string) error {
+	ap.TooManyArgsErrorFunc = func(receivedArgs []string) error {
 		args := strings.Join(receivedArgs, ", ")
 		return fmt.Errorf("Only one table may be provided at a time. Received %d: %s", len(receivedArgs), args)
 	}
