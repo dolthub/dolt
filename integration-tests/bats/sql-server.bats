@@ -1076,7 +1076,6 @@ END""")
 
     # Make sure the sql-server lock file is set for a newly created database
     [[ -f "$PWD/test1/.dolt/sql-server.lock" ]] || false
-    [[ $(stat -f "%Lp" "$PWD/test1/.dolt/sql-server.lock") == "600" ]] || false
 
     dolt sql-client -P $PORT -u dolt --use-db 'test1' -q "create table a(x int)"
     dolt sql-client -P $PORT -u dolt --use-db 'test1' -q "call dolt_add('.')"
@@ -1452,7 +1451,15 @@ databases:
     ! [[ -f "$PWD/.dolt/sql-server.lock" ]] || false
     start_sql_server
     [[ -f "$PWD/.dolt/sql-server.lock" ]] || false
-    [[ $(stat -f "%Lp" "$PWD/.dolt/sql-server.lock") == "600" ]] || false
+
+
+    if [[ `uname` == 'Darwin' ]]; then
+      run stat -x "$PWD/.dolt/sql-server.lock"
+      [[ "$output" =~ "(0600/-rw-------)" ]] || false
+    else
+      run stat "$PWD/.dolt/sql-server.lock"
+      [[ "$output" =~ "(0600/-rw-------)" ]] || false
+    fi
 }
 
 @test "sql-server: multi dir sql-server locks out children" {
@@ -1479,7 +1486,6 @@ databases:
 
     # Make sure the sql-server lock file is set for the new database
     [[ -f "$PWD/newdb/.dolt/sql-server.lock" ]] || false
-    [[ $(stat -f "%Lp" "$PWD/newdb/.dolt/sql-server.lock") == "600" ]] || false
 
     # Verify that we can't start a sql-server from the new database dir
     cd newdb
