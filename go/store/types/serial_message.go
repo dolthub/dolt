@@ -147,7 +147,6 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "\tForeignKeys: #%s\n", hash.New(msg.ForeignKeyAddrBytes()).String())
 		printWithIndendationLevel(level, ret, "\tTables: %s\n",
 			SerialMessage(msg.TablesBytes()).humanReadableStringAtIndentationLevel(level+1))
-		//printWithIndendationLevel(level, ret, "\t}\n")
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.TableFileID:
@@ -161,12 +160,9 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 
 		printWithIndendationLevel(level, ret, "\tAutoinc: %d\n", msg.AutoIncrementValue())
 
-		// TODO: can't use tree package to print here, creates a cycle
-		printWithIndendationLevel(level, ret, "\tPrimary index: prolly tree\n")
-
-		printWithIndendationLevel(level, ret, "\tSecondary indexes: {\n%s\n",
+		printWithIndendationLevel(level, ret, "\tPrimary index: #%s\n", hash.Of(msg.PrimaryIndexBytes()))
+		printWithIndendationLevel(level, ret, "\tSecondary indexes: %s\n",
 			SerialMessage(msg.SecondaryIndexesBytes()).humanReadableStringAtIndentationLevel(level+1))
-		printWithIndendationLevel(level, ret, "\t}\n")
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.AddressMapFileID:
