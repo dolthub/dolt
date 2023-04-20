@@ -1143,7 +1143,6 @@ SQL
 
 @test "sql: non unique table alias" {
     run dolt sql -q "select pk from one_pk,one_pk"
-    skip "This should be an error. MySQL gives: Not unique table/alias: 'one_pk'"
     [ $status -eq 1 ]
 }
 
@@ -2258,52 +2257,6 @@ SQL
     run dolt sql -r csv -q "SELECT * from test"
     [ $status -eq 0 ]
     [[ "$output" =~ "0,0,99" ]] || false
-}
-
-@test "sql: at commit" {
-  skip "zachmu broke this, needs to fix"
-
-  dolt add .
-  dolt commit -m "seed initial values"
-  dolt checkout -b one
-  dolt sql -q "UPDATE one_pk SET c1 = 100 WHERE pk = 0"
-  dolt add .
-  dolt commit -m "100"
-  dolt checkout -b two
-  dolt sql -q "UPDATE one_pk SET c1 = 200 WHERE pk = 0"
-  dolt add .
-  dolt commit -m "200"
-
-  EXPECTED=$( echo -e "c1\n200" )
-  run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0"
-  [ $status -eq 0 ]
-  [[ "$output" = "$EXPECTED" ]] || false
-  run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" HEAD
-  [ $status -eq 0 ]
-  [[ "$output" = "$EXPECTED" ]] || false
-  run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" two
-  [ $status -eq 0 ]
-  [[ "$output" = "$EXPECTED" ]] || false
-
-  EXPECTED=$( echo -e "c1\n100" )
-  run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" HEAD~
-  [ $status -eq 0 ]
-  [[ "$output" = "$EXPECTED" ]] || false
-  run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" one
-  [ $status -eq 0 ]
-  [[ "$output" = "$EXPECTED" ]] || false
-
-  EXPECTED=$( echo -e "c1\n0" )
-  run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" HEAD~2
-  [ $status -eq 0 ]
-  [[ "$output" = "$EXPECTED" ]] || false
-  run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" main
-  [ $status -eq 0 ]
-  [[ "$output" = "$EXPECTED" ]] || false
-
-  #writes should fail if commit is specified
-  run dolt sql -q "UPDATE one_pk SET c1 = 200 WHERE pk = 0" HEAD~
-  [ $status -ne 0 ]
 }
 
 @test "sql: select with json output supports datetime" {
