@@ -95,12 +95,10 @@ jobs:
         working-directory: go/utils/3pdeps
         run: go build .
       - uses: actions/upload-artifact@v3
-        if: ${{ steps.should_format.outputs.format == 'true' }}
         with:
           name: update-godeps-tool
           path: go/utils/3pdeps/3pdeps
       - uses: actions/upload-artifact@v3
-        if: ${{ steps.should_format.outputs.format == 'true' }}
         with:
           name: format-code-script
           path: go/utils/repofmt/_format_repo.sh
