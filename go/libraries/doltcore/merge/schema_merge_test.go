@@ -504,26 +504,45 @@ var simpleConflictTests = []schemaMergeTest{
 		conflict: true,
 	},
 	{
-		name:     "conflicting index adds: same name and columns, different constraints",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)                      ")),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX idx (a))       ")),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, UNIQUE INDEX idx (a))")),
-		conflict: true,
+		// TODO: This test case does NOT generate a conflict; the merge gets short circuited, because the table's
+		//       right/left/anc hashes are all the same. This is an issue with the test framework, not with Dolt.
+		//       The code we use in these tests to create a schema (sqlutil.ParseCreateTableStatement) silently
+		//       drops index and check constraint definitions.
+		skipNewFmt: true,
+		skipOldFmt: true,
+		name:       "conflicting index adds: same name and columns, different constraints",
+		ancestor:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)                      ")),
+		left:       tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX idx (a))       ")),
+		right:      tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, UNIQUE INDEX idx (a))")),
+		conflict:   true,
 	},
 	{
+		// TODO: This test case does NOT generate a conflict; the merge gets short circuited, because the table's
+		//       right/left/anc hashes are all the same. This is an issue with the test framework, not with Dolt.
+		//       The code we use in these tests to create a schema (sqlutil.ParseCreateTableStatement) silently
+		//       drops index and check constraint definitions.
+		skipNewFmt: true,
+		skipOldFmt: true,
+		// TODO: multiple indexes can exist for the same column set, so this shouldn't actually be a conflict;
+		//       Dolt does report this as a schema conflict today, but we could merge the two indexes together.
 		name:     "conflicting index adds: same column different names",
 		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)                 ")),
 		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX a_idx (a))")),
 		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX key_a (a))")),
-		// todo: is it allowed to define multiple indexes over the same column?
 		conflict: true,
 	},
 	{
-		name:     "conflicting index adds: same name different definitions",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)               ")),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX idx (a))")),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX idx (b))")),
-		conflict: true,
+		// TODO: This test case does NOT generate a conflict; the merge gets short circuited, because the table's
+		//       right/left/anc hashes are all the same. This is an issue with the test framework, not with Dolt.
+		//       The code we use in these tests to create a schema (sqlutil.ParseCreateTableStatement) silently
+		//       drops index and check constraint definitions.
+		skipNewFmt: true,
+		skipOldFmt: true,
+		name:       "conflicting index adds: same name different definitions",
+		ancestor:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)               ")),
+		left:       tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX idx (a))")),
+		right:      tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX idx (b))")),
+		conflict:   true,
 	},
 	{
 		name:     "add primary key columns at different key positions on left and right sides",
@@ -553,17 +572,23 @@ func testSchemaMerge(t *testing.T, tests []schemaMergeTest) {
 			// attempt merge before skipping to assert no panics
 			root, _, err := merge.MergeRoots(ctx, l, r, a, rootish{r}, rootish{a}, eo, mo)
 			maybeSkip(t, a.VRW().Format(), test)
-			require.NoError(t, err)
-			exp, err := m.MapTableHashes(ctx)
-			assert.NoError(t, err)
-			act, err := root.MapTableHashes(ctx)
-			assert.NoError(t, err)
 
-			assert.Equal(t, len(exp), len(act))
-			for name, addr := range exp {
-				a, ok := act[name]
-				assert.True(t, ok)
-				assert.Equal(t, addr, a)
+			if test.conflict {
+				// TODO: Test the conflict error message more deeply
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				exp, err := m.MapTableHashes(ctx)
+				assert.NoError(t, err)
+				act, err := root.MapTableHashes(ctx)
+				assert.NoError(t, err)
+
+				assert.Equal(t, len(exp), len(act))
+				for name, addr := range exp {
+					a, ok := act[name]
+					assert.True(t, ok)
+					assert.Equal(t, addr, a)
+				}
 			}
 		})
 	}
@@ -587,9 +612,6 @@ func setupSchemaMergeTest(t *testing.T, test schemaMergeTest) (anc, left, right,
 }
 
 func maybeSkip(t *testing.T, nbf *types.NomsBinFormat, test schemaMergeTest) {
-	if test.conflict {
-		t.Skip("TODO: test conflict state")
-	}
 	if types.IsFormat_DOLT(nbf) {
 		if test.skipNewFmt {
 			t.Skip("")
@@ -611,6 +633,7 @@ func sch(definition string) namedSchema {
 	ns := denv.DoltDB.NodeStore()
 	ctx := context.Background()
 	root, _ := doltdb.EmptyRootValue(ctx, vrw, ns)
+	// TODO: ParseCreateTableStatement silently drops any indexes or check constraints in the definition
 	name, s, err := sqlutil.ParseCreateTableStatement(ctx, root, definition)
 	if err != nil {
 		panic(err)
