@@ -2908,6 +2908,12 @@ var SchemaConflictScripts = []queries.ScriptTest{
 					"",
 				}},
 			},
+			{
+				Query: "select * from dolt_status",
+				Expected: []sql.Row{
+					{"t", false, "schema conflict"},
+				},
+			},
 		},
 	},
 }
