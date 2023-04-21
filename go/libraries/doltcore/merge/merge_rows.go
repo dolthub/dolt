@@ -128,8 +128,8 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 		return nil, nil, err
 	}
 	if schConflicts.Count() != 0 {
-		// error on schema conflicts for now
-		return nil, nil, fmt.Errorf("%w.\n%s", ErrSchemaConflict, schConflicts.AsError().Error())
+		// error on any schema conflicts that we can't resolve
+		return nil, nil, ErrSchemaConflict.New(schConflicts.AsError().Error())
 	}
 
 	if types.IsFormat_DOLT(tm.vrw.Format()) {
