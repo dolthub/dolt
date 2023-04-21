@@ -147,13 +147,16 @@ func parseShowArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	}, nil
 }
 
-func isCommit(value types.Value) bool {
-	if sm, ok := value.(types.SerialMessage); ok {
-		if serial.GetFileID(sm) == serial.CommitFileID {
-			return true
-		}
+func showObjects(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error {
+	if len(opts.specRefs) == 0 {
+		return showCommitSpec(ctx, dEnv, opts, dEnv.RepoStateReader().CWBHeadSpec())
 	}
-	return false
+
+	for _, specRef := range opts.specRefs {
+		showSpecRef(ctx, dEnv, opts, specRef)
+	}
+
+	return nil
 }
 
 func showSpecRef(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, specRef string) error {
@@ -206,16 +209,13 @@ func showSpecRef(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, specRef
 	return nil
 }
 
-func showObjects(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error {
-	if len(opts.specRefs) == 0 {
-		return showCommitSpec(ctx, dEnv, opts, dEnv.RepoStateReader().CWBHeadSpec())
+func isCommit(value types.Value) bool {
+	if sm, ok := value.(types.SerialMessage); ok {
+		if serial.GetFileID(sm) == serial.CommitFileID {
+			return true
+		}
 	}
-
-	for _, specRef := range opts.specRefs {
-		showSpecRef(ctx, dEnv, opts, specRef)
-	}
-
-	return nil
+	return false
 }
 
 func showCommitSpec(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, commitSpec *doltdb.CommitSpec) error {
