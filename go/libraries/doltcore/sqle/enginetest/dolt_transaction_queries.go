@@ -2154,3 +2154,48 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 	//		},
 	//	},
 }
+
+var MultiDbTransactionTests = []queries.ScriptTest{
+	{
+		Name:         "committing to another branch",
+		SetUpScript:  []string{
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "insert into `mydb/b1`.t1 values (1)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query:            "insert into `mydb/b1`.t1 values (2)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query:            "commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "select * from t1 order by a",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "call dolt_checkout('b1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "select * from t1 order by a",
+				Expected: []sql.Row{
+					{1},{2},
+				},
+			},
+		},
+	},
+}

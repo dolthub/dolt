@@ -1400,7 +1400,7 @@ func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, datasetId string) err
 }
 
 func (ddb *DoltDB) GetBranchesByRootHash(ctx context.Context, rootHash hash.Hash) ([]RefWithHash, error) {
-	dss, err := ddb.db.GetDatasetsByRootHash(ctx, rootHash)
+	dss, err := ddb.db.DatasetsByRootHash(ctx, rootHash)
 	if err != nil {
 		return nil, err
 	}

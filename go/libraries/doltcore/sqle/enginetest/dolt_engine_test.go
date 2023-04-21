@@ -1017,6 +1017,16 @@ func TestTransactions(t *testing.T) {
 	}
 }
 
+func TestMultiDbTransactions(t *testing.T) {
+	for _, script := range MultiDbTransactionTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
 func TestConcurrentTransactions(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
