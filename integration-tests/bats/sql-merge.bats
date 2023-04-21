@@ -909,9 +909,19 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c1\` CHECK ((\`i\` < 0))" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other -m "merge other"
-    log_status_eq 1
-    [[ "$output" =~ "our check 'c1' and their check 'c0' both reference the same column(s)" ]] || false
+    dolt merge other -m "merge other"
+
+    run dolt status
+    log_status_eq 0
+    [[ "$output" =~ "schema conflict:" ]]
+    run dolt sql -q "select count(*) from dolt_schema_conflicts"
+    log_status_eq 0
+    [[ "$output" =~ "1" ]]
+    skip "todo"
+    dolt sql -q "call dolt_conflicts_resolve('--ours')"
+    run dolt sql -q "show create table t"
+    log_status_eq 0
+    [[ "$output" =~ "CONSTRAINT \`c0\` CHECK ((\`i\` > 0))" ]] || false
 }
 
 @test "sql-merge: dropping constraint on both branches merges successfully" {
@@ -963,9 +973,18 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other -m "merge other"
-    log_status_eq 1
-    [[ "$output" =~ "check 'c' was deleted in theirs but modified in ours" ]] || false
+    dolt merge other -m "merge other"
+    run dolt status
+    log_status_eq 0
+    [[ "$output" =~ "schema conflict:" ]]
+    run dolt sql -q "select count(*) from dolt_schema_conflicts"
+    log_status_eq 0
+    [[ "$output" =~ "1" ]]
+    skip "todo"
+    dolt sql -q "call dolt_conflicts_resolve('--ours')"
+    run dolt sql -q "show create table t"
+    log_status_eq 0
+    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
 }
 
 @test "sql-merge: merging with not null and check constraints preserves both constraints" {
@@ -1027,9 +1046,18 @@ SQL
     dolt checkout main
     run dolt merge b1 -m "merge b1" --commit
     log_status_eq 0
-    run dolt merge b2 -m "merge b2"
-    log_status_eq 1
-    [[ "$output" =~ "two checks with the name 'c' but different definitions" ]] || false
+    dolt merge b2 -m "merge b2"
+    run dolt status
+    log_status_eq 0
+    [[ "$output" =~ "schema conflict:" ]]
+    run dolt sql -q "select count(*) from dolt_schema_conflicts"
+    log_status_eq 0
+    [[ "$output" =~ "1" ]]
+    skip "todo"
+    dolt sql -q "call dolt_conflicts_resolve('--ours')"
+    run dolt sql -q "show create table t"
+    log_status_eq 0
+    [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))" ]] || false
 }
 
 @test "sql-merge: check constraint for deleted column in another table" {
@@ -1054,9 +1082,18 @@ SQL
     dolt checkout main
     run dolt merge b1 -m "merge b1"
     log_status_eq 0
-    run dolt merge b2 -m "merge b2"
-    log_status_eq 1
-    [[ "$output" =~ "check 'c' references a column that will be deleted after merge" ]] || false
+    dolt merge b2 -m "merge b2"
+    run dolt status
+    log_status_eq 0
+    [[ "$output" =~ "schema conflict:" ]]
+    run dolt sql -q "select count(*) from dolt_schema_conflicts"
+    log_status_eq 0
+    [[ "$output" =~ "1" ]]
+    skip "todo"
+    dolt sql -q "call dolt_conflicts_resolve('--ours')"
+    run dolt sql -q "show create table t"
+    log_status_eq 0
+    [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`j\` > 0))" ]] || false
 }
 
 @test "sql-merge: DOLT_MERGE with author flag specified" {

@@ -11,7 +11,7 @@ teardown() {
 
 @test "schema-conflicts: dolt_schema_conflicts smoke test" {
     run dolt sql -q "select * from dolt_schema_conflicts" -r csv
-    [[ "$output" =~ "table,our_schema,their_schema,description" ]]
+    [[ "$output" =~ "table_name,our_schema,their_schema,description" ]]
 }
 
 setup_schema_conflict() {
@@ -33,7 +33,7 @@ setup_schema_conflict() {
 
     run dolt sql -q "select * from dolt_schema_conflicts" -r vertical
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "table: t" ]]
+    [[ "$output" =~ "table_name: t" ]]
     [[ "$output" =~ "our_schema: create table t (pk int primary key, c0 varchar(20))" ]]
     [[ "$output" =~ "their_schema: create table t (pk int primary key, c0 datetime)" ]]
     [[ "$output" =~ "description: " ]]
@@ -42,12 +42,11 @@ setup_schema_conflict() {
 @test "schema-conflicts: cli merge, query schema conflicts" {
     setup_schema_conflict
 
-    run dolt merge other
-    [ "$status" -ne 0 ]
+    dolt merge other
 
     run dolt sql -q "select * from dolt_schema_conflicts" -r vertical
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "table: t" ]]
+    [[ "$output" =~ "table_name: t" ]]
     [[ "$output" =~ "our_schema: create table t (pk int primary key, c0 varchar(20))" ]]
     [[ "$output" =~ "their_schema: create table t (pk int primary key, c0 datetime)" ]]
     [[ "$output" =~ "description: " ]]

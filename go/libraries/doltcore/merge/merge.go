@@ -184,7 +184,7 @@ func MergeRoots(
 			}
 		}
 
-		if mergedTable != nil {
+		if mergedTable.table != nil {
 			tblToStats[tblName] = stats
 
 			mergedRoot, err = mergedRoot.PutTable(ctx, tblName, mergedTable.table)

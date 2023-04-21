@@ -423,9 +423,9 @@ teardown() {
     run dolt stash pop
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "Changes to be committed:" ]] || false
-    [[ "${lines[3]}" =~ "new table:      new_table" ]] || false
+    [[ "${lines[3]}" =~ "new table:        new_table" ]] || false
     [[ "${lines[4]}" =~ "Untracked files:" ]] || false
-    [[ "${lines[6]}" =~ "new table:      test_table" ]] || false
+    [[ "${lines[6]}" =~ "new table:        test_table" ]] || false
 }
 
 @test "stash: stashing staged new table changes and popping the stash, the added table should be staged" {
@@ -625,7 +625,7 @@ teardown() {
     run dolt stash pop
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
-    [[ "$output" =~ "deleted:        test" ]] || false
+    [[ "$output" =~ "deleted:          test" ]] || false
     [[ "$output" =~ "Dropped refs/stash@{0}" ]] || false
 }
 

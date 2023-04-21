@@ -188,7 +188,7 @@ func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[
 		case ErrFastForward:
 			panic("fast forward merge")
 		}
-		return result.Stats, err
+		return nil, err
 	}
 
 	err = mergedRootToWorking(ctx, spec.Squash, dEnv, result, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr)

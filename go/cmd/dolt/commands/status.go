@@ -108,7 +108,7 @@ func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTb
 	}
 
 	if mergeActive {
-		if as.HasConflicts() || as.HasConstraintViolations() {
+		if as.HasConflicts() && as.HasConstraintViolations() {
 			cli.Println(fmt.Sprintf(unmergedTablesHeader, "conflicts and constraint violations"))
 		} else if as.HasConflicts() {
 			cli.Println(fmt.Sprintf(unmergedTablesHeader, "conflicts"))

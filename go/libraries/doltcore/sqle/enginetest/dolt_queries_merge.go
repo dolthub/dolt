@@ -4199,7 +4199,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				Expected: []sql.Row{{0, 1}},
 			},
 			{
-				Query:    "select `table` from dolt_schema_conflicts",
+				Query:    "select table_name from dolt_schema_conflicts",
 				Expected: []sql.Row{{"t"}},
 			},
 		},
@@ -4221,7 +4221,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				Expected: []sql.Row{{0, 1}},
 			},
 			{
-				Query:    "select `table` from dolt_schema_conflicts",
+				Query:    "select table_name from dolt_schema_conflicts",
 				Expected: []sql.Row{{"t"}},
 			},
 		},

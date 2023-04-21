@@ -104,7 +104,6 @@ SQL
     dolt checkout main
     dolt merge branch1
     dolt merge branch2
-    exit 1
 }
 
 @test "column_tags: Merging branches that use the same tag referring to different column names fails" {
@@ -130,7 +129,6 @@ SQL
     dolt checkout main
     dolt merge branch1
     dolt merge branch2
-    exit 1
 }
 
 @test "column_tags: Merging branches that both created the same column succeeds" {
@@ -355,7 +353,6 @@ DELIM
 
     run dolt merge other
     [ $status -ne 0 ]
-    echo $output
     [[ $output =~ "table with same name 'target' added in 2 commits can't be merged" ]] || false
     dolt reset --hard
 
