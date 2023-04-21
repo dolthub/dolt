@@ -108,7 +108,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	opts.diffDisplaySettings = parseDiffDisplaySettings(ctx, dEnv, apr)
 
-	err = showCommits(ctx, dEnv, opts)
+	err = showObjects(ctx, dEnv, opts)
 
 	return handleErrAndExit(err)
 }
@@ -206,7 +206,7 @@ func showSpecRef(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, specRef
 	return nil
 }
 
-func showCommits(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error {
+func showObjects(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error {
 	if len(opts.specRefs) == 0 {
 		return showCommitSpec(ctx, dEnv, opts, dEnv.RepoStateReader().CWBHeadSpec())
 	}
