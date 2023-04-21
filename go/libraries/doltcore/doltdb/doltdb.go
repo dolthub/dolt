@@ -235,6 +235,7 @@ func (ddb *DoltDB) Close() error {
 	return ddb.db.Close()
 }
 
+// ParseHashString converts a string representing a hash into a hash.Hash.
 func ParseHashString(hashStr string) (hash.Hash, error) {
 	unprefixed := strings.TrimPrefix(hashStr, "#")
 	parsedHash, ok := hash.MaybeParse(unprefixed)
@@ -244,6 +245,7 @@ func ParseHashString(hashStr string) (hash.Hash, error) {
 	return parsedHash, nil
 }
 
+// GetHashForRefStr resolves a ref string (such as a branch name or tag) and resolves it to a hash.Hash.
 func (ddb *DoltDB) GetHashForRefStr(ctx context.Context, ref string) (*hash.Hash, error) {
 	if err := datas.ValidateDatasetId(ref); err != nil {
 		return nil, fmt.Errorf("invalid ref format: %s", ref)
