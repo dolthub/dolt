@@ -4195,8 +4195,12 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "call dolt_merge('right');",
-				ExpectedErr: merge.ErrSchemaConflict,
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select `table` from dolt_schema_conflicts",
+				Expected: []sql.Row{{"t"}},
 			},
 		},
 	},
@@ -4213,8 +4217,12 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "call dolt_merge('right');",
-				ExpectedErr: merge.ErrSchemaConflict,
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select `table` from dolt_schema_conflicts",
+				Expected: []sql.Row{{"t"}},
 			},
 		},
 	},
