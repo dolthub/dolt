@@ -33,7 +33,7 @@ type conflictKind byte
 const (
 	TagCollision conflictKind = iota
 	NameCollision
-	ColumnCollision
+	ColumnCheckCollision
 	InvalidCheckCollision
 	DeletedCheckCollision
 )
@@ -117,7 +117,7 @@ func (c ChkConflict) String() string {
 	switch c.Kind {
 	case NameCollision:
 		return fmt.Sprintf("two checks with the name '%s' but different definitions", c.Ours.Name())
-	case ColumnCollision:
+	case ColumnCheckCollision:
 		return fmt.Sprintf("our check '%s' and their check '%s' both reference the same column(s)", c.Ours.Name(), c.Theirs.Name())
 	case InvalidCheckCollision:
 		return fmt.Sprintf("check '%s' references a column that will be deleted after merge", c.Ours.Name())
@@ -295,105 +295,276 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 	return common, conflicts, err
 }
 
-func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (merged *schema.ColCollection, conflicts []ColConflict, err error) {
-	var common *schema.ColCollection
-	common, conflicts = columnsInCommon(ourCC, theirCC, ancCC)
-
-	ourNewCols := schema.ColCollectionSetDifference(ourCC, ancCC)
-	theirNewCols := schema.ColCollectionSetDifference(theirCC, ancCC)
-
-	// check for name conflicts between columns added on each branch since the ancestor
-	_ = ourNewCols.Iter(func(tag uint64, ourCol schema.Column) (stop bool, err error) {
-		theirCol, ok := theirNewCols.GetByNameCaseInsensitive(ourCol.Name)
-		if ok && ourCol.Tag != theirCol.Tag {
-			conflicts = append(conflicts, ColConflict{
-				Kind:   NameCollision,
-				Ours:   ourCol,
-				Theirs: theirCol,
-			})
-		}
-		return false, nil
-	})
-
-	if len(conflicts) > 0 {
-		return nil, conflicts, nil
-	}
-
-	// order of args here is important for correct column ordering in sch schema
-	// to be before any column in the intersection
-	// TODO: sch column ordering doesn't respect sql "MODIFY ... AFTER ..." statements
-	merged, err = schema.ColCollUnion(common, ourNewCols, theirNewCols)
+// mergeColumns merges the columns from |ourCC|, |theirCC| into a single column collection, using the ancestor column
+// definitions in |ancCC| to determine on which side a column has changed. If merging is not possible because of
+// conflicting changes to the columns in |ourCC| and |theirCC|, then a set of ColConflict instances are returned
+// describing the conflicts. If any other, unexpected error occurs, then that error is returned and the other response
+// fields should be ignored.
+func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, error) {
+	columnMappings, err := mapColumns(ourCC, theirCC, ancCC)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return merged, conflicts, nil
+	conflicts, err := checkSchemaConflicts(columnMappings)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// After we've checked for schema conflicts, merge the columns together
+	// TODO: We don't currently preserve all column position changes; the returned merged columns are always based on
+	//	     their position in |ourCC|, with any new columns from |theirCC| added at the end of the column collection.
+	var mergedColumns []schema.Column
+	for _, mapping := range columnMappings {
+		ours := mapping.ours
+		theirs := mapping.theirs
+		anc := mapping.anc
+
+		switch {
+		case anc == nil && ours == nil && theirs != nil:
+			// if an ancestor does not exist, and the column exists only on one side, use that side
+			// (if an ancestor DOES exist, this means the column was deleted, so it's a no-op)
+			mergedColumns = append(mergedColumns, *theirs)
+		case anc == nil && ours != nil && theirs == nil:
+			// if an ancestor does not exist, and the column exists only on one side, use that side
+			// (if an ancestor DOES exist, this means the column was deleted, so it's a no-op)
+			mergedColumns = append(mergedColumns, *ours)
+		case ours == nil && theirs == nil:
+			// if the column is deleted on both sides... just let it fall out
+		case ours != nil && theirs != nil:
+			// otherwise, we have two valid columns and we need to figure out which one to use
+			if anc != nil {
+				oursChanged := !anc.Equals(*ours)
+				theirsChanged := !anc.Equals(*theirs)
+				if oursChanged && theirsChanged {
+					// This is a schema change conflict and has already been handled by checkSchemaConflicts
+				} else if theirsChanged {
+					mergedColumns = append(mergedColumns, *theirs)
+				} else {
+					mergedColumns = append(mergedColumns, *ours)
+				}
+			} else if ours.Equals(*theirs) {
+				// if the columns are identical, just use ours
+				mergedColumns = append(mergedColumns, *ours)
+			}
+		}
+	}
+
+	// Check that there are no duplicate column names or tags in the merged column set
+	conflicts = append(conflicts, checkForColumnConflicts(mergedColumns)...)
+	if conflicts != nil {
+		return nil, conflicts, nil
+	}
+
+	return schema.NewColCollection(mergedColumns...), nil, nil
 }
 
-func columnsInCommon(ourCC, theirCC, ancCC *schema.ColCollection) (common *schema.ColCollection, conflicts []ColConflict) {
-	common = schema.NewColCollection()
-	_ = ourCC.Iter(func(tag uint64, ourCol schema.Column) (stop bool, err error) {
-		theirCol, ok := theirCC.GetByTag(ourCol.Tag)
-		if !ok {
-			return false, nil
-		}
+// checkForColumnConflicts iterates over |mergedColumns|, checks for duplicate column names or column tags, and returns
+// a slice of ColConflicts for any conflicts found.
+func checkForColumnConflicts(mergedColumns []schema.Column) []ColConflict {
+	columnNameSet := map[string]schema.Column{}
+	columnTagSet := map[uint64]schema.Column{}
+	var conflicts []ColConflict
 
-		if ourCol.Equals(theirCol) {
-			common = common.Append(ourCol)
-			return false, nil
+	for _, col := range mergedColumns {
+		normalizedName := strings.ToLower(col.Name)
+		if _, ok := columnNameSet[normalizedName]; ok {
+			conflicts = append(conflicts, ColConflict{
+				Kind:   NameCollision,
+				Ours:   col,
+				Theirs: columnNameSet[normalizedName],
+			})
 		}
+		columnNameSet[normalizedName] = col
 
-		ancCol, ok := ancCC.GetByTag(ourCol.Tag)
-		if !ok {
-			// col added on our branch and their branch with different def
+		if _, ok := columnTagSet[col.Tag]; ok {
 			conflicts = append(conflicts, ColConflict{
 				Kind:   TagCollision,
-				Ours:   ourCol,
-				Theirs: theirCol,
+				Ours:   col,
+				Theirs: columnTagSet[col.Tag],
 			})
-			return false, nil
 		}
+		columnTagSet[col.Tag] = col
+	}
 
-		if ancCol.Equals(theirCol) {
-			// col modified on our branch
-			col, ok := common.GetByNameCaseInsensitive(ourCol.Name)
-			if ok {
+	return conflicts
+}
+
+// checkSchemaConflicts iterates over |columnMappings| and returns any column schema conflicts from column changes
+// that can't be automatically merged.
+func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) {
+	var conflicts []ColConflict
+	for _, mapping := range columnMappings {
+		ours := mapping.ours
+		theirs := mapping.theirs
+		anc := mapping.anc
+
+		// Column exists on our side
+		if ours != nil {
+			// If the column is identical on both sides, no need to check any more conflict cases,
+			// just move on to the next column
+			if theirs != nil && theirs.Equals(*ours) {
+				continue
+			}
+
+			switch {
+			case theirs == nil && anc != nil:
+				// Column doesn't exist on their side, but does exist in ancestor
+				// This means the column was deleted on theirs side
+				if !anc.Equals(*ours) {
+					// col altered on our branch and deleted on their branch
+					conflicts = append(conflicts, ColConflict{
+						Kind: NameCollision,
+						Ours: *ours,
+					})
+				}
+			case theirs != nil && anc != nil:
+				// Column exists on their side and in ancestor
+				// If the column differs from the ancestor on both sides, then we have a conflict
+				if !anc.Equals(*ours) && !anc.Equals(*theirs) {
+					conflicts = append(conflicts, ColConflict{
+						Kind:   TagCollision,
+						Ours:   *ours,
+						Theirs: *theirs,
+					})
+				}
+			case theirs != nil && anc == nil:
+				// Column exists on both sides, but not in ancestor
+				// col added on our branch and their branch with different def
 				conflicts = append(conflicts, ColConflict{
 					Kind:   NameCollision,
-					Ours:   ourCol,
-					Theirs: col,
+					Ours:   *ours,
+					Theirs: *theirs,
 				})
-			} else {
-				common = common.Append(ourCol)
+			case theirs == nil && anc == nil:
+				// column doesn't exist on theirs or in anc – no conflict
 			}
-			return false, nil
 		}
 
-		if ancCol.Equals(ourCol) {
-			// col modified on their branch
-			col, ok := common.GetByNameCaseInsensitive(theirCol.Name)
-			if ok {
-				conflicts = append(conflicts, ColConflict{
-					Kind:   NameCollision,
-					Ours:   col,
-					Theirs: theirCol,
-				})
-			} else {
-				common = common.Append(theirCol)
+		// Column does not exist on our side
+		if ours == nil {
+			switch {
+			case theirs == nil && anc != nil:
+				// Column doesn't exist on their side and our side, but does exist in ancestor
+				// deleted on both sides – no conflict
+
+			case theirs != nil && anc != nil:
+				// Column exists on their side and in ancestor
+				// If ancs doesn't match theirs, the column was altered on both sides
+				if !anc.Equals(*theirs) {
+					// col deleted on our branch and altered on their branch
+					conflicts = append(conflicts, ColConflict{
+						Kind:   NameCollision,
+						Theirs: *theirs,
+					})
+				}
+
+			case theirs != nil && anc == nil:
+				// Column exists only on theirs; no conflict
+
+			case theirs == nil && anc == nil:
+				// Invalid for anc, ours, and theirs should never happen
+				return nil, fmt.Errorf("invalid column mapping: %v", mapping)
 			}
-			return false, nil
+		}
+	}
+
+	return conflicts, nil
+}
+
+// columnMapping describes the mapping for a column being merged between the two sides of the merge as well as the ancestor.
+type columnMapping struct {
+	anc    *schema.Column
+	ours   *schema.Column
+	theirs *schema.Column
+}
+
+// newColumnMapping returns a new columnMapping instance, populated with the specified columns. If |anc|, |ours|,
+// or |theirs| is schema.InvalidColumn (checked by looking for schema.InvalidTag), then the returned mapping will
+// hold a nil value instead of schema.InvalidColumn.
+func newColumnMapping(anc, ours, theirs schema.Column) columnMapping {
+	var pAnc, pOurs, pTheirs *schema.Column
+	if anc.Tag != schema.InvalidTag {
+		pAnc = &anc
+	}
+	if ours.Tag != schema.InvalidTag {
+		pOurs = &ours
+	}
+	if theirs.Tag != schema.InvalidTag {
+		pTheirs = &theirs
+	}
+	return columnMapping{pAnc, pOurs, pTheirs}
+}
+
+type columnMappings []columnMapping
+
+// DebugString returns a string representation of this columnMappings instance.
+func (c columnMappings) DebugString() string {
+	sb := strings.Builder{}
+
+	sb.WriteString("Column Mappings:\n")
+	for _, mapping := range c {
+		if mapping.ours != nil {
+			sb.WriteString(fmt.Sprintf("  %s (%v) ", mapping.ours.Name, mapping.ours.Tag))
+		} else {
+			sb.WriteString("  --- ")
+		}
+		sb.WriteString(" -> ")
+		if mapping.theirs != nil {
+			sb.WriteString(fmt.Sprintf("  %s (%v) ", mapping.theirs.Name, mapping.theirs.Tag))
+		} else {
+			sb.WriteString("  --- ")
+		}
+		sb.WriteString(" -> ")
+		if mapping.anc != nil {
+			sb.WriteString(fmt.Sprintf("  %s (%v) ", mapping.anc.Name, mapping.anc.Tag))
+		} else {
+			sb.WriteString("  --- ")
+		}
+		sb.WriteString("\n")
+	}
+	return sb.String()
+}
+
+// mapColumns returns a columnMappings instance that describes how the columns in |ourCC|, |theirCC|, and |ancCC|
+// map to each other.
+func mapColumns(ourCC, theirCC, ancCC *schema.ColCollection) (columnMappings, error) {
+	// Make a copy of theirCC so we can modify it to track which their columns we've matched
+	theirCC = schema.NewColCollection(theirCC.GetColumns()...)
+	theirTagsToCols := theirCC.TagToCol
+
+	columnMappings := make(columnMappings, 0)
+	_ = ourCC.Iter(func(tag uint64, ourCol schema.Column) (stop bool, err error) {
+		theirCol, foundTheirByTag := theirCC.GetByTag(ourCol.Tag)
+		if !foundTheirByTag {
+			// If we didn't find a column on the other side of the merge that exactly matches this tag, then
+			// we fallback to looking for a match by name
+			theirCol, _ = theirCC.GetByNameCaseInsensitive(ourCol.Name)
 		}
 
-		// col modified on our branch and their branch with different def
-		conflicts = append(conflicts, ColConflict{
-			Kind:   TagCollision,
-			Ours:   ourCol,
-			Theirs: theirCol,
-		})
+		ancCol, foundAncByTag := ancCC.GetByTag(ourCol.Tag)
+		if !foundAncByTag {
+			// Ditto for finding the ancestor column
+			ancCol, _ = ancCC.GetByNameCaseInsensitive(ourCol.Name)
+		}
+
+		delete(theirTagsToCols, theirCol.Tag)
+		columnMappings = append(columnMappings, newColumnMapping(ancCol, ourCol, theirCol))
 		return false, nil
 	})
 
-	return common, conflicts
+	// Handle any remaining columns on the "their" side
+	for _, theirCol := range theirTagsToCols {
+		ancCol, foundAncByTag := ancCC.GetByTag(theirCol.Tag)
+		if !foundAncByTag {
+			// Ditto for finding the ancestor column
+			ancCol, _ = ancCC.GetByNameCaseInsensitive(theirCol.Name)
+		}
+
+		columnMappings = append(columnMappings, newColumnMapping(ancCol, schema.InvalidCol, theirCol))
+	}
+
+	return columnMappings, nil
 }
 
 // assumes indexes are unique over their column sets
@@ -852,7 +1023,7 @@ func mergeChecks(ctx context.Context, ourChks, theirChks, ancChks schema.CheckCo
 				if _, ok := theirNewChkColsMap[col][ourChk]; !ok {
 					for k := range theirNewChkColsMap[col] {
 						conflicts = append(conflicts, ChkConflict{
-							Kind:   ColumnCollision,
+							Kind:   ColumnCheckCollision,
 							Ours:   ourChk,
 							Theirs: k,
 						})

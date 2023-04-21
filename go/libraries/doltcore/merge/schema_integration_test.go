@@ -289,13 +289,13 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			ColConflicts: []merge.ColConflict{
 				{
 					Kind:   merge.NameCollision,
-					Ours:   newColTypeInfo("c4", uint64(4696), typeinfo.Int32Type, false),
-					Theirs: newColTypeInfo("c4", uint64(8539), typeinfo.Int32Type, false),
+					Ours:   newColTypeInfo("C6", uint64(13258), typeinfo.Int32Type, false),
+					Theirs: newColTypeInfo("c6", uint64(13258), typeinfo.Int32Type, false),
 				},
 				{
 					Kind:   merge.NameCollision,
-					Ours:   newColTypeInfo("C6", uint64(13258), typeinfo.Int32Type, false),
-					Theirs: newColTypeInfo("c6", uint64(13258), typeinfo.Int32Type, false),
+					Ours:   newColTypeInfo("c4", uint64(4696), typeinfo.Int32Type, false),
+					Theirs: newColTypeInfo("c4", uint64(8539), typeinfo.Int32Type, false),
 				},
 			},
 		},
