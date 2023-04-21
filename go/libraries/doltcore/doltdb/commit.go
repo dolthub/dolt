@@ -62,6 +62,11 @@ func (c *Commit) HashOf() (hash.Hash, error) {
 	return c.dCommit.Addr(), nil
 }
 
+// Value returns the types.Value the backs the commit.
+func (c *Commit) Value() types.Value {
+	return c.dCommit.NomsValue()
+}
+
 // GetCommitMeta gets the metadata associated with the commit
 func (c *Commit) GetCommitMeta(ctx context.Context) (*datas.CommitMeta, error) {
 	return datas.GetCommitMeta(ctx, c.dCommit.NomsValue())

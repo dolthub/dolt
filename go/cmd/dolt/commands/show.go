@@ -17,9 +17,9 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/hash"
+	"regexp"
 	"strings"
-
-	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -29,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 )
+
+var hashRegex = regexp.MustCompile(`^#?[0-9a-v]{32}$`)
 
 type showOpts struct {
 	showParents bool
@@ -145,33 +147,69 @@ func parseShowArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 
 func showCommits(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error {
 	if len(opts.specRefs) == 0 {
-		return showCommit(ctx, dEnv, opts, dEnv.RepoStateReader().CWBHeadSpec())
+		return showCommitSpec(ctx, dEnv, opts, dEnv.RepoStateReader().CWBHeadSpec())
 	}
 
 	for _, specRef := range opts.specRefs {
-		commitSpec, err := getCommitSpec(specRef)
-
+		roots, err := dEnv.Roots(ctx)
 		if err != nil {
-			cli.PrintErrln(color.HiRedString("Fatal error: invalid commit spec %s", specRef))
 			return err
 		}
 
-		err = showCommit(ctx, dEnv, opts, commitSpec)
-		if err != nil {
-			return err
+		if specRef == doltdb.Working || specRef == doltdb.Staged || hashRegex.MatchString(specRef) {
+			var refHash hash.Hash
+			var err error
+			if specRef == doltdb.Working {
+				refHash, err = roots.Working.HashOf()
+			} else if specRef == doltdb.Staged {
+				refHash, err = roots.Staged.HashOf()
+			} else {
+				refHash, err = doltdb.ParseHashString(specRef)
+			}
+			if err != nil {
+				return err
+			}
+			value, err := dEnv.DoltDB.ValueReadWriter().ReadValue(ctx, refHash)
+			if err != nil {
+				return err
+			}
+			if value == nil {
+				return fmt.Errorf("Unable to resolve object ref %s", specRef)
+			}
+			cli.Println(value.Kind(), value.HumanReadableString())
+		} else { // specRef is a CommitSpec, which must resolve to a Commit.
+			commitSpec, err := getCommitSpec(specRef)
+			if err != nil {
+				return err
+			}
+
+			return showCommitSpec(ctx, dEnv, opts, commitSpec)
 		}
 	}
 
 	return nil
 }
 
-func showCommit(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, commitSpec *doltdb.CommitSpec) error {
+func showCommitSpec(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, commitSpec *doltdb.CommitSpec) error {
 
-	comm, err := dEnv.DoltDB.Resolve(ctx, commitSpec, dEnv.RepoStateReader().CWBHeadRef())
+	commit, err := dEnv.DoltDB.Resolve(ctx, commitSpec, dEnv.RepoStateReader().CWBHeadRef())
 	if err != nil {
-		cli.PrintErrln(color.HiRedString("Fatal error: cannot resolve commit spec."))
 		return err
 	}
+
+	if opts.pretty {
+		err = showCommit(ctx, dEnv, opts, commit)
+		if err != nil {
+			return err
+		}
+	} else {
+		value := commit.Value()
+		cli.Println(value.Kind(), value.HumanReadableString())
+	}
+	return nil
+}
+
+func showCommit(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, comm *doltdb.Commit) error {
 
 	cHashToRefs, err := getHashToRefs(ctx, dEnv, opts.decoration)
 	if err != nil {

@@ -235,6 +235,15 @@ func (ddb *DoltDB) Close() error {
 	return ddb.db.Close()
 }
 
+func ParseHashString(hashStr string) (hash.Hash, error) {
+	unprefixed := strings.TrimPrefix(hashStr, "#")
+	parsedHash, ok := hash.MaybeParse(unprefixed)
+	if !ok {
+		return hash.Hash{}, errors.New("invalid hash: " + hashStr)
+	}
+	return parsedHash, nil
+}
+
 func (ddb *DoltDB) GetHashForRefStr(ctx context.Context, ref string) (*hash.Hash, error) {
 	if err := datas.ValidateDatasetId(ref); err != nil {
 		return nil, fmt.Errorf("invalid ref format: %s", ref)
@@ -275,15 +284,6 @@ func getCommitValForRefStr(ctx context.Context, ddb *DoltDB, ref string) (*datas
 	return datas.LoadCommitAddr(ctx, ddb.vrw, *commitHash)
 }
 
-func getCommitValForHash(ctx context.Context, vr types.ValueReader, c string) (*datas.Commit, error) {
-	unprefixed := strings.TrimPrefix(c, "#")
-	hash, ok := hash.MaybeParse(unprefixed)
-	if !ok {
-		return nil, errors.New("invalid hash: " + c)
-	}
-	return datas.LoadCommitAddr(ctx, vr, hash)
-}
-
 // Roots is a convenience struct to package up the three roots that most library functions will need to inspect and
 // modify the working set. This struct is designed to be passed by value always: functions should take a Roots as a
 // param and return a modified one.
@@ -300,18 +300,11 @@ type Roots struct {
 	Staged  *RootValue
 }
 
-// Resolve takes a CommitSpec and returns a Commit, or an error if the commit cannot be found.
-// If the CommitSpec is HEAD, Resolve also needs the DoltRef of the current working branch.
-func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (*Commit, error) {
-	if cs == nil {
-		panic("nil commit spec")
-	}
-
-	var commitVal *datas.Commit
-	var err error
+func (ddb *DoltDB) getHashFromCommitSpec(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (*hash.Hash, error) {
 	switch cs.csType {
 	case hashCommitSpec:
-		commitVal, err = getCommitValForHash(ctx, ddb.vrw, cs.baseSpec)
+		hash, err := ParseHashString(cs.baseSpec)
+		return &hash, err
 	case refCommitSpec:
 		// For a ref in a CommitSpec, we have the following behavior.
 		// If it starts with `refs/`, we look for an exact match before
@@ -334,30 +327,58 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 			}
 		}
 		for _, candidate := range candidates {
-			commitVal, err = getCommitValForRefStr(ctx, ddb, candidate)
+			valueHash, err := ddb.GetHashForRefStr(ctx, candidate)
 			if err == nil {
-				break
+				return valueHash, nil
 			}
 			if err != ErrBranchNotFound {
 				return nil, err
-			} else {
-				err = fmt.Errorf("%w: %s", ErrBranchNotFound, cs.baseSpec)
 			}
 		}
+		return nil, fmt.Errorf("%w: %s", ErrBranchNotFound, cs.baseSpec)
 	case headCommitSpec:
 		if cwb == nil {
 			return nil, fmt.Errorf("cannot use a nil current working branch with a HEAD commit spec")
 		}
-		commitVal, err = getCommitValForRefStr(ctx, ddb, cwb.String())
+		return ddb.GetHashForRefStr(ctx, cwb.String())
 	default:
 		panic("unrecognized commit spec csType: " + cs.csType)
 	}
+}
 
+// ResolveValue takes a CommitSpec and returns a types.Value, or an error if the spec cannot be resolved.
+// If the CommitSpec is HEAD, Resolve also needs the DoltRef of the current working branch.
+// Note that although the parameter is a CommitSpec, the object it points to might not be a commit.
+func (ddb *DoltDB) ResolveValue(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (types.Value, error) {
+	if cs == nil {
+		panic("nil commit spec")
+	}
+
+	hash, err := ddb.getHashFromCommitSpec(ctx, cs, cwb)
+	if err != nil {
+		return nil, err
+	}
+	return ddb.vrw.ReadValue(ctx, *hash)
+}
+
+// Resolve takes a CommitSpec and returns a Commit, or an error if the commit cannot be found.
+// If the CommitSpec is HEAD, Resolve also needs the DoltRef of the current working branch.
+func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (*Commit, error) {
+	if cs == nil {
+		panic("nil commit spec")
+	}
+
+	hash, err := ddb.getHashFromCommitSpec(ctx, cs, cwb)
 	if err != nil {
 		return nil, err
 	}
 
-	commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
+	commitValue, err := datas.LoadCommitAddr(ctx, ddb.vrw, *hash)
+	if err != nil {
+		return nil, err
+	}
+
+	commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitValue)
 	if err != nil {
 		return nil, err
 	}
