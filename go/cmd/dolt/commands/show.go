@@ -283,7 +283,7 @@ func showCommit(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, comm *do
 	}
 
 	if comm.NumParents() > 1 {
-		return fmt.Errorf("Requested commit is a merge commit. 'dolt show' currently only supports viewing non-merge commits.")
+		return fmt.Errorf("requested commit is a merge commit. 'dolt show' currently only supports viewing non-merge commits")
 	}
 
 	commitRoot, err := comm.GetRootValue(ctx)
