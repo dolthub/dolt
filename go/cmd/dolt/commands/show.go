@@ -203,7 +203,10 @@ func showCommits(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error {
 				return err
 			}
 
-			return showCommitSpec(ctx, dEnv, opts, commitSpec)
+			err = showCommitSpec(ctx, dEnv, opts, commitSpec)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
