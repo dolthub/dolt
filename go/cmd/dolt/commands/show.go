@@ -165,12 +165,13 @@ func showSpecRef(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, specRef
 		return err
 	}
 
-	if specRef == doltdb.Working || specRef == doltdb.Staged || hashRegex.MatchString(specRef) {
+	upperCaseSpecRef := strings.ToUpper(specRef)
+	if upperCaseSpecRef == doltdb.Working || upperCaseSpecRef == doltdb.Staged || hashRegex.MatchString(specRef) {
 		var refHash hash.Hash
 		var err error
-		if specRef == doltdb.Working {
+		if upperCaseSpecRef == doltdb.Working {
 			refHash, err = roots.Working.HashOf()
-		} else if specRef == doltdb.Staged {
+		} else if upperCaseSpecRef == doltdb.Staged {
 			refHash, err = roots.Staged.HashOf()
 		} else {
 			refHash, err = doltdb.ParseHashString(specRef)
