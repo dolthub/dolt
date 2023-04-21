@@ -4151,6 +4151,28 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 
 	// Schema conflict test cases
 	{
+		Name: "index conflicts: both sides add an index with the same name, same columns, but different type",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+		},
+		RightSetUpScript: []string{
+			"alter table t add index idx1 (col2(2));",
+			"INSERT into t values (1, 10, '100');",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add index idx1 (col2);",
+			"INSERT into t values (2, 20, '200');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "call dolt_merge('right');",
+				ExpectedErr: merge.ErrSchemaConflict,
+			},
+			// TODO: Check dolt_schema_conflicts table for the conflict metadata once that sys table exists
+		},
+	},
+
+	{
 		// https://github.com/dolthub/dolt/issues/2973
 		Name: "modifying a column on one side of a merge, and deleting it on the other",
 		AncSetUpScript: []string{
