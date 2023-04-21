@@ -384,7 +384,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 		return fmt.Errorf("FastForward: target value of new head address %v is not a commit.", newHeadAddr)
 	}
 
-	newCommit, err := commitFromValue(db.Format(), v)
+	newCommit, err := CommitFromValue(db.Format(), v)
 	if err != nil {
 		return err
 	}
@@ -392,7 +392,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 	currentHeadAddr, ok := ds.MaybeHeadAddr()
 	if ok {
 		currentHeadValue, _ := ds.MaybeHead()
-		currCommit, err := commitFromValue(db.Format(), currentHeadValue)
+		currCommit, err := CommitFromValue(db.Format(), currentHeadValue)
 		if err != nil {
 			return err
 		}

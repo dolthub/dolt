@@ -303,7 +303,7 @@ func commitPtr(nbf *types.NomsBinFormat, v types.Value, r *types.Ref) (*Commit, 
 	}, nil
 }
 
-func commitFromValue(nbf *types.NomsBinFormat, v types.Value) (*Commit, error) {
+func CommitFromValue(nbf *types.NomsBinFormat, v types.Value) (*Commit, error) {
 	return commitPtr(nbf, v, nil)
 }
 
@@ -326,7 +326,7 @@ func LoadCommitAddr(ctx context.Context, vr types.ValueReader, addr hash.Hash) (
 	if v == nil {
 		return nil, errors.New("target commit not found")
 	}
-	return commitFromValue(vr.Format(), v)
+	return CommitFromValue(vr.Format(), v)
 }
 
 func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader, ns1, ns2 tree.NodeStore) (hash.Hash, bool, error) {

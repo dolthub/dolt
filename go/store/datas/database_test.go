@@ -220,7 +220,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	suite.NoError(err)
 	suite.True(ok)
 	suite.True(h.Equals(a))
-	comm, err := commitFromValue(suite.db.Format(), mustHead(ds2))
+	comm, err := CommitFromValue(suite.db.Format(), mustHead(ds2))
 	suite.NoError(err)
 	suite.Equal(uint64(1), comm.Height())
 
@@ -232,7 +232,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	ds, err = CommitValue(context.Background(), suite.db, ds, b)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(b))
-	comm, err = commitFromValue(suite.db.Format(), mustHead(ds))
+	comm, err = CommitFromValue(suite.db.Format(), mustHead(ds))
 	suite.NoError(err)
 	suite.Equal(uint64(2), comm.Height())
 
@@ -249,7 +249,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	ds, err = CommitValue(context.Background(), suite.db, ds, d)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(d))
-	comm, err = commitFromValue(suite.db.Format(), mustHead(ds))
+	comm, err = CommitFromValue(suite.db.Format(), mustHead(ds))
 	suite.NoError(err)
 	suite.Equal(uint64(3), comm.Height())
 
