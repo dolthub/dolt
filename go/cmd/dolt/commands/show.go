@@ -17,9 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/serial"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/types"
 	"regexp"
 	"strings"
 
@@ -187,14 +185,19 @@ func showSpecRef(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, specRef
 			return fmt.Errorf("Unable to resolve object ref %s", specRef)
 		}
 
-		if opts.pretty && isCommit(value) {
-			commit, err := doltdb.NewCommitFromValue(ctx, dEnv.DoltDB.ValueReadWriter(), dEnv.DoltDB.NodeStore(), value)
-			if err != nil {
-				return err
-			}
+		if !opts.pretty {
+			cli.Println(value.Kind(), value.HumanReadableString())
+		}
+
+		// If this is a commit, use the pretty printer. To determine whether it's a commit, try calling NewCommitFromValue.
+		commit, err := doltdb.NewCommitFromValue(ctx, dEnv.DoltDB.ValueReadWriter(), dEnv.DoltDB.NodeStore(), value)
+
+		if err == doltdb.ErrNotACommit {
+			cli.Println(value.Kind(), value.HumanReadableString())
+		} else if err == nil {
 			showCommit(ctx, dEnv, opts, commit)
 		} else {
-			cli.Println(value.Kind(), value.HumanReadableString())
+			return err
 		}
 	} else { // specRef is a CommitSpec, which must resolve to a Commit.
 		commitSpec, err := getCommitSpec(specRef)
@@ -208,15 +211,6 @@ func showSpecRef(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, specRef
 		}
 	}
 	return nil
-}
-
-func isCommit(value types.Value) bool {
-	if sm, ok := value.(types.SerialMessage); ok {
-		if serial.GetFileID(sm) == serial.CommitFileID {
-			return true
-		}
-	}
-	return false
 }
 
 func showCommitSpec(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, commitSpec *doltdb.CommitSpec) error {
