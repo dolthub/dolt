@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/serial"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -29,8 +28,6 @@ import (
 
 var errCommitHasNoMeta = errors.New("commit has no metadata")
 var errHasNoRootValue = errors.New("no root value")
-
-var ErrNotACommit = errors.New("value is not a commit")
 
 // Rootish is an object resolvable to a RootValue.
 type Rootish interface {
@@ -51,6 +48,7 @@ type Commit struct {
 
 var _ Rootish = &Commit{}
 
+// NewCommit generates a new Commit object that wraps a supplies datas.Commit.
 func NewCommit(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, commit *datas.Commit) (*Commit, error) {
 	parents, err := datas.GetCommitParents(ctx, vrw, commit.NomsValue())
 	if err != nil {
@@ -59,20 +57,8 @@ func NewCommit(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore
 	return &Commit{vrw, ns, parents, commit}, nil
 }
 
-func isCommit(value types.Value) bool {
-	if sm, ok := value.(types.SerialMessage); ok {
-		if serial.GetFileID(sm) == serial.CommitFileID {
-			return true
-		}
-	}
-	return false
-}
-
-// NewCommitFromValue genetates a new Commit object that wraps a supplied types.Value.
+// NewCommitFromValue generates a new Commit object that wraps a supplied types.Value.
 func NewCommitFromValue(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, value types.Value) (*Commit, error) {
-	if !isCommit(value) {
-		return nil, ErrNotACommit
-	}
 	commit, err := datas.CommitFromValue(vrw.Format(), value)
 	if err != nil {
 		return nil, err

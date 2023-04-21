@@ -62,6 +62,7 @@ const (
 )
 
 var ErrCommitNotFound = errors.New("target commit not found")
+var ErrNotACommit = errors.New("value is not a commit")
 
 type Commit struct {
 	val    types.Value
@@ -303,7 +304,20 @@ func commitPtr(nbf *types.NomsBinFormat, v types.Value, r *types.Ref) (*Commit, 
 	}, nil
 }
 
+func isCommit(value types.Value) bool {
+	if sm, ok := value.(types.SerialMessage); ok {
+		if serial.GetFileID(sm) == serial.CommitFileID {
+			return true
+		}
+	}
+	return false
+}
+
+// CommitFromValue deserializes a types.Value into a Commit.
 func CommitFromValue(nbf *types.NomsBinFormat, v types.Value) (*Commit, error) {
+	if !isCommit(v) {
+		return nil, ErrNotACommit
+	}
 	return commitPtr(nbf, v, nil)
 }
 

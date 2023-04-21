@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"regexp"
 	"strings"
@@ -192,7 +193,7 @@ func showSpecRef(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, specRef
 		// If this is a commit, use the pretty printer. To determine whether it's a commit, try calling NewCommitFromValue.
 		commit, err := doltdb.NewCommitFromValue(ctx, dEnv.DoltDB.ValueReadWriter(), dEnv.DoltDB.NodeStore(), value)
 
-		if err == doltdb.ErrNotACommit {
+		if err == datas.ErrNotACommit {
 			cli.Println(value.Kind(), value.HumanReadableString())
 		} else if err == nil {
 			showCommit(ctx, dEnv, opts, commit)
