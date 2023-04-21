@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -101,7 +102,7 @@ func NewSqlEngineTableReaderWithEngine(sqlCtx *sql.Context, se *sqle.Engine, db 
 	}
 
 	return &sqlEngineTableReader{
-		se:     engine.NewRebasedSqlEngine(se, map[string]dsqle.SqlDatabase{db.Name(): db}),
+		se:     engine.NewRebasedSqlEngine(se, map[string]dsess.SqlDatabase{db.Name(): db}),
 		sqlCtx: sqlCtx,
 
 		sch:  doltSchema,

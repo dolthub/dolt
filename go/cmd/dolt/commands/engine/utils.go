@@ -32,10 +32,10 @@ import (
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool) ([]sqle.SqlDatabase, []filesys.Filesys, error) {
-	var dbs []sqle.SqlDatabase
+func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool) ([]dsess.SqlDatabase, []filesys.Filesys, error) {
+	var dbs []dsess.SqlDatabase
 	var locations []filesys.Filesys
-	var db sqle.SqlDatabase
+	var db dsess.SqlDatabase
 
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
 		postCommitHooks, err := GetCommitHooks(ctx, dEnv)

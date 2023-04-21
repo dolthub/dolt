@@ -46,18 +46,6 @@ var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names mus
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 
-type SqlDatabase interface {
-	sql.Database
-	dsess.SessionDatabase
-	dsess.RevisionDatabase
-
-	// TODO: get rid of this, it's managed by the session, not the DB
-	GetRoot(*sql.Context) (*doltdb.RootValue, error)
-	DbData() env.DbData
-	Flush(*sql.Context) error
-	EditOptions() editor.Options
-}
-
 // Database implements sql.Database for a dolt DB.
 type Database struct {
 	name     string
@@ -70,7 +58,7 @@ type Database struct {
 	revType  dsess.RevisionType
 }
 
-var _ SqlDatabase = Database{}
+var _ dsess.SqlDatabase = Database{}
 var _ dsess.RevisionDatabase = Database{}
 var _ globalstate.StateProvider = Database{}
 var _ sql.CollatedDatabase = Database{}
@@ -138,7 +126,7 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts e
 
 // initialDBState returns the InitialDbState for |db|. Other implementations of SqlDatabase outside this file should
 // implement their own method for an initial db state and not rely on this method.
-func initialDBState(ctx *sql.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
+func initialDBState(ctx *sql.Context, db dsess.SqlDatabase, branch string) (dsess.InitialDbState, error) {
 	if len(db.Revision()) > 0 {
 		return initialStateForRevisionDb(ctx, db)
 	}

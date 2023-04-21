@@ -46,7 +46,7 @@ const (
 type DoltDatabaseProvider struct {
 	// dbLocations maps a database name to its file system root
 	dbLocations        map[string]filesys.Filesys
-	databases          map[string]SqlDatabase
+	databases          map[string]dsess.SqlDatabase
 	functions          map[string]sql.Function
 	externalProcedures sql.ExternalStoredProcedureRegistry
 	InitDatabaseHook   InitDatabaseHook
@@ -76,21 +76,21 @@ func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys) (DoltData
 
 // NewDoltDatabaseProviderWithDatabase returns a new provider, initialized with one database at the
 // specified location, and any error that occurred along the way.
-func NewDoltDatabaseProviderWithDatabase(defaultBranch string, fs filesys.Filesys, database SqlDatabase, dbLocation filesys.Filesys) (DoltDatabaseProvider, error) {
-	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, []SqlDatabase{database}, []filesys.Filesys{dbLocation})
+func NewDoltDatabaseProviderWithDatabase(defaultBranch string, fs filesys.Filesys, database dsess.SqlDatabase, dbLocation filesys.Filesys) (DoltDatabaseProvider, error) {
+	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, []dsess.SqlDatabase{database}, []filesys.Filesys{dbLocation})
 }
 
 // NewDoltDatabaseProviderWithDatabases returns a new provider, initialized with the specified databases,
 // at the specified locations. For every database specified, there must be a corresponding filesystem
 // specified that represents where the database is located. If the number of specified databases is not the
 // same as the number of specified locations, an error is returned.
-func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Filesys, databases []SqlDatabase, locations []filesys.Filesys) (DoltDatabaseProvider, error) {
+func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Filesys, databases []dsess.SqlDatabase, locations []filesys.Filesys) (DoltDatabaseProvider, error) {
 	if len(databases) != len(locations) {
 		return DoltDatabaseProvider{}, fmt.Errorf("unable to create DoltDatabaseProvider: "+
 			"incorrect number of databases (%d) and database locations (%d) specified", len(databases), len(locations))
 	}
 
-	dbs := make(map[string]SqlDatabase, len(databases))
+	dbs := make(map[string]dsess.SqlDatabase, len(databases))
 	for _, db := range databases {
 		dbs[strings.ToLower(db.Name())] = db
 	}
@@ -197,7 +197,7 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (sql.Datab
 	return database, nil
 }
 
-func wrapForStandby(db SqlDatabase, standby bool) SqlDatabase {
+func wrapForStandby(db dsess.SqlDatabase, standby bool) dsess.SqlDatabase {
 	if !standby {
 		return db
 	}
@@ -316,7 +316,7 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 }
 
 // allRevisionDbs returns all revision dbs for the database given
-func (p DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db SqlDatabase) ([]sql.Database, error) {
+func (p DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlDatabase) ([]sql.Database, error) {
 	branches, err := db.DbData().Ddb.GetBranches(ctx)
 	if err != nil {
 		return nil, err
@@ -712,7 +712,7 @@ func (p DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, n
 	return nil
 }
 
-func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string) (SqlDatabase, bool, error) {
+func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string) (dsess.SqlDatabase, bool, error) {
 	if !strings.Contains(revDB, dbRevisionDelimiter) {
 		return nil, false, nil
 	}
@@ -727,7 +727,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		return nil, false, nil
 	}
 
-	srcDb, ok := candidate.(SqlDatabase)
+	srcDb, ok := candidate.(dsess.SqlDatabase)
 	if !ok {
 		return nil, false, nil
 	}
@@ -801,7 +801,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 }
 
 // revisionDbType returns the type of revision spec given for the database given, and the resolved revision spec
-func revisionDbType(ctx *sql.Context, srcDb SqlDatabase, revSpec string) (revType dsess.RevisionType, resolvedRevSpec string, err error) {
+func revisionDbType(ctx *sql.Context, srcDb dsess.SqlDatabase, revSpec string) (revType dsess.RevisionType, resolvedRevSpec string, err error) {
 	resolvedRevSpec, err = resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
 	if err != nil {
 		return 0, "", err
@@ -832,7 +832,7 @@ func revisionDbType(ctx *sql.Context, srcDb SqlDatabase, revSpec string) (revTyp
 	return dsess.RevisionTypeNone, "", nil
 }
 
-func initialDbState(ctx context.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
+func initialDbState(ctx context.Context, db dsess.SqlDatabase, branch string) (dsess.InitialDbState, error) {
 	rsr := db.DbData().Rsr
 	ddb := db.DbData().Ddb
 
@@ -894,7 +894,7 @@ func initialDbState(ctx context.Context, db SqlDatabase, branch string) (dsess.I
 	}, nil
 }
 
-func initialStateForRevisionDb(ctx *sql.Context, db SqlDatabase) (dsess.InitialDbState, error) {
+func initialStateForRevisionDb(ctx *sql.Context, db dsess.SqlDatabase) (dsess.InitialDbState, error) {
 	switch db.RevisionType() {
 	case dsess.RevisionTypeBranch:
 		init, err := initialStateForBranchDb(ctx, db)
@@ -949,7 +949,7 @@ func initialStateForRevisionDb(ctx *sql.Context, db SqlDatabase) (dsess.InitialD
 
 // databaseForClone returns a newly cloned database if read replication is enabled and a remote DB exists, or an error
 // otherwise
-func (p DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (SqlDatabase, error) {
+func (p DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (dsess.SqlDatabase, error) {
 	if !readReplicationActive(ctx) {
 		return nil, nil
 	}
@@ -970,7 +970,7 @@ func (p DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (
 
 	// now that the database has been cloned, retry the Database call
 	database, err := p.Database(ctx, revDB)
-	return database.(SqlDatabase), err
+	return database.(dsess.SqlDatabase), err
 }
 
 // TODO: figure out the right contract: which variables must be set? What happens if they aren't all set?
@@ -1106,7 +1106,7 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 // splitRevisionDbName splits the given database name into its base and revision parts and returns them. Non-revision
 // DBs use their full name as the base name, and empty string as the revision.
 func splitRevisionDbName(db sql.Database) (string, string) {
-	sqldb, ok := db.(SqlDatabase)
+	sqldb, ok := db.(dsess.SqlDatabase)
 	if !ok {
 		return db.Name(), ""
 	}
@@ -1141,7 +1141,7 @@ func (p DoltDatabaseProvider) ensureReplicaHeadExists(ctx *sql.Context, branch s
 }
 
 // isBranch returns whether a branch with the given name is in scope for the database given
-func isBranch(ctx context.Context, db SqlDatabase, branchName string) (string, bool, error) {
+func isBranch(ctx context.Context, db dsess.SqlDatabase, branchName string) (string, bool, error) {
 	ddbs, err := doltDbs(db)
 	if err != nil {
 		return "", false, err
@@ -1166,7 +1166,7 @@ func isBranch(ctx context.Context, db SqlDatabase, branchName string) (string, b
 	return "", false, nil
 }
 
-func doltDbs(db SqlDatabase) ([]*doltdb.DoltDB, error) {
+func doltDbs(db dsess.SqlDatabase) ([]*doltdb.DoltDB, error) {
 	var ddbs []*doltdb.DoltDB
 	switch db := db.(type) {
 	case ReadReplicaDatabase:
@@ -1213,7 +1213,7 @@ func isRemoteBranch(ctx context.Context, ddbs []*doltdb.DoltDB, branchName strin
 }
 
 // isTag returns whether a tag with the given name is in scope for the database given
-func isTag(ctx context.Context, db SqlDatabase, tagName string) (bool, error) {
+func isTag(ctx context.Context, db dsess.SqlDatabase, tagName string) (bool, error) {
 	ddbs, err := doltDbs(db)
 	if err != nil {
 		return false, err
@@ -1234,7 +1234,7 @@ func isTag(ctx context.Context, db SqlDatabase, tagName string) (bool, error) {
 }
 
 // revisionDbForBranch returns a new database that is tied to the branch named by revSpec
-func revisionDbForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string) (SqlDatabase, error) {
+func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec string) (dsess.SqlDatabase, error) {
 	branch := ref.NewBranchRef(revSpec)
 	dbName := srcDb.Name() + dbRevisionDelimiter + revSpec
 
@@ -1244,7 +1244,7 @@ func revisionDbForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 		RepoStateReader: srcDb.DbData().Rsr,
 	}
 
-	var db SqlDatabase
+	var db dsess.SqlDatabase
 
 	switch v := srcDb.(type) {
 	case Database:
@@ -1280,7 +1280,7 @@ func revisionDbForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 	return db, nil
 }
 
-func initialStateForBranchDb(ctx context.Context, srcDb SqlDatabase) (dsess.InitialDbState, error) {
+func initialStateForBranchDb(ctx context.Context, srcDb dsess.SqlDatabase) (dsess.InitialDbState, error) {
 	_, revSpec := splitRevisionDbName(srcDb)
 
 	branch := ref.NewBranchRef(revSpec)

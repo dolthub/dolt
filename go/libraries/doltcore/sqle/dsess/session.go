@@ -280,6 +280,8 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 			return nil, err
 		}
 	}
+	
+	d.provider.AllDatabases()
 
 	sessionState, ok, err := d.LookupDbState(ctx, dbName)
 	if err != nil {

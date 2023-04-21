@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
@@ -34,7 +33,7 @@ type database struct {
 }
 
 var _ sql.Database = database{}
-var _ sqle.SqlDatabase = database{}
+var _ dsess.SqlDatabase = database{}
 
 const StatusTableName = "dolt_cluster_status"
 

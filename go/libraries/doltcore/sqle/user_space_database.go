@@ -30,7 +30,7 @@ type UserSpaceDatabase struct {
 	editOpts editor.Options
 }
 
-var _ SqlDatabase = (*UserSpaceDatabase)(nil)
+var _ dsess.SqlDatabase = (*UserSpaceDatabase)(nil)
 
 func NewUserSpaceDatabase(root *doltdb.RootValue, editOpts editor.Options) *UserSpaceDatabase {
 	return &UserSpaceDatabase{RootValue: root, editOpts: editOpts}
