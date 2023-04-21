@@ -291,7 +291,6 @@ SQL
     [[ "$output" =~ "3" ]] || false
 
     dolt status
-    skip "todo"
     run dolt status
     [[ "$output" =~ "Untracked files:" ]] || false
     [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
@@ -349,12 +348,13 @@ SQL
 
     # Do a soft reset to commit 2.
     dolt reset $cm2
+    dolt status
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Untracked files:" ]] || false
     [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
-    [[ "$output" =~ "	new table:      tb3" ]] || false
-    ! [[ "$output" =~ "	new table:      tb2" ]] || false
+    [[ "$output" =~ "	new table:        tb3" ]] || false
+    ! [[ "$output" =~ "tb2" ]] || false
 
     run dolt sql -q "SELECT COUNT(*) FROM tb3"
     [[ "$output" =~ "1" ]] || false
@@ -371,9 +371,9 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Untracked files:" ]] || false
     [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
-    [[ "$output" =~ "	new table:      tb3" ]] || false
-    [[ "$output" =~ "	new table:      tb2" ]] || false
-    ! [[ "$output" =~ "	new table:      tb1" ]] || false
+    [[ "$output" =~ "	new table:        tb3" ]] || false
+    [[ "$output" =~ "	new table:        tb2" ]] || false
+    ! [[ "$output" =~ "tb1" ]] || false
 
     run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
     [[ "$output" =~ "2" ]] || false # includes init commit

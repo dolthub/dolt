@@ -204,9 +204,9 @@ func mergedRootToWorking(
 	cm2 *doltdb.Commit,
 	cm2SpecStr string,
 ) (err error) {
-	root := result.Root
+	staged, working := result.Root, result.Root
 	if len(workingDiffs) > 0 {
-		root, err = applyChanges(ctx, result.Root, workingDiffs)
+		working, err = applyChanges(ctx, working, workingDiffs)
 		if err != nil {
 			return err
 		}
@@ -222,7 +222,11 @@ func mergedRootToWorking(
 		tt := SchemaConflictTableNames(result.SchemaConflicts)
 		ws = ws.WithUnmergableTables(tt)
 	}
-	ws = ws.WithWorkingRoot(root).WithStagedRoot(root)
+
+	ws = ws.WithWorkingRoot(working)
+	if !result.HasMergeArtifacts() {
+		ws = ws.WithStagedRoot(staged)
+	}
 
 	if err = dEnv.UpdateWorkingSet(ctx, ws); err != nil {
 		return err

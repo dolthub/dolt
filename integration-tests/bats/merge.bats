@@ -330,7 +330,6 @@ SQL
     dolt status
     run dolt status
     log_status_eq 0
-    skip "todo: andy"
     [[ "$output" =~ "test2" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
 
