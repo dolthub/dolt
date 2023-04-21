@@ -429,6 +429,21 @@ func (ddb *DoltDB) ResolveWorkingSet(ctx context.Context, workingSetRef ref.Work
 		return nil, ErrWorkingSetNotFound
 	}
 
+	return ddb.workingSetFromDataset(ctx, workingSetRef, ds)
+}
+
+// ResolveWorkingSetAtRoot returns the working set object as it existed at the given root hash.
+func (ddb *DoltDB) ResolveWorkingSetAtRoot(ctx context.Context, workingSetRef ref.WorkingSetRef, nomsRoot hash.Hash) (*WorkingSet, error) {
+	ds, err := ddb.db.GetDatasetByRootHash(ctx, workingSetRef.String(), nomsRoot)
+
+	if err != nil {
+		return nil, ErrWorkingSetNotFound
+	}
+
+	return ddb.workingSetFromDataset(ctx, workingSetRef, ds)
+}
+
+func (ddb *DoltDB) workingSetFromDataset(ctx context.Context, workingSetRef ref.WorkingSetRef, ds datas.Dataset) (*WorkingSet, error) {
 	if !ds.HasHead() {
 		return nil, ErrWorkingSetNotFound
 	}

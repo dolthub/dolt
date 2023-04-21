@@ -63,6 +63,10 @@ type Database interface {
 	// DatasetsByRootHash returns all datasets as of the root hash given
 	DatasetsByRootHash(ctx context.Context, rootHash hash.Hash) (DatasetsMap, error)
 
+	// GetDatasetByRootHash returns a Dataset struct containing the mapping of datasetId in the Datasets map as it 
+	// existed at the root hash given.
+	GetDatasetByRootHash(ctx context.Context, datasetID string, rootHash hash.Hash) (Dataset, error)
+
 	// BuildNewCommit creates a new Commit struct for the provided dataset,
 	// but does not modify the dataset. This allows the commit to be inspected
 	// if necessary before any update is performed.
