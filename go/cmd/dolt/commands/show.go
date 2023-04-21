@@ -32,6 +32,7 @@ import (
 
 type showOpts struct {
 	showParents bool
+	pretty      bool
 	decoration  string
 	specRefs    []string
 
@@ -73,6 +74,7 @@ func (cmd ShowCmd) ArgParser() *argparser.ArgParser {
 	// Flags inherited from Log
 	ap.SupportsFlag(cli.ParentsFlag, "", "Shows all parents of each commit in the log.")
 	ap.SupportsString(cli.DecorateFlag, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
+	ap.SupportsFlag(cli.NoPrettyFlag, "", "Show the object without making it pretty.")
 
 	// Flags inherited from Diff
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
@@ -135,6 +137,7 @@ func parseShowArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 
 	return &showOpts{
 		showParents: apr.Contains(cli.ParentsFlag),
+		pretty:      !apr.Contains(cli.NoPrettyFlag),
 		decoration:  decorateOption,
 		specRefs:    apr.Args,
 	}, nil

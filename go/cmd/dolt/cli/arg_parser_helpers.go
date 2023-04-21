@@ -116,6 +116,7 @@ const (
 	CachedFlag       = "cached"
 	ListFlag         = "list"
 	UserParam        = "user"
+	NoPrettyFlag     = "no-pretty"
 )
 
 const (
