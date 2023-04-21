@@ -26,10 +26,22 @@ setup_schema_conflict() {
     dolt checkout main
 }
 
-@test "schema-conflicts: query schema conflicts" {
+@test "schema-conflicts: sql merge, query schema conflicts" {
     setup_schema_conflict
 
-    skip "todo"
+    dolt sql -q "call dolt_merge('other')"
+
+    run dolt sql -q "select * from dolt_schema_conflicts" -r vertical
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "table: t" ]]
+    [[ "$output" =~ "our_schema: create table t (pk int primary key, c0 varchar(20))" ]]
+    [[ "$output" =~ "their_schema: create table t (pk int primary key, c0 datetime)" ]]
+    [[ "$output" =~ "description: " ]]
+}
+
+@test "schema-conflicts: cli merge, query schema conflicts" {
+    setup_schema_conflict
+
     run dolt merge other
     [ "$status" -ne 0 ]
 

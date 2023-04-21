@@ -80,6 +80,10 @@ func (m MergeState) HasSchemaConflicts() bool {
 	return len(m.unmergableTables) > 0
 }
 
+func (m MergeState) TablesWithSchemaConflicts() []string {
+	return m.unmergableTables
+}
+
 func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb SchemaConflictFn) (err error) {
 	var to, from *RootValue
 

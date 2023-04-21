@@ -24,7 +24,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -193,13 +192,9 @@ func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[
 	}
 
 	err = mergedRootToWorking(ctx, spec.Squash, dEnv, result, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr)
-	if err != nil {
-		return nil, err
-	}
 	return result.Stats, nil
 }
 
-// TODO: change this to be functional and not write to repo state
 func mergedRootToWorking(
 	ctx context.Context,
 	squash bool,
@@ -208,34 +203,34 @@ func mergedRootToWorking(
 	workingDiffs map[string]hash.Hash,
 	cm2 *doltdb.Commit,
 	cm2SpecStr string,
-) error {
-	var err error
-
-	workingRoot := result.Root
+) (err error) {
+	root := result.Root
 	if len(workingDiffs) > 0 {
-		workingRoot, err = applyChanges(ctx, result.Root, workingDiffs)
-
+		root, err = applyChanges(ctx, result.Root, workingDiffs)
 		if err != nil {
 			return err
 		}
 	}
 
-	if !squash {
-		err = dEnv.StartMerge(ctx, cm2, cm2SpecStr)
-		if err != nil {
-			return actions.ErrFailedToSaveRepoState
-		}
-		// todo: update merge state with schema conflicts
-	}
-
-	err = dEnv.UpdateWorkingRoot(context.Background(), workingRoot)
+	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		return err
 	}
 
-	if result.HasMergeArtifacts() {
-		return doltdb.ErrUnresolvedConflictsOrViolations
+	if !squash || result.HasSchemaConflicts() {
+		ws = ws.StartMerge(cm2, cm2SpecStr)
+		tt := SchemaConflictTableNames(result.SchemaConflicts)
+		ws = ws.WithUnmergableTables(tt)
+	}
+	ws = ws.WithWorkingRoot(root).WithStagedRoot(root)
+
+	if err = dEnv.UpdateWorkingSet(ctx, ws); err != nil {
+		return err
 	}
 
-	return dEnv.UpdateStagedRoot(context.Background(), result.Root)
+	if result.HasMergeArtifacts() {
+		// this error is recoverable in some contexts
+		return doltdb.ErrUnresolvedConflictsOrViolations
+	}
+	return
 }

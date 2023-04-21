@@ -787,47 +787,6 @@ func (dEnv *DoltEnv) NewWorkingSetMeta(message string) *datas.WorkingSetMeta {
 	}
 }
 
-func (dEnv *DoltEnv) ClearMerge(ctx context.Context) error {
-	ws, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		return err
-	}
-
-	h, err := ws.HashOf()
-	if err != nil {
-		return err
-	}
-
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.ClearMerge(), h, dEnv.workingSetMeta())
-}
-
-// StartMerge updates the WorkingSet with merge information. |commit| is the
-// source commit of the merge and |commitSpecStr| is how that |commit| was
-// specified. Typically, |commitSpecStr| is specified by the user, but it could
-// also be specified by a transaction merge.
-func (dEnv *DoltEnv) StartMerge(ctx context.Context, commit *doltdb.Commit, commitSpecStr string) error {
-	ws, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		return err
-	}
-
-	h, err := ws.HashOf()
-	if err != nil {
-		return err
-	}
-
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.StartMerge(commit, commitSpecStr), h, dEnv.workingSetMeta())
-}
-
-func (dEnv *DoltEnv) IsMergeActive(ctx context.Context) (bool, error) {
-	ws, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	return ws.MergeActive(), nil
-}
-
 func (dEnv *DoltEnv) GetTablesWithConflicts(ctx context.Context) ([]string, error) {
 	root, err := dEnv.WorkingRoot(ctx)
 

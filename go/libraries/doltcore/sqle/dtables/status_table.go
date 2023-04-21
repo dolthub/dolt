@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
@@ -93,7 +92,8 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		return nil, err
 	}
 
-	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, roots)
+	// todo(andy): show constraint violations?
+	workingTblsInConflict, err := roots.Working.TablesInConflict(ctx)
 	if err != nil {
 		return nil, err
 	}

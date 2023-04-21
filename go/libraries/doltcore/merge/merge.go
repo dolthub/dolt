@@ -375,48 +375,35 @@ func MayHaveConstraintViolations(ctx context.Context, ancestor, merged *doltdb.R
 	return false, nil
 }
 
-func GetTablesInConflict(ctx context.Context, roots doltdb.Roots) (
-	workingInConflict, stagedInConflict, headInConflict []string,
-	err error,
-) {
-	headInConflict, err = roots.Head.TablesInConflict(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	stagedInConflict, err = roots.Staged.TablesInConflict(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	workingInConflict, err = roots.Working.TablesInConflict(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	return workingInConflict, stagedInConflict, headInConflict, err
+type ArtifactStatus struct {
+	SchemaConflictsTables      []string
+	DataConflictTables         []string
+	ConstraintViolationsTables []string
 }
 
-func GetTablesWithConstraintViolations(ctx context.Context, roots doltdb.Roots) (
-	workingViolations, stagedViolations, headViolations []string,
-	err error,
-) {
-	headViolations, err = roots.Head.TablesWithConstraintViolations(ctx)
-	if err != nil {
-		return nil, nil, nil, err
+func (as ArtifactStatus) HasConflicts() bool {
+	return len(as.DataConflictTables) > 0 || len(as.SchemaConflictsTables) > 0
+}
+
+func (as ArtifactStatus) HasConstraintViolations() bool {
+	return len(as.ConstraintViolationsTables) > 0
+}
+
+func GetMergeArtifactStatus(ctx context.Context, working *doltdb.WorkingSet) (as ArtifactStatus, err error) {
+	if working.MergeActive() {
+		as.SchemaConflictsTables = working.MergeState().TablesWithSchemaConflicts()
 	}
 
-	stagedViolations, err = roots.Staged.TablesWithConstraintViolations(ctx)
+	as.DataConflictTables, err = working.WorkingRoot().TablesInConflict(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return as, err
 	}
 
-	workingViolations, err = roots.Working.TablesWithConstraintViolations(ctx)
+	as.ConstraintViolationsTables, err = working.WorkingRoot().TablesWithConstraintViolations(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return as, err
 	}
-
-	return workingViolations, stagedViolations, headViolations, err
+	return
 }
 
 // MergeWouldStompChanges returns list of table names that are stomped and the diffs map between head and working set.

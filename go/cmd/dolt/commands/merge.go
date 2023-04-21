@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -98,7 +99,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	var verr errhand.VerboseError
 	if apr.Contains(cli.AbortParam) {
-		mergeActive, err := dEnv.IsMergeActive(ctx)
+		mergeActive, err := isMergeActive(ctx, dEnv)
 		if err != nil {
 			cli.PrintErrln("fatal:", err.Error())
 			return 1
@@ -130,7 +131,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		}
 
 		if verr == nil {
-			mergeActive, err := dEnv.IsMergeActive(ctx)
+			mergeActive, err := isMergeActive(ctx, dEnv)
 			if err != nil {
 				cli.PrintErrln(err.Error())
 				return 1
@@ -190,28 +191,33 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return handleCommitErr(ctx, dEnv, verr, usage)
 }
 
-func getUnmergedTableCount(ctx context.Context, root *doltdb.RootValue) (int, error) {
-	conflicted, err := root.TablesInConflict(ctx)
+func isMergeActive(ctx context.Context, denv *env.DoltEnv) (bool, error) {
+	ws, err := denv.WorkingSet(ctx)
 	if err != nil {
-		return 0, err
+		return false, err
 	}
-	cved, err := root.TablesWithConstraintViolations(ctx)
-	if err != nil {
-		return 0, err
-	}
-	uniqued := make(map[string]interface{})
-	for _, t := range conflicted {
-		uniqued[t] = struct{}{}
-	}
-	for _, t := range cved {
-		uniqued[t] = struct{}{}
-	}
-	var unmergedTableCount int
-	for range uniqued {
-		unmergedTableCount++
+	return ws.MergeActive(), nil
+}
+
+func getUnmergedTableCount(ctx context.Context, ws *doltdb.WorkingSet) (int, error) {
+	unmerged := set.NewStrSet(nil)
+	if ws.MergeState() != nil {
+		unmerged.Add(ws.MergeState().TablesWithSchemaConflicts()...)
 	}
 
-	return unmergedTableCount, nil
+	conflicted, err := ws.WorkingRoot().TablesInConflict(ctx)
+	if err != nil {
+		return 0, err
+	}
+	unmerged.Add(conflicted...)
+
+	cved, err := ws.WorkingRoot().TablesWithConstraintViolations(ctx)
+	if err != nil {
+		return 0, err
+	}
+	unmerged.Add(cved...)
+
+	return unmerged.Size(), nil
 }
 
 func validateMergeSpec(ctx context.Context, spec *merge.MergeSpec) errhand.VerboseError {
@@ -422,12 +428,12 @@ func fillStringWithChar(ch rune, strLen int) string {
 }
 
 func handleMergeErr(ctx context.Context, dEnv *env.DoltEnv, mergeErr error, hasConflicts, hasConstraintViolations bool, usage cli.UsagePrinter) int {
-	wRoot, err := dEnv.WorkingRoot(ctx)
+	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		cli.PrintErrln(err.Error())
 		return 1
 	}
-	unmergedCnt, err := getUnmergedTableCount(ctx, wRoot)
+	unmergedCnt, err := getUnmergedTableCount(ctx, ws)
 	if err != nil {
 		cli.PrintErrln(err.Error())
 		return 1
