@@ -280,8 +280,8 @@ func TestConfig(t *testing.T) {
 
 	// test setting global config with --add
 	configCmd := ConfigCmd{}
-	ret := configCmd.Exec(ctx, "dolt config", []string{"-global", "--add", "name", "bheni"}, dEnv)
-	ret += configCmd.Exec(ctx, "dolt config", []string{"-global", "--add", "title", "dufus"}, dEnv)
+	ret := configCmd.Exec(ctx, "dolt config", []string{"-global", "--add", "name", "bheni"}, dEnv, nil)
+	ret += configCmd.Exec(ctx, "dolt config", []string{"-global", "--add", "title", "dufus"}, dEnv, nil)
 
 	expectedGlobal := map[string]string{
 		"name":  "bheni",
@@ -295,7 +295,7 @@ func TestConfig(t *testing.T) {
 	}
 
 	// test setting global config with --set
-	ret = configCmd.Exec(ctx, "dolt config", []string{"-global", "--set", "name", "steph"}, dEnv)
+	ret = configCmd.Exec(ctx, "dolt config", []string{"-global", "--set", "name", "steph"}, dEnv, nil)
 
 	expectedGlobal = map[string]string{
 		"name":  "steph",
@@ -309,7 +309,7 @@ func TestConfig(t *testing.T) {
 	}
 
 	// test setting local config with --add
-	ret = configCmd.Exec(ctx, "dolt config", []string{"-local", "--add", "title", "senior dufus"}, dEnv)
+	ret = configCmd.Exec(ctx, "dolt config", []string{"-local", "--add", "title", "senior dufus"}, dEnv, nil)
 
 	expectedLocal := map[string]string{
 		"title": "senior dufus",
@@ -324,7 +324,7 @@ func TestConfig(t *testing.T) {
 	}
 
 	// test setting local config with --set
-	ret = configCmd.Exec(ctx, "dolt config", []string{"-local", "--set", "name", "steph"}, dEnv)
+	ret = configCmd.Exec(ctx, "dolt config", []string{"-local", "--set", "name", "steph"}, dEnv, nil)
 
 	expectedLocal = map[string]string{
 		"name":  "steph",
@@ -339,7 +339,7 @@ func TestConfig(t *testing.T) {
 		t.Error("Unexpected value of \"name\" retrieved from the config hierarchy")
 	}
 
-	ret = configCmd.Exec(ctx, "dolt config", []string{"-global", "--unset", "name"}, dEnv)
+	ret = configCmd.Exec(ctx, "dolt config", []string{"-global", "--unset", "name"}, dEnv, nil)
 
 	expectedGlobal = map[string]string{
 		"title": "dufus",
@@ -402,14 +402,14 @@ func TestInvalidConfigArgs(t *testing.T) {
 	configCmd := ConfigCmd{}
 
 	// local and global flags passed together is invalid
-	ret := configCmd.Exec(ctx, "dolt config", []string{"--global", "--local", "--add", "name", "bheni"}, dEnv)
+	ret := configCmd.Exec(ctx, "dolt config", []string{"--global", "--local", "--add", "name", "bheni"}, dEnv, nil)
 
 	if ret == 0 {
 		t.Error("Invalid commands should fail. Command has both local and global")
 	}
 
 	// both -add and -get are used
-	ret = configCmd.Exec(ctx, "dolt config", []string{"-global", "--get", "--add", "title"}, dEnv)
+	ret = configCmd.Exec(ctx, "dolt config", []string{"-global", "--get", "--add", "title"}, dEnv, nil)
 
 	if ret == 0 {
 		t.Error("Invalid commands should fail. Command is missing local/global")

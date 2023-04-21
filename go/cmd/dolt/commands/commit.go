@@ -76,14 +76,14 @@ func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
 	res := performCommit(ctx, commandStr, args, dEnv)
 	if res == 1 {
 		return res
 	}
 
 	// if the commit was successful, print it out using the log command
-	return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)
+	return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv, nil)
 }
 
 func performCommit(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {

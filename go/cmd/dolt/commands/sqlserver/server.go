@@ -66,7 +66,7 @@ func Serve(
 		}
 		serverController.StopServer()
 		serverController.serverStopped(closeError)
-		sqlserver.SetRunningServer(nil)
+		sqlserver.UnsetRunningServer()
 	}()
 
 	if startError = ValidateConfig(serverConfig); startError != nil {
@@ -211,7 +211,9 @@ func Serve(
 		cli.PrintErr(startError)
 		return
 	}
-	sqlserver.SetRunningServer(mySQLServer)
+
+	lck := env.NewDBLock(serverConfig.Port())
+	sqlserver.SetRunningServer(mySQLServer, &lck)
 
 	var metSrv *http.Server
 	if serverConfig.MetricsHost() != "" && serverConfig.MetricsPort() > 0 {
@@ -311,7 +313,8 @@ func Serve(
 		startError = env.ErrActiveServerLock.New(f)
 		return
 	}
-	if err = mrEnv.Lock(); err != nil {
+
+	if err = mrEnv.Lock(lck); err != nil {
 		startError = err
 		return
 	}
@@ -390,7 +393,7 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 		dsess, err := se.NewDoltSession(ctx, mysqlBaseSess)
 		if err != nil {
 			if goerrors.Is(err, env.ErrFailedToAccessDB) {
-				if server := sqlserver.GetRunningServer(); server != nil {
+				if server, _ := sqlserver.GetRunningServer(); server != nil {
 					_ = server.Close()
 				}
 			}

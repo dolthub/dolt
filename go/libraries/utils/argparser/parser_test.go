@@ -15,6 +15,7 @@
 package argparser
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -89,6 +90,13 @@ func TestArgParser(t *testing.T) {
 			NewArgParserWithVariableArgs("test").SupportsString("param", "p", "", ""),
 			[]string{"--paramvalue"},
 			UnknownArgumentParam{"paramvalue"},
+			map[string]string{},
+			[]string{},
+		},
+		{
+			NewArgParserWithMaxArgs("test", 1),
+			[]string{"foo", "bar"},
+			errors.New("error: test has too many positional arguments. Expected at most 1, found 2: foo, bar"),
 			map[string]string{},
 			[]string{},
 		},

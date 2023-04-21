@@ -67,7 +67,7 @@ func TestInit(t *testing.T) {
 			gCfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 			gCfg.SetStrings(test.GlobalConfig)
 
-			result := InitCmd{}.Exec(context.Background(), "dolt init", test.Args, dEnv)
+			result := InitCmd{}.Exec(context.Background(), "dolt init", test.Args, dEnv, nil)
 			defer dEnv.DoltDB.Close()
 
 			require.Equalf(t, test.ExpectSuccess, result == 0, "- Expected success: %t; result: %t;", test.ExpectSuccess, result == 0)
@@ -86,13 +86,11 @@ func TestInit(t *testing.T) {
 
 func TestInitTwice(t *testing.T) {
 	dEnv := createUninitializedEnv()
-	result := InitCmd{}.Exec(context.Background(), "dolt init",
-		[]string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv)
+	result := InitCmd{}.Exec(context.Background(), "dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv, nil)
 	require.True(t, result == 0, "First init should succeed")
 	defer dEnv.DoltDB.Close()
 
-	result = InitCmd{}.Exec(context.Background(), "dolt init",
-		[]string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv)
+	result = InitCmd{}.Exec(context.Background(), "dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv, nil)
 	require.True(t, result != 0, "Second init should fail")
 }
 

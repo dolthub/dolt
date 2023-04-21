@@ -33,6 +33,6 @@ func TestSchemaExport(t *testing.T) {
 	args := []string{}
 	commandStr := "dolt schema export"
 
-	result := ExportCmd{}.Exec(context.TODO(), commandStr, args, dEnv)
+	result := ExportCmd{}.Exec(context.TODO(), commandStr, args, dEnv, nil)
 	assert.Equal(t, 0, result)
 }

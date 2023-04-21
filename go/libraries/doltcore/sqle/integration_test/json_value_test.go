@@ -129,7 +129,7 @@ func testJsonValue(t *testing.T, test jsonValueTest, setupCommon []testCommand) 
 
 	setup := append(setupCommon, test.setup...)
 	for _, c := range setup {
-		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
+		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, nil)
 		require.Equal(t, 0, exitCode)
 	}
 

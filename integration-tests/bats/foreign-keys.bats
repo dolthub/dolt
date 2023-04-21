@@ -1358,12 +1358,130 @@ SQL
     dolt branch other
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);"
 
-    run dolt checkout other
-    [ "$status" -eq "0" ]
+    dolt checkout other
 
     run dolt schema show child
     [ "$status" -eq "0" ]
-    skip "foreign keys don't travel with the working set when checking out a new branch"
+    [[ "$output" =~ "fk_v1" ]] || false
+
+    dolt checkout main
+    
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "fk_v1" ]] || false
+
+    # Same test, but a table not found on the other branch
+    dolt sql <<SQL
+CREATE TABLE parent2 (
+    id int PRIMARY KEY,
+    v1 int,
+    v2 int,
+    INDEX v1 (v1),
+    INDEX v2 (v2)
+);
+CREATE TABLE child2 (
+    id int primary key,
+    v1 int,
+    v2 int
+);
+SQL
+
+    dolt add . && dolt commit -m "new tables"
+    dolt sql -q "ALTER TABLE child2 ADD CONSTRAINT fk_v2 FOREIGN KEY (v1) REFERENCES parent2(v1);"
+
+    # this is an error: modifying a table that isn't tracked on another branch prevents checkout
+    run dolt checkout other
+    [ "$status" -ne "0" ]
+    [[ "$output" =~ "Your local changes to the following tables would be overwritten by checkout" ]] || false
+    [[ "$output" =~ "child" ]] || false
+    
+    # Removing a foreign key constraint
+    dolt reset --hard HEAD~
+    dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);"
+    dolt commit -am "added fk constraint"
+    dolt branch b2
+    
+    dolt sql -q "alter table child drop constraint fk_v1"
+    dolt checkout b2
+
+    dolt schema show child
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ ! "$output" =~ "fk_v1" ]] || false
+
+    dolt checkout main
+    
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ ! "$output" =~ "fk_v1" ]] || false
+}
+
+@test "foreign-keys: non-overlapping changes in working set and target branch during checkout" {
+    dolt sql <<SQL
+CREATE TABLE parent2 (
+    id int PRIMARY KEY,
+    v1 int,
+    v2 int,
+    INDEX v1 (v1),
+    INDEX v2 (v2)
+);
+CREATE TABLE child2 (
+    id int primary key,
+    v1 int,
+    v2 int
+);
+SQL
+    dolt add . && dolt commit -m "added parent and child tables, parent2 and child2 tables"
+
+    dolt checkout -b other
+    dolt sql -q "ALTER TABLE child2 ADD CONSTRAINT fk_v2 FOREIGN KEY (v1) REFERENCES parent2(v1);"
+    dolt commit -Am "parent2 and child2, with constraint"
+
+    dolt checkout main
+    dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);"
+
+    dolt checkout other
+
+    run dolt schema show child2
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "fk_v2" ]] || false
+
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "fk_v1" ]] || false
+
+    dolt checkout main
+
+    run dolt schema show child2
+    [ "$status" -eq "0" ]
+    [[ ! "$output" =~ "fk_v2" ]] || false
+
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "fk_v1" ]] || false
+}
+
+@test "foreign-keys: conflict during checkout" {
+    dolt add . && dolt commit -m "added parent and child tables"
+
+    dolt checkout -b other
+    dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_v2 FOREIGN KEY (v2) REFERENCES parent(v2);"
+    dolt commit -Am "added a FK constraint"
+
+    dolt checkout main
+    dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);"
+
+    run dolt checkout other
+    [ "$status" -ne "0" ]
+    [[ "$output" =~ "Your local changes to the following tables would be overwritten by checkout" ]] || false
+    [[ "$output" =~ "child" ]] || false
+
+    run dolt status
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "main" ]] || false
+
+    run dolt schema show child
+    [ "$status" -eq "0" ]
     [[ "$output" =~ "fk_v1" ]] || false
 }
 

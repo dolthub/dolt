@@ -12,28 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package branch_control
+package cli
 
-import (
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-
-	fb "github.com/dolthub/flatbuffers/v23/go"
-)
-
-func TestBinlogRowSerialization(t *testing.T) {
-	row := BinlogRow{
-		IsInsert:    true,
-		Database:    "foo",
-		Branch:      "bar",
-		User:        "baz",
-		Host:        "qux",
-		Permissions: 0,
-	}
-	b := fb.NewBuilder(0)
-	o := row.Serialize(b)
-	b.Finish(o)
-	buf := b.Bytes[b.Head():]
-	assert.Equal(t, 76, len(buf))
+// CliContexct is used to pass top level command information down to subcommands.
+type CliContext interface {
 }

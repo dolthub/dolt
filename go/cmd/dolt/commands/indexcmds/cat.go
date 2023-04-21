@@ -79,7 +79,7 @@ func (cmd CatCmd) ArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, catDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
