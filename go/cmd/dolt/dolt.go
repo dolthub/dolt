@@ -474,13 +474,14 @@ func splitArgsOnSubCommand(args []string) (globalArgs, subArgs []string, initCli
 	return nil, nil, false, errors.New("No valid dolt subcommand found. See 'dolt help' for usage.")
 }
 
+// doc is currently used only when a `initCliContext` command is specified. This will include all commands in time,
+// otherwise you only see these docs if you specify a nonsense argument before the `sql` subcommand.
 var doc = cli.CommandDocumentationContent{
-	ShortDesc: "short descasdf sd d",
-	LongDesc:  `...`,
+	ShortDesc: "Dolt is git for data",
+	LongDesc:  `Dolt comprises of multiple subcommands that allow users to import, export, update, and manipulate data with SQL.`,
 
 	Synopsis: []string{
-		"",
-		"blah --bar",
+		"<--data-dir=<path>> subcommand <subcommand arguments>",
 	},
 }
 
