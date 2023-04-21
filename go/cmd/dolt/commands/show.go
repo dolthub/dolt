@@ -156,58 +156,63 @@ func isCommit(value types.Value) bool {
 	return false
 }
 
+func showSpecRef(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, specRef string) error {
+	roots, err := dEnv.Roots(ctx)
+	if err != nil {
+		return err
+	}
+
+	if specRef == doltdb.Working || specRef == doltdb.Staged || hashRegex.MatchString(specRef) {
+		var refHash hash.Hash
+		var err error
+		if specRef == doltdb.Working {
+			refHash, err = roots.Working.HashOf()
+		} else if specRef == doltdb.Staged {
+			refHash, err = roots.Staged.HashOf()
+		} else {
+			refHash, err = doltdb.ParseHashString(specRef)
+		}
+		if err != nil {
+			return err
+		}
+		value, err := dEnv.DoltDB.ValueReadWriter().ReadValue(ctx, refHash)
+		if err != nil {
+			return err
+		}
+		if value == nil {
+			return fmt.Errorf("Unable to resolve object ref %s", specRef)
+		}
+
+		if opts.pretty && isCommit(value) {
+			commit, err := doltdb.NewCommitFromValue(ctx, dEnv.DoltDB.ValueReadWriter(), dEnv.DoltDB.NodeStore(), value)
+			if err != nil {
+				return err
+			}
+			showCommit(ctx, dEnv, opts, commit)
+		} else {
+			cli.Println(value.Kind(), value.HumanReadableString())
+		}
+	} else { // specRef is a CommitSpec, which must resolve to a Commit.
+		commitSpec, err := getCommitSpec(specRef)
+		if err != nil {
+			return err
+		}
+
+		err = showCommitSpec(ctx, dEnv, opts, commitSpec)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func showCommits(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error {
 	if len(opts.specRefs) == 0 {
 		return showCommitSpec(ctx, dEnv, opts, dEnv.RepoStateReader().CWBHeadSpec())
 	}
 
 	for _, specRef := range opts.specRefs {
-		roots, err := dEnv.Roots(ctx)
-		if err != nil {
-			return err
-		}
-
-		if specRef == doltdb.Working || specRef == doltdb.Staged || hashRegex.MatchString(specRef) {
-			var refHash hash.Hash
-			var err error
-			if specRef == doltdb.Working {
-				refHash, err = roots.Working.HashOf()
-			} else if specRef == doltdb.Staged {
-				refHash, err = roots.Staged.HashOf()
-			} else {
-				refHash, err = doltdb.ParseHashString(specRef)
-			}
-			if err != nil {
-				return err
-			}
-			value, err := dEnv.DoltDB.ValueReadWriter().ReadValue(ctx, refHash)
-			if err != nil {
-				return err
-			}
-			if value == nil {
-				return fmt.Errorf("Unable to resolve object ref %s", specRef)
-			}
-
-			if opts.pretty && isCommit(value) {
-				commit, err := doltdb.NewCommitFromValue(ctx, dEnv.DoltDB.ValueReadWriter(), dEnv.DoltDB.NodeStore(), value)
-				if err != nil {
-					return err
-				}
-				showCommit(ctx, dEnv, opts, commit)
-			} else {
-				cli.Println(value.Kind(), value.HumanReadableString())
-			}
-		} else { // specRef is a CommitSpec, which must resolve to a Commit.
-			commitSpec, err := getCommitSpec(specRef)
-			if err != nil {
-				return err
-			}
-
-			err = showCommitSpec(ctx, dEnv, opts, commitSpec)
-			if err != nil {
-				return err
-			}
-		}
+		showSpecRef(ctx, dEnv, opts, specRef)
 	}
 
 	return nil
