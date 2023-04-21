@@ -1068,7 +1068,7 @@ func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) ([]s
 		// dolt_ignore doesn't exist, so don't filter any tables.
 		return tables, nil
 	}
-	// TODO, add check for noms format.
+	// TODO(nicktobey), add check for noms format.
 	index, err := table.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -1091,7 +1091,7 @@ func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) ([]s
 		if err != nil {
 			return nil, err
 		}
-		// TODO, assert schema is what we expect.
+		// TODO(nicktobey), assert schema is what we expect.
 		pattern, ok := keyDesc.GetString(0, keyTuple)
 		if !ok {
 			return nil, fmt.Errorf("could not read pattern")
