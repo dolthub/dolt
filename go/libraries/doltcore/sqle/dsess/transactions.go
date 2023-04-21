@@ -73,7 +73,7 @@ func (d DisabledTransaction) IsReadOnly() bool {
 
 type DoltTransaction struct {
 	sourceDbName    string
-	startRootHash   hash.Hash
+	startRootHash   map[string]hash.Hash
 	startState      *doltdb.WorkingSet
 	workingSetRef   ref.WorkingSetRef
 	dbData          env.DbData
@@ -89,7 +89,7 @@ type savepoint struct {
 
 func NewDoltTransaction(
 	dbName string,
-	startingRootHash hash.Hash,
+	startingRoots map[string]hash.Hash,
 	startState *doltdb.WorkingSet,
 	workingSet ref.WorkingSetRef,
 	dbData env.DbData,
@@ -98,7 +98,7 @@ func NewDoltTransaction(
 ) *DoltTransaction {
 	return &DoltTransaction{
 		sourceDbName:    dbName,
-		startRootHash:   startingRootHash,
+		startRootHash:   startingRoots,
 		startState:      startState,
 		workingSetRef:   workingSet,
 		dbData:          dbData,

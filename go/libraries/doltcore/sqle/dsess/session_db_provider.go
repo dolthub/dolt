@@ -17,7 +17,6 @@ package dsess
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -85,7 +84,7 @@ type DoltDatabaseProvider interface {
 	// database.
 	SessionDatabase(ctx *sql.Context, dbName string) (SessionDatabase, bool, error)
 	// DoltDatabases returns all databases known to this provider.
-	DoltDatabases() []sql.Database
+	DoltDatabases() []SqlDatabase
 }
 
 type SqlDatabase interface {
@@ -97,6 +96,5 @@ type SqlDatabase interface {
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
 	DbData() env.DbData
 	Flush(*sql.Context) error
-	EditOptions() editor.Options
 }
 

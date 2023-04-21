@@ -315,6 +315,25 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 	return all
 }
 
+// DoltDatabases implements the dsess.DoltDatabaseProvider interface
+func (p DoltDatabaseProvider) DoltDatabases() []dsess.SqlDatabase {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	
+	dbs := make([]dsess.SqlDatabase, len(p.databases))
+	i := 0
+	for _, db := range p.databases {
+		dbs[i] = db
+		i++
+	}
+	
+	sort.Slice(dbs, func(i, j int) bool {
+		return strings.ToLower(dbs[i].Name()) < strings.ToLower(dbs[j].Name())
+	})
+	
+	return dbs
+}
+
 // allRevisionDbs returns all revision dbs for the database given
 func (p DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlDatabase) ([]sql.Database, error) {
 	branches, err := db.DbData().Ddb.GetBranches(ctx)

@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	goerrors "gopkg.in/src-d/go-errors.v1"
@@ -254,11 +255,17 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		return DisabledTransaction{}, nil
 	}
 
-	// TODO: rather than a single database, we need to take a snapshot of all available databases that we use for the
-	//  duration of the transaction
+	nomsRoots := make(map[string]hash.Hash)
+	for _, db := range d.provider.DoltDatabases() {
+		nomsRoot, err := db.DbData().Ddb.NomsRoot(ctx)
+		if err != nil {
+			return nil, err
+		}
+		nomsRoots[strings.ToLower(db.Name())] = nomsRoot
+	}
 
+	// TODO: remove this when we have true multi-db transaction support
 	dbName := ctx.GetTransactionDatabase()
-	// TODO: remove this hack when we have true multi-db transaction support
 	if isNoOpTransactionDatabase(dbName) {
 		return DisabledTransaction{}, nil
 	}
@@ -280,8 +287,6 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 			return nil, err
 		}
 	}
-	
-	d.provider.AllDatabases()
 
 	sessionState, ok, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
@@ -345,7 +350,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
 
-	return NewDoltTransaction(dbName, ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic), nil
+	return NewDoltTransaction(dbName, nomsRoots, ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic), nil
 }
 
 // isNoOpTransactionDatabase returns whether the database name given is a non-Dolt database that shouldn't have
@@ -925,6 +930,17 @@ func (d *DoltSession) SwitchWorkingSet(
 		return ErrWorkingSetChanges.New()
 	}
 
+	// TODO: this should call session.StartTransaction once that has been cleaned up a bit
+	nomsRoots := make(map[string]hash.Hash)
+	for _, db := range d.provider.DoltDatabases() {
+		nomsRoot, err := db.DbData().Ddb.NomsRoot(ctx)
+		if err != nil {
+			return err
+		}
+		nomsRoots[strings.ToLower(db.Name())] = nomsRoot
+	}
+
+	// TODO: resolve the working set ref with the root above
 	ws, err := sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
 		return err
@@ -990,6 +1006,7 @@ func (d *DoltSession) SwitchWorkingSet(
 	}
 	ctx.SetTransaction(NewDoltTransaction(
 		dbName,
+		nomsRoots,
 		ws,
 		wsRef,
 		sessionState.dbData,
