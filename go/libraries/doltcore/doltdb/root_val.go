@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	flatbuffers "github.com/google/flatbuffers/go"
@@ -1084,11 +1085,11 @@ func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) ([]s
 	var ignorePatterns []ignorePattern
 	for {
 		keyTuple, valueTuple, err := ignoreTableMap.Next(ctx)
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
 			return nil, err
-		}
-		if keyTuple == nil {
-			break
 		}
 		// TODO, assert schema is what we expect.
 		pattern, ok := keyDesc.GetString(0, keyTuple)
