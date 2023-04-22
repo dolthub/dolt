@@ -171,7 +171,7 @@ func (hc SubCommandHandler) Hidden() bool {
 
 func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx CliContext) int {
 	if len(args) < 1 && hc.Unspecified == nil {
-		hc.printUsage(commandStr)
+		hc.PrintUsage(commandStr)
 		return 1
 	}
 
@@ -195,7 +195,7 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 		return 1
 	}
 
-	hc.printUsage(commandStr)
+	hc.PrintUsage(commandStr)
 	return 0
 }
 
@@ -302,7 +302,7 @@ func CheckUserNameAndEmail(dEnv *env.DoltEnv) bool {
 	return true
 }
 
-func (hc SubCommandHandler) printUsage(commandStr string) {
+func (hc SubCommandHandler) PrintUsage(commandStr string) {
 	Println("Valid commands for", commandStr, "are")
 
 	for _, cmd := range hc.Subcommands {

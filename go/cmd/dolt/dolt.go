@@ -407,7 +407,11 @@ func runMain() int {
 		cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
 	}
 
-	globalArgs, args, initCliContext, err := splitArgsOnSubCommand(args)
+	globalArgs, args, initCliContext, printUsage, err := splitArgsOnSubCommand(args)
+	if printUsage {
+		doltCommand.PrintUsage("dolt")
+		return 0
+	}
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failure to parse arguments: %v", err))
 		return 1
@@ -457,21 +461,26 @@ var _ cli.CliContext = (*tmpCliContext)(nil)
 
 // splitArgsOnSubCommand splits the args into two slices, the first containing all args before the first subcommand,
 // and the second containing all args after the first subcommand. The second slice will start with the subcommand name.
-func splitArgsOnSubCommand(args []string) (globalArgs, subArgs []string, initCliContext bool, err error) {
+func splitArgsOnSubCommand(args []string) (globalArgs, subArgs []string, initCliContext, printUsages bool, err error) {
 	commandSet := make(map[string]bool)
 	for _, cmd := range doltSubCommands {
 		commandSet[cmd.Name()] = true
 	}
 
 	for i, arg := range args {
+		if cli.IsHelp(arg) {
+			// Found --help before any subcommand, so print dolt help.
+			return nil, nil, false, true, nil
+		}
+
 		if _, ok := commandSet[arg]; ok {
 			// SQL is the first subcommand to support the CLIContext. We'll need a more general solution when we add more.
 			initCliContext := "sql" == arg
-			return args[:i], args[i:], initCliContext, nil
+			return args[:i], args[i:], initCliContext, false, nil
 		}
 	}
 
-	return nil, nil, false, errors.New("No valid dolt subcommand found. See 'dolt help' for usage.")
+	return nil, nil, false, false, errors.New("No valid dolt subcommand found. See 'dolt --help' for usage.")
 }
 
 // doc is currently used only when a `initCliContext` command is specified. This will include all commands in time,
