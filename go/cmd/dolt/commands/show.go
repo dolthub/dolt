@@ -17,10 +17,11 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/hash"
 	"regexp"
 	"strings"
+
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
