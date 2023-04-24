@@ -428,7 +428,7 @@ func runMain() int {
 		cliCtx = tmpCliContext{globalArgs: apr}
 	}
 
-	res := doltCommand.Exec(ctx, "dolt", args, dEnv, &cliCtx)
+	res := doltCommand.Exec(ctx, "dolt", args, dEnv, cliCtx)
 	stop()
 
 	if err = dbfactory.CloseAllLocalDatabases(); err != nil {
