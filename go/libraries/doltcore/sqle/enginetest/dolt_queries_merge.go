@@ -3684,7 +3684,7 @@ var errTmplNoAutomaticMerge = "table %s can't be automatically merged.\nTo merge
 
 var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
-		Name: "merge conflicts",
+		Name: "data conflict",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
 			"CREATE table t (pk int primary key, col1 int, col2 varchar(100), col3 varchar(50), " +
@@ -4149,6 +4149,45 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 
+	// Schema conflict test cases
+	{
+		// https://github.com/dolthub/dolt/issues/2973
+		Name: "modifying a column on one side of a merge, and deleting it on the other",
+		AncSetUpScript: []string{
+			"create table t(i int primary key, j int);",
+		},
+		RightSetUpScript: []string{
+			"alter table t drop column j;",
+		},
+		LeftSetUpScript: []string{
+			"alter table t modify column j varchar(24);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "call dolt_merge('right');",
+				ExpectedErr: merge.ErrSchemaConflict,
+			},
+		},
+	},
+	{
+		Name: "type changes to a column on both sides of a merge",
+		AncSetUpScript: []string{
+			"create table t(i int primary key, j int);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column j varchar(100);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t modify column j float;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "call dolt_merge('right');",
+				ExpectedErr: merge.ErrSchemaConflict,
+			},
+		},
+	},
+
 	// Smarter merge conflict detection
 	{
 		// This merge tests reports a conflict on pk=1, because the tuple value is different on the left side, right
@@ -4252,7 +4291,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 	{
-		// TODO: currently panics when merging!!!
 		Name: "changing the type of a column with an index",
 		AncSetUpScript: []string{
 			"create table t (pk int primary key, col1 int, INDEX col1_idx (col1));",
@@ -4271,6 +4309,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
 			},
 			{
+				Skip:  true,
 				Query: "select pk, col1 from t order by col1;",
 				Expected: []sql.Row{
 					{1, "100"},
@@ -4280,7 +4319,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 					{5, "50"},
 					{6, "60"},
 				},
-				Skip: true,
 			},
 		},
 	},

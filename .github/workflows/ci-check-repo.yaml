@@ -40,6 +40,11 @@ jobs:
             echo "code is formatted"
           else
             echo "code is not formatted"
+            if [ "${{ github.repository }}" != "dolthub/dolt" ]; then
+              echo "Pull requests from forks must be manually formatted."
+              echo "Please run dolt/go/utils/repofmt/format_repo.sh to format this pull request."
+              exit 1;
+            fi
             echo "format=true" >> $GITHUB_OUTPUT
           fi
         env:
@@ -73,8 +78,37 @@ jobs:
              echo "$diff"
              exit 1
           fi
-  format:
+  get-artifacts:
     needs: verify
+    if: ${{ needs.verify.outputs.format == 'true' }}
+    name: Get artifacts
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v3
+        with:
+          go-version: ^1.19
+      - uses: actions/checkout@v3
+        with:
+          ref: "main"
+          repository: "dolthub/dolt"
+          submodules: true
+      - name: Copy script
+        working-directory: ./go/utils/repofmt
+        run: cp format_repo.sh _format_repo.sh
+      - name: Build go deps tool
+        working-directory: go/utils/3pdeps
+        run: go build .
+      - uses: actions/upload-artifact@v3
+        with:
+          name: update-godeps-tool
+          path: go/utils/3pdeps/3pdeps
+      - uses: actions/upload-artifact@v3
+        with:
+          name: format-code-script
+          path: go/utils/repofmt/_format_repo.sh
+  format:
+    needs: [verify, get-artifacts]
     if: ${{ needs.verify.outputs.format == 'true' }}
     name: Format PR
     runs-on: ubuntu-22.04
@@ -93,14 +127,33 @@ jobs:
         working-directory: ./go
       - name: Install goimports
         run: go install golang.org/x/tools/cmd/goimports@latest
-      - name: Format repo and update licenses
+      - uses: actions/download-artifact@v3
+        with:
+          name: format-code-script
+          path: go/utils/repofmt
+      - uses: actions/download-artifact@v3
+        with:
+          name: update-godeps-tool
+          path: go
+      - name: Format repo
         working-directory: ./go
         run: |
-          ./utils/repofmt/format_repo.sh
-          ./Godeps/update.sh
+          chmod +x ./utils/repofmt/_format_repo.sh
+          ./utils/repofmt/_format_repo.sh
         env:
           BRANCH_NAME: ${{ github.head_ref }}
           CHANGE_TARGET: ${{ github.base_ref }}
+      - name: Update Go deps
+        working-directory: ./go
+        run: |
+          chmod +x ./3pdeps
+          ( go list -deps -json ./cmd/dolt/. && \
+            GOOS=windows go list -deps -json ./cmd/dolt/. ) \
+            | ./3pdeps > ./Godeps/LICENSES
+      - name: Remove artifacts
+        run: |
+          rm go/3pdeps
+          rm go/utils/repofmt/_format_repo.sh
       - name: Changes detected
         id: detect-changes
         run: |

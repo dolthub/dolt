@@ -252,7 +252,7 @@ func (a *binlogReplicaApplier) startReplicationEventStream(ctx *sql.Context, con
 // replicaBinlogEventHandler runs a loop, processing binlog events until the applier's stop replication channel
 // receives a signal to stop.
 func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error {
-	server := sqlserver.GetRunningServer()
+	server, _ := sqlserver.GetRunningServer()
 	if server == nil {
 		return fmt.Errorf("unable to access a running SQL server")
 	}
@@ -877,7 +877,7 @@ func convertVitessJsonExpressionString(ctx *sql.Context, value sqltypes.Value) (
 		return nil, err
 	}
 
-	server := sqlserver.GetRunningServer()
+	server, _ := sqlserver.GetRunningServer()
 	if server == nil {
 		return nil, fmt.Errorf("unable to access running SQL server")
 	}

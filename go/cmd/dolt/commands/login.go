@@ -94,7 +94,7 @@ func (cmd LoginCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, loginDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

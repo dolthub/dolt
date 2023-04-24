@@ -9,7 +9,6 @@ teardown() {
     teardown_common
 }
 
-# Create a single primary key table and do stuff
 @test "checkout: dolt checkout takes working set changes with you" {
     dolt sql <<SQL
 create table test(a int primary key);
@@ -52,6 +51,72 @@ SQL
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "modified" ]] || false
+}
+
+@test "checkout: dolt checkout takes working set changes with you on new table" {
+    dolt sql <<SQL
+create table test(a int primary key);
+insert into test values (1);
+SQL
+    dolt add . && dolt commit -am "Initial table with one row"
+    dolt branch feature
+
+    dolt sql -q "create table t2(b int primary key)"
+    dolt sql -q "insert into t2 values (1);"
+
+    # This is fine for an untracked table, takes it to the new branch with you
+    dolt checkout feature
+
+    run dolt sql -q "select count(*) from t2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new table" ]] || false
+
+    dolt checkout main
+
+    run dolt sql -q "select count(*) from t2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new table" ]] || false
+
+    # Now check the table into main and make additonal changes
+    dolt add . && dolt commit -m "new table"
+    dolt sql -q "insert into t2 values (2);"
+
+    # This is an error, matching git (cannot check out a branch that lacks a
+    # file you have modified)
+    run dolt checkout feature
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Your local changes to the following tables would be overwritten by checkout" ]] || false
+    [[ "$output" =~ "t2" ]] || false 
+}
+
+@test "checkout: checkout would overwrite local changes" {
+    dolt sql <<SQL
+create table test(a int primary key);
+insert into test values (1);
+SQL
+    dolt add .
+
+    dolt commit -am "Initial table with one row"
+    dolt checkout -b feature
+
+    dolt sql -q "insert into test values (2)"
+    dolt commit -am "inserted a value"
+    dolt checkout main
+
+    dolt sql -q "insert into test values (3)"
+    run dolt checkout feature
+
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Your local changes to the following tables would be overwritten by checkout" ]] || false
+    [[ "$output" =~ "test" ]] || false 
 }
 
 @test "checkout: dolt checkout doesn't stomp working set changes on other branch" {
