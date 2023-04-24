@@ -206,14 +206,18 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	// data-dir args come either from the global args or the subcommand args.  We need to check both.
 	var dataDir string
+	dataDirGiven := false
 	if multiDbDir, ok := apr.GetValue(MultiDBDirFlag); ok {
 		// When GlobalArgs migration is complete, drop this flag.
 		dataDir = multiDbDir
+		dataDirGiven = true
 	} else if dataDirPath, ok := apr.GetValue(DataDirFlag); ok {
 		// TODO: remove this once we remove the deprecated passing of data dir directly to subcommand.
 		dataDir = dataDirPath
+		dataDirGiven = true
 	} else if dataDirPath, ok := globalArgs.GetValue(DataDirFlag); ok {
 		dataDir = dataDirPath
+		dataDirGiven = true
 	}
 
 	mrEnv, dataDir, verr := getMultiRepoEnv(ctx, dataDir, dEnv)
@@ -226,7 +230,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	cfgDir, cfgDirSpecified := apr.GetValue(CfgDirFlag)
 	if cfgDirSpecified {
 		cfgDirPath = cfgDir
-	} else if len(dataDir) != 0 {
+	} else if dataDirGiven {
 		cfgDirPath = filepath.Join(dataDir, DefaultCfgDirName)
 	} else {
 		// Look in parent directory for doltcfg
