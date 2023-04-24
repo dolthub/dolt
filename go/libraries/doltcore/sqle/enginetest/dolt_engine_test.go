@@ -1015,6 +1015,9 @@ func TestTransactions(t *testing.T) {
 			enginetest.TestTransactionScript(t, h, script)
 		}()
 	}
+}
+
+func TestBranchTransactions(t *testing.T) {
 	for _, script := range BranchIsolationTests {
 		func() {
 			h := newDoltHarness(t)
