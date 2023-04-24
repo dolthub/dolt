@@ -138,8 +138,8 @@ func (ws WorkingSet) Meta() *datas.WorkingSetMeta {
 	return ws.meta
 }
 
-// NewWorkingSet creates a new WorkingSet object.
-func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, ns tree.NodeStore, ds datas.Dataset) (*WorkingSet, error) {
+// newWorkingSet creates a new WorkingSet object.
+func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, ns tree.NodeStore, ds datas.Dataset) (*WorkingSet, error) {
 	dsws, err := ds.HeadWorkingSet()
 	if err != nil {
 		return nil, err

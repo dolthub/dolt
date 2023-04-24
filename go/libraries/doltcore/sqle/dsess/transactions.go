@@ -116,6 +116,11 @@ func (tx DoltTransaction) IsReadOnly() bool {
 	return tx.tCharacteristic == sql.ReadOnly
 }
 
+func (tx DoltTransaction) GetInitialRoot(dbName string) (hash.Hash, bool) {
+	h, ok := tx.startRootHash[strings.ToLower(dbName)]
+	return h, ok
+}
+
 var txLock sync.Mutex
 
 // Commit attempts to merge the working set given into the current working set.

@@ -374,6 +374,16 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Comm
 	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
 }
 
+// ResolveCommitRefAtRoot takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
+// point to a Commit.
+func (ddb *DoltDB) ResolveCommitRefAtRoot(ctx context.Context, ref ref.DoltRef, nomsRoot hash.Hash) (*Commit, error) {
+	commitVal, err := getCommitValForRefStr(ctx, ddb, ref.String())
+	if err != nil {
+		return nil, err
+	}
+	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
+}
+
 // ResolveBranchRoots returns the Roots for the branch given
 func (ddb *DoltDB) ResolveBranchRoots(ctx context.Context, branch ref.BranchRef) (Roots, error) {
 	commitRef, err := ddb.ResolveCommitRef(ctx, branch)
@@ -452,7 +462,7 @@ func (ddb *DoltDB) workingSetFromDataset(ctx context.Context, workingSetRef ref.
 		return nil, fmt.Errorf("workingSetRef head is not a workingSetRef")
 	}
 
-	return NewWorkingSet(ctx, workingSetRef.GetPath(), ddb.vrw, ddb.ns, ds)
+	return newWorkingSet(ctx, workingSetRef.GetPath(), ddb.vrw, ddb.ns, ds)
 }
 
 // TODO: convenience method to resolve the head commit of a branch.
