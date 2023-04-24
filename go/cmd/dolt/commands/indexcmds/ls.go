@@ -55,7 +55,7 @@ func (cmd LsCmd) ArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	ap.TooManyArgsErrorFunc = func(receivedArgs []string) error {
 		args := strings.Join(receivedArgs, ", ")

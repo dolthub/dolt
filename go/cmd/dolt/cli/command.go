@@ -64,7 +64,7 @@ type Command interface {
 	// Description returns a description of the command
 	Description() string
 	// Exec executes the command
-	Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
+	Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx CliContext) int
 	// Docs returns the documentation for this command, or nil if it's undocumented
 	Docs() *CommandDocumentation
 	// ArgParser returns the arg parser for this command
@@ -169,7 +169,7 @@ func (hc SubCommandHandler) Hidden() bool {
 	return hc.hidden
 }
 
-func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx CliContext) int {
 	if len(args) < 1 && hc.Unspecified == nil {
 		hc.printUsage(commandStr)
 		return 1
@@ -183,11 +183,11 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 	for _, cmd := range hc.Subcommands {
 		lwrName := strings.ToLower(cmd.Name())
 		if lwrName == subCommandStr {
-			return hc.handleCommand(ctx, commandStr+" "+subCommandStr, cmd, args[1:], dEnv)
+			return hc.handleCommand(ctx, commandStr+" "+subCommandStr, cmd, args[1:], dEnv, cliCtx)
 		}
 	}
 	if hc.Unspecified != nil {
-		return hc.handleCommand(ctx, commandStr, hc.Unspecified, args, dEnv)
+		return hc.handleCommand(ctx, commandStr, hc.Unspecified, args, dEnv, cliCtx)
 	}
 
 	if !isHelp(subCommandStr) {
@@ -199,7 +199,7 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 	return 0
 }
 
-func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string, cmd Command, args []string, dEnv *env.DoltEnv) int {
+func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string, cmd Command, args []string, dEnv *env.DoltEnv, cliCtx CliContext) int {
 	cmdRequiresRepo := true
 	if rnrCmd, ok := cmd.(RepoNotRequiredCommand); ok {
 		cmdRequiresRepo = rnrCmd.RequiresRepo()
@@ -234,7 +234,7 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string
 		return 1
 	}
 
-	ret := cmd.Exec(ctx, commandStr, args, dEnv)
+	ret := cmd.Exec(ctx, commandStr, args, dEnv, cliCtx)
 
 	if evt != nil {
 		events.GlobalCollector.CloseEventAndAdd(evt)

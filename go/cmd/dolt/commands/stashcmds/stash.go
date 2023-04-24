@@ -88,7 +88,7 @@ func (cmd StashCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	if !dEnv.DoltDB.Format().UsesFlatbuffers() {
 		cli.PrintErrln(ErrStashNotSupportedForOldFormat.Error())
 		return 1

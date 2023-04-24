@@ -60,7 +60,7 @@ func (cmd ShowRootCmd) Hidden() bool {
 
 // Version displays the version of the running dolt client
 // Exec executes the command
-func (cmd ShowRootCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ShowRootCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	usage, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{}, ap))
 

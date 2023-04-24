@@ -70,7 +70,7 @@ func (cmd StashPopCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	if !dEnv.DoltDB.Format().UsesFlatbuffers() {
 		cli.PrintErrln(ErrStashNotSupportedForOldFormat.Error())
 		return 1
@@ -104,7 +104,7 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return handleStashPopErr(usage, err)
 	}
 
-	ret := commands.StatusCmd{}.Exec(ctx, "status", []string{}, dEnv)
+	ret := commands.StatusCmd{}.Exec(ctx, "status", []string{}, dEnv, nil)
 	if ret != 0 || !success {
 		cli.Println("The stash entry is kept in case you need it again.")
 		return 1

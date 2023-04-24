@@ -403,7 +403,7 @@ func runMain() int {
 
 	start := time.Now()
 	ctx, stop := context.WithCancel(ctx)
-	res := doltCommand.Exec(ctx, "dolt", args, dEnv)
+	res := doltCommand.Exec(ctx, "dolt", args, dEnv, nil)
 	stop()
 
 	if err = dbfactory.CloseAllLocalDatabases(); err != nil {
@@ -464,5 +464,5 @@ func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
 		return false, 0
 	}
 	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, Version)
-	return true, doltCommand.Exec(ctx, "dolt", args, dEnv)
+	return true, doltCommand.Exec(ctx, "dolt", args, dEnv, nil)
 }

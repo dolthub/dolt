@@ -29,7 +29,7 @@ import (
 
 var ErrFastForward = errors.New("fast forward")
 var ErrTableDeletedAndModified = errors.New("conflict: table with same name deleted and modified ")
-var ErrSchemaConflict = errors.New("schema conflict found, merge aborted. Please alter schema to prevent schema conflicts before merging")
+var ErrSchemaConflict = goerrors.NewKind("schema conflict found, merge aborted. Please alter schema to prevent schema conflicts before merging: %s")
 
 // ErrCantOverwriteConflicts is returned when there are unresolved conflicts
 // and the merge produces new conflicts. Because we currently don't have a model

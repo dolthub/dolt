@@ -58,7 +58,7 @@ func (cmd fvCommand) exec(ctx context.Context, dEnv *env.DoltEnv) int {
 	// execute the command using |cmd.user|'s Feature Version
 	doltdb.DoltFeatureVersion = cmd.user.vers
 	defer func() { doltdb.DoltFeatureVersion = DoltFeatureVersionCopy }()
-	return cmd.cmd.Exec(ctx, cmd.cmd.Name(), cmd.args, dEnv)
+	return cmd.cmd.Exec(ctx, cmd.cmd.Name(), cmd.args, dEnv, nil)
 }
 
 type fvUser struct {

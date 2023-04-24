@@ -243,7 +243,7 @@ SQL
     # check that dolt_commit throws an error when there are no changes to commit
     run dolt sql-client -P $PORT -u dolt --no-auto-commit -q "CALL DOLT_COMMIT('-a', '-m', 'Commit1')"
     [ $status -ne 0 ]
-    [[ "$output" =~ "nothing to commit" ]] || false 
+    [[ "$output" =~ "nothing to commit" ]] || false
 
     run dolt ls
     [ "$status" -eq 0 ]
@@ -1444,6 +1444,22 @@ databases:
     PORT=$( definePORT )
     run dolt sql-server -P $PORT --socket "dolt.$PORT.sock"
     [ "$status" -eq 1 ]
+}
+
+@test "sql-server: sql-server sets permissions on sql-server.lock" {
+    cd repo1
+    ! [[ -f "$PWD/.dolt/sql-server.lock" ]] || false
+    start_sql_server
+    [[ -f "$PWD/.dolt/sql-server.lock" ]] || false
+
+
+    if [[ `uname` == 'Darwin' ]]; then
+      run stat -x "$PWD/.dolt/sql-server.lock"
+      [[ "$output" =~ "(0600/-rw-------)" ]] || false
+    else
+      run stat "$PWD/.dolt/sql-server.lock"
+      [[ "$output" =~ "(0600/-rw-------)" ]] || false
+    fi
 }
 
 @test "sql-server: multi dir sql-server locks out children" {

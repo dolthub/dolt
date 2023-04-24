@@ -64,7 +64,7 @@ func (cmd RevertCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec implements the interface cli.Command.
-func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateRevertArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, revertDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -144,7 +144,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	res := AddCmd{}.Exec(ctx, "add", []string{"-A"}, dEnv)
+	res := AddCmd{}.Exec(ctx, "add", []string{"-A"}, dEnv, nil)
 	if res != 0 {
 		return res
 	}
@@ -156,5 +156,5 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		commitParams = append(commitParams, "--author", authorStr)
 	}
 
-	return CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv)
+	return CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv, nil)
 }

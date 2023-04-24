@@ -173,7 +173,7 @@ func (cmd SqlServerCmd) RequiresRepo() bool {
 }
 
 // Exec executes the command
-func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	controller := NewServerController()
 	newCtx, cancelF := context.WithCancel(context.Background())
 	go func() {

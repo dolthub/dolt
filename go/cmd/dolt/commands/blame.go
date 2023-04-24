@@ -79,7 +79,7 @@ func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
 //
 // When all nodes have blame information, stop iterating through commits and print the blame graph.
 // Exec executes the command
-func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, blameDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -90,5 +90,5 @@ func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 	args = []string{"--" + QueryFlag, fmt.Sprintf(blameQueryTemplate, apr.Arg(0))}
 
-	return SqlCmd{}.Exec(ctx, "sql", args, dEnv)
+	return SqlCmd{}.Exec(ctx, "sql", args, dEnv, nil)
 }

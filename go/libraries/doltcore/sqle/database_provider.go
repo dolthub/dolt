@@ -429,8 +429,9 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 	// If we're running in a sql-server context, ensure the new database is locked so that it can't
 	// be edited from the CLI. We can't rely on looking for an existing lock file, since this could
 	// be the first db creation if sql-server was started from a bare directory.
-	if sqlserver.GetRunningServer() != nil {
-		err = newEnv.Lock()
+	_, lckDeets := sqlserver.GetRunningServer()
+	if lckDeets != nil {
+		err = newEnv.Lock(*lckDeets)
 		if err != nil {
 			ctx.GetLogger().Warnf("Failed to lock newly created database: %s", err.Error())
 		}
@@ -706,7 +707,7 @@ func (p DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, n
 	}
 
 	// If we have a running server, remove it from other sessions as well
-	runningServer := sqlserver.GetRunningServer()
+	runningServer, _ := sqlserver.GetRunningServer()
 	if runningServer != nil {
 		sessionManager := runningServer.SessionManager()
 		err := sessionManager.Iter(func(session sql.Session) (bool, error) {

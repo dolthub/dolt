@@ -66,7 +66,7 @@ func (a Assist) Hidden() bool {
 	return true
 }
 
-func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	a.messages = make([]string, 0)
 
 	apiKey, ok := os.LookupEnv("OPENAI_API_KEY")

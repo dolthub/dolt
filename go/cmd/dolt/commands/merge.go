@@ -77,7 +77,7 @@ func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateMergeArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, mergeDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

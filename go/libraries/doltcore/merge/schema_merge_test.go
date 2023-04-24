@@ -36,13 +36,15 @@ import (
 )
 
 type schemaMergeTest struct {
-	name        string
-	ancestor    table
-	left, right table
-	merged      table
-	conflict    bool
-	skipNewFmt  bool
-	skipOldFmt  bool
+	name                string
+	ancestor            table
+	left, right         table
+	merged              table
+	conflict            bool
+	skipNewFmt          bool
+	skipOldFmt          bool
+	skipFlipOnNewFormat bool
+	skipFlipOnOldFormat bool
 }
 
 type table struct {
@@ -102,20 +104,6 @@ var columnAddDropTests = []schemaMergeTest{
 		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
 		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
 		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
-	},
-	{
-		name:     "right side column add",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
-	},
-	{
-		name:     "right side column drop",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
 		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
 	},
 	// both sides change columns
@@ -178,28 +166,13 @@ var columnAddDropTests = []schemaMergeTest{
 		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2), row(11, nil)),
 	},
 	{
-		name:       "left side column drop, right side insert row",
-		ancestor:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
-		left:       tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
-		right:      tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2), row(11, 22)),
-		merged:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1), row(11)),
-		skipNewFmt: true,
-	},
-	{
-		name:     "right side column add, left side insert row",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1), row(11)),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2), row(11, nil)),
-	},
-	{
-		name:       "right side column drop, left side insert row",
-		ancestor:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
-		left:       tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2), row(11, 22)),
-		right:      tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
-		merged:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1), row(11)),
-		skipNewFmt: true,
-		skipOldFmt: true,
+		name:                "left side column drop, right side insert row",
+		ancestor:            tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
+		left:                tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
+		right:               tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2), row(11, 22)),
+		merged:              tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1), row(11)),
+		skipNewFmt:          true,
+		skipFlipOnOldFormat: true,
 	},
 	// both sides change columns and insert rows
 	{
@@ -270,20 +243,6 @@ var columnDefaultTests = []schemaMergeTest{
 		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)           ")),
 	},
 	{
-		name:     "right side add default",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)           ")),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)           ")),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)")),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)")),
-	},
-	{
-		name:     "right side drop default",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)")),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)")),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)           ")),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)           ")),
-	},
-	{
 		name:     "convergent add",
 		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)           ")),
 		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)")),
@@ -299,22 +258,14 @@ var columnDefaultTests = []schemaMergeTest{
 	},
 	// one side changes columns, the other inserts rows
 	{
+		// TODO: this test silently does the wrong thing without erroring
+		skipNewFmt: true,
+		skipOldFmt: true,
 		name:       "left side column add, right side insert row",
 		ancestor:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                  "), row(1)),
 		left:       tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)"), row(1, 42)),
 		right:      tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                  "), row(1), row(12)),
 		merged:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)"), row(1, 42), row(12, 42)),
-		skipNewFmt: true, // TODO: this test silently does the wrong thing without erroring
-		skipOldFmt: true,
-	},
-	{
-		name:       "right side column add, left side insert row",
-		ancestor:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                  "), row(1)),
-		left:       tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                  "), row(1), row(11)),
-		right:      tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)"), row(1, 42)),
-		merged:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)"), row(1, 42), row(11, 42)),
-		skipNewFmt: true, // TODO: this test silently does the wrong thing without erroring
-		skipOldFmt: true,
 	},
 	// both sides change columns and insert rows
 	{
@@ -346,13 +297,6 @@ var typeChangeTests = []schemaMergeTest{
 		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b int)"), row(1, "2", 3)),
 	},
 	{
-		name:     "modify column type on the right side",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int)     "), row(1, 2, 3)),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int)     "), row(1, 2, 3)),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b int)"), row(1, "2", 3)),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b int)"), row(1, "2", 3)),
-	},
-	{
 		name:       "independently modify column type on the both sides",
 		ancestor:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int)          "), row(1, 2, 3)),
 		left:       tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b int)     "), row(1, "2", 3)),
@@ -380,13 +324,6 @@ var keyChangeTests = []schemaMergeTest{
 		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
 	},
 	{
-		name:     "add a trailing primary key column on right side",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
-	},
-	{
 		name:     "add a leading primary key column on left side",
 		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
 		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
@@ -394,26 +331,12 @@ var keyChangeTests = []schemaMergeTest{
 		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
 	},
 	{
-		name:     "add a leading primary key column on right side",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
-	},
-	{
-		name:     "remove a trailing primary key column on left side",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
-	},
-	{
-		name:       "remove a trailing primary key column on right side",
-		ancestor:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
-		left:       tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
-		right:      tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
-		merged:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
-		skipNewFmt: true,
+		name:                "remove a trailing primary key column on left side",
+		ancestor:            tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
+		left:                tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		right:               tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a, b))"), row(1, "2", float32(3.0))),
+		merged:              tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		skipFlipOnNewFormat: true,
 	},
 	{
 		name:     "remove a trailing primary key column on both sides",
@@ -423,19 +346,12 @@ var keyChangeTests = []schemaMergeTest{
 		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
 	},
 	{
-		name:     "remove a leading primary key column on left side",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
-	},
-	{
-		name:       "remove a leading primary key column on right side",
-		ancestor:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
-		left:       tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
-		right:      tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
-		merged:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
-		skipNewFmt: true,
+		name:                "remove a leading primary key column on left side",
+		ancestor:            tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
+		left:                tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		right:               tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b, a))"), row(1, "2", float32(3.0))),
+		merged:              tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
+		skipFlipOnNewFormat: true,
 	},
 	{
 		name:     "remove a leading primary key column on both sides",
@@ -445,20 +361,13 @@ var keyChangeTests = []schemaMergeTest{
 		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
 	},
 	{
-		name:     "convert left side to a keyless table",
-		ancestor: tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))"), row(1, "2", float32(3.0))),
-		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", float32(3.0))),
-		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))"), row(1, "2", float32(3.0))),
-		merged:   tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", float32(3.0))),
-	},
-	{
-		name:       "convert left side to a keyless table",
-		ancestor:   tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))"), row(1, "2", float32(3.0))),
-		left:       tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))"), row(1, "2", float32(3.0))),
-		right:      tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", float32(3.0))),
-		merged:     tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", float32(3.0))),
-		skipNewFmt: true,
-		skipOldFmt: true,
+		skipFlipOnNewFormat: true,
+		skipFlipOnOldFormat: true,
+		name:                "convert left side to a keyless table",
+		ancestor:            tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))"), row(1, "2", float32(3.0))),
+		left:                tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", float32(3.0))),
+		right:               tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))"), row(1, "2", float32(3.0))),
+		merged:              tbl(sch("CREATE TABLE t (a int, b char(20), c float)                 "), row(1, "2", float32(3.0))),
 	},
 	{
 		name:       "convert both sides to keyless tables",
@@ -504,26 +413,45 @@ var simpleConflictTests = []schemaMergeTest{
 		conflict: true,
 	},
 	{
-		name:     "conflicting index adds: same name and columns, different constraints",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)                      ")),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX idx (a))       ")),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, UNIQUE INDEX idx (a))")),
-		conflict: true,
+		// TODO: This test case does NOT generate a conflict; the merge gets short circuited, because the table's
+		//       right/left/anc hashes are all the same. This is an issue with the test framework, not with Dolt.
+		//       The code we use in these tests to create a schema (sqlutil.ParseCreateTableStatement) silently
+		//       drops index and check constraint definitions.
+		skipNewFmt: true,
+		skipOldFmt: true,
+		name:       "conflicting index adds: same name and columns, different constraints",
+		ancestor:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)                      ")),
+		left:       tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX idx (a))       ")),
+		right:      tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, UNIQUE INDEX idx (a))")),
+		conflict:   true,
 	},
 	{
+		// TODO: This test case does NOT generate a conflict; the merge gets short circuited, because the table's
+		//       right/left/anc hashes are all the same. This is an issue with the test framework, not with Dolt.
+		//       The code we use in these tests to create a schema (sqlutil.ParseCreateTableStatement) silently
+		//       drops index and check constraint definitions.
+		skipNewFmt: true,
+		skipOldFmt: true,
+		// TODO: multiple indexes can exist for the same column set, so this shouldn't actually be a conflict;
+		//       Dolt does report this as a schema conflict today, but we could merge the two indexes together.
 		name:     "conflicting index adds: same column different names",
 		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)                 ")),
 		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX a_idx (a))")),
 		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX key_a (a))")),
-		// todo: is it allowed to define multiple indexes over the same column?
 		conflict: true,
 	},
 	{
-		name:     "conflicting index adds: same name different definitions",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)               ")),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX idx (a))")),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX idx (b))")),
-		conflict: true,
+		// TODO: This test case does NOT generate a conflict; the merge gets short circuited, because the table's
+		//       right/left/anc hashes are all the same. This is an issue with the test framework, not with Dolt.
+		//       The code we use in these tests to create a schema (sqlutil.ParseCreateTableStatement) silently
+		//       drops index and check constraint definitions.
+		skipNewFmt: true,
+		skipOldFmt: true,
+		name:       "conflicting index adds: same name different definitions",
+		ancestor:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)               ")),
+		left:       tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX idx (a))")),
+		right:      tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX idx (b))")),
+		conflict:   true,
 	},
 	{
 		name:     "add primary key columns at different key positions on left and right sides",
@@ -542,7 +470,22 @@ var simpleConflictTests = []schemaMergeTest{
 }
 
 func testSchemaMerge(t *testing.T, tests []schemaMergeTest) {
+	t.Run("merge left to right", func(t *testing.T) {
+		testSchemaMergeHelper(t, tests, false)
+	})
+	t.Run("merge right to left", func(t *testing.T) {
+		testSchemaMergeHelper(t, tests, true)
+	})
+}
+
+func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool) {
 	for _, test := range tests {
+		if flipSides {
+			tmp := test.left
+			test.left = test.right
+			test.right = tmp
+		}
+
 		t.Run(test.name, func(t *testing.T) {
 			a, l, r, m := setupSchemaMergeTest(t, test)
 
@@ -552,18 +495,24 @@ func testSchemaMerge(t *testing.T, tests []schemaMergeTest) {
 			eo = eo.WithDeaf(editor.NewInMemDeaf(a.VRW()))
 			// attempt merge before skipping to assert no panics
 			root, _, err := merge.MergeRoots(ctx, l, r, a, rootish{r}, rootish{a}, eo, mo)
-			maybeSkip(t, a.VRW().Format(), test)
-			require.NoError(t, err)
-			exp, err := m.MapTableHashes(ctx)
-			assert.NoError(t, err)
-			act, err := root.MapTableHashes(ctx)
-			assert.NoError(t, err)
+			maybeSkip(t, a.VRW().Format(), test, flipSides)
 
-			assert.Equal(t, len(exp), len(act))
-			for name, addr := range exp {
-				a, ok := act[name]
-				assert.True(t, ok)
-				assert.Equal(t, addr, a)
+			if test.conflict {
+				// TODO: Test the conflict error message more deeply
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				exp, err := m.MapTableHashes(ctx)
+				assert.NoError(t, err)
+				act, err := root.MapTableHashes(ctx)
+				assert.NoError(t, err)
+
+				assert.Equal(t, len(exp), len(act))
+				for name, addr := range exp {
+					a, ok := act[name]
+					assert.True(t, ok)
+					assert.Equal(t, addr, a)
+				}
 			}
 		})
 	}
@@ -586,16 +535,13 @@ func setupSchemaMergeTest(t *testing.T, test schemaMergeTest) (anc, left, right,
 	return
 }
 
-func maybeSkip(t *testing.T, nbf *types.NomsBinFormat, test schemaMergeTest) {
-	if test.conflict {
-		t.Skip("TODO: test conflict state")
-	}
+func maybeSkip(t *testing.T, nbf *types.NomsBinFormat, test schemaMergeTest, flipSides bool) {
 	if types.IsFormat_DOLT(nbf) {
-		if test.skipNewFmt {
-			t.Skip("")
+		if test.skipNewFmt || flipSides && test.skipFlipOnNewFormat {
+			t.Skip()
 		}
 	} else {
-		if test.skipOldFmt {
+		if test.skipOldFmt || flipSides && test.skipFlipOnOldFormat {
 			t.Skip()
 		}
 	}
@@ -611,6 +557,7 @@ func sch(definition string) namedSchema {
 	ns := denv.DoltDB.NodeStore()
 	ctx := context.Background()
 	root, _ := doltdb.EmptyRootValue(ctx, vrw, ns)
+	// TODO: ParseCreateTableStatement silently drops any indexes or check constraints in the definition
 	name, s, err := sqlutil.ParseCreateTableStatement(ctx, root, definition)
 	if err != nil {
 		panic(err)
