@@ -198,7 +198,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		mergeParentCommits = parentsHeadForAmend
 	}
 
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
+	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws, mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag) || apr.Contains(cli.AmendFlag),

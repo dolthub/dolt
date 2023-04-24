@@ -88,7 +88,7 @@ type MergeStatusIter struct {
 func newMergeStatusItr(ctx context.Context, ws *doltdb.WorkingSet) (*MergeStatusIter, error) {
 	wr := ws.WorkingRoot()
 
-	inConflict, err := wr.TablesInConflict(ctx)
+	inConflict, err := wr.TablesWithDataConflicts(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -98,8 +98,14 @@ func newMergeStatusItr(ctx context.Context, ws *doltdb.WorkingSet) (*MergeStatus
 		return nil, err
 	}
 
+	var schConflicts []string
+	if ws.MergeActive() {
+		schConflicts = ws.MergeState().TablesWithSchemaConflicts()
+	}
+
 	unmergedTblNames := set.NewStrSet(inConflict)
 	unmergedTblNames.Add(tblsWithViolations...)
+	unmergedTblNames.Add(schConflicts...)
 
 	var sourceCommitSpecStr *string
 	var sourceCommitHash *string

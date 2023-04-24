@@ -694,7 +694,7 @@ func (root *RootValue) getTableMap(ctx context.Context) (tableMap, error) {
 	return root.st.GetTablesMap(ctx, root.vrw, root.ns)
 }
 
-func (root *RootValue) TablesInConflict(ctx context.Context) ([]string, error) {
+func (root *RootValue) TablesWithDataConflicts(ctx context.Context) ([]string, error) {
 	names, err := root.GetTableNames(ctx)
 	if err != nil {
 		return nil, err
@@ -747,7 +747,7 @@ func (root *RootValue) TablesWithConstraintViolations(ctx context.Context) ([]st
 }
 
 func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
-	cnfTbls, err := root.TablesInConflict(ctx)
+	cnfTbls, err := root.TablesWithDataConflicts(ctx)
 
 	if err != nil {
 		return false, err

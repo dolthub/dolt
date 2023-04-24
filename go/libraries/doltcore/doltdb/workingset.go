@@ -43,6 +43,11 @@ type SchemaConflict struct {
 	ToFks, FromFks    []ForeignKey
 	ToParentSchemas   map[string]schema.Schema
 	FromParentSchemas map[string]schema.Schema
+	toTbl, fromTbl    *Table
+}
+
+func (sc SchemaConflict) GetConflictingTables() (ours, theirs *Table) {
+	return sc.toTbl, sc.fromTbl
 }
 
 // TodoWorkingSetMeta returns an incomplete WorkingSetMeta, suitable for methods that don't have the means to construct

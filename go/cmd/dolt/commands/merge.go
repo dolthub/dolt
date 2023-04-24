@@ -205,7 +205,7 @@ func getUnmergedTableCount(ctx context.Context, ws *doltdb.WorkingSet) (int, err
 		unmerged.Add(ws.MergeState().TablesWithSchemaConflicts()...)
 	}
 
-	conflicted, err := ws.WorkingRoot().TablesInConflict(ctx)
+	conflicted, err := ws.WorkingRoot().TablesWithDataConflicts(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -520,7 +520,7 @@ func executeNoFFMergeAndCommit(ctx context.Context, dEnv *env.DoltEnv, spec *mer
 		return tblToStats, err
 	}
 
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
+	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws, mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       spec.Date,
 		AllowEmpty: spec.AllowEmpty,

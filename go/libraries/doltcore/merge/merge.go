@@ -395,7 +395,7 @@ func GetMergeArtifactStatus(ctx context.Context, working *doltdb.WorkingSet) (as
 		as.SchemaConflictsTables = working.MergeState().TablesWithSchemaConflicts()
 	}
 
-	as.DataConflictTables, err = working.WorkingRoot().TablesInConflict(ctx)
+	as.DataConflictTables, err = working.WorkingRoot().TablesWithDataConflicts(ctx)
 	if err != nil {
 		return as, err
 	}

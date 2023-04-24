@@ -788,16 +788,6 @@ func (dEnv *DoltEnv) NewWorkingSetMeta(message string) *datas.WorkingSetMeta {
 	}
 }
 
-func (dEnv *DoltEnv) GetTablesWithConflicts(ctx context.Context) ([]string, error) {
-	root, err := dEnv.WorkingRoot(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return root.TablesInConflict(ctx)
-}
-
 func (dEnv *DoltEnv) CredsDir() (string, error) {
 	return getCredsDir(dEnv.hdp)
 }

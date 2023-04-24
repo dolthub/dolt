@@ -124,7 +124,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		}
 	}
 
-	cnfTables, err := roots.Working.TablesInConflict(ctx)
+	cnfTables, err := roots.Working.TablesWithDataConflicts(ctx)
 	if err != nil {
 		return nil, err
 	}

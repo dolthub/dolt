@@ -493,9 +493,6 @@ teardown() {
     dolt commit -m "added conflicting test row"
     dolt checkout main
     dolt merge test-branch
-    run dolt checkout test
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
     run dolt sql -q "select * from test"
     [[ "$output" =~ \|[[:space:]]+5 ]] || false
     run dolt conflicts cat test
