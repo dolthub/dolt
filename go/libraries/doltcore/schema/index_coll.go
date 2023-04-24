@@ -45,8 +45,14 @@ type IndexCollection interface {
 	GetByNameCaseInsensitive(indexName string) (Index, bool)
 	// GetIndexByColumnNames returns whether the collection contains an index that has this exact collection and ordering of columns.
 	GetIndexByColumnNames(cols ...string) (Index, bool)
-	// GetIndexByTags returns whether the collection contains an index that has this exact collection and ordering of columns.
+	// GetIndexByTags returns at most one index from this collection that covers the columns identified by the specified |tags|, in
+	// the same order. Note that this is NOT guaranteed to be the ONLY index in this collection that covers those same tags.
+	// Deprecated: Multiple indexes can cover the same column set; using this method can result in race conditions and errors
+	//             when multiple indexes cover the set of columns.
 	GetIndexByTags(tags ...uint64) (Index, bool)
+	// GetIndexesByTags returns all indexes from this collection that cover the same columns identified by |tags|, in the
+	// same order specified. This method is preferred over GetIndexByTags.
+	GetIndexesByTags(tags ...uint64) []Index
 	// IndexesWithColumn returns all indexes that index the given column.
 	IndexesWithColumn(columnName string) []Index
 	// IndexesWithTag returns all indexes that index the given tag.
@@ -280,6 +286,30 @@ func (ixc *indexCollectionImpl) GetIndexByTags(tags ...uint64) (Index, bool) {
 		return nil, false
 	}
 	return idx, true
+}
+
+// GetIndexesByTags implements the schema.Index interface
+func (ixc *indexCollectionImpl) GetIndexesByTags(tags ...uint64) []Index {
+	var result []Index
+
+	tagCount := len(tags)
+	for _, idx := range ixc.indexes {
+		if tagCount != len(idx.tags) {
+			continue
+		}
+
+		allMatch := true
+		for i, idxTag := range idx.tags {
+			if tags[i] != idxTag {
+				allMatch = false
+				break
+			}
+		}
+		if allMatch {
+			result = append(result, idx)
+		}
+	}
+	return result
 }
 
 func (ixc *indexCollectionImpl) hasIndexOnTags(tags ...uint64) bool {

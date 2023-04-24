@@ -554,127 +554,192 @@ func mapColumns(ourCC, theirCC, ancCC *schema.ColCollection) (columnMappings, er
 	return columnMappings, nil
 }
 
-// assumes indexes are unique over their column sets
-func mergeIndexes(mergedCC *schema.ColCollection, ourSch, theirSch, ancSch schema.Schema) (merged schema.IndexCollection, conflicts []IdxConflict) {
-	merged, conflicts = indexesInCommon(mergedCC, ourSch.Indexes(), theirSch.Indexes(), ancSch.Indexes())
+// mergeIndexes merges the indexes from |ourSch|, |theirSch|, and |ancSch| into a single, merged collection of indexes,
+// or if problems are encountered merging the indexes, then a slice of IdxConflicts are returned describing why the
+// indexes could not be merged together into a single set.
+func mergeIndexes(mergedCC *schema.ColCollection, ourSch, theirSch, ancSch schema.Schema) (schema.IndexCollection, []IdxConflict) {
+	// Calculate the index mappings between the three schemas
+	mappings := mapIndexes(ourSch.Indexes(), theirSch.Indexes(), ancSch.Indexes())
+	//fmt.Printf("INDEX MAPPINGS: \n%s\n", mappings.DebugString())
 
-	ourNewIdxs := indexCollSetDifference(ourSch.Indexes(), ancSch.Indexes(), mergedCC)
-	theirNewIdxs := indexCollSetDifference(theirSch.Indexes(), ancSch.Indexes(), mergedCC)
+	// Then look for conflicts while merging the indexes together
+	var mergedIndexes []schema.Index
+	var conflicts []IdxConflict
+	for _, mapping := range mappings {
+		if mapping.anc == nil {
+			// if there's no ancestor
+			switch {
+			case mapping.ours == nil && mapping.theirs == nil:
+				// no-op
+			case mapping.ours == nil && mapping.theirs != nil:
+				mergedIndexes = append(mergedIndexes, mapping.theirs)
+			case mapping.ours != nil && mapping.theirs == nil:
+				mergedIndexes = append(mergedIndexes, mapping.ours)
+			case mapping.ours != nil && mapping.theirs != nil:
+				if mapping.ours.Equals(mapping.theirs) {
+					mergedIndexes = append(mergedIndexes, mapping.ours)
+				} else {
+					conflicts = append(conflicts, IdxConflict{
+						Kind:   NameCollision,
+						Ours:   mapping.ours,
+						Theirs: mapping.theirs})
+				}
+			}
+		} else {
+			// if there is a common ancestor, then we need to see how each side changed from it
+			switch {
+			case mapping.ours == nil && mapping.theirs == nil:
+				// no-op – index deleted on both sides
+			case mapping.ours == nil && mapping.theirs != nil:
+				if mapping.anc.Equals(mapping.theirs) == false {
+					// index deleted on our side, modified on theirs – conflict
+					conflicts = append(conflicts, IdxConflict{
+						Kind:   NameCollision,
+						Ours:   mapping.ours,
+						Theirs: mapping.theirs})
+				}
+			case mapping.ours != nil && mapping.theirs == nil:
+				if mapping.anc.Equals(mapping.ours) == false {
+					// index deleted on theirs side, modified on ours – conflict
+					conflicts = append(conflicts, IdxConflict{
+						Kind:   NameCollision,
+						Ours:   mapping.ours,
+						Theirs: mapping.theirs})
+				}
+			case mapping.ours != nil && mapping.theirs != nil:
+				oursChanged := !mapping.anc.Equals(mapping.ours)
+				theirsChanged := !mapping.anc.Equals(mapping.theirs)
 
-	// check for conflicts between indexes added on each branch since the ancestor
-	_ = ourNewIdxs.Iter(func(ourIdx schema.Index) (stop bool, err error) {
-		theirIdx, ok := theirNewIdxs.GetByNameCaseInsensitive(ourIdx.Name())
-		// If both indexes are exactly equal then there isn't a conflict
-		if ok && !ourIdx.DeepEquals(theirIdx) {
-			conflicts = append(conflicts, IdxConflict{
-				Kind:   NameCollision,
-				Ours:   ourIdx,
-				Theirs: theirIdx,
-			})
+				if mapping.ours.Equals(mapping.theirs) {
+					mergedIndexes = append(mergedIndexes, mapping.ours)
+				} else {
+					if !oursChanged && !theirsChanged {
+						mergedIndexes = append(mergedIndexes, mapping.ours)
+					} else if !oursChanged && theirsChanged {
+						mergedIndexes = append(mergedIndexes, mapping.theirs)
+					} else if oursChanged && !theirsChanged {
+						mergedIndexes = append(mergedIndexes, mapping.ours)
+					} else if oursChanged && theirsChanged {
+						conflicts = append(conflicts, IdxConflict{
+							Kind:   NameCollision,
+							Ours:   mapping.ours,
+							Theirs: mapping.theirs})
+					}
+				}
+			}
 		}
-		return false, nil
-	})
+	}
 
-	merged.AddIndex(ourNewIdxs.AllIndexes()...)
-	merged.AddIndex(theirNewIdxs.AllIndexes()...)
+	// One more sanity check for conflicting index names
+	indexNames := make(map[string]struct{})
+	for _, idx := range mergedIndexes {
+		if _, ok := indexNames[idx.Name()]; ok {
+			conflicts = append(conflicts, IdxConflict{
+				Kind: NameCollision,
+				Ours: idx,
+			})
+		} else {
+			indexNames[idx.Name()] = struct{}{}
+		}
+	}
 
-	return merged, conflicts
+	mergedIndexCollection := schema.NewIndexCollection(mergedCC, nil)
+	mergedIndexCollection.AddIndex(mergedIndexes...)
+
+	return mergedIndexCollection, conflicts
 }
 
-func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.IndexCollection) (common schema.IndexCollection, conflicts []IdxConflict) {
-	common = schema.NewIndexCollection(mergedCC, nil)
-	_ = ours.Iter(func(ourIdx schema.Index) (stop bool, err error) {
-		idxTags := ourIdx.IndexedColumnTags()
-		for _, t := range idxTags {
-			// if column doesn't exist anymore, drop index
-			// however, it shouldn't be possible for an index
-			// over a dropped column to exist in the intersection
-			if _, ok := mergedCC.GetByTag(t); !ok {
-				return false, nil
-			}
+type indexMappings []indexMapping
+
+func (i indexMappings) DebugString() string {
+	sb := strings.Builder{}
+	for _, mapping := range i {
+		if mapping.ours != nil {
+			sb.WriteString(fmt.Sprintf("  %s ", mapping.ours.Name()))
+		} else {
+			sb.WriteString("  --- ")
 		}
-
-		theirIdx, ok := theirs.GetIndexByTags(idxTags...)
-		if !ok {
-			return false, nil
+		sb.WriteString(" -> ")
+		if mapping.theirs != nil {
+			sb.WriteString(fmt.Sprintf("  %s ", mapping.theirs.Name()))
+		} else {
+			sb.WriteString("  --- ")
 		}
-
-		if ourIdx.Equals(theirIdx) {
-			common.AddIndex(ourIdx)
-			return false, nil
+		sb.WriteString(" -> ")
+		if mapping.anc != nil {
+			sb.WriteString(fmt.Sprintf("  %s ", mapping.anc.Name()))
+		} else {
+			sb.WriteString("  --- ")
 		}
+		sb.WriteString("\n")
+	}
+	return sb.String()
+}
 
-		ancIdx, ok := anc.GetIndexByTags(idxTags...)
+type indexMapping struct {
+	anc, ours, theirs schema.Index
+}
 
-		if !ok {
-			// index added on our branch and their branch with different defs, conflict
-			conflicts = append(conflicts, IdxConflict{
-				Kind:   TagCollision,
-				Ours:   ourIdx,
-				Theirs: theirIdx,
-			})
-			return false, nil
-		}
+// TODO: godocs
+func mapIndexes(ours, theirs, anc schema.IndexCollection) indexMappings {
+	var seenAnc = make(map[string]struct{})
+	var seenTheirs = make(map[string]struct{})
+	var mappings indexMappings
 
-		if ancIdx.Equals(theirIdx) {
-			// index modified on our branch
-			idx, ok := common.GetByNameCaseInsensitive(ourIdx.Name())
-			if ok {
-				conflicts = append(conflicts, IdxConflict{
-					Kind:   NameCollision,
-					Ours:   ourIdx,
-					Theirs: idx,
-				})
-			} else {
-				common.AddIndex(ourIdx)
-			}
-			return false, nil
-		}
-
-		if ancIdx.Equals(ourIdx) {
-			// index modified on their branch
-			idx, ok := common.GetByNameCaseInsensitive(theirIdx.Name())
-			if ok {
-				conflicts = append(conflicts, IdxConflict{
-					Kind:   NameCollision,
-					Ours:   idx,
-					Theirs: theirIdx,
-				})
-			} else {
-				common.AddIndex(theirIdx)
-			}
-			return false, nil
-		}
-
-		// index modified on our branch and their branch, conflict
-		conflicts = append(conflicts, IdxConflict{
-			Kind:   TagCollision,
-			Ours:   ourIdx,
-			Theirs: theirIdx,
+	ours.Iter(func(ourIdx schema.Index) (stop bool, err error) {
+		theirIndex := findMatchingIndex(ourIdx, theirs, seenTheirs)
+		ancIndex := findMatchingIndex(ourIdx, anc, seenAnc)
+		mappings = append(mappings, indexMapping{
+			anc:    ancIndex,
+			ours:   ourIdx,
+			theirs: theirIndex,
 		})
+
 		return false, nil
 	})
-	return common, conflicts
+
+	theirs.Iter(func(theirIdx schema.Index) (stop bool, err error) {
+		// Skip over any indexes from theirs that we've already matched
+		if _, alreadyMatched := seenTheirs[theirIdx.Name()]; alreadyMatched {
+			return false, nil
+		}
+
+		ancIndex := findMatchingIndex(theirIdx, anc, seenAnc)
+		mappings = append(mappings, indexMapping{
+			anc:    ancIndex,
+			ours:   nil,
+			theirs: theirIdx,
+		})
+
+		return false, nil
+	})
+
+	return mappings
 }
 
-func indexCollSetDifference(left, right schema.IndexCollection, cc *schema.ColCollection) (d schema.IndexCollection) {
-	d = schema.NewIndexCollection(cc, nil)
-	_ = left.Iter(func(idx schema.Index) (stop bool, err error) {
-		idxTags := idx.IndexedColumnTags()
-		for _, t := range idxTags {
-			// if column doesn't exist anymore, drop index
-			if _, ok := cc.GetByTag(t); !ok {
-				return false, nil
-			}
-		}
+// TODO: godocs
+func findMatchingIndex(target schema.Index, indexCollection schema.IndexCollection, matchedNames map[string]struct{}) schema.Index {
+	candidates := indexCollection.GetIndexesByTags(target.IndexedColumnTags()...)
 
-		_, ok := right.GetIndexByTags(idxTags...)
-		if !ok {
-			d.AddIndex(idx)
+	// First check for an exact match, including name
+	for _, candidate := range candidates {
+		_, alreadyMatched := matchedNames[candidate.Name()]
+		if !alreadyMatched && target.Equals(candidate) {
+			matchedNames[candidate.Name()] = struct{}{}
+			return candidate
 		}
-		return false, nil
-	})
-	return d
+	}
+
+	// If we didn't find an exact match, fall back to checking for a match with a different name
+	for _, candidate := range candidates {
+		_, alreadyMatched := matchedNames[candidate.Name()]
+		if !alreadyMatched && target.EqualsIgnoreName(candidate) {
+			matchedNames[candidate.Name()] = struct{}{}
+			return candidate
+		}
+	}
+
+	return nil
 }
 
 func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) (common *doltdb.ForeignKeyCollection, conflicts []FKConflict, err error) {

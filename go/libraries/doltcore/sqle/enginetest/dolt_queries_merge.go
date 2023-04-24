@@ -3828,6 +3828,244 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			},
 		},
 	},
+
+	// TODO: First step... get a test together that reliably (?) triggers the race condition...
+	// Most important thing is probably if multiple indexes exist over the same column set, and they have NOT been modified,
+	// then we should NOT have a race condition!
+	// After that, we can look at how to deal with the case where the indexes have been modified on one side or the other.
+	//   Doing this well may really require a stable, unique ID
+	//   Write up a short 1-pager on why columns (and indexes?) really need stable, unique IDs.
+	{
+		// TODO: Adding duplicate indexes to some other tests might be a good way to test the race condition, since it
+		//       would have multiple opportunities to be triggered. If we did that, we may be able to get rid of this
+		//       test case.
+		Name: "duplicate indexes",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+			"INSERT into t values (1, 10, '100');",
+			"alter table t add index idx1 (col2);",
+			"alter table t add index idx2 (col2);",
+			"alter table t add index idx3 (col2);",
+		},
+		RightSetUpScript: []string{
+			"insert into t values (2, 20, '200');",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (3, 30, '300');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// TODO: This is NOT a schema merge conflict, but because of a race condition it occasionally
+				//       is reported as a schema merge.
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select pk, col1, col2 from t;",
+				Expected: []sql.Row{{1, 10, "100"}, {2, 20, "200"}, {3, 30, "300"}},
+			},
+		},
+	},
+	{
+		// TODO: Is this test covered anywhere else?
+		Name: "index merging: renaming an index on one side of a merge",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+			"alter table t add index idx1 (col2(2));",
+			//"alter table t add index idx3 (col2(2));", // TODO: Test with duplicate index?
+			//"alter table t add index idx4 (col2(4));", // TODO: Test with similar index?
+		},
+		RightSetUpScript: []string{
+			"INSERT into t values (1, 10, '100');",
+		},
+		LeftSetUpScript: []string{
+			"alter table t rename index idx1 to idx2;",
+			"INSERT into t values (2, 20, '200');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select col2 from t;",
+				Expected: []sql.Row{{"100"}, {"200"}},
+			},
+			{
+				Query: "show create table t;",
+				Expected: []sql.Row{{"t",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` int,\n  `col2` varchar(100),\n  PRIMARY KEY (`pk`),\n  " +
+						"KEY `idx2` (`col2`(2))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+
+	// TODO: new case just for renaming an index (without duplicates? or duplicates should be in every test?)
+	// TODO: Organize index merge tests into their own section!
+	{
+		Name: "duplicate indexes: merging a duplicate index removed from one side",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+			"INSERT into t values (1, 10, '100');",
+			"alter table t add index idx1 (pk, col2);",
+			"alter table t add index idx2 (pk, col2);",
+		},
+		RightSetUpScript: []string{
+			"alter table t drop index idx2;",
+			"insert into t values (2, 20, '200');",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (3, 30, '300');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select pk, col2 from t;",
+				Expected: []sql.Row{{1, "100"}, {2, "200"}, {3, "300"}},
+			},
+			{
+				Query: "show create table t;",
+				Expected: []sql.Row{
+					{"t", "CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` int,\n  `col2` varchar(100),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`pk`,`col2`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+				},
+			},
+		},
+	},
+
+	// TODO: This test should already pass, but would be a good one to add if we don't have it covered
+	//{
+	//	Name: "duplicate index columns: unique verus non-unique",
+	//	AncSetUpScript: []string{
+	//		"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+	//		"INSERT into t values (1, 10, '100'), (2, 20, '200');",
+	//		"alter table t add unique index idx2 (col2);",
+	//		"alter table t add index idx3 (col2);",
+	//	},
+	//	RightSetUpScript: []string{
+	//		"alter table t rename column col1 to col11;",
+	//		"alter table t modify col11 int after col2;",
+	//		"insert into t values (3, '300', 30), (4, '400', 40);",
+	//	},
+	//	LeftSetUpScript: []string{
+	//		"insert into t values (5, 50, '500'), (6, 60, '600');",
+	//	},
+	//	Assertions: []queries.ScriptTestAssertion{
+	//		{
+	//			Query:    "call dolt_merge('right');",
+	//			Expected: []sql.Row{{0, 0}},
+	//		},
+	//		{
+	//			Query: "select pk, col11, col2 from t;",
+	//			Expected: []sql.Row{
+	//				{1, 10, "100"}, {2, 20, "200"},
+	//				{3, 30, "300"}, {4, 40, "400"},
+	//				{5, 50, "500"}, {6, 60, "600"},
+	//			},
+	//		},
+	//	},
+	//},
+	//{
+	//	Name: "duplicate index columns: unique vs non-unique",
+	//	AncSetUpScript: []string{
+	//		"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+	//		"INSERT into t values (1, 10, '100'), (2, 20, '200');",
+	//		"alter table t add unique index idx2 (col2);",
+	//		"alter table t add index idx3 (col2);",
+	//	},
+	//	RightSetUpScript: []string{
+	//		"alter table t rename column col1 to col11;",
+	//		"alter table t modify col11 int after col2;",
+	//		"insert into t values (3, '300', 30), (4, '400', 40);",
+	//	},
+	//	LeftSetUpScript: []string{
+	//		"insert into t values (5, 50, '500'), (6, 60, '600');",
+	//	},
+	//	Assertions: []queries.ScriptTestAssertion{
+	//		{
+	//			Query:    "call dolt_merge('right');",
+	//			Expected: []sql.Row{{0, 0}},
+	//		},
+	//		{
+	//			Query: "select pk, col11, col2 from t;",
+	//			Expected: []sql.Row{
+	//				{1, 10, "100"}, {2, 20, "200"},
+	//				{3, 30, "300"}, {4, 40, "400"},
+	//				{5, 50, "500"}, {6, 60, "600"},
+	//			},
+	//		},
+	//	},
+	//},
+	//{
+	//	Name: "duplicate index columns: duplicate indexes",
+	//	AncSetUpScript: []string{
+	//		"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+	//		"INSERT into t values (1, 10, '100'), (2, 20, '200');",
+	//		"alter table t add unique index idx2 (col2);",
+	//		"alter table t add index idx3 (col2);",
+	//	},
+	//	RightSetUpScript: []string{
+	//		"alter table t rename column col1 to col11;",
+	//		"alter table t modify col11 int after col2;",
+	//		"insert into t values (3, '300', 30), (4, '400', 40);",
+	//	},
+	//	LeftSetUpScript: []string{
+	//		"insert into t values (5, 50, '500'), (6, 60, '600');",
+	//	},
+	//	Assertions: []queries.ScriptTestAssertion{
+	//		{
+	//			Query:    "call dolt_merge('right');",
+	//			Expected: []sql.Row{{0, 0}},
+	//		},
+	//		{
+	//			Query: "select pk, col11, col2 from t;",
+	//			Expected: []sql.Row{
+	//				{1, 10, "100"}, {2, 20, "200"},
+	//				{3, 30, "300"}, {4, 40, "400"},
+	//				{5, 50, "500"}, {6, 60, "600"},
+	//			},
+	//		},
+	//	},
+	//},
+	//// TODO: Indexes are not very alterable... MySQL only supports:
+	////       - alter table t rename index idx_name to new_idx_name;
+	////       - alter table t alter index idx_name visible|invisible;
+	////       - alter table t drop index idx_name;
+	////       - alter table t add index idx_name (col1, col2, ...);
+	//{
+	//	Name: "duplicate index columns: change prefix length",
+	//	AncSetUpScript: []string{
+	//		"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+	//		"INSERT into t values (1, 10, '100'), (2, 20, '200');",
+	//		"alter table t add index idx2 (col2(10));",
+	//		"alter table t add index idx3 (col2(10));",
+	//	},
+	//	RightSetUpScript: []string{
+	//		"alter table t rename column col1 to col11;",
+	//		"alter table t modify col11 int after col2;",
+	//		"insert into t values (3, '300', 30), (4, '400', 40);",
+	//	},
+	//	LeftSetUpScript: []string{
+	//		"insert into t values (5, 50, '500'), (6, 60, '600');",
+	//	},
+	//	Assertions: []queries.ScriptTestAssertion{
+	//		{
+	//			Query:    "call dolt_merge('right');",
+	//			Expected: []sql.Row{{0, 0}},
+	//		},
+	//		{
+	//			Query: "select pk, col11, col2 from t;",
+	//			Expected: []sql.Row{
+	//				{1, 10, "100"}, {2, 20, "200"},
+	//				{3, 30, "300"}, {4, 40, "400"},
+	//				{5, 50, "500"}, {6, 60, "600"},
+	//			},
+	//		},
+	//	},
+	//},
+
 	{
 		Name: "renaming and reordering a column",
 		AncSetUpScript: []string{

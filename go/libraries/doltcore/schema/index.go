@@ -37,6 +37,8 @@ type Index interface {
 	// Equals returns whether this Index is equivalent to another. This does not check for column names, thus those may
 	// be renamed and the index equivalence will be preserved. It also does not depend on the table's primary keys.
 	Equals(other Index) bool
+	// EqualsIgnoreName returns true if this Index is equivalent to |other|, with the exception of the name.
+	EqualsIgnoreName(other Index) bool
 	// GetColumn returns the column for the given tag and whether the column was found or not.
 	GetColumn(tag uint64) (Column, bool)
 	// IndexedColumnTags returns the tags of the columns in the index.
@@ -136,6 +138,13 @@ func (ix *indexImpl) Equals(other Index) bool {
 		compareUint16Slices(ix.PrefixLengths(), other.PrefixLengths()) &&
 		ix.Comment() == other.Comment() &&
 		ix.Name() == other.Name()
+}
+
+// EqualsIgnoreName implements Index.
+func (ix *indexImpl) EqualsIgnoreName(other Index) bool {
+	copy := *ix
+	copy.name = other.Name()
+	return copy.Equals(other)
 }
 
 // DeepEquals implements Index.
