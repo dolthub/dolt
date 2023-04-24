@@ -44,6 +44,7 @@ var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transa
 	"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
 	"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.")
 
+// TODO: remove this
 func TransactionsDisabled(ctx *sql.Context) bool {
 	enabled, err := ctx.GetSessionVariable(ctx, TransactionsDisabledSysVar)
 	if err != nil {

@@ -1299,11 +1299,18 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 	return db, nil
 }
 
-func initialStateForBranchDb(ctx context.Context, srcDb dsess.SqlDatabase) (dsess.InitialDbState, error) {
-	_, revSpec := splitRevisionDbName(srcDb)
+func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.InitialDbState, error) {
+	baseName, revSpec := splitRevisionDbName(srcDb)
 
+	tx := ctx.GetTransaction().(*dsess.DoltTransaction)
+	
 	branch := ref.NewBranchRef(revSpec)
-	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, branch)
+	rootHash, ok := tx.GetInitialRoot(baseName)
+	if !ok {
+		return dsess.InitialDbState{}, fmt.Errorf("no initial root for %s", srcDb.Name())	
+	}
+	
+	cm, err := srcDb.DbData().Ddb.ResolveCommitRefAtRoot(ctx, branch, rootHash)
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
@@ -1313,7 +1320,7 @@ func initialStateForBranchDb(ctx context.Context, srcDb dsess.SqlDatabase) (dses
 		return dsess.InitialDbState{}, err
 	}
 
-	ws, err := srcDb.DbData().Ddb.ResolveWorkingSet(ctx, wsRef)
+	ws, err := srcDb.DbData().Ddb.ResolveWorkingSetAtRoot(ctx, wsRef, rootHash)
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
