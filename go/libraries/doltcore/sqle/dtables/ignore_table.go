@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -110,48 +111,50 @@ type ignoreWriter struct {
 	errDuringStatementBegin error
 	workingSet              *doltdb.WorkingSet
 	prevHash                *hash.Hash
+	//writeSession            writer.WriteSession
+	tableWriter writer.TableWriter
 }
 
-func newIgnoreWriter(it *IgnoreTable) ignoreWriter {
-	return ignoreWriter{it, nil, nil, nil}
+func newIgnoreWriter(it *IgnoreTable) *ignoreWriter {
+	return &ignoreWriter{it, nil, nil, nil, nil}
 }
 
 // Insert inserts the row given, returning an error if it cannot. Insert will be called once for each row to process
 // for the insert operation, which may involve many rows. After all rows in an operation have been processed, Close
 // is called.
-func (iw ignoreWriter) Insert(ctx *sql.Context, r sql.Row) error {
+func (iw *ignoreWriter) Insert(ctx *sql.Context, r sql.Row) error {
 	if err := iw.errDuringStatementBegin; err != nil {
 		return err
 	}
-	panic("Implement me")
+	return iw.tableWriter.Insert(ctx, r)
 }
 
 // Update the given row. Provides both the old and new rows.
-func (iw ignoreWriter) Update(ctx *sql.Context, old sql.Row, new sql.Row) error {
+func (iw *ignoreWriter) Update(ctx *sql.Context, old sql.Row, new sql.Row) error {
 	if err := iw.errDuringStatementBegin; err != nil {
 		return err
 	}
-	panic("Implement me")
+	return iw.tableWriter.Update(ctx, old, new)
 }
 
 // Delete deletes the given row. Returns ErrDeleteRowNotFound if the row was not found. Delete will be called once for
 // each row to process for the delete operation, which may involve many rows. After all rows have been processed,
 // Close is called.
-func (iw ignoreWriter) Delete(ctx *sql.Context, r sql.Row) error {
+func (iw *ignoreWriter) Delete(ctx *sql.Context, r sql.Row) error {
 	if err := iw.errDuringStatementBegin; err != nil {
 		return err
 	}
-	panic("Implement me")
+	return iw.tableWriter.Delete(ctx, r)
 }
 
 // StatementBegin is called before the first operation of a statement. Integrators should mark the state of the data
 // in some way that it may be returned to in the case of an error.
-func (iw ignoreWriter) StatementBegin(ctx *sql.Context) {
+func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
+
 	roots, _ := dSess.GetRoots(ctx, dbName)
 	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
-	iw.workingSet = dbState.WorkingSet
 	if err != nil {
 		iw.errDuringStatementBegin = err
 		return
@@ -160,13 +163,24 @@ func (iw ignoreWriter) StatementBegin(ctx *sql.Context) {
 		iw.errDuringStatementBegin = fmt.Errorf("no root value found in session")
 		return
 	}
+
+	prevHash, err := roots.Working.HashOf()
+	if err != nil {
+		iw.errDuringStatementBegin = err
+		return
+	}
+
+	iw.prevHash = &prevHash
+
+	iw.workingSet = dbState.WorkingSet
 	ignoreTable, found, err := roots.Working.GetTable(ctx, BackingTableName)
-	ignoreTable.UpdateRows()
+
 	_ = ignoreTable
 	if err != nil {
 		iw.errDuringStatementBegin = err
 		return
 	}
+
 	if !found {
 		colCollection := schema.NewColCollection(
 			schema.Column{
@@ -198,14 +212,6 @@ func (iw ignoreWriter) StatementBegin(ctx *sql.Context) {
 			return
 		}
 
-		prevHash, err := roots.Working.HashOf()
-		if err != nil {
-			iw.errDuringStatementBegin = err
-			return
-		}
-
-		iw.prevHash = &prevHash
-
 		// underlying table doesn't exist. Record this, then create the table.
 		newRootValue, err := roots.Working.CreateEmptyTable(ctx, BackingTableName, newSchema)
 
@@ -214,28 +220,42 @@ func (iw ignoreWriter) StatementBegin(ctx *sql.Context) {
 			return
 		}
 		_ = newRootValue
-	} else {
-		// Mark the original working root in case we need to roll back.
 	}
+
+	tableWriter, err := dbState.WriteSession.GetTableWriter(ctx, BackingTableName, dbName, dSess.SetRoot, true)
+	if err != nil {
+		iw.errDuringStatementBegin = err
+		return
+	}
+
+	iw.tableWriter = tableWriter
+
+	tableWriter.StatementBegin(ctx)
 
 }
 
 // DiscardChanges is called if a statement encounters an error, and all current changes since the statement beginning
 // should be discarded.
-func (iw ignoreWriter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+func (iw *ignoreWriter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	if iw.tableWriter != nil {
+		return iw.tableWriter.DiscardChanges(ctx, errorEncountered)
+	}
 	return nil
 }
 
 // StatementComplete is called after the last operation of the statement, indicating that it has successfully completed.
 // The mark set in StatementBegin may be removed, and a new one should be created on the next StatementBegin.
-func (iw ignoreWriter) StatementComplete(ctx *sql.Context) error {
+func (iw *ignoreWriter) StatementComplete(ctx *sql.Context) error {
 	newWorkingSetMeta := *iw.workingSet.Meta()
 	newWorkingSetMeta.Timestamp = uint64(time.Now().Unix())
 	iw.it.ddb.UpdateWorkingSet(ctx, iw.workingSet.Ref(), iw.workingSet, *iw.prevHash, &newWorkingSetMeta)
-	return nil
+	return iw.tableWriter.StatementComplete(ctx)
 }
 
 // Close finalizes the delete operation, persisting the result.
-func (iw ignoreWriter) Close(*sql.Context) error {
+func (iw ignoreWriter) Close(ctx *sql.Context) error {
+	if iw.tableWriter != nil {
+		return iw.tableWriter.Close(ctx)
+	}
 	return nil
 }
