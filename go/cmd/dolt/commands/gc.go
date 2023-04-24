@@ -81,7 +81,7 @@ func (cmd GarbageCollectionCmd) EventType() eventsapi.ClientEventType {
 
 // Version displays the version of the running dolt client
 // Exec executes the command
-func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
+func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	var verr errhand.VerboseError
 
 	ap := cmd.ArgParser()

@@ -76,7 +76,7 @@ func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
+func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	res := performCommit(ctx, commandStr, args, dEnv)
 	if res == 1 {
 		return res
