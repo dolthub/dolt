@@ -154,7 +154,7 @@ func TestDbRevision(t *testing.T) {
 
 			setup := append(setupCommon, test.setup...)
 			for _, c := range setup {
-				exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, nil)
+				exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cmd.BuildEmptyCliContext())
 				require.Equal(t, 0, exitCode)
 			}
 

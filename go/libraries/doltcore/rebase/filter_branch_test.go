@@ -55,6 +55,8 @@ type testAssertion struct {
 	rows  []sql.Row
 }
 
+var cliCtx = cmd.BuildEmptyCliContext()
+
 var setupCommon = []testCommand{
 	{cmd.SqlCmd{}, args{"-q",
 		`create table test (
@@ -203,7 +205,7 @@ func setupFilterBranchTests(t *testing.T) *env.DoltEnv {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	for _, c := range setupCommon {
-		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, nil)
+		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
 		require.Equal(t, 0, exitCode)
 	}
 
@@ -215,13 +217,13 @@ func testFilterBranch(t *testing.T, test filterBranchTest) {
 	dEnv := setupFilterBranchTests(t)
 	defer dEnv.DoltDB.Close()
 	for _, c := range test.setup {
-		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, nil)
+		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
 		require.Equal(t, 0, exitCode)
 	}
 
 	for _, a := range test.asserts {
 		for _, c := range a.setup {
-			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, nil)
+			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
 			require.Equal(t, 0, exitCode)
 		}
 
