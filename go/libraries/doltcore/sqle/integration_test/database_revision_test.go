@@ -48,6 +48,8 @@ type dynamicAssert struct {
 	rows  []sql.Row
 }
 
+var cliCtx = cmd.BuildEmptyCliContext()
+
 func TestDbRevision(t *testing.T) {
 	setupCommon := []testCommand{
 		{cmd.SqlCmd{}, args{"-q", `create table myTable (pk int primary key, c0 int);`}},
@@ -154,7 +156,7 @@ func TestDbRevision(t *testing.T) {
 
 			setup := append(setupCommon, test.setup...)
 			for _, c := range setup {
-				exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, nil)
+				exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
 				require.Equal(t, 0, exitCode)
 			}
 
