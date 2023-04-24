@@ -15,11 +15,20 @@
 package dtables
 
 import (
+	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
+	sqlTypes "github.com/dolthub/go-mysql-server/sql/types"
+	"time"
 )
+
+const BackingTableName = "_dolt_ignore"
 
 var _ sql.Table = (*BranchesTable)(nil)
 var _ sql.UpdatableTable = (*BranchesTable)(nil)
@@ -43,8 +52,8 @@ func (i *IgnoreTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the dolt_ignore system table.
 func (i *IgnoreTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "pattern", Type: types.Text, Source: doltdb.IgnoreTableName, PrimaryKey: true},
-		{Name: "ignored", Type: types.Boolean, Source: doltdb.IgnoreTableName, PrimaryKey: false, Nullable: false},
+		{Name: "pattern", Type: sqlTypes.Text, Source: doltdb.IgnoreTableName, PrimaryKey: true},
+		{Name: "ignored", Type: sqlTypes.Boolean, Source: doltdb.IgnoreTableName, PrimaryKey: false, Nullable: false},
 	}
 }
 
@@ -65,4 +74,168 @@ func (i *IgnoreTable) PartitionRows(context *sql.Context, partition sql.Partitio
 // NewIgnoreTable creates an IgnoreTable
 func NewIgnoreTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
 	return &IgnoreTable{ddb: ddb}
+}
+
+// Replacer returns a RowReplacer for this table. The RowReplacer will have Insert and optionally Delete called once
+// for each row, followed by a call to Close() when all rows have been processed.
+func (it *IgnoreTable) Replacer(ctx *sql.Context) sql.RowReplacer {
+	return newIgnoreWriter(it)
+}
+
+// Updater returns a RowUpdater for this table. The RowUpdater will have Update called once for each row to be
+// updated, followed by a call to Close() when all rows have been processed.
+func (it *IgnoreTable) Updater(ctx *sql.Context) sql.RowUpdater {
+	return newIgnoreWriter(it)
+}
+
+// Inserter returns an Inserter for this table. The Inserter will get one call to Insert() for each row to be
+// inserted, and will end with a call to Close() to finalize the insert operation.
+func (it *IgnoreTable) Inserter(*sql.Context) sql.RowInserter {
+	return newIgnoreWriter(it)
+}
+
+// Deleter returns a RowDeleter for this table. The RowDeleter will get one call to Delete for each row to be deleted,
+// and will end with a call to Close() to finalize the delete operation.
+func (it *IgnoreTable) Deleter(*sql.Context) sql.RowDeleter {
+	return newIgnoreWriter(it)
+}
+
+var _ sql.RowReplacer = (*ignoreWriter)(nil)
+var _ sql.RowUpdater = (*ignoreWriter)(nil)
+var _ sql.RowInserter = (*ignoreWriter)(nil)
+var _ sql.RowDeleter = (*ignoreWriter)(nil)
+
+type ignoreWriter struct {
+	it                      *IgnoreTable
+	errDuringStatementBegin error
+	workingSet              *doltdb.WorkingSet
+	prevHash                *hash.Hash
+}
+
+func newIgnoreWriter(it *IgnoreTable) ignoreWriter {
+	return ignoreWriter{it, nil, nil, nil}
+}
+
+// Insert inserts the row given, returning an error if it cannot. Insert will be called once for each row to process
+// for the insert operation, which may involve many rows. After all rows in an operation have been processed, Close
+// is called.
+func (iw ignoreWriter) Insert(ctx *sql.Context, r sql.Row) error {
+	if err := iw.errDuringStatementBegin; err != nil {
+		return err
+	}
+	panic("Implement me")
+}
+
+// Update the given row. Provides both the old and new rows.
+func (iw ignoreWriter) Update(ctx *sql.Context, old sql.Row, new sql.Row) error {
+	if err := iw.errDuringStatementBegin; err != nil {
+		return err
+	}
+	panic("Implement me")
+}
+
+// Delete deletes the given row. Returns ErrDeleteRowNotFound if the row was not found. Delete will be called once for
+// each row to process for the delete operation, which may involve many rows. After all rows have been processed,
+// Close is called.
+func (iw ignoreWriter) Delete(ctx *sql.Context, r sql.Row) error {
+	if err := iw.errDuringStatementBegin; err != nil {
+		return err
+	}
+	panic("Implement me")
+}
+
+// StatementBegin is called before the first operation of a statement. Integrators should mark the state of the data
+// in some way that it may be returned to in the case of an error.
+func (iw ignoreWriter) StatementBegin(ctx *sql.Context) {
+	dbName := ctx.GetCurrentDatabase()
+	dSess := dsess.DSessFromSess(ctx.Session)
+	roots, _ := dSess.GetRoots(ctx, dbName)
+	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
+	iw.workingSet = dbState.WorkingSet
+	if err != nil {
+		iw.errDuringStatementBegin = err
+		return
+	}
+	if !ok {
+		iw.errDuringStatementBegin = fmt.Errorf("no root value found in session")
+		return
+	}
+	ignoreTable, found, err := roots.Working.GetTable(ctx, BackingTableName)
+	ignoreTable.UpdateRows()
+	_ = ignoreTable
+	if err != nil {
+		iw.errDuringStatementBegin = err
+		return
+	}
+	if !found {
+		colCollection := schema.NewColCollection(
+			schema.Column{
+				Name:          "pattern",
+				Tag:           1,
+				Kind:          types.StringKind,
+				IsPartOfPK:    true,
+				TypeInfo:      typeinfo.FromKind(types.StringKind),
+				Default:       "",
+				AutoIncrement: false,
+				Comment:       "",
+				Constraints:   nil,
+			},
+			schema.Column{
+				Name:          "ignored",
+				Tag:           2,
+				Kind:          types.BoolKind,
+				IsPartOfPK:    true,
+				TypeInfo:      typeinfo.FromKind(types.BoolKind),
+				Default:       "false",
+				AutoIncrement: false,
+				Comment:       "",
+				Constraints:   nil,
+			},
+		)
+		newSchema, err := schema.NewSchema(colCollection, nil, schema.Collation_Default, nil, nil)
+		if err != nil {
+			iw.errDuringStatementBegin = err
+			return
+		}
+
+		prevHash, err := roots.Working.HashOf()
+		if err != nil {
+			iw.errDuringStatementBegin = err
+			return
+		}
+
+		iw.prevHash = &prevHash
+
+		// underlying table doesn't exist. Record this, then create the table.
+		newRootValue, err := roots.Working.CreateEmptyTable(ctx, BackingTableName, newSchema)
+
+		if err != nil {
+			iw.errDuringStatementBegin = err
+			return
+		}
+		_ = newRootValue
+	} else {
+		// Mark the original working root in case we need to roll back.
+	}
+
+}
+
+// DiscardChanges is called if a statement encounters an error, and all current changes since the statement beginning
+// should be discarded.
+func (iw ignoreWriter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	return nil
+}
+
+// StatementComplete is called after the last operation of the statement, indicating that it has successfully completed.
+// The mark set in StatementBegin may be removed, and a new one should be created on the next StatementBegin.
+func (iw ignoreWriter) StatementComplete(ctx *sql.Context) error {
+	newWorkingSetMeta := *iw.workingSet.Meta()
+	newWorkingSetMeta.Timestamp = uint64(time.Now().Unix())
+	iw.it.ddb.UpdateWorkingSet(ctx, iw.workingSet.Ref(), iw.workingSet, *iw.prevHash, &newWorkingSetMeta)
+	return nil
+}
+
+// Close finalizes the delete operation, persisting the result.
+func (iw ignoreWriter) Close(*sql.Context) error {
+	return nil
 }
