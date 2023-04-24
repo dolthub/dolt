@@ -52,27 +52,45 @@ setup_schema_conflict() {
     [[ "$output" =~ "description: " ]]
 }
 
-@test "schema-conflicts: resolve schema conflict with 'ours'" {
+@test "schema-conflicts: resolve schema conflict with 'ours' via SQL" {
     setup_schema_conflict
 
-    skip "todo"
-    run dolt merge other
-    [ "$status" -ne 0 ]
+    dolt merge other
 
-    dolt sql -q "call dolt_conflict_resolve('--ours', 't')"
+    dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
     run dolt schema show t
     [ "$status" -eq 0 ]
     [[ "$output" =~ "varchar(20)" ]]
 }
 
-@test "schema-conflicts: resolve schema conflict with 'theirs'" {
+@test "schema-conflicts: resolve schema conflict with 'theirs' via SQL" {
     setup_schema_conflict
 
-    skip "todo"
-    run dolt merge other
-    [ "$status" -ne 0 ]
+    dolt merge other
 
-    dolt sql -q "call dolt_conflict_resolve('--theirs', 't')"
+    dolt sql -q "call dolt_conflicts_resolve('--theirs', 't')"
+    run dolt schema show t
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "datetime" ]]
+}
+
+@test "schema-conflicts: resolve schema conflict with 'ours' via CLI" {
+    setup_schema_conflict
+
+    dolt merge other
+
+    dolt conflicts resolve --ours t
+    run dolt schema show t
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "varchar(20)" ]]
+}
+
+@test "schema-conflicts: resolve schema conflict with 'theirs' via CLI" {
+    setup_schema_conflict
+
+    dolt merge other
+
+    dolt conflicts resolve --theirs t
     run dolt schema show t
     [ "$status" -eq 0 ]
     [[ "$output" =~ "datetime" ]]

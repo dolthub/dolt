@@ -103,6 +103,7 @@ SQL
     dolt commit -m "Added column c2 longtext"
     dolt checkout main
     dolt merge branch1
+    skip_nbf_not_dolt
     dolt merge branch2
 }
 
@@ -128,6 +129,7 @@ SQL
     dolt commit -m "Added column c0 bigint"
     dolt checkout main
     dolt merge branch1
+    skip_nbf_not_dolt
     dolt merge branch2
 }
 

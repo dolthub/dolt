@@ -909,6 +909,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c1\` CHECK ((\`i\` < 0))" ]] || false
     dolt commit -am "changes to main"
 
+    skip_nbf_not_dolt
     dolt merge other -m "merge other"
 
     run dolt status
@@ -917,11 +918,11 @@ SQL
     run dolt sql -q "select count(*) from dolt_schema_conflicts"
     log_status_eq 0
     [[ "$output" =~ "1" ]]
-    skip "todo"
-    dolt sql -q "call dolt_conflicts_resolve('--ours')"
+    dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
+    dolt sql -q "show create table t"
     run dolt sql -q "show create table t"
     log_status_eq 0
-    [[ "$output" =~ "CONSTRAINT \`c0\` CHECK ((\`i\` > 0))" ]] || false
+    [[ "$output" =~ "CONSTRAINT \`c1\` CHECK ((\`i\` < 0))" ]] || false
 }
 
 @test "sql-merge: dropping constraint on both branches merges successfully" {
@@ -973,6 +974,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))" ]] || false
     dolt commit -am "changes to main"
 
+    skip_nbf_not_dolt
     dolt merge other -m "merge other"
     run dolt status
     log_status_eq 0
@@ -980,8 +982,7 @@ SQL
     run dolt sql -q "select count(*) from dolt_schema_conflicts"
     log_status_eq 0
     [[ "$output" =~ "1" ]]
-    skip "todo"
-    dolt sql -q "call dolt_conflicts_resolve('--ours')"
+    dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
     run dolt sql -q "show create table t"
     log_status_eq 0
     [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
@@ -1046,6 +1047,7 @@ SQL
     dolt checkout main
     run dolt merge b1 -m "merge b1" --commit
     log_status_eq 0
+    skip_nbf_not_dolt
     dolt merge b2 -m "merge b2"
     run dolt status
     log_status_eq 0
@@ -1053,8 +1055,7 @@ SQL
     run dolt sql -q "select count(*) from dolt_schema_conflicts"
     log_status_eq 0
     [[ "$output" =~ "1" ]]
-    skip "todo"
-    dolt sql -q "call dolt_conflicts_resolve('--ours')"
+    dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
     run dolt sql -q "show create table t"
     log_status_eq 0
     [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))" ]] || false
@@ -1082,6 +1083,7 @@ SQL
     dolt checkout main
     run dolt merge b1 -m "merge b1"
     log_status_eq 0
+    skip_nbf_not_dolt
     dolt merge b2 -m "merge b2"
     run dolt status
     log_status_eq 0
@@ -1089,8 +1091,7 @@ SQL
     run dolt sql -q "select count(*) from dolt_schema_conflicts"
     log_status_eq 0
     [[ "$output" =~ "1" ]]
-    skip "todo"
-    dolt sql -q "call dolt_conflicts_resolve('--ours')"
+    dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
     run dolt sql -q "show create table t"
     log_status_eq 0
     [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`j\` > 0))" ]] || false
