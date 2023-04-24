@@ -2155,6 +2155,67 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 	//	},
 }
 
+var BranchIsolationTests = []queries.TransactionTest{
+	{
+		Name:         "clients can't see changes on other branches made since transaction start",
+		SetUpScript:  []string{
+			"create table t1 (a int)",
+			"insert into t1 values (1)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{	
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,				
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ insert into t1 values (2)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ commit",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ select * from t1 order by a",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:            "/* client a */ select * from t1 as of 'b1' order by a",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:            "/* client a */ select * from `mydb/b1`.t1 order by a",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ select * from t1 order by a",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:            "/* client a */ select * from t1 as of 'b1' order by a",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:            "/* client a */ select * from `mydb/b1`.t1 order by a",
+				Expected: []sql.Row{{1}, {2}},
+			},
+		},
+	},
+}
+
+
 var MultiDbTransactionTests = []queries.ScriptTest{
 	{
 		Name:         "committing to another branch",

@@ -1015,6 +1015,13 @@ func TestTransactions(t *testing.T) {
 			enginetest.TestTransactionScript(t, h, script)
 		}()
 	}
+	for _, script := range BranchIsolationTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestTransactionScript(t, h, script)
+		}()
+	}
 }
 
 func TestMultiDbTransactions(t *testing.T) {
