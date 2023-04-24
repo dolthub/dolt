@@ -327,7 +327,6 @@ SQL
     log_status_eq 0
     [[ ! "$output" =~ "Fast-forward" ]] || false
 
-    dolt status
     run dolt status
     log_status_eq 0
     [[ "$output" =~ "test2" ]] || false

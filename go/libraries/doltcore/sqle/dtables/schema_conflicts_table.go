@@ -68,7 +68,7 @@ func (dt *SchemaConflictsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-// Partitions is a sql.Table interface function that returns a partition of the data.  Conflict data is partitioned by table.
+// Partitions is a sql.Table interface function that returns a partition of the data.  Conflict data for all tables exists in a single partition.
 func (dt *SchemaConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 	ws, err := sess.WorkingSet(ctx, dt.dbName)
@@ -151,7 +151,6 @@ func getCreateTableStatement(table string, sch schema.Schema, fks []doltdb.Forei
 		return "", err
 	}
 	return diff.GenerateCreateTableStatement(table, sch, pkSch, fks, parents)
-
 }
 
 type schemaConflictsIter struct {

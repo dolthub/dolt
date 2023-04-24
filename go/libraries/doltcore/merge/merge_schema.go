@@ -38,6 +38,7 @@ const (
 	DeletedCheckCollision
 )
 
+// todo: link to docs explaining how to resolve schema conflicts.
 func SchemaConflictErr(cc ...SchemaConflict) error {
 	var sb strings.Builder
 	sb.WriteString("merge aborted: schema conflict found for tables: \n")

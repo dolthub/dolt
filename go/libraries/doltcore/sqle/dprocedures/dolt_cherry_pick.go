@@ -172,8 +172,8 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 	// use parent of cherry-pick as ancestor root to merge
 
 	mo := merge.MergeOpts{
-		IsCherryPick: true,
-		// todo: should we keep schema conflicts?
+		IsCherryPick:        true,
+		KeepSchemaConflicts: false,
 	}
 	result, err := merge.MergeRoots(ctx, roots.Working, cherryRoot, parentRoot, cherryCommit, parentCommit, dbState.EditOpts(), mo)
 	if err != nil {

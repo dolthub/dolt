@@ -120,7 +120,7 @@ func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb Sch
 		if sc.toTbl, _, err = to.GetTable(ctx, name); err != nil {
 			return err
 		}
-		// todo: rename resolution
+		// todo: handle schema conflicts for renamed tables
 		if sc.fromTbl, _, err = from.GetTable(ctx, name); err != nil {
 			return err
 		}

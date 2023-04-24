@@ -34,7 +34,10 @@ import (
 )
 
 type MergeOpts struct {
-	IsCherryPick        bool
+	// IsCherryPick is set for cherry-pick operations.
+	IsCherryPick bool
+	// KeepSchemaConflicts if schema conflicts should be
+	// stored, otherwise we end the merge with an error.
 	KeepSchemaConflicts bool
 }
 
