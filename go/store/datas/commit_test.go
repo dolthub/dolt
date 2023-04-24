@@ -257,14 +257,14 @@ func TestCommitWithoutMetaField(t *testing.T) {
 		"meta":    types.EmptyStruct(db.Format()),
 	})
 	assert.NoError(err)
-	assert.True(IsCommit(ctx, metaCommit))
+	assert.True(IsCommit(metaCommit))
 
 	noMetaCommit, err := types.NewStruct(db.Format(), "Commit", types.StructData{
 		"value":   types.Float(9),
 		"parents": mustSet(types.NewSet(ctx, db)),
 	})
 	assert.NoError(err)
-	assert.False(IsCommit(ctx, noMetaCommit))
+	assert.False(IsCommit(noMetaCommit))
 }
 
 func mustCommitToTargetHashes(vrw types.ValueReadWriter, commits ...types.Value) []hash.Hash {

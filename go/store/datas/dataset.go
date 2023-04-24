@@ -492,7 +492,7 @@ func newHead(ctx context.Context, head types.Value, addr hash.Hash) (dsHead, err
 		}
 	}
 
-	matched, err := IsCommit(ctx, head)
+	matched, err := IsCommit(head)
 	if err != nil {
 		return nil, err
 	}
