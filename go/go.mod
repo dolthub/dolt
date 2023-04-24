@@ -59,7 +59,7 @@ require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.15.1-0.20230419220841-24dded8c61ef
+	github.com/dolthub/go-mysql-server v0.15.1-0.20230424184737-0b8167875768
 	github.com/dolthub/swiss v0.1.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/jmoiron/sqlx v1.3.4
@@ -125,6 +125,10 @@ require (
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/rs/xid v1.4.0 // indirect
+	github.com/tidwall/gjson v1.14.4 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.1 // indirect
+	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/tklauser/numcpus v0.3.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.opencensus.io v0.22.4 // indirect
