@@ -71,7 +71,7 @@ func (cmd TagCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
+func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateTagArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tagDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

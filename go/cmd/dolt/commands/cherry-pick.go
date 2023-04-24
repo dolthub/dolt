@@ -71,7 +71,7 @@ func (cmd CherryPickCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command.
-func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
+func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateCherryPickArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cherryPickDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

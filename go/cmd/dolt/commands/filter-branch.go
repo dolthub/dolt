@@ -96,7 +96,7 @@ func (cmd FilterBranchCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
+func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, filterBranchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

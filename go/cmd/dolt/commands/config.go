@@ -116,7 +116,7 @@ func (cmd ConfigCmd) ArgParser() *argparser.ArgParser {
 
 // Exec is used by the config command to allow users to view / edit their global and repository local configurations.
 // Exec executes the command
-func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
+func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cfgDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
