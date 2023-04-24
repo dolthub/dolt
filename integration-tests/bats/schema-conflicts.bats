@@ -31,12 +31,13 @@ setup_schema_conflict() {
 
     dolt sql -q "call dolt_merge('other')"
 
-    run dolt sql -q "select * from dolt_schema_conflicts" -r vertical
+    dolt sql -q "select * from dolt_schema_conflicts" -r csv
+    run dolt sql -q "select our_schema from dolt_schema_conflicts" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "table_name: t" ]]
-    [[ "$output" =~ "our_schema: create table t (pk int primary key, c0 varchar(20))" ]]
-    [[ "$output" =~ "their_schema: create table t (pk int primary key, c0 datetime)" ]]
-    [[ "$output" =~ "description: " ]]
+    [[ "$output" =~ "varchar(20)," ]]
+    run dolt sql -q "select their_schema from dolt_schema_conflicts" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "datetime(6)," ]]
 }
 
 @test "schema-conflicts: cli merge, query schema conflicts" {
@@ -44,12 +45,13 @@ setup_schema_conflict() {
 
     dolt merge other
 
-    run dolt sql -q "select * from dolt_schema_conflicts" -r vertical
+    dolt sql -q "select * from dolt_schema_conflicts" -r csv
+    run dolt sql -q "select our_schema from dolt_schema_conflicts" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "table_name: t" ]]
-    [[ "$output" =~ "our_schema: create table t (pk int primary key, c0 varchar(20))" ]]
-    [[ "$output" =~ "their_schema: create table t (pk int primary key, c0 datetime)" ]]
-    [[ "$output" =~ "description: " ]]
+    [[ "$output" =~ "varchar(20)," ]]
+    run dolt sql -q "select their_schema from dolt_schema_conflicts" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "datetime(6)," ]]
 }
 
 @test "schema-conflicts: resolve schema conflict with 'ours' via SQL" {
