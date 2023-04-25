@@ -1060,7 +1060,7 @@ func UnionTableNames(ctx context.Context, roots ...*RootValue) ([]string, error)
 func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) ([]string, error) {
 	filteredTables := []string{}
 	workingSet := roots.Working
-	table, found, err := workingSet.GetTable(ctx, "_dolt_ignore")
+	table, found, err := workingSet.GetTable(ctx, IgnoreTableName)
 	if err != nil {
 		return nil, err
 	}
