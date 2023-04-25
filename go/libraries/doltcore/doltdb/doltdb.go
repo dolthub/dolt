@@ -392,6 +392,69 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 	return commit.GetAncestor(ctx, cs.aSpec)
 }
 
+// TODO: trim this down, substantial duplication here
+func (ddb *DoltDB) ResolveByNomsRoot(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef, nomsRoot hash.Hash) (*Commit, error) {
+	if cs == nil {
+		panic("nil commit spec")
+	}
+
+	var commitVal *datas.Commit
+	var err error
+	switch cs.csType {
+	case hashCommitSpec:
+		commitVal, err = getCommitValForHash(ctx, ddb.vrw, cs.baseSpec)
+	case refCommitSpec:
+		// For a ref in a CommitSpec, we have the following behavior.
+		// If it starts with `refs/`, we look for an exact match before
+		// we try any suffix matches. After that, we try a match on the
+		// user supplied input, with the following four prefixes, in
+		// order: `refs/`, `refs/heads/`, `refs/tags/`, `refs/remotes/`.
+		candidates := []string{
+			"refs/" + cs.baseSpec,
+			"refs/heads/" + cs.baseSpec,
+			"refs/tags/" + cs.baseSpec,
+			"refs/remotes/" + cs.baseSpec,
+		}
+		if strings.HasPrefix(cs.baseSpec, "refs/") {
+			candidates = []string{
+				cs.baseSpec,
+				"refs/" + cs.baseSpec,
+				"refs/heads/" + cs.baseSpec,
+				"refs/tags/" + cs.baseSpec,
+				"refs/remotes/" + cs.baseSpec,
+			}
+		}
+		for _, candidate := range candidates {
+			commitVal, err = getCommitValForRefStrByNomsRoot(ctx, ddb, candidate, nomsRoot)
+			if err == nil {
+				break
+			}
+			if err != ErrBranchNotFound {
+				return nil, err
+			} else {
+				err = fmt.Errorf("%w: %s", ErrBranchNotFound, cs.baseSpec)
+			}
+		}
+	case headCommitSpec:
+		if cwb == nil {
+			return nil, fmt.Errorf("cannot use a nil current working branch with a HEAD commit spec")
+		}
+		commitVal, err = getCommitValForRefStrByNomsRoot(ctx, ddb, cwb.String(), nomsRoot)
+	default:
+		panic("unrecognized commit spec csType: " + cs.csType)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
+	if err != nil {
+		return nil, err
+	}
+	return commit.GetAncestor(ctx, cs.aSpec)
+}
+
 // ResolveCommitRef takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
 // point to a Commit.
 func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Commit, error) {

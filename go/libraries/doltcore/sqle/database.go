@@ -409,7 +409,7 @@ func resolveAsOf(ctx *sql.Context, db Database, asOf interface{}) (*doltdb.Commi
 	case time.Time:
 		return resolveAsOfTime(ctx, db.ddb, head, x)
 	case string:
-		return resolveAsOfCommitRef(ctx, db.ddb, head, x)
+		return resolveAsOfCommitRef(ctx, db, head, x)
 	default:
 		panic(fmt.Sprintf("unsupported AS OF type %T", asOf))
 	}
@@ -460,7 +460,9 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 	return nil, nil, nil
 }
 
-func resolveAsOfCommitRef(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, commitRef string) (*doltdb.Commit, *doltdb.RootValue, error) {
+func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commitRef string) (*doltdb.Commit, *doltdb.RootValue, error) {
+	ddb := db.ddb
+	
 	if commitRef == doltdb.Working || commitRef == doltdb.Staged {
 		sess := dsess.DSessFromSess(ctx.Session)
 		root, _, _, err := sess.ResolveRootForRef(ctx, ctx.GetCurrentDatabase(), commitRef)
@@ -481,8 +483,13 @@ func resolveAsOfCommitRef(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef
 		return nil, nil, err
 	}
 
-	// TODO: use the tx noms root
-	cm, err := ddb.Resolve(ctx, cs, head)
+	tx := ctx.GetTransaction().(*dsess.DoltTransaction)
+	nomsRoot, ok := tx.GetInitialRoot(db.name)
+	if !ok {
+		return nil, nil, fmt.Errorf("could not resolve initial root for database %s", db.name)
+	}
+	
+	cm, err := ddb.ResolveByNomsRoot(ctx, cs, head, nomsRoot)
 	if err != nil {
 		return nil, nil, err
 	}
