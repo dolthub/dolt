@@ -43,6 +43,8 @@ import (
 
 var tableName = "people"
 
+var stubCliCtx = BuildEmptyCliContext()
+
 // Smoke test: Console opens and exits
 func TestSqlConsole(t *testing.T) {
 	t.Run("SQL console opens and exits", func(t *testing.T) {
@@ -53,7 +55,7 @@ func TestSqlConsole(t *testing.T) {
 		args := []string{}
 		commandStr := "dolt sql"
 
-		result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv, nil)
+		result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv, stubCliCtx)
 		assert.Equal(t, 0, result)
 	})
 
@@ -81,7 +83,7 @@ func TestSqlBatchMode(t *testing.T) {
 			args := []string{"-b", "-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv, nil)
+			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv, stubCliCtx)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -120,7 +122,7 @@ func TestSqlSelect(t *testing.T) {
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv, nil)
+			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv, stubCliCtx)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -146,7 +148,7 @@ func TestSqlShow(t *testing.T) {
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv, nil)
+			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv, stubCliCtx)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -179,7 +181,7 @@ func TestCreateTable(t *testing.T) {
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv, nil)
+			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv, stubCliCtx)
 			assert.Equal(t, test.expectedRes, result)
 
 			working, err = dEnv.WorkingRoot(context.Background())
@@ -219,7 +221,7 @@ func TestShowTables(t *testing.T) {
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv, nil)
+			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv, stubCliCtx)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -250,7 +252,7 @@ func TestAlterTable(t *testing.T) {
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv, nil)
+			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv, stubCliCtx)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -277,7 +279,7 @@ func TestDropTable(t *testing.T) {
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv, nil)
+			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv, stubCliCtx)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -396,7 +398,7 @@ func TestInsert(t *testing.T) {
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(ctx, commandStr, args, dEnv, nil)
+			result := SqlCmd{}.Exec(ctx, commandStr, args, dEnv, stubCliCtx)
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {
@@ -477,7 +479,7 @@ func TestUpdate(t *testing.T) {
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(ctx, commandStr, args, dEnv, nil)
+			result := SqlCmd{}.Exec(ctx, commandStr, args, dEnv, stubCliCtx)
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {
@@ -552,7 +554,7 @@ func TestDelete(t *testing.T) {
 
 			ctx := context.Background()
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(ctx, commandStr, args, dEnv, nil)
+			result := SqlCmd{}.Exec(ctx, commandStr, args, dEnv, stubCliCtx)
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {

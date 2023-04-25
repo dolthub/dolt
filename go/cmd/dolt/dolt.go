@@ -18,6 +18,7 @@ import (
 	"context"
 	crand "crypto/rand"
 	"encoding/binary"
+	"errors"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -52,6 +53,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/events"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
@@ -63,7 +65,8 @@ const (
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
 var dumpZshCommand = &commands.GenZshCompCmd{}
-var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Command{
+
+var doltSubCommands = []cli.Command{
 	commands.InitCmd{},
 	commands.StatusCmd{},
 	commands.AddCmd{},
@@ -114,7 +117,10 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	docscmds.Commands,
 	stashcmds.StashCommands,
 	&commands.Assist{},
-})
+}
+var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", doltSubCommands)
+
+var globalArgParser = buildGlobalArgs()
 
 func init() {
 	dumpDocsCommand.DoltCommand = doltCommand
@@ -401,9 +407,28 @@ func runMain() int {
 		cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
 	}
 
+	globalArgs, args, initCliContext, printUsage, err := splitArgsOnSubCommand(args)
+	if printUsage {
+		doltCommand.PrintUsage("dolt")
+		return 0
+	}
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failure to parse arguments: %v", err))
+		return 1
+	}
+
 	start := time.Now()
 	ctx, stop := context.WithCancel(ctx)
-	res := doltCommand.Exec(ctx, "dolt", args, dEnv, nil)
+
+	var cliCtx cli.CliContext = nil
+	if initCliContext {
+		_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
+		apr := cli.ParseArgsOrDie(globalArgParser, globalArgs, usage)
+
+		cliCtx = tmpCliContext{globalArgs: apr}
+	}
+
+	res := doltCommand.Exec(ctx, "dolt", args, dEnv, cliCtx)
 	stop()
 
 	if err = dbfactory.CloseAllLocalDatabases(); err != nil {
@@ -420,6 +445,54 @@ func runMain() int {
 	}
 
 	return res
+}
+
+// tmpCliContext is a temporary implementation of the CliContext interface. It is used to pass the global args to the
+// subcommands, will be replaced with implementations aware of query contexts shortly.
+type tmpCliContext struct {
+	globalArgs *argparser.ArgParseResults
+}
+
+func (t tmpCliContext) GlobalArgs() *argparser.ArgParseResults {
+	return t.globalArgs
+}
+
+var _ cli.CliContext = (*tmpCliContext)(nil)
+
+// splitArgsOnSubCommand splits the args into two slices, the first containing all args before the first subcommand,
+// and the second containing all args after the first subcommand. The second slice will start with the subcommand name.
+func splitArgsOnSubCommand(args []string) (globalArgs, subArgs []string, initCliContext, printUsages bool, err error) {
+	commandSet := make(map[string]bool)
+	for _, cmd := range doltSubCommands {
+		commandSet[cmd.Name()] = true
+	}
+
+	for i, arg := range args {
+		if cli.IsHelp(arg) {
+			// Found --help before any subcommand, so print dolt help.
+			return nil, nil, false, true, nil
+		}
+
+		if _, ok := commandSet[arg]; ok {
+			// SQL is the first subcommand to support the CLIContext. We'll need a more general solution when we add more.
+			// blame command depends on the sql command, so it is also included here.
+			initCliContext := "sql" == arg || "blame" == arg
+			return args[:i], args[i:], initCliContext, false, nil
+		}
+	}
+
+	return nil, nil, false, false, errors.New("No valid dolt subcommand found. See 'dolt --help' for usage.")
+}
+
+// doc is currently used only when a `initCliContext` command is specified. This will include all commands in time,
+// otherwise you only see these docs if you specify a nonsense argument before the `sql` subcommand.
+var doc = cli.CommandDocumentationContent{
+	ShortDesc: "Dolt is git for data",
+	LongDesc:  `Dolt comprises of multiple subcommands that allow users to import, export, update, and manipulate data with SQL.`,
+
+	Synopsis: []string{
+		"<--data-dir=<path>> subcommand <subcommand arguments>",
+	},
 }
 
 func seedGlobalRand() {
@@ -465,4 +538,13 @@ func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
 	}
 	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, Version)
 	return true, doltCommand.Exec(ctx, "dolt", args, dEnv, nil)
+}
+
+func buildGlobalArgs() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithVariableArgs("dolt")
+
+	// Pulling this argument forward first to pave the way. Others will follow.
+	ap.SupportsString(commands.DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
+
+	return ap
 }

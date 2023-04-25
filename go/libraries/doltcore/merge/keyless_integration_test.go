@@ -116,7 +116,7 @@ func TestKeylessMerge(t *testing.T) {
 			require.NoError(t, err)
 
 			for _, c := range test.setup {
-				exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, nil)
+				exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cmd.BuildEmptyCliContext())
 				require.Equal(t, 0, exitCode)
 			}
 

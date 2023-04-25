@@ -204,6 +204,38 @@ teardown() {
     rm -rf db_dir
 }
 
+@test "sql: check --data-dir can be used as argument before subcommand" {
+    # remove config files
+    rm -rf .doltcfg
+    rm -rf db_dir
+
+    # create data dir
+    mkdir db_dir
+    cd db_dir
+    DATADIR=$(pwd)
+
+    # create databases
+    mkdir dba
+    cd dba
+    dolt init
+    cd ..
+
+    mkdir dbb
+    cd dbb
+    dolt init
+
+    # Ensure --data-dir flag is really used.
+    cd /tmp
+
+    # show databases, expect all
+    run dolt --data-dir="$DATADIR" sql -q "show databases;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dba" ]] || false
+    [[ "$output" =~ "dbb" ]] || false
+
+    dolt --data-dir="$DATADIR" sql -q "use dba; create table tablea (id int);"
+}
+
 @test "sql: check configurations specify doltcfg directory" {
     # remove any previous config directories
     rm -rf .doltcfg

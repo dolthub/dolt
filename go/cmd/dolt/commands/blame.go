@@ -90,5 +90,5 @@ func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 	args = []string{"--" + QueryFlag, fmt.Sprintf(blameQueryTemplate, apr.Arg(0))}
 
-	return SqlCmd{}.Exec(ctx, "sql", args, dEnv, nil)
+	return SqlCmd{}.Exec(ctx, "sql", args, dEnv, cliCtx)
 }
