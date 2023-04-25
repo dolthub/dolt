@@ -288,12 +288,8 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 // describing the conflicts. If any other, unexpected error occurs, then that error is returned and the other response
 // fields should be ignored.
 func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, error) {
-	columnMappings, err := mapColumns(ourCC, theirCC, ancCC)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	conflicts, err := checkSchemaConflicts(columnMappings)
+	columnMappings := mapColumns(ourCC, theirCC, ancCC)
+	conflicts, err := checkColumnMappingsForConflicts(columnMappings)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -324,7 +320,7 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColColle
 				oursChanged := !anc.Equals(*ours)
 				theirsChanged := !anc.Equals(*theirs)
 				if oursChanged && theirsChanged {
-					// This is a schema change conflict and has already been handled by checkSchemaConflicts
+					// This is a schema change conflict and has already been handled by checkColumnMappingsForConflicts
 				} else if theirsChanged {
 					mergedColumns = append(mergedColumns, *theirs)
 				} else {
@@ -377,9 +373,9 @@ func checkForColumnConflicts(mergedColumns []schema.Column) []ColConflict {
 	return conflicts
 }
 
-// checkSchemaConflicts iterates over |columnMappings| and returns any column schema conflicts from column changes
-// that can't be automatically merged.
-func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) {
+// checkColumnMappingsForConflicts iterates over |columnMappings| and returns any column schema conflicts from column
+// changes that can't be automatically merged.
+func checkColumnMappingsForConflicts(columnMappings columnMappings) ([]ColConflict, error) {
 	var conflicts []ColConflict
 	for _, mapping := range columnMappings {
 		ours := mapping.ours
@@ -483,6 +479,7 @@ func newColumnMapping(anc, ours, theirs schema.Column) columnMapping {
 	return columnMapping{pAnc, pOurs, pTheirs}
 }
 
+// columnMappings is a slice of columnMapping instances.
 type columnMappings []columnMapping
 
 // DebugString returns a string representation of this columnMappings instance.
@@ -515,7 +512,7 @@ func (c columnMappings) DebugString() string {
 
 // mapColumns returns a columnMappings instance that describes how the columns in |ourCC|, |theirCC|, and |ancCC|
 // map to each other.
-func mapColumns(ourCC, theirCC, ancCC *schema.ColCollection) (columnMappings, error) {
+func mapColumns(ourCC, theirCC, ancCC *schema.ColCollection) columnMappings {
 	// Make a copy of theirCC so we can modify it to track which their columns we've matched
 	theirCC = schema.NewColCollection(theirCC.GetColumns()...)
 	theirTagsToCols := theirCC.TagToCol
@@ -551,26 +548,22 @@ func mapColumns(ourCC, theirCC, ancCC *schema.ColCollection) (columnMappings, er
 		columnMappings = append(columnMappings, newColumnMapping(ancCol, schema.InvalidCol, theirCol))
 	}
 
-	return columnMappings, nil
+	return columnMappings
 }
 
 // mergeIndexes merges the indexes from |ourSch|, |theirSch|, and |ancSch| into a single, merged collection of indexes,
-// or if problems are encountered merging the indexes, then a slice of IdxConflicts are returned describing why the
-// indexes could not be merged together into a single set.
+// or if problems are encountered merging the indexes, then a slice of IdxConflicts is returned describing the
+// conflicts that prevented the indexes from being merged together.
 func mergeIndexes(mergedCC *schema.ColCollection, ourSch, theirSch, ancSch schema.Schema) (schema.IndexCollection, []IdxConflict) {
 	// Calculate the index mappings between the three schemas
 	mappings := mapIndexes(ourSch.Indexes(), theirSch.Indexes(), ancSch.Indexes())
-	//fmt.Printf("INDEX MAPPINGS: \n%s\n", mappings.DebugString())
 
 	// Then look for conflicts while merging the indexes together
-	// TODO: Make this look more like checkSchemaConflicts' logic
-	// TODO: Pull this out into its own function
-	// TODO: Fix the naming with this function and hte other check column functions
 	var mergedIndexes []schema.Index
 	var conflicts []IdxConflict
 	for _, mapping := range mappings {
 		if mapping.anc == nil {
-			// if there's no ancestor
+			// if there's no ancestor...
 			switch {
 			case mapping.ours == nil && mapping.theirs == nil:
 				// no-op
@@ -589,7 +582,7 @@ func mergeIndexes(mergedCC *schema.ColCollection, ourSch, theirSch, ancSch schem
 				}
 			}
 		} else {
-			// if there is a common ancestor, then we need to see how each side changed from it
+			// if there is a common ancestor, then we need to see how each side changed from it...
 			switch {
 			case mapping.ours == nil && mapping.theirs == nil:
 				// no-op – index deleted on both sides
@@ -615,19 +608,17 @@ func mergeIndexes(mergedCC *schema.ColCollection, ourSch, theirSch, ancSch schem
 
 				if mapping.ours.Equals(mapping.theirs) {
 					mergedIndexes = append(mergedIndexes, mapping.ours)
-				} else {
-					if !oursChanged && !theirsChanged {
-						mergedIndexes = append(mergedIndexes, mapping.ours)
-					} else if !oursChanged && theirsChanged {
-						mergedIndexes = append(mergedIndexes, mapping.theirs)
-					} else if oursChanged && !theirsChanged {
-						mergedIndexes = append(mergedIndexes, mapping.ours)
-					} else if oursChanged && theirsChanged {
-						conflicts = append(conflicts, IdxConflict{
-							Kind:   NameCollision,
-							Ours:   mapping.ours,
-							Theirs: mapping.theirs})
-					}
+				} else if !oursChanged && !theirsChanged {
+					mergedIndexes = append(mergedIndexes, mapping.ours)
+				} else if !oursChanged && theirsChanged {
+					mergedIndexes = append(mergedIndexes, mapping.theirs)
+				} else if oursChanged && !theirsChanged {
+					mergedIndexes = append(mergedIndexes, mapping.ours)
+				} else if oursChanged && theirsChanged {
+					conflicts = append(conflicts, IdxConflict{
+						Kind:   NameCollision,
+						Ours:   mapping.ours,
+						Theirs: mapping.theirs})
 				}
 			}
 		}
@@ -649,12 +640,13 @@ func mergeIndexes(mergedCC *schema.ColCollection, ourSch, theirSch, ancSch schem
 
 	mergedIndexCollection := schema.NewIndexCollection(mergedCC, nil)
 	mergedIndexCollection.AddIndex(mergedIndexes...)
-
 	return mergedIndexCollection, conflicts
 }
 
+// indexMappings is a slice of indexMapping instances.
 type indexMappings []indexMapping
 
+// DebugString returns a string representation of this indexMappings instance.
 func (i indexMappings) DebugString() string {
 	sb := strings.Builder{}
 	for _, mapping := range i {
@@ -680,16 +672,20 @@ func (i indexMappings) DebugString() string {
 	return sb.String()
 }
 
+// indexMapping describes how a secondary index maps from one side of a merge to the other, and to a common ancestor, if
+// one exists.
 type indexMapping struct {
 	anc, ours, theirs schema.Index
 }
 
-// TODO: godocs
+// mapIndexes takes |ours|, |theirs|, and |anc| IndexCollections and determines how each index in each set maps
+// to the indexes in the other sets. It returns a slice of indexMapping instances that describe the relationships.
 func mapIndexes(ours, theirs, anc schema.IndexCollection) indexMappings {
 	var seenAnc = make(map[string]struct{})
 	var seenTheirs = make(map[string]struct{})
 	var mappings indexMappings
 
+	// Process all the indexes from |ours| first
 	ours.Iter(func(ourIdx schema.Index) (stop bool, err error) {
 		theirIndex := findMatchingIndex(ourIdx, theirs, seenTheirs)
 		ancIndex := findMatchingIndex(ourIdx, anc, seenAnc)
@@ -702,6 +698,7 @@ func mapIndexes(ours, theirs, anc schema.IndexCollection) indexMappings {
 		return false, nil
 	})
 
+	// Make sure anything left in |theirs| gets included
 	theirs.Iter(func(theirIdx schema.Index) (stop bool, err error) {
 		// Skip over any indexes from theirs that we've already matched
 		if _, alreadyMatched := seenTheirs[theirIdx.Name()]; alreadyMatched {
@@ -721,7 +718,13 @@ func mapIndexes(ours, theirs, anc schema.IndexCollection) indexMappings {
 	return mappings
 }
 
-// TODO: godocs
+// findMatchingIndex searches |indexCollection| for an index that matches |target|. Exact matches are prioritized
+// first (i.e. same name, same column tags, same type). After finding exact matches, we fall back to checking for
+// renamed indexes (i.e. same column tags and type, but a different name). The |matchedNames| map is used to keep
+// track of what index names have been matched already, so that we don't match to the same index twice.
+// Note: this is not the ideal way to find the matching index. Having a stable, unique identifier that guarantees
+// the identity would make this logic trivial and more robust, but we don't have that yet for Indexes, so we must
+// use this heuristic.
 func findMatchingIndex(target schema.Index, indexCollection schema.IndexCollection, matchedNames map[string]struct{}) schema.Index {
 	candidates := indexCollection.GetIndexesByTags(target.IndexedColumnTags()...)
 
