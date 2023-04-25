@@ -208,7 +208,7 @@ SQL
     dolt sql -q "ALTER TABLE z ADD CONSTRAINT foreign_key1 FOREIGN KEY (c1) references t(c1)"
     run dolt status
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
-    [[ "$output" =~ "modified:       z" ]] || false
+    [[ "$output" =~ "modified:         z" ]] || false
 
     run dolt schema show z
     [ "$status" -eq 0 ]
@@ -230,7 +230,7 @@ SQL
     dolt sql -q "alter table z drop constraint foreign_key1"
     run dolt status
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
-    [[ "$output" =~ "modified:       z" ]] || false
+    [[ "$output" =~ "modified:         z" ]] || false
 
     run dolt schema show z
     [ "$status" -eq 0 ]

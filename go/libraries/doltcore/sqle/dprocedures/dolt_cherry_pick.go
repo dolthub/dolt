@@ -170,15 +170,19 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 	}
 
 	// use parent of cherry-pick as ancestor root to merge
-	mo := merge.MergeOpts{IsCherryPick: true}
-	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, roots.Working, cherryRoot, parentRoot, cherryCommit, parentCommit, dbState.EditOpts(), mo)
+
+	mo := merge.MergeOpts{
+		IsCherryPick:        true,
+		KeepSchemaConflicts: false,
+	}
+	result, err := merge.MergeRoots(ctx, roots.Working, cherryRoot, parentRoot, cherryCommit, parentCommit, dbState.EditOpts(), mo)
 	if err != nil {
 		return nil, "", err
 	}
 
 	var tablesWithConflict []string
-	for tbl, stats := range mergeStats {
-		if stats.Conflicts > 0 {
+	for tbl, stats := range result.Stats {
+		if stats.HasConflicts() {
 			tablesWithConflict = append(tablesWithConflict, tbl)
 		}
 	}
@@ -188,7 +192,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		return nil, "", fmt.Errorf("conflicts in table {'%s'}", tblNames)
 	}
 
-	workingRootHash, err = mergedRoot.HashOf()
+	workingRootHash, err = result.Root.HashOf()
 	if err != nil {
 		return nil, "", err
 	}
@@ -202,5 +206,5 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		return nil, "", err
 	}
 
-	return mergedRoot, cherryCommitMeta.Description, nil
+	return result.Root, cherryCommitMeta.Description, nil
 }

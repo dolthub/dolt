@@ -68,16 +68,19 @@ func Revert(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, hea
 			return nil, "", err
 		}
 
-		root, _, err = MergeRoots(ctx, root, theirRoot, baseRoot, parentCM, baseCommit, opts, MergeOpts{IsCherryPick: false})
+		var result *Result
+		result, err = MergeRoots(ctx, root, theirRoot, baseRoot, parentCM, baseCommit, opts, MergeOpts{IsCherryPick: false})
 		if err != nil {
 			return nil, "", err
 		}
-		if ok, err := root.HasConflicts(ctx); err != nil {
+		root = result.Root
+
+		if ok, err := result.Root.HasConflicts(ctx); err != nil {
 			return nil, "", err
 		} else if ok {
 			return nil, "", fmt.Errorf("revert currently does not handle conflicts")
 		}
-		if ok, err := root.HasConstraintViolations(ctx); err != nil {
+		if ok, err := result.Root.HasConstraintViolations(ctx); err != nil {
 			return nil, "", err
 		} else if ok {
 			return nil, "", fmt.Errorf("revert currently does not handle constraint violations")

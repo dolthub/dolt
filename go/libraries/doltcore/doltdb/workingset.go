@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -30,8 +32,22 @@ type MergeState struct {
 	// the source commit
 	commit *Commit
 	// the spec string that was used to specify |commit|
-	commitSpecStr   string
-	preMergeWorking *RootValue
+	commitSpecStr    string
+	preMergeWorking  *RootValue
+	unmergableTables []string
+}
+
+// todo(andy): this might make more sense in pkg merge
+type SchemaConflict struct {
+	ToSch, FromSch    schema.Schema
+	ToFks, FromFks    []ForeignKey
+	ToParentSchemas   map[string]schema.Schema
+	FromParentSchemas map[string]schema.Schema
+	toTbl, fromTbl    *Table
+}
+
+func (sc SchemaConflict) GetConflictingTables() (ours, theirs *Table) {
+	return sc.toTbl, sc.fromTbl
 }
 
 // TodoWorkingSetMeta returns an incomplete WorkingSetMeta, suitable for methods that don't have the means to construct
@@ -61,6 +77,72 @@ func (m MergeState) CommitSpecStr() string {
 
 func (m MergeState) PreMergeWorkingRoot() *RootValue {
 	return m.preMergeWorking
+}
+
+type SchemaConflictFn func(table string, conflict SchemaConflict) error
+
+func (m MergeState) HasSchemaConflicts() bool {
+	return len(m.unmergableTables) > 0
+}
+
+func (m MergeState) TablesWithSchemaConflicts() []string {
+	return m.unmergableTables
+}
+
+func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb SchemaConflictFn) (err error) {
+	var to, from *RootValue
+
+	to = m.preMergeWorking
+	if from, err = m.commit.GetRootValue(ctx); err != nil {
+		return err
+	}
+
+	toFKs, err := to.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return err
+	}
+	toSchemas, err := to.GetAllSchemas(ctx)
+	if err != nil {
+		return err
+	}
+
+	fromFKs, err := from.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return err
+	}
+	fromSchemas, err := from.GetAllSchemas(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, name := range m.unmergableTables {
+		var sc SchemaConflict
+		if sc.toTbl, _, err = to.GetTable(ctx, name); err != nil {
+			return err
+		}
+		// todo: handle schema conflicts for renamed tables
+		if sc.fromTbl, _, err = from.GetTable(ctx, name); err != nil {
+			return err
+		}
+
+		if sc.ToSch, err = sc.toTbl.GetSchema(ctx); err != nil {
+			return err
+		}
+		if sc.FromSch, err = sc.fromTbl.GetSchema(ctx); err != nil {
+			return err
+		}
+
+		sc.ToFks, _ = toFKs.KeysForTable(name)
+		sc.ToParentSchemas = toSchemas
+
+		sc.FromFks, _ = fromFKs.KeysForTable(name)
+		sc.FromParentSchemas = fromSchemas
+
+		if err = cb(name, sc); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type WorkingSet struct {
@@ -93,6 +175,11 @@ func (ws WorkingSet) WithWorkingRoot(workingRoot *RootValue) *WorkingSet {
 
 func (ws WorkingSet) WithMergeState(mergeState *MergeState) *WorkingSet {
 	ws.mergeState = mergeState
+	return &ws
+}
+
+func (ws WorkingSet) WithUnmergableTables(tables []string) *WorkingSet {
+	ws.mergeState.unmergableTables = tables
 	return &ws
 }
 
@@ -207,10 +294,16 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			return nil, err
 		}
 
+		unmergableTables, err := dsws.MergeState.UnmergableTables(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
+
 		mergeState = &MergeState{
-			commit:          commit,
-			commitSpecStr:   commitSpec,
-			preMergeWorking: preMergeWorkingRoot,
+			commit:           commit,
+			commitSpecStr:    commitSpec,
+			preMergeWorking:  preMergeWorkingRoot,
+			unmergableTables: unmergableTables,
 		}
 	}
 
@@ -286,7 +379,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 			return types.Ref{}, types.Ref{}, nil, err
 		}
 
-		mergeState, err = datas.NewMergeState(ctx, db.vrw, preMergeWorking, dCommit, ws.mergeState.commitSpecStr)
+		mergeState, err = datas.NewMergeState(ctx, db.vrw, preMergeWorking, dCommit, ws.mergeState.commitSpecStr, ws.mergeState.unmergableTables)
 		if err != nil {
 			return types.Ref{}, types.Ref{}, nil, err
 		}

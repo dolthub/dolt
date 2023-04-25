@@ -57,14 +57,14 @@ SQL
     [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ "  (use \"dolt reset <table>...\" to unstage)" ]] || false
-    [[ "$output" =~ "	modified:       t" ]] || false
+    [[ "$output" =~ "	modified:         t" ]] || false
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
     [[ "$output" =~ "  (use \"dolt add <table>\" to update what will be committed)" ]] || false
     [[ "$output" =~ "  (use \"dolt checkout <table>\" to discard changes in working directory)" ]] || false
-    [[ "$output" =~ "	modified:       u" ]] || false
+    [[ "$output" =~ "	modified:         u" ]] || false
     [[ "$output" =~ "Untracked files:" ]] || false
     [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
-    [[ "$output" =~ "	new table:      v" ]] || false
+    [[ "$output" =~ "	new table:        v" ]] || false
 }
 
 @test "status: deleted table" {
@@ -80,11 +80,11 @@ SQL
     [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ "  (use \"dolt reset <table>...\" to unstage)" ]] || false
-    [[ "$output" =~ "	deleted:        t" ]] || false
+    [[ "$output" =~ "	deleted:          t" ]] || false
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
     [[ "$output" =~ "  (use \"dolt add <table>\" to update what will be committed)" ]] || false
     [[ "$output" =~ "  (use \"dolt checkout <table>\" to discard changes in working directory)" ]] || false
-    [[ "$output" =~ "	deleted:        u" ]] || false
+    [[ "$output" =~ "	deleted:          u" ]] || false
 }
 
 @test "status: checkout current branch" {
@@ -116,7 +116,7 @@ SQL
     [[ "$output" =~ "  (use \"dolt merge --abort\" to abort the merge)" ]] || false
     [[ "$output" =~ "Unmerged paths:" ]] || false
     [[ "$output" =~ "  (use \"dolt add <file>...\" to mark resolution)" ]] || false
-    [[ "$output" =~ "	both modified:  t" ]] || false
+    [[ "$output" =~ "	both modified:    t" ]] || false
 }
 
 @test "status: renamed table" {
@@ -129,12 +129,12 @@ SQL
     [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "deleted:        test" ]] || false
-    [[ "$output" =~ "new table:      quiz" ]] || false
+    [[ "$output" =~ "deleted:          test" ]] || false
+    [[ "$output" =~ "new table:        quiz" ]] || false
     dolt add .
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "renamed:        test -> quiz" ]] || false
+    [[ "$output" =~ "renamed:          test -> quiz" ]] || false
 }
 
 @test "status: unstaged changes after reset" {
@@ -152,9 +152,9 @@ CREATE TABLE three (pk int PRIMARY KEY);
 SQL
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "modified:       one" ]] || false
-    [[ "$output" =~ "deleted:        two" ]] || false
-    [[ "$output" =~ "new table:      three" ]] || false
+    [[ "$output" =~ "modified:         one" ]] || false
+    [[ "$output" =~ "deleted:          two" ]] || false
+    [[ "$output" =~ "new table:        three" ]] || false
     run dolt reset
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Unstaged changes after reset:" ]] || false
@@ -290,10 +290,11 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3" ]] || false
 
+    dolt status
     run dolt status
     [[ "$output" =~ "Untracked files:" ]] || false
     [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
-    [[ "$output" =~ "	new table:      test" ]] || false
+    [[ "$output" =~ "	new table:        test" ]] || false
 
     # Now verify that commit log has changes
     run dolt sql -q "SELECT count(*) from dolt_log"
@@ -347,12 +348,13 @@ SQL
 
     # Do a soft reset to commit 2.
     dolt reset $cm2
+    dolt status
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Untracked files:" ]] || false
     [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
-    [[ "$output" =~ "	new table:      tb3" ]] || false
-    ! [[ "$output" =~ "	new table:      tb2" ]] || false
+    [[ "$output" =~ "	new table:        tb3" ]] || false
+    ! [[ "$output" =~ "tb2" ]] || false
 
     run dolt sql -q "SELECT COUNT(*) FROM tb3"
     [[ "$output" =~ "1" ]] || false
@@ -369,9 +371,9 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Untracked files:" ]] || false
     [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
-    [[ "$output" =~ "	new table:      tb3" ]] || false
-    [[ "$output" =~ "	new table:      tb2" ]] || false
-    ! [[ "$output" =~ "	new table:      tb1" ]] || false
+    [[ "$output" =~ "	new table:        tb3" ]] || false
+    [[ "$output" =~ "	new table:        tb2" ]] || false
+    ! [[ "$output" =~ "tb1" ]] || false
 
     run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
     [[ "$output" =~ "2" ]] || false # includes init commit
@@ -404,7 +406,7 @@ SQL
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
     [[ "$output" =~ "  (use \"dolt add <table>\" to update what will be committed)" ]] || false
     [[ "$output" =~ "  (use \"dolt checkout <table>\" to discard changes in working directory)" ]] || false
-    [[ "$output" =~ "	modified:       tbl" ]] || false
+    [[ "$output" =~ "	modified:         tbl" ]] || false
     ! [[ "$output" =~ "	new table:      tb2" ]] || false
 }
 
@@ -424,7 +426,7 @@ SQL
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
     [[ "$output" =~ "  (use \"dolt add <table>\" to update what will be committed)" ]] || false
     [[ "$output" =~ "  (use \"dolt checkout <table>\" to discard changes in working directory)" ]] || false
-    [[ "$output" =~ "	modified:       tbl" ]] || false
+    [[ "$output" =~ "	modified:         tbl" ]] || false
 }
 
 @test "status: dolt reset throws errors for unknown ref/table" {

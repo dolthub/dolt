@@ -70,7 +70,7 @@ func (cmd StashPopCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
+func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	if !dEnv.DoltDB.Format().UsesFlatbuffers() {
 		cli.PrintErrln(ErrStashNotSupportedForOldFormat.Error())
 		return 1
@@ -148,14 +148,14 @@ func applyStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, curWorkingRoot *dol
 	}
 
 	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: tmpDir}
-	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, curWorkingRoot, stashRoot, parentRoot, stashRoot, parentCommit, opts, merge.MergeOpts{IsCherryPick: false})
+	result, err := merge.MergeRoots(ctx, curWorkingRoot, stashRoot, parentRoot, stashRoot, parentCommit, opts, merge.MergeOpts{IsCherryPick: false})
 	if err != nil {
 		return false, err
 	}
 
 	var tablesWithConflict []string
-	for tbl, stats := range mergeStats {
-		if stats.Conflicts > 0 {
+	for tbl, stats := range result.Stats {
+		if stats.HasConflicts() {
 			tablesWithConflict = append(tablesWithConflict, tbl)
 		}
 	}
@@ -168,7 +168,7 @@ func applyStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, curWorkingRoot *dol
 		return false, nil
 	}
 
-	err = dEnv.UpdateWorkingRoot(ctx, mergedRoot)
+	err = dEnv.UpdateWorkingRoot(ctx, result.Root)
 	if err != nil {
 		return false, err
 	}

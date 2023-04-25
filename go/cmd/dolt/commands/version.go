@@ -60,7 +60,7 @@ func (cmd VersionCmd) ArgParser() *argparser.ArgParser {
 
 // Version displays the version of the running dolt client
 // Exec executes the command
-func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
+func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	cli.Println("dolt version", cmd.VersionStr)
 
 	if dEnv.HasDoltDir() && dEnv.RSLoadErr == nil && !cli.CheckEnvIsValid(dEnv) {

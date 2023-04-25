@@ -88,7 +88,7 @@ func (cmd ResolveCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
+func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, resDocumentation, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

@@ -68,7 +68,7 @@ func (cmd *trackedCommand) RequiresRepo() bool {
 	return false
 }
 
-func (cmd *trackedCommand) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *CliContext) int {
+func (cmd *trackedCommand) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx CliContext) int {
 	cmd.called = true
 	cmd.cmdStr = commandStr
 	cmd.args = args

@@ -61,7 +61,7 @@ func (cmd StatusCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
+func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, statusDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
@@ -76,26 +76,25 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return handleStatusVErr(err)
 	}
 
-	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, roots)
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		handleStatusVErr(err)
+	}
+
+	as, err := merge.GetMergeArtifactStatus(ctx, ws)
+	if err != nil {
+		handleStatusVErr(err)
+	}
+
+	err = PrintStatus(ctx, dEnv, staged, notStaged, as)
 	if err != nil {
 		return handleStatusVErr(err)
 	}
-
-	workingTblsWithViolations, _, _, err := merge.GetTablesWithConstraintViolations(ctx, roots)
-	if err != nil {
-		return handleStatusVErr(err)
-	}
-
-	err = PrintStatus(ctx, dEnv, staged, notStaged, workingTblsInConflict, workingTblsWithViolations)
-	if err != nil {
-		return handleStatusVErr(err)
-	}
-
 	return 0
 }
 
 // TODO: working docs in conflict param not used here
-func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, workingTblsInConflict, workingTblsWithViolations []string) error {
+func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, as merge.ArtifactStatus) error {
 	cli.Printf(branchHeader, dEnv.RepoStateReader().CWBHeadRef().GetPath())
 
 	err := printRemoteRefTrackingInfo(ctx, dEnv)
@@ -103,17 +102,17 @@ func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTb
 		return err
 	}
 
-	mergeActive, err := dEnv.IsMergeActive(ctx)
+	mergeActive, err := isMergeActive(ctx, dEnv)
 	if err != nil {
 		return err
 	}
 
 	if mergeActive {
-		if len(workingTblsInConflict) > 0 && len(workingTblsWithViolations) > 0 {
+		if as.HasConflicts() && as.HasConstraintViolations() {
 			cli.Println(fmt.Sprintf(unmergedTablesHeader, "conflicts and constraint violations"))
-		} else if len(workingTblsInConflict) > 0 {
+		} else if as.HasConflicts() {
 			cli.Println(fmt.Sprintf(unmergedTablesHeader, "conflicts"))
-		} else if len(workingTblsWithViolations) > 0 {
+		} else if as.HasConstraintViolations() {
 			cli.Println(fmt.Sprintf(unmergedTablesHeader, "constraint violations"))
 		} else {
 			cli.Println(allMergedHeader)
@@ -121,7 +120,7 @@ func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTb
 	}
 
 	n := printStagedDiffs(cli.CliOut, stagedTbls, true)
-	n = PrintDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, true, n, workingTblsInConflict, workingTblsWithViolations)
+	n = PrintDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, true, n, as)
 
 	if !mergeActive && n == 0 {
 		cli.Println("nothing to commit, working tree clean")

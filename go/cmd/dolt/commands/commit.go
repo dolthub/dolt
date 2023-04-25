@@ -76,7 +76,7 @@ func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
+func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	res := performCommit(ctx, commandStr, args, dEnv)
 	if res == 1 {
 		return res
@@ -198,7 +198,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		mergeParentCommits = parentsHeadForAmend
 	}
 
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
+	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws, mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag) || apr.Contains(cli.AmendFlag),
@@ -276,7 +276,7 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 
 	if actions.IsNothingStaged(err) {
 		notStagedTbls := actions.NothingStagedTblDiffs(err)
-		n := PrintDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, false, 0, nil, nil)
+		n := PrintDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, false, 0, merge.ArtifactStatus{})
 
 		if n == 0 {
 			bdr := errhand.BuildDError(`no changes added to commit (use "dolt add")`)
@@ -358,18 +358,19 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg s
 
 	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 
-	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, roots)
+	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
-		workingTblsInConflict = []string{}
+		return "", err
 	}
-	workingTblsWithViolations, _, _, err := merge.GetTablesWithConstraintViolations(ctx, roots)
+
+	as, err := merge.GetMergeArtifactStatus(ctx, ws)
 	if err != nil {
-		workingTblsWithViolations = []string{}
+		return "", nil
 	}
 
 	buf := bytes.NewBuffer([]byte{})
 	n := printStagedDiffs(buf, stagedTblDiffs, true)
-	n = PrintDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, true, n, workingTblsInConflict, workingTblsWithViolations)
+	n = PrintDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, true, n, as)
 
 	currBranch := dEnv.RepoStateReader().CWBHeadRef()
 	initialCommitMessage := fmt.Sprintf("%s\n# Please enter the commit message for your changes. Lines starting"+
@@ -405,12 +406,13 @@ func PrintDiffsNotStaged(
 	notStagedTbls []diff.TableDelta,
 	printHelp bool,
 	linesPrinted int,
-	workingTblsInConflict, workingTblsWithViolations []string,
+	as merge.ArtifactStatus,
 ) int {
-	inCnfSet := set.NewStrSet(workingTblsInConflict)
-	violationSet := set.NewStrSet(workingTblsWithViolations)
+	inCnfSet := set.NewStrSet(as.DataConflictTables)
+	inCnfSet.Add(as.SchemaConflictsTables...)
+	violationSet := set.NewStrSet(as.ConstraintViolationsTables)
 
-	if len(workingTblsInConflict) > 0 || len(workingTblsWithViolations) > 0 {
+	if as.HasConflicts() || as.HasConstraintViolations() {
 		if linesPrinted > 0 {
 			cli.Println()
 		}
@@ -419,16 +421,19 @@ func PrintDiffsNotStaged(
 			iohelp.WriteLine(wr, mergedTableHelp)
 		}
 
-		if len(workingTblsInConflict) > 0 {
+		if as.HasConflicts() {
 			lines := make([]string, 0, len(notStagedTbls))
-			for _, tblName := range workingTblsInConflict {
+			for _, tblName := range as.SchemaConflictsTables {
+				lines = append(lines, fmt.Sprintf(statusFmt, schemaConflictLabel, tblName))
+			}
+			for _, tblName := range as.DataConflictTables {
 				lines = append(lines, fmt.Sprintf(statusFmt, bothModifiedLabel, tblName))
 			}
 			iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
 			linesPrinted += len(lines)
 		}
 
-		if len(workingTblsWithViolations) > 0 {
+		if as.HasConstraintViolations() {
 			violationOnly, _, _ := violationSet.LeftIntersectionRight(inCnfSet)
 			lines := make([]string, 0, len(notStagedTbls))
 			for _, tblName := range violationOnly.AsSortedSlice() {
@@ -543,9 +548,10 @@ const (
 	untrackedHeader     = `Untracked files:`
 	untrackedHeaderHelp = `  (use "dolt add <table>" to include in what will be committed)`
 
-	statusFmt         = "\t%-16s%s"
-	statusRenameFmt   = "\t%-16s%s -> %s"
-	bothModifiedLabel = "both modified:"
+	statusFmt           = "\t%-18s%s"
+	statusRenameFmt     = "\t%-18s%s -> %s"
+	schemaConflictLabel = "schema conflict:"
+	bothModifiedLabel   = "both modified:"
 )
 
 var tblDiffTypeToLabel = map[diff.TableDiffType]string{

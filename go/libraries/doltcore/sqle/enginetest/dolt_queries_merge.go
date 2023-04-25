@@ -2881,6 +2881,44 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 	},
 }
 
+var SchemaConflictScripts = []queries.ScriptTest{
+	{
+		Name: "divergent type change causes schema conflict",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c0 varchar(20))",
+			"call dolt_commit('-Am', 'added tabele t')",
+			"call dolt_checkout('-b', 'other')",
+			"alter table t modify column c0 int",
+			"call dolt_commit('-am', 'altered t on branch other')",
+			"call dolt_checkout('main')",
+			"alter table t modify column c0 datetime",
+			"call dolt_commit('-am', 'altered t on branch main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('other')",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query: "select * from dolt_schema_conflicts",
+				Expected: []sql.Row{{
+					"t",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c0` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c0` datetime(6),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c0` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"",
+				}},
+			},
+			{
+				Query: "select * from dolt_status",
+				Expected: []sql.Row{
+					{"t", false, "schema conflict"},
+				},
+			},
+		},
+	},
+}
+
 // OldFormatMergeConflictsAndCVsScripts tests old format merge behavior
 // where violations are appended and merges are aborted if there are existing
 // violations and/or conflicts.
@@ -4424,8 +4462,12 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "call dolt_merge('right');",
-				ExpectedErr: merge.ErrSchemaConflict,
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select table_name from dolt_schema_conflicts",
+				Expected: []sql.Row{{"t"}},
 			},
 		},
 	},
@@ -4442,8 +4484,12 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "call dolt_merge('right');",
-				ExpectedErr: merge.ErrSchemaConflict,
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select table_name from dolt_schema_conflicts",
+				Expected: []sql.Row{{"t"}},
 			},
 		},
 	},
