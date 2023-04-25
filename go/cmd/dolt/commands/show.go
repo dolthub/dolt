@@ -17,12 +17,10 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/pkg/errors"
 	"regexp"
 	"strings"
 
-	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/pkg/errors"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -30,6 +28,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 )
 
