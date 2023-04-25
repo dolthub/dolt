@@ -235,16 +235,6 @@ func (ddb *DoltDB) Close() error {
 	return ddb.db.Close()
 }
 
-// ParseHashString converts a string representing a hash into a hash.Hash.
-func ParseHashString(hashStr string) (hash.Hash, error) {
-	unprefixed := strings.TrimPrefix(hashStr, "#")
-	parsedHash, ok := hash.MaybeParse(unprefixed)
-	if !ok {
-		return hash.Hash{}, errors.New("invalid hash: " + hashStr)
-	}
-	return parsedHash, nil
-}
-
 // GetHashForRefStr resolves a ref string (such as a branch name or tag) and resolves it to a hash.Hash.
 func (ddb *DoltDB) GetHashForRefStr(ctx context.Context, ref string) (*hash.Hash, error) {
 	if err := datas.ValidateDatasetId(ref); err != nil {
@@ -305,8 +295,11 @@ type Roots struct {
 func (ddb *DoltDB) getHashFromCommitSpec(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (*hash.Hash, error) {
 	switch cs.csType {
 	case hashCommitSpec:
-		hash, err := ParseHashString(cs.baseSpec)
-		return &hash, err
+		parsedHash, ok := hash.MaybeParse(cs.baseSpec)
+		if !ok {
+			return nil, errors.New("invalid hash: " + cs.baseSpec)
+		}
+		return &parsedHash, nil
 	case refCommitSpec:
 		// For a ref in a CommitSpec, we have the following behavior.
 		// If it starts with `refs/`, we look for an exact match before

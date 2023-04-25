@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/pkg/errors"
 	"regexp"
 	"strings"
 
@@ -171,6 +172,16 @@ func showObjects(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error {
 	return nil
 }
 
+// parseHashString converts a string representing a hash into a hash.Hash.
+func parseHashString(hashStr string) (hash.Hash, error) {
+	unprefixed := strings.TrimPrefix(hashStr, "#")
+	parsedHash, ok := hash.MaybeParse(unprefixed)
+	if !ok {
+		return hash.Hash{}, errors.New("invalid hash: " + hashStr)
+	}
+	return parsedHash, nil
+}
+
 func showSpecRef(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, specRef string) error {
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
@@ -186,7 +197,7 @@ func showSpecRef(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, specRef
 		} else if upperCaseSpecRef == doltdb.Staged {
 			refHash, err = roots.Staged.HashOf()
 		} else {
-			refHash, err = doltdb.ParseHashString(specRef)
+			refHash, err = parseHashString(specRef)
 		}
 		if err != nil {
 			return err
