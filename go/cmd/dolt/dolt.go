@@ -475,7 +475,8 @@ func splitArgsOnSubCommand(args []string) (globalArgs, subArgs []string, initCli
 
 		if _, ok := commandSet[arg]; ok {
 			// SQL is the first subcommand to support the CLIContext. We'll need a more general solution when we add more.
-			initCliContext := "sql" == arg
+			// blame command depends on the sql command, so it is also included here.
+			initCliContext := "sql" == arg || "blame" == arg
 			return args[:i], args[i:], initCliContext, false, nil
 		}
 	}
