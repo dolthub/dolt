@@ -216,7 +216,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 				Name:          "ignored",
 				Tag:           2,
 				Kind:          types.BoolKind,
-				IsPartOfPK:    true,
+				IsPartOfPK:    false,
 				TypeInfo:      typeinfo.FromKind(types.BoolKind),
 				Default:       "false",
 				AutoIncrement: false,
