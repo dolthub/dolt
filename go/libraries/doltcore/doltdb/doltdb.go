@@ -294,7 +294,7 @@ func getCommitValForRefStr(ctx context.Context, ddb *DoltDB, ref string) (*datas
 }
 
 func getCommitValForRefStrByNomsRoot(ctx context.Context, ddb *DoltDB, ref string, nomsRoot hash.Hash) (*datas.Commit, error) {
-	commitHash, err := ddb.GetHashForRefStr(ctx, ref)
+	commitHash, err := ddb.GetHashForRefStrByNomsRoot(ctx, ref, nomsRoot)
 
 	if err != nil {
 		return nil, err
