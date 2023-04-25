@@ -17,7 +17,7 @@ package credcmds
 import (
 	"context"
 	"fmt"
-	"net/url"
+	"net"
 
 	"google.golang.org/grpc"
 
@@ -107,11 +107,12 @@ func loadEndpoint(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (string, st
 }
 
 func getHostFromEndpoint(endpoint string) string {
-	u, err := url.Parse(endpoint)
+	host, _, err := net.SplitHostPort(endpoint)
 	if err != nil {
+		cli.Printf("error getting host name from provided endpoint '%s': %v\nUsing default host instead: %s\n", endpoint, err, env.DefaultRemotesApiHost)
 		return env.DefaultRemotesApiHost
 	}
-	return u.Hostname()
+	return host
 }
 
 func loadCred(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (creds.DoltCreds, errhand.VerboseError) {
