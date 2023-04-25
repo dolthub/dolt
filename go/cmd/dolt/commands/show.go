@@ -204,6 +204,9 @@ func showSpecRef(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, specRef
 		commit, err := doltdb.NewCommitFromValue(ctx, dEnv.DoltDB.ValueReadWriter(), dEnv.DoltDB.NodeStore(), value)
 
 		if err == datas.ErrNotACommit {
+			if !dEnv.DoltDB.Format().UsesFlatbuffers() {
+				return fmt.Errorf("dolt show cannot show non-commit objects when using the old LD_1 storage format: %s is not a commit", specRef)
+			}
 			cli.Println(value.Kind(), value.HumanReadableString())
 		} else if err == nil {
 			showCommit(ctx, dEnv, opts, commit)
