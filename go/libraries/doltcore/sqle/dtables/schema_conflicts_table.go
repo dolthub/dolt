@@ -24,9 +24,11 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	noms "github.com/dolthub/dolt/go/store/types"
 )
 
 var _ sql.Table = (*SchemaConflictsTable)(nil)
@@ -148,8 +150,20 @@ type schemaConflict struct {
 	description string
 }
 
-func newSchemaConflict(ctx context.Context, table string, br *doltdb.RootValue, c doltdb.SchemaConflict) (schemaConflict, error) {
-	base, err := getCreateTableStatementFromRoot(ctx, table, br)
+func newSchemaConflict(ctx context.Context, table string, baseRoot *doltdb.RootValue, c doltdb.SchemaConflict) (schemaConflict, error) {
+	bs, err := baseRoot.GetAllSchemas(ctx)
+	if err != nil {
+		return schemaConflict{}, err
+	}
+	baseSch := bs[table]
+
+	fkc, err := baseRoot.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return schemaConflict{}, err
+	}
+	baseFKs, _ := fkc.KeysForTable(table)
+
+	base, err := getCreateTableStatement(table, baseSch, baseFKs, bs)
 	if err != nil {
 		return schemaConflict{}, err
 	}
@@ -164,28 +178,18 @@ func newSchemaConflict(ctx context.Context, table string, br *doltdb.RootValue, 
 		return schemaConflict{}, err
 	}
 
+	desc, err := getSchemaConflictDescription(ctx, table, baseSch, c.ToSch, c.FromSch)
+	if err != nil {
+		return schemaConflict{}, err
+	}
+
 	return schemaConflict{
-		table:    table,
-		baseSch:  base,
-		ourSch:   ours,
-		theirSch: theirs,
+		table:       table,
+		baseSch:     base,
+		ourSch:      ours,
+		theirSch:    theirs,
+		description: desc,
 	}, nil
-}
-
-func getCreateTableStatementFromRoot(ctx context.Context, table string, root *doltdb.RootValue) (string, error) {
-	schemas, err := root.GetAllSchemas(ctx)
-	if err != nil {
-		return "", err
-	}
-	sch := schemas[table]
-
-	fkc, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return "", err
-	}
-	fks, _ := fkc.KeysForTable(table)
-
-	return getCreateTableStatement(table, sch, fks, schemas)
 }
 
 func getCreateTableStatement(table string, sch schema.Schema, fks []doltdb.ForeignKey, parents map[string]schema.Schema) (string, error) {
@@ -194,6 +198,15 @@ func getCreateTableStatement(table string, sch schema.Schema, fks []doltdb.Forei
 		return "", err
 	}
 	return diff.GenerateCreateTableStatement(table, sch, pkSch, fks, parents)
+}
+
+func getSchemaConflictDescription(ctx context.Context, table string, base, ours, theirs schema.Schema) (string, error) {
+	nbf := noms.Format_Default
+	_, conflict, err := merge.SchemaMerge(ctx, nbf, ours, theirs, base, table)
+	if err != nil {
+		return "", err
+	}
+	return conflict.String(), nil
 }
 
 type schemaConflictsIter struct {
