@@ -250,7 +250,10 @@ func TestKeylessMergeConflicts(t *testing.T) {
 
 		for _, c := range cc {
 			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, nil)
-			require.Equal(t, 0, exitCode)
+			// allow merge to fail with conflicts
+			if _, ok := c.cmd.(cmd.MergeCmd); !ok {
+				require.Equal(t, 0, exitCode)
+			}
 		}
 	}
 

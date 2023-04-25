@@ -493,16 +493,13 @@ teardown() {
     dolt commit -m "added conflicting test row"
     dolt checkout main
     dolt merge test-branch
-    run dolt checkout test
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
     run dolt sql -q "select * from test"
     [[ "$output" =~ \|[[:space:]]+5 ]] || false
     run dolt conflicts cat test
-    [[ ! "$output" =~ "ours" ]] || false
-    [[ ! "$output" =~ "theirs" ]] || false
+    [[ "$output" =~ "ours" ]] || false
+    [[ "$output" =~ "theirs" ]] || false
     run dolt status
-    [[ "$output" =~ "All conflicts and constraint violations fixed but you are still merging." ]] || false
+    [[ "$output" =~ "You have unmerged tables" ]] || false
     run dolt merge --abort
     [ "$status" -eq 0 ]
     [ "$output" = "" ]

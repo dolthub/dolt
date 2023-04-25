@@ -71,7 +71,7 @@ func (cmd UploadCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec implements cli.Command.
-func (cmd UploadCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
+func (cmd UploadCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, uploadDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

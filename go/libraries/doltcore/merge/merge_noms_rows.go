@@ -101,7 +101,7 @@ func mergeNomsTable(ctx context.Context, tm *TableMerger, mergedSch schema.Schem
 		if err != nil {
 			return nil, nil, err
 		}
-		stats.Conflicts = int(cons.Len())
+		stats.DataConflicts = int(cons.Len())
 	}
 
 	resultTbl, err = mergeAutoIncrementValues(ctx, tm.leftTbl, tm.rightTbl, resultTbl)
