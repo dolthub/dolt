@@ -217,14 +217,14 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 
 	// use parent of cherry-pick as ancestor to merge
 	mo := merge.MergeOpts{IsCherryPick: true}
-	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, workingRoot, cherryRoot, parentRoot, cherryCm, parentCm, opts, mo)
+	result, err := merge.MergeRoots(ctx, workingRoot, cherryRoot, parentRoot, cherryCm, parentCm, opts, mo)
 	if err != nil {
 		return nil, "", err
 	}
 
 	var tablesWithConflict []string
-	for tbl, stats := range mergeStats {
-		if stats.Conflicts > 0 {
+	for tbl, stats := range result.Stats {
+		if stats.HasConflicts() {
 			tablesWithConflict = append(tablesWithConflict, tbl)
 		}
 	}
@@ -234,5 +234,5 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 		return nil, "", errors.New(fmt.Sprintf("conflicts in table {'%s'}", tblNames))
 	}
 
-	return mergedRoot, commitMsg, nil
+	return result.Root, commitMsg, nil
 }

@@ -494,7 +494,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 			var eo editor.Options
 			eo = eo.WithDeaf(editor.NewInMemDeaf(a.VRW()))
 			// attempt merge before skipping to assert no panics
-			root, _, err := merge.MergeRoots(ctx, l, r, a, rootish{r}, rootish{a}, eo, mo)
+			result, err := merge.MergeRoots(ctx, l, r, a, rootish{r}, rootish{a}, eo, mo)
 			maybeSkip(t, a.VRW().Format(), test, flipSides)
 
 			if test.conflict {
@@ -504,7 +504,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 				require.NoError(t, err)
 				exp, err := m.MapTableHashes(ctx)
 				assert.NoError(t, err)
-				act, err := root.MapTableHashes(ctx)
+				act, err := result.Root.MapTableHashes(ctx)
 				assert.NoError(t, err)
 
 				assert.Equal(t, len(exp), len(act))

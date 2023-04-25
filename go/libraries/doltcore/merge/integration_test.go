@@ -125,10 +125,12 @@ func TestMerge(t *testing.T) {
 			defer dEnv.DoltDB.Close()
 
 			for _, tc := range setupCommon {
-				tc.exec(t, ctx, dEnv)
+				exit := tc.exec(t, ctx, dEnv)
+				require.Equal(t, 0, exit)
 			}
 			for _, tc := range test.setup {
-				tc.exec(t, ctx, dEnv)
+				exit := tc.exec(t, ctx, dEnv)
+				require.Equal(t, 0, exit)
 			}
 
 			root, err := dEnv.WorkingRoot(ctx)
@@ -245,10 +247,18 @@ func TestMergeConflicts(t *testing.T) {
 			defer dEnv.DoltDB.Close()
 
 			for _, tc := range setupCommon {
-				tc.exec(t, ctx, dEnv)
+				exit := tc.exec(t, ctx, dEnv)
+				// allow merge to fail with conflicts
+				if _, ok := tc.cmd.(cmd.MergeCmd); !ok {
+					require.Equal(t, 0, exit)
+				}
 			}
 			for _, tc := range test.setup {
-				tc.exec(t, ctx, dEnv)
+				exit := tc.exec(t, ctx, dEnv)
+				// allow merge to fail with conflicts
+				if _, ok := tc.cmd.(cmd.MergeCmd); !ok {
+					require.Equal(t, 0, exit)
+				}
 			}
 
 			root, err := dEnv.WorkingRoot(ctx)

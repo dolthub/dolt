@@ -38,7 +38,7 @@ teardown() {
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "new table:      test2" ]] || false
+    [[ "$output" =~ "new table:        test2" ]] || false
 
     dolt sql -q "call dclean('test2')"
 
@@ -48,15 +48,15 @@ teardown() {
     dolt clean test3
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "new table:      test2" ]] || false
-    [[ ! "$output" =~ "new table:      test3" ]] || false
+    [[ "$output" =~ "new table:        test2" ]] || false
+    [[ ! "$output" =~ "new table:        test3" ]] || false
 
     # don't touch staged root
     dolt add test2
     dolt clean
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "new table:      test2" ]] || false
+    [[ "$output" =~ "new table:        test2" ]] || false
 }
 
 @test "sql-clean: DOLT_CLEAN unknown table name" {
@@ -68,7 +68,7 @@ teardown() {
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "new table:      test2" ]] || false
+    [[ "$output" =~ "new table:        test2" ]] || false
 
     run dolt clean unknown
     [ $status -eq 1 ]
@@ -76,6 +76,6 @@ teardown() {
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "new table:      test2" ]] || false
+    [[ "$output" =~ "new table:        test2" ]] || false
 }
 

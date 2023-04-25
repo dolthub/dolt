@@ -248,7 +248,7 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 	if err != nil {
 		panic("couldn't get roots: " + err.Error())
 	}
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
+	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws, mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
 		Message:    "auto commit",
 		Date:       t,
 		AllowEmpty: true,

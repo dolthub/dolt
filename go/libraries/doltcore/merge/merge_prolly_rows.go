@@ -91,7 +91,7 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 	if err != nil {
 		return nil, nil, err
 	}
-	stats.Conflicts = int(n)
+	stats.DataConflicts = int(n)
 
 	mergeTbl, err = mergeAutoIncrementValues(ctx, tm.leftTbl, tm.rightTbl, mergeTbl)
 	if err != nil {
@@ -162,13 +162,13 @@ func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.
 		if err != nil {
 			return nil, nil, err
 		}
-		s.Conflicts += cnt
+		s.DataConflicts += cnt
 
 		switch diff.Op {
 		case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
 			// In this case, a modification or delete was made to one side, and a conflicting delete or modification
 			// was made to the other side, so these cannot be automatically resolved.
-			s.Conflicts++
+			s.DataConflicts++
 			err = conflicts.merge(ctx, diff, nil)
 			if err != nil {
 				return nil, nil, err
@@ -218,7 +218,7 @@ func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.
 		case tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify, tree.DiffOpConvergentDelete:
 			// In this case, both sides of the merge have made the same change, so no additional changes are needed.
 			if keyless {
-				s.Conflicts++
+				s.DataConflicts++
 				err = conflicts.merge(ctx, diff, nil)
 				if err != nil {
 					return nil, nil, err

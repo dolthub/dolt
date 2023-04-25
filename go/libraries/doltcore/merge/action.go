@@ -24,7 +24,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -116,15 +115,14 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 
 func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
 	mergedRoot, err := spec.MergeC.GetRootValue(ctx)
-
 	if err != nil {
 		return nil, ErrFailedToReadDatabase
 	}
+	result := &Result{Root: mergedRoot, Stats: make(map[string]*MergeStats)}
 
-	tblToStats := make(map[string]*MergeStats)
-	err = mergedRootToWorking(ctx, false, dEnv, mergedRoot, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr, tblToStats)
+	err = mergedRootToWorking(ctx, false, dEnv, result, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr)
 
-	return tblToStats, err
+	return result.Stats, err
 }
 
 func applyChanges(ctx context.Context, root *doltdb.RootValue, workingDiffs map[string]hash.Hash) (*doltdb.RootValue, error) {
@@ -182,74 +180,61 @@ func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[
 		return nil, err
 	}
 	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: tmpDir}
-	mergedRoot, tblToStats, err := MergeCommits(ctx, spec.HeadC, spec.MergeC, opts)
+	result, err := MergeCommits(ctx, spec.HeadC, spec.MergeC, opts)
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:
-			return tblToStats, fmt.Errorf("already up to date; %w", err)
+			return result.Stats, fmt.Errorf("already up to date; %w", err)
 		case ErrFastForward:
 			panic("fast forward merge")
 		}
-		return tblToStats, err
+		return nil, err
 	}
 
-	return tblToStats, mergedRootToWorking(ctx, spec.Squash, dEnv, mergedRoot, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr, tblToStats)
+	err = mergedRootToWorking(ctx, spec.Squash, dEnv, result, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr)
+	return result.Stats, nil
 }
 
-// TODO: change this to be functional and not write to repo state
 func mergedRootToWorking(
 	ctx context.Context,
 	squash bool,
 	dEnv *env.DoltEnv,
-	mergedRoot *doltdb.RootValue,
+	result *Result,
 	workingDiffs map[string]hash.Hash,
 	cm2 *doltdb.Commit,
 	cm2SpecStr string,
-	tblToStats map[string]*MergeStats,
-) error {
-	var err error
-
-	workingRoot := mergedRoot
+) (err error) {
+	staged, working := result.Root, result.Root
 	if len(workingDiffs) > 0 {
-		workingRoot, err = applyChanges(ctx, mergedRoot, workingDiffs)
-
+		working, err = applyChanges(ctx, working, workingDiffs)
 		if err != nil {
 			return err
 		}
 	}
 
-	if !squash {
-		err = dEnv.StartMerge(ctx, cm2, cm2SpecStr)
-
-		if err != nil {
-			return actions.ErrFailedToSaveRepoState
-		}
-	}
-
-	err = dEnv.UpdateWorkingRoot(context.Background(), workingRoot)
+	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		return err
 	}
 
-	conflicts, constraintViolations := conflictsAndViolations(tblToStats)
-	if len(conflicts) > 0 || len(constraintViolations) > 0 {
+	if !squash || result.HasSchemaConflicts() {
+		ws = ws.StartMerge(cm2, cm2SpecStr)
+		tt := SchemaConflictTableNames(result.SchemaConflicts)
+		ws = ws.WithUnmergableTables(tt)
+	}
+
+	ws = ws.WithWorkingRoot(working)
+	if !result.HasMergeArtifacts() {
+		ws = ws.WithStagedRoot(staged)
+	}
+
+	if err = dEnv.UpdateWorkingSet(ctx, ws); err != nil {
 		return err
 	}
 
-	return dEnv.UpdateStagedRoot(context.Background(), mergedRoot)
-}
-
-// conflictsAndViolations returns array of conflicts and constraintViolations
-func conflictsAndViolations(tblToStats map[string]*MergeStats) (conflicts []string, constraintViolations []string) {
-	for tblName, stats := range tblToStats {
-		if stats.Operation == TableModified && (stats.Conflicts > 0 || stats.ConstraintViolations > 0) {
-			if stats.Conflicts > 0 {
-				conflicts = append(conflicts, tblName)
-			}
-			if stats.ConstraintViolations > 0 {
-				constraintViolations = append(constraintViolations, tblName)
-			}
-		}
+	if result.HasMergeArtifacts() {
+		// this error is recoverable in some contexts
+		return doltdb.ErrUnresolvedConflictsOrViolations
 	}
 	return
 }
