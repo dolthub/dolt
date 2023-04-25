@@ -3,6 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    skip_nbf_not_dolt
 }
 
 teardown() {
@@ -31,7 +32,6 @@ setup_schema_conflict() {
 
     dolt sql -q "call dolt_merge('other')"
 
-    dolt sql -q "select * from dolt_schema_conflicts" -r csv
     run dolt sql -q "select our_schema from dolt_schema_conflicts" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "varchar(20)," ]]
@@ -45,7 +45,6 @@ setup_schema_conflict() {
 
     dolt merge other
 
-    dolt sql -q "select * from dolt_schema_conflicts" -r csv
     run dolt sql -q "select our_schema from dolt_schema_conflicts" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "varchar(20)," ]]
