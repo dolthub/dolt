@@ -71,7 +71,7 @@ func (c *Commit) HashOf() (hash.Hash, error) {
 	return c.dCommit.Addr(), nil
 }
 
-// Value returns the types.Value the backs the commit.
+// Value returns the types.Value that backs the commit.
 func (c *Commit) Value() types.Value {
 	return c.dCommit.NomsValue()
 }
