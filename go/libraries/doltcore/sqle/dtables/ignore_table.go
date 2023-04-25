@@ -241,10 +241,11 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 			iw.errDuringStatementBegin = err
 			return
 		}
-		_ = newRootValue
+
+		dSess.SetRoot(ctx, dbName, newRootValue)
 	}
 
-	tableWriter, err := dbState.WriteSession.GetTableWriter(ctx, BackingTableName, dbName, dSess.SetRoot, true)
+	tableWriter, err := dbState.WriteSession.GetTableWriter(ctx, BackingTableName, dbName, dSess.SetRoot, false)
 	if err != nil {
 		iw.errDuringStatementBegin = err
 		return
