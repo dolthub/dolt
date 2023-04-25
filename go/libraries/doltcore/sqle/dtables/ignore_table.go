@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 	sqlTypes "github.com/dolthub/go-mysql-server/sql/types"
-	"time"
 )
 
 const BackingTableName = "_dolt_ignore"
@@ -132,8 +131,7 @@ type ignoreWriter struct {
 	errDuringStatementBegin error
 	workingSet              *doltdb.WorkingSet
 	prevHash                *hash.Hash
-	//writeSession            writer.WriteSession
-	tableWriter writer.TableWriter
+	tableWriter             writer.TableWriter
 }
 
 func newIgnoreWriter(it *IgnoreTable) *ignoreWriter {
@@ -277,9 +275,6 @@ func (iw *ignoreWriter) DiscardChanges(ctx *sql.Context, errorEncountered error)
 // StatementComplete is called after the last operation of the statement, indicating that it has successfully completed.
 // The mark set in StatementBegin may be removed, and a new one should be created on the next StatementBegin.
 func (iw *ignoreWriter) StatementComplete(ctx *sql.Context) error {
-	newWorkingSetMeta := *iw.workingSet.Meta()
-	newWorkingSetMeta.Timestamp = uint64(time.Now().Unix())
-	// iw.it.ddb.UpdateWorkingSet(ctx, iw.workingSet.Ref(), iw.workingSet, *iw.prevHash, &newWorkingSetMeta)
 	return iw.tableWriter.StatementComplete(ctx)
 }
 
