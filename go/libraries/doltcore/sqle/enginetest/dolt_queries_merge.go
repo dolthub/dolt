@@ -4189,6 +4189,35 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 
 	// Schema conflict test cases
 	{
+		Name: "index conflicts: both sides add an index with the same name, same columns, but different type",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+		},
+		RightSetUpScript: []string{
+			"alter table t add index idx1 (col2(2));",
+			"INSERT into t values (1, 10, '100');",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add index idx1 (col2);",
+			"INSERT into t values (2, 20, '200');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query: "select table_name, base_schema, our_schema, their_schema from dolt_schema_conflicts;",
+				Expected: []sql.Row{{"t",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` int,\n  `col2` varchar(100),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` int,\n  `col2` varchar(100),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col2`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` int,\n  `col2` varchar(100),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col2`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+				}},
+			},
+		},
+	},
+
+	{
 		// https://github.com/dolthub/dolt/issues/2973
 		Name: "modifying a column on one side of a merge, and deleting it on the other",
 		AncSetUpScript: []string{
