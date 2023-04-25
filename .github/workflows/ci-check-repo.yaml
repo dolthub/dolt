@@ -1,8 +1,8 @@
 name: Check Formatting, Committers and Generated Code
 
 on:
-  pull_request:
-    branches: [ main ]
+#   pull_request:
+#     branches: [ main ]
   pull_request_target:
     types: [opened, edited, reopened]
 
