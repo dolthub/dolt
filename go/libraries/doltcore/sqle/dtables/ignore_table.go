@@ -194,9 +194,8 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 	iw.prevHash = &prevHash
 
 	iw.workingSet = dbState.WorkingSet
-	ignoreTable, found, err := roots.Working.GetTable(ctx, BackingTableName)
+	found, err := roots.Working.HasTable(ctx, BackingTableName)
 
-	_ = ignoreTable
 	if err != nil {
 		iw.errDuringStatementBegin = err
 		return
