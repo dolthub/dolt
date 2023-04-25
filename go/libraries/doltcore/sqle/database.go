@@ -483,12 +483,11 @@ func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commi
 		return nil, nil, err
 	}
 
-	tx := ctx.GetTransaction().(*dsess.DoltTransaction)
-	nomsRoot, ok := tx.GetInitialRoot(db.name)
-	if !ok {
-		return nil, nil, fmt.Errorf("could not resolve initial root for database %s", db.name)
+	nomsRoot, err := getTransactionRoot(ctx, db)
+	if err != nil {
+		return nil, nil, err
 	}
-	
+
 	cm, err := ddb.ResolveByNomsRoot(ctx, cs, head, nomsRoot)
 	if err != nil {
 		return nil, nil, err
@@ -500,6 +499,20 @@ func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commi
 	}
 
 	return cm, root, nil
+}
+
+func getTransactionRoot(ctx *sql.Context, db Database) (hash.Hash, error) {
+	tx, ok := ctx.GetTransaction().(*dsess.DoltTransaction)
+	// We don't have a real transaction in some cases (esp. PREPARE), in which case we need to use the tip of the data
+	if !ok {
+		return db.ddb.NomsRoot(ctx)
+	}
+	
+	nomsRoot, ok := tx.GetInitialRoot(db.name)
+	if !ok {
+		return hash.Hash{}, fmt.Errorf("could not resolve initial root for database %s", db.name)
+	}
+	return nomsRoot, nil
 }
 
 // GetTableNamesAsOf implements sql.VersionedDatabase

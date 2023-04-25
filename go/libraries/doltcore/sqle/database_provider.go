@@ -1303,6 +1303,7 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.InitialDbState, error) {
 	baseName, revSpec := splitRevisionDbName(srcDb)
 
+	// TODO: this may be a disabled transaction, need to kill those
 	tx := ctx.GetTransaction().(*dsess.DoltTransaction)
 	
 	branch := ref.NewBranchRef(revSpec)

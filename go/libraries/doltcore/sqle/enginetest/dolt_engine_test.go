@@ -1414,14 +1414,17 @@ func TestDoltRemote(t *testing.T) {
 // TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
 // desired test.
 func TestSingleTransactionScript(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 
 	script := queries.TransactionTest{
-		Name: "staged changes in working set, dolt_add and dolt_commit on top of it",
-		SetUpScript: []string{
-			"create table users (id int primary key, name varchar(32))",
-			"insert into users values (1, 'tim'), (2, 'jim')",
-			"call dolt_commit('-A', '-m', 'initial commit')",
+		Name:         "clients can't see changes on other branch working sets made since transaction start",
+		SetUpScript:  []string{
+			"create table t1 (a int)",
+			"insert into t1 values (1)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"set autocommit = 0",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1433,53 +1436,29 @@ func TestSingleTransactionScript(t *testing.T) {
 				SkipResultsCheck: true,
 			},
 			{
-				Query:            "/* client a */ update users set name = 'tim2' where name = 'tim'",
+				Query:            "/* client b */ call dolt_checkout('b1')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:            "/* client b */ update users set name = 'jim2' where name = 'jim'",
+				Query:            "/* client b */ insert into t1 values (2)",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:            "/* client a */ call dolt_add('users')",
+				Query:            "/* client b */ commit",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:            "/* client a */ commit",
+				Query:            "/* client a */ select * from `mydb/b1`.t1 order by a",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:            "/* client a */ start transaction",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:            "/* client b */ call dolt_add('users')",
-				SkipResultsCheck: true,
-			},
-			{
-				Query:    "/* client b */ select * from users order by id",
-				Expected: []sql.Row{{1, "tim"}, {2, "jim2"}},
-			},
-			{
-				Query:            "/* client b */ call dolt_commit('-m', 'jim2 commit')",
-				SkipResultsCheck: true,
-			},
-			{
-				Query:    "/* client b */ select * from users order by id",
-				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
-			},
-			{
-				Query:    "/* client b */ select * from users as of 'HEAD' order by id",
-				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
-			},
-			{
-				Query:    "/* client b */ select * from dolt_status",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client b */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
-				Expected: []sql.Row{},
-			},
-			{
-				// staged changes include changes from both A and B at staged revision of data
-				Query:    "/* client b */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
-				Expected: []sql.Row{},
+				// This query specifies the working set of that branch, which has changed
+				Query:            "/* client a */ select * from `mydb/b1`.t1 order by a",
+				Expected: []sql.Row{{1}, {2}},
 			},
 		},
 	}

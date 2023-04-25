@@ -2208,10 +2208,12 @@ var BranchIsolationTests = []queries.TransactionTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
+				// This query specifies the branch HEAD commit, which hasn't changed
 				Query:            "/* client a */ select * from t1 as of 'b1' order by a",
-				Expected: []sql.Row{{1}, {2}},
+				Expected: []sql.Row{{1}},
 			},
 			{
+				// This query specifies the working set of that branch, which has changed
 				Query:            "/* client a */ select * from `mydb/b1`.t1 order by a",
 				Expected: []sql.Row{{1}, {2}},
 			},
@@ -2279,7 +2281,6 @@ var BranchIsolationTests = []queries.TransactionTest{
 		},
 	},
 }
-
 
 var MultiDbTransactionTests = []queries.ScriptTest{
 	{

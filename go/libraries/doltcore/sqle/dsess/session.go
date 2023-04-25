@@ -270,6 +270,12 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		return DisabledTransaction{}, nil
 	}
 
+	// New transaction, clear all session state
+	d.mu.Lock()
+	d.dbStates = make(map[string]*DatabaseSessionState)
+	d.mu.Unlock()
+	
+	// TODO: remove this
 	// Since StartTransaction occurs before even any analysis, it's possible that this session has no state for the
 	// database with the transaction being performed, so we load it here.
 	if !d.HasDB(ctx, dbName) {
