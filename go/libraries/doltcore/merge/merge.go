@@ -98,7 +98,7 @@ func (r Result) HasMergeArtifacts() bool {
 func SchemaConflictTableNames(sc []SchemaConflict) (tables []string) {
 	tables = make([]string, len(sc))
 	for i := range sc {
-		tables[i] = sc[i].TableName
+		tables[i] = sc[i].tableName
 	}
 	return
 }

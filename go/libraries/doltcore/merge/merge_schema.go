@@ -31,11 +31,11 @@ import (
 type conflictKind byte
 
 const (
-	TagCollision conflictKind = iota
-	NameCollision
-	ColumnCheckCollision
-	InvalidCheckCollision
-	DeletedCheckCollision
+	tagCollision conflictKind = iota
+	nameCollision
+	columnCheckCollision
+	invalidCheckCollision
+	deletedCheckCollision
 )
 
 // todo: link to docs explaining how to resolve schema conflicts.
@@ -44,89 +44,89 @@ func SchemaConflictErr(cc ...SchemaConflict) error {
 	sb.WriteString("merge aborted: schema conflict found for tables: \n")
 	for i := range cc {
 		sb.WriteRune('\t')
-		sb.WriteString(cc[i].TableName)
+		sb.WriteString(cc[i].tableName)
 		sb.WriteRune('\n')
 	}
 	return errors.New(sb.String())
 }
 
 type SchemaConflict struct {
-	TableName    string
-	ColConflicts []ColConflict
-	IdxConflicts []IdxConflict
-	ChkConflicts []ChkConflict
+	tableName    string
+	colConflicts []colConflict
+	idxConflicts []idxConflict
+	chkConflicts []chkConflict
 }
 
 var _ error = SchemaConflict{}
 
 func (sc SchemaConflict) Count() int {
-	return len(sc.ColConflicts) + len(sc.IdxConflicts) + len(sc.ChkConflicts)
+	return len(sc.colConflicts) + len(sc.idxConflicts) + len(sc.chkConflicts)
 }
 
 func (sc SchemaConflict) Error() string {
 	var b strings.Builder
 	b.WriteString("merge aborted: schema conflict found for table ")
-	b.WriteString(sc.TableName)
+	b.WriteString(sc.tableName)
 	b.WriteString("\n please resolve schema conflicts before merging")
-	for _, c := range sc.ColConflicts {
+	for _, c := range sc.colConflicts {
 		b.WriteString(fmt.Sprintf("\t%s\n", c.String()))
 	}
-	for _, c := range sc.IdxConflicts {
+	for _, c := range sc.idxConflicts {
 		b.WriteString(fmt.Sprintf("\t%s\n", c.String()))
 	}
-	for _, c := range sc.ChkConflicts {
+	for _, c := range sc.chkConflicts {
 		b.WriteString(fmt.Sprintf("\t%s\n", c.String()))
 	}
 	return b.String()
 }
 
-type ColConflict struct {
-	Kind         conflictKind
-	Ours, Theirs schema.Column
+type colConflict struct {
+	kind         conflictKind
+	ours, theirs schema.Column
 }
 
-func (c ColConflict) String() string {
-	switch c.Kind {
-	case NameCollision:
-		return fmt.Sprintf("two columns with the same name '%s' have different tags. See https://github.com/dolthub/dolt/issues/3963", c.Ours.Name)
-	case TagCollision:
-		return fmt.Sprintf("different column definitions for our column %s and their column %s", c.Ours.Name, c.Theirs.Name)
+func (c colConflict) String() string {
+	switch c.kind {
+	case nameCollision:
+		return fmt.Sprintf("two columns with the same name '%s' have different tags. See https://github.com/dolthub/dolt/issues/3963", c.ours.Name)
+	case tagCollision:
+		return fmt.Sprintf("different column definitions for our column %s and their column %s", c.ours.Name, c.theirs.Name)
 	}
 	return ""
 }
 
-type IdxConflict struct {
-	Kind         conflictKind
-	Ours, Theirs schema.Index
+type idxConflict struct {
+	kind         conflictKind
+	ours, theirs schema.Index
 }
 
-func (c IdxConflict) String() string {
+func (c idxConflict) String() string {
 	return ""
 }
 
-type FKConflict struct {
-	Kind         conflictKind
-	Ours, Theirs doltdb.ForeignKey
+type fKConflict struct {
+	kind         conflictKind
+	ours, theirs doltdb.ForeignKey
 }
 
-type ChkConflict struct {
-	Kind         conflictKind
-	Ours, Theirs schema.Check
+type chkConflict struct {
+	kind         conflictKind
+	ours, theirs schema.Check
 }
 
-func (c ChkConflict) String() string {
-	switch c.Kind {
-	case NameCollision:
-		return fmt.Sprintf("two checks with the name '%s' but different definitions", c.Ours.Name())
-	case ColumnCheckCollision:
-		return fmt.Sprintf("our check '%s' and their check '%s' both reference the same column(s)", c.Ours.Name(), c.Theirs.Name())
-	case InvalidCheckCollision:
-		return fmt.Sprintf("check '%s' references a column that will be deleted after merge", c.Ours.Name())
-	case DeletedCheckCollision:
-		if c.Theirs == nil {
-			return fmt.Sprintf("check '%s' was deleted in theirs but modified in ours", c.Ours.Name())
+func (c chkConflict) String() string {
+	switch c.kind {
+	case nameCollision:
+		return fmt.Sprintf("two checks with the name '%s' but different definitions", c.ours.Name())
+	case columnCheckCollision:
+		return fmt.Sprintf("our check '%s' and their check '%s' both reference the same column(s)", c.ours.Name(), c.theirs.Name())
+	case invalidCheckCollision:
+		return fmt.Sprintf("check '%s' references a column that will be deleted after merge", c.ours.Name())
+	case deletedCheckCollision:
+		if c.theirs == nil {
+			return fmt.Sprintf("check '%s' was deleted in theirs but modified in ours", c.ours.Name())
 		} else {
-			return fmt.Sprintf("check '%s' was deleted in ours but modified in theirs", c.Theirs.Name())
+			return fmt.Sprintf("check '%s' was deleted in ours but modified in theirs", c.theirs.Name())
 		}
 	}
 	return ""
@@ -137,9 +137,7 @@ var ErrMergeWithDifferentPks = errors.New("error: cannot merge two tables with d
 // SchemaMerge performs a three-way merge of ourSch, theirSch, and ancSch.
 func SchemaMerge(ctx context.Context, format *types.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, err error) {
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
-	sc = SchemaConflict{
-		TableName: tblName,
-	}
+	sc = SchemaConflict{tableName: tblName}
 
 	// TODO: We'll remove this once it's possible to get diff and merge on different primary key sets
 	// TODO: decide how to merge different orders of PKS
@@ -148,17 +146,17 @@ func SchemaMerge(ctx context.Context, format *types.NomsBinFormat, ourSch, their
 	}
 
 	var mergedCC *schema.ColCollection
-	mergedCC, sc.ColConflicts, err = mergeColumns(ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
+	mergedCC, sc.colConflicts, err = mergeColumns(ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
 	if err != nil {
 		return nil, SchemaConflict{}, err
 	}
-	if len(sc.ColConflicts) > 0 {
+	if len(sc.colConflicts) > 0 {
 		return nil, sc, nil
 	}
 
 	var mergedIdxs schema.IndexCollection
-	mergedIdxs, sc.IdxConflicts = mergeIndexes(mergedCC, ourSch, theirSch, ancSch)
-	if len(sc.IdxConflicts) > 0 {
+	mergedIdxs, sc.idxConflicts = mergeIndexes(mergedCC, ourSch, theirSch, ancSch)
+	if len(sc.idxConflicts) > 0 {
 		return nil, sc, nil
 	}
 
@@ -180,11 +178,11 @@ func SchemaMerge(ctx context.Context, format *types.NomsBinFormat, ourSch, their
 
 	// Merge checks
 	var mergedChks []schema.Check
-	mergedChks, sc.ChkConflicts, err = mergeChecks(ctx, ourSch.Checks(), theirSch.Checks(), ancSch.Checks())
+	mergedChks, sc.chkConflicts, err = mergeChecks(ctx, ourSch.Checks(), theirSch.Checks(), ancSch.Checks())
 	if err != nil {
 		return nil, SchemaConflict{}, err
 	}
-	if len(sc.ChkConflicts) > 0 {
+	if len(sc.chkConflicts) > 0 {
 		return nil, sc, nil
 	}
 
@@ -195,9 +193,9 @@ func SchemaMerge(ctx context.Context, format *types.NomsBinFormat, ourSch, their
 			return nil, sc, err
 		} else if !ok {
 			// Append to conflicts
-			sc.ChkConflicts = append(sc.ChkConflicts, ChkConflict{
-				Kind: InvalidCheckCollision,
-				Ours: chk,
+			sc.chkConflicts = append(sc.chkConflicts, chkConflict{
+				kind: invalidCheckCollision,
+				ours: chk,
 			})
 		}
 	}
@@ -211,7 +209,7 @@ func SchemaMerge(ctx context.Context, format *types.NomsBinFormat, ourSch, their
 }
 
 // ForeignKeysMerge performs a three-way merge of (ourRoot, theirRoot, ancRoot) and using mergeRoot to validate FKs.
-func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRoot *doltdb.RootValue) (*doltdb.ForeignKeyCollection, []FKConflict, error) {
+func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRoot *doltdb.RootValue) (*doltdb.ForeignKeyCollection, []fKConflict, error) {
 	ours, err := ourRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -255,20 +253,20 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 		if ok && !ourFK.DeepEquals(theirFK) {
 			// Foreign Keys are defined over the same tags,
 			// but are not exactly equal
-			conflicts = append(conflicts, FKConflict{
-				Kind:   TagCollision,
-				Ours:   ourFK,
-				Theirs: theirFK,
+			conflicts = append(conflicts, fKConflict{
+				kind:   tagCollision,
+				ours:   ourFK,
+				theirs: theirFK,
 			})
 		}
 
 		theirFK, ok = theirNewFKs.GetByNameCaseInsensitive(ourFK.Name)
 		if ok && !ourFK.EqualDefs(theirFK) {
 			// Two different Foreign Keys have the same name
-			conflicts = append(conflicts, FKConflict{
-				Kind:   NameCollision,
-				Ours:   ourFK,
-				Theirs: theirFK,
+			conflicts = append(conflicts, fKConflict{
+				kind:   nameCollision,
+				ours:   ourFK,
+				theirs: theirFK,
 			})
 		}
 		return false, err
@@ -298,10 +296,10 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 
 // mergeColumns merges the columns from |ourCC|, |theirCC| into a single column collection, using the ancestor column
 // definitions in |ancCC| to determine on which side a column has changed. If merging is not possible because of
-// conflicting changes to the columns in |ourCC| and |theirCC|, then a set of ColConflict instances are returned
+// conflicting changes to the columns in |ourCC| and |theirCC|, then a set of colConflict instances are returned
 // describing the conflicts. If any other, unexpected error occurs, then that error is returned and the other response
 // fields should be ignored.
-func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, error) {
+func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []colConflict, error) {
 	columnMappings, err := mapColumns(ourCC, theirCC, ancCC)
 	if err != nil {
 		return nil, nil, err
@@ -361,28 +359,28 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColColle
 }
 
 // checkForColumnConflicts iterates over |mergedColumns|, checks for duplicate column names or column tags, and returns
-// a slice of ColConflicts for any conflicts found.
-func checkForColumnConflicts(mergedColumns []schema.Column) []ColConflict {
+// a slice of colConflicts for any conflicts found.
+func checkForColumnConflicts(mergedColumns []schema.Column) []colConflict {
 	columnNameSet := map[string]schema.Column{}
 	columnTagSet := map[uint64]schema.Column{}
-	var conflicts []ColConflict
+	var conflicts []colConflict
 
 	for _, col := range mergedColumns {
 		normalizedName := strings.ToLower(col.Name)
 		if _, ok := columnNameSet[normalizedName]; ok {
-			conflicts = append(conflicts, ColConflict{
-				Kind:   NameCollision,
-				Ours:   col,
-				Theirs: columnNameSet[normalizedName],
+			conflicts = append(conflicts, colConflict{
+				kind:   nameCollision,
+				ours:   col,
+				theirs: columnNameSet[normalizedName],
 			})
 		}
 		columnNameSet[normalizedName] = col
 
 		if _, ok := columnTagSet[col.Tag]; ok {
-			conflicts = append(conflicts, ColConflict{
-				Kind:   TagCollision,
-				Ours:   col,
-				Theirs: columnTagSet[col.Tag],
+			conflicts = append(conflicts, colConflict{
+				kind:   tagCollision,
+				ours:   col,
+				theirs: columnTagSet[col.Tag],
 			})
 		}
 		columnTagSet[col.Tag] = col
@@ -393,8 +391,8 @@ func checkForColumnConflicts(mergedColumns []schema.Column) []ColConflict {
 
 // checkSchemaConflicts iterates over |columnMappings| and returns any column schema conflicts from column changes
 // that can't be automatically merged.
-func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) {
-	var conflicts []ColConflict
+func checkSchemaConflicts(columnMappings columnMappings) ([]colConflict, error) {
+	var conflicts []colConflict
 	for _, mapping := range columnMappings {
 		ours := mapping.ours
 		theirs := mapping.theirs
@@ -414,28 +412,28 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 				// This means the column was deleted on theirs side
 				if !anc.Equals(*ours) {
 					// col altered on our branch and deleted on their branch
-					conflicts = append(conflicts, ColConflict{
-						Kind: NameCollision,
-						Ours: *ours,
+					conflicts = append(conflicts, colConflict{
+						kind: nameCollision,
+						ours: *ours,
 					})
 				}
 			case theirs != nil && anc != nil:
 				// Column exists on their side and in ancestor
 				// If the column differs from the ancestor on both sides, then we have a conflict
 				if !anc.Equals(*ours) && !anc.Equals(*theirs) {
-					conflicts = append(conflicts, ColConflict{
-						Kind:   TagCollision,
-						Ours:   *ours,
-						Theirs: *theirs,
+					conflicts = append(conflicts, colConflict{
+						kind:   tagCollision,
+						ours:   *ours,
+						theirs: *theirs,
 					})
 				}
 			case theirs != nil && anc == nil:
 				// Column exists on both sides, but not in ancestor
 				// col added on our branch and their branch with different def
-				conflicts = append(conflicts, ColConflict{
-					Kind:   NameCollision,
-					Ours:   *ours,
-					Theirs: *theirs,
+				conflicts = append(conflicts, colConflict{
+					kind:   nameCollision,
+					ours:   *ours,
+					theirs: *theirs,
 				})
 			case theirs == nil && anc == nil:
 				// column doesn't exist on theirs or in anc – no conflict
@@ -454,9 +452,9 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 				// If ancs doesn't match theirs, the column was altered on both sides
 				if !anc.Equals(*theirs) {
 					// col deleted on our branch and altered on their branch
-					conflicts = append(conflicts, ColConflict{
-						Kind:   NameCollision,
-						Theirs: *theirs,
+					conflicts = append(conflicts, colConflict{
+						kind:   nameCollision,
+						theirs: *theirs,
 					})
 				}
 
@@ -569,7 +567,7 @@ func mapColumns(ourCC, theirCC, ancCC *schema.ColCollection) (columnMappings, er
 }
 
 // assumes indexes are unique over their column sets
-func mergeIndexes(mergedCC *schema.ColCollection, ourSch, theirSch, ancSch schema.Schema) (merged schema.IndexCollection, conflicts []IdxConflict) {
+func mergeIndexes(mergedCC *schema.ColCollection, ourSch, theirSch, ancSch schema.Schema) (merged schema.IndexCollection, conflicts []idxConflict) {
 	merged, conflicts = indexesInCommon(mergedCC, ourSch.Indexes(), theirSch.Indexes(), ancSch.Indexes())
 
 	ourNewIdxs := indexCollSetDifference(ourSch.Indexes(), ancSch.Indexes(), mergedCC)
@@ -580,10 +578,10 @@ func mergeIndexes(mergedCC *schema.ColCollection, ourSch, theirSch, ancSch schem
 		theirIdx, ok := theirNewIdxs.GetByNameCaseInsensitive(ourIdx.Name())
 		// If both indexes are exactly equal then there isn't a conflict
 		if ok && !ourIdx.DeepEquals(theirIdx) {
-			conflicts = append(conflicts, IdxConflict{
-				Kind:   NameCollision,
-				Ours:   ourIdx,
-				Theirs: theirIdx,
+			conflicts = append(conflicts, idxConflict{
+				kind:   nameCollision,
+				ours:   ourIdx,
+				theirs: theirIdx,
 			})
 		}
 		return false, nil
@@ -595,7 +593,7 @@ func mergeIndexes(mergedCC *schema.ColCollection, ourSch, theirSch, ancSch schem
 	return merged, conflicts
 }
 
-func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.IndexCollection) (common schema.IndexCollection, conflicts []IdxConflict) {
+func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.IndexCollection) (common schema.IndexCollection, conflicts []idxConflict) {
 	common = schema.NewIndexCollection(mergedCC, nil)
 	_ = ours.Iter(func(ourIdx schema.Index) (stop bool, err error) {
 		idxTags := ourIdx.IndexedColumnTags()
@@ -622,10 +620,10 @@ func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.In
 
 		if !ok {
 			// index added on our branch and their branch with different defs, conflict
-			conflicts = append(conflicts, IdxConflict{
-				Kind:   TagCollision,
-				Ours:   ourIdx,
-				Theirs: theirIdx,
+			conflicts = append(conflicts, idxConflict{
+				kind:   tagCollision,
+				ours:   ourIdx,
+				theirs: theirIdx,
 			})
 			return false, nil
 		}
@@ -634,10 +632,10 @@ func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.In
 			// index modified on our branch
 			idx, ok := common.GetByNameCaseInsensitive(ourIdx.Name())
 			if ok {
-				conflicts = append(conflicts, IdxConflict{
-					Kind:   NameCollision,
-					Ours:   ourIdx,
-					Theirs: idx,
+				conflicts = append(conflicts, idxConflict{
+					kind:   nameCollision,
+					ours:   ourIdx,
+					theirs: idx,
 				})
 			} else {
 				common.AddIndex(ourIdx)
@@ -649,10 +647,10 @@ func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.In
 			// index modified on their branch
 			idx, ok := common.GetByNameCaseInsensitive(theirIdx.Name())
 			if ok {
-				conflicts = append(conflicts, IdxConflict{
-					Kind:   NameCollision,
-					Ours:   idx,
-					Theirs: theirIdx,
+				conflicts = append(conflicts, idxConflict{
+					kind:   nameCollision,
+					ours:   idx,
+					theirs: theirIdx,
 				})
 			} else {
 				common.AddIndex(theirIdx)
@@ -661,10 +659,10 @@ func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.In
 		}
 
 		// index modified on our branch and their branch, conflict
-		conflicts = append(conflicts, IdxConflict{
-			Kind:   TagCollision,
-			Ours:   ourIdx,
-			Theirs: theirIdx,
+		conflicts = append(conflicts, idxConflict{
+			kind:   tagCollision,
+			ours:   ourIdx,
+			theirs: theirIdx,
 		})
 		return false, nil
 	})
@@ -691,7 +689,7 @@ func indexCollSetDifference(left, right schema.IndexCollection, cc *schema.ColCo
 	return d
 }
 
-func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) (common *doltdb.ForeignKeyCollection, conflicts []FKConflict, err error) {
+func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) (common *doltdb.ForeignKeyCollection, conflicts []fKConflict, err error) {
 	common, _ = doltdb.NewForeignKeyCollection()
 	err = ourFKs.Iter(func(ours doltdb.ForeignKey) (stop bool, err error) {
 		theirs, ok := theirFKs.GetByTags(ours.TableColumns, ours.ReferencedTableColumns)
@@ -707,10 +705,10 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) 
 		anc, ok := ancFKs.GetByTags(ours.TableColumns, ours.ReferencedTableColumns)
 		if !ok {
 			// FKs added on both branch with different defs
-			conflicts = append(conflicts, FKConflict{
-				Kind:   TagCollision,
-				Ours:   ours,
-				Theirs: theirs,
+			conflicts = append(conflicts, fKConflict{
+				kind:   tagCollision,
+				ours:   ours,
+				theirs: theirs,
 			})
 		}
 
@@ -718,10 +716,10 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) 
 			// FK modified on our branch since the ancestor
 			fk, ok := common.GetByNameCaseInsensitive(ours.Name)
 			if ok {
-				conflicts = append(conflicts, FKConflict{
-					Kind:   NameCollision,
-					Ours:   ours,
-					Theirs: fk,
+				conflicts = append(conflicts, fKConflict{
+					kind:   nameCollision,
+					ours:   ours,
+					theirs: fk,
 				})
 			} else {
 				err = common.AddKeys(ours)
@@ -733,10 +731,10 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) 
 			// FK modified on their branch since the ancestor
 			fk, ok := common.GetByNameCaseInsensitive(theirs.Name)
 			if ok {
-				conflicts = append(conflicts, FKConflict{
-					Kind:   NameCollision,
-					Ours:   fk,
-					Theirs: theirs,
+				conflicts = append(conflicts, fKConflict{
+					kind:   nameCollision,
+					ours:   fk,
+					theirs: theirs,
 				})
 			} else {
 				err = common.AddKeys(theirs)
@@ -745,10 +743,10 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) 
 		}
 
 		// FKs modified on both branch with different defs
-		conflicts = append(conflicts, FKConflict{
-			Kind:   TagCollision,
-			Ours:   ours,
-			Theirs: theirs,
+		conflicts = append(conflicts, fKConflict{
+			kind:   tagCollision,
+			ours:   ours,
+			theirs: theirs,
 		})
 		return false, nil
 	})
@@ -824,7 +822,7 @@ func pruneInvalidForeignKeys(ctx context.Context, fkColl *doltdb.ForeignKeyColle
 }
 
 // checksInCommon finds all the common checks between ourChks, theirChks, and ancChks, and detects varying conflicts
-func checksInCommon(ourChks, theirChks, ancChks []schema.Check) ([]schema.Check, []ChkConflict) {
+func checksInCommon(ourChks, theirChks, ancChks []schema.Check) ([]schema.Check, []chkConflict) {
 	// Make map of their checks for fast lookup
 	theirChkMap := make(map[string]schema.Check)
 	for _, chk := range theirChks {
@@ -839,7 +837,7 @@ func checksInCommon(ourChks, theirChks, ancChks []schema.Check) ([]schema.Check,
 
 	// Iterate over our checks
 	var common []schema.Check
-	var conflicts []ChkConflict
+	var conflicts []chkConflict
 	for _, ourChk := range ourChks {
 		// See if ours and theirs both have a CHECK by this name
 		theirChk, ok := theirChkMap[ourChk.Name()]
@@ -858,10 +856,10 @@ func checksInCommon(ourChks, theirChks, ancChks []schema.Check) ([]schema.Check,
 		ancChk, ok := ancChkMap[ourChk.Name()]
 		// CONFLICT: our and their CHECK have the same name, but different definitions
 		if !ok {
-			conflicts = append(conflicts, ChkConflict{
-				Kind:   NameCollision,
-				Ours:   ourChk,
-				Theirs: theirChk,
+			conflicts = append(conflicts, chkConflict{
+				kind:   nameCollision,
+				ours:   ourChk,
+				theirs: theirChk,
 			})
 			continue
 		}
@@ -879,10 +877,10 @@ func checksInCommon(ourChks, theirChks, ancChks []schema.Check) ([]schema.Check,
 		}
 
 		// CONFLICT: CHECK was modified on both
-		conflicts = append(conflicts, ChkConflict{
-			Kind:   NameCollision,
-			Ours:   ourChk,
-			Theirs: theirChk,
+		conflicts = append(conflicts, chkConflict{
+			kind:   nameCollision,
+			ours:   ourChk,
+			theirs: theirChk,
 		})
 	}
 
@@ -948,7 +946,7 @@ func chkCollectionModified(anc, child []schema.Check) []schema.Check {
 }
 
 // mergeChecks attempts to combine ourChks, theirChks, and ancChks into a single collection, or gathers the conflicts
-func mergeChecks(ctx context.Context, ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.Check, []ChkConflict, error) {
+func mergeChecks(ctx context.Context, ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.Check, []chkConflict, error) {
 	// Handles modifications
 	common, conflicts := checksInCommon(ourChks.AllChecks(), theirChks.AllChecks(), ancChks.AllChecks())
 
@@ -967,10 +965,10 @@ func mergeChecks(ctx context.Context, ourChks, theirChks, ancChks schema.CheckCo
 		theirChk, ok := theirNewChksMap[ourChk.Name()]
 		// CONFLICT: our and their CHECK have the same name, but different definitions
 		if ok && ourChk != theirChk {
-			conflicts = append(conflicts, ChkConflict{
-				Kind:   NameCollision,
-				Ours:   ourChk,
-				Theirs: theirChk,
+			conflicts = append(conflicts, chkConflict{
+				kind:   nameCollision,
+				ours:   ourChk,
+				theirs: theirChk,
 			})
 		}
 	}
@@ -1023,10 +1021,10 @@ func mergeChecks(ctx context.Context, ourChks, theirChks, ancChks schema.CheckCo
 				// CONFLICT: our and their CHECK reference the same column and are not the same CHECK
 				if _, ok := theirNewChkColsMap[col][ourChk]; !ok {
 					for k := range theirNewChkColsMap[col] {
-						conflicts = append(conflicts, ChkConflict{
-							Kind:   ColumnCheckCollision,
-							Ours:   ourChk,
-							Theirs: k,
+						conflicts = append(conflicts, chkConflict{
+							kind:   columnCheckCollision,
+							ours:   ourChk,
+							theirs: k,
 						})
 					}
 					// Finding one column collision is enough
@@ -1046,9 +1044,9 @@ func mergeChecks(ctx context.Context, ourChks, theirChks, ancChks schema.CheckCo
 	theirModifiedChks := chkCollectionModified(ancChks.AllChecks(), theirChks.AllChecks())
 	deletedInOursButModifiedInTheirs := chkCollectionSetIntersection(theirModifiedChks, ourDeletedChks)
 	for _, chk := range deletedInOursButModifiedInTheirs {
-		conflicts = append(conflicts, ChkConflict{
-			Kind:   DeletedCheckCollision,
-			Theirs: chk,
+		conflicts = append(conflicts, chkConflict{
+			kind:   deletedCheckCollision,
+			theirs: chk,
 		})
 	}
 
@@ -1057,9 +1055,9 @@ func mergeChecks(ctx context.Context, ourChks, theirChks, ancChks schema.CheckCo
 	ourModifiedChks := chkCollectionModified(ancChks.AllChecks(), ourChks.AllChecks())
 	deletedInTheirsButModifiedInOurs := chkCollectionSetIntersection(ourModifiedChks, theirDeletedChks)
 	for _, chk := range deletedInTheirsButModifiedInOurs {
-		conflicts = append(conflicts, ChkConflict{
-			Kind: DeletedCheckCollision,
-			Ours: chk,
+		conflicts = append(conflicts, chkConflict{
+			kind: deletedCheckCollision,
+			ours: chk,
 		})
 	}
 
