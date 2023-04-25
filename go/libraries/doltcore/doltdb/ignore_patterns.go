@@ -27,7 +27,7 @@ type ignorePattern struct {
 
 // compilePattern takes a dolt_ignore pattern and generate a Regexp that matches against the same table names as the pattern.
 func compilePattern(pattern string) (*regexp.Regexp, error) {
-	pattern = regexp.QuoteMeta(pattern)
+	pattern = "^" + regexp.QuoteMeta(pattern) + "$"
 	pattern = strings.Replace(pattern, "\\?", ".", -1)
 	pattern = strings.Replace(pattern, "\\*", ".*", -1)
 	return regexp.Compile(pattern)
