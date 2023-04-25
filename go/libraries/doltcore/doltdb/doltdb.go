@@ -348,21 +348,6 @@ func (ddb *DoltDB) getHashFromCommitSpec(ctx context.Context, cs *CommitSpec, cw
 	}
 }
 
-// ResolveValue takes a CommitSpec and returns a types.Value, or an error if the spec cannot be resolved.
-// If the CommitSpec is HEAD, Resolve also needs the DoltRef of the current working branch.
-// Note that although the parameter is a CommitSpec, the object it points to might not be a commit.
-func (ddb *DoltDB) ResolveValue(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (types.Value, error) {
-	if cs == nil {
-		panic("nil commit spec")
-	}
-
-	hash, err := ddb.getHashFromCommitSpec(ctx, cs, cwb)
-	if err != nil {
-		return nil, err
-	}
-	return ddb.vrw.ReadValue(ctx, *hash)
-}
-
 // Resolve takes a CommitSpec and returns a Commit, or an error if the commit cannot be found.
 // If the CommitSpec is HEAD, Resolve also needs the DoltRef of the current working branch.
 func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (*Commit, error) {
