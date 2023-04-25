@@ -481,6 +481,7 @@ func resolveAsOfCommitRef(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef
 		return nil, nil, err
 	}
 
+	// TODO: use the tx noms root
 	cm, err := ddb.Resolve(ctx, cs, head)
 	if err != nil {
 		return nil, nil, err

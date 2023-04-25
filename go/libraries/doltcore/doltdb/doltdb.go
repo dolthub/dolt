@@ -246,6 +246,24 @@ func (ddb *DoltDB) GetHashForRefStr(ctx context.Context, ref string) (*hash.Hash
 		return nil, err
 	}
 
+	return hashOfCommit(ds, ref)
+}
+
+func (ddb *DoltDB) GetHashForRefStrByNomsRoot(ctx context.Context, ref string, nomsRoot hash.Hash) (*hash.Hash, error) {
+	if err := datas.ValidateDatasetId(ref); err != nil {
+		return nil, fmt.Errorf("invalid ref format: %s", ref)
+	}
+
+	ds, err := ddb.db.GetDatasetByRootHash(ctx, ref, nomsRoot)
+	if err != nil {
+		return nil, err
+	}
+	
+	return hashOfCommit(ds, ref)
+}
+
+// hashOfCommit returns the hash of the commit at the head of the dataset provided
+func hashOfCommit(ds datas.Dataset, ref string) (*hash.Hash, error) {
 	if !ds.HasHead() {
 		return nil, ErrBranchNotFound
 	}
@@ -266,6 +284,16 @@ func (ddb *DoltDB) GetHashForRefStr(ctx context.Context, ref string) (*hash.Hash
 }
 
 func getCommitValForRefStr(ctx context.Context, ddb *DoltDB, ref string) (*datas.Commit, error) {
+	commitHash, err := ddb.GetHashForRefStr(ctx, ref)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return datas.LoadCommitAddr(ctx, ddb.vrw, *commitHash)
+}
+
+func getCommitValForRefStrByNomsRoot(ctx context.Context, ddb *DoltDB, ref string, nomsRoot hash.Hash) (*datas.Commit, error) {
 	commitHash, err := ddb.GetHashForRefStr(ctx, ref)
 
 	if err != nil {
@@ -377,7 +405,7 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Comm
 // ResolveCommitRefAtRoot takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
 // point to a Commit.
 func (ddb *DoltDB) ResolveCommitRefAtRoot(ctx context.Context, ref ref.DoltRef, nomsRoot hash.Hash) (*Commit, error) {
-	commitVal, err := getCommitValForRefStr(ctx, ddb, ref.String())
+	commitVal, err := getCommitValForRefStrByNomsRoot(ctx, ddb, ref.String(), nomsRoot)
 	if err != nil {
 		return nil, err
 	}
