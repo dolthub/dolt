@@ -17,18 +17,10 @@ package engine
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"os"
 	"runtime"
 	"strings"
-
-	gms "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/analyzer"
-	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
-	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-	"github.com/dolthub/go-mysql-server/sql/rowexec"
-	_ "github.com/dolthub/go-mysql-server/sql/variables"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -40,6 +32,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/types"
+	gms "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
+	_ "github.com/dolthub/go-mysql-server/sql/variables"
 )
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
@@ -48,7 +47,6 @@ type SqlEngine struct {
 	contextFactory contextFactory
 	dsessFactory   sessionFactory
 	engine         *gms.Engine
-	resultFormat   PrintResultFormat
 }
 
 type sessionFactory func(mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (*dsess.DoltSession, error)
@@ -74,7 +72,6 @@ type SqlEngineConfig struct {
 func NewSqlEngine(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
-	format PrintResultFormat,
 	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
 	if ok, _ := mrEnv.IsLocked(); ok {
@@ -189,7 +186,6 @@ func NewSqlEngine(
 		contextFactory: sqlContextFactory(),
 		dsessFactory:   sessionFactory,
 		engine:         engine,
-		resultFormat:   format,
 	}, nil
 }
 
@@ -240,12 +236,6 @@ func (se *SqlEngine) NewLocalContext(ctx context.Context) (*sql.Context, error) 
 // NewDoltSession creates a new DoltSession from a BaseSession
 func (se *SqlEngine) NewDoltSession(_ context.Context, mysqlSess *sql.BaseSession) (*dsess.DoltSession, error) {
 	return se.dsessFactory(mysqlSess, se.provider)
-}
-
-// GetResultFormat returns the printing format of the engine. The format isn't used by the engine internally, only
-// stored for reference by clients who wish to use it to print results.
-func (se *SqlEngine) GetResultFormat() PrintResultFormat {
-	return se.resultFormat
 }
 
 // Query execute a SQL statement and return values for printing.
@@ -354,7 +344,6 @@ func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, str
 	engine, err := NewSqlEngine(
 		ctx,
 		mrEnv,
-		FormatCsv,
 		&SqlEngineConfig{
 			ServerUser: "root",
 			ServerHost: "localhost",
