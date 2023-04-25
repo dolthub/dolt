@@ -218,7 +218,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 				Kind:          types.BoolKind,
 				IsPartOfPK:    false,
 				TypeInfo:      typeinfo.FromKind(types.BoolKind),
-				Default:       "false",
+				Default:       "",
 				AutoIncrement: false,
 				Comment:       "",
 				Constraints:   nil,
