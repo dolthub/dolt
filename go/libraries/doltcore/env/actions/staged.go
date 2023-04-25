@@ -22,6 +22,11 @@ import (
 )
 
 func StageTables(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
+	tbls, err := doltdb.FilterIgnoredTables(ctx, tbls, roots)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
 	return stageTables(ctx, roots, tbls)
 }
 
@@ -31,12 +36,7 @@ func StageAllTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, erro
 		return doltdb.Roots{}, err
 	}
 
-	tbls, err = doltdb.FilterIgnoredTables(ctx, tbls, roots)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	return stageTables(ctx, roots, tbls)
+	return StageTables(ctx, roots, tbls)
 }
 
 func StageModifiedAndDeletedTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
