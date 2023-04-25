@@ -28,8 +28,6 @@ import (
 	sqlTypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
-const BackingTableName = "_dolt_ignore"
-
 var _ sql.Table = (*BranchesTable)(nil)
 var _ sql.UpdatableTable = (*BranchesTable)(nil)
 var _ sql.DeletableTable = (*BranchesTable)(nil)
@@ -38,8 +36,8 @@ var _ sql.ReplaceableTable = (*BranchesTable)(nil)
 
 // IgnoreTable is the system table that stores patterns for table names that should not be committed.
 type IgnoreTable struct {
-	db  sql.Database
-	ddb *doltdb.DoltDB
+	ddb          *doltdb.DoltDB
+	backingTable sql.Table
 }
 
 func (i *IgnoreTable) Name() string {
@@ -64,37 +62,25 @@ func (i *IgnoreTable) Collation() sql.CollationID {
 
 // Partitions is a sql.Table interface function that returns a partition of the data.
 func (i *IgnoreTable) Partitions(context *sql.Context) (sql.PartitionIter, error) {
-	ignoreTable, found, err := i.db.GetTableInsensitive(context, BackingTableName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if !found {
+	if i.backingTable == nil {
 		// no backing table; return an empty iter.
 		return index.SinglePartitionIterFromNomsMap(nil), nil
 	}
-	return ignoreTable.Partitions(context)
+	return i.backingTable.Partitions(context)
 }
 
 func (i *IgnoreTable) PartitionRows(context *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	ignoreTable, found, err := i.db.GetTableInsensitive(context, BackingTableName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if !found {
+	if i.backingTable == nil {
 		// no backing table; return an empty iter.
 		return sql.RowsToRowIter(), nil
 	}
 
-	return ignoreTable.PartitionRows(context, partition)
+	return i.backingTable.PartitionRows(context, partition)
 }
 
 // NewIgnoreTable creates an IgnoreTable
-func NewIgnoreTable(_ *sql.Context, db sql.Database, ddb *doltdb.DoltDB) sql.Table {
-	return &IgnoreTable{db: db, ddb: ddb}
+func NewIgnoreTable(_ *sql.Context, ddb *doltdb.DoltDB, backingTable sql.Table) sql.Table {
+	return &IgnoreTable{ddb: ddb, backingTable: backingTable}
 }
 
 // Replacer returns a RowReplacer for this table. The RowReplacer will have Insert and optionally Delete called once
@@ -192,7 +178,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 	iw.prevHash = &prevHash
 
 	iw.workingSet = dbState.WorkingSet
-	found, err := roots.Working.HasTable(ctx, BackingTableName)
+	found, err := roots.Working.HasTable(ctx, doltdb.IgnoreTableName)
 
 	if err != nil {
 		iw.errDuringStatementBegin = err
@@ -232,7 +218,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 		}
 
 		// underlying table doesn't exist. Record this, then create the table.
-		newRootValue, err := roots.Working.CreateEmptyTable(ctx, BackingTableName, newSchema)
+		newRootValue, err := roots.Working.CreateEmptyTable(ctx, doltdb.IgnoreTableName, newSchema)
 
 		if err != nil {
 			iw.errDuringStatementBegin = err
@@ -251,7 +237,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 		dSess.SetRoot(ctx, dbName, newRootValue)
 	}
 
-	tableWriter, err := dbState.WriteSession.GetTableWriter(ctx, BackingTableName, dbName, dSess.SetRoot, false)
+	tableWriter, err := dbState.WriteSession.GetTableWriter(ctx, doltdb.IgnoreTableName, dbName, dSess.SetRoot, false)
 	if err != nil {
 		iw.errDuringStatementBegin = err
 		return
