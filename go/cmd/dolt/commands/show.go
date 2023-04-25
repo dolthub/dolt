@@ -106,6 +106,10 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
+	if err := cmd.validateArgs(apr); err != nil {
+		return handleErrAndExit(err)
+	}
+
 	opts.diffDisplaySettings = parseDiffDisplaySettings(ctx, dEnv, apr)
 
 	err = showObjects(ctx, dEnv, opts)
