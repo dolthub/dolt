@@ -39,6 +39,7 @@ var _ sql.ReplaceableTable = (*BranchesTable)(nil)
 
 // IgnoreTable is the system table that stores patterns for table names that should not be committed.
 type IgnoreTable struct {
+	db  sql.Database
 	ddb *doltdb.DoltDB
 }
 
@@ -62,19 +63,39 @@ func (i *IgnoreTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-// Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.
+// Partitions is a sql.Table interface function that returns a partition of the data.
 func (i *IgnoreTable) Partitions(context *sql.Context) (sql.PartitionIter, error) {
-	return index.SinglePartitionIterFromNomsMap(nil), nil
+	ignoreTable, found, err := i.db.GetTableInsensitive(context, BackingTableName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !found {
+		// no backing table; return an empty iter.
+		return index.SinglePartitionIterFromNomsMap(nil), nil
+	}
+	return ignoreTable.Partitions(context)
 }
 
 func (i *IgnoreTable) PartitionRows(context *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	//TODO implement me
-	panic("implement me")
+	ignoreTable, found, err := i.db.GetTableInsensitive(context, BackingTableName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !found {
+		// no backing table; return an empty iter.
+		return sql.RowsToRowIter(), nil
+	}
+
+	return ignoreTable.PartitionRows(context, partition)
 }
 
 // NewIgnoreTable creates an IgnoreTable
-func NewIgnoreTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
-	return &IgnoreTable{ddb: ddb}
+func NewIgnoreTable(_ *sql.Context, db sql.Database, ddb *doltdb.DoltDB) sql.Table {
+	return &IgnoreTable{db: db, ddb: ddb}
 }
 
 // Replacer returns a RowReplacer for this table. The RowReplacer will have Insert and optionally Delete called once
@@ -206,6 +227,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 				Constraints:   nil,
 			},
 		)
+
 		newSchema, err := schema.NewSchema(colCollection, nil, schema.Collation_Default, nil, nil)
 		if err != nil {
 			iw.errDuringStatementBegin = err
@@ -248,7 +270,7 @@ func (iw *ignoreWriter) DiscardChanges(ctx *sql.Context, errorEncountered error)
 func (iw *ignoreWriter) StatementComplete(ctx *sql.Context) error {
 	newWorkingSetMeta := *iw.workingSet.Meta()
 	newWorkingSetMeta.Timestamp = uint64(time.Now().Unix())
-	iw.it.ddb.UpdateWorkingSet(ctx, iw.workingSet.Ref(), iw.workingSet, *iw.prevHash, &newWorkingSetMeta)
+	// iw.it.ddb.UpdateWorkingSet(ctx, iw.workingSet.Ref(), iw.workingSet, *iw.prevHash, &newWorkingSetMeta)
 	return iw.tableWriter.StatementComplete(ctx)
 }
 

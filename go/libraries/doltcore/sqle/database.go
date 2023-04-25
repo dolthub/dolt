@@ -406,7 +406,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 	case doltdb.IgnoreTableName:
-		dt, found = dtables.NewIgnoreTable(ctx, db.ddb), true
+		dt, found = dtables.NewIgnoreTable(ctx, db, db.ddb), true
 	}
 
 	if found {
