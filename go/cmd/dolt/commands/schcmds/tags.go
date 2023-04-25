@@ -64,7 +64,7 @@ func (cmd TagsCmd) ArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
+func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tblTagsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

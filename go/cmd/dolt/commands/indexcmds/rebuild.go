@@ -58,7 +58,7 @@ func (cmd RebuildCmd) ArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
+func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, rebuildDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

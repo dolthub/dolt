@@ -103,8 +103,8 @@ SQL
     dolt commit -m "Added column c2 longtext"
     dolt checkout main
     dolt merge branch1
-    run dolt merge branch2
-    [ $status -ne 0 ]
+    skip_nbf_not_dolt
+    dolt merge branch2
 }
 
 @test "column_tags: Merging branches that use the same tag referring to different column names fails" {
@@ -129,8 +129,8 @@ SQL
     dolt commit -m "Added column c0 bigint"
     dolt checkout main
     dolt merge branch1
-    run dolt merge branch2
-    [ $status -eq 1 ]
+    skip_nbf_not_dolt
+    dolt merge branch2
 }
 
 @test "column_tags: Merging branches that both created the same column succeeds" {

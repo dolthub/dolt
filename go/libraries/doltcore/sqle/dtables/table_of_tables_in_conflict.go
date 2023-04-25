@@ -122,9 +122,14 @@ func (dt *TableOfTablesInConflict) Partitions(ctx *sql.Context) (sql.PartitionIt
 	}
 
 	root := ws.WorkingRoot()
-	tblNames, err := root.TablesInConflict(ctx)
+	tblNames, err := root.TablesWithDataConflicts(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	if ws.MergeActive() {
+		schConflicts := ws.MergeState().TablesWithSchemaConflicts()
+		tblNames = append(tblNames, schConflicts...)
 	}
 
 	var partitions []*tableInConflict

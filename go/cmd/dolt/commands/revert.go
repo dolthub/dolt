@@ -64,7 +64,7 @@ func (cmd RevertCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec implements the interface cli.Command.
-func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx *cli.CliContext) int {
+func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateRevertArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, revertDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

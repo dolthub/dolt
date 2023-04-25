@@ -23,10 +23,11 @@ import (
 type tblErrorType string
 
 const (
-	tblErrInvalid        tblErrorType = "invalid"
-	tblErrTypeNotExist   tblErrorType = "do not exist"
-	tblErrTypeInConflict tblErrorType = "are in conflict"
-	tblErrTypeConstViols tblErrorType = "have constraint violations"
+	tblErrInvalid         tblErrorType = "invalid"
+	tblErrTypeNotExist    tblErrorType = "do not exist"
+	tblErrTypeInConflict  tblErrorType = "are in conflict"
+	tblErrTypeSchConflict tblErrorType = "have schema conflicts"
+	tblErrTypeConstViols  tblErrorType = "have constraint violations"
 )
 
 type TblError struct {
@@ -40,6 +41,10 @@ func NewTblNotExistError(tbls []string) TblError {
 
 func NewTblInConflictError(tbls []string) TblError {
 	return TblError{tbls, tblErrTypeInConflict}
+}
+
+func NewTblSchemaConflictError(tbls []string) TblError {
+	return TblError{tbls, tblErrTypeSchConflict}
 }
 
 func NewTblHasConstraintViolations(tbls []string) TblError {

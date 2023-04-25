@@ -353,7 +353,24 @@ func (rcv *MergeState) FromCommitSpecStr() []byte {
 	return nil
 }
 
-const MergeStateNumFields = 3
+func (rcv *MergeState) UnmergableTables(j int) []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
+	}
+	return nil
+}
+
+func (rcv *MergeState) UnmergableTablesLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+const MergeStateNumFields = 4
 
 func MergeStateStart(builder *flatbuffers.Builder) {
 	builder.StartObject(MergeStateNumFields)
@@ -372,6 +389,12 @@ func MergeStateStartFromCommitAddrVector(builder *flatbuffers.Builder, numElems 
 }
 func MergeStateAddFromCommitSpecStr(builder *flatbuffers.Builder, fromCommitSpecStr flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(fromCommitSpecStr), 0)
+}
+func MergeStateAddUnmergableTables(builder *flatbuffers.Builder, unmergableTables flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(unmergableTables), 0)
+}
+func MergeStateStartUnmergableTablesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
 }
 func MergeStateEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

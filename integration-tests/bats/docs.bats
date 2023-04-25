@@ -84,7 +84,7 @@ teardown() {
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "new table:      dolt_docs" ]] || false
+    [[ "$output" =~ "new table:        dolt_docs" ]] || false
 
     dolt commit -am "added a license file"
 
