@@ -15,6 +15,7 @@
 package dtables
 
 import (
+	"context"
 	"errors"
 	"io"
 
@@ -57,6 +58,7 @@ func (dt *SchemaConflictsTable) String() string {
 func (dt *SchemaConflictsTable) Schema() sql.Schema {
 	return []*sql.Column{
 		{Name: "table_name", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: true},
+		{Name: "base_schema", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false},
 		{Name: "our_schema", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false},
 		{Name: "their_schema", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false},
 		{Name: "description", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false},
@@ -81,8 +83,14 @@ func (dt *SchemaConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter,
 		return sql.PartitionsToPartitionIter(), nil
 	}
 
+	head, err := sess.GetHeadCommit(ctx, dt.dbName)
+	if err != nil {
+		return nil, err
+	}
+
 	return sql.PartitionsToPartitionIter(schemaConflictsPartition{
 		state: ws.MergeState(),
+		head:  head,
 		ddb:   dbd.Ddb,
 	}), nil
 }
@@ -94,9 +102,19 @@ func (dt *SchemaConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partiti
 		return nil, errors.New("unexpected partition for schema conflicts table")
 	}
 
+	base, err := doltdb.GetCommitAncestor(ctx, p.head, p.state.Commit())
+	if err != nil {
+		return nil, err
+	}
+
+	baseRoot, err := base.GetRootValue(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var conflicts []schemaConflict
-	err := p.state.IterSchemaConflicts(ctx, p.ddb, func(table string, cnf doltdb.SchemaConflict) error {
-		c, err := newSchemaConflict(table, cnf)
+	err = p.state.IterSchemaConflicts(ctx, p.ddb, func(table string, cnf doltdb.SchemaConflict) error {
+		c, err := newSchemaConflict(ctx, table, baseRoot, cnf)
 		if err != nil {
 			return err
 		}
@@ -114,6 +132,7 @@ func (dt *SchemaConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partiti
 
 type schemaConflictsPartition struct {
 	state *doltdb.MergeState
+	head  *doltdb.Commit
 	ddb   *doltdb.DoltDB
 }
 
@@ -122,27 +141,51 @@ func (p schemaConflictsPartition) Key() []byte {
 }
 
 type schemaConflict struct {
-	table          string
-	toSch, fromSch string
-	description    string
+	table       string
+	baseSch     string
+	ourSch      string
+	theirSch    string
+	description string
 }
 
-func newSchemaConflict(table string, c doltdb.SchemaConflict) (schemaConflict, error) {
-	to, err := getCreateTableStatement(table, c.ToSch, c.ToFks, c.ToParentSchemas)
+func newSchemaConflict(ctx context.Context, table string, br *doltdb.RootValue, c doltdb.SchemaConflict) (schemaConflict, error) {
+	base, err := getCreateTableStatementFromRoot(ctx, table, br)
 	if err != nil {
 		return schemaConflict{}, err
 	}
 
-	from, err := getCreateTableStatement(table, c.FromSch, c.FromFks, c.FromParentSchemas)
+	ours, err := getCreateTableStatement(table, c.ToSch, c.ToFks, c.ToParentSchemas)
 	if err != nil {
 		return schemaConflict{}, err
 	}
+
+	theirs, err := getCreateTableStatement(table, c.FromSch, c.FromFks, c.FromParentSchemas)
+	if err != nil {
+		return schemaConflict{}, err
+	}
+
 	return schemaConflict{
-		table:   table,
-		toSch:   to,
-		fromSch: from,
-		// todo(andy): description
+		table:    table,
+		baseSch:  base,
+		ourSch:   ours,
+		theirSch: theirs,
 	}, nil
+}
+
+func getCreateTableStatementFromRoot(ctx context.Context, table string, root *doltdb.RootValue) (string, error) {
+	schemas, err := root.GetAllSchemas(ctx)
+	if err != nil {
+		return "", err
+	}
+	sch := schemas[table]
+
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return "", err
+	}
+	fks, _ := fkc.KeysForTable(table)
+
+	return getCreateTableStatement(table, sch, fks, schemas)
 }
 
 func getCreateTableStatement(table string, sch schema.Schema, fks []doltdb.ForeignKey, parents map[string]schema.Schema) (string, error) {
@@ -155,8 +198,8 @@ func getCreateTableStatement(table string, sch schema.Schema, fks []doltdb.Forei
 
 type schemaConflictsIter struct {
 	conflicts   []schemaConflict
-	toSchemas   map[string]schema.Schema
-	fromSchemas map[string]schema.Schema
+	baseSchemas map[string]schema.Schema
+	baseCommit  *doltdb.Commit
 }
 
 func (it *schemaConflictsIter) Next(ctx *sql.Context) (sql.Row, error) {
@@ -165,7 +208,7 @@ func (it *schemaConflictsIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 	c := it.conflicts[0] // pop next conflict
 	it.conflicts = it.conflicts[1:]
-	return sql.NewRow(c.table, c.toSch, c.fromSch, c.description), nil
+	return sql.NewRow(c.table, c.baseSch, c.ourSch, c.theirSch, c.description), nil
 }
 
 func (it *schemaConflictsIter) Close(ctx *sql.Context) error {

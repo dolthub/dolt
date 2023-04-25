@@ -11,7 +11,7 @@ teardown() {
 
 @test "schema-conflicts: dolt_schema_conflicts smoke test" {
     run dolt sql -q "select * from dolt_schema_conflicts" -r csv
-    [[ "$output" =~ "table_name,our_schema,their_schema,description" ]]
+    [[ "$output" =~ "table_name,base_schema,our_schema,their_schema,description" ]]
 }
 
 setup_schema_conflict() {
