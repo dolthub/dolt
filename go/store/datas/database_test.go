@@ -220,7 +220,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	suite.NoError(err)
 	suite.True(ok)
 	suite.True(h.Equals(a))
-	comm, err := commitFromValue(suite.db.Format(), mustHead(ds2))
+	comm, err := CommitFromValue(suite.db.Format(), mustHead(ds2))
 	suite.NoError(err)
 	suite.Equal(uint64(1), comm.Height())
 
@@ -232,7 +232,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	ds, err = CommitValue(context.Background(), suite.db, ds, b)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(b))
-	comm, err = commitFromValue(suite.db.Format(), mustHead(ds))
+	comm, err = CommitFromValue(suite.db.Format(), mustHead(ds))
 	suite.NoError(err)
 	suite.Equal(uint64(2), comm.Height())
 
@@ -249,7 +249,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	ds, err = CommitValue(context.Background(), suite.db, ds, d)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(d))
-	comm, err = commitFromValue(suite.db.Format(), mustHead(ds))
+	comm, err = CommitFromValue(suite.db.Format(), mustHead(ds))
 	suite.NoError(err)
 	suite.Equal(uint64(3), comm.Height())
 
@@ -336,7 +336,7 @@ func assertMapOfStringToRefOfCommit(ctx context.Context, proposed, datasets type
 			}
 			if targetValue, err := ref.TargetValue(ctx, vr); err != nil {
 				d.PanicIfError(err)
-			} else if is, err := IsCommit(ctx, targetValue); err != nil {
+			} else if is, err := IsCommit(targetValue); err != nil {
 				d.PanicIfError(err)
 			} else if !is {
 				d.Panic("Root of a Database must be a Map<String, Ref<Commit>>, but the ref at key %s points to a %s", change.Key.(types.String), mustString(mustType(types.TypeOf(targetValue)).Describe(ctx)))
