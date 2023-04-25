@@ -162,7 +162,10 @@ func showObjects(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error {
 	}
 
 	for _, specRef := range opts.specRefs {
-		return showSpecRef(ctx, dEnv, opts, specRef)
+		err := showSpecRef(ctx, dEnv, opts, specRef)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
