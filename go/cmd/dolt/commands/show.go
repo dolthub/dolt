@@ -110,6 +110,11 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return handleErrAndExit(err)
 	}
 
+	if !opts.pretty && !dEnv.DoltDB.Format().UsesFlatbuffers() {
+		cli.PrintErrln("dolt show --no-pretty is not supported when using old LD_1 storage format.")
+		return 1
+	}
+
 	opts.diffDisplaySettings = parseDiffDisplaySettings(ctx, dEnv, apr)
 
 	err = showObjects(ctx, dEnv, opts)
