@@ -563,6 +563,9 @@ func mergeIndexes(mergedCC *schema.ColCollection, ourSch, theirSch, ancSch schem
 	//fmt.Printf("INDEX MAPPINGS: \n%s\n", mappings.DebugString())
 
 	// Then look for conflicts while merging the indexes together
+	// TODO: Make this look more like checkSchemaConflicts' logic
+	// TODO: Pull this out into its own function
+	// TODO: Fix the naming with this function and hte other check column functions
 	var mergedIndexes []schema.Index
 	var conflicts []IdxConflict
 	for _, mapping := range mappings {
@@ -631,15 +634,16 @@ func mergeIndexes(mergedCC *schema.ColCollection, ourSch, theirSch, ancSch schem
 	}
 
 	// One more sanity check for conflicting index names
-	indexNames := make(map[string]struct{})
+	indexNames := make(map[string]schema.Index)
 	for _, idx := range mergedIndexes {
 		if _, ok := indexNames[idx.Name()]; ok {
 			conflicts = append(conflicts, IdxConflict{
-				Kind: NameCollision,
-				Ours: idx,
+				Kind:   NameCollision,
+				Ours:   indexNames[idx.Name()],
+				Theirs: idx,
 			})
 		} else {
-			indexNames[idx.Name()] = struct{}{}
+			indexNames[idx.Name()] = idx
 		}
 	}
 
