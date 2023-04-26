@@ -271,10 +271,8 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	}
 
 	// New transaction, clear all session state
-	d.mu.Lock()
-	d.dbStates = make(map[string]*DatabaseSessionState)
-	d.mu.Unlock()
-	
+	d.clearRevisionDbState()
+
 	sessionState, ok, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
@@ -338,6 +336,22 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	sessionState.dirty = false
 
 	return NewDoltTransaction(dbName, nomsRoots, ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic), nil
+}
+
+// clearRevisionDbState clears all revision DB states for this session. This is necessary on transaction start, 
+// because they will be re-initialized with the current branch head / working set.
+// TODO: this should happen with every dbstate, not just revision DBs. The problem is that we track the current working
+//  set *only* in the session state. We need to disentangle the metadata about a state (working ref, persists across 
+//  transactions) from its data (re-initialized on every transaction start)
+func (d *DoltSession) clearRevisionDbState() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	for _, dbState := range d.dbStates {
+		if len(dbState.db.Revision()) > 0 {
+			delete(d.dbStates, strings.ToLower(dbState.db.Name()))
+		}
+	}
 }
 
 // isNoOpTransactionDatabase returns whether the database name given is a non-Dolt database that shouldn't have
@@ -1106,7 +1120,7 @@ func (d *DoltSession) HasDB(_ *sql.Context, dbName string) bool {
 
 // addDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
-func (d *DoltSession) addDB(ctx *sql.Context, db SessionDatabase) error {
+func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	DefineSystemVariablesForDB(db.Name())
 
 	sessionState := NewEmptyDatabaseSessionState()

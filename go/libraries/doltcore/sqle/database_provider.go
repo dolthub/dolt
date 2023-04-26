@@ -1044,7 +1044,7 @@ func resolveAncestorSpec(ctx *sql.Context, revSpec string, ddb *doltdb.DoltDB) (
 }
 
 // SessionDatabase implements dsess.SessionDatabaseProvider
-func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (dsess.SessionDatabase, bool, error) {
+func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool, error) {
 	var ok bool
 	p.mu.RLock()
 	db, ok := p.databases[formatDbMapKeyName(name)]
