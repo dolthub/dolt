@@ -19,7 +19,9 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
+	"github.com/dolthub/dolt/go/store/datas"
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
@@ -1416,11 +1418,36 @@ func TestDoltRemote(t *testing.T) {
 	}
 }
 
+type testCommitClock struct {
+	unixNano int64
+}
+
+func (tcc *testCommitClock) Now() time.Time {
+	now := time.Unix(0, tcc.unixNano)
+	tcc.unixNano += int64(time.Hour)
+	return now
+}
+
+func installTestCommitClock() func() {
+	oldNowFunc := datas.CommitNowFunc
+	oldCommitLoc := datas.CommitLoc
+	tcc := &testCommitClock{}
+	datas.CommitNowFunc = tcc.Now
+	datas.CommitLoc = time.UTC
+	return func() {
+		datas.CommitNowFunc = oldNowFunc
+		datas.CommitLoc = oldCommitLoc
+	}
+}
+
 // TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
 // desired test.
 func TestSingleTransactionScript(t *testing.T) {
 	// t.Skip()
 
+	f := installTestCommitClock()
+	defer f()
+	
 	script := queries.TransactionTest{
 		Name: "committed conflicts are seen by other sessions",
 		SetUpScript: []string{

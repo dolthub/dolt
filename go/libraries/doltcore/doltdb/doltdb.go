@@ -305,15 +305,6 @@ func getCommitValForRefStrByNomsRoot(ctx context.Context, ddb *DoltDB, ref strin
 	return datas.LoadCommitAddr(ctx, ddb.vrw, *commitHash)
 }
 
-func getCommitValForHash(ctx context.Context, vr types.ValueReader, c string) (*datas.Commit, error) {
-	unprefixed := strings.TrimPrefix(c, "#")
-	hash, ok := hash.MaybeParse(unprefixed)
-	if !ok {
-		return nil, errors.New("invalid hash: " + c)
-	}
-	return datas.LoadCommitAddr(ctx, vr, hash)
-}
-
 // Roots is a convenience struct to package up the three roots that most library functions will need to inspect and
 // modify the working set. This struct is designed to be passed by value always: functions should take a Roots as a
 // param and return a modified one.

@@ -391,13 +391,16 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 	if err != nil {
 		return nil, err
 	}
+	
+	debugPrint(ctx, mergeSpec)
+	
 	return mergeSpec, nil
 }
 
 // TODO NEXT: add debug options to make timing of commits deterministic
-func debugPrint(mergeSpec *merge.MergeSpec) {
-	fmt.Println("MergeH: ", mergeSpec.MergeH.String())
-	fmt.Println("HeadH: ", mergeSpec.HeadH.String())
+func debugPrint(ctx *sql.Context, mergeSpec *merge.MergeSpec) {
+	ctx.GetLogger().Warnf("MergeH: %s", mergeSpec.MergeH.String())
+	ctx.GetLogger().Warnf("HeadH: %s", mergeSpec.HeadH.String())
 }
 
 // TODO: this copied from commands/merge.go because the latter isn't reusable. Fix that.
