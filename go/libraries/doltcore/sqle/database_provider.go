@@ -1301,19 +1301,18 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 }
 
 func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.InitialDbState, error) {
-	baseName, revSpec := splitRevisionDbName(srcDb)
+	_, revSpec := splitRevisionDbName(srcDb)
 
 	// TODO: this may be a disabled transaction, need to kill those
-	tx := ctx.GetTransaction().(*dsess.DoltTransaction)
 	
-	branch := ref.NewBranchRef(revSpec)
-	rootHash, ok := tx.GetInitialRoot(baseName)
-	if !ok {
-		return dsess.InitialDbState{}, fmt.Errorf("no initial root for %s", srcDb.Name())	
+	rootHash, err := getTransactionRoot(ctx, srcDb)
+	if err != nil {
+		return dsess.InitialDbState{}, err
 	}
 	
+	branch := ref.NewBranchRef(revSpec)
 	cm, err := srcDb.DbData().Ddb.ResolveCommitRefAtRoot(ctx, branch, rootHash)
-	if err != nil {
+	if err != nil { 
 		return dsess.InitialDbState{}, err
 	}
 

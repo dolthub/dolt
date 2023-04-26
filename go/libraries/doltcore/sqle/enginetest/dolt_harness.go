@@ -371,7 +371,6 @@ func (d *DoltHarness) closeProvider() {
 	if d.provider != nil {
 		dbs := d.provider.AllDatabases(sql.NewEmptyContext())
 		for _, db := range dbs {
-			d.t.Logf("closing %v", db)
 			require.NoError(d.t, db.(dsess.SqlDatabase).DbData().Ddb.Close())
 		}
 	}

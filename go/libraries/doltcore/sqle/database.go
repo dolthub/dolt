@@ -501,17 +501,19 @@ func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commi
 	return cm, root, nil
 }
 
-func getTransactionRoot(ctx *sql.Context, db Database) (hash.Hash, error) {
+func getTransactionRoot(ctx *sql.Context, db dsess.SqlDatabase) (hash.Hash, error) {
 	tx, ok := ctx.GetTransaction().(*dsess.DoltTransaction)
 	// We don't have a real transaction in some cases (esp. PREPARE), in which case we need to use the tip of the data
 	if !ok {
-		return db.ddb.NomsRoot(ctx)
+		return db.DbData().Ddb.NomsRoot(ctx)
 	}
 	
-	nomsRoot, ok := tx.GetInitialRoot(db.name)
+	baseName, _ := splitRevisionDbName(db)
+	nomsRoot, ok := tx.GetInitialRoot(baseName)
 	if !ok {
-		return hash.Hash{}, fmt.Errorf("could not resolve initial root for database %s", db.name)
+		return hash.Hash{}, fmt.Errorf("could not resolve initial root for database %s", db.Name())
 	}
+	
 	return nomsRoot, nil
 }
 

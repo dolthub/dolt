@@ -203,7 +203,7 @@ func (d *DoltSession) Flush(ctx *sql.Context, dbName string) error {
 	if err != nil {
 		return err
 	}
-
+ 
 	return d.SetRoot(ctx, dbName, ws.WorkingRoot())
 }
 
@@ -275,25 +275,6 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	d.dbStates = make(map[string]*DatabaseSessionState)
 	d.mu.Unlock()
 	
-	// TODO: remove this
-	// Since StartTransaction occurs before even any analysis, it's possible that this session has no state for the
-	// database with the transaction being performed, so we load it here.
-	if !d.HasDB(ctx, dbName) {
-		db, ok, err := d.provider.SessionDatabase(ctx, dbName)
-		if err != nil {
-			return nil, err
-		}
-
-		if !ok {
-			return nil, sql.ErrDatabaseNotFound.New(dbName)
-		}
-
-		err = d.addDB(ctx, db)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	sessionState, ok, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
