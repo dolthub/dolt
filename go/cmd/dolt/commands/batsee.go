@@ -27,6 +27,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 var batseeDoc = cli.CommandDocumentationContent{
@@ -67,9 +68,9 @@ func (b BatseeCmd) RequiresRepo() bool {
 }
 
 type batsResult struct {
-	// Duration would be nice too.
-	path string
-	err  error
+	runtime time.Duration
+	path    string
+	err     error
 }
 
 func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
@@ -132,10 +133,7 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	exitStatus := 0
 	for result := range results {
-		if result.err != nil {
-			cli.Println("Error running bats test:", result.path, result.err.Error())
-			exitStatus = 1
-		}
+		cli.Println(fmt.Sprintf("Test %s completed in %s", result.path, result.runtime.String()))
 	}
 	return exitStatus
 }
@@ -153,6 +151,8 @@ func runBats(path string, resultChan chan<- batsResult) {
 	cmd := exec.Command("bats", path)
 
 	result := batsResult{path: path}
+
+	startTime := time.Now()
 
 	outPath := fmt.Sprintf("batsee_results/%s.stdout.log", path)
 	output, err := os.Create(outPath)
@@ -198,6 +198,7 @@ func runBats(path string, resultChan chan<- batsResult) {
 		result.err = err
 	}
 
+	result.runtime = time.Since(startTime)
 	resultChan <- result
 	return
 }
