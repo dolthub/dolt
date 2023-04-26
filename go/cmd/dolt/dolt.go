@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/fatih/color"
@@ -468,6 +469,8 @@ func splitArgsOnSubCommand(args []string) (globalArgs, subArgs []string, initCli
 	}
 
 	for i, arg := range args {
+		arg = strings.ToLower(arg)
+
 		if cli.IsHelp(arg) {
 			// Found --help before any subcommand, so print dolt help.
 			return nil, nil, false, true, nil
