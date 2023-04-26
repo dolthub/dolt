@@ -4196,7 +4196,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		// Type widening - these changes move from smaller types to bigger types, so they are guaranteed to be safe.
 		// TODO: We don't support automatically converting column types in merges yet, so currently these won't
 		//       automatically merge and instead return schema conflicts.
-		// TODO: Probably need to skip these on the old format...
 		Name: "type widening",
 		AncSetUpScript: []string{
 			"CREATE table t (pk int primary key, col1 enum('blue', 'green'), col2 float, col3 smallint, " +

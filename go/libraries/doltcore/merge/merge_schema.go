@@ -304,8 +304,9 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 // definitions in |ancCC| to determine on which side a column has changed. If merging is not possible because of
 // conflicting changes to the columns in |ourCC| and |theirCC|, then a set of ColConflict instances are returned
 // describing the conflicts. |format| indicates what storage format is in use, and is needed to determine compatibility
-// between types, since LD_1 and DOLT have different restrictions on how types can be changed. If any other,
-// unexpected error occurs, then that error is returned and the other response fields should be ignored.
+// between types, since different storage formats have different restrictions on how much types can change and remain
+// compatible with the current stored format. If any unexpected error occurs, then that error is returned and the
+// other response fields should be ignored.
 func mergeColumns(format *types.NomsBinFormat, ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, error) {
 	columnMappings, err := mapColumns(ourCC, theirCC, ancCC)
 	if err != nil {
@@ -496,9 +497,10 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 
 // columnTypesAreCompatible returns true if the change from |from| to |to| is a compatible type change.
 // Currently, no type change for the DOLT storage format is considered compatible, but over time we will
-// widen this to include safe type migrations (e.g. smallint to bigint, varchar(100) to varchar(200)).
-// For the older LD_1 storage format, we are looser with type equality and consider them compatible as long
-// as the types are in the same type family/kind.
+// widen this to include safe type migrations (e.g. smallint to bigint, varchar(100) to varchar(200)), which
+// can require rewriting existing stored data to be compatible with the new type. For the older LD_1 storage
+// format, we are looser with type equality and consider them compatible as long as the types are in the
+// same type family/kind.
 func columnTypesAreCompatible(format *types.NomsBinFormat, from, to schema.Column) bool {
 	if !from.TypeInfo.Equals(to.TypeInfo) {
 		if types.IsFormat_DOLT(format) {
