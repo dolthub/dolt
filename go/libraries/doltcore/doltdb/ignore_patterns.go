@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/store/types"
 	"io"
 	"regexp"
 	"strings"
@@ -41,8 +42,11 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots) (IgnorePatterns, 
 		// dolt_ignore doesn't exist, so don't filter any tables.
 		return ignorePatterns, nil
 	}
-	// TODO(nicktobey), add check for noms format.
 	index, err := table.GetRowData(ctx)
+	if table.Format() == types.Format_LD_1 {
+		// dolt_ignore is not supported for the legacy storage format.
+		return ignorePatterns, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -51,6 +55,7 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots) (IgnorePatterns, 
 		return nil, err
 	}
 	keyDesc, valueDesc := ignoreTableSchema.GetMapDescriptors()
+
 	ignoreTableMap, err := durable.ProllyMapFromIndex(index).IterAll(ctx)
 	if err != nil {
 		return nil, err
