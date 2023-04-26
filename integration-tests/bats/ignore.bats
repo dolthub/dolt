@@ -85,7 +85,9 @@ SQL
     run dolt add -A
 
     [ "$status" -eq 1 ]
-    [ "$output" =~ "dolt_ignore has multiple conflicting rules for commit_ignore"
+    [[ "$output" =~ "the table commit_ignore matches conflicting patterns in dolt_ignore" ]] || false
+    [[ "$output" =~ "ignored:     *_ignore" ]] || false
+    [[ "$output" =~ "not ignored: commit_*" ]] || false
 
 }
 
