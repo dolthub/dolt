@@ -145,13 +145,13 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 			return nil
 		} else if allUntracked, err := workingSetContainsOnlyUntrackedTables(ctx, roots); err != nil {
 			return err
-		} else if !apr.Contains(IncludeUntrackedFlag) && allUntracked {
+		} else if allUntracked && !apr.Contains(IncludeUntrackedFlag) && !apr.Contains(AllFlag) {
 			// if all changes in working set are untracked files, then no local changes to save
 			cli.Println("No local changes to save")
 			return nil
 		} else if allIgnored, err := workingSetContainsOnlyIgnoredTables(ctx, roots); err != nil {
 			return err
-		} else if !apr.Contains(AllFlag) && allIgnored {
+		} else if allIgnored && !apr.Contains(AllFlag) {
 			// if all changes in working set are ignored files, then no local changes to save
 			cli.Println("No local changes to save")
 			return nil
