@@ -150,6 +150,7 @@ var writeableSystemTables = []string{
 	SchemasTableName,
 	ProceduresTableName,
 	DocTableName,
+	IgnoreTableName,
 }
 
 var persistedSystemTables = []string{
@@ -157,6 +158,7 @@ var persistedSystemTables = []string{
 	DoltQueryCatalogTableName,
 	SchemasTableName,
 	ProceduresTableName,
+	IgnoreTableName,
 }
 
 var generatedSystemTables = []string{
