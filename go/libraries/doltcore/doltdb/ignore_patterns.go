@@ -15,7 +15,10 @@
 package doltdb
 
 import (
+	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"io"
 	"regexp"
 	"strings"
 )
@@ -23,6 +26,52 @@ import (
 type ignorePattern struct {
 	pattern string
 	ignore  bool
+}
+
+type IgnorePatterns []ignorePattern
+
+func GetIgnoredTablePatterns(ctx context.Context, roots Roots) (IgnorePatterns, error) {
+	var ignorePatterns []ignorePattern
+	workingSet := roots.Working
+	table, found, err := workingSet.GetTable(ctx, IgnoreTableName)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		// dolt_ignore doesn't exist, so don't filter any tables.
+		return ignorePatterns, nil
+	}
+	// TODO(nicktobey), add check for noms format.
+	index, err := table.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ignoreTableSchema, err := table.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	keyDesc, valueDesc := ignoreTableSchema.GetMapDescriptors()
+	ignoreTableMap, err := durable.ProllyMapFromIndex(index).IterAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		keyTuple, valueTuple, err := ignoreTableMap.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		// TODO(nicktobey), assert schema is what we expect.
+		pattern, ok := keyDesc.GetString(0, keyTuple)
+		if !ok {
+			return nil, fmt.Errorf("could not read pattern")
+		}
+		ignore, ok := valueDesc.GetBool(0, valueTuple)
+		ignorePatterns = append(ignorePatterns, ignorePattern{pattern, ignore})
+	}
+	return ignorePatterns, nil
 }
 
 // compilePattern takes a dolt_ignore pattern and generate a Regexp that matches against the same table names as the pattern.
@@ -78,10 +127,10 @@ func resolveConflictingPatterns(trueMatches, falseMatches []string, tableName st
 	return false, fmt.Errorf("dolt_ignore has multiple conflicting rules for %s", tableName)
 }
 
-func isTableNameIgnored(patterns []ignorePattern, tableName string) (bool, error) {
+func (ip *IgnorePatterns) IsTableNameIgnored(tableName string) (bool, error) {
 	trueMatches := []string{}
 	falseMatches := []string{}
-	for _, patternIgnore := range patterns {
+	for _, patternIgnore := range *ip {
 		pattern := patternIgnore.pattern
 		ignore := patternIgnore.ignore
 		patternRegExp, err := compilePattern(pattern)
