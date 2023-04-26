@@ -99,7 +99,7 @@ func compilePattern(pattern string) (*regexp.Regexp, error) {
 // that are "more specific" than it. (a pattern A is more specific than a pattern B if all names that match A also
 // match pattern B, but not vice versa.)
 func getMoreSpecificPatterns(lessSpecific string) (*regexp.Regexp, error) {
-	pattern := regexp.QuoteMeta(lessSpecific)
+	pattern := "^" + regexp.QuoteMeta(lessSpecific) + "$"
 	// A ? can expand to any character except for a *, since that also has special meaning in patterns.
 	pattern = strings.Replace(pattern, "\\?", "[^\\*]", -1)
 	pattern = strings.Replace(pattern, "\\*", ".*", -1)
@@ -152,9 +152,9 @@ func (ip *IgnorePatterns) IsTableNameIgnored(tableName string) (bool, error) {
 		}
 		if patternRegExp.MatchString(tableName) {
 			if ignore {
-				trueMatches = append(trueMatches, tableName)
+				trueMatches = append(trueMatches, pattern)
 			} else {
-				falseMatches = append(falseMatches, tableName)
+				falseMatches = append(falseMatches, pattern)
 			}
 		}
 	}
