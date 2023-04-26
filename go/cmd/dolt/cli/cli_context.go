@@ -18,5 +18,6 @@ import "github.com/dolthub/dolt/go/libraries/utils/argparser"
 
 // CliContexct is used to pass top level command information down to subcommands.
 type CliContext interface {
+	// GlobalArgs returns the arguments passed before the subcommand.
 	GlobalArgs() *argparser.ArgParseResults
 }
