@@ -36,7 +36,6 @@ const (
 	ColumnCheckCollision
 	InvalidCheckCollision
 	DeletedCheckCollision
-	TypeConflict
 )
 
 // todo: link to docs explaining how to resolve schema conflicts.
@@ -89,12 +88,9 @@ type ColConflict struct {
 func (c ColConflict) String() string {
 	switch c.Kind {
 	case NameCollision:
-		return fmt.Sprintf("two columns with the same name '%s' have different tags. See https://github.com/dolthub/dolt/issues/3963", c.Ours.Name)
+		return fmt.Sprintf("incompatible column types for column '%s': %s and %s", c.Ours.Name, c.Ours.TypeInfo, c.Theirs.TypeInfo)
 	case TagCollision:
 		return fmt.Sprintf("different column definitions for our column %s and their column %s", c.Ours.Name, c.Theirs.Name)
-	case TypeConflict:
-		return fmt.Sprintf("different column types for our column %s (%s) and their column %s (%s)",
-			c.Ours.Name, c.Ours.TypeInfo, c.Theirs.Name, c.Theirs.TypeInfo)
 	}
 	return ""
 }
@@ -350,7 +346,7 @@ func mergeColumns(format *types.NomsBinFormat, ourCC, theirCC, ancCC *schema.Col
 						mergedColumns = append(mergedColumns, *theirs)
 					} else {
 						conflicts = append(conflicts, ColConflict{
-							Kind:   TypeConflict,
+							Kind:   NameCollision,
 							Ours:   *ours,
 							Theirs: *theirs,
 						})
@@ -360,7 +356,7 @@ func mergeColumns(format *types.NomsBinFormat, ourCC, theirCC, ancCC *schema.Col
 						mergedColumns = append(mergedColumns, *ours)
 					} else {
 						conflicts = append(conflicts, ColConflict{
-							Kind:   TypeConflict,
+							Kind:   NameCollision,
 							Ours:   *ours,
 							Theirs: *theirs,
 						})
