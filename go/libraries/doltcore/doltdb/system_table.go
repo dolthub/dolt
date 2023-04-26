@@ -146,10 +146,10 @@ func GetAllTableNames(ctx context.Context, root *RootValue) ([]string, error) {
 // for the purposes of the dolt command line. These tables cannot be created or altered explicitly, but can be updated
 // like normal SQL tables.
 var writeableSystemTables = []string{
+	DocTableName,
 	DoltQueryCatalogTableName,
 	SchemasTableName,
 	ProceduresTableName,
-	DocTableName,
 	IgnoreTableName,
 }
 
