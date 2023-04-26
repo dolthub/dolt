@@ -491,7 +491,7 @@ func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint
 		var valueItems []mapEntry
 
 		for _, seq := range output {
-			entries, err := seq.(mapLeafSequence).entries(ctx)
+			entries, err := seq.(mapLeafSequence).entries()
 
 			if err != nil {
 				return nil, err

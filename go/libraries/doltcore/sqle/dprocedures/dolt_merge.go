@@ -243,8 +243,7 @@ func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 }
 
 func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, cmSpec string, ws *doltdb.WorkingSet, opts editor.Options) (*doltdb.WorkingSet, error) {
-	mergeRoot, mergeStats, err := merge.MergeCommits(ctx, head, cm, opts)
-
+	result, err := merge.MergeCommits(ctx, head, cm, opts)
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:
@@ -255,8 +254,7 @@ func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, cmSpec
 			return nil, err
 		}
 	}
-
-	return mergeRootToWorking(squash, ws, mergeRoot, cm, cmSpec, mergeStats)
+	return mergeRootToWorking(squash, ws, result, cm, cmSpec)
 }
 
 func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.WorkingSet, dbData env.DbData, cm2 *doltdb.Commit) (*doltdb.WorkingSet, error) {
@@ -308,8 +306,9 @@ func executeNoFFMerge(
 	if err != nil {
 		return nil, err
 	}
+	result := &merge.Result{Root: mergeRoot, Stats: make(map[string]*merge.MergeStats)}
 
-	ws, err = mergeRootToWorking(false, ws, mergeRoot, spec.MergeC, spec.MergeCSpecStr, map[string]*merge.MergeStats{})
+	ws, err = mergeRootToWorking(false, ws, result, spec.MergeC, spec.MergeCSpecStr)
 	if err != nil {
 		// This error is recoverable, so we return a working set value along with the error
 		return ws, err
@@ -405,23 +404,21 @@ func debugPrint(mergeSpec *merge.MergeSpec) {
 func mergeRootToWorking(
 	squash bool,
 	ws *doltdb.WorkingSet,
-	mergedRoot *doltdb.RootValue,
+	merged *merge.Result,
 	cm2 *doltdb.Commit,
 	cm2Spec string,
-	mergeStats map[string]*merge.MergeStats,
 ) (*doltdb.WorkingSet, error) {
-
-	workingRoot := mergedRoot
-	if !squash {
+	if !squash || merged.HasSchemaConflicts() {
 		ws = ws.StartMerge(cm2, cm2Spec)
+		tt := merge.SchemaConflictTableNames(merged.SchemaConflicts)
+		ws = ws.WithUnmergableTables(tt)
 	}
 
-	ws = ws.WithWorkingRoot(workingRoot).WithStagedRoot(workingRoot)
-	if checkForConflicts(mergeStats) || checkForViolations(mergeStats) {
+	ws = ws.WithWorkingRoot(merged.Root).WithStagedRoot(merged.Root)
+	if merged.HasMergeArtifacts() {
 		// this error is recoverable in-session, so we return the new ws along with the error
 		return ws, doltdb.ErrUnresolvedConflictsOrViolations
 	}
-
 	return ws, nil
 }
 
@@ -442,23 +439,4 @@ func checkForUncommittedChanges(ctx *sql.Context, root *doltdb.RootValue, headRo
 		return ErrUncommittedChanges.New()
 	}
 	return nil
-}
-
-func checkForConflicts(tblToStats map[string]*merge.MergeStats) bool {
-	for _, stats := range tblToStats {
-		if stats.Operation == merge.TableModified && stats.Conflicts > 0 {
-			return true
-		}
-	}
-
-	return false
-}
-
-func checkForViolations(tblToStats map[string]*merge.MergeStats) bool {
-	for _, stats := range tblToStats {
-		if stats.ConstraintViolations > 0 {
-			return true
-		}
-	}
-	return false
 }

@@ -396,11 +396,13 @@ var secondaryIndexTests = []schemaMergeTest{
 		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a, b), INDEX (b, a))"), row(1, "2", float32(3.0))),
 	},
 	{
-		name:     "independent index drops",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a), INDEX (b))"), row(1, "2", float32(3.0))),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a))           "), row(1, "2", float32(3.0))),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (b))           "), row(1, "2", float32(3.0))),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)                      "), row(1, "2", float32(3.0))),
+		name:                "independent index drops",
+		ancestor:            tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a), INDEX (b))"), row(1, "2", float32(3.0))),
+		left:                tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (a))           "), row(1, "2", float32(3.0))),
+		right:               tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float, INDEX (b))           "), row(1, "2", float32(3.0))),
+		merged:              tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b float)                      "), row(1, "2", float32(3.0))),
+		skipOldFmt:          true,
+		skipFlipOnOldFormat: true,
 	},
 }
 
@@ -494,7 +496,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 			var eo editor.Options
 			eo = eo.WithDeaf(editor.NewInMemDeaf(a.VRW()))
 			// attempt merge before skipping to assert no panics
-			root, _, err := merge.MergeRoots(ctx, l, r, a, rootish{r}, rootish{a}, eo, mo)
+			result, err := merge.MergeRoots(ctx, l, r, a, rootish{r}, rootish{a}, eo, mo)
 			maybeSkip(t, a.VRW().Format(), test, flipSides)
 
 			if test.conflict {
@@ -504,7 +506,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 				require.NoError(t, err)
 				exp, err := m.MapTableHashes(ctx)
 				assert.NoError(t, err)
-				act, err := root.MapTableHashes(ctx)
+				act, err := result.Root.MapTableHashes(ctx)
 				assert.NoError(t, err)
 
 				assert.Equal(t, len(exp), len(act))

@@ -257,14 +257,14 @@ func TestCommitWithoutMetaField(t *testing.T) {
 		"meta":    types.EmptyStruct(db.Format()),
 	})
 	assert.NoError(err)
-	assert.True(IsCommit(ctx, metaCommit))
+	assert.True(IsCommit(metaCommit))
 
 	noMetaCommit, err := types.NewStruct(db.Format(), "Commit", types.StructData{
 		"value":   types.Float(9),
 		"parents": mustSet(types.NewSet(ctx, db)),
 	})
 	assert.NoError(err)
-	assert.False(IsCommit(ctx, noMetaCommit))
+	assert.False(IsCommit(noMetaCommit))
 }
 
 func mustCommitToTargetHashes(vrw types.ValueReadWriter, commits ...types.Value) []hash.Hash {
@@ -638,9 +638,9 @@ func TestFindCommonAncestor(t *testing.T) {
 
 		assertCommonAncestor(t, a6, a9, ra9, db, rdb, "common third parent")
 
-		a9c, err := commitFromValue(db.Format(), a9)
+		a9c, err := CommitFromValue(db.Format(), a9)
 		require.NoError(t, err)
-		ra9c, err := commitFromValue(rdb.Format(), ra9)
+		ra9c, err := CommitFromValue(rdb.Format(), ra9)
 		require.NoError(t, err)
 		_, _, err = FindCommonAncestor(context.Background(), ra9c, a9c, db, rdb, db.ns, rdb.ns)
 		assert.Error(err)

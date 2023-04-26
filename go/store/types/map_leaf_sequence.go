@@ -174,7 +174,7 @@ func (ml mapLeafSequence) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return walkRefs(w.buff[:w.offset], ml.format(), cb)
 }
 
-func (ml mapLeafSequence) entries(ctx context.Context) (mapEntrySlice, error) {
+func (ml mapLeafSequence) entries() (mapEntrySlice, error) {
 	dec, count := ml.decoderSkipToValues()
 	entries := mapEntrySlice{
 		make([]mapEntry, count),

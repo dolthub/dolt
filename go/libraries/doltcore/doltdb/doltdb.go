@@ -235,6 +235,7 @@ func (ddb *DoltDB) Close() error {
 	return ddb.db.Close()
 }
 
+// GetHashForRefStr resolves a ref string (such as a branch name or tag) and resolves it to a hash.Hash.
 func (ddb *DoltDB) GetHashForRefStr(ctx context.Context, ref string) (*hash.Hash, error) {
 	if err := datas.ValidateDatasetId(ref); err != nil {
 		return nil, fmt.Errorf("invalid ref format: %s", ref)
@@ -328,6 +329,55 @@ type Roots struct {
 	Staged  *RootValue
 }
 
+func (ddb *DoltDB) getHashFromCommitSpec(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (*hash.Hash, error) {
+	switch cs.csType {
+	case hashCommitSpec:
+		parsedHash, ok := hash.MaybeParse(cs.baseSpec)
+		if !ok {
+			return nil, errors.New("invalid hash: " + cs.baseSpec)
+		}
+		return &parsedHash, nil
+	case refCommitSpec:
+		// For a ref in a CommitSpec, we have the following behavior.
+		// If it starts with `refs/`, we look for an exact match before
+		// we try any suffix matches. After that, we try a match on the
+		// user supplied input, with the following four prefixes, in
+		// order: `refs/`, `refs/heads/`, `refs/tags/`, `refs/remotes/`.
+		candidates := []string{
+			"refs/" + cs.baseSpec,
+			"refs/heads/" + cs.baseSpec,
+			"refs/tags/" + cs.baseSpec,
+			"refs/remotes/" + cs.baseSpec,
+		}
+		if strings.HasPrefix(cs.baseSpec, "refs/") {
+			candidates = []string{
+				cs.baseSpec,
+				"refs/" + cs.baseSpec,
+				"refs/heads/" + cs.baseSpec,
+				"refs/tags/" + cs.baseSpec,
+				"refs/remotes/" + cs.baseSpec,
+			}
+		}
+		for _, candidate := range candidates {
+			valueHash, err := ddb.GetHashForRefStr(ctx, candidate)
+			if err == nil {
+				return valueHash, nil
+			}
+			if err != ErrBranchNotFound {
+				return nil, err
+			}
+		}
+		return nil, fmt.Errorf("%w: %s", ErrBranchNotFound, cs.baseSpec)
+	case headCommitSpec:
+		if cwb == nil {
+			return nil, fmt.Errorf("cannot use a nil current working branch with a HEAD commit spec")
+		}
+		return ddb.GetHashForRefStr(ctx, cwb.String())
+	default:
+		panic("unrecognized commit spec csType: " + cs.csType)
+	}
+}
+
 // Resolve takes a CommitSpec and returns a Commit, or an error if the commit cannot be found.
 // If the CommitSpec is HEAD, Resolve also needs the DoltRef of the current working branch.
 func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (*Commit, error) {
@@ -335,120 +385,17 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 		panic("nil commit spec")
 	}
 
-	var commitVal *datas.Commit
-	var err error
-	switch cs.csType {
-	case hashCommitSpec:
-		commitVal, err = getCommitValForHash(ctx, ddb.vrw, cs.baseSpec)
-	case refCommitSpec:
-		// For a ref in a CommitSpec, we have the following behavior.
-		// If it starts with `refs/`, we look for an exact match before
-		// we try any suffix matches. After that, we try a match on the
-		// user supplied input, with the following four prefixes, in
-		// order: `refs/`, `refs/heads/`, `refs/tags/`, `refs/remotes/`.
-		candidates := []string{
-			"refs/" + cs.baseSpec,
-			"refs/heads/" + cs.baseSpec,
-			"refs/tags/" + cs.baseSpec,
-			"refs/remotes/" + cs.baseSpec,
-		}
-		if strings.HasPrefix(cs.baseSpec, "refs/") {
-			candidates = []string{
-				cs.baseSpec,
-				"refs/" + cs.baseSpec,
-				"refs/heads/" + cs.baseSpec,
-				"refs/tags/" + cs.baseSpec,
-				"refs/remotes/" + cs.baseSpec,
-			}
-		}
-		for _, candidate := range candidates {
-			commitVal, err = getCommitValForRefStr(ctx, ddb, candidate)
-			if err == nil {
-				break
-			}
-			if err != ErrBranchNotFound {
-				return nil, err
-			} else {
-				err = fmt.Errorf("%w: %s", ErrBranchNotFound, cs.baseSpec)
-			}
-		}
-	case headCommitSpec:
-		if cwb == nil {
-			return nil, fmt.Errorf("cannot use a nil current working branch with a HEAD commit spec")
-		}
-		commitVal, err = getCommitValForRefStr(ctx, ddb, cwb.String())
-	default:
-		panic("unrecognized commit spec csType: " + cs.csType)
-	}
-
+	hash, err := ddb.getHashFromCommitSpec(ctx, cs, cwb)
 	if err != nil {
 		return nil, err
 	}
 
-	commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
-	if err != nil {
-		return nil, err
-	}
-	return commit.GetAncestor(ctx, cs.aSpec)
-}
-
-// TODO: trim this down, substantial duplication here
-func (ddb *DoltDB) ResolveByNomsRoot(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef, nomsRoot hash.Hash) (*Commit, error) {
-	if cs == nil {
-		panic("nil commit spec")
-	}
-
-	var commitVal *datas.Commit
-	var err error
-	switch cs.csType {
-	case hashCommitSpec:
-		commitVal, err = getCommitValForHash(ctx, ddb.vrw, cs.baseSpec)
-	case refCommitSpec:
-		// For a ref in a CommitSpec, we have the following behavior.
-		// If it starts with `refs/`, we look for an exact match before
-		// we try any suffix matches. After that, we try a match on the
-		// user supplied input, with the following four prefixes, in
-		// order: `refs/`, `refs/heads/`, `refs/tags/`, `refs/remotes/`.
-		candidates := []string{
-			"refs/" + cs.baseSpec,
-			"refs/heads/" + cs.baseSpec,
-			"refs/tags/" + cs.baseSpec,
-			"refs/remotes/" + cs.baseSpec,
-		}
-		if strings.HasPrefix(cs.baseSpec, "refs/") {
-			candidates = []string{
-				cs.baseSpec,
-				"refs/" + cs.baseSpec,
-				"refs/heads/" + cs.baseSpec,
-				"refs/tags/" + cs.baseSpec,
-				"refs/remotes/" + cs.baseSpec,
-			}
-		}
-		for _, candidate := range candidates {
-			commitVal, err = getCommitValForRefStrByNomsRoot(ctx, ddb, candidate, nomsRoot)
-			if err == nil {
-				break
-			}
-			if err != ErrBranchNotFound {
-				return nil, err
-			} else {
-				err = fmt.Errorf("%w: %s", ErrBranchNotFound, cs.baseSpec)
-			}
-		}
-	case headCommitSpec:
-		if cwb == nil {
-			return nil, fmt.Errorf("cannot use a nil current working branch with a HEAD commit spec")
-		}
-		commitVal, err = getCommitValForRefStrByNomsRoot(ctx, ddb, cwb.String(), nomsRoot)
-	default:
-		panic("unrecognized commit spec csType: " + cs.csType)
-	}
-
+	commitValue, err := datas.LoadCommitAddr(ctx, ddb.vrw, *hash)
 	if err != nil {
 		return nil, err
 	}
 
-	commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
+	commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitValue)
 	if err != nil {
 		return nil, err
 	}

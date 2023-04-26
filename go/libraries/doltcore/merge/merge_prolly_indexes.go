@@ -28,13 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type confVals struct {
-	key      val.Tuple
-	ourVal   val.Tuple
-	theirVal val.Tuple
-	baseVal  val.Tuple
-}
-
 // mergeProllySecondaryIndexes merges the secondary indexes of the given |tbl|,
 // |mergeTbl|, and |ancTbl|. It stores the merged indexes into |tableToUpdate|
 // and returns its updated value.
@@ -46,7 +39,6 @@ func mergeProllySecondaryIndexes(
 	finalRows durable.Index,
 	artifacts *prolly.ArtifactsEditor,
 ) (durable.IndexSet, error) {
-
 	ancSet, err := tm.ancTbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
@@ -178,8 +170,4 @@ func applyEdit(ctx context.Context, idx MutableSecondaryIdx, key, from, to val.T
 		}
 	}
 	return nil
-}
-
-func emptyDiff(d tree.Diff) bool {
-	return d.Key == nil
 }

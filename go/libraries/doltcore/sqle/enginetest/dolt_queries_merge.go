@@ -2881,6 +2881,44 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 	},
 }
 
+var SchemaConflictScripts = []queries.ScriptTest{
+	{
+		Name: "divergent type change causes schema conflict",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c0 varchar(20))",
+			"call dolt_commit('-Am', 'added tabele t')",
+			"call dolt_checkout('-b', 'other')",
+			"alter table t modify column c0 int",
+			"call dolt_commit('-am', 'altered t on branch other')",
+			"call dolt_checkout('main')",
+			"alter table t modify column c0 datetime",
+			"call dolt_commit('-am', 'altered t on branch main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('other')",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query: "select * from dolt_schema_conflicts",
+				Expected: []sql.Row{{
+					"t",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c0` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c0` datetime(6),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c0` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"different column definitions for our column c0 and their column c0",
+				}},
+			},
+			{
+				Query: "select * from dolt_status",
+				Expected: []sql.Row{
+					{"t", false, "schema conflict"},
+				},
+			},
+		},
+	},
+}
+
 // OldFormatMergeConflictsAndCVsScripts tests old format merge behavior
 // where violations are appended and merges are aborted if there are existing
 // violations and/or conflicts.
@@ -4151,6 +4189,35 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 
 	// Schema conflict test cases
 	{
+		Name: "index conflicts: both sides add an index with the same name, same columns, but different type",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+		},
+		RightSetUpScript: []string{
+			"alter table t add index idx1 (col2(2));",
+			"INSERT into t values (1, 10, '100');",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add index idx1 (col2);",
+			"INSERT into t values (2, 20, '200');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query: "select table_name, base_schema, our_schema, their_schema from dolt_schema_conflicts;",
+				Expected: []sql.Row{{"t",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` int,\n  `col2` varchar(100),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` int,\n  `col2` varchar(100),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col2`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` int,\n  `col2` varchar(100),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col2`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+				}},
+			},
+		},
+	},
+
+	{
 		// https://github.com/dolthub/dolt/issues/2973
 		Name: "modifying a column on one side of a merge, and deleting it on the other",
 		AncSetUpScript: []string{
@@ -4164,8 +4231,12 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "call dolt_merge('right');",
-				ExpectedErr: merge.ErrSchemaConflict,
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select table_name from dolt_schema_conflicts",
+				Expected: []sql.Row{{"t"}},
 			},
 		},
 	},
@@ -4182,8 +4253,12 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "call dolt_merge('right');",
-				ExpectedErr: merge.ErrSchemaConflict,
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select table_name from dolt_schema_conflicts",
+				Expected: []sql.Row{{"t"}},
 			},
 		},
 	},

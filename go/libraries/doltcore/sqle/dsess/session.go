@@ -580,7 +580,7 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 		roots.Head = newRoots.Head
 	}
 
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, sessionState.WorkingSet.MergeActive(), mergeParentCommits, sessionState.dbData.Ddb, props)
+	pendingCommit, err := actions.GetCommitStaged(ctx, roots, sessionState.WorkingSet, mergeParentCommits, sessionState.dbData.Ddb, props)
 	if err != nil {
 		if props.Amend {
 			_, err = actions.ResetSoftToRef(ctx, sessionState.dbData, headHash.String())

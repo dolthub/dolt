@@ -193,7 +193,7 @@ func doltCommit(ctx *sql.Context,
 			// updates). The merged root value becomes our new Staged root value which
 			// is the value which we are trying to commit.
 			start := time.Now()
-			pending.Roots.Staged, _, err = merge.MergeRoots(
+			result, err := merge.MergeRoots(
 				ctx,
 				pending.Roots.Staged,
 				curRootVal,
@@ -205,6 +205,7 @@ func doltCommit(ctx *sql.Context,
 			if err != nil {
 				return nil, nil, err
 			}
+			pending.Roots.Staged = result.Root
 
 			// We also need to update the working set to reflect the new staged root value
 			workingSet = workingSet.WithStagedRoot(pending.Roots.Staged)
@@ -330,7 +331,7 @@ func (tx *DoltTransaction) mergeRoots(
 ) (*doltdb.WorkingSet, error) {
 
 	if !rootsEqual(existingWorkingSet.WorkingRoot(), workingSet.WorkingRoot()) {
-		mergedRoot, _, err := merge.MergeRoots(
+		result, err := merge.MergeRoots(
 			ctx,
 			existingWorkingSet.WorkingRoot(),
 			workingSet.WorkingRoot(),
@@ -342,11 +343,11 @@ func (tx *DoltTransaction) mergeRoots(
 		if err != nil {
 			return nil, err
 		}
-		workingSet = workingSet.WithWorkingRoot(mergedRoot)
+		workingSet = workingSet.WithWorkingRoot(result.Root)
 	}
 
 	if !rootsEqual(existingWorkingSet.StagedRoot(), workingSet.StagedRoot()) {
-		mergedRoot, _, err := merge.MergeRoots(
+		result, err := merge.MergeRoots(
 			ctx,
 			existingWorkingSet.StagedRoot(),
 			workingSet.StagedRoot(),
@@ -358,7 +359,7 @@ func (tx *DoltTransaction) mergeRoots(
 		if err != nil {
 			return nil, err
 		}
-		workingSet = workingSet.WithStagedRoot(mergedRoot)
+		workingSet = workingSet.WithStagedRoot(result.Root)
 	}
 
 	return workingSet, nil
