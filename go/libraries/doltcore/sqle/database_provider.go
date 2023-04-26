@@ -39,10 +39,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	dbRevisionDelimiter = "/"
-)
-
 type DoltDatabaseProvider struct {
 	// dbLocations maps a database name to its file system root
 	dbLocations        map[string]filesys.Filesys
@@ -685,7 +681,7 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 
 	// We not only have to delete this database, but any derivative ones that we've stored as a result of USE or
 	// connection strings
-	derivativeNamePrefix := strings.ToLower(dbKey + dbRevisionDelimiter)
+	derivativeNamePrefix := strings.ToLower(dbKey + dsess.DbRevisionDelimiter)
 	for dbName := range p.databases {
 		if strings.HasPrefix(strings.ToLower(dbName), derivativeNamePrefix) {
 			delete(p.databases, dbName)
@@ -733,11 +729,11 @@ func (p DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, n
 }
 
 func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string) (dsess.SqlDatabase, bool, error) {
-	if !strings.Contains(revDB, dbRevisionDelimiter) {
+	if !strings.Contains(revDB, dsess.DbRevisionDelimiter) {
 		return nil, false, nil
 	}
 
-	parts := strings.SplitN(revDB, dbRevisionDelimiter, 2)
+	parts := strings.SplitN(revDB, dsess.DbRevisionDelimiter, 2)
 	dbName, revSpec := parts[0], parts[1]
 
 	p.mu.RLock()
@@ -975,8 +971,8 @@ func (p DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (
 	}
 
 	var dbName string
-	if strings.Contains(revDB, dbRevisionDelimiter) {
-		parts := strings.SplitN(revDB, dbRevisionDelimiter, 2)
+	if strings.Contains(revDB, dsess.DbRevisionDelimiter) {
+		parts := strings.SplitN(revDB, dsess.DbRevisionDelimiter, 2)
 		dbName = parts[0]
 	} else {
 		dbName = revDB
@@ -1123,22 +1119,6 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 	return nil, sql.ErrTableFunctionNotFound.New(name)
 }
 
-// splitRevisionDbName splits the given database name into its base and revision parts and returns them. Non-revision
-// DBs use their full name as the base name, and empty string as the revision.
-func splitRevisionDbName(db sql.Database) (string, string) {
-	sqldb, ok := db.(dsess.SqlDatabase)
-	if !ok {
-		return db.Name(), ""
-	}
-
-	dbName := db.Name()
-	if sqldb.Revision() != "" {
-		dbName = strings.TrimSuffix(dbName, dbRevisionDelimiter+sqldb.Revision())
-	}
-
-	return dbName, sqldb.Revision()
-}
-
 // isRevisionDatabase returns true if the specified dbName represents a database that is tied to a specific
 // branch or commit from a database (e.g. "dolt/branch1").
 func (p DoltDatabaseProvider) isRevisionDatabase(ctx *sql.Context, dbName string) (bool, error) {
@@ -1150,7 +1130,7 @@ func (p DoltDatabaseProvider) isRevisionDatabase(ctx *sql.Context, dbName string
 		return false, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	_, rev := splitRevisionDbName(db)
+	_, rev := dsess.SplitRevisionDbName(db)
 	return rev != "", nil
 }
 
@@ -1256,7 +1236,7 @@ func isTag(ctx context.Context, db dsess.SqlDatabase, tagName string) (bool, err
 // revisionDbForBranch returns a new database that is tied to the branch named by revSpec
 func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec string) (dsess.SqlDatabase, error) {
 	branch := ref.NewBranchRef(revSpec)
-	dbName := srcDb.Name() + dbRevisionDelimiter + revSpec
+	dbName := srcDb.Name() + dsess.DbRevisionDelimiter + revSpec
 
 	static := staticRepoState{
 		branch:          branch,
@@ -1301,11 +1281,11 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 }
 
 func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.InitialDbState, error) {
-	_, revSpec := splitRevisionDbName(srcDb)
+	_, revSpec := dsess.SplitRevisionDbName(srcDb)
 
 	// TODO: this may be a disabled transaction, need to kill those
 	
-	rootHash, err := getTransactionRoot(ctx, srcDb)
+	rootHash, err := dsess.TransactionRoot(ctx, srcDb)
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
@@ -1365,7 +1345,7 @@ func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.I
 }
 
 func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string) (ReadOnlyDatabase, error) {
-	name := srcDb.Name() + dbRevisionDelimiter + revSpec
+	name := srcDb.Name() + dsess.DbRevisionDelimiter + revSpec
 	db := ReadOnlyDatabase{Database: Database{
 		name:     name,
 		ddb:      srcDb.DbData().Ddb,
@@ -1380,7 +1360,7 @@ func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string) (Read
 }
 
 func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.InitialDbState, error) {
-	_, revSpec := splitRevisionDbName(srcDb)
+	_, revSpec := dsess.SplitRevisionDbName(srcDb)
 	tag := ref.NewTagRef(revSpec)
 
 	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, tag)
@@ -1408,7 +1388,7 @@ func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.In
 }
 
 func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string) (ReadOnlyDatabase, error) {
-	name := srcDb.Name() + dbRevisionDelimiter + revSpec
+	name := srcDb.Name() + dsess.DbRevisionDelimiter + revSpec
 	db := ReadOnlyDatabase{Database: Database{
 		name:     name,
 		ddb:      srcDb.DbData().Ddb,
@@ -1423,7 +1403,7 @@ func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 }
 
 func initialStateForCommit(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.InitialDbState, error) {
-	_, revSpec := splitRevisionDbName(srcDb)
+	_, revSpec := dsess.SplitRevisionDbName(srcDb)
 
 	spec, err := doltdb.NewCommitSpec(revSpec)
 	if err != nil {
@@ -1467,12 +1447,12 @@ func (s staticRepoState) CWBHeadRef() ref.DoltRef {
 // formatDbMapKeyName returns formatted string of database name and/or branch name. Database name is case-insensitive,
 // so it's stored in lower case name. Branch name is case-sensitive, so not changed.
 func formatDbMapKeyName(name string) string {
-	if !strings.Contains(name, dbRevisionDelimiter) {
+	if !strings.Contains(name, dsess.DbRevisionDelimiter) {
 		return strings.ToLower(name)
 	}
 
-	parts := strings.SplitN(name, dbRevisionDelimiter, 2)
+	parts := strings.SplitN(name, dsess.DbRevisionDelimiter, 2)
 	dbName, revSpec := parts[0], parts[1]
 
-	return strings.ToLower(dbName) + dbRevisionDelimiter + revSpec
+	return strings.ToLower(dbName) + dsess.DbRevisionDelimiter + revSpec
 }

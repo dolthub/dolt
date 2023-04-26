@@ -99,7 +99,7 @@ func (db Database) RevisionType() dsess.RevisionType {
 }
 
 func (db Database) BaseName() string {
-	base, _ := splitRevisionDbName(db)
+	base, _ := dsess.SplitRevisionDbName(db)
 	return base
 }
 
@@ -360,9 +360,9 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	case doltdb.SchemaConflictsTableName:
 		dt, found = dtables.NewSchemaConflictsTable(ctx, db.name, db.ddb), true
 	case doltdb.BranchesTableName:
-		dt, found = dtables.NewBranchesTable(ctx, db.ddb), true
+		dt, found = dtables.NewBranchesTable(ctx, db), true
 	case doltdb.RemoteBranchesTableName:
-		dt, found = dtables.NewRemoteBranchesTable(ctx, db.ddb), true
+		dt, found = dtables.NewRemoteBranchesTable(ctx, db), true
 	case doltdb.RemotesTableName:
 		dt, found = dtables.NewRemotesTable(ctx, db.ddb), true
 	case doltdb.CommitsTableName:
@@ -489,7 +489,7 @@ func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commi
 		return nil, nil, err
 	}
 
-	nomsRoot, err := getTransactionRoot(ctx, db)
+	nomsRoot, err := dsess.TransactionRoot(ctx, db)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -505,22 +505,6 @@ func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commi
 	}
 
 	return cm, root, nil
-}
-
-func getTransactionRoot(ctx *sql.Context, db dsess.SqlDatabase) (hash.Hash, error) {
-	tx, ok := ctx.GetTransaction().(*dsess.DoltTransaction)
-	// We don't have a real transaction in some cases (esp. PREPARE), in which case we need to use the tip of the data
-	if !ok {
-		return db.DbData().Ddb.NomsRoot(ctx)
-	}
-	
-	baseName, _ := splitRevisionDbName(db)
-	nomsRoot, ok := tx.GetInitialRoot(baseName)
-	if !ok {
-		return hash.Hash{}, fmt.Errorf("could not resolve initial root for database %s", db.Name())
-	}
-	
-	return nomsRoot, nil
 }
 
 // GetTableNamesAsOf implements sql.VersionedDatabase

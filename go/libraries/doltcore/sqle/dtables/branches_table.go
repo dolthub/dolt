@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -34,17 +35,17 @@ var _ sql.ReplaceableTable = (*BranchesTable)(nil)
 
 // BranchesTable is the system table that accesses branches
 type BranchesTable struct {
-	ddb    *doltdb.DoltDB
+	db     dsess.SqlDatabase
 	remote bool
 }
 
 // NewBranchesTable creates a BranchesTable
-func NewBranchesTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
-	return &BranchesTable{ddb, false}
+func NewBranchesTable(_ *sql.Context, db dsess.SqlDatabase) sql.Table {
+	return &BranchesTable{db: db}
 }
 
 // NewRemoteBranchesTable creates a BranchesTable with only remote refs
-func NewRemoteBranchesTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
+func NewRemoteBranchesTable(_ *sql.Context, ddb dsess.SqlDatabase) sql.Table {
 	return &BranchesTable{ddb, true}
 }
 
@@ -95,7 +96,7 @@ func (bt *BranchesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
 func (bt *BranchesTable) PartitionRows(sqlCtx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return NewBranchItr(sqlCtx, bt.ddb, bt.remote)
+	return NewBranchItr(sqlCtx, bt.db, bt.remote)
 }
 
 // BranchItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
@@ -106,17 +107,24 @@ type BranchItr struct {
 }
 
 // NewBranchItr creates a BranchItr from the current environment.
-func NewBranchItr(ctx *sql.Context, ddb *doltdb.DoltDB, remote bool) (*BranchItr, error) {
+func NewBranchItr(ctx *sql.Context, db dsess.SqlDatabase, remote bool) (*BranchItr, error) {
 	var branchRefs []ref.DoltRef
 	var err error
 
+	txRoot, err := dsess.TransactionRoot(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	
+	ddb := db.DbData().Ddb
+	
 	if remote {
-		branchRefs, err = ddb.GetRefsOfType(ctx, map[ref.RefType]struct{}{ref.RemoteRefType: {}})
+		branchRefs, err = ddb.GetRefsOfTypeByNomsRoot(ctx, map[ref.RefType]struct{}{ref.RemoteRefType: {}}, txRoot)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		branchRefs, err = ddb.GetBranches(ctx)
+		branchRefs, err = ddb.GetBranchesByNomsRoot(ctx, txRoot)
 		if err != nil {
 			return nil, err
 		}

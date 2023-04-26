@@ -816,6 +816,11 @@ func (ddb *DoltDB) GetBranches(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, branchRefFilter)
 }
 
+// GetBranches returns a list of all branches in the database.
+func (ddb *DoltDB) GetBranchesByNomsRoot(ctx context.Context, nomsRoot hash.Hash) ([]ref.DoltRef, error) {
+	return ddb.GetRefsOfTypeByNomsRoot(ctx, branchRefFilter, nomsRoot)
+}
+
 // HasBranch returns whether the DB has a branch with the name given, case-insensitive. Returns the case-sensitive
 // matching branch if found, as well as a bool indicating if there was a case-insensitive match, and any error.
 func (ddb *DoltDB) HasBranch(ctx context.Context, branchName string) (string, bool, error) {
@@ -982,12 +987,24 @@ func (ddb *DoltDB) VisitRefsOfType(ctx context.Context, refTypeFilter map[ref.Re
 		return err
 	}
 
+	return visitDatasets(ctx, refTypeFilter, visit, dss)
+}
+
+func (ddb *DoltDB) VisitRefsOfTypeByNomsRoot(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, nomsRoot hash.Hash, visit func(r ref.DoltRef, addr hash.Hash) error) error {
+	dss, err := ddb.db.DatasetsByRootHash(ctx, nomsRoot)
+	if err != nil {
+		return err
+	}
+
+	return visitDatasets(ctx, refTypeFilter, visit, dss)
+}
+
+func visitDatasets(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, visit func(r ref.DoltRef, addr hash.Hash) error, dss datas.DatasetsMap) error {
 	return dss.IterAll(ctx, func(key string, addr hash.Hash) error {
 		keyStr := key
 
-		var dref ref.DoltRef
 		if ref.IsRef(keyStr) {
-			dref, err = ref.Parse(keyStr)
+			dref, err := ref.Parse(keyStr)
 			if err != nil {
 				return err
 			}
@@ -1043,6 +1060,15 @@ func (ddb *DoltDB) GetRefByNameInsensitive(ctx context.Context, refName string) 
 func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) ([]ref.DoltRef, error) {
 	var refs []ref.DoltRef
 	err := ddb.VisitRefsOfType(ctx, refTypeFilter, func(r ref.DoltRef, _ hash.Hash) error {
+		refs = append(refs, r)
+		return nil
+	})
+	return refs, err
+}
+
+func (ddb *DoltDB) GetRefsOfTypeByNomsRoot(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, nomsRoot hash.Hash) ([]ref.DoltRef, error) {
+	var refs []ref.DoltRef
+	err := ddb.VisitRefsOfTypeByNomsRoot(ctx, refTypeFilter, nomsRoot, func(r ref.DoltRef, _ hash.Hash) error {
 		refs = append(refs, r)
 		return nil
 	})

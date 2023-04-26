@@ -1592,3 +1592,41 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
 	return nil
 }
+
+// SplitRevisionDbName splits the given database name into its base and revision parts and returns them. Non-revision
+// DBs use their full name as the base name, and empty string as the revision.
+func SplitRevisionDbName(db SqlDatabase) (string, string) {
+	sqldb, ok := db.(SqlDatabase)
+	if !ok {
+		return db.Name(), ""
+	}
+
+	dbName := db.Name()
+	if sqldb.Revision() != "" {
+		dbName = strings.TrimSuffix(dbName, DbRevisionDelimiter+sqldb.Revision())
+	}
+
+	return dbName, sqldb.Revision()
+}
+
+// TransactionRoot returns the noms root for the given database in the current transaction
+func TransactionRoot(ctx *sql.Context, db SqlDatabase) (hash.Hash, error) {
+	tx, ok := ctx.GetTransaction().(*DoltTransaction)
+	// We don't have a real transaction in some cases (esp. PREPARE), in which case we need to use the tip of the data
+	if !ok {
+		return db.DbData().Ddb.NomsRoot(ctx)
+	}
+
+	baseName, _ := SplitRevisionDbName(db)
+	nomsRoot, ok := tx.GetInitialRoot(baseName)
+	if !ok {
+		return hash.Hash{}, fmt.Errorf("could not resolve initial root for database %s", db.Name())
+	}
+
+	return nomsRoot, nil
+}
+
+const (
+	DbRevisionDelimiter = "/"
+)
+
