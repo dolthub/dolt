@@ -216,14 +216,7 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 			return err
 		}
 
-		if !apr.Contains(AllFlag) {
-			allTblsToBeStashed, err = doltdb.FilterIgnoredTables(ctx, allTblsToBeStashed, roots)
-			if err != nil {
-				return err
-			}
-		}
-
-		roots, err = actions.StageTables(ctx, roots, allTblsToBeStashed)
+		roots, err = actions.StageTables(ctx, roots, allTblsToBeStashed, !apr.Contains(AllFlag))
 		if err != nil {
 			return err
 		}

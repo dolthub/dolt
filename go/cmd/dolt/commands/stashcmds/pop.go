@@ -179,7 +179,8 @@ func applyStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, curWorkingRoot *dol
 	}
 
 	// added tables need to be staged
-	roots, err = actions.StageTables(ctx, roots, meta.TablesToStage)
+	// since these tables are coming from a stash, don't filter for ignored table names.
+	roots, err = actions.StageTables(ctx, roots, meta.TablesToStage, false)
 	if err != nil {
 		return false, err
 	}

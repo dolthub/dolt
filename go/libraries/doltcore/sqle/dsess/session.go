@@ -538,7 +538,7 @@ func (d *DoltSession) PendingCommitAllStaged(ctx *sql.Context, dbName string, pr
 	}
 
 	var err error
-	roots, err = actions.StageAllTables(ctx, roots)
+	roots, err = actions.StageAllTables(ctx, roots, true)
 	if err != nil {
 		return nil, err
 	}

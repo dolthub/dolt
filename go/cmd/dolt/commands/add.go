@@ -79,12 +79,12 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if apr.NArg() == 0 && !allFlag {
 		cli.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		roots, err = actions.StageAllTables(ctx, roots)
+		roots, err = actions.StageAllTables(ctx, roots, !apr.Contains(cli.ForceFlag))
 		if err != nil {
 			return HandleStageError(err)
 		}
 	} else {
-		roots, err = actions.StageTables(ctx, roots, apr.Args)
+		roots, err = actions.StageTables(ctx, roots, apr.Args, !apr.Contains(cli.ForceFlag))
 		if err != nil {
 			return HandleStageError(err)
 		}

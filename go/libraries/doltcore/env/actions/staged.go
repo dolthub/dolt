@@ -21,22 +21,25 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
-func StageTables(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
-	tbls, err := doltdb.FilterIgnoredTables(ctx, tbls, roots)
-	if err != nil {
-		return doltdb.Roots{}, err
+func StageTables(ctx context.Context, roots doltdb.Roots, tbls []string, filterIgnoredTables bool) (doltdb.Roots, error) {
+	if filterIgnoredTables {
+		var err error
+		tbls, err = doltdb.FilterIgnoredTables(ctx, tbls, roots)
+		if err != nil {
+			return doltdb.Roots{}, err
+		}
 	}
 
 	return stageTables(ctx, roots, tbls)
 }
 
-func StageAllTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
+func StageAllTables(ctx context.Context, roots doltdb.Roots, filterIgnoredTables bool) (doltdb.Roots, error) {
 	tbls, err := doltdb.UnionTableNames(ctx, roots.Staged, roots.Working)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
-	return StageTables(ctx, roots, tbls)
+	return StageTables(ctx, roots, tbls, filterIgnoredTables)
 }
 
 func StageModifiedAndDeletedTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
