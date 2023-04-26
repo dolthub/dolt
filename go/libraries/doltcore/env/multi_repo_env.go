@@ -54,6 +54,7 @@ type MultiRepoEnv struct {
 	envs           []NamedEnv
 	fs             filesys.Filesys
 	cfg            config.ReadWriteConfig
+	dialProvider   dbfactory.GRPCDialProvider
 	ignoreLockFile bool
 }
 
@@ -72,6 +73,7 @@ func MultiEnvForDirectory(
 		envs:           make([]NamedEnv, 0),
 		fs:             fs,
 		cfg:            config,
+		dialProvider:   NewGRPCDialProviderFromDoltEnv(dEnv),
 		ignoreLockFile: ignoreLockFile,
 	}
 
@@ -192,6 +194,11 @@ func MultiEnvForPaths(
 		} else if dEnv.CfgLoadErr != nil {
 			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.CfgLoadErr.Error())
 		}
+
+		if mrEnv.dialProvider == nil {
+			mrEnv.dialProvider = NewGRPCDialProviderFromDoltEnv(dEnv)
+		}
+
 		envSet[name] = dEnv
 	}
 
@@ -208,10 +215,7 @@ func (mrEnv *MultiRepoEnv) FileSystem() filesys.Filesys {
 }
 
 func (mrEnv *MultiRepoEnv) RemoteDialProvider() dbfactory.GRPCDialProvider {
-	for _, env := range mrEnv.envs {
-		return env.env
-	}
-	return NewGRPCDialProvider()
+	return mrEnv.dialProvider
 }
 
 func (mrEnv *MultiRepoEnv) Config() config.ReadWriteConfig {
