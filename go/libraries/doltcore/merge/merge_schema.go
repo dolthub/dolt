@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	sqle "github.com/dolthub/go-mysql-server"
@@ -36,6 +37,9 @@ const (
 	ColumnCheckCollision
 	InvalidCheckCollision
 	DeletedCheckCollision
+	// DuplicateIndexColumnSet represent a schema conflict where multiple indexes cover the same set of columns, and
+	// we're unable to accurately match them up on each side of the merge, so the user has to manually resolve.
+	DuplicateIndexColumnSet
 )
 
 type SchemaConflict struct {
@@ -105,7 +109,12 @@ type IdxConflict struct {
 }
 
 func (c IdxConflict) String() string {
-	return ""
+	switch c.Kind {
+	case DuplicateIndexColumnSet:
+		return fmt.Sprintf("multiple indexes covering the same column set cannot be merged: '%s' and '%s'", c.Ours.Name(), c.Theirs.Name())
+	default:
+		return ""
+	}
 }
 
 type FKConflict struct {
@@ -612,9 +621,20 @@ func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.In
 			}
 		}
 
-		theirIdx, ok := theirs.GetIndexByTags(idxTags...)
-		if !ok {
+		// Check that there aren't multiple indexes covering the same columns on "theirs"
+		theirIdx, idxConflict := findIndexInCollectionByTags(ourIdx, theirs)
+		if theirIdx == nil && idxConflict == nil {
 			return false, nil
+		} else if idxConflict != nil {
+			conflicts = append(conflicts, *idxConflict)
+			return true, nil
+		}
+
+		// Check that there aren't multiple indexes covering the same columns on "ours"
+		_, idxConflict = findIndexInCollectionByTags(ourIdx, ours)
+		if idxConflict != nil {
+			conflicts = append(conflicts, *idxConflict)
+			return true, nil
 		}
 
 		if ourIdx.Equals(theirIdx) {
@@ -673,6 +693,35 @@ func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.In
 		return false, nil
 	})
 	return common, conflicts
+}
+
+// findIndexInCollectionByTags searches for a single index in |idxColl| that matches the same tags |idx| covers. If a
+// single matching index is found, then it is returned, along with no IdxConflict. If no matching index is found, then
+// nil is returned for both params. If multiple indexes are found that cover the same set of columns, a nil Index is
+// returned along with an IdxConflict that describes the conflict.
+//
+// Dolt allows you to add multiple indexes that cover the same set of columns, but in this situation, we aren't able
+// to always accurately match up the indexes between ours/theirs/anc in a merge. The set of column tags an
+// index covers was being used as a unique ID for the index, but as our index support has grown and in order to match
+// MySQL's behavior, this isn't guaranteed to be a unique identifier anymore.
+func findIndexInCollectionByTags(idx schema.Index, idxColl schema.IndexCollection) (schema.Index, *IdxConflict) {
+	theirIdxs := idxColl.GetIndexesByTags(idx.IndexedColumnTags()...)
+	switch len(theirIdxs) {
+	case 0:
+		return nil, nil
+	case 1:
+		return theirIdxs[0], nil
+	default:
+		sort.Slice(theirIdxs, func(i, j int) bool {
+			return theirIdxs[i].Name() < theirIdxs[j].Name()
+		})
+
+		return nil, &IdxConflict{
+			Kind:   DuplicateIndexColumnSet,
+			Ours:   theirIdxs[0],
+			Theirs: theirIdxs[1],
+		}
+	}
 }
 
 func indexCollSetDifference(left, right schema.IndexCollection, cc *schema.ColCollection) (d schema.IndexCollection) {

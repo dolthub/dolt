@@ -3722,6 +3722,38 @@ var errTmplNoAutomaticMerge = "table %s can't be automatically merged.\nTo merge
 
 var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
+		// Dolt indexes currently use the set of columns covered by the index, as a unique identifier for matching
+		// indexes on either side of a merge. As Dolt's index support has grown, this isn't guaranteed to be a unique
+		// id anymore, so instead of allowing a race condition in the merge logic, if we detect that multiple indexes
+		// cover the same set of columns, we return a schema conflict and let the user decide how to resolve it.
+		Name: "duplicate index tag set",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 varchar(100));",
+			"INSERT into t values (1, '100'), (2, '200');",
+			"alter table t add unique index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add index idx2 (col1(10));",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '300');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x1}},
+			},
+			{
+				Query: "select table_name, our_schema, their_schema, base_schema, description from dolt_schema_conflicts;",
+				Expected: []sql.Row{{"t",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(100),\n  PRIMARY KEY (`pk`),\n  UNIQUE KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(100),\n  PRIMARY KEY (`pk`),\n  UNIQUE KEY `idx1` (`col1`),\n  KEY `idx2` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(100),\n  PRIMARY KEY (`pk`),\n  UNIQUE KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"multiple indexes covering the same column set cannot be merged: 'idx1' and 'idx2'"}},
+			},
+		},
+	},
+	{
 		Name: "data conflict",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
