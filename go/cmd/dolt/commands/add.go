@@ -73,7 +73,7 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
-		return handleStageError(err)
+		return HandleStageError(err)
 	}
 
 	if apr.NArg() == 0 && !allFlag {
@@ -81,29 +81,29 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
 		roots, err = actions.StageAllTables(ctx, roots)
 		if err != nil {
-			return handleStageError(err)
+			return HandleStageError(err)
 		}
 	} else {
 		roots, err = actions.StageTables(ctx, roots, apr.Args)
 		if err != nil {
-			return handleStageError(err)
+			return HandleStageError(err)
 		}
 	}
 
 	err = dEnv.UpdateRoots(ctx, roots)
 	if err != nil {
-		return handleStageError(err)
+		return HandleStageError(err)
 	}
 
 	return 0
 }
 
-func handleStageError(err error) int {
-	cli.PrintErrln(toAddVErr(err).Verbose())
+func HandleStageError(err error) int {
+	cli.PrintErrln(toStageVErr(err).Verbose())
 	return 1
 }
 
-func toAddVErr(err error) errhand.VerboseError {
+func toStageVErr(err error) errhand.VerboseError {
 	switch {
 	case doltdb.IsRootValUnreachable(err):
 		rt := doltdb.GetUnreachableRootType(err)

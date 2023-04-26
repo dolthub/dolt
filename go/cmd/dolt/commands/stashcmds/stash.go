@@ -96,7 +96,7 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 1
 	}
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, stashDocs, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, stashDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	if dEnv.IsLocked() {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
@@ -104,7 +104,7 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	err := stashChanges(ctx, dEnv, apr)
 	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		return commands.HandleStageError(err)
 	}
 	return 0
 }
