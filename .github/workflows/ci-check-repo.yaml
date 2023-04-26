@@ -106,6 +106,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          submodules: true
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run go mod tidy
         run: go mod tidy
