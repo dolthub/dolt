@@ -118,6 +118,7 @@ var doltSubCommands = []cli.Command{
 	docscmds.Commands,
 	stashcmds.StashCommands,
 	&commands.Assist{},
+	commands.BatseeCmd{},
 }
 var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", doltSubCommands)
 
