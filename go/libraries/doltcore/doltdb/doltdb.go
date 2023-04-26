@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/types/edits"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 func init() {
@@ -329,7 +330,7 @@ type Roots struct {
 	Staged  *RootValue
 }
 
-func (ddb *DoltDB) getHashFromCommitSpec(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (*hash.Hash, error) {
+func (ddb *DoltDB) getHashFromCommitSpec(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef, nomsRoot hash.Hash) (*hash.Hash, error) {
 	switch cs.csType {
 	case hashCommitSpec:
 		parsedHash, ok := hash.MaybeParse(cs.baseSpec)
@@ -359,7 +360,13 @@ func (ddb *DoltDB) getHashFromCommitSpec(ctx context.Context, cs *CommitSpec, cw
 			}
 		}
 		for _, candidate := range candidates {
-			valueHash, err := ddb.GetHashForRefStr(ctx, candidate)
+			var valueHash *hash.Hash
+			var err error
+			if nomsRoot.IsEmpty() {
+				valueHash, err = ddb.GetHashForRefStr(ctx, candidate)
+			} else {
+				valueHash, err = ddb.GetHashForRefStrByNomsRoot(ctx, candidate, nomsRoot)
+			}
 			if err == nil {
 				return valueHash, nil
 			}
@@ -372,7 +379,11 @@ func (ddb *DoltDB) getHashFromCommitSpec(ctx context.Context, cs *CommitSpec, cw
 		if cwb == nil {
 			return nil, fmt.Errorf("cannot use a nil current working branch with a HEAD commit spec")
 		}
-		return ddb.GetHashForRefStr(ctx, cwb.String())
+		if nomsRoot.IsEmpty() {
+			return ddb.GetHashForRefStr(ctx, cwb.String())
+		}else {
+			return ddb.GetHashForRefStrByNomsRoot(ctx, cwb.String(), nomsRoot)
+		}
 	default:
 		panic("unrecognized commit spec csType: " + cs.csType)
 	}
@@ -385,7 +396,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 		panic("nil commit spec")
 	}
 
-	hash, err := ddb.getHashFromCommitSpec(ctx, cs, cwb)
+	hash, err := ddb.getHashFromCommitSpec(ctx, cs, cwb, hash.Hash{})
 	if err != nil {
 		return nil, err
 	}
@@ -401,6 +412,29 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 	}
 	return commit.GetAncestor(ctx, cs.aSpec)
 }
+
+func (ddb *DoltDB) ResolveByNomsRoot(ctx *sql.Context, cs *CommitSpec, cwb ref.DoltRef, root hash.Hash) (*Commit, error) {
+	if cs == nil {
+		panic("nil commit spec")
+	}
+
+	hash, err := ddb.getHashFromCommitSpec(ctx, cs, cwb, root)
+	if err != nil {
+		return nil, err
+	}
+
+	commitValue, err := datas.LoadCommitAddr(ctx, ddb.vrw, *hash)
+	if err != nil {
+		return nil, err
+	}
+
+	commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitValue)
+	if err != nil {
+		return nil, err
+	}
+	return commit.GetAncestor(ctx, cs.aSpec)
+}
+
 
 // ResolveCommitRef takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
 // point to a Commit.
