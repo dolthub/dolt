@@ -154,6 +154,11 @@ func main() {
 func runMain() int {
 	args := os.Args[1:]
 
+	if len(args) == 0 {
+		doltCommand.PrintUsage("dolt")
+		return 1
+	}
+
 	if os.Getenv("DOLT_VERBOSE_ASSERT_TABLE_FILES_CLOSED") == "" {
 		nbs.TableIndexGCFinalizerWithStackTrace = false
 	}
