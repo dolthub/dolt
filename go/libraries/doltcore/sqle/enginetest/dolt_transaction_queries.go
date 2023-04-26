@@ -2280,6 +2280,55 @@ var BranchIsolationTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		Name:         "dolt_branches table has consistent view",
+		SetUpScript:  []string{
+			"create table t1 (a int)",
+			"insert into t1 values (1)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ call dolt_branch('-d', 'b1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ call dolt_branch('b2')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ select name from dolt_branches order by 1",
+				Expected:         []sql.Row{{"b2"}, {"main"}},
+			},
+			{
+				Query:            "/* client b */ commit",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ select name from dolt_branches order by 1",
+				Expected:         []sql.Row{{"b1"}, {"main"}},
+			},
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ select name from dolt_branches order by 1",
+				Expected:         []sql.Row{{"b2"}, {"main"}},
+			},
+		},
+	},
 }
 
 var MultiDbTransactionTests = []queries.ScriptTest{
