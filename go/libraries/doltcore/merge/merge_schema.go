@@ -96,7 +96,7 @@ type ColConflict struct {
 func (c ColConflict) String() string {
 	switch c.Kind {
 	case NameCollision:
-		return fmt.Sprintf("two columns with the same name '%s' have different tags. See https://github.com/dolthub/dolt/issues/3963", c.Ours.Name)
+		return fmt.Sprintf("incompatible column types for column '%s': %s and %s", c.Ours.Name, c.Ours.TypeInfo, c.Theirs.TypeInfo)
 	case TagCollision:
 		return fmt.Sprintf("different column definitions for our column %s and their column %s", c.Ours.Name, c.Theirs.Name)
 	}
@@ -161,7 +161,7 @@ func SchemaMerge(ctx context.Context, format *types.NomsBinFormat, ourSch, their
 	}
 
 	var mergedCC *schema.ColCollection
-	mergedCC, sc.ColConflicts, err = mergeColumns(ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
+	mergedCC, sc.ColConflicts, err = mergeColumns(format, ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
 	if err != nil {
 		return nil, SchemaConflict{}, err
 	}
@@ -312,9 +312,11 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 // mergeColumns merges the columns from |ourCC|, |theirCC| into a single column collection, using the ancestor column
 // definitions in |ancCC| to determine on which side a column has changed. If merging is not possible because of
 // conflicting changes to the columns in |ourCC| and |theirCC|, then a set of ColConflict instances are returned
-// describing the conflicts. If any other, unexpected error occurs, then that error is returned and the other response
-// fields should be ignored.
-func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, error) {
+// describing the conflicts. |format| indicates what storage format is in use, and is needed to determine compatibility
+// between types, since different storage formats have different restrictions on how much types can change and remain
+// compatible with the current stored format. If any unexpected error occurs, then that error is returned and the
+// other response fields should be ignored.
+func mergeColumns(format *types.NomsBinFormat, ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, error) {
 	columnMappings, err := mapColumns(ourCC, theirCC, ancCC)
 	if err != nil {
 		return nil, nil, err
@@ -353,9 +355,25 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColColle
 				if oursChanged && theirsChanged {
 					// This is a schema change conflict and has already been handled by checkSchemaConflicts
 				} else if theirsChanged {
-					mergedColumns = append(mergedColumns, *theirs)
+					if columnTypesAreCompatible(format, *ours, *theirs) {
+						mergedColumns = append(mergedColumns, *theirs)
+					} else {
+						conflicts = append(conflicts, ColConflict{
+							Kind:   NameCollision,
+							Ours:   *ours,
+							Theirs: *theirs,
+						})
+					}
 				} else {
-					mergedColumns = append(mergedColumns, *ours)
+					if columnTypesAreCompatible(format, *theirs, *ours) {
+						mergedColumns = append(mergedColumns, *ours)
+					} else {
+						conflicts = append(conflicts, ColConflict{
+							Kind:   NameCollision,
+							Ours:   *ours,
+							Theirs: *theirs,
+						})
+					}
 				}
 			} else if ours.Equals(*theirs) {
 				// if the columns are identical, just use ours
@@ -484,6 +502,34 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 	}
 
 	return conflicts, nil
+}
+
+// columnTypesAreCompatible returns true if the change from |from| to |to| is a compatible type change.
+// Currently, no type change for the DOLT storage format is considered compatible, but over time we will
+// widen this to include safe type migrations (e.g. smallint to bigint, varchar(100) to varchar(200)), which
+// can require rewriting existing stored data to be compatible with the new type. For the older LD_1 storage
+// format, we are looser with type equality and consider them compatible as long as the types are in the
+// same type family/kind.
+func columnTypesAreCompatible(format *types.NomsBinFormat, from, to schema.Column) bool {
+	if !from.TypeInfo.Equals(to.TypeInfo) {
+		if types.IsFormat_DOLT(format) {
+			// All type changes are incompatible, for the DOLT storage format.
+			// TODO: this is overly broad, and should be narrowed down
+			return false
+		}
+
+		if from.Kind != to.Kind {
+			return false
+		}
+
+		if schema.IsColSpatialType(to) {
+			// We need to do this because some spatial type changes require a full table check, but not all.
+			// TODO: This could be narrowed down to a smaller set of spatial type changes
+			return false
+		}
+	}
+
+	return true
 }
 
 // columnMapping describes the mapping for a column being merged between the two sides of the merge as well as the ancestor.
