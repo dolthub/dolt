@@ -137,7 +137,25 @@ func resolveConflictingPatterns(trueMatches, falseMatches []string, tableName st
 	if len(falseMatchesToRemove) == len(falseMatches) {
 		return true, nil
 	}
-	return false, fmt.Errorf("dolt_ignore has multiple conflicting rules for %s", tableName)
+
+	// There's a conflict. Remove the less specific patterns so that only the conflict remains.
+
+	var conflictingTrueMatches []string
+	var conflictingFalseMatches []string
+
+	for _, trueMatch := range trueMatches {
+		if _, ok := trueMatchesToRemove[trueMatch]; !ok {
+			conflictingTrueMatches = append(conflictingTrueMatches, trueMatch)
+		}
+	}
+
+	for _, falseMatch := range falseMatches {
+		if _, ok := trueMatchesToRemove[falseMatch]; !ok {
+			conflictingFalseMatches = append(conflictingFalseMatches, falseMatch)
+		}
+	}
+
+	return false, DoltIgnoreConflict{Table: tableName, TruePatterns: conflictingTrueMatches, FalsePatterns: conflictingFalseMatches}
 }
 
 func (ip *IgnorePatterns) IsTableNameIgnored(tableName string) (bool, error) {

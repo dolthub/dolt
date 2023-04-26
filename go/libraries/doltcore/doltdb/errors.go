@@ -170,3 +170,48 @@ func GetUnreachableRootCause(err error) error {
 
 	return rvu.Cause
 }
+
+type DoltIgnoreConflict struct {
+	Table         string
+	TruePatterns  []string
+	FalsePatterns []string
+}
+
+func (dc DoltIgnoreConflict) Error() string {
+	return fmt.Sprintf("dolt_ignore has multiple conflicting rules for %s", dc.Table)
+}
+
+func IsDoltIgnoreInConflict(err error) bool {
+	_, ok := err.(DoltIgnoreConflict)
+	return ok
+}
+
+func DoltIgnoreConflictTableName(err error) string {
+	dc, ok := err.(DoltIgnoreConflict)
+
+	if !ok {
+		panic("Must validate with IsDoltIgnoreInConflict before calling DoltIgnoreConflictTableName")
+	}
+
+	return dc.Table
+}
+
+func DoltIgnoreConflictTruePatterns(err error) []string {
+	dc, ok := err.(DoltIgnoreConflict)
+
+	if !ok {
+		panic("Must validate with IsDoltIgnoreInConflict before calling DoltIgnoreConflictTruePatterns")
+	}
+
+	return dc.TruePatterns
+}
+
+func DoltIgnoreConflictFalsePatterns(err error) []string {
+	dc, ok := err.(DoltIgnoreConflict)
+
+	if !ok {
+		panic("Must validate with IsDoltIgnoreInConflict before calling DoltIgnoreConflictFalsePatterns")
+	}
+
+	return dc.FalsePatterns
+}

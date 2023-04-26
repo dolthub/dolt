@@ -127,7 +127,21 @@ func toAddVErr(err error) errhand.VerboseError {
 		}
 
 		return bdr.Build()
+	case doltdb.IsDoltIgnoreInConflict(err):
+		tbl := doltdb.DoltIgnoreConflictTableName(err)
+		truePatterns := doltdb.DoltIgnoreConflictTruePatterns(err)
+		falsePatterns := doltdb.DoltIgnoreConflictFalsePatterns(err)
+		bdr := errhand.BuildDError("error: the table %s matches conflicting patterns in dolt_ignore", tbl)
 
+		for _, pattern := range truePatterns {
+			bdr.AddDetails("ignored:     %s", pattern)
+		}
+
+		for _, pattern := range falsePatterns {
+			bdr.AddDetails("not ignored: %s", pattern)
+		}
+
+		return bdr.Build()
 	default:
 		return errhand.BuildDError("Unknown error").AddCause(err).Build()
 	}
