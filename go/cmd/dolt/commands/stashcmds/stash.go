@@ -42,6 +42,7 @@ var StashCommands = cli.NewSubCommandHandlerWithUnspecified("stash", "Stash the 
 
 const (
 	IncludeUntrackedFlag = "include-untracked"
+	AllFlag              = "all"
 )
 
 var stashDocs = cli.CommandDocumentationContent{
@@ -78,7 +79,8 @@ func (cmd StashCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd StashCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(IncludeUntrackedFlag, "u", "All untracked files (added tables) are also stashed.")
+	ap.SupportsFlag(IncludeUntrackedFlag, "u", "Untracked files (added tables) are also stashed.")
+	ap.SupportsFlag(AllFlag, "a", "All files are staged, including untracked and ignored files.")
 	return ap
 }
 
@@ -142,18 +144,24 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	if err != nil {
 		return fmt.Errorf("couldn't get working root, cause: %s", err.Error())
 	}
-
 	if headHash.Equal(stagedHash) {
 		if headHash.Equal(workingHash) {
 			cli.Println("No local changes to save")
 			return nil
-		} else if allUntracked, err := allAreUntrackedFilesInWorkingSet(ctx, roots); err != nil {
+		} else if allUntracked, err := workingSetContainsOnlyUntrackedTables(ctx, roots); err != nil {
 			return err
 		} else if !apr.Contains(IncludeUntrackedFlag) && allUntracked {
 			// if all changes in working set are untracked files, then no local changes to save
 			cli.Println("No local changes to save")
 			return nil
+		} else if allIgnored, err := workingSetContainsOnlyIgnoredTables(ctx, roots); err != nil {
+			return err
+		} else if !apr.Contains(AllFlag) && allIgnored {
+			// if all changes in working set are ignored files, then no local changes to save
+			cli.Println("No local changes to save")
+			return nil
 		}
+
 	}
 
 	roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
@@ -171,10 +179,17 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	// stage untracked files to include them in the stash,
 	// but do not include them in added table set,
 	// because they should not be staged when popped.
-	if apr.Contains(IncludeUntrackedFlag) {
+	if apr.Contains(IncludeUntrackedFlag) || apr.Contains(AllFlag) {
 		allTblsToBeStashed, err = doltdb.UnionTableNames(ctx, roots.Staged, roots.Working)
 		if err != nil {
 			return err
+		}
+
+		if !apr.Contains(AllFlag) {
+			allTblsToBeStashed, err = doltdb.FilterIgnoredTables(ctx, allTblsToBeStashed, roots)
+			if err != nil {
+				return err
+			}
 		}
 
 		roots, err = actions.StageTables(ctx, roots, allTblsToBeStashed)
@@ -224,17 +239,46 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	return nil
 }
 
-// allAreUntrackedFilesInWorkingSet returns true if all changes in working set are untracked files/added tables.
+// workingSetContainsOnlyUntrackedTables returns true if all changes in working set are untracked files/added tables.
 // Untracked files are part of working set changes, but should not be stashed unless staged or --include-untracked flag is used.
-func allAreUntrackedFilesInWorkingSet(ctx context.Context, roots doltdb.Roots) (bool, error) {
+func workingSetContainsOnlyUntrackedTables(ctx context.Context, roots doltdb.Roots) (bool, error) {
 	_, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
 		return false, err
 	}
 
+	// All ignored files are also untracked files
 	for _, tableDelta := range unstaged {
 		if !tableDelta.IsAdd() {
 			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+// workingSetContainsOnlyIgnoredTables returns true if all changes in working set are ignored  tables.
+// Note that only unstaged tables are subject to dolt_ignore (this is consistent with what git does.)
+func workingSetContainsOnlyIgnoredTables(ctx context.Context, roots doltdb.Roots) (bool, error) {
+	_, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
+	if err != nil {
+		return false, err
+	}
+
+	ignorePatterns, err := doltdb.GetIgnoredTablePatterns(ctx, roots)
+	if err != nil {
+		return false, err
+	}
+
+	for _, tableDelta := range unstaged {
+		if !(tableDelta.IsAdd()) {
+			isIgnored, err := ignorePatterns.IsTableNameIgnored(tableDelta.ToName)
+			if err != nil {
+				return false, err
+			}
+			if !isIgnored {
+				return false, nil
+			}
 		}
 	}
 
