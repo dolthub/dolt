@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 	"io"
 	"regexp"
 	"strings"
@@ -56,6 +57,13 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots) (IgnorePatterns, 
 	}
 	keyDesc, valueDesc := ignoreTableSchema.GetMapDescriptors()
 
+	if !keyDesc.Equals(val.NewTupleDescriptor(val.Type{Enc: val.StringEnc})) {
+		return nil, fmt.Errorf("dolt_ignore had unexpected key type, this should never happen")
+	}
+	if !valueDesc.Equals(val.NewTupleDescriptor(val.Type{Enc: val.Int8Enc, Nullable: true})) {
+		return nil, fmt.Errorf("dolt_ignore had unexpected value type, this should never happen")
+	}
+
 	ignoreTableMap, err := durable.ProllyMapFromIndex(index).IterAll(ctx)
 	if err != nil {
 		return nil, err
@@ -68,7 +76,7 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots) (IgnorePatterns, 
 		if err != nil {
 			return nil, err
 		}
-		// TODO(nicktobey), assert schema is what we expect.
+
 		pattern, ok := keyDesc.GetString(0, keyTuple)
 		if !ok {
 			return nil, fmt.Errorf("could not read pattern")
