@@ -189,7 +189,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 		colCollection := schema.NewColCollection(
 			schema.Column{
 				Name:          "pattern",
-				Tag:           1,
+				Tag:           schema.DoltIgnorePatternTag,
 				Kind:          types.StringKind,
 				IsPartOfPK:    true,
 				TypeInfo:      typeinfo.FromKind(types.StringKind),
@@ -200,7 +200,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 			},
 			schema.Column{
 				Name:          "ignored",
-				Tag:           2,
+				Tag:           schema.DoltIgnoreIgnoredTag,
 				Kind:          types.BoolKind,
 				IsPartOfPK:    false,
 				TypeInfo:      typeinfo.FromKind(types.BoolKind),
