@@ -74,13 +74,13 @@ func (cmd RootsCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd RootsCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsInt(numFilesParam, "n", "number", "Number of table files to scan.")
 	return ap
 }
 
 // Exec executes the command
-func (cmd RootsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd RootsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

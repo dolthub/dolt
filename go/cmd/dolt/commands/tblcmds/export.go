@@ -171,7 +171,7 @@ func (cmd ExportCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd ExportCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 2)
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table being exported."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being output to."})
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
@@ -185,7 +185,7 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, exportDocs, ap))
 

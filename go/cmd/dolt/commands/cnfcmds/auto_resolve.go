@@ -51,8 +51,7 @@ func AutoResolveAll(ctx context.Context, dEnv *env.DoltEnv, strategy AutoResolve
 		return err
 	}
 
-	tbls, err := root.TablesInConflict(ctx)
-
+	tbls, err := root.GetTableNames(ctx)
 	if err != nil {
 		return err
 	}
@@ -63,26 +62,77 @@ func AutoResolveAll(ctx context.Context, dEnv *env.DoltEnv, strategy AutoResolve
 // AutoResolveTables resolves all conflicts in the given tables according to the
 // given |strategy|.
 func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, strategy AutoResolveStrategy, tbls []string) error {
-	root, err := dEnv.WorkingRoot(ctx)
+	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		return err
 	}
 
-	for _, tblName := range tbls {
-		err = ResolveTable(ctx, dEnv, root, tblName, strategy)
+	// schema conflicts
+	if ws.MergeActive() {
+		ws, err = ResolveSchemaConflicts(ctx, dEnv.DoltDB, ws, tbls, strategy)
 		if err != nil {
+			return err
+		}
+		if err = dEnv.UpdateWorkingSet(ctx, ws); err != nil {
 			return err
 		}
 	}
 
+	// data conflicts
+	for _, tblName := range tbls {
+		err = ResolveDataConflicts(ctx, dEnv, ws, tblName, strategy)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
-// ResolveTable resolves all conflicts in the given table according to the given
+func ResolveSchemaConflicts(ctx context.Context, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, tables []string, strategy AutoResolveStrategy) (*doltdb.WorkingSet, error) {
+	tblSet := set.NewStrSet(tables)
+	updates := make(map[string]*doltdb.Table)
+	err := ws.MergeState().IterSchemaConflicts(ctx, ddb, func(table string, conflict doltdb.SchemaConflict) error {
+		if !tblSet.Contains(table) {
+			return nil
+		}
+		ours, theirs := conflict.GetConflictingTables()
+		switch strategy {
+		case AutoResolveStrategyOurs:
+			updates[table] = ours
+		case AutoResolveStrategyTheirs:
+			updates[table] = theirs
+		default:
+			panic("unhandled auto resolve strategy")
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	root := ws.WorkingRoot()
+	for name, tbl := range updates {
+		if root, err = root.PutTable(ctx, name, tbl); err != nil {
+			return nil, err
+		}
+	}
+
+	// clear resolved schema conflicts
+	var unmerged []string
+	for _, tbl := range ws.MergeState().TablesWithSchemaConflicts() {
+		if tblSet.Contains(tbl) {
+			continue
+		}
+		unmerged = append(unmerged, tbl)
+	}
+	return ws.WithWorkingRoot(root).WithUnmergableTables(unmerged), nil
+}
+
+// ResolveDataConflicts resolves all conflicts in the given table according to the given
 // |strategy|. It errors if the schema of the conflict version you are choosing
 // differs from the current schema.
-func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, tblName string, strategy AutoResolveStrategy) (err error) {
-	tbl, ok, err := root.GetTable(ctx, tblName)
+func ResolveDataConflicts(ctx context.Context, dEnv *env.DoltEnv, ws *doltdb.WorkingSet, tblName string, strategy AutoResolveStrategy) (err error) {
+	tbl, ok, err := ws.WorkingRoot().GetTable(ctx, tblName)
 	if err != nil {
 		return err
 	}
@@ -92,8 +142,7 @@ func ResolveTable(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 	has, err := tbl.HasConflicts(ctx)
 	if err != nil {
 		return err
-	}
-	if !has {
+	} else if !has {
 		return nil
 	}
 

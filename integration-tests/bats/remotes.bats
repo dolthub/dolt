@@ -2244,7 +2244,7 @@ SQL
 
     run dolt sql -q "call dolt_clone('file://$tempDir/remote', 'foo', 'bar')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: invalid number of arguments" ]] || false
+    [[ "$output" =~ "error: clone has too many positional arguments." ]] || false
 
     # Clone a local database and check for all the branches
     run dolt sql -q "call dolt_clone('file://$tempDir/remote');"

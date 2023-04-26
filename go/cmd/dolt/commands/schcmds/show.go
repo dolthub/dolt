@@ -61,7 +61,7 @@ func (cmd ShowCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd ShowCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs(cmd.Name())
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table(s) whose schema is being displayed."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"commit", "commit at which point the schema will be displayed."})
 	return ap
@@ -73,7 +73,7 @@ func (cmd ShowCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tblSchemaDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

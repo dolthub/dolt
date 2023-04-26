@@ -19,7 +19,7 @@ import (
 	"errors"
 	"strings"
 
-	flatbuffers "github.com/google/flatbuffers/go"
+	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -38,7 +38,7 @@ func NewStash(ctx context.Context, nbf *types.NomsBinFormat, vrw types.ValueRead
 			return hash.Hash{}, types.Ref{}, err
 		}
 
-		isCommit, err := IsCommit(ctx, headCommit)
+		isCommit, err := IsCommit(headCommit)
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
 		}

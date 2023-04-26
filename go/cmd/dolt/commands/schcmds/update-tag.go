@@ -58,14 +58,14 @@ func (cmd UpdateTagCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd UpdateTagCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 3)
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The name of the table"})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"column", "The name of the column"})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"tag", "The new tag value"})
 	return ap
 }
 
-func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, updateTagDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

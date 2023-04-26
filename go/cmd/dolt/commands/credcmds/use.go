@@ -68,12 +68,12 @@ func (cmd UseCmd) EventType() eventsapi.ClientEventType {
 }
 
 func (cmd UseCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)
 	return ap
 }
 
 // Exec executes the command
-func (cmd UseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd UseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, useDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

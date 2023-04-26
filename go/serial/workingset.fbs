@@ -36,6 +36,8 @@ table MergeState {
   // The spec that was used to identify the commit that we are merging. Optional
   // for backwards compatibility.
   from_commit_spec_str:string;
+
+  unmergable_tables:[string];
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

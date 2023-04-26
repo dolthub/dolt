@@ -83,7 +83,7 @@ func (cmd FilterBranchCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd FilterBranchCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs(cmd.Name())
 	ap.SupportsFlag(cli.VerboseFlag, "v", "logs more information")
 	ap.SupportsFlag(branchesFlag, "b", "filter all branches")
 	ap.SupportsFlag(cli.AllFlag, "a", "filter all branches and tags")
@@ -96,7 +96,7 @@ func (cmd FilterBranchCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, filterBranchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

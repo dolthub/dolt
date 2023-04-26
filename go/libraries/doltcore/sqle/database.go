@@ -369,6 +369,8 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.name, db.ddb), true
 	case doltdb.TableOfTablesWithViolationsName:
 		dt, found = dtables.NewTableOfTablesConstraintViolations(ctx, root), true
+	case doltdb.SchemaConflictsTableName:
+		dt, found = dtables.NewSchemaConflictsTable(ctx, db.name, db.ddb), true
 	case doltdb.BranchesTableName:
 		dt, found = dtables.NewBranchesTable(ctx, db.ddb), true
 	case doltdb.RemoteBranchesTableName:
@@ -386,7 +388,11 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			map[string]env.Remote{},
 			map[string]env.BranchConfig{},
 			map[string]env.Remote{})
-		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, adapter), true
+		ws, err := sess.WorkingSet(ctx, db.name)
+		if err != nil {
+			return nil, false, err
+		}
+		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, ws, adapter), true
 	case doltdb.MergeStatusTableName:
 		dt, found = dtables.NewMergeStatusTable(db.name), true
 	case doltdb.TagsTableName:

@@ -94,7 +94,7 @@ func (cmd DumpCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd DumpCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsString(FormatFlag, "r", "result_file_type", "Define the type of the output file. Defaults to sql. Valid values are sql, csv, json and parquet.")
 	ap.SupportsString(filenameFlag, "fn", "file_name", "Define file name for dump file. Defaults to `doltdump.sql`.")
 	ap.SupportsString(directoryFlag, "d", "directory_name", "Define directory name to dump the files in. Defaults to `doltdump/`.")
@@ -113,14 +113,10 @@ func (cmd DumpCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, dumpDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-
-	if apr.NArg() > 0 {
-		return HandleVErrAndExitCode(errhand.BuildDError("too many arguments").SetPrintUsage().Build(), usage)
-	}
 
 	root, verr := GetWorkingWithVErr(dEnv)
 	if verr != nil {

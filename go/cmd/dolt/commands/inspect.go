@@ -67,13 +67,13 @@ func (cmd InspectCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd InspectCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(tableFileIndexFlag, "i", "Measure distribution error in table file chunk indexes.")
 	return ap
 }
 
 // Exec executes the command
-func (cmd InspectCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd InspectCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

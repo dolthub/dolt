@@ -28,6 +28,20 @@ type MergeStats struct {
 	Adds                 int
 	Deletes              int
 	Modifications        int
-	Conflicts            int
+	DataConflicts        int
+	SchemaConflicts      int
 	ConstraintViolations int
+}
+
+func (ms *MergeStats) HasConflicts() bool {
+	return ms.DataConflicts > 0 ||
+		ms.SchemaConflicts > 0
+}
+
+func (ms *MergeStats) HasConstraintViolations() bool {
+	return ms.ConstraintViolations > 0
+}
+
+func (ms *MergeStats) HasArtifacts() bool {
+	return ms.HasConflicts() || ms.HasConstraintViolations()
 }

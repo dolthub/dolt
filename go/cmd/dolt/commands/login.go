@@ -80,7 +80,7 @@ func (cmd LoginCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd LoginCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)
 	ap.SupportsString(authEndpointParam, "e", "hostname:port", fmt.Sprintf("Specify the endpoint used to authenticate this client. Must be used with --%s OR set in the configuration file as `%s`", loginURLParam, env.AddCredsUrlKey))
 	ap.SupportsString(loginURLParam, "url", "url", "Specify the login url where the browser will add credentials.")
 	ap.SupportsFlag(insecureParam, "i", "If set, makes insecure connection to remote authentication server")
@@ -94,7 +94,7 @@ func (cmd LoginCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, loginDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

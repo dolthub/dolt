@@ -62,7 +62,7 @@ func (cmd ExportCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd ExportCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 2)
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table whose schema is being exported."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "the file to which the schema will be exported."})
 	return ap
@@ -74,7 +74,7 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, schExportDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

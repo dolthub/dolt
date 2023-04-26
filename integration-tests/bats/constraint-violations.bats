@@ -35,6 +35,7 @@ SQL
     [[ "$output" =~ "table,num_violations" ]] || false
     [[ "$output" =~ "test,2" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
+    dolt status
     run dolt status
     log_status_eq "0"
     [[ "$output" =~ "fix constraint violations" ]] || false

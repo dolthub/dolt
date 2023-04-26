@@ -60,13 +60,13 @@ func (cmd DiffCmd) Docs() *cli.CommandDocumentation {
 
 // ArgParser implements cli.Command.
 func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"doc", "Dolt doc to be diffed."})
 	return ap
 }
 
 // Exec implements cli.Command.
-func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, diffDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

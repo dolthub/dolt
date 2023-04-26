@@ -21,8 +21,6 @@
 
 package types
 
-import "context"
-
 // IsSubtype determines whether concreteType is a subtype of requiredType. For example, `Float` is a subtype of `Float | String`.
 func IsSubtype(nbf *NomsBinFormat, requiredType, concreteType *Type) bool {
 	isSub, _ := isSubtypeTopLevel(nbf, requiredType, concreteType)
@@ -177,8 +175,8 @@ func compoundSubtype(nbf *NomsBinFormat, requiredType, concreteType *Type, hasEx
 	return isSubtypeDetails(nbf, requiredType, concreteType, hasExtra, parentStructTypes)
 }
 
-func IsValueSubtypeOf(ctx context.Context, nbf *NomsBinFormat, v Value, t *Type) (bool, error) {
-	isSub, _, err := isValueSubtypeOfDetails(ctx, nbf, v, t, false)
+func IsValueSubtypeOf(nbf *NomsBinFormat, v Value, t *Type) (bool, error) {
+	isSub, _, err := isValueSubtypeOfDetails(nbf, v, t, false)
 
 	if err != nil {
 		return false, err
@@ -211,11 +209,11 @@ func IsValueSubtypeOf(ctx context.Context, nbf *NomsBinFormat, v Value, t *Type)
 //	                                  }
 //
 // IsValueSubtypeOfDetails(v, type1) would return isSub == true, and hasExtra == true
-func IsValueSubtypeOfDetails(ctx context.Context, nbf *NomsBinFormat, v Value, t *Type) (bool, bool, error) {
-	return isValueSubtypeOfDetails(ctx, nbf, v, t, false)
+func IsValueSubtypeOfDetails(nbf *NomsBinFormat, v Value, t *Type) (bool, bool, error) {
+	return isValueSubtypeOfDetails(nbf, v, t, false)
 }
 
-func isValueSubtypeOfDetails(ctx context.Context, nbf *NomsBinFormat, v Value, t *Type, hasExtra bool) (bool, bool, error) {
+func isValueSubtypeOfDetails(nbf *NomsBinFormat, v Value, t *Type, hasExtra bool) (bool, bool, error) {
 	switch t.TargetKind() {
 	case ValueKind:
 		return true, hasExtra, nil
@@ -241,7 +239,7 @@ func isValueSubtypeOfDetails(ctx context.Context, nbf *NomsBinFormat, v Value, t
 				anonStruct = et
 				continue
 			}
-			isSub, hasMore, err := isValueSubtypeOfDetails(ctx, nbf, v, et, hasExtra)
+			isSub, hasMore, err := isValueSubtypeOfDetails(nbf, v, et, hasExtra)
 
 			if err != nil {
 				return false, false, err
@@ -254,7 +252,7 @@ func isValueSubtypeOfDetails(ctx context.Context, nbf *NomsBinFormat, v Value, t
 		}
 
 		if anonStruct != nil {
-			isSub, hasMore, err := isValueSubtypeOfDetails(ctx, nbf, v, anonStruct, hasExtra)
+			isSub, hasMore, err := isValueSubtypeOfDetails(nbf, v, anonStruct, hasExtra)
 
 			if err != nil {
 				return false, false, err
@@ -300,7 +298,7 @@ func isValueSubtypeOfDetails(ctx context.Context, nbf *NomsBinFormat, v Value, t
 					return false, hasExtra, nil
 				}
 			} else {
-				isSub, hasMore, err := isValueSubtypeOfDetails(ctx, nbf, fv, f.Type, hasExtra)
+				isSub, hasMore, err := isValueSubtypeOfDetails(nbf, fv, f.Type, hasExtra)
 
 				if err != nil {
 					return false, false, err
@@ -332,14 +330,14 @@ func isValueSubtypeOfDetails(ctx context.Context, nbf *NomsBinFormat, v Value, t
 			kt := desc.ElemTypes[0]
 			vt := desc.ElemTypes[1]
 			if seq, ok := v.orderedSequence.(mapLeafSequence); ok {
-				meSl, err := seq.entries(ctx)
+				meSl, err := seq.entries()
 
 				if err != nil {
 					return false, false, err
 				}
 
 				for _, entry := range meSl.entries {
-					isSub, hasMore, err := isValueSubtypeOfDetails(ctx, nbf, entry.key, kt, hasExtra)
+					isSub, hasMore, err := isValueSubtypeOfDetails(nbf, entry.key, kt, hasExtra)
 
 					if err != nil {
 						return false, false, err
@@ -350,7 +348,7 @@ func isValueSubtypeOfDetails(ctx context.Context, nbf *NomsBinFormat, v Value, t
 					}
 
 					hasExtra = hasExtra || hasMore
-					isSub, hasExtra, err = isValueSubtypeOfDetails(ctx, nbf, entry.value, vt, hasExtra)
+					isSub, hasExtra, err = isValueSubtypeOfDetails(nbf, entry.value, vt, hasExtra)
 
 					if err != nil {
 						return false, false, err
@@ -373,7 +371,7 @@ func isValueSubtypeOfDetails(ctx context.Context, nbf *NomsBinFormat, v Value, t
 					return false, false, err
 				}
 				for _, v := range vals {
-					isSub, hasMore, err := isValueSubtypeOfDetails(ctx, nbf, v, et, hasExtra)
+					isSub, hasMore, err := isValueSubtypeOfDetails(nbf, v, et, hasExtra)
 
 					if err != nil {
 						return false, false, err
@@ -397,7 +395,7 @@ func isValueSubtypeOfDetails(ctx context.Context, nbf *NomsBinFormat, v Value, t
 				}
 
 				for _, v := range vals {
-					isSub, hasMore, err := isValueSubtypeOfDetails(ctx, nbf, v, et, hasExtra)
+					isSub, hasMore, err := isValueSubtypeOfDetails(nbf, v, et, hasExtra)
 
 					if err != nil {
 						return false, false, err

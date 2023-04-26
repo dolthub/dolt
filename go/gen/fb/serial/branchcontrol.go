@@ -17,7 +17,7 @@
 package serial
 
 import (
-	flatbuffers "github.com/google/flatbuffers/go"
+	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 )
 
 type BranchControl struct {

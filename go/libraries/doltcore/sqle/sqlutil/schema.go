@@ -16,9 +16,11 @@ package sqlutil
 
 import (
 	"context"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/parse"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -29,14 +31,18 @@ import (
 // is used to generate unique tags for the Schema
 func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, query string) (string, schema.Schema, error) {
 	// todo: verify create table statement
-	ddl, err := sqlparser.Parse(query)
+	p, err := sqlparser.Parse(query)
+	if err != nil {
+		return "", nil, err
+	}
+	ddl := p.(*sqlparser.DDL)
 
+	sctx := sql.NewContext(ctx)
+	s, collation, err := parse.TableSpecToSchema(sctx, ddl.TableSpec, false)
 	if err != nil {
 		return "", nil, err
 	}
 
-	ts := ddl.(*sqlparser.DDL).TableSpec
-	s, collation, err := parse.TableSpecToSchema(sql.NewContext(ctx), ts, false)
 	for _, col := range s.Schema {
 		if collatedType, ok := col.Type.(sql.TypeWithCollation); ok {
 			col.Type, err = collatedType.WithNewCollation(sql.Collation_Default)
@@ -46,19 +52,61 @@ func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, quer
 		}
 	}
 
-	if err != nil {
-		return "", nil, err
-	}
-
-	tn := ddl.(*sqlparser.DDL).Table
 	buf := sqlparser.NewTrackedBuffer(nil)
-	tn.Format(buf)
+	ddl.Table.Format(buf)
 	tableName := buf.String()
 	sch, err := ToDoltSchema(ctx, root, tableName, s, nil, collation)
-
 	if err != nil {
 		return "", nil, err
 	}
 
+	indexes, err := parse.ConvertIndexDefs(sctx, ddl.TableSpec)
+	if err != nil {
+		return "", nil, err
+	}
+
+	for _, idx := range indexes {
+		var prefixes []uint16
+		for _, c := range idx.Columns {
+			prefixes = append(prefixes, uint16(c.Length))
+		}
+		props := schema.IndexProperties{
+			IsUnique:  idx.IsUnique(),
+			IsSpatial: idx.IsSpatial(),
+			Comment:   idx.Comment,
+		}
+		name := getIndexName(idx)
+		_, err = sch.Indexes().AddIndexByColNames(name, idx.ColumnNames(), prefixes, props)
+		if err != nil {
+			return "", nil, err
+		}
+	}
+
+	// foreign keys are stored on the *doltdb.Table object, ignore them here
+	_, checks, err := parse.ConvertConstraintsDefs(sctx, ddl.Table, ddl.TableSpec)
+	if err != nil {
+		return "", nil, err
+	}
+	for _, chk := range checks {
+		name := getCheckConstraintName(chk)
+		_, err = sch.Checks().AddCheck(name, chk.Expr.String(), chk.Enforced)
+		if err != nil {
+			return "", nil, err
+		}
+	}
 	return tableName, sch, err
+}
+
+func getIndexName(def *plan.IndexDefinition) string {
+	if def.IndexName != "" {
+		return def.IndexName
+	}
+	return strings.Join(def.ColumnNames(), "_") + "_key"
+}
+
+func getCheckConstraintName(chk *sql.CheckConstraint) string {
+	if chk.Name != "" {
+		return chk.Name
+	}
+	return chk.DebugString()
 }

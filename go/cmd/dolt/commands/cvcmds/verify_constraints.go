@@ -64,10 +64,10 @@ func (cmd VerifyConstraintsCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd VerifyConstraintsCmd) ArgParser() *argparser.ArgParser {
-	return cli.CreateVerifyConstraintsArgParser()
+	return cli.CreateVerifyConstraintsArgParser(cmd.Name())
 }
 
-func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, verifyConstraintsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

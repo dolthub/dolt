@@ -820,7 +820,7 @@ teardown() {
 @test "sql-shell: inline query with missing -q flag should error" {
     run dolt sql "SELECT * FROM test;"
     [ $status -eq 1 ]
-    [[ "$output" =~ "Invalid Argument:" ]] || false
+    [[ "$output" =~ "does not take positional arguments, but found 1" ]] || false
 }
 
 @test "sql-shell: validate string formatting" {

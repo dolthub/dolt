@@ -18,7 +18,7 @@ import (
 	"context"
 	"errors"
 
-	flatbuffers "github.com/google/flatbuffers/go"
+	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -57,7 +57,7 @@ func newTag(ctx context.Context, db *database, commitAddr hash.Hash, meta *TagMe
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
 		}
-		iscommit, err := IsCommit(ctx, commitSt)
+		iscommit, err := IsCommit(commitSt)
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
 		}
@@ -134,7 +134,7 @@ func tag_flatbuffer(commitAddr hash.Hash, meta *TagMeta) serial.Message {
 
 func IsTag(ctx context.Context, v types.Value) (bool, error) {
 	if s, ok := v.(types.Struct); ok {
-		return types.IsValueSubtypeOf(ctx, s.Format(), v, valueTagType)
+		return types.IsValueSubtypeOf(s.Format(), v, valueTagType)
 	} else if sm, ok := v.(types.SerialMessage); ok {
 		data := []byte(sm)
 		return serial.GetFileID(data) == serial.TagFileID, nil

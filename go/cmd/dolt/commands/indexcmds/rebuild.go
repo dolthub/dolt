@@ -52,13 +52,13 @@ func (cmd RebuildCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd RebuildCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 2)
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table that the given index belongs to."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"index", "The name of the index to rebuild."})
 	return ap
 }
 
-func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, rebuildDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

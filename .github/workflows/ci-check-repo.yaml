@@ -3,6 +3,8 @@ name: Check Formatting, Committers and Generated Code
 on:
   pull_request:
     branches: [ main ]
+#   pull_request_target:
+#     types: [opened, edited, reopened]
 
 concurrency:
   group: ci-check-repo-${{ github.event.pull_request.number || github.ref }}
@@ -12,6 +14,8 @@ jobs:
   verify:
     name: Verify format and committers
     runs-on: ubuntu-22.04
+    outputs:
+      format: ${{ steps.should_format.outputs.format }}
     steps:
       - name: Setup Go 1.x
         uses: actions/setup-go@v3
@@ -21,16 +25,28 @@ jobs:
         with:
           submodules: true
       - name: Check all
+        id: should_format
         working-directory: ./go
         # Keep this in sync with //go/utils/prepr/prepr.sh.
         run: |
           GOFLAGS="-mod=readonly" go build ./...
           go vet -mod=readonly ./...
           go run -mod=readonly ./utils/copyrightshdrs/
-          ./utils/repofmt/check_fmt.sh
           ./Godeps/verify.sh
           ./utils/repofmt/check_bats_fmt.sh
           ./utils/repofmt/check_prepared_tests.sh
+          
+          if ./utils/repofmt/check_fmt.sh ; then
+            echo "code is formatted"
+          else
+            echo "code is not formatted"
+            if [ "${{ github.repository }}" != "dolthub/dolt" ]; then
+              echo "Pull requests from forks must be manually formatted."
+              echo "Please run dolt/go/utils/repofmt/format_repo.sh to format this pull request."
+              exit 1;
+            fi
+            echo "format=true" >> $GITHUB_OUTPUT
+          fi
         env:
           BRANCH_NAME: ${{ github.head_ref }}
           CHANGE_TARGET: ${{ github.base_ref }}
@@ -62,3 +78,93 @@ jobs:
              echo "$diff"
              exit 1
           fi
+  get-artifacts:
+    needs: verify
+    if: ${{ needs.verify.outputs.format == 'true' }}
+    name: Get artifacts
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v3
+        with:
+          go-version: ^1.19
+      - uses: actions/checkout@v3
+        with:
+          ref: "main"
+          repository: "dolthub/dolt"
+          submodules: true
+      - name: Copy script
+        working-directory: ./go/utils/repofmt
+        run: cp format_repo.sh _format_repo.sh
+      - name: Build go deps tool
+        working-directory: go/utils/3pdeps
+        run: go build .
+      - uses: actions/upload-artifact@v3
+        with:
+          name: update-godeps-tool
+          path: go/utils/3pdeps/3pdeps
+      - uses: actions/upload-artifact@v3
+        with:
+          name: format-code-script
+          path: go/utils/repofmt/_format_repo.sh
+  format:
+    needs: [verify, get-artifacts]
+    if: ${{ needs.verify.outputs.format == 'true' }}
+    name: Format PR
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v3
+        with:
+          go-version: ^1.19
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run go mod tidy
+        run: go mod tidy
+        working-directory: ./go
+      - name: Install goimports
+        run: go install golang.org/x/tools/cmd/goimports@latest
+      - uses: actions/download-artifact@v3
+        with:
+          name: format-code-script
+          path: go/utils/repofmt
+      - uses: actions/download-artifact@v3
+        with:
+          name: update-godeps-tool
+          path: go
+      - name: Format repo
+        working-directory: ./go
+        run: |
+          chmod +x ./utils/repofmt/_format_repo.sh
+          ./utils/repofmt/_format_repo.sh
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+          CHANGE_TARGET: ${{ github.base_ref }}
+      - name: Update Go deps
+        working-directory: ./go
+        run: |
+          chmod +x ./3pdeps
+          ( go list -deps -json ./cmd/dolt/. && \
+            GOOS=windows go list -deps -json ./cmd/dolt/. ) \
+            | ./3pdeps > ./Godeps/LICENSES
+      - name: Remove artifacts
+        run: |
+          rm go/3pdeps
+          rm go/utils/repofmt/_format_repo.sh
+      - name: Changes detected
+        id: detect-changes
+        run: |
+          changes=$(git status --porcelain)
+          if [ ! -z "$changes" ]; then
+             echo "has-changes=true" >> $GITHUB_OUTPUT
+          fi
+      - uses: EndBug/add-and-commit@v9.1.1
+        if: ${{ steps.detect-changes.outputs.has-changes == 'true' }}
+        with:
+          message: "[ga-format-pr] Run go/utils/repofmt/format_repo.sh and go/Godeps/update.sh"
+          add: "."
+          cwd: "."
+          pull: "--ff"

@@ -145,10 +145,11 @@ SQL
 
     dolt checkout main
     dolt merge other --no-commit
+    dolt status
     run dolt status
     log_status_eq 0
     [[ "$output" =~ "still merging" ]] || false
-    [[ "$output" =~ "modified:       test" ]] || false
+    [[ "$output" =~ "modified:         test1" ]] || false
 
     dolt merge --abort
     run dolt status
@@ -597,8 +598,7 @@ SQL
     dolt commit -am "add data to test1, drop test2"
 
     dolt checkout main
-    run dolt merge feature-branch -m "merge feature-branch"
-    log_status_eq 0
+    dolt merge feature-branch -m "merge feature-branch"
 
     run dolt sql -q "show tables"
     log_status_eq 0
@@ -635,8 +635,7 @@ SQL
     dolt commit -am "add data to test1"
 
     dolt checkout main
-    run dolt merge feature-branch -m "merge feature-branch"
-    log_status_eq 0
+    dolt merge feature-branch -m "merge feature-branch"
 
     run dolt sql -q "show tables"
     log_status_eq 0

@@ -114,7 +114,7 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_heads main
     start_sql_server repo2 && sleep 1
 
-    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "show tables" -r csv
+    run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "show tables" --result-format csv
     [ $status -eq 0 ]
     [[ "$output" =~ "Tables_in_repo2" ]] || false
     [[ "$output" =~ "test" ]] || false
@@ -222,7 +222,7 @@ teardown() {
     [ "$output" = "" ]
 
     # Connecting to heads that exist only on the remote should work fine (they get fetched)
-    dolt sql-client --use-db "repo2/b1" -u dolt -P $PORT -q "show tables" "Tables_in_repo2/b1\ntest"
+    dolt sql-client --use-db "repo2/b1" -u dolt -P $PORT -q "show tables"
     dolt sql-client --use-db repo2 -P $PORT -u dolt -q 'use `repo2/b2`'
     run dolt sql-client --use-db repo2 -P $PORT -u dolt -q 'select * from `repo2/b2`.test'
     [ $status -eq 0 ]

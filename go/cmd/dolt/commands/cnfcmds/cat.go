@@ -16,6 +16,7 @@ package cnfcmds
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -23,7 +24,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -39,9 +39,9 @@ import (
 
 var catDocs = cli.CommandDocumentationContent{
 	ShortDesc: "print conflicts",
-	LongDesc:  `The dolt conflicts cat command reads table conflicts and writes them to the standard output.`,
+	LongDesc:  `The dolt conflicts cat command reads table conflicts from the working set and writes them to the standard output.`,
 	Synopsis: []string{
-		"[{{.LessThan}}commit{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}}...",
+		"{{.LessThan}}table{{.GreaterThan}}...",
 	},
 }
 
@@ -68,14 +68,14 @@ func (cmd CatCmd) EventType() eventsapi.ClientEventType {
 }
 
 func (cmd CatCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs(cmd.Name())
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "List of tables to be printed. '.' can be used to print conflicts for all tables."})
 
 	return ap
 }
 
 // Exec executes the command
-func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, catDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -88,41 +88,26 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return 1
 	}
 
-	root, verr := commands.GetWorkingWithVErr(dEnv)
-	if verr != nil {
-		return exitWithVerr(verr)
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return exitWithVerr(errhand.VerboseErrorFromError(err))
 	}
 
-	cm, verr := commands.MaybeGetCommitWithVErr(dEnv, args[0])
-	if verr != nil {
-		return exitWithVerr(verr)
-	}
-
-	// If no commit was resolved from the first argument, assume the args are all table names and print the conflicts
-	if cm == nil {
-		if verr := printConflicts(ctx, dEnv, root, args); verr != nil {
-			return exitWithVerr(verr)
-		}
-
-		return 0
-	}
-
-	tblNames := args[1:]
+	tblNames := args
 	if len(tblNames) == 0 {
 		cli.Println("No tables specified")
 		usage()
 		return 1
+	} else if len(tblNames) == 1 && tblNames[0] == "." {
+		tblNames, err = ws.WorkingRoot().GetTableNames(ctx)
+		if err != nil {
+			return exitWithVerr(errhand.VerboseErrorFromError(err))
+		}
 	}
 
-	root, err := cm.GetRootValue(ctx)
-	if err != nil {
-		return exitWithVerr(errhand.BuildDError("unable to get the root value").AddCause(err).Build())
+	if verr := printConflicts(ctx, dEnv, ws, tblNames); verr != nil {
+		return exitWithVerr(errhand.VerboseErrorFromError(err))
 	}
-
-	if verr = printConflicts(ctx, dEnv, root, tblNames); verr != nil {
-		return exitWithVerr(verr)
-	}
-
 	return 0
 }
 
@@ -131,79 +116,116 @@ func exitWithVerr(verr errhand.VerboseError) int {
 	return 1
 }
 
-func printConflicts(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, tblNames []string) errhand.VerboseError {
-	if len(tblNames) == 1 && tblNames[0] == "." {
-		var err error
-		tblNames, err = root.GetTableNames(ctx)
-		if err != nil {
-			return errhand.BuildDError("unable to read tables").AddCause(err).Build()
-		}
-	}
-
+func printConflicts(ctx context.Context, dEnv *env.DoltEnv, ws *doltdb.WorkingSet, tblNames []string) error {
 	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		return err
 	}
+	stdOut := iohelp.NopWrCloser(cli.CliOut)
 
-	for _, tblName := range tblNames {
-		verr := func() errhand.VerboseError {
-			if has, err := root.HasTable(ctx, tblName); err != nil {
-				return errhand.BuildDError("error: unable to read database").AddCause(err).Build()
-			} else if !has {
-				return errhand.BuildDError("error: unknown table '%s'", tblName).Build()
-			}
+	// first print schema conflicts
+	if ws.MergeActive() && ws.MergeState().HasSchemaConflicts() {
+		sqlCtx, err := eng.NewLocalContext(ctx)
+		if err != nil {
+			return err
+		}
+		sqlCtx.SetCurrentDatabase(dbName)
 
-			tbl, _, err := root.GetTable(ctx, tblName)
-			if err != nil {
-				return errhand.BuildDError("error: unable to read database").AddCause(err).Build()
+		for _, table := range tblNames {
+			if err = printSchemaConflicts(sqlCtx, stdOut, eng, table); err != nil {
+				return err
 			}
-
-			has, err := tbl.HasConflicts(ctx)
-			if err != nil {
-				return errhand.BuildDError("error: unable to read database").AddCause(err).Build()
-			}
-			if !has {
-				return nil
-			}
-
-			baseSch, sch, mergeSch, err := tbl.GetConflictSchemas(ctx, tblName)
-			if err != nil {
-				return errhand.BuildDError("failed to fetch conflicts").AddCause(err).Build()
-			}
-			unionSch, err := untyped.UntypedSchemaUnion(baseSch, sch, mergeSch)
-			if err != nil {
-				return errhand.BuildDError("failed to fetch conflicts").AddCause(err).Build()
-			}
-			sqlUnionSch, err := sqlutil.FromDoltSchema(tblName, unionSch)
-			if err != nil {
-				return errhand.BuildDError("failed to fetch conflicts").AddCause(err).Build()
-			}
-
-			sqlCtx, err := eng.NewLocalContext(ctx)
-			if err != nil {
-				return errhand.BuildDError("failed to fetch conflicts").AddCause(err).Build()
-			}
-			sqlCtx.SetCurrentDatabase(dbName)
-
-			confSqlSch, rowItr, err := eng.Query(sqlCtx, buildConflictQuery(baseSch, sch, mergeSch, tblName))
-			if err != nil {
-				return errhand.BuildDError("failed to fetch conflicts").AddCause(err).Build()
-			}
-
-			tw := tabular.NewFixedWidthConflictTableWriter(sqlUnionSch.Schema, iohelp.NopWrCloser(cli.CliOut), 100)
-			err = writeConflictResults(sqlCtx, confSqlSch, sqlUnionSch.Schema, rowItr, tw)
-			if err != nil {
-				return errhand.BuildDError("failed to print conflicts").AddCause(err).Build()
-			}
-
-			return nil
-		}()
-
-		if verr != nil {
-			return verr
 		}
 	}
 
+	// next print data conflicts
+	root := ws.WorkingRoot()
+	for _, tblName := range tblNames {
+		if has, err := root.HasTable(ctx, tblName); err != nil {
+			return err
+		} else if !has {
+			return fmt.Errorf("error: unknown table '%s'", tblName)
+		}
+
+		tbl, _, err := root.GetTable(ctx, tblName)
+		if err != nil {
+			return err
+		}
+
+		has, err := tbl.HasConflicts(ctx)
+		if err != nil {
+			return err
+		} else if !has {
+			continue
+		}
+
+		base, sch, mergeSch, err := tbl.GetConflictSchemas(ctx, tblName)
+		if err != nil {
+			return err
+		}
+
+		sqlCtx, err := eng.NewLocalContext(ctx)
+		if err != nil {
+			return errhand.BuildDError("failed to fetch conflicts").AddCause(err).Build()
+		}
+		sqlCtx.SetCurrentDatabase(dbName)
+
+		confSqlSch, rowItr, err := eng.Query(sqlCtx, buildDataConflictQuery(base, sch, mergeSch, tblName))
+		if err != nil {
+			return err
+		}
+
+		unionSch, err := untyped.UntypedSchemaUnion(base, sch, mergeSch)
+		if err != nil {
+			return err
+		}
+
+		sqlUnionSch, err := sqlutil.FromDoltSchema(tblName, unionSch)
+		if err != nil {
+			return err
+		}
+
+		tw := tabular.NewFixedWidthConflictTableWriter(sqlUnionSch.Schema, stdOut, 100)
+
+		err = writeConflictResults(sqlCtx, confSqlSch, sqlUnionSch.Schema, rowItr, tw)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func printSchemaConflicts(sqlCtx *sql.Context, wrCloser io.WriteCloser, eng *engine.SqlEngine, table string) error {
+
+	sqlSch, rowItr, err := eng.Query(sqlCtx, buildSchemaConflictQuery(table))
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := rowItr.Close(sqlCtx); err == nil {
+			err = cerr
+		}
+	}()
+
+	tw := tabular.NewFixedWidthTableWriter(sqlSch, wrCloser, 100)
+	defer func() {
+		if cerr := tw.Close(sqlCtx); err == nil {
+			err = cerr
+		}
+	}()
+
+	for {
+		r, err := rowItr.Next(sqlCtx)
+		if errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			return err
+		}
+		if err = tw.WriteSqlRow(sqlCtx, r); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -241,7 +263,12 @@ func writeConflictResults(
 	}
 }
 
-func buildConflictQuery(base, sch, mergeSch schema.Schema, tblName string) string {
+func buildSchemaConflictQuery(table string) string {
+	return fmt.Sprintf("select our_schema, their_schema, base_schema, description "+
+		"from dolt_schema_conflicts where table_name = '%s'", table)
+}
+
+func buildDataConflictQuery(base, sch, mergeSch schema.Schema, tblName string) string {
 	cols := quoteWithPrefix(base.GetAllCols().GetColumnNames(), "base_")
 	cols = append(cols, quoteWithPrefix(sch.GetAllCols().GetColumnNames(), "our_")...)
 	cols = append(cols, quoteWithPrefix(mergeSch.GetAllCols().GetColumnNames(), "their_")...)

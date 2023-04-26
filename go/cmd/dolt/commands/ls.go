@@ -65,7 +65,7 @@ func (cmd LsCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd LsCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)
 	ap.SupportsFlag(cli.VerboseFlag, "v", "show the hash of the table")
 	ap.SupportsFlag(systemFlag, "s", "show system tables")
 	ap.SupportsFlag(cli.AllFlag, "a", "show system tables")
@@ -78,7 +78,7 @@ func (cmd LsCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, lsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

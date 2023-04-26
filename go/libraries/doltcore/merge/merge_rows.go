@@ -34,7 +34,11 @@ import (
 )
 
 type MergeOpts struct {
+	// IsCherryPick is set for cherry-pick operations.
 	IsCherryPick bool
+	// KeepSchemaConflicts if schema conflicts should be
+	// stored, otherwise we end the merge with an error.
+	KeepSchemaConflicts bool
 }
 
 type TableMerger struct {
@@ -104,9 +108,14 @@ func NewMerger(
 	}, nil
 }
 
+type MergedTable struct {
+	table    *doltdb.Table
+	conflict SchemaConflict
+}
+
 // MergeTable merges schema and table data for the table tblName.
 // TODO: this code will loop infinitely when merging certain schema changes
-func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*doltdb.Table, *MergeStats, error) {
+func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*MergedTable, *MergeStats, error) {
 	tm, err := rm.makeTableMerger(ctx, tblName)
 	if err != nil {
 		return nil, nil, err
@@ -115,7 +124,7 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	// short-circuit here if we can
 	finished, stats, err := rm.maybeShortCircuit(ctx, tm, mergeOpts)
 	if finished != nil || stats != nil || err != nil {
-		return finished, stats, err
+		return &MergedTable{table: finished}, stats, err
 	}
 
 	if mergeOpts.IsCherryPick && !schema.SchemasAreEqual(tm.leftSch, tm.rightSch) {
@@ -127,16 +136,32 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	if err != nil {
 		return nil, nil, err
 	}
-	if schConflicts.Count() != 0 {
-		// error on schema conflicts for now
-		return nil, nil, fmt.Errorf("%w.\n%s", ErrSchemaConflict, schConflicts.AsError().Error())
+	if schConflicts.Count() > 0 {
+		if !mergeOpts.KeepSchemaConflicts {
+			return nil, nil, schConflicts
+		}
+		// handle schema conflicts above
+		mt := &MergedTable{
+			table:    tm.leftTbl,
+			conflict: schConflicts,
+		}
+		stats = &MergeStats{
+			Operation:       TableModified,
+			SchemaConflicts: schConflicts.Count(),
+		}
+		return mt, stats, nil
 	}
 
+	var tbl *doltdb.Table
 	if types.IsFormat_DOLT(tm.vrw.Format()) {
-		return mergeProllyTable(ctx, tm, mergeSch)
+		tbl, stats, err = mergeProllyTable(ctx, tm, mergeSch)
 	} else {
-		return mergeNomsTable(ctx, tm, mergeSch, rm.vrw, opts)
+		tbl, stats, err = mergeNomsTable(ctx, tm, mergeSch, rm.vrw, opts)
 	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return &MergedTable{table: tbl}, stats, nil
 }
 
 func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (*TableMerger, error) {

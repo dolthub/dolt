@@ -80,7 +80,7 @@ func (cmd ResolveCmd) EventType() eventsapi.ClientEventType {
 }
 
 func (cmd ResolveCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs(cmd.Name())
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "List of tables to be resolved. '.' can be used to resolve all tables."})
 	ap.SupportsFlag("ours", "", "For all conflicts, take the version from our branch and resolve the conflict")
 	ap.SupportsFlag("theirs", "", "For all conflicts, take the version from their branch and resolve the conflict")
@@ -88,7 +88,7 @@ func (cmd ResolveCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, resDocumentation, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

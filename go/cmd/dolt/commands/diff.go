@@ -143,7 +143,7 @@ func (cmd DiffCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithVariableArgs(cmd.Name())
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
 	ap.SupportsFlag(StatFlag, "", "Show stats of data changes")
@@ -159,7 +159,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, diffDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

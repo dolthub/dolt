@@ -33,7 +33,7 @@ type GenZshCompCmd struct {
 }
 
 func (z GenZshCompCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(z.Name(), 0)
 	ap.SupportsString(fileParamName, "", "file", "The file to write zsh comp file to")
 	ap.SupportsFlag("includeHidden", "", "Include hidden commands")
 	return ap
@@ -47,7 +47,7 @@ func (z GenZshCompCmd) Description() string {
 	return "Creates a zsh autocomp file for all dolt commands"
 }
 
-func (z GenZshCompCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (z GenZshCompCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := z.ArgParser()
 
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{}, ap))

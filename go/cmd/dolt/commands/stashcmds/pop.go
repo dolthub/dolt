@@ -60,7 +60,7 @@ func (cmd StashPopCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd StashPopCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)
 	return ap
 }
 
@@ -70,7 +70,7 @@ func (cmd StashPopCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	if !dEnv.DoltDB.Format().UsesFlatbuffers() {
 		cli.PrintErrln(ErrStashNotSupportedForOldFormat.Error())
 		return 1
@@ -80,11 +80,6 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	if dEnv.IsLocked() {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
-	}
-
-	if apr.NArg() > 1 {
-		usage()
-		return 1
 	}
 
 	var idx = 0
@@ -109,7 +104,7 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return handleStashPopErr(usage, err)
 	}
 
-	ret := commands.StatusCmd{}.Exec(ctx, "status", []string{}, dEnv)
+	ret := commands.StatusCmd{}.Exec(ctx, "status", []string{}, dEnv, nil)
 	if ret != 0 || !success {
 		cli.Println("The stash entry is kept in case you need it again.")
 		return 1
@@ -153,14 +148,14 @@ func applyStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, curWorkingRoot *dol
 	}
 
 	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: tmpDir}
-	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, curWorkingRoot, stashRoot, parentRoot, stashRoot, parentCommit, opts, merge.MergeOpts{IsCherryPick: false})
+	result, err := merge.MergeRoots(ctx, curWorkingRoot, stashRoot, parentRoot, stashRoot, parentCommit, opts, merge.MergeOpts{IsCherryPick: false})
 	if err != nil {
 		return false, err
 	}
 
 	var tablesWithConflict []string
-	for tbl, stats := range mergeStats {
-		if stats.Conflicts > 0 {
+	for tbl, stats := range result.Stats {
+		if stats.HasConflicts() {
 			tablesWithConflict = append(tablesWithConflict, tbl)
 		}
 	}
@@ -173,7 +168,7 @@ func applyStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, curWorkingRoot *dol
 		return false, nil
 	}
 
-	err = dEnv.UpdateWorkingRoot(ctx, mergedRoot)
+	err = dEnv.UpdateWorkingRoot(ctx, result.Root)
 	if err != nil {
 		return false, err
 	}

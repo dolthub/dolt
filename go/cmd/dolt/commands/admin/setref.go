@@ -50,7 +50,7 @@ func (cmd SetRefCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd SetRefCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsOptionalString("branch", "", "branch name", "the branch ref to set")
 	ap.SupportsOptionalString("remote-name", "", "remote name", "the remote name, e.g. origin, of the remote ref to set")
 	ap.SupportsOptionalString("remote-branch", "", "remote branch name", "the remote branch name of the remote ref set")
@@ -64,7 +64,7 @@ func (cmd SetRefCmd) Hidden() bool {
 
 // Version displays the version of the running dolt client
 // Exec executes the command
-func (cmd SetRefCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd SetRefCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	usage, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{}, ap))
 

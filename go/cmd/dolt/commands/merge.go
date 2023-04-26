@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -77,7 +78,7 @@ func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateMergeArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, mergeDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -98,7 +99,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	var verr errhand.VerboseError
 	if apr.Contains(cli.AbortParam) {
-		mergeActive, err := dEnv.IsMergeActive(ctx)
+		mergeActive, err := isMergeActive(ctx, dEnv)
 		if err != nil {
 			cli.PrintErrln("fatal:", err.Error())
 			return 1
@@ -130,7 +131,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		}
 
 		if verr == nil {
-			mergeActive, err := dEnv.IsMergeActive(ctx)
+			mergeActive, err := isMergeActive(ctx, dEnv)
 			if err != nil {
 				cli.PrintErrln(err.Error())
 				return 1
@@ -190,28 +191,33 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return handleCommitErr(ctx, dEnv, verr, usage)
 }
 
-func getUnmergedTableCount(ctx context.Context, root *doltdb.RootValue) (int, error) {
-	conflicted, err := root.TablesInConflict(ctx)
+func isMergeActive(ctx context.Context, denv *env.DoltEnv) (bool, error) {
+	ws, err := denv.WorkingSet(ctx)
 	if err != nil {
-		return 0, err
+		return false, err
 	}
-	cved, err := root.TablesWithConstraintViolations(ctx)
-	if err != nil {
-		return 0, err
-	}
-	uniqued := make(map[string]interface{})
-	for _, t := range conflicted {
-		uniqued[t] = struct{}{}
-	}
-	for _, t := range cved {
-		uniqued[t] = struct{}{}
-	}
-	var unmergedTableCount int
-	for range uniqued {
-		unmergedTableCount++
+	return ws.MergeActive(), nil
+}
+
+func getUnmergedTableCount(ctx context.Context, ws *doltdb.WorkingSet) (int, error) {
+	unmerged := set.NewStrSet(nil)
+	if ws.MergeState() != nil {
+		unmerged.Add(ws.MergeState().TablesWithSchemaConflicts()...)
 	}
 
-	return unmergedTableCount, nil
+	conflicted, err := ws.WorkingRoot().TablesWithDataConflicts(ctx)
+	if err != nil {
+		return 0, err
+	}
+	unmerged.Add(conflicted...)
+
+	cved, err := ws.WorkingRoot().TablesWithConstraintViolations(ctx)
+	if err != nil {
+		return 0, err
+	}
+	unmerged.Add(cved...)
+
+	return unmerged.Size(), nil
 }
 
 func validateMergeSpec(ctx context.Context, spec *merge.MergeSpec) errhand.VerboseError {
@@ -308,13 +314,13 @@ func printConflictsAndViolations(tblToStats map[string]*merge.MergeStats) (confl
 	hasConflicts := false
 	hasConstraintViolations := false
 	for tblName, stats := range tblToStats {
-		if stats.Operation == merge.TableModified && (stats.Conflicts > 0 || stats.ConstraintViolations > 0) {
+		if stats.HasArtifacts() {
 			cli.Println("Auto-merging", tblName)
-			if stats.Conflicts > 0 {
+			if stats.HasConflicts() {
 				cli.Println("CONFLICT (content): Merge conflict in", tblName)
 				hasConflicts = true
 			}
-			if stats.ConstraintViolations > 0 {
+			if stats.HasConstraintViolations() {
 				cli.Println("CONSTRAINT VIOLATION (content): Merge created constraint violation in", tblName)
 				hasConstraintViolations = true
 			}
@@ -332,10 +338,10 @@ func printModifications(tblToStats map[string]*merge.MergeStats) {
 	rowsChanged := 0
 	var tbls []string
 	for tblName, stats := range tblToStats {
-		if stats.Operation == merge.TableModified && stats.Conflicts == 0 && stats.ConstraintViolations == 0 {
+		if stats.Operation == merge.TableModified && stats.DataConflicts == 0 && stats.ConstraintViolations == 0 {
 			tbls = append(tbls, tblName)
 			nameLen := len(tblName)
-			modCount := stats.Adds + stats.Modifications + stats.Deletes + stats.Conflicts
+			modCount := stats.Adds + stats.Modifications + stats.Deletes + stats.DataConflicts
 
 			if nameLen > maxNameLen {
 				maxNameLen = nameLen
@@ -346,7 +352,7 @@ func printModifications(tblToStats map[string]*merge.MergeStats) {
 			}
 
 			rowsAdded += stats.Adds
-			rowsChanged += stats.Modifications + stats.Conflicts
+			rowsChanged += stats.Modifications + stats.DataConflicts
 			rowsDeleted += stats.Deletes
 		}
 	}
@@ -362,7 +368,7 @@ func printModifications(tblToStats map[string]*merge.MergeStats) {
 	for _, tbl := range tbls {
 		stats := tblToStats[tbl]
 		if stats.Operation == merge.TableModified {
-			modCount := stats.Adds + stats.Modifications + stats.Deletes + stats.Conflicts
+			modCount := stats.Adds + stats.Modifications + stats.Deletes + stats.DataConflicts
 			modCountStr := strconv.FormatInt(int64(modCount), 10)
 			visualizedChanges := visualizeChangeTypes(stats, maxModCount)
 
@@ -422,12 +428,12 @@ func fillStringWithChar(ch rune, strLen int) string {
 }
 
 func handleMergeErr(ctx context.Context, dEnv *env.DoltEnv, mergeErr error, hasConflicts, hasConstraintViolations bool, usage cli.UsagePrinter) int {
-	wRoot, err := dEnv.WorkingRoot(ctx)
+	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		cli.PrintErrln(err.Error())
 		return 1
 	}
-	unmergedCnt, err := getUnmergedTableCount(ctx, wRoot)
+	unmergedCnt, err := getUnmergedTableCount(ctx, ws)
 	if err != nil {
 		cli.PrintErrln(err.Error())
 		return 1
@@ -514,7 +520,7 @@ func executeNoFFMergeAndCommit(ctx context.Context, dEnv *env.DoltEnv, spec *mer
 		return tblToStats, err
 	}
 
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
+	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws, mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       spec.Date,
 		AllowEmpty: spec.AllowEmpty,
@@ -593,7 +599,7 @@ func getCommitMsgForMerge(ctx context.Context, dEnv *env.DoltEnv, userDefinedMsg
 // hasConflictOrViolations checks for conflicts or constraint violation regardless of a table being modified
 func hasConflictOrViolations(tblToStats map[string]*merge.MergeStats) bool {
 	for _, tblStats := range tblToStats {
-		if tblStats.Conflicts > 0 || tblStats.ConstraintViolations > 0 {
+		if tblStats.HasArtifacts() {
 			return true
 		}
 	}

@@ -161,6 +161,22 @@ func (fk ForeignKey) HashOf() hash.Hash {
 	return hash.Of(bb.Bytes())
 }
 
+// CombinedHash returns a combined hash value for all foreign keys in the slice provided.
+// An empty slice has a zero hash.
+func CombinedHash(fks []ForeignKey) hash.Hash {
+	if len(fks) == 0 {
+		return hash.Hash{}
+	}
+
+	var bb bytes.Buffer
+	for _, fk := range fks {
+		h := fk.HashOf()
+		bb.Write(h[:])
+	}
+
+	return hash.Of(bb.Bytes())
+}
+
 // IsSelfReferential returns whether the table declaring the foreign key is also referenced by the foreign key.
 func (fk ForeignKey) IsSelfReferential() bool {
 	return strings.ToLower(fk.TableName) == strings.ToLower(fk.ReferencedTableName)
@@ -275,6 +291,16 @@ func (fkc *ForeignKeyCollection) AllKeys() []ForeignKey {
 func (fkc *ForeignKeyCollection) Contains(foreignKeyName string) bool {
 	_, ok := fkc.GetByNameCaseInsensitive(foreignKeyName)
 	return ok
+}
+
+// HashOf returns the hash of the serialized form of this foreign key collection
+func (fkc *ForeignKeyCollection) HashOf(ctx context.Context, vrw types.ValueReadWriter) (hash.Hash, error) {
+	serialized, err := SerializeForeignKeys(ctx, vrw, fkc)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	return serialized.Hash(vrw.Format())
 }
 
 // Count returns the number of indexes in this collection.
@@ -602,35 +628,6 @@ func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, r
 		}
 	}
 	return nil
-}
-
-// RenameTable updates all foreign key entries in the collection with the updated table name. Does not check for name
-// collisions. Additionally, any unresolved foreign keys will still update their referenced names as this matches
-// MySQL's behavior.
-func (fkc *ForeignKeyCollection) RenameTable(oldTableName, newTableName string) {
-	updated := make(map[string]ForeignKey, len(fkc.foreignKeys))
-	for _, fk := range fkc.foreignKeys {
-		if fk.TableName == oldTableName {
-			fk.TableName = newTableName
-		}
-		if fk.ReferencedTableName == oldTableName {
-			fk.ReferencedTableName = newTableName
-		}
-		updated[fk.HashOf().String()] = fk
-	}
-	fkc.foreignKeys = updated
-}
-
-// Stage takes the keys to add and remove and updates the current collection. Does not perform any key validation nor
-// name uniqueness verification, as this is intended for use in commit staging. Adding a foreign key and updating (such
-// as a table rename) an existing one are functionally the same.
-func (fkc *ForeignKeyCollection) Stage(ctx context.Context, fksToAdd []ForeignKey, fksToRemove []ForeignKey) {
-	for _, fk := range fksToAdd {
-		fkc.foreignKeys[fk.HashOf().String()] = fk
-	}
-	for _, fk := range fksToRemove {
-		delete(fkc.foreignKeys, fk.HashOf().String())
-	}
 }
 
 // Tables returns the set of all tables that either declare a foreign key or are referenced by a foreign key.

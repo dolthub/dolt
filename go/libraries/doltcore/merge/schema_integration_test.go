@@ -39,9 +39,8 @@ type testCommand struct {
 	args args
 }
 
-func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) {
-	exitCode := tc.cmd.Exec(ctx, tc.cmd.Name(), tc.args, dEnv)
-	require.Equal(t, 0, exitCode)
+func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) int {
+	return tc.cmd.Exec(ctx, tc.cmd.Name(), tc.args, dEnv, nil)
 }
 
 type args []string
@@ -290,13 +289,13 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			ColConflicts: []merge.ColConflict{
 				{
 					Kind:   merge.NameCollision,
-					Ours:   newColTypeInfo("c4", uint64(4696), typeinfo.Int32Type, false),
-					Theirs: newColTypeInfo("c4", uint64(8539), typeinfo.Int32Type, false),
+					Ours:   newColTypeInfo("C6", uint64(13258), typeinfo.Int32Type, false),
+					Theirs: newColTypeInfo("c6", uint64(13258), typeinfo.Int32Type, false),
 				},
 				{
 					Kind:   merge.NameCollision,
-					Ours:   newColTypeInfo("C6", uint64(13258), typeinfo.Int32Type, false),
-					Theirs: newColTypeInfo("c6", uint64(13258), typeinfo.Int32Type, false),
+					Ours:   newColTypeInfo("c4", uint64(4696), typeinfo.Int32Type, false),
+					Theirs: newColTypeInfo("c4", uint64(8539), typeinfo.Int32Type, false),
 				},
 			},
 		},
@@ -562,18 +561,20 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	ctx := context.Background()
 
 	for _, c := range setupCommon {
-		c.exec(t, ctx, dEnv)
+		exit := c.exec(t, ctx, dEnv)
+		require.Equal(t, 0, exit)
 	}
 	for _, c := range test.setup {
-		c.exec(t, ctx, dEnv)
+		exit := c.exec(t, ctx, dEnv)
+		require.Equal(t, 0, exit)
 	}
 
 	// assert that we're on main
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv)
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, nil)
 	require.Equal(t, 0, exitCode)
 
 	// merge branches
-	exitCode = commands.MergeCmd{}.Exec(ctx, "merge", []string{"other"}, dEnv)
+	exitCode = commands.MergeCmd{}.Exec(ctx, "merge", []string{"other"}, dEnv, nil)
 	assert.Equal(t, 0, exitCode)
 
 	wr, err := dEnv.WorkingRoot(ctx)
@@ -605,22 +606,24 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 	for _, c := range setupCommon {
-		c.exec(t, ctx, dEnv)
+		exit := c.exec(t, ctx, dEnv)
+		require.Equal(t, 0, exit)
 	}
 
 	ancSch := getSchema(t, dEnv)
 
 	for _, c := range test.setup {
-		c.exec(t, ctx, dEnv)
+		exit := c.exec(t, ctx, dEnv)
+		require.Equal(t, 0, exit)
 	}
 
 	// assert that we're on main
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv)
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, nil)
 	require.Equal(t, 0, exitCode)
 
 	mainSch := getSchema(t, dEnv)
 
-	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv)
+	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv, nil)
 	require.Equal(t, 0, exitCode)
 
 	otherSch := getSchema(t, dEnv)
@@ -660,25 +663,27 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 	for _, c := range setupForeignKeyTests {
-		c.exec(t, ctx, dEnv)
+		exit := c.exec(t, ctx, dEnv)
+		require.Equal(t, 0, exit)
 	}
 
 	ancRoot, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 
 	for _, c := range test.setup {
-		c.exec(t, ctx, dEnv)
+		exit := c.exec(t, ctx, dEnv)
+		require.Equal(t, 0, exit)
 	}
 
 	// assert that we're on main
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv)
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, nil)
 	require.Equal(t, 0, exitCode)
 
 	mainWS, err := dEnv.WorkingSet(ctx)
 	require.NoError(t, err)
 	mainRoot := mainWS.WorkingRoot()
 
-	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv)
+	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv, nil)
 	require.Equal(t, 0, exitCode)
 
 	otherWS, err := dEnv.WorkingSet(ctx)
@@ -687,10 +692,10 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 
 	opts := editor.TestEditorOptions(dEnv.DoltDB.ValueReadWriter())
 	mo := merge.MergeOpts{IsCherryPick: false}
-	mergedRoot, _, err := merge.MergeRoots(ctx, mainRoot, otherRoot, ancRoot, mainWS, otherWS, opts, mo)
+	result, err := merge.MergeRoots(ctx, mainRoot, otherRoot, ancRoot, mainWS, otherWS, opts, mo)
 	assert.NoError(t, err)
 
-	fkc, err := mergedRoot.GetForeignKeyCollection(ctx)
+	fkc, err := result.Root.GetForeignKeyCollection(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, test.fkColl.Count(), fkc.Count())
 

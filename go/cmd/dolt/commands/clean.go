@@ -65,7 +65,7 @@ func (cmd CleanCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd CleanCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CleanCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateCleanArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cleanDocContent, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

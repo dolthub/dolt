@@ -24,7 +24,7 @@ to see what we're building next.
 
 [![Dolt Explainer Video](https://img.youtube.com/vi/3F6LwZt6e-A/maxresdefault.jpg)](https://www.youtube.com/watch?v=3F6LwZt6e-A)
 
-## What's it for?
+# What's it for?
 
 Lots of things! Dolt is a generally useful tool with countless
 applications. But if you want some ideas, [here's how people are using

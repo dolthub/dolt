@@ -208,7 +208,7 @@ teardown() {
     start_sql_server
     
     dolt sql-client --use-db '' -u dolt -P $PORT -q "create database testdb"
-    run dolt sql-client --use-db '' -u dolt -P $PORT -r csv -q "show databases"
+    run dolt sql-client --use-db '' -u dolt -P $PORT --result-format csv -q "show databases"
     [ $status -eq 0 ]
     [[ "$output" =~ "testdb" ]] || false
     dolt sql-client --use-db testdb -u dolt -P $PORT -q "create table a(x int)"

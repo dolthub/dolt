@@ -72,14 +72,14 @@ func (cmd CatCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd CatCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 2)
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table that the given index belongs to."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"index", "The name of the index that belongs to the given table."})
 	ap.SupportsString(formatFlag, "r", "result format", "How to format the resulting output. Valid values are tabular, csv, json. Defaults to tabular.")
 	return ap
 }
 
-func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, catDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

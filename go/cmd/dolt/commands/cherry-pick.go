@@ -71,7 +71,7 @@ func (cmd CherryPickCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command.
-func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateCherryPickArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cherryPickDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -156,13 +156,13 @@ func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cherryStr string) errhan
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	res := AddCmd{}.Exec(ctx, "add", []string{"-A"}, dEnv)
+	res := AddCmd{}.Exec(ctx, "add", []string{"-A"}, dEnv, nil)
 	if res != 0 {
 		return errhand.BuildDError("dolt add failed").AddCause(err).Build()
 	}
 
 	commitParams := []string{"-m", commitMsg}
-	res = CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv)
+	res = CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv, nil)
 	if res != 0 {
 		return errhand.BuildDError("dolt commit failed").AddCause(err).Build()
 	}
@@ -217,14 +217,14 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 
 	// use parent of cherry-pick as ancestor to merge
 	mo := merge.MergeOpts{IsCherryPick: true}
-	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, workingRoot, cherryRoot, parentRoot, cherryCm, parentCm, opts, mo)
+	result, err := merge.MergeRoots(ctx, workingRoot, cherryRoot, parentRoot, cherryCm, parentCm, opts, mo)
 	if err != nil {
 		return nil, "", err
 	}
 
 	var tablesWithConflict []string
-	for tbl, stats := range mergeStats {
-		if stats.Conflicts > 0 {
+	for tbl, stats := range result.Stats {
+		if stats.HasConflicts() {
 			tablesWithConflict = append(tablesWithConflict, tbl)
 		}
 	}
@@ -234,5 +234,5 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 		return nil, "", errors.New(fmt.Sprintf("conflicts in table {'%s'}", tblNames))
 	}
 
-	return mergedRoot, commitMsg, nil
+	return result.Root, commitMsg, nil
 }

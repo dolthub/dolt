@@ -1666,7 +1666,7 @@ SOFTWARE.
 ================================================================================
 
 ================================================================================
-= github.com/dolthub/flatbuffers licensed under: =
+= github.com/dolthub/flatbuffers/v23 licensed under: =
 
 
                                  Apache License
@@ -1871,7 +1871,7 @@ SOFTWARE.
    See the License for the specific language governing permissions and
    limitations under the License.
 
-= LICENSE.txt 75cd5500580317e758b5e984e017524dc961140e4889f7d427f85e41 =
+= LICENSE 75cd5500580317e758b5e984e017524dc961140e4889f7d427f85e41 =
 ================================================================================
 
 ================================================================================
@@ -2313,7 +2313,7 @@ SOFTWARE.
 
 The MIT License (MIT)
 
-Copyright (c) 2015 oliver
+Copyright (c) 2021, 2015; DoltHub Authors, oliver
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -2334,7 +2334,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-= LICENSE a33ad37999b0aa5d38b8bc56a9c6b2d6287a7e2478ee822af7fa7a11 =
+= LICENSE 18bf16f1b1dc8f5ace048507fc77c4aebe34aaaf174e30020ab27303 =
 ================================================================================
 
 ================================================================================
@@ -6890,6 +6890,115 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 = LICENSE 8324b31a3793e08aae6a3c5bad20c4f41d089fd801d4d24c21aa6ea2 =
+================================================================================
+
+================================================================================
+= github.com/tidwall/gjson licensed under: =
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Josh Baker
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+= LICENSE badaf752b478a2d788d9e29135e98f3065808ddadacb92ad64b9029c =
+================================================================================
+
+================================================================================
+= github.com/tidwall/match licensed under: =
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Josh Baker
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+= LICENSE badaf752b478a2d788d9e29135e98f3065808ddadacb92ad64b9029c =
+================================================================================
+
+================================================================================
+= github.com/tidwall/pretty licensed under: =
+
+The MIT License (MIT)
+
+Copyright (c) 2017 Josh Baker
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+= LICENSE 750e3e39193f5aef1a2551d106d5c5ed491da8c3188b22a41ec0b0f1 =
+================================================================================
+
+================================================================================
+= github.com/tidwall/sjson licensed under: =
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Josh Baker
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+= LICENSE 1f160a4ae8ef3a78226669d0d335c257e25202501dd3e5884fa3e955 =
 ================================================================================
 
 ================================================================================

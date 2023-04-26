@@ -17,7 +17,7 @@ package credcmds
 import (
 	"context"
 	"fmt"
-	"net/url"
+	"net"
 
 	"google.golang.org/grpc"
 
@@ -71,14 +71,14 @@ func (cmd CheckCmd) EventType() eventsapi.ClientEventType {
 }
 
 func (cmd CheckCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsString("endpoint", "", "", "API endpoint, otherwise taken from config.")
 	ap.SupportsString("creds", "", "", "Public Key ID or Public Key for credentials, otherwise taken from config.")
 	return ap
 }
 
 // Exec executes the command
-func (cmd CheckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CheckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, checkDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -107,11 +107,12 @@ func loadEndpoint(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (string, st
 }
 
 func getHostFromEndpoint(endpoint string) string {
-	u, err := url.Parse(endpoint)
+	host, _, err := net.SplitHostPort(endpoint)
 	if err != nil {
+		cli.Printf("error getting host name from provided endpoint '%s': %v\nUsing default host instead: %s\n", endpoint, err, env.DefaultRemotesApiHost)
 		return env.DefaultRemotesApiHost
 	}
-	return u.Hostname()
+	return host
 }
 
 func loadCred(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (creds.DoltCreds, errhand.VerboseError) {

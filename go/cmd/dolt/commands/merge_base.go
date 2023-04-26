@@ -54,7 +54,7 @@ func (cmd MergeBaseCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd MergeBaseCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 2)
 	//ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"start-point", "A commit that a new branch should point at."})
 	return ap
 }
@@ -65,7 +65,7 @@ func (cmd MergeBaseCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, mergeBaseDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

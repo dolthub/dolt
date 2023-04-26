@@ -78,7 +78,7 @@ func (cmd StashCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd StashCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(IncludeUntrackedFlag, "u", "Untracked files (added tables) are also stashed.")
 	ap.SupportsFlag(AllFlag, "a", "All files are staged, including untracked and ignored files.")
 	return ap
@@ -90,7 +90,7 @@ func (cmd StashCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	if !dEnv.DoltDB.Format().UsesFlatbuffers() {
 		cli.PrintErrln(ErrStashNotSupportedForOldFormat.Error())
 		return 1
@@ -100,11 +100,6 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	if dEnv.IsLocked() {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
-	}
-
-	if apr.NArg() > 0 {
-		usage()
-		return 1
 	}
 
 	err := stashChanges(ctx, dEnv, apr)
@@ -161,7 +156,6 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 			cli.Println("No local changes to save")
 			return nil
 		}
-
 	}
 
 	roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)

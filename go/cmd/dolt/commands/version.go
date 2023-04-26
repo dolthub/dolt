@@ -53,14 +53,14 @@ func (cmd VersionCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd VersionCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(featureVersionFlag, "f", "query the feature version of this repository.")
 	return ap
 }
 
 // Version displays the version of the running dolt client
 // Exec executes the command
-func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	cli.Println("dolt version", cmd.VersionStr)
 
 	if dEnv.HasDoltDir() && dEnv.RSLoadErr == nil && !cli.CheckEnvIsValid(dEnv) {

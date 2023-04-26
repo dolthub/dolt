@@ -132,6 +132,8 @@ func (ix *indexImpl) Equals(other Index) bool {
 	}
 
 	return ix.IsUnique() == other.IsUnique() &&
+		ix.IsSpatial() == other.IsSpatial() &&
+		compareUint16Slices(ix.PrefixLengths(), other.PrefixLengths()) &&
 		ix.Comment() == other.Comment() &&
 		ix.Name() == other.Name()
 }
@@ -142,7 +144,7 @@ func (ix *indexImpl) DeepEquals(other Index) bool {
 		return false
 	}
 
-	// we're only interested in columns the index is defined over, not the table's primary keys
+	// DeepEquals compares all tags used in this index, as well as the tags from the table's primary key
 	tt := ix.AllTags()
 	ot := other.AllTags()
 	for i := range tt {
@@ -152,8 +154,26 @@ func (ix *indexImpl) DeepEquals(other Index) bool {
 	}
 
 	return ix.IsUnique() == other.IsUnique() &&
+		ix.IsSpatial() == other.IsSpatial() &&
+		compareUint16Slices(ix.PrefixLengths(), other.PrefixLengths()) &&
 		ix.Comment() == other.Comment() &&
 		ix.Name() == other.Name()
+}
+
+// compareUint16Slices returns true if |a| and |b| contain the exact same uint16 values, in the same order; otherwise
+// it returns false.
+func compareUint16Slices(a, b []uint16) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 // GetColumn implements Index.

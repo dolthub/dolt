@@ -279,6 +279,9 @@ const (
 	// TableOfTablesWithViolationsName is the constraint violations system table name
 	TableOfTablesWithViolationsName = "dolt_constraint_violations"
 
+	// SchemaConflictsTableName is the schema conflicts system table name
+	SchemaConflictsTableName = "dolt_schema_conflicts"
+
 	// BranchesTableName is the branches system table name
 	BranchesTableName = "dolt_branches"
 

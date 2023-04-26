@@ -56,7 +56,7 @@ func (cmd StashDropCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd StashDropCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)
 	return ap
 }
 
@@ -66,7 +66,7 @@ func (cmd StashDropCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd StashDropCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd StashDropCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	if !dEnv.DoltDB.Format().UsesFlatbuffers() {
 		cli.PrintErrln(ErrStashNotSupportedForOldFormat.Error())
 		return 1
@@ -76,11 +76,6 @@ func (cmd StashDropCmd) Exec(ctx context.Context, commandStr string, args []stri
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	if dEnv.IsLocked() {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
-	}
-
-	if apr.NArg() > 1 {
-		usage()
-		return 1
 	}
 
 	var idx = 0

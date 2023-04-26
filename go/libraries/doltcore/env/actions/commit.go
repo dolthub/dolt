@@ -37,7 +37,7 @@ type CommitStagedProps struct {
 func GetCommitStaged(
 	ctx context.Context,
 	roots doltdb.Roots,
-	mergeActive bool,
+	ws *doltdb.WorkingSet,
 	mergeParents []*doltdb.Commit,
 	db *doltdb.DoltDB,
 	props CommitStagedProps,
@@ -61,13 +61,13 @@ func GetCommitStaged(
 	}
 
 	isEmpty := len(staged) == 0
-	allowEmpty := mergeActive || props.AllowEmpty || props.Amend
+	allowEmpty := ws.MergeActive() || props.AllowEmpty || props.Amend
 	if isEmpty && !allowEmpty {
 		return nil, NothingStaged{notStaged}
 	}
 
 	if !props.Force {
-		inConflict, err := roots.Working.TablesInConflict(ctx)
+		inConflict, err := roots.Working.TablesWithDataConflicts(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -80,6 +80,13 @@ func GetCommitStaged(
 		}
 		if len(violatesConstraints) > 0 {
 			return nil, NewTblHasConstraintViolations(violatesConstraints)
+		}
+
+		if ws.MergeActive() {
+			schConflicts := ws.MergeState().TablesWithSchemaConflicts()
+			if len(schConflicts) > 0 {
+				return nil, NewTblSchemaConflictError(schConflicts)
+			}
 		}
 	}
 

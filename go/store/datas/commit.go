@@ -27,7 +27,7 @@ import (
 	"errors"
 	"fmt"
 
-	flatbuffers "github.com/google/flatbuffers/go"
+	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -62,6 +62,7 @@ const (
 )
 
 var ErrCommitNotFound = errors.New("target commit not found")
+var ErrNotACommit = errors.New("value is not a commit")
 
 type Commit struct {
 	val    types.Value
@@ -303,7 +304,15 @@ func commitPtr(nbf *types.NomsBinFormat, v types.Value, r *types.Ref) (*Commit, 
 	}, nil
 }
 
-func commitFromValue(nbf *types.NomsBinFormat, v types.Value) (*Commit, error) {
+// CommitFromValue deserializes a types.Value into a Commit.
+func CommitFromValue(nbf *types.NomsBinFormat, v types.Value) (*Commit, error) {
+	isCommit, err := IsCommit(v)
+	if err != nil {
+		return nil, err
+	}
+	if !isCommit {
+		return nil, ErrNotACommit
+	}
 	return commitPtr(nbf, v, nil)
 }
 
@@ -326,7 +335,7 @@ func LoadCommitAddr(ctx context.Context, vr types.ValueReader, addr hash.Hash) (
 	if v == nil {
 		return nil, errors.New("target commit not found")
 	}
-	return commitFromValue(vr.Format(), v)
+	return CommitFromValue(vr.Format(), v)
 }
 
 func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader, ns1, ns2 tree.NodeStore) (hash.Hash, bool, error) {
@@ -695,9 +704,9 @@ func firstError(l, r error) error {
 	return r
 }
 
-func IsCommit(ctx context.Context, v types.Value) (bool, error) {
+func IsCommit(v types.Value) (bool, error) {
 	if s, ok := v.(types.Struct); ok {
-		return types.IsValueSubtypeOf(ctx, s.Format(), v, valueCommitType)
+		return types.IsValueSubtypeOf(s.Format(), v, valueCommitType)
 	} else if sm, ok := v.(types.SerialMessage); ok {
 		data := []byte(sm)
 		return serial.GetFileID(data) == serial.CommitFileID, nil

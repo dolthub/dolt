@@ -2881,6 +2881,44 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 	},
 }
 
+var SchemaConflictScripts = []queries.ScriptTest{
+	{
+		Name: "divergent type change causes schema conflict",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c0 varchar(20))",
+			"call dolt_commit('-Am', 'added tabele t')",
+			"call dolt_checkout('-b', 'other')",
+			"alter table t modify column c0 int",
+			"call dolt_commit('-am', 'altered t on branch other')",
+			"call dolt_checkout('main')",
+			"alter table t modify column c0 datetime",
+			"call dolt_commit('-am', 'altered t on branch main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('other')",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query: "select * from dolt_schema_conflicts",
+				Expected: []sql.Row{{
+					"t",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c0` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c0` datetime(6),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c0` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"different column definitions for our column c0 and their column c0",
+				}},
+			},
+			{
+				Query: "select * from dolt_status",
+				Expected: []sql.Row{
+					{"t", false, "schema conflict"},
+				},
+			},
+		},
+	},
+}
+
 // OldFormatMergeConflictsAndCVsScripts tests old format merge behavior
 // where violations are appended and merges are aborted if there are existing
 // violations and/or conflicts.
@@ -3684,7 +3722,7 @@ var errTmplNoAutomaticMerge = "table %s can't be automatically merged.\nTo merge
 
 var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
-		Name: "merge conflicts",
+		Name: "data conflict",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
 			"CREATE table t (pk int primary key, col1 int, col2 varchar(100), col3 varchar(50), " +
@@ -4149,6 +4187,82 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 
+	// Schema conflict test cases
+	{
+		Name: "index conflicts: both sides add an index with the same name, same columns, but different type",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
+		},
+		RightSetUpScript: []string{
+			"alter table t add index idx1 (col2(2));",
+			"INSERT into t values (1, 10, '100');",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add index idx1 (col2);",
+			"INSERT into t values (2, 20, '200');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query: "select table_name, base_schema, our_schema, their_schema from dolt_schema_conflicts;",
+				Expected: []sql.Row{{"t",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` int,\n  `col2` varchar(100),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` int,\n  `col2` varchar(100),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col2`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` int,\n  `col2` varchar(100),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col2`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+				}},
+			},
+		},
+	},
+
+	{
+		// https://github.com/dolthub/dolt/issues/2973
+		Name: "modifying a column on one side of a merge, and deleting it on the other",
+		AncSetUpScript: []string{
+			"create table t(i int primary key, j int);",
+		},
+		RightSetUpScript: []string{
+			"alter table t drop column j;",
+		},
+		LeftSetUpScript: []string{
+			"alter table t modify column j varchar(24);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select table_name from dolt_schema_conflicts",
+				Expected: []sql.Row{{"t"}},
+			},
+		},
+	},
+	{
+		Name: "type changes to a column on both sides of a merge",
+		AncSetUpScript: []string{
+			"create table t(i int primary key, j int);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column j varchar(100);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t modify column j float;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select table_name from dolt_schema_conflicts",
+				Expected: []sql.Row{{"t"}},
+			},
+		},
+	},
+
 	// Smarter merge conflict detection
 	{
 		// This merge tests reports a conflict on pk=1, because the tuple value is different on the left side, right
@@ -4252,7 +4366,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 	{
-		// TODO: currently panics when merging!!!
 		Name: "changing the type of a column with an index",
 		AncSetUpScript: []string{
 			"create table t (pk int primary key, col1 int, INDEX col1_idx (col1));",
@@ -4271,6 +4384,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
 			},
 			{
+				Skip:  true,
 				Query: "select pk, col1 from t order by col1;",
 				Expected: []sql.Row{
 					{1, "100"},
@@ -4280,7 +4394,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 					{5, "50"},
 					{6, "60"},
 				},
-				Skip: true,
 			},
 		},
 	},

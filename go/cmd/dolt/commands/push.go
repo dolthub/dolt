@@ -71,10 +71,7 @@ func (cmd PushCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd PushCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(cli.SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} and other commands.")
-	ap.SupportsFlag(cli.ForceFlag, "f", "Update the remote with local history, overwriting any conflicting history in the remote.")
-	return ap
+	return cli.CreatePushArgParser()
 }
 
 // EventType returns the type of the event to log
@@ -83,7 +80,7 @@ func (cmd PushCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, pushDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
