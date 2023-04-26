@@ -45,6 +45,7 @@ get_working_tables() {
     dolt sql <<SQL
 CREATE TABLE ignoreme (pk int);
 CREATE TABLE dontignore (pk int);
+CREATE TABLE nomatch (pk int);
 SQL
 
     dolt add -A
@@ -54,6 +55,7 @@ SQL
 
     [[ ! -z $(echo "$working" | grep "ignoreme") ]] || false
     [[ ! -z $(echo "$staged" | grep "dontignore") ]] || false
+    [[ ! -z $(echo "$staged" | grep "nomatch") ]] || false
 }
 
 @test "ignore: specific overrides" {
@@ -104,4 +106,39 @@ SQL
 
     [[ ! -z $(echo "$working" | grep "commit_1") ]] || false
     [[ ! -z $(echo "$staged" | grep "commit_11") ]] || false
+}
+
+@test "ignore: don't stash ignored tables" {
+    dolt sql <<SQL
+CREATE TABLE ignoreme (pk int);
+SQL
+
+    run dolt stash -u
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No local changes to save" ]] || false
+}
+
+@test "ignore: error when trying to stash table with dolt_ignore conflict" {
+    dolt sql <<SQL
+CREATE TABLE commit_ignore (pk int);
+SQL
+
+    run dolt stash -u
+
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "the table commit_ignore matches conflicting patterns in dolt_ignore" ]] || false
+    [[ "$output" =~ "ignored:     *_ignore" ]] || false
+    [[ "$output" =~ "not ignored: commit_*" ]] || false
+}
+
+@test "ignore: stash table with dolt_ignore conflict when --all is passed" {
+    dolt sql <<SQL
+CREATE TABLE commit_ignore (pk int);
+SQL
+
+    run dolt stash -a
+
+    [ "$status" -eq 0 ]
+
 }
