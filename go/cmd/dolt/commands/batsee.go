@@ -73,6 +73,20 @@ type batsResult struct {
 	err     error
 }
 
+// list of slow commands
+var slowCommands = map[string]bool{
+	"types.bats":                 true,
+	"keyless.bats":               true,
+	"index-on-writes.bats":       true,
+	"constraint-violations.bats": true,
+	"foreign-keys.bats":          true,
+	"index.bats":                 true,
+	"sql-server.bats":            true,
+	"index-on-writes-2.bats":     true,
+	"sql.bats":                   true,
+	"remotes.bats":               true,
+}
+
 func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	apr, err := b.ArgParser().Parse(args)
 	if err != nil {
