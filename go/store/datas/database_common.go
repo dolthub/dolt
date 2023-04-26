@@ -268,7 +268,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 	headType := newHead.TypeName()
 	switch headType {
 	case commitName:
-		iscommit, err := IsCommit(ctx, newVal)
+		iscommit, err := IsCommit(newVal)
 		if err != nil {
 			return err
 		}
@@ -291,7 +291,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 		if err != nil {
 			return err
 		}
-		iscommit, err := IsCommit(ctx, commitval)
+		iscommit, err := IsCommit(commitval)
 		if err != nil {
 			return err
 		}
@@ -376,7 +376,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 	}
 
 	v := newHead.value()
-	iscommit, err := IsCommit(ctx, v)
+	iscommit, err := IsCommit(v)
 	if err != nil {
 		return err
 	}
@@ -384,7 +384,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 		return fmt.Errorf("FastForward: target value of new head address %v is not a commit.", newHeadAddr)
 	}
 
-	newCommit, err := commitFromValue(db.Format(), v)
+	newCommit, err := CommitFromValue(db.Format(), v)
 	if err != nil {
 		return err
 	}
@@ -392,7 +392,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 	currentHeadAddr, ok := ds.MaybeHeadAddr()
 	if ok {
 		currentHeadValue, _ := ds.MaybeHead()
-		currCommit, err := commitFromValue(db.Format(), currentHeadValue)
+		currCommit, err := CommitFromValue(db.Format(), currentHeadValue)
 		if err != nil {
 			return err
 		}
@@ -905,7 +905,7 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	var v types.Value
 	v = rHead.(nomsHead).st
 
-	is, err := IsCommit(ctx, v)
+	is, err := IsCommit(v)
 
 	if err != nil {
 		return types.Struct{}, err

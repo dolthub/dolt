@@ -38,18 +38,6 @@ const (
 	DeletedCheckCollision
 )
 
-// todo: link to docs explaining how to resolve schema conflicts.
-func SchemaConflictErr(cc ...SchemaConflict) error {
-	var sb strings.Builder
-	sb.WriteString("merge aborted: schema conflict found for tables: \n")
-	for i := range cc {
-		sb.WriteRune('\t')
-		sb.WriteString(cc[i].TableName)
-		sb.WriteRune('\n')
-	}
-	return errors.New(sb.String())
-}
-
 type SchemaConflict struct {
 	TableName    string
 	ColConflicts []ColConflict
@@ -63,21 +51,37 @@ func (sc SchemaConflict) Count() int {
 	return len(sc.ColConflicts) + len(sc.IdxConflicts) + len(sc.ChkConflicts)
 }
 
+// String implements fmt.Stringer. This method is used to
+// display schema conflicts on schema conflict read paths.
+func (sc SchemaConflict) String() string {
+	return strings.Join(sc.messages(), "\n")
+}
+
+// Error implements error. This error will be returned to the
+// user if merge is configured to error upon schema conflicts.
+// todo: link to docs explaining how to resolve schema conflicts.
 func (sc SchemaConflict) Error() string {
+	template := "merge aborted: schema conflict found for table %s \n" +
+		" please resolve schema conflicts before merging: %s"
 	var b strings.Builder
-	b.WriteString("merge aborted: schema conflict found for table ")
-	b.WriteString(sc.TableName)
-	b.WriteString("\n please resolve schema conflicts before merging")
+	for _, m := range sc.messages() {
+		b.WriteString("\n\t")
+		b.WriteString(m)
+	}
+	return fmt.Sprintf(template, sc.TableName, b.String())
+}
+
+func (sc SchemaConflict) messages() (mm []string) {
 	for _, c := range sc.ColConflicts {
-		b.WriteString(fmt.Sprintf("\t%s\n", c.String()))
+		mm = append(mm, c.String())
 	}
 	for _, c := range sc.IdxConflicts {
-		b.WriteString(fmt.Sprintf("\t%s\n", c.String()))
+		mm = append(mm, c.String())
 	}
 	for _, c := range sc.ChkConflicts {
-		b.WriteString(fmt.Sprintf("\t%s\n", c.String()))
+		mm = append(mm, c.String())
 	}
-	return b.String()
+	return
 }
 
 type ColConflict struct {
