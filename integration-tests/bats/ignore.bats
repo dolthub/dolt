@@ -5,11 +5,7 @@ setup() {
     setup_common
 
     dolt sql <<SQL
-CREATE TABLE _dolt_ignore (
-  pattern VARCHAR(max) PRIMARY KEY,
-  ignored BOOLEAN NOT NULL
-);
-INSERT INTO _dolt_ignore VALUES
+INSERT INTO dolt_ignore VALUES
   ("ignoreme", true),
   ("dontignore", false),
 
@@ -21,8 +17,6 @@ INSERT INTO _dolt_ignore VALUES
 
   ("commit_?", true);
 SQL
-
-# commit_ignore is ambiguous
 
 }
 
@@ -46,7 +40,7 @@ get_working_tables() {
     '
 }
 
-@test "dolt_ignore simple matches" {
+@test "ignore: simple matches" {
 
     dolt sql <<SQL
 CREATE TABLE ignoreme (pk int);
@@ -62,7 +56,7 @@ SQL
     [[ ! -z $(echo "$staged" | grep "dontignore") ]] || false
 }
 
-@test "dolt_ignore specific overrides" {
+@test "ignore: specific overrides" {
 
     dolt sql <<SQL
 CREATE TABLE please_ignore (pk int);
@@ -82,7 +76,7 @@ SQL
     [[ ! -z $(echo "$working" | grep "commit_me_not") ]] || false
 }
 
-@test "dolt_ignore conflict" {
+@test "ignore: conflict" {
 
     dolt sql <<SQL
 CREATE TABLE commit_ignore (pk int);
@@ -95,7 +89,7 @@ SQL
 
 }
 
-@test "dolt_ignore question mark" {
+@test "ignore: question mark" {
     dolt sql <<SQL
 CREATE TABLE commit_1 (pk int);
 CREATE TABLE commit_11 (pk int);
