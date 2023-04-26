@@ -109,53 +109,90 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return 0
 }
 
-func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) error {
+func hasLocalChanges(ctx context.Context, dEnv *env.DoltEnv, roots doltdb.Roots, apr *argparser.ArgParseResults) (bool, error) {
 	headRoot, err := dEnv.HeadRoot(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	workingRoot, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	stagedRoot, err := dEnv.StagedRoot(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	headHash, err := headRoot.HashOf()
 	if err != nil {
-		return err
+		return false, err
 	}
 	workingHash, err := workingRoot.HashOf()
 	if err != nil {
-		return err
+		return false, err
 	}
 	stagedHash, err := stagedRoot.HashOf()
 	if err != nil {
-		return err
+		return false, err
 	}
+
+	// Are there staged changes? If so, stash them.
+	if !headHash.Equal(stagedHash) {
+		return true, nil
+	}
+
+	// No staged changes, but are there any unstaged changes? If not, no work is needed.
+	if headHash.Equal(workingHash) {
+		return false, nil
+	}
+
+	// There are unstaged changes, is --all set? If so, nothing else matters. Stash them.
+	if apr.Contains(AllFlag) {
+		return true, nil
+	}
+
+	// --all was not set, so we can ignore tables. Is every table ignored?
+	allIgnored, err := workingSetContainsOnlyIgnoredTables(ctx, roots)
+	if err != nil {
+		return false, err
+	}
+
+	if allIgnored {
+		return false, nil
+	}
+
+	// There are unignored, unstaged tables. Is --include-untracked set. If so, nothing else matters. Stash them.
+	if apr.Contains(IncludeUntrackedFlag) {
+		return true, nil
+	}
+
+	// --include-untracked was not set, so we can skip untracked tables. Is every table untracked?
+	allUntracked, err := workingSetContainsOnlyUntrackedTables(ctx, roots)
+	if err != nil {
+		return false, err
+	}
+
+	if allUntracked {
+		return false, nil
+	}
+
+	// There are changes to tracked tables. Stash them.
+	return true, nil
+}
+
+func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) error {
 
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
 		return fmt.Errorf("couldn't get working root, cause: %s", err.Error())
 	}
-	if headHash.Equal(stagedHash) {
-		if headHash.Equal(workingHash) {
-			cli.Println("No local changes to save")
-			return nil
-		} else if allUntracked, err := workingSetContainsOnlyUntrackedTables(ctx, roots); err != nil {
-			return err
-		} else if allUntracked && !apr.Contains(IncludeUntrackedFlag) && !apr.Contains(AllFlag) {
-			// if all changes in working set are untracked files, then no local changes to save
-			cli.Println("No local changes to save")
-			return nil
-		} else if allIgnored, err := workingSetContainsOnlyIgnoredTables(ctx, roots); err != nil {
-			return err
-		} else if allIgnored && !apr.Contains(AllFlag) {
-			// if all changes in working set are ignored files, then no local changes to save
-			cli.Println("No local changes to save")
-			return nil
-		}
+
+	hasChanges, err := hasLocalChanges(ctx, dEnv, roots, apr)
+	if err != nil {
+		return err
+	}
+	if !hasChanges {
+		cli.Println("No local changes to save")
+		return nil
 	}
 
 	roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
