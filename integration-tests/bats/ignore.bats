@@ -15,7 +15,9 @@ INSERT INTO dolt_ignore VALUES
   ("commit_*", false),
   ("commit_me_not", true),
 
-  ("commit_?", true);
+  ("test*", true),
+  ("test?*", false),
+  ("test?", true);
 SQL
 
 }
@@ -114,8 +116,9 @@ SQL
 
 @test "ignore: question mark" {
     dolt sql <<SQL
-CREATE TABLE commit_1 (pk int);
-CREATE TABLE commit_11 (pk int);
+CREATE TABLE test (pk int);
+CREATE TABLE test1 (pk int);
+CREATE TABLE test11 (pk int);
 SQL
 
     dolt add -A
@@ -123,8 +126,9 @@ SQL
     ignored=$(get_ignored_tables)
     staged=$(get_staged_tables)
 
-    [[ ! -z $(echo "$ignored" | grep "commit_1") ]] || false
-    [[ ! -z $(echo "$staged" | grep "commit_11") ]] || false
+    [[ ! -z $(echo "$ignored" | grep "test$") ]] || false
+    [[ ! -z $(echo "$ignored" | grep "test1$") ]] || false
+    [[ ! -z $(echo "$staged" | grep "test11$") ]] || false
 }
 
 @test "ignore: don't stash ignored tables" {
@@ -215,6 +219,40 @@ SQL
 
     run dolt show
 
+    [ "$status" -eq 0 ]
+
     [[ ! ["$output" =~ "diff --dolt a/ignoreme b/ignoreme"] ]] || false
+
+}
+
+@test "ignore: dolt status doesn't show ignored files when --ignored is not supplied" {
+    dolt sql <<SQL
+CREATE TABLE ignoreme (pk int);
+CREATE TABLE nomatch (pk int);
+SQL
+
+    run dolt status
+
+    [ "$status" -eq 0 ]
+
+    [[ "$output" =~ "nomatch" ]] || false
+    [[ ! ["$output" =~ "Ignored tables"] ]] || false
+    [[ ! ["$output" =~ "ignoreme"] ]] || false
+
+}
+
+@test "ignore: dolt status shows ignored files when --ignored is not supplied" {
+    dolt sql <<SQL
+CREATE TABLE ignoreme (pk int);
+CREATE TABLE nomatch (pk int);
+SQL
+
+    run dolt status --ignored
+
+    [ "$status" -eq 0 ]
+
+    [[ "$output" =~ "nomatch" ]] || false
+    [[ "$output" =~ "Ignored tables" ]] || false
+    [[ "$output" =~ "ignoreme" ]] || false
 
 }
