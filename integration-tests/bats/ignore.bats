@@ -62,6 +62,7 @@ get_conflict_tables() {
 }
 
 @test "ignore: simple matches" {
+    skip_nbf_ld_1
 
     dolt sql <<SQL
 CREATE TABLE ignoreme (pk int);
@@ -80,6 +81,7 @@ SQL
 }
 
 @test "ignore: specific overrides" {
+    skip_nbf_ld_1
 
     dolt sql <<SQL
 CREATE TABLE please_ignore (pk int);
@@ -100,6 +102,7 @@ SQL
 }
 
 @test "ignore: conflict" {
+    skip_nbf_ld_1
 
     dolt sql <<SQL
 CREATE TABLE commit_ignore (pk int);
@@ -115,6 +118,8 @@ SQL
 }
 
 @test "ignore: question mark" {
+    skip_nbf_ld_1
+
     dolt sql <<SQL
 CREATE TABLE test (pk int);
 CREATE TABLE test1 (pk int);
@@ -132,6 +137,8 @@ SQL
 }
 
 @test "ignore: don't stash ignored tables" {
+    skip_nbf_ld_1
+
     dolt sql <<SQL
 CREATE TABLE ignoreme (pk int);
 SQL
@@ -143,6 +150,8 @@ SQL
 }
 
 @test "ignore: error when trying to stash table with dolt_ignore conflict" {
+    skip_nbf_ld_1
+
     dolt sql <<SQL
 CREATE TABLE commit_ignore (pk int);
 SQL
@@ -156,6 +165,8 @@ SQL
 }
 
 @test "ignore: stash ignored and untracked tables when --all is passed" {
+    skip_nbf_ld_1
+
     dolt sql <<SQL
 CREATE TABLE ignoreme (pk int);
 CREATE TABLE dontignore (pk int);
@@ -179,6 +190,8 @@ SQL
 }
 
 @test "ignore: stash table with dolt_ignore conflict when --all is passed" {
+    skip_nbf_ld_1
+
     dolt sql <<SQL
 CREATE TABLE commit_ignore (pk int);
 SQL
@@ -198,6 +211,8 @@ SQL
 }
 
 @test "ignore: allow staging ignored files if 'add --force' is supplied" {
+    skip_nbf_ld_1
+
     dolt sql <<SQL
 CREATE TABLE ignoreme (pk int);
 SQL
@@ -210,6 +225,8 @@ SQL
 }
 
 @test "ignore: don't auto-stage ignored files" {
+    skip_nbf_ld_1
+
     dolt sql <<SQL
 CREATE TABLE ignoreme (pk int);
 CREATE TABLE nomatch (pk int);
@@ -226,6 +243,8 @@ SQL
 }
 
 @test "ignore: dolt status doesn't show ignored files when --ignored is not supplied" {
+    skip_nbf_ld_1
+
     dolt sql <<SQL
 CREATE TABLE ignoreme (pk int);
 CREATE TABLE nomatch (pk int);
@@ -242,6 +261,8 @@ SQL
 }
 
 @test "ignore: dolt status shows ignored files when --ignored is not supplied" {
+    skip_nbf_ld_1
+
     dolt sql <<SQL
 CREATE TABLE ignoreme (pk int);
 CREATE TABLE nomatch (pk int);
