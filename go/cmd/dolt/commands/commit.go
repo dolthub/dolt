@@ -278,7 +278,8 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 		notStagedTbls := actions.NothingStagedTblDiffs(err)
 		n, newErr := PrintDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, false, false, 0, merge.ArtifactStatus{})
 		if newErr != nil {
-			bdr := errhand.BuildDError(`no changes added to commit (use "dolt add")\n%w`, newErr)
+			bdr := errhand.BuildDError(`No changes added to commit (use "dolt add")\nCould not print diff because of additional error`)
+			bdr.AddCause(newErr)
 			return HandleVErrAndExitCode(bdr.Build(), usage)
 		}
 
