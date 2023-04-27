@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/fatih/color"
 	"io"
 	"io/ioutil"
 	"os"
@@ -103,7 +104,6 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		fmt.Println("Error getting current working directory:", err)
 		return 1
 	}
-
 	// This is pretty restrictive. Loosen this up.
 	if filepath.Base(cwd) != "bats" || filepath.Base(filepath.Dir(cwd)) != "integration-tests" {
 		cli.Println("Current working directory is not integration-tests/bats")
@@ -116,10 +116,18 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		cli.Println("Error reading directory:", err)
 		return 1
 	}
+
 	workQueue := []string{}
+	// Insert the slow tests first
+	for key, _ := range slowCommands {
+		workQueue = append(workQueue, key)
+	}
+	// Then insert the rest of the tests
 	for _, file := range files {
 		if !file.IsDir() && filepath.Ext(file.Name()) == ".bats" {
-			workQueue = append(workQueue, file.Name())
+			if _, ok := slowCommands[file.Name()]; !ok {
+				workQueue = append(workQueue, file.Name())
+			}
 		}
 	}
 
@@ -147,7 +155,11 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	exitStatus := 0
 	for result := range results {
-		cli.Println(fmt.Sprintf("Test %s completed in %s", result.path, result.runtime.String()))
+		status := color.GreenString("PASS")
+		if result.err != nil {
+			status = color.RedString("FAIL")
+		}
+		cli.Println(fmt.Sprintf("Test %s completed in %s with status %s", result.path, result.runtime.String(), status))
 	}
 	return exitStatus
 }
