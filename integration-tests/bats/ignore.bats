@@ -43,7 +43,7 @@ get_working_tables() {
 }
 
 get_ignored_tables() {
-    dolt status --show-ignored | awk '
+    dolt status --ignored | awk '
         BEGIN { working = 0 }
         (working == 1) && match($0, /new table:\ */) { print substr($0, RSTART+RLENGTH) }
         /Ignored tables:/ { working = 1 }
@@ -203,20 +203,6 @@ SQL
     staged=$(get_staged_tables)
 
     [[ ! -z $(echo "$staged" | grep "ignoreme") ]] || false
-}
-
-@test "ignore: allow staging ingnored files if 'commit --add-ignore' is supplied" {
-    dolt sql <<SQL
-CREATE TABLE ignoreme (pk int);
-SQL
-
-    dolt commit -m "commit1" -A --add-ignored
-
-    run dolt show
-
-    [[ "$output" =~ "diff --dolt a/ignoreme b/ignoreme" ]] || false
-    [[ "$output" =~ "added table" ]] || false
-
 }
 
 @test "ignore: don't auto-stage ignored files" {
