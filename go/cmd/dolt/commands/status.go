@@ -94,7 +94,6 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 	return 0
 }
 
-// TODO: working docs in conflict param not used here
 func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, showIgnoredTables bool, as merge.ArtifactStatus) error {
 	cli.Printf(branchHeader, dEnv.RepoStateReader().CWBHeadRef().GetPath())
 
