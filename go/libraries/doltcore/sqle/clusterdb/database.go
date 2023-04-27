@@ -99,7 +99,7 @@ func (db database) GetRoot(context *sql.Context) (*doltdb.RootValue, error) {
 }
 
 func (db database) DbData() env.DbData {
-	panic("unimplemented")
+	return env.DbData{}
 }
 
 func (db database) Flush(context *sql.Context) error {
