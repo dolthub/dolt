@@ -29,6 +29,7 @@ get_staged_tables() {
     dolt status | awk '
         match($0, /new table:\ */) { print substr($0, RSTART+RLENGTH) }
         /Untracked files:/ { exit }
+        /Tables with conflicting dolt_ignore patterns:/ { exit }
     '
 }
 
@@ -37,6 +38,24 @@ get_working_tables() {
         BEGIN { working = 0 }
         (working == 1) && match($0, /new table:\ */) { print substr($0, RSTART+RLENGTH) }
         /Untracked files:/ { working = 1 }
+        /Tables with conflicting dolt_ignore patterns:/ { working = 0 }
+    '
+}
+
+get_ignored_tables() {
+    dolt status --show-ignored | awk '
+        BEGIN { working = 0 }
+        (working == 1) && match($0, /new table:\ */) { print substr($0, RSTART+RLENGTH) }
+        /Ignored tables:/ { working = 1 }
+        /Tables with conflicting dolt_ignore patterns:/ { working = 0 }
+    '
+}
+
+get_conflict_tables() {
+    dolt status | awk '
+        BEGIN { working = 0 }
+        (working == 1) && match($0, /new table:\ */) { print substr($0, RSTART+RLENGTH) }
+        /Tables with conflicting dolt_ignore patterns:/ { working = 1 }
     '
 }
 
@@ -50,10 +69,10 @@ SQL
 
     dolt add -A
 
-    working=$(get_working_tables)
     staged=$(get_staged_tables)
+    ignored=$(get_ignored_tables)
 
-    [[ ! -z $(echo "$working" | grep "ignoreme") ]] || false
+    [[ ! -z $(echo "$ignored" | grep "ignoreme") ]] || false
     [[ ! -z $(echo "$staged" | grep "dontignore") ]] || false
     [[ ! -z $(echo "$staged" | grep "nomatch") ]] || false
 }
@@ -69,13 +88,13 @@ SQL
 
     dolt add -A
 
-    working=$(get_working_tables)
+    ignored=$(get_ignored_tables)
     staged=$(get_staged_tables)
 
-    [[ ! -z $(echo "$working" | grep "please_ignore") ]] || false
+    [[ ! -z $(echo "$ignored" | grep "please_ignore") ]] || false
     [[ ! -z $(echo "$staged" | grep "do_not_ignore") ]] || false
     [[ ! -z $(echo "$staged" | grep "commit_me") ]] || false
-    [[ ! -z $(echo "$working" | grep "commit_me_not") ]] || false
+    [[ ! -z $(echo "$ignored" | grep "commit_me_not") ]] || false
 }
 
 @test "ignore: conflict" {
@@ -101,10 +120,10 @@ SQL
 
     dolt add -A
 
-    working=$(get_working_tables)
+    ignored=$(get_ignored_tables)
     staged=$(get_staged_tables)
 
-    [[ ! -z $(echo "$working" | grep "commit_1") ]] || false
+    [[ ! -z $(echo "$ignored" | grep "commit_1") ]] || false
     [[ ! -z $(echo "$staged" | grep "commit_11") ]] || false
 }
 
@@ -141,15 +160,17 @@ SQL
     dolt stash -a
 
     working=$(get_working_tables)
+    ignored=$(get_ignored_tables)
 
-    [[ -z $(echo "$working" | grep "ignoreme") ]] || false
+    [[ -z $(echo "$ignored" | grep "ignoreme") ]] || false
     [[ -z $(echo "$working" | grep "dontignore") ]] || false
 
     dolt stash pop
 
     working=$(get_working_tables)
+    ignored=$(get_ignored_tables)
 
-    [[ ! -z $(echo "$working" | grep "ignoreme") ]] || false
+    [[ ! -z $(echo "$ignored" | grep "ignoreme") ]] || false
     [[ ! -z $(echo "$working" | grep "dontignore") ]] || false
 }
 
@@ -160,15 +181,15 @@ SQL
 
     dolt stash -a
 
-    working=$(get_working_tables)
+    conflicts=$(get_conflict_tables)
 
-    [[ -z $(echo "$working" | grep "commit_ignore") ]] || false
+    [[ -z $(echo "$conflicts" | grep "commit_ignore") ]] || false
 
     dolt stash pop
 
-    working=$(get_working_tables)
+    conflicts=$(get_conflict_tables)
 
-    [[ ! -z $(echo "$working" | grep "commit_ignore") ]] || false
+    [[ ! -z $(echo "$conflicts" | grep "commit_ignore") ]] || false
 
 }
 
