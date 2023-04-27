@@ -1055,12 +1055,6 @@ func UnionTableNames(ctx context.Context, roots ...*RootValue) ([]string, error)
 	return tblNames, nil
 }
 
-type IgnoredTables struct {
-	Ignore     []string
-	DontIgnore []string
-	Conflicts  []DoltIgnoreConflictError
-}
-
 // FilterIgnoredTables takes a slice of table names and divides it into new slices based on whether the table is ignored, not ignored, or matches conflicting ignore patterns.
 func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) (ignoredTables IgnoredTables, err error) {
 	ignorePatterns, err := GetIgnoredTablePatterns(ctx, roots)

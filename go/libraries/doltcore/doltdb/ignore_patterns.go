@@ -31,6 +31,13 @@ type ignorePattern struct {
 	ignore  bool
 }
 
+// IgnoredTables contains the results of comparing a series of tables to a set of dolt_ignore patterns.
+type IgnoredTables struct {
+	Ignore     []string
+	DontIgnore []string
+	Conflicts  []DoltIgnoreConflictError
+}
+
 // IgnoreResult is an enum containing the result of matching a table name against the list of ignored table patterns
 type IgnoreResult int
 
