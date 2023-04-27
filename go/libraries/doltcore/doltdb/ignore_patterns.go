@@ -31,6 +31,16 @@ type ignorePattern struct {
 	ignore  bool
 }
 
+// IgnoreResult is an enum containing the result of matching a table name against the list of ignored table patterns
+type IgnoreResult int
+
+const (
+	Ignore                IgnoreResult = iota // The table should be ignored.
+	DontIgnore                                // The table should not be ignored.
+	IgnorePatternConflict                     // The table matched multiple conflicting patterns.
+	ErrorOccurred                             // An error occured.
+)
+
 type IgnorePatterns []ignorePattern
 
 func GetIgnoredTablePatterns(ctx context.Context, roots Roots) (IgnorePatterns, error) {
@@ -107,13 +117,13 @@ func getMoreSpecificPatterns(lessSpecific string) (*regexp.Regexp, error) {
 	return regexp.Compile(pattern)
 }
 
-func resolveConflictingPatterns(trueMatches, falseMatches []string, tableName string) (bool, error) {
+func resolveConflictingPatterns(trueMatches, falseMatches []string, tableName string) (IgnoreResult, error) {
 	trueMatchesToRemove := map[string]struct{}{}
 	falseMatchesToRemove := map[string]struct{}{}
 	for _, trueMatch := range trueMatches {
 		trueMatchRegExp, err := getMoreSpecificPatterns(trueMatch)
 		if err != nil {
-			return false, err
+			return ErrorOccurred, err
 		}
 		for _, falseMatch := range falseMatches {
 			if trueMatchRegExp.MatchString(falseMatch) {
@@ -124,7 +134,7 @@ func resolveConflictingPatterns(trueMatches, falseMatches []string, tableName st
 	for _, falseMatch := range falseMatches {
 		falseMatchRegExp, err := getMoreSpecificPatterns(falseMatch)
 		if err != nil {
-			return false, err
+			return ErrorOccurred, err
 		}
 		for _, trueMatch := range trueMatches {
 			if falseMatchRegExp.MatchString(trueMatch) {
@@ -133,10 +143,10 @@ func resolveConflictingPatterns(trueMatches, falseMatches []string, tableName st
 		}
 	}
 	if len(trueMatchesToRemove) == len(trueMatches) {
-		return false, nil
+		return DontIgnore, nil
 	}
 	if len(falseMatchesToRemove) == len(falseMatches) {
-		return true, nil
+		return Ignore, nil
 	}
 
 	// There's a conflict. Remove the less specific patterns so that only the conflict remains.
@@ -156,10 +166,10 @@ func resolveConflictingPatterns(trueMatches, falseMatches []string, tableName st
 		}
 	}
 
-	return false, DoltIgnoreConflictError{Table: tableName, TruePatterns: conflictingTrueMatches, FalsePatterns: conflictingFalseMatches}
+	return IgnorePatternConflict, DoltIgnoreConflictError{Table: tableName, TruePatterns: conflictingTrueMatches, FalsePatterns: conflictingFalseMatches}
 }
 
-func (ip *IgnorePatterns) IsTableNameIgnored(tableName string) (bool, error) {
+func (ip *IgnorePatterns) IsTableNameIgnored(tableName string) (IgnoreResult, error) {
 	trueMatches := []string{}
 	falseMatches := []string{}
 	for _, patternIgnore := range *ip {
@@ -167,7 +177,7 @@ func (ip *IgnorePatterns) IsTableNameIgnored(tableName string) (bool, error) {
 		ignore := patternIgnore.ignore
 		patternRegExp, err := compilePattern(pattern)
 		if err != nil {
-			return false, err
+			return ErrorOccurred, err
 		}
 		if patternRegExp.MatchString(tableName) {
 			if ignore {
@@ -178,16 +188,12 @@ func (ip *IgnorePatterns) IsTableNameIgnored(tableName string) (bool, error) {
 		}
 	}
 	if len(trueMatches) == 0 {
-		return false, nil
+		return DontIgnore, nil
 	}
 	if len(falseMatches) == 0 {
-		return true, nil
+		return Ignore, nil
 	}
 	// The table name matched both positive and negative patterns.
 	// More specific patterns override less specific patterns.
-	ignoreTable, err := resolveConflictingPatterns(trueMatches, falseMatches, tableName)
-	if err != nil {
-		return false, err
-	}
-	return ignoreTable, nil
+	return resolveConflictingPatterns(trueMatches, falseMatches, tableName)
 }

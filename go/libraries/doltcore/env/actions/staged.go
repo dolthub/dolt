@@ -24,10 +24,14 @@ import (
 func StageTables(ctx context.Context, roots doltdb.Roots, tbls []string, filterIgnoredTables bool) (doltdb.Roots, error) {
 	if filterIgnoredTables {
 		var err error
-		tbls, _, err = doltdb.FilterIgnoredTables(ctx, tbls, roots)
+		filteredTables, err := doltdb.FilterIgnoredTables(ctx, tbls, roots)
+		if len(filteredTables.Conflicts) > 0 {
+			return doltdb.Roots{}, filteredTables.Conflicts[0]
+		}
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
+		tbls = filteredTables.DontIgnore
 	}
 
 	return stageTables(ctx, roots, tbls)

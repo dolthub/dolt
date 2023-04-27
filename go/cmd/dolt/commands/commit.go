@@ -501,20 +501,20 @@ func PrintDiffsNotStaged(
 		}
 
 		addedNotStagedTables := getAddedNotStagedTables(notStagedTbls)
-		addedNotStagedNotIgnoredTables, ignoredTables, err := doltdb.FilterIgnoredTables(ctx, addedNotStagedTables, roots)
-		if err != nil {
+		filteredTables, err := doltdb.FilterIgnoredTables(ctx, addedNotStagedTables, roots)
+		if err != nil && doltdb.AsDoltIgnoreInConflict(err) == nil {
 			return 0, err
 		}
 
-		lines := make([]string, len(addedNotStagedNotIgnoredTables))
-		for i, tableName := range addedNotStagedNotIgnoredTables {
+		lines := make([]string, len(filteredTables.DontIgnore))
+		for i, tableName := range filteredTables.DontIgnore {
 			lines[i] = fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.AddedTable], tableName)
 		}
 
 		iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
 		linesPrinted += len(lines)
 
-		if printIgnored && len(ignoredTables) > 0 {
+		if printIgnored && len(filteredTables.Ignore) > 0 {
 			if linesPrinted > 0 {
 				cli.Println()
 			}
@@ -525,9 +525,32 @@ func PrintDiffsNotStaged(
 				iohelp.WriteLine(wr, ignoredHeaderHelp)
 			}
 
-			for i, tableName := range ignoredTables {
+			lines := make([]string, len(filteredTables.Ignore))
+			for i, tableName := range filteredTables.Ignore {
 				lines[i] = fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.AddedTable], tableName)
 			}
+
+			iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
+			linesPrinted += len(lines)
+		}
+
+		if len(filteredTables.Conflicts) > 0 {
+			if linesPrinted > 0 {
+				cli.Println()
+			}
+
+			iohelp.WriteLine(wr, conflictedIgnoredHeader)
+
+			if printHelp {
+				iohelp.WriteLine(wr, conflictedIgnoredHeaderHelp)
+			}
+
+			lines := make([]string, len(filteredTables.Conflicts))
+			for i, conflict := range filteredTables.Conflicts {
+				lines[i] = fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.AddedTable], conflict.Table)
+			}
+
+			iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
 			linesPrinted += len(lines)
 		}
 	}
@@ -586,8 +609,11 @@ const (
 	untrackedHeader     = `Untracked files:`
 	untrackedHeaderHelp = `  (use "dolt add <table>" to include in what will be committed)`
 
-	ignoredHeader     = `Ignored files:`
+	ignoredHeader     = `Ignored tables:`
 	ignoredHeaderHelp = `  (use "dolt add -f <table>" to include in what will be committed)`
+
+	conflictedIgnoredHeader     = `Tables with conflicting dolt_ignore patterns:`
+	conflictedIgnoredHeaderHelp = `  (use "dolt add -f <table>" to include in what will be committed)`
 
 	statusFmt           = "\t%-18s%s"
 	statusRenameFmt     = "\t%-18s%s -> %s"

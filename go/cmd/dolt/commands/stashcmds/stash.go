@@ -281,7 +281,7 @@ func workingSetContainsOnlyUntrackedTables(ctx context.Context, roots doltdb.Roo
 	return true, nil
 }
 
-// workingSetContainsOnlyIgnoredTables returns true if all changes in working set are ignored  tables.
+// workingSetContainsOnlyIgnoredTables returns true if all changes in working set are ignored tables.
 // Note that only unstaged tables are subject to dolt_ignore (this is consistent with what git does.)
 func workingSetContainsOnlyIgnoredTables(ctx context.Context, roots doltdb.Roots) (bool, error) {
 	_, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
@@ -302,7 +302,7 @@ func workingSetContainsOnlyIgnoredTables(ctx context.Context, roots doltdb.Roots
 		if err != nil {
 			return false, err
 		}
-		if !isIgnored {
+		if isIgnored != doltdb.Ignore {
 			return false, nil
 		}
 	}

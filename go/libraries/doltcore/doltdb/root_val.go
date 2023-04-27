@@ -1055,27 +1055,34 @@ func UnionTableNames(ctx context.Context, roots ...*RootValue) ([]string, error)
 	return tblNames, nil
 }
 
+type IgnoredTables struct {
+	Ignore     []string
+	DontIgnore []string
+	Conflicts  []DoltIgnoreConflictError
+}
+
 // FilterIgnoredTables takes a slice of table names and returns two new slices: one with any table names that are specified by dolt_ignore, and the other with only those tables.
-func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) ([]string, []string, error) {
-	filteredTables := []string{}
-	ignoredTables := []string{}
+func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) (ignoredTables IgnoredTables, err error) {
 	ignorePatterns, err := GetIgnoredTablePatterns(ctx, roots)
 	if err != nil {
-		return nil, nil, err
+		return ignoredTables, err
 	}
 	for _, tableName := range tables {
 		ignored, err := ignorePatterns.IsTableNameIgnored(tableName)
-		if err != nil {
-			return nil, nil, err
-		}
-		if !ignored {
-			filteredTables = append(filteredTables, tableName)
+		if conflict := AsDoltIgnoreInConflict(err); conflict != nil {
+			ignoredTables.Conflicts = append(ignoredTables.Conflicts, *conflict)
+		} else if err != nil {
+			return ignoredTables, err
+		} else if ignored == DontIgnore {
+			ignoredTables.DontIgnore = append(ignoredTables.DontIgnore, tableName)
+		} else if ignored == Ignore {
+			ignoredTables.Ignore = append(ignoredTables.Ignore, tableName)
 		} else {
-			ignoredTables = append(ignoredTables, tableName)
+			panic(fmt.Sprintf("IsTableNameIgnored returned ErrorOccurred but no error! %s %s", ignored, err))
 		}
 	}
 
-	return filteredTables, ignoredTables, nil
+	return ignoredTables, nil
 }
 
 // validateTagUniqueness checks for tag collisions between the given table and the set of tables in then given root.
