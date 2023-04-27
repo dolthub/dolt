@@ -244,10 +244,8 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 
 		err = eg.Wait()
 		if err != nil {
-			// todo: issue warning on corrupt index recovery
-			if err = wr.corruptIndexRecovery(ctx); err != nil {
-				return
-			}
+			_ = wr.corruptIndexRecovery(ctx)
+			return hash.Hash{}, err
 		}
 		wr.ranges = wr.ranges.flatten()
 	}
@@ -277,6 +275,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 
 // corruptIndexRecovery handles a corrupted or malformed journal index by truncating
 // the index file and restarting the journal bootstrapping process without an index.
+// todo: make backup file?
 func (wr *journalWriter) corruptIndexRecovery(ctx context.Context) (err error) {
 	if _, err = wr.index.Seek(0, io.SeekStart); err != nil {
 		return
