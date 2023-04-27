@@ -188,6 +188,8 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 	}
 
 	if !found {
+		// TODO: This is effectively a duplicate of the schema declaration above in a different format.
+		// We should find a way to not repeat ourselves.
 		colCollection := schema.NewColCollection(
 			schema.Column{
 				Name:          "pattern",
