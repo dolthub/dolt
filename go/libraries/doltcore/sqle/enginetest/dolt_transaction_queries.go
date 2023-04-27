@@ -2296,10 +2296,6 @@ var BranchIsolationTests = []queries.TransactionTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:            "/* client b */ start transaction",
-				SkipResultsCheck: true,
-			},
-			{
 				Query:            "/* client b */ call dolt_branch('-d', 'b1')",
 				SkipResultsCheck: true,
 			},
