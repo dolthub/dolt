@@ -118,6 +118,7 @@ const (
 	UserParam        = "user"
 	NoPrettyFlag     = "no-pretty"
 	AddIgnoredFlag   = "add-ignored"
+	ShowIgnoredFlag  = "show-ignored"
 )
 
 const (

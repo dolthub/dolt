@@ -24,7 +24,7 @@ import (
 func StageTables(ctx context.Context, roots doltdb.Roots, tbls []string, filterIgnoredTables bool) (doltdb.Roots, error) {
 	if filterIgnoredTables {
 		var err error
-		tbls, err = doltdb.FilterIgnoredTables(ctx, tbls, roots)
+		tbls, _, err = doltdb.FilterIgnoredTables(ctx, tbls, roots)
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
@@ -48,7 +48,7 @@ func StageModifiedAndDeletedTables(ctx context.Context, roots doltdb.Roots) (dol
 		return doltdb.Roots{}, err
 	}
 
-	tbls := []string{}
+	var tbls []string
 	for _, tableDelta := range unstaged {
 		if !tableDelta.IsAdd() {
 			tbls = append(tbls, tableDelta.FromName)

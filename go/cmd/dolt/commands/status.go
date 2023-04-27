@@ -57,6 +57,7 @@ func (cmd StatusCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd StatusCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
+	ap.SupportsFlag(cli.ShowIgnoredFlag, "i", "Show tables that are ignored (according to dolt_ignore)")
 	return ap
 }
 
@@ -64,7 +65,7 @@ func (cmd StatusCmd) ArgParser() *argparser.ArgParser {
 func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, statusDocs, ap))
-	cli.ParseArgsOrDie(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
@@ -86,7 +87,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		handleStatusVErr(err)
 	}
 
-	err = PrintStatus(ctx, dEnv, staged, notStaged, as)
+	err = PrintStatus(ctx, dEnv, staged, notStaged, apr.Contains(cli.ShowIgnoredFlag), as)
 	if err != nil {
 		return handleStatusVErr(err)
 	}
@@ -94,7 +95,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 }
 
 // TODO: working docs in conflict param not used here
-func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, as merge.ArtifactStatus) error {
+func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, showIgnoredTables bool, as merge.ArtifactStatus) error {
 	cli.Printf(branchHeader, dEnv.RepoStateReader().CWBHeadRef().GetPath())
 
 	err := printRemoteRefTrackingInfo(ctx, dEnv)
@@ -120,7 +121,10 @@ func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTb
 	}
 
 	n := printStagedDiffs(cli.CliOut, stagedTbls, true)
-	n = PrintDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, true, n, as)
+	n, err = PrintDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, true, showIgnoredTables, n, as)
+	if err != nil {
+		return err
+	}
 
 	if !mergeActive && n == 0 {
 		cli.Println("nothing to commit, working tree clean")

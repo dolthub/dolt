@@ -1055,24 +1055,27 @@ func UnionTableNames(ctx context.Context, roots ...*RootValue) ([]string, error)
 	return tblNames, nil
 }
 
-// FilterIgnoredTables takes a slice of table names and returns a new slice that omits any table names that are specified by dolt_ignore.
-func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) ([]string, error) {
+// FilterIgnoredTables takes a slice of table names and returns two new slices: one with any table names that are specified by dolt_ignore, and the other with only those tables.
+func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) ([]string, []string, error) {
 	filteredTables := []string{}
+	ignoredTables := []string{}
 	ignorePatterns, err := GetIgnoredTablePatterns(ctx, roots)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for _, tableName := range tables {
 		ignored, err := ignorePatterns.IsTableNameIgnored(tableName)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !ignored {
 			filteredTables = append(filteredTables, tableName)
+		} else {
+			ignoredTables = append(ignoredTables, tableName)
 		}
 	}
 
-	return filteredTables, nil
+	return filteredTables, ignoredTables, nil
 }
 
 // validateTagUniqueness checks for tag collisions between the given table and the set of tables in then given root.
