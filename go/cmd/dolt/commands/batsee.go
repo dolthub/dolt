@@ -74,7 +74,7 @@ type batsResult struct {
 	err     error
 }
 
-// list of slow commands
+// list of slow commands. These tend to run more than 5-7 min, so we want to run them first.
 var slowCommands = map[string]bool{
 	"types.bats":                 true,
 	"keyless.bats":               true,
@@ -98,13 +98,12 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		threads = 12
 	}
 
-	// Get the current working directory
 	cwd, err := os.Getwd()
 	if err != nil {
-		fmt.Println("Error getting current working directory:", err)
+		cli.Println("Error getting current working directory:", err)
 		return 1
 	}
-	// This is pretty restrictive. Loosen this up.
+	// This is pretty restrictive. Loosen this up. TODO
 	if filepath.Base(cwd) != "bats" || filepath.Base(filepath.Dir(cwd)) != "integration-tests" {
 		cli.Println("Current working directory is not integration-tests/bats")
 		return 1
@@ -153,15 +152,27 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	wg.Wait()
 	close(results)
 
-	exitStatus := 0
+	passStr := color.GreenString("PASS")
+	failStr := color.RedString("FAIL")
+	failedQ := []batsResult{}
 	for result := range results {
-		status := color.GreenString("PASS")
 		if result.err != nil {
-			status = color.RedString("FAIL")
+			failedQ = append(failedQ, result)
+		} else {
+			cli.Println(fmt.Sprintf("%s completed in %s with status %s", result.path, durationStr(result.runtime), passStr))
 		}
-		cli.Println(fmt.Sprintf("Test %s completed in %s with status %s", result.path, result.runtime.String(), status))
 	}
+	exitStatus := 0
+	for _, result := range failedQ {
+		cli.Println(fmt.Sprintf("%s completed in %s with status %s", result.path, durationStr(result.runtime), failStr))
+		exitStatus = 1
+	}
+
 	return exitStatus
+}
+
+func durationStr(duration time.Duration) string {
+	return fmt.Sprintf("%02d:%02d", int(duration.Minutes()), int(duration.Seconds())%60)
 }
 
 func worker(jobs <-chan string, results chan<- batsResult) {
