@@ -1078,7 +1078,7 @@ func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) (ign
 		} else if ignored == Ignore {
 			ignoredTables.Ignore = append(ignoredTables.Ignore, tableName)
 		} else {
-			panic(fmt.Sprintf("IsTableNameIgnored returned ErrorOccurred but no error! %s %s", ignored, err))
+			panic("IsTableNameIgnored returned ErrorOccurred but no error!")
 		}
 	}
 
