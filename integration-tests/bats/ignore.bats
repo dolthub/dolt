@@ -142,3 +142,43 @@ SQL
     [ "$status" -eq 0 ]
 
 }
+
+@test "ignore: allow staging ingnored files if 'add --force' is supplied" {
+    dolt sql <<SQL
+CREATE TABLE ignoreme (pk int);
+SQL
+
+    dolt add -A --force
+
+    staged=$(get_staged_tables)
+
+    [[ ! -z $(echo "$staged" | grep "ignoreme") ]] || false
+}
+
+@test "ignore: allow staging ingnored files if 'commit --add-ignore' is supplied" {
+    dolt sql <<SQL
+CREATE TABLE ignoreme (pk int);
+SQL
+
+    dolt commit -m "commit1" -A --add-ignored
+
+    run dolt show
+
+    [[ "$output" =~ "diff --dolt a/ignoreme b/ignoreme" ]] || false
+    [[ "$output" =~ "added table" ]] || false
+
+}
+
+@test "ignore: don't auto-stage ignored files" {
+    dolt sql <<SQL
+CREATE TABLE ignoreme (pk int);
+CREATE TABLE nomatch (pk int);
+SQL
+
+    dolt commit -m "commit1" -A
+
+    run dolt show
+
+    [[ ! ["$output" =~ "diff --dolt a/ignoreme b/ignoreme"] ]] || false
+
+}
