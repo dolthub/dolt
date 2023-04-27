@@ -28,6 +28,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -62,6 +63,7 @@ func (b BatseeCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs(b.Name())
 	ap.SupportsUint("threads", "t", "processes", "Number of tests to execute in parallel. Defaults to 12")
 	ap.SupportsFlag("skip-slow", "", "Skip slow tests")
+	ap.SupportsString("max-time", "", "", "Maximum time to run tests. Defaults to 30m")
 	return ap
 }
 
@@ -74,14 +76,7 @@ type batsResult struct {
 	path    string
 	err     error
 	skipped bool
-}
-
-var skipCommands = map[string]bool{
-	"export-tables.bats":      true,
-	"garbage_collection.bats": true,
-	"remotes.bats":            true,
-	"remotesrv.bats":          true,
-	"schema-changes.bats":     true,
+	aborted bool
 }
 
 // list of slow commands. These tend to run more than 5-7 min, so we want to run them first.
@@ -108,6 +103,24 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		threads = 12
 	}
 
+	durationStr, hasDuration := apr.GetValue("max-time")
+	if !hasDuration {
+		durationStr = "30m"
+	}
+
+	skipSlow := false
+	_, hasVal := apr.GetValue("skip-slow")
+	if hasVal {
+		skipSlow = true
+	}
+
+	duration, err := time.ParseDuration(durationStr)
+	if err != nil {
+		cli.Println("Error parsing duration:", err)
+		return 1
+	}
+	deadline := time.Now().Add(duration)
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		cli.Println("Error getting current working directory:", err)
@@ -129,9 +142,8 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	workQueue := []string{}
 	// Insert the slow tests first
 	for key, _ := range slowCommands {
-		workQueue = append(workQueue, key)
-		if _, ok := skipCommands[key]; !ok {
-			skipCommands[key] = true
+		if !skipSlow {
+			workQueue = append(workQueue, key)
 		}
 	}
 	// Then insert the rest of the tests
@@ -151,7 +163,7 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			worker(jobs, results)
+			worker(jobs, results, deadline)
 		}()
 	}
 
@@ -165,9 +177,18 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	wg.Wait()
 	close(results)
 
-	passStr := color.GreenString("PASSED")
-	failStr := color.RedString("FAILED")
-	skippedStr := color.YellowString("SKIPPED")
+	exitStatus := printResults(results)
+	return exitStatus
+}
+
+func printResults(results <-chan batsResult) int {
+
+	passStr := color.GreenString(fmt.Sprintf("%20s", "PASSED"))
+	failStr := color.RedString(fmt.Sprintf("%20s", "FAILED"))
+	skippedStr := color.YellowString(fmt.Sprintf("%20s", "SKIPPED"))
+	skippedNoTimeStr := color.YellowString(fmt.Sprintf("%20s", "SKIPPED (no time)"))
+	terminatedStr := color.RedString(fmt.Sprintf("%20s", "TERMINATED"))
+
 	failedQ := []batsResult{}
 	skippedQ := []batsResult{}
 	for result := range results {
@@ -179,19 +200,26 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		if result.err != nil {
 			failedQ = append(failedQ, result)
 		} else {
-			cli.Println(fmt.Sprintf("%10s %-40s (time: %s)", passStr, result.path, durationStr(result.runtime)))
+			cli.Println(fmt.Sprintf("%s %-40s (time: %s)", passStr, result.path, durationStr(result.runtime)))
 		}
 	}
 	for _, result := range skippedQ {
-		cli.Println(fmt.Sprintf("%10s %-40s (time:NA)", skippedStr, result.path))
+		reason := skippedStr
+		if result.aborted {
+			reason = skippedNoTimeStr
+		}
+		cli.Println(fmt.Sprintf("%s %-40s (time:NA)", reason, result.path))
 	}
 
 	exitStatus := 0
 	for _, result := range failedQ {
-		cli.Println(fmt.Sprintf("%10s %-40s (time:%s)", failStr, result.path, durationStr(result.runtime)))
+		reason := failStr
+		if result.aborted {
+			reason = terminatedStr
+		}
+		cli.Println(fmt.Sprintf("%s %-40s (time:%s)", reason, result.path, durationStr(result.runtime)))
 		exitStatus = 1
 	}
-
 	return exitStatus
 }
 
@@ -199,25 +227,23 @@ func durationStr(duration time.Duration) string {
 	return fmt.Sprintf("%02d:%02d", int(duration.Minutes()), int(duration.Seconds())%60)
 }
 
-func worker(jobs <-chan string, results chan<- batsResult) {
-	// Process the job and send the result to the results channel
+func worker(jobs <-chan string, results chan<- batsResult, quittingTime time.Time) {
 	for job := range jobs {
-		runBats(job, results)
+		runBats(job, results, quittingTime)
 	}
 }
 
 // runBats runs a single bats test and sends the result to the results channel. Stdout and stderr are written to files
 // in the batsee_results directory in the CWD, and the error is written to the result.err field.
-func runBats(path string, resultChan chan<- batsResult) {
-	cmd := exec.Command("bats", path)
+func runBats(path string, resultChan chan<- batsResult, quitingTime time.Time) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, quitingTime.Sub(time.Now()))
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bats", path)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	result := batsResult{path: path}
-
-	if _, ok := skipCommands[path]; ok {
-		result.skipped = true
-		resultChan <- result
-		return
-	}
 
 	startTime := time.Now()
 
@@ -250,21 +276,35 @@ func runBats(path string, resultChan chan<- batsResult) {
 
 	err = cmd.Start()
 	if err != nil {
-		cli.Println("Error starting command:", err.Error())
+		if ctx.Err() == context.DeadlineExceeded {
+			result.aborted = true
+			result.skipped = true
+		} else {
+			cli.Println("Error starting command:", err.Error())
+		}
 		result.err = err
+	} else {
+		// do this as a goroutines so that we can tail the output files while tests are running.
+		go io.Copy(output, stdout)
+		go io.Copy(errput, stderr)
 	}
 
-	// do this as a goroutine so that we can tail the output files while tests are running.
-	go io.Copy(output, stdout)
-	go io.Copy(errput, stderr)
+	if cmd.Process != nil {
+		// Process started. Now we may have things to clean up if things go sideways.
+		pgroup := -1 * cmd.Process.Pid
 
-	err = cmd.Wait()
-	if err != nil {
-		// command completed with a non-0 exit code. This is "normal", so not writing to output. It will be captured
-		// as part of the summary.
-		result.err = err
+		err = cmd.Wait()
+		if err != nil {
+			if ctx.Err() == context.DeadlineExceeded {
+				// Kill entire process group with fire
+				syscall.Kill(pgroup, syscall.SIGKILL)
+				result.aborted = true
+			}
+			// command completed with a non-0 exit code. This is "normal", so not writing to output. It will be captured
+			// as part of the summary.
+			result.err = err
+		}
 	}
-
 	result.runtime = time.Since(startTime)
 	resultChan <- result
 	return
