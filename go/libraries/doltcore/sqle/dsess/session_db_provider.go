@@ -98,4 +98,3 @@ type SqlDatabase interface {
 	DbData() env.DbData
 	Flush(*sql.Context) error
 }
-

@@ -59,11 +59,11 @@ type Database interface {
 	// GetDataset returns a Dataset struct containing the current mapping of
 	// datasetID in the above Datasets Map.
 	GetDataset(ctx context.Context, datasetID string) (Dataset, error)
-	
+
 	// DatasetsByRootHash returns all datasets as of the root hash given
 	DatasetsByRootHash(ctx context.Context, rootHash hash.Hash) (DatasetsMap, error)
 
-	// GetDatasetByRootHash returns a Dataset struct containing the mapping of datasetId in the Datasets map as it 
+	// GetDatasetByRootHash returns a Dataset struct containing the mapping of datasetId in the Datasets map as it
 	// existed at the root hash given.
 	GetDatasetByRootHash(ctx context.Context, datasetID string, rootHash hash.Hash) (Dataset, error)
 

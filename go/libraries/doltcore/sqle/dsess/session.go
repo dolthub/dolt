@@ -23,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	goerrors "gopkg.in/src-d/go-errors.v1"
@@ -38,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -203,7 +203,7 @@ func (d *DoltSession) Flush(ctx *sql.Context, dbName string) error {
 	if err != nil {
 		return err
 	}
- 
+
 	return d.SetRoot(ctx, dbName, ws.WorkingRoot())
 }
 
@@ -254,7 +254,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	if TransactionsDisabled(ctx) {
 		return DisabledTransaction{}, nil
 	}
-	
+
 	// TODO: remove this when we have true multi-db transaction support
 	dbName := ctx.GetTransactionDatabase()
 	if isNoOpTransactionDatabase(dbName) {
@@ -343,11 +343,12 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	return NewDoltTransaction(dbName, nomsRoots, ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic), nil
 }
 
-// clearRevisionDbState clears all revision DB states for this session. This is necessary on transaction start, 
+// clearRevisionDbState clears all revision DB states for this session. This is necessary on transaction start,
 // because they will be re-initialized with the current branch head / working set.
 // TODO: this should happen with every dbstate, not just revision DBs. The problem is that we track the current working
-//  set *only* in the session state. We need to disentangle the metadata about a state (working ref, persists across 
-//  transactions) from its data (re-initialized on every transaction start)
+//
+//	set *only* in the session state. We need to disentangle the metadata about a state (working ref, persists across
+//	transactions) from its data (re-initialized on every transaction start)
 func (d *DoltSession) clearRevisionDbState() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -1634,4 +1635,3 @@ func TransactionRoot(ctx *sql.Context, db SqlDatabase) (hash.Hash, error) {
 const (
 	DbRevisionDelimiter = "/"
 )
-

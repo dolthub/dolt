@@ -315,18 +315,18 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 func (p DoltDatabaseProvider) DoltDatabases() []dsess.SqlDatabase {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	
+
 	dbs := make([]dsess.SqlDatabase, len(p.databases))
 	i := 0
 	for _, db := range p.databases {
 		dbs[i] = db
 		i++
 	}
-	
+
 	sort.Slice(dbs, func(i, j int) bool {
 		return strings.ToLower(dbs[i].Name()) < strings.ToLower(dbs[j].Name())
 	})
-	
+
 	return dbs
 }
 
@@ -1284,15 +1284,15 @@ func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.I
 	_, revSpec := dsess.SplitRevisionDbName(srcDb)
 
 	// TODO: this may be a disabled transaction, need to kill those
-	
+
 	rootHash, err := dsess.TransactionRoot(ctx, srcDb)
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
-	
+
 	branch := ref.NewBranchRef(revSpec)
 	cm, err := srcDb.DbData().Ddb.ResolveCommitRefAtRoot(ctx, branch, rootHash)
-	if err != nil { 
+	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
 

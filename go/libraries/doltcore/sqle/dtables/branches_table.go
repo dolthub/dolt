@@ -18,12 +18,12 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
@@ -115,9 +115,9 @@ func NewBranchItr(ctx *sql.Context, db dsess.SqlDatabase, remote bool) (*BranchI
 	if err != nil {
 		return nil, err
 	}
-	
+
 	ddb := db.DbData().Ddb
-	
+
 	if remote {
 		branchRefs, err = ddb.GetRefsOfTypeByNomsRoot(ctx, map[ref.RefType]struct{}{ref.RemoteRefType: {}}, txRoot)
 		if err != nil {

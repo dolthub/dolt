@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -33,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/types/edits"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 func init() {
@@ -260,7 +261,7 @@ func (ddb *DoltDB) GetHashForRefStrByNomsRoot(ctx context.Context, ref string, n
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return hashOfCommit(ds, ref)
 }
 
@@ -372,7 +373,7 @@ func (ddb *DoltDB) getHashFromCommitSpec(ctx context.Context, cs *CommitSpec, cw
 		}
 		if nomsRoot.IsEmpty() {
 			return ddb.GetHashForRefStr(ctx, cwb.String())
-		}else {
+		} else {
 			return ddb.GetHashForRefStrByNomsRoot(ctx, cwb.String(), nomsRoot)
 		}
 	default:
@@ -425,7 +426,6 @@ func (ddb *DoltDB) ResolveByNomsRoot(ctx *sql.Context, cs *CommitSpec, cwb ref.D
 	}
 	return commit.GetAncestor(ctx, cs.aSpec)
 }
-
 
 // ResolveCommitRef takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
 // point to a Commit.

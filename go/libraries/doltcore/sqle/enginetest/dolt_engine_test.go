@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dolthub/dolt/go/store/datas"
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
@@ -41,6 +40,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -1448,7 +1448,7 @@ func TestSingleTransactionScript(t *testing.T) {
 	tcc := &testCommitClock{}
 	cleanup := installTestCommitClock(tcc)
 	defer cleanup()
-	
+
 	sql.RunWithNowFunc(tcc.Now, func() error {
 
 		script := queries.TransactionTest{
@@ -1476,16 +1476,16 @@ func TestSingleTransactionScript(t *testing.T) {
 					Expected: []sql.Row{},
 				},
 				{
-					Query:    "/* client a */ select * from dolt_log order by date",
+					Query: "/* client a */ select * from dolt_log order by date",
 					Expected:
-						// existing transaction logic
+					// existing transaction logic
 					[]sql.Row{
 						sql.Row{"j131v1r3cf6mrdjjjuqgkv4t33oa0l54", "billy bob", "bigbillieb@fake.horse", time.Date(1969, time.December, 31, 21, 0, 0, 0, time.Local), "Initialize data repository"},
 						sql.Row{"kcg4345ir3tjfb13mr0on1bv1m56h9if", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 1, 4, 0, 0, 0, time.Local), "checkpoint enginetest database mydb"},
 						sql.Row{"9jtjpggd4t5nso3mefilbde3tkfosdna", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 1, 12, 0, 0, 0, time.Local), "Step 1"},
 						sql.Row{"559f6kdh0mm5i1o40hs3t8dr43bkerav", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 2, 3, 0, 0, 0, time.Local), "update a value"},
 					},
-						
+
 					// new tx logic
 					// 	[]sql.Row{
 					// 	sql.Row{"j131v1r3cf6mrdjjjuqgkv4t33oa0l54", "billy bob", "bigbillieb@fake.horse", time.Date(1969, time.December, 31, 21, 0, 0, 0, time.Local), "Initialize data repository"},
@@ -1565,7 +1565,7 @@ func TestSingleTransactionScript(t *testing.T) {
 		h := newDoltHarness(t)
 		defer h.Close()
 		enginetest.TestTransactionScript(t, h, script)
-		
+
 		return nil
 	})
 }

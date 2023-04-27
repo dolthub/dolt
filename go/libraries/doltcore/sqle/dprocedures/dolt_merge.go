@@ -391,7 +391,7 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return mergeSpec, nil
 }
 
