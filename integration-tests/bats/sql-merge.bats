@@ -771,7 +771,7 @@ call dolt_merge('feature-branch');
 SHOW WARNINGS;
 SQL
    log_status_eq 0
-   [[ "$output" =~ "current fast forward from a to b. a is ahead of b already" ]] || false
+   [[ "$output" =~ "cannot fast forward from a to b. a is ahead of b already" ]] || false
 }
 
 @test "sql-merge: up-to-date branch does not error on CALL" {
@@ -785,7 +785,7 @@ CALL DOLT_MERGE('feature-branch');
 SHOW WARNINGS;
 SQL
    log_status_eq 0
-   [[ "$output" =~ "current fast forward from a to b. a is ahead of b already" ]] || false
+   [[ "$output" =~ "cannot fast forward from a to b. a is ahead of b already" ]] || false
 }
 
 @test "sql-merge: adding and dropping primary keys any number of times not produce schema merge conflicts" {

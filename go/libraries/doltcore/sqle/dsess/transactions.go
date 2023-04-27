@@ -44,6 +44,7 @@ var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transa
 	"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
 	"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.")
 
+// TODO: remove this
 func TransactionsDisabled(ctx *sql.Context) bool {
 	enabled, err := ctx.GetSessionVariable(ctx, TransactionsDisabledSysVar)
 	if err != nil {
@@ -73,6 +74,7 @@ func (d DisabledTransaction) IsReadOnly() bool {
 
 type DoltTransaction struct {
 	sourceDbName    string
+	startRootHash   map[string]hash.Hash
 	startState      *doltdb.WorkingSet
 	workingSetRef   ref.WorkingSetRef
 	dbData          env.DbData
@@ -88,6 +90,7 @@ type savepoint struct {
 
 func NewDoltTransaction(
 	dbName string,
+	startingRoots map[string]hash.Hash,
 	startState *doltdb.WorkingSet,
 	workingSet ref.WorkingSetRef,
 	dbData env.DbData,
@@ -96,6 +99,7 @@ func NewDoltTransaction(
 ) *DoltTransaction {
 	return &DoltTransaction{
 		sourceDbName:    dbName,
+		startRootHash:   startingRoots,
 		startState:      startState,
 		workingSetRef:   workingSet,
 		dbData:          dbData,
@@ -111,6 +115,11 @@ func (tx DoltTransaction) String() string {
 
 func (tx DoltTransaction) IsReadOnly() bool {
 	return tx.tCharacteristic == sql.ReadOnly
+}
+
+func (tx DoltTransaction) GetInitialRoot(dbName string) (hash.Hash, bool) {
+	h, ok := tx.startRootHash[strings.ToLower(dbName)]
+	return h, ok
 }
 
 var txLock sync.Mutex
