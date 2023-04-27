@@ -156,7 +156,7 @@ func resolveConflictingPatterns(trueMatches, falseMatches []string, tableName st
 		}
 	}
 
-	return false, DoltIgnoreConflict{Table: tableName, TruePatterns: conflictingTrueMatches, FalsePatterns: conflictingFalseMatches}
+	return false, DoltIgnoreConflictError{Table: tableName, TruePatterns: conflictingTrueMatches, FalsePatterns: conflictingFalseMatches}
 }
 
 func (ip *IgnorePatterns) IsTableNameIgnored(tableName string) (bool, error) {
