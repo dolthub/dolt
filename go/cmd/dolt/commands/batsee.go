@@ -61,6 +61,7 @@ func (b BatseeCmd) Hidden() bool {
 func (b BatseeCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs(b.Name())
 	ap.SupportsUint("threads", "t", "processes", "Number of tests to execute in parallel. Defaults to 12")
+	ap.SupportsFlag("skip-slow", "", "Skip slow tests")
 	return ap
 }
 
@@ -72,6 +73,15 @@ type batsResult struct {
 	runtime time.Duration
 	path    string
 	err     error
+	skipped bool
+}
+
+var skipCommands = map[string]bool{
+	"export-tables.bats":      true,
+	"garbage_collection.bats": true,
+	"remotes.bats":            true,
+	"remotesrv.bats":          true,
+	"schema-changes.bats":     true,
 }
 
 // list of slow commands. These tend to run more than 5-7 min, so we want to run them first.
@@ -120,6 +130,9 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	// Insert the slow tests first
 	for key, _ := range slowCommands {
 		workQueue = append(workQueue, key)
+		if _, ok := skipCommands[key]; !ok {
+			skipCommands[key] = true
+		}
 	}
 	// Then insert the rest of the tests
 	for _, file := range files {
@@ -152,19 +165,30 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	wg.Wait()
 	close(results)
 
-	passStr := color.GreenString("PASS")
-	failStr := color.RedString("FAIL")
+	passStr := color.GreenString("PASSED")
+	failStr := color.RedString("FAILED")
+	skippedStr := color.YellowString("SKIPPED")
 	failedQ := []batsResult{}
+	skippedQ := []batsResult{}
 	for result := range results {
+		if result.skipped {
+			skippedQ = append(skippedQ, result)
+			continue
+		}
+
 		if result.err != nil {
 			failedQ = append(failedQ, result)
 		} else {
-			cli.Println(fmt.Sprintf("%s completed in %s with status %s", result.path, durationStr(result.runtime), passStr))
+			cli.Println(fmt.Sprintf("%10s %-40s (time: %s)", passStr, result.path, durationStr(result.runtime)))
 		}
 	}
+	for _, result := range skippedQ {
+		cli.Println(fmt.Sprintf("%10s %-40s (time:NA)", skippedStr, result.path))
+	}
+
 	exitStatus := 0
 	for _, result := range failedQ {
-		cli.Println(fmt.Sprintf("%s completed in %s with status %s", result.path, durationStr(result.runtime), failStr))
+		cli.Println(fmt.Sprintf("%10s %-40s (time:%s)", failStr, result.path, durationStr(result.runtime)))
 		exitStatus = 1
 	}
 
@@ -188,6 +212,12 @@ func runBats(path string, resultChan chan<- batsResult) {
 	cmd := exec.Command("bats", path)
 
 	result := batsResult{path: path}
+
+	if _, ok := skipCommands[path]; ok {
+		result.skipped = true
+		resultChan <- result
+		return
+	}
 
 	startTime := time.Now()
 
