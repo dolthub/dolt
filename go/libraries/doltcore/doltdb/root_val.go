@@ -1055,7 +1055,7 @@ func UnionTableNames(ctx context.Context, roots ...*RootValue) ([]string, error)
 	return tblNames, nil
 }
 
-// FilterIgnoredTables takes a list of table names and removes any that are specified by dolt_ignore.
+// FilterIgnoredTables takes a slice of table names and returns a new slice that omits any table names that are specified by dolt_ignore.
 func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) ([]string, error) {
 	filteredTables := []string{}
 	ignorePatterns, err := GetIgnoredTablePatterns(ctx, roots)
