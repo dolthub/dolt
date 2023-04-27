@@ -228,7 +228,7 @@ func (ms *MergeState) FromCommit(ctx context.Context, vr types.ValueReader) (*Co
 		return nil, fmt.Errorf("corrupted MergeState struct")
 	}
 
-	return commitFromValue(vr.Format(), commitV)
+	return CommitFromValue(vr.Format(), commitV)
 }
 
 func (ms *MergeState) FromCommitSpec(ctx context.Context, vr types.ValueReader) (string, error) {
@@ -504,7 +504,7 @@ func newHead(ctx context.Context, head types.Value, addr hash.Hash) (dsHead, err
 		}
 	}
 
-	matched, err := IsCommit(ctx, head)
+	matched, err := IsCommit(head)
 	if err != nil {
 		return nil, err
 	}

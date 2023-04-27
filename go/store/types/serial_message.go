@@ -53,6 +53,15 @@ func (sm SerialMessage) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 }
 
 func (sm SerialMessage) HumanReadableString() string {
+	return sm.humanReadableStringAtIndentationLevel(0)
+}
+
+func printWithIndendationLevel(level int, builder *strings.Builder, format string, a ...any) {
+	fmt.Fprintf(builder, strings.Repeat("\t", level))
+	fmt.Fprintf(builder, format, a...)
+}
+
+func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string {
 	id := serial.GetFileID(sm)
 	switch id {
 	// NOTE: splunk uses a separate path for some printing
@@ -60,101 +69,101 @@ func (sm SerialMessage) HumanReadableString() string {
 		msg := serial.GetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		mapbytes := msg.AddressMapBytes()
-		fmt.Fprintf(ret, "StoreRoot{%s}", SerialMessage(mapbytes).HumanReadableString())
+		printWithIndendationLevel(level, ret, "StoreRoot{%s}",
+			SerialMessage(mapbytes).humanReadableStringAtIndentationLevel(level+1))
 		return ret.String()
 	case serial.StashListFileID:
 		msg := serial.GetRootAsStashList([]byte(sm), serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		mapbytes := msg.AddressMapBytes()
-		fmt.Fprintf(ret, "StashList{%s}", SerialMessage(mapbytes).HumanReadableString())
+		printWithIndendationLevel(level, ret, "StashList{%s}",
+			SerialMessage(mapbytes).humanReadableStringAtIndentationLevel(level+1))
 		return ret.String()
 	case serial.StashFileID:
 		msg := serial.GetRootAsStash(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
-		fmt.Fprintf(ret, "{\n")
-		fmt.Fprintf(ret, "\tBranchName: %s\n", msg.BranchName())
-		fmt.Fprintf(ret, "\tDesc: %s\n", msg.Desc())
-		fmt.Fprintf(ret, "\tStashRootAddr: #%s\n", hash.New(msg.StashRootAddrBytes()).String())
-		fmt.Fprintf(ret, "\tHeadCommitAddr: #%s\n", hash.New(msg.HeadCommitAddrBytes()).String())
-		fmt.Fprintf(ret, "}")
+		printWithIndendationLevel(level, ret, "{\n")
+		printWithIndendationLevel(level, ret, "\tBranchName: %s\n", msg.BranchName())
+		printWithIndendationLevel(level, ret, "\tDesc: %s\n", msg.Desc())
+		printWithIndendationLevel(level, ret, "\tStashRootAddr: #%s\n", hash.New(msg.StashRootAddrBytes()).String())
+		printWithIndendationLevel(level, ret, "\tHeadCommitAddr: #%s\n", hash.New(msg.HeadCommitAddrBytes()).String())
+		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.TagFileID:
 		return "Tag"
 	case serial.WorkingSetFileID:
 		msg := serial.GetRootAsWorkingSet(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
-		fmt.Fprintf(ret, "{\n")
-		fmt.Fprintf(ret, "\tName: %s\n", msg.Name())
-		fmt.Fprintf(ret, "\tDesc: %s\n", msg.Desc())
-		fmt.Fprintf(ret, "\tEmail: %s\n", msg.Email())
-		fmt.Fprintf(ret, "\tTime: %s\n", time.UnixMilli((int64)(msg.TimestampMillis())).String())
-		fmt.Fprintf(ret, "\tWorkingRootAddr: #%s\n", hash.New(msg.WorkingRootAddrBytes()).String())
-		fmt.Fprintf(ret, "\tStagedRootAddr: #%s\n", hash.New(msg.StagedRootAddrBytes()).String())
-		fmt.Fprintf(ret, "}")
+		printWithIndendationLevel(level, ret, "{\n")
+		printWithIndendationLevel(level, ret, "\tName: %s\n", msg.Name())
+		printWithIndendationLevel(level, ret, "\tDesc: %s\n", msg.Desc())
+		printWithIndendationLevel(level, ret, "\tEmail: %s\n", msg.Email())
+		printWithIndendationLevel(level, ret, "\tTime: %s\n", time.UnixMilli((int64)(msg.TimestampMillis())).String())
+		printWithIndendationLevel(level, ret, "\tWorkingRootAddr: #%s\n", hash.New(msg.WorkingRootAddrBytes()).String())
+		printWithIndendationLevel(level, ret, "\tStagedRootAddr: #%s\n", hash.New(msg.StagedRootAddrBytes()).String())
+		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.CommitFileID:
 		msg := serial.GetRootAsCommit(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
-		fmt.Fprintf(ret, "{\n")
-		fmt.Fprintf(ret, "\tName: %s\n", msg.Name())
-		fmt.Fprintf(ret, "\tDesc: %s\n", msg.Description())
-		fmt.Fprintf(ret, "\tEmail: %s\n", msg.Email())
-		fmt.Fprintf(ret, "\tTime: %s\n", time.UnixMilli((int64)(msg.TimestampMillis())).String())
-		fmt.Fprintf(ret, "\tHeight: %d\n", msg.Height())
+		printWithIndendationLevel(level, ret, "{\n")
+		printWithIndendationLevel(level, ret, "\tName: %s\n", msg.Name())
+		printWithIndendationLevel(level, ret, "\tDesc: %s\n", msg.Description())
+		printWithIndendationLevel(level, ret, "\tEmail: %s\n", msg.Email())
+		printWithIndendationLevel(level, ret, "\tTime: %s\n", time.UnixMilli((int64)(msg.TimestampMillis())).String())
+		printWithIndendationLevel(level, ret, "\tHeight: %d\n", msg.Height())
 
-		fmt.Fprintf(ret, "\tRootValue: {\n")
+		printWithIndendationLevel(level, ret, "\tRootValue: {\n")
 		hashes := msg.RootBytes()
 		for i := 0; i < len(hashes)/hash.ByteLen; i++ {
 			addr := hash.New(hashes[i*20 : (i+1)*20])
-			fmt.Fprintf(ret, "\t\t#%s\n", addr.String())
+			printWithIndendationLevel(level, ret, "\t\t#%s\n", addr.String())
 		}
-		fmt.Fprintf(ret, "\t}\n")
+		printWithIndendationLevel(level, ret, "\t}\n")
 
-		fmt.Fprintf(ret, "\tParents: {\n")
+		printWithIndendationLevel(level, ret, "\tParents: {\n")
 		hashes = msg.ParentAddrsBytes()
 		for i := 0; i < msg.ParentAddrsLength()/hash.ByteLen; i++ {
 			addr := hash.New(hashes[i*20 : (i+1)*20])
-			fmt.Fprintf(ret, "\t\t#%s\n", addr.String())
+			printWithIndendationLevel(level, ret, "\t\t#%s\n", addr.String())
 		}
-		fmt.Fprintf(ret, "\t}\n")
+		printWithIndendationLevel(level, ret, "\t}\n")
 
-		fmt.Fprintf(ret, "\tParentClosure: {\n")
+		printWithIndendationLevel(level, ret, "\tParentClosure: {\n")
 		hashes = msg.ParentClosureBytes()
 		for i := 0; i < msg.ParentClosureLength()/hash.ByteLen; i++ {
 			addr := hash.New(hashes[i*20 : (i+1)*20])
-			fmt.Fprintf(ret, "\t\t#%s\n", addr.String())
+			printWithIndendationLevel(level, ret, "\t\t#%s\n", addr.String())
 		}
-		fmt.Fprintf(ret, "\t}\n")
+		printWithIndendationLevel(level, ret, "\t}\n")
 
-		fmt.Fprintf(ret, "}")
+		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.RootValueFileID:
 		msg := serial.GetRootAsRootValue(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
-		fmt.Fprintf(ret, "{\n")
-		fmt.Fprintf(ret, "\tFeatureVersion: %d\n", msg.FeatureVersion())
-		fmt.Fprintf(ret, "\tForeignKeys: #%s\n", hash.New(msg.ForeignKeyAddrBytes()).String())
-		fmt.Fprintf(ret, "\tTables: {\n\t%s", SerialMessage(msg.TablesBytes()).HumanReadableString())
-		fmt.Fprintf(ret, "\t}\n")
-		fmt.Fprintf(ret, "}")
+		printWithIndendationLevel(level, ret, "{\n")
+		printWithIndendationLevel(level, ret, "\tFeatureVersion: %d\n", msg.FeatureVersion())
+		printWithIndendationLevel(level, ret, "\tForeignKeys: #%s\n", hash.New(msg.ForeignKeyAddrBytes()).String())
+		printWithIndendationLevel(level, ret, "\tTables: %s\n",
+			SerialMessage(msg.TablesBytes()).humanReadableStringAtIndentationLevel(level+1))
+		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.TableFileID:
 		msg := serial.GetRootAsTable(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 
-		fmt.Fprintf(ret, "asdasdf {\n")
-		fmt.Fprintf(ret, "\tSchema: #%s\n", hash.New(msg.SchemaBytes()).String())
-		fmt.Fprintf(ret, "\tViolations: #%s\n", hash.New(msg.ViolationsBytes()).String())
+		printWithIndendationLevel(level, ret, "{\n")
+		printWithIndendationLevel(level, ret, "\tSchema: #%s\n", hash.New(msg.SchemaBytes()).String())
+		printWithIndendationLevel(level, ret, "\tViolations: #%s\n", hash.New(msg.ViolationsBytes()).String())
 		// TODO: merge conflicts, not stable yet
 
-		fmt.Fprintf(ret, "\tAutoinc: %d\n", msg.AutoIncrementValue())
+		printWithIndendationLevel(level, ret, "\tAutoinc: %d\n", msg.AutoIncrementValue())
 
-		// TODO: can't use tree package to print here, creates a cycle
-		fmt.Fprintf(ret, "\tPrimary index: prolly tree\n")
-
-		fmt.Fprintf(ret, "\tSecondary indexes: {\n\t%s\n", SerialMessage(msg.SecondaryIndexesBytes()).HumanReadableString())
-		fmt.Fprintf(ret, "\t}\n")
-		fmt.Fprintf(ret, "}")
+		printWithIndendationLevel(level, ret, "\tPrimary index: #%s\n", hash.Of(msg.PrimaryIndexBytes()))
+		printWithIndendationLevel(level, ret, "\tSecondary indexes: %s\n",
+			SerialMessage(msg.SecondaryIndexesBytes()).humanReadableStringAtIndentationLevel(level+1))
+		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.AddressMapFileID:
 		keys, values, _, cnt, err := message.UnpackFields(serial.Message(sm))
@@ -162,16 +171,17 @@ func (sm SerialMessage) HumanReadableString() string {
 			return fmt.Sprintf("error in HumanReadString(): %s", err)
 		}
 		var b strings.Builder
-		b.Write([]byte("AddressMap{\n"))
+		b.Write([]byte("AddressMap {\n"))
 		for i := uint16(0); i < cnt; i++ {
 			name := keys.GetItem(int(i), serial.Message(sm))
 			addr := values.GetItem(int(i), serial.Message(sm))
-			b.Write([]byte("\t"))
+			b.Write([]byte(strings.Repeat("\t", level+1)))
 			b.Write(name)
 			b.Write([]byte(": #"))
 			b.Write([]byte(hash.New(addr).String()))
 			b.Write([]byte("\n"))
 		}
+		b.Write([]byte(strings.Repeat("\t", level)))
 		b.Write([]byte("}"))
 		return b.String()
 	default:
