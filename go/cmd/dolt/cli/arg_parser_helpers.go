@@ -117,7 +117,6 @@ const (
 	ListFlag         = "list"
 	UserParam        = "user"
 	NoPrettyFlag     = "no-pretty"
-	AddIgnoredFlag   = "add-ignored"
 	ShowIgnoredFlag  = "show-ignored"
 )
 
@@ -144,7 +143,6 @@ func CreateCommitArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(AllowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
 	ap.SupportsString(DateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
-	ap.SupportsFlag(AddIgnoredFlag, "i", "Allow adding otherwise ignored files.")
 	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
 	ap.SupportsFlag(AllFlag, "a", "Adds all existing, changed tables (but not new tables) in the working set to the staged set.")
 	ap.SupportsFlag(UpperCaseAllFlag, "A", "Adds all tables (including new tables) in the working set to the staged set.")

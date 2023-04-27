@@ -104,7 +104,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 	}
 
 	if upperCaseAllFlag {
-		roots, err = actions.StageAllTables(ctx, roots, !apr.Contains(cli.AddIgnoredFlag))
+		roots, err = actions.StageAllTables(ctx, roots, true)
 		if err != nil {
 			return handleCommitErr(ctx, dEnv, err, help)
 		}
