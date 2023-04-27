@@ -30,11 +30,11 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-var _ sql.Table = (*BranchesTable)(nil)
-var _ sql.UpdatableTable = (*BranchesTable)(nil)
-var _ sql.DeletableTable = (*BranchesTable)(nil)
-var _ sql.InsertableTable = (*BranchesTable)(nil)
-var _ sql.ReplaceableTable = (*BranchesTable)(nil)
+var _ sql.Table = (*IgnoreTable)(nil)
+var _ sql.UpdatableTable = (*IgnoreTable)(nil)
+var _ sql.DeletableTable = (*IgnoreTable)(nil)
+var _ sql.InsertableTable = (*IgnoreTable)(nil)
+var _ sql.ReplaceableTable = (*IgnoreTable)(nil)
 
 // IgnoreTable is the system table that stores patterns for table names that should not be committed.
 type IgnoreTable struct {
