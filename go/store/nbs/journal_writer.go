@@ -244,7 +244,10 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 
 		err = eg.Wait()
 		if err != nil {
-			_ = wr.corruptIndexRecovery(ctx)
+			err = errors.Join(errors.New("error bootstrapping chunk journal: "), err)
+			if cerr := wr.corruptIndexRecovery(ctx); cerr != nil {
+				err = errors.Join(err, cerr)
+			}
 			return hash.Hash{}, err
 		}
 		wr.ranges = wr.ranges.flatten()
