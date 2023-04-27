@@ -95,5 +95,5 @@ func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		fmt.Sprintf("--%s", commands.BatchFlag),
 		fmt.Sprintf(`--%s`, commands.QueryFlag),
 		queryStr,
-	}, dEnv, nil)
+	}, dEnv, cliCtx)
 }

@@ -177,7 +177,7 @@ func runTestSql(t *testing.T, ctx context.Context, setup []string) (*doltdb.Dolt
 	dEnv := dtestutils.CreateTestEnv()
 	cmd := commands.SqlCmd{}
 	for _, query := range setup {
-		code := cmd.Exec(ctx, cmd.Name(), []string{"-q", query}, dEnv, nil)
+		code := cmd.Exec(ctx, cmd.Name(), []string{"-q", query}, dEnv, commands.BuildEmptyCliContext())
 		require.Equal(t, 0, code)
 	}
 	root, err := dEnv.WorkingRoot(ctx)
