@@ -193,7 +193,7 @@ SQL
 
 }
 
-@test "ignore: allow staging ingnored files if 'add --force' is supplied" {
+@test "ignore: allow staging ignored files if 'add --force' is supplied" {
     dolt sql <<SQL
 CREATE TABLE ignoreme (pk int);
 SQL
