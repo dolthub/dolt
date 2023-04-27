@@ -133,7 +133,7 @@ func NewBranchItr(ctx *sql.Context, db dsess.SqlDatabase, remote bool) (*BranchI
 	branchNames := make([]string, len(branchRefs))
 	commits := make([]*doltdb.Commit, len(branchRefs))
 	for i, branch := range branchRefs {
-		commit, err := ddb.ResolveCommitRef(ctx, branch)
+		commit, err := ddb.ResolveCommitRefAtRoot(ctx, branch, txRoot)
 
 		if err != nil {
 			return nil, err
