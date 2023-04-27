@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/dolthub/swiss"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -187,31 +188,56 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 		if info, err = wr.index.Stat(); err != nil {
 			return hash.Hash{}, err
 		}
+
+		eg, ectx := errgroup.WithContext(ctx)
+		ch := make(chan []lookup, 4)
+
 		// process the indexed portion of the journal
-		err = processIndexRecords(ctx, wr.index, info.Size(), func(o int64, r indexRec) (err error) {
-			switch r.kind {
-			case tableIndexRecKind:
-				// |r.end| is expected to point to a root hash record in |wr.journal|
-				// containing a hash equal to |r.lastRoot|, validate this here
-				var h hash.Hash
-				if h, err = peekRootHashAt(wr.journal, int64(r.end)); err != nil {
-					return err
-				} else if h != r.lastRoot {
-					return fmt.Errorf("invalid index record hash (%s != %s)", h.String(), r.lastRoot.String())
+		eg.Go(func() error {
+			defer close(ch)
+			return processIndexRecords(ectx, wr.index, info.Size(), func(o int64, r indexRec) (err error) {
+				switch r.kind {
+				case tableIndexRecKind:
+					// |r.end| is expected to point to a root hash record in |wr.journal|
+					// containing a hash equal to |r.lastRoot|, validate this here
+					var h hash.Hash
+					if h, err = peekRootHashAt(wr.journal, int64(r.end)); err != nil {
+						return err
+					} else if h != r.lastRoot {
+						return fmt.Errorf("invalid index record hash (%s != %s)", h.String(), r.lastRoot.String())
+					}
+					select {
+					case <-ectx.Done():
+						return ectx.Err()
+					case ch <- deserializeLookups(r.payload):
+						// record a high-water-mark for the indexed portion of the journal
+						wr.indexed = int64(r.end)
+					}
+					// todo: uncompressed size
+				default:
+					return fmt.Errorf("unknown index record kind (%d)", r.kind)
 				}
-				// populate range hashmap
-				for _, l := range deserializeLookups(r.payload) {
-					wr.ranges.put(l.a, l.r)
-				}
-				// record a high-water-mark for the indexed portion of the journal
-				wr.indexed = int64(r.end)
-				wr.ranges = wr.ranges.flatten()
-				// todo: uncompressed size
-			default:
-				return fmt.Errorf("unknown index record kind (%d)", r.kind)
-			}
-			return nil
+				return nil
+			})
 		})
+		// populate range hashmap
+		eg.Go(func() error {
+			for {
+				select {
+				case <-ectx.Done():
+					return nil
+				case ll, ok := <-ch:
+					if !ok {
+						return nil
+					}
+					for _, l := range ll {
+						wr.ranges.putCached(l.a, l.r)
+					}
+				}
+			}
+		})
+
+		err = eg.Wait()
 		if err != nil {
 			// todo: issue warning on corrupt index recovery
 			if err = wr.corruptIndexRecovery(ctx); err != nil {
@@ -512,6 +538,10 @@ func newRangeIndex() rangeIndex {
 	}
 }
 
+func estimateRangeCount(info os.FileInfo) uint32 {
+	return uint32(info.Size()/32) + journalIndexDefaultMaxNovel
+}
+
 func (idx rangeIndex) get(a addr) (rng Range, ok bool) {
 	rng, ok = idx.novel.Get(a)
 	if !ok {
@@ -522,6 +552,10 @@ func (idx rangeIndex) get(a addr) (rng Range, ok bool) {
 
 func (idx rangeIndex) put(a addr, rng Range) {
 	idx.novel.Put(a, rng)
+}
+
+func (idx rangeIndex) putCached(a addr, rng Range) {
+	idx.cached.Put(toAddr16(a), rng)
 }
 
 func (idx rangeIndex) count() uint32 {
