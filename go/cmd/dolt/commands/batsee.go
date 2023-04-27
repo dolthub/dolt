@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -64,6 +65,7 @@ func (b BatseeCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsUint("threads", "t", "processes", "Number of tests to execute in parallel. Defaults to 12")
 	ap.SupportsFlag("skip-slow", "", "Skip slow tests")
 	ap.SupportsString("max-time", "", "", "Maximum time to run tests. Defaults to 30m")
+	ap.SupportsString("only", "", "", "Only run the specified test")
 	return ap
 }
 
@@ -112,6 +114,16 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	_, hasVal := apr.GetValue("skip-slow")
 	if hasVal {
 		skipSlow = true
+	}
+
+	limitTo := map[string]bool{}
+	runOnlyStr, hasRunOnly := apr.GetValue("only")
+	if hasRunOnly {
+		// split runOnlyStr on commas
+		for _, test := range strings.Split(runOnlyStr, ",") {
+			test = strings.TrimSpace(test)
+			limitTo[test] = true
+		}
 	}
 
 	duration, err := time.ParseDuration(durationStr)
@@ -163,7 +175,7 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			worker(jobs, results, deadline)
+			worker(jobs, results, deadline, limitTo)
 		}()
 	}
 
@@ -227,15 +239,15 @@ func durationStr(duration time.Duration) string {
 	return fmt.Sprintf("%02d:%02d", int(duration.Minutes()), int(duration.Seconds())%60)
 }
 
-func worker(jobs <-chan string, results chan<- batsResult, quittingTime time.Time) {
+func worker(jobs <-chan string, results chan<- batsResult, quittingTime time.Time, limitTo map[string]bool) {
 	for job := range jobs {
-		runBats(job, results, quittingTime)
+		runBats(job, results, quittingTime, limitTo)
 	}
 }
 
 // runBats runs a single bats test and sends the result to the results channel. Stdout and stderr are written to files
 // in the batsee_results directory in the CWD, and the error is written to the result.err field.
-func runBats(path string, resultChan chan<- batsResult, quitingTime time.Time) {
+func runBats(path string, resultChan chan<- batsResult, quitingTime time.Time, limitTo map[string]bool) {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, quitingTime.Sub(time.Now()))
 	defer cancel()
@@ -244,6 +256,12 @@ func runBats(path string, resultChan chan<- batsResult, quitingTime time.Time) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	result := batsResult{path: path}
+
+	if limitTo != nil && len(limitTo) != 0 && !limitTo[path] {
+		result.skipped = true
+		resultChan <- result
+		return
+	}
 
 	startTime := time.Now()
 
