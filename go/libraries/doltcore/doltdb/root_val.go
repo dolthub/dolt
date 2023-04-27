@@ -1061,7 +1061,7 @@ type IgnoredTables struct {
 	Conflicts  []DoltIgnoreConflictError
 }
 
-// FilterIgnoredTables takes a slice of table names and returns two new slices: one with any table names that are specified by dolt_ignore, and the other with only those tables.
+// FilterIgnoredTables takes a slice of table names and divides it into new slices based on whether the table is ignored, not ignored, or matches conflicting ignore patterns.
 func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) (ignoredTables IgnoredTables, err error) {
 	ignorePatterns, err := GetIgnoredTablePatterns(ctx, roots)
 	if err != nil {
