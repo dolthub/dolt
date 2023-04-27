@@ -260,7 +260,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	if isNoOpTransactionDatabase(dbName) {
 		return DisabledTransaction{}, nil
 	}
-	
+
 	// New transaction, clear all session state
 	d.clearRevisionDbState()
 
