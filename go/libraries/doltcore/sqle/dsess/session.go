@@ -260,21 +260,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	if isNoOpTransactionDatabase(dbName) {
 		return DisabledTransaction{}, nil
 	}
-
-	nomsRoots := make(map[string]hash.Hash)
-	for _, db := range d.provider.DoltDatabases() {
-		// TODO: this is only necessary to support UserSpaceDatabase, come up with a better set of interfaces to capture
-		//  these capabilities
-		ddb := db.DbData().Ddb
-		if ddb != nil {
-			nomsRoot, err := ddb.NomsRoot(ctx)
-			if err != nil {
-				return nil, err
-			}
-			nomsRoots[strings.ToLower(db.Name())] = nomsRoot
-		}
-	}
-
+	
 	// New transaction, clear all session state
 	d.clearRevisionDbState()
 
@@ -309,6 +295,20 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 
 	if sessionState.readOnly {
 		return DisabledTransaction{}, nil
+	}
+
+	nomsRoots := make(map[string]hash.Hash)
+	for _, db := range d.provider.DoltDatabases() {
+		// TODO: this is only necessary to support UserSpaceDatabase, come up with a better set of interfaces to capture
+		//  these capabilities
+		ddb := db.DbData().Ddb
+		if ddb != nil {
+			nomsRoot, err := ddb.NomsRoot(ctx)
+			if err != nil {
+				return nil, err
+			}
+			nomsRoots[strings.ToLower(db.Name())] = nomsRoot
+		}
 	}
 
 	if _, v, ok := sql.SystemVariables.GetGlobal(ReadReplicaRemote); ok && v != "" {
