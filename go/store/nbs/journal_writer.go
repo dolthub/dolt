@@ -244,9 +244,9 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 
 		err = eg.Wait()
 		if err != nil {
-			err = errors.Join(errors.New("error bootstrapping chunk journal: "), err)
+			err = fmt.Errorf("error bootstrapping chunk journal: %s", err.Error())
 			if cerr := wr.corruptIndexRecovery(ctx); cerr != nil {
-				err = errors.Join(err, cerr)
+				err = fmt.Errorf("error recovering corrupted chunk journal index: %s", err.Error())
 			}
 			return hash.Hash{}, err
 		}
