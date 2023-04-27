@@ -189,6 +189,11 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 			return hash.Hash{}, err
 		}
 
+		// initialize range index with enough capacity to
+		// avoid rehashing during bootstrapping
+		cnt := estimateRangeCount(info)
+		wr.ranges.cached = swiss.NewMap[addr16, Range](cnt)
+
 		eg, ectx := errgroup.WithContext(ctx)
 		ch := make(chan []lookup, 4)
 
