@@ -296,13 +296,14 @@ func workingSetContainsOnlyIgnoredTables(ctx context.Context, roots doltdb.Roots
 
 	for _, tableDelta := range unstaged {
 		if !(tableDelta.IsAdd()) {
-			isIgnored, err := ignorePatterns.IsTableNameIgnored(tableDelta.ToName)
-			if err != nil {
-				return false, err
-			}
-			if !isIgnored {
-				return false, nil
-			}
+			return false, nil
+		}
+		isIgnored, err := ignorePatterns.IsTableNameIgnored(tableDelta.ToName)
+		if err != nil {
+			return false, err
+		}
+		if !isIgnored {
+			return false, nil
 		}
 	}
 
