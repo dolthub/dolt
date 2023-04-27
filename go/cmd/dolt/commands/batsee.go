@@ -100,14 +100,15 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
 	}
+
 	threads, hasThreads := apr.GetUint("threads")
 	if !hasThreads {
 		threads = 12
 	}
 
-	durationStr, hasDuration := apr.GetValue("max-time")
+	durationInput, hasDuration := apr.GetValue("max-time")
 	if !hasDuration {
-		durationStr = "30m"
+		durationInput = "30m"
 	}
 
 	skipSlow := false
@@ -126,12 +127,14 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 	}
 
-	duration, err := time.ParseDuration(durationStr)
+	duration, err := time.ParseDuration(durationInput)
 	if err != nil {
 		cli.Println("Error parsing duration:", err)
 		return 1
 	}
-	deadline := time.Now().Add(duration)
+
+	startTime := time.Now()
+	deadline := startTime.Add(duration)
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -190,6 +193,9 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	close(results)
 
 	exitStatus := printResults(results)
+
+	cli.Println(fmt.Sprintf("BATS Executor Exemplar completed in: %s with a status of %d", durationStr(time.Since(startTime)), exitStatus))
+
 	return exitStatus
 }
 
