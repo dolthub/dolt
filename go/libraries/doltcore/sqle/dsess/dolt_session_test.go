@@ -251,6 +251,14 @@ type emptyRevisionDatabaseProvider struct {
 	sql.DatabaseProvider
 }
 
+func (e emptyRevisionDatabaseProvider) SessionDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool, error) {
+	return nil, false, sql.ErrDatabaseNotFound.New(dbName)
+}
+
+func (e emptyRevisionDatabaseProvider) DoltDatabases() []SqlDatabase {
+	return nil
+}
+
 func (e emptyRevisionDatabaseProvider) DbState(ctx *sql.Context, dbName string, defaultBranch string) (InitialDbState, error) {
 	return InitialDbState{}, sql.ErrDatabaseNotFound.New(dbName)
 }
@@ -289,8 +297,4 @@ func (e emptyRevisionDatabaseProvider) CreateDatabase(ctx *sql.Context, dbName s
 
 func (e emptyRevisionDatabaseProvider) RevisionDbState(_ *sql.Context, revDB string) (InitialDbState, error) {
 	return InitialDbState{}, sql.ErrDatabaseNotFound.New(revDB)
-}
-
-func (e emptyRevisionDatabaseProvider) SessionDatabase(ctx *sql.Context, dbName string) (SessionDatabase, bool, error) {
-	return nil, false, nil
 }

@@ -254,20 +254,25 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	if TransactionsDisabled(ctx) {
 		return DisabledTransaction{}, nil
 	}
-
-	nomsRoots := make(map[string]hash.Hash)
-	for _, db := range d.provider.DoltDatabases() {
-		nomsRoot, err := db.DbData().Ddb.NomsRoot(ctx)
-		if err != nil {
-			return nil, err
-		}
-		nomsRoots[strings.ToLower(db.Name())] = nomsRoot
-	}
-
+	
 	// TODO: remove this when we have true multi-db transaction support
 	dbName := ctx.GetTransactionDatabase()
 	if isNoOpTransactionDatabase(dbName) {
 		return DisabledTransaction{}, nil
+	}
+
+	nomsRoots := make(map[string]hash.Hash)
+	for _, db := range d.provider.DoltDatabases() {
+		// TODO: this is only necessary to support UserSpaceDatabase, come up with a better set of interfaces to capture
+		//  these capabilities
+		ddb := db.DbData().Ddb
+		if ddb != nil {
+			nomsRoot, err := ddb.NomsRoot(ctx)
+			if err != nil {
+				return nil, err
+			}
+			nomsRoots[strings.ToLower(db.Name())] = nomsRoot
+		}
 	}
 
 	// New transaction, clear all session state

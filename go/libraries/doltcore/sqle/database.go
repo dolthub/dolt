@@ -80,6 +80,7 @@ type ReadOnlyDatabase struct {
 }
 
 var _ sql.ReadOnlyDatabase = ReadOnlyDatabase{}
+var _ dsess.SqlDatabase = ReadOnlyDatabase{}
 
 func (r ReadOnlyDatabase) IsReadOnly() bool {
 	return true

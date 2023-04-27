@@ -96,7 +96,7 @@ func (db *UserSpaceDatabase) GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootV
 }
 
 func (db *UserSpaceDatabase) DbData() env.DbData {
-	panic("UserSpaceDatabase does not have dbdata")
+	return env.DbData{}
 }
 
 func (db *UserSpaceDatabase) Flush(ctx *sql.Context) error {
