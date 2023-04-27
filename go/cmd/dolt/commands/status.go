@@ -57,7 +57,7 @@ func (cmd StatusCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd StatusCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
-	ap.SupportsFlag(cli.ShowIgnoredFlag, "i", "Show tables that are ignored (according to dolt_ignore)")
+	ap.SupportsFlag(cli.ShowIgnoredFlag, "", "Show tables that are ignored (according to dolt_ignore)")
 	return ap
 }
 

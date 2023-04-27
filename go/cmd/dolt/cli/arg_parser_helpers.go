@@ -117,7 +117,7 @@ const (
 	ListFlag         = "list"
 	UserParam        = "user"
 	NoPrettyFlag     = "no-pretty"
-	ShowIgnoredFlag  = "show-ignored"
+	ShowIgnoredFlag  = "ignored"
 )
 
 const (
