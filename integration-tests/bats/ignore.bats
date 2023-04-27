@@ -132,14 +132,43 @@ SQL
     [[ "$output" =~ "not ignored: commit_*" ]] || false
 }
 
+@test "ignore: stash ignored and untracked tables when --all is passed" {
+    dolt sql <<SQL
+CREATE TABLE ignoreme (pk int);
+CREATE TABLE dontignore (pk int);
+SQL
+
+    dolt stash -a
+
+    working=$(get_working_tables)
+
+    [[ -z $(echo "$working" | grep "ignoreme") ]] || false
+    [[ -z $(echo "$working" | grep "dontignore") ]] || false
+
+    dolt stash pop
+
+    working=$(get_working_tables)
+
+    [[ ! -z $(echo "$working" | grep "ignoreme") ]] || false
+    [[ ! -z $(echo "$working" | grep "dontignore") ]] || false
+}
+
 @test "ignore: stash table with dolt_ignore conflict when --all is passed" {
     dolt sql <<SQL
 CREATE TABLE commit_ignore (pk int);
 SQL
 
-    run dolt stash -a
+    dolt stash -a
 
-    [ "$status" -eq 0 ]
+    working=$(get_working_tables)
+
+    [[ -z $(echo "$working" | grep "commit_ignore") ]] || false
+
+    dolt stash pop
+
+    working=$(get_working_tables)
+
+    [[ ! -z $(echo "$working" | grep "commit_ignore") ]] || false
 
 }
 
