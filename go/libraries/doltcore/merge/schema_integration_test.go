@@ -40,7 +40,7 @@ type testCommand struct {
 }
 
 func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) int {
-	return tc.cmd.Exec(ctx, tc.cmd.Name(), tc.args, dEnv, nil)
+	return tc.cmd.Exec(ctx, tc.cmd.Name(), tc.args, dEnv, commands.BuildEmptyCliContext())
 }
 
 type args []string

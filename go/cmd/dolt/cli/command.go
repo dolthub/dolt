@@ -32,7 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func isHelp(str string) bool {
+func IsHelp(str string) bool {
 	str = strings.TrimSpace(str)
 
 	if len(str) == 0 {
@@ -50,7 +50,7 @@ func isHelp(str string) bool {
 
 func hasHelpFlag(args []string) bool {
 	for _, arg := range args {
-		if isHelp(arg) {
+		if IsHelp(arg) {
 			return true
 		}
 	}
@@ -171,7 +171,7 @@ func (hc SubCommandHandler) Hidden() bool {
 
 func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx CliContext) int {
 	if len(args) < 1 && hc.Unspecified == nil {
-		hc.printUsage(commandStr)
+		hc.PrintUsage(commandStr)
 		return 1
 	}
 
@@ -190,12 +190,12 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 		return hc.handleCommand(ctx, commandStr, hc.Unspecified, args, dEnv, cliCtx)
 	}
 
-	if !isHelp(subCommandStr) {
+	if !IsHelp(subCommandStr) {
 		PrintErrln(color.RedString("Unknown Command " + subCommandStr))
 		return 1
 	}
 
-	hc.printUsage(commandStr)
+	hc.PrintUsage(commandStr)
 	return 0
 }
 
@@ -302,7 +302,7 @@ func CheckUserNameAndEmail(dEnv *env.DoltEnv) bool {
 	return true
 }
 
-func (hc SubCommandHandler) printUsage(commandStr string) {
+func (hc SubCommandHandler) PrintUsage(commandStr string) {
 	Println("Valid commands for", commandStr, "are")
 
 	for _, cmd := range hc.Subcommands {

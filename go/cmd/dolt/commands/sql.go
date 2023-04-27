@@ -189,6 +189,12 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
+	globalArgs := cliCtx.GlobalArgs()
+	err = validateSqlArgs(globalArgs)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
 	// We need a username and password for many SQL commands, so set defaults if they don't exist
 	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 
@@ -198,24 +204,33 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		username = user
 	}
 
-	mrEnv, verr := getMultiRepoEnv(ctx, apr, dEnv)
+	// data-dir args come either from the global args or the subcommand args.  We need to check both.
+	var dataDir string
+	dataDirGiven := false
+	if multiDbDir, ok := apr.GetValue(MultiDBDirFlag); ok {
+		// When GlobalArgs migration is complete, drop this flag.
+		dataDir = multiDbDir
+		dataDirGiven = true
+	} else if dataDirPath, ok := apr.GetValue(DataDirFlag); ok {
+		// TODO: remove this once we remove the deprecated passing of data dir directly to subcommand.
+		dataDir = dataDirPath
+		dataDirGiven = true
+	} else if dataDirPath, ok := globalArgs.GetValue(DataDirFlag); ok {
+		dataDir = dataDirPath
+		dataDirGiven = true
+	}
+
+	mrEnv, dataDir, verr := getMultiRepoEnv(ctx, dataDir, dEnv)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
 	// need to return cfgdirpath and error
 	var cfgDirPath string
-	var dataDir string
-	if multiDbDir, ok := apr.GetValue(MultiDBDirFlag); ok {
-		dataDir = multiDbDir
-	} else if dataDirPath, ok := apr.GetValue(DataDirFlag); ok {
-		dataDir = dataDirPath
-	}
-
 	cfgDir, cfgDirSpecified := apr.GetValue(CfgDirFlag)
 	if cfgDirSpecified {
 		cfgDirPath = cfgDir
-	} else if len(dataDir) != 0 {
+	} else if dataDirGiven {
 		cfgDirPath = filepath.Join(dataDir, DefaultCfgDirName)
 	} else {
 		// Look in parent directory for doltcfg
@@ -267,10 +282,20 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	se, sqlCtx, err := newEngine(ctx, apr, cfgDirPath, privsFp, branchControlFilePath, username, mrEnv)
+	format := engine.FormatTabular
+	if formatSr, ok := apr.GetValue(FormatFlag); ok {
+		var verr errhand.VerboseError
+		format, verr = GetResultFormat(formatSr)
+		if verr != nil {
+			return HandleVErrAndExitCode(verr, usage)
+		}
+	}
+
+	se, sqlCtx, err := newEngine(ctx, format, cfgDirPath, privsFp, branchControlFilePath, username, mrEnv)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+
 	defer se.Close()
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
@@ -338,22 +363,13 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 func newEngine(
 	ctx context.Context,
-	apr *argparser.ArgParseResults,
+	format engine.PrintResultFormat,
 	cfgDirPath string,
 	privsFp string,
 	branchControlFilePath string,
 	username string,
 	mrEnv *env.MultiRepoEnv,
 ) (*engine.SqlEngine, *sql.Context, error) {
-
-	format := engine.FormatTabular
-	if formatSr, ok := apr.GetValue(FormatFlag); ok {
-		var verr errhand.VerboseError
-		format, verr = GetResultFormat(formatSr)
-		if verr != nil {
-			return nil, nil, verr
-		}
-	}
 
 	config := &engine.SqlEngineConfig{
 		DoltCfgDirPath:     cfgDirPath,
@@ -501,26 +517,26 @@ func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, se *engine.SqlEngine, ap
 }
 
 // getMultiRepoEnv returns an appropriate MultiRepoEnv for this invocation of the command
-func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (*env.MultiRepoEnv, errhand.VerboseError) {
+func getMultiRepoEnv(ctx context.Context, workingDir string, dEnv *env.DoltEnv) (mrEnv *env.MultiRepoEnv, resolvedDir string, verr errhand.VerboseError) {
 	var err error
 	fs := dEnv.FS
-
-	if dataDir, ok := apr.GetValue(MultiDBDirFlag); ok {
-		fs, err = fs.WithWorkingDir(dataDir)
-	} else if dataDir, ok := apr.GetValue(DataDirFlag); ok {
-		fs, err = fs.WithWorkingDir(dataDir)
+	if len(workingDir) > 0 {
+		fs, err = fs.WithWorkingDir(workingDir)
 	}
-
 	if err != nil {
-		return nil, errhand.VerboseErrorFromError(err)
+		return nil, "", errhand.VerboseErrorFromError(err)
 	}
-
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	resolvedDir, err = fs.Abs("")
 	if err != nil {
-		return nil, errhand.VerboseErrorFromError(err)
+		return nil, "", errhand.VerboseErrorFromError(err)
 	}
 
-	return mrEnv, nil
+	mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	if err != nil {
+		return nil, "", errhand.VerboseErrorFromError(err)
+	}
+
+	return mrEnv, resolvedDir, nil
 }
 
 func execBatch(
