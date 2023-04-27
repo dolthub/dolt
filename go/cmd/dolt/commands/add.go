@@ -127,17 +127,15 @@ func toStageVErr(err error) errhand.VerboseError {
 		}
 
 		return bdr.Build()
-	case doltdb.IsDoltIgnoreInConflict(err):
-		tbl := doltdb.DoltIgnoreConflictTableName(err)
-		truePatterns := doltdb.DoltIgnoreConflictTruePatterns(err)
-		falsePatterns := doltdb.DoltIgnoreConflictFalsePatterns(err)
-		bdr := errhand.BuildDError("error: the table %s matches conflicting patterns in dolt_ignore", tbl)
+	case doltdb.AsDoltIgnoreInConflict(err) != nil:
+		doltIgnoreConflictError := doltdb.AsDoltIgnoreInConflict(err)
+		bdr := errhand.BuildDError("error: the table %s matches conflicting patterns in dolt_ignore", doltIgnoreConflictError.Table)
 
-		for _, pattern := range truePatterns {
+		for _, pattern := range doltIgnoreConflictError.TruePatterns {
 			bdr.AddDetails("ignored:     %s", pattern)
 		}
 
-		for _, pattern := range falsePatterns {
+		for _, pattern := range doltIgnoreConflictError.FalsePatterns {
 			bdr.AddDetails("not ignored: %s", pattern)
 		}
 
