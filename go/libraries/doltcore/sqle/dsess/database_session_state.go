@@ -38,7 +38,6 @@ type InitialDbState struct {
 	HeadRoot    *doltdb.RootValue
 	ReadOnly    bool
 	DbData      env.DbData
-	ReadReplica *env.Remote
 	Remotes     map[string]env.Remote
 	Branches    map[string]env.BranchConfig
 	Backups     map[string]env.Remote
@@ -57,20 +56,34 @@ type SessionDatabase interface {
 	InitialDBState(ctx *sql.Context, branch string) (InitialDbState, error)
 }
 
+// DatabaseSessionState is the set of all information for a given database in this session.
 type DatabaseSessionState struct {
+	// dbName is the name of the database this state applies to. This includes a revision specifier in some cases.
 	dbName       string
+	// db is the database this state applies to
 	db           SqlDatabase
+	// headCommit is the head commit for this database. May be nil for databases tied to a detached root value, in which 
+	// case headRoot must be set.
 	headCommit   *doltdb.Commit
+	// HeadRoot is the root value for databases without a headCommit. Nil for databases with a headCommit.
 	headRoot     *doltdb.RootValue
+	// WorkingSet is the working set for this database. May be nil for databases tied to a detached root value, in which
+	// case headCommit must be set
 	WorkingSet   *doltdb.WorkingSet
+	// dbData is an accessor for the underlying doltDb
 	dbData       env.DbData
+	// WriteSession is this database's write session, which changes when the working set changes
 	WriteSession writer.WriteSession
+	// globalState is the global state of this session (shared by all sessions for a particular db)
 	globalState  globalstate.GlobalState
+	// readOnly is true if this database is read only
 	readOnly     bool
+	// dirty is true if this session has uncommitted changes
 	dirty        bool
-	readReplica  *env.Remote
+	// tmpFileDir is the directory to use for temporary files for this database
 	tmpFileDir   string
 
+	// sessionCache is a collection of cached values used to speed up performance
 	sessionCache *SessionCache
 
 	// Same as InitialDbState.Err, this signifies that this

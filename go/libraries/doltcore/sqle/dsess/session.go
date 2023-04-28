@@ -1164,7 +1164,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	adapter := NewSessionStateAdapter(d, db.Name(), dbState.Remotes, dbState.Branches, dbState.Backups)
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
-	sessionState.readOnly, sessionState.readReplica = dbState.ReadOnly, dbState.ReadReplica
+	sessionState.readOnly = dbState.ReadOnly
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
 	// Or better yet, get rid of EditOptions from the database, it's a session setting
@@ -1206,7 +1206,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		sessionState.headRoot = dbState.HeadRoot
 	}
 
-	// This has to happen after SetRoot above, since it does a stale check before its work
+	// This has to happen after SetWorkingSet above, since it does a stale check before its work
 	// TODO: this needs to be kept up to date as the working set ref changes
 	sessionState.headCommit = dbState.HeadCommit
 
