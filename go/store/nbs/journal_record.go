@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 
@@ -256,7 +257,10 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 
 func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err error) {
 	buf := make([]byte, 1024) // assumes len(rec) < 1024
-	if _, err = journal.ReadAt(buf, offset); err != nil {
+	_, err = journal.ReadAt(buf, offset)
+	if errors.Is(err, io.EOF) {
+		err = nil // EOF is expected for last record
+	} else if err != nil {
 		return
 	}
 	sz := readUint32(buf)
