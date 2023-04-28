@@ -180,7 +180,7 @@ func (c *Controller) ManageSystemVariables(variables sqlvars) {
 	c.refreshSystemVars()
 }
 
-func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, bt *sql.BackgroundThreads, mrEnv *env.MultiRepoEnv, dbs ...sqle.SqlDatabase) error {
+func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, bt *sql.BackgroundThreads, mrEnv *env.MultiRepoEnv, dbs ...dsess.SqlDatabase) error {
 	if c == nil {
 		return nil
 	}

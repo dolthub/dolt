@@ -157,7 +157,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 		return nil, err
 	}
 
-	sqledb, ok := dtf.database.(SqlDatabase)
+	sqledb, ok := dtf.database.(dsess.SqlDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unable to get dolt database")
 	}
@@ -201,7 +201,7 @@ type refDetails struct {
 
 // loadDetailsForRef loads the root, hash, and timestamp for the specified from
 // and to ref values
-func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db SqlDatabase) (*refDetails, *refDetails, error) {
+func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db dsess.SqlDatabase) (*refDetails, *refDetails, error) {
 	fromCommitStr, toCommitStr, err := loadCommitStrings(ctx, fromRef, toRef, dotRef, db)
 	if err != nil {
 		return nil, nil, err
@@ -225,7 +225,7 @@ func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db
 	return fromDetails, toDetails, nil
 }
 
-func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db SqlDatabase) (string, string, error) {
+func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db dsess.SqlDatabase) (string, string, error) {
 	if dotRef != nil {
 		dotStr, err := interfaceToString(dotRef)
 		if err != nil {
@@ -279,7 +279,7 @@ func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, 
 
 // loadCommitStrings gets the to and from commit strings, using the common
 // ancestor as the from commit string for three dot diff
-func loadCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db SqlDatabase) (string, string, error) {
+func loadCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db dsess.SqlDatabase) (string, string, error) {
 	fromStr, toStr, err := resolveCommitStrings(ctx, fromRef, toRef, dotRef, db)
 	if err != nil {
 		return "", "", err
@@ -402,7 +402,7 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 		return nil
 	}
 
-	sqledb, ok := dtf.database.(SqlDatabase)
+	sqledb, ok := dtf.database.(dsess.SqlDatabase)
 	if !ok {
 		return fmt.Errorf("unexpected database type: %T", dtf.database)
 	}
@@ -455,7 +455,7 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 
 // cacheTableDelta caches and returns an appropriate table delta for the table name given, taking renames into
 // consideration. Returns a sql.ErrTableNotFound if the given table name cannot be found in either revision.
-func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, toCommitVal, dotCommitVal interface{}, tableName string, db SqlDatabase) (diff.TableDelta, error) {
+func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, toCommitVal, dotCommitVal interface{}, tableName string, db dsess.SqlDatabase) (diff.TableDelta, error) {
 	fromRefDetails, toRefDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, db)
 	if err != nil {
 		return diff.TableDelta{}, err

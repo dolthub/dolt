@@ -21,17 +21,29 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
-func StageTables(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
+func StageTables(ctx context.Context, roots doltdb.Roots, tbls []string, filterIgnoredTables bool) (doltdb.Roots, error) {
+	if filterIgnoredTables {
+		var err error
+		filteredTables, err := doltdb.FilterIgnoredTables(ctx, tbls, roots)
+		if len(filteredTables.Conflicts) > 0 {
+			return doltdb.Roots{}, filteredTables.Conflicts[0]
+		}
+		if err != nil {
+			return doltdb.Roots{}, err
+		}
+		tbls = filteredTables.DontIgnore
+	}
+
 	return stageTables(ctx, roots, tbls)
 }
 
-func StageAllTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
+func StageAllTables(ctx context.Context, roots doltdb.Roots, filterIgnoredTables bool) (doltdb.Roots, error) {
 	tbls, err := doltdb.UnionTableNames(ctx, roots.Staged, roots.Working)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
-	return stageTables(ctx, roots, tbls)
+	return StageTables(ctx, roots, tbls, filterIgnoredTables)
 }
 
 func StageModifiedAndDeletedTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
@@ -40,7 +52,7 @@ func StageModifiedAndDeletedTables(ctx context.Context, roots doltdb.Roots) (dol
 		return doltdb.Roots{}, err
 	}
 
-	tbls := []string{}
+	var tbls []string
 	for _, tableDelta := range unstaged {
 		if !tableDelta.IsAdd() {
 			tbls = append(tbls, tableDelta.FromName)

@@ -117,6 +117,7 @@ const (
 	ListFlag         = "list"
 	UserParam        = "user"
 	NoPrettyFlag     = "no-pretty"
+	ShowIgnoredFlag  = "ignored"
 )
 
 const (
@@ -183,7 +184,9 @@ func CreatePushArgParser() *argparser.ArgParser {
 func CreateAddArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("add")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."})
-	ap.SupportsFlag(AllFlag, "A", "Stages any and all changes (adds, deletes, and modifications).")
+	ap.SupportsFlag(AllFlag, "A", "Stages any and all changes (adds, deletes, and modifications) except for ignored tables.")
+	ap.SupportsFlag(ForceFlag, "f", "Allow adding otherwise ignored tables.")
+
 	return ap
 }
 

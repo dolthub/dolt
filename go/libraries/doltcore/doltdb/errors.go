@@ -43,7 +43,7 @@ var ErrAlreadyOnWorkspace = errors.New("Already on workspace")
 var ErrNomsIO = errors.New("error reading from or writing to noms")
 
 var ErrUpToDate = errors.New("up to date")
-var ErrIsAhead = errors.New("current fast forward from a to b. a is ahead of b already")
+var ErrIsAhead = errors.New("cannot fast forward from a to b. a is ahead of b already")
 var ErrIsBehind = errors.New("cannot reverse from b to a. b is a is behind a already")
 
 var ErrUnresolvedConflictsOrViolations = errors.New("merge has unresolved conflicts or constraint violations")
@@ -169,4 +169,23 @@ func GetUnreachableRootCause(err error) error {
 	}
 
 	return rvu.Cause
+}
+
+// DoltIgnoreConflictError is an error that is returned when the user attempts to stage a table that matches conflicting dolt_ignore patterns
+type DoltIgnoreConflictError struct {
+	Table         string
+	TruePatterns  []string
+	FalsePatterns []string
+}
+
+func (dc DoltIgnoreConflictError) Error() string {
+	return fmt.Sprintf("dolt_ignore has multiple conflicting rules for %s", dc.Table)
+}
+
+func AsDoltIgnoreInConflict(err error) *DoltIgnoreConflictError {
+	di, ok := err.(DoltIgnoreConflictError)
+	if ok {
+		return &di
+	}
+	return nil
 }

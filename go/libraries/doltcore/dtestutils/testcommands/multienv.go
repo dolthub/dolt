@@ -319,7 +319,7 @@ func (mr *MultiRepoTestSetup) StageAll(dbName string) {
 		mr.Errhand(fmt.Sprintf("Failed to get roots: %s", dbName))
 	}
 
-	roots, err = actions.StageAllTables(ctx, roots)
+	roots, err = actions.StageAllTables(ctx, roots, true)
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to stage tables: %s", dbName))
 	}

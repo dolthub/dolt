@@ -54,7 +54,7 @@ type DoltHarness struct {
 func (h *DoltHarness) Close() {
 	dbs := h.sess.Provider().AllDatabases(sql.NewEmptyContext())
 	for _, db := range dbs {
-		db.(dsql.SqlDatabase).DbData().Ddb.Close()
+		db.(dsess.SqlDatabase).DbData().Ddb.Close()
 	}
 }
 

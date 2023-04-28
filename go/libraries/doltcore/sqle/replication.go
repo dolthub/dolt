@@ -116,8 +116,8 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 	return rrd, nil
 }
 
-func ApplyReplicationConfig(ctx context.Context, bThreads *sql.BackgroundThreads, mrEnv *env.MultiRepoEnv, logger io.Writer, dbs ...SqlDatabase) ([]SqlDatabase, error) {
-	outputDbs := make([]SqlDatabase, len(dbs))
+func ApplyReplicationConfig(ctx context.Context, bThreads *sql.BackgroundThreads, mrEnv *env.MultiRepoEnv, logger io.Writer, dbs ...dsess.SqlDatabase) ([]dsess.SqlDatabase, error) {
+	outputDbs := make([]dsess.SqlDatabase, len(dbs))
 	for i, db := range dbs {
 		dEnv := mrEnv.GetEnv(db.Name())
 		if dEnv == nil {
