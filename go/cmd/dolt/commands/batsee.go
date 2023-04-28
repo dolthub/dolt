@@ -139,7 +139,6 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	startTime := time.Now()
-	deadline := startTime.Add(duration)
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -178,12 +177,15 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	jobs := make(chan string, len(workQueue))
 	results := make(chan batsResult, len(workQueue))
 
+	ctx, cancel := context.WithTimeout(ctx, duration)
+	defer cancel()
+
 	var wg sync.WaitGroup
 	for i := uint64(0); i < threads; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			worker(jobs, retries, results, deadline, limitTo)
+			worker(jobs, retries, results, ctx, limitTo)
 		}()
 	}
 
@@ -193,15 +195,35 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	close(jobs)
 
 	cli.Println(fmt.Sprintf("Waiting for workers (%d) to finish", threads))
+	comprehensiveWait(ctx, wg)
 
-	wg.Wait()
 	close(results)
 
 	exitStatus := printResults(results)
-
 	cli.Println(fmt.Sprintf("BATS Executor Exemplar completed in: %s with a status of %d", durationStr(time.Since(startTime)), exitStatus))
-
 	return exitStatus
+}
+
+func comprehensiveWait(ctx context.Context, wg sync.WaitGroup) {
+	wgChan := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(wgChan)
+	}()
+
+	prematureExit := false
+	select {
+	case <-ctx.Done():
+		prematureExit = true
+	case <-wgChan:
+	}
+
+	if prematureExit {
+		// Still need to wait for workers to finish. They got the signal, but we will panic if we don't let them finish.
+		select {
+		case <-wgChan:
+		}
+	}
 }
 
 func printResults(results <-chan batsResult) int {
@@ -250,21 +272,18 @@ func durationStr(duration time.Duration) string {
 	return fmt.Sprintf("%02d:%02d", int(duration.Minutes()), int(duration.Seconds())%60)
 }
 
-func worker(jobs <-chan string, retries int, results chan<- batsResult, quittingTime time.Time, limitTo map[string]bool) {
+func worker(jobs <-chan string, retries int, results chan<- batsResult, ctx context.Context, limitTo map[string]bool) {
 	for job := range jobs {
-		runBats(job, retries, results, quittingTime, limitTo)
+		runBats(job, retries, results, ctx, limitTo)
 	}
 }
 
 // runBats runs a single bats test and sends the result to the results channel. Stdout and stderr are written to files
 // in the batsee_results directory in the CWD, and the error is written to the result.err field.
-func runBats(path string, retries int, resultChan chan<- batsResult, quitingTime time.Time, limitTo map[string]bool) {
-
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, quitingTime.Sub(time.Now()))
-	defer cancel()
-
+func runBats(path string, retries int, resultChan chan<- batsResult, ctx context.Context, limitTo map[string]bool) {
 	cmd := exec.CommandContext(ctx, "bats", path)
+	// Set the process group ID so that we can kill the entire process tree if it runs too long. We need to differenciate
+	// process group of the sub process from this one, because kill the primary process if we don't.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Env = append(os.Environ(), fmt.Sprintf("DOLT_TEST_RETRIES=%d", retries))
 
@@ -328,7 +347,7 @@ func runBats(path string, retries int, resultChan chan<- batsResult, quitingTime
 
 		err = cmd.Wait()
 		if err != nil {
-			if ctx.Err() == context.DeadlineExceeded {
+			if ctx.Err() == context.DeadlineExceeded || ctx.Err() == context.Canceled {
 				// Kill entire process group with fire
 				syscall.Kill(pgroup, syscall.SIGKILL)
 				result.aborted = true
