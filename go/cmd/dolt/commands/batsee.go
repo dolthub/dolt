@@ -63,9 +63,10 @@ func (b BatseeCmd) Hidden() bool {
 func (b BatseeCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs(b.Name())
 	ap.SupportsUint("threads", "t", "processes", "Number of tests to execute in parallel. Defaults to 12")
-	ap.SupportsFlag("skip-slow", "", "Skip slow tests")
+	ap.SupportsFlag("skip-slow", "s", "Skip slow tests")
 	ap.SupportsString("max-time", "", "", "Maximum time to run tests. Defaults to 30m")
 	ap.SupportsString("only", "", "", "Only run the specified test")
+	ap.SupportsInt("retries", "r", "retries", "Number of times to retry a failed test. Defaults to 1")
 	return ap
 }
 
@@ -110,6 +111,11 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	if !hasDuration {
 		durationInput = "30m"
 	}
+	duration, err := time.ParseDuration(durationInput)
+	if err != nil {
+		cli.Println("Error parsing duration:", err)
+		return 1
+	}
 
 	skipSlow := false
 	_, hasVal := apr.GetValue("skip-slow")
@@ -127,10 +133,9 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 	}
 
-	duration, err := time.ParseDuration(durationInput)
-	if err != nil {
-		cli.Println("Error parsing duration:", err)
-		return 1
+	retries, hasRetries := apr.GetInt("retries")
+	if !hasRetries {
+		retries = 1
 	}
 
 	startTime := time.Now()
@@ -178,7 +183,7 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			worker(jobs, results, deadline, limitTo)
+			worker(jobs, retries, results, deadline, limitTo)
 		}()
 	}
 
@@ -245,21 +250,23 @@ func durationStr(duration time.Duration) string {
 	return fmt.Sprintf("%02d:%02d", int(duration.Minutes()), int(duration.Seconds())%60)
 }
 
-func worker(jobs <-chan string, results chan<- batsResult, quittingTime time.Time, limitTo map[string]bool) {
+func worker(jobs <-chan string, retries int, results chan<- batsResult, quittingTime time.Time, limitTo map[string]bool) {
 	for job := range jobs {
-		runBats(job, results, quittingTime, limitTo)
+		runBats(job, retries, results, quittingTime, limitTo)
 	}
 }
 
 // runBats runs a single bats test and sends the result to the results channel. Stdout and stderr are written to files
 // in the batsee_results directory in the CWD, and the error is written to the result.err field.
-func runBats(path string, resultChan chan<- batsResult, quitingTime time.Time, limitTo map[string]bool) {
+func runBats(path string, retries int, resultChan chan<- batsResult, quitingTime time.Time, limitTo map[string]bool) {
+
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, quitingTime.Sub(time.Now()))
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "bats", path)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Env = append(os.Environ(), fmt.Sprintf("DOLT_TEST_RETRIES=%d", retries))
 
 	result := batsResult{path: path}
 
@@ -298,23 +305,25 @@ func runBats(path string, resultChan chan<- batsResult, quitingTime time.Time, l
 		result.err = err
 	}
 
-	err = cmd.Start()
-	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			result.aborted = true
-			result.skipped = true
-		} else {
-			cli.Println("Error starting command:", err.Error())
+	if result.err == nil {
+		// All systems go!
+		err = cmd.Start()
+		if err != nil {
+			if ctx.Err() == context.DeadlineExceeded {
+				result.aborted = true
+				result.skipped = true
+			} else {
+				cli.Println("Error starting command:", err.Error())
+			}
+			result.err = err
 		}
-		result.err = err
-	} else {
-		// do this as a goroutines so that we can tail the output files while tests are running.
-		go io.Copy(output, stdout)
-		go io.Copy(errput, stderr)
 	}
 
 	if cmd.Process != nil {
 		// Process started. Now we may have things to clean up if things go sideways.
+		// do this as a goroutines so that we can tail the output files while tests are running.
+		go io.Copy(output, stdout)
+		go io.Copy(errput, stderr)
 		pgroup := -1 * cmd.Process.Pid
 
 		err = cmd.Wait()
