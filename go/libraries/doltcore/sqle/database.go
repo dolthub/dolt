@@ -400,6 +400,12 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 				dt, found = dtables.NewBranchNamespaceControlTable(controller.Namespace), true
 			}
 		}
+	case doltdb.IgnoreTableName:
+		backingTable, _, err := db.getTable(ctx, root, doltdb.IgnoreTableName)
+		if err != nil {
+			return nil, false, err
+		}
+		dt, found = dtables.NewIgnoreTable(ctx, db.ddb, backingTable), true
 	}
 
 	if found {

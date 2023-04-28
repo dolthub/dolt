@@ -1055,6 +1055,30 @@ func UnionTableNames(ctx context.Context, roots ...*RootValue) ([]string, error)
 	return tblNames, nil
 }
 
+// FilterIgnoredTables takes a slice of table names and divides it into new slices based on whether the table is ignored, not ignored, or matches conflicting ignore patterns.
+func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) (ignoredTables IgnoredTables, err error) {
+	ignorePatterns, err := GetIgnoredTablePatterns(ctx, roots)
+	if err != nil {
+		return ignoredTables, err
+	}
+	for _, tableName := range tables {
+		ignored, err := ignorePatterns.IsTableNameIgnored(tableName)
+		if conflict := AsDoltIgnoreInConflict(err); conflict != nil {
+			ignoredTables.Conflicts = append(ignoredTables.Conflicts, *conflict)
+		} else if err != nil {
+			return ignoredTables, err
+		} else if ignored == DontIgnore {
+			ignoredTables.DontIgnore = append(ignoredTables.DontIgnore, tableName)
+		} else if ignored == Ignore {
+			ignoredTables.Ignore = append(ignoredTables.Ignore, tableName)
+		} else {
+			panic("IsTableNameIgnored returned ErrorOccurred but no error!")
+		}
+	}
+
+	return ignoredTables, nil
+}
+
 // validateTagUniqueness checks for tag collisions between the given table and the set of tables in then given root.
 func validateTagUniqueness(ctx context.Context, root *RootValue, tableName string, table *Table) error {
 	prev, ok, err := root.GetTable(ctx, tableName)

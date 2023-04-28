@@ -108,3 +108,8 @@ const (
 	DoltConflictsOurCardinalityTag
 	DoltConflictsTheirCardinalityTag
 )
+
+const (
+	DoltIgnorePatternTag = iota + SystemTableReservedMin + uint64(8000)
+	DoltIgnoreIgnoredTag
+)

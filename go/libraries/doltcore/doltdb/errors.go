@@ -170,3 +170,22 @@ func GetUnreachableRootCause(err error) error {
 
 	return rvu.Cause
 }
+
+// DoltIgnoreConflictError is an error that is returned when the user attempts to stage a table that matches conflicting dolt_ignore patterns
+type DoltIgnoreConflictError struct {
+	Table         string
+	TruePatterns  []string
+	FalsePatterns []string
+}
+
+func (dc DoltIgnoreConflictError) Error() string {
+	return fmt.Sprintf("dolt_ignore has multiple conflicting rules for %s", dc.Table)
+}
+
+func AsDoltIgnoreInConflict(err error) *DoltIgnoreConflictError {
+	di, ok := err.(DoltIgnoreConflictError)
+	if ok {
+		return &di
+	}
+	return nil
+}
