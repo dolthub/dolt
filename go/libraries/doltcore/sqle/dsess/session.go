@@ -230,10 +230,10 @@ func (d *DoltSession) ValidateSession(ctx *sql.Context, dbName string) error {
 	if !ok {
 		return nil
 	}
-	if sessionState.WorkingSet == nil {
+	if sessionState.GetWorkingSet() == nil {
 		return nil
 	}
-	wsRef := sessionState.WorkingSet.Ref()
+	wsRef := sessionState.GetWorkingSet().Ref()
 	_, err = sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
 	if err == doltdb.ErrWorkingSetNotFound {
 		_, err = d.newWorkingSetForHead(ctx, wsRef, dbName)
@@ -276,7 +276,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	// There are both valid and invalid ways that a working set for the session state can be nil (e.g. connected to a
 	// commit hash revision DB, or the DB contents cannot be loaded). Either way this transaction is defunct.
 	// TODO: with multi-db transactions, such DBs should be ignored
-	if sessionState.WorkingSet == nil {
+	if sessionState.GetWorkingSet() == nil {
 		return DisabledTransaction{}, nil
 	}
 
@@ -320,7 +320,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		}
 	}
 
-	wsRef := sessionState.WorkingSet.Ref()
+	wsRef := sessionState.GetWorkingSet().Ref()
 	ws, err := sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
 	// TODO: every HEAD needs a working set created when it is. We can get rid of this in a 1.0 release when this is fixed
 	if err == doltdb.ErrWorkingSetNotFound {
@@ -530,7 +530,7 @@ func (d *DoltSession) doCommit(ctx *sql.Context, dbName string, tx sql.Transacti
 		return nil, fmt.Errorf("expected a DoltTransaction")
 	}
 
-	mergedWorkingSet, newCommit, err := commitFunc(ctx, dtx, dbState.WorkingSet)
+	mergedWorkingSet, newCommit, err := commitFunc(ctx, dtx, dbState.GetWorkingSet())
 	if err != nil {
 		return nil, err
 	}
@@ -573,8 +573,8 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 	headHash, _ := headCommit.HashOf()
 
 	var mergeParentCommits []*doltdb.Commit
-	if sessionState.WorkingSet.MergeActive() {
-		mergeParentCommits = []*doltdb.Commit{sessionState.WorkingSet.MergeState().Commit()}
+	if sessionState.GetWorkingSet().MergeActive() {
+		mergeParentCommits = []*doltdb.Commit{sessionState.GetWorkingSet().MergeState().Commit()}
 	} else if props.Amend {
 		numParentsHeadForAmend := headCommit.NumParents()
 		for i := 0; i < numParentsHeadForAmend; i++ {
@@ -592,7 +592,7 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 			return nil, err
 		}
 
-		err = d.SetWorkingSet(ctx, dbName, sessionState.WorkingSet.WithStagedRoot(newRoots.Staged))
+		err = d.SetWorkingSet(ctx, dbName, sessionState.GetWorkingSet().WithStagedRoot(newRoots.Staged))
 		if err != nil {
 			return nil, err
 		}
@@ -600,7 +600,7 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 		roots.Head = newRoots.Head
 	}
 
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, sessionState.WorkingSet, mergeParentCommits, sessionState.dbData.Ddb, props)
+	pendingCommit, err := actions.GetCommitStaged(ctx, roots, sessionState.GetWorkingSet(), mergeParentCommits, sessionState.dbData.Ddb, props)
 	if err != nil {
 		if props.Amend {
 			_, err = actions.ResetSoftToRef(ctx, sessionState.dbData, headHash.String())
@@ -845,9 +845,9 @@ func (d *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.R
 		// TODO: Return an error here?
 		return nil
 	}
-	sessionState.WorkingSet = sessionState.WorkingSet.WithWorkingRoot(newRoot)
+	sessionState.WorkingSet = sessionState.GetWorkingSet().WithWorkingRoot(newRoot)
 
-	return d.SetWorkingSet(ctx, dbName, sessionState.WorkingSet)
+	return d.SetWorkingSet(ctx, dbName, sessionState.GetWorkingSet())
 }
 
 // SetRoots sets new roots for the session for the database named. Typically clients should only set the working root,
@@ -860,7 +860,7 @@ func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roo
 		return err
 	}
 
-	workingSet := sessionState.WorkingSet.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
+	workingSet := sessionState.GetWorkingSet().WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
 	return d.SetWorkingSet(ctx, dbName, workingSet)
 }
 
@@ -875,7 +875,7 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	if err != nil {
 		return err
 	}
-	if ws.Ref() != sessionState.WorkingSet.Ref() {
+	if ws.Ref() != sessionState.GetWorkingSet().Ref() {
 		return fmt.Errorf("must switch working sets with SwitchWorkingSet")
 	}
 	sessionState.WorkingSet = ws
@@ -1029,7 +1029,7 @@ func (d *DoltSession) WorkingSet(ctx *sql.Context, dbName string) (*doltdb.Worki
 	if err != nil {
 		return nil, err
 	}
-	return sessionState.WorkingSet, nil
+	return sessionState.GetWorkingSet(), nil
 }
 
 // GetHeadCommit returns the parent commit of the current session.
@@ -1191,7 +1191,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		if err != nil {
 			return err
 		}
-		sessionState.WriteSession = writer.NewWriteSession(nbf, sessionState.WorkingSet, tracker, editOpts)
+		sessionState.WriteSession = writer.NewWriteSession(nbf, sessionState.GetWorkingSet(), tracker, editOpts)
 		if err = d.SetWorkingSet(ctx, db.Name(), dbState.WorkingSet); err != nil {
 			return err
 		}
@@ -1255,11 +1255,11 @@ func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, 
 		return nil, err
 	}
 
-	if dbState.WorkingSet == nil {
+	if dbState.GetWorkingSet() == nil {
 		return nil, nil
 	}
 
-	return dbState.WorkingSet.Ref().ToHeadRef()
+	return dbState.GetWorkingSet().Ref().ToHeadRef()
 }
 
 func (d *DoltSession) Username() string {
@@ -1283,8 +1283,8 @@ func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string) error
 
 	// Different DBs have different requirements for what state is set, so we are maximally permissive on what's expected
 	// in the state object here
-	if state.WorkingSet != nil {
-		headRef, err := state.WorkingSet.Ref().ToHeadRef()
+	if state.GetWorkingSet() != nil {
+		headRef, err := state.GetWorkingSet().Ref().ToHeadRef()
 		if err != nil {
 			return err
 		}
@@ -1425,8 +1425,8 @@ func (d *DoltSession) GetBranch() (string, error) {
 		return "", err
 	}
 
-	if dbState.WorkingSet != nil {
-		branchRef, err := dbState.WorkingSet.Ref().ToHeadRef()
+	if dbState.GetWorkingSet() != nil {
+		branchRef, err := dbState.GetWorkingSet().Ref().ToHeadRef()
 		if err != nil {
 			return "", err
 		}

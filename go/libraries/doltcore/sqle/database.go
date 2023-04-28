@@ -654,7 +654,7 @@ func (db Database) GetWorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	if !ok {
 		return nil, fmt.Errorf("no root value found in session")
 	}
-	return dbState.WorkingSet, nil
+	return dbState.GetWorkingSet(), nil
 }
 
 // SetRoot should typically be called on the Session, which is where this state lives. But it's available here as a

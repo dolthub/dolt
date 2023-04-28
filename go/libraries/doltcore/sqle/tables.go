@@ -1257,7 +1257,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return nil, fmt.Errorf("database %s not found in session", t.db.Name())
 	}
 
-	ws := dbState.WorkingSet
+	ws := dbState.GetWorkingSet()
 
 	head, err := sess.GetHeadCommit(ctx, t.db.Name())
 	if err != nil {

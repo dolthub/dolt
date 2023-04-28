@@ -78,7 +78,7 @@ func NewTempTable(
 		return nil, fmt.Errorf("database %s not found in session", db)
 	}
 
-	ws := dbState.WorkingSet
+	ws := dbState.GetWorkingSet()
 
 	sch, err := temporaryDoltSchema(ctx, pkSch, collation)
 	if err != nil {
@@ -152,7 +152,7 @@ func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoo
 			return fmt.Errorf("database %s not found in session", t.dbName)
 		}
 
-		ws := dbState.WorkingSet
+		ws := dbState.GetWorkingSet()
 		newWs := ws.WithWorkingRoot(newRoot)
 
 		ait, err := globalstate.NewAutoIncrementTracker(ctx, newWs)
