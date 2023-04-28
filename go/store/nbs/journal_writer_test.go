@@ -365,6 +365,7 @@ func TestJournalIndexBootstrap(t *testing.T) {
 				}
 				assert.Equal(t, expected[len(expected)-1].last, last)
 			}
+
 			idxPath := filepath.Join(filepath.Dir(path), journalIndexFileName)
 
 			before, err := os.Stat(idxPath)
@@ -382,13 +383,14 @@ func TestJournalIndexBootstrap(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, before.Size(), info.Size())
 
-			// bootstrap journal without index
+			// bootstrap journal with corrupted index
 			corruptJournalIndex(t, idxPath)
-			validateJournal(path, epochs)
-			// assert corrupt index cleaned up
-			info, err = os.Stat(idxPath)
+			jnl, ok, err := openJournalWriter(ctx, idxPath)
 			require.NoError(t, err)
-			assert.Equal(t, int64(0), info.Size())
+			require.True(t, ok)
+			_, err = jnl.bootstrapJournal(ctx)
+			assert.Error(t, err)
+
 		})
 	}
 }

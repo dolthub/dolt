@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 
@@ -188,12 +189,16 @@ func readJournalRecord(buf []byte) (rec journalRec, err error) {
 	return
 }
 
-func validateJournalRecord(buf []byte) (ok bool) {
-	if len(buf) > (journalRecLenSz + journalRecChecksumSz) {
-		off := len(buf) - journalRecChecksumSz
-		ok = crc(buf[:off]) == readUint32(buf[off:])
+func validateJournalRecord(buf []byte) bool {
+	if len(buf) < (journalRecLenSz + journalRecChecksumSz) {
+		return false
 	}
-	return
+	off := readUint32(buf)
+	if int(off) > len(buf) {
+		return false
+	}
+	off -= indexRecChecksumSz
+	return crc(buf[:off]) == readUint32(buf[off:])
 }
 
 func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb func(o int64, r journalRec) error) (int64, error) {
@@ -252,7 +257,10 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 
 func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err error) {
 	buf := make([]byte, 1024) // assumes len(rec) < 1024
-	if _, err = journal.ReadAt(buf, offset); err != nil {
+	_, err = journal.ReadAt(buf, offset)
+	if errors.Is(err, io.EOF) {
+		err = nil // EOF is expected for last record
+	} else if err != nil {
 		return
 	}
 	sz := readUint32(buf)
