@@ -558,6 +558,10 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 	headCommit := sessionState.headCommit
 	headHash, _ := headCommit.HashOf()
 
+	if sessionState.WorkingSet == nil {
+		return nil, fmt.Errorf("Cannot commit while not attached to a branch. ")
+	}
+
 	var mergeParentCommits []*doltdb.Commit
 	if sessionState.WorkingSet.MergeActive() {
 		mergeParentCommits = []*doltdb.Commit{sessionState.WorkingSet.MergeState().Commit()}
