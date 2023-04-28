@@ -526,7 +526,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 	}
 
 	setter := ds.SetRoot
-	ed, err = state.WriteSession.GetTableWriter(ctx, t.tableName, t.db.Name(), setter, batched)
+	ed, err = state.GetWriteSession().GetTableWriter(ctx, t.tableName, t.db.Name(), setter, batched)
 
 	if err != nil {
 		return nil, err
@@ -1363,7 +1363,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 
 	// We can't just call getTableEditor here because it uses the session state, which we can't update until after the
 	// rewrite operation
-	opts := dbState.WriteSession.GetOptions()
+	opts := dbState.GetWriteSession().GetOptions()
 	opts.ForeignKeyChecksDisabled = true
 
 	newRoot, err := ws.WorkingRoot().PutTable(ctx, t.Name(), dt)

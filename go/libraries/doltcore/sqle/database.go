@@ -1010,7 +1010,7 @@ func (db Database) Flush(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	editSession := dbState.WriteSession
+	editSession := dbState.GetWriteSession()
 
 	ws, err := editSession.Flush(ctx)
 	if err != nil {

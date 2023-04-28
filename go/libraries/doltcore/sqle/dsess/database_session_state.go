@@ -98,7 +98,7 @@ func (d *DatabaseSessionState) GetWorkingSet() *doltdb.WorkingSet {
 }
 
 func (d *DatabaseSessionState) GetWriteSession() writer.WriteSession {
-	return d.WriteSession
+	return d.GetWriteSession()
 }
 
 type dbData struct {
@@ -143,5 +143,5 @@ func (d *DatabaseSessionState) SessionCache() *SessionCache {
 }
 
 func (d DatabaseSessionState) EditOpts() editor.Options {
-	return d.WriteSession.GetOptions()
+	return d.GetWriteSession().GetOptions()
 }

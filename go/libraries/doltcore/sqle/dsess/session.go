@@ -199,7 +199,7 @@ func (d *DoltSession) Flush(ctx *sql.Context, dbName string) error {
 		return err
 	}
 
-	ws, err := dbState.WriteSession.Flush(ctx)
+	ws, err := dbState.GetWriteSession().Flush(ctx)
 	if err != nil {
 		return err
 	}
@@ -340,7 +340,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
 
-	return NewDoltTransaction(dbName, nomsRoots, ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic), nil
+	return NewDoltTransaction(dbName, nomsRoots, ws, wsRef, sessionState.dbData, sessionState.GetWriteSession().GetOptions(), tCharacteristic), nil
 }
 
 // clearRevisionDbState clears all revision DB states for this session. This is necessary on transaction start,
@@ -907,7 +907,7 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 		return err
 	}
 
-	err = sessionState.WriteSession.SetWorkingSet(ctx, ws)
+	err = sessionState.GetWriteSession().SetWorkingSet(ctx, ws)
 	if err != nil {
 		return err
 	}
@@ -993,7 +993,7 @@ func (d *DoltSession) SwitchWorkingSet(
 	}
 
 	// make a fresh WriteSession, discard existing WriteSession
-	opts := sessionState.WriteSession.GetOptions()
+	opts := sessionState.GetWriteSession().GetOptions()
 	nbf := ws.WorkingRoot().VRW().Format()
 	tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx)
 	if err != nil {
@@ -1017,7 +1017,7 @@ func (d *DoltSession) SwitchWorkingSet(
 		ws,
 		wsRef,
 		sessionState.dbData,
-		sessionState.WriteSession.GetOptions(),
+		sessionState.GetWriteSession().GetOptions(),
 		tCharacteristic,
 	))
 
@@ -1099,15 +1099,15 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 	}
 	if intVal == 0 {
 		for _, dbState := range d.dbStates {
-			opts := dbState.WriteSession.GetOptions()
+			opts := dbState.GetWriteSession().GetOptions()
 			opts.ForeignKeyChecksDisabled = true
-			dbState.WriteSession.SetOptions(opts)
+			dbState.GetWriteSession().SetOptions(opts)
 		}
 	} else if intVal == 1 {
 		for _, dbState := range d.dbStates {
-			opts := dbState.WriteSession.GetOptions()
+			opts := dbState.GetWriteSession().GetOptions()
 			opts.ForeignKeyChecksDisabled = false
-			dbState.WriteSession.SetOptions(opts)
+			dbState.GetWriteSession().SetOptions(opts)
 		}
 	} else {
 		return fmt.Errorf("variable 'foreign_key_checks' can't be set to the value of '%d'", intVal)
