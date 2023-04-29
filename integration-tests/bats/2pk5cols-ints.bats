@@ -36,7 +36,7 @@ teardown() {
     [ "${lines[1]}" = "added table" ]
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ "Untracked tables" ]] || false
     [[ "$output" =~ "new table:" ]] || false
 }
 

@@ -373,7 +373,7 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ "Untracked tables:" ]] || false
     [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test2) ]] || false
 
     dolt add .
@@ -395,7 +395,7 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ "Untracked tables:" ]] || false
     [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test2) ]] || false
 
     dolt add .

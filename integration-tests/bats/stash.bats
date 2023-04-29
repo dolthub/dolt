@@ -384,14 +384,14 @@ teardown() {
     [ "$output" = "$result" ]
 }
 
-@test "stash: stashing on working set with untracked files only should be nothing to stash" {
+@test "stash: stashing on working set with untracked tables only should be nothing to stash" {
     skip_nbf_ld_1
     dolt sql -q "CREATE TABLE new_table (id INT PRIMARY KEY);"
 
     run dolt status
     [[ ! "$output" =~ "Changes to be committed:" ]] || false
     [[ ! "$output" =~ "Changes not staged for commit:" ]] || false
-    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ "Untracked tables:" ]] || false
 
     run dolt stash
     [ "$status" -eq 0 ]
@@ -402,7 +402,7 @@ teardown() {
     [[ "$output" =~ "new_table" ]] || false
 }
 
-@test "stash: stashing untracked files with --include-untracked flag and popping the table should not be staged" {
+@test "stash: stashing untracked tables with --include-untracked flag and popping the table should not be staged" {
     skip_nbf_ld_1
     dolt sql -q "CREATE TABLE new_table (id INT PRIMARY KEY);"
     dolt add .
@@ -411,7 +411,7 @@ teardown() {
     run dolt status
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ ! "$output" =~ "Changes not staged for commit:" ]] || false
-    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ "Untracked tables:" ]] || false
 
     run dolt stash --include-untracked
     [ "$status" -eq 0 ]
@@ -424,7 +424,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "Changes to be committed:" ]] || false
     [[ "${lines[3]}" =~ "new table:        new_table" ]] || false
-    [[ "${lines[4]}" =~ "Untracked files:" ]] || false
+    [[ "${lines[4]}" =~ "Untracked tables:" ]] || false
     [[ "${lines[6]}" =~ "new table:        test_table" ]] || false
 }
 
@@ -436,7 +436,7 @@ teardown() {
     run dolt status
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ ! "$output" =~ "Changes not staged for commit:" ]] || false
-    [[ ! "$output" =~ "Untracked files:" ]] || false
+    [[ ! "$output" =~ "Untracked tables:" ]] || false
 
     run dolt ls
     [ "$status" -eq 0 ]
@@ -462,7 +462,7 @@ teardown() {
     [[ "$output" =~ "new_table" ]] || false
 }
 
-@test "stash: stashing with staged, working set changes with untracked files should only stash modified working set and staged changes" {
+@test "stash: stashing with staged, working set changes with untracked tables should only stash modified working set and staged changes" {
     skip_nbf_ld_1
     dolt sql -q "CREATE TABLE new_table (id INT PRIMARY KEY);"
     dolt add .
@@ -471,7 +471,7 @@ teardown() {
     run dolt status
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
-    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ "Untracked tables:" ]] || false
 
     run dolt stash
     [ "$status" -eq 0 ]
@@ -480,7 +480,7 @@ teardown() {
     run dolt status
     [[ ! "$output" =~ "Changes to be committed:" ]] || false
     [[ ! "$output" =~ "Changes not staged for commit:" ]] || false
-    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ "Untracked tables:" ]] || false
 
     run dolt ls
     [ "$status" -eq 0 ]
@@ -491,7 +491,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ ! "$output" =~ "Changes not staged for commit:" ]] || false
-    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ "Untracked tables:" ]] || false
 
     run dolt ls
     [ "$status" -eq 0 ]
@@ -508,7 +508,7 @@ teardown() {
     run dolt status
     [[ ! "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
-    [[ ! "$output" =~ "Untracked files:" ]] || false
+    [[ ! "$output" =~ "Untracked tables:" ]] || false
 
     run dolt stash
     [ "$status" -eq 0 ]
@@ -526,7 +526,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
-    [[ ! "$output" =~ "Untracked files:" ]] || false
+    [[ ! "$output" =~ "Untracked tables:" ]] || false
 
     run dolt ls
     [[ ! "$output" =~ "new_table" ]] || false
