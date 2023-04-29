@@ -17,11 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/fatih/color"
 	"io"
 	"io/ioutil"
 	"os"
@@ -31,6 +26,13 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/fatih/color"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 var batseeDoc = cli.CommandDocumentationContent{
