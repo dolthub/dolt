@@ -35,7 +35,12 @@ import (
 
 var batseeDoc = cli.CommandDocumentationContent{
 	ShortDesc: `Run the Bats Tests concurrently`,
-	LongDesc:  `TODO`,
+	LongDesc:  `From within the integration-test/bats directory, run the bats tests concurrently. Output for each test is written to a file in the batsee_output directory.`,
+	Synopsis: []string{
+		`-t 42`,
+		`--skip-slow --max-time 1h15m`,
+		`--retries 2 --only types.bats,foreign-keys.bats`,
+	},
 }
 
 type BatseeCmd struct {
@@ -61,11 +66,11 @@ func (b BatseeCmd) Hidden() bool {
 }
 
 func (b BatseeCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithVariableArgs(b.Name())
-	ap.SupportsUint("threads", "t", "processes", "Number of tests to execute in parallel. Defaults to 12")
-	ap.SupportsFlag("skip-slow", "s", "Skip slow tests")
+	ap := argparser.NewArgParserWithMaxArgs(b.Name(), 0)
+	ap.SupportsUint("threads", "t", "threads", "Number of tests to execute in parallel. Defaults to 12")
+	ap.SupportsFlag("skip-slow", "s", "Skip slow tests. This is a static list of test we know are slow, may grow stale.")
 	ap.SupportsString("max-time", "", "", "Maximum time to run tests. Defaults to 30m")
-	ap.SupportsString("only", "", "", "Only run the specified test")
+	ap.SupportsString("only", "", "", "Only run the specified test, or tests (comma separated)")
 	ap.SupportsInt("retries", "r", "retries", "Number of times to retry a failed test. Defaults to 1")
 	return ap
 }
@@ -97,9 +102,17 @@ var slowCommands = map[string]bool{
 }
 
 func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	apr, err := b.ArgParser().Parse(args)
+	ap := b.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, batseeDoc, ap))
+
+	apr, err := ap.Parse(args)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
+		if err != argparser.ErrHelp {
+			verr := errhand.NewDError("", "", err, true)
+			return HandleVErrAndExitCode(verr, usage)
+		}
+		help()
+		return 0
 	}
 
 	threads, hasThreads := apr.GetUint("threads")
@@ -182,8 +195,8 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	var wg sync.WaitGroup
 	for i := uint64(0); i < threads; i++ {
-		wg.Add(1)
 		go func() {
+			wg.Add(1)
 			defer wg.Done()
 			worker(jobs, retries, results, ctx, limitTo)
 		}()
@@ -195,7 +208,7 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	close(jobs)
 
 	cli.Println(fmt.Sprintf("Waiting for workers (%d) to finish", threads))
-	comprehensiveWait(ctx, wg)
+	comprehensiveWait(ctx, &wg)
 
 	close(results)
 
@@ -204,7 +217,7 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	return exitStatus
 }
 
-func comprehensiveWait(ctx context.Context, wg sync.WaitGroup) {
+func comprehensiveWait(ctx context.Context, wg *sync.WaitGroup) {
 	wgChan := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -215,14 +228,13 @@ func comprehensiveWait(ctx context.Context, wg sync.WaitGroup) {
 	select {
 	case <-ctx.Done():
 		prematureExit = true
+		break
 	case <-wgChan:
 	}
 
 	if prematureExit {
 		// Still need to wait for workers to finish. They got the signal, but we will panic if we don't let them finish.
-		select {
-		case <-wgChan:
-		}
+		<-wgChan
 	}
 }
 
@@ -328,7 +340,7 @@ func runBats(path string, retries int, resultChan chan<- batsResult, ctx context
 		// All systems go!
 		err = cmd.Start()
 		if err != nil {
-			if ctx.Err() == context.DeadlineExceeded {
+			if ctx.Err() == context.DeadlineExceeded || ctx.Err() == context.Canceled {
 				result.aborted = true
 				result.skipped = true
 			} else {
