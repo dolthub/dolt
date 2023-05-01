@@ -64,7 +64,11 @@ func CreateSetTypeFromParams(params map[string]string) (TypeInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &setType{sqlSetType}, nil
+	return CreateSetTypeFromSqlSetType(sqlSetType), nil
+}
+
+func CreateSetTypeFromSqlSetType(sqlSetType sql.SetType) TypeInfo {
+	return &setType{sqlSetType}
 }
 
 // ConvertNomsValueToValue implements TypeInfo interface.

@@ -20,13 +20,11 @@ import (
 	"fmt"
 	"strings"
 
-	sqle "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	storetypes "github.com/dolthub/dolt/go/store/types"
+	sqle "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type conflictKind byte
@@ -319,6 +317,8 @@ func mergeColumns(format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schem
 		return nil, nil, err
 	}
 
+	compatChecker := newTypeCompatabilityCheckerForStorageFormat(format)
+
 	// After we've checked for schema conflicts, merge the columns together
 	// TODO: We don't currently preserve all column position changes; the returned merged columns are always based on
 	//	     their position in |ourCC|, with any new columns from |theirCC| added at the end of the column collection.
@@ -347,8 +347,9 @@ func mergeColumns(format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schem
 				if oursChanged && theirsChanged {
 					// This is a schema change conflict and has already been handled by checkSchemaConflicts
 				} else if theirsChanged {
-					compatible, requiresRewrite := isTypeChangeCompatible(format, *ours, *theirs)
-					if compatible && !requiresRewrite {
+					// In this case, only theirsChanged, so we need to check if moving from ours->theirs
+					// is valid, otherwise it's a conflict
+					if compatChecker.IsTypeChangeCompatible(ours.TypeInfo, theirs.TypeInfo) {
 						mergedColumns = append(mergedColumns, *theirs)
 					} else {
 						conflicts = append(conflicts, ColConflict{
@@ -358,10 +359,9 @@ func mergeColumns(format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schem
 						})
 					}
 				} else if oursChanged {
-					// In this case, oursChanged, so we need to check if moving from theirs->ours is valid
-					// if it is, then we can use ours column, otherwise it's a conflict
-					compatible, requiresRewrite := isTypeChangeCompatible(format, *theirs, *ours)
-					if compatible && !requiresRewrite {
+					// In this case, only oursChanged, so we need to check if moving from theirs->ours
+					// is valid, otherwise it's a conflict
+					if compatChecker.IsTypeChangeCompatible(theirs.TypeInfo, ours.TypeInfo) {
 						mergedColumns = append(mergedColumns, *ours)
 					} else {
 						conflicts = append(conflicts, ColConflict{
@@ -501,73 +501,6 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 	}
 
 	return conflicts, nil
-}
-
-// isTypeChangeCompatible returns true if the change from |from| to |to| is a compatible type change.
-// For the DOLT storage format, very few cases (outside of the types being exactly identical) are considered
-// compatible, but we expect to widen then over time to handle more type changes that can be automatically
-// merged. The older LD_1 storage format, has a more forgiving storage layout, so type changes are generally
-// considered compatible as long as they are in the same type family/kind. The second boolean return value
-// is only valid if the types are considered compatible (i.e. the first boolean return value is true) and indicates
-// whether the table data on disk needs to be rewritten in order to convert between the two types.
-func isTypeChangeCompatible(format *storetypes.NomsBinFormat, from, to schema.Column) (compatible, requiresRewrite bool) {
-	if from.TypeInfo.Equals(to.TypeInfo) {
-		return true, false
-	}
-
-	if storetypes.IsFormat_DOLT(format) {
-		fromSqlType := from.TypeInfo.ToSqlType()
-		toSqlType := to.TypeInfo.ToSqlType()
-
-		switch {
-		case types.IsEnum(fromSqlType) && types.IsEnum(toSqlType):
-			fromEnumType := fromSqlType.(sql.EnumType)
-			toEnumType := toSqlType.(sql.EnumType)
-			if fromEnumType.NumberOfElements() > toEnumType.NumberOfElements() {
-				return false, false
-			}
-
-			// TODO: This logic should probably be part of the Type interface, but getting it started off
-			//       here to figure out the right interface.
-			fromEnumValues := fromEnumType.Values()
-			toEnumValues := toEnumType.Values()
-
-			// charset/collation changes require a table rewrite? skip for now
-			fromCharSet, fromCollation := fromEnumType.CharacterSet(), fromEnumType.Collation()
-			toCharSet, toCollation := toEnumType.CharacterSet(), toEnumType.Collation()
-			if fromCharSet != toCharSet || fromCollation != toCollation {
-				return false, false
-			}
-
-			// only values added at the end are allowed (no reordering or removal)
-			for i, fromEnumValue := range fromEnumValues {
-				if toEnumValues[i] != fromEnumValue {
-					return false, false
-				}
-			}
-
-			// MySQL uses 1 byte to store enum values that have <= 255 values, and 2 bytes for > 255 values
-			// The DOLT storage format *always* uses 2 bytes for all enum values, so table data never needs
-			// to be rewritten in this additive case.
-			return true, false
-		}
-
-		// Otherwise, all type changes are incompatible for the DOLT storage format
-		return false, false
-	} else {
-		// For the older, LD_1 storage format, our compatibility rules are looser
-		if from.Kind != to.Kind {
-			return false, false
-		}
-
-		if schema.IsColSpatialType(to) {
-			// We need to do this because some spatial type changes require a full table check, but not all.
-			// TODO: This could be narrowed down to a smaller set of spatial type changes
-			return false, false
-		}
-
-		return true, false
-	}
 }
 
 // columnMapping describes the mapping for a column being merged between the two sides of the merge as well as the ancestor.
