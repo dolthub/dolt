@@ -1041,23 +1041,25 @@ func resolveAncestorSpec(ctx *sql.Context, revSpec string, ddb *doltdb.DoltDB) (
 
 // SessionDatabase implements dsess.SessionDatabaseProvider
 func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool, error) {
+	baseName := name
+	isRevisionDb := strings.Contains(name, dsess.DbRevisionDelimiter)
+	
+	if isRevisionDb {
+		// TODO: formalize and enforce this rule (can't allow DBs with / in the name)
+		// TODO: some connectors will take issue with the /, we need other mechanisms to support them
+		parts := strings.SplitN(name, dsess.DbRevisionDelimiter, 2)
+		baseName = parts[0]
+	}
+	
 	var ok bool
 	p.mu.RLock()
-	db, ok := p.databases[formatDbMapKeyName(name)]
+	db, ok := p.databases[strings.ToLower(baseName)]
 	standby := *p.isStandby
 	p.mu.RUnlock()
-	if ok {
-		return wrapForStandby(db, standby), true, nil
-	}
-
-	// Revision databases aren't tracked in the map, just instantiated on demand
-	db, ok, err := p.databaseForRevision(ctx, name)
-	if err != nil {
-		return nil, false, err
-	}
-
-	// A final check: if the database doesn't exist and this is a read replica, attempt to clone it from the remote
+	
+	// If the database doesn't exist and this is a read replica, attempt to clone it from the remote
 	if !ok {
+		var err error
 		db, err = p.databaseForClone(ctx, name)
 
 		if err != nil {
@@ -1067,6 +1069,18 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 		if db == nil {
 			return nil, false, nil
 		}
+	}
+
+	// The db map only contains base databases, not revision DBs. Convert to a revision DB for creation.
+	if !isRevisionDb {
+		// TODO: capture the initial checked out head at startup, don't get it here every time 
+		headRef := db.DbData().Rsr.CWBHeadRef()
+		name = baseName + dsess.DbRevisionDelimiter + headRef.GetPath()
+	}
+	
+	db, ok, err := p.databaseForRevision(ctx, name)
+	if err != nil {
+		return nil, false, err
 	}
 
 	return wrapForStandby(db, standby), true, nil
@@ -1446,6 +1460,7 @@ func (s staticRepoState) CWBHeadRef() ref.DoltRef {
 
 // formatDbMapKeyName returns formatted string of database name and/or branch name. Database name is case-insensitive,
 // so it's stored in lower case name. Branch name is case-sensitive, so not changed.
+// TODO: branch names should be case-insensitive too
 func formatDbMapKeyName(name string) string {
 	if !strings.Contains(name, dsess.DbRevisionDelimiter) {
 		return strings.ToLower(name)

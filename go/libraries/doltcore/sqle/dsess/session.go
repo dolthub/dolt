@@ -170,6 +170,12 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 	return dbState, true, nil
 }
 
+// TODO NEXT: the lookupdbstate method is the key abstraction point. It proxies all non-revisoined DBs to a revisioned 
+//  state, based on the current db (the default branch if none). The session stores all data by working set ref. DB 
+//  names are masked on return in the case of a non-revisined DB. Session stae is also responsible for keeping track of
+//  the checked out branch in the case of a default (no branch-specified) db connection.
+//  Alternate idea: branch head is always set correctly in response to a USE statement, OR a checkout procedure. The
+//  latter implicitly updates the current database. You also get a revision db checked out on connection to no branch.
 func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
 	s, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
