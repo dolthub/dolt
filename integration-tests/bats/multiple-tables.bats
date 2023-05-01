@@ -222,8 +222,8 @@ SQL
     run dolt status
     [[ "$output" =~ modified.*test1 ]] || false
     [[ "$output" =~ modified.*test2 ]] || false
-    [[ "$output" =~ file.*test3 ]] || false
-    [[ "$output" =~ file.*test4 ]] || false
+    [[ "$output" =~ table.*test3 ]] || false
+    [[ "$output" =~ table.*test4 ]] || false
 
     dolt add test1 test2 test3
     dolt reset --hard
@@ -231,8 +231,8 @@ SQL
     run dolt status
     [[ ! "$output" =~ "test1" ]] || false
     [[ ! "$output" =~ "test2" ]] || false
-    [[ ! "$output" =~ file.*test3 ]] || false
-    [[ "$output" =~ file.*test4 ]] || false
+    [[ ! "$output" =~ table.*test3 ]] || false
+    [[ "$output" =~ table.*test4 ]] || false
 }
 
 @test "multiple-tables: dolt reset --hard on new tables" {

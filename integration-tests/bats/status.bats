@@ -115,7 +115,7 @@ SQL
     [[ "$output" =~ "  (fix conflicts and run \"dolt commit\")" ]] || false
     [[ "$output" =~ "  (use \"dolt merge --abort\" to abort the merge)" ]] || false
     [[ "$output" =~ "Unmerged paths:" ]] || false
-    [[ "$output" =~ "  (use \"dolt add <file>...\" to mark resolution)" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>...\" to mark resolution)" ]] || false
     [[ "$output" =~ "	both modified:    t" ]] || false
 }
 
