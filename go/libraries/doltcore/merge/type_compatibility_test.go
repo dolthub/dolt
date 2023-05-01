@@ -46,10 +46,12 @@ var acdSet = typeinfo.CreateSetTypeFromSqlSetType(gmstypes.MustCreateSetType([]s
 var abcSetCi = typeinfo.CreateSetTypeFromSqlSetType(gmstypes.MustCreateSetType([]string{"a", "b", "c"}, sql.Collation_utf8mb3_general_ci))
 var abcdSetCi = typeinfo.CreateSetTypeFromSqlSetType(gmstypes.MustCreateSetType([]string{"a", "b", "c", "d"}, sql.Collation_utf8mb3_general_ci))
 
-// Geo test data
+// Geometry test data
 var geo = typeinfo.CreateGeometryTypeFromSqlGeometryType(gmstypes.GeometryType{SRID: uint32(4326), DefinedSRID: true})
 var point = typeinfo.CreatePointTypeFromSqlPointType(gmstypes.PointType{SRID: uint32(4326), DefinedSRID: true})
 
+// TestLd1IsTypeChangeCompatible tests that the LD1 TypeCompatibilityChecker implementation
+// correctly computes compatibility between types.
 func TestLd1IsTypeChangeCompatible(t *testing.T) {
 	compatChecker := newTypeCompatabilityCheckerForStorageFormat(storetypes.Format_LD_1)
 	runTypeCompatibilityTests(t, compatChecker, []typeChangeCompatibilityTest{
@@ -74,15 +76,15 @@ func TestLd1IsTypeChangeCompatible(t *testing.T) {
 			to:       abcdEnum,
 			expected: true,
 		}, {
-			// TODO: LD_1 considers these compatible... but it probably shouldn't, right?
-			//       There's no check on enum compatibility, so you could probably merge
-			//       an enum or set that removes values and corrupt your data?
-			name:     "enums: subtractive changes are ?compatible",
+			// NOTE: LD_1 considers these compatible, even though it probably shouldn't. This matches the existing
+			//       behavior for LD_1, so we're preserving it, since we don't want to invest more in LD_1.
+			name:     "enums: subtractive changes are compatible",
 			from:     abcdEnum,
 			to:       abcEnum,
 			expected: true,
 		}, {
-			// TODO: Shouldn't this be incompatible?
+			// NOTE: This should be incompatible, but preserving the existing behavior since we don't want
+			//       to invest more in LD_1.
 			name:     "enums: collation changes are incompatible",
 			from:     abcEnum,
 			to:       abcdEnum,
@@ -93,15 +95,15 @@ func TestLd1IsTypeChangeCompatible(t *testing.T) {
 			to:       abcdSet,
 			expected: true,
 		}, {
-			// TODO: LD_1 considers these compatible... but it probably shouldn't, right?
-			//       There's no check on enum compatibility, so you could probably merge
-			//       an enum or set that removes values and corrupt your data?
+			// NOTE: This should be incompatible, but preserving the existing behavior since we don't want
+			//       to invest more in LD_1.
 			name:     "sets: subtractive changes are compatible",
 			from:     abcdSet,
 			to:       abcSet,
 			expected: true,
 		}, {
-			// TODO: Shouldn't this be incompatible?
+			// NOTE: This should be incompatible, but preserving the existing behavior since we don't want
+			//       to invest more in LD_1.
 			name:     "sets: collation changes are incompatible",
 			from:     abcSet,
 			to:       abcdSet,
@@ -120,6 +122,8 @@ func TestLd1IsTypeChangeCompatible(t *testing.T) {
 	})
 }
 
+// TestDoltIsTypeChangeCompatible tests that the DOLT TypeCompatibilityChecker implementation
+// correctly computes compatibility between types.
 func TestDoltIsTypeChangeCompatible(t *testing.T) {
 	compatChecker := newTypeCompatabilityCheckerForStorageFormat(storetypes.Format_DOLT)
 	runTypeCompatibilityTests(t, compatChecker, []typeChangeCompatibilityTest{
