@@ -15,6 +15,7 @@
 package dsess
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -62,22 +63,12 @@ type DatabaseSessionState struct {
 	dbName       string
 	// db is the database this state applies to
 	db           SqlDatabase
-	// headCommit is the head commit for this database. May be nil for databases tied to a detached root value, in which 
-	// case headRoot must be set.
-	headCommit   *doltdb.Commit
-	// HeadRoot is the root value for databases without a headCommit. Nil for databases with a headCommit.
-	headRoot     *doltdb.RootValue
-	// WorkingSet is the working set for this database. May be nil for databases tied to a detached root value, in which
-	// case headCommit must be set
-	WorkingSet   *doltdb.WorkingSet
-	// dbData is an accessor for the underlying doltDb
-	dbData       env.DbData
-	// WriteSession is this database's write session, which changes when the working set changes
-	WriteSession writer.WriteSession
+	// currentHead is the current head of the database when unqualified by a DB name
+	currentHead ref.WorkingSetRef
+	// heads records the in-memory DB state for every branch head accessed by the session
+	heads 			map[ref.WorkingSetRef]dbData
 	// globalState is the global state of this session (shared by all sessions for a particular db)
 	globalState  globalstate.GlobalState
-	// readOnly is true if this database is read only
-	readOnly     bool
 	// dirty is true if this session has uncommitted changes
 	dirty        bool
 	// tmpFileDir is the directory to use for temporary files for this database
@@ -92,13 +83,18 @@ type DatabaseSessionState struct {
 	Err error
 }
 
-func (d *DatabaseSessionState) GetWorkingSet() *doltdb.WorkingSet {
-	// TODO: key off the current branch
-	return d.WorkingSet
+type SessionState interface {
+	GetWorkingSet() *doltdb.WorkingSet
+	GetWriteSession() writer.WriteSession
 }
 
-func (d *DatabaseSessionState) GetWriteSession() writer.WriteSession {
-	return d.GetWriteSession()
+
+func (d *dbData) GetWorkingSet() *doltdb.WorkingSet {
+	return d.workingSet
+}
+
+func (d *dbData) GetWriteSession() writer.WriteSession {
+	return d.writeSession
 }
 
 type dbData struct {
@@ -107,14 +103,16 @@ type dbData struct {
 	headCommit   *doltdb.Commit
 	// HeadRoot is the root value for databases without a headCommit. Nil for databases with a headCommit.
 	headRoot     *doltdb.RootValue
-	// WorkingSet is the working set for this database. May be nil for databases tied to a detached root value, in which
+	// workingSet is the working set for this database. May be nil for databases tied to a detached root value, in which
 	// case headCommit must be set
-	WorkingSet   *doltdb.WorkingSet
+	workingSet *doltdb.WorkingSet
 	// dbData is an accessor for the underlying doltDb
 	dbData       env.DbData
-	// WriteSession is this database's write session, which changes when the working set changes
-	WriteSession writer.WriteSession
+	// writeSession is this database's write session, which changes when the working set changes
+	writeSession writer.WriteSession
 	// globalState is the global state of this session (shared by all sessions for a particular db)
+	// readOnly is true if this database is read only
+	readOnly     bool
 }
 
 func NewEmptyDatabaseSessionState() *DatabaseSessionState {
@@ -124,7 +122,7 @@ func NewEmptyDatabaseSessionState() *DatabaseSessionState {
 }
 
 func (d DatabaseSessionState) GetRoots() doltdb.Roots {
-	if d.GetWorkingSet() == nil {
+	if d.GetWorkingSet(ctx) == nil {
 		return doltdb.Roots{
 			Head:    d.headRoot,
 			Working: d.headRoot,
@@ -133,8 +131,8 @@ func (d DatabaseSessionState) GetRoots() doltdb.Roots {
 	}
 	return doltdb.Roots{
 		Head:    d.headRoot,
-		Working: d.GetWorkingSet().WorkingRoot(),
-		Staged:  d.GetWorkingSet().StagedRoot(),
+		Working: d.GetWorkingSet(ctx).WorkingRoot(),
+		Staged:  d.GetWorkingSet(ctx).StagedRoot(),
 	}
 }
 
