@@ -238,7 +238,7 @@ SQL
 
     [ "$status" -eq 0 ]
 
-    [[ ! ["$output" =~ "diff --dolt a/ignoreme b/ignoreme"] ]] || false
+    ! [["$output" =~ "diff --dolt a/ignoreme b/ignoreme"]] || false
 
 }
 
@@ -255,8 +255,8 @@ SQL
     [ "$status" -eq 0 ]
 
     [[ "$output" =~ "nomatch" ]] || false
-    [[ ! ["$output" =~ "Ignored tables"] ]] || false
-    [[ ! ["$output" =~ "ignoreme"] ]] || false
+    ! [["$output" =~ "Ignored tables"]] || false
+    ! [["$output" =~ "ignoreme"]] || false
 
 }
 
@@ -291,5 +291,5 @@ SQL
     [ "$status" -eq 0 ]
 
     [[ "$output" =~ "nomatch" ]] || false
-    [[ ! ["$output" =~ "ignoreme"] ]] || false
+    ! [["$output" =~ "ignoreme"]] || false
 }
