@@ -601,6 +601,14 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 		return nil, err
 	}
 
+	// If we have an initialization hook, invoke it.  By default, this will
+	// be ConfigureReplicationDatabaseHook, which will setup replication
+	// for the new database if a remote url template is set.
+	err = p.InitDatabaseHook(ctx, p, dbName, dEnv)
+	if err != nil {
+		return nil, err
+	}
+
 	p.databases[formatDbMapKeyName(db.Name())] = db
 
 	return dEnv, nil
