@@ -189,7 +189,21 @@ func (db *database) GetDataset(ctx context.Context, datasetID string) (Dataset, 
 	return db.datasetFromMap(ctx, datasetID, datasets)
 }
 
-func (db *database) GetDatasetsByRootHash(ctx context.Context, rootHash hash.Hash) (DatasetsMap, error) {
+func (db *database) GetDatasetByRootHash(ctx context.Context, datasetID string, rootHash hash.Hash) (Dataset, error) {
+	// precondition checks
+	if err := ValidateDatasetId(datasetID); err != nil {
+		return Dataset{}, fmt.Errorf("%w: %s", err, datasetID)
+	}
+
+	datasets, err := db.DatasetsByRootHash(ctx, rootHash)
+	if err != nil {
+		return Dataset{}, err
+	}
+
+	return db.datasetFromMap(ctx, datasetID, datasets)
+}
+
+func (db *database) DatasetsByRootHash(ctx context.Context, rootHash hash.Hash) (DatasetsMap, error) {
 
 	if db.Format().UsesFlatbuffers() {
 		rm, err := db.loadDatasetsRefmap(ctx, rootHash)

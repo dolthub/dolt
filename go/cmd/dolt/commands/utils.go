@@ -17,6 +17,9 @@ package commands
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -67,4 +70,18 @@ func MaybeGetCommitWithVErr(dEnv *env.DoltEnv, maybeCommit string) (*doltdb.Comm
 	}
 
 	return cm, nil
+}
+
+type cliCtx struct{}
+
+func (c cliCtx) GlobalArgs() *argparser.ArgParseResults {
+	ap := argparser.NewArgParserWithMaxArgs("empty", 0)
+	apr, _ := ap.Parse(make([]string, 0))
+	return apr
+}
+
+var _ cli.CliContext = cliCtx{}
+
+func BuildEmptyCliContext() cli.CliContext {
+	return cliCtx{}
 }

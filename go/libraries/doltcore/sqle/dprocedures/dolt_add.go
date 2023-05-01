@@ -60,7 +60,7 @@ func doDoltAdd(ctx *sql.Context, args []string) (int, error) {
 			return 1, fmt.Errorf("db session not found")
 		}
 
-		roots, err = actions.StageAllTables(ctx, roots)
+		roots, err = actions.StageAllTables(ctx, roots, !apr.Contains(cli.ForceFlag))
 		if err != nil {
 			return 1, err
 		}
@@ -70,7 +70,7 @@ func doDoltAdd(ctx *sql.Context, args []string) (int, error) {
 			return 1, err
 		}
 	} else {
-		roots, err = actions.StageTables(ctx, roots, apr.Args)
+		roots, err = actions.StageTables(ctx, roots, apr.Args, !apr.Contains(cli.ForceFlag))
 		if err != nil {
 			return 1, err
 		}

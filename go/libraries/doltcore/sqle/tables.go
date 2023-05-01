@@ -77,7 +77,7 @@ func init() {
 type DoltTable struct {
 	tableName    string
 	sqlSch       sql.PrimaryKeySchema
-	db           SqlDatabase
+	db           dsess.SqlDatabase
 	lockedToRoot *doltdb.RootValue
 	nbf          *types.NomsBinFormat
 	sch          schema.Schema
@@ -89,7 +89,7 @@ type DoltTable struct {
 	opts editor.Options
 }
 
-func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, opts editor.Options) (*DoltTable, error) {
+func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db dsess.SqlDatabase, opts editor.Options) (*DoltTable, error) {
 	var autoCol schema.Column
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.AutoIncrement {
@@ -1492,7 +1492,11 @@ func validateSchemaChange(
 	idxCols []sql.IndexColumn,
 ) error {
 	for _, idxCol := range idxCols {
-		col := newSchema.Schema[newSchema.Schema.IndexOfColName(idxCol.Name)]
+		idx := newSchema.Schema.IndexOfColName(idxCol.Name)
+		if idx < 0 { // avoid panics
+			return sql.ErrColumnNotFound.New(idxCol.Name)
+		}
+		col := newSchema.Schema[idx]
 		if col.PrimaryKey && idxCol.Length > 0 && sqltypes.IsText(col.Type) {
 			return sql.ErrUnsupportedIndexPrefix.New(col.Name)
 		}

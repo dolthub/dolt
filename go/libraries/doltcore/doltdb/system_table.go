@@ -146,10 +146,11 @@ func GetAllTableNames(ctx context.Context, root *RootValue) ([]string, error) {
 // for the purposes of the dolt command line. These tables cannot be created or altered explicitly, but can be updated
 // like normal SQL tables.
 var writeableSystemTables = []string{
+	DocTableName,
 	DoltQueryCatalogTableName,
 	SchemasTableName,
 	ProceduresTableName,
-	DocTableName,
+	IgnoreTableName,
 }
 
 var persistedSystemTables = []string{
@@ -157,6 +158,7 @@ var persistedSystemTables = []string{
 	DoltQueryCatalogTableName,
 	SchemasTableName,
 	ProceduresTableName,
+	IgnoreTableName,
 }
 
 var generatedSystemTables = []string{
@@ -303,6 +305,8 @@ const (
 
 	// TagsTableName is the tags table name
 	TagsTableName = "dolt_tags"
+
+	IgnoreTableName = "dolt_ignore"
 )
 
 const (

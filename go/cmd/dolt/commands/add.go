@@ -73,37 +73,37 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
-		return handleStageError(err)
+		return HandleStageError(err)
 	}
 
 	if apr.NArg() == 0 && !allFlag {
 		cli.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		roots, err = actions.StageAllTables(ctx, roots)
+		roots, err = actions.StageAllTables(ctx, roots, !apr.Contains(cli.ForceFlag))
 		if err != nil {
-			return handleStageError(err)
+			return HandleStageError(err)
 		}
 	} else {
-		roots, err = actions.StageTables(ctx, roots, apr.Args)
+		roots, err = actions.StageTables(ctx, roots, apr.Args, !apr.Contains(cli.ForceFlag))
 		if err != nil {
-			return handleStageError(err)
+			return HandleStageError(err)
 		}
 	}
 
 	err = dEnv.UpdateRoots(ctx, roots)
 	if err != nil {
-		return handleStageError(err)
+		return HandleStageError(err)
 	}
 
 	return 0
 }
 
-func handleStageError(err error) int {
-	cli.PrintErrln(toAddVErr(err).Verbose())
+func HandleStageError(err error) int {
+	cli.PrintErrln(toStageVErr(err).Verbose())
 	return 1
 }
 
-func toAddVErr(err error) errhand.VerboseError {
+func toStageVErr(err error) errhand.VerboseError {
 	switch {
 	case doltdb.IsRootValUnreachable(err):
 		rt := doltdb.GetUnreachableRootType(err)
@@ -127,7 +127,19 @@ func toAddVErr(err error) errhand.VerboseError {
 		}
 
 		return bdr.Build()
+	case doltdb.AsDoltIgnoreInConflict(err) != nil:
+		doltIgnoreConflictError := doltdb.AsDoltIgnoreInConflict(err)
+		bdr := errhand.BuildDError("error: the table %s matches conflicting patterns in dolt_ignore", doltIgnoreConflictError.Table)
 
+		for _, pattern := range doltIgnoreConflictError.TruePatterns {
+			bdr.AddDetails("ignored:     %s", pattern)
+		}
+
+		for _, pattern := range doltIgnoreConflictError.FalsePatterns {
+			bdr.AddDetails("not ignored: %s", pattern)
+		}
+
+		return bdr.Build()
 	default:
 		return errhand.BuildDError("Unknown error").AddCause(err).Build()
 	}

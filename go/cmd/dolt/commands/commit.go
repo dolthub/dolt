@@ -104,7 +104,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 	}
 
 	if upperCaseAllFlag {
-		roots, err = actions.StageAllTables(ctx, roots)
+		roots, err = actions.StageAllTables(ctx, roots, true)
 		if err != nil {
 			return handleCommitErr(ctx, dEnv, err, help)
 		}
@@ -276,7 +276,12 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 
 	if actions.IsNothingStaged(err) {
 		notStagedTbls := actions.NothingStagedTblDiffs(err)
-		n := PrintDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, false, 0, merge.ArtifactStatus{})
+		n, newErr := PrintDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, false, false, 0, merge.ArtifactStatus{})
+		if newErr != nil {
+			bdr := errhand.BuildDError(`No changes added to commit (use "dolt add")\nCould not print diff because of additional error`)
+			bdr.AddCause(newErr)
+			return HandleVErrAndExitCode(bdr.Build(), usage)
+		}
 
 		if n == 0 {
 			bdr := errhand.BuildDError(`no changes added to commit (use "dolt add")`)
@@ -370,7 +375,10 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg s
 
 	buf := bytes.NewBuffer([]byte{})
 	n := printStagedDiffs(buf, stagedTblDiffs, true)
-	n = PrintDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, true, n, as)
+	n, err = PrintDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, true, false, n, as)
+	if err != nil {
+		return "", err
+	}
 
 	currBranch := dEnv.RepoStateReader().CWBHeadRef()
 	initialCommitMessage := fmt.Sprintf("%s\n# Please enter the commit message for your changes. Lines starting"+
@@ -405,9 +413,15 @@ func PrintDiffsNotStaged(
 	wr io.Writer,
 	notStagedTbls []diff.TableDelta,
 	printHelp bool,
+	printIgnored bool,
 	linesPrinted int,
 	as merge.ArtifactStatus,
-) int {
+) (int, error) {
+	roots, err := dEnv.Roots(ctx)
+	if err != nil {
+		return 0, err
+	}
+
 	inCnfSet := set.NewStrSet(as.DataConflictTables)
 	inCnfSet.Add(as.SchemaConflictsTables...)
 	violationSet := set.NewStrSet(as.ConstraintViolationsTables)
@@ -487,13 +501,62 @@ func PrintDiffsNotStaged(
 			iohelp.WriteLine(wr, untrackedHeaderHelp)
 		}
 
-		lines := getAddedNotStaged(notStagedTbls)
+		addedNotStagedTables := getAddedNotStagedTables(notStagedTbls)
+		filteredTables, err := doltdb.FilterIgnoredTables(ctx, addedNotStagedTables, roots)
+		if err != nil && doltdb.AsDoltIgnoreInConflict(err) == nil {
+			return 0, err
+		}
+
+		lines := make([]string, len(filteredTables.DontIgnore))
+		for i, tableName := range filteredTables.DontIgnore {
+			lines[i] = fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.AddedTable], tableName)
+		}
 
 		iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
 		linesPrinted += len(lines)
+
+		if printIgnored && len(filteredTables.Ignore) > 0 {
+			if linesPrinted > 0 {
+				cli.Println()
+			}
+
+			iohelp.WriteLine(wr, ignoredHeader)
+
+			if printHelp {
+				iohelp.WriteLine(wr, ignoredHeaderHelp)
+			}
+
+			lines := make([]string, len(filteredTables.Ignore))
+			for i, tableName := range filteredTables.Ignore {
+				lines[i] = fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.AddedTable], tableName)
+			}
+
+			iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
+			linesPrinted += len(lines)
+		}
+
+		if len(filteredTables.Conflicts) > 0 {
+			if linesPrinted > 0 {
+				cli.Println()
+			}
+
+			iohelp.WriteLine(wr, conflictedIgnoredHeader)
+
+			if printHelp {
+				iohelp.WriteLine(wr, conflictedIgnoredHeaderHelp)
+			}
+
+			lines := make([]string, len(filteredTables.Conflicts))
+			for i, conflict := range filteredTables.Conflicts {
+				lines[i] = fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.AddedTable], conflict.Table)
+			}
+
+			iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
+			linesPrinted += len(lines)
+		}
 	}
 
-	return linesPrinted
+	return linesPrinted, nil
 }
 
 func getModifiedAndRemovedNotStaged(notStagedTbls []diff.TableDelta, inCnfSet, violationSet *set.StrSet) (lines []string) {
@@ -514,15 +577,14 @@ func getModifiedAndRemovedNotStaged(notStagedTbls []diff.TableDelta, inCnfSet, v
 	return lines
 }
 
-func getAddedNotStaged(notStagedTbls []diff.TableDelta) (lines []string) {
-	lines = make([]string, 0, len(notStagedTbls))
+func getAddedNotStagedTables(notStagedTbls []diff.TableDelta) (tables []string) {
+	tables = make([]string, 0, len(notStagedTbls))
 	for _, td := range notStagedTbls {
 		if td.IsAdd() || td.IsRename() {
-			// per Git, unstaged renames are shown as drop + add
-			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.AddedTable], td.CurName()))
+			tables = append(tables, td.CurName())
 		}
 	}
-	return lines
+	return tables
 }
 
 const (
@@ -547,6 +609,12 @@ const (
 
 	untrackedHeader     = `Untracked files:`
 	untrackedHeaderHelp = `  (use "dolt add <table>" to include in what will be committed)`
+
+	ignoredHeader     = `Ignored tables:`
+	ignoredHeaderHelp = `  (use "dolt add -f <table>" to include in what will be committed)`
+
+	conflictedIgnoredHeader     = `Tables with conflicting dolt_ignore patterns:`
+	conflictedIgnoredHeaderHelp = `  (use "dolt add -f <table>" to include in what will be committed)`
 
 	statusFmt           = "\t%-18s%s"
 	statusRenameFmt     = "\t%-18s%s -> %s"

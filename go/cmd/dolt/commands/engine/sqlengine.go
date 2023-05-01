@@ -112,7 +112,7 @@ func NewSqlEngine(
 
 	clusterDB := config.ClusterController.ClusterDatabase()
 	if clusterDB != nil {
-		all = append(all, clusterDB.(dsqle.SqlDatabase))
+		all = append(all, clusterDB.(dsess.SqlDatabase))
 		locations = append(locations, nil)
 	}
 
@@ -195,18 +195,18 @@ func NewSqlEngine(
 
 // NewRebasedSqlEngine returns a smalled rebased engine primarily used in filterbranch.
 // TODO: migrate to provider
-func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsqle.SqlDatabase) *SqlEngine {
+func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsess.SqlDatabase) *SqlEngine {
 	return &SqlEngine{
 		engine: engine,
 	}
 }
 
 // Databases returns a slice of all databases in the engine
-func (se *SqlEngine) Databases(ctx *sql.Context) []dsqle.SqlDatabase {
+func (se *SqlEngine) Databases(ctx *sql.Context) []dsess.SqlDatabase {
 	databases := se.provider.AllDatabases(ctx)
-	dbs := make([]dsqle.SqlDatabase, len(databases))
+	dbs := make([]dsess.SqlDatabase, len(databases))
 	for i := range databases {
-		dbs[i] = databases[i].(dsqle.SqlDatabase)
+		dbs[i] = databases[i].(dsess.SqlDatabase)
 	}
 
 	return nil

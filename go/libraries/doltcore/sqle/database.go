@@ -46,18 +46,6 @@ var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names mus
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 
-type SqlDatabase interface {
-	sql.Database
-	dsess.SessionDatabase
-	dsess.RevisionDatabase
-
-	// TODO: get rid of this, it's managed by the session, not the DB
-	GetRoot(*sql.Context) (*doltdb.RootValue, error)
-	DbData() env.DbData
-	Flush(*sql.Context) error
-	EditOptions() editor.Options
-}
-
 // Database implements sql.Database for a dolt DB.
 type Database struct {
 	name     string
@@ -70,7 +58,7 @@ type Database struct {
 	revType  dsess.RevisionType
 }
 
-var _ SqlDatabase = Database{}
+var _ dsess.SqlDatabase = Database{}
 var _ dsess.RevisionDatabase = Database{}
 var _ globalstate.StateProvider = Database{}
 var _ sql.CollatedDatabase = Database{}
@@ -92,6 +80,7 @@ type ReadOnlyDatabase struct {
 }
 
 var _ sql.ReadOnlyDatabase = ReadOnlyDatabase{}
+var _ dsess.SqlDatabase = ReadOnlyDatabase{}
 
 func (r ReadOnlyDatabase) IsReadOnly() bool {
 	return true
@@ -111,7 +100,7 @@ func (db Database) RevisionType() dsess.RevisionType {
 }
 
 func (db Database) BaseName() string {
-	base, _ := splitRevisionDbName(db)
+	base, _ := dsess.SplitRevisionDbName(db)
 	return base
 }
 
@@ -138,7 +127,7 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts e
 
 // initialDBState returns the InitialDbState for |db|. Other implementations of SqlDatabase outside this file should
 // implement their own method for an initial db state and not rely on this method.
-func initialDBState(ctx *sql.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
+func initialDBState(ctx *sql.Context, db dsess.SqlDatabase, branch string) (dsess.InitialDbState, error) {
 	if len(db.Revision()) > 0 {
 		return initialStateForRevisionDb(ctx, db)
 	}
@@ -372,9 +361,9 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	case doltdb.SchemaConflictsTableName:
 		dt, found = dtables.NewSchemaConflictsTable(ctx, db.name, db.ddb), true
 	case doltdb.BranchesTableName:
-		dt, found = dtables.NewBranchesTable(ctx, db.ddb), true
+		dt, found = dtables.NewBranchesTable(ctx, db), true
 	case doltdb.RemoteBranchesTableName:
-		dt, found = dtables.NewRemoteBranchesTable(ctx, db.ddb), true
+		dt, found = dtables.NewRemoteBranchesTable(ctx, db), true
 	case doltdb.RemotesTableName:
 		dt, found = dtables.NewRemotesTable(ctx, db.ddb), true
 	case doltdb.CommitsTableName:
@@ -411,6 +400,12 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 				dt, found = dtables.NewBranchNamespaceControlTable(controller.Namespace), true
 			}
 		}
+	case doltdb.IgnoreTableName:
+		backingTable, _, err := db.getTable(ctx, root, doltdb.IgnoreTableName)
+		if err != nil {
+			return nil, false, err
+		}
+		dt, found = dtables.NewIgnoreTable(ctx, db.ddb, backingTable), true
 	}
 
 	if found {
@@ -427,7 +422,7 @@ func resolveAsOf(ctx *sql.Context, db Database, asOf interface{}) (*doltdb.Commi
 	case time.Time:
 		return resolveAsOfTime(ctx, db.ddb, head, x)
 	case string:
-		return resolveAsOfCommitRef(ctx, db.ddb, head, x)
+		return resolveAsOfCommitRef(ctx, db, head, x)
 	default:
 		panic(fmt.Sprintf("unsupported AS OF type %T", asOf))
 	}
@@ -478,7 +473,9 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 	return nil, nil, nil
 }
 
-func resolveAsOfCommitRef(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, commitRef string) (*doltdb.Commit, *doltdb.RootValue, error) {
+func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commitRef string) (*doltdb.Commit, *doltdb.RootValue, error) {
+	ddb := db.ddb
+
 	if commitRef == doltdb.Working || commitRef == doltdb.Staged {
 		sess := dsess.DSessFromSess(ctx.Session)
 		root, _, _, err := sess.ResolveRootForRef(ctx, ctx.GetCurrentDatabase(), commitRef)
@@ -499,7 +496,12 @@ func resolveAsOfCommitRef(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef
 		return nil, nil, err
 	}
 
-	cm, err := ddb.Resolve(ctx, cs, head)
+	nomsRoot, err := dsess.TransactionRoot(ctx, db)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cm, err := ddb.ResolveByNomsRoot(ctx, cs, head, nomsRoot)
 	if err != nil {
 		return nil, nil, err
 	}

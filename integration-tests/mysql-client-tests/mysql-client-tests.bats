@@ -100,6 +100,10 @@ cmake ..
     ruby $BATS_TEST_DIRNAME/ruby/ruby-mysql-test.rb $USER $PORT $REPO_NAME
 }
 
+@test "ruby mysql2 test" {
+    ruby $BATS_TEST_DIRNAME/ruby/mysql2-test.rb $USER $PORT $REPO_NAME
+}
+
 @test "elixir myxql test" {
     cd $BATS_TEST_DIRNAME/elixir/
     # install some mix dependencies

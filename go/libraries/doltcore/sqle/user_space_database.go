@@ -30,7 +30,7 @@ type UserSpaceDatabase struct {
 	editOpts editor.Options
 }
 
-var _ SqlDatabase = (*UserSpaceDatabase)(nil)
+var _ dsess.SqlDatabase = (*UserSpaceDatabase)(nil)
 
 func NewUserSpaceDatabase(root *doltdb.RootValue, editOpts editor.Options) *UserSpaceDatabase {
 	return &UserSpaceDatabase{RootValue: root, editOpts: editOpts}
@@ -96,7 +96,7 @@ func (db *UserSpaceDatabase) GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootV
 }
 
 func (db *UserSpaceDatabase) DbData() env.DbData {
-	panic("UserSpaceDatabase does not have dbdata")
+	return env.DbData{}
 }
 
 func (db *UserSpaceDatabase) Flush(ctx *sql.Context) error {

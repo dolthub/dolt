@@ -78,8 +78,21 @@ func doDoltBranch(ctx *sql.Context, args []string) (int, error) {
 	if err != nil {
 		return 1, err
 	} else {
-		return 0, nil
+		return 0, commitTransaction(ctx, dSess)
 	}
+}
+
+func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession) error {
+	err := dSess.CommitTransaction(ctx, ctx.GetTransaction())
+	if err != nil {
+		return err
+	}
+
+	// Because this transaction manipulation is happening outside the engine's awareness, we need to set it to nil here
+	// to get a fresh transaction started on the next statement.
+	// TODO: put this under engine control
+	ctx.SetTransaction(nil)
+	return nil
 }
 
 // renameBranch takes DoltSession and database name to try accessing file system for dolt database.
