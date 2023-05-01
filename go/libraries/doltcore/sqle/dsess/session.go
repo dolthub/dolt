@@ -135,16 +135,26 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 }
 
 // LookupDbState returns the session state for the database named
-func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
+func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (branchState, bool, error) {
+	// TODO: change to require a db, not a name
+	
 	dbName = strings.ToLower(dbName)
 	d.mu.Lock()
 	dbState, ok := d.dbStates[dbName]
 	d.mu.Unlock()
+
+	if !ok {
+		return branchState{}, false, nil
+	}
+	
 	if ok {
+		if dbState.Err != nil {
+			return branchState{}, false, dbState.Err
+		}
+		
+		// TODO: fill in
 		return dbState, ok, nil
 	}
-
-	// TODO: this needs to include the transaction's snapshot of the DB at tx start time
 
 	database, ok, err := d.provider.SessionDatabase(ctx, dbName)
 	if err != nil {
@@ -176,13 +186,10 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseS
 //  the checked out branch in the case of a default (no branch-specified) db connection.
 //  Alternate idea: branch head is always set correctly in response to a USE statement, OR a checkout procedure. The
 //  latter implicitly updates the current database. You also get a revision db checked out on connection to no branch.
-func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
+func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (SessionState, bool, error) {
 	s, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, false, err
-	}
-	if ok && s.Err != nil {
-		return nil, false, s.Err
 	}
 
 	return s, ok, nil
@@ -1135,55 +1142,58 @@ func (d *DoltSession) HasDB(_ *sql.Context, dbName string) bool {
 func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	DefineSystemVariablesForDB(db.Name())
 
-	sessionState := NewEmptyDatabaseSessionState()
-	d.mu.Lock()
-	d.dbStates[strings.ToLower(db.Name())] = sessionState
-	d.mu.Unlock()
-	sessionState.dbName = db.Name()
-	sessionState.db = db
-
-	_, val, ok := sql.SystemVariables.GetGlobal(DefaultBranchKey(db.Name()))
-	initialBranch := ""
-	if ok {
-		initialBranch = val.(string)
-	}
-
-	// TODO: the branch should be already set if the DB was specified with a branch revision string
-	dbState, err := db.InitialDBState(ctx, initialBranch)
+	var sessionState *DatabaseSessionState
+	branchState := &branchState{} 
+	baseName, rev := SplitRevisionDbName(db)
+	
+	dbState, err := db.InitialDBState(ctx, rev)
 	if err != nil {
 		return err
 	}
+
+	d.mu.Lock()
+	if _, ok := d.dbStates[strings.ToLower(baseName)]; !ok {
+		sessionState = NewEmptyDatabaseSessionState()
+		d.dbStates[strings.ToLower(baseName)] = sessionState
+		sessionState.heads[strings.ToLower(rev)] = branchState
+
+		tmpDir, err := dbState.DbData.Rsw.TempTableFilesDir()
+		if err != nil {
+			if errors.Is(err, env.ErrDoltRepositoryNotFound) {
+				return env.ErrFailedToAccessDB.New(dbState.Db.Name())
+			}
+			return err
+		}
+		sessionState.tmpFileDir = tmpDir
+	}
+	d.mu.Unlock()
+
+	sessionState.dbName = baseName
+	// TODO: this doesn't seem right, shouldn't be a revision DB
+	sessionState.db = db
 
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
 	// TODO: this no longer gets called at session creation time, so the error handling below never occurs when a
 	//  database is deleted out from under a running server
-	sessionState.dbData = dbState.DbData
-	tmpDir, err := dbState.DbData.Rsw.TempTableFilesDir()
-	if err != nil {
-		if errors.Is(err, env.ErrDoltRepositoryNotFound) {
-			return env.ErrFailedToAccessDB.New(dbState.Db.Name())
-		}
-		return err
-	}
-	sessionState.tmpFileDir = tmpDir
+	branchState.dbData = dbState.DbData
 	adapter := NewSessionStateAdapter(d, db.Name(), dbState.Remotes, dbState.Branches, dbState.Backups)
-	sessionState.dbData.Rsr = adapter
-	sessionState.dbData.Rsw = adapter
-	sessionState.readOnly = dbState.ReadOnly
+	branchState.dbData.Rsr = adapter
+	branchState.dbData.Rsw = adapter
+	branchState.readOnly = dbState.ReadOnly
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
 	// Or better yet, get rid of EditOptions from the database, it's a session setting
 	nbf := types.Format_Default
-	if sessionState.dbData.Ddb != nil {
-		nbf = sessionState.dbData.Ddb.Format()
+	if branchState.dbData.Ddb != nil {
+		nbf = branchState.dbData.Ddb.Format()
 	}
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
 
 	if dbState.Err != nil {
 		sessionState.Err = dbState.Err
 	} else if dbState.WorkingSet != nil {
-		sessionState.WorkingSet = dbState.WorkingSet
+		branchState.workingSet = dbState.WorkingSet
 
 		// TODO: this is pretty clunky, there is a silly dependency between InitialDbState and globalstate.StateProvider
 		//  that's hard to express with the current types
@@ -1197,7 +1207,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		if err != nil {
 			return err
 		}
-		sessionState.WriteSession = writer.NewWriteSession(nbf, sessionState.GetWorkingSet(), tracker, editOpts)
+		branchState.writeSession = writer.NewWriteSession(nbf, branchState.GetWorkingSet(), tracker, editOpts)
 		if err = d.SetWorkingSet(ctx, db.Name(), dbState.WorkingSet); err != nil {
 			return err
 		}
@@ -1207,16 +1217,17 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		if err != nil {
 			return err
 		}
-		sessionState.headRoot = headRoot
+		branchState.headRoot = headRoot
 	} else if dbState.HeadRoot != nil {
-		sessionState.headRoot = dbState.HeadRoot
+		branchState.headRoot = dbState.HeadRoot
 	}
 
 	// This has to happen after SetWorkingSet above, since it does a stale check before its work
 	// TODO: this needs to be kept up to date as the working set ref changes
-	sessionState.headCommit = dbState.HeadCommit
+	branchState.headCommit = dbState.HeadCommit
 
 	// After setting the initial root we have no state to commit
+	// TODO: do we still want to track dirty states, or just look at hashes
 	sessionState.dirty = false
 
 	if sessionState.Err == nil {

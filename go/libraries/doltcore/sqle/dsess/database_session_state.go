@@ -66,7 +66,7 @@ type DatabaseSessionState struct {
 	// currentHead is the current head of the database when unqualified by a DB name
 	currentHead ref.WorkingSetRef
 	// heads records the in-memory DB state for every branch head accessed by the session
-	heads 			map[ref.WorkingSetRef]dbData
+	heads 			map[string]*branchState
 	// globalState is the global state of this session (shared by all sessions for a particular db)
 	globalState  globalstate.GlobalState
 	// dirty is true if this session has uncommitted changes
@@ -88,16 +88,16 @@ type SessionState interface {
 	GetWriteSession() writer.WriteSession
 }
 
-
-func (d *dbData) GetWorkingSet() *doltdb.WorkingSet {
+func (d *branchState) GetWorkingSet() *doltdb.WorkingSet {
 	return d.workingSet
 }
 
-func (d *dbData) GetWriteSession() writer.WriteSession {
+func (d *branchState) GetWriteSession() writer.WriteSession {
 	return d.writeSession
 }
 
-type dbData struct {
+// branchState records all the in-memory session state for a particular branch head
+type branchState struct {
 	// headCommit is the head commit for this database. May be nil for databases tied to a detached root value, in which 
 	// case headRoot must be set.
 	headCommit   *doltdb.Commit
@@ -118,6 +118,8 @@ type dbData struct {
 func NewEmptyDatabaseSessionState() *DatabaseSessionState {
 	return &DatabaseSessionState{
 		sessionCache: newSessionCache(),
+		heads: make(map[ref.WorkingSetRef]branchState),
+		// TODO: current head?
 	}
 }
 
