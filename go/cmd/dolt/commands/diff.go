@@ -551,8 +551,54 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 		return errhand.VerboseErrorFromError(err)
 	}
 
+	roots, err := dEnv.Roots(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(fmt.Errorf("couldn't get working root, cause: %w", err))
+	}
+
+	ignoredTablePatterns, err := doltdb.GetIgnoredTablePatterns(ctx, roots)
+	if err != nil {
+		return errhand.VerboseErrorFromError(fmt.Errorf("couldn't get ignored table patterns, cause: %w", err))
+	}
+
+	toRootHash, err := dArgs.diffDatasets.toRoot.HashOf()
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	fromRootHash, err := dArgs.diffDatasets.fromRoot.HashOf()
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	workingSetHash, err := roots.Working.HashOf()
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
 	doltSchemasChanged := false
 	for _, td := range tableDeltas {
+		// Don't print tables if one side of the diff is an ignored table in the working set.
+		if toRootHash == workingSetHash {
+			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(td.ToName)
+			if err != nil {
+				return errhand.VerboseErrorFromError(err)
+			}
+			if ignoreResult == doltdb.Ignore {
+				continue
+			}
+		}
+
+		if fromRootHash == workingSetHash {
+			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(td.FromName)
+			if err != nil {
+				return errhand.VerboseErrorFromError(err)
+			}
+			if ignoreResult == doltdb.Ignore {
+				continue
+			}
+		}
+
 		if !shouldPrintTableDelta(dArgs.tableSet, td) {
 			continue
 		}
