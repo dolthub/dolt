@@ -15,10 +15,11 @@
 package merge
 
 import (
+	"testing"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
-	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	storetypes "github.com/dolthub/dolt/go/store/types"

@@ -15,11 +15,12 @@
 package merge
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	storetypes "github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/proto/query"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	storetypes "github.com/dolthub/dolt/go/store/types"
 )
 
 // TypeCompatibilityChecker checks if type changes are compatible at the storage layer and is used to
