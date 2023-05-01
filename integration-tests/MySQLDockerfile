@@ -36,7 +36,8 @@ RUN apt update -y && \
         g++ \
         libmysqlcppconn-dev \
         git \
-        ruby\
+        ruby \
+        ruby-dev \
         gem \
         libc6 \
         libgcc1 \
