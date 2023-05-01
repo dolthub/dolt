@@ -277,3 +277,19 @@ SQL
     [[ "$output" =~ "ignoreme" ]] || false
 
 }
+
+@test "ignore: don't display ignored tables in dolt diff" {
+    skip_nbf_ld_1
+
+    dolt sql <<SQL
+CREATE TABLE ignoreme (pk int);
+CREATE TABLE nomatch (pk int);
+SQL
+
+    run dolt diff
+
+    [ "$status" -eq 0 ]
+
+    [[ "$output" =~ "nomatch" ]] || false
+    [[ ! ["$output" =~ "ignoreme"] ]] || false
+}
