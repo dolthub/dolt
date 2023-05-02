@@ -30,7 +30,7 @@ teardown() {
 get_staged_tables() {
     dolt status | awk '
         match($0, /new table:\ */) { print substr($0, RSTART+RLENGTH) }
-        /Untracked files:/ { exit }
+        /Untracked tables:/ { exit }
         /Tables with conflicting dolt_ignore patterns:/ { exit }
     '
 }
@@ -39,7 +39,7 @@ get_working_tables() {
     dolt status | awk '
         BEGIN { working = 0 }
         (working == 1) && match($0, /new table:\ */) { print substr($0, RSTART+RLENGTH) }
-        /Untracked files:/ { working = 1 }
+        /Untracked tables:/ { working = 1 }
         /Tables with conflicting dolt_ignore patterns:/ { working = 0 }
     '
 }
@@ -210,7 +210,7 @@ SQL
 
 }
 
-@test "ignore: allow staging ignored files if 'add --force' is supplied" {
+@test "ignore: allow staging ignored tables if 'add --force' is supplied" {
     skip_nbf_ld_1
 
     dolt sql <<SQL
@@ -224,7 +224,7 @@ SQL
     [[ ! -z $(echo "$staged" | grep "ignoreme") ]] || false
 }
 
-@test "ignore: don't auto-stage ignored files" {
+@test "ignore: don't auto-stage ignored tables" {
     skip_nbf_ld_1
 
     dolt sql <<SQL
@@ -242,7 +242,7 @@ SQL
 
 }
 
-@test "ignore: dolt status doesn't show ignored files when --ignored is not supplied" {
+@test "ignore: dolt status doesn't show ignored tables when --ignored is not supplied" {
     skip_nbf_ld_1
 
     dolt sql <<SQL
@@ -260,7 +260,7 @@ SQL
 
 }
 
-@test "ignore: dolt status shows ignored files when --ignored is not supplied" {
+@test "ignore: dolt status shows ignored tables when --ignored is not supplied" {
     skip_nbf_ld_1
 
     dolt sql <<SQL
