@@ -45,20 +45,20 @@ Example:  batsee -t 42 --max-time 1h15m -r 2 --only types.bats,foreign-keys.bats
 }
 
 const (
-	threadsF  = "threads"
-	skipSlowF = "skip-slow"
-	maxTimeF  = "max-time"
-	onlyF     = "only"
-	retriesF  = "retries"
+	threadsFlag  = "threads"
+	skipSlowFlag = "skip-slow"
+	maxTimeFlag  = "max-time"
+	onlyFLag     = "only"
+	retriesFLag  = "retries"
 )
 
 func buildArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("batsee", 0)
-	ap.SupportsUint(threadsF, "t", "threads", "Number of tests to execute in parallel. Defaults to 12")
-	ap.SupportsFlag(skipSlowF, "s", "Skip slow tests. This is a static list of test we know are slow, may grow stale.")
-	ap.SupportsString(maxTimeF, "", "duration", "Maximum time to run tests. Defaults to 30m")
-	ap.SupportsString(onlyF, "", "", "Only run the specified test, or tests (comma separated)")
-	ap.SupportsInt(retriesF, "r", "retries", "Number of times to retry a failed test. Defaults to 1")
+	ap.SupportsUint(threadsFlag, "t", "threads", "Number of tests to execute in parallel. Defaults to 12")
+	ap.SupportsFlag(skipSlowFlag, "s", "Skip slow tests. This is a static list of test we know are slow, may grow stale.")
+	ap.SupportsString(maxTimeFlag, "", "duration", "Maximum time to run tests. Defaults to 30m")
+	ap.SupportsString(onlyFLag, "", "", "Only run the specified test, or tests (comma separated)")
+	ap.SupportsInt(retriesFLag, "r", "retries", "Number of times to retry a failed test. Defaults to 1")
 	return ap
 }
 
@@ -90,12 +90,12 @@ func main() {
 	args := os.Args[1:]
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	threads, hasThreads := apr.GetUint(threadsF)
+	threads, hasThreads := apr.GetUint(threadsFlag)
 	if !hasThreads {
 		threads = 12
 	}
 
-	durationInput, hasDuration := apr.GetValue(maxTimeF)
+	durationInput, hasDuration := apr.GetValue(maxTimeFlag)
 	if !hasDuration {
 		durationInput = "30m"
 	}
@@ -105,10 +105,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	skipSlow := apr.Contains(skipSlowF)
+	skipSlow := apr.Contains(skipSlowFlag)
 
 	limitTo := map[string]bool{}
-	runOnlyStr, hasRunOnly := apr.GetValue(onlyF)
+	runOnlyStr, hasRunOnly := apr.GetValue(onlyFLag)
 	if hasRunOnly {
 		for _, test := range strings.Split(runOnlyStr, ",") {
 			test = strings.TrimSpace(test)
@@ -116,7 +116,7 @@ func main() {
 		}
 	}
 
-	retries, hasRetries := apr.GetInt(retriesF)
+	retries, hasRetries := apr.GetInt(retriesFLag)
 	if !hasRetries {
 		retries = 1
 	}
