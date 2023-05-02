@@ -91,27 +91,18 @@ func NewEmptyDatabaseSessionState() *DatabaseSessionState {
 	}
 }
 
-func (d *DatabaseSessionState) SessionCache() *SessionCache {
-	return d.sessionCache
-}
-
 // SessionState is the public interface for dealing with session state outside this package. Session-state is always
 // branch-specific. 
 type SessionState interface {
-	GetWorkingSet() *doltdb.WorkingSet
-	GetWriteSession() writer.WriteSession
-}
-
-func (d *branchState) GetWorkingSet() *doltdb.WorkingSet {
-	return d.workingSet
-}
-
-func (d *branchState) GetWriteSession() writer.WriteSession {
-	return d.writeSession
+	WorkingSet() *doltdb.WorkingSet
+	WriteSession() writer.WriteSession
+	EditOpts() editor.Options
+	SessionCache() *SessionCache
 }
 
 // branchState records all the in-memory session state for a particular branch head
 type branchState struct {
+	// dbState is the parent database state for this branch head state
 	dbState *DatabaseSessionState
 	// headCommit is the head commit for this database. May be nil for databases tied to a detached root value, in which 
 	// case headRoot must be set.
@@ -122,16 +113,34 @@ type branchState struct {
 	// case headCommit must be set
 	workingSet *doltdb.WorkingSet
 	// dbData is an accessor for the underlying doltDb
+	// TODO: move this to DatabaseSessionState only
 	dbData       env.DbData
-	// writeSession is this database's write session, which changes when the working set changes
+	// writeSession is this head's write session
 	writeSession writer.WriteSession
-	// globalState is the global state of this session (shared by all sessions for a particular db)
 	// readOnly is true if this database is read only
 	readOnly     bool
 }
 
-func (d branchState) GetRoots() doltdb.Roots {
-	if d.GetWorkingSet() == nil {
+var _ SessionState = (*branchState)(nil)
+
+func (d *branchState) WorkingSet() *doltdb.WorkingSet {
+	return d.workingSet
+}
+
+func (d *branchState) WriteSession() writer.WriteSession {
+	return d.writeSession
+}
+
+func (d *branchState) SessionCache() *SessionCache {
+	return d.dbState.sessionCache
+}
+
+func (d branchState) EditOpts() editor.Options {
+	return d.WriteSession().GetOptions()
+}
+
+func (d branchState) roots() doltdb.Roots {
+	if d.WorkingSet() == nil {
 		return doltdb.Roots{
 			Head:    d.headRoot,
 			Working: d.headRoot,
@@ -140,11 +149,7 @@ func (d branchState) GetRoots() doltdb.Roots {
 	}
 	return doltdb.Roots{
 		Head:    d.headRoot,
-		Working: d.GetWorkingSet().WorkingRoot(),
-		Staged:  d.GetWorkingSet().StagedRoot(),
+		Working: d.WorkingSet().WorkingRoot(),
+		Staged:  d.WorkingSet().StagedRoot(),
 	}
-}
-
-func (d branchState) EditOpts() editor.Options {
-	return d.GetWriteSession().GetOptions()
 }

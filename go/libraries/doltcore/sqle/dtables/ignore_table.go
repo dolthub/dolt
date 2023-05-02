@@ -179,7 +179,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 
 	iw.prevHash = &prevHash
 
-	iw.workingSet = dbState.GetWorkingSet()
+	iw.workingSet = dbState.WorkingSet()
 	found, err := roots.Working.HasTable(ctx, doltdb.IgnoreTableName)
 
 	if err != nil {
@@ -232,7 +232,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 		// We use WriteSession.SetWorkingSet instead of DoltSession.SetRoot because we want to avoid modifying the root
 		// until the end of the transaction, but we still want the WriteSession to be able to find the newly
 		// created table.
-		err = dbState.GetWriteSession().SetWorkingSet(ctx, dbState.GetWorkingSet().WithWorkingRoot(newRootValue))
+		err = dbState.WriteSession().SetWorkingSet(ctx, dbState.WorkingSet().WithWorkingRoot(newRootValue))
 		if err != nil {
 			iw.errDuringStatementBegin = err
 			return
@@ -241,7 +241,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 		dSess.SetRoot(ctx, dbName, newRootValue)
 	}
 
-	tableWriter, err := dbState.GetWriteSession().GetTableWriter(ctx, doltdb.IgnoreTableName, dbName, dSess.SetRoot, false)
+	tableWriter, err := dbState.WriteSession().GetTableWriter(ctx, doltdb.IgnoreTableName, dbName, dSess.SetRoot, false)
 	if err != nil {
 		iw.errDuringStatementBegin = err
 		return
