@@ -270,59 +270,36 @@ func (d *DoltSession) ValidateSession(ctx *sql.Context, dbName string) error {
 
 // StartTransaction refreshes the state of this session and starts a new transaction.
 func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
-	if TransactionsDisabled(ctx) {
-		return DisabledTransaction{}, nil
-	}
-
-	// TODO: remove this when we have true multi-db transaction support
-	dbName := ctx.GetTransactionDatabase()
-	if isNoOpTransactionDatabase(dbName) {
-		return DisabledTransaction{}, nil
-	}
-
 	// New transaction, clear all session state
 	// TODO: revisit this
 	d.clearRevisionDbState()
 
-	branchState, ok, err := d.lookupDbState(ctx, dbName)
-	if err != nil {
-		return nil, err
-	}
-
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	// There are both valid and invalid ways that a working set for the session state can be nil (e.g. connected to a
-	// commit hash revision DB, or the DB contents cannot be loaded). Either way this transaction is defunct.
-	// TODO: with multi-db transactions, such DBs should be ignored
-	if branchState.WorkingSet() == nil {
-		return DisabledTransaction{}, nil
-	}
-
-	// TODO: this needs to happen for every DB in the database, not just the one named in the transaction
-	if branchState != nil && branchState.dbState.db != nil {
-		rrd, ok := branchState.dbState.db.(RemoteReadReplicaDatabase)
-		if ok && rrd.ValidReplicaState(ctx) {
-			err := rrd.PullFromRemote(ctx)
-			if err != nil && !IgnoreReplicationErrors() {
-				return nil, fmt.Errorf("replication error: %w", err)
-			} else if err != nil {
-				WarnReplicationError(ctx, err)
-			}
-		}
-	}
-
-	if branchState.readOnly {
-		return DisabledTransaction{}, nil
-	}
-
+	// Take a snapshot of the current noms root for every database under management
 	nomsRoots := make(map[string]hash.Hash)
 	for _, db := range d.provider.DoltDatabases() {
-		// TODO: this is only necessary to support UserSpaceDatabase, come up with a better set of interfaces to capture
-		//  these capabilities
+		// TODO: this nil check is only necessary to support UserSpaceDatabase, come up with a better set of interfaces 
+		//  to capture these capabilities
 		ddb := db.DbData().Ddb
 		if ddb != nil {
+			rrd, ok := db.(RemoteReadReplicaDatabase)
+			if ok && rrd.ValidReplicaState(ctx) {
+				err := rrd.PullFromRemote(ctx)
+				if err != nil && !IgnoreReplicationErrors() {
+					return nil, fmt.Errorf("replication error: %w", err)
+				} else if err != nil {
+					WarnReplicationError(ctx, err)
+				}
+			}
+
+			if _, v, ok := sql.SystemVariables.GetGlobal(ReadReplicaRemote); ok && v != "" {
+				err := ddb.Rebase(ctx)
+				if err != nil && !IgnoreReplicationErrors() {
+					return nil, err
+				} else if err != nil {
+					WarnReplicationError(ctx, err)
+				}
+			}
+
 			nomsRoot, err := ddb.NomsRoot(ctx)
 			if err != nil {
 				return nil, err
@@ -330,37 +307,8 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 			nomsRoots[strings.ToLower(db.Name())] = nomsRoot
 		}
 	}
-
-	if _, v, ok := sql.SystemVariables.GetGlobal(ReadReplicaRemote); ok && v != "" {
-		err = branchState.dbData.Ddb.Rebase(ctx)
-		if err != nil && !IgnoreReplicationErrors() {
-			return nil, err
-		} else if err != nil {
-			WarnReplicationError(ctx, err)
-		}
-	}
-
-	wsRef := branchState.WorkingSet().Ref()
-	ws, err := branchState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
-	// TODO: every HEAD needs a working set created when it is. We can get rid of this in a 1.0 release when this is fixed
-	if err == doltdb.ErrWorkingSetNotFound {
-		ws, err = d.newWorkingSetForHead(ctx, wsRef, dbName)
-		if err != nil {
-			return nil, err
-		}
-	} else if err != nil {
-		return nil, err
-	}
-
-	// logrus.Tracef("starting transaction with working root %s", ws.WorkingRoot().DebugString(ctx, true))
-
-	// TODO: this is going to do 2 resolves to get the head root, not ideal
-	err = d.SetWorkingSet(ctx, dbName, ws)
-
-	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
-	branchState.dbState.dirty = false
-
-	return NewDoltTransaction(dbName, nomsRoots, ws, wsRef, branchState.dbData, branchState.WriteSession().GetOptions(), tCharacteristic), nil
+	
+	return NewMultiHeadTransaction(nomsRoots, tCharacteristic), nil
 }
 
 // clearRevisionDbState clears all revision DB states for this session. This is necessary on transaction start,

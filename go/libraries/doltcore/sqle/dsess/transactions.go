@@ -85,6 +85,7 @@ type DoltTransaction struct {
 
 type savepoint struct {
 	name string
+	// TODO: we need a root value per DB here
 	root *doltdb.RootValue
 }
 
@@ -104,6 +105,16 @@ func NewDoltTransaction(
 		workingSetRef:   workingSet,
 		dbData:          dbData,
 		mergeEditOpts:   mergeEditOpts,
+		tCharacteristic: tCharacteristic,
+	}
+}
+
+func NewMultiHeadTransaction(
+		startingRoots map[string]hash.Hash,
+		tCharacteristic sql.TransactionCharacteristic,
+) *DoltTransaction {
+	return &DoltTransaction{
+		startRootHash:   startingRoots,
 		tCharacteristic: tCharacteristic,
 	}
 }
