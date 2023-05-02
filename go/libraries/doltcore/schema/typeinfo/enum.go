@@ -64,7 +64,11 @@ func CreateEnumTypeFromParams(params map[string]string) (TypeInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &enumType{sqlEnumType}, nil
+	return CreateEnumTypeFromSqlEnumType(sqlEnumType), nil
+}
+
+func CreateEnumTypeFromSqlEnumType(sqlEnumType sql.EnumType) TypeInfo {
+	return &enumType{sqlEnumType}
 }
 
 // ConvertNomsValueToValue implements TypeInfo interface.

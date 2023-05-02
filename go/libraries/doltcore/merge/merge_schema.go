@@ -26,7 +26,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/types"
+	storetypes "github.com/dolthub/dolt/go/store/types"
 )
 
 type conflictKind byte
@@ -148,7 +148,7 @@ func (c ChkConflict) String() string {
 var ErrMergeWithDifferentPks = errors.New("error: cannot merge two tables with different primary keys")
 
 // SchemaMerge performs a three-way merge of ourSch, theirSch, and ancSch.
-func SchemaMerge(ctx context.Context, format *types.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, err error) {
+func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, err error) {
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
 	sc = SchemaConflict{
 		TableName: tblName,
@@ -316,7 +316,7 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 // between types, since different storage formats have different restrictions on how much types can change and remain
 // compatible with the current stored format. If any unexpected error occurs, then that error is returned and the
 // other response fields should be ignored.
-func mergeColumns(format *types.NomsBinFormat, ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, error) {
+func mergeColumns(format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, error) {
 	columnMappings, err := mapColumns(ourCC, theirCC, ancCC)
 	if err != nil {
 		return nil, nil, err
@@ -326,6 +326,8 @@ func mergeColumns(format *types.NomsBinFormat, ourCC, theirCC, ancCC *schema.Col
 	if err != nil {
 		return nil, nil, err
 	}
+
+	compatChecker := newTypeCompatabilityCheckerForStorageFormat(format)
 
 	// After we've checked for schema conflicts, merge the columns together
 	// TODO: We don't currently preserve all column position changes; the returned merged columns are always based on
@@ -355,7 +357,9 @@ func mergeColumns(format *types.NomsBinFormat, ourCC, theirCC, ancCC *schema.Col
 				if oursChanged && theirsChanged {
 					// This is a schema change conflict and has already been handled by checkSchemaConflicts
 				} else if theirsChanged {
-					if columnTypesAreCompatible(format, *ours, *theirs) {
+					// In this case, only theirsChanged, so we need to check if moving from ours->theirs
+					// is valid, otherwise it's a conflict
+					if compatChecker.IsTypeChangeCompatible(ours.TypeInfo, theirs.TypeInfo) {
 						mergedColumns = append(mergedColumns, *theirs)
 					} else {
 						conflicts = append(conflicts, ColConflict{
@@ -364,8 +368,10 @@ func mergeColumns(format *types.NomsBinFormat, ourCC, theirCC, ancCC *schema.Col
 							Theirs: *theirs,
 						})
 					}
-				} else {
-					if columnTypesAreCompatible(format, *theirs, *ours) {
+				} else if oursChanged {
+					// In this case, only oursChanged, so we need to check if moving from theirs->ours
+					// is valid, otherwise it's a conflict
+					if compatChecker.IsTypeChangeCompatible(theirs.TypeInfo, ours.TypeInfo) {
 						mergedColumns = append(mergedColumns, *ours)
 					} else {
 						conflicts = append(conflicts, ColConflict{
@@ -374,6 +380,9 @@ func mergeColumns(format *types.NomsBinFormat, ourCC, theirCC, ancCC *schema.Col
 							Theirs: *theirs,
 						})
 					}
+				} else {
+					// if neither side changed, just use ours
+					mergedColumns = append(mergedColumns, *ours)
 				}
 			} else if ours.Equals(*theirs) {
 				// if the columns are identical, just use ours
@@ -502,34 +511,6 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 	}
 
 	return conflicts, nil
-}
-
-// columnTypesAreCompatible returns true if the change from |from| to |to| is a compatible type change.
-// Currently, no type change for the DOLT storage format is considered compatible, but over time we will
-// widen this to include safe type migrations (e.g. smallint to bigint, varchar(100) to varchar(200)), which
-// can require rewriting existing stored data to be compatible with the new type. For the older LD_1 storage
-// format, we are looser with type equality and consider them compatible as long as the types are in the
-// same type family/kind.
-func columnTypesAreCompatible(format *types.NomsBinFormat, from, to schema.Column) bool {
-	if !from.TypeInfo.Equals(to.TypeInfo) {
-		if types.IsFormat_DOLT(format) {
-			// All type changes are incompatible, for the DOLT storage format.
-			// TODO: this is overly broad, and should be narrowed down
-			return false
-		}
-
-		if from.Kind != to.Kind {
-			return false
-		}
-
-		if schema.IsColSpatialType(to) {
-			// We need to do this because some spatial type changes require a full table check, but not all.
-			// TODO: This could be narrowed down to a smaller set of spatial type changes
-			return false
-		}
-	}
-
-	return true
 }
 
 // columnMapping describes the mapping for a column being merged between the two sides of the merge as well as the ancestor.
