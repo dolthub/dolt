@@ -74,8 +74,6 @@ func (d DisabledTransaction) IsReadOnly() bool {
 
 type DoltTransaction struct {
 	dbStartPoints   map[string]dbRoot
-	startState      *doltdb.WorkingSet
-	dbData          env.DbData
 	savepoints      []savepoint
 	mergeEditOpts   editor.Options
 	tCharacteristic sql.TransactionCharacteristic
@@ -103,8 +101,6 @@ func NewDoltTransaction(
 		tCharacteristic sql.TransactionCharacteristic,
 ) *DoltTransaction {
 	return &DoltTransaction{
-		startState:      startState,
-		dbData:          dbData,
 		mergeEditOpts:   mergeEditOpts,
 		tCharacteristic: tCharacteristic,
 	}
@@ -192,7 +188,7 @@ func doltCommit(ctx *sql.Context,
 	}
 
 	headSpec, _ := doltdb.NewCommitSpec("HEAD")
-	curHead, err := tx.dbData.Ddb.Resolve(ctx, headSpec, headRef)
+	curHead, err := doltDb.Resolve(ctx, headSpec, headRef)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -301,7 +297,7 @@ func (tx *DoltTransaction) doCommit(
 
 			newWorkingSet := false
 
-			existingWs, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, workingSet.Ref())
+			existingWs, err := startPoint.db.ResolveWorkingSet(ctx, workingSet.Ref())
 			if err == doltdb.ErrWorkingSetNotFound {
 				// This is to handle the case where an existing DB pre working sets is committing to this HEAD for the
 				// first time. Can be removed and called an error post 1.0
