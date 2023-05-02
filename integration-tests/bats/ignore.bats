@@ -278,7 +278,7 @@ SQL
 
 }
 
-@test "ignore: don't display ignored tables in dolt diff" {
+@test "ignore: don't display add ignored tables in dolt diff" {
     skip_nbf_ld_1
 
     dolt sql <<SQL
@@ -292,4 +292,49 @@ SQL
 
     [[ "$output" =~ "nomatch" ]] || false
     ! [["$output" =~ "ignoreme"]] || false
+}
+
+@test "ignore: DO display modified ignored tables in dolt diff after staging" {
+    skip_nbf_ld_1
+
+    dolt sql <<SQL
+CREATE TABLE ignoreme (pk int);
+SQL
+
+    dolt add --force ignoreme
+
+    dolt sql <<SQL
+INSERT INTO ignoreme VALUES (1);
+SQL
+
+    run dolt diff
+
+    [ "$status" -eq 0 ]
+
+    echo "$output"
+
+    [[ "$output" =~ "ignoreme" ]] || false
+}
+
+@test "ignore: DO display modified ignored tables in dolt diff after committing" {
+    skip_nbf_ld_1
+
+    dolt sql <<SQL
+CREATE TABLE ignoreme (pk int);
+SQL
+
+    dolt add --force ignoreme
+    dolt commit -m "commit1"
+
+    dolt sql <<SQL
+INSERT INTO ignoreme VALUES (1);
+SQL
+
+    run dolt diff
+
+    [ "$status" -eq 0 ]
+
+    echo "$output"
+
+    [[ "$output" =~ "ignoreme" ]] || false
 }

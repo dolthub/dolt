@@ -578,8 +578,8 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 
 	doltSchemasChanged := false
 	for _, td := range tableDeltas {
-		// Don't print tables if one side of the diff is an ignored table in the working set.
-		if toRootHash == workingSetHash {
+		// Don't print tables if one side of the diff is an ignored table in the working set being added.
+		if toRootHash == workingSetHash && td.FromTable == nil {
 			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(td.ToName)
 			if err != nil {
 				return errhand.VerboseErrorFromError(err)
@@ -589,7 +589,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 			}
 		}
 
-		if fromRootHash == workingSetHash {
+		if fromRootHash == workingSetHash && td.ToTable == nil {
 			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(td.FromName)
 			if err != nil {
 				return errhand.VerboseErrorFromError(err)
