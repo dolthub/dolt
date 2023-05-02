@@ -83,6 +83,20 @@ type DatabaseSessionState struct {
 	Err error
 }
 
+func NewEmptyDatabaseSessionState() *DatabaseSessionState {
+	return &DatabaseSessionState{
+		sessionCache: newSessionCache(),
+		heads: make(map[string]*branchState),
+		// TODO: current head?
+	}
+}
+
+func (d *DatabaseSessionState) SessionCache() *SessionCache {
+	return d.sessionCache
+}
+
+// SessionState is the public interface for dealing with session state outside this package. Session-state is always
+// branch-specific. 
 type SessionState interface {
 	GetWorkingSet() *doltdb.WorkingSet
 	GetWriteSession() writer.WriteSession
@@ -98,6 +112,7 @@ func (d *branchState) GetWriteSession() writer.WriteSession {
 
 // branchState records all the in-memory session state for a particular branch head
 type branchState struct {
+	dbState *DatabaseSessionState
 	// headCommit is the head commit for this database. May be nil for databases tied to a detached root value, in which 
 	// case headRoot must be set.
 	headCommit   *doltdb.Commit
@@ -115,16 +130,8 @@ type branchState struct {
 	readOnly     bool
 }
 
-func NewEmptyDatabaseSessionState() *DatabaseSessionState {
-	return &DatabaseSessionState{
-		sessionCache: newSessionCache(),
-		heads: make(map[ref.WorkingSetRef]branchState),
-		// TODO: current head?
-	}
-}
-
-func (d DatabaseSessionState) GetRoots() doltdb.Roots {
-	if d.GetWorkingSet(ctx) == nil {
+func (d branchState) GetRoots() doltdb.Roots {
+	if d.GetWorkingSet() == nil {
 		return doltdb.Roots{
 			Head:    d.headRoot,
 			Working: d.headRoot,
@@ -133,15 +140,11 @@ func (d DatabaseSessionState) GetRoots() doltdb.Roots {
 	}
 	return doltdb.Roots{
 		Head:    d.headRoot,
-		Working: d.GetWorkingSet(ctx).WorkingRoot(),
-		Staged:  d.GetWorkingSet(ctx).StagedRoot(),
+		Working: d.GetWorkingSet().WorkingRoot(),
+		Staged:  d.GetWorkingSet().StagedRoot(),
 	}
 }
 
-func (d *DatabaseSessionState) SessionCache() *SessionCache {
-	return d.sessionCache
-}
-
-func (d DatabaseSessionState) EditOpts() editor.Options {
+func (d branchState) EditOpts() editor.Options {
 	return d.GetWriteSession().GetOptions()
 }
