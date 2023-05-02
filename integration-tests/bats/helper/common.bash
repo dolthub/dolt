@@ -49,6 +49,10 @@ setup_no_dolt_init() {
     # multiple tests can be run in parallel on the same machine
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
+
+    if [ -z "$DOLT_TEST_RETRIES" ]; then
+        export BATS_TEST_RETRIES="$DOLT_TEST_RETRIES"
+    fi
 }
 
 assert_feature_version() {
