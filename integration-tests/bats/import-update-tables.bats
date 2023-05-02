@@ -1296,3 +1296,46 @@ DELIM
     [ $status -eq 0 ]
     [[ "$output" =~ '1,0,0,0,0,0,0,0,0,0,0,0000-00-00,00:00:00,0000-00-00 00:00:00,0000-00-00 00:00:00,0,first,""' ]] || false
 }
+
+@test "import-update-tables: empty string should NOT be imported as null value for ENUM type" {
+    dolt sql <<SQL
+create table alphabet(letter enum('', 'a', 'b'));
+SQL
+    dolt commit -Am "add a table"
+
+    cat <<DELIM > data.csv
+letter
+a
+""
+DELIM
+    run dolt table import -u alphabet data.csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 2, Additions: 2, Modifications: 0, Had No Effect: 0" ]] || false
+
+    run dolt sql -r csv -q "select * from alphabet;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ '""' ]] || false
+    [[ ! "$output" =~ 'NULL' ]] || false
+}
+
+@test "import-update-tables: empty string should NOT be imported as null value for SET type" {
+    dolt sql <<SQL
+create table word(letters set('', 'a', 'b'));
+SQL
+    dolt commit -Am "add a table"
+
+    cat <<DELIM > word_data.csv
+letters
+"a,b"
+a
+""
+DELIM
+    run dolt table import -u word word_data.csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
+
+    run dolt sql -r csv -q "select * from word;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ '""' ]] || false
+    [[ ! "$output" =~ 'NULL' ]] || false
+}
