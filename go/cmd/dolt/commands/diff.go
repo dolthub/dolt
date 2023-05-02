@@ -64,6 +64,7 @@ const (
 	SkinnyFlag  = "skinny"
 	MergeBase   = "merge-base"
 	DiffMode    = "diff-mode"
+	ReverseFlag = "reverse"
 )
 
 var diffDocs = cli.CommandDocumentationContent{
@@ -155,6 +156,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
 	ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
 	ap.SupportsString(DiffMode, "", "diff mode", "Determines how to display modified rows with tabular output. Valid values are row, line, in-place, context. Defaults to context.")
+	ap.SupportsFlag(ReverseFlag, "R", "Reverses the direction of the diff.")
 	return ap
 }
 
@@ -245,6 +247,15 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	tableNames, err := dArgs.applyDiffRoots(ctx, dEnv, apr.Args, apr.Contains(cli.CachedFlag), apr.Contains(MergeBase))
 	if err != nil {
 		return nil, err
+	}
+
+	if apr.Contains(ReverseFlag) {
+		dArgs.diffDatasets = &diffDatasets{
+			fromRoot: dArgs.toRoot,
+			fromRef:  dArgs.toRef,
+			toRoot:   dArgs.fromRoot,
+			toRef:    dArgs.fromRef,
+		}
 	}
 
 	tableSet, err := parseDiffTableSet(ctx, dEnv, dArgs.diffDatasets, tableNames)
