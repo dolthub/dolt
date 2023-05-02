@@ -95,6 +95,7 @@ func NewEmptyDatabaseSessionState() *DatabaseSessionState {
 // branch-specific. 
 type SessionState interface {
 	WorkingSet() *doltdb.WorkingSet
+	WorkingRoot() *doltdb.RootValue
 	WriteSession() writer.WriteSession
 	EditOpts() editor.Options
 	SessionCache() *SessionCache
@@ -121,6 +122,10 @@ type branchState struct {
 	readOnly     bool
 }
 
+func (d *branchState) WorkingRoot() *doltdb.RootValue {
+	return d.roots().Working
+}
+
 var _ SessionState = (*branchState)(nil)
 
 func (d *branchState) WorkingSet() *doltdb.WorkingSet {
@@ -139,7 +144,7 @@ func (d branchState) EditOpts() editor.Options {
 	return d.WriteSession().GetOptions()
 }
 
-func (d branchState) roots() doltdb.Roots {
+func (d *branchState) roots() doltdb.Roots {
 	if d.WorkingSet() == nil {
 		return doltdb.Roots{
 			Head:    d.headRoot,

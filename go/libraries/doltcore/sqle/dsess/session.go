@@ -213,12 +213,12 @@ func (d *DoltSession) RemoveDbState(_ *sql.Context, dbName string) error {
 // happens automatically as part of statement execution, and is only necessary when the session is manually batched (as
 // for bulk SQL import)
 func (d *DoltSession) Flush(ctx *sql.Context, dbName string) error {
-	dbState, _, err := d.LookupDbState(ctx, dbName)
+	branchState, _, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
 
-	ws, err := dbState.GetWriteSession().Flush(ctx)
+	ws, err := branchState.WriteSession().Flush(ctx)
 	if err != nil {
 		return err
 	}
