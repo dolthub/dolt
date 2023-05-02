@@ -441,7 +441,7 @@ func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.T
 	}
 
 	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-		ws, err := dtx.Commit(ctx, workingSet)
+		ws, err := dtx.Commit(ctx, workingSet, dbName)
 		return ws, nil, err
 	}
 
@@ -587,40 +587,8 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 
 // Rollback rolls the given transaction back
 func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
-	dbName := ctx.GetTransactionDatabase()
-
-	if TransactionsDisabled(ctx) || dbName == "" {
-		return nil
-	}
-
-	dirty, err := d.isDirty(ctx, dbName)
-	if err != nil {
-		return err
-	}
-
-	if !dirty {
-		return nil
-	}
-
-	branchState, ok, err := d.lookupDbState(ctx, dbName)
-	if err != nil {
-		return err
-	}
-
-	dtx, ok := tx.(*DoltTransaction)
-	if !ok {
-		return fmt.Errorf("expected a DoltTransaction")
-	}
-
-	// This operation usually doesn't matter, because the engine will process a `rollback` statement by first calling
-	// this logic, then discarding any current transaction. So the next statement will get a fresh transaction regardless,
-	// and this is throwaway work. It only matters if this method is used outside a standalone `rollback` statement.
-	err = d.SetRoot(ctx, dbName, dtx.startState.WorkingRoot())
-	if err != nil {
-		return err
-	}
-
-	branchState.dbState.dirty = false
+	// Nothing to do here, we just throw away all our work and let a new transaction begin next statement
+	d.clearRevisionDbState()
 	return nil
 }
 
@@ -983,15 +951,7 @@ func (d *DoltSession) SwitchWorkingSet(
 			tCharacteristic = sql.ReadOnly
 		}
 	}
-	ctx.SetTransaction(NewDoltTransaction(
-		dbName,
-		nomsRoots,
-		ws,
-		wsRef,
-		branchState.dbData,
-		branchState.WriteSession().GetOptions(),
-		tCharacteristic,
-	))
+	ctx.SetTransaction(NewDoltTransaction(nomsRoots, ws, wsRef, branchState.dbData, branchState.WriteSession().GetOptions(), tCharacteristic))
 
 	return nil
 }

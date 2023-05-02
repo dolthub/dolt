@@ -73,8 +73,7 @@ func (d DisabledTransaction) IsReadOnly() bool {
 }
 
 type DoltTransaction struct {
-	sourceDbName    string
-	startRootHash   map[string]hash.Hash
+	dbStartPoints   map[string]dbRoot
 	startState      *doltdb.WorkingSet
 	workingSetRef   ref.WorkingSetRef
 	dbData          env.DbData
@@ -83,24 +82,28 @@ type DoltTransaction struct {
 	tCharacteristic sql.TransactionCharacteristic
 }
 
+type dbRoot struct {
+	dbName   string
+	rootHash hash.Hash
+	db       *doltdb.DoltDB
+}
+
 type savepoint struct {
 	name string
 	// TODO: we need a root value per DB here
 	root *doltdb.RootValue
 }
 
+// TODO: find refs to this and remove
 func NewDoltTransaction(
-	dbName string,
-	startingRoots map[string]hash.Hash,
-	startState *doltdb.WorkingSet,
-	workingSet ref.WorkingSetRef,
-	dbData env.DbData,
-	mergeEditOpts editor.Options,
-	tCharacteristic sql.TransactionCharacteristic,
+		startingRoots map[string]hash.Hash,
+		startState *doltdb.WorkingSet,
+		workingSet ref.WorkingSetRef,
+		dbData env.DbData,
+		mergeEditOpts editor.Options,
+		tCharacteristic sql.TransactionCharacteristic,
 ) *DoltTransaction {
 	return &DoltTransaction{
-		sourceDbName:    dbName,
-		startRootHash:   startingRoots,
 		startState:      startState,
 		workingSetRef:   workingSet,
 		dbData:          dbData,
@@ -110,13 +113,33 @@ func NewDoltTransaction(
 }
 
 func NewMultiHeadTransaction(
-		startingRoots map[string]hash.Hash,
+	  ctx *sql.Context,
+		dbs []SqlDatabase,
 		tCharacteristic sql.TransactionCharacteristic,
-) *DoltTransaction {
-	return &DoltTransaction{
-		startRootHash:   startingRoots,
-		tCharacteristic: tCharacteristic,
+) (*DoltTransaction, error) {
+	
+	startPoints := make(map[string]dbRoot)
+	for _, db := range dbs {
+		ddb := db.DbData().Ddb
+		// TODO: this nil check is only here to accommodate user-space databases, find a better interface to exclude them
+		if ddb != nil {
+			nomsRoot, err := ddb.NomsRoot(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			startPoints[strings.ToLower(db.Name())] = dbRoot{
+				dbName:   db.Name(),
+				rootHash: nomsRoot,
+				db:       ddb,
+			}
+		}
 	}
+	
+	return &DoltTransaction{
+		dbStartPoints:   startPoints,
+		tCharacteristic: tCharacteristic,
+	}, nil
 }
 
 func (tx DoltTransaction) String() string {
@@ -129,8 +152,8 @@ func (tx DoltTransaction) IsReadOnly() bool {
 }
 
 func (tx DoltTransaction) GetInitialRoot(dbName string) (hash.Hash, bool) {
-	h, ok := tx.startRootHash[strings.ToLower(dbName)]
-	return h, ok
+	startPoint, ok := tx.dbStartPoints[strings.ToLower(dbName)]
+	return startPoint.rootHash, ok
 }
 
 var txLock sync.Mutex
@@ -143,14 +166,16 @@ var txLock sync.Mutex
 // if workingSet.workingRoot == ancRoot, attempt a fast-forward merge
 // TODO: Non-working roots aren't merged into the working set and just stomp any changes made there. We need merge
 // strategies for staged as well as merge state.
-func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
-	ws, _, err := tx.doCommit(ctx, workingSet, nil, txCommit)
+func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSet, dbName string) (*doltdb.WorkingSet, error) {
+	ws, _, err := tx.doCommit(ctx, workingSet, nil, txCommit, dbName)
 	return ws, err
 }
 
 // transactionWrite is the logic to write an updated working set (and optionally a commit) to the database
 type transactionWrite func(ctx *sql.Context,
 	tx *DoltTransaction, // the transaction being written
+	doltDb *doltdb.DoltDB, // the database to write to
+	startState *doltdb.WorkingSet, // the starting working set
 	commit *doltdb.PendingCommit, // optional
 	workingSet *doltdb.WorkingSet, // must be provided
 	hash hash.Hash, // hash of the current working set to be written
@@ -158,10 +183,12 @@ type transactionWrite func(ctx *sql.Context,
 
 // doltCommit is a transactionWrite function that updates the working set and commits a pending commit atomically
 func doltCommit(ctx *sql.Context,
-	tx *DoltTransaction,
-	commit *doltdb.PendingCommit,
-	workingSet *doltdb.WorkingSet,
-	currHash hash.Hash,
+		tx *DoltTransaction, // the transaction being written
+		doltDb *doltdb.DoltDB, // the database to write to
+		startState *doltdb.WorkingSet, // the starting working set
+		commit *doltdb.PendingCommit, // optional
+		workingSet *doltdb.WorkingSet, // must be provided
+		currHash hash.Hash, // hash of the current working set to be written
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	pending := *commit
 
@@ -210,7 +237,7 @@ func doltCommit(ctx *sql.Context,
 				curRootVal,
 				pending.Roots.Head,
 				curHead,
-				tx.startState,
+				startState,
 				tx.mergeEditOpts,
 				merge.MergeOpts{})
 			if err != nil {
@@ -227,32 +254,50 @@ func doltCommit(ctx *sql.Context,
 
 	workingSet = workingSet.ClearMerge()
 
-	newCommit, err := tx.dbData.Ddb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, &pending, workingSet, currHash, tx.getWorkingSetMeta(ctx))
+	newCommit, err := doltDb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, &pending, workingSet, currHash, tx.getWorkingSetMeta(ctx))
 	return workingSet, newCommit, err
 }
 
 // txCommit is a transactionWrite function that updates the working set
 func txCommit(ctx *sql.Context,
-	tx *DoltTransaction,
-	_ *doltdb.PendingCommit,
-	workingSet *doltdb.WorkingSet,
-	hash hash.Hash,
+		tx *DoltTransaction, // the transaction being written
+		doltDb *doltdb.DoltDB, // the database to write to
+		_ *doltdb.WorkingSet, // the starting working set
+		_ *doltdb.PendingCommit, // optional
+		workingSet *doltdb.WorkingSet, // must be provided
+		hash hash.Hash, // hash of the current working set to be written
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-	return workingSet, nil, tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx))
+	return workingSet, nil, doltDb.UpdateWorkingSet(ctx, workingSet.Ref(), workingSet, hash, tx.getWorkingSetMeta(ctx))
 }
 
 // DoltCommit commits the working set and creates a new DoltCommit as specified, in one atomic write
-func (tx *DoltTransaction) DoltCommit(ctx *sql.Context, workingSet *doltdb.WorkingSet, commit *doltdb.PendingCommit) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-	return tx.doCommit(ctx, workingSet, commit, doltCommit)
+func (tx *DoltTransaction) DoltCommit(
+		ctx *sql.Context,
+		workingSet *doltdb.WorkingSet,
+		commit *doltdb.PendingCommit,
+) (*doltdb.WorkingSet, *doltdb.Commit, error) {
+	return tx.doCommit(ctx, workingSet, commit, doltCommit, "")
 }
 
 // doCommit commits this transaction with the write function provided. It takes the same params as DoltCommit
 func (tx *DoltTransaction) doCommit(
-	ctx *sql.Context,
-	workingSet *doltdb.WorkingSet,
-	commit *doltdb.PendingCommit,
-	writeFn transactionWrite,
+		ctx *sql.Context,
+		workingSet *doltdb.WorkingSet,
+		commit *doltdb.PendingCommit,
+		writeFn transactionWrite,
+		dbName string,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
+
+	// Load the start state for this working set from the noms root at tx start
+	startPoint, ok := tx.dbStartPoints[strings.ToLower(dbName)]
+	if !ok {
+		return nil, nil, fmt.Errorf("database %s unknown to transaction, this is a bug", dbName)
+	}
+	
+	startState, err := startPoint.db.ResolveWorkingSetAtRoot(ctx, workingSet.Ref(), startPoint.rootHash)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	for i := 0; i < maxTxCommitRetries; i++ {
 		updatedWs, newCommit, err := func() (*doltdb.WorkingSet, *doltdb.Commit, error) {
@@ -277,7 +322,7 @@ func (tx *DoltTransaction) doCommit(
 				return nil, nil, err
 			}
 
-			if newWorkingSet || workingAndStagedEqual(existingWs, tx.startState) {
+			if newWorkingSet || workingAndStagedEqual(existingWs, startState) {
 				// ff merge
 				err = tx.validateWorkingSetForCommit(ctx, workingSet, isFfMerge)
 				if err != nil {
@@ -285,7 +330,7 @@ func (tx *DoltTransaction) doCommit(
 				}
 
 				var newCommit *doltdb.Commit
-				workingSet, newCommit, err = writeFn(ctx, tx, commit, workingSet, existingWSHash)
+				workingSet, newCommit, err = writeFn(ctx, tx, startPoint.db, startState, commit, workingSet, existingWSHash)
 				if err == datas.ErrOptimisticLockFailed {
 					// this is effectively a `continue` in the loop
 					return nil, nil, nil
@@ -298,7 +343,7 @@ func (tx *DoltTransaction) doCommit(
 
 			// otherwise (not a ff), merge the working sets together
 			start := time.Now()
-			mergedWorkingSet, err := tx.mergeRoots(ctx, existingWs, workingSet)
+			mergedWorkingSet, err := tx.mergeRoots(ctx, startState, existingWs, workingSet)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -310,7 +355,7 @@ func (tx *DoltTransaction) doCommit(
 			}
 
 			var newCommit *doltdb.Commit
-			mergedWorkingSet, newCommit, err = writeFn(ctx, tx, commit, mergedWorkingSet, existingWSHash)
+			mergedWorkingSet, newCommit, err = writeFn(ctx, tx, startPoint.db, startState, commit, mergedWorkingSet, existingWSHash)
 			if err == datas.ErrOptimisticLockFailed {
 				// this is effectively a `continue` in the loop
 				return nil, nil, nil
@@ -337,6 +382,7 @@ func (tx *DoltTransaction) doCommit(
 // Currently merges working and staged roots as necessary. HEAD root is only handled by the DoltCommit function.
 func (tx *DoltTransaction) mergeRoots(
 	ctx *sql.Context,
+	startState *doltdb.WorkingSet,
 	existingWorkingSet *doltdb.WorkingSet,
 	workingSet *doltdb.WorkingSet,
 ) (*doltdb.WorkingSet, error) {
@@ -346,9 +392,9 @@ func (tx *DoltTransaction) mergeRoots(
 			ctx,
 			existingWorkingSet.WorkingRoot(),
 			workingSet.WorkingRoot(),
-			tx.startState.WorkingRoot(),
+			startState.WorkingRoot(),
 			workingSet,
-			tx.startState,
+			startState,
 			tx.mergeEditOpts,
 			merge.MergeOpts{})
 		if err != nil {
@@ -362,9 +408,9 @@ func (tx *DoltTransaction) mergeRoots(
 			ctx,
 			existingWorkingSet.StagedRoot(),
 			workingSet.StagedRoot(),
-			tx.startState.StagedRoot(),
+			startState.StagedRoot(),
 			workingSet,
-			tx.startState,
+			startState,
 			tx.mergeEditOpts,
 			merge.MergeOpts{})
 		if err != nil {
