@@ -120,22 +120,18 @@ func NewMultiHeadTransaction(
 	
 	startPoints := make(map[string]dbRoot)
 	for _, db := range dbs {
-		ddb := db.DbData().Ddb
-		// TODO: this nil check is only here to accommodate user-space databases, find a better interface to exclude them
-		if ddb != nil {
-			nomsRoot, err := ddb.NomsRoot(ctx)
-			if err != nil {
-				return nil, err
-			}
+		nomsRoot, err := db.DbData().Ddb.NomsRoot(ctx)
+		if err != nil {
+			return nil, err
+		}
 
-			startPoints[strings.ToLower(db.Name())] = dbRoot{
-				dbName:   db.Name(),
-				rootHash: nomsRoot,
-				db:       ddb,
-			}
+		startPoints[strings.ToLower(db.Name())] = dbRoot{
+			dbName:   db.Name(),
+			rootHash: nomsRoot,
+			db:       db.DbData().Ddb,
 		}
 	}
-	
+
 	return &DoltTransaction{
 		dbStartPoints:   startPoints,
 		tCharacteristic: tCharacteristic,

@@ -22,7 +22,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-
+	
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	goerrors "gopkg.in/src-d/go-errors.v1"
@@ -137,29 +137,30 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 // lookupDbState is the private version of LookupDbState, returning a struct that has more information available than
 // the interface returned by the public method.
 func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchState, bool, error) {
-	// TODO: change to require a db, not a name?
-	
+	// TODO: change to require a db, not a name so that the below doesn't need to do a string split
 	dbName = strings.ToLower(dbName)
+	
+	parts := strings.SplitN(dbName, DbRevisionDelimiter, 2)
+	baseName := parts[0]
+
 	d.mu.Lock()
-	dbState, ok := d.dbStates[dbName]
+	dbState, ok := d.dbStates[baseName]
 	d.mu.Unlock()
 
-	if !ok {
-		return nil, false, nil
-	}
-
-	_, rev := SplitRevisionDbName(dbState.db)
-	branchState, ok := dbState.heads[strings.ToLower(rev)]
-	
 	if ok {
-		if dbState.Err != nil {
-			return nil, false, dbState.Err
-		}
-		
-		// TODO: fill in
-		return branchState, ok, nil
-	}
+		_, rev := SplitRevisionDbName(dbState.db)
+		branchState, ok := dbState.heads[strings.ToLower(rev)]
 
+		if ok {
+			if dbState.Err != nil {
+				return nil, false, dbState.Err
+			}
+
+			return branchState, ok, nil
+		}
+	}
+	
+	// no state for this db / branch combination yet, look it up from the provider
 	database, ok, err := d.provider.SessionDatabase(ctx, dbName)
 	if err != nil {
 		return nil, false, err
@@ -181,9 +182,8 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 		return nil, false, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	branchState = dbState.heads[strings.ToLower(rev)]
-
-	return branchState, true, nil
+	_, rev := SplitRevisionDbName(database)
+	return dbState.heads[strings.ToLower(rev)], true, nil
 }
 
 // TODO NEXT: the lookupdbstate method is the key abstraction point. It proxies all non-revisoined DBs to a revisioned 
@@ -275,8 +275,9 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	d.clearRevisionDbState()
 
 	// Take a snapshot of the current noms root for every database under management
-	nomsRoots := make(map[string]hash.Hash)
-	for _, db := range d.provider.DoltDatabases() {
+	doltDatabases := d.provider.DoltDatabases()
+	txDbs := make([]SqlDatabase, 0, len(doltDatabases))
+	for _, db := range doltDatabases {
 		// TODO: this nil check is only necessary to support UserSpaceDatabase, come up with a better set of interfaces 
 		//  to capture these capabilities
 		ddb := db.DbData().Ddb
@@ -300,15 +301,11 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 				}
 			}
 
-			nomsRoot, err := ddb.NomsRoot(ctx)
-			if err != nil {
-				return nil, err
-			}
-			nomsRoots[strings.ToLower(db.Name())] = nomsRoot
+			txDbs = append(txDbs, db)
 		}
 	}
 	
-	return NewMultiHeadTransaction(nomsRoots, tCharacteristic), nil
+	return NewMultiHeadTransaction(ctx, txDbs, tCharacteristic)
 }
 
 // clearRevisionDbState clears all revision DB states for this session. This is necessary on transaction start,
@@ -431,21 +428,12 @@ func (d *DoltSession) isDirty(ctx *sql.Context, dbName string) (bool, error) {
 // CommitWorkingSet commits the working set for the transaction given, without creating a new dolt commit.
 // Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
 func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error {
-	dirty, err := d.isDirty(ctx, dbName)
-	if err != nil {
-		return err
-	}
-
-	if !dirty {
-		return nil
-	}
-
 	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 		ws, err := dtx.Commit(ctx, workingSet, dbName)
 		return ws, nil, err
 	}
 
-	_, err = d.doCommit(ctx, dbName, tx, commitFunc)
+	_, err := d.doCommit(ctx, dbName, tx, commitFunc)
 	return err
 }
 
