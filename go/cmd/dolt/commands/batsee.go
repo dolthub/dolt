@@ -30,18 +30,17 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 var batseeDoc = cli.CommandDocumentationContent{
 	ShortDesc: `Run the Bats Tests concurrently`,
-	LongDesc:  `From within the integration-test/bats directory, run the bats tests concurrently. Output for each test is written to a file in the batsee_output directory.`,
+	LongDesc: `From within the integration-test/bats directory, run the bats tests concurrently.
+Output for each test is written to a file in the batsee_output directory.
+Example:  batsee -t 42 --max-time 1h15m -r 2 --only types.bats,foreign-keys.bats`,
 	Synopsis: []string{
-		`-t 42`,
-		`--skip-slow --max-time 1h15m`,
-		`--retries 2 --only types.bats,foreign-keys.bats`,
+		`[-t {{.LessThan}}threads{{.GreaterThan}}] [--skip-slow] [--max-time {{.LessThan}}time{{.GreaterThan}}] [--retries {{.LessThan}}retries{{.GreaterThan}}] [--only test1,test2,...]`,
 	},
 }
 
@@ -67,13 +66,21 @@ func (b BatseeCmd) Hidden() bool {
 	return true
 }
 
+const (
+	threadsF  = "threads"
+	skipSlowF = "skip-slow"
+	maxTimeF  = "max-time"
+	onlyF     = "only"
+	retriesF  = "retries"
+)
+
 func (b BatseeCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(b.Name(), 0)
-	ap.SupportsUint("threads", "t", "threads", "Number of tests to execute in parallel. Defaults to 12")
-	ap.SupportsFlag("skip-slow", "s", "Skip slow tests. This is a static list of test we know are slow, may grow stale.")
-	ap.SupportsString("max-time", "", "", "Maximum time to run tests. Defaults to 30m")
-	ap.SupportsString("only", "", "", "Only run the specified test, or tests (comma separated)")
-	ap.SupportsInt("retries", "r", "retries", "Number of times to retry a failed test. Defaults to 1")
+	ap.SupportsUint(threadsF, "t", "threads", "Number of tests to execute in parallel. Defaults to 12")
+	ap.SupportsFlag(skipSlowF, "s", "Skip slow tests. This is a static list of test we know are slow, may grow stale.")
+	ap.SupportsString(maxTimeF, "", "duration", "Maximum time to run tests. Defaults to 30m")
+	ap.SupportsString(onlyF, "", "", "Only run the specified test, or tests (comma separated)")
+	ap.SupportsInt(retriesF, "r", "retries", "Number of times to retry a failed test. Defaults to 1")
 	return ap
 }
 
@@ -105,24 +112,15 @@ var slowCommands = map[string]bool{
 
 func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := b.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, batseeDoc, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, batseeDoc, ap))
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	apr, err := ap.Parse(args)
-	if err != nil {
-		if err != argparser.ErrHelp {
-			verr := errhand.NewDError("", "", err, true)
-			return HandleVErrAndExitCode(verr, usage)
-		}
-		help()
-		return 0
-	}
-
-	threads, hasThreads := apr.GetUint("threads")
+	threads, hasThreads := apr.GetUint(threadsF)
 	if !hasThreads {
 		threads = 12
 	}
 
-	durationInput, hasDuration := apr.GetValue("max-time")
+	durationInput, hasDuration := apr.GetValue(maxTimeF)
 	if !hasDuration {
 		durationInput = "30m"
 	}
@@ -132,23 +130,18 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 1
 	}
 
-	skipSlow := false
-	_, hasVal := apr.GetValue("skip-slow")
-	if hasVal {
-		skipSlow = true
-	}
+	skipSlow := apr.Contains(skipSlowF)
 
 	limitTo := map[string]bool{}
-	runOnlyStr, hasRunOnly := apr.GetValue("only")
+	runOnlyStr, hasRunOnly := apr.GetValue(onlyF)
 	if hasRunOnly {
-		// split runOnlyStr on commas
 		for _, test := range strings.Split(runOnlyStr, ",") {
 			test = strings.TrimSpace(test)
 			limitTo[test] = true
 		}
 	}
 
-	retries, hasRetries := apr.GetInt("retries")
+	retries, hasRetries := apr.GetInt(retriesF)
 	if !hasRetries {
 		retries = 1
 	}
@@ -241,7 +234,8 @@ func comprehensiveWait(ctx context.Context, wg *sync.WaitGroup) {
 }
 
 func printResults(results <-chan batsResult) int {
-
+	// Note that color control characters batch formatting, so we build these status strings all to be the same length
+	// so they will produce the right results when included below.
 	passStr := color.GreenString(fmt.Sprintf("%20s", "PASSED"))
 	failStr := color.RedString(fmt.Sprintf("%20s", "FAILED"))
 	skippedStr := color.YellowString(fmt.Sprintf("%20s", "SKIPPED"))
