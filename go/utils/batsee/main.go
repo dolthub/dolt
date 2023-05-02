@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package commands
+package main
 
 import (
 	"context"
@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -30,7 +31,6 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -44,28 +44,6 @@ Example:  batsee -t 42 --max-time 1h15m -r 2 --only types.bats,foreign-keys.bats
 	},
 }
 
-type BatseeCmd struct {
-	messages []string
-}
-
-var _ cli.Command = &BatseeCmd{}
-var _ cli.RepoNotRequiredCommand = &BatseeCmd{}
-
-func (b BatseeCmd) Name() string {
-	return "batsee"
-}
-
-func (b BatseeCmd) Description() string {
-	return batseeDoc.ShortDesc
-}
-func (b BatseeCmd) Docs() *cli.CommandDocumentation {
-	return cli.NewCommandDocumentation(batseeDoc, b.ArgParser())
-}
-
-func (b BatseeCmd) Hidden() bool {
-	return true
-}
-
 const (
 	threadsF  = "threads"
 	skipSlowF = "skip-slow"
@@ -74,18 +52,14 @@ const (
 	retriesF  = "retries"
 )
 
-func (b BatseeCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(b.Name(), 0)
+func buildArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithMaxArgs("batsee", 0)
 	ap.SupportsUint(threadsF, "t", "threads", "Number of tests to execute in parallel. Defaults to 12")
 	ap.SupportsFlag(skipSlowF, "s", "Skip slow tests. This is a static list of test we know are slow, may grow stale.")
 	ap.SupportsString(maxTimeF, "", "duration", "Maximum time to run tests. Defaults to 30m")
 	ap.SupportsString(onlyF, "", "", "Only run the specified test, or tests (comma separated)")
 	ap.SupportsInt(retriesF, "r", "retries", "Number of times to retry a failed test. Defaults to 1")
 	return ap
-}
-
-func (b BatseeCmd) RequiresRepo() bool {
-	return false
 }
 
 type batsResult struct {
@@ -110,9 +84,10 @@ var slowCommands = map[string]bool{
 	"remotes.bats":               true,
 }
 
-func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	ap := b.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, batseeDoc, ap))
+func main() {
+	ap := buildArgParser()
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("batsee", batseeDoc, ap))
+	args := os.Args[1:]
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	threads, hasThreads := apr.GetUint(threadsF)
@@ -127,7 +102,7 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	duration, err := time.ParseDuration(durationInput)
 	if err != nil {
 		cli.Println("Error parsing duration:", err)
-		return 1
+		os.Exit(1)
 	}
 
 	skipSlow := apr.Contains(skipSlowF)
@@ -151,19 +126,19 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	cwd, err := os.Getwd()
 	if err != nil {
 		cli.Println("Error getting current working directory:", err)
-		return 1
+		os.Exit(1)
 	}
 	// This is pretty restrictive. Loosen this up. TODO
 	if filepath.Base(cwd) != "bats" || filepath.Base(filepath.Dir(cwd)) != "integration-tests" {
 		cli.Println("Current working directory is not integration-tests/bats")
-		return 1
+		os.Exit(1)
 	}
 
 	// Get a list of all files in this directory which end in ".bats"
 	files, err := ioutil.ReadDir(cwd)
 	if err != nil {
 		cli.Println("Error reading directory:", err)
-		return 1
+		os.Exit(1)
 	}
 
 	workQueue := []string{}
@@ -185,6 +160,9 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	jobs := make(chan string, len(workQueue))
 	results := make(chan batsResult, len(workQueue))
 
+	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	ctx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
 
@@ -209,7 +187,7 @@ func (b BatseeCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	exitStatus := printResults(results)
 	cli.Println(fmt.Sprintf("BATS Executor Exemplar completed in: %s with a status of %d", durationStr(time.Since(startTime)), exitStatus))
-	return exitStatus
+	os.Exit(exitStatus)
 }
 
 func comprehensiveWait(ctx context.Context, wg *sync.WaitGroup) {
