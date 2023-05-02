@@ -75,7 +75,6 @@ func (d DisabledTransaction) IsReadOnly() bool {
 type DoltTransaction struct {
 	dbStartPoints   map[string]dbRoot
 	startState      *doltdb.WorkingSet
-	workingSetRef   ref.WorkingSetRef
 	dbData          env.DbData
 	savepoints      []savepoint
 	mergeEditOpts   editor.Options
@@ -105,7 +104,6 @@ func NewDoltTransaction(
 ) *DoltTransaction {
 	return &DoltTransaction{
 		startState:      startState,
-		workingSetRef:   workingSet,
 		dbData:          dbData,
 		mergeEditOpts:   mergeEditOpts,
 		tCharacteristic: tCharacteristic,
@@ -250,7 +248,7 @@ func doltCommit(ctx *sql.Context,
 
 	workingSet = workingSet.ClearMerge()
 
-	newCommit, err := doltDb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, &pending, workingSet, currHash, tx.getWorkingSetMeta(ctx))
+	newCommit, err := doltDb.CommitWithWorkingSet(ctx, headRef, workingSet.Ref(), &pending, workingSet, currHash, tx.getWorkingSetMeta(ctx))
 	return workingSet, newCommit, err
 }
 
@@ -303,11 +301,11 @@ func (tx *DoltTransaction) doCommit(
 
 			newWorkingSet := false
 
-			existingWs, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, tx.workingSetRef)
+			existingWs, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, workingSet.Ref())
 			if err == doltdb.ErrWorkingSetNotFound {
 				// This is to handle the case where an existing DB pre working sets is committing to this HEAD for the
 				// first time. Can be removed and called an error post 1.0
-				existingWs = doltdb.EmptyWorkingSet(tx.workingSetRef)
+				existingWs = doltdb.EmptyWorkingSet(workingSet.Ref())
 				newWorkingSet = true
 			} else if err != nil {
 				return nil, nil, err
