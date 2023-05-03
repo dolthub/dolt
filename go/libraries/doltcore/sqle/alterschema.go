@@ -69,10 +69,6 @@ func addColumnToTable(
 		return nil, err
 	}
 
-	if schema.IsKeyless(oldSchema) {
-		return nil, ErrKeylessAltTbl
-	}
-
 	if err := validateNewColumn(ctx, root, tbl, tblName, tag, newColName, typeInfo); err != nil {
 		return nil, err
 	}
@@ -328,8 +324,6 @@ func modifyPkOrdinals(oldSch, newSch schema.Schema) ([]int, error) {
 
 	return newPkOrdinals, nil
 }
-
-var ErrKeylessAltTbl = errors.New("schema alterations not supported for keyless tables")
 
 // backupFkcIndexesForKeyDrop finds backup indexes to cover foreign key references during a primary
 // key drop. If multiple indexes are valid, we sort by unique and select the first.
