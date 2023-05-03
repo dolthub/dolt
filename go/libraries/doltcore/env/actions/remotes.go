@@ -455,6 +455,35 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB,
 	return nil
 }
 
+// SyncRoots is going to copy the root hash of the database from srcDb to destDb.
+// We can do this |Clone| if (1) destDb is empty, (2) destDb and srcDb are both
+// |TableFileStore|s, and (3) srcDb does *not* have a journal file. The most
+// common scenario where this occurs is when we are restoring a backup.
+//
+// The journal's interaction with TableFileStore is not great currently ---
+// when accessing a journal file through TableFileStore, the Reader() should in
+// reality return something which is going to result in reading an actual table
+// file. For now, we avoid the |Clone| path when the journal file is present.
+func canSyncRootsWithClone(ctx context.Context, srcDb, destDb *doltdb.DoltDB, destDbRoot hash.Hash) (bool, error) {
+	if !destDbRoot.IsEmpty() {
+		return false, nil
+	}
+	if !srcDb.IsTableFileStore() {
+		return false, nil
+	}
+	if !destDb.IsTableFileStore() {
+		return false, nil
+	}
+	srcHasJournal, err := srcDb.TableFileStoreHasJournal(ctx)
+	if err != nil {
+		return false, err
+	}
+	if srcHasJournal {
+		return false, nil
+	}
+	return true, nil
+}
+
 // SyncRoots copies the entire chunkstore from srcDb to destDb and rewrites the remote manifest. Used to
 // streamline database backup and restores.
 // TODO: this should read/write a backup lock file specific to the client who created the backup
@@ -484,10 +513,12 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 		}
 	}()
 
-	if destRoot.IsEmpty() {
-		// In this case, we can clone into the dest root, if both src and destination support it.
-		// We will try to translate the stats from the table file events to the statsCh.
+	canClone, err := canSyncRootsWithClone(ctx, srcDb, destDb, destRoot)
+	if err != nil {
+		return err
+	}
 
+	if canClone {
 		tfCh := make(chan pull.TableFileEvent)
 		go func() {
 			start := time.Now()
