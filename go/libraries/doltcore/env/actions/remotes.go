@@ -501,31 +501,31 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 					if tfe.EventType == pull.DownloadStats {
 						stats[tfe.TableFiles[0]] = tfe.Stats[0]
 
-						totalsentbytes := uint64(0)
-						totalbytes := uint64(0)
+						totalSentBytes := uint64(0)
+						totalBytes := uint64(0)
 
 						for _, v := range stats {
 							if v.Percent > 0.001 {
-								totalsentbytes += v.Read
-								totalbytes += uint64(float64(v.Read) / v.Percent)
+								totalSentBytes += v.Read
+								totalBytes += uint64(float64(v.Read) / v.Percent)
 							}
 						}
 
 						// We fake some of these values.
-						toemit := pull.Stats{
-							FinishedSendBytes: totalsentbytes,
-							BufferedSendBytes: totalsentbytes,
-							SendBytesPerSec:   float64(totalsentbytes) / (time.Since(start).Seconds()),
+						toEmit := pull.Stats{
+							FinishedSendBytes: totalSentBytes,
+							BufferedSendBytes: totalSentBytes,
+							SendBytesPerSec:   float64(totalSentBytes) / (time.Since(start).Seconds()),
 
 							// estimate the number of chunks based on an average chunk size of 4096.
-							TotalSourceChunks:   totalbytes / 4096,
-							FetchedSourceChunks: totalsentbytes / 4096,
+							TotalSourceChunks:   totalBytes / 4096,
+							FetchedSourceChunks: totalSentBytes / 4096,
 
-							FetchedSourceBytes:       totalsentbytes,
-							FetchedSourceBytesPerSec: float64(totalsentbytes) / (time.Since(start).Seconds()),
+							FetchedSourceBytes:       totalSentBytes,
+							FetchedSourceBytesPerSec: float64(totalSentBytes) / (time.Since(start).Seconds()),
 						}
 						select {
-						case statsCh <- toemit:
+						case statsCh <- toEmit:
 
 							// TODO: This looks wrong without a ctx.Done() select, but Puller does not conditionally send here...
 
