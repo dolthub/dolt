@@ -119,12 +119,27 @@ func compilePattern(pattern string) (*regexp.Regexp, error) {
 // match pattern B, but not vice versa.)
 func getMoreSpecificPatterns(lessSpecific string) (*regexp.Regexp, error) {
 	pattern := "^" + regexp.QuoteMeta(lessSpecific) + "$"
-	// A ? can expand to any character except for a *, since that also has special meaning in patterns.
+	// A ? can expand to any character except for a * or %, since that also has special meaning in patterns.
 
 	pattern = strings.Replace(pattern, "\\?", "[^\\*%]", -1)
 	pattern = strings.Replace(pattern, "\\*", ".*", -1)
 	pattern = strings.Replace(pattern, "%", ".*", -1)
 	return regexp.Compile(pattern)
+}
+
+// normalizePattern generates an equivalent pattern, such that all equivalent patterns have the same normalized pattern.
+// It accomplishes this by replacing all * with %, and removing multiple adjacent %.
+// This will get a lot harder to implement once we support escaped characters in patterns.
+func normalizePattern(pattern string) string {
+	pattern = strings.Replace(pattern, "*", "%", -1)
+	for {
+		newPattern := strings.Replace(pattern, "%%", "%", -1)
+		if newPattern == pattern {
+			break
+		}
+		pattern = newPattern
+	}
+	return pattern
 }
 
 func resolveConflictingPatterns(trueMatches, falseMatches []string, tableName string) (IgnoreResult, error) {
@@ -136,6 +151,9 @@ func resolveConflictingPatterns(trueMatches, falseMatches []string, tableName st
 			return ErrorOccurred, err
 		}
 		for _, falseMatch := range falseMatches {
+			if normalizePattern(trueMatch) == normalizePattern(falseMatch) {
+				return IgnorePatternConflict, DoltIgnoreConflictError{Table: tableName, TruePatterns: []string{trueMatch}, FalsePatterns: []string{falseMatch}}
+			}
 			if trueMatchRegExp.MatchString(falseMatch) {
 				trueMatchesToRemove[trueMatch] = struct{}{}
 			}
