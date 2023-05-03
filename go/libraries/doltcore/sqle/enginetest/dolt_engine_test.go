@@ -115,39 +115,48 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "parallel column updates (repro issue #4547)",
+			Name: "index by primary key",
 			SetUpScript: []string{
-				"SET dolt_allow_commit_conflicts = on;",
-				"create table t (rowId int not null, col1 varchar(255), col2 varchar(255), keyCol varchar(60), dataA varchar(255), dataB varchar(255), PRIMARY KEY (rowId), UNIQUE KEY uniqKey (col1, col2, keyCol));",
-				"insert into t (rowId, col1, col2, keyCol, dataA, dataB) values (1, '1', '2', 'key-a', 'test1', 'test2')",
-				"CALL DOLT_COMMIT('-Am', 'new table');",
-
-				"CALL DOLT_CHECKOUT('-b', 'other');",
-				"update t set dataA = 'other'",
-				"CALL DOLT_COMMIT('-am', 'update data other');",
-
-				"CALL DOLT_CHECKOUT('main');",
-				"update t set dataB = 'main'",
-				"CALL DOLT_COMMIT('-am', 'update on main');",
+				"create table t1 (pk int primary key, c int);",
+				"call dolt_add('.')",
+				"insert into t1 values (1,2), (3,4)",
+				"set @Commit1 = '';",
+				"call dolt_commit_hash_out(@Commit1, '-am', 'initial table');",
+				"insert into t1 values (5,6), (7,8)",
+				"set @Commit2 = '';",
+				"call dolt_commit_hash_out(@Commit2, '-am', 'two more rows');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
+				//{
+				//	Query: "explain select pk, c from dolt_history_t1 order by pk",
+				//	Expected: []sql.Row{
+				//	},
+				//},
 				{
-					Query:    "CALL DOLT_MERGE('other')",
-					Expected: []sql.Row{{"child", uint64(1)}},
-				},
-				{
-					Query:    "SELECT * from dolt_constraint_violations_t",
-					Expected: []sql.Row{},
-				},
-				{
-					Query: "SELECT * from t",
+					Query: "select pk, c from dolt_history_t1 order by pk",
 					Expected: []sql.Row{
-						{1, "1", "2", "key-a", "other", "main"},
+						{1, 2},
+						{1, 2},
+						{3, 4},
+						{3, 4},
+						{5, 6},
+						{7, 8},
 					},
 				},
+				//{
+				//	Query: "select pk, c from dolt_history_t1 order by pk, c",
+				//	Expected: []sql.Row{
+				//		{1, 2},
+				//		{1, 2},
+				//		{3, 4},
+				//		{3, 4},
+				//		{5, 6},
+				//		{7, 8},
+				//	},
+				//},
 			},
 		},
 	}
@@ -156,6 +165,49 @@ func TestSingleScript(t *testing.T) {
 	for _, test := range scripts {
 		enginetest.TestScript(t, harness, test)
 	}
+
+
+	//t.Skip()
+	//var scripts = []queries.ScriptTest{
+	//	{
+	//		Name: "parallel column updates (repro issue #4547)",
+	//		SetUpScript: []string{
+	//			"SET dolt_allow_commit_conflicts = on;",
+	//			"create table t (rowId int not null, col1 varchar(255), col2 varchar(255), keyCol varchar(60), dataA varchar(255), dataB varchar(255), PRIMARY KEY (rowId), UNIQUE KEY uniqKey (col1, col2, keyCol));",
+	//			"insert into t (rowId, col1, col2, keyCol, dataA, dataB) values (1, '1', '2', 'key-a', 'test1', 'test2')",
+	//			"CALL DOLT_COMMIT('-Am', 'new table');",
+	//
+	//			"CALL DOLT_CHECKOUT('-b', 'other');",
+	//			"update t set dataA = 'other'",
+	//			"CALL DOLT_COMMIT('-am', 'update data other');",
+	//
+	//			"CALL DOLT_CHECKOUT('main');",
+	//			"update t set dataB = 'main'",
+	//			"CALL DOLT_COMMIT('-am', 'update on main');",
+	//		},
+	//		Assertions: []queries.ScriptTestAssertion{
+	//			{
+	//				Query:    "CALL DOLT_MERGE('other')",
+	//				Expected: []sql.Row{{"child", uint64(1)}},
+	//			},
+	//			{
+	//				Query:    "SELECT * from dolt_constraint_violations_t",
+	//				Expected: []sql.Row{},
+	//			},
+	//			{
+	//				Query: "SELECT * from t",
+	//				Expected: []sql.Row{
+	//					{1, "1", "2", "key-a", "other", "main"},
+	//				},
+	//			},
+	//		},
+	//	},
+	//}
+	//
+	//harness := newDoltHarness(t)
+	//for _, test := range scripts {
+	//	enginetest.TestScript(t, harness, test)
+	//}
 }
 
 func TestSingleQueryPrepared(t *testing.T) {
