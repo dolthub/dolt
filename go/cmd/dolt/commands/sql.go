@@ -291,7 +291,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	se, sqlCtx, err := newEngine(ctx, format, cfgDirPath, privsFp, branchControlFilePath, username, mrEnv)
+	se, sqlCtx, err := newEngine(ctx, cfgDirPath, privsFp, branchControlFilePath, username, mrEnv)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -300,13 +300,13 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		if apr.Contains(saveFlag) {
-			return execSaveQuery(sqlCtx, dEnv, se, apr, query, usage)
+			return execSaveQuery(sqlCtx, dEnv, se, apr, query, format, usage)
 		}
-		return queryMode(sqlCtx, se, apr, query, usage)
+		return queryMode(sqlCtx, se, apr, query, format, usage)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		return executeSavedQuery(sqlCtx, se, dEnv, savedQueryName, usage)
+		return executeSavedQuery(sqlCtx, se, dEnv, savedQueryName, format, usage)
 	} else if apr.Contains(listSavedFlag) {
-		return listSavedQueries(sqlCtx, se, dEnv, usage)
+		return listSavedQueries(sqlCtx, se, dEnv, format, usage)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		isTty := false
@@ -341,17 +341,17 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if isTty {
-			err := execShell(sqlCtx, se)
+			err := execShell(sqlCtx, se, format)
 			if err != nil {
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 			}
 		} else if runInBatchMode {
-			verr = execBatch(sqlCtx, se, input, continueOnError)
+			verr = execBatch(sqlCtx, se, input, continueOnError, format)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else {
-			err := execMultiStatements(sqlCtx, se, input, continueOnError)
+			err := execMultiStatements(sqlCtx, se, input, continueOnError, format)
 			if err != nil {
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 			}
@@ -363,7 +363,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 func newEngine(
 	ctx context.Context,
-	format engine.PrintResultFormat,
 	cfgDirPath string,
 	privsFp string,
 	branchControlFilePath string,
@@ -383,7 +382,6 @@ func newEngine(
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
-		format,
 		config,
 	)
 	if err != nil {
@@ -409,7 +407,7 @@ func newEngine(
 	return se, sqlCtx, nil
 }
 
-func listSavedQueries(ctx *sql.Context, se *engine.SqlEngine, dEnv *env.DoltEnv, usage cli.UsagePrinter) int {
+func listSavedQueries(ctx *sql.Context, se *engine.SqlEngine, dEnv *env.DoltEnv, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
 	if !dEnv.Valid() {
 		return HandleVErrAndExitCode(errhand.BuildDError("error: --%s must be used in a dolt database directory.", listSavedFlag).Build(), usage)
 	}
@@ -431,10 +429,10 @@ func listSavedQueries(ctx *sql.Context, se *engine.SqlEngine, dEnv *env.DoltEnv,
 	}
 
 	query := "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
-	return HandleVErrAndExitCode(execQuery(ctx, se, query), usage)
+	return HandleVErrAndExitCode(execQuery(ctx, se, query, format), usage)
 }
 
-func executeSavedQuery(ctx *sql.Context, se *engine.SqlEngine, dEnv *env.DoltEnv, savedQueryName string, usage cli.UsagePrinter) int {
+func executeSavedQuery(ctx *sql.Context, se *engine.SqlEngine, dEnv *env.DoltEnv, savedQueryName string, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
 	if !dEnv.Valid() {
 		return HandleVErrAndExitCode(errhand.BuildDError("error: --%s must be used in a dolt database directory.", executeFlag).Build(), usage)
 	}
@@ -451,7 +449,7 @@ func executeSavedQuery(ctx *sql.Context, se *engine.SqlEngine, dEnv *env.DoltEnv
 	}
 
 	cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-	return HandleVErrAndExitCode(execQuery(ctx, se, sq.Query), usage)
+	return HandleVErrAndExitCode(execQuery(ctx, se, sq.Query, format), usage)
 }
 
 func queryMode(
@@ -459,6 +457,7 @@ func queryMode(
 	se *engine.SqlEngine,
 	apr *argparser.ArgParseResults,
 	query string,
+	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
 ) int {
 
@@ -470,13 +469,13 @@ func queryMode(
 
 	if batchMode {
 		batchInput := strings.NewReader(query)
-		verr := execBatch(ctx, se, batchInput, continueOnError)
+		verr := execBatch(ctx, se, batchInput, continueOnError, format)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
 	} else {
 		input := strings.NewReader(query)
-		err := execMultiStatements(ctx, se, input, continueOnError)
+		err := execMultiStatements(ctx, se, input, continueOnError, format)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -485,14 +484,14 @@ func queryMode(
 	return 0
 }
 
-func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, se *engine.SqlEngine, apr *argparser.ArgParseResults, query string, usage cli.UsagePrinter) int {
+func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, se *engine.SqlEngine, apr *argparser.ArgParseResults, query string, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
 	if !dEnv.Valid() {
 		return HandleVErrAndExitCode(errhand.BuildDError("error: --%s must be used in a dolt database directory.", saveFlag).Build(), usage)
 	}
 
 	saveName := apr.GetValueOrDefault(saveFlag, "")
 
-	verr := execQuery(ctx, se, query)
+	verr := execQuery(ctx, se, query, format)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
@@ -544,10 +543,11 @@ func execBatch(
 	se *engine.SqlEngine,
 	batchInput io.Reader,
 	continueOnErr bool,
+	format engine.PrintResultFormat,
 ) errhand.VerboseError {
 	// In batch mode, we need to set a couple flags on the session to prevent constant flushes to disk
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
-	err := runBatchMode(sqlCtx, se, batchInput, continueOnErr)
+	err := runBatchMode(sqlCtx, se, batchInput, continueOnErr, format)
 	if err != nil {
 		// If we encounter an error, attempt to flush what we have so far to disk before exiting
 		flushErr := flushBatchedEdits(sqlCtx, se)
@@ -565,6 +565,7 @@ func execQuery(
 	sqlCtx *sql.Context,
 	se *engine.SqlEngine,
 	query string,
+	format engine.PrintResultFormat,
 ) errhand.VerboseError {
 
 	sqlSch, rowIter, err := processQuery(sqlCtx, query, se)
@@ -573,7 +574,7 @@ func execQuery(
 	}
 
 	if rowIter != nil {
-		err = engine.PrettyPrintResults(sqlCtx, se.GetResultFormat(), sqlSch, rowIter)
+		err = engine.PrettyPrintResults(sqlCtx, format, sqlSch, rowIter)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -745,7 +746,7 @@ func saveQuery(ctx *sql.Context, root *doltdb.RootValue, query string, name stri
 }
 
 // execMultiStatements runs all the queries in the input reader without any batch optimizations
-func execMultiStatements(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, continueOnErr bool) error {
+func execMultiStatements(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, continueOnErr bool, format engine.PrintResultFormat) error {
 	scanner := NewSqlStatementScanner(input)
 	var query string
 	for scanner.Scan() {
@@ -788,7 +789,7 @@ func execMultiStatements(ctx *sql.Context, se *engine.SqlEngine, input io.Reader
 					fileReadProg.printNewLineIfNeeded()
 				}
 			}
-			err = engine.PrettyPrintResults(ctx, se.GetResultFormat(), sqlSch, rowIter)
+			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter)
 			if err != nil {
 				handleError(scanner.statementStartLine, query, err)
 				return err
@@ -810,7 +811,7 @@ func handleError(stmtStartLine int, query string, err error) {
 }
 
 // runBatchMode processes queries until EOF. The Root of the sqlEngine may be updated.
-func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, continueOnErr bool) error {
+func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, continueOnErr bool, format engine.PrintResultFormat) error {
 	scanner := NewSqlStatementScanner(input)
 
 	var query string
@@ -823,7 +824,7 @@ func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, conti
 		if len(query) == 0 || query == "\n" {
 			continue
 		}
-		if err := processBatchQuery(ctx, query, se); err != nil {
+		if err := processBatchQuery(ctx, query, se, format); err != nil {
 			// TODO: this line number will not be accurate for errors that occur when flushing a batch of inserts (as opposed
 			//  to processing the query)
 			verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
@@ -846,9 +847,9 @@ func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, conti
 	return flushBatchedEdits(ctx, se)
 }
 
-// runShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
+// execShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
 // be updated by any queries which were processed.
-func execShell(sqlCtx *sql.Context, se *engine.SqlEngine) error {
+func execShell(sqlCtx *sql.Context, se *engine.SqlEngine, format engine.PrintResultFormat) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
@@ -908,6 +909,8 @@ func execShell(sqlCtx *sql.Context, se *engine.SqlEngine) error {
 			return
 		}
 
+		closureFormat := format
+
 		// TODO: there's a bug in the readline library when editing multi-line history entries.
 		// Longer term we need to switch to a new readline library, like in this bug:
 		// https://github.com/cockroachdb/cockroach/issues/15460
@@ -920,12 +923,11 @@ func execShell(sqlCtx *sql.Context, se *engine.SqlEngine) error {
 		}
 
 		query = strings.TrimSuffix(query, shell.LineTerminator())
-		resultFormat := se.GetResultFormat()
 
 		// TODO: it would be better to build this into the statement parser rather than special case it here
 		for _, terminator := range verticalOutputLineTerminators {
 			if strings.HasSuffix(query, terminator) {
-				resultFormat = engine.FormatVertical
+				closureFormat = engine.FormatVertical
 			}
 			query = strings.TrimSuffix(query, terminator)
 		}
@@ -948,11 +950,11 @@ func execShell(sqlCtx *sql.Context, se *engine.SqlEngine) error {
 				verr := formatQueryError("", err)
 				shell.Println(verr.Verbose())
 			} else if rowIter != nil {
-				switch resultFormat {
+				switch closureFormat {
 				case engine.FormatTabular, engine.FormatVertical:
-					err = engine.PrettyPrintResultsExtended(sqlCtx, resultFormat, sqlSch, rowIter)
+					err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter)
 				default:
-					err = engine.PrettyPrintResults(sqlCtx, resultFormat, sqlSch, rowIter)
+					err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter)
 				}
 
 				if err != nil {
@@ -1229,7 +1231,7 @@ func flushBatchedEdits(ctx *sql.Context, se *engine.SqlEngine) error {
 }
 
 // Processes a single query in batch mode. The Root of the sqlEngine may or may not be changed.
-func processBatchQuery(ctx *sql.Context, query string, se *engine.SqlEngine) error {
+func processBatchQuery(ctx *sql.Context, query string, se *engine.SqlEngine, format engine.PrintResultFormat) error {
 	sqlStatement, err := sqlparser.Parse(query)
 	if err == sqlparser.ErrEmpty {
 		// silently skip empty statements
@@ -1270,7 +1272,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *engine.SqlEngine) err
 			return err
 		}
 	} else {
-		err := processNonBatchableQuery(ctx, se, query, sqlStatement)
+		err := processNonBatchableQuery(ctx, se, query, sqlStatement, format)
 		if err != nil {
 			return err
 		}
@@ -1283,7 +1285,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *engine.SqlEngine) err
 	return nil
 }
 
-func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query string, sqlStatement sqlparser.Statement) (returnErr error) {
+func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query string, sqlStatement sqlparser.Statement, format engine.PrintResultFormat) (returnErr error) {
 	sqlSch, rowIter, err := processParsedQuery(ctx, query, se, sqlStatement)
 	if err != nil {
 		return err
@@ -1303,7 +1305,7 @@ func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query stri
 			if fileReadProg != nil {
 				fileReadProg.printNewLineIfNeeded()
 			}
-			err = engine.PrettyPrintResults(ctx, se.GetResultFormat(), sqlSch, rowIter)
+			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter)
 			if err != nil {
 				return err
 			}

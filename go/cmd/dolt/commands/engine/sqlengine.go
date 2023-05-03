@@ -48,7 +48,6 @@ type SqlEngine struct {
 	contextFactory contextFactory
 	dsessFactory   sessionFactory
 	engine         *gms.Engine
-	resultFormat   PrintResultFormat
 }
 
 type sessionFactory func(mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (*dsess.DoltSession, error)
@@ -74,7 +73,6 @@ type SqlEngineConfig struct {
 func NewSqlEngine(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
-	format PrintResultFormat,
 	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
 	if ok, _ := mrEnv.IsLocked(); ok {
@@ -189,7 +187,6 @@ func NewSqlEngine(
 		contextFactory: sqlContextFactory(),
 		dsessFactory:   sessionFactory,
 		engine:         engine,
-		resultFormat:   format,
 	}, nil
 }
 
@@ -240,12 +237,6 @@ func (se *SqlEngine) NewLocalContext(ctx context.Context) (*sql.Context, error) 
 // NewDoltSession creates a new DoltSession from a BaseSession
 func (se *SqlEngine) NewDoltSession(_ context.Context, mysqlSess *sql.BaseSession) (*dsess.DoltSession, error) {
 	return se.dsessFactory(mysqlSess, se.provider)
-}
-
-// GetResultFormat returns the printing format of the engine. The format isn't used by the engine internally, only
-// stored for reference by clients who wish to use it to print results.
-func (se *SqlEngine) GetResultFormat() PrintResultFormat {
-	return se.resultFormat
 }
 
 // Query execute a SQL statement and return values for printing.
@@ -354,7 +345,6 @@ func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, str
 	engine, err := NewSqlEngine(
 		ctx,
 		mrEnv,
-		FormatCsv,
 		&SqlEngineConfig{
 			ServerUser: "root",
 			ServerHost: "localhost",
