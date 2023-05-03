@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -522,7 +521,7 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 		tfCh := make(chan pull.TableFileEvent)
 		go func() {
 			start := time.Now()
-			stats := make(map[chunks.TableFile]iohelp.ReadStats)
+			stats := make(map[string]iohelp.ReadStats)
 			for {
 				select {
 				case tfe, ok := <-tfCh:
@@ -530,7 +529,7 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 						return
 					}
 					if tfe.EventType == pull.DownloadStats {
-						stats[tfe.TableFiles[0]] = tfe.Stats[0]
+						stats[tfe.TableFiles[0].FileID()] = tfe.Stats[0]
 
 						totalSentBytes := uint64(0)
 						totalBytes := uint64(0)
@@ -555,11 +554,10 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 							FetchedSourceBytes:       totalSentBytes,
 							FetchedSourceBytesPerSec: float64(totalSentBytes) / (time.Since(start).Seconds()),
 						}
+
+						// TODO: This looks wrong without a ctx.Done() select, but Puller does not conditionally send here...
 						select {
 						case statsCh <- toEmit:
-
-							// TODO: This looks wrong without a ctx.Done() select, but Puller does not conditionally send here...
-
 						}
 					}
 				}
