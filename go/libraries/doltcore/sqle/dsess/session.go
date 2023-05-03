@@ -449,7 +449,8 @@ func (d *DoltSession) DoltCommit(
 		ws, commit, err := dtx.DoltCommit(
 			ctx,
 			workingSet.WithWorkingRoot(commit.Roots.Working).WithStagedRoot(commit.Roots.Staged),
-			commit)
+			commit,
+			dbName)
 		if err != nil {
 			return nil, nil, err
 		}
