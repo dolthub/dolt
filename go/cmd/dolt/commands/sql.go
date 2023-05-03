@@ -1016,11 +1016,7 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		}
 		return nil, nil, nil
 	case *sqlparser.DBDDL:
-		if se, ok := qryist.(*engine.SqlEngine); ok {
-			// NM4 TODO refactor this out. Dbddl is a special case which is no longer needed. Breaks tests if we naively drop it tho.
-			return se.Dbddl(ctx, s, query)
-		}
-		return nil, nil, fmt.Errorf("unsupported statement: %s", query)
+		return dbddl(ctx, qryist, s, query)
 	case *sqlparser.Load:
 		if s.Local {
 			return nil, nil, fmt.Errorf("LOCAL supported only in sql-server mode")
@@ -1358,6 +1354,38 @@ func updateFileReadProgressOutput() {
 	fileReadProg.printed = fileReadProg.bytesRead
 	displayStr := fmt.Sprintf("Processed %.1f%% of the file", percent)
 	fileReadProg.displayStrLen = cli.DeleteAndPrint(fileReadProg.displayStrLen, displayStr)
+}
+
+func dbddl(ctx *sql.Context, queryist cli.Queryist, dbddl *sqlparser.DBDDL, query string) (sql.Schema, sql.RowIter, error) {
+	action := strings.ToLower(dbddl.Action)
+	var rowIter sql.RowIter = nil
+	var err error = nil
+
+	if action != sqlparser.CreateStr && action != sqlparser.DropStr {
+		return nil, nil, fmt.Errorf("Unhandled DBDDL action %v in Query %v", action, query)
+	}
+
+	if action == sqlparser.DropStr {
+		// Should not be allowed to delete repo name and information schema
+		if dbddl.DBName == sql.InformationSchemaDatabaseName {
+			return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", sql.InformationSchemaDatabaseName)
+		}
+	}
+
+	sch, rowIter, err := queryist.Query(ctx, query)
+
+	if rowIter != nil {
+		err = rowIter.Close(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return sch, nil, nil
 }
 
 // Updates the batch insert stats with the results of an INSERT, UPDATE, or DELETE statement.
