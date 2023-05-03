@@ -1487,6 +1487,29 @@ func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- pul
 	return pull.Clone(ctx, datas.ChunkStoreFromDatabase(ddb.db), datas.ChunkStoreFromDatabase(destDB.db), eventCh)
 }
 
+// Returns |true| if the underlying ChunkStore for this DoltDB implements |chunks.TableFileStore|.
+func (ddb *DoltDB) IsTableFileStore() bool {
+	_, ok := datas.ChunkStoreFromDatabase(ddb.db).(chunks.TableFileStore)
+	return ok
+}
+
+func (ddb *DoltDB) TableFileStoreHasJournal(ctx context.Context) (bool, error) {
+	tableFileStore, ok := datas.ChunkStoreFromDatabase(ddb.db).(chunks.TableFileStore)
+	if !ok {
+		return false, errors.New("unsupported operation, DoltDB.TableFileStoreHasManifest on non-TableFileStore")
+	}
+	_, tableFiles, _, err := tableFileStore.Sources(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, tableFile := range tableFiles {
+		if tableFile.FileID() == chunks.JournalFileID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (ddb *DoltDB) SetCommitHooks(ctx context.Context, postHooks []CommitHook) *DoltDB {
 	ddb.db = ddb.db.SetCommitHooks(ctx, postHooks)
 	return ddb

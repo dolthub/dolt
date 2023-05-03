@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -28,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -452,6 +455,35 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB,
 	return nil
 }
 
+// SyncRoots is going to copy the root hash of the database from srcDb to destDb.
+// We can do this |Clone| if (1) destDb is empty, (2) destDb and srcDb are both
+// |TableFileStore|s, and (3) srcDb does *not* have a journal file. The most
+// common scenario where this occurs is when we are restoring a backup.
+//
+// The journal's interaction with TableFileStore is not great currently ---
+// when accessing a journal file through TableFileStore, the Reader() should in
+// reality return something which is going to result in reading an actual table
+// file. For now, we avoid the |Clone| path when the journal file is present.
+func canSyncRootsWithClone(ctx context.Context, srcDb, destDb *doltdb.DoltDB, destDbRoot hash.Hash) (bool, error) {
+	if !destDbRoot.IsEmpty() {
+		return false, nil
+	}
+	if !srcDb.IsTableFileStore() {
+		return false, nil
+	}
+	if !destDb.IsTableFileStore() {
+		return false, nil
+	}
+	srcHasJournal, err := srcDb.TableFileStoreHasJournal(ctx)
+	if err != nil {
+		return false, err
+	}
+	if srcHasJournal {
+		return false, nil
+	}
+	return true, nil
+}
+
 // SyncRoots copies the entire chunkstore from srcDb to destDb and rewrites the remote manifest. Used to
 // streamline database backup and restores.
 // TODO: this should read/write a backup lock file specific to the client who created the backup
@@ -480,6 +512,71 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 			cli.Println()
 		}
 	}()
+
+	canClone, err := canSyncRootsWithClone(ctx, srcDb, destDb, destRoot)
+	if err != nil {
+		return err
+	}
+
+	if canClone {
+		tfCh := make(chan pull.TableFileEvent)
+		go func() {
+			start := time.Now()
+			stats := make(map[chunks.TableFile]iohelp.ReadStats)
+			for {
+				select {
+				case tfe, ok := <-tfCh:
+					if !ok {
+						return
+					}
+					if tfe.EventType == pull.DownloadStats {
+						stats[tfe.TableFiles[0]] = tfe.Stats[0]
+
+						totalSentBytes := uint64(0)
+						totalBytes := uint64(0)
+
+						for _, v := range stats {
+							if v.Percent > 0.001 {
+								totalSentBytes += v.Read
+								totalBytes += uint64(float64(v.Read) / v.Percent)
+							}
+						}
+
+						// We fake some of these values.
+						toEmit := pull.Stats{
+							FinishedSendBytes: totalSentBytes,
+							BufferedSendBytes: totalSentBytes,
+							SendBytesPerSec:   float64(totalSentBytes) / (time.Since(start).Seconds()),
+
+							// estimate the number of chunks based on an average chunk size of 4096.
+							TotalSourceChunks:   totalBytes / 4096,
+							FetchedSourceChunks: totalSentBytes / 4096,
+
+							FetchedSourceBytes:       totalSentBytes,
+							FetchedSourceBytesPerSec: float64(totalSentBytes) / (time.Since(start).Seconds()),
+						}
+						select {
+						case statsCh <- toEmit:
+
+							// TODO: This looks wrong without a ctx.Done() select, but Puller does not conditionally send here...
+
+						}
+					}
+				}
+			}
+		}()
+
+		err := srcDb.Clone(ctx, destDb, tfCh)
+		close(tfCh)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, pull.ErrCloneUnsupported) {
+			return err
+		}
+
+		// If clone is unsupported, we can fall back to pull.
+	}
 
 	err = destDb.PullChunks(ctx, tempTableDir, srcDb, []hash.Hash{srcRoot}, statsCh)
 	if err != nil {
