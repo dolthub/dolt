@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -28,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -480,6 +483,69 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 			cli.Println()
 		}
 	}()
+
+	if destRoot.IsEmpty() {
+		// In this case, we can clone into the dest root, if both src and destination support it.
+		// We will try to translate the stats from the table file events to the statsCh.
+
+		tfCh := make(chan pull.TableFileEvent)
+		go func() {
+			start := time.Now()
+			stats := make(map[chunks.TableFile]iohelp.ReadStats)
+			for {
+				select {
+				case tfe, ok := <-tfCh:
+					if !ok {
+						return
+					}
+					if tfe.EventType == pull.DownloadStats {
+						stats[tfe.TableFiles[0]] = tfe.Stats[0]
+
+						totalsentbytes := uint64(0)
+						totalbytes := uint64(0)
+
+						for _, v := range stats {
+							if v.Percent > 0.001 {
+								totalsentbytes += v.Read
+								totalbytes += uint64(float64(v.Read) / v.Percent)
+							}
+						}
+
+						// We fake some of these values.
+						toemit := pull.Stats{
+							FinishedSendBytes: totalsentbytes,
+							BufferedSendBytes: totalsentbytes,
+							SendBytesPerSec:   float64(totalsentbytes) / (time.Since(start).Seconds()),
+
+							// estimate the number of chunks based on an average chunk size of 4096.
+							TotalSourceChunks:   totalbytes / 4096,
+							FetchedSourceChunks: totalsentbytes / 4096,
+
+							FetchedSourceBytes:       totalsentbytes,
+							FetchedSourceBytesPerSec: float64(totalsentbytes) / (time.Since(start).Seconds()),
+						}
+						select {
+						case statsCh <- toemit:
+
+							// TODO: This looks wrong without a ctx.Done() select, but Puller does not conditionally send here...
+
+						}
+					}
+				}
+			}
+		}()
+
+		err := srcDb.Clone(ctx, destDb, tfCh)
+		close(tfCh)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, pull.ErrCloneUnsupported) {
+			return err
+		}
+
+		// If clone is unsupported, we can fall back to pull.
+	}
 
 	err = destDb.PullChunks(ctx, tempTableDir, srcDb, []hash.Hash{srcRoot}, statsCh)
 	if err != nil {
