@@ -121,7 +121,7 @@ func getMoreSpecificPatterns(lessSpecific string) (*regexp.Regexp, error) {
 	pattern := "^" + regexp.QuoteMeta(lessSpecific) + "$"
 	// A ? can expand to any character except for a *, since that also has special meaning in patterns.
 
-	pattern = strings.Replace(pattern, "\\?", "[^\\*]", -1)
+	pattern = strings.Replace(pattern, "\\?", "[^\\*%]", -1)
 	pattern = strings.Replace(pattern, "\\*", ".*", -1)
 	pattern = strings.Replace(pattern, "\\%", ".*", -1)
 	return regexp.Compile(pattern)
