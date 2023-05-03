@@ -12,7 +12,7 @@ INSERT INTO dolt_ignore VALUES
   ("*_ignore", true),
   ("do_not_ignore", false),
 
-  ("%_also_ignore", true),
+  ("%_ignore_too", true),
 
   ("commit_*", false),
   ("commit_me_not", true),
@@ -87,7 +87,7 @@ SQL
 
     dolt sql <<SQL
 CREATE TABLE please_ignore (pk int);
-CREATE TABLE please_also_ignore (pk int);
+CREATE TABLE please_ignore_too (pk int);
 CREATE TABLE do_not_ignore (pk int);
 CREATE TABLE commit_me (pk int);
 CREATE TABLE commit_me_not(pk int);
@@ -99,7 +99,7 @@ SQL
     staged=$(get_staged_tables)
 
     [[ ! -z $(echo "$ignored" | grep "please_ignore") ]] || false
-    [[ ! -z $(echo "$ignored" | grep "please_also_ignore") ]] || false
+    [[ ! -z $(echo "$ignored" | grep "please_ignore_too") ]] || false
     [[ ! -z $(echo "$staged" | grep "do_not_ignore") ]] || false
     [[ ! -z $(echo "$staged" | grep "commit_me") ]] || false
     [[ ! -z $(echo "$ignored" | grep "commit_me_not") ]] || false
