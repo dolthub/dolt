@@ -110,7 +110,7 @@ func compilePattern(pattern string) (*regexp.Regexp, error) {
 	pattern = "^" + regexp.QuoteMeta(pattern) + "$"
 	pattern = strings.Replace(pattern, "\\?", ".", -1)
 	pattern = strings.Replace(pattern, "\\*", ".*", -1)
-	pattern = strings.Replace(pattern, "\\%", ".*", -1)
+	pattern = strings.Replace(pattern, "%", ".*", -1)
 	return regexp.Compile(pattern)
 }
 
@@ -123,7 +123,7 @@ func getMoreSpecificPatterns(lessSpecific string) (*regexp.Regexp, error) {
 
 	pattern = strings.Replace(pattern, "\\?", "[^\\*%]", -1)
 	pattern = strings.Replace(pattern, "\\*", ".*", -1)
-	pattern = strings.Replace(pattern, "\\%", ".*", -1)
+	pattern = strings.Replace(pattern, "%", ".*", -1)
 	return regexp.Compile(pattern)
 }
 
