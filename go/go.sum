@@ -170,6 +170,8 @@ github.com/dolthub/go-mysql-server v0.15.1-0.20230504004035-e6e9cca62184 h1:Fw54
 github.com/dolthub/go-mysql-server v0.15.1-0.20230504004035-e6e9cca62184/go.mod h1:vEfWRA6yBMBQymwSv9oK4J/q3tGdxuuZ5EK2NwIx0/w=
 github.com/dolthub/go-mysql-server v0.15.1-0.20230504175519-04fc02bd6dfb h1:9lMUt17vy9iEdbr+5JgkDMxCPfyESZQJ6MTWfXJzN8Y=
 github.com/dolthub/go-mysql-server v0.15.1-0.20230504175519-04fc02bd6dfb/go.mod h1:vEfWRA6yBMBQymwSv9oK4J/q3tGdxuuZ5EK2NwIx0/w=
+github.com/dolthub/go-mysql-server v0.15.1-0.20230504215734-3cea4c6c7bd8 h1:NA9urktuxs8AxAp1gCVhsfmWGgcTxu31Y8A2CXJAbp0=
+github.com/dolthub/go-mysql-server v0.15.1-0.20230504215734-3cea4c6c7bd8/go.mod h1:vEfWRA6yBMBQymwSv9oK4J/q3tGdxuuZ5EK2NwIx0/w=
 github.com/dolthub/ishell v0.0.0-20221214210346-d7db0b066488 h1:0HHu0GWJH0N6a6keStrHhUAK5/o9LVfkh44pvsV4514=
 github.com/dolthub/ishell v0.0.0-20221214210346-d7db0b066488/go.mod h1:ehexgi1mPxRTk0Mok/pADALuHbvATulTh6gzr7NzZto=
 github.com/dolthub/jsonpath v0.0.1 h1:Nd+T3U+XisK3kOuxtABS5IIbZqXVIlOR9VYquyjQ0u0=
