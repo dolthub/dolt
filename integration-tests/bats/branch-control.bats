@@ -230,6 +230,29 @@ branch', 'test', '%', 'admin')"
     [[ $output =~ "cannot create a branch" ]] || false   
 }
 
+@test "branch-control: test longest match in branch access control" {
+  setup_test_user
+  dolt sql -q "create user admin"
+  dolt sql -q "grant all on *.* to admin"
+  dolt sql -q "insert into dolt_branch_control values ('%', '%', 'admin', '%', 'admin')"
+
+  dolt sql -q "insert into dolt_branch_control values ('dolt_repo_$$', 'test-branch', 'test', '%', 'read')"
+  dolt sql -q "insert into dolt_branch_control values ('dolt_repo_$$', '%', 'test', '%', 'write')"
+  dolt branch test-branch
+
+  start_sql_server
+
+  run dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test -q "call dolt_checkout('test-branch'); create table t (c1 int)"
+  [ $status -ne 0 ]
+  [[ $output =~ "does not have the correct permissions" ]] || false
+
+  dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u admin -q "delete from dolt_branch_control where branch = 'test-branch'"
+
+  run dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test -q "call dolt_checkout('test-branch'); create table t (c1 int)"
+  [ $status -eq 0 ]
+  [[ ! $output =~ "does not have the correct permissions" ]] || false
+}
+
 @test "branch-control: repeat deletion does not cause a nil panic" {
   dolt sql <<SQL
 DELETE FROM dolt_branch_control;
