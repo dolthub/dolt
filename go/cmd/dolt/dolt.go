@@ -307,11 +307,19 @@ func runMain() int {
 				args = args[1:]
 
 			case featureVersionFlag:
-				if featureVersion, err := strconv.Atoi(args[1]); err == nil {
-					doltdb.DoltFeatureVersion = doltdb.FeatureVersion(featureVersion)
+				var err error
+				if len(args) == 0 {
+					err = fmt.Errorf("missing argument for the --feature-version flag")
 				} else {
-					panic(err)
+					if featureVersion, err := strconv.Atoi(args[1]); err == nil {
+						doltdb.DoltFeatureVersion = doltdb.FeatureVersion(featureVersion)
+					}
 				}
+				if err != nil {
+					cli.PrintErrln(err.Error())
+					return 1
+				}
+
 				args = args[2:]
 
 			default:
