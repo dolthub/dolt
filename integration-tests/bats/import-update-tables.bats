@@ -1296,3 +1296,23 @@ DELIM
     [ $status -eq 0 ]
     [[ "$output" =~ '1,0,0,0,0,0,0,0,0,0,0,0000-00-00,00:00:00,0000-00-00 00:00:00,0000-00-00 00:00:00,0,first,""' ]] || false
 }
+
+@test "import-update-tables: import table with absent auto-increment column" {
+    dolt sql <<SQL
+CREATE TABLE tbl (
+    id int PRIMARY KEY AUTO_INCREMENT,
+    v1 int,
+    v2 int,
+    INDEX v1 (v1),
+    INDEX v2 (v2)
+);
+SQL
+
+    cat <<DELIM > auto-increment.csv
+v1,v2
+4,2
+3,1
+DELIM
+
+    dolt table import -u tbl auto-increment.csv
+}
