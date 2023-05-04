@@ -22,11 +22,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-// Queryist is generic interface for executing queries.
-type Queryist interface {
-	Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, error)
-}
-
 // LateBindQueryist is a function that will be called the first time Querist is needed for use. Input is a context which
 // is appropriate for the call to comence. Output is a Queryist, a sql.Context, a closer function, and an error.
 // The closer function is called when the Queryist is no longer needed, typically a defer right after getting it.
@@ -39,6 +34,18 @@ type CliContext interface {
 	QueryEngine(ctx context.Context) (Queryist, *sql.Context, func(), error)
 }
 
+// NewCliContext creates a new CliContext instance. Arguments must not be nil.
+func NewCliContext(args *argparser.ArgParseResults, latebind LateBindQueryist) (CliContext, errhand.VerboseError) {
+	if args == nil || latebind == nil {
+		return nil, errhand.VerboseErrorFromError(fmt.Errorf("Invariant violated. args and latebind must be non nil."))
+	}
+
+	return LateBindCliContext{globalArgs: args, bind: latebind}, nil
+}
+
+// LateBindCliContext is a struct that implements CliContext. It's primary purpose is to wrap the global arguments and
+// provide an implementation of the QueryEngine function. This instance is stateful to ensure that the Queryist if only
+// created once.
 type LateBindCliContext struct {
 	globalArgs *argparser.ArgParseResults
 	queryist   Queryist
@@ -53,7 +60,8 @@ func (lbc LateBindCliContext) GlobalArgs() *argparser.ArgParseResults {
 }
 
 // QueryEngine returns a Queryist, a sql.Context, a closer function, and an error. It ensures that only one call to the
-// LateBindQueryist is made, and caches the result.
+// LateBindQueryist is made, and caches the result. Note that if this is called twice, the closer function returns will
+// be nil, callers should check if is nil.
 func (lbc LateBindCliContext) QueryEngine(ctx context.Context) (Queryist, *sql.Context, func(), error) {
 	if lbc.queryist != nil {
 		return lbc.queryist, lbc.sqlCtx, nil, nil
@@ -71,11 +79,3 @@ func (lbc LateBindCliContext) QueryEngine(ctx context.Context) (Queryist, *sql.C
 }
 
 var _ CliContext = LateBindCliContext{}
-
-func BuildCliContext(args *argparser.ArgParseResults, latebind LateBindQueryist) (CliContext, errhand.VerboseError) {
-	if args == nil || latebind == nil {
-		return nil, errhand.VerboseErrorFromError(fmt.Errorf("Invariants violated.  args and latebind must be non nil."))
-	}
-
-	return LateBindCliContext{globalArgs: args, bind: latebind}, nil
-}

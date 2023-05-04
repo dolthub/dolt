@@ -446,7 +446,7 @@ func runMain() int {
 			return 1
 		}
 
-		cliCtx, err = cli.BuildCliContext(apr, lateBind)
+		cliCtx, err = cli.NewCliContext(apr, lateBind)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Unexpected Error: %v", err))
 			return 1

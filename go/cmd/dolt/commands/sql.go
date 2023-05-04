@@ -205,7 +205,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	defer closeFunc()
+	if closeFunc != nil {
+		defer closeFunc()
+	}
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		if apr.Contains(saveFlag) {
