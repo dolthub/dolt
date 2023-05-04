@@ -156,7 +156,6 @@ func Serve(
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
-		engine.FormatTabular,
 		config,
 	)
 	if err != nil {
