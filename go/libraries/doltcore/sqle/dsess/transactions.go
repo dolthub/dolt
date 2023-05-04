@@ -280,9 +280,18 @@ func (tx *DoltTransaction) doCommit(
 		writeFn transactionWrite,
 		dbName string,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
+	sess := DSessFromSess(ctx.Session)
+	branchState, ok, err := sess.lookupDbState(ctx, dbName)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !ok {
+		return nil, nil, fmt.Errorf("database %s unknown to transaction, this is a bug", dbName)
+	}
 
 	// Load the start state for this working set from the noms root at tx start
-	startPoint, ok := tx.dbStartPoints[strings.ToLower(dbName)]
+	// Get the base DB name from the db state, not the branch state
+	startPoint, ok := tx.dbStartPoints[strings.ToLower(branchState.dbState.dbName)]
 	if !ok {
 		return nil, nil, fmt.Errorf("database %s unknown to transaction, this is a bug", dbName)
 	}
@@ -293,17 +302,8 @@ func (tx *DoltTransaction) doCommit(
 	}
 	
 	// TODO: no-op if the working set hasn't changed since the transaction started
-
-	sess := DSessFromSess(ctx.Session)
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return nil, nil, err
-	}
-	if !ok {
-		return nil, nil, fmt.Errorf("database %s unknown to transaction, this is a bug", dbName)
-	}
 	
-	mergeOpts := dbState.EditOpts()
+	mergeOpts := branchState.EditOpts()
 
 	for i := 0; i < maxTxCommitRetries; i++ {
 		updatedWs, newCommit, err := func() (*doltdb.WorkingSet, *doltdb.Commit, error) {

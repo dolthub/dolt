@@ -1032,16 +1032,18 @@ func (d *DoltSession) HasDB(_ *sql.Context, dbName string) bool {
 func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	DefineSystemVariablesForDB(db.Name())
 
-	var sessionState *DatabaseSessionState
 	branchState := &branchState{} 
 	baseName, rev := SplitRevisionDbName(db)
-	
+
+	DefineSystemVariablesForDB(baseName)
+
 	dbState, err := db.InitialDBState(ctx, rev)
 	if err != nil {
 		return err
 	}
 
 	d.mu.Lock()
+	var sessionState *DatabaseSessionState
 	if _, ok := d.dbStates[strings.ToLower(baseName)]; !ok {
 		sessionState = NewEmptyDatabaseSessionState()
 		d.dbStates[strings.ToLower(baseName)] = sessionState
