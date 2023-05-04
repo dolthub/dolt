@@ -253,6 +253,9 @@ func TestQueryPlans(t *testing.T) {
 }
 
 func TestIntegrationQueryPlans(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format supports reverse indextableaccess")
+	}
 	harness := newDoltHarness(t).WithParallelism(1)
 	defer harness.Close()
 	enginetest.TestIntegrationPlans(t, harness)
