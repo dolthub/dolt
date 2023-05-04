@@ -213,6 +213,7 @@ func (itr *rangePartitionIter) nextNomsPartition() (sql.Partition, error) {
 	return rangePartition{
 		nomsRange: nr,
 		key:       bytes[:],
+		isReverse: itr.isReverse,
 	}, nil
 }
 
@@ -468,6 +469,7 @@ type nomsLookupBuilder struct {
 // NewRowIter implements IndexLookup
 func (lb *nomsLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	p := part.(rangePartition)
+	p.nomsRange.Reverse = p.isReverse
 	ranges := []*noms.ReadRange{p.nomsRange}
 	return RowIterForNomsRanges(ctx, lb.idx, ranges, lb.projections, lb.s)
 }

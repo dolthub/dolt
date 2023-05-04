@@ -773,6 +773,10 @@ func (di *doltIndex) Order() sql.IndexOrder {
 	return di.order
 }
 
+func (di *doltIndex) Reversible() bool {
+	return di.doltBinFormat
+}
+
 // Database implement sql.Index
 func (di *doltIndex) Database() string {
 	return di.dbName
