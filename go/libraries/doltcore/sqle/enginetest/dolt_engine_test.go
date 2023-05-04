@@ -1443,7 +1443,7 @@ func installTestCommitClock(tcc *testCommitClock) func() {
 // TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
 // desired test.
 func TestSingleTransactionScript(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 
 	tcc := &testCommitClock{}
 	cleanup := installTestCommitClock(tcc)
@@ -1452,117 +1452,44 @@ func TestSingleTransactionScript(t *testing.T) {
 	sql.RunWithNowFunc(tcc.Now, func() error {
 
 		script := queries.TransactionTest{
-			Name: "committed conflicts are seen by other sessions",
+			Name: "autocommit on",
 			SetUpScript: []string{
-				"CREATE TABLE test (pk int primary key, val int)",
-				"CALL DOLT_ADD('.')",
-				"INSERT INTO test VALUES (0, 0)",
-				"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
-				"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
-				"INSERT INTO test VALUES (1, 1);",
-				"UPDATE test SET val=1000 WHERE pk=0;",
-				"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
-				"CALL DOLT_CHECKOUT('main');",
-				"UPDATE test SET val=1001 WHERE pk=0;",
-				"CALL DOLT_COMMIT('-a', '-m', 'update a value');",
+				"create table t (x int primary key, y int)",
+				"insert into t values (1, 1)",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "/* client a */ start transaction",
-					Expected: []sql.Row{},
+					Query:    "/* client a */ insert into t values (2, 2)",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 				},
 				{
-					Query:    "/* client b */ start transaction",
-					Expected: []sql.Row{},
+					Query:    "/* client b */ select * from t order by x",
+					Expected: []sql.Row{{1, 1}, {2, 2}},
 				},
 				{
-					Query: "/* client a */ select * from dolt_log order by date",
-					Expected:
-					// existing transaction logic
-					[]sql.Row{
-						sql.Row{"j131v1r3cf6mrdjjjuqgkv4t33oa0l54", "billy bob", "bigbillieb@fake.horse", time.Date(1969, time.December, 31, 21, 0, 0, 0, time.Local), "Initialize data repository"},
-						sql.Row{"kcg4345ir3tjfb13mr0on1bv1m56h9if", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 1, 4, 0, 0, 0, time.Local), "checkpoint enginetest database mydb"},
-						sql.Row{"9jtjpggd4t5nso3mefilbde3tkfosdna", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 1, 12, 0, 0, 0, time.Local), "Step 1"},
-						sql.Row{"559f6kdh0mm5i1o40hs3t8dr43bkerav", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 2, 3, 0, 0, 0, time.Local), "update a value"},
-					},
-
-					// new tx logic
-					// 	[]sql.Row{
-					// 	sql.Row{"j131v1r3cf6mrdjjjuqgkv4t33oa0l54", "billy bob", "bigbillieb@fake.horse", time.Date(1969, time.December, 31, 21, 0, 0, 0, time.Local), "Initialize data repository"},
-					// 	sql.Row{"kcg4345ir3tjfb13mr0on1bv1m56h9if", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 1, 4, 0, 0, 0, time.Local), "checkpoint enginetest database mydb"},
-					// 	sql.Row{"pifio95ccefa03qstm1g3s1sivj1sm1d", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 1, 11, 0, 0, 0, time.Local), "Step 1"},
-					// 	sql.Row{"rdrgqfcml1hfgj8clr0caabgu014v2g9", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 1, 20, 0, 0, 0, time.Local), "this is a normal commit"},
-					// 	sql.Row{"shhv61eiefo9c4m9lvo5bt23i3om1ft4", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 2, 2, 0, 0, 0, time.Local), "update a value"},
-					// },
+					Query:    "/* client b */ insert into t values (3, 3)",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 				},
 				{
-					Query:    "/* client a */ CALL DOLT_MERGE('feature-branch')",
-					Expected: []sql.Row{{0, 1}},
+					Query:    "/* client b */ select * from t order by x",
+					Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
 				},
 				{
-					Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",
-					Expected: []sql.Row{{1}},
+					Query:    "/* client a */ select * from t order by x",
+					Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
 				},
 				{
-					Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
-					Expected: []sql.Row{{0}},
+					Query:    "/* client a */ insert into t values (4, 4)",
+					SkipResultsCheck: true,
 				},
 				{
-					Query:    "/* client a */ set dolt_allow_commit_conflicts = 1",
-					Expected: []sql.Row{{}},
-				},
-				{
-					Query:    "/* client a */ commit",
-					Expected: []sql.Row{},
-				},
-				{
-					Query:    "/* client b */ start transaction",
-					Expected: []sql.Row{},
-				},
-				{
-					Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
-					Expected: []sql.Row{{1}},
-				},
-				{
-					Query:    "/* client a */ start transaction",
-					Expected: []sql.Row{},
-				},
-				{
-					Query:    "/* client a */ CALL DOLT_MERGE('--abort')",
-					Expected: []sql.Row{{0, 0}},
-				},
-				{
-					Query:    "/* client a */ commit",
-					Expected: []sql.Row{},
-				},
-				{
-					Query:    "/* client b */ start transaction",
-					Expected: []sql.Row{},
-				},
-				{
-					Query:    "/* client a */ SET @@dolt_allow_commit_conflicts = 0",
-					Expected: []sql.Row{{}},
-				},
-				{
-					Query:          "/* client a */ CALL DOLT_MERGE('feature-branch')",
-					ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
-				},
-				{ // client rolled back on merge with conflicts
-					Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",
-					Expected: []sql.Row{{0}},
-				},
-				{
-					Query:    "/* client a */ commit",
-					Expected: []sql.Row{},
-				},
-				{
-					Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
-					Expected: []sql.Row{{0}},
+					Query:    "/* client b */ select * from t order by x",
+					Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 				},
 			},
 		}
 
-		h := newDoltHarness(t)
+				h := newDoltHarness(t)
 		defer h.Close()
 		enginetest.TestTransactionScript(t, h, script)
 

@@ -176,7 +176,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	}
 
 	d.mu.Lock()
-	dbState, ok = d.dbStates[dbName]
+	dbState, ok = d.dbStates[baseName]
 	d.mu.Unlock()
 	if !ok {
 		return nil, false, sql.ErrDatabaseNotFound.New(dbName)
@@ -287,18 +287,12 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 
 // clearRevisionDbState clears all revision DB states for this session. This is necessary on transaction start,
 // because they will be re-initialized with the current branch head / working set.
-// TODO: this should happen with every dbstate, not just revision DBs. The problem is that we track the current working
-//
-//	set *only* in the session state. We need to disentangle the metadata about a state (working ref, persists across
-//	transactions) from its data (re-initialized on every transaction start)
 func (d *DoltSession) clearRevisionDbState() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	for _, dbState := range d.dbStates {
-		if len(dbState.db.Revision()) > 0 {
-			delete(d.dbStates, strings.ToLower(dbState.db.Name()))
-		}
+	for db := range d.dbStates {
+		delete(d.dbStates, db)
 	}
 }
 
@@ -1330,13 +1324,13 @@ func (d *DoltSession) GetBranch() (string, error) {
 		return "", nil
 	}
 
-	dbState, _, err := d.LookupDbState(ctx, currentDb)
+	branchState, _, err := d.LookupDbState(ctx, currentDb)
 	if err != nil {
 		return "", err
 	}
 
-	if dbState.WorkingSet() != nil {
-		branchRef, err := dbState.WorkingSet().Ref().ToHeadRef()
+	if branchState.WorkingSet() != nil {
+		branchRef, err := branchState.WorkingSet().Ref().ToHeadRef()
 		if err != nil {
 			return "", err
 		}
