@@ -230,7 +230,7 @@ func (d *DoltSession) Flush(ctx *sql.Context, dbName string) error {
 // to ValidateSession. This is effectively a way to disable a session.
 //
 // Used by sql/cluster logic to make sessions on a server which has
-// transitioned roles termainlly error.
+// transitioned roles terminally error.
 func (d *DoltSession) SetValidateErr(err error) {
 	d.validateErr = err
 }
@@ -241,29 +241,6 @@ func (d *DoltSession) SetValidateErr(err error) {
 func (d *DoltSession) ValidateSession(ctx *sql.Context, dbName string) error {
 	if d.validateErr != nil {
 		return d.validateErr
-	}
-	sessionState, ok, err := d.lookupDbState(ctx, dbName)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return nil
-	}
-	if sessionState.WorkingSet() == nil {
-		return nil
-	}
-	wsRef := sessionState.WorkingSet().Ref()
-	_, err = sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
-	if err == doltdb.ErrWorkingSetNotFound {
-		_, err = d.newWorkingSetForHead(ctx, wsRef, dbName)
-		// if the current head is not found, the branch was force deleted, so use nil working set.
-		if errors.Is(err, doltdb.ErrBranchNotFound) {
-			return ErrCurrentBranchDeleted
-		} else if err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
 	}
 	return nil
 }
