@@ -1533,17 +1533,12 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 // SplitRevisionDbName splits the given database name into its base and revision parts and returns them. Non-revision
 // DBs use their full name as the base name, and empty string as the revision.
 func SplitRevisionDbName(db SqlDatabase) (string, string) {
-	sqldb, ok := db.(SqlDatabase)
-	if !ok {
-		return db.Name(), ""
-	}
-
 	dbName := db.Name()
-	if sqldb.Revision() != "" {
-		dbName = strings.TrimSuffix(dbName, DbRevisionDelimiter+sqldb.Revision())
+	if db.Revision() != "" {
+		dbName = strings.TrimSuffix(dbName, DbRevisionDelimiter+db.Revision())
 	}
 
-	return dbName, sqldb.Revision()
+	return dbName, db.Revision()
 }
 
 // TransactionRoot returns the noms root for the given database in the current transaction
