@@ -71,10 +71,17 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 	valueMerger := newValueMerger(mergedSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool())
 	leftMapping := valueMerger.leftMapping
 
+	// We need a sql.Context to apply column default values in merges; if we don't have one already,
+	// create one, since this code also gets called from the CLI merge code path.
+	sqlCtx, ok := ctx.(*sql.Context)
+	if !ok {
+		sqlCtx = sql.NewContext(ctx)
+	}
+
 	// Migrate primary index data to rewrite the values on the left side of the merge if necessary
 	schemasDifferentSize := len(tm.leftSch.GetAllCols().GetColumns()) != len(mergedSch.GetAllCols().GetColumns())
 	if schemasDifferentSize || leftMapping.IsIdentityMapping() == false {
-		if err := migrateDataToMergedSchema(ctx, tm, valueMerger, mergedSch); err != nil {
+		if err := migrateDataToMergedSchema(sqlCtx, tm, valueMerger, mergedSch); err != nil {
 			return nil, nil, err
 		}
 
@@ -84,24 +91,24 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 	}
 
 	// After we've migrated the existing data to the new schema, it's safe for us to update the schema on the table
-	mergeTbl, err = tm.leftTbl.UpdateSchema(ctx, mergedSch)
+	mergeTbl, err = tm.leftTbl.UpdateSchema(sqlCtx, mergedSch)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	var stats *MergeStats
-	mergeTbl, stats, err = mergeProllyTableData(ctx, tm, mergedSch, mergeTbl, valueMerger)
+	mergeTbl, stats, err = mergeProllyTableData(sqlCtx, tm, mergedSch, mergeTbl, valueMerger)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	n, err := mergeTbl.NumRowsInConflict(ctx)
+	n, err := mergeTbl.NumRowsInConflict(sqlCtx)
 	if err != nil {
 		return nil, nil, err
 	}
 	stats.DataConflicts = int(n)
 
-	mergeTbl, err = mergeAutoIncrementValues(ctx, tm.leftTbl, tm.rightTbl, mergeTbl)
+	mergeTbl, err = mergeAutoIncrementValues(sqlCtx, tm.leftTbl, tm.rightTbl, mergeTbl)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -116,7 +123,7 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 // as well as any secondary indexes, and also checking for unique constraints incrementally. When
 // conflicts are detected, this function attempts to resolve them automatically if possible, and
 // if not, they are recorded as conflicts in the table's artifacts.
-func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger) (*doltdb.Table, *MergeStats, error) {
+func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger) (*doltdb.Table, *MergeStats, error) {
 	iter, err := threeWayDiffer(ctx, tm, valueMerger)
 	if err != nil {
 		return nil, nil, err
@@ -576,7 +583,7 @@ func newPrimaryMerger(leftRows prolly.Map, tableMerger *TableMerger, valueMerger
 // specifies the schema of the source of the diff, which is used to map the diff to the post-merge
 // schema. |sourceSch| may be nil when no mapping from the source schema is needed (i.e. DiffOpRightDelete,
 // and DiffOpDivergentModifyResolved).
-func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourceSch schema.Schema) error {
+func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSch schema.Schema) error {
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
 		if sourceSch == nil {
@@ -725,7 +732,7 @@ func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping)
 // currently being merged and associated node store. |mergedSch| is the new schema of the table and is used to look up
 // column default values to apply to any existing rows when a new column is added as part of a merge. |pool| is used to
 // to allocate memory for the new tuple. A pointer to the new tuple data is returned, along with any error encountered.
-func remapTupleWithColumnDefaults(ctx context.Context, tuple *val.Tuple, tupleDesc val.TupleDesc, mapping val.OrdinalMapping, tm *TableMerger, mergedSch schema.Schema, pool pool.BuffPool) (*val.Tuple, error) {
+func remapTupleWithColumnDefaults(ctx *sql.Context, tuple *val.Tuple, tupleDesc val.TupleDesc, mapping val.OrdinalMapping, tm *TableMerger, mergedSch schema.Schema, pool pool.BuffPool) (*val.Tuple, error) {
 	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor())
 
 	for to, from := range mapping {
@@ -734,15 +741,8 @@ func remapTupleWithColumnDefaults(ctx context.Context, tuple *val.Tuple, tupleDe
 			// If the column is a new column, then look up any default value
 			col := mergedSch.GetNonPKCols().GetByIndex(to)
 			if col.Default != "" {
-				// We need a sql.Context to call parse.StringToColumnDefaultValue, so see if we have one already;
-				// if not, create one, since this code also gets called from the CLI merge code path.
-				sqlCtx, ok := ctx.(*sql.Context)
-				if !ok {
-					sqlCtx = sql.NewContext(ctx)
-				}
-
 				// TODO: Not great to reparse the expression for every single row... need to cache this
-				defaultValue, err := parse.StringToColumnDefaultValue(sqlCtx, col.Default)
+				defaultValue, err := parse.StringToColumnDefaultValue(ctx, col.Default)
 				if err != nil {
 					return nil, err
 				}
@@ -750,14 +750,14 @@ func remapTupleWithColumnDefaults(ctx context.Context, tuple *val.Tuple, tupleDe
 				// TODO: We can currently only handle column default values that only use literal
 				//       values. Any expressions that need to be resolved (e.g. column references,
 				//       functions) need the analyzer invoked on them before we can Eval() them.
-				//       So, instead of potentially corrupting data and not applying the default
-				//       value that customers are expecting, throw an error and alert customers
-				//       that they need to manually apply the alter to update existing rows.
+				//       So, instead of potentially creating inconsistent data and not applying the
+				//       correct default value that customers are expecting, throw an error and alert
+				//       customers that they need to manually apply the alter to update existing rows.
 				if !defaultValue.Expression.Resolved() {
 					return nil, ErrUnableToMergeColumnDefaultValue.New(defaultValue, tm.name)
 				}
 
-				value, err = defaultValue.Expression.Eval(sqlCtx, nil)
+				value, err = defaultValue.Expression.Eval(ctx, nil)
 				if err != nil {
 					return nil, err
 				}
@@ -886,7 +886,7 @@ func findNonPKColumnMappingByTagOrName(sch schema.Schema, col schema.Column) int
 // migrateDataToMergedSchema migrates the data from the left side of the merge of a table to the merged schema. This
 // currently only includes updating the primary index. This is necessary when a schema change is
 // being applied, so that when the new schema is used to pull out data from the table, it will be in the right order.
-func migrateDataToMergedSchema(ctx context.Context, tm *TableMerger, vm *valueMerger, mergedSch schema.Schema) error {
+func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerger, mergedSch schema.Schema) error {
 	lr, err := tm.leftTbl.GetRowData(ctx)
 	if err != nil {
 		return err
