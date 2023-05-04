@@ -20,20 +20,27 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/parse"
+	errorkinds "gopkg.in/src-d/go-errors.v1"
 	"io"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
+
+// ErrUnableToMergeColumnDefaultValue is returned when a column's default value cannot be Eval'ed and we are unable to
+// correctly fill in a new column's value for existing table rows. This can happen when a column default value uses
+// references that need to be resolved by the analyzer (e.g. column references, function references).
+var ErrUnableToMergeColumnDefaultValue = errorkinds.NewKind("unable to automatically apply column default value " +
+	"in merge: %s for table '%s'; to continue merging, first manually apply the column alteration on this branch")
 
 // mergeProllyTable merges the table specified by |tm| using the specified |mergedSch| and returns the new table
 // instance, along with merge stats and any error. This function will merge the table artifacts (e.g. recorded
@@ -128,7 +135,7 @@ func mergeProllyTableData(ctx context.Context, tm *TableMerger, finalSch schema.
 
 	keyless := schema.IsKeyless(tm.leftSch)
 
-	pri, err := newPrimaryMerger(leftRows, valueMerger, finalSch)
+	pri, err := newPrimaryMerger(leftRows, tm, valueMerger, finalSch)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -549,21 +556,17 @@ func (m *conflictMerger) finalize(ctx context.Context) (durable.ArtifactIndex, e
 // primaryMerger translates three-way diffs
 // on the primary index into merge-left updates.
 type primaryMerger struct {
-	serializer  message.ProllyMapSerializer
-	keyDesc     val.TupleDesc
-	valDesc     val.TupleDesc
-	ns          tree.NodeStore
-	root        tree.Node
 	mut         *prolly.MutableMap
-	key, value  val.Tuple
 	valueMerger *valueMerger
+	tableMerger *TableMerger
 	finalSch    schema.Schema
 }
 
-func newPrimaryMerger(leftRows prolly.Map, valueMerger *valueMerger, finalSch schema.Schema) (*primaryMerger, error) {
+func newPrimaryMerger(leftRows prolly.Map, tableMerger *TableMerger, valueMerger *valueMerger, finalSch schema.Schema) (*primaryMerger, error) {
 	return &primaryMerger{
 		mut:         leftRows.Mutate(),
 		valueMerger: valueMerger,
+		tableMerger: tableMerger,
 		finalSch:    finalSch,
 	}, nil
 }
@@ -585,8 +588,12 @@ func (m *primaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourc
 				return fmt.Errorf("cannot merge keyless tables with reordered columns")
 			}
 		} else {
-			modifiedValue := remapTuple(diff.Right, sourceSch.GetValueDescriptor(), m.valueMerger.rightMapping)
-			newTupleValue = val.NewTuple(m.valueMerger.syncPool, modifiedValue...)
+			tempTupleValue, err := remapTupleWithColumnDefaults(ctx, &diff.Right, sourceSch.GetValueDescriptor(),
+				m.valueMerger.rightMapping, m.tableMerger, m.finalSch, m.valueMerger.syncPool)
+			if err != nil {
+				return err
+			}
+			newTupleValue = *tempTupleValue
 		}
 		return m.mut.Put(ctx, diff.Key, newTupleValue)
 	case tree.DiffOpRightDelete:
@@ -710,6 +717,62 @@ func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping)
 	}
 
 	return result
+}
+
+// remapTupleWithColumnDefaults takes the given |tuple| (and the |tupleDesc| that describes how to access its fields)
+// and uses |mapping| to map the tuple's data and return a new tuple. |tm| provides high access to the name of the table
+// currently being merged and associated node store. |mergedSch| is the new schema of the table and is used to look up
+// column default values to apply to any existing rows when a new column is added as part of a merge. |pool| is used to
+// to allocate memory for the new tuple. A pointer to the new tuple data is returned, along with any error encountered.
+func remapTupleWithColumnDefaults(ctx context.Context, tuple *val.Tuple, tupleDesc val.TupleDesc, mapping val.OrdinalMapping, tm *TableMerger, mergedSch schema.Schema, pool pool.BuffPool) (*val.Tuple, error) {
+	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor())
+
+	for to, from := range mapping {
+		var value interface{}
+		if from == -1 {
+			// If the column is a new column, then look up any default value
+			col := mergedSch.GetNonPKCols().GetByIndex(to)
+			if col.Default != "" {
+				// We need a sql.Context to call parse.StringToColumnDefaultValue, so see if we have one already;
+				// if not, create one, since this code also gets called from the CLI merge code path.
+				sqlCtx, ok := ctx.(*sql.Context)
+				if !ok {
+					sqlCtx = sql.NewContext(ctx)
+				}
+
+				// TODO: Not great to reparse the expression for every single row... need to cache this
+				defaultValue, err := parse.StringToColumnDefaultValue(sqlCtx, col.Default)
+				if err != nil {
+					return nil, err
+				}
+
+				// TODO: We can currently only handle column default values that only use literal
+				//       values. Any expressions that need to be resolved (e.g. column references,
+				//       functions) need the analyzer invoked on them before we can Eval() them.
+				//       So, instead of potentially corrupting data and not applying the default
+				//       value that customers are expecting, throw an error and alert customers
+				//       that they need to manually apply the alter to update existing rows.
+				if !defaultValue.Expression.Resolved() {
+					return nil, ErrUnableToMergeColumnDefaultValue.New(defaultValue, tm.name)
+				}
+
+				value, err = defaultValue.Expression.Eval(sqlCtx, nil)
+				if err != nil {
+					return nil, err
+				}
+
+				err = index.PutField(ctx, tm.ns, tb, to, value)
+				if err != nil {
+					return nil, err
+				}
+			}
+		} else {
+			tb.PutRaw(to, tupleDesc.GetField(from, *tuple))
+		}
+	}
+
+	newTuple := tb.Build(pool)
+	return &newTuple, nil
 }
 
 func mergeTableArtifacts(ctx context.Context, tm *TableMerger, mergeTbl *doltdb.Table) (*doltdb.Table, error) {
@@ -841,16 +904,19 @@ func migrateDataToMergedSchema(ctx context.Context, tm *TableMerger, vm *valueMe
 	valueDescriptor := leftSch.GetValueDescriptor()
 
 	for {
-		key, value, err := mapIter.Next(ctx)
+		keyTuple, valueTuple, err := mapIter.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
 			return err
 		}
-		pool := vm.syncPool
-		modifiedValue := remapTuple(value, valueDescriptor, vm.leftMapping)
-		modifiedValueAsTuple := val.NewTuple(pool, modifiedValue...)
-		err = mut.Put(ctx, key, modifiedValueAsTuple)
+
+		newValueTuple, err := remapTupleWithColumnDefaults(ctx, &valueTuple, valueDescriptor, vm.leftMapping, tm, mergedSch, vm.syncPool)
+		if err != nil {
+			return err
+		}
+
+		err = mut.Put(ctx, keyTuple, *newValueTuple)
 		if err != nil {
 			return err
 		}
