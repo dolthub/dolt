@@ -229,3 +229,44 @@ branch', 'test', '%', 'admin')"
     [ $status -ne 0 ]
     [[ $output =~ "cannot create a branch" ]] || false   
 }
+
+@test "branch-control: repeat deletion does not cause a nil panic" {
+  dolt sql <<SQL
+DELETE FROM dolt_branch_control;
+INSERT INTO dolt_branch_control VALUES ("dolt","s1","ab","%","admin");
+INSERT INTO dolt_branch_control VALUES ("dolt","s2","ab","%","admin");
+INSERT INTO dolt_branch_control VALUES ("%","%","%","%","write");
+DELETE FROM dolt_branch_control;
+INSERT INTO dolt_branch_control VALUES ("dolt","s1","ab","%","admin");
+INSERT INTO dolt_branch_control VALUES ("dolt","s2","ab","%","admin");
+INSERT INTO dolt_branch_control VALUES ("%","%","%","%","write");
+DELETE FROM dolt_branch_control;
+INSERT INTO dolt_branch_control VALUES ("dolt","s1","ab","%","admin");
+INSERT INTO dolt_branch_control VALUES ("dolt","s2","ab","%","admin");
+INSERT INTO dolt_branch_control VALUES ("%","%","%","%","write");
+DELETE FROM dolt_branch_control;
+INSERT INTO dolt_branch_control VALUES ("dolt","s1","ab","%","admin");
+INSERT INTO dolt_branch_control VALUES ("dolt","s2","ab","%","admin");
+INSERT INTO dolt_branch_control VALUES ("%","%","%","%","write");
+SQL
+  run dolt sql -q "SELECT * FROM dolt_branch_control ORDER BY 1,2,3" -r=csv
+  [ $status -eq 0 ]
+  [ ${lines[0]} = "database,branch,user,host,permissions" ]
+  [ ${lines[1]} = "%,%,%,%,write" ]
+  [ ${lines[2]} = "dolt,s1,ab,%,admin" ]
+  [ ${lines[3]} = "dolt,s2,ab,%,admin" ]
+
+  # Related to the above issue, multiple deletions would report matches even when they should have all been deleted
+  run dolt sql -q "DELETE FROM dolt_branch_control;"
+  [ $status -eq 0 ]
+  [[ $output =~ "3 rows affected" ]] || false
+  run dolt sql -q "DELETE FROM dolt_branch_control;"
+  [ $status -eq 0 ]
+  [[ $output =~ "0 rows affected" ]] || false
+  run dolt sql -q "DELETE FROM dolt_branch_control;"
+  [ $status -eq 0 ]
+  [[ $output =~ "0 rows affected" ]] || false
+  run dolt sql -q "DELETE FROM dolt_branch_control;"
+  [ $status -eq 0 ]
+  [[ $output =~ "0 rows affected" ]] || false
+}

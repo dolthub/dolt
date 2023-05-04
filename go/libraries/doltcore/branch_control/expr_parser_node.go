@@ -226,7 +226,7 @@ ParentLoop:
 				copy(newSortOrders, originalSortOrders)
 				root.Children[newSortOrders[0]] = &MatchNode{
 					SortOrders: newSortOrders,
-					Children:   nil,
+					Children:   make(map[int32]*MatchNode),
 					Data:       &data,
 				}
 				break
@@ -249,7 +249,7 @@ ParentLoop:
 			copy(newSortOrders, originalSortOrders)
 			newChild := &MatchNode{
 				SortOrders: newSortOrders,
-				Children:   nil,
+				Children:   make(map[int32]*MatchNode),
 				Data:       &data,
 			}
 			root.SortOrders = root.SortOrders[:len(root.SortOrders)-len(remainingRootSortOrders)]
@@ -318,19 +318,25 @@ ParentLoop:
 						root.Children = nil
 						break
 					}
-				} else if len(root.Children) == 0 && rootParent != nil {
-					// With no children, we can remove this node from the parent
-					delete(rootParent.Children, childIndex)
-					// If the parent only has a single child, and it's not a destination node, we can merge that child
-					// with the parent
-					if len(rootParent.Children) == 1 && rootParent.Data == nil {
-						// Since there is only a single child, we merge it with this node
-						for _, child := range rootParent.Children {
-							// It was silly a few lines ago, and it's still silly here
-							rootParent.SortOrders = append(rootParent.SortOrders, child.SortOrders...)
-							rootParent.Data = child.Data
-							rootParent.Children = nil
+				} else if len(root.Children) == 0 {
+					if rootParent != nil {
+						// With no children, we can remove this node from the parent
+						delete(rootParent.Children, childIndex)
+						// If the parent only has a single child, and it's not a destination node, we can merge that child
+						// with the parent
+						if len(rootParent.Children) == 1 && rootParent.Data == nil {
+							// Since there is only a single child, we merge it with this node
+							for _, child := range rootParent.Children {
+								// It was silly a few lines ago, and it's still silly here
+								rootParent.SortOrders = append(rootParent.SortOrders, child.SortOrders...)
+								rootParent.Data = child.Data
+								rootParent.Children = child.Children
+							}
 						}
+					} else {
+						// This is the base root of the table, and it has no children (they may have been merged with
+						// the base root in a previous deletion), so we completely reset its sort orders to the base state
+						root.SortOrders = []int32{columnMarker}
 					}
 				}
 				// If this node has multiple children then we have nothing more to do
