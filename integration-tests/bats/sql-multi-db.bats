@@ -20,7 +20,7 @@ teardown() {
 }
 
 seed_repos_with_tables_with_use_statements() {
-    dolt sql -r csv --data-dir ./ -b -q "
+    dolt --data-dir ./ sql -r csv -b -q "
             USE repo1;
             CREATE TABLE r1_t1 (pk BIGINT, PRIMARY KEY(pk));
             INSERT INTO r1_t1 (pk) values (0),(1),(2);
@@ -31,7 +31,7 @@ seed_repos_with_tables_with_use_statements() {
 
 @test "sql-multi-db: sql multi-db test show databases" {
     EXPECTED=$(echo -e "Database\ninformation_schema\nmysql\nrepo1\nrepo2")
-    run dolt sql -r csv --data-dir ./ -q "SHOW DATABASES"
+    run dolt --data-dir ./ sql -r csv -q "SHOW DATABASES"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
@@ -40,26 +40,26 @@ seed_repos_with_tables_with_use_statements() {
     seed_repos_with_tables_with_use_statements
 
     EXPECTED_R1T1=$(echo -e "pk\n0\n1\n2")
-    run dolt sql -r csv --data-dir ./ -b -q "USE repo1; SELECT * FROM r1_t1;"
+    run dolt --data-dir ./ sql -r csv -b -q "USE repo1; SELECT * FROM r1_t1;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED_R1T1" ]] || false
 
     EXPECTED_R2T1=$(echo -e "pk,c1\n2,200\n3,300\n4,400")
-    run dolt sql -r csv --data-dir ./ -b -q "USE repo2; SELECT * FROM r2_t1;"
+    run dolt --data-dir ./ sql -r csv -b -q "USE repo2; SELECT * FROM r2_t1;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED_R2T1" ]] || false
 
     # test tables of other database inaccessible without database qualifier
-    run dolt sql -r csv --data-dir ./ -b -q "USE repo1; SELECT * FROM r2_t1;"
+    run dolt --data-dir ./ sql -r csv -b -q "USE repo1; SELECT * FROM r2_t1;"
     [ ! "$status" -eq 0 ]
-    run dolt sql -r csv --data-dir ./ -b -q "USE repo2; SELECT * FROM r1_t1;"
+    run dolt --data-dir ./ sql -r csv -b -q "USE repo2; SELECT * FROM r1_t1;"
     [ ! "$status" -eq 0 ]
 
     # test tables in other databases accessible when qualified
-    run dolt sql -r csv --data-dir ./ -b -q "USE repo1; SELECT * FROM repo2.r2_t1;"
+    run dolt --data-dir ./ sql -r csv -b -q "USE repo1; SELECT * FROM repo2.r2_t1;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED_R2T1" ]] || false
-    run dolt sql -r csv --data-dir ./ -b -q "USE repo2; SELECT * FROM repo1.r1_t1;"
+    run dolt --data-dir ./ sql -r csv -b -q "USE repo2; SELECT * FROM repo1.r1_t1;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED_R1T1" ]] || false
 }
@@ -67,7 +67,7 @@ seed_repos_with_tables_with_use_statements() {
 @test "sql-multi-db: sql test use invalid db name" {
     seed_repos_with_tables_with_use_statements
 
-    run dolt sql -r csv --data-dir ./ -q "USE invalid_db_name;"
+    run dolt --data-dir ./ sql -r csv -q "USE invalid_db_name;"
     [ ! "$status" -eq 0 ]
     echo $output
     [[ "$output" =~ "database not found: invalid_db_name" ]] || false
@@ -77,7 +77,7 @@ seed_repos_with_tables_with_use_statements() {
     seed_repos_with_tables_with_use_statements
 
     EXPECTED=$(echo -e "pk,c1\n2,200")
-    run dolt sql -r csv --data-dir ./ -b -q "
+    run dolt --data-dir ./ sql -r csv -b -q "
         USE repo1;
         SELECT r1_t1.pk as pk, repo2.r2_t1.c1 as c1 FROM r1_t1 JOIN repo2.r2_t1 ON r1_t1.pk=repo2.r2_t1.pk;"
     echo \"\"\"$output\"\"\"
@@ -87,11 +87,11 @@ seed_repos_with_tables_with_use_statements() {
 
 @test "sql-multi-db: join on multiple databases with same name" {
     seed_repos_with_tables_with_use_statements
-    dolt sql --data-dir ./ -b -q "
+    dolt --data-dir ./ sql -b -q "
             USE repo1;
             CREATE TABLE r2_t1 (pk BIGINT, c1 BIGINT, PRIMARY KEY(pk));
             INSERT INTO r2_t1 (pk, c1) values (2,200),(3,300),(4,400);"
-    run dolt sql --data-dir ./ -q "select * from repo1.r2_t1 join repo2.r2_t1 on repo1.r2_t1.pk=repo2.r2_t1.pk"
+    run dolt --data-dir ./ sql -q "select * from repo1.r2_t1 join repo2.r2_t1 on repo1.r2_t1.pk=repo2.r2_t1.pk"
     skip "Fails on Not unique table/alias"
     [ "$status" -eq 0 ]
     [[ ! $output =~ "Not unique table/alias" ]] || false
@@ -109,7 +109,7 @@ seed_repos_with_tables_with_use_statements() {
     dolt clone file://../remote1 repo2
 
     cd ..
-    run dolt sql --data-dir ./subremotes -b -q "
+    run dolt --data-dir ./subremotes sql -b -q "
         USE repo2;
         call dolt_fetch();" -r csv
     [ "$status" -eq 0 ]
