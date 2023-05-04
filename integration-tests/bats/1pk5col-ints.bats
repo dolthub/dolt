@@ -41,7 +41,7 @@ teardown() {
     
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Untracked files" ]]
+    [[ "$output" =~ "Untracked tables" ]]
     [[ "$output" =~ new[[:space:]]table:[[:space:]]+test ]] || false
 }
 
@@ -58,7 +58,7 @@ teardown() {
     [ "$output" = "" ]
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Untracked files" ]]
+    [[ "$output" =~ "Untracked tables" ]]
     [[ "$output" =~ "new table:" ]] || false
     run dolt add .
     [ "$status" -eq 0 ]

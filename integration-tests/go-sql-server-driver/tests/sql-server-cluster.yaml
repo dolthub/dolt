@@ -925,3 +925,70 @@ tests:
       result:
         columns: ["count(*)"]
         rows: [["15"]]
+- name: create new database, clone a database, primary replicates to standby, standby has both databases
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
+  connections:
+  - on: server1
+    queries:
+    - exec: 'create database repo1'
+    - exec: 'use repo1'
+    - exec: 'create table vals (i int primary key)'
+    - exec: 'insert into vals values (0),(1),(2),(3),(4)'
+    - exec: 'call dolt_commit("-Am", "create a commit")'
+    - exec: 'call dolt_remote("add", "origin", "file://my_remote/")'
+    - exec: 'call dolt_push("origin", "main:main")'
+    - exec: 'call dolt_clone("file://repo1/my_remote", "repo_cloned")'
+    - query: "call dolt_assume_cluster_role('standby', 2)"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+  - on: server2
+    queries:
+    - exec: 'use repo1'
+    - query: "select count(*) from vals"
+      result:
+        columns: ["count(*)"]
+        rows: [["5"]]
+    - exec: 'use repo_cloned'
+    - query: "select count(*) from vals"
+      result:
+        columns: ["count(*)"]
+        rows: [["5"]]

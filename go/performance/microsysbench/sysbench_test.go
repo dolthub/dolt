@@ -118,7 +118,7 @@ func setupBenchmark(t *testing.B, dEnv *env.DoltEnv) (*sql.Context, *engine.SqlE
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	require.NoError(t, err)
 
-	eng, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatNull, config)
+	eng, err := engine.NewSqlEngine(ctx, mrEnv, config)
 	require.NoError(t, err)
 
 	sqlCtx, err := eng.NewLocalContext(ctx)

@@ -101,7 +101,9 @@ setup_test_user() {
     [ $status -ne 0 ]
     [[ $output =~ "does not have the correct permissions" ]] || false
 
-    dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test -q "call dolt_checkout('test-branch'); create table t (c1 int)" 
+    dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test -q "call dolt_checkout('test-branch'); create table t (c1 int)"
+
+    dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test -q "call dolt_checkout('test-branch'); call dolt_add('t'); call dolt_commit('-m', 'Testing commit');"
 
     # I should also have branch permissions on branches I create
     dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test -q "call dolt_checkout('-b', 'test-branch-2'); create table t (c1 int)"

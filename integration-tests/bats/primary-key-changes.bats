@@ -365,7 +365,7 @@ teardown() {
     [ "$status" -eq 0 ]
 
     run dolt status
-    [[ "$output" =~ 'Untracked files' ]] || false
+    [[ "$output" =~ 'Untracked tables' ]] || false
     [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*t) ]] || false
     ! [[ "$output" =~ 'deleted' ]] || false
     ! [[ "$output" =~ 'modified' ]] || false

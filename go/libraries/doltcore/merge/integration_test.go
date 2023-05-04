@@ -368,7 +368,7 @@ func engineFromEnvironment(ctx context.Context, dEnv *env.DoltEnv) (dbName strin
 		panic(err)
 	}
 
-	eng, err = engine.NewSqlEngine(ctx, mrEnv, engine.FormatNull, &engine.SqlEngineConfig{
+	eng, err = engine.NewSqlEngine(ctx, mrEnv, &engine.SqlEngineConfig{
 		IsReadOnly: false,
 		ServerUser: "root",
 		ServerHost: "localhost",

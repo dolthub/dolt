@@ -4191,6 +4191,38 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 
+	// Resolvable type changes
+	{
+		Name: "type widening - enums and sets",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 enum('blue', 'green'), col2 set('blue', 'green'));",
+			"INSERT into t values (1, 'blue', 'blue,green');",
+			"alter table t add index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 enum('blue', 'green', 'red');",
+			"alter table t modify column col2 set('blue', 'green', 'red');",
+			"INSERT into t values (3, 'red', 'red,blue');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (2, 'green', 'green,blue');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x0}},
+			},
+			{
+				Query: "select * from t order by pk;",
+				Expected: []sql.Row{
+					{1, uint64(1), uint64(3)},
+					{2, uint64(2), uint64(3)},
+					{3, uint64(3), uint64(5)},
+				},
+			},
+		},
+	},
+
 	// Schema conflicts
 	{
 		// Type widening - these changes move from smaller types to bigger types, so they are guaranteed to be safe.

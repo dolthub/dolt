@@ -76,6 +76,24 @@ func (database) DropStoredProcedure(ctx *sql.Context, name string) error {
 	return errors.New("unimplemented")
 }
 
+var _ sql.ViewDatabase = database{}
+
+func (db database) CreateView(ctx *sql.Context, name string, selectStatement, createViewStmt string) error {
+	return errors.New("unimplemented")
+}
+
+func (db database) DropView(ctx *sql.Context, name string) error {
+	return errors.New("unimplemented")
+}
+
+func (db database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.ViewDefinition, bool, error) {
+	return sql.ViewDefinition{}, false, nil
+}
+
+func (db database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
+	return nil, nil
+}
+
 var _ sql.ReadOnlyDatabase = database{}
 
 func (database) IsReadOnly() bool {

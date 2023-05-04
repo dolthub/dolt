@@ -44,7 +44,7 @@ var commitDocs = cli.CommandDocumentationContent{
 	LongDesc: `
 Stores the current contents of the staged tables in a new commit along with a log message from the user describing the changes.
 
-The content to be added can be specified by using dolt add to incrementally \"add\" changes to the staged tables before using the commit command (Note: even modified files must be \"added\").
+The content to be added can be specified by using dolt add to incrementally \"add\" changes to the staged tables before using the commit command (Note: even modified tables must be \"added\").
 
 The log message can be added with the parameter {{.EmphasisLeft}}-m <msg>{{.EmphasisRight}}.  If the {{.LessThan}}-m{{.GreaterThan}} parameter is not provided an editor will be opened where you can review the commit and provide a log message.
 
@@ -601,13 +601,13 @@ const (
   (use "dolt commit" to conclude merge)`
 
 	unmergedPathsHeader = `Unmerged paths:`
-	mergedTableHelp     = `  (use "dolt add <file>..." to mark resolution)`
+	mergedTableHelp     = `  (use "dolt add <table>..." to mark resolution)`
 
 	workingHeader     = `Changes not staged for commit:`
 	workingHeaderHelp = `  (use "dolt add <table>" to update what will be committed)
   (use "dolt checkout <table>" to discard changes in working directory)`
 
-	untrackedHeader     = `Untracked files:`
+	untrackedHeader     = `Untracked tables:`
 	untrackedHeaderHelp = `  (use "dolt add <table>" to include in what will be committed)`
 
 	ignoredHeader     = `Ignored tables:`
