@@ -273,14 +273,6 @@ func TestQueryPlans(t *testing.T) {
 
 func TestIntegrationQueryPlans(t *testing.T) {
 	harness := newDoltHarness(t).WithParallelism(1)
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		// only new format supports reverse indextableaccess
-		//reverseIndexSkip := []string {
-		//
-		//}
-		//harness = harness.WithSkippedQueries()
-	}
-
 
 	defer harness.Close()
 	enginetest.TestIntegrationPlans(t, harness)
