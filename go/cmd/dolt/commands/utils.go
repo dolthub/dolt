@@ -178,7 +178,7 @@ func newLateBindingEngine(
 		PrivFilePath:       privsFp,
 		BranchCtrlFilePath: branchControlFilePath,
 		ServerUser:         username,
-		ServerHost:         "localhost", // NM4 - was a const before. shrug?
+		ServerHost:         "localhost",
 		Autocommit:         true,
 	}
 

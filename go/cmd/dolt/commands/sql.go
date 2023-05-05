@@ -1017,7 +1017,7 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		return nil, nil, nil
 	case *sqlparser.DBDDL:
 		if se, ok := qryist.(*engine.SqlEngine); ok {
-			// NM4 refactor this out
+			// NM4 TODO refactor this out. Dbddl is a special case which is no longer needed. Breaks tests if we naively drop it tho.
 			return se.Dbddl(ctx, s, query)
 		}
 		return nil, nil, fmt.Errorf("unsupported statement: %s", query)
