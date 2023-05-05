@@ -217,6 +217,22 @@ func TestParse(t *testing.T) {
 			false,
 		},
 		{
+			`file://C:\Users\name\datasets`,
+			url.URL{
+				Scheme: "file",
+				Path:   "C:/Users/name/datasets",
+			},
+			false,
+		},
+		{
+			`file:///C:\Users\name\datasets`,
+			url.URL{
+				Scheme: "file",
+				Path:   "C:/Users/name/datasets",
+			},
+			false,
+		},
+		{
 			"file://localhost/C$/Users/name/datasets",
 			url.URL{
 				Scheme: "file",
