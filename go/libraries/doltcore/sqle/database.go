@@ -99,9 +99,9 @@ func (db Database) RevisionType() dsess.RevisionType {
 	return db.revType
 }
 
+// TODO: remove this
 func (db Database) BaseName() string {
-	base, _ := dsess.SplitRevisionDbName(db)
-	return base
+	return db.name
 }
 
 func (db Database) EditOptions() editor.Options {
@@ -132,6 +132,7 @@ func initialDBState(ctx *sql.Context, db dsess.SqlDatabase, branch string) (dses
 		return initialStateForRevisionDb(ctx, db)
 	}
 
+	// TODO: this should never be true
 	return initialDbState(ctx, db, branch)
 }
 

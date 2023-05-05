@@ -22,7 +22,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	
+
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	goerrors "gopkg.in/src-d/go-errors.v1"
@@ -137,18 +137,30 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 // lookupDbState is the private version of LookupDbState, returning a struct that has more information available than
 // the interface returned by the public method.
 func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchState, bool, error) {
-	// TODO: change to require a db, not a name so that the below doesn't need to do a string split
 	dbName = strings.ToLower(dbName)
 	
+	var baseName, rev string
 	parts := strings.SplitN(dbName, DbRevisionDelimiter, 2)
-	baseName := parts[0]
+	baseName = parts[0]
+	if len(parts) > 1 {
+		rev = parts[1]
+	}
 
 	d.mu.Lock()
 	dbState, ok := d.dbStates[baseName]
 	d.mu.Unlock()
 
 	if ok {
-		_, rev := SplitRevisionDbName(dbState.db)
+		// If we got an unqualified name, use the current working set head
+		if rev == "" {
+			headRef, err := dbState.currentHead.ToHeadRef()
+			if err != nil {
+				return nil, false, err
+			}
+			
+			rev = headRef.GetPath()
+		}
+		
 		branchState, ok := dbState.heads[strings.ToLower(rev)]
 
 		if ok {
@@ -182,7 +194,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 		return nil, false, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	_, rev := SplitRevisionDbName(database)
+	_, rev = SplitRevisionDbName(database)
 	return dbState.heads[strings.ToLower(rev)], true, nil
 }
 
@@ -204,6 +216,32 @@ func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (SessionSta
 
 	return s, ok, nil
 }
+
+// func (d *DoltSession) CurrentDbState(ctx *sql.Context) (SessionState, bool, error) {
+// 	db := ctx.GetCurrentDatabase()
+// 	if db == "" {
+// 		return nil, false, fmt.Errorf("no current database")
+// 	}
+// 
+// 	// TODO: this should always be false, right?
+// 	isRevisionDb := strings.Contains(db, DbRevisionDelimiter)
+// 	if !isRevisionDb {
+// 		d.mu.Lock()
+// 		dbState, ok := d.dbStates[strings.ToLower(db)]
+// 		d.mu.Unlock()
+// 
+// 		if !ok {
+// 			return d.lookupDbState(ctx, db)
+// 		} 
+// 	}
+// 	
+// 	s, ok, err := d.lookupDbState(ctx, db)
+// 	if err != nil {
+// 		return nil, false, err
+// 	}
+// 
+// 	return s, ok, nil
+// }
 
 // RemoveDbState invalidates any cached db state in this session, for example, if a database is dropped.
 func (d *DoltSession) RemoveDbState(_ *sql.Context, dbName string) error {
@@ -955,6 +993,7 @@ func (d *DoltSession) HasDB(_ *sql.Context, dbName string) bool {
 // addDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
 func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
+	// TODO: get rid of this, only define these for base names
 	DefineSystemVariablesForDB(db.Name())
 
 	branchState := &branchState{} 
@@ -1436,6 +1475,7 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 
 // SplitRevisionDbName splits the given database name into its base and revision parts and returns them. Non-revision
 // DBs use their full name as the base name, and empty string as the revision.
+// TODO: get rid of this, should no longer be necessary
 func SplitRevisionDbName(db SqlDatabase) (string, string) {
 	dbName := db.Name()
 	if db.Revision() != "" {

@@ -734,10 +734,10 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 	}
 
 	parts := strings.SplitN(revDB, dsess.DbRevisionDelimiter, 2)
-	dbName, revSpec := parts[0], parts[1]
+	baseName, rev := parts[0], parts[1]
 
 	p.mu.RLock()
-	candidate, ok := p.databases[formatDbMapKeyName(dbName)]
+	candidate, ok := p.databases[formatDbMapKeyName(baseName)]
 	p.mu.RUnlock()
 	if !ok {
 		return nil, false, nil
@@ -748,7 +748,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		return nil, false, nil
 	}
 
-	dbType, resolvedRevSpec, err := revisionDbType(ctx, srcDb, revSpec)
+	dbType, resolvedRevSpec, err := revisionDbType(ctx, srcDb, rev)
 	if err != nil {
 		return nil, false, err
 	}
@@ -803,7 +803,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		if !ok {
 			return nil, false, nil
 		}
-		db, err := revisionDbForCommit(ctx, srcDb.(Database), revSpec)
+		db, err := revisionDbForCommit(ctx, srcDb.(Database), rev)
 		if err != nil {
 			return nil, false, err
 		}
@@ -812,7 +812,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 		// not an error, ok = false will get handled as a not found error in a layer above as appropriate
 		return nil, false, nil
 	default:
-		return nil, false, fmt.Errorf("unrecognized revision type for revision spec %s", revSpec)
+		return nil, false, fmt.Errorf("unrecognized revision type for revision spec %s", rev)
 	}
 }
 
@@ -1073,7 +1073,8 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 
 	// The db map only contains base databases, not revision DBs. Convert to a revision DB for creation.
 	if !isRevisionDb {
-		// TODO: capture the initial checked out head at startup, don't get it here every time 
+		// TODO: capture the initial checked out head at startup, don't get it here every time
+		// TODO: shouldn't use CWBHeadRef here, should come from the session's working set
 		headRef := db.DbData().Rsr.CWBHeadRef()
 		name = baseName + dsess.DbRevisionDelimiter + headRef.GetPath()
 	}
@@ -1250,7 +1251,6 @@ func isTag(ctx context.Context, db dsess.SqlDatabase, tagName string) (bool, err
 // revisionDbForBranch returns a new database that is tied to the branch named by revSpec
 func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec string) (dsess.SqlDatabase, error) {
 	branch := ref.NewBranchRef(revSpec)
-	dbName := srcDb.Name() + dsess.DbRevisionDelimiter + revSpec
 
 	static := staticRepoState{
 		branch:          branch,
@@ -1263,7 +1263,7 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 	switch v := srcDb.(type) {
 	case Database:
 		db = Database{
-			name:     dbName,
+			name:     srcDb.Name(),
 			ddb:      v.ddb,
 			rsw:      static,
 			rsr:      static,
@@ -1275,7 +1275,7 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 	case ReadReplicaDatabase:
 		db = ReadReplicaDatabase{
 			Database: Database{
-				name:     dbName,
+				name:     srcDb.Name(),
 				ddb:      v.ddb,
 				rsw:      static,
 				rsr:      static,
@@ -1359,9 +1359,8 @@ func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.I
 }
 
 func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string) (ReadOnlyDatabase, error) {
-	name := srcDb.Name() + dsess.DbRevisionDelimiter + revSpec
 	db := ReadOnlyDatabase{Database: Database{
-		name:     name,
+		name:     srcDb.Name(),
 		ddb:      srcDb.DbData().Ddb,
 		rsw:      srcDb.DbData().Rsw,
 		rsr:      srcDb.DbData().Rsr,
@@ -1402,9 +1401,8 @@ func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.In
 }
 
 func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string) (ReadOnlyDatabase, error) {
-	name := srcDb.Name() + dsess.DbRevisionDelimiter + revSpec
 	db := ReadOnlyDatabase{Database: Database{
-		name:     name,
+		name:     srcDb.Name(),
 		ddb:      srcDb.DbData().Ddb,
 		rsw:      srcDb.DbData().Rsw,
 		rsr:      srcDb.DbData().Rsr,
