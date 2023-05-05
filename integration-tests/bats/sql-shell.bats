@@ -49,15 +49,15 @@ teardown() {
     # default user is root
     run dolt sql <<< "select user from mysql.user"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "root" ]]
+    [[ "$output" =~ "root" ]] || false
 
     # create user
     run dolt sql <<< "create user new_user@'localhost'"
     [ "$status" -eq 0 ]
 
-    run dolt sql --user=new_user <<< "select user from mysql.user"
+    run dolt --user=new_user sql <<< "select user from mysql.user"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Access denied for user" ]]
+    [[ "$output" =~ "Access denied for user" ]] || false
 
     rm -rf .doltcfg
 }
