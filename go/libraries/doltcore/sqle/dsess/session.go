@@ -192,6 +192,10 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 //  the checked out branch in the case of a default (no branch-specified) db connection.
 //  Alternate idea: branch head is always set correctly in response to a USE statement, OR a checkout procedure. The
 //  latter implicitly updates the current database. You also get a revision db checked out on connection to no branch.
+// The original idea is more tractable for now -- too many things break with the latter approach, although it's cleaner 
+// in many respects. Biggest blocker is grants, which are currently tied to the base database name and probably need to
+// stay that way. Unless I can come up with some clever workaround...
+// Possible workaround for permissions: new GMS interface for "permissionDbName" or similar, workable?
 func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (SessionState, bool, error) {
 	s, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
