@@ -18,7 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -108,7 +110,8 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 			return nil, err
 		}
 
-		urlStr = fmt.Sprintf("file://%s", filepath.ToSlash(absPath))
+		//urlStr = fmt.Sprintf("file://%s", filepath.ToSlash(absPath))
+		urlStr = earl.FileUrlFromPath(filepath.Join(filepath.ToSlash(absPath), dbfactory.DoltDataDir), os.PathSeparator)
 
 		if params == nil {
 			params = make(map[string]any)
