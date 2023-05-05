@@ -382,6 +382,8 @@ SQL
 }
 
 @test "ignore: detect when equivalent patterns have different values" {
+    skip_nbf_ld_1
+
     dolt sql <<SQL
 INSERT INTO dolt_ignore VALUES
   ("**_test", true),
