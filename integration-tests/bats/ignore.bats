@@ -12,6 +12,8 @@ INSERT INTO dolt_ignore VALUES
   ("*_ignore", true),
   ("do_not_ignore", false),
 
+  ("%_ignore_too", true),
+
   ("commit_*", false),
   ("commit_me_not", true),
 
@@ -85,6 +87,7 @@ SQL
 
     dolt sql <<SQL
 CREATE TABLE please_ignore (pk int);
+CREATE TABLE please_ignore_too (pk int);
 CREATE TABLE do_not_ignore (pk int);
 CREATE TABLE commit_me (pk int);
 CREATE TABLE commit_me_not(pk int);
@@ -96,6 +99,7 @@ SQL
     staged=$(get_staged_tables)
 
     [[ ! -z $(echo "$ignored" | grep "please_ignore") ]] || false
+    [[ ! -z $(echo "$ignored" | grep "please_ignore_too") ]] || false
     [[ ! -z $(echo "$staged" | grep "do_not_ignore") ]] || false
     [[ ! -z $(echo "$staged" | grep "commit_me") ]] || false
     [[ ! -z $(echo "$ignored" | grep "commit_me_not") ]] || false
@@ -375,4 +379,27 @@ SQL
     echo "$output"
 
     [[ "$output" =~ "ignoreme" ]] || false
+}
+
+@test "ignore: detect when equivalent patterns have different values" {
+    skip_nbf_ld_1
+
+    dolt sql <<SQL
+INSERT INTO dolt_ignore VALUES
+  ("**_test", true),
+  ("*_test", false),
+
+  ("*_foo", true),
+  ("%_foo", false);
+CREATE TABLE a_test (pk int);
+CREATE TABLE a_foo (pk int);
+SQL
+
+    conflict=$(get_conflict_tables)
+
+    echo "$conflict"
+
+    [[ ! -z $(echo "$conflict" | grep "a_test") ]] || false
+    [[ ! -z $(echo "$conflict" | grep "a_foo") ]] || false
+
 }
