@@ -67,6 +67,10 @@ var HeadRefTypes = map[RefType]struct{}{
 	WorkspaceRefType: {},
 }
 
+var StashRefTypes = map[RefType]struct{}{
+	StashRefType: {},
+}
+
 // PrefixForType returns what a reference string for a given type should start with
 func PrefixForType(refType RefType) string {
 	return refPrefix + string(refType) + "/"
@@ -158,6 +162,17 @@ func Parse(str string) (DoltRef, error) {
 				return NewTagRef(str), nil
 			case WorkspaceRefType:
 				return NewWorkspaceRef(str), nil
+			default:
+				panic("unknown type " + rType)
+			}
+		}
+	}
+
+	for rType := range StashRefTypes {
+		prefix := PrefixForType(rType)
+		if strings.HasPrefix(str, prefix) {
+			str = str[len(prefix):]
+			switch rType {
 			case StashRefType:
 				return NewStashRef(), nil
 			default:
