@@ -904,7 +904,7 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	if err != nil {
 		return err
 	}
-	
+
 	sessionState.headRoot = headRoot
 
 	err = d.setSessionVarsForDb(ctx, dbName)
