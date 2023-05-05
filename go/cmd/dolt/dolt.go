@@ -155,6 +155,8 @@ func main() {
 func runMain() int {
 	args := os.Args[1:]
 
+	start := time.Now()
+
 	if len(args) == 0 {
 		doltCommand.PrintUsage("dolt")
 		return 1
@@ -432,9 +434,6 @@ func runMain() int {
 		return 1
 	}
 
-	start := time.Now()
-	ctx, stop := context.WithCancel(ctx)
-
 	var cliCtx cli.CliContext = nil
 	if initCliContext {
 		_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
@@ -454,6 +453,7 @@ func runMain() int {
 
 	}
 
+	ctx, stop := context.WithCancel(ctx)
 	res := doltCommand.Exec(ctx, "dolt", args, dEnv, cliCtx)
 	stop()
 
