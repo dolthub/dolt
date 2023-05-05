@@ -65,7 +65,6 @@ var HeadRefTypes = map[RefType]struct{}{
 	InternalRefType:  {},
 	TagRefType:       {},
 	WorkspaceRefType: {},
-	StashRefType:     {},
 }
 
 // PrefixForType returns what a reference string for a given type should start with
