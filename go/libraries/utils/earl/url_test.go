@@ -201,18 +201,20 @@ func TestParse(t *testing.T) {
 			false,
 		},
 		{
-			"file:///C:/Users/name/datasets",
+			"file://C:/Users/name/datasets",
 			url.URL{
+				Host:   "C:",
 				Scheme: "file",
-				Path:   "C:/Users/name/datasets",
+				Path:   "/Users/name/datasets",
 			},
 			false,
 		},
 		{
-			`file:///C:\Users\name\datasets`,
+			"file:///C:/Users/name/datasets",
 			url.URL{
+				Host:   "C:",
 				Scheme: "file",
-				Path:   "C:/Users/name/datasets",
+				Path:   "/Users/name/datasets",
 			},
 			false,
 		},
@@ -228,8 +230,9 @@ func TestParse(t *testing.T) {
 		{
 			FileUrlFromPath(`C:\Users\name\datasets`, '\\'),
 			url.URL{
+				Host:   "C:",
 				Scheme: "file",
-				Path:   "C:/Users/name/datasets",
+				Path:   "/Users/name/datasets",
 			},
 			false,
 		},
