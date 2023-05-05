@@ -25,9 +25,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -88,20 +86,6 @@ type savepoint struct {
 	name string
 	// TODO: we need a root value per DB here
 	root *doltdb.RootValue
-}
-
-// TODO: find refs to this and remove
-func NewDoltTransaction(
-		startingRoots map[string]hash.Hash,
-		startState *doltdb.WorkingSet,
-		workingSet ref.WorkingSetRef,
-		dbData env.DbData,
-		mergeEditOpts editor.Options,
-		tCharacteristic sql.TransactionCharacteristic,
-) *DoltTransaction {
-	return &DoltTransaction{
-		tCharacteristic: tCharacteristic,
-	}
 }
 
 func NewMultiHeadTransaction(

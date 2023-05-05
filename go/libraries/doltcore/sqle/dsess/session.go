@@ -825,94 +825,12 @@ func (d *DoltSession) SwitchWorkingSet(
 	dbName string,
 	wsRef ref.WorkingSetRef,
 ) error {
-	branchState, _, err := d.lookupDbState(ctx, dbName)
+	headRef, err := wsRef.ToHeadRef()
 	if err != nil {
 		return err
 	}
-
-	// TODO: should this be an error if any database in the transaction is dirty, or just this one?
-	if branchState.dbState.dirty {
-		return ErrWorkingSetChanges.New()
-	}
-
-	// TODO: this should call session.StartTransaction once that has been cleaned up a bit
-	nomsRoots := make(map[string]hash.Hash)
-	for _, db := range d.provider.DoltDatabases() {
-		nomsRoot, err := db.DbData().Ddb.NomsRoot(ctx)
-		if err != nil {
-			return err
-		}
-		nomsRoots[strings.ToLower(db.Name())] = nomsRoot
-	}
-
-	// TODO: resolve the working set ref with the root above
-	ws, err := branchState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
-	if err != nil {
-		return err
-	}
-
-	// TODO: just call SetWorkingSet?
-	branchState.workingSet = ws
-
-	cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
-	if err != nil {
-		return err
-	}
-
-	branchRef, err := ws.Ref().ToHeadRef()
-	if err != nil {
-		return err
-	}
-
-	cm, err := branchState.dbData.Ddb.Resolve(ctx, cs, branchRef)
-	if err != nil {
-		return err
-	}
-
-	branchState.headCommit = cm
-	branchState.headRoot, err = cm.GetRootValue(ctx)
-	if err != nil {
-		return err
-	}
-
-	err = d.setSessionVarsForDb(ctx, dbName)
-	if err != nil {
-		return err
-	}
-
-	h, err := ws.WorkingRoot().HashOf()
-	if err != nil {
-		return err
-	}
-
-	err = d.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
-	if err != nil {
-		return err
-	}
-
-	// make a fresh WriteSession, discard existing WriteSession
-	opts := branchState.WriteSession().GetOptions()
-	nbf := ws.WorkingRoot().VRW().Format()
-	tracker, err := branchState.dbState.globalState.GetAutoIncrementTracker(ctx)
-	if err != nil {
-		return err
-	}
-	branchState.writeSession = writer.NewWriteSession(nbf, ws, tracker, opts)
-
-	// After switching to a new working set, we are by definition clean
-	// TODO: obviously this is no longer true but this entire method needs a rewrite to tolerate writing to multiple
-	//  heads in one tx
-	branchState.dbState.dirty = false
-
-	// the current transaction, if there is one, needs to be restarted
-	tCharacteristic := sql.ReadWrite
-	if t := ctx.GetTransaction(); t != nil {
-		if t.IsReadOnly() {
-			tCharacteristic = sql.ReadOnly
-		}
-	}
-	ctx.SetTransaction(NewDoltTransaction(nomsRoots, ws, wsRef, branchState.dbData, branchState.WriteSession().GetOptions(), tCharacteristic))
-
+	
+	ctx.SetCurrentDatabase(dbName + DbRevisionDelimiter + headRef.GetPath())
 	return nil
 }
 
