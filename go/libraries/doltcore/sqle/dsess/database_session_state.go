@@ -15,7 +15,6 @@
 package dsess
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -63,8 +62,12 @@ type DatabaseSessionState struct {
 	dbName       string
 	// db is the database this state applies to
 	db           SqlDatabase
-	// currentHead is the current head of the database when unqualified by a DB name
-	currentHead ref.WorkingSetRef
+	// currRevSpec is the current revision spec of the database when referred to by its base name. Changes when a 
+	// `dolt_checkout` or `use` statement is executed.
+	currRevSpec string
+	// currRevType is the current revision type of the database when referred to by its base name. Changes when a
+	// `dolt_checkout` or `use` statement is executed.
+	currRevType RevisionType
 	// heads records the in-memory DB state for every branch head accessed by the session
 	heads 			map[string]*branchState
 	// globalState is the global state of this session (shared by all sessions for a particular db)

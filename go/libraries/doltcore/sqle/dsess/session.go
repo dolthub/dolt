@@ -140,11 +140,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	dbName = strings.ToLower(dbName)
 	
 	var baseName, rev string
-	parts := strings.SplitN(dbName, DbRevisionDelimiter, 2)
-	baseName = parts[0]
-	if len(parts) > 1 {
-		rev = parts[1]
-	}
+	baseName, rev = splitDbName(dbName)
 
 	d.mu.Lock()
 	dbState, ok := d.dbStates[baseName]
@@ -153,14 +149,9 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	if ok {
 		// If we got an unqualified name, use the current working set head
 		if rev == "" {
-			headRef, err := dbState.currentHead.ToHeadRef()
-			if err != nil {
-				return nil, false, err
-			}
-			
-			rev = headRef.GetPath()
+			rev = dbState.currRevSpec
 		}
-		
+
 		branchState, ok := dbState.heads[strings.ToLower(rev)]
 
 		if ok {
@@ -171,7 +162,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 			return branchState, ok, nil
 		}
 	}
-	
+
 	// no state for this db / branch combination yet, look it up from the provider
 	database, ok, err := d.provider.SessionDatabase(ctx, dbName)
 	if err != nil {
@@ -196,6 +187,16 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 
 	_, rev = SplitRevisionDbName(database)
 	return dbState.heads[strings.ToLower(rev)], true, nil
+}
+
+func splitDbName(dbName string) (string, string) {
+	var baseName, rev string
+	parts := strings.SplitN(dbName, DbRevisionDelimiter, 2)
+	baseName = parts[0]
+	if len(parts) > 1 {
+		rev = parts[1]
+	}
+	return baseName, rev
 }
 
 // TODO NEXT: the lookupdbstate method is the key abstraction point. It proxies all non-revisoined DBs to a revisioned 
@@ -880,8 +881,18 @@ func (d *DoltSession) SwitchWorkingSet(
 	if err != nil {
 		return err
 	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	
-	ctx.SetCurrentDatabase(dbName + DbRevisionDelimiter + headRef.GetPath())
+	baseName, _ := splitDbName(dbName)
+	dbState, ok := d.dbStates[strings.ToLower(baseName)]
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(dbName)
+	}
+	dbState.currRevSpec = headRef.GetPath()
+	dbState.currRevType = RevisionTypeBranch
+	
 	return nil
 }
 
@@ -1020,7 +1031,12 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 			return err
 		}
 		sessionState.tmpFileDir = tmpDir
+
+		// TODO: is this right? 
+		sessionState.currRevSpec = db.Revision()
+		sessionState.currRevType = db.RevisionType()
 	}
+	
 	branchState.dbState = sessionState
 	sessionState.heads[strings.ToLower(rev)] = branchState
 	d.mu.Unlock()
