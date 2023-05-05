@@ -668,7 +668,7 @@ DELIM
 
     run dolt table import -u test 1pk5col-ints-updt.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error determining the output schema." ]] || false
+    [[ "$output" =~ "Field 'pk' doesn't have a default value" ]] || false
 }
 
 @test "import-update-tables: partial update on keyless table" {
