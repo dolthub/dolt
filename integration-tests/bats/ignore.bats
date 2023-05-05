@@ -380,3 +380,24 @@ SQL
 
     [[ "$output" =~ "ignoreme" ]] || false
 }
+
+@test "ignore: detect when equivalent patterns have different values" {
+    dolt sql <<SQL
+INSERT INTO dolt_ignore VALUES
+  ("**_test", true),
+  ("*_test", false),
+
+  ("*_foo", true),
+  ("%_foo", false);
+CREATE TABLE a_test (pk int);
+CREATE TABLE a_foo (pk int);
+SQL
+
+    conflict=$(get_conflict_tables)
+
+    echo "$conflict"
+
+    [[ ! -z $(echo "$conflict" | grep "a_test") ]] || false
+    [[ ! -z $(echo "$conflict" | grep "a_foo") ]] || false
+
+}
