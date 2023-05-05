@@ -140,7 +140,12 @@ func populateRepo(dEnv *env.DoltEnv, insertData string) {
 	execSql := func(dEnv *env.DoltEnv, q string) int {
 		ctx := context.Background()
 		args := []string{"-r", "null", "-q", q}
-		return commands.SqlCmd{}.Exec(ctx, "sql", args, dEnv, commands.BuildEmptyCliContext())
+		cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv)
+		if err != nil {
+			panic(err)
+		}
+
+		return commands.SqlCmd{}.Exec(ctx, "sql", args, dEnv, cliCtx)
 	}
 	execSql(dEnv, createTable)
 	execSql(dEnv, insertData)

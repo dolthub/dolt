@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -75,9 +76,22 @@ func MaybeGetCommitWithVErr(dEnv *env.DoltEnv, maybeCommit string) (*doltdb.Comm
 	return cm, nil
 }
 
+// NewArgFreeCliContext creates a new CliContext instance with no arguments using a local SqlEngine. This is useful for testing primarily
+func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv) (cli.CliContext, errhand.VerboseError) {
+	lateBind, err := BuildSqlEngineQueryist(ctx, dEnv, argparser.NewEmptyResults())
+	if err != nil {
+		return nil, err
+	}
+	return cli.NewCliContext(argparser.NewEmptyResults(), lateBind)
+}
+
 // BuildSqlEngineQueryist Utility function to build a local SQLEngine for use interacting with data on disk using
-// SQL queries.
+// SQL queries. ctx and dEnv must be non-nil. apr can be nil.
 func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
+	if ctx == nil || dEnv == nil || apr == nil {
+		errhand.VerboseErrorFromError(fmt.Errorf("Invariant violated. Nil argument provided to BuildSqlEngineQueryist"))
+	}
+
 	// Retrieve username and password from command line, if provided
 	username := DefaultUser
 	if user, ok := apr.GetValue(UserFlag); ok {
