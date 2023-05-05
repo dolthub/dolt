@@ -17,17 +17,17 @@ package commands
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/go-mysql-server/sql"
-	"path/filepath"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 var fwtStageName = "fwt"

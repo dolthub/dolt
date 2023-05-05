@@ -17,9 +17,11 @@ package cli
 import (
 	"context"
 	"fmt"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // LateBindQueryist is a function that will be called the first time Querist is needed for use. Input is a context which

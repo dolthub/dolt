@@ -17,12 +17,12 @@ package cli
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
