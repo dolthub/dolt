@@ -40,15 +40,20 @@ func TestBinlogReplicationAutoReconnect(t *testing.T) {
 	configureFastConnectionRetry(t)
 	startReplication(t, proxyPort)
 
+	// Get the replica started up and ensure it's in sync with the primary before turning on the limit_data toxic
 	testInitialReplicaStatus(t)
-
 	primaryDatabase.MustExec("create table reconnect_test(pk int primary key, c1 varchar(255));")
+	waitForReplicaToCatchUp(t)
+	turnOnLimitDataToxic(t)
+
 	for i := 0; i < 1000; i++ {
 		value := "foobarbazbashfoobarbazbashfoobarbazbashfoobarbazbashfoobarbazbash"
 		primaryDatabase.MustExec(fmt.Sprintf("insert into reconnect_test values (%v, %q)", i, value))
 	}
 	// Remove the limit_data toxic so that a connection can be reestablished
-	mysqlProxy.RemoveToxic("limit_data")
+	err := mysqlProxy.RemoveToxic("limit_data")
+	require.NoError(t, err)
+	fmt.Printf("Toxiproxy proxy limit_data toxic removed")
 
 	// Assert that all records get written to the table
 	waitForReplicaToCatchUp(t)
@@ -151,7 +156,7 @@ func configureToxiProxy(t *testing.T) {
 		toxiproxyServer.Listen("localhost", strconv.Itoa(toxiproxyPort))
 	}()
 	time.Sleep(500 * time.Millisecond)
-	fmt.Printf("Toxiproxy server running on port %d \n", toxiproxyPort)
+	fmt.Printf("Toxiproxy control plane running on port %d \n", toxiproxyPort)
 
 	toxiClient = toxiproxyclient.NewClient(fmt.Sprintf("localhost:%d", toxiproxyPort))
 
@@ -163,10 +168,18 @@ func configureToxiProxy(t *testing.T) {
 	if err != nil {
 		panic(fmt.Sprintf("unable to create toxiproxy: %v", err.Error()))
 	}
+	fmt.Printf("Toxiproxy proxy started on port %d \n", proxyPort)
+}
 
-	mysqlProxy.AddToxic("limit_data", "limit_data", "downstream", 1.0, toxiproxyclient.Attributes{
+// turnOnLimitDataToxic adds a limit_data toxic to the active Toxiproxy, which prevents more than 1KB of data
+// from being sent from the primary through the proxy to the replica. Callers MUST call configureToxiProxy
+// before calling this function.
+func turnOnLimitDataToxic(t *testing.T) {
+	require.NotNil(t, mysqlProxy)
+	_, err := mysqlProxy.AddToxic("limit_data", "limit_data", "downstream", 1.0, toxiproxyclient.Attributes{
 		"bytes": 1_000,
 	})
+	require.NoError(t, err)
 	fmt.Printf("Toxiproxy proxy with limit_data toxic (1KB) started on port %d \n", proxyPort)
 }
 
