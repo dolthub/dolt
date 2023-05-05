@@ -331,7 +331,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 	if isNoOpTransactionDatabase(dbName) {
 		return nil
 	}
-
+	
 	if d.BatchMode() == Batched {
 		err := d.Flush(ctx, dbName)
 		if err != nil {
@@ -340,6 +340,15 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 	}
 
 	if TransactionsDisabled(ctx) {
+		return nil
+	}
+
+	isDirty, err := d.isDirty(ctx, dbName)
+	if err != nil {
+		return err
+	}
+	
+	if !isDirty {
 		return nil
 	}
 
