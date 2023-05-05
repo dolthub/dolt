@@ -299,8 +299,8 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 
 	nomsRoots := make(map[string]hash.Hash)
 	for _, db := range d.provider.DoltDatabases() {
-		// TODO: this is only necessary to support UserSpaceDatabase, come up with a better set of interfaces to capture
-		//  these capabilities
+		// TODO: this nil check is only necessary to support UserSpaceDatabase and clusterDatabase, come up with a better set of
+		//  interfaces to capture these capabilities
 		ddb := db.DbData().Ddb
 		if ddb != nil {
 			nomsRoot, err := ddb.NomsRoot(ctx)
@@ -904,6 +904,7 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	if err != nil {
 		return err
 	}
+	
 	sessionState.headRoot = headRoot
 
 	err = d.setSessionVarsForDb(ctx, dbName)
@@ -944,11 +945,16 @@ func (d *DoltSession) SwitchWorkingSet(
 	// TODO: this should call session.StartTransaction once that has been cleaned up a bit
 	nomsRoots := make(map[string]hash.Hash)
 	for _, db := range d.provider.DoltDatabases() {
-		nomsRoot, err := db.DbData().Ddb.NomsRoot(ctx)
-		if err != nil {
-			return err
+		// TODO: this nil check is only necessary to support UserSpaceDatabase and clusterDatabase, come up with a better set of
+		//  interfaces to capture these capabilities
+		ddb := db.DbData().Ddb
+		if ddb != nil {
+			nomsRoot, err := ddb.NomsRoot(ctx)
+			if err != nil {
+				return err
+			}
+			nomsRoots[strings.ToLower(db.Name())] = nomsRoot
 		}
-		nomsRoots[strings.ToLower(db.Name())] = nomsRoot
 	}
 
 	// TODO: resolve the working set ref with the root above
