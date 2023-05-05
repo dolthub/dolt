@@ -109,6 +109,7 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 		}
 
 		urlStr = fmt.Sprintf("file://%s", filepath.ToSlash(absPath))
+		//urlStr = earl.FileUrlFromPath(filepath.Join(absPath, dbfactory.DoltDataDir), os.PathSeparator)
 
 		if params == nil {
 			params = make(map[string]any)
