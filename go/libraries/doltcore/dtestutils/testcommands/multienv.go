@@ -142,7 +142,7 @@ func (mr *MultiRepoTestSetup) NewDB(dbName string) {
 func (mr *MultiRepoTestSetup) NewRemote(remoteName string) {
 	remote := filepath.Join(mr.Root, remoteName)
 	os.Mkdir(remote, os.ModePerm)
-	remotePath := fmt.Sprintf("file:///%s", remote)
+	remotePath := fmt.Sprintf("file:///%s", filepath.ToSlash(remote))
 
 	rem := env.NewRemote(remoteName, remotePath, nil)
 
