@@ -57,7 +57,7 @@ const (
 
 func buildArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("batsee", 0)
-	ap.SupportsUint(threadsFlag, "t", "threads", "Number of tests to execute in parallel. Defaults to 12")
+	ap.SupportsInt(threadsFlag, "t", "threads", "Number of tests to execute in parallel. Defaults to 12")
 	ap.SupportsFlag(skipSlowFlag, "s", "Skip slow tests. This is a static list of test we know are slow, may grow stale.")
 	ap.SupportsString(maxTimeFlag, "", "duration", "Maximum time to run tests. Defaults to 30m")
 	ap.SupportsString(onlyFLag, "", "", "Only run the specified test, or tests (comma separated)")
@@ -87,13 +87,16 @@ var slowCommands = map[string]bool{
 	"remotes.bats":               true,
 }
 
-func main() {
-	ap := buildArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("batsee", batseeDoc, ap))
-	args := os.Args[1:]
-	apr := cli.ParseArgsOrDie(ap, args, help)
+type config struct {
+	threads  int
+	duration time.Duration
+	skipSlow bool
+	limitTo  map[string]bool
+	retries  int
+}
 
-	threads, hasThreads := apr.GetUint(threadsFlag)
+func buildConfig(apr *argparser.ArgParseResults) config {
+	threads, hasThreads := apr.GetInt(threadsFlag)
 	if !hasThreads {
 		threads = 12
 	}
@@ -124,6 +127,23 @@ func main() {
 		retries = 1
 	}
 
+	return config{
+		threads:  threads,
+		duration: duration,
+		skipSlow: skipSlow,
+		limitTo:  limitTo,
+		retries:  retries,
+	}
+}
+
+func main() {
+	ap := buildArgParser()
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("batsee", batseeDoc, ap))
+	args := os.Args[1:]
+	apr := cli.ParseArgsOrDie(ap, args, help)
+
+	config := buildConfig(apr)
+
 	startTime := time.Now()
 
 	cwd, err := os.Getwd()
@@ -147,7 +167,7 @@ func main() {
 	workQueue := []string{}
 	// Insert the slow tests first
 	for key, _ := range slowCommands {
-		if !skipSlow {
+		if !config.skipSlow {
 			workQueue = append(workQueue, key)
 		}
 	}
@@ -166,15 +186,15 @@ func main() {
 	ctx := context.Background()
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	ctx, cancel := context.WithTimeout(ctx, duration)
+	ctx, cancel := context.WithTimeout(ctx, config.duration)
 	defer cancel()
 
 	var wg sync.WaitGroup
-	for i := uint64(0); i < threads; i++ {
+	for i := 0; i < config.threads; i++ {
 		go func() {
 			wg.Add(1)
 			defer wg.Done()
-			worker(jobs, retries, results, ctx, limitTo)
+			worker(jobs, results, ctx, config)
 		}()
 	}
 
@@ -183,7 +203,7 @@ func main() {
 	}
 	close(jobs)
 
-	cli.Println(fmt.Sprintf("Waiting for workers (%d) to finish", threads))
+	cli.Println(fmt.Sprintf("Waiting for workers (%d) to finish", config.threads))
 	comprehensiveWait(ctx, &wg)
 
 	close(results)
@@ -261,24 +281,24 @@ func durationStr(duration time.Duration) string {
 	return fmt.Sprintf("%02d:%02d", int(duration.Minutes()), int(duration.Seconds())%60)
 }
 
-func worker(jobs <-chan string, retries int, results chan<- batsResult, ctx context.Context, limitTo map[string]bool) {
+func worker(jobs <-chan string, results chan<- batsResult, ctx context.Context, config config) {
 	for job := range jobs {
-		runBats(job, retries, results, ctx, limitTo)
+		runBats(job, results, ctx, config)
 	}
 }
 
 // runBats runs a single bats test and sends the result to the results channel. Stdout and stderr are written to files
 // in the batsee_results directory in the CWD, and the error is written to the result.err field.
-func runBats(path string, retries int, resultChan chan<- batsResult, ctx context.Context, limitTo map[string]bool) {
+func runBats(path string, resultChan chan<- batsResult, ctx context.Context, cfg config) {
 	cmd := exec.CommandContext(ctx, "bats", path)
 	// Set the process group ID so that we can kill the entire process tree if it runs too long. We need to differenciate
 	// process group of the sub process from this one, because kill the primary process if we don't.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Env = append(os.Environ(), fmt.Sprintf("DOLT_TEST_RETRIES=%d", retries))
+	cmd.Env = append(os.Environ(), fmt.Sprintf("DOLT_TEST_RETRIES=%d", cfg.retries))
 
 	result := batsResult{path: path}
 
-	if limitTo != nil && len(limitTo) != 0 && !limitTo[path] {
+	if cfg.limitTo != nil && len(cfg.limitTo) != 0 && !cfg.limitTo[path] {
 		result.skipped = true
 		resultChan <- result
 		return
