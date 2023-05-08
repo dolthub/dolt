@@ -388,16 +388,7 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 	sess := dsess.DSessFromSess(ctx.Session)
 	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
 
-	// if currentDB is empty, it will create the database with the default format which is the old format
 	newDbStorageFormat := types.Format_Default
-	if curDB := sess.GetCurrentDatabase(); curDB != "" {
-		if sess.HasDB(ctx, curDB) {
-			if ddb, ok := sess.GetDoltDB(ctx, curDB); ok {
-				newDbStorageFormat = ddb.ValueReadWriter().Format()
-			}
-		}
-	}
-
 	err = newEnv.InitRepo(ctx, newDbStorageFormat, sess.Username(), sess.Email(), p.defaultBranch)
 	if err != nil {
 		return err
