@@ -45,8 +45,8 @@ func NewCliContext(args *argparser.ArgParseResults, latebind LateBindQueryist) (
 	return LateBindCliContext{globalArgs: args, bind: latebind}, nil
 }
 
-// LateBindCliContext is a struct that implements CliContext. It's primary purpose is to wrap the global arguments and
-// provide an implementation of the QueryEngine function. This instance is stateful to ensure that the Queryist if only
+// LateBindCliContext is a struct that implements CliContext. Its primary purpose is to wrap the global arguments and
+// provide an implementation of the QueryEngine function. This instance is stateful to ensure that the Queryist is only
 // created once.
 type LateBindCliContext struct {
 	globalArgs *argparser.ArgParseResults
