@@ -163,8 +163,15 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 		}
 	}
 
-	// no state for this db / branch combination yet, look it up from the provider
-	database, ok, err := d.provider.SessionDatabase(ctx, dbName)
+	// No state for this db / branch combination yet, look it up from the provider. We use the unqualified DB name (no 
+	// branch) if the current DB has not yet been loaded into this session. It will resolve to that DB's default branch 
+	// in that case.
+	sessionDbName := dbName
+	if rev != "" {
+		sessionDbName = revisionDbName(baseName, rev)
+	}
+	
+	database, ok, err := d.provider.SessionDatabase(ctx, sessionDbName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -187,6 +194,10 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 
 	_, rev = SplitRevisionDbName(database)
 	return dbState.heads[strings.ToLower(rev)], true, nil
+}
+
+func revisionDbName(baseName string, rev string) string {
+	return baseName + DbRevisionDelimiter + rev
 }
 
 func splitDbName(dbName string) (string, string) {
@@ -334,8 +345,10 @@ func (d *DoltSession) clearRevisionDbState() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	for db := range d.dbStates {
-		delete(d.dbStates, db)
+	for _, dbState := range d.dbStates {
+		for head := range dbState.heads {
+			delete(dbState.heads, head)
+		}
 	}
 }
 
@@ -1314,6 +1327,7 @@ func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
 
 // GetBranch implements the interface branch_control.Context.
 func (d *DoltSession) GetBranch() (string, error) {
+	// TODO: creating a new SQL context here is expensive
 	ctx := sql.NewContext(context.Background(), sql.WithSession(d))
 	currentDb := d.Session.GetCurrentDatabase()
 
