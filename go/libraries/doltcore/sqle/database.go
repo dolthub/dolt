@@ -1201,7 +1201,7 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition,
 	}
 
 	for _, frag := range frags {
-		if frag.name == strings.ToLower(name) {
+		if strings.ToLower(frag.name) == strings.ToLower(name) {
 			return sql.EventDefinition{
 				Name:            frag.name,
 				CreateStatement: frag.fragment,
@@ -1255,8 +1255,8 @@ func (db Database) DropEvent(ctx *sql.Context, name string) error {
 }
 
 // UpdateEvent implements sql.EventDatabase.
-func (db Database) UpdateEvent(ctx *sql.Context, ed sql.EventDefinition) error {
-	err := db.DropEvent(ctx, ed.Name)
+func (db Database) UpdateEvent(ctx *sql.Context, originalName string, ed sql.EventDefinition) error {
+	err := db.DropEvent(ctx, originalName)
 	if err != nil {
 		return err
 	}
