@@ -165,7 +165,7 @@ SQL
     mkdir remote
     cd remote
     dolt init
-    dolt sql --privilege-file=privs.json -q "CREATE USER user IDENTIFIED BY 'pass0'"
+    dolt --privilege-file=privs.json sql -q "CREATE USER user IDENTIFIED BY 'pass0'"
     dolt sql -q 'create table vals (i int);'
     dolt sql -q 'insert into vals (i) values (1), (2), (3), (4), (5);'
     dolt add vals
@@ -237,7 +237,7 @@ SQL
     mkdir remote
     cd remote
     dolt init
-    dolt sql --privilege-file=privs.json -q "CREATE USER user0 IDENTIFIED BY 'pass0'"
+    dolt --privilege-file=privs.json sql -q "CREATE USER user0 IDENTIFIED BY 'pass0'"
     dolt sql -q 'create table vals (i int);'
     dolt sql -q 'insert into vals (i) values (1), (2), (3), (4), (5);'
     dolt add vals
@@ -258,7 +258,7 @@ SQL
     mkdir remote
     cd remote
     dolt init
-    dolt sql --privilege-file=privs.json -q "CREATE USER user0 IDENTIFIED BY 'pass0'"
+    dolt --privilege-file=privs.json sql -q "CREATE USER user0 IDENTIFIED BY 'pass0'"
     dolt sql -q 'create table vals (i int);'
     dolt sql -q 'insert into vals (i) values (1), (2), (3), (4), (5);'
     dolt add vals

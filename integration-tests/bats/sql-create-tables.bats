@@ -359,7 +359,7 @@ SQL
     cd workspace
     dolt init
     cd ..
-    dolt sql --data-dir ./ -b -q "USE workspace;CREATE TABLE mytable LIKE otherdb.othertable;"
+    dolt --data-dir ./ sql -b -q "USE workspace;CREATE TABLE mytable LIKE otherdb.othertable;"
     cd workspace
     run dolt schema show mytable
     [ "$status" -eq 0 ]
@@ -705,7 +705,7 @@ SQL
     cd repo2
     dolt init
     cd ..
-    run dolt sql --data-dir ./ -b -q "USE repo2;CREATE TEMPORARY TABLE temp2 LIKE repo1.tableone;"
+    run dolt --data-dir ./ sql -b -q "USE repo2;CREATE TEMPORARY TABLE temp2 LIKE repo1.tableone;"
     [ "$status" -eq 0 ]
     cd repo2
 

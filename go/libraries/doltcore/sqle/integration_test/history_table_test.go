@@ -212,8 +212,11 @@ var INIT = ""   // HEAD~4
 func setupHistoryTests(t *testing.T) *env.DoltEnv {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
+	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv)
+	require.NoError(t, verr)
+
 	for _, c := range setupCommon {
-		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cmd.BuildEmptyCliContext())
+		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
 		require.Equal(t, 0, exitCode)
 	}
 
@@ -236,8 +239,11 @@ func setupHistoryTests(t *testing.T) *env.DoltEnv {
 
 func testHistoryTable(t *testing.T, test historyTableTest, dEnv *env.DoltEnv) {
 	ctx := context.Background()
+	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv)
+	require.NoError(t, verr)
+
 	for _, c := range test.setup {
-		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cmd.BuildEmptyCliContext())
+		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
 		require.Equal(t, 0, exitCode)
 	}
 
