@@ -54,7 +54,7 @@ func TestBinlogReplicationAutoReconnect(t *testing.T) {
 	// Remove the limit_data toxic so that a connection can be reestablished
 	err := mysqlProxy.RemoveToxic("limit_data")
 	require.NoError(t, err)
-	fmt.Printf("Toxiproxy proxy limit_data toxic removed")
+	t.Logf("Toxiproxy proxy limit_data toxic removed")
 
 	// Assert that all records get written to the table
 	waitForReplicaToCatchUp(t)
@@ -157,7 +157,7 @@ func configureToxiProxy(t *testing.T) {
 		toxiproxyServer.Listen("localhost", strconv.Itoa(toxiproxyPort))
 	}()
 	time.Sleep(500 * time.Millisecond)
-	fmt.Printf("Toxiproxy control plane running on port %d \n", toxiproxyPort)
+	t.Logf("Toxiproxy control plane running on port %d", toxiproxyPort)
 
 	toxiClient = toxiproxyclient.NewClient(fmt.Sprintf("localhost:%d", toxiproxyPort))
 
@@ -169,7 +169,7 @@ func configureToxiProxy(t *testing.T) {
 	if err != nil {
 		panic(fmt.Sprintf("unable to create toxiproxy: %v", err.Error()))
 	}
-	fmt.Printf("Toxiproxy proxy started on port %d \n", proxyPort)
+	t.Logf("Toxiproxy proxy started on port %d", proxyPort)
 }
 
 // turnOnLimitDataToxic adds a limit_data toxic to the active Toxiproxy, which prevents more than 1KB of data
@@ -181,7 +181,7 @@ func turnOnLimitDataToxic(t *testing.T) {
 		"bytes": 1_000,
 	})
 	require.NoError(t, err)
-	fmt.Printf("Toxiproxy proxy with limit_data toxic (1KB) started on port %d \n", proxyPort)
+	t.Logf("Toxiproxy proxy with limit_data toxic (1KB) started on port %d", proxyPort)
 }
 
 // convertByteArraysToStrings converts each []byte value in the specified map |m| into a string.
