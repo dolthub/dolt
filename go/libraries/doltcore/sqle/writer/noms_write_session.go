@@ -37,6 +37,7 @@ type WriteSession interface {
 	GetTableWriter(ctx context.Context, table, db string, setter SessionRootSetter, batched bool) (TableWriter, error)
 
 	// SetWorkingSet modifies the state of the WriteSession. The WorkingSetRef of |ws| must match the existing Ref.
+	// TODO: kill this, do not reuse write sessions between working sets
 	SetWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error
 
 	// GetOptions returns the editor.Options for this session.

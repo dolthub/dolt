@@ -1452,44 +1452,97 @@ func TestSingleTransactionScript(t *testing.T) {
 	sql.RunWithNowFunc(tcc.Now, func() error {
 
 		script := queries.TransactionTest{
-			Name: "autocommit on",
+			Name: "committed conflicts are seen by other sessions",
 			SetUpScript: []string{
-				"create table t (x int primary key, y int)",
-				"insert into t values (1, 1)",
+				"CREATE TABLE test (pk int primary key, val int)",
+				"CALL DOLT_ADD('.')",
+				"INSERT INTO test VALUES (0, 0)",
+				"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+				"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
+				"INSERT INTO test VALUES (1, 1);",
+				"UPDATE test SET val=1000 WHERE pk=0;",
+				"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+				"CALL DOLT_CHECKOUT('main');",
+				"UPDATE test SET val=1001 WHERE pk=0;",
+				"CALL DOLT_COMMIT('-a', '-m', 'update a value');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "/* client a */ insert into t values (2, 2)",
-					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+					Query:    "/* client a */ start transaction",
+					Expected: []sql.Row{},
 				},
 				{
-					Query:    "/* client b */ select * from t order by x",
-					Expected: []sql.Row{{1, 1}, {2, 2}},
+					Query:    "/* client b */ start transaction",
+					Expected: []sql.Row{},
 				},
 				{
-					Query:    "/* client b */ insert into t values (3, 3)",
-					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+					Query:    "/* client a */ CALL DOLT_MERGE('feature-branch')",
+					Expected: []sql.Row{{0, 1}},
 				},
 				{
-					Query:    "/* client b */ select * from t order by x",
-					Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+					Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",
+					Expected: []sql.Row{{1}},
 				},
 				{
-					Query:    "/* client a */ select * from t order by x",
-					Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+					Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
+					Expected: []sql.Row{{0}},
 				},
 				{
-					Query:    "/* client a */ insert into t values (4, 4)",
-					SkipResultsCheck: true,
+					Query:    "/* client a */ set dolt_allow_commit_conflicts = 1",
+					Expected: []sql.Row{{}},
 				},
 				{
-					Query:    "/* client b */ select * from t order by x",
-					Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+					Query:    "/* client a */ commit",
+					Expected: []sql.Row{},
+				},
+				{
+					Query:    "/* client b */ start transaction",
+					Expected: []sql.Row{},
+				},
+				{
+					Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
+					Expected: []sql.Row{{1}},
+				},
+				{
+					Query:    "/* client a */ start transaction",
+					Expected: []sql.Row{},
+				},
+				{
+					Query:    "/* client a */ CALL DOLT_MERGE('--abort')",
+					Expected: []sql.Row{{0, 0}},
+				},
+				{
+					Query:    "/* client a */ commit",
+					Expected: []sql.Row{},
+				},
+				{
+					Query:    "/* client b */ start transaction",
+					Expected: []sql.Row{},
+				},
+				{
+					Query:    "/* client a */ SET @@dolt_allow_commit_conflicts = 0",
+					Expected: []sql.Row{{}},
+				},
+				{
+					Query:          "/* client a */ CALL DOLT_MERGE('feature-branch')",
+					ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
+				},
+				{ // client rolled back on merge with conflicts
+					Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",
+					Expected: []sql.Row{{0}},
+				},
+				{
+					Query:    "/* client a */ commit",
+					Expected: []sql.Row{},
+				},
+				{
+					Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
+					Expected: []sql.Row{{0}},
 				},
 			},
 		}
 
-				h := newDoltHarness(t)
+		h := newDoltHarness(t)
 		defer h.Close()
 		enginetest.TestTransactionScript(t, h, script)
 

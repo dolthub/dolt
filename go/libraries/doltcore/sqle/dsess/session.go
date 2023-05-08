@@ -816,6 +816,7 @@ func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roo
 
 // SetWorkingSet sets the working set for this session.
 // Unlike setting the working root alone, this method always marks the session dirty.
+// TODO: this is doing a lot of resolve work that should only happen once, at initialization time
 func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.WorkingSet) error {
 	if ws == nil {
 		panic("attempted to set a nil working set for the session")
@@ -830,33 +831,12 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	}
 	branchState.workingSet = ws
 
-	cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
-	if err != nil {
-		return err
-	}
-
-	branchRef, err := ws.Ref().ToHeadRef()
-	if err != nil {
-		return err
-	}
-
-	cm, err := branchState.dbData.Ddb.Resolve(ctx, cs, branchRef)
-	if err != nil {
-		return err
-	}
-	branchState.headCommit = cm
-
-	headRoot, err := cm.GetRootValue(ctx)
-	if err != nil {
-		return err
-	}
-	branchState.headRoot = headRoot
-
 	err = d.setSessionVarsForDb(ctx, dbName)
 	if err != nil {
 		return err
 	}
 
+	// TODO: remove this
 	err = branchState.WriteSession().SetWorkingSet(ctx, ws)
 	if err != nil {
 		return err
@@ -864,6 +844,30 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 
 	branchState.dbState.dirty = true
 
+	return nil
+}
+
+// SetCurrentHead sets the currently connected head revision spec for this session.
+// TODO: more caveats and guidance
+func (d *DoltSession) SetCurrentHead(ctx *sql.Context, dbName string, wsRef ref.WorkingSetRef) error {
+	headRef, err := wsRef.ToHeadRef()
+	if err != nil {
+		return err
+	}
+	
+	d.mu.Lock()
+
+	baseName, _ := splitDbName(dbName)
+	dbState, ok := d.dbStates[strings.ToLower(baseName)]
+	if !ok {
+		d.mu.Unlock()
+		return sql.ErrDatabaseNotFound.New(dbName)
+	}
+	dbState.currRevSpec = headRef.GetPath()
+	dbState.currRevType = RevisionTypeBranch
+
+	d.mu.Unlock()
+	
 	return nil
 }
 
@@ -883,15 +887,27 @@ func (d *DoltSession) SwitchWorkingSet(
 	}
 
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	
 	baseName, _ := splitDbName(dbName)
 	dbState, ok := d.dbStates[strings.ToLower(baseName)]
 	if !ok {
+		d.mu.Unlock()
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
 	dbState.currRevSpec = headRef.GetPath()
 	dbState.currRevType = RevisionTypeBranch
+
+	d.mu.Unlock()
+
+	// bootstrap the db state as necessary
+	_, ok, err = d.lookupDbState(ctx, baseName + DbRevisionDelimiter + headRef.GetPath())
+	if err != nil {
+		return err
+	}
+	
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(dbName)
+	}
 	
 	return nil
 }
@@ -1018,8 +1034,8 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	}
 
 	d.mu.Lock()
-	var sessionState *DatabaseSessionState
-	if _, ok := d.dbStates[strings.ToLower(baseName)]; !ok {
+	sessionState, ok := d.dbStates[strings.ToLower(baseName)]
+	if !ok {
 		sessionState = NewEmptyDatabaseSessionState()
 		d.dbStates[strings.ToLower(baseName)] = sessionState
 
@@ -1081,11 +1097,10 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 			return err
 		}
 		branchState.writeSession = writer.NewWriteSession(nbf, branchState.WorkingSet(), tracker, editOpts)
-		if err = d.SetWorkingSet(ctx, db.Name(), dbState.WorkingSet); err != nil {
-			return err
-		}
-	} else if dbState.HeadCommit != nil {
-		// WorkingSet is nil in the case of a read only, detached head DB
+	}
+
+	// WorkingSet is nil in the case of a read only, detached head DB
+	if dbState.HeadCommit != nil {
 		headRoot, err := dbState.HeadCommit.GetRootValue(ctx)
 		if err != nil {
 			return err
@@ -1098,14 +1113,11 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	// This has to happen after SetWorkingSet above, since it does a stale check before its work
 	// TODO: this needs to be kept up to date as the working set ref changes
 	branchState.headCommit = dbState.HeadCommit
-
-	// After setting the initial root we have no state to commit
-	// TODO: do we still want to track dirty states, or just look at hashes
-	sessionState.dirty = false
-
+	
 	if sessionState.Err == nil {
 		return d.setSessionVarsForDb(ctx, db.Name())
 	}
+	
 	return nil
 }
 

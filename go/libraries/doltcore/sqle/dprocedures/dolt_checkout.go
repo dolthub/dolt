@@ -263,11 +263,7 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 	if err != nil {
 		return err
 	}
-	err = checkoutBranch(ctx, dbName, newBranchName)
-	if err != nil {
-		return err
-	}
-
+	
 	if setTrackUpstream {
 		err = env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteName, ref.NewBranchRef(remoteBranchName))
 		if err != nil {
@@ -284,8 +280,21 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 			return err
 		}
 	}
+	
+	// We need to commit the transaction here or else the branch we just created isn't visible to the current transaction,
+	// and we are about to switch to it. So set the new branch head for the new transaction, then commit this one
+	sess := dsess.DSessFromSess(ctx.Session)
+	err = commitTransaction(ctx, sess)
+	if err != nil {
+		return err
+	}
 
-	return nil
+	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(newBranchName))
+	if err != nil {
+		return err
+	}
+	
+	return sess.SetCurrentHead(ctx, dbName, wsRef)
 }
 
 func checkoutBranch(ctx *sql.Context, dbName string, branchName string) error {
