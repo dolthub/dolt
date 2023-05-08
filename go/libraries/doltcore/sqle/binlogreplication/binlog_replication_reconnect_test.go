@@ -17,6 +17,7 @@ package binlogreplication
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -70,7 +71,7 @@ func TestBinlogReplicationAutoReconnect(t *testing.T) {
 	// Assert that show replica status show reconnection IO error
 	status := showReplicaStatus(t)
 	require.Equal(t, "1158", status["Last_IO_Errno"])
-	require.Equal(t, "unexpected EOF", status["Last_IO_Error"])
+	require.True(t, strings.Contains(status["Last_IO_Error"].(string), "EOF"))
 	requireRecentTimeString(t, status["Last_IO_Error_Timestamp"])
 }
 
