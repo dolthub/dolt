@@ -43,12 +43,13 @@ var batseeDoc = cli.CommandDocumentationContent{
 Output for each test is written to a file in the batsee_output directory.
 Example:  batsee -t 42 --max-time 1h15m -r 2 --only types.bats,foreign-keys.bats`,
 	Synopsis: []string{
-		`[-t {{.LessThan}}threads{{.GreaterThan}}] [--skip-slow] [--max-time {{.LessThan}}time{{.GreaterThan}}] [--retries {{.LessThan}}retries{{.GreaterThan}}] [--only test1,test2,...]`,
+		`[-t threads] [-o dir] [--skip-slow] [--max-time time] [--only test1,test2,...]`,
 	},
 }
 
 const (
 	threadsFlag  = "threads"
+	outputDir    = "output"
 	skipSlowFlag = "skip-slow"
 	maxTimeFlag  = "max-time"
 	onlyFLag     = "only"
@@ -58,6 +59,7 @@ const (
 func buildArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("batsee", 0)
 	ap.SupportsInt(threadsFlag, "t", "threads", "Number of tests to execute in parallel. Defaults to 12")
+	ap.SupportsString(outputDir, "o", "directory", "Directory to write output to. Defaults to 'batsee_results'")
 	ap.SupportsFlag(skipSlowFlag, "s", "Skip slow tests. This is a static list of test we know are slow, may grow stale.")
 	ap.SupportsString(maxTimeFlag, "", "duration", "Maximum time to run tests. Defaults to 30m")
 	ap.SupportsString(onlyFLag, "", "", "Only run the specified test, or tests (comma separated)")
@@ -89,6 +91,7 @@ var slowCommands = map[string]bool{
 
 type config struct {
 	threads  int
+	output   string
 	duration time.Duration
 	skipSlow bool
 	limitTo  map[string]bool
@@ -99,6 +102,11 @@ func buildConfig(apr *argparser.ArgParseResults) config {
 	threads, hasThreads := apr.GetInt(threadsFlag)
 	if !hasThreads {
 		threads = 12
+	}
+
+	output, hasOutput := apr.GetValue(outputDir)
+	if !hasOutput {
+		output = "batsee_results"
 	}
 
 	durationInput, hasDuration := apr.GetValue(maxTimeFlag)
@@ -129,6 +137,7 @@ func buildConfig(apr *argparser.ArgParseResults) config {
 
 	return config{
 		threads:  threads,
+		output:   output,
 		duration: duration,
 		skipSlow: skipSlow,
 		limitTo:  limitTo,
@@ -306,7 +315,7 @@ func runBats(path string, resultChan chan<- batsResult, ctx context.Context, cfg
 
 	startTime := time.Now()
 
-	outPath := fmt.Sprintf("batsee_results/%s.stdout.log", path)
+	outPath := fmt.Sprintf("%s/%s.stdout.log", cfg.output, path)
 	output, err := os.Create(outPath)
 	if err != nil {
 		cli.Println("Error creating stdout log:", err.Error())
@@ -319,7 +328,7 @@ func runBats(path string, resultChan chan<- batsResult, ctx context.Context, cfg
 		result.err = err
 	}
 
-	errPath := fmt.Sprintf("batsee_results/%s.stderr.log", path)
+	errPath := fmt.Sprintf("%s/%s.stderr.log", cfg.output, path)
 	errput, err := os.Create(errPath)
 	if err != nil {
 		cli.Println("Error creating stderr log:", err.Error())
