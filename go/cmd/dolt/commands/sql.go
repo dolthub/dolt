@@ -176,8 +176,15 @@ func (cmd SqlCmd) RequiresRepo() bool {
 func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlDocs, ap))
+	apr, verr := cmd.handleLegacyArguments(ap, commandStr, args)
+	if verr != nil {
+		if verr == argparser.ErrHelp {
+			help()
+			return 0
+		}
+		return HandleVErrAndExitCode(verr, usage)
+	}
 
-	apr := cli.ParseArgsOrDie(ap, args, help)
 	err := validateSqlArgs(apr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -276,6 +283,45 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	return 0
+}
+
+// handleLegacyArguments is a temporary function to parse args, and print a error and explanation when the old form is provided.
+func (cmd SqlCmd) handleLegacyArguments(ap *argparser.ArgParser, commandStr string, args []string) (*argparser.ArgParseResults, errhand.VerboseError) {
+
+	apr, err := ap.Parse(args)
+
+	if err != nil {
+		legacyParser := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
+		legacyParser.SupportsString(QueryFlag, "q", "SQL query to run", "Runs a single query and exits.")
+		legacyParser.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, vertical. Defaults to tabular.")
+		legacyParser.SupportsString(saveFlag, "s", "saved query name", "Used with --query, save the query to the query catalog with the name provided. Saved queries can be examined in the dolt_query_catalog system table.")
+		legacyParser.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name.")
+		legacyParser.SupportsFlag(listSavedFlag, "l", "List all saved queries.")
+		legacyParser.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also `--name`.")
+		legacyParser.SupportsFlag(BatchFlag, "b", "Use to enable more efficient batch processing for large SQL import scripts consisting of only INSERT statements. Other statements types are not guaranteed to work in this mode.")
+		legacyParser.SupportsString(DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
+		legacyParser.SupportsString(MultiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory. This is deprecated, you should use `--data-dir` instead")
+		legacyParser.SupportsString(CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change that affect configuration settings.")
+		legacyParser.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
+		legacyParser.SupportsString(fileInputFlag, "f", "input file", "Execute statements from the file given.")
+		legacyParser.SupportsString(PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
+		legacyParser.SupportsString(BranchCtrlPathFlag, "", "branch control file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will only be created if there is a change to branch control permissions.")
+		legacyParser.SupportsString(UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", DefaultUser))
+
+		_, newErr := legacyParser.Parse(args)
+
+		if newErr != nil {
+			// Neither form of the arguments works. Print the usage and the error of the first parse.
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+
+		// The legacy form worked, so print an error and exit.
+		err = fmt.Errorf("SQL arguments have changed. Move --data-dir, --doltcfg-dir to before the sql sub command.")
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+
+	return apr, nil
+
 }
 
 func listSavedQueries(ctx *sql.Context, qryist cli.Queryist, dEnv *env.DoltEnv, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
