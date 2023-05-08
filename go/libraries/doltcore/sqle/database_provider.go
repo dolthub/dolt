@@ -1074,6 +1074,9 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 	if err != nil {
 		return nil, false, err
 	}
+	if !ok {
+		return nil, false, nil
+	}
 
 	return wrapForStandby(db, standby), true, nil
 }
@@ -1249,11 +1252,9 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 		RepoStateReader: srcDb.DbData().Rsr,
 	}
 
-	var db dsess.SqlDatabase
-
 	switch v := srcDb.(type) {
-	case Database:
-		db = Database{
+	case ReadOnlyDatabase:
+		db := Database{
 			name:     srcDb.Name(),
 			ddb:      v.ddb,
 			rsw:      static,
@@ -1263,8 +1264,20 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 			revision: revSpec,
 			revType:  dsess.RevisionTypeBranch,
 		}
+		return ReadOnlyDatabase{db}, nil
+	case Database:
+		return Database{
+			name:     srcDb.Name(),
+			ddb:      v.ddb,
+			rsw:      static,
+			rsr:      static,
+			gs:       v.gs,
+			editOpts: v.editOpts,
+			revision: revSpec,
+			revType:  dsess.RevisionTypeBranch,
+		}, nil
 	case ReadReplicaDatabase:
-		db = ReadReplicaDatabase{
+		return ReadReplicaDatabase{
 			Database: Database{
 				name:     srcDb.Name(),
 				ddb:      v.ddb,
@@ -1279,10 +1292,10 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 			srcDB:   v.srcDB,
 			tmpDir:  v.tmpDir,
 			limiter: newLimiter(),
-		}
+		}, nil
+	default:
+		panic(fmt.Sprintf("unrecognized type of database %T", srcDb))
 	}
-
-	return db, nil
 }
 
 func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.InitialDbState, error) {
@@ -1350,7 +1363,7 @@ func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.I
 }
 
 func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string) (ReadOnlyDatabase, error) {
-	db := ReadOnlyDatabase{Database: Database{
+	return ReadOnlyDatabase{Database: Database{
 		name:     srcDb.Name(),
 		ddb:      srcDb.DbData().Ddb,
 		rsw:      srcDb.DbData().Rsw,
@@ -1358,9 +1371,7 @@ func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string) (Read
 		editOpts: srcDb.editOpts,
 		revision: revSpec,
 		revType:  dsess.RevisionTypeTag,
-	}}
-
-	return db, nil
+	}}, nil
 }
 
 func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.InitialDbState, error) {
@@ -1392,7 +1403,7 @@ func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.In
 }
 
 func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string) (ReadOnlyDatabase, error) {
-	db := ReadOnlyDatabase{Database: Database{
+	return ReadOnlyDatabase{Database: Database{
 		name:     srcDb.Name(),
 		ddb:      srcDb.DbData().Ddb,
 		rsw:      srcDb.DbData().Rsw,
@@ -1400,9 +1411,7 @@ func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		editOpts: srcDb.editOpts,
 		revision: revSpec,
 		revType:  dsess.RevisionTypeCommit,
-	}}
-
-	return db, nil
+	}}, nil
 }
 
 func initialStateForCommit(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.InitialDbState, error) {
