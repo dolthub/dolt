@@ -163,6 +163,10 @@ func TestSingleScript(t *testing.T) {
 				Expected: []sql.Row{{1, 1}, {2, 2}},
 			},
 			{
+				Query:    "select * from `mydb/tag1`.t01;",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+			{
 				Query:    "select * from `mydb/tag1^`.t01;",
 				Expected: []sql.Row{{1, 1}, {2, 2}},
 			},

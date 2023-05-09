@@ -172,6 +172,7 @@ func createWorkingSetForLocalBranch(ctx *sql.Context, ddb *doltdb.DoltDB, branch
 }
 
 // getRevisionForRevisionDatabase returns the root database name and revision for a database, or just the root database name if the specified db name is not a revision database.
+// TODO: this is no longer necessary, kill it
 func getRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, string, error) {
 	doltsess, ok := ctx.Session.(*dsess.DoltSession)
 	if !ok {
@@ -185,13 +186,8 @@ func getRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, st
 	if !ok {
 		return "", "", sql.ErrDatabaseNotFound.New(dbName)
 	}
-
-	rdb, ok := db.(dsess.RevisionDatabase)
-	if !ok {
-		return dbName, "", nil
-	}
-
-	return rdb.BaseName(), rdb.Revision(), nil
+	
+	return db.Name(), db.Revision(), nil
 }
 
 // checkoutRemoteBranch checks out a remote branch creating a new local branch with the same name as the remote branch

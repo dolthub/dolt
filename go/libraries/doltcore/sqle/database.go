@@ -145,6 +145,15 @@ func (db Database) Name() string {
 	return db.name
 }
 
+// RevisionQualifiedName returns the name of this database including its revision qualifier, if any. This method should
+// be used whenever accessing internal state of a database and its tables.
+func (db Database) RevisionQualifiedName() string {
+	if db.revision == "" {
+		return db.name
+	}
+	return db.name + dsess.DbRevisionDelimiter + db.revision
+}
+
 // GetDoltDB gets the underlying DoltDB of the Database
 func (db Database) GetDoltDB() *doltdb.DoltDB {
 	return db.ddb
@@ -378,7 +387,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			map[string]env.Remote{},
 			map[string]env.BranchConfig{},
 			map[string]env.Remote{})
-		ws, err := sess.WorkingSet(ctx, db.name)
+		ws, err := sess.WorkingSet(ctx, db.RevisionQualifiedName())
 		if err != nil {
 			return nil, false, err
 		}
@@ -534,7 +543,7 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 // getTable returns the user table with the given name from the root given
 func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName string) (sql.Table, bool, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, ok, err := sess.LookupDbState(ctx, db.name)
+	dbState, ok, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
 	if err != nil {
 		return nil, false, err
 	}
@@ -635,7 +644,7 @@ func filterDoltInternalTables(tblNames []string) []string {
 // GetRoot returns the root value for this database session
 func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, ok, err := sess.LookupDbState(ctx, db.Name())
+	dbState, ok, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
 	if err != nil {
 		return nil, err
 	}
@@ -648,7 +657,7 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 
 func (db Database) GetWorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, ok, err := sess.LookupDbState(ctx, db.Name())
+	dbState, ok, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
 	if err != nil {
 		return nil, err
 	}
@@ -1007,7 +1016,7 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 // Flush flushes the current batch of outstanding changes and returns any errors.
 func (db Database) Flush(ctx *sql.Context) error {
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, _, err := sess.LookupDbState(ctx, db.Name())
+	dbState, _, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
 	if err != nil {
 		return err
 	}
@@ -1045,7 +1054,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 	}
 
 	ds := dsess.DSessFromSess(ctx.Session)
-	dbState, _, err := ds.LookupDbState(ctx, db.name)
+	dbState, _, err := ds.LookupDbState(ctx, db.RevisionQualifiedName())
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}

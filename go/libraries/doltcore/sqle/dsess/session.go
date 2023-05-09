@@ -818,6 +818,7 @@ func (d *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.R
 // Unlike setting the working root, this method always marks the database state dirty.
 func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
 	// TODO: handle HEAD here?
+	// TODO: need to make sure we use a revision qualified DB name here
 	sessionState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
@@ -948,6 +949,7 @@ func (d *DoltSession) UseDatabase(ctx *sql.Context, db sql.Database) error {
 }
 
 func (d *DoltSession) WorkingSet(ctx *sql.Context, dbName string) (*doltdb.WorkingSet, error) {
+	// TODO: need to make sure we use a revision qualified DB name here
 	sessionState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err

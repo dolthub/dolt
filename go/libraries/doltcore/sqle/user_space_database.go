@@ -115,6 +115,6 @@ func (db *UserSpaceDatabase) RevisionType() dsess.RevisionType {
 	return dsess.RevisionTypeNone
 }
 
-func (db *UserSpaceDatabase) BaseName() string {
+func (db *UserSpaceDatabase) RevisionQualifiedName() string {
 	return db.Name()
 }

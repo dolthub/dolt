@@ -244,7 +244,7 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, ok, err := sess.LookupDbState(ctx, t.db.Name())
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.RevisionQualifiedName())
 	if err != nil {
 		return nil, err
 	}
@@ -520,7 +520,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 		}
 	}
 
-	state, _, err := ds.LookupDbState(ctx, t.db.name)
+	state, _, err := ds.LookupDbState(ctx, t.db.RevisionQualifiedName())
 	if err != nil {
 		return nil, err
 	}
@@ -635,13 +635,13 @@ func (t *WritableDoltTable) truncate(
 		}
 	}
 
-	ws, err := sess.WorkingSet(ctx, t.db.name)
+	ws, err := sess.WorkingSet(ctx, t.db.RevisionQualifiedName())
 	if err != nil {
 		return nil, err
 	}
 
 	if schema.HasAutoIncrement(sch) {
-		ddb, _ := sess.GetDoltDB(ctx, t.db.name)
+		ddb, _ := sess.GetDoltDB(ctx, t.db.RevisionQualifiedName())
 		err = t.db.removeTableFromAutoIncrementTracker(ctx, t.Name(), ddb, ws.Ref())
 		if err != nil {
 			return nil, err
@@ -1248,7 +1248,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	// Begin by creating a new table with the same name and the new schema, then removing all its existing rows
-	dbState, ok, err := sess.LookupDbState(ctx, t.db.Name())
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.RevisionQualifiedName())
 	if err != nil {
 		return nil, err
 	}
@@ -2377,7 +2377,7 @@ func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootV
 	// When we update this table we need to also clear any cached versions of the object, since they may now have
 	// incorrect schema information
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, ok, err := sess.LookupDbState(ctx, t.db.name)
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.RevisionQualifiedName())
 	if !ok {
 		return fmt.Errorf("no db state found for %s", t.db.name)
 	}
