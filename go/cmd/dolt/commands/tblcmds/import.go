@@ -778,7 +778,7 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 		// For non string types we want empty strings to be converted to nils. String types should be allowed to take on
 		// an empty string value
 		switch col.Type.(type) {
-		case sql.StringType:
+		case sql.StringType, sql.EnumType, sql.SetType:
 		default:
 			row[i] = emptyStringToNil(row[i])
 		}
