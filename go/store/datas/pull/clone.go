@@ -55,7 +55,7 @@ func Clone(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, eventCh chan<- 
 		return fmt.Errorf("%w: sink db is not a Table File Store", ErrCloneUnsupported)
 	}
 
-	return clone(ctx, srcTS, sinkTS, eventCh)
+	return clone(ctx, srcTS, sinkTS, sinkCS, eventCh)
 }
 
 type CloneTableFileEvent int
@@ -91,7 +91,7 @@ func mapTableFiles(tblFiles []chunks.TableFile) ([]string, map[string]chunks.Tab
 
 const concurrentTableFileDownloads = 3
 
-func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, eventCh chan<- TableFileEvent) error {
+func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chunks.ChunkStore, eventCh chan<- TableFileEvent) error {
 	root, sourceFiles, appendixFiles, err := srcTS.Sources(ctx)
 	if err != nil {
 		return err
@@ -211,6 +211,24 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, eventCh cha
 	}
 
 	sinkTS.AddTableFilesToManifest(ctx, fileIDToNumChunks)
+
+	// AddTableFilesToManifest can set the root chunk if there is a chunk
+	// journal which we downloaded in the clone. If that happened, the
+	// chunk journal is actually more accurate on what the current root is
+	// than the result of |Sources| up above. We choose not to touch
+	// anything in that case.
+	err = sinkCS.Rebase(ctx)
+	if err != nil {
+		return err
+	}
+	sinkRoot, err := sinkCS.Root(ctx)
+	if err != nil {
+		return err
+	}
+	if !sinkRoot.IsEmpty() {
+		return nil
+	}
+
 	return sinkTS.SetRootChunk(ctx, root, hash.Hash{})
 }
 
