@@ -123,7 +123,11 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	if len(opts.commitSpecs) == 0 {
-		opts.commitSpecs = append(opts.commitSpecs, dEnv.RepoStateReader().CWBHeadSpec())
+		headRef, err := dEnv.RepoStateReader().CWBHeadSpec()
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+		opts.commitSpecs = append(opts.commitSpecs, headRef)
 	}
 	if len(opts.tableName) > 0 {
 		return handleErrAndExit(logTableCommits(ctx, dEnv, opts))
@@ -327,8 +331,12 @@ func getHashToRefs(ctx context.Context, dEnv *env.DoltEnv, decorationLevel strin
 func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 	hashes := make([]hash.Hash, len(opts.commitSpecs))
 
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return handleErrAndExit(err)
+	}
 	for i, cs := range opts.commitSpecs {
-		commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
+		commit, err := dEnv.DoltDB.Resolve(ctx, cs, headRef)
 		if err != nil {
 			cli.PrintErrln(color.HiRedString("Fatal error: cannot get HEAD commit for current branch."))
 			return 1
@@ -360,7 +368,7 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 		excludingHashes := make([]hash.Hash, len(opts.excludingCommitSpecs))
 
 		for i, excludingSpec := range opts.excludingCommitSpecs {
-			excludingCommit, err := dEnv.DoltDB.Resolve(ctx, excludingSpec, dEnv.RepoStateReader().CWBHeadRef())
+			excludingCommit, err := dEnv.DoltDB.Resolve(ctx, excludingSpec, headRef)
 			if err != nil {
 				cli.PrintErrln(color.HiRedString("Fatal error: cannot get excluding commit for current branch."))
 				return 1
@@ -383,7 +391,6 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 		return 1
 	}
 
-	headRef := dEnv.RepoStateReader().CWBHeadRef()
 	cwbHash, err := dEnv.DoltDB.GetHashForRefStr(ctx, headRef.String())
 
 	if err != nil {
@@ -441,8 +448,13 @@ func tableExists(ctx context.Context, commit *doltdb.Commit, tableName string) (
 func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) error {
 	hashes := make([]hash.Hash, len(opts.commitSpecs))
 
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return err
+	}
+
 	for i, cs := range opts.commitSpecs {
-		commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
+		commit, err := dEnv.DoltDB.Resolve(ctx, cs, headRef)
 		if err != nil {
 			return err
 		}

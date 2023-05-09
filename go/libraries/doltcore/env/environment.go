@@ -206,7 +206,10 @@ func (dEnv *DoltEnv) Valid() bool {
 // initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.
 // This is only necessary to migrate repos written before this method was introduced, and can be removed after 1.0
 func (dEnv *DoltEnv) initWorkingSetFromRepoState(ctx context.Context) error {
-	headRef := dEnv.RepoStateReader().CWBHeadRef()
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return err
+	}
 	wsRef, err := ref.WorkingSetRefForHead(headRef)
 	if err != nil {
 		return err
@@ -591,7 +594,11 @@ func (dEnv *DoltEnv) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, error)
 }
 
 func WorkingSet(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.WorkingSet, error) {
-	workingSetRef, err := ref.WorkingSetRefForHead(rsr.CWBHeadRef())
+	headRef, err := rsr.CWBHeadRef()
+	if err != nil {
+		return nil, err
+	}
+	workingSetRef, err := ref.WorkingSetRefForHead(headRef)
 	if err != nil {
 		return nil, err
 	}
@@ -655,12 +662,12 @@ type repoStateReader struct {
 	*DoltEnv
 }
 
-func (r *repoStateReader) CWBHeadRef() ref.DoltRef {
-	return r.RepoState.CWBHeadRef()
+func (r *repoStateReader) CWBHeadRef() (ref.DoltRef, error) {
+	return r.RepoState.CWBHeadRef(), nil
 }
 
-func (r *repoStateReader) CWBHeadSpec() *doltdb.CommitSpec {
-	return r.RepoState.CWBHeadSpec()
+func (r *repoStateReader) CWBHeadSpec() (*doltdb.CommitSpec, error) {
+	return r.RepoState.CWBHeadSpec(), nil
 }
 
 func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {

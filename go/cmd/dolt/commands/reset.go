@@ -145,7 +145,10 @@ func handleResetHard(ctx context.Context, apr *argparser.ArgParseResults, usage 
 		arg = apr.Arg(0)
 	}
 
-	headRef := dEnv.RepoStateReader().CWBHeadRef()
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)

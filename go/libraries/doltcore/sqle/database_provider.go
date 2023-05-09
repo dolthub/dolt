@@ -864,7 +864,11 @@ func initialDbState(ctx context.Context, db dsess.SqlDatabase, branch string) (d
 	if len(branch) > 0 {
 		r = ref.NewBranchRef(branch)
 	} else {
-		r = rsr.CWBHeadRef()
+		var err error
+		r, err = rsr.CWBHeadRef()
+		if err != nil {
+			return dsess.InitialDbState{}, err
+		}
 	}
 
 	var retainedErr error
@@ -1418,7 +1422,11 @@ func initialStateForCommit(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.I
 		return dsess.InitialDbState{}, err
 	}
 
-	cm, err := srcDb.DbData().Ddb.Resolve(ctx, spec, srcDb.DbData().Rsr.CWBHeadRef())
+	headRef, err := srcDb.DbData().Rsr.CWBHeadRef()
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+	cm, err := srcDb.DbData().Ddb.Resolve(ctx, spec, headRef)
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
@@ -1448,8 +1456,8 @@ type staticRepoState struct {
 	env.RepoStateReader
 }
 
-func (s staticRepoState) CWBHeadRef() ref.DoltRef {
-	return s.branch
+func (s staticRepoState) CWBHeadRef() (ref.DoltRef, error) {
+	return s.branch, nil
 }
 
 // formatDbMapKeyName returns formatted string of database name and/or branch name. Database name is case-insensitive,

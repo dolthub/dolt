@@ -417,14 +417,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 
 // resolveAsOf resolves given expression to a commit, if one exists.
 func resolveAsOf(ctx *sql.Context, db Database, asOf interface{}) (*doltdb.Commit, *doltdb.RootValue, error) {
-	head := db.rsr.CWBHeadRef()
+	head, err := db.rsr.CWBHeadRef()
+	if err != nil {
+		return nil, nil, err
+	}
 	switch x := asOf.(type) {
 	case time.Time:
 		return resolveAsOfTime(ctx, db.ddb, head, x)
 	case string:
 		return resolveAsOfCommitRef(ctx, db, head, x)
 	default:
-		panic(fmt.Sprintf("unsupported AS OF type %T", asOf))
+		return nil, nil, fmt.Errorf("unsupported AS OF type %T", asOf)
 	}
 }
 
