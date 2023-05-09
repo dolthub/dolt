@@ -32,7 +32,11 @@ type TagProps struct {
 }
 
 func CreateTag(ctx context.Context, dEnv *env.DoltEnv, tagName, startPoint string, props TagProps) error {
-	return CreateTagOnDB(ctx, dEnv.DoltDB, tagName, startPoint, props, dEnv.RepoStateReader().CWBHeadRef())
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return err
+	}
+	return CreateTagOnDB(ctx, dEnv.DoltDB, tagName, startPoint, props, headRef)
 }
 
 func CreateTagOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagName, startPoint string, props TagProps, headRef ref.DoltRef) error {

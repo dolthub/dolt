@@ -40,7 +40,11 @@ func RenameBranch(ctx context.Context, dbData env.DbData, oldBranch, newBranch s
 		return err
 	}
 
-	if ref.Equals(dbData.Rsr.CWBHeadRef(), oldRef) {
+	headRef, err := dbData.Rsr.CWBHeadRef()
+	if err != nil {
+		return err
+	}
+	if ref.Equals(headRef, oldRef) {
 		err = dbData.Rsw.SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: newRef})
 		if err != nil {
 			return err
@@ -122,7 +126,11 @@ func DeleteBranch(ctx context.Context, dbData env.DbData, brName string, opts De
 		}
 	} else {
 		branchRef = ref.NewBranchRef(brName)
-		if ref.Equals(dbData.Rsr.CWBHeadRef(), branchRef) {
+		headRef, err := dbData.Rsr.CWBHeadRef()
+		if err != nil {
+			return err
+		}
+		if ref.Equals(headRef, branchRef) {
 			return ErrCOBranchDelete
 		}
 	}
@@ -193,7 +201,11 @@ func validateBranchMergedIntoCurrentWorkingBranch(ctx context.Context, dbdata en
 		return err
 	}
 
-	cwbHead, err := dbdata.Ddb.Resolve(ctx, cwbCs, dbdata.Rsr.CWBHeadRef())
+	headRef, err := dbdata.Rsr.CWBHeadRef()
+	if err != nil {
+		return err
+	}
+	cwbHead, err := dbdata.Ddb.Resolve(ctx, cwbCs, headRef)
 	if err != nil {
 		return err
 	}
@@ -323,7 +335,11 @@ func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, starti
 }
 
 func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoint string, force bool) error {
-	return CreateBranchOnDB(ctx, dbData.Ddb, newBranch, startingPoint, force, dbData.Rsr.CWBHeadRef())
+	headRef, err := dbData.Rsr.CWBHeadRef()
+	if err != nil {
+		return err
+	}
+	return CreateBranchOnDB(ctx, dbData.Ddb, newBranch, startingPoint, force, headRef)
 }
 
 var emptyHash = hash.Hash{}
@@ -341,7 +357,11 @@ func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb
 	cs, err := doltdb.NewCommitSpec(str)
 
 	if err == nil {
-		cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
+		headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+		if err != nil {
+			return nil, err
+		}
+		cm, err := dEnv.DoltDB.Resolve(ctx, cs, headRef)
 
 		if errors.Is(err, doltdb.ErrBranchNotFound) {
 			return nil, nil
