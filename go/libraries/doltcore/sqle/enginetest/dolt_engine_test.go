@@ -262,6 +262,7 @@ func TestQueryPlans(t *testing.T) {
 			"SELECT s,i FROM mytable as a order by i DESC",
 			"SELECT pk1, pk2 FROM two_pk order by pk1 asc, pk2 asc",
 			"SELECT pk1, pk2 FROM two_pk order by pk1 desc, pk2 desc",
+			"SELECT i FROM (SELECT i FROM (SELECT i FROM mytable ORDER BY i DESC  LIMIT 1) sq1) sq2 WHERE i = 3",
 		}
 		harness = harness.WithSkippedQueries(reverseIndexSkip)
 	}
