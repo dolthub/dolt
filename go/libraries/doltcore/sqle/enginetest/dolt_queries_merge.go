@@ -1606,6 +1606,52 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "try to merge a nullable field into a non-null column",
+		SetUpScript: []string{
+			"SET dolt_force_transaction_commit = on;",
+			"create table test (pk int primary key, c0 int)",
+			"insert into test values (1,1),(3,3);",
+			"call dolt_commit('-Am', 'new table with NULL value');",
+			"call dolt_checkout('-b', 'other')",
+			"insert into test values (2,NULL);",
+			"call dolt_commit('-am', 'inserted null value')",
+			"call dolt_checkout('main');",
+			"alter table test modify c0 int not null;",
+			"insert into test values (4,4)",
+			"call dolt_commit('-am', 'modified column c0 to not null');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('other')",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query: "select violation_type, pk, violation_info from dolt_constraint_violations_test",
+				Expected: []sql.Row{
+					{uint16(4), 2, types.JSONDocument{Val: merge.NullViolationMeta{Columns: []string{"c0"}}}},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_revert() detects not null violation (issue #4527)",
+		SetUpScript: []string{
+			"create table test2 (pk int primary key, c0 int)",
+			"insert into test2 values (1,1),(2,NULL),(3,3);",
+			"call dolt_commit('-Am', 'new table with NULL value');",
+			"delete from test2 where pk = 2;",
+			"call dolt_commit('-am', 'deleted row with NULL value');",
+			"alter table test2 modify c0 int not null",
+			"call dolt_commit('-am', 'modified column c0 to not null');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_revert('head~1');",
+				ExpectedErrStr: "revert currently does not handle constraint violations",
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{

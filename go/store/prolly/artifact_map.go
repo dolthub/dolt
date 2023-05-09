@@ -41,6 +41,11 @@ const (
 	ArtifactTypeUniqueKeyViol
 	// ArtifactTypeChkConsViol is the type for check constraint violations.
 	ArtifactTypeChkConsViol
+	// ArtifactTypeNullViol is the type for nullability violations.
+	ArtifactTypeNullViol
+)
+
+const (
 	artifactMapPendingBufferSize = 650_000
 )
 
@@ -191,11 +196,11 @@ func (m ArtifactMap) IterAll(ctx context.Context) (ArtifactIter, error) {
 }
 
 func (m ArtifactMap) IterAllCVs(ctx context.Context) (ArtifactIter, error) {
-	itr, err := m.iterAllOfTypes(ctx, ArtifactTypeForeignKeyViol, ArtifactTypeUniqueKeyViol, ArtifactTypeChkConsViol)
-	if err != nil {
-		return nil, err
-	}
-	return itr, nil
+	return m.iterAllOfTypes(ctx,
+		ArtifactTypeForeignKeyViol,
+		ArtifactTypeUniqueKeyViol,
+		ArtifactTypeChkConsViol,
+		ArtifactTypeNullViol)
 }
 
 // IterAllConflicts returns an iterator for the conflicts.
@@ -495,7 +500,7 @@ var _ ArtifactIter = multiArtifactTypeItr{}
 
 // newMultiArtifactTypeItr creates an iter that iterates an artifact if its type exists in |types|.
 func newMultiArtifactTypeItr(itr ArtifactIter, types []ArtifactType) multiArtifactTypeItr {
-	members := make([]bool, 5)
+	members := make([]bool, 6)
 	for _, t := range types {
 		members[uint8(t)] = true
 	}

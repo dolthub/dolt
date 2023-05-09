@@ -156,8 +156,13 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		return nil, nil, err
 	}
 
-	// validator shares editor with conflict merge
+	// validator shares artifact editor with conflict merge
 	uniq, err := newUniqValidator(ctx, finalSch, tm, valueMerger, ae)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	nullChk, err := newNullValidator(ctx, finalSch, tm, valueMerger, ae)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -177,7 +182,16 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		if err != nil {
 			return nil, nil, err
 		}
-		s.DataConflicts += cnt
+		s.ConstraintViolations += cnt
+
+		cnt, err = nullChk.validateDiff(ctx, diff)
+		if err != nil {
+			return nil, nil, err
+		}
+		s.ConstraintViolations += cnt
+		if cnt > 0 {
+			continue
+		}
 
 		switch diff.Op {
 		case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
@@ -379,7 +393,7 @@ func newUniqValidator(ctx context.Context, sch schema.Schema, tm *TableMerger, v
 	return uv, nil
 }
 
-func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff) (conflicts int, err error) {
+func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff) (violations int, err error) {
 	var value val.Tuple
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
@@ -399,7 +413,7 @@ func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 
 	for _, idx := range uv.indexes {
 		err = idx.findCollisions(ctx, diff.Key, value, func(k, v val.Tuple) error {
-			conflicts++
+			violations++
 			return uv.insertArtifact(ctx, k, v, idx.meta)
 		})
 		if err != nil {
@@ -489,6 +503,68 @@ func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, c
 		return err
 	}
 	return cb(key, value)
+}
+
+// nullValidator enforces NOT NULL constraints on merge
+type nullValidator struct {
+	// final is the merge result schema
+	final schema.Schema
+	// rightMap maps right-side value tuples to |final|
+	rightMap val.OrdinalMapping
+	// edits is the artifacts maps editor
+	edits *prolly.ArtifactsEditor
+	// theirRootish is the hash.Hash of the right-side
+	// rootish being merged
+	theirRootish hash.Hash
+}
+
+func newNullValidator(ctx context.Context, final schema.Schema, tm *TableMerger, vm *valueMerger, edits *prolly.ArtifactsEditor) (nullValidator, error) {
+	theirRootish, err := tm.rightSrc.HashOf()
+	if err != nil {
+		return nullValidator{}, err
+	}
+	return nullValidator{
+		final:        final,
+		rightMap:     vm.rightMapping,
+		edits:        edits,
+		theirRootish: theirRootish,
+	}, nil
+}
+
+func (nv nullValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff) (count int, err error) {
+	var violations []string
+	switch diff.Op {
+	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
+		for to, from := range nv.rightMap {
+			col := nv.final.GetNonPKCols().GetByIndex(to)
+			if col.IsNullable() {
+				continue
+			}
+			if from < 0 {
+				// non-nullable column in |nv.final| does not exist
+				// on the right side of the merge, check if it will
+				// be populated with a default value
+				if col.Default == "" {
+					violations = append(violations, col.Name)
+				}
+			} else {
+				if diff.Right.FieldIsNull(from) {
+					violations = append(violations, col.Name)
+				}
+			}
+		}
+	}
+	if len(violations) > 0 {
+		var meta prolly.ConstraintViolationMeta
+		if meta, err = newNotNullViolationMeta(violations, diff.Right); err != nil {
+			return 0, err
+		}
+		err = nv.edits.ReplaceConstraintViolation(ctx, diff.Key, nv.theirRootish, prolly.ArtifactTypeNullViol, meta)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return len(violations), nil
 }
 
 // conflictMerger processing primary key diffs
@@ -596,12 +672,12 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 				return fmt.Errorf("cannot merge keyless tables with reordered columns")
 			}
 		} else {
-			tempTupleValue, err := remapTupleWithColumnDefaults(ctx, &diff.Right, sourceSch.GetValueDescriptor(),
+			tempTupleValue, err := remapTupleWithColumnDefaults(ctx, diff.Right, sourceSch.GetValueDescriptor(),
 				m.valueMerger.rightMapping, m.tableMerger, m.finalSch, m.valueMerger.syncPool)
 			if err != nil {
 				return err
 			}
-			newTupleValue = *tempTupleValue
+			newTupleValue = tempTupleValue
 		}
 		return m.mut.Put(ctx, diff.Key, newTupleValue)
 	case tree.DiffOpRightDelete:
@@ -732,7 +808,7 @@ func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping)
 // currently being merged and associated node store. |mergedSch| is the new schema of the table and is used to look up
 // column default values to apply to any existing rows when a new column is added as part of a merge. |pool| is used to
 // to allocate memory for the new tuple. A pointer to the new tuple data is returned, along with any error encountered.
-func remapTupleWithColumnDefaults(ctx *sql.Context, tuple *val.Tuple, tupleDesc val.TupleDesc, mapping val.OrdinalMapping, tm *TableMerger, mergedSch schema.Schema, pool pool.BuffPool) (*val.Tuple, error) {
+func remapTupleWithColumnDefaults(ctx *sql.Context, tuple val.Tuple, tupleDesc val.TupleDesc, mapping val.OrdinalMapping, tm *TableMerger, mergedSch schema.Schema, pool pool.BuffPool) (val.Tuple, error) {
 	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor())
 
 	for to, from := range mapping {
@@ -768,12 +844,10 @@ func remapTupleWithColumnDefaults(ctx *sql.Context, tuple *val.Tuple, tupleDesc 
 				}
 			}
 		} else {
-			tb.PutRaw(to, tupleDesc.GetField(from, *tuple))
+			tb.PutRaw(to, tupleDesc.GetField(from, tuple))
 		}
 	}
-
-	newTuple := tb.Build(pool)
-	return &newTuple, nil
+	return tb.Build(pool), nil
 }
 
 func mergeTableArtifacts(ctx context.Context, tm *TableMerger, mergeTbl *doltdb.Table) (*doltdb.Table, error) {
@@ -912,12 +986,12 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 			return err
 		}
 
-		newValueTuple, err := remapTupleWithColumnDefaults(ctx, &valueTuple, valueDescriptor, vm.leftMapping, tm, mergedSch, vm.syncPool)
+		newValueTuple, err := remapTupleWithColumnDefaults(ctx, valueTuple, valueDescriptor, vm.leftMapping, tm, mergedSch, vm.syncPool)
 		if err != nil {
 			return err
 		}
 
-		err = mut.Put(ctx, keyTuple, *newValueTuple)
+		err = mut.Put(ctx, keyTuple, newValueTuple)
 		if err != nil {
 			return err
 		}

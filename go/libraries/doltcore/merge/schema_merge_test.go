@@ -66,6 +66,9 @@ func TestSchemaMerge(t *testing.T) {
 	t.Run("column default tests", func(t *testing.T) {
 		testSchemaMerge(t, columnDefaultTests)
 	})
+	t.Run("nullability tests", func(t *testing.T) {
+		testSchemaMerge(t, nullabilityTests)
+	})
 	t.Run("column type change tests", func(t *testing.T) {
 		testSchemaMerge(t, typeChangeTests)
 	})
@@ -283,6 +286,30 @@ var columnDefaultTests = []schemaMergeTest{
 		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 19)"), row(1, 19)),
 		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 19)"), row(1, 19)),
 		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 19)"), row(1, 19)),
+	},
+}
+
+var nullabilityTests = []schemaMergeTest{
+	{
+		name:     "add not null column to empty table",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                ")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NOT NULL)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                ")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NOT NULL)")),
+	},
+	{
+		name:     "add not null constraint to existing column",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)         "), row(1, 1)),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NOT NULL)"), row(1, 1)),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)         "), row(1, 1)),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NOT NULL)"), row(1, 1)),
+	},
+	{
+		name:     "add not null column to non-empty table",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                              "), row(1)),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NOT NULL DEFAULT  '19')"), row(1, 1)),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                              "), row(1), row(2)),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NOT NULL DEFAULT  '19')"), row(1, 1), row(2, 19)),
 	},
 }
 

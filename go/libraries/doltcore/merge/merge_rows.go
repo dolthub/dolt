@@ -318,10 +318,10 @@ func validateTupleFields(existingSch schema.Schema, targetSch schema.Schema) (bo
 			return false, nil
 		}
 
-		// If a not-null constraint was added, bail.
-		if existingVD.Types[existingIndex].Nullable && !targetVD.Types[targetIndex].Nullable {
-			return false, nil
-		}
+		//// If a not-null constraint was added, bail.
+		//if existingVD.Types[existingIndex].Nullable && !targetVD.Types[targetIndex].Nullable {
+		//	return false, nil
+		//}
 
 		// If the collation was changed, bail.
 		// Different collations will affect the ordering of any secondary indexes using this column.

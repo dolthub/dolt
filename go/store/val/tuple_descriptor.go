@@ -176,6 +176,11 @@ func (td TupleDesc) GetFixedAccess() FixedAccess {
 	return td.fast
 }
 
+// WithoutFixedAccess returns a copy of |td| without fixed access metadata.
+func (td TupleDesc) WithoutFixedAccess() TupleDesc {
+	return TupleDesc{Types: td.Types, cmp: td.cmp}
+}
+
 // GetBool reads a bool from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetBool(i int, tup Tuple) (v bool, ok bool) {
