@@ -1087,7 +1087,7 @@ tests:
   - on: server2
     queries:
     - exec: 'use repo1'
-    - query: "select * from vals"
+    - query: "select * from vals order by id asc"
       result:
         columns: ["id","val"]
         rows:
