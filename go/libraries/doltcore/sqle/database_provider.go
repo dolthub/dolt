@@ -1064,12 +1064,24 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 
 	// The db map only contains base databases, not revision DBs. Convert to a revision DB for creation.
 	if !isRevisionDb {
-		// TODO: capture the initial checked out head at startup, don't get it here every time
-		// TODO: shouldn't use CWBHeadRef here, should come from the session's working set
-		headRef := db.DbData().Rsr.CWBHeadRef()
-		name = baseName + dsess.DbRevisionDelimiter + headRef.GetPath()
+		sess := dsess.DSessFromSess(ctx.Session)
+
+		// To find the correct revision DB for this unqualified name, we need to look into the session state. A newly 
+		// created session may not have any info on current head stored yet, in which case we get the default branch for
+		// the db itself instead. 
+		head, ok, err := sess.CurrentHead(ctx, baseName)
+		if err != nil {
+			return nil, false, err
+		}
+
+		if !ok {
+			headRef := db.DbData().Rsr.CWBHeadRef()
+			head = headRef.GetPath()
+		}
+
+		name = baseName + dsess.DbRevisionDelimiter + head
 	}
-	
+
 	db, ok, err := p.databaseForRevision(ctx, name)
 	if err != nil {
 		return nil, false, err

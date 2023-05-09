@@ -932,7 +932,7 @@ func (d *DoltSession) UseDatabase(ctx *sql.Context, db sql.Database) error {
 		return fmt.Errorf("expected a SqlDatabase, got %T", db)
 	}
 
-	branchState, ok, err := d.lookupDbState(ctx, db.Name())
+	branchState, ok, err := d.lookupDbState(ctx, sdb.RevisionQualifiedName())
 	if err != nil {
 		return err
 	}
@@ -1201,6 +1201,28 @@ func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, 
 	}
 	
 	return ref.NewBranchRef(branchState.dbState.currRevSpec), nil
+}
+
+// CurrentHead returns the current head for the db named, which must be unqualifed. Used for bootstrap resolving the
+// correct session head when a database name from the client is unqualified.
+func (d *DoltSession) CurrentHead(ctx *sql.Context, dbName string) (string, bool, error) {
+	dbName = strings.ToLower(dbName)
+
+	var baseName, rev string
+	baseName, rev = splitDbName(dbName)
+	if rev != "" {
+		return "", false, fmt.Errorf("invalid database name: %s", dbName)
+	}
+
+	d.mu.Lock()
+	dbState, ok := d.dbStates[baseName]
+	d.mu.Unlock()
+	
+	if ok {
+		return dbState.currRevSpec, true, nil
+	}
+	
+	return "", false, nil
 }
 
 func (d *DoltSession) Username() string {
