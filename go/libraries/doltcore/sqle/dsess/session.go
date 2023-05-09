@@ -844,7 +844,7 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	}
 	branchState.workingSet = ws
 
-	err = d.setSessionVarsForDb(ctx, dbName)
+	err = d.setSessionVarsForDb(ctx, dbName, branchState)
 	if err != nil {
 		return err
 	}
@@ -1074,7 +1074,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		sessionState = NewEmptyDatabaseSessionState()
 		d.dbStates[strings.ToLower(baseName)] = sessionState
 
-		tmpDir, err := dbState.DbData.Rsw.TempTableFilesDir()
+		sessionState.tmpFileDir, err = dbState.DbData.Rsw.TempTableFilesDir()
 		if err != nil {
 			d.mu.Unlock()
 			if errors.Is(err, env.ErrDoltRepositoryNotFound) {
@@ -1082,18 +1082,16 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 			}
 			return err
 		}
-		sessionState.tmpFileDir = tmpDir
-
-		// TODO: is this right? 
-		sessionState.currRevSpec = db.Revision()
+		
+		sessionState.dbName = baseName
 		sessionState.currRevType = db.RevisionType()
+		sessionState.currRevSpec = db.Revision()
 	}
 	
 	branchState.dbState = sessionState
 	sessionState.heads[strings.ToLower(rev)] = branchState
 	d.mu.Unlock()
 
-	sessionState.dbName = baseName
 	// TODO: this doesn't seem right, shouldn't be a revision DB
 	sessionState.db = db
 
@@ -1151,7 +1149,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	branchState.headCommit = dbState.HeadCommit
 	
 	if sessionState.Err == nil {
-		return d.setSessionVarsForDb(ctx, db.Name())
+		return d.setSessionVarsForDb(ctx, db.Name(), branchState)
 	}
 	
 	return nil
@@ -1216,12 +1214,7 @@ func (d *DoltSession) BatchMode() batchMode {
 }
 
 // setSessionVarsForDb updates the three session vars that track the value of the session root hashes
-func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string) error {
-	state, _, err := d.lookupDbState(ctx, dbName)
-	if err != nil {
-		return err
-	}
-
+func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string, state *branchState) error {
 	// Different DBs have different requirements for what state is set, so we are maximally permissive on what's expected
 	// in the state object here
 	if state.WorkingSet() != nil {
