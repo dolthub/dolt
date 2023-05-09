@@ -115,47 +115,106 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
-	var scripts = []queries.ScriptTest{
-		{
-			Name: "parallel column updates (repro issue #4547)",
-			SetUpScript: []string{
-				"SET dolt_allow_commit_conflicts = on;",
-				"create table t (rowId int not null, col1 varchar(255), col2 varchar(255), keyCol varchar(60), dataA varchar(255), dataB varchar(255), PRIMARY KEY (rowId), UNIQUE KEY uniqKey (col1, col2, keyCol));",
-				"insert into t (rowId, col1, col2, keyCol, dataA, dataB) values (1, '1', '2', 'key-a', 'test1', 'test2')",
-				"CALL DOLT_COMMIT('-Am', 'new table');",
-
-				"CALL DOLT_CHECKOUT('-b', 'other');",
-				"update t set dataA = 'other'",
-				"CALL DOLT_COMMIT('-am', 'update data other');",
-
-				"CALL DOLT_CHECKOUT('main');",
-				"update t set dataB = 'main'",
-				"CALL DOLT_COMMIT('-am', 'update on main');",
+	// t.Skip()
+	
+	var script = queries.ScriptTest{
+		Name: "database revision specs: Ancestor references",
+		SetUpScript: []string{
+			"create table t01 (pk int primary key, c1 int)",
+			"call dolt_commit('-Am', 'creating table t01 on main');",
+			"call dolt_branch('branch1');",
+			"insert into t01 values (1, 1), (2, 2);",
+			"call dolt_commit('-am', 'adding rows to table t01 on main');",
+			"insert into t01 values (3, 3);",
+			"call dolt_commit('-am', 'adding another row to table t01 on main');",
+			"call dolt_tag('tag1');",
+			"call dolt_checkout('branch1');",
+			"insert into t01 values (100, 100), (200, 200);",
+			"call dolt_commit('-am', 'inserting rows in t01 on branch1');",
+			"insert into t01 values (1000, 1000);",
+			"call dolt_commit('-am', 'inserting another row in t01 on branch1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
-			Assertions: []queries.ScriptTestAssertion{
-				{
-					Query:    "CALL DOLT_MERGE('other')",
-					Expected: []sql.Row{{"child", uint64(1)}},
-				},
-				{
-					Query:    "SELECT * from dolt_constraint_violations_t",
-					Expected: []sql.Row{},
-				},
-				{
-					Query: "SELECT * from t",
-					Expected: []sql.Row{
-						{1, "1", "2", "key-a", "other", "main"},
-					},
-				},
+			{
+				Query:    "use `mydb/tag1~`;",
+				Expected: []sql.Row{},
+			},
+			{
+				// The database name is always the base name, never the revision specifier
+				Query:    "select database()",
+				Expected: []sql.Row{{"mydb"}},
+			},
+			{
+				// The branch is nil in the case of a non-branch revision DB
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{nil}},
+			},
+			{
+				// The branch is nil in the case of a non-branch revision DB
+				Query:    "select active_revision()",
+				Expected: []sql.Row{{"tag1~"}},
+			},
+			{
+				Query:    "select * from t01;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "select * from `mydb/tag1^`.t01;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				// Only merge commits are valid for ^2 ancestor spec
+				Query:          "select * from `mydb/tag1^2`.t01;",
+				ExpectedErrStr: "invalid ancestor spec",
+			},
+			{
+				Query:    "select * from `mydb/tag1~1`.t01;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "select * from `mydb/tag1~2`.t01;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:       "select * from `mydb/tag1~3`.t01;",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query:          "select * from `mydb/tag1~20`.t01;",
+				ExpectedErrStr: "invalid ancestor spec",
+			},
+			{
+				Query:    "select * from `mydb/branch1~`.t01;",
+				Expected: []sql.Row{{100, 100}, {200, 200}},
+			},
+			{
+				Query:    "select * from `mydb/branch1^`.t01;",
+				Expected: []sql.Row{{100, 100}, {200, 200}},
+			},
+			{
+				Query:    "select * from `mydb/branch1~2`.t01;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:       "select * from `mydb/branch1~3`.t01;",
+				ExpectedErr: sql.ErrTableNotFound,
 			},
 		},
 	}
 
-	harness := newDoltHarness(t)
-	for _, test := range scripts {
-		enginetest.TestScript(t, harness, test)
-	}
+	tcc := &testCommitClock{}
+	cleanup := installTestCommitClock(tcc)
+	defer cleanup()
+
+	sql.RunWithNowFunc(tcc.Now, func() error {
+		harness := newDoltHarness(t)
+		enginetest.TestScript(t, harness, script)
+		return nil
+	})
 }
 
 func TestSingleQueryPrepared(t *testing.T) {
@@ -1443,7 +1502,7 @@ func installTestCommitClock(tcc *testCommitClock) func() {
 // TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
 // desired test.
 func TestSingleTransactionScript(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 
 	tcc := &testCommitClock{}
 	cleanup := installTestCommitClock(tcc)

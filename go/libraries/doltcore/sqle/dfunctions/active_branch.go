@@ -49,6 +49,9 @@ func (ab *ActiveBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, er
 	if err != nil {
 		return nil, err
 	}
+	if currentBranchRef == nil {
+		return nil, nil
+	}
 
 	branches, err := ddb.GetBranches(ctx)
 	if err != nil {

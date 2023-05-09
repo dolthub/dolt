@@ -925,6 +925,28 @@ func (d *DoltSession) SwitchWorkingSet(
 	return nil
 }
 
+func (d *DoltSession) UseDatabase(ctx *sql.Context, db sql.Database) error {
+	sdb, ok := db.(SqlDatabase)
+	if !ok {
+		return fmt.Errorf("expected a SqlDatabase, got %T", db)
+	}
+
+	branchState, ok, err := d.lookupDbState(ctx, db.Name())
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(db.Name())
+	}
+	
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	branchState.dbState.currRevSpec = sdb.Revision()
+	branchState.dbState.currRevType = sdb.RevisionType()
+	
+	return nil
+}
+
 func (d *DoltSession) WorkingSet(ctx *sql.Context, dbName string) (*doltdb.WorkingSet, error) {
 	sessionState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
@@ -1054,6 +1076,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 		tmpDir, err := dbState.DbData.Rsw.TempTableFilesDir()
 		if err != nil {
+			d.mu.Unlock()
 			if errors.Is(err, env.ErrDoltRepositoryNotFound) {
 				return env.ErrFailedToAccessDB.New(dbState.Db.Name())
 			}
@@ -1165,16 +1188,19 @@ func (d *DoltSession) GetAllTemporaryTables(ctx *sql.Context, db string) ([]sql.
 
 // CWBHeadRef returns the branch ref for this session HEAD for the database named
 func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, error) {
-	dbState, _, err := d.LookupDbState(ctx, dbName)
+	branchState, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
-
-	if dbState.WorkingSet() == nil {
+	if !ok {
+		return nil, sql.ErrDatabaseNotFound.New(dbName)
+	}
+	
+	if branchState.dbState.currRevType != RevisionTypeBranch {
 		return nil, nil
 	}
-
-	return dbState.WorkingSet().Ref().ToHeadRef()
+	
+	return ref.NewBranchRef(branchState.dbState.currRevSpec), nil
 }
 
 func (d *DoltSession) Username() string {
