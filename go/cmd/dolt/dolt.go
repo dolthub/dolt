@@ -140,6 +140,7 @@ const stdOutFlag = "--stdout"
 const stdErrFlag = "--stderr"
 const stdOutAndErrFlag = "--out-and-err"
 const ignoreLocksFlag = "--ignore-lock-file"
+const verboseEngineSetupFlag = "--verbose-engine-setup"
 
 const cpuProf = "cpu"
 const memProf = "mem"
@@ -168,6 +169,7 @@ func runMain() int {
 
 	csMetrics := false
 	ignoreLockFile := false
+	verboseEngineSetup := false
 	if len(args) > 0 {
 		var doneDebugFlags bool
 		for !doneDebugFlags && len(args) > 0 {
@@ -324,6 +326,9 @@ func runMain() int {
 
 				args = args[2:]
 
+			case verboseEngineSetupFlag:
+				verboseEngineSetup = true
+				args = args[1:]
 			default:
 				doneDebugFlags = true
 			}
@@ -466,7 +471,7 @@ The sql subcommand is currently the only command that uses these flags. All othe
 
 	var cliCtx cli.CliContext = nil
 	if initCliContext {
-		lateBind, err := buildLateBinder(ctx, dEnv, mrEnv, apr, true)
+		lateBind, err := buildLateBinder(ctx, dEnv, mrEnv, apr, verboseEngineSetup)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failure to Load SQL Engine: %v", err))
 			return 1
