@@ -22,6 +22,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -78,6 +79,12 @@ type SignalCommand interface {
 
 	// InstallsSignalHandlers returns whether this command manages its own signal handlers for interruption / termination.
 	InstallsSignalHandlers() bool
+}
+
+// Queryist is generic interface for executing queries. Commands will be provided a Queryist to perform any work using
+// SQL. The Queryist can be obtained from the CliContext passed into the Exec method by calling the QueryEngine method.
+type Queryist interface {
+	Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, error)
 }
 
 // This type is to store the content of a documented command, elsewhere we can transform this struct into

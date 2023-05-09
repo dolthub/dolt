@@ -17,6 +17,7 @@ package pull
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/cenkalti/backoff/v4"
@@ -29,12 +30,13 @@ import (
 )
 
 var ErrNoData = errors.New("no data")
+var ErrCloneUnsupported = errors.New("clone unsupported")
 
 func Clone(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, eventCh chan<- TableFileEvent) error {
 	srcTS, srcOK := srcCS.(chunks.TableFileStore)
 
 	if !srcOK {
-		return errors.New("src db is not a Table File Store")
+		return fmt.Errorf("%w: src db is not a Table File Store", ErrCloneUnsupported)
 	}
 
 	size, err := srcTS.Size(ctx)
@@ -50,7 +52,7 @@ func Clone(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, eventCh chan<- 
 	sinkTS, sinkOK := sinkCS.(chunks.TableFileStore)
 
 	if !sinkOK {
-		return errors.New("sink db is not a Table File Store")
+		return fmt.Errorf("%w: sink db is not a Table File Store", ErrCloneUnsupported)
 	}
 
 	return clone(ctx, srcTS, sinkTS, eventCh)

@@ -27,6 +27,30 @@ teardown() {
     teardown_common
 }
 
+@test "merge: unresolved FKs not dropped on merge (issue #5531)" {
+    dolt sql <<SQL
+    SET foreign_key_checks = off;
+    CREATE TABLE operations (id int primary key);
+    CREATE TABLE diff_summaries (id int primary key, op_id_fk int, foreign key (op_id_fk) references operations (id));
+SQL
+    dolt commit -Am 'initial commit'
+    dolt checkout -b base
+
+    dolt branch two
+    dolt checkout -b one
+    dolt sql -q 'insert into operations values (1)'
+    dolt commit -Am 'insert operations 1'
+    dolt checkout two
+    dolt sql -q 'insert into operations values (2)'
+    dolt commit -Am 'insert operations 2'
+    dolt checkout -b merged
+    dolt merge --no-edit one
+    run dolt schema show diff_summaries
+    log_status_eq 0
+    [[ "$output" =~ "op_id_fk" ]] || false
+    [[ "$output" =~ "FOREIGN KEY (\`op_id_fk\`) REFERENCES \`operations\`" ]] || false
+}
+
 @test "merge: three-way merge with longer key on both left and right" {
 
     # Base table has a key length of 2. Left and right will both add a column to

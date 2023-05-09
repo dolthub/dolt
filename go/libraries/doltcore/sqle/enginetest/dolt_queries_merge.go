@@ -3921,6 +3921,84 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "adding a column with a literal default value",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key);",
+			"INSERT into t values (1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column c1 varchar(100) default ('hello');",
+			"insert into t values (2, 'hi');",
+			"alter table t add index idx1 (c1, pk);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "hello"}, {2, "hi"}, {3, "hello"}},
+			},
+		},
+	},
+	{
+		Name: "altering a column to add a literal default value",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, c1 varchar(100));",
+			"INSERT into t values (1, NULL);",
+			"alter table t add index idx1 (c1, pk);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column c1 varchar(100) default ('hello');",
+			"insert into t values (2, DEFAULT);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (3, NULL);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, nil}, {2, "hello"}, {3, nil}},
+			},
+		},
+	},
+	{
+		// TODO: We can currently only support literal default values. Supporting column references and functions
+		//       requires getting the analyzer involved to resolve references.
+		Name: "adding a column with a non-literal default value",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key);",
+			"INSERT into t values (1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column c1 varchar(100) default (CONCAT('h','e','l','l','o'));",
+			"insert into t values (2, 'hi');",
+			"alter table t add index idx1 (c1, pk);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "call dolt_merge('right');",
+				ExpectedErr: merge.ErrUnableToMergeColumnDefaultValue,
+			},
+			{
+				Skip:     true,
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "hello"}, {2, "hi"}, {3, "hello"}},
+			},
+		},
+	},
+	{
 		Name: "adding different columns to both sides",
 		AncSetUpScript: []string{
 			"create table t (pk int primary key);",
@@ -4187,6 +4265,38 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			{
 				Query:    "select * from t;",
 				Expected: []sql.Row{{1, 1}, {2, 1}, {3, 3}},
+			},
+		},
+	},
+
+	// Resolvable type changes
+	{
+		Name: "type widening - enums and sets",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 enum('blue', 'green'), col2 set('blue', 'green'));",
+			"INSERT into t values (1, 'blue', 'blue,green');",
+			"alter table t add index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 enum('blue', 'green', 'red');",
+			"alter table t modify column col2 set('blue', 'green', 'red');",
+			"INSERT into t values (3, 'red', 'red,blue');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (2, 'green', 'green,blue');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x0}},
+			},
+			{
+				Query: "select * from t order by pk;",
+				Expected: []sql.Row{
+					{1, uint64(1), uint64(3)},
+					{2, uint64(2), uint64(3)},
+					{3, uint64(3), uint64(5)},
+				},
 			},
 		},
 	},

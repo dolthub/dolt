@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/swiss"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -36,7 +37,7 @@ const (
 	//   but we don't have a hard limit on record size right now
 	journalWriterBuffSize = 1024 * 1024
 
-	chunkJournalAddr = "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"
+	chunkJournalAddr = chunks.JournalFileID
 
 	journalIndexFileName = "journal.idx"
 

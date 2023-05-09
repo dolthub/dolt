@@ -152,9 +152,11 @@ func TestDbRevision(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
 			defer dEnv.DoltDB.Close()
 
+			cliCtx, _ := cmd.NewArgFreeCliContext(ctx, dEnv)
+
 			setup := append(setupCommon, test.setup...)
 			for _, c := range setup {
-				exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cmd.BuildEmptyCliContext())
+				exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
 				require.Equal(t, 0, exitCode)
 			}
 

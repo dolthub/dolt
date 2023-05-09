@@ -114,9 +114,11 @@ func TestKeylessMerge(t *testing.T) {
 			require.NoError(t, err)
 			err = dEnv.UpdateWorkingRoot(ctx, root)
 			require.NoError(t, err)
+			cliCtx, err := cmd.NewArgFreeCliContext(ctx, dEnv)
+			require.NoError(t, err)
 
 			for _, c := range test.setup {
-				exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cmd.BuildEmptyCliContext())
+				exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
 				require.Equal(t, 0, exitCode)
 			}
 
@@ -247,9 +249,11 @@ func TestKeylessMergeConflicts(t *testing.T) {
 		require.NoError(t, err)
 		err = dEnv.UpdateWorkingRoot(ctx, root)
 		require.NoError(t, err)
+		cliCtx, err := cmd.NewArgFreeCliContext(ctx, dEnv)
+		require.NoError(t, err)
 
 		for _, c := range cc {
-			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cmd.BuildEmptyCliContext())
+			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
 			// allow merge to fail with conflicts
 			if _, ok := c.cmd.(cmd.MergeCmd); !ok {
 				require.Equal(t, 0, exitCode)

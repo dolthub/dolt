@@ -55,8 +55,6 @@ type gcTest struct {
 	postGCFunc func(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB, prevRes interface{})
 }
 
-var gcCliCtx = commands.BuildEmptyCliContext()
-
 var gcTests = []gcTest{
 	{
 		name: "gc test",
@@ -114,8 +112,11 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 	dEnv := dtestutils.CreateTestEnv()
 	defer dEnv.DoltDB.Close()
 
+	cliCtx, verr := commands.NewArgFreeCliContext(ctx, dEnv)
+	require.NoError(t, verr)
+
 	for _, c := range gcSetupCommon {
-		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, gcCliCtx)
+		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
 		require.Equal(t, 0, exitCode)
 	}
 
@@ -123,7 +124,7 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 	for _, stage := range test.stages {
 		res = stage.preStageFunc(ctx, t, dEnv.DoltDB, res)
 		for _, c := range stage.commands {
-			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, gcCliCtx)
+			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
 			require.Equal(t, 0, exitCode)
 		}
 	}

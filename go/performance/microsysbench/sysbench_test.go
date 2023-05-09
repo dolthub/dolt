@@ -118,7 +118,7 @@ func setupBenchmark(t *testing.B, dEnv *env.DoltEnv) (*sql.Context, *engine.SqlE
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	require.NoError(t, err)
 
-	eng, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatNull, config)
+	eng, err := engine.NewSqlEngine(ctx, mrEnv, config)
 	require.NoError(t, err)
 
 	sqlCtx, err := eng.NewLocalContext(ctx)
@@ -140,7 +140,12 @@ func populateRepo(dEnv *env.DoltEnv, insertData string) {
 	execSql := func(dEnv *env.DoltEnv, q string) int {
 		ctx := context.Background()
 		args := []string{"-r", "null", "-q", q}
-		return commands.SqlCmd{}.Exec(ctx, "sql", args, dEnv, commands.BuildEmptyCliContext())
+		cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv)
+		if err != nil {
+			panic(err)
+		}
+
+		return commands.SqlCmd{}.Exec(ctx, "sql", args, dEnv, cliCtx)
 	}
 	execSql(dEnv, createTable)
 	execSql(dEnv, insertData)

@@ -61,25 +61,25 @@ teardown() {
     cd dbs1/repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote unknown
     cd ../..
-    run dolt sql --data-dir=dbs1 -b -q "select @@GLOBAL.dolt_replicate_to_remote"
+    run dolt --data-dir=dbs1 sql -b -q "select @@GLOBAL.dolt_replicate_to_remote"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "remote1" ]] || false
 }
 
 @test "replication-multidb: push on sqlengine commit" {
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote remote1
-    dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
-    dolt sql --data-dir=dbs1 -b -q "use repo1; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo1; call dolt_commit('-am', 'cm')"
-    dolt sql --data-dir=dbs1 -b -q "use repo2; create table t2 (a int primary key)"
-    dolt sql --data-dir=dbs1 -b -q "use repo2; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo2; call dolt_commit('-am', 'cm')"
-    dolt sql --data-dir=dbs1 -b -q "use repo3; create table t3 (a int primary key)"
-    dolt sql --data-dir=dbs1 -b -q "use repo3; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo3; call dolt_commit('-am', 'cm')"
+    dolt --data-dir= dbs1 sql -b -q "use repo1; create table t1 (a int primary key)"
+    dolt --data-dir= dbs1 sql -b -q "use repo1; call dolt_add('.')"
+    dolt --data-dir= dbs1 sql -b -q "use repo1; call dolt_commit('-am', 'cm')"
+    dolt --data-dir= dbs1 sql -b -q "use repo2; create table t2 (a int primary key)"
+    dolt --data-dir= dbs1 sql -b -q "use repo2; call dolt_add('.')"
+    dolt --data-dir= dbs1 sql -b -q "use repo2; call dolt_commit('-am', 'cm')"
+    dolt --data-dir= dbs1 sql -b -q "use repo3; create table t3 (a int primary key)"
+    dolt --data-dir= dbs1 sql -b -q "use repo3; call dolt_add('.')"
+    dolt --data-dir= dbs1 sql -b -q "use repo3; call dolt_commit('-am', 'cm')"
     
     clone_helper $TMPDIRS
-    run dolt sql --data-dir=dbs2 -b -q "use repo1; show tables" -r csv
+    run dolt --data-dir=dbs2 sql -b -q "use repo1; show tables" -r csv
 
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
@@ -87,14 +87,14 @@ teardown() {
     [[ ! "$output" =~ "t2" ]] || false
     [[ ! "$output" =~ "t3" ]] || false
 
-    run dolt sql --data-dir=dbs2 -b -q "use repo2; show tables" -r csv
+    run dolt --data-dir=dbs2 sql -b -q "use repo2; show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     [[ "$output" =~ "t2" ]] || false
     [[ ! n"$output" =~ "t1" ]] || false
     [[ ! "$output" =~ "t3" ]] || faalse
 
-    run dolt sql --data-dir=dbs2 -b -q "use repo3; show tables" -r csv
+    run dolt --data-dir=dbs2 sql -b -q "use repo3; show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     [[ "$output" =~ "t3" ]] || false
@@ -106,7 +106,7 @@ teardown() {
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote remote1
     dolt sql -q "set @@persist.dolt_replication_remote_url_template = 'file://$TMPDIRS/rem1/{database}'"
 
-    dolt sql --data-dir=dbs1 <<SQL
+    dolt --data-dir=dbs1 sql <<SQL
 create database newdb;
 use newdb;
 create table new_table (b int primary key);
@@ -123,7 +123,7 @@ SQL
     # TODO: fix this mess
     dolt config --global --unset sqlserver.global.dolt_replicate_to_remote
     
-    run dolt sql --data-dir=dbs2 -q "use newdb; show tables" -r csv
+    run dolt --data-dir=dbs2 sql -q "use newdb; show tables" -r csv
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "new_table" ]] || false
@@ -147,7 +147,7 @@ SQL
     dolt sql -q "set @@persist.dolt_replication_remote_url_template = 'file://$TMPDIRS/rem2/{database}'"
 
     mkdir -p "${TMPDIRS}/dbs2"
-    dolt sql --data-dir=dbs2 <<SQL
+    dolt --data-dir=dbs2 sql <<SQL
 call dolt_clone('file://${TMPDIRS}/rem1/repo1', 'repo1');
 use repo1;
 create table new_table (b int primary key);
@@ -165,12 +165,12 @@ SQL
     # TODO: fix this mess
     dolt config --global --unset sqlserver.global.dolt_replicate_to_remote
     
-    run dolt sql --data-dir=dbs3 -q "use repo1; show tables" -r csv
+    run dolt --data-dir=dbs3 sql -q "use repo1; show tables" -r csv
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "new_table" ]] || false
 
-    run dolt sql --data-dir=dbs3 -q "use repo2; show tables" -r csv
+    run dolt --data-dir=dbs3 sql -q "use repo2; show tables" -r csv
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
     [[ ! "$output" =~ "new_table" ]] || false
@@ -180,7 +180,7 @@ SQL
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote remote1
     dolt sql -q "set @@persist.dolt_replication_remote_url_template = 'file://$TMPDIRS/rem1/{database}'"
 
-    dolt sql --data-dir=dbs1 -q "create database newdb;"
+    dolt --data-dir=dbs1 sql -q "create database newdb;"
 
     mkdir -p "${TMPDIRS}/dbs2"
     cd $TMPDIRS
@@ -191,22 +191,22 @@ SQL
     # mess
     dolt config --global --unset sqlserver.global.dolt_replicate_to_remote
     
-    run dolt sql --data-dir=dbs2 -q "use newdb; show tables" -r csv
+    run dolt --data-dir=dbs2 sql -q "use newdb; show tables" -r csv
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
 }
 
 @test "replication-multidb: pull on read" {
     push_helper $TMPDIRS
-    dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
-    dolt sql --data-dir=dbs1 -b -q "use repo1; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo1; call dolt_commit('-am', 'cm')"
-    dolt sql --data-dir=dbs1 -b -q "use repo2; create table t2 (a int primary key)"
-    dolt sql --data-dir=dbs1 -b -q "use repo2; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo2; call dolt_commit('-am', 'cm')"
-    dolt sql --data-dir=dbs1 -b -q "use repo3; create table t3 (a int primary key)"
-    dolt sql --data-dir=dbs1 -b -q "use repo3; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo3; call dolt_commit('-am', 'cm')"
+    dolt --data-dir=dbs1 sql -b -q "use repo1; create table t1 (a int primary key)"
+    dolt --data-dir=dbs1 sql -b -q "use repo1; call dolt_add('.')"
+    dolt --data-dir=dbs1 sql -b -q "use repo1; call dolt_commit('-am', 'cm')"
+    dolt --data-dir=dbs1 sql -b -q "use repo2; create table t2 (a int primary key)"
+    dolt --data-dir=dbs1 sql -b -q "use repo2; call dolt_add('.')"
+    dolt --data-dir=dbs1 sql -b -q "use repo2; call dolt_commit('-am', 'cm')"
+    dolt --data-dir=dbs1 sql -b -q "use repo3; create table t3 (a int primary key)"
+    dolt --data-dir=dbs1 sql -b -q "use repo3; call dolt_add('.')"
+    dolt --data-dir=dbs1 sql -b -q "use repo3; call dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
     push_helper $TMPDIRS
@@ -214,21 +214,21 @@ SQL
     dolt config --global --add sqlserver.global.dolt_read_replica_remote remote1
     dolt config --global --add sqlserver.global.dolt_replicate_heads main
 
-    run dolt sql --data-dir=dbs2 -b -q "use repo1; show tables" -r csv
+    run dolt --data-dir=dbs2 sql -b -q "use repo1; show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     [[ "$output" =~ "t1" ]] || false
     [[ ! "$output" =~ "t2" ]] || false
     [[ ! "$output" =~ "t3" ]] || false
 
-    run dolt sql --data-dir=dbs2 -b -q "use repo2; show tables" -r csv
+    run dolt --data-dir=dbs2 sql -b -q "use repo2; show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     [[ "$output" =~ "t2" ]] || false
     [[ ! n"$output" =~ "t1" ]] || false
     [[ ! "$output" =~ "t3" ]] || faalse
 
-    run dolt sql --data-dir=dbs2 -b -q "use repo3; show tables" -r csv
+    run dolt --data-dir=dbs2 sql -b -q "use repo3; show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     [[ "$output" =~ "t3" ]] || false
@@ -240,7 +240,7 @@ SQL
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote remote1
     dolt sql -q "set @@persist.dolt_replication_remote_url_template = 'file://$TMPDIRS/rem1/{database}'"
 
-    dolt sql --data-dir=dbs1 <<SQL
+    dolt --data-dir=dbs1 sql <<SQL
 create database newdb;
 use newdb;
 create table new_table (b int primary key);
@@ -259,20 +259,20 @@ SQL
 
     [ ! -d "dbs2/newdb" ]
     
-    run dolt sql --data-dir=dbs2 -q "use newdb; show tables" -r csv
+    run dolt --data-dir=dbs2 sql -q "use newdb; show tables" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "new_table" ]] || false
 
     [ -d "dbs2/newdb" ]
 
-    run dolt sql --data-dir=dbs2 -q "use not_exist; show tables" -r csv
+    run dolt --data-dir=dbs2 sql -q "use not_exist; show tables" -r csv
     [ $status -ne 0 ]
     [[ "$output" =~ "database not found" ]] || false
 }
 
 @test "replication-multidb: missing database config" {
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote unknown
-    run dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
+    run dolt --data-dir=dbs1 sql -b -q "use repo1; create table t1 (a int primary key)"
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
@@ -281,7 +281,7 @@ SQL
 @test "replication-multidb: missing database config quiet warning" {
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote unknown
     dolt config --global --add sqlserver.global.dolt_skip_replication_errors 1
-    dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
+    dolt --data-dir=dbs1 sql -b -q "use repo1; create table t1 (a int primary key)"
 }
 
 @test "replication-multidb: sql-server push on commit" {
@@ -302,21 +302,21 @@ SQL
 
     clone_helper $TMPDIRS
 
-    run dolt sql --data-dir=dbs2 -b -q "use repo1; show tables" -r csv
+    run dolt --data-dir=dbs2 sql -b -q "use repo1; show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     [[ "$output" =~ "t1" ]] || false
     [[ ! "$output" =~ "t2" ]] || false
     [[ ! "$output" =~ "t3" ]] || false
 
-    run dolt sql --data-dir=dbs2 -b -q "use repo2; show tables" -r csv
+    run dolt --data-dir=dbs2 sql -b -q "use repo2; show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     [[ "$output" =~ "t2" ]] || false
     [[ ! n"$output" =~ "t1" ]] || false
     [[ ! "$output" =~ "t3" ]] || faalse
 
-    run dolt sql --data-dir=dbs2 -b -q "use repo3; show tables" -r csv
+    run dolt --data-dir=dbs2 sql -b -q "use repo3; show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     [[ "$output" =~ "t3" ]] || false
@@ -326,15 +326,15 @@ SQL
 
 @test "replication-multidb: sql-server pull on read" {
     push_helper $TMPDIRS
-    dolt sql --data-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
-    dolt sql --data-dir=dbs1 -b -q "use repo1; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo1; call dolt_commit('-am', 'cm')"
-    dolt sql --data-dir=dbs1 -b -q "use repo2; create table t2 (a int primary key)"
-    dolt sql --data-dir=dbs1 -b -q "use repo2; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo2; call dolt_commit('-am', 'cm')"
-    dolt sql --data-dir=dbs1 -b -q "use repo3; create table t3 (a int primary key)"
-    dolt sql --data-dir=dbs1 -b -q "use repo3; call dolt_add('.')"
-    dolt sql --data-dir=dbs1 -b -q "use repo3; call dolt_commit('-am', 'cm')"
+    dolt --data-dir=dbs1 sql -b -q "use repo1; create table t1 (a int primary key)"
+    dolt --data-dir=dbs1 sql -b -q "use repo1; call dolt_add('.')"
+    dolt --data-dir=dbs1 sql -b -q "use repo1; call dolt_commit('-am', 'cm')"
+    dolt --data-dir=dbs1 sql -b -q "use repo2; create table t2 (a int primary key)"
+    dolt --data-dir=dbs1 sql -b -q "use repo2; call dolt_add('.')"
+    dolt --data-dir=dbs1 sql -b -q "use repo2; call dolt_commit('-am', 'cm')"
+    dolt --data-dir=dbs1 sql -b -q "use repo3; create table t3 (a int primary key)"
+    dolt --data-dir=dbs1 sql -b -q "use repo3; call dolt_add('.')"
+    dolt --data-dir=dbs1 sql -b -q "use repo3; call dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
     push_helper $TMPDIRS
