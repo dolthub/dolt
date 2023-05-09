@@ -133,6 +133,7 @@ DELIM
     [[ "$output" =~ "Rows Processed: 4, Additions: 4, Modifications: 0, Had No Effect: 0" ]] || false
 
     run dolt sql -r csv -q "select * from word;"
+    echo "OUTPUT: $output \n"
     [ $status -eq 0 ]
     [[ "$output" = "$expected" ]] || false
 }
