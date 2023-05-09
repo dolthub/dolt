@@ -149,10 +149,10 @@ user_session_vars:
     aws_credentials_file: /Users/user1/.aws/config
     aws_credentials_profile: lddev" > server.yaml
 
-    dolt sql --privilege-file=privs.json -q "CREATE USER dolt@'127.0.0.1'"
-    dolt sql --privilege-file=privs.json -q "CREATE USER user0@'127.0.0.1' IDENTIFIED BY 'pass0'"
-    dolt sql --privilege-file=privs.json -q "CREATE USER user1@'127.0.0.1' IDENTIFIED BY 'pass1'"
-    dolt sql --privilege-file=privs.json -q "CREATE USER user2@'127.0.0.1' IDENTIFIED BY 'pass2'"
+    dolt --privilege-file=privs.json sql -q "CREATE USER dolt@'127.0.0.1'"
+    dolt --privilege-file=privs.json sql -q "CREATE USER user0@'127.0.0.1' IDENTIFIED BY 'pass0'"
+    dolt --privilege-file=privs.json sql -q "CREATE USER user1@'127.0.0.1' IDENTIFIED BY 'pass1'"
+    dolt --privilege-file=privs.json sql -q "CREATE USER user2@'127.0.0.1' IDENTIFIED BY 'pass2'"
 
     start_sql_server_with_config "" server.yaml
 
@@ -200,7 +200,7 @@ SQL
     [[ "$output" =~ "one_pk" ]] || false
 
     # Add rows on the command line
-    run dolt sql --user=dolt -q "insert into one_pk values (1,1,1)"
+    run dolt --user=dolt sql -q "insert into one_pk values (1,1,1)"
     [ "$status" -eq 1 ]
 
     run dolt sql-client -P $PORT -u dolt -q "SELECT * FROM one_pk"
@@ -307,7 +307,7 @@ SQL
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "working tree clean" ]] || false
-    run dolt sql --user=dolt -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
+    run dolt --user=dolt sql -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "6,6" ]] || false
 
@@ -318,7 +318,7 @@ SQL
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "working tree clean" ]] || false
-    run dolt sql --user=dolt -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
+    run dolt --user=dolt sql -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "6,6" ]] || false
 }
@@ -690,11 +690,11 @@ SQL
 
      # verify changes outside the session
      cd repo2
-     run dolt sql --user=dolt -q "show tables"
+     run dolt --user=dolt sql -q "show tables"
      [ "$status" -eq 0 ]
      [[ "$output" =~ "one_pk" ]] || false
 
-     run dolt sql --user=dolt -q "select * from one_pk"
+     run dolt --user=dolt sql -q "select * from one_pk"
      [ "$status" -eq 0 ]
      [[ "$output" =~ " 0 " ]] || false
      [[ "$output" =~ " 1 " ]] || false
@@ -712,7 +712,7 @@ SQL
 
      # verify changes outside the session
      cd newdb
-     run dolt sql --user=dolt -q "show tables"
+     run dolt --user=dolt sql -q "show tables"
      [ "$status" -eq 0 ]
      [[ "$output" =~ "test" ]] || false
 }
@@ -745,7 +745,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
 
-    run dolt sql --user=dolt -q "drop table one_pk"
+    run dolt --user=dolt sql -q "drop table one_pk"
     [ "$status" -eq 1 ]
 
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "drop table one_pk"
@@ -1094,7 +1094,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table a" ]] || false
 
-    run dolt sql --user=dolt -q "show tables"
+    run dolt --user=dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "a" ]] || false
 
@@ -1103,7 +1103,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table b" ]] || false
 
-    run dolt sql --user=dolt -q "show tables"
+    run dolt --user=dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "b" ]] || false
 
@@ -1340,7 +1340,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table a" ]] || false
 
-    run dolt sql --user=dolt -q "show tables"
+    run dolt --user=dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "a" ]] || false
 
@@ -1349,7 +1349,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table b" ]] || false
 
-    run dolt sql --user=dolt -q "show tables"
+    run dolt --user=dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "b" ]] || false
 

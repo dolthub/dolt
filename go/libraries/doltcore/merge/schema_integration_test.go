@@ -40,7 +40,9 @@ type testCommand struct {
 }
 
 func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) int {
-	return tc.cmd.Exec(ctx, tc.cmd.Name(), tc.args, dEnv, commands.BuildEmptyCliContext())
+	cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv)
+	require.NoError(t, err)
+	return tc.cmd.Exec(ctx, tc.cmd.Name(), tc.args, dEnv, cliCtx)
 }
 
 type args []string

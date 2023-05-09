@@ -229,3 +229,67 @@ branch', 'test', '%', 'admin')"
     [ $status -ne 0 ]
     [[ $output =~ "cannot create a branch" ]] || false   
 }
+
+@test "branch-control: test longest match in branch access control" {
+  setup_test_user
+  dolt sql -q "create user admin"
+  dolt sql -q "grant all on *.* to admin"
+  dolt sql -q "insert into dolt_branch_control values ('%', '%', 'admin', '%', 'admin')"
+
+  dolt sql -q "insert into dolt_branch_control values ('dolt_repo_$$', 'test-branch', 'test', '%', 'read')"
+  dolt sql -q "insert into dolt_branch_control values ('dolt_repo_$$', '%', 'test', '%', 'write')"
+  dolt branch test-branch
+
+  start_sql_server
+
+  run dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test -q "call dolt_checkout('test-branch'); create table t (c1 int)"
+  [ $status -ne 0 ]
+  [[ $output =~ "does not have the correct permissions" ]] || false
+
+  dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u admin -q "delete from dolt_branch_control where branch = 'test-branch'"
+
+  run dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test -q "call dolt_checkout('test-branch'); create table t (c1 int)"
+  [ $status -eq 0 ]
+  [[ ! $output =~ "does not have the correct permissions" ]] || false
+}
+
+@test "branch-control: repeat deletion does not cause a nil panic" {
+  dolt sql <<SQL
+DELETE FROM dolt_branch_control;
+INSERT INTO dolt_branch_control VALUES ("dolt","s1","ab","%","admin");
+INSERT INTO dolt_branch_control VALUES ("dolt","s2","ab","%","admin");
+INSERT INTO dolt_branch_control VALUES ("%","%","%","%","write");
+DELETE FROM dolt_branch_control;
+INSERT INTO dolt_branch_control VALUES ("dolt","s1","ab","%","admin");
+INSERT INTO dolt_branch_control VALUES ("dolt","s2","ab","%","admin");
+INSERT INTO dolt_branch_control VALUES ("%","%","%","%","write");
+DELETE FROM dolt_branch_control;
+INSERT INTO dolt_branch_control VALUES ("dolt","s1","ab","%","admin");
+INSERT INTO dolt_branch_control VALUES ("dolt","s2","ab","%","admin");
+INSERT INTO dolt_branch_control VALUES ("%","%","%","%","write");
+DELETE FROM dolt_branch_control;
+INSERT INTO dolt_branch_control VALUES ("dolt","s1","ab","%","admin");
+INSERT INTO dolt_branch_control VALUES ("dolt","s2","ab","%","admin");
+INSERT INTO dolt_branch_control VALUES ("%","%","%","%","write");
+SQL
+  run dolt sql -q "SELECT * FROM dolt_branch_control ORDER BY 1,2,3" -r=csv
+  [ $status -eq 0 ]
+  [ ${lines[0]} = "database,branch,user,host,permissions" ]
+  [ ${lines[1]} = "%,%,%,%,write" ]
+  [ ${lines[2]} = "dolt,s1,ab,%,admin" ]
+  [ ${lines[3]} = "dolt,s2,ab,%,admin" ]
+
+  # Related to the above issue, multiple deletions would report matches even when they should have all been deleted
+  run dolt sql -q "DELETE FROM dolt_branch_control;"
+  [ $status -eq 0 ]
+  [[ $output =~ "3 rows affected" ]] || false
+  run dolt sql -q "DELETE FROM dolt_branch_control;"
+  [ $status -eq 0 ]
+  [[ $output =~ "0 rows affected" ]] || false
+  run dolt sql -q "DELETE FROM dolt_branch_control;"
+  [ $status -eq 0 ]
+  [[ $output =~ "0 rows affected" ]] || false
+  run dolt sql -q "DELETE FROM dolt_branch_control;"
+  [ $status -eq 0 ]
+  [[ $output =~ "0 rows affected" ]] || false
+}

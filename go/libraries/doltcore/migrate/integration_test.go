@@ -170,10 +170,12 @@ func setupMigrationTest(t *testing.T, ctx context.Context, test migrationTest) *
 		dEnv, err = test.hook(ctx, dEnv)
 		require.NoError(t, err)
 	}
+	cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv)
+	require.NoError(t, err)
 
 	cmd := commands.SqlCmd{}
 	for _, query := range test.setup {
-		code := cmd.Exec(ctx, cmd.Name(), []string{"-q", query}, dEnv, commands.BuildEmptyCliContext())
+		code := cmd.Exec(ctx, cmd.Name(), []string{"-q", query}, dEnv, cliCtx)
 		require.Equal(t, 0, code)
 	}
 	return dEnv

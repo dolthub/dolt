@@ -992,3 +992,34 @@ tests:
       result:
         columns: ["count(*)"]
         rows: [["5"]]
+- name: call dolt checkout
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  connections:
+  - on: server1
+    queries:
+    - exec: 'create database repo1'
+    - exec: 'use repo1'
+    - exec: 'call dolt_branch("-c", "main", "new_branch_name")'
+  - on: server1
+    queries:
+    - exec: 'use repo1'
+    - exec: 'call dolt_checkout("new_branch_name")'

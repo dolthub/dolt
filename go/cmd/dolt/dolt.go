@@ -19,6 +19,7 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -61,7 +62,7 @@ import (
 )
 
 const (
-	Version = "0.75.19"
+	Version = "1.0.0"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -153,6 +154,8 @@ func main() {
 
 func runMain() int {
 	args := os.Args[1:]
+
+	start := time.Now()
 
 	if len(args) == 0 {
 		doltCommand.PrintUsage("dolt")
@@ -306,11 +309,19 @@ func runMain() int {
 				args = args[1:]
 
 			case featureVersionFlag:
-				if featureVersion, err := strconv.Atoi(args[1]); err == nil {
-					doltdb.DoltFeatureVersion = doltdb.FeatureVersion(featureVersion)
+				var err error
+				if len(args) == 0 {
+					err = fmt.Errorf("missing argument for the --feature-version flag")
 				} else {
-					panic(err)
+					if featureVersion, err := strconv.Atoi(args[1]); err == nil {
+						doltdb.DoltFeatureVersion = doltdb.FeatureVersion(featureVersion)
+					}
 				}
+				if err != nil {
+					cli.PrintErrln(err.Error())
+					return 1
+				}
+
 				args = args[2:]
 
 			default:
@@ -423,17 +434,26 @@ func runMain() int {
 		return 1
 	}
 
-	start := time.Now()
-	ctx, stop := context.WithCancel(ctx)
-
 	var cliCtx cli.CliContext = nil
 	if initCliContext {
 		_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
 		apr := cli.ParseArgsOrDie(globalArgParser, globalArgs, usage)
 
-		cliCtx = tmpCliContext{globalArgs: apr}
+		lateBind, err := commands.BuildSqlEngineQueryist(ctx, dEnv, apr)
+		if err != nil {
+			cli.PrintErrln(color.RedString("Failure to Load SQL Engine: %v", err))
+			return 1
+		}
+
+		cliCtx, err = cli.NewCliContext(apr, lateBind)
+		if err != nil {
+			cli.PrintErrln(color.RedString("Unexpected Error: %v", err))
+			return 1
+		}
+
 	}
 
+	ctx, stop := context.WithCancel(ctx)
 	res := doltCommand.Exec(ctx, "dolt", args, dEnv, cliCtx)
 	stop()
 
@@ -452,18 +472,6 @@ func runMain() int {
 
 	return res
 }
-
-// tmpCliContext is a temporary implementation of the CliContext interface. It is used to pass the global args to the
-// subcommands, will be replaced with implementations aware of query contexts shortly.
-type tmpCliContext struct {
-	globalArgs *argparser.ArgParseResults
-}
-
-func (t tmpCliContext) GlobalArgs() *argparser.ArgParseResults {
-	return t.globalArgs
-}
-
-var _ cli.CliContext = (*tmpCliContext)(nil)
 
 // splitArgsOnSubCommand splits the args into two slices, the first containing all args before the first subcommand,
 // and the second containing all args after the first subcommand. The second slice will start with the subcommand name.
@@ -552,7 +560,11 @@ func buildGlobalArgs() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("dolt")
 
 	// Pulling this argument forward first to pave the way. Others will follow.
+	ap.SupportsString(commands.UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", commands.DefaultUser))
 	ap.SupportsString(commands.DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
+	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change to configuration settings.")
+	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
+	ap.SupportsString(commands.BranchCtrlPathFlag, "", "branch control file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will only be created if there is a change to branch control permissions.")
 
 	return ap
 }

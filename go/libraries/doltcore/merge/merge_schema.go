@@ -245,7 +245,7 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 		return nil, nil, err
 	}
 
-	common, conflicts, err := foreignKeysInCommon(ours, theirs, anc)
+	common, conflicts, err := foreignKeysInCommon(ours, theirs, anc, ancSchs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -771,10 +771,11 @@ func indexCollSetDifference(left, right schema.IndexCollection, cc *schema.ColCo
 	return d
 }
 
-func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) (common *doltdb.ForeignKeyCollection, conflicts []FKConflict, err error) {
+func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection, ancSchs map[string]schema.Schema) (common *doltdb.ForeignKeyCollection, conflicts []FKConflict, err error) {
 	common, _ = doltdb.NewForeignKeyCollection()
 	err = ourFKs.Iter(func(ours doltdb.ForeignKey) (stop bool, err error) {
-		theirs, ok := theirFKs.GetByTags(ours.TableColumns, ours.ReferencedTableColumns)
+
+		theirs, ok := theirFKs.GetMatchingKey(ours, ancSchs)
 		if !ok {
 			return false, nil
 		}
@@ -784,7 +785,7 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) 
 			return false, err
 		}
 
-		anc, ok := ancFKs.GetByTags(ours.TableColumns, ours.ReferencedTableColumns)
+		anc, ok := ancFKs.GetMatchingKey(ours, ancSchs)
 		if !ok {
 			// FKs added on both branch with different defs
 			conflicts = append(conflicts, FKConflict{
