@@ -305,6 +305,15 @@ func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 	return filteredIter{iter: iter, rng: rng}, nil
 }
 
+// IterRangeReverse returns a mutableMapIter that iterates over a Range backwards.
+func (m Map) IterRangeReverse(ctx context.Context, rng Range) (MapIter, error) {
+	iter, err := treeIterFromRangeReverse(ctx, m.tuples.Root, m.tuples.NodeStore, rng)
+	if err != nil {
+		return nil, err
+	}
+	return filteredIter{iter: iter, rng: rng}, nil
+}
+
 // IterKeyRange iterates over a physical key range defined by |start| and
 // |stop|. If |startInclusive| and/or |stop| is nil, the range will be open
 // towards that end.
@@ -345,6 +354,16 @@ func treeIterFromRange(
 ) (*tree.OrderedTreeIter[val.Tuple, val.Tuple], error) {
 	findStart, findStop := rangeStartSearchFn(rng), rangeStopSearchFn(rng)
 	return tree.OrderedTreeIterFromCursors[val.Tuple, val.Tuple](ctx, root, ns, findStart, findStop)
+}
+
+func treeIterFromRangeReverse(
+	ctx context.Context,
+	root tree.Node,
+	ns tree.NodeStore,
+	rng Range,
+) (*tree.OrderedTreeIter[val.Tuple, val.Tuple], error) {
+	findStart, findStop := rangeStartSearchFn(rng), rangeStopSearchFn(rng)
+	return tree.ReverseOrderedTreeIterFromCursors[val.Tuple, val.Tuple](ctx, root, ns, findStart, findStop)
 }
 
 func NewPointLookup(k, v val.Tuple) *pointLookup {

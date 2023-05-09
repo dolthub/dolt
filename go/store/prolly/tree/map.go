@@ -491,6 +491,35 @@ type OrderedTreeIter[K, V ~[]byte] struct {
 	stop func(*Cursor) bool
 }
 
+func ReverseOrderedTreeIterFromCursors[K, V ~[]byte](
+	ctx context.Context,
+	root Node, ns NodeStore,
+	findStart, findEnd SearchFn,
+) (*OrderedTreeIter[K, V], error) {
+	start, err := newCursorFromSearchFn(ctx, ns, root, findStart)
+	if err != nil {
+		return nil, err
+	}
+	end, err := newCursorFromSearchFn(ctx, ns, root, findEnd)
+	if err != nil {
+		return nil, err
+	}
+	err = end.retreat(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	stopFn := func(curr *Cursor) bool {
+		return curr.compare(start) < 0
+	}
+
+	if stopFn(end) {
+		end = nil // empty range
+	}
+
+	return &OrderedTreeIter[K, V]{curr: end, stop: stopFn, step: end.retreat}, nil
+}
+
 func OrderedTreeIterFromCursors[K, V ~[]byte](
 	ctx context.Context,
 	root Node, ns NodeStore,
