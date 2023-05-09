@@ -41,7 +41,7 @@ type ReadReplicaDatabase struct {
 	limiter *limiter
 }
 
-var _ SqlDatabase = ReadReplicaDatabase{}
+var _ dsess.SqlDatabase = ReadReplicaDatabase{}
 var _ sql.VersionedDatabase = ReadReplicaDatabase{}
 var _ sql.TableDropper = ReadReplicaDatabase{}
 var _ sql.TableCreator = ReadReplicaDatabase{}

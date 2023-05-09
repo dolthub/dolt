@@ -22,7 +22,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
-    [[ ! "$output" =~ "Untracked files:" ]] || false
+    [[ ! "$output" =~ "Untracked tables:" ]] || false
     [[ ! "$output" =~ "LICENSE.md" ]] || false
     [[ ! "$output" =~ "README.md" ]] || false
 }

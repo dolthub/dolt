@@ -59,7 +59,7 @@ type SessionDatabase interface {
 
 type DatabaseSessionState struct {
 	dbName       string
-	db           sql.Database
+	db           SqlDatabase
 	headCommit   *doltdb.Commit
 	headRoot     *doltdb.RootValue
 	WorkingSet   *doltdb.WorkingSet

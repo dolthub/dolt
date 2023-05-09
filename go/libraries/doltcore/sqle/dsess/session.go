@@ -37,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -254,32 +255,14 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		return DisabledTransaction{}, nil
 	}
 
-	// TODO: rather than a single database, we need to take a snapshot of all available databases that we use for the
-	//  duration of the transaction
-
+	// TODO: remove this when we have true multi-db transaction support
 	dbName := ctx.GetTransactionDatabase()
-	// TODO: remove this hack when we have true multi-db transaction support
 	if isNoOpTransactionDatabase(dbName) {
 		return DisabledTransaction{}, nil
 	}
 
-	// Since StartTransaction occurs before even any analysis, it's possible that this session has no state for the
-	// database with the transaction being performed, so we load it here.
-	if !d.HasDB(ctx, dbName) {
-		db, ok, err := d.provider.SessionDatabase(ctx, dbName)
-		if err != nil {
-			return nil, err
-		}
-
-		if !ok {
-			return nil, sql.ErrDatabaseNotFound.New(dbName)
-		}
-
-		err = d.addDB(ctx, db)
-		if err != nil {
-			return nil, err
-		}
-	}
+	// New transaction, clear all session state
+	d.clearRevisionDbState()
 
 	sessionState, ok, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
@@ -314,6 +297,20 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		return DisabledTransaction{}, nil
 	}
 
+	nomsRoots := make(map[string]hash.Hash)
+	for _, db := range d.provider.DoltDatabases() {
+		// TODO: this nil check is only necessary to support UserSpaceDatabase and clusterDatabase, come up with a better set of
+		//  interfaces to capture these capabilities
+		ddb := db.DbData().Ddb
+		if ddb != nil {
+			nomsRoot, err := ddb.NomsRoot(ctx)
+			if err != nil {
+				return nil, err
+			}
+			nomsRoots[strings.ToLower(db.Name())] = nomsRoot
+		}
+	}
+
 	if _, v, ok := sql.SystemVariables.GetGlobal(ReadReplicaRemote); ok && v != "" {
 		err = sessionState.dbData.Ddb.Rebase(ctx)
 		if err != nil && !IgnoreReplicationErrors() {
@@ -343,7 +340,24 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
 
-	return NewDoltTransaction(dbName, ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic), nil
+	return NewDoltTransaction(dbName, nomsRoots, ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic), nil
+}
+
+// clearRevisionDbState clears all revision DB states for this session. This is necessary on transaction start,
+// because they will be re-initialized with the current branch head / working set.
+// TODO: this should happen with every dbstate, not just revision DBs. The problem is that we track the current working
+//
+//	set *only* in the session state. We need to disentangle the metadata about a state (working ref, persists across
+//	transactions) from its data (re-initialized on every transaction start)
+func (d *DoltSession) clearRevisionDbState() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	for _, dbState := range d.dbStates {
+		if len(dbState.db.Revision()) > 0 {
+			delete(d.dbStates, strings.ToLower(dbState.db.Name()))
+		}
+	}
 }
 
 // isNoOpTransactionDatabase returns whether the database name given is a non-Dolt database that shouldn't have
@@ -890,6 +904,7 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	if err != nil {
 		return err
 	}
+
 	sessionState.headRoot = headRoot
 
 	err = d.setSessionVarsForDb(ctx, dbName)
@@ -927,6 +942,22 @@ func (d *DoltSession) SwitchWorkingSet(
 		return ErrWorkingSetChanges.New()
 	}
 
+	// TODO: this should call session.StartTransaction once that has been cleaned up a bit
+	nomsRoots := make(map[string]hash.Hash)
+	for _, db := range d.provider.DoltDatabases() {
+		// TODO: this nil check is only necessary to support UserSpaceDatabase and clusterDatabase, come up with a better set of
+		//  interfaces to capture these capabilities
+		ddb := db.DbData().Ddb
+		if ddb != nil {
+			nomsRoot, err := ddb.NomsRoot(ctx)
+			if err != nil {
+				return err
+			}
+			nomsRoots[strings.ToLower(db.Name())] = nomsRoot
+		}
+	}
+
+	// TODO: resolve the working set ref with the root above
 	ws, err := sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
 		return err
@@ -992,6 +1023,7 @@ func (d *DoltSession) SwitchWorkingSet(
 	}
 	ctx.SetTransaction(NewDoltTransaction(
 		dbName,
+		nomsRoots,
 		ws,
 		wsRef,
 		sessionState.dbData,
@@ -1104,7 +1136,7 @@ func (d *DoltSession) HasDB(_ *sql.Context, dbName string) bool {
 
 // addDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
-func (d *DoltSession) addDB(ctx *sql.Context, db SessionDatabase) error {
+func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	DefineSystemVariablesForDB(db.Name())
 
 	sessionState := NewEmptyDatabaseSessionState()
@@ -1576,3 +1608,40 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
 	return nil
 }
+
+// SplitRevisionDbName splits the given database name into its base and revision parts and returns them. Non-revision
+// DBs use their full name as the base name, and empty string as the revision.
+func SplitRevisionDbName(db SqlDatabase) (string, string) {
+	sqldb, ok := db.(SqlDatabase)
+	if !ok {
+		return db.Name(), ""
+	}
+
+	dbName := db.Name()
+	if sqldb.Revision() != "" {
+		dbName = strings.TrimSuffix(dbName, DbRevisionDelimiter+sqldb.Revision())
+	}
+
+	return dbName, sqldb.Revision()
+}
+
+// TransactionRoot returns the noms root for the given database in the current transaction
+func TransactionRoot(ctx *sql.Context, db SqlDatabase) (hash.Hash, error) {
+	tx, ok := ctx.GetTransaction().(*DoltTransaction)
+	// We don't have a real transaction in some cases (esp. PREPARE), in which case we need to use the tip of the data
+	if !ok {
+		return db.DbData().Ddb.NomsRoot(ctx)
+	}
+
+	baseName, _ := SplitRevisionDbName(db)
+	nomsRoot, ok := tx.GetInitialRoot(baseName)
+	if !ok {
+		return hash.Hash{}, fmt.Errorf("could not resolve initial root for database %s", db.Name())
+	}
+
+	return nomsRoot, nil
+}
+
+const (
+	DbRevisionDelimiter = "/"
+)

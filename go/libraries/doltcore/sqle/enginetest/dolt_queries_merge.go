@@ -3921,6 +3921,84 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "adding a column with a literal default value",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key);",
+			"INSERT into t values (1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column c1 varchar(100) default ('hello');",
+			"insert into t values (2, 'hi');",
+			"alter table t add index idx1 (c1, pk);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "hello"}, {2, "hi"}, {3, "hello"}},
+			},
+		},
+	},
+	{
+		Name: "altering a column to add a literal default value",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, c1 varchar(100));",
+			"INSERT into t values (1, NULL);",
+			"alter table t add index idx1 (c1, pk);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column c1 varchar(100) default ('hello');",
+			"insert into t values (2, DEFAULT);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (3, NULL);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, nil}, {2, "hello"}, {3, nil}},
+			},
+		},
+	},
+	{
+		// TODO: We can currently only support literal default values. Supporting column references and functions
+		//       requires getting the analyzer involved to resolve references.
+		Name: "adding a column with a non-literal default value",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key);",
+			"INSERT into t values (1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column c1 varchar(100) default (CONCAT('h','e','l','l','o'));",
+			"insert into t values (2, 'hi');",
+			"alter table t add index idx1 (c1, pk);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "call dolt_merge('right');",
+				ExpectedErr: merge.ErrUnableToMergeColumnDefaultValue,
+			},
+			{
+				Skip:     true,
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "hello"}, {2, "hi"}, {3, "hello"}},
+			},
+		},
+	},
+	{
 		Name: "adding different columns to both sides",
 		AncSetUpScript: []string{
 			"create table t (pk int primary key);",
@@ -4191,6 +4269,38 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 
+	// Resolvable type changes
+	{
+		Name: "type widening - enums and sets",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 enum('blue', 'green'), col2 set('blue', 'green'));",
+			"INSERT into t values (1, 'blue', 'blue,green');",
+			"alter table t add index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 enum('blue', 'green', 'red');",
+			"alter table t modify column col2 set('blue', 'green', 'red');",
+			"INSERT into t values (3, 'red', 'red,blue');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (2, 'green', 'green,blue');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x0}},
+			},
+			{
+				Query: "select * from t order by pk;",
+				Expected: []sql.Row{
+					{1, uint64(1), uint64(3)},
+					{2, uint64(2), uint64(3)},
+					{3, uint64(3), uint64(5)},
+				},
+			},
+		},
+	},
+
 	// Schema conflicts
 	{
 		// Type widening - these changes move from smaller types to bigger types, so they are guaranteed to be safe.
@@ -4267,6 +4377,38 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` enum('blue','green','red'),\n  `col2` double,\n  `col3` bigint,\n  `col4` decimal(8,4),\n  `col5` varchar(20),\n  `col6` set('a','b','c'),\n  `col7` bit(2),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` enum('blue','green'),\n  `col2` float,\n  `col3` smallint,\n  `col4` decimal(4,2),\n  `col5` varchar(10),\n  `col6` set('a','b'),\n  `col7` bit(1),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` enum('blue','green','red'),\n  `col2` double,\n  `col3` bigint,\n  `col4` decimal(8,4),\n  `col5` varchar(20),\n  `col6` set('a','b','c'),\n  `col7` bit(2),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"}},
+			},
+		},
+	},
+	{
+		// Dolt indexes currently use the set of columns covered by the index, as a unique identifier for matching
+		// indexes on either side of a merge. As Dolt's index support has grown, this isn't guaranteed to be a unique
+		// id anymore, so instead of allowing a race condition in the merge logic, if we detect that multiple indexes
+		// cover the same set of columns, we return a schema conflict and let the user decide how to resolve it.
+		Name: "duplicate index tag set",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 varchar(100));",
+			"INSERT into t values (1, '100'), (2, '200');",
+			"alter table t add unique index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add index idx2 (col1(10));",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '300');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x1}},
+			},
+			{
+				Query: "select table_name, our_schema, their_schema, base_schema, description from dolt_schema_conflicts;",
+				Expected: []sql.Row{{"t",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(100),\n  PRIMARY KEY (`pk`),\n  UNIQUE KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(100),\n  PRIMARY KEY (`pk`),\n  UNIQUE KEY `idx1` (`col1`),\n  KEY `idx2` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(100),\n  PRIMARY KEY (`pk`),\n  UNIQUE KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"multiple indexes covering the same column set cannot be merged: 'idx1' and 'idx2'"}},
 			},
 		},
 	},

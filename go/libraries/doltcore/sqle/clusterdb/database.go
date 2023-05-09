@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
@@ -34,7 +33,7 @@ type database struct {
 }
 
 var _ sql.Database = database{}
-var _ sqle.SqlDatabase = database{}
+var _ dsess.SqlDatabase = database{}
 
 const StatusTableName = "dolt_cluster_status"
 
@@ -77,6 +76,24 @@ func (database) DropStoredProcedure(ctx *sql.Context, name string) error {
 	return errors.New("unimplemented")
 }
 
+var _ sql.ViewDatabase = database{}
+
+func (db database) CreateView(ctx *sql.Context, name string, selectStatement, createViewStmt string) error {
+	return errors.New("unimplemented")
+}
+
+func (db database) DropView(ctx *sql.Context, name string) error {
+	return errors.New("unimplemented")
+}
+
+func (db database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.ViewDefinition, bool, error) {
+	return sql.ViewDefinition{}, false, nil
+}
+
+func (db database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
+	return nil, nil
+}
+
 var _ sql.ReadOnlyDatabase = database{}
 
 func (database) IsReadOnly() bool {
@@ -100,7 +117,7 @@ func (db database) GetRoot(context *sql.Context) (*doltdb.RootValue, error) {
 }
 
 func (db database) DbData() env.DbData {
-	panic("unimplemented")
+	return env.DbData{}
 }
 
 func (db database) Flush(context *sql.Context) error {

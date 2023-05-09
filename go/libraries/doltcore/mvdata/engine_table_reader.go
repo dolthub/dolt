@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
@@ -51,7 +52,6 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
-		engine.FormatCsv,
 		config,
 	)
 	if err != nil {
@@ -101,7 +101,7 @@ func NewSqlEngineTableReaderWithEngine(sqlCtx *sql.Context, se *sqle.Engine, db 
 	}
 
 	return &sqlEngineTableReader{
-		se:     engine.NewRebasedSqlEngine(se, map[string]dsqle.SqlDatabase{db.Name(): db}),
+		se:     engine.NewRebasedSqlEngine(se, map[string]dsess.SqlDatabase{db.Name(): db}),
 		sqlCtx: sqlCtx,
 
 		sch:  doltSchema,

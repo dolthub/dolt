@@ -366,7 +366,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		return nil, err
 	}
 
-	sqledb, ok := ltf.database.(SqlDatabase)
+	sqledb, ok := ltf.database.(dsess.SqlDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unexpected database type: %T", ltf.database)
 	}

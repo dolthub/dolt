@@ -82,5 +82,19 @@ type DoltDatabaseProvider interface {
 	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error
 	// SessionDatabase returns the SessionDatabase for the specified database, which may name a revision of a base
 	// database.
-	SessionDatabase(ctx *sql.Context, dbName string) (SessionDatabase, bool, error)
+	SessionDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool, error)
+	// DoltDatabases returns all databases known to this provider.
+	DoltDatabases() []SqlDatabase
+}
+
+type SqlDatabase interface {
+	sql.Database
+	SessionDatabase
+	RevisionDatabase
+
+	// TODO: get rid of this, it's managed by the session, not the DB
+	GetRoot(*sql.Context) (*doltdb.RootValue, error)
+	// TODO: remove ddb from the below, it's separable and is 95% of the uses of this method
+	DbData() env.DbData
+	Flush(*sql.Context) error
 }

@@ -84,7 +84,6 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
-		engine.FormatCsv,
 		config,
 	)
 	if err != nil {
@@ -158,7 +157,7 @@ func NewSqlEngineTableWriterWithEngine(ctx *sql.Context, eng *sqle.Engine, db ds
 	}
 
 	return &SqlEngineTableWriter{
-		se:         engine.NewRebasedSqlEngine(eng, map[string]dsqle.SqlDatabase{db.Name(): db}),
+		se:         engine.NewRebasedSqlEngine(eng, map[string]dsess.SqlDatabase{db.Name(): db}),
 		sqlCtx:     ctx,
 		contOnErr:  options.ContinueOnErr,
 		force:      options.Force,

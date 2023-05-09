@@ -1,8 +1,7 @@
 #!/usr/bin/ruby
 
-require 'mysql'
+require 'mysql2'
 require 'test/unit'
-require 'pp'
 
 extend Test::Unit::Assertions
 
@@ -28,22 +27,23 @@ queries = [
 ]
 
 # Smoke test the queries to make sure nothing blows up
-conn = Mysql::new("127.0.0.1", user, "", db, port)
+client = Mysql2::Client.new(:host => "127.0.0.1", :port => port, :username => user, :database => db)
 queries.each do |query|
-  res = conn.query(query)
+  res = client.query(query)
 end
 
+
 # Then make sure we can read some data back
-res = conn.query("SELECT * from test where pk = 1;")
+res = client.query("SELECT * from test where pk = 1;")
 rowCount = 0
 res.each do |row|
   rowCount += 1
-  assert_equal 1, row[0].to_i
-  assert_equal 1, row[1].to_i
-  assert_equal 123456.789, row[2].to_f
-  assert_equal 420.42, row[3].to_f
+  assert_equal 1, row["pk"]
+  assert_equal 1, row["value"]
+  assert_equal 123456.789, row["d1"]
+  assert_equal 420.42, row["f1"]
 end
 assert_equal 1, rowCount
 
-conn.close()
+client.close()
 exit(0)

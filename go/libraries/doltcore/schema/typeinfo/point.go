@@ -228,5 +228,9 @@ func CreatePointTypeFromParams(params map[string]string) (TypeInfo, error) {
 		}
 	}
 
-	return &pointType{sqlPointType: gmstypes.PointType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
+	return CreatePointTypeFromSqlPointType(gmstypes.PointType{SRID: uint32(sridVal), DefinedSRID: def}), nil
+}
+
+func CreatePointTypeFromSqlPointType(sqlPointType gmstypes.PointType) TypeInfo {
+	return &pointType{sqlPointType: sqlPointType}
 }

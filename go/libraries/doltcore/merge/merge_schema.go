@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	sqle "github.com/dolthub/go-mysql-server"
@@ -25,7 +26,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/types"
+	storetypes "github.com/dolthub/dolt/go/store/types"
 )
 
 type conflictKind byte
@@ -36,6 +37,9 @@ const (
 	ColumnCheckCollision
 	InvalidCheckCollision
 	DeletedCheckCollision
+	// DuplicateIndexColumnSet represent a schema conflict where multiple indexes cover the same set of columns, and
+	// we're unable to accurately match them up on each side of the merge, so the user has to manually resolve.
+	DuplicateIndexColumnSet
 )
 
 type SchemaConflict struct {
@@ -105,7 +109,12 @@ type IdxConflict struct {
 }
 
 func (c IdxConflict) String() string {
-	return ""
+	switch c.Kind {
+	case DuplicateIndexColumnSet:
+		return fmt.Sprintf("multiple indexes covering the same column set cannot be merged: '%s' and '%s'", c.Ours.Name(), c.Theirs.Name())
+	default:
+		return ""
+	}
 }
 
 type FKConflict struct {
@@ -139,7 +148,7 @@ func (c ChkConflict) String() string {
 var ErrMergeWithDifferentPks = errors.New("error: cannot merge two tables with different primary keys")
 
 // SchemaMerge performs a three-way merge of ourSch, theirSch, and ancSch.
-func SchemaMerge(ctx context.Context, format *types.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, err error) {
+func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, err error) {
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
 	sc = SchemaConflict{
 		TableName: tblName,
@@ -307,7 +316,7 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 // between types, since different storage formats have different restrictions on how much types can change and remain
 // compatible with the current stored format. If any unexpected error occurs, then that error is returned and the
 // other response fields should be ignored.
-func mergeColumns(format *types.NomsBinFormat, ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, error) {
+func mergeColumns(format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, error) {
 	columnMappings, err := mapColumns(ourCC, theirCC, ancCC)
 	if err != nil {
 		return nil, nil, err
@@ -317,6 +326,8 @@ func mergeColumns(format *types.NomsBinFormat, ourCC, theirCC, ancCC *schema.Col
 	if err != nil {
 		return nil, nil, err
 	}
+
+	compatChecker := newTypeCompatabilityCheckerForStorageFormat(format)
 
 	// After we've checked for schema conflicts, merge the columns together
 	// TODO: We don't currently preserve all column position changes; the returned merged columns are always based on
@@ -346,7 +357,9 @@ func mergeColumns(format *types.NomsBinFormat, ourCC, theirCC, ancCC *schema.Col
 				if oursChanged && theirsChanged {
 					// This is a schema change conflict and has already been handled by checkSchemaConflicts
 				} else if theirsChanged {
-					if columnTypesAreCompatible(format, *ours, *theirs) {
+					// In this case, only theirsChanged, so we need to check if moving from ours->theirs
+					// is valid, otherwise it's a conflict
+					if compatChecker.IsTypeChangeCompatible(ours.TypeInfo, theirs.TypeInfo) {
 						mergedColumns = append(mergedColumns, *theirs)
 					} else {
 						conflicts = append(conflicts, ColConflict{
@@ -355,8 +368,10 @@ func mergeColumns(format *types.NomsBinFormat, ourCC, theirCC, ancCC *schema.Col
 							Theirs: *theirs,
 						})
 					}
-				} else {
-					if columnTypesAreCompatible(format, *theirs, *ours) {
+				} else if oursChanged {
+					// In this case, only oursChanged, so we need to check if moving from theirs->ours
+					// is valid, otherwise it's a conflict
+					if compatChecker.IsTypeChangeCompatible(theirs.TypeInfo, ours.TypeInfo) {
 						mergedColumns = append(mergedColumns, *ours)
 					} else {
 						conflicts = append(conflicts, ColConflict{
@@ -365,6 +380,9 @@ func mergeColumns(format *types.NomsBinFormat, ourCC, theirCC, ancCC *schema.Col
 							Theirs: *theirs,
 						})
 					}
+				} else {
+					// if neither side changed, just use ours
+					mergedColumns = append(mergedColumns, *ours)
 				}
 			} else if ours.Equals(*theirs) {
 				// if the columns are identical, just use ours
@@ -493,34 +511,6 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 	}
 
 	return conflicts, nil
-}
-
-// columnTypesAreCompatible returns true if the change from |from| to |to| is a compatible type change.
-// Currently, no type change for the DOLT storage format is considered compatible, but over time we will
-// widen this to include safe type migrations (e.g. smallint to bigint, varchar(100) to varchar(200)), which
-// can require rewriting existing stored data to be compatible with the new type. For the older LD_1 storage
-// format, we are looser with type equality and consider them compatible as long as the types are in the
-// same type family/kind.
-func columnTypesAreCompatible(format *types.NomsBinFormat, from, to schema.Column) bool {
-	if !from.TypeInfo.Equals(to.TypeInfo) {
-		if types.IsFormat_DOLT(format) {
-			// All type changes are incompatible, for the DOLT storage format.
-			// TODO: this is overly broad, and should be narrowed down
-			return false
-		}
-
-		if from.Kind != to.Kind {
-			return false
-		}
-
-		if schema.IsColSpatialType(to) {
-			// We need to do this because some spatial type changes require a full table check, but not all.
-			// TODO: This could be narrowed down to a smaller set of spatial type changes
-			return false
-		}
-	}
-
-	return true
 }
 
 // columnMapping describes the mapping for a column being merged between the two sides of the merge as well as the ancestor.
@@ -658,9 +648,20 @@ func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.In
 			}
 		}
 
-		theirIdx, ok := theirs.GetIndexByTags(idxTags...)
-		if !ok {
+		// Check that there aren't multiple indexes covering the same columns on "theirs"
+		theirIdx, idxConflict := findIndexInCollectionByTags(ourIdx, theirs)
+		if theirIdx == nil && idxConflict == nil {
 			return false, nil
+		} else if idxConflict != nil {
+			conflicts = append(conflicts, *idxConflict)
+			return true, nil
+		}
+
+		// Check that there aren't multiple indexes covering the same columns on "ours"
+		_, idxConflict = findIndexInCollectionByTags(ourIdx, ours)
+		if idxConflict != nil {
+			conflicts = append(conflicts, *idxConflict)
+			return true, nil
 		}
 
 		if ourIdx.Equals(theirIdx) {
@@ -719,6 +720,35 @@ func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.In
 		return false, nil
 	})
 	return common, conflicts
+}
+
+// findIndexInCollectionByTags searches for a single index in |idxColl| that matches the same tags |idx| covers. If a
+// single matching index is found, then it is returned, along with no IdxConflict. If no matching index is found, then
+// nil is returned for both params. If multiple indexes are found that cover the same set of columns, a nil Index is
+// returned along with an IdxConflict that describes the conflict.
+//
+// Dolt allows you to add multiple indexes that cover the same set of columns, but in this situation, we aren't able
+// to always accurately match up the indexes between ours/theirs/anc in a merge. The set of column tags an
+// index covers was being used as a unique ID for the index, but as our index support has grown and in order to match
+// MySQL's behavior, this isn't guaranteed to be a unique identifier anymore.
+func findIndexInCollectionByTags(idx schema.Index, idxColl schema.IndexCollection) (schema.Index, *IdxConflict) {
+	theirIdxs := idxColl.GetIndexesByTags(idx.IndexedColumnTags()...)
+	switch len(theirIdxs) {
+	case 0:
+		return nil, nil
+	case 1:
+		return theirIdxs[0], nil
+	default:
+		sort.Slice(theirIdxs, func(i, j int) bool {
+			return theirIdxs[i].Name() < theirIdxs[j].Name()
+		})
+
+		return nil, &IdxConflict{
+			Kind:   DuplicateIndexColumnSet,
+			Ours:   theirIdxs[0],
+			Theirs: theirIdxs[1],
+		}
+	}
 }
 
 func indexCollSetDifference(left, right schema.IndexCollection, cc *schema.ColCollection) (d schema.IndexCollection) {

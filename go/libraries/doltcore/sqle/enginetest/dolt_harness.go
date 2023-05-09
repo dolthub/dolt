@@ -338,7 +338,7 @@ func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (*gms.Eng
 	}
 
 	allDatabases := ddp.AllDatabases(d.NewContext())
-	dbs := make([]sqle.SqlDatabase, len(allDatabases))
+	dbs := make([]dsess.SqlDatabase, len(allDatabases))
 	locations := make([]filesys.Filesys, len(allDatabases))
 
 	for i, db := range allDatabases {
@@ -371,8 +371,7 @@ func (d *DoltHarness) closeProvider() {
 	if d.provider != nil {
 		dbs := d.provider.AllDatabases(sql.NewEmptyContext())
 		for _, db := range dbs {
-			d.t.Logf("closing %v", db)
-			require.NoError(d.t, db.(sqle.SqlDatabase).DbData().Ddb.Close())
+			require.NoError(d.t, db.(dsess.SqlDatabase).DbData().Ddb.Close())
 		}
 	}
 }

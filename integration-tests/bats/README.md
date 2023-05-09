@@ -32,13 +32,14 @@ cd go/utils/remotesrv && go install . && cd -
 
 This came with my Mac Developer Tools and was on my PATH.
 
-4. `pip install mysql-connector-python` and `pip install pyarrow`
+4. `pip install mysql-connector-python`, `pip install pyarrow` and  `pip install pandas`
 
 I also needed this specific version on the python mysql.connector. `pip install mysql.connector` mostly worked but caused some SSL errors.
 
 ```
 pip3 install mysql-connector-python
-pip install pyarrow
+pip3 install pyarrow
+pip3 install pandas
 ```
 
 5. Install `parquet` and its dependencies
