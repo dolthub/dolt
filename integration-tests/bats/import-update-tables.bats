@@ -1297,45 +1297,51 @@ DELIM
     [[ "$output" =~ '1,0,0,0,0,0,0,0,0,0,0,0000-00-00,00:00:00,0000-00-00 00:00:00,0000-00-00 00:00:00,0,first,""' ]] || false
 }
 
-@test "import-update-tables: empty string should NOT be imported as null value for ENUM type" {
+@test "import-update-tables: distinguish between empty string and null for ENUMs" {
     dolt sql <<SQL
-create table alphabet(letter enum('', 'a', 'b'));
+create table alphabet(pk int primary key, letter enum('', 'a', 'b'));
 SQL
     dolt commit -Am "add a table"
 
-    cat <<DELIM > data.csv
-letter
-a
-""
+    expected=$(cat <<DELIM
+pk,letter
+1,a
+2,""
+3,
 DELIM
+)
+    echo "$expected" > data.csv
+
     run dolt table import -u alphabet data.csv
-    [ $status -eq 0 ]
-    [[ "$output" =~ "Rows Processed: 2, Additions: 2, Modifications: 0, Had No Effect: 0" ]] || false
-
-    run dolt sql -r csv -q "select * from alphabet;"
-    [ $status -eq 0 ]
-    [[ "$output" =~ '""' ]] || false
-    [[ ! "$output" =~ 'NULL' ]] || false
-}
-
-@test "import-update-tables: empty string should NOT be imported as null value for SET type" {
-    dolt sql <<SQL
-create table word(letters set('', 'a', 'b'));
-SQL
-    dolt commit -Am "add a table"
-
-    cat <<DELIM > word_data.csv
-letters
-"a,b"
-a
-""
-DELIM
-    run dolt table import -u word word_data.csv
     [ $status -eq 0 ]
     [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
 
+    run dolt sql -r csv -q "select * from alphabet;"
+    [ $status -eq 0 ]
+    [[ "$output" = "$expected" ]] || false
+}
+
+@test "import-update-tables: distinguish between empty string and null for SETs" {
+    dolt sql <<SQL
+create table word(pk int primary key, letters set('', 'a', 'b'));
+SQL
+    dolt commit -Am "add a table"
+
+    expected=$(cat <<DELIM
+pk,letters
+1,"a,b"
+2,a
+3,""
+4,
+DELIM
+)
+    echo "$expected" > word_data.csv
+
+    run dolt table import -u word word_data.csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 4, Additions: 4, Modifications: 0, Had No Effect: 0" ]] || false
+
     run dolt sql -r csv -q "select * from word;"
     [ $status -eq 0 ]
-    [[ "$output" =~ '""' ]] || false
-    [[ ! "$output" =~ 'NULL' ]] || false
+    [[ "$output" = "$expected" ]] || false
 }
