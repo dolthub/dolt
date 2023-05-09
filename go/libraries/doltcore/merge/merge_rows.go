@@ -299,9 +299,7 @@ func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm *TableMerger, op
 }
 
 func validateTupleFields(existingSch schema.Schema, targetSch schema.Schema) (bool, error) {
-	existingVD := existingSch.GetValueDescriptor()
 	targetVD := targetSch.GetValueDescriptor()
-
 	_, valMapping, err := schema.MapSchemaBasedOnTagAndName(existingSch, targetSch)
 	if err != nil {
 		return false, err
@@ -312,16 +310,6 @@ func validateTupleFields(existingSch schema.Schema, targetSch schema.Schema) (bo
 		if targetIndex == -1 {
 			continue
 		}
-
-		// If the field types have changed between existing and target, bail.
-		if existingVD.Types[existingIndex].Enc != targetVD.Types[targetIndex].Enc {
-			return false, nil
-		}
-
-		//// If a not-null constraint was added, bail.
-		//if existingVD.Types[existingIndex].Nullable && !targetVD.Types[targetIndex].Nullable {
-		//	return false, nil
-		//}
 
 		// If the collation was changed, bail.
 		// Different collations will affect the ordering of any secondary indexes using this column.

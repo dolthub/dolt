@@ -158,6 +158,81 @@ func TestSingleScript(t *testing.T) {
 	}
 }
 
+// Convenience test for debugging a single query. Unskip and set to the desired query.
+func TestSingleMergeScript(t *testing.T) {
+	var scripts = []MergeScriptTest{
+		{
+			Name: "adding a not-null constraint and default value to a column",
+			AncSetUpScript: []string{
+				"set dolt_force_transaction_commit = on;",
+				"create table t (pk int primary key, col1 int);",
+				"insert into t values (1, null), (2, null);",
+			},
+			RightSetUpScript: []string{
+				"update t set col1 = 9999 where col1 is null;",
+				"alter table t modify column col1 int not null default 9999;",
+				"insert into t values (3, 30), (4, 40);",
+			},
+			LeftSetUpScript: []string{
+				"insert into t values (5, null), (6, null);",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query: "call dolt_merge('right');",
+				},
+				{
+					Query: "select pk, col1 from t;",
+					Expected: []sql.Row{
+						{1, 9999},
+						{2, 9999},
+						{3, 30},
+						{4, 40},
+					},
+				},
+			},
+		},
+		{
+			Name: "adding a not-null constraint to one side",
+			AncSetUpScript: []string{
+				"set dolt_force_transaction_commit = on;",
+				"create table t (pk int primary key, col1 int);",
+				"insert into t values (1, null), (2, null);",
+			},
+			RightSetUpScript: []string{
+				"update t set col1 = 0 where col1 is null;",
+				"alter table t modify col1 int not null;",
+			},
+			LeftSetUpScript: []string{
+				"insert into t values (3, null);",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query: "call dolt_merge('right');",
+				},
+				{
+					Skip:  true,
+					Query: "select pk, col1 from t;",
+					Expected: []sql.Row{
+						{1, 0},
+						{2, 0},
+					},
+				},
+				{
+					Query: "select violation_type, pk from dolt_constraint_violations_t",
+					Expected: []sql.Row{
+						{uint16(4), 3},
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range scripts {
+		enginetest.TestScript(t, newDoltHarness(t), convertMergeScriptTest(test, true))
+		//enginetest.TestScript(t, harness, convertMergeScriptTest(test, false))
+	}
+}
+
 func TestSingleQueryPrepared(t *testing.T) {
 	t.Skip()
 

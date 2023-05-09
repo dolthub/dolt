@@ -156,7 +156,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		return nil, nil, err
 	}
 
-	// validator shares artifact editor with conflict merge
+	// validator shares an artifact editor with conflict merge
 	uniq, err := newUniqValidator(ctx, finalSch, tm, valueMerger, ae)
 	if err != nil {
 		return nil, nil, err
@@ -507,10 +507,11 @@ func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, c
 
 // nullValidator enforces NOT NULL constraints on merge
 type nullValidator struct {
+	table string
 	// final is the merge result schema
 	final schema.Schema
-	// rightMap maps right-side value tuples to |final|
-	rightMap val.OrdinalMapping
+	// leftMap and rightMap map value tuples to |final|
+	leftMap, rightMap val.OrdinalMapping
 	// edits is the artifacts maps editor
 	edits *prolly.ArtifactsEditor
 	// theirRootish is the hash.Hash of the right-side
@@ -524,7 +525,9 @@ func newNullValidator(ctx context.Context, final schema.Schema, tm *TableMerger,
 		return nullValidator{}, err
 	}
 	return nullValidator{
+		table:        tm.name,
 		final:        final,
+		leftMap:      vm.leftMapping,
 		rightMap:     vm.rightMapping,
 		edits:        edits,
 		theirRootish: theirRootish,
@@ -550,6 +553,31 @@ func (nv nullValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 			} else {
 				if diff.Right.FieldIsNull(from) {
 					violations = append(violations, col.Name)
+				}
+			}
+		}
+	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
+		for to, from := range nv.leftMap {
+			col := nv.final.GetNonPKCols().GetByIndex(to)
+			if col.IsNullable() {
+				continue
+			}
+			if from < 0 {
+				// non-nullable column in |nv.final| does not exist
+				// on the left side of the merge, check if it will
+				// be populated with a default value
+				if col.Default == "" {
+					// todo: we cannot record row-level conflicts originating from
+					//  the left side of the merge, this should be a schema conflict
+					return 0, fmt.Errorf("table %s can't be automatically merged.\n"+
+						"To merge this table, make the schema on the source and target branch equal.", nv.table)
+				}
+			} else {
+				if diff.Left.FieldIsNull(from) {
+					// todo: we cannot record row-level conflicts originating from
+					//  the left side of the merge, this should be a schema conflict
+					return 0, fmt.Errorf("table %s can't be automatically merged.\n"+
+						"To merge this table, make the schema on the source and target branch equal.", nv.table)
 				}
 			}
 		}

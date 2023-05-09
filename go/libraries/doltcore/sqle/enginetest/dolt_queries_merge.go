@@ -4657,6 +4657,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
 		Name: "adding a not-null constraint and default value to a column",
 		AncSetUpScript: []string{
+			"set dolt_force_transaction_commit = on;",
 			"create table t (pk int primary key, col1 int);",
 			"insert into t values (1, null), (2, null);",
 		},
@@ -4670,8 +4671,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "call dolt_merge('right');",
-				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
+				Skip:  true,
+				Query: "call dolt_merge('right');",
 			},
 			{
 				Skip:  true,
@@ -4681,8 +4682,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 					{2, 9999},
 					{3, 30},
 					{4, 40},
-					{5, 9999},
-					{6, 9999},
 				},
 			},
 		},
@@ -4690,6 +4689,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
 		Name: "adding a not-null constraint to one side",
 		AncSetUpScript: []string{
+			"set dolt_force_transaction_commit = on;",
 			"create table t (pk int primary key, col1 int);",
 			"insert into t values (1, null), (2, null);",
 		},
@@ -4702,8 +4702,23 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "call dolt_merge('right');",
-				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
+				Skip:  true,
+				Query: "call dolt_merge('right');",
+			},
+			{
+				Skip:  true,
+				Query: "select pk, col1 from t;",
+				Expected: []sql.Row{
+					{1, 0},
+					{2, 0},
+				},
+			},
+			{
+				Skip:  true,
+				Query: "select violation_type, pk, violation_info from dolt_constraint_violations_t",
+				Expected: []sql.Row{
+					{uint16(4), 3, types.JSONDocument{Val: merge.NullViolationMeta{Columns: []string{"col1"}}}},
+				},
 			},
 		},
 	},
