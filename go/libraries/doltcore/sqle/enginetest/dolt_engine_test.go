@@ -266,7 +266,6 @@ func TestQueryPlans(t *testing.T) {
 		harness = harness.WithSkippedQueries(reverseIndexSkip)
 	}
 
-
 	defer harness.Close()
 	enginetest.TestQueryPlans(t, harness, queries.PlanTests)
 }
