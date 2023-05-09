@@ -76,10 +76,7 @@ type DatabaseSessionState struct {
 	dirty        bool
 	// tmpFileDir is the directory to use for temporary files for this database
 	tmpFileDir   string
-
-	// sessionCache is a collection of cached values used to speed up performance
-	sessionCache *SessionCache
-
+	
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a
 	// DatabaseSessionState with Err != nil will return that err.
@@ -88,9 +85,7 @@ type DatabaseSessionState struct {
 
 func NewEmptyDatabaseSessionState() *DatabaseSessionState {
 	return &DatabaseSessionState{
-		sessionCache: newSessionCache(),
 		heads: make(map[string]*branchState),
-		// TODO: current head?
 	}
 }
 
@@ -123,6 +118,15 @@ type branchState struct {
 	writeSession writer.WriteSession
 	// readOnly is true if this database is read only
 	readOnly     bool
+	// sessionCache is a collection of cached values used to speed up performance
+	sessionCache *SessionCache
+}
+
+func NewEmptyBranchState(dbState *DatabaseSessionState) *branchState {
+	return &branchState{
+		dbState: dbState,
+		sessionCache: newSessionCache(),
+	}
 }
 
 func (d *branchState) WorkingRoot() *doltdb.RootValue {
@@ -140,7 +144,7 @@ func (d *branchState) WriteSession() writer.WriteSession {
 }
 
 func (d *branchState) SessionCache() *SessionCache {
-	return d.dbState.sessionCache
+	return d.sessionCache
 }
 
 func (d branchState) EditOpts() editor.Options {

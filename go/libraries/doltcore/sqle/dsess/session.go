@@ -1060,7 +1060,6 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	// TODO: get rid of this, only define these for base names
 	DefineSystemVariablesForDB(db.Name())
 
-	branchState := &branchState{} 
 	baseName, rev := SplitRevisionDbName(db)
 
 	DefineSystemVariablesForDB(baseName)
@@ -1089,8 +1088,8 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		sessionState.currRevType = db.RevisionType()
 		sessionState.currRevSpec = db.Revision()
 	}
-	
-	branchState.dbState = sessionState
+
+	branchState := NewEmptyBranchState(sessionState)
 	sessionState.heads[strings.ToLower(rev)] = branchState
 	d.mu.Unlock()
 
