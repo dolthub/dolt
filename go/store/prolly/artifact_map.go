@@ -323,11 +323,11 @@ type ArtifactsEditor struct {
 	pool         pool.BuffPool
 }
 
-func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, artType ArtifactType, meta []byte) error {
+func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType, meta []byte) error {
 	for i := 0; i < srcKey.Count(); i++ {
 		wr.artKB.PutRaw(i, srcKey.GetField(i))
 	}
-	wr.artKB.PutCommitAddr(srcKey.Count(), theirRootIsh)
+	wr.artKB.PutCommitAddr(srcKey.Count(), srcRootish)
 	wr.artKB.PutUint8(srcKey.Count()+1, uint8(artType))
 	key := wr.artKB.Build(wr.pool)
 
@@ -342,7 +342,7 @@ func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, theirRootI
 // the given will be inserted. Returns true if a violation was replaced. If an
 // existing violation exists but has a different |meta.VInfo| value then
 // ErrMergeArtifactCollision is a returned.
-func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, artType ArtifactType, meta ConstraintViolationMeta) error {
+func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType, meta ConstraintViolationMeta) error {
 	itr, err := wr.mut.IterRange(ctx, PrefixRange(srcKey, wr.srcKeyDesc))
 	if err != nil {
 		return err
@@ -360,7 +360,7 @@ func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKe
 	var currMeta ConstraintViolationMeta
 	for art, err = aItr.Next(ctx); err == nil; art, err = aItr.Next(ctx) {
 		// prefix scanning sometimes returns keys not in the range
-		if bytes.Compare(art.Key, srcKey) != 0 {
+		if bytes.Compare(art.SourceKey, srcKey) != 0 {
 			continue
 		}
 		if art.ArtType != artType {
@@ -391,7 +391,7 @@ func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKe
 	if err != nil {
 		return err
 	}
-	err = wr.Add(ctx, srcKey, theirRootIsh, artType, d)
+	err = wr.Add(ctx, srcKey, srcRootish, artType, d)
 	if err != nil {
 		return err
 	}
@@ -446,8 +446,8 @@ func (itr *ConflictArtifactIter) Next(ctx context.Context) (ConflictArtifact, er
 	}
 
 	return ConflictArtifact{
-		Key:          art.Key,
-		TheirRootIsh: art.TheirRootIsh,
+		Key:          art.SourceKey,
+		TheirRootIsh: art.SourceRootish,
 		Metadata:     parsedMeta,
 	}, nil
 }
@@ -545,11 +545,11 @@ func (itr artifactIterImpl) Next(ctx context.Context) (Artifact, error) {
 	metadata, _ := itr.artVD.GetJSON(0, v)
 
 	return Artifact{
-		ArtKey:       artKey,
-		Key:          srcKey,
-		TheirRootIsh: cmHash,
-		ArtType:      ArtifactType(artType),
-		Metadata:     metadata,
+		ArtKey:        artKey,
+		SourceKey:     srcKey,
+		SourceRootish: cmHash,
+		ArtType:       ArtifactType(artType),
+		Metadata:      metadata,
 	}, nil
 }
 
@@ -564,10 +564,10 @@ func (itr artifactIterImpl) getSrcKeyFromArtKey(k val.Tuple) val.Tuple {
 type Artifact struct {
 	// ArtKey is the key of the artifact itself
 	ArtKey val.Tuple
-	// Key is the key of the source row that the artifact references
-	Key val.Tuple
+	// SourceKey is the key of the source row that the artifact references
+	SourceKey val.Tuple
 	// TheirRootIsh is the working set hash or commit hash of the right in the merge
-	TheirRootIsh hash.Hash
+	SourceRootish hash.Hash
 	// ArtType is the type of the artifact
 	ArtType ArtifactType
 	// Metadata is the encoded json metadata

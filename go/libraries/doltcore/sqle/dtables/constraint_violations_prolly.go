@@ -161,7 +161,7 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	r := make(sql.Row, itr.sch.GetAllCols().Size()+3)
-	r[0] = art.TheirRootIsh.String()
+	r[0] = art.SourceRootish.String()
 	r[1] = mapCVType(art.ArtType)
 
 	var meta prolly.ConstraintViolationMeta
@@ -173,7 +173,7 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 	o := 2
 	if !schema.IsKeyless(itr.sch) {
 		for i := 0; i < itr.kd.Count(); i++ {
-			r[o+i], err = index.GetField(ctx, itr.kd, i, art.Key, itr.ns)
+			r[o+i], err = index.GetField(ctx, itr.kd, i, art.SourceKey, itr.ns)
 			if err != nil {
 				return nil, err
 			}
