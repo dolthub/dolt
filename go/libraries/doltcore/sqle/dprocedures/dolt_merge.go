@@ -120,7 +120,12 @@ func doDoltMerge(ctx *sql.Context, args []string) (int, int, error) {
 	if !ok {
 		return noConflictsOrViolations, threeWayMerge, fmt.Errorf("Could not load database %s", dbName)
 	}
-	msg := fmt.Sprintf("Merge branch '%s' into %s", branchName, dbData.Rsr.CWBHeadRef().GetPath())
+
+	headRef, err := dbData.Rsr.CWBHeadRef()
+	if err != nil {
+		return noConflictsOrViolations, threeWayMerge, err
+	}
+	msg := fmt.Sprintf("Merge branch '%s' into %s", branchName, headRef.GetPath())
 	if userMsg, mOk := apr.GetValue(cli.MessageArg); mOk {
 		msg = userMsg
 	}
@@ -266,7 +271,11 @@ func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.Wor
 	// TODO: This is all incredibly suspect, needs to be replaced with library code that is functional instead of
 	//  altering global state
 	if !squash {
-		err = dbData.Ddb.FastForward(ctx, dbData.Rsr.CWBHeadRef(), cm2)
+		headRef, err := dbData.Rsr.CWBHeadRef()
+		if err != nil {
+			return nil, err
+		}
+		err = dbData.Ddb.FastForward(ctx, headRef, cm2)
 		if err != nil {
 			return ws, err
 		}
