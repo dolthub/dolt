@@ -187,7 +187,7 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 	// We start by first checking whether the input table is a temporary table. Temporary tables with name `x` take
 	// priority over persisted tables of name `x`.
 	ds := dsess.DSessFromSess(ctx.Session)
-	if tbl, ok := ds.GetTemporaryTable(ctx, db.Name(), tblName); ok {
+	if tbl, ok := ds.GetTemporaryTable(ctx, db.RevisionQualifiedName(), tblName); ok {
 		return tbl, ok, nil
 	}
 
@@ -273,8 +273,8 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 
-		suffix := tblName[len(doltdb.DoltDiffTablePrefix):]
-		dt, err := dtables.NewDiffTable(ctx, suffix, db.ddb, root, head)
+		tableName := tblName[len(doltdb.DoltDiffTablePrefix):]
+		dt, err := dtables.NewDiffTable(ctx, tableName, db.ddb, root, head)
 		if err != nil {
 			return nil, false, err
 		}
@@ -347,13 +347,13 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	case doltdb.DiffTableName:
 		if head == nil {
 			var err error
-			head, err = ds.GetHeadCommit(ctx, db.Name())
+			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
 			if err != nil {
 				return nil, false, err
 			}
 		}
 
-		dt, found = dtables.NewUnscopedDiffTable(ctx, db.name, db.ddb, head), true
+		dt, found = dtables.NewUnscopedDiffTable(ctx, db.RevisionQualifiedName(), db.ddb, head), true
 	case doltdb.ColumnDiffTableName:
 		if head == nil {
 			var err error

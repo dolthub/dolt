@@ -1449,6 +1449,16 @@ func TestDoltGC(t *testing.T) {
 	}
 }
 
+func TestDoltCheckout(t *testing.T) {
+	for _, script := range DoltCheckoutScripts {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
 func TestDoltBranch(t *testing.T) {
 	for _, script := range DoltBranchScripts {
 		func() {
