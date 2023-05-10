@@ -275,23 +275,34 @@ tests:
       result:
         columns: ["@@GLOBAL.max_connections"]
         rows: [["555"]]
-- name: "@@global.dolt_log_level read behavior"
+- name: "@@global.dolt_log_level behavior"
   repos:
   - name: repo1
     server:
-      args: ["-l", "trace"]
+      args: ["-l", "warning"]
+      log_matches:
+      - "Starting query"
   connections:
   - on: repo1
     queries:
     - query: "select @@GLOBAL.dolt_log_level"
       result:
         columns: ["@@GLOBAL.dolt_log_level"]
+        rows: [["warning"]]
+    - exec: "set @@GLOBAL.dolt_log_level = 'trace'"
+    - query: "select 2+2 from dual"
+      result:
+        columns: ["2+2"]
+        rows: [["4"]]
+    - query: "select @@GLOBAL.dolt_log_level"
+      result:
+        columns: ["@@GLOBAL.dolt_log_level"]
         rows: [["trace"]]
     restart_server:
-      args: ["-l", "debug"]
+      args: ["-l", "info"]
   - on: repo1
     queries:
     - query: "select @@GLOBAL.dolt_log_level"
       result:
         columns: ["@@GLOBAL.dolt_log_level"]
-        rows: [["debug"]]
+        rows: [["info"]]
