@@ -118,43 +118,25 @@ func TestSingleScript(t *testing.T) {
 	// t.Skip()
 	
 	var script = queries.ScriptTest{
-		Name: "database revision specs: Ancestor references",
+		Name: "database revision specs: branch-qualified revision spec",
 		SetUpScript: []string{
 			"create table t01 (pk int primary key, c1 int)",
-			"call dolt_commit('-Am', 'creating table t01 on main');",
-			"call dolt_branch('branch1');",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'creating table t01 on main');",
 			"insert into t01 values (1, 1), (2, 2);",
 			"call dolt_commit('-am', 'adding rows to table t01 on main');",
+			"call dolt_branch('branch1');",
 			"insert into t01 values (3, 3);",
 			"call dolt_commit('-am', 'adding another row to table t01 on main');",
-			"call dolt_tag('tag1');",
-			"call dolt_checkout('branch1');",
-			"insert into t01 values (100, 100), (200, 200);",
-			"call dolt_commit('-am', 'inserting rows in t01 on branch1');",
-			"insert into t01 values (1000, 1000);",
-			"call dolt_commit('-am', 'inserting another row in t01 on branch1');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
-			},
-			{
-				Query:    "use `mydb/tag1~`;",
+				Query:    "use mydb/branch1;",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "select commit_hash, date, message from dolt_log order by date;",
-				Expected: []sql.Row{
-					{"j131v1r3cf6mrdjjjuqgkv4t33oa0l54", time.Date(1969, time.December, 31, 21, 0, 0, 0, time.Local), "Initialize data repository"},
-					{"kcg4345ir3tjfb13mr0on1bv1m56h9if", time.Date(1970, time.January, 1, 4, 0, 0, 0, time.Local), "checkpoint enginetest database mydb"},
-					{"3kfav66courcnskj6ai5h5f55hg517e6", time.Date(1970, time.January, 1, 7, 0, 0, 0, time.Local), "creating table t01 on main"},
-					{"vsu7clg7ernin5hs4v78hlucghvmh4ti", time.Date(1970, time.January, 1, 14, 0, 0, 0, time.Local), "adding rows to table t01 on main"},
-				},
-			},
-			{
-				Query:    "select @@mydb_head",
-				Expected: []sql.Row{{"vsu7clg7ernin5hs4v78hlucghvmh4ti"}},
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				// The database name is always the base name, never the revision specifier
@@ -162,63 +144,65 @@ func TestSingleScript(t *testing.T) {
 				Expected: []sql.Row{{"mydb"}},
 			},
 			{
-				// The branch is nil in the case of a non-branch revision DB
 				Query:    "select active_branch()",
-				Expected: []sql.Row{{nil}},
+				Expected: []sql.Row{{"branch1"}},
 			},
 			{
-				// The branch is nil in the case of a non-branch revision DB
-				Query:    "select active_revision()",
-				Expected: []sql.Row{{"tag1~"}},
-			},
-			{
-				Query:    "select * from t01 order by 1;",
+				Query:    "select * from t01",
 				Expected: []sql.Row{{1, 1}, {2, 2}},
 			},
 			{
-				Query:    "select * from `mydb/tag1`.t01 order by 1;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Query:    "call dolt_checkout('main');",
+				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    "select * from `mydb/tag1^`.t01 order by 1;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
-				// Only merge commits are valid for ^2 ancestor spec
-				Query:          "select * from `mydb/tag1^2`.t01 order by 1;",
-				ExpectedErrStr: "invalid ancestor spec",
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb"}},
 			},
 			{
-				Query:    "select * from `mydb/tag1~1`.t01 order by 1;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
-			},
-			{
-				Query:    "select * from `mydb/tag1~2`.t01 order by 1;",
+				Query:    "use mydb/branch1;",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:       "select * from `mydb/tag1~3`.t01 order by 1;",
-				ExpectedErr: sql.ErrTableNotFound,
+				Query:    "call dolt_reset();",
+				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:          "select * from `mydb/tag1~20`.t01 order by 1;",
-				ExpectedErrStr: "invalid ancestor spec",
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb"}},
 			},
 			{
-				Query:    "select * from `mydb/branch1~`.t01 order by 1;",
-				Expected: []sql.Row{{100, 100}, {200, 200}},
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
-				Query:    "select * from `mydb/branch1^`.t01 order by 1;",
-				Expected: []sql.Row{{100, 100}, {200, 200}},
+				// Create a table in the working set to verify the main db
+				Query:    "create table working_set_table(pk int primary key);",
+				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
 			},
 			{
-				Query:    "select * from `mydb/branch1~2`.t01 order by 1;",
+				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
+				Expected: []sql.Row{{"working_set_table"}},
+			},
+			{
+				Query:    "use mydb;",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:       "select * from `mydb/branch1~3`.t01 order by 1;",
-				ExpectedErr: sql.ErrTableNotFound,
+				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_checkout('branch1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
+				Expected: []sql.Row{{"working_set_table"}},
 			},
 		},
 	}
@@ -1186,11 +1170,11 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 			},
 			{
 				Query:    "select database();",
-				Expected: []sql.Row{{"mydb/" + commithash}},
+				Expected: []sql.Row{{"mydb"}},
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/" + commithash}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "select * from t01",

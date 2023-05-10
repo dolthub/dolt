@@ -311,9 +311,14 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				// The database name should be the revision spec we started with, not its resolved hash
-				Query:    "select database() regexp '^mydb/[0-9a-v]{32}$', database() = 'mydb/tag1~';",
-				Expected: []sql.Row{{false, true}},
+				// The database name is always the base name, never the revision specifier
+				Query:    "select database()",
+				Expected: []sql.Row{{"mydb"}},
+			},
+			{
+				// The branch is nil in the case of a non-branch revision DB
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{nil}},
 			},
 			{
 				Query:    "select * from t01;",
@@ -384,12 +389,18 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "select database();",
-				Expected: []sql.Row{{"mydb/tag1"}},
+				// The database name is always the base name, never the revision specifier
+				Query:    "select database()",
+				Expected: []sql.Row{{"mydb"}},
+			},
+			{
+				// The branch is nil in the case of a non-branch revision DB
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{nil}},
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/tag1"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "select * from t01;",
@@ -444,11 +455,16 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/branch1"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
-				Query:    "select database();",
-				Expected: []sql.Row{{"mydb/branch1"}},
+				// The database name is always the base name, never the revision specifier
+				Query:    "select database()",
+				Expected: []sql.Row{{"mydb"}},
+			},
+			{
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{"branch1"}},
 			},
 			{
 				Query:    "select * from t01",
@@ -476,18 +492,18 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select database();",
-				Expected: []sql.Row{{"mydb/branch1"}},
+				Expected: []sql.Row{{"mydb"}},
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/branch1"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
+				// Create a table in the working set to verify the main db
 				Query:    "create table working_set_table(pk int primary key);",
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				// Create a table in the working set to verify the main db
 				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
 				Expected: []sql.Row{{"working_set_table"}},
 			},
