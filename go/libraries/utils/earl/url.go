@@ -85,6 +85,12 @@ func parse(urlStr string) (*url.URL, error) {
 			Path:   urlStr[strIdx+4:],
 		}, nil
 	}
+	if strIdx := strings.Index(urlStr, "://"); strIdx != -1 && osutil.StartsWithWindowsVolume(urlStr[strIdx+3:]) {
+		return &url.URL{
+			Scheme: urlStr[:strIdx],
+			Path:   urlStr[strIdx+3:],
+		}, nil
+	}
 	if strings.Index(urlStr, "://") == -1 {
 		u, err := url.Parse("http://" + urlStr)
 

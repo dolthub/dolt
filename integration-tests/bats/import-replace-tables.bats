@@ -42,8 +42,7 @@ CREATE TABLE test (
 SQL
     run dolt table import -r test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error determining the output schema." ]] || false
-    [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
+    [[ "$output" =~ "Field 'pk' doesn't have a default value" ]] || false
 }
 
 @test "import-replace-tables: replace table using psv" {
@@ -79,8 +78,7 @@ CREATE TABLE test (
 SQL
     run dolt table import -r test `batshelper 1pk5col-ints.psv`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error determining the output schema." ]] || false
-    [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
+    [[ "$output" =~ "Field 'pk1' doesn't have a default value" ]] || false
 }
 
 @test "import-replace-tables: replace table using schema with csv" {
@@ -252,8 +250,7 @@ SQL
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt table import -r test `batshelper 1pk5col-ints.csv`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error determining the output schema." ]] || false
-    [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
+    [[ "$output" =~ "Field 'pk1' doesn't have a default value" ]] || false
 }
 
 @test "import-replace-tables: replace table with 2 primary keys with a csv with 2 primary keys" {

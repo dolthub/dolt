@@ -475,19 +475,6 @@ func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema sc
 		return nil, dmce
 	}
 
-	// Validate that the schema from files has primary keys.
-	err := tableSchema.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		preImage := imOpts.nameMapper.PreImage(col.Name)
-		_, found := rdSchema.GetAllCols().GetByName(preImage)
-		if !found {
-			err = fmt.Errorf("input primary keys do not match primary keys of existing table")
-		}
-		return err == nil, err
-	})
-	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
-	}
-
 	// construct the schema of the set of column to be updated.
 	rowOperationColColl := schema.NewColCollection()
 	rdSchema.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -791,7 +778,7 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 		// For non string types we want empty strings to be converted to nils. String types should be allowed to take on
 		// an empty string value
 		switch col.Type.(type) {
-		case sql.StringType:
+		case sql.StringType, sql.EnumType, sql.SetType:
 		default:
 			row[i] = emptyStringToNil(row[i])
 		}

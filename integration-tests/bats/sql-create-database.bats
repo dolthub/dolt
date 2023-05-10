@@ -103,7 +103,7 @@ SQL
 
     mkdir db_dir
     
-    dolt sql --data-dir db_dir <<SQL
+    dolt --data-dir db_dir sql <<SQL
 create database mydb1;
 create database mydb2;
 use mydb1;
@@ -132,12 +132,12 @@ SQL
 
     cd ../../
     
-    dolt sql --data-dir db_dir -q "drop database mydb1"
+    dolt --data-dir db_dir sql -q "drop database mydb1"
     
     [ ! -d db_dir/mydb1 ]
     [ -d db_dir/mydb2 ]
 
-    run dolt sql --data-dir db_dir -q "show databases"
+    run dolt --data-dir db_dir sql -q "show databases"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "mydb2" ]] || false
     [[ ! "$output" =~ "mydb1" ]] || false
@@ -147,7 +147,7 @@ SQL
     absdir="/tmp/$$/db_dir"
     mkdir -p "$absdir"
 
-    dolt sql --data-dir "$absdir" <<SQL
+    dolt --data-dir "$absdir" sql <<SQL
 create database mydb1;
 create database mydb2;
 use mydb1;
@@ -164,7 +164,7 @@ SQL
     [ -d "$absdir/mydb1" ]
     [ -d "$absdir/mydb2" ]
 
-    dolt sql --data-dir "$absdir" -q "drop database mydb1"
+    dolt --data-dir "$absdir" sql -q "drop database mydb1"
 
     [ ! -d "$absdir/mydb1" ]
     [ -d "$absdir/mydb2" ]

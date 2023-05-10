@@ -117,6 +117,7 @@ func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 		prollyRanges: prollyRanges,
 		curr:         0,
 		isDoltFmt:    isDoltFmt,
+		isReverse:    lookup.IsReverse,
 	}, nil
 }
 
@@ -166,6 +167,7 @@ type rangePartitionIter struct {
 	prollyRanges []prolly.Range
 	curr         int
 	isDoltFmt    bool
+	isReverse    bool
 }
 
 // Close is required by the sql.PartitionIter interface. Does nothing.
@@ -194,6 +196,7 @@ func (itr *rangePartitionIter) nextProllyPartition() (sql.Partition, error) {
 	return rangePartition{
 		prollyRange: pr,
 		key:         bytes[:],
+		isReverse:   itr.isReverse,
 	}, nil
 }
 
@@ -210,6 +213,7 @@ func (itr *rangePartitionIter) nextNomsPartition() (sql.Partition, error) {
 	return rangePartition{
 		nomsRange: nr,
 		key:       bytes[:],
+		isReverse: itr.isReverse,
 	}, nil
 }
 
@@ -217,6 +221,7 @@ type rangePartition struct {
 	nomsRange   *noms.ReadRange
 	prollyRange prolly.Range
 	key         []byte
+	isReverse   bool
 }
 
 func (rp rangePartition) Key() []byte {
@@ -364,7 +369,11 @@ func (lb *baseLookupBuilder) rangeIter(ctx *sql.Context, part sql.Partition) (pr
 	case pointPartition:
 		return lb.newPointLookup(ctx, p.r)
 	case rangePartition:
-		return lb.sec.IterRange(ctx, p.prollyRange)
+		if p.isReverse {
+			return lb.sec.IterRangeReverse(ctx, p.prollyRange)
+		} else {
+			return lb.sec.IterRange(ctx, p.prollyRange)
+		}
 	default:
 		panic(fmt.Sprintf("unexpected prolly partition type: %T", part))
 	}

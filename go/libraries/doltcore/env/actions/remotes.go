@@ -389,56 +389,33 @@ func FetchRemoteBranch(
 // This function takes dbData which is a env.DbData object for handling repoState read and write, and srcDB is
 // a remote *doltdb.DoltDB object that is used to fetch remote branches from.
 func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB, refSpecs []ref.RemoteRefSpec, remote env.Remote, mode ref.UpdateMode, progStarter ProgStarter, progStopper ProgStopper) error {
-	branchRefs, err := srcDB.GetHeadRefs(ctx)
+	var branchRefs []doltdb.RefWithHash
+	err := srcDB.VisitRefsOfType(ctx, ref.HeadRefTypes, func(r ref.DoltRef, addr hash.Hash) error {
+		branchRefs = append(branchRefs, doltdb.RefWithHash{Ref: r, Hash: addr})
+		return nil
+	})
 	if err != nil {
 		return fmt.Errorf("%w: %s", env.ErrFailedToReadDb, err.Error())
 	}
+
+	// We build up two structures:
+	// 1) The list of chunk addresses to fetch, representing the remote branch heads.
+	// 2) A mapping from branch HEAD to the remote tracking ref we're going to update.
+
+	var toFetch []hash.Hash
+	var newHeads []doltdb.RefWithHash
 
 	for _, rs := range refSpecs {
 		rsSeen := false
 
 		for _, branchRef := range branchRefs {
-			remoteTrackRef := rs.DestRef(branchRef)
+			remoteTrackRef := rs.DestRef(branchRef.Ref)
 
 			if remoteTrackRef != nil {
 				rsSeen = true
-				tmpDir, err := dbData.Rsw.TempTableFilesDir()
-				if err != nil {
-					return err
-				}
-				srcDBCommit, err := FetchRemoteBranch(ctx, tmpDir, remote, srcDB, dbData.Ddb, branchRef, progStarter, progStopper)
-				if err != nil {
-					return err
-				}
 
-				switch mode {
-				case ref.ForceUpdate:
-					// TODO: can't be used safely in a SQL context
-					err := dbData.Ddb.SetHeadToCommit(ctx, remoteTrackRef, srcDBCommit)
-					if err != nil {
-						return err
-					}
-				case ref.FastForwardOnly:
-					ok, err := dbData.Ddb.CanFastForward(ctx, remoteTrackRef, srcDBCommit)
-					if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
-						return fmt.Errorf("%w: %s", ErrCantFF, err.Error())
-					}
-					if !ok {
-						return ErrCantFF
-					}
-
-					switch err {
-					case doltdb.ErrUpToDate:
-					case doltdb.ErrIsAhead, nil:
-						// TODO: can't be used safely in a SQL context
-						err = dbData.Ddb.FastForward(ctx, remoteTrackRef, srcDBCommit)
-						if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
-							return fmt.Errorf("%w: %s", ErrCantFF, err.Error())
-						}
-					default:
-						return fmt.Errorf("%w: %s", ErrCantFF, err.Error())
-					}
-				}
+				toFetch = append(toFetch, branchRef.Hash)
+				newHeads = append(newHeads, doltdb.RefWithHash{Ref: remoteTrackRef, Hash: branchRef.Hash})
 			}
 		}
 		if !rsSeen {
@@ -446,10 +423,71 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB,
 		}
 	}
 
+	// Now we fetch all the new HEADs we need.
 	tmpDir, err := dbData.Rsw.TempTableFilesDir()
 	if err != nil {
 		return err
 	}
+
+	err = func() error {
+		newCtx := ctx
+		var statsCh chan pull.Stats
+
+		if progStarter != nil && progStopper != nil {
+			var cancelFunc func()
+			newCtx, cancelFunc = context.WithCancel(ctx)
+			var wg *sync.WaitGroup
+			wg, statsCh = progStarter(newCtx)
+			defer progStopper(cancelFunc, wg, statsCh)
+		}
+
+		err = dbData.Ddb.PullChunks(ctx, tmpDir, srcDB, toFetch, statsCh)
+		if err == pull.ErrDBUpToDate {
+			err = nil
+		}
+		return err
+	}()
+	if err != nil {
+		return err
+	}
+
+	for _, newHead := range newHeads {
+		commit, err := dbData.Ddb.ReadCommit(ctx, newHead.Hash)
+		if err != nil {
+			return err
+		}
+		remoteTrackRef := newHead.Ref
+
+		switch mode {
+		case ref.ForceUpdate:
+			// TODO: can't be used safely in a SQL context
+			err := dbData.Ddb.SetHeadToCommit(ctx, remoteTrackRef, commit)
+			if err != nil {
+				return err
+			}
+		case ref.FastForwardOnly:
+			ok, err := dbData.Ddb.CanFastForward(ctx, remoteTrackRef, commit)
+			if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
+				return fmt.Errorf("%w: %s", ErrCantFF, err.Error())
+			}
+			if !ok {
+				return ErrCantFF
+			}
+
+			switch err {
+			case doltdb.ErrUpToDate:
+			case doltdb.ErrIsAhead, nil:
+				// TODO: can't be used safely in a SQL context
+				err = dbData.Ddb.FastForward(ctx, remoteTrackRef, commit)
+				if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
+					return fmt.Errorf("%w: %s", ErrCantFF, err.Error())
+				}
+			default:
+				return fmt.Errorf("%w: %s", ErrCantFF, err.Error())
+			}
+		}
+	}
+
 	err = FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, progStarter, progStopper)
 	if err != nil {
 		return err
