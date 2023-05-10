@@ -49,7 +49,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 85
+const SkipPreparedsCount = 86
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -160,76 +160,42 @@ func TestSingleScript(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleMergeScript(t *testing.T) {
+	t.Skip()
 	var scripts = []MergeScriptTest{
 		{
-			Name: "adding a not-null constraint and default value to a column",
+			Name: "adding a non-null column with a default value to one side",
 			AncSetUpScript: []string{
 				"set dolt_force_transaction_commit = on;",
 				"create table t (pk int primary key, col1 int);",
-				"insert into t values (1, null), (2, null);",
+				"insert into t values (1, 1);",
 			},
 			RightSetUpScript: []string{
-				"update t set col1 = 9999 where col1 is null;",
-				"alter table t modify column col1 int not null default 9999;",
-				"insert into t values (3, 30), (4, 40);",
+				"alter table t add column col2 int not null default 0",
+				"alter table t add column col3 int;",
+				"update t set col2 = 1 where pk = 1;",
+				"insert into t values (2, 2, 2, null);",
 			},
 			LeftSetUpScript: []string{
-				"insert into t values (5, null), (6, null);",
+				"insert into t values (3, 3);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
 					Query: "call dolt_merge('right');",
 				},
 				{
-					Query: "select pk, col1 from t;",
-					Expected: []sql.Row{
-						{1, 9999},
-						{2, 9999},
-						{3, 30},
-						{4, 40},
-					},
-				},
-			},
-		},
-		{
-			Name: "adding a not-null constraint to one side",
-			AncSetUpScript: []string{
-				"set dolt_force_transaction_commit = on;",
-				"create table t (pk int primary key, col1 int);",
-				"insert into t values (1, null), (2, null);",
-			},
-			RightSetUpScript: []string{
-				"update t set col1 = 0 where col1 is null;",
-				"alter table t modify col1 int not null;",
-			},
-			LeftSetUpScript: []string{
-				"insert into t values (3, null);",
-			},
-			Assertions: []queries.ScriptTestAssertion{
-				{
-					Query: "call dolt_merge('right');",
+					Query:    "select * from t;",
+					Expected: []sql.Row{{1, 1, 1, nil}, {2, 2, 2, nil}, {3, 3, 0, nil}},
 				},
 				{
-					Skip:  true,
-					Query: "select pk, col1 from t;",
-					Expected: []sql.Row{
-						{1, 0},
-						{2, 0},
-					},
-				},
-				{
-					Query: "select violation_type, pk from dolt_constraint_violations_t",
-					Expected: []sql.Row{
-						{uint16(4), 3},
-					},
+					Query:    "select pk, violation_type from dolt_constraint_violations_t",
+					Expected: []sql.Row{},
 				},
 			},
 		},
 	}
-
 	for _, test := range scripts {
+		enginetest.TestScript(t, newDoltHarness(t), convertMergeScriptTest(test, false))
 		enginetest.TestScript(t, newDoltHarness(t), convertMergeScriptTest(test, true))
-		//enginetest.TestScript(t, harness, convertMergeScriptTest(test, false))
 	}
 }
 

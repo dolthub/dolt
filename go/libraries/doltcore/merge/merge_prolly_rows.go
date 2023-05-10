@@ -133,17 +133,17 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	if err != nil {
 		return nil, nil, err
 	}
-	leftRows := durable.ProllyMapFromIndex(lr)
+	leftEditor := durable.ProllyMapFromIndex(lr).Mutate()
 
 	ai, err := mergeTbl.GetArtifacts(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	ae := durable.ProllyMapFromArtifactIndex(ai).Editor()
+	artEditor := durable.ProllyMapFromArtifactIndex(ai).Editor()
 
 	keyless := schema.IsKeyless(tm.leftSch)
 
-	pri, err := newPrimaryMerger(leftRows, tm, valueMerger, finalSch)
+	pri, err := newPrimaryMerger(leftEditor, tm, valueMerger, finalSch)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -151,18 +151,18 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	if err != nil {
 		return nil, nil, err
 	}
-	conflicts, err := newConflictMerger(ctx, tm, ae)
+	conflicts, err := newConflictMerger(ctx, tm, artEditor)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// validator shares an artifact editor with conflict merge
-	uniq, err := newUniqValidator(ctx, finalSch, tm, valueMerger, ae)
+	uniq, err := newUniqValidator(ctx, finalSch, tm, valueMerger, artEditor)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	nullChk, err := newNullValidator(ctx, finalSch, tm, valueMerger, ae)
+	nullChk, err := newNullValidator(ctx, finalSch, tm, valueMerger, artEditor, leftEditor, sec.leftMut)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -513,14 +513,31 @@ type nullValidator struct {
 	// leftMap and rightMap map value tuples to |final|
 	leftMap, rightMap val.OrdinalMapping
 	// edits is the artifacts maps editor
-	edits *prolly.ArtifactsEditor
-	// theirRootish is the hash.Hash of the right-side
-	// rootish being merged
+	artEditor *prolly.ArtifactsEditor
+	// leftEdits if the left-side row editor
+	leftEditor *prolly.MutableMap
+	// secEditors are the secondary index editors
+	secEditors []MutableSecondaryIdx
+	// theirRootish is the hash.Hash of the right-side revision
 	theirRootish hash.Hash
+	// ourRootish is the hash.Hash of the left-side revision
+	ourRootish hash.Hash
 }
 
-func newNullValidator(ctx context.Context, final schema.Schema, tm *TableMerger, vm *valueMerger, edits *prolly.ArtifactsEditor) (nullValidator, error) {
+func newNullValidator(
+	ctx context.Context,
+	final schema.Schema,
+	tm *TableMerger,
+	vm *valueMerger,
+	artEditor *prolly.ArtifactsEditor,
+	leftEditor *prolly.MutableMap,
+	secEditors []MutableSecondaryIdx,
+) (nullValidator, error) {
 	theirRootish, err := tm.rightSrc.HashOf()
+	if err != nil {
+		return nullValidator{}, err
+	}
+	ourRootish, err := tm.rightSrc.HashOf()
 	if err != nil {
 		return nullValidator{}, err
 	}
@@ -529,15 +546,18 @@ func newNullValidator(ctx context.Context, final schema.Schema, tm *TableMerger,
 		final:        final,
 		leftMap:      vm.leftMapping,
 		rightMap:     vm.rightMapping,
-		edits:        edits,
+		artEditor:    artEditor,
+		leftEditor:   leftEditor,
+		secEditors:   secEditors,
 		theirRootish: theirRootish,
+		ourRootish:   ourRootish,
 	}, nil
 }
 
 func (nv nullValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff) (count int, err error) {
-	var violations []string
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
+		var violations []string
 		for to, from := range nv.rightMap {
 			col := nv.final.GetNonPKCols().GetByIndex(to)
 			if col.IsNullable() {
@@ -556,7 +576,22 @@ func (nv nullValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 				}
 			}
 		}
+		// for right-side NULL violations, we insert a constraint violation and
+		// set |count| > 0 to signal to the caller that |diff| should not be applied
+		if len(violations) > 0 {
+			var meta prolly.ConstraintViolationMeta
+			if meta, err = newNotNullViolationMeta(violations, diff.Right); err != nil {
+				return 0, err
+			}
+			err = nv.artEditor.ReplaceConstraintViolation(ctx, diff.Key, nv.theirRootish, prolly.ArtifactTypeNullViol, meta)
+			if err != nil {
+				return 0, err
+			}
+		}
+		count = len(violations)
+
 	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
+		var violations []string
 		for to, from := range nv.leftMap {
 			col := nv.final.GetNonPKCols().GetByIndex(to)
 			if col.IsNullable() {
@@ -567,32 +602,36 @@ func (nv nullValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 				// on the left side of the merge, check if it will
 				// be populated with a default value
 				if col.Default == "" {
-					// todo: we cannot record row-level conflicts originating from
-					//  the left side of the merge, this should be a schema conflict
-					return 0, fmt.Errorf("table %s can't be automatically merged.\n"+
-						"To merge this table, make the schema on the source and target branch equal.", nv.table)
+					violations = append(violations, col.Name)
 				}
 			} else {
 				if diff.Left.FieldIsNull(from) {
-					// todo: we cannot record row-level conflicts originating from
-					//  the left side of the merge, this should be a schema conflict
-					return 0, fmt.Errorf("table %s can't be automatically merged.\n"+
-						"To merge this table, make the schema on the source and target branch equal.", nv.table)
+					violations = append(violations, col.Name)
+				}
+			}
+		}
+		// for left-side NULL violations, we insert a constraint violation and
+		// then must explicitly remove this row from all left-side indexes
+		if len(violations) > 0 {
+			var meta prolly.ConstraintViolationMeta
+			if meta, err = newNotNullViolationMeta(violations, diff.Left); err != nil {
+				return 0, err
+			}
+			err = nv.artEditor.ReplaceConstraintViolation(ctx, diff.Key, nv.ourRootish, prolly.ArtifactTypeNullViol, meta)
+			if err != nil {
+				return 0, err
+			}
+			if err = nv.leftEditor.Delete(ctx, diff.Key); err != nil {
+				return 0, err
+			}
+			for _, editor := range nv.secEditors {
+				if err = editor.DeleteEntry(ctx, diff.Key, diff.Left); err != nil {
+					return 0, err
 				}
 			}
 		}
 	}
-	if len(violations) > 0 {
-		var meta prolly.ConstraintViolationMeta
-		if meta, err = newNotNullViolationMeta(violations, diff.Right); err != nil {
-			return 0, err
-		}
-		err = nv.edits.ReplaceConstraintViolation(ctx, diff.Key, nv.theirRootish, prolly.ArtifactTypeNullViol, meta)
-		if err != nil {
-			return 0, err
-		}
-	}
-	return len(violations), nil
+	return
 }
 
 // conflictMerger processing primary key diffs
@@ -674,9 +713,9 @@ type primaryMerger struct {
 	finalSch    schema.Schema
 }
 
-func newPrimaryMerger(leftRows prolly.Map, tableMerger *TableMerger, valueMerger *valueMerger, finalSch schema.Schema) (*primaryMerger, error) {
+func newPrimaryMerger(leftEditor *prolly.MutableMap, tableMerger *TableMerger, valueMerger *valueMerger, finalSch schema.Schema) (*primaryMerger, error) {
 	return &primaryMerger{
-		mut:         leftRows.Mutate(),
+		mut:         leftEditor,
 		valueMerger: valueMerger,
 		tableMerger: tableMerger,
 		finalSch:    finalSch,

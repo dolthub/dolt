@@ -4636,6 +4636,35 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		RightSetUpScript: []string{
 			"alter table t add column col2 int not null default 0",
 			"alter table t add column col3 int;",
+			"insert into t values (2, 2, 2, null);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (3, 3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call dolt_merge('right');",
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1, 0, nil}, {2, 2, 2, nil}, {3, 3, 0, nil}},
+			},
+			{
+				Query:    "select pk, violation_type from dolt_constraint_violations_t",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "adding a non-null column with a default value to one side (with update to existing row)",
+		AncSetUpScript: []string{
+			"set dolt_force_transaction_commit = on;",
+			"create table t (pk int primary key, col1 int);",
+			"insert into t values (1, 1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 int not null default 0",
+			"alter table t add column col3 int;",
 			"update t set col2 = 1 where pk = 1;",
 			"insert into t values (2, 2, 2, null);",
 		},
@@ -4648,8 +4677,12 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			},
 			{
 				Skip:     true,
-				Query:    "select * from t;",
+				Query:    "select * from t;", // fails with row(1,1,0,NULL)
 				Expected: []sql.Row{{1, 1, 1, nil}, {2, 2, 2, nil}, {3, 3, 0, nil}},
+			},
+			{
+				Query:    "select pk, violation_type from dolt_constraint_violations_t",
+				Expected: []sql.Row{},
 			},
 		},
 	},
@@ -4670,8 +4703,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Skip:  true,
-				Query: "call dolt_merge('right');",
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x1}},
 			},
 			{
 				Skip:  true,
@@ -4681,6 +4714,13 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 					{2, 9999},
 					{3, 30},
 					{4, 40},
+				},
+			},
+			{
+				Query: "select pk, violation_type from dolt_constraint_violations_t",
+				Expected: []sql.Row{
+					{5, uint16(4)},
+					{6, uint16(4)},
 				},
 			},
 		},
@@ -4701,11 +4741,10 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Skip:  true,
-				Query: "call dolt_merge('right');",
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x1}},
 			},
 			{
-				Skip:  true,
 				Query: "select pk, col1 from t;",
 				Expected: []sql.Row{
 					{1, 0},
@@ -4713,7 +4752,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				},
 			},
 			{
-				Skip:  true,
 				Query: "select violation_type, pk, violation_info from dolt_constraint_violations_t",
 				Expected: []sql.Row{
 					{uint16(4), 3, types.JSONDocument{Val: merge.NullViolationMeta{Columns: []string{"col1"}}}},
