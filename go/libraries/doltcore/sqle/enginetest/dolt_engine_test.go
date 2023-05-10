@@ -128,49 +128,49 @@ func TestSingleScript(t *testing.T) {
 			"insert into t01 values (3, 3);",
 			"call dolt_commit('-am', 'adding another row to table t01 on main');",
 			"call dolt_tag('tag1');",
-			// "call dolt_checkout('branch1');",
-			// "insert into t01 values (100, 100), (200, 200);",
-			// "call dolt_commit('-am', 'inserting rows in t01 on branch1');",
-			// "insert into t01 values (1000, 1000);",
-			// "call dolt_commit('-am', 'inserting another row in t01 on branch1');",
+			"call dolt_checkout('branch1');",
+			"insert into t01 values (100, 100), (200, 200);",
+			"call dolt_commit('-am', 'inserting rows in t01 on branch1');",
+			"insert into t01 values (1000, 1000);",
+			"call dolt_commit('-am', 'inserting another row in t01 on branch1');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
-			// {
-			// 	Query:    "show databases;",
-			// 	Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
-			// },
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+			},
 			{
 				Query:    "use `mydb/tag1~`;",
 				Expected: []sql.Row{},
 			},
-			// {
-			// 	Query:    "select commit_hash, date, message from dolt_log order by date;",
-			// 	Expected: []sql.Row{
-			// 		{"j131v1r3cf6mrdjjjuqgkv4t33oa0l54", time.Date(1969, time.December, 31, 21, 0, 0, 0, time.Local), "Initialize data repository"},
-			// 		{"kcg4345ir3tjfb13mr0on1bv1m56h9if", time.Date(1970, time.January, 1, 4, 0, 0, 0, time.Local), "checkpoint enginetest database mydb"},
-			// 		{"3kfav66courcnskj6ai5h5f55hg517e6", time.Date(1970, time.January, 1, 7, 0, 0, 0, time.Local), "creating table t01 on main"},
-			// 		{"vsu7clg7ernin5hs4v78hlucghvmh4ti", time.Date(1970, time.January, 1, 14, 0, 0, 0, time.Local), "adding rows to table t01 on main"},
-			// 	},
-			// },
-			// {
-			// 	Query:    "select @@mydb_head",
-			// 	Expected: []sql.Row{{"vsu7clg7ernin5hs4v78hlucghvmh4ti"}},
-			// },
-			// {
-			// 	// The database name is always the base name, never the revision specifier
-			// 	Query:    "select database()",
-			// 	Expected: []sql.Row{{"mydb"}},
-			// },
-			// {
-			// 	// The branch is nil in the case of a non-branch revision DB
-			// 	Query:    "select active_branch()",
-			// 	Expected: []sql.Row{{nil}},
-			// },
-			// {
-			// 	// The branch is nil in the case of a non-branch revision DB
-			// 	Query:    "select active_revision()",
-			// 	Expected: []sql.Row{{"tag1~"}},
-			// },
+			{
+				Query:    "select commit_hash, date, message from dolt_log order by date;",
+				Expected: []sql.Row{
+					{"j131v1r3cf6mrdjjjuqgkv4t33oa0l54", time.Date(1969, time.December, 31, 21, 0, 0, 0, time.Local), "Initialize data repository"},
+					{"kcg4345ir3tjfb13mr0on1bv1m56h9if", time.Date(1970, time.January, 1, 4, 0, 0, 0, time.Local), "checkpoint enginetest database mydb"},
+					{"3kfav66courcnskj6ai5h5f55hg517e6", time.Date(1970, time.January, 1, 7, 0, 0, 0, time.Local), "creating table t01 on main"},
+					{"vsu7clg7ernin5hs4v78hlucghvmh4ti", time.Date(1970, time.January, 1, 14, 0, 0, 0, time.Local), "adding rows to table t01 on main"},
+				},
+			},
+			{
+				Query:    "select @@mydb_head",
+				Expected: []sql.Row{{"vsu7clg7ernin5hs4v78hlucghvmh4ti"}},
+			},
+			{
+				// The database name is always the base name, never the revision specifier
+				Query:    "select database()",
+				Expected: []sql.Row{{"mydb"}},
+			},
+			{
+				// The branch is nil in the case of a non-branch revision DB
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{nil}},
+			},
+			{
+				// The branch is nil in the case of a non-branch revision DB
+				Query:    "select active_revision()",
+				Expected: []sql.Row{{"tag1~"}},
+			},
 			{
 				Query:    "select * from t01 order by 1;",
 				Expected: []sql.Row{{1, 1}, {2, 2}},

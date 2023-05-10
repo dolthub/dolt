@@ -222,8 +222,7 @@ func (t *DoltTable) workingRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	return root, nil
 }
 
-// getRoot returns the appropriate root value for this session. The only controlling factor
-// is whether this is a temporary table or not.
+// getRoot returns the current root value for this session, to be used for all table data access.
 func (t *DoltTable) getRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	return t.db.GetRoot(ctx)
 }

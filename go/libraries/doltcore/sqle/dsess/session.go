@@ -48,6 +48,10 @@ const (
 	Batched
 )
 
+const (
+	DbRevisionDelimiter = "/"
+)
+
 var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
 	"Rollback or commit changes before changing working sets.")
 var ErrSessionNotPeristable = errors.New("session is not persistable")
@@ -140,7 +144,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	dbName = strings.ToLower(dbName)
 	
 	var baseName, rev string
-	baseName, rev = splitDbName(dbName)
+	baseName, rev = SplitRevDbName(dbName)
 
 	d.mu.Lock()
 	dbState, ok := d.dbStates[baseName]
@@ -166,12 +170,12 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	// No state for this db / branch combination yet, look it up from the provider. We use the unqualified DB name (no 
 	// branch) if the current DB has not yet been loaded into this session. It will resolve to that DB's default branch 
 	// in that case.
-	sessionDbName := dbName
+	revisionQualifiedName := dbName
 	if rev != "" {
-		sessionDbName = revisionDbName(baseName, rev)
+		revisionQualifiedName = revisionDbName(baseName, rev)
 	}
 	
-	database, ok, err := d.provider.SessionDatabase(ctx, sessionDbName)
+	database, ok, err := d.provider.SessionDatabase(ctx, revisionQualifiedName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -192,15 +196,14 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 		return nil, false, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	_, rev = SplitRevisionDbName(database)
-	return dbState.heads[strings.ToLower(rev)], true, nil
+	return dbState.heads[strings.ToLower(database.Revision())], true, nil
 }
 
 func revisionDbName(baseName string, rev string) string {
 	return baseName + DbRevisionDelimiter + rev
 }
 
-func splitDbName(dbName string) (string, string) {
+func SplitRevDbName(dbName string) (string, string) {
 	var baseName, rev string
 	parts := strings.SplitN(dbName, DbRevisionDelimiter, 2)
 	baseName = parts[0]
@@ -871,7 +874,7 @@ func (d *DoltSession) SetCurrentHead(ctx *sql.Context, dbName string, wsRef ref.
 	
 	d.mu.Lock()
 
-	baseName, _ := splitDbName(dbName)
+	baseName, _ := SplitRevDbName(dbName)
 	dbState, ok := d.dbStates[strings.ToLower(baseName)]
 	if !ok {
 		d.mu.Unlock()
@@ -902,7 +905,7 @@ func (d *DoltSession) SwitchWorkingSet(
 
 	d.mu.Lock()
 	
-	baseName, _ := splitDbName(dbName)
+	baseName, _ := SplitRevDbName(dbName)
 	dbState, ok := d.dbStates[strings.ToLower(baseName)]
 	if !ok {
 		d.mu.Unlock()
@@ -1057,14 +1060,11 @@ func (d *DoltSession) HasDB(_ *sql.Context, dbName string) bool {
 // addDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
 func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
-	// TODO: get rid of this, only define these for base names
 	DefineSystemVariablesForDB(db.Name())
 
-	baseName, rev := SplitRevisionDbName(db)
-
-	DefineSystemVariablesForDB(baseName)
-
-	dbState, err := db.InitialDBState(ctx, rev)
+	baseName, rev := db.Name(), db.Revision()
+	// TODO: odd that we need to tell the DB what its own revision is here
+	dbState, err := db.InitialDBState(ctx, db.Revision())
 	if err != nil {
 		return err
 	}
@@ -1208,7 +1208,7 @@ func (d *DoltSession) CurrentHead(ctx *sql.Context, dbName string) (string, bool
 	dbName = strings.ToLower(dbName)
 
 	var baseName, rev string
-	baseName, rev = splitDbName(dbName)
+	baseName, rev = SplitRevDbName(dbName)
 	if rev != "" {
 		return "", false, fmt.Errorf("invalid database name: %s", dbName)
 	}
@@ -1557,18 +1557,6 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	return nil
 }
 
-// SplitRevisionDbName splits the given database name into its base and revision parts and returns them. Non-revision
-// DBs use their full name as the base name, and empty string as the revision.
-// TODO: get rid of this, should no longer be necessary
-func SplitRevisionDbName(db SqlDatabase) (string, string) {
-	dbName := db.Name()
-	if db.Revision() != "" {
-		dbName = strings.TrimSuffix(dbName, DbRevisionDelimiter+db.Revision())
-	}
-
-	return dbName, db.Revision()
-}
-
 // TransactionRoot returns the noms root for the given database in the current transaction
 func TransactionRoot(ctx *sql.Context, db SqlDatabase) (hash.Hash, error) {
 	tx, ok := ctx.GetTransaction().(*DoltTransaction)
@@ -1577,15 +1565,10 @@ func TransactionRoot(ctx *sql.Context, db SqlDatabase) (hash.Hash, error) {
 		return db.DbData().Ddb.NomsRoot(ctx)
 	}
 
-	baseName, _ := SplitRevisionDbName(db)
-	nomsRoot, ok := tx.GetInitialRoot(baseName)
+	nomsRoot, ok := tx.GetInitialRoot(db.Name())
 	if !ok {
 		return hash.Hash{}, fmt.Errorf("could not resolve initial root for database %s", db.Name())
 	}
 
 	return nomsRoot, nil
 }
-
-const (
-	DbRevisionDelimiter = "/"
-)

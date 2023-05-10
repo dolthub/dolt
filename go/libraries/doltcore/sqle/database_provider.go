@@ -599,11 +599,8 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 
 // DropDatabase implements the sql.MutableDatabaseProvider interface
 func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
-	isRevisionDatabase, err := p.isRevisionDatabase(ctx, name)
-	if err != nil {
-		return err
-	}
-	if isRevisionDatabase {
+	_, revision := dsess.SplitRevDbName(name)
+	if revision != "" {
 		return fmt.Errorf("unable to drop revision database: %s", name)
 	}
 
@@ -618,7 +615,7 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	db := p.databases[dbKey]
 
 	ddb := db.(Database).ddb
-	err = ddb.Close()
+	err := ddb.Close()
 	if err != nil {
 		return err
 	}
@@ -1140,21 +1137,6 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 	return nil, sql.ErrTableFunctionNotFound.New(name)
 }
 
-// isRevisionDatabase returns true if the specified dbName represents a database that is tied to a specific
-// branch or commit from a database (e.g. "dolt/branch1").
-func (p DoltDatabaseProvider) isRevisionDatabase(ctx *sql.Context, dbName string) (bool, error) {
-	db, ok, err := p.SessionDatabase(ctx, dbName)
-	if err != nil {
-		return false, err
-	}
-	if !ok {
-		return false, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	_, rev := dsess.SplitRevisionDbName(db)
-	return rev != "", nil
-}
-
 // ensureReplicaHeadExists tries to pull the latest version of a remote branch. Will fail if the branch
 // does not exist on the ReadReplicaDatabase's remote.
 func (p DoltDatabaseProvider) ensureReplicaHeadExists(ctx *sql.Context, branch string, db ReadReplicaDatabase) error {
@@ -1311,10 +1293,9 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 }
 
 func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.InitialDbState, error) {
-	_, revSpec := dsess.SplitRevisionDbName(srcDb)
+	revSpec := srcDb.Revision()
 
 	// TODO: this may be a disabled transaction, need to kill those
-
 	rootHash, err := dsess.TransactionRoot(ctx, srcDb)
 	if err != nil {
 		return dsess.InitialDbState{}, err
@@ -1387,7 +1368,7 @@ func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string) (Read
 }
 
 func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.InitialDbState, error) {
-	_, revSpec := dsess.SplitRevisionDbName(srcDb)
+	revSpec := srcDb.Revision()
 	tag := ref.NewTagRef(revSpec)
 
 	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, tag)
@@ -1427,7 +1408,7 @@ func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 }
 
 func initialStateForCommit(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.InitialDbState, error) {
-	_, revSpec := dsess.SplitRevisionDbName(srcDb)
+	revSpec := srcDb.Revision()
 
 	spec, err := doltdb.NewCommitSpec(revSpec)
 	if err != nil {
