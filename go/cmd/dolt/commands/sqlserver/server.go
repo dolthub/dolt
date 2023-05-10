@@ -27,6 +27,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
@@ -39,6 +40,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
@@ -86,6 +88,25 @@ func Serve(
 		logrus.SetLevel(level)
 	}
 	logrus.SetFormatter(LogFormat{})
+
+	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+                {
+			Name:              dsess.DoltLogLevel,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemEnumType(dsess.DoltLogLevel,
+				logrus.PanicLevel.String(),
+				logrus.FatalLevel.String(),
+				logrus.ErrorLevel.String(),
+				logrus.WarnLevel.String(),
+				logrus.InfoLevel.String(),
+				logrus.DebugLevel.String(),
+				logrus.TraceLevel.String(),
+			),
+			Default:           logrus.GetLevel().String(),
+		},
+	})
 
 	var mrEnv *env.MultiRepoEnv
 	var err error

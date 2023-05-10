@@ -275,3 +275,23 @@ tests:
       result:
         columns: ["@@GLOBAL.max_connections"]
         rows: [["555"]]
+- name: "@@global.dolt_log_level read behavior"
+  repos:
+  - name: repo1
+    server:
+      args: ["-l", "trace"]
+  connections:
+  - on: repo1
+    queries:
+    - query: "select @@GLOBAL.dolt_log_level"
+      result:
+        columns: ["@@GLOBAL.dolt_log_level"]
+        rows: [["trace"]]
+    restart_server:
+      args: ["-l", "debug"]
+  - on: repo1
+    queries:
+    - query: "select @@GLOBAL.dolt_log_level"
+      result:
+        columns: ["@@GLOBAL.dolt_log_level"]
+        rows: [["debug"]]
