@@ -40,8 +40,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
 
@@ -90,12 +90,12 @@ func Serve(
 	logrus.SetFormatter(LogFormat{})
 
 	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-                {
+		{
 			Name:              dsess.DoltLogLevel,
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              types.NewSystemEnumType(dsess.DoltLogLevel,
+			Type: types.NewSystemEnumType(dsess.DoltLogLevel,
 				logrus.PanicLevel.String(),
 				logrus.FatalLevel.String(),
 				logrus.ErrorLevel.String(),
@@ -104,8 +104,8 @@ func Serve(
 				logrus.DebugLevel.String(),
 				logrus.TraceLevel.String(),
 			),
-			Default:           logrus.GetLevel().String(),
-			NotifyChanged:     func(scope sql.SystemVariableScope, v sql.SystemVarValue) {
+			Default: logrus.GetLevel().String(),
+			NotifyChanged: func(scope sql.SystemVariableScope, v sql.SystemVarValue) {
 				if level, err := logrus.ParseLevel(v.Val.(string)); err == nil {
 					logrus.SetLevel(level)
 				} else {
