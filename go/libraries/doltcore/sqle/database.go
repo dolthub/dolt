@@ -100,11 +100,6 @@ func (db Database) RevisionType() dsess.RevisionType {
 	return db.revType
 }
 
-// TODO: remove this
-func (db Database) BaseName() string {
-	return db.name
-}
-
 func (db Database) EditOptions() editor.Options {
 	return db.editOpts
 }
@@ -153,6 +148,10 @@ func (db Database) RevisionQualifiedName() string {
 		return db.name
 	}
 	return db.name + dsess.DbRevisionDelimiter + db.revision
+}
+
+func (db Database) RequestedName() string {
+	return db.requestedName
 }
 
 // GetDoltDB gets the underlying DoltDB of the Database

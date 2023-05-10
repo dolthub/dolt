@@ -118,3 +118,7 @@ func (db *UserSpaceDatabase) RevisionType() dsess.RevisionType {
 func (db *UserSpaceDatabase) RevisionQualifiedName() string {
 	return db.Name()
 }
+
+func (db *UserSpaceDatabase) RequestedName() string {
+	return db.Name()
+}

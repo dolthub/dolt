@@ -68,6 +68,9 @@ type DatabaseSessionState struct {
 	// currRevType is the current revision type of the database when referred to by its base name. Changes when a
 	// `dolt_checkout` or `use` statement is executed.
 	currRevType RevisionType
+	// checkedOutRevSpec is the checked out revision specifier of the database. Changes only when a `dolt_checkout` 
+	// occurs.
+	checkedOutRevSpec string
 	// heads records the in-memory DB state for every branch head accessed by the session
 	heads 			map[string]*branchState
 	// globalState is the global state of this session (shared by all sessions for a particular db)

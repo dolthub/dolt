@@ -865,7 +865,6 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 }
 
 // SetCurrentHead sets the currently connected head revision spec for this session.
-// TODO: more caveats and guidance
 func (d *DoltSession) SetCurrentHead(ctx *sql.Context, dbName string, wsRef ref.WorkingSetRef) error {
 	headRef, err := wsRef.ToHeadRef()
 	if err != nil {
@@ -873,17 +872,17 @@ func (d *DoltSession) SetCurrentHead(ctx *sql.Context, dbName string, wsRef ref.
 	}
 	
 	d.mu.Lock()
+	defer d.mu.Unlock()
 
 	baseName, _ := SplitRevDbName(dbName)
 	dbState, ok := d.dbStates[strings.ToLower(baseName)]
 	if !ok {
-		d.mu.Unlock()
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
+
+	dbState.checkedOutRevSpec = headRef.GetPath()
 	dbState.currRevSpec = headRef.GetPath()
 	dbState.currRevType = RevisionTypeBranch
-
-	d.mu.Unlock()
 	
 	return nil
 }
@@ -945,8 +944,18 @@ func (d *DoltSession) UseDatabase(ctx *sql.Context, db sql.Database) error {
 	
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	branchState.dbState.currRevSpec = sdb.Revision()
-	branchState.dbState.currRevType = sdb.RevisionType()
+	
+	// Set the session state for this database according to what database name was USEd
+	// In the case of a revision qualified name, that will be the revision specified
+	// In the case of an unqualified name (USE mydb), this will be the last checked out head in this session.
+	_, rev := SplitRevDbName(sdb.RequestedName())
+	if rev == "" {
+		branchState.dbState.currRevSpec = branchState.dbState.checkedOutRevSpec
+		branchState.dbState.currRevType = RevisionTypeBranch
+	} else {
+		branchState.dbState.currRevSpec = sdb.Revision()
+		branchState.dbState.currRevType = sdb.RevisionType()
+	}
 	
 	return nil
 }

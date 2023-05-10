@@ -725,13 +725,8 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQual
 	baseName, rev := parts[0], parts[1]
 
 	p.mu.RLock()
-	candidate, ok := p.databases[formatDbMapKeyName(baseName)]
+	srcDb, ok := p.databases[formatDbMapKeyName(baseName)]
 	p.mu.RUnlock()
-	if !ok {
-		return nil, false, nil
-	}
-
-	srcDb, ok := candidate.(dsess.SqlDatabase)
 	if !ok {
 		return nil, false, nil
 	}

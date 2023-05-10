@@ -38,9 +38,12 @@ type RevisionDatabase interface {
 	Revision() string
 	// RevisionType returns the type of revision this database is pinned to.
 	RevisionType() RevisionType
-	// RevisionQualiedName returns the fully qualified name of the database, which includes the revision if one is 
+	// RevisionQualifiedName returns the fully qualified name of the database, which includes the revision if one is 
 	// specified.
 	RevisionQualifiedName() string
+	// RequestedName returns the name of the database as requested by the user when the name was resolved to this 
+	// database.
+	RequestedName() string
 }
 
 // RevisionType represents the type of revision a database is pinned to. For branches and tags, the revision is a
