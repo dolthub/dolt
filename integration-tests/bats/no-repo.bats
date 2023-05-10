@@ -97,7 +97,6 @@ teardown() {
         [ "$status" -eq 0 ]
 
         if [[ "$output" =~ "Valid commands for dolt $cmd are" ]]; then
-            echo "/ - / {print \"$cmd\", \$1}"
             echo "$output" | awk -F ' - ' "/ - / {print \"$cmd\", \$1}" >> subcommands.txt
             continue
         fi
@@ -112,11 +111,8 @@ teardown() {
             continue
         fi
 
-        echo $cmd
-
         run dolt $cmd -h
-        echo $status
-        echo "$output"
+
         [ "$status" -eq 0 ]
 
         [[ "$output" =~ "NAME" ]] || false
