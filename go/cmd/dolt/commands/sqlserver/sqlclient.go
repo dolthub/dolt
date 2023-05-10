@@ -44,7 +44,6 @@ import (
 const (
 	sqlClientDualFlag     = "dual"
 	SqlClientQueryFlag    = "query"
-	SqlClientUseDbFlag    = "use-db"
 	sqlClientResultFormat = "result-format"
 )
 
@@ -85,7 +84,7 @@ func (cmd SqlClientCmd) ArgParser() *argparser.ArgParser {
 	ap := SqlServerCmd{}.ArgParserWithName(cmd.Name())
 	ap.SupportsFlag(sqlClientDualFlag, "d", "Causes this command to spawn a dolt server that is automatically connected to.")
 	ap.SupportsString(SqlClientQueryFlag, "q", "string", "Sends the given query to the server and immediately exits.")
-	ap.SupportsString(SqlClientUseDbFlag, "", "db_name", fmt.Sprintf("Selects the given database before executing a query. "+
+	ap.SupportsString(commands.UseDbFlag, "", "db_name", fmt.Sprintf("Selects the given database before executing a query. "+
 		"By default, uses the current folder's name. Must be used with the --%s flag.", SqlClientQueryFlag))
 	ap.SupportsString(sqlClientResultFormat, "", "format", fmt.Sprintf("Returns the results in the given format. Must be used with the --%s flag.", SqlClientQueryFlag))
 	return ap
@@ -127,8 +126,8 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			cli.PrintErrln(color.RedString(fmt.Sprintf("--%s flag may not be used with --%s", sqlClientDualFlag, SqlClientQueryFlag)))
 			return 1
 		}
-		if apr.Contains(SqlClientUseDbFlag) {
-			cli.PrintErrln(color.RedString(fmt.Sprintf("--%s flag may not be used with --%s", sqlClientDualFlag, SqlClientUseDbFlag)))
+		if apr.Contains(commands.UseDbFlag) {
+			cli.PrintErrln(color.RedString(fmt.Sprintf("--%s flag may not be used with --%s", sqlClientDualFlag, commands.UseDbFlag)))
 			return 1
 		}
 		if apr.Contains(sqlClientResultFormat) {
@@ -168,13 +167,13 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 	}
 
 	query, hasQuery := apr.GetValue(SqlClientQueryFlag)
-	dbToUse, hasUseDb := apr.GetValue(SqlClientUseDbFlag)
+	dbToUse, hasUseDb := apr.GetValue(commands.UseDbFlag)
 	resultFormat, hasResultFormat := apr.GetValue(sqlClientResultFormat)
 	if !hasQuery && hasUseDb {
-		cli.PrintErrln(color.RedString(fmt.Sprintf("--%s may only be used with --%s", SqlClientUseDbFlag, SqlClientQueryFlag)))
+		cli.PrintErrln(color.RedString(fmt.Sprintf("--%s may only be used with --%s", commands.UseDbFlag, SqlClientQueryFlag)))
 		return 1
 	} else if !hasQuery && hasResultFormat {
-		cli.PrintErrln(color.RedString(fmt.Sprintf("--%s may only be used with --%s", SqlClientUseDbFlag, sqlClientResultFormat)))
+		cli.PrintErrln(color.RedString(fmt.Sprintf("--%s may only be used with --%s", commands.UseDbFlag, sqlClientResultFormat)))
 		return 1
 	}
 	if !hasUseDb && hasQuery {

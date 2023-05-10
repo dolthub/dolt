@@ -78,17 +78,22 @@ func MaybeGetCommitWithVErr(dEnv *env.DoltEnv, maybeCommit string) (*doltdb.Comm
 
 // NewArgFreeCliContext creates a new CliContext instance with no arguments using a local SqlEngine. This is useful for testing primarily
 func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv) (cli.CliContext, errhand.VerboseError) {
-	lateBind, err := BuildSqlEngineQueryist(ctx, dEnv, argparser.NewEmptyResults())
+	mrEnv, err := env.MultiEnvForSingleEnv(ctx, dEnv)
 	if err != nil {
-		return nil, err
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+
+	lateBind, verr := BuildSqlEngineQueryist(ctx, dEnv, mrEnv, argparser.NewEmptyResults())
+	if err != nil {
+		return nil, verr
 	}
 	return cli.NewCliContext(argparser.NewEmptyResults(), lateBind)
 }
 
 // BuildSqlEngineQueryist Utility function to build a local SQLEngine for use interacting with data on disk using
 // SQL queries. ctx and dEnv must be non-nil. apr can be nil.
-func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
-	if ctx == nil || dEnv == nil || apr == nil {
+func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, mrEnv *env.MultiRepoEnv, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
+	if ctx == nil || dEnv == nil || mrEnv == nil || apr == nil {
 		errhand.VerboseErrorFromError(fmt.Errorf("Invariant violated. Nil argument provided to BuildSqlEngineQueryist"))
 	}
 
@@ -98,24 +103,22 @@ func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, apr *argpars
 		username = user
 	}
 
-	// data-dir args come either from the global args or the subcommand args.  We need to check both.
-	var dataDir string
-	dataDirGiven := false
-	if dataDirPath, ok := apr.GetValue(DataDirFlag); ok {
-		dataDir = dataDirPath
-		dataDirGiven = true
-	}
-
-	mrEnv, dataDir, verr := getMultiRepoEnv(ctx, dataDir, dEnv)
-	if verr != nil {
-		return nil, verr
+	// We want to know if the user provided us the data-dir flag, but we want to use the abs value used to
+	// create the DoltEnv. This is a little messy.
+	dataDir, dataDirGiven := apr.GetValue(DataDirFlag)
+	dataDir, err := dEnv.FS.Abs(dataDir)
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
 	}
 
 	// need to return cfgdirpath and error
 	var cfgDirPath string
 	cfgDir, cfgDirSpecified := apr.GetValue(CfgDirFlag)
 	if cfgDirSpecified {
-		cfgDirPath = cfgDir
+		cfgDirPath, err = dEnv.FS.Abs(cfgDir)
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
 	} else if dataDirGiven {
 		cfgDirPath = filepath.Join(dataDir, DefaultCfgDirName)
 	} else {
@@ -150,7 +153,6 @@ func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, apr *argpars
 		}
 	}
 
-	var err error
 	// If no privilege filepath specified, default to doltcfg directory
 	privsFp, hasPrivsFp := apr.GetValue(PrivsFilePathFlag)
 	if !hasPrivsFp {
@@ -169,7 +171,14 @@ func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, apr *argpars
 		}
 	}
 
-	binder, err := newLateBindingEngine(ctx, apr, cfgDirPath, privsFp, branchControlFilePath, username, mrEnv)
+	// Whether we're running in shell mode or some other mode, sql commands from the command line always have a current
+	// database set when you begin using them.
+	database, hasDB := apr.GetValue(UseDbFlag)
+	if !hasDB {
+		database = mrEnv.GetFirstDatabase()
+	}
+
+	binder, err := newLateBindingEngine(cfgDirPath, privsFp, branchControlFilePath, username, database, mrEnv)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}
@@ -178,12 +187,11 @@ func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, apr *argpars
 }
 
 func newLateBindingEngine(
-	ctx context.Context,
-	apr *argparser.ArgParseResults,
 	cfgDirPath string,
 	privsFp string,
 	branchControlFilePath string,
 	username string,
+	database string,
 	mrEnv *env.MultiRepoEnv,
 ) (cli.LateBindQueryist, error) {
 
@@ -212,7 +220,7 @@ func newLateBindingEngine(
 
 		// Whether we're running in shell mode or some other mode, sql commands from the command line always have a current
 		// database set when you begin using them.
-		sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
+		sqlCtx.SetCurrentDatabase(database)
 
 		// Add specified user as new superuser, if it doesn't already exist
 		if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {

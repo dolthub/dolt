@@ -58,6 +58,11 @@ type MultiRepoEnv struct {
 	ignoreLockFile bool
 }
 
+// NewMultiEnv returns a new MultiRepoEnv instance dirived from a root DoltEnv instance.
+func MultiEnvForSingleEnv(ctx context.Context, env *DoltEnv) (*MultiRepoEnv, error) {
+	return MultiEnvForDirectory(ctx, env.Config.WriteableConfig(), env.FS, env.Version, env.IgnoreLockFile, env)
+}
+
 // MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given. The doltEnv from the
 // invoking context is included. If it's non-nil and valid, it will be included in the returned MultiRepoEnv, and will
 // be the first database in all iterations.
