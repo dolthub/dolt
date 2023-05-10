@@ -2054,6 +2054,15 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
+				Query:    "use `mydb/b3`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b3"}},
+			},
+			// Since b2 was the last branch checked out with dolt_checkout, it's what mydb resolves to
+			{
 				Query:    "use `mydb`",
 				SkipResultsCheck: true,
 			},
