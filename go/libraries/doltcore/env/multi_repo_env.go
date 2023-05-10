@@ -74,14 +74,6 @@ func MultiEnvForDirectory(
 	ignoreLockFile bool,
 	dEnv *DoltEnv,
 ) (*MultiRepoEnv, error) {
-	mrEnv := &MultiRepoEnv{
-		envs:           make([]NamedEnv, 0),
-		fs:             fs,
-		cfg:            config,
-		dialProvider:   NewGRPCDialProviderFromDoltEnv(dEnv),
-		ignoreLockFile: ignoreLockFile,
-	}
-
 	// Load current fs and put into mr env
 	var dbName string
 	if _, ok := fs.(*filesys.InMemFS); ok {
@@ -93,6 +85,14 @@ func MultiEnvForDirectory(
 		}
 		envName := getRepoRootDir(path, string(os.PathSeparator))
 		dbName = dirToDBName(envName)
+	}
+
+	mrEnv := &MultiRepoEnv{
+		envs:           make([]NamedEnv, 0),
+		fs:             fs,
+		cfg:            config,
+		dialProvider:   NewGRPCDialProviderFromDoltEnv(dEnv),
+		ignoreLockFile: ignoreLockFile,
 	}
 
 	envSet := map[string]*DoltEnv{}
@@ -129,14 +129,13 @@ func MultiEnvForDirectory(
 	enforceSingleFormat(envSet)
 
 	// if the current directory database is in our set, add it first so it will be the current database
-	var ok bool
-	if dEnv, ok = envSet[dbName]; ok && dEnv.Valid() {
-		mrEnv.addEnv(dbName, dEnv)
+	if env, ok := envSet[dbName]; ok && env.Valid() {
+		mrEnv.addEnv(dbName, env)
 		delete(envSet, dbName)
 	}
 
-	for dbName, dEnv = range envSet {
-		mrEnv.addEnv(dbName, dEnv)
+	for dbName, env := range envSet {
+		mrEnv.addEnv(dbName, env)
 	}
 
 	return mrEnv, nil

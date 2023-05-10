@@ -452,3 +452,52 @@ func secondsSince(start time.Time, end time.Time) float64 {
 	timeDisplay := float64(seconds) + float64(milliRemainder)*.001
 	return timeDisplay
 }
+
+type ConnectionQueryist struct {
+	connection *dbr.Connection
+}
+
+func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, error) {
+	rows, err := c.connection.QueryContext(ctx, query)
+	if err != nil {
+		return nil, nil, err
+	}
+	rowIter, err := NewMysqlRowWrapper(rows)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rowIter.Schema(), rowIter, nil
+}
+
+var _ cli.Queryist = ConnectionQueryist{}
+
+// BuildConnectionStringQueryist returns a Queryist that connects to the server specified by the given server config. Presence in this
+// module isn't ideal, but it's the only way to get the server config into the queryist.
+func BuildConnectionStringQueryist(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, port int, database string) (cli.LateBindQueryist, error) {
+	serverConfig, err := GetServerConfig(dEnv, apr)
+	if err != nil {
+		return nil, err
+	}
+
+	parsedMySQLConfig, err := mysqlDriver.ParseDSN(ConnectionString(serverConfig, database))
+	if err != nil {
+		return nil, err
+	}
+
+	parsedMySQLConfig.Addr = fmt.Sprintf("localhost:%d", port)
+
+	mysqlConnector, err := mysqlDriver.NewConnector(parsedMySQLConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	conn := &dbr.Connection{DB: mysql.OpenDB(mysqlConnector), EventReceiver: nil, Dialect: dialect.MySQL}
+
+	queryist := ConnectionQueryist{connection: conn}
+
+	var lateBind cli.LateBindQueryist = func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
+		return queryist, sql.NewContext(ctx), func() { conn.Conn(ctx) }, nil
+	}
+
+	return lateBind, nil
+}
