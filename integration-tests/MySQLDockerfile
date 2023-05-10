@@ -38,6 +38,8 @@ RUN apt update -y && \
         git \
         ruby \
         ruby-dev \
+        rustc \
+        cargo \
         gem \
         libc6 \
         libgcc1 \
