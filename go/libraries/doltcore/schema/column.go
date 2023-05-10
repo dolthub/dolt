@@ -145,6 +145,16 @@ func (c Column) Equals(other Column) bool {
 		ColConstraintsAreEqual(c.Constraints, other.Constraints)
 }
 
+// EqualsWithoutTag tests equality between two columns, but does not check the columns' tags.
+func (c Column) EqualsWithoutTag(other Column) bool {
+	return c.Name == other.Name &&
+		c.Kind == other.Kind &&
+		c.IsPartOfPK == other.IsPartOfPK &&
+		c.TypeInfo.Equals(other.TypeInfo) &&
+		c.Default == other.Default &&
+		ColConstraintsAreEqual(c.Constraints, other.Constraints)
+}
+
 // Compatible tests compatibility between two columns. Compatible columns have the same tag and can store the same
 // kinds of values at the storage layer, but may have different constraints or type parameters.
 func (c Column) Compatible(other Column) bool {
