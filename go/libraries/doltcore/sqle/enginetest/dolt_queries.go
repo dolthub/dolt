@@ -181,7 +181,7 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "show create table tbl",
-				Expected: []sql.Row{sql.Row{"tbl", "CREATE TABLE `tbl` (\n" +
+				Expected: []sql.Row{{"tbl", "CREATE TABLE `tbl` (\n" +
 					"  `a` int NOT NULL,\n" +
 					"  `b` int NOT NULL DEFAULT '42',\n" + //
 					"  `c` int NOT NULL DEFAULT (24),\n" + // Ensure these match setup above.
@@ -215,7 +215,7 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "show create table tbl",
-				Expected: []sql.Row{sql.Row{"tbl", "CREATE TABLE `tbl` (\n" +
+				Expected: []sql.Row{{"tbl", "CREATE TABLE `tbl` (\n" +
 					"  `a` int NOT NULL DEFAULT (NOW()),\n" + // MySql preserves now as lower case.
 					"  `b` int NOT NULL DEFAULT '42',\n" + //
 					"  `c` int NOT NULL DEFAULT (24),\n" + // Ensure these match setup above.
@@ -553,6 +553,40 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			{
 				Query:    "select active_branch();",
 				Expected: []sql.Row{{"another-branch"}},
+			},
+		},
+	},
+	{
+		Name: "database revision specs: can checkout a table",
+		SetUpScript: []string{
+			"call dolt_checkout('main')",
+			"create table t01 (pk int primary key, c1 int)",
+			"call dolt_add('t01');",
+			"call dolt_commit('-am', 'creating table t01 on branch1');",
+			"insert into t01 values (1, 1), (2, 2);",
+			"call dolt_branch('new-branch')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+			},
+			{
+				Query:    "use `mydb/main`;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from dolt_status",
+				Expected: []sql.Row{{"t01", false, "modified"}},
+			},
+			{
+				Query:    "call dolt_checkout('t01')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "select * from dolt_status",
+				// Expected: []sql.Row{},
+				SkipResultsCheck: true, // TODO: https://github.com/dolthub/dolt/issues/5816
 			},
 		},
 	},
