@@ -81,10 +81,8 @@ teardown() {
     sed "s/ //g" all_raw.txt > all.txt
 
     # filter out commands without "-h"
-    # and filter out stash because of https://github.com/dolthub/dolt/issues/5920
     cat all.txt \
         | sed "s/version//g"   \
-        | sed "s/stash//g"     \
         > commands.txt
 
     touch subcommands.txt
