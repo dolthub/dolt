@@ -394,6 +394,7 @@ func enforceSingleFormat(envSet map[string]*DoltEnv) {
 	}
 }
 
+// NM4
 func dirToDBName(dirName string) string {
 	dbName := strings.TrimSpace(dirName)
 	dbName = strings.Map(func(r rune) rune {
