@@ -15,7 +15,6 @@
 package enginetest
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
@@ -4630,6 +4629,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
 		Name: "adding a non-null column with a default value to one side",
 		AncSetUpScript: []string{
+			"set dolt_force_transaction_commit = on;",
 			"create table t (pk int primary key, col1 int);",
 			"insert into t values (1, 1);",
 		},
@@ -4644,8 +4644,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "call dolt_merge('right');",
-				ExpectedErrStr: fmt.Sprintf(errTmplNoAutomaticMerge, "t"),
+				Query: "call dolt_merge('right');",
 			},
 			{
 				Skip:     true,

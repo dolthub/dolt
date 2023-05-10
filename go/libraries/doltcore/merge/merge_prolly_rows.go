@@ -865,7 +865,10 @@ func remapTupleWithColumnDefaults(ctx *sql.Context, tuple val.Tuple, tupleDesc v
 				if err != nil {
 					return nil, err
 				}
-
+				value, _, err = col.TypeInfo.ToSqlType().Convert(value)
+				if err != nil {
+					return nil, err
+				}
 				err = index.PutField(ctx, tm.ns, tb, to, value)
 				if err != nil {
 					return nil, err

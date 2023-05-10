@@ -301,15 +301,15 @@ var nullabilityTests = []schemaMergeTest{
 		name:     "add not null constraint to existing column",
 		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)         "), row(1, 1)),
 		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NOT NULL)"), row(1, 1)),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)         "), row(1, 1)),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NOT NULL)"), row(1, 1)),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)         "), row(1, 1), row(2, 2)),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NOT NULL)"), row(1, 1), row(2, 2)),
 	},
 	{
 		name:     "add not null column to non-empty table",
 		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                              "), row(1)),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NOT NULL DEFAULT  '19')"), row(1, 1)),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NOT NULL DEFAULT  '19')"), row(1, 19)),
 		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                              "), row(1), row(2)),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NOT NULL DEFAULT  '19')"), row(1, 1), row(2, 19)),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NOT NULL DEFAULT  '19')"), row(1, 19), row(2, 19)),
 	},
 }
 
@@ -540,7 +540,14 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 				for name, addr := range exp {
 					a, ok := act[name]
 					assert.True(t, ok)
-					assert.Equal(t, addr, a)
+					if !assert.Equal(t, addr, a) {
+						expTbl, _, err := m.GetTable(ctx, name)
+						require.NoError(t, err)
+						t.Logf("expected rows: %s", expTbl.DebugString(ctx))
+						actTbl, _, err := result.Root.GetTable(ctx, name)
+						require.NoError(t, err)
+						t.Logf("actual rows: %s", actTbl.DebugString(ctx))
+					}
 				}
 			}
 		})
