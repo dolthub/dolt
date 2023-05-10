@@ -58,10 +58,9 @@ type SessionDatabase interface {
 
 // DatabaseSessionState is the set of all information for a given database in this session.
 type DatabaseSessionState struct {
-	// dbName is the name of the database this state applies to. This includes a revision specifier in some cases.
+	// dbName is the name of the database this state applies to. This is always the base name of the database, without 
+	// a revision qualifier.
 	dbName       string
-	// db is the database this state applies to
-	db           SqlDatabase
 	// currRevSpec is the current revision spec of the database when referred to by its base name. Changes when a 
 	// `dolt_checkout` or `use` statement is executed.
 	currRevSpec string
@@ -69,7 +68,7 @@ type DatabaseSessionState struct {
 	// `dolt_checkout` or `use` statement is executed.
 	currRevType RevisionType
 	// checkedOutRevSpec is the checked out revision specifier of the database. Changes only when a `dolt_checkout` 
-	// occurs.
+	// occurs. `USE mydb` without a revision qualifier will get this revision.
 	checkedOutRevSpec string
 	// heads records the in-memory DB state for every branch head accessed by the session
 	heads 			map[string]*branchState

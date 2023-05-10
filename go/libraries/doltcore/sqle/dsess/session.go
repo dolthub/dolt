@@ -910,6 +910,7 @@ func (d *DoltSession) SwitchWorkingSet(
 		d.mu.Unlock()
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
+	dbState.checkedOutRevSpec = headRef.GetPath()
 	dbState.currRevSpec = headRef.GetPath()
 	dbState.currRevType = RevisionTypeBranch
 
@@ -949,12 +950,13 @@ func (d *DoltSession) UseDatabase(ctx *sql.Context, db sql.Database) error {
 	// In the case of a revision qualified name, that will be the revision specified
 	// In the case of an unqualified name (USE mydb), this will be the last checked out head in this session.
 	_, rev := SplitRevDbName(sdb.RequestedName())
+	dbState := branchState.dbState
 	if rev == "" {
-		branchState.dbState.currRevSpec = branchState.dbState.checkedOutRevSpec
-		branchState.dbState.currRevType = RevisionTypeBranch
+		dbState.currRevSpec = dbState.checkedOutRevSpec
+		dbState.currRevType = RevisionTypeBranch
 	} else {
-		branchState.dbState.currRevSpec = sdb.Revision()
-		branchState.dbState.currRevType = sdb.RevisionType()
+		dbState.currRevSpec = sdb.Revision()
+		dbState.currRevType = sdb.RevisionType()
 	}
 	
 	return nil
@@ -1094,6 +1096,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		}
 		
 		sessionState.dbName = baseName
+		sessionState.checkedOutRevSpec = db.Revision()
 		sessionState.currRevType = db.RevisionType()
 		sessionState.currRevSpec = db.Revision()
 	}
@@ -1101,10 +1104,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	branchState := NewEmptyBranchState(sessionState)
 	sessionState.heads[strings.ToLower(rev)] = branchState
 	d.mu.Unlock()
-
-	// TODO: this doesn't seem right, shouldn't be a revision DB
-	sessionState.db = db
-
+	
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
 	// TODO: this no longer gets called at session creation time, so the error handling below never occurs when a
