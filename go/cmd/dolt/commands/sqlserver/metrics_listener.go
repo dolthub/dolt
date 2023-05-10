@@ -112,7 +112,7 @@ func newMetricsListener(labels prometheus.Labels, versionStr string, clusterStat
 	prometheus.MustRegister(ml.histQueryDur)
 
 	go func() {
-		for ml.updateReplMetrics(ml.clusterStatus.GetClusterStatus()) {
+		for ml.updateReplMetrics() {
 			time.Sleep(clusterUpdateInterval)
 		}
 	}()
@@ -121,7 +121,7 @@ func newMetricsListener(labels prometheus.Labels, versionStr string, clusterStat
 	return ml, nil
 }
 
-func (ml *metricsListener) updateReplMetrics(perDbStatus []clusterdb.ReplicaStatus) bool {
+func (ml *metricsListener) updateReplMetrics() bool {
 	ml.mu.Lock()
 	defer ml.mu.Unlock()
 
@@ -129,6 +129,7 @@ func (ml *metricsListener) updateReplMetrics(perDbStatus []clusterdb.ReplicaStat
 		return false
 	}
 
+	perDbStatus := ml.clusterStatus.GetClusterStatus()
 	dbNames := make(map[string]struct{})
 
 	for _, status := range perDbStatus {
