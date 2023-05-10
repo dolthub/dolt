@@ -16,6 +16,9 @@ package sqlserver
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
+	"sync"
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/version"
@@ -24,19 +27,35 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	clusterUpdateInterval = time.Second * 5
+)
+
 var _ server.ServerEventListener = (*metricsListener)(nil)
 
 type metricsListener struct {
+	labels prometheus.Labels
+
 	cntConnections         prometheus.Counter
 	cntDisconnects         prometheus.Counter
 	gaugeConcurrentConn    prometheus.Gauge
 	gaugeConcurrentQueries prometheus.Gauge
 	histQueryDur           prometheus.Histogram
 	gaugeVersion           prometheus.Gauge
+
+	// replication metrics
+	dbToIsReplica      map[string]prometheus.Gauge
+	dbToReplicationLag map[string]prometheus.Gauge
+
+	// used in updating cluster metrics
+	clusterStatus clusterdb.ClusterStatusProvider
+	mu            *sync.Mutex
+	done          bool
 }
 
-func newMetricsListener(labels prometheus.Labels, versionStr string) (*metricsListener, error) {
+func newMetricsListener(labels prometheus.Labels, versionStr string, clusterStatus clusterdb.ClusterStatusProvider) (*metricsListener, error) {
 	ml := &metricsListener{
+		labels: labels,
 		cntConnections: prometheus.NewCounter(prometheus.CounterOpts{
 			Name:        "dss_connects",
 			Help:        "Count of server connects",
@@ -68,6 +87,10 @@ func newMetricsListener(labels prometheus.Labels, versionStr string) (*metricsLi
 			Help:        "The version of dolt currently running on the machine",
 			ConstLabels: labels,
 		}),
+		dbToIsReplica:      make(map[string]prometheus.Gauge),
+		dbToReplicationLag: make(map[string]prometheus.Gauge),
+		clusterStatus:      clusterStatus,
+		mu:                 &sync.Mutex{},
 	}
 
 	u32Version, err := version.Encode(versionStr)
@@ -88,8 +111,76 @@ func newMetricsListener(labels prometheus.Labels, versionStr string) (*metricsLi
 	prometheus.MustRegister(ml.gaugeConcurrentQueries)
 	prometheus.MustRegister(ml.histQueryDur)
 
+	go func() {
+		for ml.updateReplMetrics(ml.clusterStatus.GetClusterStatus()) {
+			time.Sleep(clusterUpdateInterval)
+		}
+	}()
+
 	ml.gaugeVersion.Set(f64Version)
 	return ml, nil
+}
+
+func (ml *metricsListener) updateReplMetrics(perDbStatus []clusterdb.ReplicaStatus) bool {
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
+
+	if ml.done {
+		return false
+	}
+
+	dbNames := make(map[string]struct{})
+
+	for _, status := range perDbStatus {
+		dbName := status.Database
+		dbNames[dbName] = struct{}{}
+
+		// if we haven't seen this db before, register the metrics
+		if _, ok := ml.dbToIsReplica[dbName]; !ok {
+			labels := prometheus.Labels{"database": dbName}
+			for k, v := range ml.labels {
+				labels[k] = v
+			}
+
+			ml.dbToIsReplica[dbName] = prometheus.NewGauge(prometheus.GaugeOpts{
+				Name:        "dss_is_replica",
+				Help:        "Whether this dolt sql server is a replica of the database",
+				ConstLabels: labels,
+			})
+			ml.dbToReplicationLag[dbName] = prometheus.NewGauge(prometheus.GaugeOpts{
+				Name:        "dss_replication_lag",
+				Help:        "The replication lag of this dolt sql server from the master",
+				ConstLabels: labels,
+			})
+
+			prometheus.MustRegister(ml.dbToIsReplica[dbName])
+			prometheus.MustRegister(ml.dbToReplicationLag[dbName])
+		}
+
+		// update the metrics
+		isReplica := ml.dbToIsReplica[dbName]
+		replicationLag := ml.dbToReplicationLag[dbName]
+
+		isReplica.Set(1.0)
+		if status.Role == string(cluster.RolePrimary) {
+			isReplica.Set(0.0)
+		}
+
+		replicationLag.Set(float64(status.ReplicationLag.Milliseconds()))
+	}
+
+	// deregister metrics for deleted databases
+	for dbName := range ml.dbToIsReplica {
+		if _, ok := dbNames[dbName]; !ok {
+			isReplica := ml.dbToIsReplica[dbName]
+			replicationLag := ml.dbToReplicationLag[dbName]
+
+			prometheus.Unregister(isReplica)
+			prometheus.Unregister(replicationLag)
+		}
+	}
+
+	return true
 }
 
 func (ml *metricsListener) ClientConnected() {
@@ -118,4 +209,20 @@ func (ml *metricsListener) Close() {
 	prometheus.Unregister(ml.gaugeConcurrentConn)
 	prometheus.Unregister(ml.gaugeConcurrentQueries)
 	prometheus.Unregister(ml.histQueryDur)
+
+	ml.closeReplicationMetrics()
+}
+
+func (ml *metricsListener) closeReplicationMetrics() {
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
+	for dbName := range ml.dbToIsReplica {
+		isReplica := ml.dbToIsReplica[dbName]
+		replicationLag := ml.dbToReplicationLag[dbName]
+
+		prometheus.Unregister(isReplica)
+		prometheus.Unregister(replicationLag)
+	}
+
+	ml.done = true
 }
