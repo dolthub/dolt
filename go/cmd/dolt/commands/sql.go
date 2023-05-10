@@ -105,6 +105,7 @@ const (
 	UserFlag              = "user"
 	DefaultUser           = "root"
 	DefaultHost           = "localhost"
+	UseDbFlag             = "use-db"
 
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
@@ -436,29 +437,6 @@ func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, qryist cli.Queryist, apr
 	}
 
 	return 0
-}
-
-// getMultiRepoEnv returns an appropriate MultiRepoEnv for this invocation of the command
-func getMultiRepoEnv(ctx context.Context, workingDir string, dEnv *env.DoltEnv) (mrEnv *env.MultiRepoEnv, resolvedDir string, verr errhand.VerboseError) {
-	var err error
-	fs := dEnv.FS
-	if len(workingDir) > 0 {
-		fs, err = fs.WithWorkingDir(workingDir)
-	}
-	if err != nil {
-		return nil, "", errhand.VerboseErrorFromError(err)
-	}
-	resolvedDir, err = fs.Abs("")
-	if err != nil {
-		return nil, "", errhand.VerboseErrorFromError(err)
-	}
-
-	mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
-	if err != nil {
-		return nil, "", errhand.VerboseErrorFromError(err)
-	}
-
-	return mrEnv, resolvedDir, nil
 }
 
 func execBatch(

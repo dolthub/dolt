@@ -342,7 +342,35 @@ func runMain() int {
 		return exit
 	}
 
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
+	globalArgs, args, initCliContext, printUsage, err := splitArgsOnSubCommand(args)
+	if printUsage {
+		doltCommand.PrintUsage("dolt")
+		return 0
+	}
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failure to parse arguments: %v", err))
+		return 1
+	}
+
+	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
+	apr := cli.ParseArgsOrDie(globalArgParser, globalArgs, usage)
+
+	var fs filesys.Filesys
+	fs = filesys.LocalFS
+	dataDir, hasDataDir := apr.GetValue(commands.DataDirFlag)
+	if hasDataDir {
+		// If a relative path was provided, this ensures we have an absolute path everywhere.
+		dataDir, err = fs.Abs(dataDir)
+		if err != nil {
+			cli.PrintErrln(color.RedString("Failed to get absolute path for %s: %v", dataDir, err))
+			return 1
+		}
+		if ok, dir := fs.Exists(dataDir); !ok || !dir {
+			cli.Println(color.RedString("Provided data directory does not exist: %s", dataDir))
+			return 1
+		}
+	}
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
 	dEnv.IgnoreLockFile = ignoreLockFile
 
 	root, err := env.GetCurrentUserHomeDir()
@@ -409,7 +437,12 @@ func runMain() int {
 	// variables like `${db_name}_default_branch` (maybe these should not be
 	// part of Dolt config in the first place!).
 
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	dataDirFS, err := dEnv.FS.WithWorkingDir(dataDir)
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to set the data directory. %v", err))
+		return 1
+	}
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dataDirFS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	if err != nil {
 		cli.PrintErrln("failed to load database names")
 		return 1
@@ -424,22 +457,10 @@ func runMain() int {
 		cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
 	}
 
-	globalArgs, args, initCliContext, printUsage, err := splitArgsOnSubCommand(args)
-	if printUsage {
-		doltCommand.PrintUsage("dolt")
-		return 0
-	}
-	if err != nil {
-		cli.PrintErrln(color.RedString("Failure to parse arguments: %v", err))
-		return 1
-	}
-
 	var cliCtx cli.CliContext = nil
 	if initCliContext {
-		_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
-		apr := cli.ParseArgsOrDie(globalArgParser, globalArgs, usage)
 
-		lateBind, err := commands.BuildSqlEngineQueryist(ctx, dEnv, apr)
+		lateBind, err := commands.BuildSqlEngineQueryist(ctx, dEnv, mrEnv, apr)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failure to Load SQL Engine: %v", err))
 			return 1
@@ -565,6 +586,7 @@ func buildGlobalArgs() *argparser.ArgParser {
 	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change to configuration settings.")
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
 	ap.SupportsString(commands.BranchCtrlPathFlag, "", "branch control file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will only be created if there is a change to branch control permissions.")
+	ap.SupportsString(commands.UseDbFlag, "", "database", "The name of the database to use when executing SQL queries. Defaults to the first database alphabetically.")
 
 	return ap
 }
