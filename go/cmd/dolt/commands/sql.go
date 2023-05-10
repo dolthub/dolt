@@ -176,16 +176,16 @@ func (cmd SqlCmd) RequiresRepo() bool {
 func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlDocs, ap))
-	apr, verr := cmd.handleLegacyArguments(ap, commandStr, args)
-	if verr != nil {
-		if verr == argparser.ErrHelp {
+	apr, err := cmd.handleLegacyArguments(ap, commandStr, args)
+	if err != nil {
+		if err == argparser.ErrHelp {
 			help()
 			return 0
 		}
-		return HandleVErrAndExitCode(verr, usage)
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	err := validateSqlArgs(apr)
+	err = validateSqlArgs(apr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -286,7 +286,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 }
 
 // handleLegacyArguments is a temporary function to parse args, and print a error and explanation when the old form is provided.
-func (cmd SqlCmd) handleLegacyArguments(ap *argparser.ArgParser, commandStr string, args []string) (*argparser.ArgParseResults, errhand.VerboseError) {
+func (cmd SqlCmd) handleLegacyArguments(ap *argparser.ArgParser, commandStr string, args []string) (*argparser.ArgParseResults, error) {
 
 	apr, err := ap.Parse(args)
 
@@ -312,12 +312,12 @@ func (cmd SqlCmd) handleLegacyArguments(ap *argparser.ArgParser, commandStr stri
 
 		if newErr != nil {
 			// Neither form of the arguments works. Print the usage and the error of the first parse.
-			return nil, errhand.VerboseErrorFromError(err)
+			return nil, err
 		}
 
 		// The legacy form worked, so print an error and exit.
 		err = fmt.Errorf("SQL arguments have changed. Move --data-dir, --doltcfg-dir to before the sql sub command.")
-		return nil, errhand.VerboseErrorFromError(err)
+		return nil, err
 	}
 
 	return apr, nil
