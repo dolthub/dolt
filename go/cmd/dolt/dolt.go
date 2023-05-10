@@ -351,7 +351,6 @@ func runMain() int {
 		cli.PrintErrln(color.RedString("Failure to parse arguments: %v", err))
 		return 1
 	}
-
 	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
 	apr := cli.ParseArgsOrDie(globalArgParser, globalArgs, usage)
 
@@ -459,8 +458,7 @@ func runMain() int {
 
 	var cliCtx cli.CliContext = nil
 	if initCliContext {
-
-		lateBind, err := commands.BuildSqlEngineQueryist(ctx, dEnv, mrEnv, apr)
+		lateBind, err := buildLateBinder(ctx, dEnv, mrEnv, apr, true)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failure to Load SQL Engine: %v", err))
 			return 1
@@ -471,7 +469,6 @@ func runMain() int {
 			cli.PrintErrln(color.RedString("Unexpected Error: %v", err))
 			return 1
 		}
-
 	}
 
 	ctx, stop := context.WithCancel(ctx)
@@ -492,6 +489,57 @@ func runMain() int {
 	}
 
 	return res
+}
+
+func buildLateBinder(ctx context.Context, dEnv *env.DoltEnv, mrEnv *env.MultiRepoEnv, apr *argparser.ArgParseResults, verbose bool) (cli.LateBindQueryist, error) {
+	_, hasConnection := apr.GetValue("connection") // NM4 - connection flag defined where??
+	if hasConnection {
+		// We should probably handle this first..... makes the logic simpler.
+		if verbose {
+			cli.Println("NM4 - Starting connection mode")
+		}
+		// This doesn't work at all..... NM4
+		return sqlserver.BuildConnectionStringQueryist(ctx, dEnv, apr, 666, "") // NM4 database name should be used here (?)
+		// This unambiguously tells us to use a remote connection.
+	}
+
+	var targetEnv *env.DoltEnv = nil
+
+	useDb, hasUseDb := apr.GetValue(commands.UseDbFlag)
+	if hasUseDb {
+		targetEnv = mrEnv.GetEnv(useDb)
+		if targetEnv == nil {
+			return nil, fmt.Errorf("The provided --use-db %s does not exist or is not a directory.", useDb)
+		}
+	} else {
+		useDb = mrEnv.GetFirstDatabase()
+	}
+
+	if targetEnv == nil {
+		targetEnv = mrEnv.GetEnv(useDb)
+		if targetEnv == nil {
+			return nil, fmt.Errorf("database %s doesn't exist.", useDb)
+		}
+	}
+
+	isLocked, lock, err := targetEnv.GetLock()
+	if err != nil {
+		return nil, err
+	}
+	if isLocked {
+		if verbose {
+			cli.Println("NM4 Starting remote mode")
+		}
+
+		mrEnv.GetFirstDatabase()
+
+		return sqlserver.BuildConnectionStringQueryist(ctx, dEnv, apr, lock.Port, useDb)
+	} else {
+		if verbose {
+			cli.Println("NM4 Starting local mode")
+		}
+		return commands.BuildSqlEngineQueryist(ctx, dEnv, mrEnv, apr)
+	}
 }
 
 // splitArgsOnSubCommand splits the args into two slices, the first containing all args before the first subcommand,
@@ -580,13 +628,21 @@ func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
 func buildGlobalArgs() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("dolt")
 
-	// Pulling this argument forward first to pave the way. Others will follow.
 	ap.SupportsString(commands.UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", commands.DefaultUser))
 	ap.SupportsString(commands.DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
 	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change to configuration settings.")
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
 	ap.SupportsString(commands.BranchCtrlPathFlag, "", "branch control file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will only be created if there is a change to branch control permissions.")
 	ap.SupportsString(commands.UseDbFlag, "", "database", "The name of the database to use when executing SQL queries. Defaults to the first database alphabetically.")
+
+	serverConfig := sqlserver.DefaultServerConfig()
+	ap.SupportsString("host", "H", "host address", fmt.Sprintf("Defines the host address that the server will run on. Defaults to `%v`.", serverConfig.Host()))
+	ap.SupportsUint("port", "P", "port", fmt.Sprintf("Defines the port that the server will run on. Defaults to `%v`.", serverConfig.Port()))
+	ap.SupportsString("password", "p", "password", fmt.Sprintf("Defines the server password. Defaults to `%v`.", serverConfig.Password()))
+	ap.SupportsInt("timeout", "t", "connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout. Defaults to `%v`.", serverConfig.ReadTimeout()))
+	ap.SupportsString("allow-cleartext-passwords", "", "allow-cleartext-passwords", "Allows use of cleartext passwords. Defaults to false.")
+
+	// NM4??	ap.SupportsOptionalString(socketFlag, "", "socket file", "Path for the unix socket file. Defaults to '/tmp/mysql.sock'.")
 
 	return ap
 }
