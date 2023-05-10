@@ -112,6 +112,16 @@ privileges or aren't comfortable running a script with them, you can download th
 for your platform from [the latest release](https://github.com/dolthub/dolt/releases), unzip it,
 and put the binary somewhere on your `$PATH`.
 
+### Linux
+
+#### Arch Linux
+
+Dolt is packaged in the official repositories for Arch Linux.
+
+```
+pacman -S dolt
+```
+
 ### Mac
 
 #### Homebrew
