@@ -1166,22 +1166,22 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 }
 
 func (d *DoltSession) AddTemporaryTable(ctx *sql.Context, db string, tbl sql.Table) {
-	d.tempTables[db] = append(d.tempTables[db], tbl)
+	d.tempTables[strings.ToLower(db)] = append(d.tempTables[strings.ToLower(db)], tbl)
 }
 
 func (d *DoltSession) DropTemporaryTable(ctx *sql.Context, db, name string) {
-	tables := d.tempTables[db]
-	for i, tbl := range d.tempTables[db] {
+	tables := d.tempTables[strings.ToLower(db)]
+	for i, tbl := range d.tempTables[strings.ToLower(db)] {
 		if strings.ToLower(tbl.Name()) == strings.ToLower(name) {
 			tables = append(tables[:i], tables[i+1:]...)
 			break
 		}
 	}
-	d.tempTables[db] = tables
+	d.tempTables[strings.ToLower(db)] = tables
 }
 
 func (d *DoltSession) GetTemporaryTable(ctx *sql.Context, db, name string) (sql.Table, bool) {
-	for _, tbl := range d.tempTables[db] {
+	for _, tbl := range d.tempTables[strings.ToLower(db)] {
 		if strings.ToLower(tbl.Name()) == strings.ToLower(name) {
 			return tbl, true
 		}
@@ -1191,7 +1191,7 @@ func (d *DoltSession) GetTemporaryTable(ctx *sql.Context, db, name string) (sql.
 
 // GetAllTemporaryTables returns all temp tables for this session.
 func (d *DoltSession) GetAllTemporaryTables(ctx *sql.Context, db string) ([]sql.Table, error) {
-	return d.tempTables[db], nil
+	return d.tempTables[strings.ToLower(db)], nil
 }
 
 // CWBHeadRef returns the branch ref for this session HEAD for the database named
