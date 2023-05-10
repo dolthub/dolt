@@ -29,6 +29,10 @@ import (
 
 const (
 	clusterUpdateInterval = time.Second * 5
+
+	dbLabel     = "database"
+	roleLabel   = "role"
+	remoteLabel = "remote"
 )
 
 var _ server.ServerEventListener = (*metricsListener)(nil)
@@ -44,13 +48,14 @@ type metricsListener struct {
 	gaugeVersion           prometheus.Gauge
 
 	// replication metrics
-	dbToIsReplica      map[string]prometheus.Gauge
-	dbToReplicationLag map[string]prometheus.Gauge
+	isReplicaGauges      *prometheus.GaugeVec
+	replicationLagGauges *prometheus.GaugeVec
 
 	// used in updating cluster metrics
-	clusterStatus clusterdb.ClusterStatusProvider
-	mu            *sync.Mutex
-	done          bool
+	clusterStatus  clusterdb.ClusterStatusProvider
+	mu             *sync.Mutex
+	done           bool
+	clusterSeenDbs map[string]struct{}
 }
 
 func newMetricsListener(labels prometheus.Labels, versionStr string, clusterStatus clusterdb.ClusterStatusProvider) (*metricsListener, error) {
@@ -87,10 +92,19 @@ func newMetricsListener(labels prometheus.Labels, versionStr string, clusterStat
 			Help:        "The version of dolt currently running on the machine",
 			ConstLabels: labels,
 		}),
-		dbToIsReplica:      make(map[string]prometheus.Gauge),
-		dbToReplicationLag: make(map[string]prometheus.Gauge),
-		clusterStatus:      clusterStatus,
-		mu:                 &sync.Mutex{},
+		replicationLagGauges: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name:        "dss_replication_lag",
+			Help:        "The reported replication lag of this server when it is a primary to the given standby.",
+			ConstLabels: labels,
+		}, []string{dbLabel, remoteLabel}),
+		isReplicaGauges: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name:        "dss_is_replica",
+			Help:        "one if the server is currently in this role, zero otherwise",
+			ConstLabels: labels,
+		}, []string{dbLabel}),
+		clusterStatus:  clusterStatus,
+		mu:             &sync.Mutex{},
+		clusterSeenDbs: make(map[string]struct{}),
 	}
 
 	u32Version, err := version.Encode(versionStr)
@@ -130,56 +144,32 @@ func (ml *metricsListener) updateReplMetrics() bool {
 	}
 
 	perDbStatus := ml.clusterStatus.GetClusterStatus()
-	dbNames := make(map[string]struct{})
+	if perDbStatus == nil {
+		return true
+	}
 
+	dbNames := make(map[string]struct{})
 	for _, status := range perDbStatus {
 		dbName := status.Database
 		dbNames[dbName] = struct{}{}
 
-		// if we haven't seen this db before, register the metrics
-		if _, ok := ml.dbToIsReplica[dbName]; !ok {
-			labels := prometheus.Labels{"database": dbName}
-			for k, v := range ml.labels {
-				labels[k] = v
-			}
-
-			ml.dbToIsReplica[dbName] = prometheus.NewGauge(prometheus.GaugeOpts{
-				Name:        "dss_is_replica",
-				Help:        "Whether this dolt sql server is a replica of the database",
-				ConstLabels: labels,
-			})
-			ml.dbToReplicationLag[dbName] = prometheus.NewGauge(prometheus.GaugeOpts{
-				Name:        "dss_replication_lag",
-				Help:        "The replication lag of this dolt sql server from the master",
-				ConstLabels: labels,
-			})
-
-			prometheus.MustRegister(ml.dbToIsReplica[dbName])
-			prometheus.MustRegister(ml.dbToReplicationLag[dbName])
-		}
-
-		// update the metrics
-		isReplica := ml.dbToIsReplica[dbName]
-		replicationLag := ml.dbToReplicationLag[dbName]
-
-		isReplica.Set(1.0)
 		if status.Role == string(cluster.RolePrimary) {
-			isReplica.Set(0.0)
+			ml.isReplicaGauges.WithLabelValues(status.Database).Set(0.0)
+			ml.replicationLagGauges.WithLabelValues(status.Database, status.Remote).Set(float64(status.ReplicationLag.Milliseconds()))
+		} else {
+			ml.isReplicaGauges.WithLabelValues(status.Database).Set(1.0)
+			ml.replicationLagGauges.WithLabelValues(status.Database, status.Remote).Set(-1.0)
 		}
-
-		replicationLag.Set(float64(status.ReplicationLag.Milliseconds()))
 	}
 
 	// deregister metrics for deleted databases
-	for dbName := range ml.dbToIsReplica {
-		if _, ok := dbNames[dbName]; !ok {
-			isReplica := ml.dbToIsReplica[dbName]
-			replicationLag := ml.dbToReplicationLag[dbName]
-
-			prometheus.Unregister(isReplica)
-			prometheus.Unregister(replicationLag)
+	for db := range ml.clusterSeenDbs {
+		if _, ok := dbNames[db]; !ok {
+			ml.isReplicaGauges.DeletePartialMatch(prometheus.Labels{"database": db})
+			ml.replicationLagGauges.DeletePartialMatch(prometheus.Labels{"database": db})
 		}
 	}
+	ml.clusterSeenDbs = dbNames
 
 	return true
 }
@@ -217,13 +207,9 @@ func (ml *metricsListener) Close() {
 func (ml *metricsListener) closeReplicationMetrics() {
 	ml.mu.Lock()
 	defer ml.mu.Unlock()
-	for dbName := range ml.dbToIsReplica {
-		isReplica := ml.dbToIsReplica[dbName]
-		replicationLag := ml.dbToReplicationLag[dbName]
 
-		prometheus.Unregister(isReplica)
-		prometheus.Unregister(replicationLag)
-	}
+	prometheus.Unregister(ml.replicationLagGauges)
+	prometheus.Unregister(ml.isReplicaGauges)
 
 	ml.done = true
 }
