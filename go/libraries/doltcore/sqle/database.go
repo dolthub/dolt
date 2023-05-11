@@ -363,13 +363,13 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 
-		dt, found = dtables.NewColumnDiffTable(ctx, db.name, db.ddb, head), true
+		dt, found = dtables.NewColumnDiffTable(ctx, db.RevisionQualifiedName(), db.ddb, head), true
 	case doltdb.TableOfTablesInConflictName:
-		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.name, db.ddb), true
+		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.RevisionQualifiedName(), db.ddb), true
 	case doltdb.TableOfTablesWithViolationsName:
 		dt, found = dtables.NewTableOfTablesConstraintViolations(ctx, root), true
 	case doltdb.SchemaConflictsTableName:
-		dt, found = dtables.NewSchemaConflictsTable(ctx, db.name, db.ddb), true
+		dt, found = dtables.NewSchemaConflictsTable(ctx, db.RevisionQualifiedName(), db.ddb), true
 	case doltdb.BranchesTableName:
 		dt, found = dtables.NewBranchesTable(ctx, db), true
 	case doltdb.RemoteBranchesTableName:
@@ -393,7 +393,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 		dt, found = dtables.NewStatusTable(ctx, db.ddb, ws, adapter), true
 	case doltdb.MergeStatusTableName:
-		dt, found = dtables.NewMergeStatusTable(db.name), true
+		dt, found = dtables.NewMergeStatusTable(db.RevisionQualifiedName()), true
 	case doltdb.TagsTableName:
 		dt, found = dtables.NewTagsTable(ctx, db.ddb), true
 	case dtables.AccessTableName:

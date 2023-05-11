@@ -160,6 +160,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 
+	// TODO: this needs to use a revision qualified name
 	roots, _ := dSess.GetRoots(ctx, dbName)
 	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
 	if err != nil {
