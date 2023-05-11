@@ -131,39 +131,39 @@ func NewEmptyBranchState(dbState *DatabaseSessionState) *branchState {
 	}
 }
 
-func (d *branchState) WorkingRoot() *doltdb.RootValue {
-	return d.roots().Working
+func (bs *branchState) WorkingRoot() *doltdb.RootValue {
+	return bs.roots().Working
 }
 
 var _ SessionState = (*branchState)(nil)
 
-func (d *branchState) WorkingSet() *doltdb.WorkingSet {
-	return d.workingSet
+func (bs *branchState) WorkingSet() *doltdb.WorkingSet {
+	return bs.workingSet
 }
 
-func (d *branchState) WriteSession() writer.WriteSession {
-	return d.writeSession
+func (bs *branchState) WriteSession() writer.WriteSession {
+	return bs.writeSession
 }
 
-func (d *branchState) SessionCache() *SessionCache {
-	return d.sessionCache
+func (bs *branchState) SessionCache() *SessionCache {
+	return bs.sessionCache
 }
 
-func (d branchState) EditOpts() editor.Options {
-	return d.WriteSession().GetOptions()
+func (bs branchState) EditOpts() editor.Options {
+	return bs.WriteSession().GetOptions()
 }
 
-func (d *branchState) roots() doltdb.Roots {
-	if d.WorkingSet() == nil {
+func (bs *branchState) roots() doltdb.Roots {
+	if bs.WorkingSet() == nil {
 		return doltdb.Roots{
-			Head:    d.headRoot,
-			Working: d.headRoot,
-			Staged:  d.headRoot,
+			Head:    bs.headRoot,
+			Working: bs.headRoot,
+			Staged:  bs.headRoot,
 		}
 	}
 	return doltdb.Roots{
-		Head:    d.headRoot,
-		Working: d.WorkingSet().WorkingRoot(),
-		Staged:  d.WorkingSet().StagedRoot(),
+		Head:    bs.headRoot,
+		Working: bs.WorkingSet().WorkingRoot(),
+		Staged:  bs.WorkingSet().StagedRoot(),
 	}
 }
