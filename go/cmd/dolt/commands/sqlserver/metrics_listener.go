@@ -16,15 +16,15 @@ package sqlserver
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
 	"sync"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/utils/version"
-
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
+	"github.com/dolthub/dolt/go/libraries/utils/version"
 )
 
 const (
