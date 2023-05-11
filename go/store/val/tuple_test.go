@@ -96,7 +96,6 @@ func tuplePrefix(pool pool.BuffPool, tup Tuple, k int) Tuple {
 }
 
 func tupleSuffix(pool pool.BuffPool, tup Tuple, k int) Tuple {
-	// todo(andy)
 	cnt := tup.Count()
 	if k == 0 {
 		return EmptyTuple
