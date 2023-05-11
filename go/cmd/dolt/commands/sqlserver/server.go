@@ -206,7 +206,7 @@ func Serve(
 	labels := serverConfig.MetricsLabels()
 
 	var listener *metricsListener
-	listener, startError = newMetricsListener(labels, version)
+	listener, startError = newMetricsListener(labels, version, clusterController)
 	if startError != nil {
 		cli.Println(startError)
 		return
