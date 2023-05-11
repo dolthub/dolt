@@ -133,17 +133,17 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	if err != nil {
 		return nil, nil, err
 	}
-	leftRows := durable.ProllyMapFromIndex(lr)
+	leftEditor := durable.ProllyMapFromIndex(lr).Mutate()
 
 	ai, err := mergeTbl.GetArtifacts(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	ae := durable.ProllyMapFromArtifactIndex(ai).Editor()
+	artEditor := durable.ProllyMapFromArtifactIndex(ai).Editor()
 
 	keyless := schema.IsKeyless(tm.leftSch)
 
-	pri, err := newPrimaryMerger(leftRows, tm, valueMerger, finalSch)
+	pri, err := newPrimaryMerger(leftEditor, tm, valueMerger, finalSch)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -151,13 +151,18 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	if err != nil {
 		return nil, nil, err
 	}
-	conflicts, err := newConflictMerger(ctx, tm, ae)
+	conflicts, err := newConflictMerger(ctx, tm, artEditor)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// validator shares editor with conflict merge
-	uniq, err := newUniqValidator(ctx, finalSch, tm, valueMerger, ae)
+	// validator shares an artifact editor with conflict merge
+	uniq, err := newUniqValidator(ctx, finalSch, tm, valueMerger, artEditor)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	nullChk, err := newNullValidator(ctx, finalSch, tm, valueMerger, artEditor, leftEditor, sec.leftMut)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -177,7 +182,16 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		if err != nil {
 			return nil, nil, err
 		}
-		s.DataConflicts += cnt
+		s.ConstraintViolations += cnt
+
+		cnt, err = nullChk.validateDiff(ctx, diff)
+		if err != nil {
+			return nil, nil, err
+		}
+		s.ConstraintViolations += cnt
+		if cnt > 0 {
+			continue
+		}
 
 		switch diff.Op {
 		case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
@@ -379,7 +393,7 @@ func newUniqValidator(ctx context.Context, sch schema.Schema, tm *TableMerger, v
 	return uv, nil
 }
 
-func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff) (conflicts int, err error) {
+func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff) (violations int, err error) {
 	var value val.Tuple
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
@@ -399,7 +413,7 @@ func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 
 	for _, idx := range uv.indexes {
 		err = idx.findCollisions(ctx, diff.Key, value, func(k, v val.Tuple) error {
-			conflicts++
+			violations++
 			return uv.insertArtifact(ctx, k, v, idx.meta)
 		})
 		if err != nil {
@@ -491,6 +505,135 @@ func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, c
 	return cb(key, value)
 }
 
+// nullValidator enforces NOT NULL constraints on merge
+type nullValidator struct {
+	table string
+	// final is the merge result schema
+	final schema.Schema
+	// leftMap and rightMap map value tuples to |final|
+	leftMap, rightMap val.OrdinalMapping
+	// edits is the artifacts maps editor
+	artEditor *prolly.ArtifactsEditor
+	// leftEdits if the left-side row editor
+	leftEditor *prolly.MutableMap
+	// secEditors are the secondary index editors
+	secEditors []MutableSecondaryIdx
+	// theirRootish is the hash.Hash of the right-side revision
+	theirRootish hash.Hash
+	// ourRootish is the hash.Hash of the left-side revision
+	ourRootish hash.Hash
+}
+
+func newNullValidator(
+	ctx context.Context,
+	final schema.Schema,
+	tm *TableMerger,
+	vm *valueMerger,
+	artEditor *prolly.ArtifactsEditor,
+	leftEditor *prolly.MutableMap,
+	secEditors []MutableSecondaryIdx,
+) (nullValidator, error) {
+	theirRootish, err := tm.rightSrc.HashOf()
+	if err != nil {
+		return nullValidator{}, err
+	}
+	ourRootish, err := tm.rightSrc.HashOf()
+	if err != nil {
+		return nullValidator{}, err
+	}
+	return nullValidator{
+		table:        tm.name,
+		final:        final,
+		leftMap:      vm.leftMapping,
+		rightMap:     vm.rightMapping,
+		artEditor:    artEditor,
+		leftEditor:   leftEditor,
+		secEditors:   secEditors,
+		theirRootish: theirRootish,
+		ourRootish:   ourRootish,
+	}, nil
+}
+
+func (nv nullValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff) (count int, err error) {
+	switch diff.Op {
+	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
+		var violations []string
+		for to, from := range nv.rightMap {
+			col := nv.final.GetNonPKCols().GetByIndex(to)
+			if col.IsNullable() {
+				continue
+			}
+			if from < 0 {
+				// non-nullable column in |nv.final| does not exist
+				// on the right side of the merge, check if it will
+				// be populated with a default value
+				if col.Default == "" {
+					violations = append(violations, col.Name)
+				}
+			} else {
+				if diff.Right.FieldIsNull(from) {
+					violations = append(violations, col.Name)
+				}
+			}
+		}
+		// for right-side NULL violations, we insert a constraint violation and
+		// set |count| > 0 to signal to the caller that |diff| should not be applied
+		if len(violations) > 0 {
+			var meta prolly.ConstraintViolationMeta
+			if meta, err = newNotNullViolationMeta(violations, diff.Right); err != nil {
+				return 0, err
+			}
+			err = nv.artEditor.ReplaceConstraintViolation(ctx, diff.Key, nv.theirRootish, prolly.ArtifactTypeNullViol, meta)
+			if err != nil {
+				return 0, err
+			}
+		}
+		count = len(violations)
+
+	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
+		var violations []string
+		for to, from := range nv.leftMap {
+			col := nv.final.GetNonPKCols().GetByIndex(to)
+			if col.IsNullable() {
+				continue
+			}
+			if from < 0 {
+				// non-nullable column in |nv.final| does not exist
+				// on the left side of the merge, check if it will
+				// be populated with a default value
+				if col.Default == "" {
+					violations = append(violations, col.Name)
+				}
+			} else {
+				if diff.Left.FieldIsNull(from) {
+					violations = append(violations, col.Name)
+				}
+			}
+		}
+		// for left-side NULL violations, we insert a constraint violation and
+		// then must explicitly remove this row from all left-side indexes
+		if len(violations) > 0 {
+			var meta prolly.ConstraintViolationMeta
+			if meta, err = newNotNullViolationMeta(violations, diff.Left); err != nil {
+				return 0, err
+			}
+			err = nv.artEditor.ReplaceConstraintViolation(ctx, diff.Key, nv.ourRootish, prolly.ArtifactTypeNullViol, meta)
+			if err != nil {
+				return 0, err
+			}
+			if err = nv.leftEditor.Delete(ctx, diff.Key); err != nil {
+				return 0, err
+			}
+			for _, editor := range nv.secEditors {
+				if err = editor.DeleteEntry(ctx, diff.Key, diff.Left); err != nil {
+					return 0, err
+				}
+			}
+		}
+	}
+	return
+}
+
 // conflictMerger processing primary key diffs
 // with conflict types into artifact table writes.
 type conflictMerger struct {
@@ -570,9 +713,9 @@ type primaryMerger struct {
 	finalSch    schema.Schema
 }
 
-func newPrimaryMerger(leftRows prolly.Map, tableMerger *TableMerger, valueMerger *valueMerger, finalSch schema.Schema) (*primaryMerger, error) {
+func newPrimaryMerger(leftEditor *prolly.MutableMap, tableMerger *TableMerger, valueMerger *valueMerger, finalSch schema.Schema) (*primaryMerger, error) {
 	return &primaryMerger{
-		mut:         leftRows.Mutate(),
+		mut:         leftEditor,
 		valueMerger: valueMerger,
 		tableMerger: tableMerger,
 		finalSch:    finalSch,
@@ -596,12 +739,12 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 				return fmt.Errorf("cannot merge keyless tables with reordered columns")
 			}
 		} else {
-			tempTupleValue, err := remapTupleWithColumnDefaults(ctx, &diff.Right, sourceSch.GetValueDescriptor(),
+			tempTupleValue, err := remapTupleWithColumnDefaults(ctx, diff.Right, sourceSch.GetValueDescriptor(),
 				m.valueMerger.rightMapping, m.tableMerger, m.finalSch, m.valueMerger.syncPool)
 			if err != nil {
 				return err
 			}
-			newTupleValue = *tempTupleValue
+			newTupleValue = tempTupleValue
 		}
 		return m.mut.Put(ctx, diff.Key, newTupleValue)
 	case tree.DiffOpRightDelete:
@@ -732,7 +875,7 @@ func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping)
 // currently being merged and associated node store. |mergedSch| is the new schema of the table and is used to look up
 // column default values to apply to any existing rows when a new column is added as part of a merge. |pool| is used to
 // to allocate memory for the new tuple. A pointer to the new tuple data is returned, along with any error encountered.
-func remapTupleWithColumnDefaults(ctx *sql.Context, tuple *val.Tuple, tupleDesc val.TupleDesc, mapping val.OrdinalMapping, tm *TableMerger, mergedSch schema.Schema, pool pool.BuffPool) (*val.Tuple, error) {
+func remapTupleWithColumnDefaults(ctx *sql.Context, tuple val.Tuple, tupleDesc val.TupleDesc, mapping val.OrdinalMapping, tm *TableMerger, mergedSch schema.Schema, pool pool.BuffPool) (val.Tuple, error) {
 	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor())
 
 	for to, from := range mapping {
@@ -761,19 +904,20 @@ func remapTupleWithColumnDefaults(ctx *sql.Context, tuple *val.Tuple, tupleDesc 
 				if err != nil {
 					return nil, err
 				}
-
+				value, _, err = col.TypeInfo.ToSqlType().Convert(value)
+				if err != nil {
+					return nil, err
+				}
 				err = index.PutField(ctx, tm.ns, tb, to, value)
 				if err != nil {
 					return nil, err
 				}
 			}
 		} else {
-			tb.PutRaw(to, tupleDesc.GetField(from, *tuple))
+			tb.PutRaw(to, tupleDesc.GetField(from, tuple))
 		}
 	}
-
-	newTuple := tb.Build(pool)
-	return &newTuple, nil
+	return tb.Build(pool), nil
 }
 
 func mergeTableArtifacts(ctx context.Context, tm *TableMerger, mergeTbl *doltdb.Table) (*doltdb.Table, error) {
@@ -912,12 +1056,12 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 			return err
 		}
 
-		newValueTuple, err := remapTupleWithColumnDefaults(ctx, &valueTuple, valueDescriptor, vm.leftMapping, tm, mergedSch, vm.syncPool)
+		newValueTuple, err := remapTupleWithColumnDefaults(ctx, valueTuple, valueDescriptor, vm.leftMapping, tm, mergedSch, vm.syncPool)
 		if err != nil {
 			return err
 		}
 
-		err = mut.Put(ctx, keyTuple, *newValueTuple)
+		err = mut.Put(ctx, keyTuple, newValueTuple)
 		if err != nil {
 			return err
 		}

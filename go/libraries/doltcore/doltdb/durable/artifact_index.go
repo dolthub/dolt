@@ -137,7 +137,11 @@ func (i prollyArtifactIndex) ConflictCount(ctx context.Context) (uint64, error) 
 }
 
 func (i prollyArtifactIndex) ConstraintViolationCount(ctx context.Context) (uint64, error) {
-	return i.index.CountOfTypes(ctx, prolly.ArtifactTypeForeignKeyViol, prolly.ArtifactTypeUniqueKeyViol, prolly.ArtifactTypeChkConsViol)
+	return i.index.CountOfTypes(ctx,
+		prolly.ArtifactTypeForeignKeyViol,
+		prolly.ArtifactTypeUniqueKeyViol,
+		prolly.ArtifactTypeChkConsViol,
+		prolly.ArtifactTypeNullViol)
 }
 
 func (i prollyArtifactIndex) ClearConflicts(ctx context.Context) (ArtifactIndex, error) {
