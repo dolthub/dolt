@@ -119,7 +119,12 @@ func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr string) (*doltdb.Commit, 
 		return nil, errhand.BuildDError("'%s' is not a valid commit", cSpecStr).Build()
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, dEnv.RepoStateReader().CWBHeadRef())
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+
+	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, headRef)
 	if err != nil {
 		if errors.Is(err, doltdb.ErrInvalidAncestorSpec) {
 			return nil, errhand.BuildDError("'%s' could not resolve ancestor spec", cSpecStr).Build()

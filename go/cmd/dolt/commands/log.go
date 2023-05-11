@@ -249,7 +249,10 @@ func (opts *logOpts) parseRefsAndTable(ctx context.Context, apr *argparser.ArgPa
 
 			opts.excludingCommitSpecs = append(opts.excludingCommitSpecs, notCs)
 		} else {
-			argIsRef := actions.IsValidRef(ctx, arg, dEnv.DoltDB, dEnv.RepoStateReader())
+			argIsRef, err := actions.IsValidRef(ctx, arg, dEnv.DoltDB, dEnv.RepoStateReader())
+			if err != nil {
+				return nil
+			}
 			// <ref>
 			if argIsRef && !seenRefs[arg] {
 				cs, err := getCommitSpec(arg)
