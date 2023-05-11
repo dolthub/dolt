@@ -45,12 +45,7 @@ type Ordering[K ~[]byte] interface {
 
 func newCursorAtStart(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, err error) {
 	cur = &Cursor{nd: nd, nrw: ns}
-	var leaf bool
-	leaf, err = cur.isLeaf()
-	if err != nil {
-		return nil, err
-	}
-	for !leaf {
+	for !cur.isLeaf() {
 		nd, err = fetchChild(ctx, ns, cur.currentRef())
 		if err != nil {
 			return nil, err
@@ -58,10 +53,6 @@ func newCursorAtStart(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, 
 
 		parent := cur
 		cur = &Cursor{nd: nd, parent: parent, nrw: ns}
-		leaf, err = cur.isLeaf()
-		if err != nil {
-			return nil, err
-		}
 	}
 	return
 }
@@ -70,12 +61,7 @@ func newCursorAtEnd(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, er
 	cur = &Cursor{nd: nd, nrw: ns}
 	cur.skipToNodeEnd()
 
-	var leaf bool
-	leaf, err = cur.isLeaf()
-	if err != nil {
-		return nil, err
-	}
-	for !leaf {
+	for !cur.isLeaf() {
 		nd, err = fetchChild(ctx, ns, cur.currentRef())
 		if err != nil {
 			return nil, err
@@ -84,10 +70,6 @@ func newCursorAtEnd(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, er
 		parent := cur
 		cur = &Cursor{nd: nd, parent: parent, nrw: ns}
 		cur.skipToNodeEnd()
-		leaf, err = cur.isLeaf()
-		if err != nil {
-			return nil, err
-		}
 	}
 	return
 }
@@ -140,11 +122,7 @@ func newCursorAtOrdinal(ctx context.Context, ns NodeStore, nd Node, ord uint64) 
 
 // GetOrdinalOfCursor returns the ordinal position of a Cursor.
 func getOrdinalOfCursor(curr *Cursor) (ord uint64, err error) {
-	leaf, err := curr.isLeaf()
-	if err != nil {
-		return 0, err
-	}
-	if !leaf {
+	if !curr.isLeaf() {
 		return 0, fmt.Errorf("|cur| must be at a leaf")
 	}
 
@@ -186,13 +164,7 @@ func newCursorFromSearchFn(ctx context.Context, ns NodeStore, nd Node, search Se
 	cur = &Cursor{nd: nd, nrw: ns}
 
 	cur.idx = search(cur.nd)
-	var leaf bool
-	leaf, err = cur.isLeaf()
-	if err != nil {
-		return nil, err
-	}
-	for !leaf {
-
+	for !cur.isLeaf() {
 		// stay in bounds for internal nodes
 		cur.keepInBounds()
 
@@ -205,16 +177,12 @@ func newCursorFromSearchFn(ctx context.Context, ns NodeStore, nd Node, search Se
 		cur = &Cursor{nd: nd, parent: parent, nrw: ns}
 
 		cur.idx = search(cur.nd)
-		leaf, err = cur.isLeaf()
-		if err != nil {
-			return nil, err
-		}
 	}
-
 	return
 }
 
 func newLeafCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeStore, nd Node, key K, order O) (Cursor, error) {
+	var err error
 	cur := Cursor{nd: nd, nrw: ns}
 	for {
 		// binary search |cur.nd| for |key|
@@ -230,10 +198,7 @@ func newLeafCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeSt
 		}
 		cur.idx = i
 
-		leaf, err := cur.isLeaf()
-		if err != nil {
-			return cur, err
-		} else if leaf {
+		if cur.isLeaf() {
 			break // done
 		}
 
@@ -402,13 +367,10 @@ func (cur *Cursor) currentRef() hash.Hash {
 }
 
 func (cur *Cursor) currentSubtreeSize() (uint64, error) {
-	leaf, err := cur.isLeaf()
-	if err != nil {
-		return 0, err
-	}
-	if leaf {
+	if cur.isLeaf() {
 		return 1, nil
 	}
+	var err error
 	cur.nd, err = cur.nd.loadSubtrees()
 	if err != nil {
 		return 0, err
@@ -455,13 +417,8 @@ func (cur *Cursor) atNodeEnd() bool {
 	return cur.idx == lastKeyIdx
 }
 
-func (cur *Cursor) isLeaf() (bool, error) {
-	// todo(andy): cache Level
-	lvl, err := cur.level()
-	if err != nil {
-		return false, err
-	}
-	return lvl == 0, nil
+func (cur *Cursor) isLeaf() bool {
+	return cur.nd.level == 0
 }
 
 func (cur *Cursor) level() (uint64, error) {
