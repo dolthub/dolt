@@ -95,8 +95,6 @@ type procedurestore interface {
 }
 
 const (
-	DoltClusterRoleVariable      = "dolt_cluster_role"
-	DoltClusterRoleEpochVariable = "dolt_cluster_role_epoch"
 	// Since we fetch the keys from the other replicas we’re going to use a fixed string here.
 	DoltClusterRemoteApiAudience = "dolt-cluster-remote-api.dolthub.com"
 )
@@ -285,17 +283,17 @@ func (c *Controller) refreshSystemVars() {
 	role, epoch := string(c.role), c.epoch
 	vars := []sql.SystemVariable{
 		{
-			Name:    DoltClusterRoleVariable,
+			Name:    dsess.DoltClusterRoleVariable,
 			Dynamic: false,
 			Scope:   sql.SystemVariableScope_Persist,
-			Type:    gmstypes.NewSystemStringType(DoltClusterRoleVariable),
+			Type:    gmstypes.NewSystemStringType(dsess.DoltClusterRoleVariable),
 			Default: role,
 		},
 		{
-			Name:    DoltClusterRoleEpochVariable,
+			Name:    dsess.DoltClusterRoleEpochVariable,
 			Dynamic: false,
 			Scope:   sql.SystemVariableScope_Persist,
-			Type:    gmstypes.NewSystemIntType(DoltClusterRoleEpochVariable, 0, 9223372036854775807, false),
+			Type:    gmstypes.NewSystemIntType(dsess.DoltClusterRoleEpochVariable, 0, 9223372036854775807, false),
 			Default: epoch,
 		},
 	}
@@ -304,16 +302,16 @@ func (c *Controller) refreshSystemVars() {
 
 func (c *Controller) persistVariables() error {
 	toset := make(map[string]string)
-	toset[DoltClusterRoleVariable] = string(c.role)
-	toset[DoltClusterRoleEpochVariable] = strconv.Itoa(c.epoch)
+	toset[dsess.DoltClusterRoleVariable] = string(c.role)
+	toset[dsess.DoltClusterRoleEpochVariable] = strconv.Itoa(c.epoch)
 	return c.persistentCfg.SetStrings(toset)
 }
 
 func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) (Role, int, error) {
 	toset := make(map[string]string)
-	persistentRole := pCfg.GetStringOrDefault(DoltClusterRoleVariable, "")
+	persistentRole := pCfg.GetStringOrDefault(dsess.DoltClusterRoleVariable, "")
 	var roleFromPersistentConfig bool
-	persistentEpoch := pCfg.GetStringOrDefault(DoltClusterRoleEpochVariable, "")
+	persistentEpoch := pCfg.GetStringOrDefault(dsess.DoltClusterRoleEpochVariable, "")
 	if persistentRole == "" {
 		if cfg.BootstrapRole() != "" {
 			lgr.Tracef("cluster/controller: persisted cluster role was empty, apply bootstrap_role %s", cfg.BootstrapRole())
@@ -322,7 +320,7 @@ func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.Rea
 			lgr.Trace("cluster/controller: persisted cluster role was empty, bootstrap_role was empty: defaulted to primary")
 			persistentRole = "primary"
 		}
-		toset[DoltClusterRoleVariable] = persistentRole
+		toset[dsess.DoltClusterRoleVariable] = persistentRole
 	} else {
 		roleFromPersistentConfig = true
 		lgr.Tracef("cluster/controller: persisted cluster role is %s", persistentRole)
@@ -330,19 +328,19 @@ func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.Rea
 	if persistentEpoch == "" {
 		persistentEpoch = strconv.Itoa(cfg.BootstrapEpoch())
 		lgr.Tracef("cluster/controller: persisted cluster role epoch is empty, took boostrap_epoch: %s", persistentEpoch)
-		toset[DoltClusterRoleEpochVariable] = persistentEpoch
+		toset[dsess.DoltClusterRoleEpochVariable] = persistentEpoch
 	} else {
 		lgr.Tracef("cluster/controller: persisted cluster role epoch is %s", persistentEpoch)
 	}
 	if persistentRole != string(RolePrimary) && persistentRole != string(RoleStandby) {
 		isallowed := persistentRole == string(RoleDetectedBrokenConfig) && roleFromPersistentConfig
 		if !isallowed {
-			return "", 0, fmt.Errorf("persisted role %s.%s = %s must be \"primary\" or \"secondary\"", PersistentConfigPrefix, DoltClusterRoleVariable, persistentRole)
+			return "", 0, fmt.Errorf("persisted role %s.%s = %s must be \"primary\" or \"secondary\"", PersistentConfigPrefix, dsess.DoltClusterRoleVariable, persistentRole)
 		}
 	}
 	epochi, err := strconv.Atoi(persistentEpoch)
 	if err != nil {
-		return "", 0, fmt.Errorf("persisted role epoch %s.%s = %s must be an integer", PersistentConfigPrefix, DoltClusterRoleEpochVariable, persistentEpoch)
+		return "", 0, fmt.Errorf("persisted role epoch %s.%s = %s must be an integer", PersistentConfigPrefix, dsess.DoltClusterRoleEpochVariable, persistentEpoch)
 	}
 	if len(toset) > 0 {
 		err := pCfg.SetStrings(toset)

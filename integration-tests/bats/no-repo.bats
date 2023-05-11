@@ -77,16 +77,15 @@ teardown() {
 @test "no-repo: check all commands for valid help text" {
     # pipe all commands to a file
     # cut -s suppresses the line if it doesn't contain the delim
-    dolt | cut -f 1 -d " - " -s | sed "s/ //g" > all.txt
+    dolt | awk -F ' - ' '/ - / {print $1}' > all_raw.txt
+    sed "s/ //g" all_raw.txt > all.txt
 
     # filter out commands without "-h"
     cat all.txt \
-        | sed "s/creds//g"     \
         | sed "s/version//g"   \
-        | sed "s/schema//g"    \
-        | sed "s/table//g"     \
-        | sed "s/conflicts//g" \
         > commands.txt
+
+    touch subcommands.txt
 
     cat commands.txt | while IFS= read -r cmd;
     do
@@ -96,9 +95,30 @@ teardown() {
 
         run dolt "$cmd" -h
         [ "$status" -eq 0 ]
+
+        if [[ "$output" =~ "Valid commands for dolt $cmd are" ]]; then
+            echo "$output" | awk -F ' - ' "/ - / {print \"$cmd\", \$1}" >> subcommands.txt
+            continue
+        fi
+
         [[ "$output" =~ "NAME" ]] || false
         [[ "$output" =~ "DESCRIPTION" ]] || false
     done
+
+    cat subcommands.txt | while IFS= read -r cmd;
+    do
+        if [ -z "$cmd" ]; then
+            continue
+        fi
+
+        run dolt $cmd -h
+
+        [ "$status" -eq 0 ]
+
+        [[ "$output" =~ "NAME" ]] || false
+        [[ "$output" =~ "DESCRIPTION" ]] || false
+    done
+
 }
 
 @test "no-repo: testing dolt version output" {

@@ -50,6 +50,10 @@ const (
 	AwsCredsProfile               = "aws_credentials_profile"
 	AwsCredsRegion                = "aws_credentials_region"
 	ShowBranchDatabases           = "dolt_show_branch_databases"
+	DoltLogLevel                  = "dolt_log_level"
+
+	DoltClusterRoleVariable      = "dolt_cluster_role"
+	DoltClusterRoleEpochVariable = "dolt_cluster_role_epoch"
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"
