@@ -668,7 +668,7 @@ DELIM
 
     run dolt table import -u test 1pk5col-ints-updt.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error determining the output schema." ]] || false
+    [[ "$output" =~ "Field 'pk' doesn't have a default value" ]] || false
 }
 
 @test "import-update-tables: partial update on keyless table" {
@@ -1295,4 +1295,72 @@ DELIM
     run dolt sql -r csv -q "select * from t;"
     [ $status -eq 0 ]
     [[ "$output" =~ '1,0,0,0,0,0,0,0,0,0,0,0000-00-00,00:00:00,0000-00-00 00:00:00,0000-00-00 00:00:00,0,first,""' ]] || false
+}
+
+@test "import-update-tables: import table with absent auto-increment column" {
+    dolt sql <<SQL
+CREATE TABLE tbl (
+    id int PRIMARY KEY AUTO_INCREMENT,
+    v1 int,
+    v2 int,
+    INDEX v1 (v1),
+    INDEX v2 (v2)
+);
+SQL
+
+    cat <<DELIM > auto-increment.csv
+v1,v2
+4,2
+3,1
+DELIM
+
+    dolt table import -u tbl auto-increment.csv
+}
+@test "import-update-tables: distinguish between empty string and null for ENUMs" {
+    dolt sql <<SQL
+create table alphabet(pk int primary key, letter enum('', 'a', 'b'));
+SQL
+    dolt commit -Am "add a table"
+
+    expected=$(cat <<DELIM
+pk,letter
+1,a
+2,""
+3,
+DELIM
+)
+    echo "$expected" > data.csv
+
+    run dolt table import -u alphabet data.csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
+
+    run dolt sql -r csv -q "select * from alphabet;"
+    [ $status -eq 0 ]
+    [[ "$output" = "$expected" ]] || false
+}
+
+@test "import-update-tables: distinguish between empty string and null for SETs" {
+    dolt sql <<SQL
+create table word(pk int primary key, letters set('', 'a', 'b'));
+SQL
+    dolt commit -Am "add a table"
+
+    expected=$(cat <<DELIM
+pk,letters
+1,"a,b"
+2,a
+3,""
+4,
+DELIM
+)
+    echo "$expected" > word_data.csv
+
+    run dolt table import -u word word_data.csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 4, Additions: 4, Modifications: 0, Had No Effect: 0" ]] || false
+
+    run dolt sql -r csv -q "select * from word order by pk;"
+    [ $status -eq 0 ]
+    [[ "$output" = "$expected" ]] || false
 }

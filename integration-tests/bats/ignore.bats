@@ -12,6 +12,8 @@ INSERT INTO dolt_ignore VALUES
   ("*_ignore", true),
   ("do_not_ignore", false),
 
+  ("%_ignore_too", true),
+
   ("commit_*", false),
   ("commit_me_not", true),
 
@@ -30,7 +32,7 @@ teardown() {
 get_staged_tables() {
     dolt status | awk '
         match($0, /new table:\ */) { print substr($0, RSTART+RLENGTH) }
-        /Untracked files:/ { exit }
+        /Untracked tables:/ { exit }
         /Tables with conflicting dolt_ignore patterns:/ { exit }
     '
 }
@@ -39,7 +41,7 @@ get_working_tables() {
     dolt status | awk '
         BEGIN { working = 0 }
         (working == 1) && match($0, /new table:\ */) { print substr($0, RSTART+RLENGTH) }
-        /Untracked files:/ { working = 1 }
+        /Untracked tables:/ { working = 1 }
         /Tables with conflicting dolt_ignore patterns:/ { working = 0 }
     '
 }
@@ -85,6 +87,7 @@ SQL
 
     dolt sql <<SQL
 CREATE TABLE please_ignore (pk int);
+CREATE TABLE please_ignore_too (pk int);
 CREATE TABLE do_not_ignore (pk int);
 CREATE TABLE commit_me (pk int);
 CREATE TABLE commit_me_not(pk int);
@@ -96,6 +99,7 @@ SQL
     staged=$(get_staged_tables)
 
     [[ ! -z $(echo "$ignored" | grep "please_ignore") ]] || false
+    [[ ! -z $(echo "$ignored" | grep "please_ignore_too") ]] || false
     [[ ! -z $(echo "$staged" | grep "do_not_ignore") ]] || false
     [[ ! -z $(echo "$staged" | grep "commit_me") ]] || false
     [[ ! -z $(echo "$ignored" | grep "commit_me_not") ]] || false
@@ -210,7 +214,7 @@ SQL
 
 }
 
-@test "ignore: allow staging ignored files if 'add --force' is supplied" {
+@test "ignore: allow staging ignored tables if 'add --force' is supplied" {
     skip_nbf_ld_1
 
     dolt sql <<SQL
@@ -224,7 +228,7 @@ SQL
     [[ ! -z $(echo "$staged" | grep "ignoreme") ]] || false
 }
 
-@test "ignore: don't auto-stage ignored files" {
+@test "ignore: don't auto-stage ignored tables" {
     skip_nbf_ld_1
 
     dolt sql <<SQL
@@ -238,11 +242,11 @@ SQL
 
     [ "$status" -eq 0 ]
 
-    [[ ! ["$output" =~ "diff --dolt a/ignoreme b/ignoreme"] ]] || false
+    ! [["$output" =~ "diff --dolt a/ignoreme b/ignoreme"]] || false
 
 }
 
-@test "ignore: dolt status doesn't show ignored files when --ignored is not supplied" {
+@test "ignore: dolt status doesn't show ignored tables when --ignored is not supplied" {
     skip_nbf_ld_1
 
     dolt sql <<SQL
@@ -255,12 +259,12 @@ SQL
     [ "$status" -eq 0 ]
 
     [[ "$output" =~ "nomatch" ]] || false
-    [[ ! ["$output" =~ "Ignored tables"] ]] || false
-    [[ ! ["$output" =~ "ignoreme"] ]] || false
+    ! [["$output" =~ "Ignored tables"]] || false
+    ! [["$output" =~ "ignoreme"]] || false
 
 }
 
-@test "ignore: dolt status shows ignored files when --ignored is not supplied" {
+@test "ignore: dolt status shows ignored tables when --ignored is not supplied" {
     skip_nbf_ld_1
 
     dolt sql <<SQL
@@ -275,5 +279,127 @@ SQL
     [[ "$output" =~ "nomatch" ]] || false
     [[ "$output" =~ "Ignored tables" ]] || false
     [[ "$output" =~ "ignoreme" ]] || false
+
+}
+
+@test "ignore: don't display new but ignored tables in dolt diff" {
+    skip_nbf_ld_1
+
+    dolt sql <<SQL
+CREATE TABLE ignoreme (pk int);
+CREATE TABLE nomatch (pk int);
+SQL
+
+    run dolt diff
+
+    [ "$status" -eq 0 ]
+
+    [[ "$output" =~ "nomatch" ]] || false
+    ! [["$output" =~ "ignoreme"]] || false
+}
+
+@test "ignore: don't display new but ignored tables in reverse diff" {
+    skip_nbf_ld_1
+
+    dolt sql <<SQL
+CREATE TABLE ignoreme (pk int);
+CREATE TABLE nomatch (pk int);
+SQL
+
+    run dolt diff -R
+
+    [ "$status" -eq 0 ]
+
+    [[ "$output" =~ "nomatch" ]] || false
+    ! [["$output" =~ "ignoreme"]] || false
+}
+
+@test "ignore: DO display modified ignored tables in dolt diff after staging" {
+    skip_nbf_ld_1
+
+    dolt sql <<SQL
+CREATE TABLE ignoreme (pk int);
+SQL
+
+    dolt add --force ignoreme
+
+    dolt sql <<SQL
+INSERT INTO ignoreme VALUES (1);
+SQL
+
+    run dolt diff
+
+    [ "$status" -eq 0 ]
+
+    echo "$output"
+
+    [[ "$output" =~ "ignoreme" ]] || false
+}
+
+@test "ignore: DO display modified ignored tables in reverse diff after staging" {
+    skip_nbf_ld_1
+
+    dolt sql <<SQL
+CREATE TABLE ignoreme (pk int);
+SQL
+
+    dolt add --force ignoreme
+
+    dolt sql <<SQL
+INSERT INTO ignoreme VALUES (1);
+SQL
+
+    run dolt diff -R
+
+    [ "$status" -eq 0 ]
+
+    echo "$output"
+
+    [[ "$output" =~ "ignoreme" ]] || false
+}
+
+@test "ignore: DO display modified ignored tables in dolt diff after committing" {
+    skip_nbf_ld_1
+
+    dolt sql <<SQL
+CREATE TABLE ignoreme (pk int);
+SQL
+
+    dolt add --force ignoreme
+    dolt commit -m "commit1"
+
+    dolt sql <<SQL
+INSERT INTO ignoreme VALUES (1);
+SQL
+
+    run dolt diff
+
+    [ "$status" -eq 0 ]
+
+    echo "$output"
+
+    [[ "$output" =~ "ignoreme" ]] || false
+}
+
+@test "ignore: detect when equivalent patterns have different values" {
+    skip_nbf_ld_1
+
+    dolt sql <<SQL
+INSERT INTO dolt_ignore VALUES
+  ("**_test", true),
+  ("*_test", false),
+
+  ("*_foo", true),
+  ("%_foo", false);
+CREATE TABLE a_test (pk int);
+CREATE TABLE a_foo (pk int);
+SQL
+
+    conflict=$(get_conflict_tables)
+
+    echo "$conflict"
+
+    [[ ! -z $(echo "$conflict" | grep "a_test") ]] || false
+    [[ ! -z $(echo "$conflict" | grep "a_foo") ]] || false
 
 }

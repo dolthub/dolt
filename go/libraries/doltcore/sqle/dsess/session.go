@@ -312,7 +312,8 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	doltDatabases := d.provider.DoltDatabases()
 	txDbs := make([]SqlDatabase, 0, len(doltDatabases))
 	for _, db := range doltDatabases {
-		// TODO: this nil check is only necessary to support UserSpaceDatabase, come up with a better set of interfaces 
+		// TODO: this nil check is only necessary to support UserSpaceDatabase and clusterDatabase, come up with a better set of
+		//  interfaces 
 		//  to capture these capabilities
 		ddb := db.DbData().Ddb
 		if ddb != nil {
@@ -568,6 +569,10 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 
 	headCommit := branchState.headCommit
 	headHash, _ := headCommit.HashOf()
+
+	if sessionState.WorkingSet == nil {
+		return nil, fmt.Errorf("Cannot commit while not attached to a branch. ")
+	}
 
 	var mergeParentCommits []*doltdb.Commit
 	if branchState.WorkingSet().MergeActive() {

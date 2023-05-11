@@ -16,6 +16,7 @@ package merge
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -149,3 +150,33 @@ func ordinalMappingFromIndex(def schema.Index) (m val.OrdinalMapping) {
 	}
 	return
 }
+
+type NullViolationMeta struct {
+	Columns []string `json:"Columns"`
+}
+
+func newNotNullViolationMeta(violations []string, value val.Tuple) (prolly.ConstraintViolationMeta, error) {
+	info, err := json.Marshal(NullViolationMeta{Columns: violations})
+	if err != nil {
+		return prolly.ConstraintViolationMeta{}, err
+	}
+	return prolly.ConstraintViolationMeta{
+		VInfo: info,
+		Value: value,
+	}, nil
+}
+
+func (m NullViolationMeta) Unmarshall(ctx *sql.Context) (val types.JSONDocument, err error) {
+	return types.JSONDocument{Val: m}, nil
+}
+
+func (m NullViolationMeta) Compare(ctx *sql.Context, v types.JSONValue) (cmp int, err error) {
+	ours := types.JSONDocument{Val: m}
+	return ours.Compare(ctx, v)
+}
+
+func (m NullViolationMeta) ToString(ctx *sql.Context) (string, error) {
+	return fmt.Sprintf("{Columns: [%s]}", strings.Join(m.Columns, ",")), nil
+}
+
+var _ types.JSONValue = FkCVMeta{}

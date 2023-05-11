@@ -50,6 +50,11 @@ func (res *ArgParseResults) Equals(other *ArgParseResults) bool {
 	return true
 }
 
+// NewEmptyResults creates a new ArgParseResults object with no arguments or options. Mostly useful for testing.
+func NewEmptyResults() *ArgParseResults {
+	return &ArgParseResults{options: make(map[string]string), Args: make([]string, 0)}
+}
+
 func (res *ArgParseResults) Contains(name string) bool {
 	_, ok := res.options[name]
 	return ok

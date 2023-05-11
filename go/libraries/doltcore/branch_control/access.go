@@ -31,8 +31,9 @@ type Permissions uint64
 const (
 	Permissions_Admin Permissions = 1 << iota // Permissions_Admin grants unrestricted control over a branch, including modification of table entries
 	Permissions_Write                         // Permissions_Write allows for all modifying operations on a branch, but does not allow modification of table entries
+	Permissions_Read                          // Permissions_Read allows for reading from a branch, which is equivalent to having no permissions
 
-	Permissions_None Permissions = 0 // Permissions_None represents a lack of permissions
+	Permissions_None Permissions = 0 // Permissions_None represents a lack of permissions, which defaults to allowing reading
 )
 
 // Access contains all of the expressions that comprise the "dolt_branch_control" table, which handles write Access to
@@ -77,9 +78,15 @@ func newAccess() *Access {
 // Requires external synchronization handling, therefore manually manage the RWMutex.
 func (tbl *Access) Match(database string, branch string, user string, host string) (bool, Permissions) {
 	results := tbl.Root.Match(database, branch, user, host)
+	// We use the result(s) with the longest length
+	length := uint32(0)
 	perms := Permissions_None
 	for _, result := range results {
-		perms |= result.Permissions
+		if result.Length > length {
+			perms = result.Permissions
+		} else if result.Length == length {
+			perms |= result.Permissions
+		}
 	}
 	return len(results) > 0, perms
 }

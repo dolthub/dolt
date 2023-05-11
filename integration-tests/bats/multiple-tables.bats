@@ -54,11 +54,11 @@ teardown() {
     dolt add test1
     run dolt status
     [[ "$output" =~ "Changes to be committed" ]] || false
-    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ "Untracked tables" ]] || false
     run dolt commit -m "added one table"
     run dolt status
     [[ ! "$output" =~ "Changes to be committed" ]] || false
-    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ "Untracked tables" ]] || false
     run dolt diff
     [[ "$output" =~ "test2" ]] || false
     run dolt checkout test2
@@ -77,26 +77,26 @@ teardown() {
     dolt add --all
     run dolt status
     [[ "$output" =~ "Changes to be committed" ]] || false
-    [[ ! "$output" =~ "Untracked files" ]] || false
+    [[ ! "$output" =~ "Untracked tables" ]] || false
     run dolt reset test1 test2
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt status
     [[ ! "$output" =~ "Changes to be committed" ]] || false
-    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ "Untracked tables" ]] || false
     run dolt add -A
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt status
     [[ "$output" =~ "Changes to be committed" ]] || false
-    [[ ! "$output" =~ "Untracked files" ]] || false
+    [[ ! "$output" =~ "Untracked tables" ]] || false
     dolt reset test1 test2
     run dolt add .
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt status
     [[ "$output" =~ "Changes to be committed" ]] || false
-    [[ ! "$output" =~ "Untracked files" ]] || false
+    [[ ! "$output" =~ "Untracked tables" ]] || false
 }
 
 @test "multiple-tables: dolt commit with -a flag adds all changes" {
@@ -109,7 +109,7 @@ teardown() {
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
-    [[ ! "$output" =~ "Untracked files" ]] || false
+    [[ ! "$output" =~ "Untracked tables" ]] || false
 }
 
 @test "multiple-tables: dolt commit with -a flag does not add new table changes" {
@@ -169,26 +169,26 @@ SQL
     dolt add --all
     run dolt status
     [[ "$output" =~ "Changes to be committed" ]] || false
-    [[ ! "$output" =~ "Untracked files" ]] || false
+    [[ ! "$output" =~ "Untracked tables" ]] || false
     run dolt reset .
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt status
     [[ ! "$output" =~ "Changes to be committed" ]] || false
-    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ "Untracked tables" ]] || false
 }
 
 @test "multiple-tables: dolt reset --hard" {
     dolt add --all
     run dolt status
     [[ "$output" =~ "Changes to be committed" ]] || false
-    [[ ! "$output" =~ "Untracked files" ]] || false
+    [[ ! "$output" =~ "Untracked tables" ]] || false
     run dolt reset .
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt status
     [[ ! "$output" =~ "Changes to be committed" ]] || false
-    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ "Untracked tables" ]] || false
 
     dolt add --all
     dolt commit -m "commit file1 and file2"
@@ -222,8 +222,8 @@ SQL
     run dolt status
     [[ "$output" =~ modified.*test1 ]] || false
     [[ "$output" =~ modified.*test2 ]] || false
-    [[ "$output" =~ file.*test3 ]] || false
-    [[ "$output" =~ file.*test4 ]] || false
+    [[ "$output" =~ table.*test3 ]] || false
+    [[ "$output" =~ table.*test4 ]] || false
 
     dolt add test1 test2 test3
     dolt reset --hard
@@ -231,8 +231,8 @@ SQL
     run dolt status
     [[ ! "$output" =~ "test1" ]] || false
     [[ ! "$output" =~ "test2" ]] || false
-    [[ ! "$output" =~ file.*test3 ]] || false
-    [[ "$output" =~ file.*test4 ]] || false
+    [[ ! "$output" =~ table.*test3 ]] || false
+    [[ "$output" =~ table.*test4 ]] || false
 }
 
 @test "multiple-tables: dolt reset --hard on new tables" {

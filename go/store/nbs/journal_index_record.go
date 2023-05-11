@@ -167,12 +167,16 @@ func readJournalIndexRecord(buf []byte) (rec indexRec, err error) {
 	return
 }
 
-func validateIndexRecord(buf []byte) (ok bool) {
-	if len(buf) > (indexRecLenSz + indexRecChecksumSz) {
-		off := len(buf) - indexRecChecksumSz
-		ok = crc(buf[:off]) == readUint32(buf[off:])
+func validateIndexRecord(buf []byte) bool {
+	if len(buf) < (indexRecLenSz + indexRecChecksumSz) {
+		return false
 	}
-	return
+	off := readUint32(buf)
+	if int(off) > len(buf) {
+		return false
+	}
+	off -= indexRecChecksumSz
+	return crc(buf[:off]) == readUint32(buf[off:])
 }
 
 // processIndexRecords reads a sequence of index records from |r| and passes them to the callback. While reading records

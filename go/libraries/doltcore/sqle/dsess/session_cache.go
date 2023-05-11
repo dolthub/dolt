@@ -33,6 +33,8 @@ type SessionCache struct {
 	mu sync.RWMutex
 }
 
+const maxCachedKeys = 64
+
 func newSessionCache() *SessionCache {
 	return &SessionCache{}
 }
@@ -46,6 +48,11 @@ func (c *SessionCache) CacheTableIndexes(key doltdb.DataCacheKey, table string, 
 
 	if c.indexes == nil {
 		c.indexes = make(map[doltdb.DataCacheKey]map[string][]sql.Index)
+	}
+	if len(c.indexes) > maxCachedKeys {
+		for k := range c.indexes {
+			delete(c.indexes, k)
+		}
 	}
 
 	tableIndexes, ok := c.indexes[key]
@@ -62,7 +69,6 @@ func (c *SessionCache) GetTableIndexesCache(key doltdb.DataCacheKey, table strin
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	table = strings.ToLower(table)
 	if c.indexes == nil {
 		return nil, false
 	}
@@ -71,6 +77,7 @@ func (c *SessionCache) GetTableIndexesCache(key doltdb.DataCacheKey, table strin
 	if !ok {
 		return nil, false
 	}
+	table = strings.ToLower(table)
 
 	indexes, ok := tableIndexes[table]
 	return indexes, ok
@@ -84,6 +91,11 @@ func (c *SessionCache) CacheTable(key doltdb.DataCacheKey, tableName string, tab
 	tableName = strings.ToLower(tableName)
 	if c.tables == nil {
 		c.tables = make(map[doltdb.DataCacheKey]map[string]sql.Table)
+	}
+	if len(c.tables) > maxCachedKeys {
+		for k := range c.tables {
+			delete(c.tables, k)
+		}
 	}
 
 	tablesForKey, ok := c.tables[key]
@@ -131,6 +143,11 @@ func (c *SessionCache) CacheViews(key doltdb.DataCacheKey, views []sql.ViewDefin
 
 	if c.views == nil {
 		c.views = make(map[doltdb.DataCacheKey]map[string]sql.ViewDefinition)
+	}
+	if len(c.views) > maxCachedKeys {
+		for k := range c.views {
+			delete(c.views, k)
+		}
 	}
 
 	viewsForKey, ok := c.views[key]
