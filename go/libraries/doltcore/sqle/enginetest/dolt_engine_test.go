@@ -172,7 +172,6 @@ func TestSingleMergeScript(t *testing.T) {
 			RightSetUpScript: []string{
 				"alter table t add column col2 int not null default 0",
 				"alter table t add column col3 int;",
-				"update t set col2 = 1 where pk = 1;",
 				"insert into t values (2, 2, 2, null);",
 			},
 			LeftSetUpScript: []string{
@@ -180,11 +179,12 @@ func TestSingleMergeScript(t *testing.T) {
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "call dolt_merge('right');",
+					Query:    "call dolt_merge('right');",
+					Expected: []sql.Row{{0, 0}},
 				},
 				{
 					Query:    "select * from t;",
-					Expected: []sql.Row{{1, 1, 1, nil}, {2, 2, 2, nil}, {3, 3, 0, nil}},
+					Expected: []sql.Row{{1, 1, 0, nil}, {2, 2, 2, nil}, {3, 3, 0, nil}},
 				},
 				{
 					Query:    "select pk, violation_type from dolt_constraint_violations_t",
@@ -194,8 +194,12 @@ func TestSingleMergeScript(t *testing.T) {
 		},
 	}
 	for _, test := range scripts {
-		enginetest.TestScript(t, newDoltHarness(t), convertMergeScriptTest(test, false))
-		enginetest.TestScript(t, newDoltHarness(t), convertMergeScriptTest(test, true))
+		t.Run("merge right into left", func(t *testing.T) {
+			enginetest.TestScript(t, newDoltHarness(t), convertMergeScriptTest(test, false))
+		})
+		t.Run("merge left into right", func(t *testing.T) {
+			enginetest.TestScript(t, newDoltHarness(t), convertMergeScriptTest(test, true))
+		})
 	}
 }
 
