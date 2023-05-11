@@ -266,7 +266,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
 		if head == nil {
 			var err error
-			head, err = ds.GetHeadCommit(ctx, db.Name())
+			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
 
 			if err != nil {
 				return nil, false, err
@@ -300,7 +300,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 
 		if head == nil {
 			var err error
-			head, err = ds.GetHeadCommit(ctx, db.Name())
+			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
 			if err != nil {
 				return nil, false, err
 			}
@@ -337,7 +337,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	case doltdb.LogTableName:
 		if head == nil {
 			var err error
-			head, err = ds.GetHeadCommit(ctx, db.Name())
+			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
 			if err != nil {
 				return nil, false, err
 			}
@@ -357,7 +357,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	case doltdb.ColumnDiffTableName:
 		if head == nil {
 			var err error
-			head, err = ds.GetHeadCommit(ctx, db.Name())
+			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
 			if err != nil {
 				return nil, false, err
 			}
@@ -383,7 +383,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	case doltdb.StatusTableName:
 		sess := dsess.DSessFromSess(ctx.Session)
 		adapter := dsess.NewSessionStateAdapter(
-			sess, db.name,
+			sess, db.RevisionQualifiedName(),
 			map[string]env.Remote{},
 			map[string]env.BranchConfig{},
 			map[string]env.Remote{})
@@ -391,7 +391,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
-		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, ws, adapter), true
+		dt, found = dtables.NewStatusTable(ctx, db.ddb, ws, adapter), true
 	case doltdb.MergeStatusTableName:
 		dt, found = dtables.NewMergeStatusTable(db.name), true
 	case doltdb.TagsTableName:
@@ -677,7 +677,7 @@ func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 // GetHeadRoot returns root value for the current session head
 func (db Database) GetHeadRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
-	head, err := sess.GetHeadCommit(ctx, db.name)
+	head, err := sess.GetHeadCommit(ctx, db.RevisionQualifiedName())
 	if err != nil {
 		return nil, err
 	}

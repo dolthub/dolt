@@ -118,91 +118,52 @@ func TestSingleScript(t *testing.T) {
 	// t.Skip()
 	
 	var script = queries.ScriptTest{
-		Name: "database revision specs: branch-qualified revision spec",
+		Name: "CALL DOLT_MERGE ff correctly works with autocommit off",
 		SetUpScript: []string{
-			"create table t01 (pk int primary key, c1 int)",
-			"call dolt_add('.')",
-			"call dolt_commit('-am', 'creating table t01 on main');",
-			"insert into t01 values (1, 1), (2, 2);",
-			"call dolt_commit('-am', 'adding rows to table t01 on main');",
-			"call dolt_branch('branch1');",
-			"insert into t01 values (3, 3);",
-			"call dolt_commit('-am', 'adding another row to table t01 on main');",
+			"CREATE TABLE test (pk int primary key)",
+			"call DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET autocommit = 0",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"CALL DOLT_CHECKOUT('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "use mydb/branch1;",
+				// FF-Merge
+				Query:    "CALL DOLT_MERGE('feature-branch')",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
+				Query:    "SELECT * from dolt_diff_test",
+				Expected: []sql.Row{
+					sql.Row{0, "bedi5n02gp5s9hukr79pirq3kbi6kh2r", time.Date(1970, time.January, 1, 11, 0, 0, 0, time.Local), interface {}(nil), "kcg4345ir3tjfb13mr0on1bv1m56h9if", time.Date(1970, time.January, 1, 4, 0, 0, 0, time.Local), "added"},
+					sql.Row{1, "bedi5n02gp5s9hukr79pirq3kbi6kh2r", time.Date(1970, time.January, 1, 11, 0, 0, 0, time.Local), interface {}(nil), "kcg4345ir3tjfb13mr0on1bv1m56h9if", time.Date(1970, time.January, 1, 4, 0, 0, 0, time.Local), "added"},
+					sql.Row{2, "bedi5n02gp5s9hukr79pirq3kbi6kh2r", time.Date(1970, time.January, 1, 11, 0, 0, 0, time.Local), interface {}(nil), "kcg4345ir3tjfb13mr0on1bv1m56h9if", time.Date(1970, time.January, 1, 4, 0, 0, 0, time.Local), "added"},
+					sql.Row{interface {}(nil), "WORKING", interface {}(nil), 0, "bedi5n02gp5s9hukr79pirq3kbi6kh2r", time.Date(1970, time.January, 1, 11, 0, 0, 0, time.Local), "removed"},
+					sql.Row{3, "WORKING", interface {}(nil), interface {}(nil), "bedi5n02gp5s9hukr79pirq3kbi6kh2r", time.Date(1970, time.January, 1, 11, 0, 0, 0, time.Local), "added"},
+					sql.Row{1000, "WORKING", interface {}(nil), interface {}(nil), "bedi5n02gp5s9hukr79pirq3kbi6kh2r", time.Date(1970, time.January, 1, 11, 0, 0, 0, time.Local), "added"},
+				},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
-			},
-			{
-				// The database name is always the base name, never the revision specifier
-				Query:    "select database()",
-				Expected: []sql.Row{{"mydb"}},
-			},
-			{
-				Query:    "select active_branch()",
-				Expected: []sql.Row{{"branch1"}},
-			},
-			{
-				Query:    "select * from t01",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
-			},
-			{
-				Query:    "call dolt_checkout('main');",
+				Query:    "CALL DOLT_CHECKOUT('-b', 'new-branch')",
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
-			},
-			{
-				Query:    "select database();",
-				Expected: []sql.Row{{"mydb"}},
-			},
-			{
-				Query:    "use mydb/branch1;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "call dolt_reset();",
-				Expected: []sql.Row{{0}},
-			},
-			{
-				Query:    "select database();",
-				Expected: []sql.Row{{"mydb"}},
-			},
-			{
-				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
-			},
-			{
-				// Create a table in the working set to verify the main db
-				Query:    "create table working_set_table(pk int primary key);",
-				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
-			},
-			{
-				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
-				Expected: []sql.Row{{"working_set_table"}},
-			},
-			{
-				Query:    "use mydb;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "call dolt_checkout('branch1');",
-				Expected: []sql.Row{{0}},
-			},
-			{
-				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
-				Expected: []sql.Row{{"working_set_table"}},
+				Query:    "INSERT INTO test VALUES (4)",
+				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 			},
 		},
 	}

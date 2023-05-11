@@ -1258,7 +1258,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 
 	ws := dbState.WorkingSet()
 
-	head, err := sess.GetHeadCommit(ctx, t.db.Name())
+	head, err := sess.GetHeadCommit(ctx, t.db.RevisionQualifiedName())
 	if err != nil {
 		return nil, err
 	}
