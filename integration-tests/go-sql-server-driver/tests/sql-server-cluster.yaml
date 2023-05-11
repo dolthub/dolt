@@ -992,6 +992,112 @@ tests:
       result:
         columns: ["count(*)"]
         rows: [["5"]]
+- name: dolt_cluster_ack_writes_timeout_secs behavior
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
+  # This test writes new commits on the primary and quickly checks for them on
+  # the secondary. If dolt_cluster_ack_writes_timeout_secs is working as
+  # intended, the new writes will always be present.
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@PERSIST.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'CREATE DATABASE repo1'
+    - exec: 'USE repo1'
+    - exec: 'CREATE TABLE vals (i INT PRIMARY KEY)'
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - query: "SHOW TABLES"
+      result:
+        columns: ["Tables_in_repo1"]
+        rows: [["vals"]]
+  - on: server1
+    queries:
+    - exec: 'USE repo1'
+    - exec: 'INSERT INTO vals VALUES (0),(1),(2),(3),(4)'
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - query: 'SELECT COUNT(*) FROM vals'
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]
+  - on: server1
+    queries:
+    - exec: 'USE repo1'
+    - exec: 'INSERT INTO vals VALUES (5),(6),(7),(8),(9)'
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - query: 'SELECT COUNT(*) FROM vals'
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["10"]]
+  # Restart both servers to test the behavior of the persisted variable.
+  - on: server1
+    restart_server: {}
+  - on: server2
+    restart_server: {}
+  - on: server1
+    queries:
+    - exec: 'USE repo1'
+    - exec: 'INSERT INTO vals VALUES (10),(11),(12),(13),(14)'
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - query: 'SELECT COUNT(*) FROM vals'
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["15"]]
+  - on: server1
+    queries:
+    - exec: 'USE repo1'
+    - exec: 'INSERT INTO vals VALUES (15),(16),(17),(18),(19)'
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - query: 'SELECT COUNT(*) FROM vals'
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["20"]]
 - name: call dolt checkout
   multi_repos:
   - name: server1

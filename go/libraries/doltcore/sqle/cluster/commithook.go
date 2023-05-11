@@ -53,6 +53,16 @@ type commithook struct {
 	// commithooks are caught up with replicating to the standby.
 	waitNotify func()
 
+	// This is a slice of notification channels maintained by the
+	// commithook. The semantics are:
+	// 1. All accesses to |successChs| must happen with |mu| held.
+	// 2. There maybe be |0| or more channels in the slice.
+	// 3. As a reader, if |successChs| is non-empty, you should just read a value, for example, |successChs[0]| and use it. All entries will be closed at the same time. If |successChs| is empty when you need a channel, you should add one to it.
+	// 4. If you read a channel out of |successChs|, that channel will be closed on the next successful replication attempt. It will not be closed before then.
+	successChs []chan struct{}
+
+	execTimeout time.Duration
+
 	role Role
 
 	// The standby replica to which the new root gets replicated.
@@ -143,6 +153,12 @@ func (h *commithook) replicate(ctx context.Context) {
 			if h.waitNotify != nil {
 				h.waitNotify()
 			}
+			if len(h.successChs) != 0 {
+				for _, ch := range h.successChs {
+					close(ch)
+				}
+				h.successChs = nil
+			}
 			h.cond.Wait()
 			lgr.Tracef("cluster/commithook: background thread: woken up.")
 		}
@@ -191,6 +207,13 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 			h.cancelReplicate()
 		}
 		h.cancelReplicate = nil
+	}()
+	successChs := h.successChs
+	h.successChs = nil
+	defer func() {
+		if len(successChs) != 0 {
+			h.successChs = append(h.successChs, successChs...)
+		}
 	}()
 	h.mu.Unlock()
 
@@ -242,6 +265,12 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 			h.lastPushedHead = toPush
 			h.lastSuccess = incomingTime
 			h.nextPushAttempt = time.Time{}
+			if len(successChs) != 0 {
+				for _, ch := range successChs {
+					close(ch)
+				}
+				successChs = nil
+			}
 		} else {
 			h.currentError = new(string)
 			*h.currentError = fmt.Sprintf("failed to commit chunks on destDB: %v", err)
@@ -350,6 +379,47 @@ func (h *commithook) setWaitNotify(f func()) bool {
 	return true
 }
 
+type replicationResult int
+
+const replicationResultTimeout = 0
+const replicationResultContextCanceled = 1
+const replicationResultSuccess = 2
+
+// Blocks the current goroutine until:
+// 1. There is no replication necessary, i.e., isCaughtUp() == true. This returns replicationResultSuccess.
+// 2. The replication of |nextHead|, or a later head, at the time this method was called succeeds. This returns replicationResultSuccess.
+// 3. ctx.Done() closes. This returns replicationResultContextCanceled.
+// 4. timeout passes. This returns replicationResultSuccess.
+func (h *commithook) waitForReplicationSuccess(ctx context.Context, timeout time.Duration) replicationResult {
+	h.mu.Lock()
+	if h.isCaughtUp() {
+		h.mu.Unlock()
+		return replicationResultSuccess
+	}
+	if len(h.successChs) == 0 {
+		h.successChs = append(h.successChs, make(chan struct{}))
+	}
+	ch := h.successChs[0]
+	h.mu.Unlock()
+	select {
+	case <-ch:
+		return replicationResultSuccess
+	case <-ctx.Done():
+		return replicationResultContextCanceled
+	case <-time.After(timeout):
+		return replicationResultTimeout
+	}
+}
+
+// Set by the controller. If it is non-zero, the Execute() DatabaseHook
+// callback will block the calling goroutine for that many seconds waiting for
+// replication quiescence.
+func (h *commithook) setExecTimeout(timeout time.Duration) {
+	h.mu.Lock()
+	h.execTimeout = timeout
+	h.mu.Unlock()
+}
+
 var errDetectedBrokenConfigStr = "error: more than one server was configured as primary in the same epoch. this server has stopped accepting writes. choose a primary in the cluster and call dolt_assume_cluster_role() on servers in the cluster to start replication at a higher epoch"
 
 // Execute on this commithook updates the target root hash we're attempting to
@@ -364,10 +434,10 @@ func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db datas.Dat
 		return err
 	}
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	lgr = h.logger()
 	if h.role != RolePrimary {
 		lgr.Warnf("cluster/commithook received commit callback for a commit on %s, but we are not role primary; not replicating the commit, which is likely to be lost.", ds.ID())
+		h.mu.Unlock()
 		return nil
 	}
 	if root != h.nextHead {
@@ -376,6 +446,15 @@ func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db datas.Dat
 		h.nextHead = root
 		h.nextPushAttempt = time.Time{}
 		h.cond.Signal()
+	}
+	execTimeout := h.execTimeout
+	h.mu.Unlock()
+	if execTimeout != time.Duration(0) {
+		res := h.waitForReplicationSuccess(ctx, execTimeout)
+		if res != replicationResultSuccess {
+			// TODO: Get this failure into the *sql.Context warnings.
+			lgr.Warnf("cluster/commithook failed to replicate write before the timeout. timeout: %d, wait result: %v", execTimeout, res)
+		}
 	}
 	return nil
 }

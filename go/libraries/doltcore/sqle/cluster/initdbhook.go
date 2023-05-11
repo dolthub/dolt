@@ -17,6 +17,7 @@ package cluster
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -57,6 +58,8 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 			})
 		}
 
+		_, execTimeoutVal, _ := controller.systemVars.GetGlobal(dsess.DoltClusterAckWritesTimeoutSecs)
+
 		role, _ := controller.roleAndEpoch()
 		for i, r := range controller.cfg.StandbyRemotes() {
 			ttfdir, err := denv.TempTableFilesDir()
@@ -64,6 +67,7 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 				return err
 			}
 			commitHook := newCommitHook(controller.lgr, r.Name(), name, role, remoteDBs[i], denv.DoltDB, ttfdir)
+			commitHook.setExecTimeout(time.Duration(execTimeoutVal.(int64)) * time.Second)
 			denv.DoltDB.PrependCommitHook(ctx, commitHook)
 			controller.registerCommitHook(commitHook)
 			if err := commitHook.Run(bt); err != nil {
