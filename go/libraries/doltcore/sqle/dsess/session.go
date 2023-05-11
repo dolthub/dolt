@@ -570,7 +570,7 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 	headCommit := branchState.headCommit
 	headHash, _ := headCommit.HashOf()
 
-	if sessionState.WorkingSet == nil {
+	if branchState.WorkingSet() == nil {
 		return nil, fmt.Errorf("Cannot commit while not attached to a branch. ")
 	}
 
