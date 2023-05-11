@@ -122,17 +122,17 @@ func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, mrEnv *env.M
 	} else if dataDirGiven {
 		cfgDirPath = filepath.Join(dataDir, DefaultCfgDirName)
 	} else {
-		// Look in parent directory for doltcfg
+		// Look in CWD parent directory for doltcfg
 		parentDirCfg := filepath.Join("..", DefaultCfgDirName)
 		parentExists, isDir := dEnv.FS.Exists(parentDirCfg)
 		parentDirExists := parentExists && isDir
 
-		// Look in data directory (which is necessarily current directory) for doltcfg
-		currDirCfg := filepath.Join(dataDir, DefaultCfgDirName)
-		currExists, isDir := dEnv.FS.Exists(currDirCfg)
-		currDirExists := currExists && isDir
+		// Look in data directory for doltcfg
+		dataDirCfg := filepath.Join(dataDir, DefaultCfgDirName)
+		dataDirCfgExists, isDir := dEnv.FS.Exists(dataDirCfg)
+		currDirExists := dataDirCfgExists && isDir
 
-		// Error if both current and parent exist
+		// Error if both CWD/../.doltfcfg and dataDir/.doltcfg exist because it's unclear which to use.
 		if currDirExists && parentDirExists {
 			p1, err := dEnv.FS.Abs(cfgDirPath)
 			if err != nil {
@@ -149,7 +149,7 @@ func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, mrEnv *env.M
 		if parentDirExists {
 			cfgDirPath = parentDirCfg
 		} else {
-			cfgDirPath = currDirCfg
+			cfgDirPath = dataDirCfg
 		}
 	}
 
@@ -160,12 +160,22 @@ func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, mrEnv *env.M
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
+	} else {
+		privsFp, err = dEnv.FS.Abs(privsFp)
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
 	}
 
 	// If no branch control file path is specified, default to doltcfg directory
 	branchControlFilePath, hasBCFilePath := apr.GetValue(BranchCtrlPathFlag)
 	if !hasBCFilePath {
 		branchControlFilePath, err = dEnv.FS.Abs(filepath.Join(cfgDirPath, DefaultBranchCtrlName))
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+	} else {
+		branchControlFilePath, err = dEnv.FS.Abs(branchControlFilePath)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
