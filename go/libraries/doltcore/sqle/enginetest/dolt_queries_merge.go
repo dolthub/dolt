@@ -1626,6 +1626,10 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, 1}},
 			},
 			{
+				Query:    "select * from dolt_constraint_violations",
+				Expected: []sql.Row{{"test", uint(1)}},
+			},
+			{
 				Query: "select violation_type, pk, violation_info from dolt_constraint_violations_test",
 				Expected: []sql.Row{
 					{uint16(4), 2, types.JSONDocument{Val: merge.NullViolationMeta{Columns: []string{"c0"}}}},
@@ -4643,7 +4647,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call dolt_merge('right');",
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query:    "select * from t;",
@@ -4673,7 +4678,9 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call dolt_merge('right');",
+				SkipResultsCheck: true,
+				Query:            "call dolt_merge('right');",
+				Expected:         []sql.Row{{0, 0}}, // non-symmetric result
 			},
 			{
 				Skip:     true,
@@ -4707,7 +4714,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				Expected: []sql.Row{{0, 0x1}},
 			},
 			{
-				Skip:  true,
 				Query: "select pk, col1 from t;",
 				Expected: []sql.Row{
 					{1, 9999},
