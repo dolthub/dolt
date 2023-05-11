@@ -275,18 +275,26 @@ func resetStaged(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb
 // IsValidRef validates whether the input parameter is a valid cString
 // TODO: this doesn't belong in this package
 func IsValidRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (bool, error) {
+	// The error return value is only for propagating unhandled errors from rsr.CWBHeadRef()
+	// All other errors merely indicate an invalid ref spec.
+	// TODO: It's much better to enumerate the expected errors, to make sure we don't suppress any unexpected ones.
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	if err != nil {
-		return false, err
+		return false, nil
 	}
 
 	headRef, err := rsr.CWBHeadRef()
-	if err != nil {
+	if err == doltdb.ErrOperationNotSupportedInDetachedHead {
+		// This is safe because ddb.Resolve checks if headRef is nil, but only when the value is actually needed.
+		// Basically, this guarentees that resolving "HEAD" or similar will return an error but other resolves will work.
+		headRef = nil
+	} else if err != nil {
 		return false, err
 	}
+
 	_, err = ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
-		return false, err
+		return false, nil
 	}
 
 	return true, nil
