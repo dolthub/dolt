@@ -86,10 +86,47 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			return cmdFailure, err
 		}
 	} else {
+		// Currently, if this server is involved in cluster
+		// replication, a full GC is only safe to run on the primary.
+		// We assert that we are the primary here before we begin, and
+		// we assert again that we are the primary at the same epoch as
+		// we establish the safepoint.
+
+		origepoch := -1
+		if _, role, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleVariable); ok {
+			// TODO: magic constant...
+			if role.(string) != "primary" {
+				return cmdFailure, fmt.Errorf("cannot run a full dolt_gc() while cluster replication is enabled and role is %s; must be the primary", role.(string))
+			}
+			_, epoch, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleEpochVariable)
+			if !ok {
+				return cmdFailure, fmt.Errorf("internal error: cannot run a full dolt_gc(); cluster replication is enabled but could not read %s", dsess.DoltClusterRoleEpochVariable)
+			}
+			origepoch = epoch.(int)
+		}
+
 		// TODO: If we got a callback at the beginning and an
 		// (allowed-to-block) callback at the end, we could more
 		// gracefully tear things down.
 		err = ddb.GC(ctx, func() error {
+			if origepoch != -1 {
+				// Here we need to sanity check role and epoch.
+				if _, role, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleVariable); ok {
+					if role.(string) != "primary" {
+						return fmt.Errorf("dolt_gc failed: when we began we were a primary in a cluster, but now our role is %s", role.(string))
+					}
+					_, epoch, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleEpochVariable)
+					if !ok {
+						return fmt.Errorf("dolt_gc failed: when we began we were a primary in a cluster, but we can no longer read the cluster role epoch.")
+					}
+					if origepoch != epoch.(int) {
+						return fmt.Errorf("dolt_gc failed: when we began we were primary in the cluster at epoch %d, but now we are at epoch %d. for gc to safely finalize, our role and epoch must not change throughout the gc.", origepoch, epoch.(int))
+					}
+				} else {
+					return fmt.Errorf("dolt_gc failed: when we began we were a primary in a cluster, but we can no longer read the cluster role.")
+				}
+			}
+
 			killed := make(map[uint32]struct{})
 			processes := ctx.ProcessList.Processes()
 			for _, p := range processes {
