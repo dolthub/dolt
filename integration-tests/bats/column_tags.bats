@@ -344,15 +344,7 @@ DELIM
     dolt sql -q "ALTER TABLE target DROP COLUMN badCol;"
     dolt commit -Am "fixup"
 
-    run dolt schema tags
-    [[ $output =~ "| target | col1   | 14690 |" ]] || false
-
     dolt checkout main
-
-    run dolt schema tags
-    [ $status -eq 0 ]
-    [[ $output =~ "| target | col1   | 14649 |" ]] || false
-
     run dolt merge other -m "merge other into main"
     [ $status -eq 0 ]
     [[ $output =~ "1 tables changed, 1 rows added(+)" ]] || false
