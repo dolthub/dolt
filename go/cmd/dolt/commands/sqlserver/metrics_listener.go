@@ -155,7 +155,12 @@ func (ml *metricsListener) updateReplMetrics() bool {
 
 		if status.Role == string(cluster.RolePrimary) {
 			ml.isReplicaGauges.WithLabelValues(status.Database).Set(0.0)
-			ml.replicationLagGauges.WithLabelValues(status.Database, status.Remote).Set(float64(status.ReplicationLag.Milliseconds()))
+
+			if status.ReplicationLag == nil {
+				ml.replicationLagGauges.WithLabelValues(status.Database, status.Remote).Set(-1.0)
+			} else {
+				ml.replicationLagGauges.WithLabelValues(status.Database, status.Remote).Set(float64(status.ReplicationLag.Milliseconds()))
+			}
 		} else {
 			ml.isReplicaGauges.WithLabelValues(status.Database).Set(1.0)
 			ml.replicationLagGauges.WithLabelValues(status.Database, status.Remote).Set(-1.0)
