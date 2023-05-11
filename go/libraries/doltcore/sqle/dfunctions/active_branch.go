@@ -16,6 +16,7 @@ package dfunctions
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -46,6 +47,10 @@ func (ab *ActiveBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, er
 	}
 
 	currentBranchRef, err := dSess.CWBHeadRef(ctx, dbName)
+	if err == doltdb.ErrOperationNotSupportedInDetachedHead {
+		// active_branch should return NULL if we're in detached head state
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
