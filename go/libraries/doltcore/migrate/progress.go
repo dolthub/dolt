@@ -298,6 +298,6 @@ func commitRoot(
 		Name:      meta.Name,
 		Email:     meta.Email,
 		Timestamp: uint64(time.Now().Unix()),
-	})
+	}, nil)
 	return err
 }

@@ -216,7 +216,7 @@ func doltCommit(ctx *sql.Context,
 
 	workingSet = workingSet.ClearMerge()
 
-	newCommit, err := tx.dbData.Ddb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, &pending, workingSet, currHash, tx.getWorkingSetMeta(ctx))
+	newCommit, err := tx.dbData.Ddb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, &pending, workingSet, currHash, tx.getWorkingSetMeta(ctx), nil)
 	return workingSet, newCommit, err
 }
 
@@ -227,7 +227,7 @@ func txCommit(ctx *sql.Context,
 	workingSet *doltdb.WorkingSet,
 	hash hash.Hash,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-	return workingSet, nil, tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx))
+	return workingSet, nil, tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx), nil)
 }
 
 // DoltCommit commits the working set and creates a new DoltCommit as specified, in one atomic write

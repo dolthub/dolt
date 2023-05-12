@@ -334,7 +334,7 @@ func pullBranchesAndUpdateWorkingSet(
 			if commitRootHash != wsWorkingRootHash || commitRootHash != wsStagedRootHash {
 				ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
 
-				err = rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, prevHash, doltdb.TodoWorkingSetMeta())
+				err = rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, prevHash, doltdb.TodoWorkingSetMeta(), nil)
 				if err == nil {
 					return nil
 				}

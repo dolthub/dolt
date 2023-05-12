@@ -424,21 +424,21 @@ var errDetectedBrokenConfigStr = "error: more than one server was configured as 
 
 // Execute on this commithook updates the target root hash we're attempting to
 // replicate and wakes the replication thread.
-func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
+func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error) {
 	lgr := h.logger()
 	lgr.Tracef("cluster/commithook: Execute called post commit")
 	cs := datas.ChunkStoreFromDatabase(db)
 	root, err := cs.Root(ctx)
 	if err != nil {
 		lgr.Errorf("cluster/commithook: Execute: error retrieving local database root: %v", err)
-		return err
+		return nil, err
 	}
 	h.mu.Lock()
 	lgr = h.logger()
 	if h.role != RolePrimary {
 		lgr.Warnf("cluster/commithook received commit callback for a commit on %s, but we are not role primary; not replicating the commit, which is likely to be lost.", ds.ID())
 		h.mu.Unlock()
-		return nil
+		return nil, nil
 	}
 	if root != h.nextHead {
 		lgr.Tracef("signaling replication thread to push new head: %v", root.String())
@@ -456,7 +456,7 @@ func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db datas.Dat
 			lgr.Warnf("cluster/commithook failed to replicate write before the timeout. timeout: %d, wait result: %v", execTimeout, res)
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 func (h *commithook) HandleError(ctx context.Context, err error) error {

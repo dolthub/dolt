@@ -1124,7 +1124,7 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 	}
 
 	ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, TodoWorkingSetMeta())
+	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, TodoWorkingSetMeta(), nil)
 }
 
 // CopyWorkingSet copies a WorkingSetRef from one ref to another. If `force` is
@@ -1155,7 +1155,7 @@ func (ddb *DoltDB) CopyWorkingSet(ctx context.Context, fromWSRef ref.WorkingSetR
 		}
 	}
 
-	return ddb.UpdateWorkingSet(ctx, toWSRef, ws, currWsHash, TodoWorkingSetMeta())
+	return ddb.UpdateWorkingSet(ctx, toWSRef, ws, currWsHash, TodoWorkingSetMeta(), nil)
 }
 
 // DeleteBranch deletes the branch given, returning an error if it doesn't exist.
@@ -1216,6 +1216,13 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 	return err
 }
 
+type ReplicationStatusController struct {
+	// A slice of funcs which can be called to wait for the replication
+	// associated with a commithook to complete. Must return if the
+	// associated Context is canceled.
+	Wait []func(ctx context.Context) error
+}
+
 // UpdateWorkingSet updates the working set with the ref given to the root value given
 // |prevHash| is the hash of the expected WorkingSet struct stored in the ref, not the hash of the RootValue there.
 func (ddb *DoltDB) UpdateWorkingSet(
@@ -1224,6 +1231,7 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	workingSet *WorkingSet,
 	prevHash hash.Hash,
 	meta *datas.WorkingSetMeta,
+	replicationStatus *ReplicationStatusController,
 ) error {
 	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
 	if err != nil {
@@ -1235,6 +1243,7 @@ func (ddb *DoltDB) UpdateWorkingSet(
 		return err
 	}
 
+	ctx = withReplicaState(ctx, replicationStatus)
 	_, err = ddb.db.UpdateWorkingSet(ctx, ds, datas.WorkingSetSpec{
 		Meta:        meta,
 		WorkingRoot: workingRootRef,
@@ -1255,6 +1264,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 	commit *PendingCommit, workingSet *WorkingSet,
 	prevHash hash.Hash,
 	meta *datas.WorkingSetMeta,
+	replicationStatus *ReplicationStatusController,
 ) (*Commit, error) {
 	wsDs, err := ddb.db.GetDataset(ctx, workingSetRef.String())
 	if err != nil {
@@ -1271,7 +1281,8 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return nil, err
 	}
 
-	commitDataset, _, err := ddb.db.CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.nomsValue(), datas.WorkingSetSpec{
+	rsCtx := withReplicaState(ctx, replicationStatus)
+	commitDataset, _, err := ddb.db.CommitWithWorkingSet(rsCtx, headDs, wsDs, commit.Roots.Staged.nomsValue(), datas.WorkingSetSpec{
 		Meta:        meta,
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,

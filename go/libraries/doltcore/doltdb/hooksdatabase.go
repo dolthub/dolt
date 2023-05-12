@@ -25,6 +25,24 @@ import (
 	"sync"
 )
 
+type replicaStateContextKey struct{
+}
+
+func withReplicaState(ctx context.Context, c *ReplicationStatusController) context.Context {
+	if c != nil {
+		return context.WithValue(ctx, replicaStateContextKey{}, c)
+	}
+	return ctx
+}
+
+func getReplicaState(ctx context.Context) *ReplicationStatusController {
+	v := ctx.Value(replicaStateContextKey{})
+	if v == nil {
+		return nil
+	}
+	return v.(*ReplicationStatusController)
+}
+
 type hooksDatabase struct {
 	datas.Database
 	postCommitHooks []CommitHook
@@ -33,7 +51,7 @@ type hooksDatabase struct {
 // CommitHook is an abstraction for executing arbitrary commands after atomic database commits
 type CommitHook interface {
 	// Execute is arbitrary read-only function whose arguments are new Dataset commit into a specific Database
-	Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error
+	Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error)
 	// HandleError is an bridge function to handle Execute errors
 	HandleError(ctx context.Context, err error) error
 	// SetLogger lets clients specify an output stream for HandleError
@@ -59,22 +77,39 @@ func (db hooksDatabase) PostCommitHooks() []CommitHook {
 }
 
 func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset, onlyWS bool) {
-	var err error
 	var wg sync.WaitGroup
-	for _, hook := range db.postCommitHooks {
+	rsc := getReplicaState(ctx)
+	if rsc != nil {
+		rsc.Wait = make([]func(context.Context) error, len(db.postCommitHooks))
+	}
+	for il, hook := range db.postCommitHooks {
 		if !onlyWS || hook.ExecuteForWorkingSets() {
+			i := il
 			hook := hook
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				err = hook.Execute(ctx, ds, db)
+				f, err := hook.Execute(ctx, ds, db)
 				if err != nil {
 					hook.HandleError(ctx, err)
+				}
+				if rsc != nil {
+					rsc.Wait[i] = f
 				}
 			}()
 		}
 	}
 	wg.Wait()
+	if rsc != nil {
+		j := 0
+		for i := range rsc.Wait {
+			if rsc.Wait[i] != nil {
+				rsc.Wait[j] = rsc.Wait[i]
+				j++
+			}
+		}
+		rsc.Wait = rsc.Wait[:j]
+	}
 }
 
 func (db hooksDatabase) CommitWithWorkingSet(

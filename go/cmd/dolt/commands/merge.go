@@ -538,6 +538,7 @@ func executeNoFFMergeAndCommit(ctx context.Context, dEnv *env.DoltEnv, spec *mer
 		ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),
 		wsHash,
 		dEnv.NewWorkingSetMeta(msg),
+		nil,
 	)
 
 	if err != nil {

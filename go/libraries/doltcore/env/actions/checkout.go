@@ -331,6 +331,7 @@ func cleanOldWorkingSet(
 		initialWs.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged).ClearMerge(),
 		h,
 		dEnv.NewWorkingSetMeta("reset hard"),
+		nil,
 	)
 	if err != nil {
 		return err

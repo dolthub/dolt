@@ -268,6 +268,7 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 		ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),
 		prevHash,
 		doltdb.TodoWorkingSetMeta(),
+		nil,
 	)
 	if err != nil {
 		panic("couldn't commit: " + err.Error())

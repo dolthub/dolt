@@ -93,7 +93,7 @@ func migrateWorkingSet(ctx context.Context, menv Environment, brRef ref.BranchRe
 
 	newWs := doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(wr).WithStagedRoot(sr)
 
-	return new.UpdateWorkingSet(ctx, wsRef, newWs, hash.Hash{}, oldWs.Meta())
+	return new.UpdateWorkingSet(ctx, wsRef, newWs, hash.Hash{}, oldWs.Meta(), nil)
 }
 
 func migrateCommit(ctx context.Context, menv Environment, oldCm *doltdb.Commit, new *doltdb.DoltDB, prog *progress) error {
