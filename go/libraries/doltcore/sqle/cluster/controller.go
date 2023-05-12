@@ -176,20 +176,6 @@ func (c *Controller) ManageSystemVariables(variables sqlvars) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.systemVars = variables
-
-	// We reset this system variable here to put our NotifyChanged on it.
-	v, _, ok := variables.GetGlobal(dsess.DoltClusterAckWritesTimeoutSecs)
-	if !ok {
-		panic(fmt.Sprintf("internal error: did not find required global system variable %s", dsess.DoltClusterAckWritesTimeoutSecs))
-	}
-	v.NotifyChanged = func(scope sql.SystemVariableScope, v sql.SystemVarValue) {
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		for _, hook := range c.commithooks {
-			hook.setExecTimeout(time.Duration(v.Val.(int64)) * time.Second)
-		}
-	}
-	variables.AddSystemVariables([]sql.SystemVariable{v})
 	c.refreshSystemVars()
 }
 
@@ -208,10 +194,6 @@ func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, bt *sql.
 		hooks, err := c.applyCommitHooks(ctx, db.Name(), bt, denv)
 		if err != nil {
 			return err
-		}
-		_, execTimeoutVal, _ := c.systemVars.GetGlobal(dsess.DoltClusterAckWritesTimeoutSecs)
-		for _, h := range hooks {
-			h.setExecTimeout(time.Duration(execTimeoutVal.(int64)) * time.Second)
 		}
 		c.commithooks = append(c.commithooks, hooks...)
 	}
