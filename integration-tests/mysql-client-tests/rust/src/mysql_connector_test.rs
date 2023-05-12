@@ -1,8 +1,28 @@
-// any imports?
-use std::collections::HashMap;
-use mysql::*;
+//use mysql::*;
+//use mysql::prelude::*;
 use std::env;
 use std::process::exit;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let user = &args[1];
+    let port = &args[2];
+    let db = &args[3];
+
+    let url = format!("mysql://{}@127.0.0.1:{}/{}", user, port, db);
+    //let pool = Pool::new(url).unwrap();
+    //let mut conn = pool.get_conn().unwrap();
+    println!("USER: {}", user);
+    println!("PORT: {}", port);
+    println!("DB: {}", db);
+    println!("URL: {}", url);
+
+    exit(0)
+}
+
+/*
+use std::collections::HashMap;
+
 
 // queries
 const QUERY_RESPONSE: HashMap<&str, i32> = HashMap::from([
@@ -51,4 +71,4 @@ fn main() {
     }
     exit(0)
 
-}
+}*/

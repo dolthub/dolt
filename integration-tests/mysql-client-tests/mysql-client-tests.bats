@@ -165,6 +165,6 @@ EOF" -m "postgres"
 @test "rust mysql.connector client" {
     cd $BATS_TEST_DIRNAME/rust
     cargo build
-    cargo run -- $USER $PORT $REPO_NAME
+    cargo run --bin mysql_connector_test $USER $PORT $REPO_NAME
 }
 

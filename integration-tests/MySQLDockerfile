@@ -38,8 +38,6 @@ RUN apt update -y && \
         git \
         ruby \
         ruby-dev \
-        rustc \
-        cargo \
         gem \
         libc6 \
         libgcc1 \
@@ -118,6 +116,10 @@ RUN gem install bundler -v 2.1.4 && bundle install
 # install R packages
 RUN Rscript -e 'install.packages(c("DBI", "RMySQL", "RMariaDB"), \
                   repos = c(RSPM="https://packagemanager.rstudio.com/cran/__linux__/focal/latest"))'
+
+# install rust
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # install postgres and psql
 RUN service postgresql start
