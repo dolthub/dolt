@@ -200,12 +200,12 @@ SQL
     [[ "$output" =~ "one_pk" ]] || false
 
     # Add rows on the command line
-    run dolt --user=dolt sql -q "insert into one_pk values (1,1,1)"
-    [ "$status" -eq 1 ]
-
+    run dolt --verbose-engine-setup --user=dolt sql -q "insert into one_pk values (1,1,1)"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "NM4 Starting remote mode" ]] || false
     run dolt sql-client -P $PORT -u dolt -q "SELECT * FROM one_pk"
     [ $status -eq 0 ]
-    ! [[ $output =~ " 1 " ]] || false
+    [[ $output =~ " 1 " ]] || false
 
     # Test import as well (used by doltpy)
     echo 'pk,c1,c2' > import.csv
@@ -1498,12 +1498,13 @@ databases:
     cd repo2
     dolt sql -q "create table a (x int primary key)" 
     start_sql_server
-    run dolt sql -q "create table b (x int primary key)" 
+    run dolt --verbose-engine-setup sql -q "create table b (x int primary key)" 
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "database is locked to writes" ]] || false
-    run dolt sql -q "insert into b values (0)"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "database is locked to writes" ]] || false
+    [[ "$output" =~ "User not found 'root'" ]] || false
+
+    run dolt --verbose-engine-setup --user dolt sql -q "create table b (x int primary key)" 
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "NM4 Starting remote mode" ]] || false
 }
 
 @test "sql-server: start server without socket flag should set default socket path" {
