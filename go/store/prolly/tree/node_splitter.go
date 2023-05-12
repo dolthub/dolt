@@ -190,7 +190,6 @@ func newKeySplitter(level uint8) nodeSplitter {
 var _ splitterFactory = newKeySplitter
 
 func (ks *keySplitter) Append(key, value Item) error {
-	// todo(andy): account for key/value offsets, vtable, etc.
 	thisSize := uint32(len(key) + len(value))
 	ks.size += thisSize
 

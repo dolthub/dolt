@@ -105,15 +105,6 @@ const (
 	DecimalEnc    = Encoding(serial.EncodingDecimal)
 	JSONEnc       = Encoding(serial.EncodingJSON)
 	GeometryEnc   = Encoding(serial.EncodingGeometry)
-
-	// TODO
-	//  CharEnc
-	//  BinaryEnc
-	//  TextEnc
-	//  BlobEnc
-	//  EnumEnc
-	//  SetEnc
-	//  ExpressionEnc
 )
 
 func sizeFromType(t Type) (ByteSize, bool) {
