@@ -69,25 +69,17 @@ func MultiEnvForSingleEnv(ctx context.Context, env *DoltEnv) (*MultiRepoEnv, err
 func MultiEnvForDirectory(
 	ctx context.Context,
 	config config.ReadWriteConfig,
-	fs filesys.Filesys,
+	fs filesys.Filesys, // This is the DATA DIR PATH - unless some caller f'ed it up. NM4
 	version string,
 	ignoreLockFile bool,
 	dEnv *DoltEnv,
 ) (*MultiRepoEnv, error) {
-	mrEnv := &MultiRepoEnv{
-		envs:           make([]NamedEnv, 0),
-		fs:             fs,
-		cfg:            config,
-		dialProvider:   NewGRPCDialProviderFromDoltEnv(dEnv),
-		ignoreLockFile: ignoreLockFile,
-	}
-
 	// Load current fs and put into mr env
 	var dbName string
-	if _, ok := fs.(*filesys.InMemFS); ok {
+	if _, ok := dEnv.FS.(*filesys.InMemFS); ok {
 		dbName = "dolt"
 	} else {
-		path, err := fs.Abs("")
+		path, err := fs.Abs("") // Just use a dataDir string?? NM4
 		if err != nil {
 			return nil, err
 		}
@@ -95,9 +87,18 @@ func MultiEnvForDirectory(
 		dbName = dirToDBName(envName)
 	}
 
+	newDEnv := Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
+	mrEnv := &MultiRepoEnv{
+		envs:           make([]NamedEnv, 0),
+		fs:             fs,
+		cfg:            config,
+		dialProvider:   NewGRPCDialProviderFromDoltEnv(newDEnv), // Shouldn't this be on each env? This seems wrong. Zach Agrees (without seeing the code).
+		ignoreLockFile: ignoreLockFile,
+	}
+
 	envSet := map[string]*DoltEnv{}
-	if dEnv.Valid() {
-		envSet[dbName] = dEnv
+	if newDEnv.Valid() {
+		envSet[dbName] = newDEnv
 	}
 
 	// If there are other directories in the directory, try to load them as additional databases
@@ -114,10 +115,10 @@ func MultiEnvForDirectory(
 		}
 
 		// TODO: get rid of version altogether
-		version := ""
-		if dEnv != nil {
-			version = dEnv.Version
-		}
+		//		version := ""
+		//		if d_Env != nil {
+		//			version = dEnv.Version
+		//		}
 
 		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, version)
 		if newEnv.Valid() {
@@ -129,14 +130,13 @@ func MultiEnvForDirectory(
 	enforceSingleFormat(envSet)
 
 	// if the current directory database is in our set, add it first so it will be the current database
-	var ok bool
-	if dEnv, ok = envSet[dbName]; ok && dEnv.Valid() {
-		mrEnv.addEnv(dbName, dEnv)
+	if env, ok := envSet[dbName]; ok && env.Valid() {
+		mrEnv.addEnv(dbName, env)
 		delete(envSet, dbName)
 	}
 
-	for dbName, dEnv = range envSet {
-		mrEnv.addEnv(dbName, dEnv)
+	for dbName, env := range envSet {
+		mrEnv.addEnv(dbName, env)
 	}
 
 	return mrEnv, nil
