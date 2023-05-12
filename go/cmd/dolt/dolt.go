@@ -520,31 +520,28 @@ func buildLateBinder(ctx context.Context, dEnv *env.DoltEnv, mrEnv *env.MultiRep
 		useDb = mrEnv.GetFirstDatabase()
 	}
 
-	if targetEnv == nil {
+	if targetEnv == nil && useDb != "" {
 		targetEnv = mrEnv.GetEnv(useDb)
-		if targetEnv == nil {
-			return nil, fmt.Errorf("database %s doesn't exist.", useDb)
+	}
+
+	// nil targetEnv will happen if the user ran a command in an empty directory - which we support in some cases.
+	if targetEnv != nil {
+		isLocked, lock, err := targetEnv.GetLock()
+		if err != nil {
+			return nil, err
+		}
+		if isLocked {
+			if verbose {
+				cli.Println("NM4 Starting remote mode")
+			}
+			return sqlserver.BuildConnectionStringQueryist(ctx, dEnv, apr, lock.Port, useDb)
 		}
 	}
 
-	isLocked, lock, err := targetEnv.GetLock()
-	if err != nil {
-		return nil, err
+	if verbose {
+		cli.Println("NM4 Starting local mode")
 	}
-	if isLocked {
-		if verbose {
-			cli.Println("NM4 Starting remote mode")
-		}
-
-		mrEnv.GetFirstDatabase()
-
-		return sqlserver.BuildConnectionStringQueryist(ctx, dEnv, apr, lock.Port, useDb)
-	} else {
-		if verbose {
-			cli.Println("NM4 Starting local mode")
-		}
-		return commands.BuildSqlEngineQueryist(ctx, dEnv, mrEnv, apr)
-	}
+	return commands.BuildSqlEngineQueryist(ctx, dEnv, mrEnv, apr)
 }
 
 // splitArgsOnSubCommand splits the args into two slices, the first containing all args before the first subcommand,
