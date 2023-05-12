@@ -25,7 +25,7 @@ import (
 	"sync"
 )
 
-type replicaStateContextKey struct{
+type replicaStateContextKey struct {
 }
 
 func withReplicaState(ctx context.Context, c *ReplicationStatusController) context.Context {
