@@ -607,7 +607,7 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 
 // DropDatabase implements the sql.MutableDatabaseProvider interface
 func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
-	_, revision := dsess.SplitRevDbName(name)
+	_, revision := dsess.SplitRevisionDbName(name)
 	if revision != "" {
 		return fmt.Errorf("unable to drop revision database: %s", name)
 	}

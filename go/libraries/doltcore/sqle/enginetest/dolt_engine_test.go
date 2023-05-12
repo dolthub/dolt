@@ -115,7 +115,7 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 	
 	var script = queries.ScriptTest{
 		Name: "CALL DOLT_MERGE ff correctly works with autocommit off",
@@ -143,15 +143,8 @@ func TestSingleScript(t *testing.T) {
 				Expected: []sql.Row{{false, nil, nil, nil}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_test",
-				Expected: []sql.Row{
-					sql.Row{0, "bedi5n02gp5s9hukr79pirq3kbi6kh2r", time.Date(1970, time.January, 1, 11, 0, 0, 0, time.Local), interface {}(nil), "kcg4345ir3tjfb13mr0on1bv1m56h9if", time.Date(1970, time.January, 1, 4, 0, 0, 0, time.Local), "added"},
-					sql.Row{1, "bedi5n02gp5s9hukr79pirq3kbi6kh2r", time.Date(1970, time.January, 1, 11, 0, 0, 0, time.Local), interface {}(nil), "kcg4345ir3tjfb13mr0on1bv1m56h9if", time.Date(1970, time.January, 1, 4, 0, 0, 0, time.Local), "added"},
-					sql.Row{2, "bedi5n02gp5s9hukr79pirq3kbi6kh2r", time.Date(1970, time.January, 1, 11, 0, 0, 0, time.Local), interface {}(nil), "kcg4345ir3tjfb13mr0on1bv1m56h9if", time.Date(1970, time.January, 1, 4, 0, 0, 0, time.Local), "added"},
-					sql.Row{interface {}(nil), "WORKING", interface {}(nil), 0, "bedi5n02gp5s9hukr79pirq3kbi6kh2r", time.Date(1970, time.January, 1, 11, 0, 0, 0, time.Local), "removed"},
-					sql.Row{3, "WORKING", interface {}(nil), interface {}(nil), "bedi5n02gp5s9hukr79pirq3kbi6kh2r", time.Date(1970, time.January, 1, 11, 0, 0, 0, time.Local), "added"},
-					sql.Row{1000, "WORKING", interface {}(nil), interface {}(nil), "bedi5n02gp5s9hukr79pirq3kbi6kh2r", time.Date(1970, time.January, 1, 11, 0, 0, 0, time.Local), "added"},
-				},
+				Query:    "SELECT * from dolt_diff_test where to_commit = 'WORKING'",
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "SELECT * from dolt_status",

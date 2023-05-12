@@ -144,7 +144,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	dbName = strings.ToLower(dbName)
 	
 	var baseName, rev string
-	baseName, rev = SplitRevDbName(dbName)
+	baseName, rev = SplitRevisionDbName(dbName)
 
 	d.mu.Lock()
 	dbState, ok := d.dbStates[baseName]
@@ -203,7 +203,7 @@ func revisionDbName(baseName string, rev string) string {
 	return baseName + DbRevisionDelimiter + rev
 }
 
-func SplitRevDbName(dbName string) (string, string) {
+func SplitRevisionDbName(dbName string) (string, string) {
 	var baseName, rev string
 	parts := strings.SplitN(dbName, DbRevisionDelimiter, 2)
 	baseName = parts[0]
@@ -879,7 +879,7 @@ func (d *DoltSession) SetCurrentHead(ctx *sql.Context, dbName string, wsRef ref.
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	baseName, _ := SplitRevDbName(dbName)
+	baseName, _ := SplitRevisionDbName(dbName)
 	dbState, ok := d.dbStates[strings.ToLower(baseName)]
 	if !ok {
 		return sql.ErrDatabaseNotFound.New(dbName)
@@ -909,7 +909,7 @@ func (d *DoltSession) SwitchWorkingSet(
 
 	d.mu.Lock()
 	
-	baseName, _ := SplitRevDbName(dbName)
+	baseName, _ := SplitRevisionDbName(dbName)
 	dbState, ok := d.dbStates[strings.ToLower(baseName)]
 	if !ok {
 		d.mu.Unlock()
@@ -954,7 +954,7 @@ func (d *DoltSession) UseDatabase(ctx *sql.Context, db sql.Database) error {
 	// Set the session state for this database according to what database name was USEd
 	// In the case of a revision qualified name, that will be the revision specified
 	// In the case of an unqualified name (USE mydb), this will be the last checked out head in this session.
-	_, rev := SplitRevDbName(sdb.RequestedName())
+	_, rev := SplitRevisionDbName(sdb.RequestedName())
 	dbState := branchState.dbState
 	if rev == "" {
 		dbState.currRevSpec = dbState.checkedOutRevSpec
@@ -1222,7 +1222,7 @@ func (d *DoltSession) CurrentHead(ctx *sql.Context, dbName string) (string, bool
 	dbName = strings.ToLower(dbName)
 
 	var baseName, rev string
-	baseName, rev = SplitRevDbName(dbName)
+	baseName, rev = SplitRevisionDbName(dbName)
 	if rev != "" {
 		return "", false, fmt.Errorf("invalid database name: %s", dbName)
 	}
