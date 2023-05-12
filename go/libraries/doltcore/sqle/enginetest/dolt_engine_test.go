@@ -49,7 +49,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 85
+const SkipPreparedsCount = 86
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -155,6 +155,51 @@ func TestSingleScript(t *testing.T) {
 	harness := newDoltHarness(t)
 	for _, test := range scripts {
 		enginetest.TestScript(t, harness, test)
+	}
+}
+
+// Convenience test for debugging a single query. Unskip and set to the desired query.
+func TestSingleMergeScript(t *testing.T) {
+	t.Skip()
+	var scripts = []MergeScriptTest{
+		{
+			Name: "adding a non-null column with a default value to one side",
+			AncSetUpScript: []string{
+				"set dolt_force_transaction_commit = on;",
+				"create table t (pk int primary key, col1 int);",
+				"insert into t values (1, 1);",
+			},
+			RightSetUpScript: []string{
+				"alter table t add column col2 int not null default 0",
+				"alter table t add column col3 int;",
+				"insert into t values (2, 2, 2, null);",
+			},
+			LeftSetUpScript: []string{
+				"insert into t values (3, 3);",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:    "call dolt_merge('right');",
+					Expected: []sql.Row{{0, 0}},
+				},
+				{
+					Query:    "select * from t;",
+					Expected: []sql.Row{{1, 1, 0, nil}, {2, 2, 2, nil}, {3, 3, 0, nil}},
+				},
+				{
+					Query:    "select pk, violation_type from dolt_constraint_violations_t",
+					Expected: []sql.Row{},
+				},
+			},
+		},
+	}
+	for _, test := range scripts {
+		t.Run("merge right into left", func(t *testing.T) {
+			enginetest.TestScript(t, newDoltHarness(t), convertMergeScriptTest(test, false))
+		})
+		t.Run("merge left into right", func(t *testing.T) {
+			enginetest.TestScript(t, newDoltHarness(t), convertMergeScriptTest(test, true))
+		})
 	}
 }
 

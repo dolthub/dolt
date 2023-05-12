@@ -57,6 +57,7 @@ const (
 	CvType_ForeignKey CvType = iota + 1
 	CvType_UniqueIndex
 	CvType_CheckConstraint
+	CvType_NotNull
 )
 
 type FKViolationReceiver interface {

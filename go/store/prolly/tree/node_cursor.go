@@ -29,11 +29,11 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-// Cursor explores a tree of Nodes.
-type Cursor struct {
+// cursor explores a tree of Nodes.
+type cursor struct {
 	nd     Node
 	idx    int
-	parent *Cursor
+	parent *cursor
 	nrw    NodeStore
 }
 
@@ -43,56 +43,38 @@ type Ordering[K ~[]byte] interface {
 	Compare(left, right K) int
 }
 
-func newCursorAtStart(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, err error) {
-	cur = &Cursor{nd: nd, nrw: ns}
-	var leaf bool
-	leaf, err = cur.isLeaf()
-	if err != nil {
-		return nil, err
-	}
-	for !leaf {
+func newCursorAtStart(ctx context.Context, ns NodeStore, nd Node) (cur *cursor, err error) {
+	cur = &cursor{nd: nd, nrw: ns}
+	for !cur.isLeaf() {
 		nd, err = fetchChild(ctx, ns, cur.currentRef())
 		if err != nil {
 			return nil, err
 		}
 
 		parent := cur
-		cur = &Cursor{nd: nd, parent: parent, nrw: ns}
-		leaf, err = cur.isLeaf()
-		if err != nil {
-			return nil, err
-		}
+		cur = &cursor{nd: nd, parent: parent, nrw: ns}
 	}
 	return
 }
 
-func newCursorAtEnd(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, err error) {
-	cur = &Cursor{nd: nd, nrw: ns}
+func newCursorAtEnd(ctx context.Context, ns NodeStore, nd Node) (cur *cursor, err error) {
+	cur = &cursor{nd: nd, nrw: ns}
 	cur.skipToNodeEnd()
 
-	var leaf bool
-	leaf, err = cur.isLeaf()
-	if err != nil {
-		return nil, err
-	}
-	for !leaf {
+	for !cur.isLeaf() {
 		nd, err = fetchChild(ctx, ns, cur.currentRef())
 		if err != nil {
 			return nil, err
 		}
 
 		parent := cur
-		cur = &Cursor{nd: nd, parent: parent, nrw: ns}
+		cur = &cursor{nd: nd, parent: parent, nrw: ns}
 		cur.skipToNodeEnd()
-		leaf, err = cur.isLeaf()
-		if err != nil {
-			return nil, err
-		}
 	}
 	return
 }
 
-func newCursorPastEnd(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, err error) {
+func newCursorPastEnd(ctx context.Context, ns NodeStore, nd Node) (cur *cursor, err error) {
 	cur, err = newCursorAtEnd(ctx, ns, nd)
 	if err != nil {
 		return nil, err
@@ -110,7 +92,7 @@ func newCursorPastEnd(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, 
 	return
 }
 
-func newCursorAtOrdinal(ctx context.Context, ns NodeStore, nd Node, ord uint64) (cur *Cursor, err error) {
+func newCursorAtOrdinal(ctx context.Context, ns NodeStore, nd Node, ord uint64) (cur *cursor, err error) {
 	cnt, err := nd.TreeCount()
 	if err != nil {
 		return nil, err
@@ -138,13 +120,9 @@ func newCursorAtOrdinal(ctx context.Context, ns NodeStore, nd Node, ord uint64) 
 	})
 }
 
-// GetOrdinalOfCursor returns the ordinal position of a Cursor.
-func getOrdinalOfCursor(curr *Cursor) (ord uint64, err error) {
-	leaf, err := curr.isLeaf()
-	if err != nil {
-		return 0, err
-	}
-	if !leaf {
+// GetOrdinalOfCursor returns the ordinal position of a cursor.
+func getOrdinalOfCursor(curr *cursor) (ord uint64, err error) {
+	if !curr.isLeaf() {
 		return 0, fmt.Errorf("|cur| must be at a leaf")
 	}
 
@@ -178,21 +156,15 @@ func getOrdinalOfCursor(curr *Cursor) (ord uint64, err error) {
 	return ord, nil
 }
 
-func NewCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeStore, nd Node, key K, order O) (cur *Cursor, err error) {
+func newCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeStore, nd Node, key K, order O) (cur *cursor, err error) {
 	return newCursorFromSearchFn(ctx, ns, nd, searchForKey(key, order))
 }
 
-func newCursorFromSearchFn(ctx context.Context, ns NodeStore, nd Node, search SearchFn) (cur *Cursor, err error) {
-	cur = &Cursor{nd: nd, nrw: ns}
+func newCursorFromSearchFn(ctx context.Context, ns NodeStore, nd Node, search SearchFn) (cur *cursor, err error) {
+	cur = &cursor{nd: nd, nrw: ns}
 
 	cur.idx = search(cur.nd)
-	var leaf bool
-	leaf, err = cur.isLeaf()
-	if err != nil {
-		return nil, err
-	}
-	for !leaf {
-
+	for !cur.isLeaf() {
 		// stay in bounds for internal nodes
 		cur.keepInBounds()
 
@@ -202,20 +174,16 @@ func newCursorFromSearchFn(ctx context.Context, ns NodeStore, nd Node, search Se
 		}
 
 		parent := cur
-		cur = &Cursor{nd: nd, parent: parent, nrw: ns}
+		cur = &cursor{nd: nd, parent: parent, nrw: ns}
 
 		cur.idx = search(cur.nd)
-		leaf, err = cur.isLeaf()
-		if err != nil {
-			return nil, err
-		}
 	}
-
 	return
 }
 
-func newLeafCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeStore, nd Node, key K, order O) (Cursor, error) {
-	cur := Cursor{nd: nd, nrw: ns}
+func newLeafCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeStore, nd Node, key K, order O) (cursor, error) {
+	var err error
+	cur := cursor{nd: nd, nrw: ns}
 	for {
 		// binary search |cur.nd| for |key|
 		i, j := 0, cur.nd.Count()
@@ -230,10 +198,7 @@ func newLeafCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeSt
 		}
 		cur.idx = i
 
-		leaf, err := cur.isLeaf()
-		if err != nil {
-			return cur, err
-		} else if leaf {
+		if cur.isLeaf() {
 			break // done
 		}
 
@@ -345,17 +310,17 @@ func recursiveFetchLeafNodeSpan(ctx context.Context, ns NodeStore, nodes []Node,
 	return recursiveFetchLeafNodeSpan(ctx, ns, children, start, stop)
 }
 
-func currentCursorItems(cur *Cursor) (key, value Item) {
+func currentCursorItems(cur *cursor) (key, value Item) {
 	key = cur.nd.keys.GetItem(cur.idx, cur.nd.msg)
 	value = cur.nd.values.GetItem(cur.idx, cur.nd.msg)
 	return
 }
 
-// Seek updates the Cursor's node to one whose range spans the key's value, or the last
+// Seek updates the cursor's node to one whose range spans the key's value, or the last
 // node if the key is greater than all existing keys.
-// If a node does not contain the key, we recurse upwards to the parent Cursor. If the
+// If a node does not contain the key, we recurse upwards to the parent cursor. If the
 // node contains a key, we recurse downwards into child nodes.
-func Seek[K ~[]byte, O Ordering[K]](ctx context.Context, cur *Cursor, key K, order O) (err error) {
+func Seek[K ~[]byte, O Ordering[K]](ctx context.Context, cur *cursor, key K, order O) (err error) {
 	inBounds := true
 	if cur.parent != nil {
 		inBounds = inBounds && order.Compare(key, K(cur.firstKey())) >= 0
@@ -382,33 +347,30 @@ func Seek[K ~[]byte, O Ordering[K]](ctx context.Context, cur *Cursor, key K, ord
 	return
 }
 
-func (cur *Cursor) Valid() bool {
+func (cur *cursor) Valid() bool {
 	return cur.nd.count != 0 &&
 		cur.nd.bytes() != nil &&
 		cur.idx >= 0 &&
 		cur.idx < int(cur.nd.count)
 }
 
-func (cur *Cursor) CurrentKey() Item {
+func (cur *cursor) CurrentKey() Item {
 	return cur.nd.GetKey(cur.idx)
 }
 
-func (cur *Cursor) currentValue() Item {
+func (cur *cursor) currentValue() Item {
 	return cur.nd.GetValue(cur.idx)
 }
 
-func (cur *Cursor) currentRef() hash.Hash {
+func (cur *cursor) currentRef() hash.Hash {
 	return cur.nd.getAddress(cur.idx)
 }
 
-func (cur *Cursor) currentSubtreeSize() (uint64, error) {
-	leaf, err := cur.isLeaf()
-	if err != nil {
-		return 0, err
-	}
-	if leaf {
+func (cur *cursor) currentSubtreeSize() (uint64, error) {
+	if cur.isLeaf() {
 		return 1, nil
 	}
+	var err error
 	cur.nd, err = cur.nd.loadSubtrees()
 	if err != nil {
 		return 0, err
@@ -416,25 +378,25 @@ func (cur *Cursor) currentSubtreeSize() (uint64, error) {
 	return cur.nd.getSubtreeCount(cur.idx)
 }
 
-func (cur *Cursor) firstKey() Item {
+func (cur *cursor) firstKey() Item {
 	return cur.nd.GetKey(0)
 }
 
-func (cur *Cursor) lastKey() Item {
+func (cur *cursor) lastKey() Item {
 	lastKeyIdx := int(cur.nd.count) - 1
 	return cur.nd.GetKey(lastKeyIdx)
 }
 
-func (cur *Cursor) skipToNodeStart() {
+func (cur *cursor) skipToNodeStart() {
 	cur.idx = 0
 }
 
-func (cur *Cursor) skipToNodeEnd() {
+func (cur *cursor) skipToNodeEnd() {
 	lastKeyIdx := int(cur.nd.count) - 1
 	cur.idx = lastKeyIdx
 }
 
-func (cur *Cursor) keepInBounds() {
+func (cur *cursor) keepInBounds() {
 	if cur.idx < 0 {
 		cur.skipToNodeStart()
 	}
@@ -444,64 +406,59 @@ func (cur *Cursor) keepInBounds() {
 	}
 }
 
-func (cur *Cursor) atNodeStart() bool {
+func (cur *cursor) atNodeStart() bool {
 	return cur.idx == 0
 }
 
-// atNodeEnd returns true if the Cursor's current |idx|
+// atNodeEnd returns true if the cursor's current |idx|
 // points to the last node item
-func (cur *Cursor) atNodeEnd() bool {
+func (cur *cursor) atNodeEnd() bool {
 	lastKeyIdx := int(cur.nd.count) - 1
 	return cur.idx == lastKeyIdx
 }
 
-func (cur *Cursor) isLeaf() (bool, error) {
-	// todo(andy): cache Level
-	lvl, err := cur.level()
-	if err != nil {
-		return false, err
-	}
-	return lvl == 0, nil
+func (cur *cursor) isLeaf() bool {
+	return cur.nd.level == 0
 }
 
-func (cur *Cursor) level() (uint64, error) {
+func (cur *cursor) level() (uint64, error) {
 	return uint64(cur.nd.level), nil
 }
 
-// invalidateAtEnd sets the Cursor's index to the node count.
-func (cur *Cursor) invalidateAtEnd() {
+// invalidateAtEnd sets the cursor's index to the node count.
+func (cur *cursor) invalidateAtEnd() {
 	cur.idx = int(cur.nd.count)
 }
 
-// invalidateAtStart sets the Cursor's index to -1.
-func (cur *Cursor) invalidateAtStart() {
+// invalidateAtStart sets the cursor's index to -1.
+func (cur *cursor) invalidateAtStart() {
 	cur.idx = -1
 }
 
 // hasNext returns true if we do not need to recursively
-// check the parent to know that the current Cursor
+// check the parent to know that the current cursor
 // has more keys. hasNext can be false even if parent
 // cursors are not exhausted.
-func (cur *Cursor) hasNext() bool {
+func (cur *cursor) hasNext() bool {
 	return cur.idx < int(cur.nd.count)-1
 }
 
 // hasPrev returns true if the current node has preceding
 // keys. hasPrev can be false even in a parent node has
 // preceding keys.
-func (cur *Cursor) hasPrev() bool {
+func (cur *cursor) hasPrev() bool {
 	return cur.idx > 0
 }
 
-// outOfBounds returns true if the current Cursor and
+// outOfBounds returns true if the current cursor and
 // all parents are exhausted.
-func (cur *Cursor) outOfBounds() bool {
+func (cur *cursor) outOfBounds() bool {
 	return cur.idx < 0 || cur.idx >= int(cur.nd.count)
 }
 
 // advance either increments the current key index by one,
 // or has reached the end of the current node and skips to the next
-// child of the parent Cursor, recursively if necessary, returning
+// child of the parent cursor, recursively if necessary, returning
 // either an error or nil.
 //
 // More specifically, one of three things happens:
@@ -509,14 +466,14 @@ func (cur *Cursor) outOfBounds() bool {
 // 1) The current chunk still has keys, iterate to
 // the next |idx|;
 //
-// 2) We've exhausted the current Cursor, but there is at least
-// one |parent| Cursor with more keys. We find that |parent| recursively,
+// 2) We've exhausted the current cursor, but there is at least
+// one |parent| cursor with more keys. We find that |parent| recursively,
 // perform step (1), and then have every child initialize itself
 // using the new |parent|.
 //
-// 3) We've exhausted the current Cursor and every |parent|. Jump
+// 3) We've exhausted the current cursor and every |parent|. Jump
 // to an end state (idx = node.count).
-func (cur *Cursor) advance(ctx context.Context) error {
+func (cur *cursor) advance(ctx context.Context) error {
 	if cur.hasNext() {
 		cur.idx++
 		return nil
@@ -551,7 +508,7 @@ func (cur *Cursor) advance(ctx context.Context) error {
 
 // retreat decrements to the previous key, if necessary by
 // recursively decrementing parent nodes.
-func (cur *Cursor) retreat(ctx context.Context) error {
+func (cur *cursor) retreat(ctx context.Context) error {
 	if cur.hasPrev() {
 		cur.idx--
 		return nil
@@ -584,9 +541,9 @@ func (cur *Cursor) retreat(ctx context.Context) error {
 	return nil
 }
 
-// fetchNode loads the Node that the Cursor index points to.
-// It's called whenever the Cursor advances/retreats to a different chunk.
-func (cur *Cursor) fetchNode(ctx context.Context) (err error) {
+// fetchNode loads the Node that the cursor index points to.
+// It's called whenever the cursor advances/retreats to a different chunk.
+func (cur *cursor) fetchNode(ctx context.Context) (err error) {
 	assertTrue(cur.parent != nil, "cannot fetch node for cursor with nil parent")
 	cur.nd, err = fetchChild(ctx, cur.nrw, cur.parent.currentRef())
 	cur.idx = -1 // caller must set
@@ -594,7 +551,7 @@ func (cur *Cursor) fetchNode(ctx context.Context) (err error) {
 }
 
 // Compare returns the highest relative index difference
-// between two Cursor trees. A parent has a higher precedence
+// between two cursor trees. A parent has a higher precedence
 // than its child.
 //
 // Ex:
@@ -608,12 +565,12 @@ func (cur *Cursor) fetchNode(ctx context.Context) (err error) {
 // other: L3 -> 4, L2 -> 3, L1 -> 5, L0 -> 4
 //
 //	res => +1 (from level 2)
-func (cur *Cursor) compare(other *Cursor) int {
+func (cur *cursor) compare(other *cursor) int {
 	return compareCursors(cur, other)
 }
 
-func (cur *Cursor) clone() *Cursor {
-	cln := Cursor{
+func (cur *cursor) clone() *cursor {
+	cln := cursor{
 		nd:  cur.nd,
 		idx: cur.idx,
 		nrw: cur.nrw,
@@ -626,7 +583,7 @@ func (cur *Cursor) clone() *Cursor {
 	return &cln
 }
 
-func (cur *Cursor) copy(other *Cursor) {
+func (cur *cursor) copy(other *cursor) {
 	cur.nd = other.nd
 	cur.idx = other.idx
 	cur.nrw = other.nrw
@@ -639,7 +596,7 @@ func (cur *Cursor) copy(other *Cursor) {
 	}
 }
 
-func compareCursors(left, right *Cursor) (diff int) {
+func compareCursors(left, right *cursor) (diff int) {
 	diff = 0
 	for {
 		d := left.idx - right.idx

@@ -245,7 +245,9 @@ func ColCollsAreEqual(cc1, cc2 *ColCollection) bool {
 	}
 	// Pks Cols need to be in the same order and equivalent.
 	for i := 0; i < cc1.Size(); i++ {
-		if !cc1.cols[i].Equals(cc2.cols[i]) {
+		// Test that the columns are identical, but don't worry about tags matching, since
+		// different tags could be generated depending on how the schemas were created.
+		if !cc1.cols[i].EqualsWithoutTag(cc2.cols[i]) {
 			return false
 		}
 	}

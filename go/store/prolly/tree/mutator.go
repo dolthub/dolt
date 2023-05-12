@@ -69,7 +69,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		return root, nil // no mutations
 	}
 
-	cur, err := NewCursorAtKey(ctx, ns, root, K(newKey), order)
+	cur, err := newCursorAtKey(ctx, ns, root, K(newKey), order)
 	if err != nil {
 		return Node{}, err
 	}

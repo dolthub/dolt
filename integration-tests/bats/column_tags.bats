@@ -325,7 +325,7 @@ DELIM
     [[ $output =~ "col1   | 6" ]] || false
 }
 
-@test "column_tags: create table on two separate branches, merge them together by updating tags" {
+@test "column_tags: create table on two separate branches, merge them together even though they have different tags" {
     skip_nbf_not_dolt
 
     dolt branch other
@@ -344,23 +344,7 @@ DELIM
     dolt sql -q "ALTER TABLE target DROP COLUMN badCol;"
     dolt commit -Am "fixup"
 
-    run dolt schema tags
-    [[ $output =~ "| target | col1   | 14690 |" ]] || false
-
     dolt checkout main
-
-    run dolt schema tags
-    [ $status -eq 0 ]
-    [[ $output =~ "| target | col1   | 14649 |" ]] || false
-
-    run dolt merge other
-    [ $status -ne 0 ]
-    [[ $output =~ "table with same name 'target' added in 2 commits can't be merged" ]] || false
-    dolt reset --hard
-
-    dolt schema update-tag target col1 14690
-    dolt commit -am "update tag of col1 of target"
-
     run dolt merge other -m "merge other into main"
     [ $status -eq 0 ]
     [[ $output =~ "1 tables changed, 1 rows added(+)" ]] || false

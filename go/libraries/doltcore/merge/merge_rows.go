@@ -301,7 +301,6 @@ func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm *TableMerger, op
 func validateTupleFields(existingSch schema.Schema, targetSch schema.Schema) (bool, error) {
 	existingVD := existingSch.GetValueDescriptor()
 	targetVD := targetSch.GetValueDescriptor()
-
 	_, valMapping, err := schema.MapSchemaBasedOnTagAndName(existingSch, targetSch)
 	if err != nil {
 		return false, err
@@ -315,11 +314,6 @@ func validateTupleFields(existingSch schema.Schema, targetSch schema.Schema) (bo
 
 		// If the field types have changed between existing and target, bail.
 		if existingVD.Types[existingIndex].Enc != targetVD.Types[targetIndex].Enc {
-			return false, nil
-		}
-
-		// If a not-null constraint was added, bail.
-		if existingVD.Types[existingIndex].Nullable && !targetVD.Types[targetIndex].Nullable {
 			return false, nil
 		}
 
@@ -338,18 +332,18 @@ func validateTupleFields(existingSch schema.Schema, targetSch schema.Schema) (bo
 		return false, err
 	}
 
-	for i, j := range valMapping {
-		if i == j {
+	for targetIndex, existingIndex := range valMapping {
+		if targetIndex == existingIndex {
 			continue
 		}
 
+		col := targetSch.GetNonPKCols().GetByIndex(targetIndex)
 		// If we haven't bailed so far, then these fields were added at the end.
-		// If they are not-null bail.
-		if !targetVD.Types[i].Nullable {
+		// If one of these fields is NOT NULL, without a default value, then fail.
+		if !col.IsNullable() && col.Default == "" {
 			return false, nil
 		}
 	}
-
 	return true, nil
 }
 

@@ -222,7 +222,6 @@ func estimateProllyMapSize(keys, values [][]byte, subtrees []uint64, valAddrsCnt
 		panic(fmt.Sprintf("value vector exceeds Size limit ( %d > %d )", valSz, MaxVectorOffset))
 	}
 
-	// todo(andy): better estimates
 	bufSz += keySz + valSz               // tuples
 	bufSz += subtreesSz                  // subtree counts
 	bufSz += len(keys)*2 + len(values)*2 // offStart

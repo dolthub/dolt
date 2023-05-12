@@ -21,6 +21,8 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+
+	"sync"
 )
 
 type hooksDatabase struct {
@@ -58,14 +60,21 @@ func (db hooksDatabase) PostCommitHooks() []CommitHook {
 
 func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset, onlyWS bool) {
 	var err error
+	var wg sync.WaitGroup
 	for _, hook := range db.postCommitHooks {
 		if !onlyWS || hook.ExecuteForWorkingSets() {
-			err = hook.Execute(ctx, ds, db)
-			if err != nil {
-				hook.HandleError(ctx, err)
-			}
+			hook := hook
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				err = hook.Execute(ctx, ds, db)
+				if err != nil {
+					hook.HandleError(ctx, err)
+				}
+			}()
 		}
 	}
+	wg.Wait()
 }
 
 func (db hooksDatabase) CommitWithWorkingSet(

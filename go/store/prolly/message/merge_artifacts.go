@@ -224,7 +224,6 @@ func estimateMergeArtifactSize(keys, values [][]byte, subtrees []uint64, keyAddr
 		panic(fmt.Sprintf("value vector exceeds Size limit ( %d > %d )", valSz, MaxVectorOffset))
 	}
 
-	// todo(andy): better estimates
 	bufSz += keySz + valSz               // tuples
 	bufSz += refCntSz                    // subtree counts
 	bufSz += len(keys)*2 + len(values)*2 // offStart
