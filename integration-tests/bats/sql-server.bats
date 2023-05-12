@@ -74,7 +74,7 @@ EOF
 
     # verify that dolt_clone works
     dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test01" ""
-    dolt sql-client -P $PORT -u dolt --use-db 'test01' -q"call dolt_clone('file:///$tempDir/remote')" 
+    dolt sql-client -P $PORT -u dolt --use-db 'test01' -q"call dolt_clone('file:///$tempDir/remote')"
 }
 
 @test "sql-server: loglevels are case insensitive" {
@@ -200,19 +200,19 @@ SQL
     [[ "$output" =~ "one_pk" ]] || false
 
     # Add rows on the command line
-    run dolt --user=dolt sql -q "insert into one_pk values (1,1,1)"
-    [ "$status" -eq 1 ]
-
+    run dolt --verbose-engine-setup --user=dolt sql -q "insert into one_pk values (1,1,1)"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "NM4 Starting remote mode" ]] || false
     run dolt sql-client -P $PORT -u dolt -q "SELECT * FROM one_pk"
     [ $status -eq 0 ]
-    ! [[ $output =~ " 1 " ]] || false
+    [[ $output =~ " 1 " ]] || false
 
     # Test import as well (used by doltpy)
     echo 'pk,c1,c2' > import.csv
     echo '2,2,2' >> import.csv
     run dolt table import -u one_pk import.csv
     [ "$status" -eq 1 ]
-    
+
     run dolt sql-client -P $PORT -u dolt -q "SELECT * FROM one_pk"
     [ $status -eq 0 ]
     ! [[ $output =~ " 2 " ]] || false
@@ -235,7 +235,7 @@ SQL
         c1 BIGINT,
         c2 BIGINT,
         PRIMARY KEY (pk))"
-    
+
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false
@@ -394,7 +394,7 @@ SQL
     [[ $output =~ "1,1," ]] || false
     [[ $output =~ "2,2,2" ]] || false
     [[ $output =~ "3,3,3" ]] || false
-    
+
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "
     UPDATE r1_one_pk SET c2=1 WHERE pk=1;
     USE repo2;
@@ -445,10 +445,10 @@ SQL
     [[ $output =~ "r2_one_pk" ]] || false
 
     # put data in both using database scoped inserts
-    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo1.r1_one_pk (pk) VALUES (0)" 
+    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo1.r1_one_pk (pk) VALUES (0)"
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo1.r1_one_pk (pk,c1) VALUES (1,1)"
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo1.r1_one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
-    
+
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo2.r2_one_pk (pk) VALUES (0)"
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo2.r2_one_pk (pk,c3) VALUES (1,1)"
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "INSERT INTO repo2.r2_one_pk (pk,c3,c4) VALUES (2,2,2),(3,3,3)"
@@ -466,10 +466,10 @@ SQL
     [[ $output =~ "1,1," ]] || false
     [[ $output =~ "2,2,2" ]] || false
     [[ $output =~ "3,3,3" ]] || false
-    
+
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "DELETE FROM repo1.r1_one_pk where pk=0"
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "DELETE FROM repo2.r2_one_pk where pk=0"
-    
+
     run dolt sql-client -P $PORT -u dolt --use-db repo1 --result-format csv -q "SELECT * FROM repo1.r1_one_pk ORDER BY pk"
     [ $status -eq 0 ]
     ! [[ $output =~ "0,," ]] || false
@@ -740,15 +740,15 @@ SQL
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
     CALL DOLT_ADD('.');
     CALL dolt_commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');"
-    
+
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
 
-    run dolt --user=dolt sql -q "drop table one_pk"
-    [ "$status" -eq 1 ]
+    run dolt --verbose-engine-setup  --user=dolt --use-db repo1 sql -q "drop table one_pk"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "NM4 Starting remote mode" ]] || false
 
-    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "drop table one_pk"
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_add('.')"
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_commit('-am', 'Dropped table one_pk')"
 
@@ -891,7 +891,7 @@ EOF
     dolt sql-server --config ./config.yml --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
     sleep 1
-    
+
     # We do things manually here because we need to control
     # CLIENT_MULTI_STATEMENTS.
     python3 -c '
@@ -1005,7 +1005,7 @@ END""")
     [[ $output =~ "2,2" ]] || false
     [[ $output =~ "4,4" ]] || false
     ! [[ $output =~ "3,3" ]] || false
-    
+
     # drop the table on main, should keep counting from 4
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "drop table t1"
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE t1(pk bigint primary key auto_increment, val int)" ""
@@ -1055,7 +1055,7 @@ END""")
     cd repo3
     run dolt sql -q "select * from test" -r csv
     [ "$status" -eq 0 ]
-    [ "${lines[0]}" = "pk" ] 
+    [ "${lines[0]}" = "pk" ]
     [ "${lines[1]}" = "0" ]
     [ "${lines[2]}" = "1" ]
     [ "${lines[3]}" = "2" ]
@@ -1183,7 +1183,7 @@ END""")
     run dolt sql-client --use-db "test1/newbranch" -u dolt -P $PORT -q "select * from a"
     [ $status -ne 0 ]
     [[ "$output" =~ "database not found" ]] || false
-    
+
     # can't drop a branch-qualified database name
     run dolt sql-client -P $PORT -u dolt --use-db '' -q "drop database \`test2/newbranch\`"
     [ $status -ne 0 ]
@@ -1237,7 +1237,7 @@ END""")
     mkdir no_dolt && cd no_dolt
     mkdir db_dir
     start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
-    
+
     dolt sql-client -P $PORT -u dolt --use-db '' -q "create database test1"
     run dolt sql-client -P $PORT -u dolt --use-db '' -q "show databases"
     [ $status -eq 0 ]
@@ -1304,7 +1304,7 @@ END""")
     run dolt sql-client -P $PORT -u dolt --use-db '' -q "create database dir_exists"
     [ $status -ne 0 ]
     [[ $output =~ exists ]] || false
-    
+
     run dolt sql-client -P $PORT -u dolt --use-db '' -q	"create database file_exists"
     [ $status -ne 0 ]
     [[ $output =~ exists ]] || false
@@ -1496,14 +1496,15 @@ databases:
 
 @test "sql-server: sql-server locks database to writes" {
     cd repo2
-    dolt sql -q "create table a (x int primary key)" 
+    dolt sql -q "create table a (x int primary key)"
     start_sql_server
-    run dolt sql -q "create table b (x int primary key)" 
+    run dolt --verbose-engine-setup sql -q "create table b (x int primary key)"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "database is locked to writes" ]] || false
-    run dolt sql -q "insert into b values (0)"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "database is locked to writes" ]] || false
+    [[ "$output" =~ "User not found 'root'" ]] || false
+
+    run dolt --verbose-engine-setup --user dolt sql -q "create table b (x int primary key)"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "NM4 Starting remote mode" ]] || false
 }
 
 @test "sql-server: start server without socket flag should set default socket path" {
