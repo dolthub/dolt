@@ -1098,6 +1098,51 @@ tests:
       result:
         columns: ["COUNT(*)"]
         rows: [["20"]]
+   # Assert that branch creation and deletion also blocks on replication.
+  - on: server1
+    queries:
+    - exec: 'USE repo1'
+    - exec: 'CALL DOLT_BRANCH("new_branch")'
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - query: 'SELECT COUNT(*) FROM dolt_branches'
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["2"]]
+  - on: server1
+    queries:
+    - exec: 'USE repo1'
+    - exec: 'CALL DOLT_BRANCH("-d", "new_branch")'
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - query: 'SELECT COUNT(*) FROM dolt_branches'
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["1"]]
+  - on: server1
+    queries:
+    - exec: 'USE repo1'
+    - exec: 'CALL DOLT_BRANCH("new_branch")'
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - query: 'SELECT COUNT(*) FROM dolt_branches'
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["2"]]
+  - on: server1
+    queries:
+    - exec: 'USE repo1'
+    - exec: 'CALL DOLT_BRANCH("-d", "new_branch")'
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - query: 'SELECT COUNT(*) FROM dolt_branches'
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["1"]]
 - name: call dolt checkout
   multi_repos:
   - name: server1
