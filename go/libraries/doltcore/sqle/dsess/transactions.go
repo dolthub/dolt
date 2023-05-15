@@ -23,8 +23,8 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
 	"github.com/dolthub/vitess/go/mysql"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"

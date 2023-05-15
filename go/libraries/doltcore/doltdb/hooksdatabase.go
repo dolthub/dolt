@@ -96,7 +96,7 @@ func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset
 				}
 				if rsc != nil {
 					rsc.Wait[i] = f
-					if nf, ok := hook.(interface{
+					if nf, ok := hook.(interface {
 						NotifyWaitFailed()
 					}); ok {
 						rsc.NotifyWaitFailed[i] = nf.NotifyWaitFailed
