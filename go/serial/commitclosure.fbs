@@ -22,7 +22,8 @@ table CommitClosure {
   // array of subtree addresses for internal prolly tree nodes
   address_array:[ubyte];
 
-  // array of uvarint encoded subtree counts
+  // array of varint encoded subtree counts
+  // see: go/store/prolly/message/varint.go
   subtree_counts:[ubyte];
   // total count of prolly tree
   tree_count:uint64;
