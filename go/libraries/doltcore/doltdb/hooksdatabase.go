@@ -81,6 +81,7 @@ func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset
 	rsc := getReplicaState(ctx)
 	if rsc != nil {
 		rsc.Wait = make([]func(context.Context) error, len(db.postCommitHooks))
+		rsc.NotifyWaitFailed = make([]func(), len(db.postCommitHooks))
 	}
 	for il, hook := range db.postCommitHooks {
 		if !onlyWS || hook.ExecuteForWorkingSets() {
@@ -95,6 +96,13 @@ func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset
 				}
 				if rsc != nil {
 					rsc.Wait[i] = f
+					if nf, ok := hook.(interface{
+						NotifyWaitFailed()
+					}); ok {
+						rsc.NotifyWaitFailed[i] = nf.NotifyWaitFailed
+					} else {
+						rsc.NotifyWaitFailed[i] = func() {}
+					}
 				}
 			}()
 		}
@@ -105,10 +113,12 @@ func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset
 		for i := range rsc.Wait {
 			if rsc.Wait[i] != nil {
 				rsc.Wait[j] = rsc.Wait[i]
+				rsc.NotifyWaitFailed[j] = rsc.NotifyWaitFailed[i]
 				j++
 			}
 		}
 		rsc.Wait = rsc.Wait[:j]
+		rsc.NotifyWaitFailed = rsc.NotifyWaitFailed[:j]
 	}
 }
 

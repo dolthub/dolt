@@ -1222,6 +1222,13 @@ type ReplicationStatusController struct {
 	// associated with a commithook to complete. Must return if the
 	// associated Context is canceled.
 	Wait []func(ctx context.Context) error
+
+	// There is an entry here for each function in Wait. If a Wait fails,
+	// you can notify the corresponding function in this slice. This might
+	// control resiliency behaviors like adaptive retry and timeouts,
+	// circuit breakers, etc. and might feed into exposed replication
+	// metrics.
+	NotifyWaitFailed []func()
 }
 
 // UpdateWorkingSet updates the working set with the ref given to the root value given

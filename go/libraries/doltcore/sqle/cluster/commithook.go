@@ -61,6 +61,12 @@ type commithook struct {
 	// 4. If you read a channel out of |successChs|, that channel will be closed on the next successful replication attempt. It will not be closed before then.
 	successChs []chan struct{}
 
+	// If this is true, the waitF returned by Execute() will fast fail if
+	// we are not already caught up, instead of blocking on a successCh
+	// actually indicated we are caught up. This is set to by a call to
+	// NotifyWaitFailed(), an optional interface on CommitHook.
+	circuitBreakerOpen bool
+
 	role Role
 
 	// The standby replica to which the new root gets replicated.
@@ -157,6 +163,7 @@ func (h *commithook) replicate(ctx context.Context) {
 				}
 				h.successChs = nil
 			}
+			h.circuitBreakerOpen = false
 			h.cond.Wait()
 			lgr.Tracef("cluster/commithook: background thread: woken up.")
 		}
@@ -406,20 +413,32 @@ func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db datas.Dat
 	}
 	var waitF func(context.Context) error
 	if !h.isCaughtUp() {
-		if len(h.successChs) == 0 {
-			h.successChs = append(h.successChs, make(chan struct{}))
-		}
-		successCh := h.successChs[0]
-		waitF = func(ctx context.Context) error {
-			select {
-			case <-successCh:
-				return nil
-			case <-ctx.Done():
-				return ctx.Err()
+		if h.circuitBreakerOpen {
+			waitF = func(ctx context.Context) error {
+				return fmt.Errorf("circuit breaker for replication to %s/%s is open. this commit did not necessarily replicate successfully.", h.remotename, h.dbname)
+			}
+		} else {
+			if len(h.successChs) == 0 {
+				h.successChs = append(h.successChs, make(chan struct{}))
+			}
+			successCh := h.successChs[0]
+			waitF = func(ctx context.Context) error {
+				select {
+				case <-successCh:
+					return nil
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 			}
 		}
 	}
 	return waitF, nil
+}
+
+func (h *commithook) NotifyWaitFailed() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.circuitBreakerOpen = true
 }
 
 func (h *commithook) HandleError(ctx context.Context, err error) error {

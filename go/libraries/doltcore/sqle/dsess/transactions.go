@@ -276,12 +276,14 @@ func WaitForReplicationController(ctx *sql.Context, rsc doltdb.ReplicationStatus
 		close(done)
 	}()
 
+	waitFailed := false
 	select {
 	case <-time.After(time.Duration(timeoutI) * time.Second):
 		// We timed out before all the waiters were done.
 		// First we make certain to finalize everything.
 		cancel()
 		<-done
+		waitFailed = true
 	case <-done:
 		cancel()
 	}
@@ -290,9 +292,12 @@ func WaitForReplicationController(ctx *sql.Context, rsc doltdb.ReplicationStatus
 	// returned nil errors. Any non-nil entries in rsc.Wait returned an
 	// error. We turn those into warnings here.
 	numFailed := 0
-	for _, f := range rsc.Wait {
+	for i, f := range rsc.Wait {
 		if f != nil {
 			numFailed += 1
+			if waitFailed {
+				rsc.NotifyWaitFailed[i]()
+			}
 		}
 	}
 	ctx.Session.Warn(&sql.Warning{
