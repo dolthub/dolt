@@ -157,13 +157,13 @@ func (h *commithook) replicate(ctx context.Context) {
 			if h.waitNotify != nil {
 				h.waitNotify()
 			}
-			if len(h.successChs) != 0 {
+			if len(h.successChs) != 0 && h.isCaughtUp() {
 				for _, ch := range h.successChs {
 					close(ch)
 				}
 				h.successChs = nil
+				h.circuitBreakerOpen = false
 			}
-			h.circuitBreakerOpen = false
 			h.cond.Wait()
 			lgr.Tracef("cluster/commithook: background thread: woken up.")
 		}
