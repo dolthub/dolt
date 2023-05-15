@@ -54,6 +54,7 @@ const (
 	createParam       = "create-table"
 	updateParam       = "update-table"
 	replaceParam      = "replace-table"
+	appendParam       = "append-table"
 	tableParam        = "table"
 	fileParam         = "file"
 	schemaParam       = "schema"
@@ -237,6 +238,8 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		moveOp = mvdata.CreateOp
 	case apr.Contains(replaceParam):
 		moveOp = mvdata.ReplaceOp
+	case apr.Contains(appendParam):
+		moveOp = mvdata.AppendOp
 	default:
 		moveOp = mvdata.UpdateOp
 	}
@@ -352,6 +355,7 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{fileParam, "The file being imported. Supported file types are csv, psv, and nbf."})
 	ap.SupportsFlag(createParam, "c", "Create a new table, or overwrite an existing table (with the -f flag) from the imported data.")
 	ap.SupportsFlag(updateParam, "u", "Update an existing table with the imported data.")
+	ap.SupportsFlag(appendParam, "a", "Require that the operation will not modify any rows in the table.")
 	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
