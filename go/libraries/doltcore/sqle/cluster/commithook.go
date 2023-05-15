@@ -199,7 +199,7 @@ func (h *commithook) attemptHeartbeat(ctx context.Context) {
 	if destDB == nil {
 		return
 	}
-	ctx, h.cancelReplicate = context.WithTimeout(ctx, 5 * time.Second)
+	ctx, h.cancelReplicate = context.WithTimeout(ctx, 5*time.Second)
 	defer func() {
 		if h.cancelReplicate != nil {
 			h.cancelReplicate()
