@@ -427,6 +427,12 @@ func runMain() int {
 	globalArgs, args, initCliContext, printUsage, err := splitArgsOnSubCommand(args)
 	if printUsage {
 		doltCommand.PrintUsage("dolt")
+		_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
+
+		cli.Println("\n\nDolt subcommands are in transition to using the flags listed below as global flags.  ")
+		cli.Println("The sql subcommand is currently the only command that uses these flags.  All other commands will ignore them.\n")
+		usage()
+
 		return 0
 	}
 	if err != nil {
