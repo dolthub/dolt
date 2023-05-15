@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -65,11 +66,13 @@ func doDoltRemote(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("error: invalid argument, use 'dolt_remotes' system table to list remotes")
 	}
 
+	var rsc doltdb.ReplicationStatusController
+
 	switch apr.Arg(0) {
 	case "add":
 		err = addRemote(ctx, dbName, dbData, apr, dSess)
 	case "remove", "rm":
-		err = removeRemote(ctx, dbData, apr)
+		err = removeRemote(ctx, dbData, apr, &rsc)
 	default:
 		err = fmt.Errorf("error: invalid argument")
 	}
@@ -77,6 +80,9 @@ func doDoltRemote(ctx *sql.Context, args []string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
+
+	dsess.WaitForReplicationController(ctx, rsc)
+
 	return 0, nil
 }
 
@@ -106,7 +112,7 @@ func addRemote(_ *sql.Context, dbName string, dbd env.DbData, apr *argparser.Arg
 	return dbd.Rsw.AddRemote(r)
 }
 
-func removeRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResults) error {
+func removeRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
 	if apr.NArg() != 2 {
 		return fmt.Errorf("error: invalid argument")
 	}
@@ -133,7 +139,7 @@ func removeRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResul
 		rr := r.(ref.RemoteRef)
 
 		if rr.GetRemote() == remote.Name {
-			err = ddb.DeleteBranch(ctx, rr)
+			err = ddb.DeleteBranch(ctx, rr, rsc)
 
 			if err != nil {
 				return fmt.Errorf("%w; failed to delete remote tracking ref '%s'; %s", env.ErrFailedToDeleteRemote, rr.String(), err.Error())

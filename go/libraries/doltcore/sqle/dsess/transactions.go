@@ -219,7 +219,7 @@ func doltCommit(ctx *sql.Context,
 
 	var rsc doltdb.ReplicationStatusController
 	newCommit, err := tx.dbData.Ddb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, &pending, workingSet, currHash, tx.getWorkingSetMeta(ctx), &rsc)
-	waitForReplicationController(ctx, rsc)
+	WaitForReplicationController(ctx, rsc)
 	return workingSet, newCommit, err
 }
 
@@ -232,7 +232,7 @@ func txCommit(ctx *sql.Context,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	var rsc doltdb.ReplicationStatusController
 	err := tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx), &rsc)
-	waitForReplicationController(ctx, rsc)
+	WaitForReplicationController(ctx, rsc)
 	return workingSet, nil, err
 }
 
@@ -241,7 +241,7 @@ func (tx *DoltTransaction) DoltCommit(ctx *sql.Context, workingSet *doltdb.Worki
 	return tx.doCommit(ctx, workingSet, commit, doltCommit)
 }
 
-func waitForReplicationController(ctx *sql.Context, rsc doltdb.ReplicationStatusController) {
+func WaitForReplicationController(ctx *sql.Context, rsc doltdb.ReplicationStatusController) {
 	if len(rsc.Wait) == 0 {
 		return
 	}

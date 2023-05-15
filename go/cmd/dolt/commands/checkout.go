@@ -238,7 +238,7 @@ func checkoutRemoteBranchOrSuggestNew(ctx context.Context, dEnv *env.DoltEnv, na
 }
 
 func checkoutNewBranchFromStartPt(ctx context.Context, dEnv *env.DoltEnv, newBranch, startPt string) errhand.VerboseError {
-	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, false)
+	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, false, nil)
 	if err != nil {
 		return errhand.BuildDError(err.Error()).Build()
 	}

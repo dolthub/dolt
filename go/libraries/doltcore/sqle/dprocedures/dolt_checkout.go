@@ -71,9 +71,11 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Could not load database %s", currentDbName)
 	}
 
+	var rsc doltdb.ReplicationStatusController
+
 	// Checking out new branch.
 	if branchOrTrack {
-		err = checkoutNewBranch(ctx, dbName, dbData, apr)
+		err = checkoutNewBranch(ctx, dbName, dbData, apr, &rsc)
 		if err != nil {
 			return 1, err
 		} else {
@@ -121,12 +123,14 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 
 	err = checkoutTables(ctx, roots, dbName, args)
 	if err != nil && apr.NArg() == 1 {
-		err = checkoutRemoteBranch(ctx, dbName, dbData, branchName, apr)
+		err = checkoutRemoteBranch(ctx, dbName, dbData, branchName, apr, &rsc)
 	}
 
 	if err != nil {
 		return 1, err
 	}
+
+	dsess.WaitForReplicationController(ctx, rsc)
 
 	return 0, nil
 }
@@ -196,7 +200,7 @@ func getRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, st
 
 // checkoutRemoteBranch checks out a remote branch creating a new local branch with the same name as the remote branch
 // and set its upstream. The upstream persists out of sql session.
-func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, branchName string, apr *argparser.ArgParseResults) error {
+func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
 	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
 	if err != nil {
 		return errors.New("fatal: unable to read from data repository")
@@ -206,7 +210,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, br
 		return fmt.Errorf("error: could not find %s", branchName)
 	} else if len(remoteRefs) == 1 {
 		remoteRef := remoteRefs[0]
-		err = actions.CreateBranchWithStartPt(ctx, dbData, branchName, remoteRef.String(), false)
+		err = actions.CreateBranchWithStartPt(ctx, dbData, branchName, remoteRef.String(), false, rsc)
 		if err != nil {
 			return err
 		}
@@ -226,7 +230,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, br
 	}
 }
 
-func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *argparser.ArgParseResults) error {
+func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
 	var newBranchName string
 	var remoteName, remoteBranchName string
 	var startPt = "head"
@@ -259,7 +263,7 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 		newBranchName = newBranch
 	}
 
-	err = actions.CreateBranchWithStartPt(ctx, dbData, newBranchName, startPt, false)
+	err = actions.CreateBranchWithStartPt(ctx, dbData, newBranchName, startPt, false, rsc)
 	if err != nil {
 		return err
 	}
