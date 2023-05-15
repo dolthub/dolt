@@ -98,7 +98,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		case env.ErrNoUpstreamForBranch:
 			currentBranch, err := dEnv.RepoStateReader().CWBHeadRef()
 			if err != nil {
-				verr = errhand.BuildDError("fatal: The current branch could not be identified").Build()
+				verr = errhand.BuildDError("fatal: The current branch could not be identified").AddCause(err).Build()
 			} else {
 				remoteName := "<remote>"
 				if defRemote, verr := env.GetDefaultRemote(dEnv.RepoStateReader()); verr == nil {

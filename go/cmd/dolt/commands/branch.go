@@ -175,11 +175,7 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		}
 
 		if verbose {
-			headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-			if err != nil {
-				return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), nil)
-			}
-			cm, err := dEnv.DoltDB.Resolve(ctx, cs, headRef)
+			cm, err := dEnv.DoltDB.Resolve(ctx, cs, currentBranch)
 
 			if err == nil {
 				h, err := cm.HashOf()

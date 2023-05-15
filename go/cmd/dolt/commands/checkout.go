@@ -180,12 +180,13 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Ar
 		return verr
 	}
 
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return errhand.BuildDError(err.Error()).Build()
+	}
+
 	// the new branch is checked out at this point
 	if setTrackUpstream {
-		headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-		if err != nil {
-			return errhand.BuildDError(err.Error()).Build()
-		}
 		verr = SetRemoteUpstreamForBranchRef(dEnv, remoteName, remoteBranchName, headRef)
 		if verr != nil {
 			return verr
@@ -201,10 +202,6 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Ar
 		_, remoteOk := remotes[remoteName]
 		if !remoteOk {
 			return nil
-		}
-		headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-		if err != nil {
-			return errhand.BuildDError(err.Error()).Build()
 		}
 		verr = SetRemoteUpstreamForBranchRef(dEnv, remoteName, remoteBranchName, headRef)
 		if verr != nil {
