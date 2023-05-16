@@ -202,7 +202,7 @@ SQL
     # Add rows on the command line
     run dolt --verbose-engine-setup --user=dolt sql -q "insert into one_pk values (1,1,1)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "NM4 Starting remote mode" ]] || false
+    [[ "$output" =~ "starting remote mode" ]] || false
     run dolt sql-client -P $PORT -u dolt -q "SELECT * FROM one_pk"
     [ $status -eq 0 ]
     [[ $output =~ " 1 " ]] || false
@@ -747,7 +747,7 @@ SQL
 
     run dolt --verbose-engine-setup  --user=dolt --use-db repo1 sql -q "drop table one_pk"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "NM4 Starting remote mode" ]] || false
+    [[ "$output" =~ "starting remote mode" ]] || false
 
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_add('.')"
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_commit('-am', 'Dropped table one_pk')"
@@ -1504,7 +1504,7 @@ databases:
 
     run dolt --verbose-engine-setup --user dolt sql -q "create table b (x int primary key)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "NM4 Starting remote mode" ]] || false
+    [[ "$output" =~ "starting remote mode" ]] || false
 }
 
 @test "sql-server: start server without socket flag should set default socket path" {
