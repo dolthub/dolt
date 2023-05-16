@@ -42,6 +42,13 @@ type CommitHook interface {
 	ExecuteForWorkingSets() bool
 }
 
+// If a commit hook supports this interface, it can be notified if waiting for
+// replication in the callback returned by |Execute| failed to complete in time
+// or returned an error.
+type NotifyWaitFailedCommitHook interface {
+	NotifyWaitFailed()
+}
+
 func (db hooksDatabase) SetCommitHooks(ctx context.Context, postHooks []CommitHook) hooksDatabase {
 	db.postCommitHooks = make([]CommitHook, len(postHooks))
 	copy(db.postCommitHooks, postHooks)
@@ -88,9 +95,7 @@ func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset
 				}
 				if rsc != nil {
 					rsc.Wait[i+ioff] = f
-					if nf, ok := hook.(interface {
-						NotifyWaitFailed()
-					}); ok {
+					if nf, ok := hook.(NotifyWaitFailedCommitHook); ok {
 						rsc.NotifyWaitFailed[i+ioff] = nf.NotifyWaitFailed
 					} else {
 						rsc.NotifyWaitFailed[i+ioff] = func() {}
