@@ -48,10 +48,14 @@ CSV
     run dolt table import -a t --continue <<CSV
 pk, col1
 1, 1
+2, 3
 CSV
 
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows Processed: 1, Modifications: 0, Had No Effect: 1" ]] || false
+    [[ "$output" =~ "The following rows were skipped:" ]] || false
+    [[ "$output" =~ "[1,1]" ]] || false
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Lines skipped: 1" ]] || false
 }
 
 @test "import-append-tables: reject rows in source that would modify rows in destination, but continue if --continue is supplied" {
