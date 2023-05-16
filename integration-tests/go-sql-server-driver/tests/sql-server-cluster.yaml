@@ -925,6 +925,74 @@ tests:
       result:
         columns: ["count(*)"]
         rows: [["15"]]
+- name: last_updated heartbeats
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
+  connections:
+  - on: server1
+    queries:
+    - exec: 'create database repo1'
+    - query: "call dolt_assume_cluster_role('standby', 2)"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+  - on: server1
+    queries:
+    - query: "call dolt_assume_cluster_role('primary', 3)"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+  - on: server2
+    queries:
+    - query: "SELECT TIMESTAMPDIFF(SECOND, CONVERT_TZ(last_update, 'GMT', @@GLOBAL.time_zone), NOW()) < 5 AS within_threshold FROM dolt_cluster.dolt_cluster_status;"
+      result:
+        columns: ["within_threshold"]
+        rows: [["1"]]
+    - query: "SELECT SLEEP(5)"
+      result:
+        columns: ["SLEEP(5)"]
+        rows: [["0"]]
+    - query: "SELECT TIMESTAMPDIFF(SECOND, CONVERT_TZ(last_update, 'GMT', @@GLOBAL.time_zone), NOW()) < 5 AS within_threshold FROM dolt_cluster.dolt_cluster_status;"
+      result:
+        columns: ["within_threshold"]
+        rows: [["1"]]
 - name: create new database, clone a database, primary replicates to standby, standby has both databases
   multi_repos:
   - name: server1
