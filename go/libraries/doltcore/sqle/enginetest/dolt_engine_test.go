@@ -264,24 +264,52 @@ func TestSingleQueryPrepared(t *testing.T) {
 
 func TestSingleScriptPrepared(t *testing.T) {
 	t.Skip()
+	
 	var script = queries.ScriptTest{
-		Name: "table with commit column should maintain its data in diff",
+		Name: "dolt_history table filter correctness",
 		SetUpScript: []string{
-			"CREATE TABLE t (pk int PRIMARY KEY, commit varchar(20));",
-			"CALL DOLT_ADD('.');",
-			"CALL dolt_commit('-am', 'creating table t');",
-			"INSERT INTO t VALUES (1, '123456');",
-			"CALL dolt_commit('-am', 'insert data');",
+			"create table xy (x int primary key, y int);",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'creating table');",
+			"insert into xy values (0, 1);",
+			"call dolt_commit('-am', 'add data');",
+			"insert into xy values (2, 3);",
+			"call dolt_commit('-am', 'add data');",
+			"insert into xy values (4, 5);",
+			"call dolt_commit('-am', 'add data');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT to_pk, char_length(to_commit), from_pk, char_length(from_commit), diff_type from dolt_diff_t;",
-				Expected: []sql.Row{{1, 32, nil, 32, "added"}},
+				Query: "select * from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1) order by 1",
+				Expected: []sql.Row{
+					sql.Row{0, 1, "itt2nrlkbl7jis4gt9aov2l32ctt08th", "billy bob", time.Date(1970, time.January, 1, 19, 0, 0, 0, time.Local)},
+					sql.Row{2, 3, "itt2nrlkbl7jis4gt9aov2l32ctt08th", "billy bob", time.Date(1970, time.January, 1, 19, 0, 0, 0, time.Local)},
+				},
+			},
+			{
+				Query: "select count(*) from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1)",
+				Expected: []sql.Row{
+					{2},
+				},
+			},
+			{
+				Query: "select count(*) from dolt_history_xy where commit_hash = 'itt2nrlkbl7jis4gt9aov2l32ctt08th'",
+				Expected: []sql.Row{
+					{2},
+				},
 			},
 		},
 	}
-	harness := newDoltHarness(t)
-	enginetest.TestScriptPrepared(t, harness, script)
+
+	tcc := &testCommitClock{}
+	cleanup := installTestCommitClock(tcc)
+	defer cleanup()
+
+	sql.RunWithNowFunc(tcc.Now, func() error {
+		harness := newDoltHarness(t)
+		enginetest.TestScriptPrepared(t, harness, script)
+		return nil
+	})
 }
 
 func TestVersionedQueries(t *testing.T) {
