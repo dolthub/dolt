@@ -2828,5 +2828,5 @@ SQL
     # Use of the use-db flag when we have a different DB specified by data-dir should error.
     run dolt --data-dir="$ROOT_DIR/dbb" --use-db=dba sql -q "show tables"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "database not found" ]] || false
+    [[ "$output" =~ "provided --use-db dba does not exist or is not a directory" ]] || false
 }
