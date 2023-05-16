@@ -398,7 +398,29 @@ func (td TableDelta) CurName() string {
 }
 
 func (td TableDelta) HasFKChanges() bool {
-	return !fkSlicesAreEqual(td.FromFks, td.ToFks)
+	if len(td.FromFks) != len(td.ToFks) {
+		return true
+	}
+
+	sort.Slice(td.FromFks, func(i, j int) bool {
+		return td.FromFks[i].Name < td.FromFks[j].Name
+	})
+	sort.Slice(td.ToFks, func(i, j int) bool {
+		return td.ToFks[i].Name < td.ToFks[j].Name
+	})
+
+	fromSchemaMap := td.FromFksParentSch
+	fromSchemaMap[td.FromName] = td.FromSch
+	toSchemaMap := td.ToFksParentSch
+	toSchemaMap[td.ToName] = td.ToSch
+
+	for i := range td.FromFks {
+		if !td.FromFks[i].Equals(td.ToFks[i], fromSchemaMap, toSchemaMap) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // GetSchemas returns the table's schema at the fromRoot and toRoot, or schema.Empty if the table did not exist.
@@ -536,26 +558,6 @@ func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, er
 	}
 
 	return from, to, nil
-}
-
-func fkSlicesAreEqual(from, to []doltdb.ForeignKey) bool {
-	if len(from) != len(to) {
-		return false
-	}
-
-	sort.Slice(from, func(i, j int) bool {
-		return from[i].Name < from[j].Name
-	})
-	sort.Slice(to, func(i, j int) bool {
-		return to[i].Name < to[j].Name
-	})
-
-	for i := range from {
-		if !from[i].DeepEquals(to[i]) {
-			return false
-		}
-	}
-	return true
 }
 
 // SqlSchemaDiff returns a slice of DDL statements that will transform the schema in the from delta to the schema in
