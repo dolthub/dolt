@@ -21,7 +21,7 @@ teardown() {
     teardown_common
 }
 
-@test "sql: test switch between server/no server" {
+@test "sql-local-remote: test switch between server/no server" {
     start_sql_server defaultDB
 
     run dolt --verbose-engine-setup --user dolt sql -q "show databases" 
@@ -39,7 +39,7 @@ teardown() {
     [[ "$output" =~ "altDB" ]] || false
 }
 
-@test "sql: check --data-dir pointing to a server root can be used when in different directory." {
+@test "sql-local-remote: check --data-dir pointing to a server root can be used when in different directory." {
     start_sql_server altDb
     ROOT_DIR=$(pwd)
 
@@ -79,7 +79,7 @@ teardown() {
 }
 
 
-@test "sql: check --data-dir pointing to a database root can be used when in different directory." {
+@test "sql-local-remote: check --data-dir pointing to a database root can be used when in different directory." {
     start_sql_server altDb
     ROOT_DIR=$(pwd)
 
