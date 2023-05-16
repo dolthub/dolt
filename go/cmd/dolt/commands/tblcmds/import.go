@@ -17,7 +17,6 @@ package tblcmds
 import (
 	"context"
 	"fmt"
-	"gopkg.in/src-d/go-errors.v1"
 	"io"
 	"os"
 	"regexp"
@@ -31,6 +30,7 @@ import (
 	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/text/message"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
