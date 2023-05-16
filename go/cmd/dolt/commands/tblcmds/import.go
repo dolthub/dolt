@@ -17,6 +17,7 @@ package tblcmds
 import (
 	"context"
 	"fmt"
+	"gopkg.in/src-d/go-errors.v1"
 	"io"
 	"os"
 	"regexp"
@@ -528,7 +529,11 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 	badRowCB := func(row sql.Row, err error) (quit bool) {
 		// record the first error encountered unless asked to ignore it
 		if row != nil && rowErr == nil && !options.contOnErr {
-			rowErr = fmt.Errorf("A bad row was encountered: %s: %w", sql.FormatRow(row), err)
+			if ue, ok := err.(sql.WrappedInsertError).Cause.(*errors.Error).Cause().(sql.UniqueKeyError); ok {
+				rowErr = fmt.Errorf("row %s would be overwritten by %s: %w", sql.FormatRow(ue.Existing), sql.FormatRow(row), err)
+			} else {
+				rowErr = fmt.Errorf("A bad row was encountered: %s: %w", sql.FormatRow(row), err)
+			}
 		}
 
 		atomic.AddInt64(&badCount, 1)
