@@ -402,21 +402,15 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 		return nil
 	}
 
-	isDirty, err := d.isDirty(ctx, dbName)
-	if err != nil {
-		return err
+	dirties := d.dirtyWorkingSets()
+	if len(dirties) == 0 {
+		return nil
 	}
 	
-	if !isDirty {
-		return nil
+	if len(dirties) > 1 {
+		return ErrDirtyWorkingSets
 	}
-
-	// This is triggered when certain commands are sent to the server (ex. commit) when a database is not selected.
-	// These commands should not error.
-	if dbName == "" {
-		return nil
-	}
-
+	
 	performDoltCommitVar, err := d.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommit)
 	if err != nil {
 		return err
@@ -452,16 +446,20 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 	}
 }
 
-// isDirty returns whether the working set for the database named is dirty
-// TODO: remove the dbname parameter, return a global dirty bit
-// TODO: re-evaluate dirty tracking like this altogether, use tx data
-func (d *DoltSession) isDirty(ctx *sql.Context, dbName string) (bool, error) {
-	branchState, _, err := d.lookupDbState(ctx, dbName)
-	if err != nil {
-		return false, err
+var ErrDirtyWorkingSets = errors.New("multiple dirty working sets found")
+
+// dirtyWorkingSets returns all dirty working sets for this session
+func (d *DoltSession) dirtyWorkingSets() []*branchState {
+	var dirtyStates []*branchState
+	for _, state := range d.dbStates {
+		for _, branchState := range state.heads {
+			if branchState.dirty {
+				dirtyStates = append(dirtyStates, branchState)
+			}
+		}
 	}
 	
-	return branchState.dbState.dirty, nil
+	return dirtyStates
 }
 
 // CommitWorkingSet commits the working set for the transaction given, without creating a new dolt commit.
@@ -537,7 +535,7 @@ func (d *DoltSession) doCommit(ctx *sql.Context, dbName string, tx sql.Transacti
 		return nil, err
 	}
 
-	branchState.dbState.dirty = false
+	branchState.dirty = false
 	return newCommit, nil
 }
 
@@ -838,6 +836,7 @@ func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roo
 // SetWorkingSet sets the working set for this session.
 // Unlike setting the working root alone, this method always marks the session dirty.
 // TODO: this is doing a lot of resolve work that should only happen once, at initialization time
+// TODO: find uses of this for dirty changes
 func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.WorkingSet) error {
 	if ws == nil {
 		panic("attempted to set a nil working set for the session")
@@ -863,7 +862,7 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 		return err
 	}
 
-	branchState.dbState.dirty = true
+	branchState.dirty = true
 
 	return nil
 }

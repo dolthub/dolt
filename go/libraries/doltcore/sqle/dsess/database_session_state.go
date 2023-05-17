@@ -74,8 +74,6 @@ type DatabaseSessionState struct {
 	heads 			map[string]*branchState
 	// globalState is the global state of this session (shared by all sessions for a particular db)
 	globalState  globalstate.GlobalState
-	// dirty is true if this session has uncommitted changes
-	dirty        bool
 	// tmpFileDir is the directory to use for temporary files for this database
 	tmpFileDir   string
 	
@@ -123,6 +121,7 @@ type branchState struct {
 	// sessionCache is a collection of cached values used to speed up performance
 	sessionCache *SessionCache
 	// dirty is true if this branch state has uncommitted changes
+	// TODO NEXT: fill this in and check it
 	dirty bool
 }
 
