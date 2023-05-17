@@ -651,7 +651,9 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 // GetWorkingSet gets the current working set for the database.
 // If there is no working set (most likely because the DB is in Detached Head mode, return an error.
 // If a command needs to work while in Detached Head, that command should call sess.LookupDbState directly.
-// TODO: Replace all uses of dbState.WorkingSet, including this, with a new interface.
+// TODO: This is a temporary measure to make sure that new commands that call GetWorkingSet don't unexpectedly receive
+// a null pointer. In the future, we should replace all uses of dbState.WorkingSet, including this, with a new interface
+// where users avoid handling the WorkingSet directly.
 func (db Database) GetWorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbState, ok, err := sess.LookupDbState(ctx, db.Name())
