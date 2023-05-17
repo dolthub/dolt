@@ -160,7 +160,7 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 	for i, r := range refs {
 		switch dRef := r.(type) {
 		case ref.BranchRef:
-			err = ddb.NewBranchAtCommit(ctx, dRef, newHeads[i])
+			err = ddb.NewBranchAtCommit(ctx, dRef, newHeads[i], nil)
 
 		case ref.TagRef:
 			// rewrite tag with new commit

@@ -156,7 +156,7 @@ func (mr *MultiRepoTestSetup) NewRemote(remoteName string) {
 
 func (mr *MultiRepoTestSetup) NewBranch(dbName, branchName string) {
 	dEnv := mr.envs[dbName]
-	err := actions.CreateBranchWithStartPt(context.Background(), dEnv.DbData(), branchName, "head", false)
+	err := actions.CreateBranchWithStartPt(context.Background(), dEnv.DbData(), branchName, "head", false, nil)
 	if err != nil {
 		mr.Errhand(err)
 	}
@@ -273,6 +273,7 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 		ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),
 		prevHash,
 		doltdb.TodoWorkingSetMeta(),
+		nil,
 	)
 	if err != nil {
 		panic("couldn't commit: " + err.Error())

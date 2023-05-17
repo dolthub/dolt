@@ -33,7 +33,7 @@ var goldenHash = hash.Hash{
 	0xea, 0x7d, 0x47, 0x69, 0x6c,
 }
 
-// todo(andy): need and analogous test in pkg prolly
+// todo(andy): need an analogous test in pkg prolly
 func TestContentAddress(t *testing.T) {
 	tups, _ := AscendingUintTuples(12345)
 	m := makeTree(t, tups)

@@ -62,7 +62,7 @@ import (
 )
 
 const (
-	Version = "1.0.0"
+	Version = "1.1.0"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -427,6 +427,15 @@ func runMain() int {
 	globalArgs, args, initCliContext, printUsage, err := splitArgsOnSubCommand(args)
 	if printUsage {
 		doltCommand.PrintUsage("dolt")
+		_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
+
+		specialMsg := `
+Dolt subcommands are in transition to using the flags listed below as global flags.
+The sql subcommand is currently the only command that uses these flags. All other commands will ignore them.
+`
+		cli.Println(specialMsg)
+		usage()
+
 		return 0
 	}
 	if err != nil {

@@ -21,7 +21,8 @@ table Blob {
   // array of subtree addresses for internal tree nodes
   address_array:[ubyte];
 
-  // array of uvarint encoded subtree sizes
+  // array of varint encoded subtree counts
+  // see: go/store/prolly/message/varint.go
   subtree_sizes:[ubyte];
   tree_size:uint64;
   tree_level:uint8;

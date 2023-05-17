@@ -252,7 +252,7 @@ func moveBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 	force := apr.Contains(cli.ForceFlag)
 	src := apr.Arg(0)
 	dest := apr.Arg(1)
-	err := actions.RenameBranch(ctx, dEnv.DbData(), src, apr.Arg(1), dEnv, force)
+	err := actions.RenameBranch(ctx, dEnv.DbData(), src, apr.Arg(1), dEnv, force, nil)
 
 	var verr errhand.VerboseError
 	if err != nil {
@@ -313,7 +313,7 @@ func deleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPa
 		err := actions.DeleteBranch(ctx, dEnv.DbData(), brName, actions.DeleteOptions{
 			Force:  force,
 			Remote: apr.Contains(cli.RemoteParam),
-		}, dEnv)
+		}, dEnv, nil)
 
 		if err != nil {
 			var verr errhand.VerboseError
@@ -386,7 +386,7 @@ func createBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		}
 	}
 
-	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, apr.Contains(cli.ForceFlag))
+	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, apr.Contains(cli.ForceFlag), nil)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usage)
 	}

@@ -168,7 +168,7 @@ func ResetHard(
 		return err
 	}
 
-	err = dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge(), h, dEnv.NewWorkingSetMeta("reset hard"))
+	err = dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge(), h, dEnv.NewWorkingSetMeta("reset hard"), nil)
 	if err != nil {
 		return err
 	}

@@ -27,50 +27,32 @@ const (
 	countSize ByteSize = 2
 )
 
-// todo(andy): update comment
-// Tuples are byte slices containing field values and a footer. Tuples only
-//   contain Values for non-NULL Fields. Value i contains the data for ith non-
-//   NULL Field. Values are packed contiguously from the front of the Tuple. The
-//   footer contains offsets, a member mask, and a field count. offsets enable
-//   random access to Values. The member mask enables NULL-compaction for Values.
+// A Tuple is a vector of fields encoded as a byte slice. Key-Value Tuple pairs
+// are used to store row data within clustered and secondary indexes in Dolt.
 //
-//   Tuples read and write Values as byte slices. (De)serialization is delegated
-//   to Tuple Descriptors, which know a Tuple's schema and associated encodings.
-//   When reading and writing Values, NULLs are encoded as nil byte slices. Note
-//   that these are not the same as zero-length byte slices. An empty string may
-//   be encoded as a zero-length byte slice and will be distinct from a NULL
-//   string both logically and semantically.
+// The encoding format for Tuples starts with field values packed contiguously from
+// the front of the Tuple, followed by field offsets, and finally a field count:
 //
-//   Tuple:
-//   +---------+---------+-----+---------+---------+-------------+-------------+
-//   | Value 0 | Value 1 | ... | Value K | offsets | Member Mask | Field Count |
-//   +---------+---------+-----+---------+---------+-------------+-------------+
+//	+---------+---------+-----+---------+----------+-----+----------+-------+
+//	| Value 0 | Value 1 | ... | Value K | Offset 1 | ... | Offset K | Count |
+//	+---------+---------+-----+---------+----------+-----+----------+-------+
 //
-//   offsets:
-//     The offset array contains a uint16 for each non-NULL field after field 0.
-//     Offset i encodes the distance to the ith Value from the front of the Tuple.
-//     The size of the offset array is 2*(K-1) bytes, where K is the number of
-//     Values in the Tuple.
-//   +----------+----------+-----+----------+
-//   | Offset 1 | Offset 2 | ... | Offset K |
-//   +----------+----------+-----+----------+
+// Field offsets encode the byte-offset from the front of the Tuple to the beginning
+// of the corresponding field in the Tuple. The offset for the first field is always
+// zero and is therefor omitted. Offsets and the field count are little-endian
+// encoded uint16 values.
 //
-//   Member Mask:
-//     The member mask is a bit-array encoding field membership in Tuples. Fields
-//     with non-NULL values are present, and encoded as 1, NULL fields are absent
-//     and encoded as 0. The size of the bit array is math.Ceil(N/8) bytes, where
-//     N is the number of Fields in the Tuple.
-//   +------------+-------------+-----+
-//   | Bits 0 - 7 | Bits 8 - 15 | ... |
-//   +------------+-------------+-----+
+// Tuples read and write field values as byte slices. Interpreting these encoded
+// values is left up to TupleDesc which knows about a Tuple's schema and associated
+// field encodings. Zero-length fields are interpreted as NULL values, all non-NULL
+// values must be encoded with non-zero length. For this reason, variable-length
+// strings are encoded with a NUL terminator (see codec.go).
 //
-//   Field Count:
-//      The field fieldCount is a uint16 containing the number of fields in the
-//     	Tuple, it is stored in 2 bytes.
-//   +----------------------+
-//   | Field Count (uint16) |
-//   +----------------------+
-
+// Accessing the ith field where i > count will return a NULL value. This allows us
+// to implicitly add nullable columns to the end of a schema without needing to
+// rewrite index storage. However, because Dolt storage in content-addressed, we
+// must have a single canonical encoding for any given Tuple. For this reason, the
+// NULL suffix of a Tuple is explicitly truncated and the field count reduced.
 type Tuple []byte
 
 var EmptyTuple = Tuple([]byte{0, 0})

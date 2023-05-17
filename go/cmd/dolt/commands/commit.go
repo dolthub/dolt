@@ -233,6 +233,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),
 		prevHash,
 		dEnv.NewWorkingSetMeta(fmt.Sprintf("Updated by %s %s", commandStr, strings.Join(args, " "))),
+		nil,
 	)
 	if err != nil {
 		if apr.Contains(cli.AmendFlag) {

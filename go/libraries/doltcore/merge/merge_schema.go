@@ -595,16 +595,19 @@ func mapColumns(ourCC, theirCC, ancCC *schema.ColCollection) (columnMappings, er
 	})
 
 	// Handle any remaining columns on the "their" side
-	for _, theirCol := range theirTagsToCols {
-		ancCol, foundAncByTag := ancCC.GetByTag(theirCol.Tag)
+	_ = theirCC.Iter(func(tag uint64, theirCol schema.Column) (stop bool, err error) {
+		if _, ok := theirTagsToCols[tag]; !ok {
+			return // already added
+		}
+
+		ancCol, foundAncByTag := ancCC.GetByTag(tag)
 		if !foundAncByTag {
 			// Ditto for finding the ancestor column
 			ancCol, _ = ancCC.GetByNameCaseInsensitive(theirCol.Name)
 		}
-
 		columnMappings = append(columnMappings, newColumnMapping(ancCol, schema.InvalidCol, theirCol))
-	}
-
+		return
+	})
 	return columnMappings, nil
 }
 

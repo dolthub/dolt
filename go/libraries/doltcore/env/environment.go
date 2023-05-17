@@ -636,7 +636,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 		wsRef = ws.Ref()
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, dEnv.workingSetMeta())
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, dEnv.workingSetMeta(), nil)
 }
 
 // UpdateWorkingSet updates the working set for the current working branch to the value given.
@@ -655,7 +655,7 @@ func (dEnv *DoltEnv) UpdateWorkingSet(ctx context.Context, ws *doltdb.WorkingSet
 		}
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws, h, dEnv.workingSetMeta())
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws, h, dEnv.workingSetMeta(), nil)
 }
 
 type repoStateReader struct {
@@ -765,7 +765,7 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootV
 		wsRef = ws.Ref()
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithStagedRoot(newRoot), h, dEnv.workingSetMeta())
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithStagedRoot(newRoot), h, dEnv.workingSetMeta(), nil)
 }
 
 func (dEnv *DoltEnv) AbortMerge(ctx context.Context) error {
@@ -779,7 +779,7 @@ func (dEnv *DoltEnv) AbortMerge(ctx context.Context) error {
 		return err
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.AbortMerge(), h, dEnv.workingSetMeta())
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.AbortMerge(), h, dEnv.workingSetMeta(), nil)
 }
 
 func (dEnv *DoltEnv) workingSetMeta() *datas.WorkingSetMeta {
@@ -918,7 +918,7 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 		rr := r.(ref.RemoteRef)
 
 		if rr.GetRemote() == remote.Name {
-			err = ddb.DeleteBranch(ctx, rr)
+			err = ddb.DeleteBranch(ctx, rr, nil)
 
 			if err != nil {
 				return fmt.Errorf("%w; failed to delete remote tracking ref '%s'; %s", ErrFailedToDeleteRemote, rr.String(), err.Error())
