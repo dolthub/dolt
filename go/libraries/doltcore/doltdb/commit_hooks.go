@@ -49,8 +49,8 @@ func NewPushOnWriteHook(destDB *DoltDB, tmpDir string) *PushOnWriteHook {
 }
 
 // Execute implements CommitHook, replicates head updates to the destDb field
-func (ph *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
-	return pushDataset(ctx, ph.destDB, db, ds, ph.tmpDir)
+func (ph *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error) {
+	return nil, pushDataset(ctx, ph.destDB, db, ds, ph.tmpDir)
 }
 
 func pushDataset(ctx context.Context, destDB, srcDB datas.Database, ds datas.Dataset, tmpDir string) error {
@@ -135,16 +135,16 @@ func (*AsyncPushOnWriteHook) ExecuteForWorkingSets() bool {
 }
 
 // Execute implements CommitHook, replicates head updates to the destDb field
-func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
+func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error) {
 	addr, _ := ds.MaybeHeadAddr()
 
 	select {
 	case ah.ch <- PushArg{ds: ds, db: db, hash: addr}:
 	case <-ctx.Done():
 		ah.ch <- PushArg{ds: ds, db: db, hash: addr}
-		return ctx.Err()
+		return nil, ctx.Err()
 	}
-	return nil
+	return nil, nil
 }
 
 // HandleError implements CommitHook
@@ -174,12 +174,12 @@ func NewLogHook(msg []byte) *LogHook {
 }
 
 // Execute implements CommitHook, writes message to log channel
-func (lh *LogHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
+func (lh *LogHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error) {
 	if lh.out != nil {
 		_, err := lh.out.Write(lh.msg)
-		return err
+		return nil, err
 	}
-	return nil
+	return nil, nil
 }
 
 // HandleError implements CommitHook

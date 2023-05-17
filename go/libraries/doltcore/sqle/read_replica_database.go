@@ -243,7 +243,7 @@ func (rrd ReadReplicaDatabase) CreateLocalBranchFromRemote(ctx *sql.Context, bra
 		}
 
 		// create refs/heads/branch dataset
-		err = rrd.ddb.NewBranchAtCommit(ctx, branchRef, cm)
+		err = rrd.ddb.NewBranchAtCommit(ctx, branchRef, cm, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -334,7 +334,7 @@ func pullBranchesAndUpdateWorkingSet(
 			if commitRootHash != wsWorkingRootHash || commitRootHash != wsStagedRootHash {
 				ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
 
-				err = rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, prevHash, doltdb.TodoWorkingSetMeta())
+				err = rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, prevHash, doltdb.TodoWorkingSetMeta(), nil)
 				if err == nil {
 					return nil
 				}
@@ -458,7 +458,7 @@ func (rrd ReadReplicaDatabase) createNewBranchFromRemote(ctx *sql.Context, remot
 		return err
 	}
 
-	err = rrd.ddb.NewBranchAtCommit(ctx, remoteRef.Ref, cm)
+	err = rrd.ddb.NewBranchAtCommit(ctx, remoteRef.Ref, cm, nil)
 	err = rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
 	if err != nil {
 		return err
@@ -534,7 +534,7 @@ func refsToDelete(remRefs, localRefs []doltdb.RefWithHash) []doltdb.RefWithHash 
 
 func deleteBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []doltdb.RefWithHash) error {
 	for _, b := range branches {
-		err := rrd.ddb.DeleteBranch(ctx, b.Ref)
+		err := rrd.ddb.DeleteBranch(ctx, b.Ref, nil)
 		if errors.Is(err, doltdb.ErrBranchNotFound) {
 			continue
 		} else if err != nil {

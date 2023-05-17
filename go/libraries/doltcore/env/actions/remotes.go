@@ -220,14 +220,14 @@ func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef 
 	}
 
 	if hasRef {
-		err = remoteDB.DeleteBranch(ctx, targetRef)
+		err = remoteDB.DeleteBranch(ctx, targetRef, nil)
 	}
 
 	if err != nil {
 		return err
 	}
 
-	err = localDB.DeleteBranch(ctx, remoteRef)
+	err = localDB.DeleteBranch(ctx, remoteRef, nil)
 
 	if err != nil {
 		return err

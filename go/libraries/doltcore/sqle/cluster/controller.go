@@ -82,6 +82,7 @@ type Controller struct {
 
 type sqlvars interface {
 	AddSystemVariables(sysVars []sql.SystemVariable)
+	GetGlobal(name string) (sql.SystemVariable, interface{}, bool)
 }
 
 // We can manage certain aspects of the exposed databases on the server through
