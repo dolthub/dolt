@@ -800,8 +800,9 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQual
 		}
 		return db, true, nil
 	case dsess.RevisionTypeNone:
-		// not an error, ok = false will get handled as a not found error in a layer above as appropriate
-		return nil, false, nil
+		// Returning an error with the fully qualified db name here is our only opportunity to do so in some cases (such 
+		// as when a branch is deleted by another client)
+		return nil, false, sql.ErrDatabaseNotFound.New(revisionQualifiedName)
 	default:
 		return nil, false, fmt.Errorf("unrecognized revision type for revision spec %s", rev)
 	}

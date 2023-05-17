@@ -121,7 +121,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SELECT DATABASE(), ACTIVE_BRANCH();",
-				Expected: []sql.Row{{"dolt/branch1", "branch1"}},
+				Expected: []sql.Row{{"dolt", "branch1"}},
 			},
 			{
 				Query:    "/* client b */ use dolt/branch2;",
@@ -129,11 +129,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client b */ SELECT DATABASE(), ACTIVE_BRANCH();",
-				Expected: []sql.Row{{"dolt/branch2", "branch2"}},
+				Expected: []sql.Row{{"dolt", "branch2"}},
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"dolt"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_BRANCH('-d', 'branch2');",
@@ -145,7 +145,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"dolt"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				// Call a stored procedure since this searches across all databases and will
@@ -168,7 +168,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SELECT DATABASE(), ACTIVE_BRANCH();",
-				Expected: []sql.Row{{"dolt/branch1", "branch1"}},
+				Expected: []sql.Row{{"dolt", "branch1"}},
 			},
 			{
 				Query:    "/* client b */ use dolt/branch2;",
@@ -176,11 +176,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client b */ SELECT DATABASE(), ACTIVE_BRANCH();",
-				Expected: []sql.Row{{"dolt/branch2", "branch2"}},
+				Expected: []sql.Row{{"dolt", "branch2"}},
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"dolt"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_BRANCH('-m', 'branch2', 'newName');",
@@ -192,7 +192,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"dolt"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				// Call a stored procedure since this searches across all databases and will
@@ -235,11 +235,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client a */ select name from dolt_branches;",
-				ExpectedErrStr: "Error 1105: current branch has been force deleted. run 'USE <database>/<branch>' to checkout a different branch, or reconnect to the server",
+				ExpectedErrStr: "Error 1105: database not found: dolt/branch1",
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
-				ExpectedErrStr: "Error 1105: current branch has been force deleted. run 'USE <database>/<branch>' to checkout a different branch, or reconnect to the server",
+				ExpectedErrStr: "Error 1105: database not found: dolt/branch1",
 			},
 			{
 				Query:    "/* client a */ USE dolt/main;",
@@ -284,11 +284,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client a */ select name from dolt_branches;",
-				ExpectedErrStr: "Error 1105: current branch has been force deleted. run 'USE <database>/<branch>' to checkout a different branch, or reconnect to the server",
+				ExpectedErrStr: "Error 1105: database not found: dolt/branch1",
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
-				ExpectedErrStr: "Error 1105: current branch has been force deleted. run 'USE <database>/<branch>' to checkout a different branch, or reconnect to the server",
+				ExpectedErrStr: "Error 1105: database not found: dolt/branch1",
 			},
 			{
 				Query:    "/* client a */ USE dolt/main;",
