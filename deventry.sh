@@ -19,9 +19,12 @@ rm -f /go1.20.4.linux-amd64.tar.gz
 
 apt-get install -y git python3 python3.10-venv
 
-git clone https://github.com/bats-core/bats-core.git /bats-core
-cd /bats-core
+curl -o /bats-v1.9.0.tar.gz -L https://github.com/bats-core/bats-core/archive/refs/tags/v1.9.0.tar.gz
+cd /
+tar zxf /bats-v1.9.0.tar.gz
+cd /bats-core-1.9.0
 ./install.sh /usr/local
+cd /
 
 python3 -m venv /bats_venv
 echo "source /bats_venv/bin/activate" >> /etc/bash.bashrc
