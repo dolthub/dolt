@@ -209,8 +209,12 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
-				Query:       "CALL DOLT_CHECKOUT('-b', 'other-branch')",
-				ExpectedErr: dsess.ErrWorkingSetChanges,
+				Query:       "CALL DOLT_CHECKOUT('-b', 'other')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:       "CALL DOLT_CHECKOUT('main')",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},
@@ -252,10 +256,6 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"update a value"}},
 			},
 			{
-				Query:       "CALL DOLT_CHECKOUT('-b', 'other-branch')",
-				ExpectedErr: dsess.ErrWorkingSetChanges,
-			},
-			{
 				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
 				Expected: []sql.Row{{1}},
 			},
@@ -270,6 +270,38 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * from test ORDER BY pk",
 				Expected: []sql.Row{{0, 1001}, {1, 1}},
+			},
+		},
+	},
+	{
+		Name: "merge conflicts prevent new branch creation",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key, val int)",
+			"call DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0, 0)",
+			"SET autocommit = 0",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (1, 1);",
+			"UPDATE test SET val=1000 WHERE pk=0;",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
+			"CALL DOLT_CHECKOUT('main');",
+			"UPDATE test SET val=1001 WHERE pk=0;",
+			"CALL DOLT_COMMIT('-a', '-m', 'update a value', '--date', '2022-08-06T12:00:03');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", "test"}},
+			},
+			{
+				// errors because creating a new branch implicitly commits the current transaction
+				Query:       "CALL DOLT_CHECKOUT('-b', 'other-branch')",
+				ExpectedErrStr: "Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1",
 			},
 		},
 	},
@@ -327,7 +359,11 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:       "CALL DOLT_CHECKOUT('-b', 'other')",
-				ExpectedErr: dsess.ErrWorkingSetChanges,
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:       "CALL DOLT_CHECKOUT('main')",
+				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "SELECT * FROM test order by pk",
