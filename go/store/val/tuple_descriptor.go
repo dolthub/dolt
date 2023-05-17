@@ -523,7 +523,6 @@ func (td TupleDesc) FormatValue(i int, value []byte) string {
 	return formatValue(td.Types[i].Enc, value)
 }
 func formatValue(enc Encoding, value []byte) string {
-	// todo(andy): complete cases
 	switch enc {
 	case Int8Enc:
 		v := readInt8(value)

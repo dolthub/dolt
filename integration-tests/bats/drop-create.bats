@@ -332,7 +332,7 @@ SQL
     [[ "$output" =~ "+  \`b\` tinyint NOT NULL," ]] || false
     [[ "$output" =~ "+  \`c\` varchar(10)," ]] || false
     [[ "$output" =~ "+  PRIMARY KEY (\`a\`)," ]] || false
-    [[ "$output" =~ "+  CONSTRAINT \`chk_vk8cbuqc\` CHECK ((\`b\` > 0))" ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`test_chk_vk8cbuqc\` CHECK ((\`b\` > 0))" ]] || false
 }
 
 @test "drop-create: default changes" {

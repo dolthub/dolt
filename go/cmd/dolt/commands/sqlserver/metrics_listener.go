@@ -124,6 +124,8 @@ func newMetricsListener(labels prometheus.Labels, versionStr string, clusterStat
 	prometheus.MustRegister(ml.gaugeConcurrentConn)
 	prometheus.MustRegister(ml.gaugeConcurrentQueries)
 	prometheus.MustRegister(ml.histQueryDur)
+	prometheus.MustRegister(ml.replicationLagGauges)
+	prometheus.MustRegister(ml.isReplicaGauges)
 
 	go func() {
 		for ml.updateReplMetrics() {

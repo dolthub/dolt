@@ -124,7 +124,86 @@ func (fk ForeignKey) EqualDefs(other ForeignKey) bool {
 		fk.OnDelete == other.OnDelete
 }
 
-// DeepEquals compares all attributes of a foreign key to another, including name and table names.
+// Equals compares this ForeignKey to |other| and returns true if they are equal. Foreign keys can either be in
+// a "resolved" state, where the referenced columns in the parent and child tables are identified by column tags,
+// or in an "unresolved" state where the reference columns in the parent and child are still identified by strings.
+// If one foreign key is resolved and one is unresolved, the logic for comparing them requires resolving the string
+// column names to column tags, which is why |fkSchemasByName| and |otherSchemasByName| are passed in. Each of these
+// is a map of table schemas for |fk| and |other|, where the child table and every parent table referenced in the
+// foreign key is present in the map.
+func (fk ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByName map[string]schema.Schema) bool {
+	// If both FKs are resolved or unresolved, we can just deeply compare them
+	if fk.IsResolved() == other.IsResolved() {
+		return fk.DeepEquals(other)
+	}
+
+	// Otherwise, one FK is resolved and one is not, so we need to work a little harder
+	// to calculate equality since their referenced columns are represented differently.
+	// First check the attributes that don't change when an FK is resolved or unresolved.
+	if fk.Name != other.Name &&
+		fk.TableName != other.TableName &&
+		fk.ReferencedTableName != other.ReferencedTableName &&
+		fk.TableIndex != other.TableIndex &&
+		fk.ReferencedTableIndex != other.ReferencedTableIndex &&
+		fk.OnUpdate == other.OnUpdate &&
+		fk.OnDelete == other.OnDelete {
+		return false
+	}
+
+	// Sort out which FK is resolved and which is not
+	var resolvedFK, unresolvedFK ForeignKey
+	var resolvedSchemasByName map[string]schema.Schema
+	if fk.IsResolved() {
+		resolvedFK, unresolvedFK, resolvedSchemasByName = fk, other, fkSchemasByName
+	} else {
+		resolvedFK, unresolvedFK, resolvedSchemasByName = other, fk, otherSchemasByName
+	}
+
+	// Check the columns on the child table
+	if len(resolvedFK.TableColumns) != len(unresolvedFK.UnresolvedFKDetails.TableColumns) {
+		return false
+	}
+	for i, tag := range resolvedFK.TableColumns {
+		unresolvedColName := unresolvedFK.UnresolvedFKDetails.TableColumns[i]
+		resolvedSch, ok := resolvedSchemasByName[resolvedFK.TableName]
+		if !ok {
+			return false
+		}
+		resolvedCol, ok := resolvedSch.GetAllCols().GetByTag(tag)
+		if !ok {
+			return false
+		}
+		if resolvedCol.Name != unresolvedColName {
+			return false
+		}
+	}
+
+	// Check the columns on the parent table
+	if len(resolvedFK.ReferencedTableColumns) != len(unresolvedFK.UnresolvedFKDetails.ReferencedTableColumns) {
+		return false
+	}
+	for i, tag := range resolvedFK.ReferencedTableColumns {
+		unresolvedColName := unresolvedFK.UnresolvedFKDetails.ReferencedTableColumns[i]
+		resolvedSch, ok := resolvedSchemasByName[unresolvedFK.ReferencedTableName]
+		if !ok {
+			return false
+		}
+		resolvedCol, ok := resolvedSch.GetAllCols().GetByTag(tag)
+		if !ok {
+			return false
+		}
+		if resolvedCol.Name != unresolvedColName {
+			return false
+		}
+	}
+
+	return true
+}
+
+// DeepEquals compares all attributes of a foreign key to another, including name and
+// table names. Note that if one foreign key is resolved and the other is NOT resolved,
+// then this function will not calculate equality correctly. When comparing a resolved
+// FK with an unresolved FK, the ForeignKey.Equals() function should be used instead.
 func (fk ForeignKey) DeepEquals(other ForeignKey) bool {
 	if !fk.EqualDefs(other) {
 		return false

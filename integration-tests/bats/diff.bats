@@ -771,23 +771,35 @@ SQL
     [[ "$output" =~ 'resolved foreign key' ]] || false
 }
 
-@test "diff: existing foreign key is resolved" {
+@test "diff: resolved FKs don't show up in diff results" {
     dolt sql <<SQL
-set foreign_key_checks=0;
-create table parent (i int primary key);
-create table child (j int primary key, constraint fk foreign key (j) references parent (i));
+SET @@foreign_key_checks=0;
+CREATE TABLE dept_emp (
+  emp_no int NOT NULL,
+  dept_no char(4) COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  PRIMARY KEY (emp_no,dept_no),
+  KEY dept_no (dept_no),
+  CONSTRAINT dept_emp_ibfk_1 FOREIGN KEY (emp_no) REFERENCES employees (emp_no) ON DELETE CASCADE
+);
+CREATE TABLE employees (
+  emp_no int NOT NULL,
+  nickname varchar(100),
+  PRIMARY KEY (emp_no)
+);
+insert into employees values (100, "bob");
+insert into dept_emp values (100, 1);
 SQL
-    run dolt diff
-    [ "$status" -eq 0 ]
-    [[ ! "$output" =~ 'resolved foreign key' ]] || false
+    dolt commit -Am "Importing data, with unresolved FKs"
 
-    dolt add -A
-    dolt commit -m "init commit"
-    dolt sql -q "delete from parent where i = 0"
+    # update a row to trigger FKs to be resolved
+    dolt sql -q "UPDATE employees SET nickname = 'bobby' WHERE emp_no = 100;"
+    dolt commit -am "Updating data, and resolving FKs"
 
-    run dolt diff
+    # check that the diff output doesn't mention FKs getting resolved or the dept_emp table
+    run dolt diff HEAD~ HEAD
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'resolved foreign key' ]] || false
+    ! [[ "$output" =~ "dept_emp" ]] || false
+    ! [[ "$output" =~ "resolved foreign key" ]] || false
 }
 
 @test "diff: with index and foreign key changes" {

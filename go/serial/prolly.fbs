@@ -39,14 +39,13 @@ table ProllyTreeNode {
   // (eg value tuples containing out-of-line BLOB addresses)
   value_address_offsets:[uint16];
 
-
   // array of chunk addresses
   //  - subtree addresses for internal prolly tree nodes
   //  - value addresses for AddressMap leaf nodes
   address_array:[ubyte];
 
-
-  // array of uvarint encoded subtree counts
+  // array of varint encoded subtree counts
+  // see: go/store/prolly/message/varint.go
   subtree_counts:[ubyte];
   // total count of prolly tree
   tree_count:uint64;

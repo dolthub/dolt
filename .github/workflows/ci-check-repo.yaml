@@ -3,8 +3,6 @@ name: Check Formatting, Committers and Generated Code
 on:
   pull_request:
     branches: [ main ]
-#   pull_request_target:
-#     types: [opened, edited, reopened]
 
 concurrency:
   group: ci-check-repo-${{ github.event.pull_request.number || github.ref }}
@@ -107,7 +105,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           submodules: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
       - name: Run go mod tidy
         run: go mod tidy
         working-directory: ./go

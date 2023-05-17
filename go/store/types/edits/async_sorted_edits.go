@@ -77,7 +77,6 @@ func (ase *AsyncSortedEdits) EditsAdded() int {
 func (ase *AsyncSortedEdits) AddEdit(k types.LesserValuable, v types.Valuable) {
 	ase.editsAdded++
 	if ase.accumulating == nil {
-		// TODO: buffer pool
 		ase.accumulating = make([]types.KVP, 0, ase.sliceSize)
 	}
 

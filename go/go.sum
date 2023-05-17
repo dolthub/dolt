@@ -166,8 +166,10 @@ github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2 h1:u3PMzfF8RkKd3lB9pZ2bfn0qEG+1G
 github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2/go.mod h1:mIEZOHnFx4ZMQeawhw9rhsj+0zwQj7adVsnBX7t+eKY=
 github.com/dolthub/fslock v0.0.3 h1:iLMpUIvJKMKm92+N1fmHVdxJP5NdyDK5bK7z7Ba2s2U=
 github.com/dolthub/fslock v0.0.3/go.mod h1:QWql+P17oAAMLnL4HGB5tiovtDuAjdDTPbuqx7bYfa0=
-github.com/dolthub/go-mysql-server v0.15.1-0.20230511161328-b4ddc44585e9 h1:+0W2FuuaoOtyFkw7vtklJxbibBxRv+tuWKaRo6OyMnU=
-github.com/dolthub/go-mysql-server v0.15.1-0.20230511161328-b4ddc44585e9/go.mod h1:YO4FtMULZ/HuKxlvm7QfvTE8uBKEv+1LtK2A3FrrGe4=
+github.com/dolthub/go-icu-regex v0.0.0-20230516121657-5424676dd4ac h1:/bsG4AyV5MesUPw7LSkxHKMsP9f+LSLrsMbBxLP6+Mk=
+github.com/dolthub/go-icu-regex v0.0.0-20230516121657-5424676dd4ac/go.mod h1:xLKpPutKiF9FxxcLG3gf/JA95YZQNAqBegkDRe1AZF4=
+github.com/dolthub/go-mysql-server v0.15.1-0.20230516125723-110a1193be66 h1:GNS0Ym5152HqqWNaRR40h58EhKYmQOEIlRuO4PKn1rQ=
+github.com/dolthub/go-mysql-server v0.15.1-0.20230516125723-110a1193be66/go.mod h1:J+NMF5CgU6b3tBI4G2QVb1AUSf+YoPDDCsZkcM7rY1I=
 github.com/dolthub/ishell v0.0.0-20221214210346-d7db0b066488 h1:0HHu0GWJH0N6a6keStrHhUAK5/o9LVfkh44pvsV4514=
 github.com/dolthub/ishell v0.0.0-20221214210346-d7db0b066488/go.mod h1:ehexgi1mPxRTk0Mok/pADALuHbvATulTh6gzr7NzZto=
 github.com/dolthub/jsonpath v0.0.1 h1:Nd+T3U+XisK3kOuxtABS5IIbZqXVIlOR9VYquyjQ0u0=
@@ -623,6 +625,8 @@ github.com/stretchr/testify v1.8.1 h1:w7B6lhMri9wdJUVmEZPGGhZzrYTPvgJArz7wNPgYKs
 github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
 github.com/tealeg/xlsx v1.0.5 h1:+f8oFmvY8Gw1iUXzPk+kz+4GpbDZPK1FhPiQRd+ypgE=
 github.com/tealeg/xlsx v1.0.5/go.mod h1:btRS8dz54TDnvKNosuAqxrM1QgN1udgk9O34bDCnORM=
+github.com/tetratelabs/wazero v1.0.3 h1:IWmaxc/5vKg71DE+c0SLjjLFAA3u3tD/Zegpgif2Wpo=
+github.com/tetratelabs/wazero v1.0.3/go.mod h1:wYx2gNRg8/WihJfSDxA1TIL8H+GkfLYm+bIfbblu9VQ=
 github.com/thepudds/swisstable v0.0.0-20221011152303-9c77dc657777 h1:5u+6YWU2faS+Sr/x8j9yalMpSDUkatNOZWXV3wMUCGQ=
 github.com/tidwall/gjson v1.14.2/go.mod h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=
 github.com/tidwall/gjson v1.14.4 h1:uo0p8EbA09J7RQaflQ1aBRffTR7xedD2bcIVSYxLnkM=
