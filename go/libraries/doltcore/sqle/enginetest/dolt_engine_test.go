@@ -1137,7 +1137,7 @@ func TestBranchTransactions(t *testing.T) {
 }
 
 func TestMultiDbTransactions(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 	for _, script := range MultiDbTransactionTests {
 		func() {
 			h := newDoltHarness(t)

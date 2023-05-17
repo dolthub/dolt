@@ -2370,4 +2370,67 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "committing to more than one branch at a time",
+		SetUpScript: []string{
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "insert into t1 values (1)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query: "insert into `mydb/b1`.t1 values (2)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query: "insert into `mydb/b1`.t1 values (3)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query:    "commit",
+				ExpectedErrStr: "cannot commit to more than one branch at once",
+			},
+		},
+	},
+	{
+		Name: "committing to more than one database at a time",
+		SetUpScript: []string{
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"create database db2",
+			"set autocommit = 0",
+			"create table db2.t1 (a int)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "insert into t1 values (1)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query: "insert into db2.t1 values (2)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query:    "commit",
+				ExpectedErrStr: "cannot commit to more than one database at once",
+			},
+		},
+	},
 }
