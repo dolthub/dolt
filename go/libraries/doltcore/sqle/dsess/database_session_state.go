@@ -122,6 +122,8 @@ type branchState struct {
 	readOnly     bool
 	// sessionCache is a collection of cached values used to speed up performance
 	sessionCache *SessionCache
+	// dirty is true if this branch state has uncommitted changes
+	dirty bool
 }
 
 func NewEmptyBranchState(dbState *DatabaseSessionState) *branchState {
