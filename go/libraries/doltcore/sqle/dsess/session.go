@@ -386,15 +386,12 @@ func (d *DoltSession) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSe
 // CommitTransaction commits the in-progress transaction for the database named. Depending on session settings, this
 // may write only a new working set, or may additionally create a new dolt commit for the current HEAD.
 func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
-	dbName := ctx.GetTransactionDatabase()
-	if isNoOpTransactionDatabase(dbName) {
-		return nil
-	}
-	
 	if d.BatchMode() == Batched {
-		err := d.Flush(ctx, dbName)
-		if err != nil {
-			return err
+		for _, db := range d.provider.DoltDatabases() {
+			err := d.Flush(ctx, db.Name())
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -411,8 +408,6 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 		return ErrDirtyWorkingSets
 	}
 	
-	ws := dirties[0]
-	
 	performDoltCommitVar, err := d.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommit)
 	if err != nil {
 		return err
@@ -423,8 +418,9 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 		return fmt.Errorf(fmt.Sprintf("Unexpected type for var %s: %T", DoltCommitOnTransactionCommit, performDoltCommitVar))
 	}
 
+	dirtyBranchState := dirties[0]
 	if peformDoltCommitInt == 1 {
-		pendingCommit, err := d.PendingCommitAllStaged(ctx, ws, actions.CommitStagedProps{
+		pendingCommit, err := d.PendingCommitAllStaged(ctx, dirtyBranchState, actions.CommitStagedProps{
 			Message:    "Transaction commit",
 			Date:       ctx.QueryTime(),
 			AllowEmpty: false,
@@ -438,13 +434,13 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 
 		// Nothing to stage, so fall back to CommitWorkingSet logic instead
 		if pendingCommit == nil {
-			return d.CommitWorkingSet(ctx, dbName, tx)
+			return d.commitWorkingSet(ctx, dirtyBranchState, tx)
 		}
 
-		_, err = d.DoltCommit(ctx, dbName, tx, pendingCommit)
+		_, err = d.DoltCommit(ctx, dirtyBranchState.dbState.dbName, tx, pendingCommit)
 		return err
 	} else {
-		return d.CommitWorkingSet(ctx, dbName, tx)
+		return d.commitWorkingSet(ctx, dirtyBranchState, tx)
 	}
 }
 
@@ -473,6 +469,16 @@ func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.T
 	}
 
 	_, err := d.doCommit(ctx, dbName, tx, commitFunc)
+	return err
+}
+
+func (d *DoltSession) commitWorkingSet(ctx *sql.Context, branchState *branchState, tx sql.Transaction) error {
+	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
+		ws, err := dtx.Commit(ctx, workingSet, branchState.dbState.dbName)
+		return ws, nil, err
+	}
+
+	_, err := d.doCommitInternal(ctx, branchState, tx, commitFunc)
 	return err
 }
 
@@ -510,6 +516,28 @@ func (d *DoltSession) DoltCommit(
 type doCommitFunc func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error)
 
 // doCommit exercise the business logic for a particular doCommitFunc
+func (d *DoltSession) doCommitInternal(ctx *sql.Context, branchState *branchState, tx sql.Transaction, commitFunc doCommitFunc) (*doltdb.Commit, error) {
+	dtx, ok := tx.(*DoltTransaction)
+	if !ok {
+		return nil, fmt.Errorf("expected a DoltTransaction")
+	}
+
+	mergedWorkingSet, newCommit, err := commitFunc(ctx, dtx, branchState.WorkingSet())
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: this is probably unnecessary
+	err = d.SetWorkingSet(ctx, branchState.dbState.dbName, mergedWorkingSet)
+	if err != nil {
+		return nil, err
+	}
+
+	branchState.dirty = false
+	return newCommit, nil
+}
+
+// doCommit exercise the business logic for a particular doCommitFunc
 func (d *DoltSession) doCommit(ctx *sql.Context, dbName string, tx sql.Transaction, commitFunc doCommitFunc) (*doltdb.Commit, error) {
 	branchState, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
@@ -521,24 +549,7 @@ func (d *DoltSession) doCommit(ctx *sql.Context, dbName string, tx sql.Transacti
 		return nil, nil
 	}
 
-	// TODO: validate that the transaction belongs to the DB named
-	dtx, ok := tx.(*DoltTransaction)
-	if !ok {
-		return nil, fmt.Errorf("expected a DoltTransaction")
-	}
-
-	mergedWorkingSet, newCommit, err := commitFunc(ctx, dtx, branchState.WorkingSet())
-	if err != nil {
-		return nil, err
-	}
-
-	err = d.SetWorkingSet(ctx, dbName, mergedWorkingSet)
-	if err != nil {
-		return nil, err
-	}
-
-	branchState.dirty = false
-	return newCommit, nil
+	return d.doCommitInternal(ctx, branchState, tx, commitFunc)
 }
 
 // PendingCommitAllStaged returns a pending commit with all tables staged. Returns nil if there are no changes to stage.
