@@ -43,7 +43,8 @@ teardown() {
     start_sql_server altDb
     ROOT_DIR=$(pwd)
 
-    cd /tmp
+    mkdir someplace_else
+    cd someplace_else
 
     run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --user dolt --use-db altDB sql -q "show tables"
     [ "$status" -eq 0 ]
@@ -83,7 +84,8 @@ teardown() {
     start_sql_server altDb
     ROOT_DIR=$(pwd)
 
-    cd /tmp
+    mkdir -p someplace_new/fun
+    cd someplace_new/fun
 
     run dolt --verbose-engine-setup --data-dir="$ROOT_DIR/altDB" --user dolt sql -q "show tables"
     [ "$status" -eq 0 ]

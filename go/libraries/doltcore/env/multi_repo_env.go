@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -138,8 +139,14 @@ func MultiEnvForDirectory(
 		delete(envSet, dbName)
 	}
 
-	for dbName, env := range envSet {
-		mrEnv.addEnv(dbName, env)
+	// get the keys from the envSet keys as a sorted list
+	sortedKeys := make([]string, 0, len(envSet))
+	for k := range envSet {
+		sortedKeys = append(sortedKeys, k)
+	}
+	sort.Strings(sortedKeys)
+	for _, dbName := range sortedKeys {
+		mrEnv.addEnv(dbName, envSet[dbName])
 	}
 
 	return mrEnv, nil
