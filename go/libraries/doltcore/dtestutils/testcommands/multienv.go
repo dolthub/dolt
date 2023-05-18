@@ -260,9 +260,14 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 		panic("pending commit error: " + err.Error())
 	}
 
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		panic("couldn't get working set: " + err.Error())
+	}
+
 	commit, err := dEnv.DoltDB.CommitWithWorkingSet(
 		ctx,
-		dEnv.RepoStateReader().CWBHeadRef(),
+		headRef,
 		ws.Ref(),
 		pendingCommit,
 		ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),

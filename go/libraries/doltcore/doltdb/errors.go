@@ -29,7 +29,6 @@ var ErrInvalidBranchOrHash = errors.New("string is not a valid branch or hash")
 var ErrInvalidHash = errors.New("string is not a valid hash")
 
 var ErrFoundHashNotACommit = errors.New("the value retrieved for this hash is not a commit")
-
 var ErrHashNotFound = errors.New("could not find a value for this hash")
 var ErrBranchNotFound = errors.New("branch not found")
 var ErrTagNotFound = errors.New("tag not found")
@@ -48,6 +47,8 @@ var ErrIsBehind = errors.New("cannot reverse from b to a. b is a is behind a alr
 
 var ErrUnresolvedConflictsOrViolations = errors.New("merge has unresolved conflicts or constraint violations")
 var ErrMergeActive = errors.New("merging is not possible because you have not committed an active merge")
+
+var ErrOperationNotSupportedInDetachedHead = errors.New("this operation is not supported while in a detached head state")
 
 type ErrClientOutOfDate struct {
 	RepoVer   FeatureVersion

@@ -224,7 +224,10 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		}
 	}
 
-	curHeadRef := dEnv.RepoStateReader().CWBHeadRef()
+	curHeadRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return err
+	}
 	curBranchName := curHeadRef.String()
 	commitSpec, err := doltdb.NewCommitSpec(curBranchName)
 	if err != nil {

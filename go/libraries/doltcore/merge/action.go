@@ -62,7 +62,12 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 		return nil, err
 	}
 
-	headCM, err := ddb.Resolve(context.TODO(), headCS, rsr.CWBHeadRef())
+	headRef, err := rsr.CWBHeadRef()
+	if err != nil {
+		return nil, err
+	}
+
+	headCM, err := ddb.Resolve(context.TODO(), headCS, headRef)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +77,7 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 		return nil, err
 	}
 
-	mergeCM, err := ddb.Resolve(context.TODO(), mergeCS, rsr.CWBHeadRef())
+	mergeCM, err := ddb.Resolve(context.TODO(), mergeCS, headRef)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +164,11 @@ func ExecuteFFMerge(
 	}
 
 	if !spec.Squash {
-		err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoStateReader().CWBHeadRef(), spec.MergeC)
+		headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+		if err != nil {
+			return err
+		}
+		err = dEnv.DoltDB.FastForward(ctx, headRef, spec.MergeC)
 
 		if err != nil {
 			return err

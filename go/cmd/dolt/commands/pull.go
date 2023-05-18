@@ -202,7 +202,12 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				return err
 			}
 
-			suggestedMsg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, dEnv.RepoStateReader().CWBHeadRef().GetPath())
+			headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+			if err != nil {
+				return err
+			}
+
+			suggestedMsg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, headRef.GetPath())
 			tblStats, err := performMerge(ctx, dEnv, mergeSpec, suggestedMsg)
 			printSuccessStats(tblStats)
 			if err != nil {

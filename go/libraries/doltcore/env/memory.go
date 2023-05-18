@@ -101,16 +101,20 @@ type MemoryRepoState struct {
 var _ RepoStateReader = MemoryRepoState{}
 var _ RepoStateWriter = MemoryRepoState{}
 
-func (m MemoryRepoState) CWBHeadRef() ref.DoltRef {
-	return m.Head
+func (m MemoryRepoState) CWBHeadRef() (ref.DoltRef, error) {
+	return m.Head, nil
 }
 
-func (m MemoryRepoState) CWBHeadSpec() *doltdb.CommitSpec {
-	spec, err := doltdb.NewCommitSpec(m.CWBHeadRef().GetPath())
+func (m MemoryRepoState) CWBHeadSpec() (*doltdb.CommitSpec, error) {
+	headRef, err := m.CWBHeadRef()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return spec
+	spec, err := doltdb.NewCommitSpec(headRef.GetPath())
+	if err != nil {
+		return nil, err
+	}
+	return spec, nil
 }
 
 func (m MemoryRepoState) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
@@ -120,7 +124,11 @@ func (m MemoryRepoState) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.R
 	ws, err := m.WorkingSet(ctx)
 	if err == doltdb.ErrWorkingSetNotFound {
 		// first time updating root
-		wsRef, err = ref.WorkingSetRefForHead(m.CWBHeadRef())
+		headRef, err := m.CWBHeadRef()
+		if err != nil {
+			return err
+		}
+		wsRef, err = ref.WorkingSetRefForHead(headRef)
 		if err != nil {
 			return err
 		}
@@ -146,7 +154,11 @@ func (m MemoryRepoState) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.
 	ws, err := m.WorkingSet(ctx)
 	if err == doltdb.ErrWorkingSetNotFound {
 		// first time updating root
-		wsRef, err = ref.WorkingSetRefForHead(m.CWBHeadRef())
+		headRef, err := m.CWBHeadRef()
+		if err != nil {
+			return err
+		}
+		wsRef, err = ref.WorkingSetRefForHead(headRef)
 		if err != nil {
 			return err
 		}
@@ -166,7 +178,11 @@ func (m MemoryRepoState) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.
 }
 
 func (m MemoryRepoState) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, error) {
-	workingSetRef, err := ref.WorkingSetRefForHead(m.CWBHeadRef())
+	headRef, err := m.CWBHeadRef()
+	if err != nil {
+		return nil, err
+	}
+	workingSetRef, err := ref.WorkingSetRefForHead(headRef)
 	if err != nil {
 		return nil, err
 	}

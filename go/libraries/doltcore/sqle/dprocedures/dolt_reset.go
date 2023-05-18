@@ -100,7 +100,11 @@ func doDoltReset(ctx *sql.Context, args []string) (int, error) {
 
 		// TODO: this overrides the transaction setting, needs to happen at commit, not here
 		if newHead != nil {
-			if err := dbData.Ddb.SetHeadToCommit(ctx, dbData.Rsr.CWBHeadRef(), newHead); err != nil {
+			headRef, err := dbData.Rsr.CWBHeadRef()
+			if err != nil {
+				return 1, err
+			}
+			if err := dbData.Ddb.SetHeadToCommit(ctx, headRef, newHead); err != nil {
 				return 1, err
 			}
 		}
