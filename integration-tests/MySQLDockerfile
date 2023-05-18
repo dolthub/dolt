@@ -140,5 +140,9 @@ RUN go build -o /usr/local/bin/dolt ./cmd/dolt
 COPY mysql-client-tests /mysql-client-tests
 COPY mysql-client-tests/mysql-client-tests-entrypoint.sh /mysql-client-tests/entrypoint.sh
 
+# install rust dependencies
+WORKDIR /mysql-client-tests/rust
+RUN cargo build --config net.git-fetch-with-cli=true
+
 WORKDIR /mysql-client-tests
 ENTRYPOINT ["/mysql-client-tests/entrypoint.sh"]
