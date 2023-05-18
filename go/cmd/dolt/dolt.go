@@ -471,7 +471,7 @@ The sql subcommand is currently the only command that uses these flags. All othe
 
 	var cliCtx cli.CliContext = nil
 	if initCliContext {
-		lateBind, err := buildLateBinder(ctx, dEnv, mrEnv, apr, verboseEngineSetup)
+		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, apr, verboseEngineSetup)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failure to Load SQL Engine: %v", err))
 			return 1
@@ -504,7 +504,7 @@ The sql subcommand is currently the only command that uses these flags. All othe
 	return res
 }
 
-func buildLateBinder(ctx context.Context, dEnv *env.DoltEnv, mrEnv *env.MultiRepoEnv, apr *argparser.ArgParseResults, verbose bool) (cli.LateBindQueryist, error) {
+func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, apr *argparser.ArgParseResults, verbose bool) (cli.LateBindQueryist, error) {
 
 	var targetEnv *env.DoltEnv = nil
 
@@ -532,14 +532,14 @@ func buildLateBinder(ctx context.Context, dEnv *env.DoltEnv, mrEnv *env.MultiRep
 			if verbose {
 				cli.Println("verbose: starting remote mode")
 			}
-			return sqlserver.BuildConnectionStringQueryist(ctx, dEnv, apr, lock.Port, useDb)
+			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, apr, lock.Port, useDb)
 		}
 	}
 
 	if verbose {
 		cli.Println("verbose: starting local mode")
 	}
-	return commands.BuildSqlEngineQueryist(ctx, dEnv, mrEnv, apr)
+	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, apr)
 }
 
 // splitArgsOnSubCommand splits the args into two slices, the first containing all args before the first subcommand,

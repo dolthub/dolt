@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/abiosoft/readline"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/ishell"
@@ -135,7 +136,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			return 1
 		}
 
-		serverConfig, err = GetServerConfig(dEnv, apr)
+		serverConfig, err = GetServerConfig(dEnv.FS, apr)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Bad Configuration"))
 			cli.PrintErrln(err.Error())
@@ -158,7 +159,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			return 1
 		}
 	} else {
-		serverConfig, err = GetServerConfig(dEnv, apr)
+		serverConfig, err = GetServerConfig(dEnv.FS, apr)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Bad Configuration"))
 			cli.PrintErrln(err.Error())
@@ -473,8 +474,8 @@ var _ cli.Queryist = ConnectionQueryist{}
 
 // BuildConnectionStringQueryist returns a Queryist that connects to the server specified by the given server config. Presence in this
 // module isn't ideal, but it's the only way to get the server config into the queryist.
-func BuildConnectionStringQueryist(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, port int, database string) (cli.LateBindQueryist, error) {
-	serverConfig, err := GetServerConfig(dEnv, apr)
+func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, apr *argparser.ArgParseResults, port int, database string) (cli.LateBindQueryist, error) {
+	serverConfig, err := GetServerConfig(cwdFS, apr)
 	if err != nil {
 		return nil, err
 	}

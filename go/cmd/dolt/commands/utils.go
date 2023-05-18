@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -83,7 +84,7 @@ func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv) (cli.CliContex
 		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	lateBind, verr := BuildSqlEngineQueryist(ctx, dEnv, mrEnv, argparser.NewEmptyResults())
+	lateBind, verr := BuildSqlEngineQueryist(ctx, dEnv.FS, mrEnv, argparser.NewEmptyResults())
 	if err != nil {
 		return nil, verr
 	}
@@ -91,9 +92,9 @@ func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv) (cli.CliContex
 }
 
 // BuildSqlEngineQueryist Utility function to build a local SQLEngine for use interacting with data on disk using
-// SQL queries. ctx and dEnv must be non-nil. apr can be nil.
-func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, mrEnv *env.MultiRepoEnv, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
-	if ctx == nil || dEnv == nil || mrEnv == nil || apr == nil {
+// SQL queries. ctx, cwdFS, mrEnv, and apr must all be non-nil.
+func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
+	if ctx == nil || cwdFS == nil || mrEnv == nil || apr == nil {
 		errhand.VerboseErrorFromError(fmt.Errorf("Invariant violated. Nil argument provided to BuildSqlEngineQueryist"))
 	}
 
@@ -106,7 +107,7 @@ func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, mrEnv *env.M
 	// We want to know if the user provided us the data-dir flag, but we want to use the abs value used to
 	// create the DoltEnv. This is a little messy.
 	dataDir, dataDirGiven := apr.GetValue(DataDirFlag)
-	dataDir, err := dEnv.FS.Abs(dataDir)
+	dataDir, err := cwdFS.Abs(dataDir)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}
@@ -115,7 +116,7 @@ func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, mrEnv *env.M
 	var cfgDirPath string
 	cfgDir, cfgDirSpecified := apr.GetValue(CfgDirFlag)
 	if cfgDirSpecified {
-		cfgDirPath, err = dEnv.FS.Abs(cfgDir)
+		cfgDirPath, err = cwdFS.Abs(cfgDir)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
@@ -124,21 +125,21 @@ func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, mrEnv *env.M
 	} else {
 		// Look in CWD parent directory for doltcfg
 		parentDirCfg := filepath.Join("..", DefaultCfgDirName)
-		parentExists, isDir := dEnv.FS.Exists(parentDirCfg)
+		parentExists, isDir := cwdFS.Exists(parentDirCfg)
 		parentDirExists := parentExists && isDir
 
 		// Look in data directory for doltcfg
 		dataDirCfg := filepath.Join(dataDir, DefaultCfgDirName)
-		dataDirCfgExists, isDir := dEnv.FS.Exists(dataDirCfg)
+		dataDirCfgExists, isDir := cwdFS.Exists(dataDirCfg)
 		currDirExists := dataDirCfgExists && isDir
 
 		// Error if both CWD/../.doltfcfg and dataDir/.doltcfg exist because it's unclear which to use.
 		if currDirExists && parentDirExists {
-			p1, err := dEnv.FS.Abs(cfgDirPath)
+			p1, err := cwdFS.Abs(cfgDirPath)
 			if err != nil {
 				return nil, errhand.VerboseErrorFromError(err)
 			}
-			p2, err := dEnv.FS.Abs(parentDirCfg)
+			p2, err := cwdFS.Abs(parentDirCfg)
 			if err != nil {
 				return nil, errhand.VerboseErrorFromError(err)
 			}
@@ -156,12 +157,12 @@ func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, mrEnv *env.M
 	// If no privilege filepath specified, default to doltcfg directory
 	privsFp, hasPrivsFp := apr.GetValue(PrivsFilePathFlag)
 	if !hasPrivsFp {
-		privsFp, err = dEnv.FS.Abs(filepath.Join(cfgDirPath, DefaultPrivsName))
+		privsFp, err = cwdFS.Abs(filepath.Join(cfgDirPath, DefaultPrivsName))
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
 	} else {
-		privsFp, err = dEnv.FS.Abs(privsFp)
+		privsFp, err = cwdFS.Abs(privsFp)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
@@ -170,12 +171,12 @@ func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, mrEnv *env.M
 	// If no branch control file path is specified, default to doltcfg directory
 	branchControlFilePath, hasBCFilePath := apr.GetValue(BranchCtrlPathFlag)
 	if !hasBCFilePath {
-		branchControlFilePath, err = dEnv.FS.Abs(filepath.Join(cfgDirPath, DefaultBranchCtrlName))
+		branchControlFilePath, err = cwdFS.Abs(filepath.Join(cfgDirPath, DefaultBranchCtrlName))
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
 	} else {
-		branchControlFilePath, err = dEnv.FS.Abs(branchControlFilePath)
+		branchControlFilePath, err = cwdFS.Abs(branchControlFilePath)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
