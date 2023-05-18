@@ -433,8 +433,6 @@ SQL
     [ $status -ne 0 ]
     [[ $output =~ "Incorrect datetime value" ]] || false
 }
-    
-
 
 @test "sql-load-data: schema with not null constraints" {
     cat <<CSV > in.csv
