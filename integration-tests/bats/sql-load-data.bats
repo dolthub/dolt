@@ -437,15 +437,99 @@ SQL
 
 
 @test "sql-load-data: schema with not null constraints" {
+    cat <<CSV > in.csv
+0,0,0
+CSV
 
+    dolt sql -q "create table t (pk int primary key, c1 int not null, c2 int)"
+    dolt sql <<SQL
+load data infile 'in.csv' into table t
+fields terminated by ','
+lines terminated by '\n'
+SQL
+
+    run dolt sql -r csv -q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,0,0" ]] || false
+
+    cat <<CSV > in.csv
+1,NULL,1
+CSV
+
+    run dolt sql <<SQL
+load data infile 'in.csv' into table t
+fields terminated by ','
+lines terminated by '\n'
+SQL
+    [ $status -ne 0 ]
+    [[ $output =~ "non-nullable but attempted to set a value of null" ]] || false
+
+    run dolt sql -r csv -q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,0,0" ]] || false
 }
 
 @test "sql-load-data: test schema with column defaults" {
+    cat <<CSV > in.csv
+0,0,0
+CSV
 
+    dolt sql -q "create table t (pk int primary key, c1 int default 1, c2 int)"
+    dolt sql <<SQL
+load data infile 'in.csv' into table t
+fields terminated by ','
+lines terminated by '\n'
+SQL
+
+    run dolt sql -r csv -q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,0,0" ]] || false
+
+    cat <<CSV > in.csv
+1,NULL,1
+CSV
+
+    dolt sql <<SQL
+load data infile 'in.csv' into table t
+fields terminated by ','
+lines terminated by '\n'
+SQL
+
+    run dolt sql -r csv -q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,0,0" ]] || false
+    skip "Column defaults not applied on load data"
+    ! [[ $output =~ "1,NULL,1" ]] || false
+    [[ $output =~ "1,1,1" ]] || false
 }
 
 @test "sql-load-data: test schema with check constraints" {
+    cat <<CSV > in.csv
+0,0,0
+CSV
 
+    dolt sql -q "create table t (pk int primary key, c1 int, c2 int, check(c1 > 0))"
+    run dolt sql <<SQL
+load data infile 'in.csv' into table t
+fields terminated by ','
+lines terminated by '\n'
+SQL
+    [ $status -ne 0 ]
+    [[ $output =~ "Check constraint" ]] || false
+
+    cat <<CSV > in.csv
+0,1,0
+CSV
+
+    run dolt sql <<SQL
+load data infile 'in.csv' into table t
+fields terminated by ','
+lines terminated by '\n'
+SQL
+
+    run dolt sql -r csv -q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,1,0" ]] || false
 }
 
 @test "sql-load-data: test schema with foreign keys" {
