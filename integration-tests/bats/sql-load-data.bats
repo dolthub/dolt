@@ -246,6 +246,46 @@ SQL
     [ "${lines[2]}" = "1,1,2,3,4,5" ]
 }
 
+@test "sql-load-data: run twice it appends" {
+    cat <<CSV > in.csv
+0,0,0
+CSV
+
+    dolt sql -q "create table t (pk int primary key, c1 int, c2 int)"
+    dolt sql <<SQL
+load data infile 'in.csv' into table t
+fields terminated by ','
+lines terminated by '\n'
+SQL
+
+    run dolt sql -r csv -q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,0,0" ]] || false
+
+    cat <<CSV > in.csv
+1,1,1
+CSV
+
+    dolt sql <<SQL
+load data infile 'in.csv' into table t
+fields terminated by ','
+lines terminated by '\n'
+SQL
+    
+    run dolt sql -r csv -q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,0,0" ]] || false
+    [[ $output =~ "1,1,1" ]] || false
+
+    run dolt sql <<SQL
+load data infile 'in.csv' into table t
+fields terminated by ','
+lines terminated by '\n'
+SQL
+    [ $status -ne 0 ]
+    [[ $output =~ "duplicate primary key given" ]] || false
+}
+
 @test "sql-load-data: load data ignore" {
     cat <<CSV > in.csv
 0,0,0
@@ -264,8 +304,8 @@ SQL
 
     run dolt sql -r csv -q "select * from t"
     [ $status -eq 0 ]
-    [[ $output =~ 0,0,0 ]] || false
-    [[ $output =~ 1,1,1 ]] || false
+    [[ $output =~ "0,0,0" ]] || false
+    [[ $output =~ "1,1,1" ]] || false
     
 }
 
@@ -278,27 +318,125 @@ CSV
     dolt sql -q "create table t (pk int primary key, c1 int, c2 int)"
     dolt sql -q "insert into t values (0,0,0)"
     skip "load data replace not supported"
-    run dolt sql <<SQL
+    dolt sql <<SQL
 load data infile 'in.csv' replace into table t
 fields terminated by ','
 lines terminated by '\n'
 SQL
+
+    run dolt sql -r csv -q "select * from t"
     [ $status -eq 0 ]
-    ! [[ $output =~ 0,0,0 ]] || false
-    [[ $output =~ 0,0,1 ]] || false
-    [[ $output =~ 1,1,1 ]] || false
+    ! [[ $output =~ "0,0,0" ]] || false
+    [[ $output =~ "0,0,1" ]] || false
+    [[ $output =~ "1,1,1" ]] || false
 }
 
 
 @test "sql-load-data: keyless table" {
+    cat <<CSV > in.csv
+this,is,keyless
+and,uses,strings
+CSV
 
+    dolt sql -q "create table t (c1 varchar(10), c2 varchar(20), c3 varchar(30))"
+
+    dolt sql <<SQL
+load data infile 'in.csv' into table t
+fields terminated by ','
+lines terminated by '\n'
+SQL
+
+    run	dolt sql -r csv	-q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "this,is,keyless" ]] || false
+    [[ $output =~ "and,uses,strings" ]] || false
+
+    # keyless tables can be appended to forever
+    dolt sql <<SQL
+load data infile 'in.csv' into table t
+fields terminated by ','
+lines terminated by '\n'
+SQL
+    run dolt sql -q "select count(c1) from t where c1='this'"
+    [ $status -eq 0 ]
+    [[ $output =~ " 2 " ]] || false
+    
 }
 
-@test "sql-load-data: test schema with many types" {
+@test "sql-load-data: schema with string and numerical types" {
+    cat <<CSV > in.csv
+0,a,a,this is text,0,0,0.01,a
+CSV
 
+    dolt sql -q "create table t (
+pk int primary key,
+c1 char(1),
+c2 varchar(1),
+c3 text,
+c4 int,
+c5 tinyint,
+c6 double,
+c7 enum('a','b')
+)"
+    dolt sql <<SQL
+load data infile 'in.csv' into table t
+fields terminated by ','
+lines terminated by '\n'
+SQL
+
+    run dolt sql -r csv -q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,a,a,this is text,0,0,0.01,a" ]] || false
+
+    cat <<CSV > in.csv
+1,a,a,this is text,0,5555555,0.01,a
+CSV
+    run dolt sql <<SQL
+load data infile 'in.csv' into table t
+fields terminated by ','
+lines terminated by '\n'
+SQL
+    [ $status -ne 0 ]
+    [[ $output =~ "555555 out of range for tinyint" ]] || false
 }
 
-@test "sql-load-data: test schema with not null constraints" {
+@test "sql-load-data: date types" {
+    cat <<CSV > in.csv
+0,2022-10-10 00:00:00,2022-10-10,00:00:00
+CSV
+
+    dolt sql -q "create table t (
+pk int primary key,
+c1 datetime,
+c2 date,
+c3 time)"
+
+    dolt sql <<SQL
+load data infile 'in.csv' into table t
+fields terminated by ','
+lines terminated by '\n'
+SQL
+
+    run dolt sql -r csv -q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "0,2022-10-10 00:00:00,2022-10-10,00:00:00" ]] || false
+
+    cat <<CSV > in.csv
+1,2022-10-10 00:00:00:00,2022-10-10,00:00:00
+CSV
+
+    run dolt sql <<SQL
+load data infile 'in.csv' into table t
+fields terminated by ','
+lines terminated by '\n'
+SQL
+    [ $status -ne 0 ]
+    [[ $output =~ "Incorrect datetime value" ]] || false
+}
+    
+
+
+@test "sql-load-data: schema with not null constraints" {
 
 }
 
