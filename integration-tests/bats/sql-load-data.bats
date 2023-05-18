@@ -113,7 +113,7 @@ SQL
 }
 
 @test "sql-load-data: works with fields separated by tabs" {
-    skip "This needs to be fixed."
+    skip "This is a test problem with CI preserving tabs in this file. Tabs work locally."
     cat <<DELIM > 1pk2col-ints.csv
 pk  c1
 0 1
@@ -533,11 +533,36 @@ SQL
 }
 
 @test "sql-load-data: test schema with foreign keys" {
+    dolt sql -q "create table t1 (pk int primary key, c1 int, c2 int)"
+    dolt sql -q "create table t2 (pk int primary key, foreign key (pk) references t1(pk))"
 
-}
+    dolt sql -q "insert into t1 values (0,0,0),(2,2,2)"
 
-@test "sql-load-data: test load data defaults" {
+    cat <<CSV > in.csv
+0
+2
+CSV
 
+    dolt sql -q "load data infile 'in.csv' into table t2"
+    run dolt sql -r csv -q "select * from t2"
+    [ $status -eq 0 ]
+    [[ $output =~ "0" ]] || false
+    [[ $output =~ "2" ]] || false
+
+    cat <<CSV > in.csv
+1
+CSV
+    
+    run dolt sql -q "load data infile 'in.csv' into table t2"
+    [ $status -ne 0 ]
+    [[ $output =~ "Foreign key violation" ]] || false
+
+    dolt sql -q "set foreign_key_checks=0; load data infile 'in.csv' into table t2"
+    run dolt sql -r csv -q "select * from t2"
+    [ $status -eq 0 ]
+    [[ $output =~ "0" ]] || false
+    [[ $output =~ "1" ]] || false
+    [[ $output =~ "2" ]] || false
 }
 
 @test "sql-load-data: load data local" {
