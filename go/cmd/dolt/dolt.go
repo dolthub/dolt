@@ -558,11 +558,29 @@ func runMain() int {
 	return res
 }
 
+// buildLateBinder builds a LateBindQueryist for which is used to obtain the Querist used for the length of the
+// command execution.
 func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults, subcommandName string, verbose bool) (cli.LateBindQueryist, error) {
 
 	var targetEnv *env.DoltEnv = nil
 
 	useDb, hasUseDb := apr.GetValue(commands.UseDbFlag)
+	// If the host flag is given, we are forced to use a remote connection to a server.
+	host, hasHost := apr.GetValue(cli.HostFlag)
+	if hasHost {
+		if !hasUseDb && subcommandName != "sql" {
+			return nil, fmt.Errorf("The --host flag requires the additional --use-db flag.")
+		}
+
+		port, hasPort := apr.GetInt(cli.PortFlag)
+		if !hasPort {
+			port = 3306
+		}
+		useTLS := !apr.Contains(cli.NoTLSFlag)
+
+		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, useTLS, useDb)
+	}
+
 	if hasUseDb {
 		targetEnv = mrEnv.GetEnv(useDb)
 		if targetEnv == nil {
@@ -602,7 +620,7 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 				creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: lock.Secret, Specified: false}
 			}
 
-			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, lock.Port, useDb)
+			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", lock.Port, false, useDb)
 		}
 	}
 
@@ -674,6 +692,9 @@ func buildGlobalArgs() *argparser.ArgParser {
 
 	ap.SupportsString(cli.UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", commands.DefaultUser))
 	ap.SupportsString(cli.PasswordFlag, "p", "password", "Defines the password for the user. Defaults to empty string.")
+	ap.SupportsString(cli.HostFlag, "", "host", "Defines the host to connect to. Defaults to `localhost`.")
+	ap.SupportsInt(cli.PortFlag, "", "port", "Defines the port to connect to. Only used when the --host flag is also provided. Defaults to `3306`.")
+	ap.SupportsFlag(cli.NoTLSFlag, "", "Disables TLS for the connection to remote databases.")
 	ap.SupportsString(commands.DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
 	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change to configuration settings.")
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
