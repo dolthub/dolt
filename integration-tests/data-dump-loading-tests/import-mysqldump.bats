@@ -479,7 +479,7 @@ SQL
 
     run dolt sql -q "show create table address;" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "\`location\` geometry NOT NULL SRID 0," ]] || false
+    [[ "$output" =~ "\`location\` geometry NOT NULL /*!80003 SRID 0 */," ]] || false
 }
 
 @test "import mysqldump: dolt dump --no-autocommit can be loaded back into mysql" {
