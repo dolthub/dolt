@@ -411,6 +411,8 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 		return ErrDirtyWorkingSets
 	}
 	
+	ws := dirties[0]
+	
 	performDoltCommitVar, err := d.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommit)
 	if err != nil {
 		return err
@@ -422,7 +424,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 	}
 
 	if peformDoltCommitInt == 1 {
-		pendingCommit, err := d.PendingCommitAllStaged(ctx, dbName, actions.CommitStagedProps{
+		pendingCommit, err := d.PendingCommitAllStaged(ctx, ws, actions.CommitStagedProps{
 			Message:    "Transaction commit",
 			Date:       ctx.QueryTime(),
 			AllowEmpty: false,
@@ -540,11 +542,8 @@ func (d *DoltSession) doCommit(ctx *sql.Context, dbName string, tx sql.Transacti
 }
 
 // PendingCommitAllStaged returns a pending commit with all tables staged. Returns nil if there are no changes to stage.
-func (d *DoltSession) PendingCommitAllStaged(ctx *sql.Context, dbName string, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
-	roots, ok := d.GetRoots(ctx, dbName)
-	if !ok {
-		return nil, fmt.Errorf("Couldn't get info for database %s", dbName)
-	}
+func (d *DoltSession) PendingCommitAllStaged(ctx *sql.Context, branchState *branchState, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
+	roots := branchState.roots()
 
 	var err error
 	roots, err = actions.StageAllTables(ctx, roots, true)
@@ -552,18 +551,27 @@ func (d *DoltSession) PendingCommitAllStaged(ctx *sql.Context, dbName string, pr
 		return nil, err
 	}
 
-	return d.NewPendingCommit(ctx, dbName, roots, props)
+	return d.newPendingCommit(ctx, branchState, roots, props)
 }
 
 // NewPendingCommit returns a new |doltdb.PendingCommit| for the database named, using the roots given, adding any
 // merge parent from an in progress merge as appropriate. The session working set is not updated with these new roots,
 // but they are set in the returned |doltdb.PendingCommit|. If there are no changes staged, this method returns nil.
 func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots doltdb.Roots, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
-	branchState, _, err := d.lookupDbState(ctx, dbName)
+	branchState, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
+	if !ok {
+		return nil, fmt.Errorf("session state for database %s not found", dbName)
+	}
+	
+	return d.newPendingCommit(ctx, branchState, roots, props)
+}
 
+// newPendingCommit returns a new |doltdb.PendingCommit| for the database and head named by |branchState|
+// See NewPendingCommit
+func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchState, roots doltdb.Roots, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
 	headCommit := branchState.headCommit
 	headHash, _ := headCommit.HashOf()
 
@@ -591,7 +599,7 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 			return nil, err
 		}
 
-		err = d.SetWorkingSet(ctx, dbName, branchState.WorkingSet().WithStagedRoot(newRoots.Staged))
+		err = d.SetWorkingSet(ctx, branchState.dbState.dbName, branchState.WorkingSet().WithStagedRoot(newRoots.Staged))
 		if err != nil {
 			return nil, err
 		}
