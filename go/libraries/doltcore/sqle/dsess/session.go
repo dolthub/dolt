@@ -522,17 +522,11 @@ func (d *DoltSession) doCommitInternal(ctx *sql.Context, branchState *branchStat
 		return nil, fmt.Errorf("expected a DoltTransaction")
 	}
 
-	mergedWorkingSet, newCommit, err := commitFunc(ctx, dtx, branchState.WorkingSet())
+	_, newCommit, err := commitFunc(ctx, dtx, branchState.WorkingSet())
 	if err != nil {
 		return nil, err
 	}
-
-	// TODO: this is probably unnecessary
-	err = d.SetWorkingSet(ctx, branchState.dbState.dbName, mergedWorkingSet)
-	if err != nil {
-		return nil, err
-	}
-
+	
 	branchState.dirty = false
 	return newCommit, nil
 }
@@ -1269,6 +1263,8 @@ func (d *DoltSession) BatchMode() batchMode {
 
 // setSessionVarsForDb updates the three session vars that track the value of the session root hashes
 func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string, state *branchState) error {
+	baseName, _ := SplitRevisionDbName(dbName)
+	
 	// Different DBs have different requirements for what state is set, so we are maximally permissive on what's expected
 	// in the state object here
 	if state.WorkingSet() != nil {
@@ -1277,7 +1273,7 @@ func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string, state
 			return err
 		}
 
-		err = d.Session.SetSessionVariable(ctx, HeadRefKey(dbName), headRef.String())
+		err = d.Session.SetSessionVariable(ctx, HeadRefKey(baseName), headRef.String())
 		if err != nil {
 			return err
 		}
@@ -1290,7 +1286,7 @@ func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string, state
 		if err != nil {
 			return err
 		}
-		err = d.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
+		err = d.Session.SetSessionVariable(ctx, WorkingKey(baseName), h.String())
 		if err != nil {
 			return err
 		}
@@ -1301,7 +1297,7 @@ func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string, state
 		if err != nil {
 			return err
 		}
-		err = d.Session.SetSessionVariable(ctx, StagedKey(dbName), h.String())
+		err = d.Session.SetSessionVariable(ctx, StagedKey(baseName), h.String())
 		if err != nil {
 			return err
 		}
@@ -1312,7 +1308,7 @@ func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string, state
 		if err != nil {
 			return err
 		}
-		err = d.Session.SetSessionVariable(ctx, HeadKey(dbName), h.String())
+		err = d.Session.SetSessionVariable(ctx, HeadKey(baseName), h.String())
 		if err != nil {
 			return err
 		}
