@@ -69,31 +69,31 @@ func MultiEnvForSingleEnv(ctx context.Context, env *DoltEnv) (*MultiRepoEnv, err
 func MultiEnvForDirectory(
 	ctx context.Context,
 	config config.ReadWriteConfig,
-	fs filesys.Filesys, // fs which is the root of the multi-env. This is essentially the --data-dir flag or cwd.
+	dataDirFS filesys.Filesys,
 	version string,
 	ignoreLockFile bool,
 	dEnv *DoltEnv,
 ) (*MultiRepoEnv, error) {
-	// Load current fs and put into mr env
+	// Load current dataDirFS and put into mr env
 	var dbName string = "dolt"
 	var newDEnv *DoltEnv = dEnv
 
 	// InMemFS is used only for testing.
-	// All other FS Types should get a newly created Envronment which will serve as the primary env in the MultiRepoEnv
-	if _, ok := fs.(*filesys.InMemFS); !ok {
-		path, err := fs.Abs("")
+	// All other FS Types should get a newly created Environment which will serve as the primary env in the MultiRepoEnv
+	if _, ok := dataDirFS.(*filesys.InMemFS); !ok {
+		path, err := dataDirFS.Abs("")
 		if err != nil {
 			return nil, err
 		}
 		envName := getRepoRootDir(path, string(os.PathSeparator))
 		dbName = dirToDBName(envName)
 
-		newDEnv = Load(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
+		newDEnv = Load(ctx, GetCurrentUserHomeDir, dataDirFS, doltdb.LocalDirDoltDB, version)
 	}
 
 	mrEnv := &MultiRepoEnv{
 		envs:           make([]NamedEnv, 0),
-		fs:             fs,
+		fs:             dataDirFS,
 		cfg:            config,
 		dialProvider:   NewGRPCDialProviderFromDoltEnv(newDEnv),
 		ignoreLockFile: ignoreLockFile,
@@ -105,14 +105,14 @@ func MultiEnvForDirectory(
 	}
 
 	// If there are other directories in the directory, try to load them as additional databases
-	fs.Iter(".", false, func(path string, size int64, isDir bool) (stop bool) {
+	dataDirFS.Iter(".", false, func(path string, size int64, isDir bool) (stop bool) {
 		if !isDir {
 			return false
 		}
 
 		dir := filepath.Base(path)
 
-		newFs, err := fs.WithWorkingDir(dir)
+		newFs, err := dataDirFS.WithWorkingDir(dir)
 		if err != nil {
 			return false
 		}

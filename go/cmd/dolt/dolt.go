@@ -633,7 +633,7 @@ func buildGlobalArgs() *argparser.ArgParser {
 	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change to configuration settings.")
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
 	ap.SupportsString(commands.BranchCtrlPathFlag, "", "branch control file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will only be created if there is a change to branch control permissions.")
-	ap.SupportsString(commands.UseDbFlag, "", "database", "The name of the database to use when executing SQL queries. Defaults to the first database alphabetically.")
+	ap.SupportsString(commands.UseDbFlag, "", "database", "The name of the database to use when executing SQL queries. Defaults the database of the root directory, if it exists, and the first alphabetically if not.")
 
 	return ap
 }
