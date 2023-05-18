@@ -1498,8 +1498,10 @@ databases:
     cd repo2
     dolt sql -q "create table a (x int primary key)"
     start_sql_server
+
     run dolt --verbose-engine-setup sql -q "create table b (x int primary key)"
     [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error connecting to remote database" ]] || false
     [[ "$output" =~ "User not found 'root'" ]] || false
 
     run dolt --verbose-engine-setup --user dolt sql -q "create table b (x int primary key)"
