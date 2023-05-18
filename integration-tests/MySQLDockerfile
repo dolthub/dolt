@@ -120,6 +120,8 @@ RUN Rscript -e 'install.packages(c("DBI", "RMySQL", "RMariaDB"), \
 # install rust
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
+RUN rustup install stable
+RUN rustup default stable
 
 # install postgres and psql
 RUN service postgresql start
