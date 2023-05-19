@@ -2351,6 +2351,16 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				},
 			},
 			{
+				Query:    "select * from t1 order by a",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from `mydb/b1`.t1 order by a",
+				Expected: []sql.Row{
+					{1}, {2},
+				},
+			},
+			{
 				Query:    "commit",
 				Expected: []sql.Row{},
 			},
@@ -2367,6 +2377,235 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{1}, {2},
 				},
+			},
+		},
+	},
+	{
+		Name: "committing to another branch with autocommit",
+		SetUpScript: []string{
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"set autocommit = on", // unnecessary but make it explicit
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "insert into `mydb/b1`.t1 values (1)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query:    "select * from t1 order by a",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "call dolt_checkout('b1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "select * from t1 order by a",
+				Expected: []sql.Row{
+					{1},
+				},
+			},
+		},
+	},
+	{
+		Name: "checkout and use different branch",
+		SetUpScript: []string{
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "insert into `mydb/b1`.t1 values (1)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query: "insert into `mydb/b1`.t1 values (2)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query:    "select * from t1 order by a",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_checkout('b1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{"b1"}},
+			},
+			{
+				Query: "select * from t1 order by a",
+				Expected: []sql.Row{
+					{1}, {2},
+				},
+			},
+			{
+				Query:    "call dolt_checkout('main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "select * from t1 order by a",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "use `mydb/b1`",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{"b1"}},
+			},
+			{
+				Query:    "select * from t1 order by a",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "use mydb",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from t1 order by a",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "call dolt_checkout('b1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "select * from t1 order by a",
+				Expected: []sql.Row{
+					{1}, {2},
+				},
+			},
+		},
+	},
+	{
+		Name: "committing to another database",
+		SetUpScript: []string{
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"create database db1",
+			"use db1",
+			"create table t1 (a int)",
+			"use mydb",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "insert into db1.t1 values (1)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query: "insert into db1.t1 values (2)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query:    "select * from t1 order by a",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from db1.t1 order by a",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from t1 order by a",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from db1.t1 order by a",
+				Expected: []sql.Row{{1}, {2}},
+			},
+		},
+	},
+	{
+		Name: "committing to another branch on another database",
+		SetUpScript: []string{
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"create database db1",
+			"use db1",
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"use mydb",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "insert into `db1/b1`.t1 values (1)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query: "insert into `db1/b1`.t1 values (2)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query:    "select * from t1 order by a",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from db1.t1 order by a",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from `db1/b1`.t1 order by a",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from t1 order by a",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from db1.t1 order by a",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from `db1/b1`.t1 order by a",
+				Expected: []sql.Row{{1}, {2}},
 			},
 		},
 	},
@@ -2393,7 +2632,33 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "insert into `mydb/b1`.t1 values (3)",
+				Query:    "commit",
+				ExpectedErrStr: "Cannot commit changes on more than one branch / database",
+			},
+		},
+	},
+	{
+		Name: "committing to more than one branch at a time with checkout",
+		SetUpScript: []string{
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "insert into t1 values (1)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query: "call dolt_checkout('b1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "insert into t1 values (2)",
 				Expected: []sql.Row{
 					{types.OkResult{RowsAffected: 1}},
 				},
