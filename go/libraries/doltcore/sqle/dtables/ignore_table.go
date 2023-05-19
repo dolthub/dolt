@@ -117,13 +117,12 @@ var _ sql.RowDeleter = (*ignoreWriter)(nil)
 type ignoreWriter struct {
 	it                      *IgnoreTable
 	errDuringStatementBegin error
-	workingSet              *doltdb.WorkingSet
 	prevHash                *hash.Hash
 	tableWriter             writer.TableWriter
 }
 
 func newIgnoreWriter(it *IgnoreTable) *ignoreWriter {
-	return &ignoreWriter{it, nil, nil, nil, nil}
+	return &ignoreWriter{it, nil, nil, nil}
 }
 
 // Insert inserts the row given, returning an error if it cannot. Insert will be called once for each row to process
@@ -180,7 +179,6 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 
 	iw.prevHash = &prevHash
 
-	iw.workingSet = dbState.WorkingSet()
 	found, err := roots.Working.HasTable(ctx, doltdb.IgnoreTableName)
 
 	if err != nil {
@@ -227,6 +225,11 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 
 		if err != nil {
 			iw.errDuringStatementBegin = err
+			return
+		}
+
+		if dbState.WorkingSet == nil {
+			iw.errDuringStatementBegin = doltdb.ErrOperationNotSupportedInDetachedHead
 			return
 		}
 

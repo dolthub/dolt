@@ -141,7 +141,10 @@ func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoSt
 	}
 
 	remote, remoteOK := remotes[remoteName]
-	currentBranch := rsr.CWBHeadRef()
+	currentBranch, err := rsr.CWBHeadRef()
+	if err != nil {
+		return nil, err
+	}
 	branches, err := rsr.GetBranches()
 	if err != nil {
 		return nil, err
@@ -422,7 +425,10 @@ func NewPullSpec(_ context.Context, rsr RepoStateReader, remoteName, remoteRefNa
 
 	var remoteRef ref.DoltRef
 	if remoteRefName == "" {
-		branch := rsr.CWBHeadRef()
+		branch, err := rsr.CWBHeadRef()
+		if err != nil {
+			return nil, err
+		}
 		trackedBranches, err := rsr.GetBranches()
 		if err != nil {
 			return nil, err

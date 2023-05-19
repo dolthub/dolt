@@ -113,7 +113,11 @@ func AllBranches(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, 
 
 // CurrentBranch rewrites the history of the current branch using the |replay| function.
 func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
-	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, dEnv.RepoStateReader().CWBHeadRef())
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return nil
+	}
+	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, headRef)
 }
 
 // AllBranchesByRoots rewrites the history of all branches in the repo using the |replay| function.
@@ -130,7 +134,11 @@ func AllBranchesByRoots(ctx context.Context, dEnv *env.DoltEnv, replay ReplayRoo
 // CurrentBranchByRoot rewrites the history of the current branch using the |replay| function.
 func CurrentBranchByRoot(ctx context.Context, dEnv *env.DoltEnv, replay ReplayRootFn, nerf NeedsRebaseFn) error {
 	replayCommit := wrapReplayRootFn(replay)
-	return rebaseRefs(ctx, dEnv.DbData(), replayCommit, nerf, dEnv.RepoStateReader().CWBHeadRef())
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return nil
+	}
+	return rebaseRefs(ctx, dEnv.DbData(), replayCommit, nerf, headRef)
 }
 
 func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {
@@ -152,7 +160,7 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 	for i, r := range refs {
 		switch dRef := r.(type) {
 		case ref.BranchRef:
-			err = ddb.NewBranchAtCommit(ctx, dRef, newHeads[i])
+			err = ddb.NewBranchAtCommit(ctx, dRef, newHeads[i], nil)
 
 		case ref.TagRef:
 			// rewrite tag with new commit

@@ -230,7 +230,7 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		}
 
 		if brnch.GetPath() != branch {
-			err := dEnv.DoltDB.DeleteBranch(ctx, brnch)
+			err := dEnv.DoltDB.DeleteBranch(ctx, brnch, nil)
 			if err != nil {
 				return fmt.Errorf("%w: %s; %s", ErrFailedToDeleteBranch, brnch.String(), err.Error())
 			}

@@ -95,9 +95,14 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 }
 
 func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, showIgnoredTables bool, as merge.ArtifactStatus) error {
-	cli.Printf(branchHeader, dEnv.RepoStateReader().CWBHeadRef().GetPath())
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return err
+	}
 
-	err := printRemoteRefTrackingInfo(ctx, dEnv)
+	cli.Printf(branchHeader, headRef.GetPath())
+
+	err = printRemoteRefTrackingInfo(ctx, dEnv)
 	if err != nil {
 		return err
 	}
@@ -141,7 +146,10 @@ func handleStatusVErr(err error) int {
 func printRemoteRefTrackingInfo(ctx context.Context, dEnv *env.DoltEnv) error {
 	ddb := dEnv.DoltDB
 	rsr := dEnv.RepoStateReader()
-	headRef := rsr.CWBHeadRef()
+	headRef, err := rsr.CWBHeadRef()
+	if err != nil {
+		return err
+	}
 	branches, err := rsr.GetBranches()
 	if err != nil {
 		return err

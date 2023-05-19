@@ -136,7 +136,7 @@ func TestPushOnWriteHook(t *testing.T) {
 		ds, err := ddb.db.GetDataset(ctx, "refs/heads/main")
 		require.NoError(t, err)
 
-		err = hook.Execute(ctx, ds, ddb.db)
+		_, err = hook.Execute(ctx, ds, ddb.db)
 		require.NoError(t, err)
 
 		cs, _ = NewCommitSpec(defaultBranch)
@@ -269,7 +269,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 			require.NoError(t, err)
 			ds, err := ddb.db.GetDataset(ctx, "refs/heads/main")
 			require.NoError(t, err)
-			err = hook.Execute(ctx, ds, ddb.db)
+			_, err = hook.Execute(ctx, ds, ddb.db)
 			require.NoError(t, err)
 		}
 	})

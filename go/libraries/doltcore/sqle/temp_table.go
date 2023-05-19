@@ -79,6 +79,9 @@ func NewTempTable(
 	}
 
 	ws := dbState.WorkingSet()
+	if ws == nil {
+		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
+	}
 
 	sch, err := temporaryDoltSchema(ctx, pkSch, collation)
 	if err != nil {
@@ -153,6 +156,9 @@ func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoo
 		}
 
 		ws := dbState.WorkingSet()
+		if ws == nil {
+			return doltdb.ErrOperationNotSupportedInDetachedHead
+		}
 		newWs := ws.WithWorkingRoot(newRoot)
 
 		ait, err := globalstate.NewAutoIncrementTracker(ctx, newWs)

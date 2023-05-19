@@ -206,7 +206,10 @@ func (dEnv *DoltEnv) Valid() bool {
 // initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.
 // This is only necessary to migrate repos written before this method was introduced, and can be removed after 1.0
 func (dEnv *DoltEnv) initWorkingSetFromRepoState(ctx context.Context) error {
-	headRef := dEnv.RepoStateReader().CWBHeadRef()
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return err
+	}
 	wsRef, err := ref.WorkingSetRefForHead(headRef)
 	if err != nil {
 		return err
@@ -591,7 +594,11 @@ func (dEnv *DoltEnv) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, error)
 }
 
 func WorkingSet(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.WorkingSet, error) {
-	workingSetRef, err := ref.WorkingSetRefForHead(rsr.CWBHeadRef())
+	headRef, err := rsr.CWBHeadRef()
+	if err != nil {
+		return nil, err
+	}
+	workingSetRef, err := ref.WorkingSetRefForHead(headRef)
 	if err != nil {
 		return nil, err
 	}
@@ -629,7 +636,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 		wsRef = ws.Ref()
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, dEnv.workingSetMeta())
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, dEnv.workingSetMeta(), nil)
 }
 
 // UpdateWorkingSet updates the working set for the current working branch to the value given.
@@ -648,19 +655,19 @@ func (dEnv *DoltEnv) UpdateWorkingSet(ctx context.Context, ws *doltdb.WorkingSet
 		}
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws, h, dEnv.workingSetMeta())
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws, h, dEnv.workingSetMeta(), nil)
 }
 
 type repoStateReader struct {
 	*DoltEnv
 }
 
-func (r *repoStateReader) CWBHeadRef() ref.DoltRef {
-	return r.RepoState.CWBHeadRef()
+func (r *repoStateReader) CWBHeadRef() (ref.DoltRef, error) {
+	return r.RepoState.CWBHeadRef(), nil
 }
 
-func (r *repoStateReader) CWBHeadSpec() *doltdb.CommitSpec {
-	return r.RepoState.CWBHeadSpec()
+func (r *repoStateReader) CWBHeadSpec() (*doltdb.CommitSpec, error) {
+	return r.RepoState.CWBHeadSpec(), nil
 }
 
 func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {
@@ -758,7 +765,7 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootV
 		wsRef = ws.Ref()
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithStagedRoot(newRoot), h, dEnv.workingSetMeta())
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithStagedRoot(newRoot), h, dEnv.workingSetMeta(), nil)
 }
 
 func (dEnv *DoltEnv) AbortMerge(ctx context.Context) error {
@@ -772,7 +779,7 @@ func (dEnv *DoltEnv) AbortMerge(ctx context.Context) error {
 		return err
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.AbortMerge(), h, dEnv.workingSetMeta())
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.AbortMerge(), h, dEnv.workingSetMeta(), nil)
 }
 
 func (dEnv *DoltEnv) workingSetMeta() *datas.WorkingSetMeta {
@@ -911,7 +918,7 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 		rr := r.(ref.RemoteRef)
 
 		if rr.GetRemote() == remote.Name {
-			err = ddb.DeleteBranch(ctx, rr)
+			err = ddb.DeleteBranch(ctx, rr, nil)
 
 			if err != nil {
 				return fmt.Errorf("%w; failed to delete remote tracking ref '%s'; %s", ErrFailedToDeleteRemote, rr.String(), err.Error())

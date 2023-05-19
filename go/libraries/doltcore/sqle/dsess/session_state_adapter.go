@@ -61,29 +61,30 @@ func (s SessionStateAdapter) GetRoots(ctx context.Context) (doltdb.Roots, error)
 	return state.roots(), nil
 }
 
-func (s SessionStateAdapter) CWBHeadRef() ref.DoltRef {
+func (s SessionStateAdapter) CWBHeadRef() (ref.DoltRef, error) {
 	workingSet, err := s.session.WorkingSet(sql.NewContext(context.Background()), s.dbName)
 	if err != nil {
-		// TODO: fix this interface
-		panic(err)
+		return nil, err
 	}
 
 	headRef, err := workingSet.Ref().ToHeadRef()
-	// TODO: fix this interface
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return headRef
+	return headRef, nil
 }
 
-func (s SessionStateAdapter) CWBHeadSpec() *doltdb.CommitSpec {
+func (s SessionStateAdapter) CWBHeadSpec() (*doltdb.CommitSpec, error) {
 	// TODO: get rid of this
-	ref := s.CWBHeadRef()
+	ref, err := s.CWBHeadRef()
+	if err != nil {
+		return nil, err
+	}
 	spec, err := doltdb.NewCommitSpec(ref.GetPath())
 	if err != nil {
 		panic(err)
 	}
-	return spec
+	return spec, nil
 }
 
 func (s SessionStateAdapter) GetRemotes() (map[string]env.Remote, error) {

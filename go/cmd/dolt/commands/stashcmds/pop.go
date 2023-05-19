@@ -133,7 +133,11 @@ func applyStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, curWorkingRoot *dol
 	if err != nil {
 		return false, err
 	}
-	parentCommit, err := dEnv.DoltDB.Resolve(ctx, headCommitSpec, dEnv.RepoStateReader().CWBHeadRef())
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return false, err
+	}
+	parentCommit, err := dEnv.DoltDB.Resolve(ctx, headCommitSpec, headRef)
 	if err != nil {
 		return false, err
 	}
