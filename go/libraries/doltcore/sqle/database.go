@@ -673,7 +673,7 @@ func (db Database) GetWorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	if !ok {
 		return nil, fmt.Errorf("no root value found in session")
 	}
-	if dbState.WorkingSet == nil {
+	if dbState.WorkingSet() == nil {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
 	return dbState.WorkingSet(), nil

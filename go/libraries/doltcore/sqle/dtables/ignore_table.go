@@ -228,7 +228,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 			return
 		}
 
-		if dbState.WorkingSet == nil {
+		if dbState.WorkingSet() == nil {
 			iw.errDuringStatementBegin = doltdb.ErrOperationNotSupportedInDetachedHead
 			return
 		}

@@ -846,7 +846,7 @@ func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roo
 		return err
 	}
 
-	if sessionState.WorkingSet == nil {
+	if sessionState.WorkingSet() == nil {
 		return doltdb.ErrOperationNotSupportedInDetachedHead
 	}
 
@@ -992,7 +992,7 @@ func (d *DoltSession) WorkingSet(ctx *sql.Context, dbName string) (*doltdb.Worki
 	if err != nil {
 		return nil, err
 	}
-	if sessionState.WorkingSet == nil {
+	if sessionState.WorkingSet() == nil {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
 	return sessionState.WorkingSet(), nil
