@@ -2400,7 +2400,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "commit",
-				ExpectedErrStr: "cannot commit to more than one branch at once",
+				ExpectedErrStr: "Cannot commit changes on more than one branch / database",
 			},
 		},
 	},
@@ -2429,7 +2429,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "commit",
-				ExpectedErrStr: "cannot commit to more than one database at once",
+				ExpectedErrStr: "Cannot commit changes on more than one branch / database",
 			},
 		},
 	},

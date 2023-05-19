@@ -444,7 +444,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 	}
 }
 
-var ErrDirtyWorkingSets = errors.New("multiple dirty working sets found")
+var ErrDirtyWorkingSets = errors.New("Cannot commit changes on more than one branch / database")
 
 // dirtyWorkingSets returns all dirty working sets for this session
 func (d *DoltSession) dirtyWorkingSets() []*branchState {
