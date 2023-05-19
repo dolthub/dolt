@@ -169,11 +169,18 @@ func drainIter(ctx *sql.Context, iter sql.RowIter) error {
 	return iter.Close(ctx)
 }
 
-func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
+func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) (dsess.InitialDbState, error) {
 	ctx := context.Background()
 
-	head := dEnv.RepoStateReader().CWBHeadSpec()
-	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
+	headSpec, err := dEnv.RepoStateReader().CWBHeadSpec()
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, headSpec, headRef)
 	require.NoError(t, err)
 
 	ws, err := dEnv.WorkingSet(ctx)
@@ -185,5 +192,5 @@ func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) dsess.InitialD
 		WorkingSet: ws,
 		DbData:     dEnv.DbData(),
 		Remotes:    dEnv.RepoState.Remotes,
-	}
+	}, nil
 }

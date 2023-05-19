@@ -168,7 +168,11 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 	}
 
 	cs, _ := doltdb.NewCommitSpec(srcRef.GetPath())
-	cm, err := localDB.Resolve(ctx, cs, rsr.CWBHeadRef())
+	headRef, err := rsr.CWBHeadRef()
+	if err != nil {
+		return err
+	}
+	cm, err := localDB.Resolve(ctx, cs, headRef)
 
 	if err != nil {
 		return fmt.Errorf("%w; refspec not found: '%s'; %s", ref.ErrInvalidRefSpec, srcRef.GetPath(), err.Error())

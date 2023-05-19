@@ -27,8 +27,8 @@ import (
 
 // TODO: change name to ClientStateReader, move out of env package
 type RepoStateReader interface {
-	CWBHeadRef() ref.DoltRef
-	CWBHeadSpec() *doltdb.CommitSpec
+	CWBHeadRef() (ref.DoltRef, error)
+	CWBHeadSpec() (*doltdb.CommitSpec, error)
 	GetRemotes() (map[string]Remote, error)
 	GetBackups() (map[string]Remote, error)
 	GetBranches() (map[string]BranchConfig, error)

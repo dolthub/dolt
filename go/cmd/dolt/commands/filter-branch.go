@@ -186,7 +186,12 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 		return nil, err
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return nil, err
+	}
+
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return nil, err
 	}

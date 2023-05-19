@@ -183,7 +183,11 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 	if err != nil {
 		return nil, "", err
 	}
-	cherryCm, err := dEnv.DoltDB.Resolve(ctx, cherrySpec, dEnv.RepoStateReader().CWBHeadRef())
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return nil, "", err
+	}
+	cherryCm, err := dEnv.DoltDB.Resolve(ctx, cherrySpec, headRef)
 	if err != nil {
 		return nil, "", err
 	}

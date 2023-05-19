@@ -221,9 +221,13 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		return handleCommitErr(ctx, dEnv, err, usage)
 	}
 
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return handleCommitErr(ctx, dEnv, err, usage)
+	}
 	_, err = dEnv.DoltDB.CommitWithWorkingSet(
 		ctx,
-		dEnv.RepoStateReader().CWBHeadRef(),
+		headRef,
 		ws.Ref(),
 		pendingCommit,
 		ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),
@@ -381,7 +385,10 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg s
 		return "", err
 	}
 
-	currBranch := dEnv.RepoStateReader().CWBHeadRef()
+	currBranch, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return "", err
+	}
 	initialCommitMessage := fmt.Sprintf("%s\n# Please enter the commit message for your changes. Lines starting"+
 		"\n# with '#' will be ignored, and an empty message aborts the commit."+
 		"\n# On branch %s\n#\n", suggestedMsg, currBranch)

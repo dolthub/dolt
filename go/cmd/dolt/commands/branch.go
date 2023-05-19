@@ -138,7 +138,10 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read refs from db").AddCause(err).Build(), nil)
 	}
 
-	currentBranch := dEnv.RepoStateReader().CWBHeadRef()
+	currentBranch, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read refs from db").AddCause(err).Build(), nil)
+	}
 	sort.Slice(branches, func(i, j int) bool {
 		return branches[i].String() < branches[j].String()
 	})
@@ -172,7 +175,7 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		}
 
 		if verbose {
-			cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
+			cm, err := dEnv.DoltDB.Resolve(ctx, cs, currentBranch)
 
 			if err == nil {
 				h, err := cm.HashOf()
@@ -195,7 +198,11 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 }
 
 func printCurrentBranch(dEnv *env.DoltEnv) int {
-	cli.Println(dEnv.RepoStateReader().CWBHeadRef().GetPath())
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), nil)
+	}
+	cli.Println(headRef.GetPath())
 	return 0
 }
 

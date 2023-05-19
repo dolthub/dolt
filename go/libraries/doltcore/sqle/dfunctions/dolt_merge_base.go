@@ -94,11 +94,16 @@ func resolveRefSpecs(ctx *sql.Context, leftSpec, rightSpec string) (left, right 
 		return nil, nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	left, err = doltDB.Resolve(ctx, lcs, dbData.Rsr.CWBHeadRef())
+	headRef, err := dbData.Rsr.CWBHeadRef()
 	if err != nil {
 		return nil, nil, err
 	}
-	right, err = doltDB.Resolve(ctx, rcs, dbData.Rsr.CWBHeadRef())
+
+	left, err = doltDB.Resolve(ctx, lcs, headRef)
+	if err != nil {
+		return nil, nil, err
+	}
+	right, err = doltDB.Resolve(ctx, rcs, headRef)
 	if err != nil {
 		return nil, nil, err
 	}

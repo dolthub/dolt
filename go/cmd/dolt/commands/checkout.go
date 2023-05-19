@@ -119,7 +119,10 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usagePrt)
 		}
-		headRef := dEnv.RepoStateReader().CWBHeadRef()
+		headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), nil)
+		}
 		ws, err := dEnv.WorkingSet(ctx)
 		if err != nil {
 			HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usagePrt)
@@ -177,9 +180,14 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Ar
 		return verr
 	}
 
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return errhand.BuildDError(err.Error()).Build()
+	}
+
 	// the new branch is checked out at this point
 	if setTrackUpstream {
-		verr = SetRemoteUpstreamForBranchRef(dEnv, remoteName, remoteBranchName, dEnv.RepoStateReader().CWBHeadRef())
+		verr = SetRemoteUpstreamForBranchRef(dEnv, remoteName, remoteBranchName, headRef)
 		if verr != nil {
 			return verr
 		}
@@ -195,7 +203,7 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Ar
 		if !remoteOk {
 			return nil
 		}
-		verr = SetRemoteUpstreamForBranchRef(dEnv, remoteName, remoteBranchName, dEnv.RepoStateReader().CWBHeadRef())
+		verr = SetRemoteUpstreamForBranchRef(dEnv, remoteName, remoteBranchName, headRef)
 		if verr != nil {
 			return verr
 		}
@@ -230,7 +238,11 @@ func checkoutRemoteBranchOrSuggestNew(ctx context.Context, dEnv *env.DoltEnv, na
 		if verr != nil {
 			return verr
 		}
-		return SetRemoteUpstreamForBranchRef(dEnv, remoteRefs[0].GetRemote(), remoteRefs[0].GetBranch(), dEnv.RepoStateReader().CWBHeadRef())
+		headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+		if err != nil {
+			return errhand.BuildDError(err.Error()).Build()
+		}
+		return SetRemoteUpstreamForBranchRef(dEnv, remoteRefs[0].GetRemote(), remoteRefs[0].GetBranch(), headRef)
 	} else {
 		// TODO : add hint of using `dolt checkout --track <remote>/<branch>` when --track flag is supported
 		return errhand.BuildDError("'%s' matched multiple (%v) remote tracking branches", name, len(remoteRefs)).Build()

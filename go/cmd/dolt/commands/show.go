@@ -159,7 +159,11 @@ func parseShowArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 
 func showObjects(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error {
 	if len(opts.specRefs) == 0 {
-		return showCommitSpec(ctx, dEnv, opts, dEnv.RepoStateReader().CWBHeadSpec())
+		headRef, err := dEnv.RepoStateReader().CWBHeadSpec()
+		if err != nil {
+			return err
+		}
+		return showCommitSpec(ctx, dEnv, opts, headRef)
 	}
 
 	for _, specRef := range opts.specRefs {
@@ -243,7 +247,12 @@ func showSpecRef(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, specRef
 
 func showCommitSpec(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, commitSpec *doltdb.CommitSpec) error {
 
-	commit, err := dEnv.DoltDB.Resolve(ctx, commitSpec, dEnv.RepoStateReader().CWBHeadRef())
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return err
+	}
+
+	commit, err := dEnv.DoltDB.Resolve(ctx, commitSpec, headRef)
 	if err != nil {
 		return err
 	}
@@ -283,7 +292,10 @@ func showCommit(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, comm *do
 		return err
 	}
 
-	headRef := dEnv.RepoStateReader().CWBHeadRef()
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return err
+	}
 	cwbHash, err := dEnv.DoltDB.GetHashForRefStr(ctx, headRef.String())
 	if err != nil {
 		return err

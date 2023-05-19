@@ -159,7 +159,10 @@ func rootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.
 
 func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
 	branchRef := ref.NewBranchRef(brName)
-	initialHeadRef := dEnv.RepoStateReader().CWBHeadRef()
+	initialHeadRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return err
+	}
 
 	db := dEnv.DoltDB
 	hasRef, err := db.HasRef(ctx, branchRef)
@@ -170,7 +173,11 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 		return doltdb.ErrBranchNotFound
 	}
 
-	if ref.Equals(dEnv.RepoStateReader().CWBHeadRef(), branchRef) {
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return err
+	}
+	if ref.Equals(headRef, branchRef) {
 		return doltdb.ErrAlreadyOnBranch
 	}
 
