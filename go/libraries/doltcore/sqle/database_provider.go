@@ -1081,7 +1081,10 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 		}
 
 		if !ok {
-			headRef := db.DbData().Rsr.CWBHeadRef()
+			headRef, err := db.DbData().Rsr.CWBHeadRef()
+			if err != nil {
+				return nil, false, err
+			}
 			head = headRef.GetPath()
 		}
 

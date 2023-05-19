@@ -818,7 +818,7 @@ func (d *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.R
 		return err
 	}
 
-	if sessionState.WorkingSet == nil {
+	if branchState.WorkingSet() == nil {
 		return doltdb.ErrOperationNotSupportedInDetachedHead
 	}
 

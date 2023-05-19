@@ -249,8 +249,8 @@ func txCommit(ctx *sql.Context,
 		hash hash.Hash, // hash of the current working set to be written
 		_ editor.Options, // editor options for merges
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-	err := doltDb.UpdateWorkingSet(ctx, workingSet.Ref(), workingSet, hash, tx.getWorkingSetMeta(ctx))
 	var rsc doltdb.ReplicationStatusController
+	err := doltDb.UpdateWorkingSet(ctx, workingSet.Ref(), workingSet, hash, tx.getWorkingSetMeta(ctx), &rsc)
 	WaitForReplicationController(ctx, rsc)
 	return workingSet, nil, err
 }
