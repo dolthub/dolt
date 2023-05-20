@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"database/sql"
-
+	
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -78,7 +78,15 @@ func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server) *driver.S
 	if s.Port != 0 {
 		opts = append(opts, driver.WithPort(s.Port))
 	}
-	server, err := driver.StartSqlServer(dc, opts...)
+
+	var server *driver.SqlServer
+	var err error
+	if s.DebugPort != 0 {
+		server, err = driver.DebugSqlServer(dc, s.DebugPort, opts...)	
+	} else {
+		server, err = driver.StartSqlServer(dc, opts...)
+	}
+	
 	require.NoError(t, err)
 	if len(s.ErrorMatches) > 0 {
 		err := server.ErrorStop()
