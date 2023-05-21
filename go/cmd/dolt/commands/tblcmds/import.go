@@ -285,11 +285,11 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 	}
 
 	if !apr.ContainsAny(createParam, updateParam, replaceParam, appendParam) {
-		return errhand.BuildDError("Must include '-c' for initial table import or -u to update existing table or -a to append to existing table or -r to replace existing table.").Build()
+		return errhand.BuildDError("Must specify exactly one of -c, -u, -a, or -r.").Build()
 	}
 
 	if len(apr.ContainsMany(createParam, updateParam, replaceParam, appendParam)) > 1 {
-		return errhand.BuildDError("Must not include multiple of '-c' for initial table import or -u to update existing table or -a to append to existing table or -r to replace existing table.").Build()
+		return errhand.BuildDError("Must specify exactly one of -c, -u, -a, or -r.").Build()
 	}
 
 	if apr.Contains(schemaParam) && !apr.Contains(createParam) {
