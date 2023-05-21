@@ -26,9 +26,10 @@ CSV
     [[ "$output" =~ "row [1,1] would be overwritten by [1,2]" ]] || false
 
     run dolt sql -q "select * from t"
+    echo "$output"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 1 | 1 |" ]] || false
-    [[ ! "$output" =~ "| 1 | 2 |" ]] || false
+    [[   "$output" =~ "| 1  | 1    |" ]] || false
+    [[ ! "$output" =~ "| 1  | 2    |" ]] || false
 }
 
 @test "import-append-tables: disallow multiple keys with different values during append" {
@@ -45,8 +46,8 @@ CSV
 
     run dolt sql -q "select * from t"
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "| 1 | 1 |" ]] || false
-    [[ ! "$output" =~ "| 1 | 2 |" ]] || false
+    [[ ! "$output" =~ "| 1  | 1    |" ]] || false
+    [[ ! "$output" =~ "| 1  | 2    |" ]] || false
 }
 
 @test "import-append-tables: ignore rows that would have no effect on import" {
@@ -69,8 +70,8 @@ CSV
 
     run dolt sql -q "select * from t"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 1 | 1 |" ]] || false
-    [[ "$output" =~ "| 2 | 3 |" ]] || false
+    [[ "$output" =~ "| 1  | 1    |" ]] || false
+    [[ "$output" =~ "| 2  | 3    |" ]] || false
 }
 
 @test "import-append-tables: reject rows in source that would modify rows in destination, but continue if --continue is supplied" {
@@ -93,7 +94,7 @@ CSV
 
     run dolt sql -q "select * from t"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 1 | 1 |" ]] || false
-    [[ "$output" =~ "| 2 | 3 |" ]] || false
-    [[ ! "$output" =~ "| 1 | 2 |" ]] || false
+    [[   "$output" =~ "| 1  | 1    |" ]] || false
+    [[   "$output" =~ "| 2  | 3    |" ]] || false
+    [[ ! "$output" =~ "| 1  | 2    |" ]] || false
 }
