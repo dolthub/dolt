@@ -30,6 +30,7 @@ CSV
     [ "$status" -eq 0 ]
     [[   "$output" =~ "| 1  | 1    |" ]] || false
     [[ ! "$output" =~ "| 1  | 2    |" ]] || false
+    [ "${#lines[@]}" -eq 5 ]
 }
 
 @test "import-append-tables: disallow multiple keys with different values during append" {
@@ -48,6 +49,7 @@ CSV
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "| 1  | 1    |" ]] || false
     [[ ! "$output" =~ "| 1  | 2    |" ]] || false
+    [ "${#lines[@]}" -eq 0 ]
 }
 
 @test "import-append-tables: ignore rows that would have no effect on import" {
@@ -72,6 +74,7 @@ CSV
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| 1  | 1    |" ]] || false
     [[ "$output" =~ "| 2  | 3    |" ]] || false
+    [ "${#lines[@]}" -eq 6 ]
 }
 
 @test "import-append-tables: reject rows in source that would modify rows in destination, but continue if --continue is supplied" {
@@ -97,4 +100,5 @@ CSV
     [[   "$output" =~ "| 1  | 1    |" ]] || false
     [[   "$output" =~ "| 2  | 3    |" ]] || false
     [[ ! "$output" =~ "| 1  | 2    |" ]] || false
+    [ "${#lines[@]}" -eq 6 ]
 }
