@@ -24,6 +24,11 @@ CSV
     [ "$status" -eq 1 ]
     [[ "$output" =~ "An error occurred while moving data" ]] || false
     [[ "$output" =~ "row [1,1] would be overwritten by [1,2]" ]] || false
+
+    run dolt sql -q "select * from t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 1 | 1 |" ]] || false
+    [ ! [["$output" =~ "| 1 | 2 |" ]] ] || false
 }
 
 @test "import-append-tables: disallow multiple keys with different values during append" {
@@ -37,6 +42,11 @@ CSV
     [ "$status" -eq 1 ]
     [[ "$output" =~ "An error occurred while moving data" ]] || false
     [[ "$output" =~ "row [1,1] would be overwritten by [1,2]" ]] || false
+
+    run dolt sql -q "select * from t"
+    [ "$status" -eq 0 ]
+    [ ! [[ "$output" =~ "| 1 | 1 |" ]] ] || false
+    [ ! [[ "$output" =~ "| 1 | 2 |" ]] ] || false
 }
 
 @test "import-append-tables: ignore rows that would have no effect on import" {
@@ -56,6 +66,11 @@ CSV
     [[ "$output" =~ "[1,1]" ]] || false
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Lines skipped: 1" ]] || false
+
+    run dolt sql -q "select * from t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 1 | 1 |" ]] || false
+    [[ "$output" =~ "| 2 | 3 |" ]] || false
 }
 
 @test "import-append-tables: reject rows in source that would modify rows in destination, but continue if --continue is supplied" {
@@ -75,4 +90,10 @@ CSV
     [[ "$output" =~ "[1,2]" ]] || false
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Lines skipped: 1" ]] || false
+
+    run dolt sql -q "select * from t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 1 | 1 |" ]] || false
+    [[ "$output" =~ "| 2 | 3 |" ]] || false
+    [ ! [[ "$output" =~ "| 1 | 2 |" ]] ] || false
 }
