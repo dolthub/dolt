@@ -285,11 +285,11 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 	}
 
 	if !apr.ContainsAny(createParam, updateParam, replaceParam, appendParam) {
-		return errhand.BuildDError("Must specify exactly one of -c, -u, -a, or -r.").Build()
+		return errhand.BuildDError("Must specify exactly one of -c, -u, -a, or -r.").SetPrintUsage().Build()
 	}
 
 	if len(apr.ContainsMany(createParam, updateParam, replaceParam, appendParam)) > 1 {
-		return errhand.BuildDError("Must specify exactly one of -c, -u, -a, or -r.").Build()
+		return errhand.BuildDError("Must specify exactly one of -c, -u, -a, or -r.").SetPrintUsage().Build()
 	}
 
 	if apr.Contains(schemaParam) && !apr.Contains(createParam) {
