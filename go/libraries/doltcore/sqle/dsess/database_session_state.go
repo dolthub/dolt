@@ -112,7 +112,6 @@ type branchState struct {
 	// case headCommit must be set
 	workingSet *doltdb.WorkingSet
 	// dbData is an accessor for the underlying doltDb
-	// TODO: move this to DatabaseSessionState only
 	dbData       env.DbData
 	// writeSession is this head's write session
 	writeSession writer.WriteSession
@@ -121,7 +120,6 @@ type branchState struct {
 	// sessionCache is a collection of cached values used to speed up performance
 	sessionCache *SessionCache
 	// dirty is true if this branch state has uncommitted changes
-	// TODO NEXT: fill this in and check it
 	dirty bool
 }
 
