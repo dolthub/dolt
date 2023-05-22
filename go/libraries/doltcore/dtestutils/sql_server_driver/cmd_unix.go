@@ -17,7 +17,10 @@
 
 package sql_server_driver
 
-import "syscall"
+import (
+	"os/exec"
+	"syscall"
+)
 
 func ApplyCmdAttributes(cmd *exec.Cmd) {
 	// nothing to do on unix / darwin
