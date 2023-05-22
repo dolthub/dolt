@@ -542,33 +542,6 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, apr)
 }
 
-// splitArgsOnSubCommand splits the args into two slices, the first containing all args before the first subcommand,
-// and the second containing all args after the first subcommand. The second slice will start with the subcommand name.
-func splitArgsOnSubCommand(args []string) (globalArgs, subArgs []string, initCliContext, printUsages bool, err error) {
-	commandSet := make(map[string]bool)
-	for _, cmd := range doltSubCommands {
-		commandSet[cmd.Name()] = true
-	}
-
-	for i, arg := range args {
-		arg = strings.ToLower(arg)
-
-		if cli.IsHelp(arg) {
-			// Found --help before any subcommand, so print dolt help.
-			return nil, nil, false, true, nil
-		}
-
-		if _, ok := commandSet[arg]; ok {
-			// SQL is the first subcommand to support the CLIContext. We'll need a more general solution when we add more.
-			// blame, table rm, and table mv commands also depend on the sql command, so they are also included here.
-			initCliContext := "sql" == arg || "blame" == arg || "table" == arg
-			return args[:i], args[i:], initCliContext, false, nil
-		}
-	}
-
-	return nil, nil, false, false, errors.New("No valid dolt subcommand found. See 'dolt --help' for usage.")
-}
-
 // doc is currently used only when a `initCliContext` command is specified. This will include all commands in time,
 // otherwise you only see these docs if you specify a nonsense argument before the `sql` subcommand.
 var doc = cli.CommandDocumentationContent{
