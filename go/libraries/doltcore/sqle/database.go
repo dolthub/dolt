@@ -982,13 +982,13 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 		return ErrInvalidTableName.New(tableName)
 	}
 
-	tmp, err := NewTempTable(ctx, db.ddb, pkSch, tableName, db.name, db.editOpts, collation)
+	tmp, err := NewTempTable(ctx, db.ddb, pkSch, tableName, db.RevisionQualifiedName(), db.editOpts, collation)
 	if err != nil {
 		return err
 	}
 
 	ds := dsess.DSessFromSess(ctx.Session)
-	ds.AddTemporaryTable(ctx, db.Name(), tmp)
+	ds.AddTemporaryTable(ctx, db.RevisionQualifiedName(), tmp)
 	return nil
 }
 

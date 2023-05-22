@@ -1390,7 +1390,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 	}
 
 	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
-	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.Name(), sess.SetRoot, false)
+	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.RevisionQualifiedName(), sess.SetRoot, false)
 	if err != nil {
 		return nil, err
 	}
