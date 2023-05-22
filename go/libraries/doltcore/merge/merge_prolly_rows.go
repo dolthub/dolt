@@ -407,7 +407,6 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 		var valueTuple val.Tuple
 		var valueDesc val.TupleDesc
 
-		// TODO: Is this a common pattern we could extract and reuse?
 		switch diff.Op {
 		case tree.DiffOpLeftAdd, tree.DiffOpLeftDelete, tree.DiffOpLeftModify:
 			valueTuple = diff.Left
@@ -423,8 +422,8 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 			valueTuple = diff.Merged
 			valueDesc = cv.tableMerger.leftSch.GetValueDescriptor()
 		case tree.DiffOpDivergentDeleteConflict, tree.DiffOpDivergentModifyConflict:
-			// TODO: We shouldn't ever see these, right?
-			panic("what?")
+			// TODO: Add a test case to trigger this... would this even get this far?
+			return 0, fmt.Errorf("check constraint validation not supported for divergent conflicts")
 		}
 
 		// TODO: Do we need to honor column defaults here? Seems like it?
@@ -438,25 +437,9 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 			newTuple = val.NewTuple(cv.valueMerger.syncPool, newTupleBytes...)
 		}
 
-		var row sql.Row
-		// TODO: planbuilder.Parse() seems to return the GetField indexes at N+1 from what I expected...
-		// TODO: Ask Max why this is? It's just the placeholder index spot for the expression itself, right?
-		row = append(row, nil)
-		keyDesc := cv.sch.GetKeyDescriptor()
-		for i := range keyDesc.Types {
-			value, err := index.GetField(ctx, keyDesc, i, diff.Key, cv.tableMerger.ns)
-			if err != nil {
-				return 0, err
-			}
-			row = append(row, value)
-		}
-
-		for i := range cv.sch.GetNonPKCols().GetColumns() {
-			value, err := index.GetField(ctx, cv.sch.GetValueDescriptor(), i, newTuple, cv.tableMerger.ns)
-			if err != nil {
-				return 0, err
-			}
-			row = append(row, value)
+		row, err := cv.buildRow(ctx, diff.Key, newTuple)
+		if err != nil {
+			return 0, err
 		}
 
 		result, err := checkExpression.Eval(ctx, row)
@@ -495,6 +478,34 @@ func (cv checkValidator) insertArtifact(ctx context.Context, key, value val.Tupl
 	}
 	cvm := prolly.ConstraintViolationMeta{VInfo: vinfo, Value: value}
 	return cv.edits.ReplaceConstraintViolation(ctx, key, cv.srcHash, prolly.ArtifactTypeChkConsViol, cvm)
+}
+
+// buildRow takes the |key| and |value| tuple and returns a new sql.Row, along with any errors encountered.
+func (cv checkValidator) buildRow(ctx *sql.Context, key, value val.Tuple) (sql.Row, error) {
+	var row sql.Row
+	// When we parse and resolve the check constraint expression with planbuilder, it leaves row position 0
+	// for the expression itself, so we add an empty spot in our row to account for that before we pass the
+	// row into the expression to evaluate it.
+	// TODO: double check this assumption with Max
+	row = append(row, nil)
+	keyDesc := cv.sch.GetKeyDescriptor()
+	for i := range keyDesc.Types {
+		value, err := index.GetField(ctx, keyDesc, i, key, cv.tableMerger.ns)
+		if err != nil {
+			return nil, err
+		}
+		row = append(row, value)
+	}
+
+	for i := range cv.sch.GetNonPKCols().GetColumns() {
+		value, err := index.GetField(ctx, cv.sch.GetValueDescriptor(), i, value, cv.tableMerger.ns)
+		if err != nil {
+			return nil, err
+		}
+		row = append(row, value)
+	}
+
+	return row, nil
 }
 
 // uniqValidator checks whether new additions from the merge-right
