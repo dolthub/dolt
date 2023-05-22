@@ -1,5 +1,14 @@
 #!/bin/sh
 
+e=$(env)
+echo "DUSTIN: env: $e"
+
+c=$(which cargo)
+r=$(which rustup)
+
+echo "DUSTIN: cargo: $c"
+echo "DUSTIN: rustup $r"
+
 echo "Updating dolt config for tests:"
 dolt config --global --add metrics.disabled true
 dolt config --global --add metrics.host localhost
