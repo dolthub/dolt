@@ -500,20 +500,16 @@ func (cv checkValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDif
 			// TODO: Add a test case for CHECK(NULL = NULL) –something that will always return NULL
 			continue
 		} else if result == false {
-			// check failed!
 			conflictCount++
-			// TODO: This type is specific for Unique constraint violations; we need to create our own
-			foo := UniqCVMeta{
-				Columns: []string{"myColumns?"},
-				Name:    checkName,
-			}
-			err = cv.insertArtifact(ctx, diff.Key, newTuple, foo)
+			meta, err := newCheckCVMeta(cv.sch, checkName)
 			if err != nil {
+				return 0, err
+			}
+			if err = cv.insertArtifact(ctx, diff.Key, newTuple, meta); err != nil {
 				return conflictCount, err
 			}
 		} else {
-			// TODO: Can result be anything else besides true false or nil?
-			//
+			return 0, fmt.Errorf("unexpected result from check constraint expression: %v", result)
 		}
 	}
 
@@ -522,7 +518,7 @@ func (cv checkValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDif
 
 // insertArtifact records a check constraint violation, as described by |meta|, for the row with the specified
 // |key| and |value|.
-func (cv checkValidator) insertArtifact(ctx context.Context, key, value val.Tuple, meta UniqCVMeta) error {
+func (cv checkValidator) insertArtifact(ctx context.Context, key, value val.Tuple, meta CheckCVMeta) error {
 	vinfo, err := json.Marshal(meta)
 	if err != nil {
 		return err
