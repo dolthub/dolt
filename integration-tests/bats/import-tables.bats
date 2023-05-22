@@ -14,7 +14,7 @@ teardown() {
     run dolt table import t test.csv
 
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Must include '-c' for initial table import or -u to update existing table or -a to append to existing table or -r to replace existing table." ]] || false
+    [[ "$output" =~ "Must specify exactly one of -c, -u, -a, or -r." ]] || false
 }
 
 @test "import-tables: error if multiple operations are provided" {
@@ -23,5 +23,5 @@ teardown() {
     echo "$output"
 
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Must not include multiple of '-c' for initial table import or -u to update existing table or -a to append to existing table or -r to replace existing table." ]] || false
+    [[ "$output" =~ "Must specify exactly one of -c, -u, -a, or -r." ]] || false
 }
