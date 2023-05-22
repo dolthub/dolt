@@ -28,6 +28,10 @@ func TestCluster(t *testing.T) {
 	RunTestsFile(t, "tests/sql-server-cluster.yaml")
 }
 
+func TestSingle(t *testing.T) {
+	RunSingleTest(t, "tests/sql-server-cluster.yaml", "primary comes up and replicates to standby")
+}
+
 func TestClusterTLS(t *testing.T) {
 	RunTestsFile(t, "tests/sql-server-cluster-tls.yaml")
 }

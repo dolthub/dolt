@@ -46,6 +46,17 @@ type Test struct {
 	Skip string `yaml:"skip"`
 }
 
+// Set this environment variable to effectively disable timeouts for debugging.
+const debugEnvKey = "DOLT_SQL_SERVER_TEST_DEBUG"
+var timeout = 20 * time.Second
+
+func init() {
+	_, ok := os.LookupEnv(debugEnvKey)
+	if ok {
+		timeout = 1000 * time.Hour
+	}
+}
+
 func ParseTestsFile(path string) (TestDef, error) {
 	contents, err := os.ReadFile(path)
 	if err != nil {
@@ -206,6 +217,16 @@ func RunTestsFile(t *testing.T, path string) {
 	}
 }
 
+func RunSingleTest(t *testing.T, path string, testName string) {
+	def, err := ParseTestsFile(path)
+	require.NoError(t, err)
+	for _, test := range def.Tests {
+		if test.Name == testName {
+			t.Run(test.Name, test.Run)
+		}
+	}
+}
+
 type retryTestingT struct {
 	*testing.T
 	errorfStrings []string
@@ -276,7 +297,7 @@ func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q driver.Query) {
 		args[i] = q.Args[i]
 	}
 	if q.Query != "" {
-		ctx, c := context.WithTimeout(context.Background(), 20*time.Second)
+		ctx, c := context.WithTimeout(context.Background(), timeout)
 		defer c()
 		rows, err := conn.QueryContext(ctx, q.Query, args...)
 		if err == nil {
@@ -299,7 +320,7 @@ func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q driver.Query) {
 			require.Contains(t, *q.Result.Rows.Or, rowstrings)
 		}
 	} else if q.Exec != "" {
-		ctx, c := context.WithTimeout(context.Background(), 20*time.Second)
+		ctx, c := context.WithTimeout(context.Background(), timeout)
 		defer c()
 		_, err := conn.ExecContext(ctx, q.Exec, args...)
 		if q.ErrorMatch == "" {
