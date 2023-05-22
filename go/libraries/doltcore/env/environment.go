@@ -1149,7 +1149,18 @@ func (dEnv *DoltEnv) IsLocked() bool {
 	if dEnv.IgnoreLockFile {
 		return false
 	}
-	return FsIsLocked(dEnv.FS)
+
+	ans, _, _ := fsIsLocked(dEnv.FS)
+	return ans
+}
+
+// GetLock returns the lockfile for this database or nil if the database is not locked
+func (dEnv *DoltEnv) GetLock() (bool, *DBLock, error) {
+	if dEnv.IgnoreLockFile {
+		return false, nil, nil
+	}
+
+	return fsIsLocked(dEnv.FS)
 }
 
 // DBLock is a struct that contains the pid of the process that created the lockfile and the port that the server is running on
@@ -1259,24 +1270,27 @@ func WriteLockfile(fs filesys.Filesys, lock DBLock) error {
 
 // FsIsLocked returns true if a lockFile exists with the same pid as
 // any live process.
-func FsIsLocked(fs filesys.Filesys) bool {
+func fsIsLocked(fs filesys.Filesys) (bool, *DBLock, error) {
 	lockFile, _ := fs.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
 
 	ok, _ := fs.Exists(lockFile)
 	if !ok {
-		return false
+		return false, nil, nil
 	}
 
 	loadedLock, err := LoadDBLockFile(fs, lockFile)
 	if err != nil { // if there's any error assume that env is locked since the file exists
-		return true
+		return true, nil, err
 	}
 
 	// Check whether the pid that spawned the lock file is still running. Ignore it if not.
 	p, err := ps.FindProcess(loadedLock.Pid)
 	if err != nil {
-		return false
+		return false, nil, nil
 	}
 
-	return p != nil
+	if p != nil {
+		return true, loadedLock, nil
+	}
+	return false, nil, nil
 }

@@ -207,7 +207,7 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	if err := validateSqlServerArgs(apr); err != nil {
 		return 1
 	}
-	serverConfig, err := GetServerConfig(dEnv, apr)
+	serverConfig, err := GetServerConfig(dEnv.FS, apr)
 	if err != nil {
 		if serverController != nil {
 			serverController.StopServer()
@@ -246,16 +246,16 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 
 // GetServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
 // on command line. Server config variables not defined are set to default values.
-func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
+func GetServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	var yamlCfg YAMLConfig
 	if cfgFile, ok := apr.GetValue(configFileFlag); ok {
-		cfg, err := getYAMLServerConfig(dEnv.FS, cfgFile)
+		cfg, err := getYAMLServerConfig(cwdFS, cfgFile)
 		if err != nil {
 			return nil, err
 		}
 		yamlCfg = cfg.(YAMLConfig)
 	} else {
-		return getCommandLineServerConfig(dEnv, apr)
+		return getCommandLineServerConfig(apr)
 	}
 
 	// if command line user argument was given, replace yaml's user and password
@@ -350,7 +350,7 @@ func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config S
 
 // getCommandLineServerConfig sets server config variables and persisted global variables with values defined on command line.
 // If not defined, it sets variables to default values.
-func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
+func getCommandLineServerConfig(apr *argparser.ArgParseResults) (ServerConfig, error) {
 	serverConfig := DefaultServerConfig()
 
 	if sock, ok := apr.GetValue(socketFlag); ok {

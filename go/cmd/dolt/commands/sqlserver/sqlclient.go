@@ -38,13 +38,13 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
 const (
 	sqlClientDualFlag     = "dual"
 	SqlClientQueryFlag    = "query"
-	SqlClientUseDbFlag    = "use-db"
 	sqlClientResultFormat = "result-format"
 )
 
@@ -85,7 +85,7 @@ func (cmd SqlClientCmd) ArgParser() *argparser.ArgParser {
 	ap := SqlServerCmd{}.ArgParserWithName(cmd.Name())
 	ap.SupportsFlag(sqlClientDualFlag, "d", "Causes this command to spawn a dolt server that is automatically connected to.")
 	ap.SupportsString(SqlClientQueryFlag, "q", "string", "Sends the given query to the server and immediately exits.")
-	ap.SupportsString(SqlClientUseDbFlag, "", "db_name", fmt.Sprintf("Selects the given database before executing a query. "+
+	ap.SupportsString(commands.UseDbFlag, "", "db_name", fmt.Sprintf("Selects the given database before executing a query. "+
 		"By default, uses the current folder's name. Must be used with the --%s flag.", SqlClientQueryFlag))
 	ap.SupportsString(sqlClientResultFormat, "", "format", fmt.Sprintf("Returns the results in the given format. Must be used with the --%s flag.", SqlClientQueryFlag))
 	return ap
@@ -127,8 +127,8 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			cli.PrintErrln(color.RedString(fmt.Sprintf("--%s flag may not be used with --%s", sqlClientDualFlag, SqlClientQueryFlag)))
 			return 1
 		}
-		if apr.Contains(SqlClientUseDbFlag) {
-			cli.PrintErrln(color.RedString(fmt.Sprintf("--%s flag may not be used with --%s", sqlClientDualFlag, SqlClientUseDbFlag)))
+		if apr.Contains(commands.UseDbFlag) {
+			cli.PrintErrln(color.RedString(fmt.Sprintf("--%s flag may not be used with --%s", sqlClientDualFlag, commands.UseDbFlag)))
 			return 1
 		}
 		if apr.Contains(sqlClientResultFormat) {
@@ -136,7 +136,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			return 1
 		}
 
-		serverConfig, err = GetServerConfig(dEnv, apr)
+		serverConfig, err = GetServerConfig(dEnv.FS, apr)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Bad Configuration"))
 			cli.PrintErrln(err.Error())
@@ -159,7 +159,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			return 1
 		}
 	} else {
-		serverConfig, err = GetServerConfig(dEnv, apr)
+		serverConfig, err = GetServerConfig(dEnv.FS, apr)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Bad Configuration"))
 			cli.PrintErrln(err.Error())
@@ -168,13 +168,13 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 	}
 
 	query, hasQuery := apr.GetValue(SqlClientQueryFlag)
-	dbToUse, hasUseDb := apr.GetValue(SqlClientUseDbFlag)
+	dbToUse, hasUseDb := apr.GetValue(commands.UseDbFlag)
 	resultFormat, hasResultFormat := apr.GetValue(sqlClientResultFormat)
 	if !hasQuery && hasUseDb {
-		cli.PrintErrln(color.RedString(fmt.Sprintf("--%s may only be used with --%s", SqlClientUseDbFlag, SqlClientQueryFlag)))
+		cli.PrintErrln(color.RedString(fmt.Sprintf("--%s may only be used with --%s", commands.UseDbFlag, SqlClientQueryFlag)))
 		return 1
 	} else if !hasQuery && hasResultFormat {
-		cli.PrintErrln(color.RedString(fmt.Sprintf("--%s may only be used with --%s", SqlClientUseDbFlag, sqlClientResultFormat)))
+		cli.PrintErrln(color.RedString(fmt.Sprintf("--%s may only be used with --%s", commands.UseDbFlag, sqlClientResultFormat)))
 		return 1
 	}
 	if !hasUseDb && hasQuery {
@@ -452,4 +452,53 @@ func secondsSince(start time.Time, end time.Time) float64 {
 	milliRemainder := (runTime - seconds*time.Second) / time.Millisecond
 	timeDisplay := float64(seconds) + float64(milliRemainder)*.001
 	return timeDisplay
+}
+
+type ConnectionQueryist struct {
+	connection *dbr.Connection
+}
+
+func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, error) {
+	rows, err := c.connection.QueryContext(ctx, query)
+	if err != nil {
+		return nil, nil, err
+	}
+	rowIter, err := NewMysqlRowWrapper(rows)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rowIter.Schema(), rowIter, nil
+}
+
+var _ cli.Queryist = ConnectionQueryist{}
+
+// BuildConnectionStringQueryist returns a Queryist that connects to the server specified by the given server config. Presence in this
+// module isn't ideal, but it's the only way to get the server config into the queryist.
+func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, apr *argparser.ArgParseResults, port int, database string) (cli.LateBindQueryist, error) {
+	serverConfig, err := GetServerConfig(cwdFS, apr)
+	if err != nil {
+		return nil, err
+	}
+
+	parsedMySQLConfig, err := mysqlDriver.ParseDSN(ConnectionString(serverConfig, database))
+	if err != nil {
+		return nil, err
+	}
+
+	parsedMySQLConfig.Addr = fmt.Sprintf("localhost:%d", port)
+
+	mysqlConnector, err := mysqlDriver.NewConnector(parsedMySQLConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	conn := &dbr.Connection{DB: mysql.OpenDB(mysqlConnector), EventReceiver: nil, Dialect: dialect.MySQL}
+
+	queryist := ConnectionQueryist{connection: conn}
+
+	var lateBind cli.LateBindQueryist = func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
+		return queryist, sql.NewContext(ctx), func() { conn.Conn(ctx) }, nil
+	}
+
+	return lateBind, nil
 }
