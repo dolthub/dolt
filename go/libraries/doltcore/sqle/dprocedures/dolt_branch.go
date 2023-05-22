@@ -221,11 +221,7 @@ func shouldAllowDefaultBranchDeletion(ctx *sql.Context) bool {
 // validateBranchNotActiveInAnySessions returns an error if the specified branch is currently
 // selected as the active branch for any active server sessions.
 func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) error {
-	currentDbName, _, err := getRevisionForRevisionDatabase(ctx, ctx.GetCurrentDatabase())
-	if err != nil {
-		return err
-	}
-
+	currentDbName := ctx.GetCurrentDatabase()
 	if currentDbName == "" {
 		return nil
 	}
@@ -247,19 +243,16 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 			return false, fmt.Errorf("unexpected session type: %T", session)
 		}
 
-		sessionDatabase := dsess.Session.GetCurrentDatabase()
-		sessionDbName, _, err := getRevisionForRevisionDatabase(ctx, dsess.GetCurrentDatabase())
-		if err != nil {
-			return false, err
-		}
-
-		if len(sessionDatabase) == 0 || sessionDbName != currentDbName {
+		sessionDbName := dsess.Session.GetCurrentDatabase()
+		if len(sessionDbName) == 0 || sessionDbName != currentDbName {
 			return false, nil
 		}
 
-		activeBranchRef, err := dsess.CWBHeadRef(ctx, sessionDatabase)
+		activeBranchRef, err := dsess.CWBHeadRef(ctx, sessionDbName)
 		if err != nil {
-			return false, err
+			// The above will throw an error if the current DB doesn't have a head ref, in which case we don't need to 
+			// consider it
+			return false, nil
 		}
 
 		if ref.Equals(branchRef, activeBranchRef) {

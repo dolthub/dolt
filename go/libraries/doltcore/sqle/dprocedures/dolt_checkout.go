@@ -47,13 +47,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	if len(currentDbName) == 0 {
 		return 1, fmt.Errorf("Empty database name.")
 	}
-
-	// non-revision database branchName is used to check out a branch on it.
-	dbName, _, err := getRevisionForRevisionDatabase(ctx, currentDbName)
-	if err != nil {
-		return -1, err
-	}
-
+	
 	apr, err := cli.CreateCheckoutArgParser().Parse(args)
 	if err != nil {
 		return 1, err
@@ -65,7 +59,6 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
-	// dbData should use the current database data, which can be at revision database.
 	dbData, ok := dSess.GetDbData(ctx, currentDbName)
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", currentDbName)
@@ -75,7 +68,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 
 	// Checking out new branch.
 	if branchOrTrack {
-		err = checkoutNewBranch(ctx, dbName, dbData, apr, &rsc)
+		err = checkoutNewBranch(ctx, currentDbName, dbData, apr, &rsc)
 		if err != nil {
 			return 1, err
 		} else {
@@ -92,7 +85,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, branchName); err != nil {
 		return 1, err
 	} else if isBranch {
-		err = checkoutBranch(ctx, dbName, branchName)
+		err = checkoutBranch(ctx, currentDbName, branchName)
 		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
 			// If there is a branch but there is no working set,
 			// somehow the local branch ref was created without a
@@ -108,7 +101,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 				return 1, err
 			}
 
-			err = checkoutBranch(ctx, dbName, branchName)
+			err = checkoutBranch(ctx, currentDbName, branchName)
 		}
 		if err != nil {
 			return 1, err
@@ -116,14 +109,14 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		return 0, nil
 	}
 
-	roots, ok := dSess.GetRoots(ctx, dbName)
+	roots, ok := dSess.GetRoots(ctx, currentDbName)
 	if !ok {
-		return 1, fmt.Errorf("Could not load database %s", dbName)
+		return 1, fmt.Errorf("Could not load database %s", currentDbName)
 	}
 
-	err = checkoutTables(ctx, roots, dbName, args)
+	err = checkoutTables(ctx, roots, currentDbName, args)
 	if err != nil && apr.NArg() == 1 {
-		err = checkoutRemoteBranch(ctx, dbName, dbData, branchName, apr, &rsc)
+		err = checkoutRemoteBranch(ctx, currentDbName, dbData, branchName, apr, &rsc)
 	}
 
 	if err != nil {
@@ -173,25 +166,6 @@ func createWorkingSetForLocalBranch(ctx *sql.Context, ddb *doltdb.DoltDB, branch
 
 	ws := doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
 	return ddb.UpdateWorkingSet(ctx, wsRef, ws, hash.Hash{} /* current hash... */, doltdb.TodoWorkingSetMeta(), nil)
-}
-
-// getRevisionForRevisionDatabase returns the root database name and revision for a database, or just the root database name if the specified db name is not a revision database.
-// TODO: this is no longer necessary, kill it
-func getRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, string, error) {
-	doltsess, ok := ctx.Session.(*dsess.DoltSession)
-	if !ok {
-		return "", "", fmt.Errorf("unexpected session type: %T", ctx.Session)
-	}
-
-	db, ok, err := doltsess.Provider().SessionDatabase(ctx, dbName)
-	if err != nil {
-		return "", "", err
-	}
-	if !ok {
-		return "", "", sql.ErrDatabaseNotFound.New(dbName)
-	}
-	
-	return db.Name(), db.Revision(), nil
 }
 
 // checkoutRemoteBranch checks out a remote branch creating a new local branch with the same name as the remote branch
