@@ -295,7 +295,12 @@ func sqlHandleVErrAndExitCode(queryist cli.Queryist, verr errhand.VerboseError, 
 			if _, ok := queryist.(*engine.SqlEngine); !ok {
 				// We are in a context where we are attempting to connect to a remote database. These errors
 				// are unstructured, so we add some additional context around them.
-				msg = fmt.Sprintf("Error connecting to remote database: \"%s\".", msg)
+				tmpMsg := `You've encountered a new behavior in dolt which is not fully documented yet.
+A local dolt server is using your dolt data directory, and in an attempt to service your request, we are attempting to 
+connect to it. That has failed. You should stop the server, or reach out to @macneale on https://discord.gg/gqr7K4VNKe
+for help.`
+				cli.PrintErrln(tmpMsg)
+				msg = fmt.Sprintf("A local server is running, and dolt is failing to connect. Error connecting to remote database: \"%s\".\n", msg)
 			}
 			cli.PrintErrln(msg)
 		}
