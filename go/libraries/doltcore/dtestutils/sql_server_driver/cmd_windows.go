@@ -15,8 +15,19 @@
 package sql_server_driver
 
 import (
+	"os/exec"
+	"syscall"
+
 	"golang.org/x/sys/windows"
 )
+
+func ApplyCmdAttributes(cmd *exec.Cmd) {
+	// Creating a new process group for the process will allow GracefulStop to send the break signal to that process
+	// without also killing the parent process
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
+	}
+}
 
 func (s *SqlServer) GracefulStop() error {
 	err := windows.GenerateConsoleCtrlEvent(windows.CTRL_BREAK_EVENT, uint32(s.Cmd.Process.Pid))

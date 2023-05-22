@@ -25,7 +25,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -99,10 +98,7 @@ func (u DoltUser) DoltCmd(args ...string) *exec.Cmd {
 	cmd := exec.Command(DoltPath, args...)
 	cmd.Dir = u.tmpdir
 	cmd.Env = append(os.Environ(), "DOLT_ROOT_PATH="+u.tmpdir)
-	// TODO: only on windows
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
-	}
+	ApplyCmdAttributes(cmd)
 	return cmd
 }
 

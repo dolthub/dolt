@@ -19,6 +19,10 @@ package sql_server_driver
 
 import "syscall"
 
+func ApplyCmdAttributes(cmd *exec.Cmd) {
+	// nothing to do on unix / darwin
+}
+
 func (s *SqlServer) GracefulStop() error {
 	err := s.Cmd.Process.Signal(syscall.SIGTERM)
 	if err != nil {
