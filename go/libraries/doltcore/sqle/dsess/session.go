@@ -274,8 +274,7 @@ func (d *DoltSession) ValidateSession(ctx *sql.Context, dbName string) error {
 // StartTransaction refreshes the state of this session and starts a new transaction.
 func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
 	// New transaction, clear all session state
-	// TODO: revisit this
-	d.clearRevisionDbState()
+	d.clear()
 
 	// Take a snapshot of the current noms root for every database under management
 	doltDatabases := d.provider.DoltDatabases()
@@ -312,9 +311,8 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	return NewMultiHeadTransaction(ctx, txDbs, tCharacteristic)
 }
 
-// clearRevisionDbState clears all revision DB states for this session. This is necessary on transaction start,
-// because they will be re-initialized with the current branch head / working set.
-func (d *DoltSession) clearRevisionDbState() {
+// clear clears all DB state for this session
+func (d *DoltSession) clear() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -601,7 +599,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchStat
 // Rollback rolls the given transaction back
 func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 	// Nothing to do here, we just throw away all our work and let a new transaction begin next statement
-	d.clearRevisionDbState()
+	d.clear()
 	return nil
 }
 
