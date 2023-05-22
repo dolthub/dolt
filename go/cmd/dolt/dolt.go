@@ -64,7 +64,7 @@ import (
 const (
 	Version = "1.1.0"
 )
-//
+
 var dumpDocsCommand = &commands.DumpDocsCmd{}
 var dumpZshCommand = &commands.GenZshCompCmd{}
 
