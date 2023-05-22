@@ -3770,7 +3770,6 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 var errTmplNoAutomaticMerge = "table %s can't be automatically merged.\nTo merge this table, make the schema on the source and target branch equal."
 
 var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
-
 	// Data conflicts during a merge with schema changes
 	{
 		Name: "data conflict",
@@ -4291,6 +4290,75 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			},
 		},
 	},
+
+	// TODO: Another case to test is when a constraint is added on one side, but the other side adds
+	//       data that would violate the constraint
+	{
+		Name: "check constraint violation - simple case, no schema changes",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 int, col2 int, CHECK (col1 != col2));",
+			"INSERT into t values (1, 2, 3);",
+			"alter table t add index idx1 (pk, col2);",
+		},
+		RightSetUpScript: []string{
+			"update t set col2=4;",
+		},
+		LeftSetUpScript: []string{
+			"update t set col1=4;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x1}},
+			},
+		},
+	},
+	{
+		Name: "check constraint violation - schema change",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 int, col2 int, col3 int, CHECK (col2 != col3));",
+			"INSERT into t values (1, 2, 3, -3);",
+			"alter table t add index idx1 (pk, col2);",
+		},
+		RightSetUpScript: []string{
+			"update t set col2=100;",
+		},
+		LeftSetUpScript: []string{
+			"alter table t drop column col1;",
+			"update t set col3=100;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x1}},
+			},
+		},
+	},
+	{
+		Name: "check constraint violation - left side violates new check constraint",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(100));",
+			"INSERT into t values (1, 'hi');",
+			"alter table t add index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add constraint CHECK (col1 != concat('he', 'llo'))",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (2, 'hello');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x1}},
+			},
+			// TODO: Look in the constraint violations metadata table
+		},
+	},
+
 	{
 		Name: "dropping a unique key",
 		AncSetUpScript: []string{
