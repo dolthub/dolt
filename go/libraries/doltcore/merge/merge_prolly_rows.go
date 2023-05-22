@@ -403,29 +403,32 @@ func newCheckValidator(ctx *sql.Context, tm *TableMerger, vm *valueMerger, sch s
 func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (int, error) {
 	conflictCount := 0
 
+	var valueTuple val.Tuple
+	var valueDesc val.TupleDesc
+
+	switch diff.Op {
+	case tree.DiffOpLeftDelete, tree.DiffOpRightDelete, tree.DiffOpConvergentDelete:
+		// no need to validate check constraints for deletes
+		return 0, nil
+	case tree.DiffOpDivergentDeleteConflict, tree.DiffOpDivergentModifyConflict:
+		// Don't bother validating divergent conflicts, just let them get reported as conflicts
+		return 0, nil
+	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
+		valueTuple = diff.Left
+		valueDesc = cv.tableMerger.leftSch.GetValueDescriptor()
+	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
+		valueTuple = diff.Right
+		valueDesc = cv.tableMerger.rightSch.GetValueDescriptor()
+	case tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify:
+		// both sides made the same change, just take the left
+		valueTuple = diff.Left
+		valueDesc = cv.tableMerger.leftSch.GetValueDescriptor()
+	case tree.DiffOpDivergentModifyResolved:
+		valueTuple = diff.Merged
+		valueDesc = cv.tableMerger.leftSch.GetValueDescriptor()
+	}
+
 	for checkName, checkExpression := range cv.checkExpressions {
-		var valueTuple val.Tuple
-		var valueDesc val.TupleDesc
-
-		switch diff.Op {
-		case tree.DiffOpLeftAdd, tree.DiffOpLeftDelete, tree.DiffOpLeftModify:
-			valueTuple = diff.Left
-			valueDesc = cv.tableMerger.leftSch.GetValueDescriptor()
-		case tree.DiffOpRightAdd, tree.DiffOpRightDelete, tree.DiffOpRightModify:
-			valueTuple = diff.Right
-			valueDesc = cv.tableMerger.rightSch.GetValueDescriptor()
-		case tree.DiffOpConvergentAdd, tree.DiffOpConvergentDelete, tree.DiffOpConvergentModify:
-			// both sides made the same change, just take the left
-			valueTuple = diff.Left
-			valueDesc = cv.tableMerger.leftSch.GetValueDescriptor()
-		case tree.DiffOpDivergentModifyResolved:
-			valueTuple = diff.Merged
-			valueDesc = cv.tableMerger.leftSch.GetValueDescriptor()
-		case tree.DiffOpDivergentDeleteConflict, tree.DiffOpDivergentModifyConflict:
-			// Don't bother validating divergent conflicts, just let them get reported as conflicts
-			return 0, nil
-		}
-
 		// If the row came from the right side of the merge, then remap it (if necessary) to the final schema.
 		// This isn't necessary for left-side changes, because we already migrated the primary index data to
 		// the merged schema, and we skip keyless tables, since their value tuples require different mapping

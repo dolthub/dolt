@@ -4382,6 +4382,27 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "check constraint violation - deleting rows",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 int, col2 int, col3 int, CHECK (col2 != col3));",
+			"INSERT into t values (1, 2, 3, -3);",
+			"alter table t add index idx1 (pk, col2);",
+		},
+		RightSetUpScript: []string{
+			"delete from t where pk=1;",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (4, 3, 2, 1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x0}},
+			},
+		},
+	},
+	{
 		Name: "check constraint violation - divergent edits",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
