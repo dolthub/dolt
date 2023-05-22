@@ -4447,15 +4447,17 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Name: "check constraint violation - left side violates new check constraint",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
-			"CREATE table t (pk int primary key, col1 varchar(100) default ('hello'));",
-			"INSERT into t values (1, 'hi');",
+			"CREATE table t (pk int primary key, col00 int, col01 int, col1 varchar(100) default ('hello'));",
+			"INSERT into t values (1, 0, 0, 'hi');",
 			"alter table t add index idx1 (col1);",
 		},
 		RightSetUpScript: []string{
-			"alter table t add constraint CHECK (col1 != concat('he', 'llo'))",
+			"insert into t values (2, 0, 0, DEFAULT);",
 		},
 		LeftSetUpScript: []string{
-			"insert into t values (2, DEFAULT);",
+			"alter table t drop column col00;",
+			"alter table t drop column col01;",
+			"alter table t add constraint CHECK (col1 != concat('he', 'llo'))",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -4469,6 +4471,35 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			{
 				Query:    `select violation_type, pk, col1, violation_info like "\%NOT((col1 = concat('he','llo')))\%" from dolt_constraint_violations_t;`,
 				Expected: []sql.Row{{uint64(3), 2, "hello", true}},
+			},
+		},
+	},
+	{
+		Name: "check constraint violation - keyless table, left side violates new check constraint",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (c0 int, col0 varchar(100), col1 varchar(100) default ('hello'));",
+			"INSERT into t values (1, 'adios', 'hi');",
+			"alter table t add index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"insert into t values (2, 'hola', DEFAULT);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add constraint CHECK (col1 != concat('he', 'llo'))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(1)}},
+			},
+			{
+				Query:    `select violation_type, c0, col0, col1, violation_info like "\%NOT((col1 = concat('he','llo')))\%" from dolt_constraint_violations_t;`,
+				Expected: []sql.Row{{uint64(3), 2, "hola", "hello", true}},
 			},
 		},
 	},

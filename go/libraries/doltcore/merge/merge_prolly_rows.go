@@ -426,11 +426,12 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 			return 0, nil
 		}
 
+		// If the row came from the right side of the merge, then remap it (if necessary) to the final schema.
+		// This isn't necessary for left-side changes, because we already migrated the primary index data to
+		// the merged schema, and we skip keyless tables, since their value tuples require different mapping
+		// logic and we don't currently support merges to keyless tables that contain schema changes anyway.
 		newTuple := valueTuple
-		// TODO: Why are our tests working without this?!
-		if false {
-			// TODO: If we're using diff.Merged, then that means we don't need to do any remapping, right?
-			// TODO: This right mapping needs to be different, right? for each diff op type?
+		if !cv.valueMerger.keyless && (diff.Op == tree.DiffOpRightAdd || diff.Op == tree.DiffOpRightModify) {
 			newTupleBytes := remapTuple(valueTuple, valueDesc, cv.valueMerger.rightMapping)
 			newTuple = val.NewTuple(cv.valueMerger.syncPool, newTupleBytes...)
 		}
@@ -479,23 +480,34 @@ func (cv checkValidator) insertArtifact(ctx context.Context, key, value val.Tupl
 
 // buildRow takes the |key| and |value| tuple and returns a new sql.Row, along with any errors encountered.
 func (cv checkValidator) buildRow(ctx *sql.Context, key, value val.Tuple) (sql.Row, error) {
-	var row sql.Row
 	// When we parse and resolve the check constraint expression with planbuilder, it leaves row position 0
 	// for the expression itself, so we add an empty spot in our row to account for that before we pass the
 	// row into the expression to evaluate it.
-	// TODO: double check this assumption with Max
+	var row sql.Row
 	row = append(row, nil)
-	keyDesc := cv.sch.GetKeyDescriptor()
-	for i := range keyDesc.Types {
-		value, err := index.GetField(ctx, keyDesc, i, key, cv.tableMerger.ns)
-		if err != nil {
-			return nil, err
+
+	// Skip adding the key tuple if we're working with a keyless table, since the table row data is
+	// always all contained in the value tuple for keyless tables.
+	if !cv.valueMerger.keyless {
+		keyDesc := cv.sch.GetKeyDescriptor()
+		for i := range keyDesc.Types {
+			value, err := index.GetField(ctx, keyDesc, i, key, cv.tableMerger.ns)
+			if err != nil {
+				return nil, err
+			}
+			row = append(row, value)
 		}
-		row = append(row, value)
 	}
 
-	for i := range cv.sch.GetNonPKCols().GetColumns() {
-		value, err := index.GetField(ctx, cv.sch.GetValueDescriptor(), i, value, cv.tableMerger.ns)
+	valueDescriptor := cv.sch.GetValueDescriptor()
+	for i := range valueDescriptor.Types {
+		// Skip processing the first value in the value tuple for keyless tables, since that field
+		// always holds the cardinality of the row and shouldn't be passed in to an expression.
+		if cv.valueMerger.keyless && i == 0 {
+			continue
+		}
+
+		value, err := index.GetField(ctx, valueDescriptor, i, value, cv.tableMerger.ns)
 		if err != nil {
 			return nil, err
 		}
@@ -574,8 +586,7 @@ func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 		return
 	}
 
-	// Don't remap the value to the merged schema if the table is keyless (since they
-	// don't allow schema changes) or if the mapping is an identity mapping.
+	// Don't remap the value to the merged schema if the table is keyless or if the mapping is an identity mapping.
 	if !uv.valueMerger.keyless && !uv.valueMerger.rightMapping.IsIdentityMapping() {
 		modifiedValue := remapTuple(value, uv.tm.rightSch.GetValueDescriptor(), uv.valueMerger.rightMapping)
 		value = val.NewTuple(uv.valueMerger.syncPool, modifiedValue...)
