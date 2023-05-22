@@ -146,13 +146,7 @@ func (db database) RequestedName() string {
 
 type noopRepoStateWriter struct{}
 
-func (n noopRepoStateWriter) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
-	return nil
-}
-
-func (n noopRepoStateWriter) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
-	return nil
-}
+var _ env.RepoStateWriter = noopRepoStateWriter{}
 
 func (n noopRepoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.MarshalableRef) error {
 	return nil

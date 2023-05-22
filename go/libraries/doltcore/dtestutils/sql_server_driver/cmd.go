@@ -116,6 +116,7 @@ func (u DoltUser) DoltDebug(debuggerPort int, args ...string) *exec.Cmd {
 		cmd := exec.Command(DelvePath, append(dlvArgs, args...)...)
 		cmd.Dir = u.tmpdir
 		cmd.Env = append(os.Environ(), "DOLT_ROOT_PATH="+u.tmpdir)
+		ApplyCmdAttributes(cmd)
 		return cmd
 	} else {
 		panic("dlv not found")
@@ -202,6 +203,7 @@ type SqlServer struct {
 	Done        chan struct{}
 	Cmd         *exec.Cmd
 	Port        int
+	DebugPort   int
 	Output      *bytes.Buffer
 	DBName      string
 	RecreateCmd func(args ...string) *exec.Cmd
@@ -227,6 +229,12 @@ func WithPort(port int) SqlServerOpt {
 	}
 }
 
+func WithDebugPort(port int) SqlServerOpt {
+	return func(s *SqlServer) {
+		s.DebugPort = port
+	}
+}
+
 type DoltCmdable interface {
 	DoltCmd(args ...string) *exec.Cmd
 }
@@ -247,7 +255,7 @@ func DebugSqlServer(dc DoltCmdable, debuggerPort int, opts ...SqlServerOpt) (*Sq
 	}
 	
 	cmd := ddb.DoltDebug(debuggerPort, "sql-server")
-	return runSqlServerCommand(dc, opts, cmd)
+	return runSqlServerCommand(dc, append(opts, WithDebugPort(debuggerPort)), cmd)
 }
 
 func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*SqlServer, error) {
@@ -268,23 +276,34 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 		wg.Wait()
 		close(done)
 	}()
-	ret := &SqlServer{
+	
+	server := &SqlServer{
 		Done:   done,
 		Cmd:    cmd,
 		Port:   3306,
 		Output: output,
-		RecreateCmd: func(args ...string) *exec.Cmd {
-			return dc.DoltCmd(args...)
-		},
 	}
 	for _, o := range opts {
-		o(ret)
+		o(server)
 	}
-	err = ret.Cmd.Start()
+
+	server.RecreateCmd = func(args ...string) *exec.Cmd {
+		if server.DebugPort > 0 {
+			ddb, ok := dc.(DoltDebuggable)
+			if !ok {
+				panic(fmt.Sprintf("%T does not implement DoltDebuggable", dc))
+			}
+			return ddb.DoltDebug(server.DebugPort, args...)
+		} else {
+			return dc.DoltCmd(args...)
+		}
+	}
+
+	err = server.Cmd.Start()
 	if err != nil {
 		return nil, err
 	}
-	return ret, nil
+	return server, nil
 }
 
 func (s *SqlServer) ErrorStop() error {
