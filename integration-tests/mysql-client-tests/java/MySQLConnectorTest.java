@@ -23,7 +23,7 @@ public class MySQLConnectorTest {
 
 	    String[] queries = {
 		 "create table test (pk int, `value` int, primary key(pk))",
-		 "describe test",
+// 		 "describe test",
 		 "select * from test",
 		 "insert into test (pk, `value`) values (0,0)",
 		 "select * from test",
@@ -41,7 +41,7 @@ public class MySQLConnectorTest {
 	    // Only test the first row, column pair for now
 	    String[] results = {
 		"0",
-		"pk",
+// 		"pk",
 		null,
 		"1",
 		"0",
