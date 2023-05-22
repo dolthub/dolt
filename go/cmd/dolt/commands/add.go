@@ -15,13 +15,14 @@
 package commands
 
 import (
+	"bytes"
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -59,40 +60,50 @@ func (cmd AddCmd) ArgParser() *argparser.ArgParser {
 	return cli.CreateAddArgParser()
 }
 
+// Generate the query that will call the `DOLT_ADD` stored proceudre.
+// This is safe because the only inputs are flag names and validated table names.
+func generateSql(apr *argparser.ArgParseResults) string {
+	var buffer bytes.Buffer
+	buffer.WriteString("CALL DOLT_ADD('")
+	if apr.Contains(cli.AllFlag) {
+		buffer.WriteString("-A', '")
+	}
+	if apr.Contains(cli.ForceFlag) {
+		buffer.WriteString("-f', '")
+	}
+	for i := 0; i < apr.NArg()-1; i++ {
+		buffer.WriteString(apr.Arg(i))
+		buffer.WriteString("', '")
+	}
+	buffer.WriteString(apr.Arg(apr.NArg() - 1))
+	buffer.WriteString("')")
+	return buffer.String()
+}
+
 // Exec executes the command
 func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
 	ap := cli.CreateAddArgParser()
 	helpPr, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, addDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, helpPr)
 
-	allFlag := apr.Contains(cli.AllFlag)
-
-	if dEnv.IsLocked() {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), helpPr)
-	}
-
-	roots, err := dEnv.Roots(ctx)
-	if err != nil {
-		return HandleStageError(err)
-	}
-
-	if apr.NArg() == 0 && !allFlag {
-		cli.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
-	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		roots, err = actions.StageAllTables(ctx, roots, !apr.Contains(cli.ForceFlag))
-		if err != nil {
-			return HandleStageError(err)
-		}
-	} else {
-		roots, err = actions.StageTables(ctx, roots, apr.Args, !apr.Contains(cli.ForceFlag))
-		if err != nil {
-			return HandleStageError(err)
+	for _, tableName := range apr.Args {
+		if !doltdb.IsValidTableName(tableName) {
+			return HandleVErrAndExitCode(errhand.BuildDError("'%s' is not a valid table name", tableName).Build(), nil)
 		}
 	}
 
-	err = dEnv.UpdateRoots(ctx, roots)
+	_, _, err = queryist.Query(sqlCtx, generateSql(apr))
 	if err != nil {
-		return HandleStageError(err)
+		cli.PrintErrln(errhand.VerboseErrorFromError(err))
+		return 1
 	}
 
 	return 0
@@ -143,8 +154,4 @@ func toStageVErr(err error) errhand.VerboseError {
 	default:
 		return errhand.BuildDError("Unknown error").AddCause(err).Build()
 	}
-}
-
-func HandleDocTableVErrAndExitCode() int {
-	return HandleVErrAndExitCode(errhand.BuildDError("'%s' is not a valid table name", doltdb.DocTableName).Build(), nil)
 }
