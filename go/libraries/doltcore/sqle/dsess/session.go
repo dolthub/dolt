@@ -777,11 +777,10 @@ func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string)
 // SetRoot sets a new root value for the session for the database named. This is the primary mechanism by which data
 // changes are communicated to the engine and persisted back to disk. All data changes should be followed by a call to
 // update the session's root value via this method.
+// The dbName given should generally be a revision-qualified database name.
 // Data changes contained in the |newRoot| aren't persisted until this session is committed.
 // TODO: rename to SetWorkingRoot
-// TODO: kill this method
 func (d *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
-	// TODO: this is redundant with work done in setRoot
 	branchState, _, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return err
@@ -796,8 +795,7 @@ func (d *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.R
 	}
 
 	if branchState.readOnly {
-		// TODO: Return an error here?
-		return nil
+		return fmt.Errorf("cannot set root on read-only session")
 	}
 	branchState.workingSet = branchState.WorkingSet().WithWorkingRoot(newRoot)
 
@@ -808,8 +806,11 @@ func (d *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.R
 // via setRoot. This method is for clients that need to update more of the session state, such as the dolt_ functions.
 // Unlike setting the working root, this method always marks the database state dirty.
 func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
-	// TODO: handle HEAD here?
-	// TODO: need to make sure we use a revision qualified DB name here
+	_, rev := SplitRevisionDbName(dbName)
+	if rev != "" {
+		return fmt.Errorf("cannot set roots for a revision database")
+	}
+
 	sessionState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
@@ -825,8 +826,6 @@ func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roo
 
 // SetWorkingSet sets the working set for this session.
 // Unlike setting the working root alone, this method always marks the session dirty.
-// TODO: this is doing a lot of resolve work that should only happen once, at initialization time
-// TODO: find uses of this for dirty changes
 func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.WorkingSet) error {
 	if ws == nil {
 		panic("attempted to set a nil working set for the session")
@@ -853,7 +852,6 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	}
 
 	branchState.dirty = true
-
 	return nil
 }
 
