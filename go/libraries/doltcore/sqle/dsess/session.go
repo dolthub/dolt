@@ -212,16 +212,12 @@ func SplitRevisionDbName(dbName string) (string, string) {
 	return baseName, rev
 }
 
-// TODO NEXT: the lookupdbstate method is the key abstraction point. It proxies all non-revisoined DBs to a revisioned 
-//  state, based on the current db (the default branch if none). The session stores all data by working set ref. DB 
-//  names are masked on return in the case of a non-revisined DB. Session stae is also responsible for keeping track of
-//  the checked out branch in the case of a default (no branch-specified) db connection.
-//  Alternate idea: branch head is always set correctly in response to a USE statement, OR a checkout procedure. The
-//  latter implicitly updates the current database. You also get a revision db checked out on connection to no branch.
-// The original idea is more tractable for now -- too many things break with the latter approach, although it's cleaner 
-// in many respects. Biggest blocker is grants, which are currently tied to the base database name and probably need to
-// stay that way. Unless I can come up with some clever workaround...
-// Possible workaround for permissions: new GMS interface for "permissionDbName" or similar, workable?
+// LookupDbState returns the session state for the database named. Unqualified database names, e.g. `mydb` get resolved
+// to the currently checked out HEAD, which could be a branch, a commit, a tag, etc. Revision-qualified database names,
+// e.g. `mydb/branch1` get resolved to the session state for the revision named.
+// A note on unqualified database names: unqualified names will resolve to a) the head last checked out with 
+// `dolt_checkout`, or b) the database's default branch, if this session hasn't called `dolt_checkout` yet. 
+// Also returns a bool indicating whether the database was found, and an error if one occurred.
 func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (SessionState, bool, error) {
 	s, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
@@ -230,32 +226,6 @@ func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (SessionSta
 
 	return s, ok, nil
 }
-
-// func (d *DoltSession) CurrentDbState(ctx *sql.Context) (SessionState, bool, error) {
-// 	db := ctx.GetCurrentDatabase()
-// 	if db == "" {
-// 		return nil, false, fmt.Errorf("no current database")
-// 	}
-// 
-// 	// TODO: this should always be false, right?
-// 	isRevisionDb := strings.Contains(db, DbRevisionDelimiter)
-// 	if !isRevisionDb {
-// 		d.mu.Lock()
-// 		dbState, ok := d.dbStates[strings.ToLower(db)]
-// 		d.mu.Unlock()
-// 
-// 		if !ok {
-// 			return d.lookupDbState(ctx, db)
-// 		} 
-// 	}
-// 	
-// 	s, ok, err := d.lookupDbState(ctx, db)
-// 	if err != nil {
-// 		return nil, false, err
-// 	}
-// 
-// 	return s, ok, nil
-// }
 
 // RemoveDbState invalidates any cached db state in this session, for example, if a database is dropped.
 func (d *DoltSession) RemoveDbState(_ *sql.Context, dbName string) error {
