@@ -18,7 +18,6 @@ import (
 	"context"
 	crand "crypto/rand"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -26,7 +25,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/fatih/color"
@@ -120,6 +118,67 @@ var doltSubCommands = []cli.Command{
 	stashcmds.StashCommands,
 	&commands.Assist{},
 }
+
+var subCommandsUsingDEnv = []cli.Command{
+	commands.InitCmd{},
+	commands.StatusCmd{},
+	commands.DiffCmd{},
+	commands.ResetCmd{},
+	commands.CleanCmd{},
+	commands.CommitCmd{},
+	admin.Commands,
+	sqlserver.SqlServerCmd{VersionStr: Version},
+	sqlserver.SqlClientCmd{VersionStr: Version},
+	commands.LogCmd{},
+	commands.ShowCmd{},
+	commands.BranchCmd{},
+	commands.CheckoutCmd{},
+	commands.MergeCmd{},
+	cnfcmds.Commands,
+	commands.CherryPickCmd{},
+	commands.RevertCmd{},
+	commands.CloneCmd{},
+	commands.FetchCmd{},
+	commands.PullCmd{},
+	commands.PushCmd{},
+	commands.ConfigCmd{},
+	commands.RemoteCmd{},
+	commands.BackupCmd{},
+	commands.LoginCmd{},
+	credcmds.Commands,
+	commands.LsCmd{},
+	schcmds.Commands,
+	tblcmds.Commands,
+	commands.TagCmd{},
+	commands.BlameCmd{},
+	cvcmds.Commands,
+	commands.SendMetricsCmd{},
+	commands.MigrateCmd{},
+	indexcmds.Commands,
+	commands.ReadTablesCmd{},
+	commands.GarbageCollectionCmd{},
+	commands.FilterBranchCmd{},
+	commands.MergeBaseCmd{},
+	commands.RootsCmd{},
+	commands.VersionCmd{VersionStr: Version},
+	commands.DumpCmd{},
+	commands.InspectCmd{},
+	dumpDocsCommand,
+	dumpZshCommand,
+	docscmds.Commands,
+	stashcmds.StashCommands,
+	&commands.Assist{},
+}
+
+func initCliContext(commandName string) bool {
+	for _, command := range subCommandsUsingDEnv {
+		if command.Name() == commandName {
+			return false
+		}
+	}
+	return true
+}
+
 var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", doltSubCommands)
 
 var globalArgParser = buildGlobalArgs()
@@ -469,8 +528,7 @@ The sql subcommand is currently the only command that uses these flags. All othe
 	}
 
 	var cliCtx cli.CliContext = nil
-	initCliContext := true
-	if initCliContext {
+	if initCliContext(remainingArgs[0]) {
 		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, apr, verboseEngineSetup)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failure to Load SQL Engine: %v", err))
