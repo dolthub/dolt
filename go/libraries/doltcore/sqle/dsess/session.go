@@ -573,7 +573,7 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 	headHash, _ := headCommit.HashOf()
 
 	if sessionState.WorkingSet == nil {
-		return nil, fmt.Errorf("Cannot commit while not attached to a branch. ")
+		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
 
 	var mergeParentCommits []*doltdb.Commit
@@ -841,6 +841,10 @@ func (d *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.R
 		return err
 	}
 
+	if sessionState.WorkingSet == nil {
+		return doltdb.ErrOperationNotSupportedInDetachedHead
+	}
+
 	if rootsEqual(sessionState.GetRoots().Working, newRoot) {
 		return nil
 	}
@@ -862,6 +866,10 @@ func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roo
 	sessionState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
+	}
+
+	if sessionState.WorkingSet == nil {
+		return doltdb.ErrOperationNotSupportedInDetachedHead
 	}
 
 	workingSet := sessionState.WorkingSet.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
@@ -1038,6 +1046,9 @@ func (d *DoltSession) WorkingSet(ctx *sql.Context, dbName string) (*doltdb.Worki
 	sessionState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
+	}
+	if sessionState.WorkingSet == nil {
+		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
 	return sessionState.WorkingSet, nil
 }
@@ -1266,7 +1277,7 @@ func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, 
 	}
 
 	if dbState.WorkingSet == nil {
-		return nil, nil
+		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
 
 	return dbState.WorkingSet.Ref().ToHeadRef()

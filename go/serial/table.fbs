@@ -34,12 +34,14 @@ table Table {
   conflicts:Conflicts;
 
   // address of a violations types.Map (for __DOLT_DEV__).
+  // todo: deprecate
   violations:[ubyte];
 
   // address of artifacts
   artifacts:[ubyte];
 }
 
+// todo: deprecate
 table Conflicts {
     // address of a conflicts types.Map (for __DOLT_DEV__).
     data:[ubyte] (required);

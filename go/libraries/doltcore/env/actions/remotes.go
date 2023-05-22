@@ -168,7 +168,11 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 	}
 
 	cs, _ := doltdb.NewCommitSpec(srcRef.GetPath())
-	cm, err := localDB.Resolve(ctx, cs, rsr.CWBHeadRef())
+	headRef, err := rsr.CWBHeadRef()
+	if err != nil {
+		return err
+	}
+	cm, err := localDB.Resolve(ctx, cs, headRef)
 
 	if err != nil {
 		return fmt.Errorf("%w; refspec not found: '%s'; %s", ref.ErrInvalidRefSpec, srcRef.GetPath(), err.Error())
@@ -220,14 +224,14 @@ func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef 
 	}
 
 	if hasRef {
-		err = remoteDB.DeleteBranch(ctx, targetRef)
+		err = remoteDB.DeleteBranch(ctx, targetRef, nil)
 	}
 
 	if err != nil {
 		return err
 	}
 
-	err = localDB.DeleteBranch(ctx, remoteRef)
+	err = localDB.DeleteBranch(ctx, remoteRef, nil)
 
 	if err != nil {
 		return err

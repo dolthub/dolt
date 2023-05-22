@@ -159,7 +159,12 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				return handleCommitErr(ctx, dEnv, err, usage)
 			}
 
-			suggestedMsg := fmt.Sprintf("Merge branch '%s' into %s", commitSpecStr, dEnv.RepoStateReader().CWBHeadRef().GetPath())
+			headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+			if err != nil {
+				return handleCommitErr(ctx, dEnv, err, usage)
+			}
+
+			suggestedMsg := fmt.Sprintf("Merge branch '%s' into %s", commitSpecStr, headRef.GetPath())
 			msg := ""
 			if m, ok := apr.GetValue(cli.MessageArg); ok {
 				msg = m
@@ -529,15 +534,21 @@ func executeNoFFMergeAndCommit(ctx context.Context, dEnv *env.DoltEnv, spec *mer
 		Email:      spec.Email,
 	})
 
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return tblToStats, err
+	}
+
 	wsHash, err := ws.HashOf()
 	_, err = dEnv.DoltDB.CommitWithWorkingSet(
 		ctx,
-		dEnv.RepoStateReader().CWBHeadRef(),
+		headRef,
 		ws.Ref(),
 		pendingCommit,
 		ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),
 		wsHash,
 		dEnv.NewWorkingSetMeta(msg),
+		nil,
 	)
 
 	if err != nil {

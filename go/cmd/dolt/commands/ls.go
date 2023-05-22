@@ -121,7 +121,12 @@ func getRootForCommitSpecStr(ctx context.Context, csStr string, dEnv *env.DoltEn
 		return "", nil, bdr.AddCause(err).Build()
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return "", nil, errhand.VerboseErrorFromError(err)
+	}
+
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs, headRef)
 
 	if err != nil {
 		return "", nil, errhand.BuildDError(`Unable to resolve "%s"`, csStr).AddCause(err).Build()

@@ -776,3 +776,18 @@ SQL
     dolt sql -q "INSERT INTO budgets VALUES (UUID());"
     dolt sql -q "INSERT INTO budgets2 VALUES (UUID());"
 }
+
+@test "sql-create-tables: tables should not reuse constraint names" {
+    run dolt sql -r csv <<SQL
+CREATE TABLE t1 (
+    pk int PRIMARY KEY,
+    val int CHECK (val > 0)
+);
+CREATE TABLE t2 LIKE t1;
+SELECT count(CONSTRAINT_NAME), count(distinct CONSTRAINT_NAME) FROM information_schema.table_constraints WHERE CONSTRAINT_TYPE="CHECK";
+SQL
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2,2" ]] || false
+
+}

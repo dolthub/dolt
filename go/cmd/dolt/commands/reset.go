@@ -103,7 +103,11 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	} else {
 		if apr.NArg() == 1 {
 			ref := apr.Arg(0)
-			if actions.IsValidRef(ctx, ref, dEnv.DoltDB, dEnv.RepoStateReader()) {
+			isValidRef, err := actions.IsValidRef(ctx, ref, dEnv.DoltDB, dEnv.RepoStateReader())
+			if err != nil {
+				return handleErrAndExit(err)
+			}
+			if isValidRef {
 				return handleResetSoftToRef(ctx, dEnv, ref, usage)
 			}
 		}
@@ -145,7 +149,10 @@ func handleResetHard(ctx context.Context, apr *argparser.ArgParseResults, usage 
 		arg = apr.Arg(0)
 	}
 
-	headRef := dEnv.RepoStateReader().CWBHeadRef()
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)

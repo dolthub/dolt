@@ -97,7 +97,10 @@ func doDoltTag(ctx *sql.Context, args []string) (int, error) {
 	if len(apr.Args) > 1 {
 		startPoint = apr.Arg(1)
 	}
-	headRef := dbData.Rsr.CWBHeadRef()
+	headRef, err := dbData.Rsr.CWBHeadRef()
+	if err != nil {
+		return 0, err
+	}
 	err = actions.CreateTagOnDB(ctx, dbData.Ddb, tagName, startPoint, props, headRef)
 	if err != nil {
 		return 1, err

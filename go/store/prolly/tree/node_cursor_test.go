@@ -78,7 +78,7 @@ func testNewCursorAtItem(t *testing.T, count int) {
 	ctx := context.Background()
 	for i := range items {
 		key, value := items[i][0], items[i][1]
-		cur, err := NewCursorAtKey(ctx, ns, root, val.Tuple(key), keyDesc)
+		cur, err := newCursorAtKey(ctx, ns, root, val.Tuple(key), keyDesc)
 		require.NoError(t, err)
 		assert.Equal(t, key, cur.CurrentKey())
 		assert.Equal(t, value, cur.currentValue())
@@ -104,7 +104,7 @@ func testGetOrdinalOfCursor(t *testing.T, count int) {
 	assert.NoError(t, err)
 
 	for i := 0; i < len(tuples); i++ {
-		curr, err := NewCursorAtKey(ctx, ns, nd, tuples[i][0], desc)
+		curr, err := newCursorAtKey(ctx, ns, nd, tuples[i][0], desc)
 		require.NoError(t, err)
 
 		ord, err := getOrdinalOfCursor(curr)
@@ -117,7 +117,7 @@ func testGetOrdinalOfCursor(t *testing.T, count int) {
 	b.PutUint32(0, uint32(len(tuples)))
 	aboveItem := b.Build(sharedPool)
 
-	curr, err := NewCursorAtKey(ctx, ns, nd, aboveItem, desc)
+	curr, err := newCursorAtKey(ctx, ns, nd, aboveItem, desc)
 	require.NoError(t, err)
 
 	ord, err := getOrdinalOfCursor(curr)

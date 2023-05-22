@@ -16,27 +16,51 @@ package sqlserver
 
 import (
 	"fmt"
+	"sync"
 	"time"
-
-	"github.com/dolthub/dolt/go/libraries/utils/version"
 
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
+	"github.com/dolthub/dolt/go/libraries/utils/version"
+)
+
+const (
+	clusterUpdateInterval = time.Second * 5
+
+	dbLabel     = "database"
+	roleLabel   = "role"
+	remoteLabel = "remote"
 )
 
 var _ server.ServerEventListener = (*metricsListener)(nil)
 
 type metricsListener struct {
+	labels prometheus.Labels
+
 	cntConnections         prometheus.Counter
 	cntDisconnects         prometheus.Counter
 	gaugeConcurrentConn    prometheus.Gauge
 	gaugeConcurrentQueries prometheus.Gauge
 	histQueryDur           prometheus.Histogram
 	gaugeVersion           prometheus.Gauge
+
+	// replication metrics
+	isReplicaGauges      *prometheus.GaugeVec
+	replicationLagGauges *prometheus.GaugeVec
+
+	// used in updating cluster metrics
+	clusterStatus  clusterdb.ClusterStatusProvider
+	mu             *sync.Mutex
+	done           bool
+	clusterSeenDbs map[string]struct{}
 }
 
-func newMetricsListener(labels prometheus.Labels, versionStr string) (*metricsListener, error) {
+func newMetricsListener(labels prometheus.Labels, versionStr string, clusterStatus clusterdb.ClusterStatusProvider) (*metricsListener, error) {
 	ml := &metricsListener{
+		labels: labels,
 		cntConnections: prometheus.NewCounter(prometheus.CounterOpts{
 			Name:        "dss_connects",
 			Help:        "Count of server connects",
@@ -68,6 +92,19 @@ func newMetricsListener(labels prometheus.Labels, versionStr string) (*metricsLi
 			Help:        "The version of dolt currently running on the machine",
 			ConstLabels: labels,
 		}),
+		replicationLagGauges: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name:        "dss_replication_lag",
+			Help:        "The reported replication lag of this server when it is a primary to the given standby.",
+			ConstLabels: labels,
+		}, []string{dbLabel, remoteLabel}),
+		isReplicaGauges: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name:        "dss_is_replica",
+			Help:        "one if the server is currently in this role, zero otherwise",
+			ConstLabels: labels,
+		}, []string{dbLabel}),
+		clusterStatus:  clusterStatus,
+		mu:             &sync.Mutex{},
+		clusterSeenDbs: make(map[string]struct{}),
 	}
 
 	u32Version, err := version.Encode(versionStr)
@@ -87,9 +124,61 @@ func newMetricsListener(labels prometheus.Labels, versionStr string) (*metricsLi
 	prometheus.MustRegister(ml.gaugeConcurrentConn)
 	prometheus.MustRegister(ml.gaugeConcurrentQueries)
 	prometheus.MustRegister(ml.histQueryDur)
+	prometheus.MustRegister(ml.replicationLagGauges)
+	prometheus.MustRegister(ml.isReplicaGauges)
+
+	go func() {
+		for ml.updateReplMetrics() {
+			time.Sleep(clusterUpdateInterval)
+		}
+	}()
 
 	ml.gaugeVersion.Set(f64Version)
 	return ml, nil
+}
+
+func (ml *metricsListener) updateReplMetrics() bool {
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
+
+	if ml.done {
+		return false
+	}
+
+	perDbStatus := ml.clusterStatus.GetClusterStatus()
+	if perDbStatus == nil {
+		return true
+	}
+
+	dbNames := make(map[string]struct{})
+	for _, status := range perDbStatus {
+		dbName := status.Database
+		dbNames[dbName] = struct{}{}
+
+		if status.Role == string(cluster.RolePrimary) {
+			ml.isReplicaGauges.WithLabelValues(status.Database).Set(0.0)
+
+			if status.ReplicationLag == nil {
+				ml.replicationLagGauges.WithLabelValues(status.Database, status.Remote).Set(-1.0)
+			} else {
+				ml.replicationLagGauges.WithLabelValues(status.Database, status.Remote).Set(float64(status.ReplicationLag.Milliseconds()))
+			}
+		} else {
+			ml.isReplicaGauges.WithLabelValues(status.Database).Set(1.0)
+			ml.replicationLagGauges.WithLabelValues(status.Database, status.Remote).Set(-1.0)
+		}
+	}
+
+	// deregister metrics for deleted databases
+	for db := range ml.clusterSeenDbs {
+		if _, ok := dbNames[db]; !ok {
+			ml.isReplicaGauges.DeletePartialMatch(prometheus.Labels{"database": db})
+			ml.replicationLagGauges.DeletePartialMatch(prometheus.Labels{"database": db})
+		}
+	}
+	ml.clusterSeenDbs = dbNames
+
+	return true
 }
 
 func (ml *metricsListener) ClientConnected() {
@@ -118,4 +207,16 @@ func (ml *metricsListener) Close() {
 	prometheus.Unregister(ml.gaugeConcurrentConn)
 	prometheus.Unregister(ml.gaugeConcurrentQueries)
 	prometheus.Unregister(ml.histQueryDur)
+
+	ml.closeReplicationMetrics()
+}
+
+func (ml *metricsListener) closeReplicationMetrics() {
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
+
+	prometheus.Unregister(ml.replicationLagGauges)
+	prometheus.Unregister(ml.isReplicaGauges)
+
+	ml.done = true
 }

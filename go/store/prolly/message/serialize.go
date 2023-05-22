@@ -100,7 +100,6 @@ func writeAddressOffsets(b *fb.Builder, items [][]byte, sumSz int, td val.TupleD
 }
 
 func writeCountArray(b *fb.Builder, counts []uint64) fb.UOffsetT {
-	// todo(andy): write without alloc
 	buf := make([]byte, maxEncodedSize(len(counts)))
 	return b.CreateByteVector(encodeVarints(counts, buf))
 }

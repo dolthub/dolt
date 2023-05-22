@@ -11,7 +11,7 @@ teardown() {
 }
 
 
-@test "merge-3way-schema-changes: blocked merge can be fixed by making the schema identical" {
+@test "merge-3way-schema-changes: add a NOT NULL column with default value on a branch" {
     dolt sql -q "create table t (pk int primary key);"
     dolt commit -Am "ancestor"
 
@@ -24,20 +24,10 @@ teardown() {
     dolt sql -q "insert into t values (2);"
     dolt commit -am "left"
 
-    run dolt merge right
-    [ $status -ne 0 ]
-    [[ $output =~ "table t can't be automatically merged." ]]
-
-    run dolt diff main right --schema -r sql
-    [ $status -eq 0 ]
-    [[ $output =~ 'ALTER TABLE `t` ADD `col1` int NOT NULL DEFAULT 0;' ]]
-
-    dolt sql -q 'ALTER TABLE `t` ADD `col1` int NOT NULL DEFAULT 0;'
-    dolt commit -am "fix merge"
     dolt merge right
 
-    run dolt sql -r csv -q "select * from t;"
-    [[ $output =~ "pk,col1" ]]
-    [[ $output =~ "1,0" ]]
-    [[ $output =~ "2,0" ]]
+    run dolt sql -q "select * from t" -r csv
+    log_status_eq 0
+    [[ "$output" =~ "1,0" ]] || false
+    [[ "$output" =~ "2,0" ]] || false
 }

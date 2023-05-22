@@ -1258,6 +1258,9 @@ func (t *AlterableDoltTable) RewriteInserter(
 	}
 
 	ws := dbState.WorkingSet
+	if ws == nil {
+		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
+	}
 
 	head, err := sess.GetHeadCommit(ctx, t.db.Name())
 	if err != nil {
@@ -2541,7 +2544,7 @@ func (t *AlterableDoltTable) generateCheckName(ctx *sql.Context, check *sql.Chec
 	bb.Write([]byte(check.CheckExpression))
 	hash := hash.Of(bb.Bytes())
 
-	hashedName := fmt.Sprintf("chk_%s", hash.String()[:8])
+	hashedName := fmt.Sprintf("%s_chk_%s", t.tableName, hash.String()[:8])
 	name := hashedName
 
 	var i int

@@ -117,6 +117,12 @@ func (cvt *prollyConstraintViolationsTable) PartitionRows(ctx *sql.Context, part
 		return nil, err
 	}
 	kd, vd := sch.GetMapDescriptors()
+
+	// value tuples encoded in ConstraintViolationMeta may
+	// violate the not null constraints assumed by fixed access
+	kd = kd.WithoutFixedAccess()
+	vd = vd.WithoutFixedAccess()
+
 	return prollyCVIter{
 		itr: itr,
 		sch: sch,
@@ -155,7 +161,7 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	r := make(sql.Row, itr.sch.GetAllCols().Size()+3)
-	r[0] = art.TheirRootIsh.String()
+	r[0] = art.SourceRootish.String()
 	r[1] = mapCVType(art.ArtType)
 
 	var meta prolly.ConstraintViolationMeta
@@ -167,7 +173,7 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 	o := 2
 	if !schema.IsKeyless(itr.sch) {
 		for i := 0; i < itr.kd.Count(); i++ {
-			r[o+i], err = index.GetField(ctx, itr.kd, i, art.Key, itr.ns)
+			r[o+i], err = index.GetField(ctx, itr.kd, i, art.SourceKey, itr.ns)
 			if err != nil {
 				return nil, err
 			}
@@ -201,6 +207,13 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 		r[o] = m
 	case prolly.ArtifactTypeUniqueKeyViol:
 		var m merge.UniqCVMeta
+		err = json.Unmarshal(meta.VInfo, &m)
+		if err != nil {
+			return nil, err
+		}
+		r[o] = m
+	case prolly.ArtifactTypeNullViol:
+		var m merge.NullViolationMeta
 		err = json.Unmarshal(meta.VInfo, &m)
 		if err != nil {
 			return nil, err
@@ -295,6 +308,8 @@ func mapCVType(artifactType prolly.ArtifactType) (outType uint64) {
 		outType = uint64(merge.CvType_UniqueIndex)
 	case prolly.ArtifactTypeChkConsViol:
 		outType = uint64(merge.CvType_CheckConstraint)
+	case prolly.ArtifactTypeNullViol:
+		outType = uint64(merge.CvType_NotNull)
 	default:
 		panic("unhandled cv type")
 	}
@@ -309,6 +324,8 @@ func unmapCVType(in merge.CvType) (out prolly.ArtifactType) {
 		out = prolly.ArtifactTypeUniqueKeyViol
 	case merge.CvType_CheckConstraint:
 		out = prolly.ArtifactTypeChkConsViol
+	case merge.CvType_NotNull:
+		out = prolly.ArtifactTypeNullViol
 	default:
 		panic("unhandled cv type")
 	}

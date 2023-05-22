@@ -33,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// todo(andy): randomize test seed
 var testRand = rand.New(rand.NewSource(1))
 var sharedPool = pool.NewBuffPool()
 

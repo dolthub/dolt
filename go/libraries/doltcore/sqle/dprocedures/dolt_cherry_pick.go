@@ -136,7 +136,11 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 	if err != nil {
 		return nil, "", err
 	}
-	cherryCommit, err := doltDB.Resolve(ctx, cherryCommitSpec, dbData.Rsr.CWBHeadRef())
+	headRef, err := dbData.Rsr.CWBHeadRef()
+	if err != nil {
+		return nil, "", err
+	}
+	cherryCommit, err := doltDB.Resolve(ctx, cherryCommitSpec, headRef)
 	if err != nil {
 		return nil, "", err
 	}
