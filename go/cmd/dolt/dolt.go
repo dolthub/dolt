@@ -347,9 +347,10 @@ func runMain() int {
 		return exit
 	}
 
-	globalArgs, args, initCliContext, printUsage, err := splitArgsOnSubCommand(args)
 	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
-	if printUsage {
+
+	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
+	if err == argparser.ErrHelp {
 		doltCommand.PrintUsage("dolt")
 
 		specialMsg := `
@@ -360,12 +361,10 @@ The sql subcommand is currently the only command that uses these flags. All othe
 		usage()
 
 		return 0
-	}
-	if err != nil {
+	} else if err != nil {
 		cli.PrintErrln(color.RedString("Failure to parse arguments: %v", err))
 		return 1
 	}
-	apr := cli.ParseArgsOrDie(globalArgParser, globalArgs, usage)
 
 	var fs filesys.Filesys
 	fs = filesys.LocalFS
@@ -470,6 +469,7 @@ The sql subcommand is currently the only command that uses these flags. All othe
 	}
 
 	var cliCtx cli.CliContext = nil
+	initCliContext := true
 	if initCliContext {
 		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, apr, verboseEngineSetup)
 		if err != nil {
@@ -485,7 +485,7 @@ The sql subcommand is currently the only command that uses these flags. All othe
 	}
 
 	ctx, stop := context.WithCancel(ctx)
-	res := doltCommand.Exec(ctx, "dolt", args, dEnv, cliCtx)
+	res := doltCommand.Exec(ctx, "dolt", remainingArgs, dEnv, cliCtx)
 	stop()
 
 	if err = dbfactory.CloseAllLocalDatabases(); err != nil {
