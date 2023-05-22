@@ -845,7 +845,6 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 		return err
 	}
 
-	// TODO: remove this
 	err = branchState.WriteSession().SetWorkingSet(ctx, ws)
 	if err != nil {
 		return err
