@@ -12,6 +12,7 @@ load $BATS_TEST_DIRNAME/helpers.bash
 
 setup() {
     setup_dolt_repo
+    rm -f /tmp/mysql.sock
 }
 
 teardown() {
