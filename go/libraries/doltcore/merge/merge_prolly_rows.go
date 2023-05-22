@@ -422,14 +422,12 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 			valueTuple = diff.Merged
 			valueDesc = cv.tableMerger.leftSch.GetValueDescriptor()
 		case tree.DiffOpDivergentDeleteConflict, tree.DiffOpDivergentModifyConflict:
-			// TODO: Add a test case to trigger this... would this even get this far?
-			return 0, fmt.Errorf("check constraint validation not supported for divergent conflicts")
+			// Don't bother validating divergent conflicts, just let them get reported as conflicts
+			return 0, nil
 		}
 
-		// TODO: Do we need to honor column defaults here? Seems like it?
-		// TEST: A new column with a column default is added, and the column default value causes a check violation
-		//       (check must be just added on one side of the merge to trigger this)
 		newTuple := valueTuple
+		// TODO: Why are our tests working without this?!
 		if false {
 			// TODO: If we're using diff.Merged, then that means we don't need to do any remapping, right?
 			// TODO: This right mapping needs to be different, right? for each diff op type?
@@ -448,9 +446,8 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 		}
 
 		if result == nil || result == true {
-			// If a check constraint returns NULL (aka UNKNOWN) or TRUE, then the check constraint is fulfilled
+			// If a check constraint returns NULL or TRUE, then the check constraint is fulfilled
 			// https://dev.mysql.com/doc/refman/8.0/en/create-table-check-constraints.html
-			// TODO: Add a test case for CHECK(NULL = NULL) –something that will always return NULL
 			continue
 		} else if result == false {
 			conflictCount++

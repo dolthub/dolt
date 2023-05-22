@@ -4382,10 +4382,72 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "check constraint violation - divergent edits",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(100) default ('hello'));",
+			"INSERT into t values (1, 'hi');",
+			"alter table t add index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add constraint CHECK (col1 != concat('he', 'llo'))",
+			"update t set col1 = 'bye' where pk=1;",
+		},
+		LeftSetUpScript: []string{
+			"update t set col1 = 'adios' where pk=1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x1}},
+			},
+		},
+	},
+	{
+		Name: "check constraint violation - check is always NULL",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 varchar(100) default ('hello'));",
+			"INSERT into t values (1, 'hi');",
+			"alter table t add index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add constraint CHECK (NULL = NULL)",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (2, DEFAULT);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x0}},
+			},
+		},
+	},
+	{
+		Name: "check constraint violation - check is always false",
+		AncSetUpScript: []string{
+			"SET @@dolt_force_transaction_commit=1;",
+			"CREATE table t (pk int primary key, col1 varchar(100) default ('hello'));",
+			"alter table t add index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add constraint CHECK (1 = 2)",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (1, DEFAULT);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0x1}},
+			},
+		},
+	},
+	{
 		Name: "check constraint violation - left side violates new check constraint",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
-			"CREATE table t (pk int primary key, col1 varchar(100));",
+			"CREATE table t (pk int primary key, col1 varchar(100) default ('hello'));",
 			"INSERT into t values (1, 'hi');",
 			"alter table t add index idx1 (col1);",
 		},
@@ -4393,7 +4455,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			"alter table t add constraint CHECK (col1 != concat('he', 'llo'))",
 		},
 		LeftSetUpScript: []string{
-			"insert into t values (2, 'hello');",
+			"insert into t values (2, DEFAULT);",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
