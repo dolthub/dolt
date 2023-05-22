@@ -18,6 +18,7 @@ public class MySQLConnectorTest {
             conn = DriverManager.getConnection(url, user, password);
 
             String[] queries = {
+            "select 1",
              "create table test (pk int, `value` int, primary key(pk))",
     // 		 "describe test",
              "select * from test",
@@ -36,6 +37,7 @@ public class MySQLConnectorTest {
 
             // Only test the first row, column pair for now
             String[] results = {
+            "1",
             "0",
     // 		"pk",
             null,
