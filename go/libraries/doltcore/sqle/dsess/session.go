@@ -281,8 +281,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	txDbs := make([]SqlDatabase, 0, len(doltDatabases))
 	for _, db := range doltDatabases {
 		// TODO: this nil check is only necessary to support UserSpaceDatabase and clusterDatabase, come up with a better set of
-		//  interfaces 
-		//  to capture these capabilities
+		//  interfaces to capture these capabilities
 		ddb := db.DbData().Ddb
 		if ddb != nil {
 			rrd, ok := db.(RemoteReadReplicaDatabase)
@@ -436,7 +435,7 @@ func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.T
 		return ws, nil, err
 	}
 
-	_, err := d.doCommit(ctx, dbName, tx, commitFunc)
+	_, err := d.commitCurrentHead(ctx, dbName, tx, commitFunc)
 	return err
 }
 
@@ -446,7 +445,7 @@ func (d *DoltSession) commitWorkingSet(ctx *sql.Context, branchState *branchStat
 		return ws, nil, err
 	}
 
-	_, err := d.doCommitInternal(ctx, branchState, tx, commitFunc)
+	_, err := d.commitBranchState(ctx, branchState, tx, commitFunc)
 	return err
 }
 
@@ -476,15 +475,20 @@ func (d *DoltSession) DoltCommit(
 		return ws, commit, err
 	}
 
-	return d.doCommit(ctx, dbName, tx, commitFunc)
+	return d.commitCurrentHead(ctx, dbName, tx, commitFunc)
 }
 
 // doCommitFunc is a function to write to the database, which involves updating the working set and potentially
 // updating HEAD with a new commit
 type doCommitFunc func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error)
 
-// doCommit exercise the business logic for a particular doCommitFunc
-func (d *DoltSession) doCommitInternal(ctx *sql.Context, branchState *branchState, tx sql.Transaction, commitFunc doCommitFunc) (*doltdb.Commit, error) {
+// commitBranchState performs a commit for the branch state given, using the doCommitFunc provided
+func (d *DoltSession) commitBranchState(
+		ctx *sql.Context,
+		branchState *branchState,
+		tx sql.Transaction,
+		commitFunc doCommitFunc,
+) (*doltdb.Commit, error) {
 	dtx, ok := tx.(*DoltTransaction)
 	if !ok {
 		return nil, fmt.Errorf("expected a DoltTransaction")
@@ -499,19 +503,16 @@ func (d *DoltSession) doCommitInternal(ctx *sql.Context, branchState *branchStat
 	return newCommit, nil
 }
 
-// doCommit exercise the business logic for a particular doCommitFunc
-func (d *DoltSession) doCommit(ctx *sql.Context, dbName string, tx sql.Transaction, commitFunc doCommitFunc) (*doltdb.Commit, error) {
+// commitCurrentHead commits the current HEAD for the database given, using the doCommitFunc provided
+func (d *DoltSession) commitCurrentHead(ctx *sql.Context, dbName string, tx sql.Transaction, commitFunc doCommitFunc) (*doltdb.Commit, error) {
 	branchState, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
 	} else if !ok {
-		// It's possible that we don't have dbstate if the user has created an in-Memory database. Moreover,
-		// the analyzer will check for us whether a db exists or not.
-		// TODO: fix this
-		return nil, nil
+		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	return d.doCommitInternal(ctx, branchState, tx, commitFunc)
+	return d.commitBranchState(ctx, branchState, tx, commitFunc)
 }
 
 // PendingCommitAllStaged returns a pending commit with all tables staged. Returns nil if there are no changes to stage.
