@@ -289,20 +289,7 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 		}
 	}
 	p.mu.RUnlock()
-
-	// If the current database is not one of the primary databases, it must be a transitory revision database
-	// if !foundDatabase && currDb != "" {
-	// 	revDb, ok, err := p.databaseForRevision(ctx, currDb)
-	// 	if err != nil {
-	// 		// We can't return an error from this interface function, so just log a message
-	// 		ctx.GetLogger().Warnf("unable to load %q as a database revision: %s", ctx.GetCurrentDatabase(), err.Error())
-	// 	} else if !ok {
-	// 		ctx.GetLogger().Warnf("unable to load %q as a database revision", ctx.GetCurrentDatabase())
-	// 	} else {
-	// 		all = append(all, revDb)
-	// 	}
-	// }
-
+	
 	// Because we store databases in a map, sort to get a consistent ordering
 	sort.Slice(all, func(i, j int) bool {
 		return strings.ToLower(all[i].Name()) < strings.ToLower(all[j].Name())
@@ -339,7 +326,7 @@ func (p DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlDatab
 
 	revDbs := make([]sql.Database, len(branches))
 	for i, branch := range branches {
-		revDb, ok, err := p.databaseForRevision(ctx, fmt.Sprintf("%s/%s", db.Name(), branch.GetPath()), "")
+		revDb, ok, err := p.databaseForRevision(ctx, fmt.Sprintf("%s/%s", db.Name(), branch.GetPath()), db.Name())
 		if err != nil {
 			return nil, err
 		}
