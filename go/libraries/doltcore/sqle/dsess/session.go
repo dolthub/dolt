@@ -307,7 +307,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		}
 	}
 	
-	return NewMultiHeadTransaction(ctx, txDbs, tCharacteristic)
+	return NewDoltTransaction(ctx, txDbs, tCharacteristic)
 }
 
 // clear clears all DB state for this session
@@ -855,7 +855,8 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	return nil
 }
 
-// SetCurrentHead sets the currently connected head revision spec for this session.
+// SetCurrentHead sets the currently connected head revision spec for this session. This changes the revision that
+// unqualified references to the database name resolve to, and is only done by dolt_checkout().
 func (d *DoltSession) SetCurrentHead(ctx *sql.Context, dbName string, wsRef ref.WorkingSetRef) error {
 	headRef, err := wsRef.ToHeadRef()
 	if err != nil {
@@ -1149,7 +1150,6 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	}
 
 	// This has to happen after SetWorkingSet above, since it does a stale check before its work
-	// TODO: this needs to be kept up to date as the working set ref changes
 	branchState.headCommit = dbState.HeadCommit
 	
 	if sessionState.Err == nil {

@@ -132,7 +132,6 @@ func initialDBState(ctx *sql.Context, db dsess.SqlDatabase, branch string) (dses
 		return initialStateForRevisionDb(ctx, db)
 	}
 
-	// TODO: this should never be true
 	return initialDbState(ctx, db, branch)
 }
 

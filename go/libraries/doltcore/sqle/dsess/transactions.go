@@ -90,7 +90,7 @@ type savepoint struct {
 	root *doltdb.RootValue
 }
 
-func NewMultiHeadTransaction(
+func NewDoltTransaction(
 	  ctx *sql.Context,
 		dbs []SqlDatabase,
 		tCharacteristic sql.TransactionCharacteristic,

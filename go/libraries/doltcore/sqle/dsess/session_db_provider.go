@@ -55,7 +55,6 @@ type RevisionDatabase interface {
 // string naming that branch or tag. For other revision specs, e.g. "HEAD~2", the revision is a commit hash.
 type RevisionType int
 
-// TODO: do we need a working set type here, or no?
 const (
 	RevisionTypeNone RevisionType = iota
 	RevisionTypeBranch
