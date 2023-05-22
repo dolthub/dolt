@@ -96,6 +96,10 @@ func (db Database) Revision() string {
 	return db.revision
 }
 
+func (db Database) Versioned() bool {
+	return true
+}
+
 func (db Database) RevisionType() dsess.RevisionType {
 	return db.revType
 }

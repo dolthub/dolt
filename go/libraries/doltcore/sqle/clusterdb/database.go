@@ -132,6 +132,10 @@ func (db database) Revision() string {
 	return ""
 }
 
+func (db database) Versioned() bool {
+	return false
+}
+
 func (db database) RevisionType() dsess.RevisionType {
 	return dsess.RevisionTypeNone
 }

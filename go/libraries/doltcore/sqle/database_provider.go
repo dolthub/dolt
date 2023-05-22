@@ -1038,9 +1038,9 @@ func resolveAncestorSpec(ctx *sql.Context, revSpec string, ddb *doltdb.DoltDB) (
 // SessionDatabase implements dsess.SessionDatabaseProvider
 func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool, error) {
 	baseName := name
-	isRevisionDb := strings.Contains(name, dsess.DbRevisionDelimiter)
+	isRevisionDbName := strings.Contains(name, dsess.DbRevisionDelimiter)
 	
-	if isRevisionDb {
+	if isRevisionDbName {
 		// TODO: formalize and enforce this rule (can't allow DBs with / in the name)
 		// TODO: some connectors will take issue with the /, we need other mechanisms to support them
 		parts := strings.SplitN(name, dsess.DbRevisionDelimiter, 2)
@@ -1066,15 +1066,20 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 			return nil, false, nil
 		}
 	}
+	
+	// Some DB implementations don't support addressing by versioned names, so return directly if we have one of those
+	if !db.Versioned() {
+		return wrapForStandby(db, standby), true, nil
+	}
 
-	// The db map only contains base databases, not revision DBs. Convert to a revision DB for creation.
+	// Convert to a revision database before returning. If we got a non-qualified name, convert it to a qualified name 
+	// using the session's current head 
 	revisionQualifiedName := name
-	if !isRevisionDb {
+	if !isRevisionDbName {
 		sess := dsess.DSessFromSess(ctx.Session)
 
-		// To find the correct revision DB for this unqualified name, we need to look into the session state. A newly 
-		// created session may not have any info on current head stored yet, in which case we get the default branch for
-		// the db itself instead. 
+		// A newly created session may not have any info on current head stored yet, in which case we get the default 
+		// branch for the db itself instead. 
 		head, ok, err := sess.CurrentHead(ctx, baseName)
 		if err != nil {
 			return nil, false, err
@@ -1091,7 +1096,7 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 
 		revisionQualifiedName = baseName + dsess.DbRevisionDelimiter + head
 	}
-
+	
 	db, ok, err := p.databaseForRevision(ctx, revisionQualifiedName, name)
 	if err != nil {
 		return nil, false, err
@@ -1099,7 +1104,7 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 	if !ok {
 		return nil, false, nil
 	}
-
+	
 	return wrapForStandby(db, standby), true, nil
 }
 

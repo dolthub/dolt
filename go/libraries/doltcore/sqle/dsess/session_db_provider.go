@@ -44,6 +44,11 @@ type RevisionDatabase interface {
 	// RequestedName returns the name of the database as requested by the user when the name was resolved to this 
 	// database.
 	RequestedName() string
+	// Versioned returns whether this database implementation supports more than a single revision. 
+	// TODO: This shouldn't be a necessary part of the interface, but it's required to differentiate between dolt-backed
+	//  databases and others that we serve for custom purposes with similar pieces of functionality, and the session
+	//  management logic intermixes these concerns.  
+	Versioned() bool
 }
 
 // RevisionType represents the type of revision a database is pinned to. For branches and tags, the revision is a
