@@ -76,52 +76,6 @@ func ParseAuthor(authorStr string) (string, string, error) {
 }
 
 const (
-	AllowEmptyFlag   = "allow-empty"
-	SkipEmptyFlag    = "skip-empty"
-	DateParam        = "date"
-	MessageArg       = "message"
-	AuthorParam      = "author"
-	ForceFlag        = "force"
-	DryRunFlag       = "dry-run"
-	SetUpstreamFlag  = "set-upstream"
-	AllFlag          = "all"
-	UpperCaseAllFlag = "ALL"
-	HardResetParam   = "hard"
-	SoftResetParam   = "soft"
-	CheckoutCoBranch = "b"
-	NoFFParam        = "no-ff"
-	SquashParam      = "squash"
-	AbortParam       = "abort"
-	CopyFlag         = "copy"
-	MoveFlag         = "move"
-	DeleteFlag       = "delete"
-	DeleteForceFlag  = "D"
-	OutputOnlyFlag   = "output-only"
-	RemoteParam      = "remote"
-	BranchParam      = "branch"
-	TrackFlag        = "track"
-	AmendFlag        = "amend"
-	CommitFlag       = "commit"
-	NoCommitFlag     = "no-commit"
-	NoEditFlag       = "no-edit"
-	OursFlag         = "ours"
-	TheirsFlag       = "theirs"
-	NumberFlag       = "number"
-	NotFlag          = "not"
-	MergesFlag       = "merges"
-	ParentsFlag      = "parents"
-	MinParentsFlag   = "min-parents"
-	DecorateFlag     = "decorate"
-	OneLineFlag      = "oneline"
-	ShallowFlag      = "shallow"
-	CachedFlag       = "cached"
-	ListFlag         = "list"
-	UserParam        = "user"
-	NoPrettyFlag     = "no-pretty"
-	ShowIgnoredFlag  = "ignored"
-)
-
-const (
 	SyncBackupId        = "sync"
 	SyncBackupUrlId     = "sync-url"
 	RestoreBackupId     = "restore"
@@ -202,7 +156,7 @@ func CreateCloneArgParser() *argparser.ArgParser {
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use.")
 	ap.SupportsString(dbfactory.OSSCredsFileParam, "", "file", "OSS credentials file.")
 	ap.SupportsString(dbfactory.OSSCredsProfile, "", "profile", "OSS profile to use.")
-	ap.SupportsString(UserParam, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
+	ap.SupportsString(UserFlag, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
 	return ap
 }
 
@@ -247,7 +201,7 @@ func CreateCherryPickArgParser() *argparser.ArgParser {
 
 func CreateFetchArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("fetch")
-	ap.SupportsString(UserParam, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
+	ap.SupportsString(UserFlag, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
 	return ap
 }
 
@@ -270,7 +224,7 @@ func CreatePullArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(CommitFlag, "", "Perform the merge and commit the result. This is the default option, but can be overridden with the --no-commit flag. Note that this option does not affect fast-forward merges, which don't create a new merge commit, and if any merge conflicts or constraint violations are detected, no commit will be attempted.")
 	ap.SupportsFlag(NoCommitFlag, "", "Perform the merge and stop just before creating a merge commit. Note this will not prevent a fast-forward merge; use the --no-ff arg together with the --no-commit arg to prevent both fast-forwards and merge commits.")
 	ap.SupportsFlag(NoEditFlag, "", "Use an auto-generated commit message when creating a merge commit. The default for interactive CLI sessions is to open an editor.")
-	ap.SupportsString(UserParam, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
+	ap.SupportsString(UserFlag, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
 	return ap
 }
 
