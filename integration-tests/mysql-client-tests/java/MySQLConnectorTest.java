@@ -84,7 +84,11 @@ public class MySQLConnectorTest {
 	    System.exit(0);
 
         } catch (SQLException ex) {
-            System.out.println("An error occurred: " + ex.toString());
+            System.out.println("An error occurred: ");
+            System.out.println("   message: " + ex.getMessage());
+            System.out.println("   error code: " + ex.getErrorCode());
+            System.out.println("   SQL State: " + ex.getSQLState();
+            System.out.println("   cause: " + ex.getCause());
             ex.printStackTrace();
     	    System.exit(1);
         }
