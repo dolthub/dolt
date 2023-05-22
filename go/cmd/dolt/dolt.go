@@ -669,6 +669,7 @@ func buildGlobalArgs() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("dolt")
 
 	ap.SupportsString(commands.UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", commands.DefaultUser))
+	ap.SupportsString(cli.PasswordFlag, "p", "password", "Defines the password for the user. Defaults to empty string.")
 	ap.SupportsString(commands.DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
 	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change to configuration settings.")
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
