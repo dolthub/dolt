@@ -190,7 +190,7 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 	// We start by first checking whether the input table is a temporary table. Temporary tables with name `x` take
 	// priority over persisted tables of name `x`.
 	ds := dsess.DSessFromSess(ctx.Session)
-	if tbl, ok := ds.GetTemporaryTable(ctx, db.Name(), tblName); ok {
+	if tbl, ok := ds.GetTemporaryTable(ctx, db.RevisionQualifiedName(), tblName); ok {
 		return tbl, ok, nil
 	}
 
