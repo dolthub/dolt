@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var fwtStageName = "fwt"
@@ -78,17 +79,22 @@ func MaybeGetCommitWithVErr(dEnv *env.DoltEnv, maybeCommit string) (*doltdb.Comm
 
 // NewArgFreeCliContext creates a new CliContext instance with no arguments using a local SqlEngine. This is useful for testing primarily
 func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv) (cli.CliContext, errhand.VerboseError) {
-	lateBind, err := BuildSqlEngineQueryist(ctx, dEnv, argparser.NewEmptyResults())
+	mrEnv, err := env.MultiEnvForSingleEnv(ctx, dEnv)
 	if err != nil {
-		return nil, err
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+
+	lateBind, verr := BuildSqlEngineQueryist(ctx, dEnv.FS, mrEnv, argparser.NewEmptyResults())
+	if err != nil {
+		return nil, verr
 	}
 	return cli.NewCliContext(argparser.NewEmptyResults(), lateBind)
 }
 
 // BuildSqlEngineQueryist Utility function to build a local SQLEngine for use interacting with data on disk using
-// SQL queries. ctx and dEnv must be non-nil. apr can be nil.
-func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
-	if ctx == nil || dEnv == nil || apr == nil {
+// SQL queries. ctx, cwdFS, mrEnv, and apr must all be non-nil.
+func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
+	if ctx == nil || cwdFS == nil || mrEnv == nil || apr == nil {
 		errhand.VerboseErrorFromError(fmt.Errorf("Invariant violated. Nil argument provided to BuildSqlEngineQueryist"))
 	}
 
@@ -98,44 +104,42 @@ func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, apr *argpars
 		username = user
 	}
 
-	// data-dir args come either from the global args or the subcommand args.  We need to check both.
-	var dataDir string
-	dataDirGiven := false
-	if dataDirPath, ok := apr.GetValue(DataDirFlag); ok {
-		dataDir = dataDirPath
-		dataDirGiven = true
-	}
-
-	mrEnv, dataDir, verr := getMultiRepoEnv(ctx, dataDir, dEnv)
-	if verr != nil {
-		return nil, verr
+	// We want to know if the user provided us the data-dir flag, but we want to use the abs value used to
+	// create the DoltEnv. This is a little messy.
+	dataDir, dataDirGiven := apr.GetValue(DataDirFlag)
+	dataDir, err := cwdFS.Abs(dataDir)
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
 	}
 
 	// need to return cfgdirpath and error
 	var cfgDirPath string
 	cfgDir, cfgDirSpecified := apr.GetValue(CfgDirFlag)
 	if cfgDirSpecified {
-		cfgDirPath = cfgDir
+		cfgDirPath, err = cwdFS.Abs(cfgDir)
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
 	} else if dataDirGiven {
 		cfgDirPath = filepath.Join(dataDir, DefaultCfgDirName)
 	} else {
-		// Look in parent directory for doltcfg
+		// Look in CWD parent directory for doltcfg
 		parentDirCfg := filepath.Join("..", DefaultCfgDirName)
-		parentExists, isDir := dEnv.FS.Exists(parentDirCfg)
+		parentExists, isDir := cwdFS.Exists(parentDirCfg)
 		parentDirExists := parentExists && isDir
 
-		// Look in data directory (which is necessarily current directory) for doltcfg
-		currDirCfg := filepath.Join(dataDir, DefaultCfgDirName)
-		currExists, isDir := dEnv.FS.Exists(currDirCfg)
-		currDirExists := currExists && isDir
+		// Look in data directory for doltcfg
+		dataDirCfg := filepath.Join(dataDir, DefaultCfgDirName)
+		dataDirCfgExists, isDir := cwdFS.Exists(dataDirCfg)
+		currDirExists := dataDirCfgExists && isDir
 
-		// Error if both current and parent exist
+		// Error if both CWD/../.doltfcfg and dataDir/.doltcfg exist because it's unclear which to use.
 		if currDirExists && parentDirExists {
-			p1, err := dEnv.FS.Abs(cfgDirPath)
+			p1, err := cwdFS.Abs(cfgDirPath)
 			if err != nil {
 				return nil, errhand.VerboseErrorFromError(err)
 			}
-			p2, err := dEnv.FS.Abs(parentDirCfg)
+			p2, err := cwdFS.Abs(parentDirCfg)
 			if err != nil {
 				return nil, errhand.VerboseErrorFromError(err)
 			}
@@ -146,15 +150,19 @@ func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, apr *argpars
 		if parentDirExists {
 			cfgDirPath = parentDirCfg
 		} else {
-			cfgDirPath = currDirCfg
+			cfgDirPath = dataDirCfg
 		}
 	}
 
-	var err error
 	// If no privilege filepath specified, default to doltcfg directory
 	privsFp, hasPrivsFp := apr.GetValue(PrivsFilePathFlag)
 	if !hasPrivsFp {
-		privsFp, err = dEnv.FS.Abs(filepath.Join(cfgDirPath, DefaultPrivsName))
+		privsFp, err = cwdFS.Abs(filepath.Join(cfgDirPath, DefaultPrivsName))
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+	} else {
+		privsFp, err = cwdFS.Abs(privsFp)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
@@ -163,13 +171,25 @@ func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, apr *argpars
 	// If no branch control file path is specified, default to doltcfg directory
 	branchControlFilePath, hasBCFilePath := apr.GetValue(BranchCtrlPathFlag)
 	if !hasBCFilePath {
-		branchControlFilePath, err = dEnv.FS.Abs(filepath.Join(cfgDirPath, DefaultBranchCtrlName))
+		branchControlFilePath, err = cwdFS.Abs(filepath.Join(cfgDirPath, DefaultBranchCtrlName))
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+	} else {
+		branchControlFilePath, err = cwdFS.Abs(branchControlFilePath)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
 	}
 
-	binder, err := newLateBindingEngine(ctx, apr, cfgDirPath, privsFp, branchControlFilePath, username, mrEnv)
+	// Whether we're running in shell mode or some other mode, sql commands from the command line always have a current
+	// database set when you begin using them.
+	database, hasDB := apr.GetValue(UseDbFlag)
+	if !hasDB {
+		database = mrEnv.GetFirstDatabase()
+	}
+
+	binder, err := newLateBindingEngine(cfgDirPath, privsFp, branchControlFilePath, username, database, mrEnv)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}
@@ -178,12 +198,11 @@ func BuildSqlEngineQueryist(ctx context.Context, dEnv *env.DoltEnv, apr *argpars
 }
 
 func newLateBindingEngine(
-	ctx context.Context,
-	apr *argparser.ArgParseResults,
 	cfgDirPath string,
 	privsFp string,
 	branchControlFilePath string,
 	username string,
+	database string,
 	mrEnv *env.MultiRepoEnv,
 ) (cli.LateBindQueryist, error) {
 
@@ -212,7 +231,7 @@ func newLateBindingEngine(
 
 		// Whether we're running in shell mode or some other mode, sql commands from the command line always have a current
 		// database set when you begin using them.
-		sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
+		sqlCtx.SetCurrentDatabase(database)
 
 		// Add specified user as new superuser, if it doesn't already exist
 		if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {

@@ -104,25 +104,6 @@ func replaceUniqueKeyViolation(ctx context.Context, edt *prolly.ArtifactsEditor,
 	return nil
 }
 
-func replaceUniqueKeyViolationWithValue(ctx context.Context, edt *prolly.ArtifactsEditor, k, value val.Tuple, kd val.TupleDesc, theirRootIsh doltdb.Rootish, vInfo []byte, tblName string) error {
-	meta := prolly.ConstraintViolationMeta{
-		VInfo: vInfo,
-		Value: value,
-	}
-
-	theirsHash, err := theirRootIsh.HashOf()
-	if err != nil {
-		return err
-	}
-
-	err = edt.ReplaceConstraintViolation(ctx, k, theirsHash, prolly.ArtifactTypeUniqueKeyViol, meta)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func getPKFromSecondaryKey(pKB *val.TupleBuilder, pool pool.BuffPool, pkMapping val.OrdinalMapping, k val.Tuple) val.Tuple {
 	for to := range pkMapping {
 		from := pkMapping.MapOrdinal(to)
@@ -179,4 +160,52 @@ func (m NullViolationMeta) ToString(ctx *sql.Context) (string, error) {
 	return fmt.Sprintf("{Columns: [%s]}", strings.Join(m.Columns, ",")), nil
 }
 
-var _ types.JSONValue = FkCVMeta{}
+// CheckCVMeta holds metadata describing a check constraint violation.
+type CheckCVMeta struct {
+	Name       string `json:"Name"`
+	Expression string `jason:"Expression"`
+}
+
+var _ types.JSONValue = CheckCVMeta{}
+
+// newCheckCVMeta creates a new CheckCVMeta from a schema |sch| and a check constraint name |checkName|. If the
+// check constraint is not found in the specified schema, an error is returned.
+func newCheckCVMeta(sch schema.Schema, checkName string) (CheckCVMeta, error) {
+	found := false
+	var check schema.Check
+	for _, check = range sch.Checks().AllChecks() {
+		if check.Name() == checkName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return CheckCVMeta{}, fmt.Errorf("check constraint '%s' not found in schema", checkName)
+	}
+
+	return CheckCVMeta{
+		Name:       check.Name(),
+		Expression: check.Expression(),
+	}, nil
+}
+
+// Unmarshall implements types.JSONValue
+func (m CheckCVMeta) Unmarshall(_ *sql.Context) (val types.JSONDocument, err error) {
+	return types.JSONDocument{Val: m}, nil
+}
+
+// Compare implements types.JSONValue
+func (m CheckCVMeta) Compare(ctx *sql.Context, v types.JSONValue) (cmp int, err error) {
+	ours := types.JSONDocument{Val: m}
+	return ours.Compare(ctx, v)
+}
+
+// ToString implements types.JSONValue
+func (m CheckCVMeta) ToString(_ *sql.Context) (string, error) {
+	jsonStr := fmt.Sprintf(`{`+
+		`"Name": "%s", `+
+		`"Expression": "%s"}`,
+		m.Name,
+		m.Expression)
+	return jsonStr, nil
+}

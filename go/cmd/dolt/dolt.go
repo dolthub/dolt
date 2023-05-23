@@ -62,7 +62,7 @@ import (
 )
 
 const (
-	Version = "1.1.0"
+	Version = "1.1.1"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -140,6 +140,7 @@ const stdOutFlag = "--stdout"
 const stdErrFlag = "--stderr"
 const stdOutAndErrFlag = "--out-and-err"
 const ignoreLocksFlag = "--ignore-lock-file"
+const verboseEngineSetupFlag = "--verbose-engine-setup"
 
 const cpuProf = "cpu"
 const memProf = "mem"
@@ -168,6 +169,7 @@ func runMain() int {
 
 	csMetrics := false
 	ignoreLockFile := false
+	verboseEngineSetup := false
 	if len(args) > 0 {
 		var doneDebugFlags bool
 		for !doneDebugFlags && len(args) > 0 {
@@ -324,6 +326,9 @@ func runMain() int {
 
 				args = args[2:]
 
+			case verboseEngineSetupFlag:
+				verboseEngineSetup = true
+				args = args[1:]
 			default:
 				doneDebugFlags = true
 			}
@@ -342,7 +347,42 @@ func runMain() int {
 		return exit
 	}
 
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
+	globalArgs, args, initCliContext, printUsage, err := splitArgsOnSubCommand(args)
+	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
+	if printUsage {
+		doltCommand.PrintUsage("dolt")
+
+		specialMsg := `
+Dolt subcommands are in transition to using the flags listed below as global flags.
+The sql subcommand is currently the only command that uses these flags. All other commands will ignore them.
+`
+		cli.Println(specialMsg)
+		usage()
+
+		return 0
+	}
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failure to parse arguments: %v", err))
+		return 1
+	}
+	apr := cli.ParseArgsOrDie(globalArgParser, globalArgs, usage)
+
+	var fs filesys.Filesys
+	fs = filesys.LocalFS
+	dataDir, hasDataDir := apr.GetValue(commands.DataDirFlag)
+	if hasDataDir {
+		// If a relative path was provided, this ensures we have an absolute path everywhere.
+		dataDir, err = fs.Abs(dataDir)
+		if err != nil {
+			cli.PrintErrln(color.RedString("Failed to get absolute path for %s: %v", dataDir, err))
+			return 1
+		}
+		if ok, dir := fs.Exists(dataDir); !ok || !dir {
+			cli.Println(color.RedString("Provided data directory does not exist: %s", dataDir))
+			return 1
+		}
+	}
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
 	dEnv.IgnoreLockFile = ignoreLockFile
 
 	root, err := env.GetCurrentUserHomeDir()
@@ -409,7 +449,12 @@ func runMain() int {
 	// variables like `${db_name}_default_branch` (maybe these should not be
 	// part of Dolt config in the first place!).
 
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	dataDirFS, err := dEnv.FS.WithWorkingDir(dataDir)
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to set the data directory. %v", err))
+		return 1
+	}
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dataDirFS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	if err != nil {
 		cli.PrintErrln("failed to load database names")
 		return 1
@@ -424,31 +469,9 @@ func runMain() int {
 		cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
 	}
 
-	globalArgs, args, initCliContext, printUsage, err := splitArgsOnSubCommand(args)
-	if printUsage {
-		doltCommand.PrintUsage("dolt")
-		_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
-
-		specialMsg := `
-Dolt subcommands are in transition to using the flags listed below as global flags.
-The sql subcommand is currently the only command that uses these flags. All other commands will ignore them.
-`
-		cli.Println(specialMsg)
-		usage()
-
-		return 0
-	}
-	if err != nil {
-		cli.PrintErrln(color.RedString("Failure to parse arguments: %v", err))
-		return 1
-	}
-
 	var cliCtx cli.CliContext = nil
 	if initCliContext {
-		_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
-		apr := cli.ParseArgsOrDie(globalArgParser, globalArgs, usage)
-
-		lateBind, err := commands.BuildSqlEngineQueryist(ctx, dEnv, apr)
+		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, apr, verboseEngineSetup)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failure to Load SQL Engine: %v", err))
 			return 1
@@ -459,7 +482,6 @@ The sql subcommand is currently the only command that uses these flags. All othe
 			cli.PrintErrln(color.RedString("Unexpected Error: %v", err))
 			return 1
 		}
-
 	}
 
 	ctx, stop := context.WithCancel(ctx)
@@ -480,6 +502,44 @@ The sql subcommand is currently the only command that uses these flags. All othe
 	}
 
 	return res
+}
+
+func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, apr *argparser.ArgParseResults, verbose bool) (cli.LateBindQueryist, error) {
+
+	var targetEnv *env.DoltEnv = nil
+
+	useDb, hasUseDb := apr.GetValue(commands.UseDbFlag)
+	if hasUseDb {
+		targetEnv = mrEnv.GetEnv(useDb)
+		if targetEnv == nil {
+			return nil, fmt.Errorf("The provided --use-db %s does not exist or is not a directory.", useDb)
+		}
+	} else {
+		useDb = mrEnv.GetFirstDatabase()
+	}
+
+	if targetEnv == nil && useDb != "" {
+		targetEnv = mrEnv.GetEnv(useDb)
+	}
+
+	// nil targetEnv will happen if the user ran a command in an empty directory - which we support in some cases.
+	if targetEnv != nil {
+		isLocked, lock, err := targetEnv.GetLock()
+		if err != nil {
+			return nil, err
+		}
+		if isLocked {
+			if verbose {
+				cli.Println("verbose: starting remote mode")
+			}
+			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, apr, lock.Port, useDb)
+		}
+	}
+
+	if verbose {
+		cli.Println("verbose: starting local mode")
+	}
+	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, apr)
 }
 
 // splitArgsOnSubCommand splits the args into two slices, the first containing all args before the first subcommand,
@@ -568,12 +628,12 @@ func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
 func buildGlobalArgs() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("dolt")
 
-	// Pulling this argument forward first to pave the way. Others will follow.
 	ap.SupportsString(commands.UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", commands.DefaultUser))
 	ap.SupportsString(commands.DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
 	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change to configuration settings.")
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
 	ap.SupportsString(commands.BranchCtrlPathFlag, "", "branch control file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will only be created if there is a change to branch control permissions.")
+	ap.SupportsString(commands.UseDbFlag, "", "database", "The name of the database to use when executing SQL queries. Defaults the database of the root directory, if it exists, and the first alphabetically if not.")
 
 	return ap
 }

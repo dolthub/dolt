@@ -387,6 +387,8 @@ type FkCVMeta struct {
 	Table             string   `json:"Table"`
 }
 
+var _ types.JSONValue = FkCVMeta{}
+
 func (m FkCVMeta) Unmarshall(ctx *sql.Context) (val types.JSONDocument, err error) {
 	return types.JSONDocument{Val: m}, nil
 }

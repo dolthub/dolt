@@ -478,8 +478,7 @@ teardown() {
     ! [[ "$output" =~ ".doltcfg" ]] || false
 
     # create new user
-    run dolt --data-dir=db_dir --privilege-file=privs.db sql <<< "create user new_user"
-    [ "$status" -eq 0 ]
+    dolt --data-dir=db_dir --privilege-file=privs.db sql <<< "create user new_user"
 
     # show users, expect root user and new_user
     run dolt --data-dir=db_dir --privilege-file=privs.db sql <<< "select user from mysql.user;"
