@@ -1,5 +1,0 @@
-name: 'Dolt Rust MySQL client integration test'
-description: 'Smoke test for rust mysql client integration'
-runs:
-  using: 'docker'
-  image: '../../../integration-tests/RustDockerfile'
