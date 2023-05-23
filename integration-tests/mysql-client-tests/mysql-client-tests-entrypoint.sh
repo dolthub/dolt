@@ -6,5 +6,7 @@ dolt config --global --add metrics.host localhost
 dolt config --global --add user.name mysql-test-runner
 dolt config --global --add user.email mysql-test-runner@liquidata.co
 
+echo $(date)
+
 echo "Running mysql-client-tests:"
 bats /mysql-client-tests/mysql-client-tests.bats
