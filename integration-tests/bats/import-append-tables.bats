@@ -21,6 +21,7 @@ pk, col1
 1, 2
 CSV
 
+    echo "$output"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "An error occurred while moving data" ]] || false
     [[ "$output" =~ "row [1,1] would be overwritten by [1,2]" ]] || false
@@ -41,6 +42,7 @@ pk, col1
 1, 2
 CSV
 
+    echo "$output"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "An error occurred while moving data" ]] || false
     [[ "$output" =~ "row [1,1] would be overwritten by [1,2]" ]] || false
