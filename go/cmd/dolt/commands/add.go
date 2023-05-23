@@ -117,8 +117,6 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			return 1
 		}
 	}
-
-	return 0
 }
 
 func HandleStageError(err error) int {
