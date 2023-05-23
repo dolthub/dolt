@@ -454,9 +454,12 @@ func secondsSince(start time.Time, end time.Time) float64 {
 	return timeDisplay
 }
 
+// ConnectionQueryist executes queries by connecting to a running mySql server.
 type ConnectionQueryist struct {
 	connection *dbr.Connection
 }
+
+var _ cli.Queryist = ConnectionQueryist{}
 
 func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, error) {
 	rows, err := c.connection.QueryContext(ctx, query)
@@ -469,8 +472,6 @@ func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, s
 	}
 	return rowIter.Schema(), rowIter, nil
 }
-
-var _ cli.Queryist = ConnectionQueryist{}
 
 // BuildConnectionStringQueryist returns a Queryist that connects to the server specified by the given server config. Presence in this
 // module isn't ideal, but it's the only way to get the server config into the queryist.
