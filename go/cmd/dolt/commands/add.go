@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -100,10 +101,21 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	_, _, err = queryist.Query(sqlCtx, generateSql(apr))
+	_, rowIter, err := queryist.Query(sqlCtx, generateSql(apr))
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1
+	}
+
+	for {
+		_, err := rowIter.Next(sqlCtx)
+		if err == io.EOF {
+			return 0
+		}
+		if err != nil {
+			cli.PrintErrln(errhand.VerboseErrorFromError(err))
+			return 1
+		}
 	}
 
 	return 0
