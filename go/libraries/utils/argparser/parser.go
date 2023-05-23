@@ -284,6 +284,7 @@ func (ap *ArgParser) ParseGlobalArgs(args []string) (apr *ArgParseResults, remai
 		}
 
 		if arg[0] != '-' {
+			// This isn't a flag; assume it's the subcommand. Don't parse the remaining args.
 			return &ArgParseResults{results, nil, ap}, args[i:], nil
 		}
 
