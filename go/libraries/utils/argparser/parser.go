@@ -302,39 +302,39 @@ func (ap *ArgParser) ParseGlobalArgs(args []string) (apr *ArgParseResults, remai
 // methods. Any unrecognized arguments or incorrect types will result in an appropriate error being returned. If the
 // universal --help or -h flag is found, an ErrHelp error is returned.
 func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
-	list := make([]string, 0, 16)
-	results := make(map[string]string)
+	positionalArgs := make([]string, 0, 16)
+	namedArgs := make(map[string]string)
 
-	i := 0
-	for ; i < len(args); i++ {
-		arg := args[i]
+	index := 0
+	for ; index < len(args); index++ {
+		arg := args[index]
 
 		if len(arg) == 0 || arg[0] != '-' || arg == "--" { // empty strings should get passed through like other naked words
-			list = append(list, arg)
+			positionalArgs = append(positionalArgs, arg)
 			continue
 		}
 
 		var err error
-		i, list, results, err = ap.parseToken(args, i, list, results)
+		index, positionalArgs, namedArgs, err = ap.parseToken(args, index, positionalArgs, namedArgs)
 
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if i < len(args) {
-		copy(list, args[i:])
+	if index < len(args) {
+		copy(positionalArgs, args[index:])
 	}
 
-	if ap.MaxArgs != -1 && len(list) > ap.MaxArgs {
-		return nil, ap.TooManyArgsErrorFunc(list)
+	if ap.MaxArgs != -1 && len(positionalArgs) > ap.MaxArgs {
+		return nil, ap.TooManyArgsErrorFunc(positionalArgs)
 	}
 
-	return &ArgParseResults{results, list, ap}, nil
+	return &ArgParseResults{namedArgs, positionalArgs, ap}, nil
 }
 
-func (ap *ArgParser) parseToken(args []string, i int, list []string, results map[string]string) (int, []string, map[string]string, error) {
-	arg := args[i]
+func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []string, namedArgs map[string]string) (newIndex int, newPositionalArgs []string, newNamedArgs map[string]string, err error) {
+	arg := args[index]
 
 	isLongFormFlag := len(arg) >= 2 && arg[:2] == "--"
 
@@ -347,49 +347,49 @@ func (ap *ArgParser) parseToken(args []string, i int, list []string, results map
 	modalOpts, rest := ap.matchModalOptions(arg)
 
 	for _, opt := range modalOpts {
-		if _, exists := results[opt.Name]; exists {
+		if _, exists := namedArgs[opt.Name]; exists {
 			return 0, nil, nil, errors.New("error: multiple values provided for `" + opt.Name + "'")
 		}
 
-		results[opt.Name] = ""
+		namedArgs[opt.Name] = ""
 	}
 
 	opt, value := ap.matchValueOption(rest, isLongFormFlag)
 
 	if opt == nil {
 		if rest == "" {
-			return i, list, results, nil
+			return index, positionalArgs, namedArgs, nil
 		}
 
 		if len(modalOpts) > 0 {
 			// value was attached to modal flag
 			// eg: dolt branch -fdmy_branch
-			list = append(list, rest)
-			return i, list, results, nil
+			positionalArgs = append(positionalArgs, rest)
+			return index, positionalArgs, namedArgs, nil
 		}
 
 		return 0, nil, nil, UnknownArgumentParam{name: arg}
 	}
 
-	if _, exists := results[opt.Name]; exists {
+	if _, exists := namedArgs[opt.Name]; exists {
 		//already provided
 		return 0, nil, nil, errors.New("error: multiple values provided for `" + opt.Name + "'")
 	}
 
 	if value == nil {
-		i++
+		index++
 		valueStr := ""
-		if i >= len(args) {
+		if index >= len(args) {
 			if opt.OptType != OptionalEmptyValue {
 				return 0, nil, nil, errors.New("error: no value for option `" + opt.Name + "'")
 			}
 		} else {
 			if opt.AllowMultipleOptions {
-				list := getListValues(args[i:])
+				list := getListValues(args[index:])
 				valueStr = strings.Join(list, ",")
-				i += len(list) - 1
+				index += len(list) - 1
 			} else {
-				valueStr = args[i]
+				valueStr = args[index]
 			}
 		}
 		value = &valueStr
@@ -403,8 +403,8 @@ func (ap *ArgParser) parseToken(args []string, i int, list []string, results map
 		}
 	}
 
-	results[opt.Name] = *value
-	return i, list, results, nil
+	namedArgs[opt.Name] = *value
+	return index, positionalArgs, namedArgs, nil
 }
 
 func getListValues(args []string) []string {
