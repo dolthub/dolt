@@ -95,7 +95,7 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	apr := cli.ParseArgsOrDie(ap, args, helpPr)
 
 	for _, tableName := range apr.Args {
-		if !doltdb.IsValidTableName(tableName) {
+		if tableName != "." && !doltdb.IsValidTableName(tableName) {
 			return HandleVErrAndExitCode(errhand.BuildDError("'%s' is not a valid table name", tableName).Build(), nil)
 		}
 	}
