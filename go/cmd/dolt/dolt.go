@@ -409,6 +409,7 @@ func runMain() int {
 	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
 
 	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
+	subcommandName := remainingArgs[0]
 	if err == argparser.ErrHelp {
 		doltCommand.PrintUsage("dolt")
 
@@ -528,7 +529,7 @@ The sql subcommand is currently the only command that uses these flags. All othe
 	}
 
 	var cliCtx cli.CliContext = nil
-	if initCliContext(remainingArgs[0]) {
+	if initCliContext(subcommandName) {
 		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, apr, verboseEngineSetup)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failure to Load SQL Engine: %v", err))
