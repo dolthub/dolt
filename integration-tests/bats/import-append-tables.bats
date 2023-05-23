@@ -11,6 +11,7 @@ teardown() {
 }
 
 @test "import-append-tables: disallow overwriting row during append" {
+    skip_nbf_not_dolt
     dolt sql -q "CREATE TABLE t (pk int primary key, col1 int);"
     dolt table import -a t <<CSV
 pk, col1
@@ -21,7 +22,6 @@ pk, col1
 1, 2
 CSV
 
-    echo "$output"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "An error occurred while moving data" ]] || false
     [[ "$output" =~ "row [1,1] would be overwritten by [1,2]" ]] || false
