@@ -21,8 +21,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -37,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type DoltDatabaseProvider struct {
@@ -1062,23 +1061,44 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 	// Convert to a revision database before returning. If we got a non-qualified name, convert it to a qualified name 
 	// using the session's current head 
 	revisionQualifiedName := name
+	usingDefaultBranch := false
+	head := ""
 	if !isRevisionDbName {
 		sess := dsess.DSessFromSess(ctx.Session)
 
-		// A newly created session may not have any info on current head stored yet, in which case we get the default 
-		// branch for the db itself instead. 
-		head, ok, err := sess.CurrentHead(ctx, baseName)
+		var err error
+		head, ok, err = sess.CurrentHead(ctx, baseName)
 		if err != nil {
 			return nil, false, err
 		}
 
+		// A newly created session may not have any info on current head stored yet, in which case we get the default 
+		// branch for the db itself instead. 
 		if !ok {
-			rsr := db.DbData().Rsr
-			headRef, err := rsr.CWBHeadRef()
-			if err != nil {
-				return nil, false, err
+			usingDefaultBranch = true
+			
+			// First check the global variable for the default branch
+			_, val, ok := sql.SystemVariables.GetGlobal(dsess.DefaultBranchKey(db.Name()))
+			if ok {
+				head = val.(string)
+				branchRef, err := ref.Parse(head)
+				if err == nil {
+					head = branchRef.GetPath()
+				} else {
+					head = ""
+					// continue to below
+				}
+			} 
+			
+			// Fall back to the database's checked out branch
+			if head == "" {
+				rsr := db.DbData().Rsr
+				headRef, err := rsr.CWBHeadRef()
+				if err != nil {
+					return nil, false, err
+				}
+				head = headRef.GetPath()
 			}
-			head = headRef.GetPath()
 		}
 
 		revisionQualifiedName = baseName + dsess.DbRevisionDelimiter + head
@@ -1086,8 +1106,16 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 	
 	db, ok, err := p.databaseForRevision(ctx, revisionQualifiedName, name)
 	if err != nil {
-		return nil, false, err
+		if sql.ErrDatabaseNotFound.Is(err) && usingDefaultBranch {
+			// We can return a better error message here in some cases
+			// TODO: this better error message doesn't always get returned to clients because the code path is doesn't 
+			//  return an error, only a boolean result (HasDB)
+			return nil, false, fmt.Errorf("cannot resolve default branch head for database '%s': '%s'", baseName, head)
+		} else {
+			return nil, false, err
+		}
 	}
+	
 	if !ok {
 		return nil, false, nil
 	}
