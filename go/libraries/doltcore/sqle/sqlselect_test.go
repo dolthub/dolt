@@ -1675,7 +1675,7 @@ func processNode(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, node Hist
 	require.NoError(t, err)
 
 	if !ok {
-		err = dEnv.DoltDB.NewBranchAtCommit(ctx, branchRef, parent)
+		err = dEnv.DoltDB.NewBranchAtCommit(ctx, branchRef, parent, nil)
 		require.NoError(t, err)
 	}
 

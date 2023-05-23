@@ -39,7 +39,11 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 			return nil, doltdb.Roots{}, err
 		}
 
-		newHead, err = ddb.Resolve(ctx, cs, rsr.CWBHeadRef())
+		headRef, err := rsr.CWBHeadRef()
+		if err != nil {
+			return nil, doltdb.Roots{}, err
+		}
+		newHead, err = ddb.Resolve(ctx, cs, headRef)
 		if err != nil {
 			return nil, doltdb.Roots{}, err
 		}
@@ -164,7 +168,7 @@ func ResetHard(
 		return err
 	}
 
-	err = dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge(), h, dEnv.NewWorkingSetMeta("reset hard"))
+	err = dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge(), h, dEnv.NewWorkingSetMeta("reset hard"), nil)
 	if err != nil {
 		return err
 	}
@@ -220,7 +224,11 @@ func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) (do
 		return doltdb.Roots{}, err
 	}
 
-	newHead, err := dbData.Ddb.Resolve(ctx, cs, dbData.Rsr.CWBHeadRef())
+	headRef, err := dbData.Rsr.CWBHeadRef()
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+	newHead, err := dbData.Ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -231,7 +239,7 @@ func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) (do
 	}
 
 	// Update the head to this commit
-	if err = dbData.Ddb.SetHeadToCommit(ctx, dbData.Rsr.CWBHeadRef(), newHead); err != nil {
+	if err = dbData.Ddb.SetHeadToCommit(ctx, headRef, newHead); err != nil {
 		return doltdb.Roots{}, err
 	}
 
@@ -265,19 +273,31 @@ func resetStaged(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb
 }
 
 // IsValidRef validates whether the input parameter is a valid cString
-// TODO: this doesn't belong int his package
-func IsValidRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) bool {
+// TODO: this doesn't belong in this package
+func IsValidRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (bool, error) {
+	// The error return value is only for propagating unhandled errors from rsr.CWBHeadRef()
+	// All other errors merely indicate an invalid ref spec.
+	// TODO: It's much better to enumerate the expected errors, to make sure we don't suppress any unexpected ones.
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	if err != nil {
-		return false
+		return false, nil
 	}
 
-	_, err = ddb.Resolve(ctx, cs, rsr.CWBHeadRef())
+	headRef, err := rsr.CWBHeadRef()
+	if err == doltdb.ErrOperationNotSupportedInDetachedHead {
+		// This is safe because ddb.Resolve checks if headRef is nil, but only when the value is actually needed.
+		// Basically, this guarentees that resolving "HEAD" or similar will return an error but other resolves will work.
+		headRef = nil
+	} else if err != nil {
+		return false, err
+	}
+
+	_, err = ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
-		return false
+		return false, nil
 	}
 
-	return true
+	return true, nil
 }
 
 // CleanUntracked deletes untracked tables from the working root.

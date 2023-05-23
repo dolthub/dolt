@@ -64,28 +64,34 @@ func doDoltBranch(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
+	var rsc doltdb.ReplicationStatusController
+
 	switch {
 	case apr.Contains(cli.CopyFlag):
-		err = copyBranch(ctx, dbData, apr)
+		err = copyBranch(ctx, dbData, apr, &rsc)
 	case apr.Contains(cli.MoveFlag):
-		err = renameBranch(ctx, dbData, apr, dSess, dbName)
+		err = renameBranch(ctx, dbData, apr, dSess, dbName, &rsc)
 	case apr.Contains(cli.DeleteFlag), apr.Contains(cli.DeleteForceFlag):
-		err = deleteBranches(ctx, dbData, apr, dSess, dbName)
+		err = deleteBranches(ctx, dbData, apr, dSess, dbName, &rsc)
 	default:
-		err = createNewBranch(ctx, dbData, apr)
+		err = createNewBranch(ctx, dbData, apr, &rsc)
 	}
 
 	if err != nil {
 		return 1, err
 	} else {
-		return 0, commitTransaction(ctx, dSess)
+		return 0, commitTransaction(ctx, dSess, &rsc)
 	}
 }
 
-func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession) error {
+func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession, rsc *doltdb.ReplicationStatusController) error {
 	err := dSess.CommitTransaction(ctx, ctx.GetTransaction())
 	if err != nil {
 		return err
+	}
+
+	if rsc != nil {
+		dsess.WaitForReplicationController(ctx, *rsc)
 	}
 
 	// Because this transaction manipulation is happening outside the engine's awareness, we need to set it to nil here
@@ -97,7 +103,7 @@ func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession) error {
 
 // renameBranch takes DoltSession and database name to try accessing file system for dolt database.
 // If the oldBranch being renamed is the current branch on CLI, then RepoState head will be updated with the newBranch ref.
-func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults, sess *dsess.DoltSession, dbName string) error {
+func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults, sess *dsess.DoltSession, dbName string, rsc *doltdb.ReplicationStatusController) error {
 	if apr.NArg() != 2 {
 		return InvalidArgErr
 	}
@@ -124,7 +130,7 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 		return err
 	}
 
-	err := actions.RenameBranch(ctx, dbData, oldBranchName, newBranchName, sess.Provider(), force)
+	err := actions.RenameBranch(ctx, dbData, oldBranchName, newBranchName, sess.Provider(), force, rsc)
 	if err != nil {
 		return err
 	}
@@ -150,7 +156,7 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 // deleteBranches takes DoltSession and database name to try accessing file system for dolt database.
 // If the database is not session state db and the branch being deleted is the current branch on CLI, it will update
 // the RepoState to set head as empty branchRef.
-func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults, sess *dsess.DoltSession, dbName string) error {
+func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults, sess *dsess.DoltSession, dbName string, rsc *doltdb.ReplicationStatusController) error {
 	if apr.NArg() == 0 {
 		return InvalidArgErr
 	}
@@ -194,7 +200,7 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 
 		err = actions.DeleteBranch(ctx, dbData, branchName, actions.DeleteOptions{
 			Force: force,
-		}, dSess.Provider())
+		}, dSess.Provider(), rsc)
 		if err != nil {
 			return err
 		}
@@ -274,7 +280,7 @@ func loadConfig(ctx *sql.Context) *env.DoltCliConfig {
 	return dEnv.Config
 }
 
-func createNewBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults) error {
+func createNewBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
 	if apr.NArg() == 0 || apr.NArg() > 2 {
 		return InvalidArgErr
 	}
@@ -332,7 +338,7 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgPars
 		return err
 	}
 
-	err = actions.CreateBranchWithStartPt(ctx, dbData, branchName, startPt, apr.Contains(cli.ForceFlag))
+	err = actions.CreateBranchWithStartPt(ctx, dbData, branchName, startPt, apr.Contains(cli.ForceFlag), rsc)
 	if err != nil {
 		return err
 	}
@@ -348,7 +354,7 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgPars
 	return nil
 }
 
-func copyBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults) error {
+func copyBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
 	if apr.NArg() != 2 {
 		return InvalidArgErr
 	}
@@ -364,10 +370,10 @@ func copyBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResu
 	}
 
 	force := apr.Contains(cli.ForceFlag)
-	return copyABranch(ctx, dbData, srcBr, destBr, force)
+	return copyABranch(ctx, dbData, srcBr, destBr, force, rsc)
 }
 
-func copyABranch(ctx *sql.Context, dbData env.DbData, srcBr string, destBr string, force bool) error {
+func copyABranch(ctx *sql.Context, dbData env.DbData, srcBr string, destBr string, force bool, rsc *doltdb.ReplicationStatusController) error {
 	if err := branch_control.CanCreateBranch(ctx, destBr); err != nil {
 		return err
 	}
@@ -378,7 +384,7 @@ func copyABranch(ctx *sql.Context, dbData env.DbData, srcBr string, destBr strin
 			return err
 		}
 	}
-	err := actions.CopyBranchOnDB(ctx, dbData.Ddb, srcBr, destBr, force)
+	err := actions.CopyBranchOnDB(ctx, dbData.Ddb, srcBr, destBr, force, rsc)
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {
 			return errors.New(fmt.Sprintf("fatal: A branch named '%s' not found", srcBr))

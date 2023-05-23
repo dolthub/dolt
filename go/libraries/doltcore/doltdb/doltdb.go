@@ -1079,7 +1079,7 @@ func (ddb *DoltDB) GetRefsOfTypeByNomsRoot(ctx context.Context, refTypeFilter ma
 
 // NewBranchAtCommit creates a new branch with HEAD at the commit given. Branch names must pass IsValidUserBranchName.
 // Silently overwrites any existing branch with the same name given, if one exists.
-func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef, commit *Commit) error {
+func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef, commit *Commit, replicationStatus *ReplicationStatusController) error {
 	if !IsValidBranchRef(branchRef) {
 		panic(fmt.Sprintf("invalid branch name %s, use IsValidUserBranchName check", branchRef.String()))
 	}
@@ -1124,7 +1124,7 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 	}
 
 	ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, TodoWorkingSetMeta())
+	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, TodoWorkingSetMeta(), replicationStatus)
 }
 
 // CopyWorkingSet copies a WorkingSetRef from one ref to another. If `force` is
@@ -1155,15 +1155,15 @@ func (ddb *DoltDB) CopyWorkingSet(ctx context.Context, fromWSRef ref.WorkingSetR
 		}
 	}
 
-	return ddb.UpdateWorkingSet(ctx, toWSRef, ws, currWsHash, TodoWorkingSetMeta())
+	return ddb.UpdateWorkingSet(ctx, toWSRef, ws, currWsHash, TodoWorkingSetMeta(), nil)
 }
 
 // DeleteBranch deletes the branch given, returning an error if it doesn't exist.
-func (ddb *DoltDB) DeleteBranch(ctx context.Context, branch ref.DoltRef) error {
-	return ddb.deleteRef(ctx, branch)
+func (ddb *DoltDB) DeleteBranch(ctx context.Context, branch ref.DoltRef, replicationStatus *ReplicationStatusController) error {
+	return ddb.deleteRef(ctx, branch, replicationStatus)
 }
 
-func (ddb *DoltDB) deleteRef(ctx context.Context, dref ref.DoltRef) error {
+func (ddb *DoltDB) deleteRef(ctx context.Context, dref ref.DoltRef, replicationStatus *ReplicationStatusController) error {
 	ds, err := ddb.db.GetDataset(ctx, dref.String())
 
 	if err != nil {
@@ -1184,7 +1184,7 @@ func (ddb *DoltDB) deleteRef(ctx context.Context, dref ref.DoltRef) error {
 		}
 	}
 
-	_, err = ddb.db.Delete(ctx, ds)
+	_, err = ddb.db.withReplicationStatusController(replicationStatus).Delete(ctx, ds)
 	return err
 }
 
@@ -1216,6 +1216,20 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 	return err
 }
 
+type ReplicationStatusController struct {
+	// A slice of funcs which can be called to wait for the replication
+	// associated with a commithook to complete. Must return if the
+	// associated Context is canceled.
+	Wait []func(ctx context.Context) error
+
+	// There is an entry here for each function in Wait. If a Wait fails,
+	// you can notify the corresponding function in this slice. This might
+	// control resiliency behaviors like adaptive retry and timeouts,
+	// circuit breakers, etc. and might feed into exposed replication
+	// metrics.
+	NotifyWaitFailed []func()
+}
+
 // UpdateWorkingSet updates the working set with the ref given to the root value given
 // |prevHash| is the hash of the expected WorkingSet struct stored in the ref, not the hash of the RootValue there.
 func (ddb *DoltDB) UpdateWorkingSet(
@@ -1224,6 +1238,7 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	workingSet *WorkingSet,
 	prevHash hash.Hash,
 	meta *datas.WorkingSetMeta,
+	replicationStatus *ReplicationStatusController,
 ) error {
 	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
 	if err != nil {
@@ -1235,7 +1250,7 @@ func (ddb *DoltDB) UpdateWorkingSet(
 		return err
 	}
 
-	_, err = ddb.db.UpdateWorkingSet(ctx, ds, datas.WorkingSetSpec{
+	_, err = ddb.db.withReplicationStatusController(replicationStatus).UpdateWorkingSet(ctx, ds, datas.WorkingSetSpec{
 		Meta:        meta,
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,
@@ -1255,6 +1270,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 	commit *PendingCommit, workingSet *WorkingSet,
 	prevHash hash.Hash,
 	meta *datas.WorkingSetMeta,
+	replicationStatus *ReplicationStatusController,
 ) (*Commit, error) {
 	wsDs, err := ddb.db.GetDataset(ctx, workingSetRef.String())
 	if err != nil {
@@ -1271,12 +1287,13 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return nil, err
 	}
 
-	commitDataset, _, err := ddb.db.CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.nomsValue(), datas.WorkingSetSpec{
-		Meta:        meta,
-		WorkingRoot: workingRootRef,
-		StagedRoot:  stagedRef,
-		MergeState:  mergeState,
-	}, prevHash, commit.CommitOptions)
+	commitDataset, _, err := ddb.db.withReplicationStatusController(replicationStatus).
+		CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.nomsValue(), datas.WorkingSetSpec{
+			Meta:        meta,
+			WorkingRoot: workingRootRef,
+			StagedRoot:  stagedRef,
+			MergeState:  mergeState,
+		}, prevHash, commit.CommitOptions)
 
 	if err != nil {
 		return nil, err
@@ -1310,7 +1327,7 @@ func (ddb *DoltDB) DeleteWorkingSet(ctx context.Context, workingSetRef ref.Worki
 }
 
 func (ddb *DoltDB) DeleteTag(ctx context.Context, tag ref.DoltRef) error {
-	err := ddb.deleteRef(ctx, tag)
+	err := ddb.deleteRef(ctx, tag, nil)
 
 	if err == ErrBranchNotFound {
 		return ErrTagNotFound
@@ -1337,7 +1354,7 @@ func (ddb *DoltDB) NewWorkspaceAtCommit(ctx context.Context, workRef ref.DoltRef
 }
 
 func (ddb *DoltDB) DeleteWorkspace(ctx context.Context, workRef ref.DoltRef) error {
-	err := ddb.deleteRef(ctx, workRef)
+	err := ddb.deleteRef(ctx, workRef, nil)
 
 	if err == ErrBranchNotFound {
 		return ErrWorkspaceNotFound
@@ -1652,7 +1669,7 @@ func (ddb *DoltDB) RemoveStashAtIdx(ctx context.Context, idx int) error {
 // RemoveAllStashes removes the stash list Dataset from the database,
 // which equivalent to removing Stash entries from the stash list.
 func (ddb *DoltDB) RemoveAllStashes(ctx context.Context) error {
-	err := ddb.deleteRef(ctx, ref.NewStashRef())
+	err := ddb.deleteRef(ctx, ref.NewStashRef(), nil)
 	if err == ErrBranchNotFound {
 		return nil
 	}

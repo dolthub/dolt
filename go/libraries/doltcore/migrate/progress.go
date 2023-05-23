@@ -182,7 +182,7 @@ func persistMigratedCommitMapping(ctx context.Context, ddb *doltdb.DoltDB, mappi
 	}
 
 	br := ref.NewBranchRef(MigratedCommitsBranch)
-	err = ddb.NewBranchAtCommit(ctx, br, init)
+	err = ddb.NewBranchAtCommit(ctx, br, init, nil)
 	if err != nil {
 		return err
 	}
@@ -298,6 +298,6 @@ func commitRoot(
 		Name:      meta.Name,
 		Email:     meta.Email,
 		Timestamp: uint64(time.Now().Unix()),
-	})
+	}, nil)
 	return err
 }

@@ -219,7 +219,11 @@ func MaybeResolveRoot(ctx context.Context, rsr env.RepoStateReader, doltDB *dolt
 		return nil, false
 	}
 
-	cm, err := doltDB.Resolve(ctx, cs, rsr.CWBHeadRef())
+	headRef, err := rsr.CWBHeadRef()
+	if err != nil {
+		return nil, false
+	}
+	cm, err := doltDB.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return nil, false
 	}

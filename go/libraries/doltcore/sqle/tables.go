@@ -1258,6 +1258,9 @@ func (t *AlterableDoltTable) RewriteInserter(
 	}
 
 	ws := dbState.WorkingSet
+	if ws == nil {
+		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
+	}
 
 	head, err := sess.GetHeadCommit(ctx, t.db.Name())
 	if err != nil {

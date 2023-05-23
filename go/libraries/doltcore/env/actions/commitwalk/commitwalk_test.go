@@ -86,7 +86,7 @@ func TestGetDotDotRevisions(t *testing.T) {
 
 	// Create a feature branch.
 	bref := ref.NewBranchRef("feature")
-	err = dEnv.DoltDB.NewBranchAtCommit(context.Background(), bref, mainCommits[5])
+	err = dEnv.DoltDB.NewBranchAtCommit(context.Background(), bref, mainCommits[5], nil)
 	require.NoError(t, err)
 
 	// Create 3 commits on feature branch.

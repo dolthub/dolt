@@ -1031,7 +1031,7 @@ SQL
     run dolt sql -r csv -q "select @@character_set_client"
     [ $status -eq 0 ]
     [[ "$output" =~ "utf8mb4" ]] || false
-    
+
     run dolt sql -r json -q "select * from test order by a"
     [ $status -eq 0 ]
     [ "$output" == '{"rows": [{"a":1,"b":1.5,"c":"1","d":"2020-01-01 00:00:00"},{"a":2,"b":2.5,"c":"2","d":"2020-02-02 00:00:00"},{"a":3,"c":"3","d":"2020-03-03 00:00:00"},{"a":4,"b":4.5,"d":"2020-04-04 00:00:00"},{"a":5,"b":5.5,"c":"5"}]}' ]
@@ -2544,7 +2544,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3" ]] || false
 
-    run dolt sql -q "SELECT COUNT(*) from dolt_diff_t where to_commit_date < now()"
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_t where to_commit_date < UTC_TIMESTAMP()"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3" ]] || false
 }
@@ -2775,4 +2775,58 @@ SQL
 [[ "$output" =~ "Query OK, 1 row affected (1".*" sec)" ]] || false
 [[ "$output" =~ "Query OK, 1 row affected (2".*" sec)" ]] || false
 [[ "$output" =~ "Query OK, 1 row affected (3".*" sec)" ]] || false
+}
+
+
+@test "sql: check --data-dir used from a completely different location and still resolve DB names" {
+    # remove config files
+    rm -rf .doltcfg
+    rm -rf db_dir
+
+    mkdir db_dir
+    cd db_dir
+    ROOT_DIR=$(pwd)
+
+    # create an alternate database, without the table
+    mkdir dba
+    cd dba
+    dolt init
+    cd ..
+    dolt sql -q "create table dba_tbl (id int)"
+
+    mkdir dbb
+    cd dbb
+    dolt init
+    dolt sql -q "create table dbb_tbl (id int)"
+
+    # Ensure --data-dir flag is really used by changing the cwd.
+    cd /tmp
+
+    run dolt --data-dir="$ROOT_DIR/dbb" sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dbb_tbl" ]] || false
+
+    run dolt --data-dir="$ROOT_DIR/dba" sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dba_tbl" ]] || false
+
+    # Default to first DB alphabetically.
+    run dolt --data-dir="$ROOT_DIR" sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dba_tbl" ]] || false
+
+    # --use-db arg can be used to be specific.
+    run dolt --data-dir="$ROOT_DIR" --use-db=dbb sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dbb_tbl" ]] || false
+
+    # Redundant use of the flag is OK.
+    run dolt --data-dir="$ROOT_DIR/dbb" --use-db=dbb sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dbb_tbl" ]] || false
+
+    # Use of the use-db flag when we have a different DB specified by data-dir should error.
+    run dolt --data-dir="$ROOT_DIR/dbb" --use-db=dba sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "provided --use-db dba does not exist or is not a directory" ]] || false
 }

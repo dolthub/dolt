@@ -249,6 +249,7 @@ call dolt_commit('-am', 'new table');
 SQL
 
     cd $TMPDIRS
+    mkdir -p "dbs2"
 
     # this is a hack: we have to change our persisted global server
     # vars for the sql command to work on the replica TODO: fix this

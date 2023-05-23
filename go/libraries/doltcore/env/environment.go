@@ -206,7 +206,10 @@ func (dEnv *DoltEnv) Valid() bool {
 // initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.
 // This is only necessary to migrate repos written before this method was introduced, and can be removed after 1.0
 func (dEnv *DoltEnv) initWorkingSetFromRepoState(ctx context.Context) error {
-	headRef := dEnv.RepoStateReader().CWBHeadRef()
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	if err != nil {
+		return err
+	}
 	wsRef, err := ref.WorkingSetRefForHead(headRef)
 	if err != nil {
 		return err
@@ -591,7 +594,11 @@ func (dEnv *DoltEnv) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, error)
 }
 
 func WorkingSet(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.WorkingSet, error) {
-	workingSetRef, err := ref.WorkingSetRefForHead(rsr.CWBHeadRef())
+	headRef, err := rsr.CWBHeadRef()
+	if err != nil {
+		return nil, err
+	}
+	workingSetRef, err := ref.WorkingSetRefForHead(headRef)
 	if err != nil {
 		return nil, err
 	}
@@ -629,7 +636,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 		wsRef = ws.Ref()
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, dEnv.workingSetMeta())
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, dEnv.workingSetMeta(), nil)
 }
 
 // UpdateWorkingSet updates the working set for the current working branch to the value given.
@@ -648,19 +655,19 @@ func (dEnv *DoltEnv) UpdateWorkingSet(ctx context.Context, ws *doltdb.WorkingSet
 		}
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws, h, dEnv.workingSetMeta())
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws, h, dEnv.workingSetMeta(), nil)
 }
 
 type repoStateReader struct {
 	*DoltEnv
 }
 
-func (r *repoStateReader) CWBHeadRef() ref.DoltRef {
-	return r.RepoState.CWBHeadRef()
+func (r *repoStateReader) CWBHeadRef() (ref.DoltRef, error) {
+	return r.RepoState.CWBHeadRef(), nil
 }
 
-func (r *repoStateReader) CWBHeadSpec() *doltdb.CommitSpec {
-	return r.RepoState.CWBHeadSpec()
+func (r *repoStateReader) CWBHeadSpec() (*doltdb.CommitSpec, error) {
+	return r.RepoState.CWBHeadSpec(), nil
 }
 
 func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {
@@ -758,7 +765,7 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootV
 		wsRef = ws.Ref()
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithStagedRoot(newRoot), h, dEnv.workingSetMeta())
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithStagedRoot(newRoot), h, dEnv.workingSetMeta(), nil)
 }
 
 func (dEnv *DoltEnv) AbortMerge(ctx context.Context) error {
@@ -772,7 +779,7 @@ func (dEnv *DoltEnv) AbortMerge(ctx context.Context) error {
 		return err
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.AbortMerge(), h, dEnv.workingSetMeta())
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.AbortMerge(), h, dEnv.workingSetMeta(), nil)
 }
 
 func (dEnv *DoltEnv) workingSetMeta() *datas.WorkingSetMeta {
@@ -911,7 +918,7 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 		rr := r.(ref.RemoteRef)
 
 		if rr.GetRemote() == remote.Name {
-			err = ddb.DeleteBranch(ctx, rr)
+			err = ddb.DeleteBranch(ctx, rr, nil)
 
 			if err != nil {
 				return fmt.Errorf("%w; failed to delete remote tracking ref '%s'; %s", ErrFailedToDeleteRemote, rr.String(), err.Error())
@@ -1142,7 +1149,18 @@ func (dEnv *DoltEnv) IsLocked() bool {
 	if dEnv.IgnoreLockFile {
 		return false
 	}
-	return FsIsLocked(dEnv.FS)
+
+	ans, _, _ := fsIsLocked(dEnv.FS)
+	return ans
+}
+
+// GetLock returns the lockfile for this database or nil if the database is not locked
+func (dEnv *DoltEnv) GetLock() (bool, *DBLock, error) {
+	if dEnv.IgnoreLockFile {
+		return false, nil, nil
+	}
+
+	return fsIsLocked(dEnv.FS)
 }
 
 // DBLock is a struct that contains the pid of the process that created the lockfile and the port that the server is running on
@@ -1252,24 +1270,27 @@ func WriteLockfile(fs filesys.Filesys, lock DBLock) error {
 
 // FsIsLocked returns true if a lockFile exists with the same pid as
 // any live process.
-func FsIsLocked(fs filesys.Filesys) bool {
+func fsIsLocked(fs filesys.Filesys) (bool, *DBLock, error) {
 	lockFile, _ := fs.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
 
 	ok, _ := fs.Exists(lockFile)
 	if !ok {
-		return false
+		return false, nil, nil
 	}
 
 	loadedLock, err := LoadDBLockFile(fs, lockFile)
 	if err != nil { // if there's any error assume that env is locked since the file exists
-		return true
+		return true, nil, err
 	}
 
 	// Check whether the pid that spawned the lock file is still running. Ignore it if not.
 	p, err := ps.FindProcess(loadedLock.Pid)
 	if err != nil {
-		return false
+		return false, nil, nil
 	}
 
-	return p != nil
+	if p != nil {
+		return true, loadedLock, nil
+	}
+	return false, nil, nil
 }

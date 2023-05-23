@@ -706,7 +706,7 @@ func closeWriteSession(ctx *sql.Context, engine *gms.Engine, databaseName string
 		return err
 	}
 
-	return sqlDatabase.DbData().Ddb.UpdateWorkingSet(ctx, newWorkingSet.Ref(), newWorkingSet, hash, newWorkingSet.Meta())
+	return sqlDatabase.DbData().Ddb.UpdateWorkingSet(ctx, newWorkingSet.Ref(), newWorkingSet, hash, newWorkingSet.Meta(), nil)
 }
 
 // getTableSchema returns a sql.Schema for the specified table in the specified database.

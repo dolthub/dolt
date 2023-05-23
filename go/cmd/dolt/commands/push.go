@@ -96,16 +96,20 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		var verr errhand.VerboseError
 		switch err {
 		case env.ErrNoUpstreamForBranch:
-			currentBranch := dEnv.RepoStateReader().CWBHeadRef()
-			remoteName := "<remote>"
-			if defRemote, verr := env.GetDefaultRemote(dEnv.RepoStateReader()); verr == nil {
-				remoteName = defRemote.Name
+			currentBranch, err := dEnv.RepoStateReader().CWBHeadRef()
+			if err != nil {
+				verr = errhand.BuildDError("fatal: The current branch could not be identified").AddCause(err).Build()
+			} else {
+				remoteName := "<remote>"
+				if defRemote, verr := env.GetDefaultRemote(dEnv.RepoStateReader()); verr == nil {
+					remoteName = defRemote.Name
+				}
+				verr = errhand.BuildDError("fatal: The current branch " + currentBranch.GetPath() + " has no upstream branch.\n" +
+					"To push the current branch and set the remote as upstream, use\n" +
+					"\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath() + "\n" +
+					"To have this happen automatically for branches without a tracking\n" +
+					"upstream, see 'push.autoSetupRemote' in 'dolt config --help'.").Build()
 			}
-			verr = errhand.BuildDError("fatal: The current branch " + currentBranch.GetPath() + " has no upstream branch.\n" +
-				"To push the current branch and set the remote as upstream, use\n" +
-				"\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath() + "\n" +
-				"To have this happen automatically for branches without a tracking\n" +
-				"upstream, see 'push.autoSetupRemote' in 'dolt config --help'.").Build()
 
 		case env.ErrInvalidSetUpstreamArgs:
 			verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
