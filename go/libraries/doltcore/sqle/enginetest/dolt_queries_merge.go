@@ -3790,7 +3790,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
@@ -3985,7 +3985,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x0}},
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query:    "select * from t;",
@@ -4010,7 +4010,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x0}},
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query:    "select * from t;",
@@ -4267,7 +4267,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
@@ -4339,7 +4339,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
@@ -4369,7 +4369,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
@@ -4398,7 +4398,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x0}},
+				Expected: []sql.Row{{0, 0}},
 			},
 		},
 	},
@@ -4420,7 +4420,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 		},
 	},
@@ -4440,7 +4440,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x0}},
+				Expected: []sql.Row{{0, 0}},
 			},
 		},
 	},
@@ -4460,7 +4460,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 		},
 	},
@@ -4483,7 +4483,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
@@ -4512,7 +4512,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
@@ -4544,7 +4544,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x0}},
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query: "select * from t order by pk;",
@@ -4585,7 +4585,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query: "select table_name, our_schema, their_schema, base_schema from dolt_schema_conflicts;",
@@ -4625,7 +4625,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query: "select table_name, our_schema, their_schema, base_schema from dolt_schema_conflicts;",
@@ -4656,7 +4656,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query: "select table_name, our_schema, their_schema, base_schema, description from dolt_schema_conflicts;",
@@ -4918,7 +4918,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query: "select pk, col1 from t;",
@@ -4955,7 +4955,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query: "select pk, col1 from t;",
@@ -4993,7 +4993,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				//       There is a constraint violation that should be reported.
 				Skip:     true,
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 		},
 	},
