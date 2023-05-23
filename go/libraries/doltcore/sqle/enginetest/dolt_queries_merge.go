@@ -4465,7 +4465,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 	{
-		Name: "check constraint violation - left side violates new check constraint",
+		Name: "check constraint violation - right side violates new check constraint",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
 			"CREATE table t (pk int primary key, col00 int, col01 int, col1 varchar(100) default ('hello'));",
@@ -4496,7 +4496,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 	{
-		Name: "check constraint violation - keyless table, left side violates new check constraint",
+		Name: "check constraint violation - keyless table, right side violates new check constraint",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
 			"CREATE table t (c0 int, col0 varchar(100), col1 varchar(100) default ('hello'));",
@@ -4969,31 +4969,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				Expected: []sql.Row{
 					{uint16(4), 3, types.JSONDocument{Val: merge.NullViolationMeta{Columns: []string{"col1"}}}},
 				},
-			},
-		},
-	},
-	{
-		// TODO: We should scan for check constraints during merge and flag failing
-		//       constraints as violations in `dolt_constraint_violations`.
-		Name: "adding a check-constraint",
-		AncSetUpScript: []string{
-			"create table t (pk int primary key, col1 int);",
-			"insert into t values (1, 1);",
-		},
-		RightSetUpScript: []string{
-			"update t set col1 = col1 + 5 where col1 < 5;",
-			"alter table t add check ( col1 > 5 );",
-		},
-		LeftSetUpScript: []string{
-			"insert into t values (2, 2);",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				// TODO: Dolt currently merges this without an error, but it shouldn't;
-				//       There is a constraint violation that should be reported.
-				Skip:     true,
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 1}},
 			},
 		},
 	},
