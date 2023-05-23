@@ -209,11 +209,11 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
-				Query:       "CALL DOLT_CHECKOUT('-b', 'other')",
+				Query:    "CALL DOLT_CHECKOUT('-b', 'other')",
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:       "CALL DOLT_CHECKOUT('main')",
+				Query:    "CALL DOLT_CHECKOUT('main')",
 				Expected: []sql.Row{{0}},
 			},
 		},
@@ -300,7 +300,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				// errors because creating a new branch implicitly commits the current transaction
-				Query:       "CALL DOLT_CHECKOUT('-b', 'other-branch')",
+				Query:          "CALL DOLT_CHECKOUT('-b', 'other-branch')",
 				ExpectedErrStr: "Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1",
 			},
 		},
@@ -358,11 +358,11 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1, 0}},
 			},
 			{
-				Query:       "CALL DOLT_CHECKOUT('-b', 'other')",
+				Query:    "CALL DOLT_CHECKOUT('-b', 'other')",
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:       "CALL DOLT_CHECKOUT('main')",
+				Query:    "CALL DOLT_CHECKOUT('main')",
 				Expected: []sql.Row{{0}},
 			},
 			{

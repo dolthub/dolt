@@ -250,7 +250,7 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 
 		activeBranchRef, err := dsess.CWBHeadRef(ctx, sessionDbName)
 		if err != nil {
-			// The above will throw an error if the current DB doesn't have a head ref, in which case we don't need to 
+			// The above will throw an error if the current DB doesn't have a head ref, in which case we don't need to
 			// consider it
 			return false, nil
 		}

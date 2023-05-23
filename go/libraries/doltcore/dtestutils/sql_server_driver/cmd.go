@@ -46,7 +46,7 @@ func init() {
 	}
 	path = filepath.Clean(path)
 	var err error
-	
+
 	DoltPath, err = exec.LookPath(path)
 	if err != nil {
 		log.Printf("did not find dolt binary: %v\n", err.Error())
@@ -104,7 +104,7 @@ func (u DoltUser) DoltCmd(args ...string) *exec.Cmd {
 
 func (u DoltUser) DoltDebug(debuggerPort int, args ...string) *exec.Cmd {
 	if DelvePath != "" {
-		dlvArgs := []string {
+		dlvArgs := []string{
 			fmt.Sprintf("--listen=:%d", debuggerPort),
 			"--headless",
 			"--api-version=2",
@@ -253,7 +253,7 @@ func DebugSqlServer(dc DoltCmdable, debuggerPort int, opts ...SqlServerOpt) (*Sq
 	if !ok {
 		return nil, fmt.Errorf("%T does not implement DoltDebuggable", dc)
 	}
-	
+
 	cmd := ddb.DoltDebug(debuggerPort, "sql-server")
 	return runSqlServerCommand(dc, append(opts, WithDebugPort(debuggerPort)), cmd)
 }
@@ -276,7 +276,7 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 		wg.Wait()
 		close(done)
 	}()
-	
+
 	server := &SqlServer{
 		Done:   done,
 		Cmd:    cmd,

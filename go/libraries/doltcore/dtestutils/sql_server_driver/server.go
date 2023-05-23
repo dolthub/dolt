@@ -163,7 +163,7 @@ type Server struct {
 	Port int `yaml:"port"`
 
 	// DebugPort if set to a non-zero value will cause this server to be started with |dlv| listening for a debugger
-	// connection on the port given. 
+	// connection on the port given.
 	DebugPort int `yaml:"debug_port"`
 
 	// Assertions to be run against the log output of the server process
