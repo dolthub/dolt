@@ -116,7 +116,7 @@ func TestSingleQuery(t *testing.T) {
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
 	t.Skip()
-	
+
 	var script = queries.ScriptTest{
 		Name: "CALL DOLT_MERGE ff correctly works with autocommit off",
 		SetUpScript: []string{
@@ -264,7 +264,7 @@ func TestSingleQueryPrepared(t *testing.T) {
 
 func TestSingleScriptPrepared(t *testing.T) {
 	t.Skip()
-	
+
 	var script = queries.ScriptTest{
 		Name: "dolt_history table filter correctness",
 		SetUpScript: []string{

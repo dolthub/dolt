@@ -47,7 +47,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	if len(currentDbName) == 0 {
 		return 1, fmt.Errorf("Empty database name.")
 	}
-	
+
 	apr, err := cli.CreateCheckoutArgParser().Parse(args)
 	if err != nil {
 		return 1, err
@@ -242,7 +242,7 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 	if err != nil {
 		return err
 	}
-	
+
 	if setTrackUpstream {
 		err = env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteName, ref.NewBranchRef(remoteBranchName))
 		if err != nil {
@@ -258,7 +258,7 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 			}
 		}
 	}
-	
+
 	// We need to commit the transaction here or else the branch we just created isn't visible to the current transaction,
 	// and we are about to switch to it. So set the new branch head for the new transaction, then commit this one
 	sess := dsess.DSessFromSess(ctx.Session)
@@ -271,7 +271,7 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 	if err != nil {
 		return err
 	}
-	
+
 	return sess.SetCurrentHead(ctx, dbName, wsRef)
 }
 

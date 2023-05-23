@@ -289,7 +289,7 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 		}
 	}
 	p.mu.RUnlock()
-	
+
 	// Because we store databases in a map, sort to get a consistent ordering
 	sort.Slice(all, func(i, j int) bool {
 		return strings.ToLower(all[i].Name()) < strings.ToLower(all[j].Name())
@@ -787,7 +787,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQual
 		}
 		return db, true, nil
 	case dsess.RevisionTypeNone:
-		// Returning an error with the fully qualified db name here is our only opportunity to do so in some cases (such 
+		// Returning an error with the fully qualified db name here is our only opportunity to do so in some cases (such
 		// as when a branch is deleted by another client)
 		return nil, false, sql.ErrDatabaseNotFound.New(revisionQualifiedName)
 	default:
@@ -1026,20 +1026,20 @@ func resolveAncestorSpec(ctx *sql.Context, revSpec string, ddb *doltdb.DoltDB) (
 func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool, error) {
 	baseName := name
 	isRevisionDbName := strings.Contains(name, dsess.DbRevisionDelimiter)
-	
+
 	if isRevisionDbName {
 		// TODO: formalize and enforce this rule (can't allow DBs with / in the name)
 		// TODO: some connectors will take issue with the /, we need other mechanisms to support them
 		parts := strings.SplitN(name, dsess.DbRevisionDelimiter, 2)
 		baseName = parts[0]
 	}
-	
+
 	var ok bool
 	p.mu.RLock()
 	db, ok := p.databases[strings.ToLower(baseName)]
 	standby := *p.isStandby
 	p.mu.RUnlock()
-	
+
 	// If the database doesn't exist and this is a read replica, attempt to clone it from the remote
 	if !ok {
 		var err error
@@ -1053,20 +1053,20 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 			return nil, false, nil
 		}
 	}
-	
+
 	// Some DB implementations don't support addressing by versioned names, so return directly if we have one of those
 	if !db.Versioned() {
 		return wrapForStandby(db, standby), true, nil
 	}
 
-	// Convert to a revision database before returning. If we got a non-qualified name, convert it to a qualified name 
-	// using the session's current head 
+	// Convert to a revision database before returning. If we got a non-qualified name, convert it to a qualified name
+	// using the session's current head
 	revisionQualifiedName := name
 	if !isRevisionDbName {
 		sess := dsess.DSessFromSess(ctx.Session)
 
-		// A newly created session may not have any info on current head stored yet, in which case we get the default 
-		// branch for the db itself instead. 
+		// A newly created session may not have any info on current head stored yet, in which case we get the default
+		// branch for the db itself instead.
 		head, ok, err := sess.CurrentHead(ctx, baseName)
 		if err != nil {
 			return nil, false, err
@@ -1083,7 +1083,7 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 
 		revisionQualifiedName = baseName + dsess.DbRevisionDelimiter + head
 	}
-	
+
 	db, ok, err := p.databaseForRevision(ctx, revisionQualifiedName, name)
 	if err != nil {
 		return nil, false, err
@@ -1091,7 +1091,7 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 	if !ok {
 		return nil, false, nil
 	}
-	
+
 	return wrapForStandby(db, standby), true, nil
 }
 
@@ -1254,41 +1254,41 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 	switch v := srcDb.(type) {
 	case ReadOnlyDatabase:
 		db := Database{
-			name:     srcDb.Name(),
+			name:          srcDb.Name(),
 			requestedName: requestedName,
-			ddb:      v.ddb,
-			rsw:      static,
-			rsr:      static,
-			gs:       v.gs,
-			editOpts: v.editOpts,
-			revision: revSpec,
-			revType:  dsess.RevisionTypeBranch,
+			ddb:           v.ddb,
+			rsw:           static,
+			rsr:           static,
+			gs:            v.gs,
+			editOpts:      v.editOpts,
+			revision:      revSpec,
+			revType:       dsess.RevisionTypeBranch,
 		}
 		return ReadOnlyDatabase{db}, nil
 	case Database:
 		return Database{
-			name:     srcDb.Name(),
+			name:          srcDb.Name(),
 			requestedName: requestedName,
-			ddb:      v.ddb,
-			rsw:      static,
-			rsr:      static,
-			gs:       v.gs,
-			editOpts: v.editOpts,
-			revision: revSpec,
-			revType:  dsess.RevisionTypeBranch,
+			ddb:           v.ddb,
+			rsw:           static,
+			rsr:           static,
+			gs:            v.gs,
+			editOpts:      v.editOpts,
+			revision:      revSpec,
+			revType:       dsess.RevisionTypeBranch,
 		}, nil
 	case ReadReplicaDatabase:
 		return ReadReplicaDatabase{
 			Database: Database{
-				name:     srcDb.Name(),
+				name:          srcDb.Name(),
 				requestedName: requestedName,
-				ddb:      v.ddb,
-				rsw:      static,
-				rsr:      static,
-				gs:       v.gs,
-				editOpts: v.editOpts,
-				revision: revSpec,
-				revType:  dsess.RevisionTypeBranch,
+				ddb:           v.ddb,
+				rsw:           static,
+				rsr:           static,
+				gs:            v.gs,
+				editOpts:      v.editOpts,
+				revision:      revSpec,
+				revType:       dsess.RevisionTypeBranch,
 			},
 			remote:  v.remote,
 			srcDB:   v.srcDB,
@@ -1365,14 +1365,14 @@ func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.I
 
 func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string, requestedName string) (ReadOnlyDatabase, error) {
 	return ReadOnlyDatabase{Database: Database{
-		name:     srcDb.Name(),
+		name:          srcDb.Name(),
 		requestedName: requestedName,
-		ddb:      srcDb.DbData().Ddb,
-		rsw:      srcDb.DbData().Rsw,
-		rsr:      srcDb.DbData().Rsr,
-		editOpts: srcDb.editOpts,
-		revision: revSpec,
-		revType:  dsess.RevisionTypeTag,
+		ddb:           srcDb.DbData().Ddb,
+		rsw:           srcDb.DbData().Rsw,
+		rsr:           srcDb.DbData().Rsr,
+		editOpts:      srcDb.editOpts,
+		revision:      revSpec,
+		revType:       dsess.RevisionTypeTag,
 	}}, nil
 }
 

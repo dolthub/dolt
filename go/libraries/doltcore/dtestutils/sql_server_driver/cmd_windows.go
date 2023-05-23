@@ -34,7 +34,7 @@ func (s *SqlServer) GracefulStop() error {
 	if err != nil {
 		return err
 	}
-	
+
 	<-s.Done
 
 	_, err = s.Cmd.Process.Wait()

@@ -1972,7 +1972,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1, 1}},
 			},
 			{
-				Query:    "call dolt_checkout('b2');",
+				Query:            "call dolt_checkout('b2');",
 				SkipResultsCheck: true,
 			},
 			{
@@ -1984,7 +1984,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{2, 2}},
 			},
 			{
-				Query:    "call dolt_checkout('b3');",
+				Query:            "call dolt_checkout('b3');",
 				SkipResultsCheck: true,
 			},
 			{
@@ -1996,7 +1996,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{3, 3}},
 			},
 			{
-				Query:    "call dolt_checkout('main');",
+				Query:            "call dolt_checkout('main');",
 				SkipResultsCheck: true,
 			},
 			{
@@ -2036,7 +2036,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1, 1}},
 			},
 			{
-				Query:    "use `mydb/b2`;",
+				Query:            "use `mydb/b2`;",
 				SkipResultsCheck: true,
 			},
 			{
@@ -2048,7 +2048,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{2, 2}},
 			},
 			{
-				Query:    "use `mydb/b3`;",
+				Query:            "use `mydb/b3`;",
 				SkipResultsCheck: true,
 			},
 			{
@@ -2060,7 +2060,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{3, 3}},
 			},
 			{
-				Query:    "use `mydb/main`",
+				Query:            "use `mydb/main`",
 				SkipResultsCheck: true,
 			},
 			{
@@ -2072,7 +2072,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1, 1}},
 			},
 			{
-				Query:    "use `mydb`",
+				Query:            "use `mydb`",
 				SkipResultsCheck: true,
 			},
 			{
@@ -2084,11 +2084,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1, 1}},
 			},
 			{
-				Query:    "call dolt_checkout('b2');",
+				Query:            "call dolt_checkout('b2');",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "use `mydb/b3`",
+				Query:            "use `mydb/b3`",
 				SkipResultsCheck: true,
 			},
 			{
@@ -2097,7 +2097,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			// Since b2 was the last branch checked out with dolt_checkout, it's what mydb resolves to
 			{
-				Query:    "use `mydb`",
+				Query:            "use `mydb`",
 				SkipResultsCheck: true,
 			},
 			{
@@ -2394,7 +2394,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 	// 		"call dolt_add('.')",
 	// 		"set @Commit1 = '';",
 	// 		"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
-	// 
+	//
 	// 		"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
 	// 		"set @Commit2 = '';",
 	// 		"call dolt_commit_hash_out(@Commit2, '-am', 'inserting into t');",

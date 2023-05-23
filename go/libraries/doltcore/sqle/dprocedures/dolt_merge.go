@@ -105,7 +105,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (int, int, error) {
 		if err != nil {
 			return noConflictsOrViolations, threeWayMerge, err
 		}
-		
+
 		// Because this commit happens outside the engine's control, we need to manually clear the transaction
 		ctx.SetTransaction(nil)
 
@@ -301,7 +301,7 @@ func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.Wor
 		if err != nil {
 			return ws, err
 		}
-		
+
 		// because this commit happens outside the SQL engine's awareness, we need to manually clear the transaction
 		ctx.SetTransaction(nil)
 	}
@@ -359,7 +359,7 @@ func executeNoFFMerge(
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// because this commit happens outside the SQL engine's awareness, we need to manually clear the transaction
 	ctx.SetTransaction(nil)
 

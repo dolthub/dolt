@@ -38,16 +38,16 @@ type RevisionDatabase interface {
 	Revision() string
 	// RevisionType returns the type of revision this database is pinned to.
 	RevisionType() RevisionType
-	// RevisionQualifiedName returns the fully qualified name of the database, which includes the revision if one is 
+	// RevisionQualifiedName returns the fully qualified name of the database, which includes the revision if one is
 	// specified.
 	RevisionQualifiedName() string
-	// RequestedName returns the name of the database as requested by the user when the name was resolved to this 
+	// RequestedName returns the name of the database as requested by the user when the name was resolved to this
 	// database.
 	RequestedName() string
-	// Versioned returns whether this database implementation supports more than a single revision. 
+	// Versioned returns whether this database implementation supports more than a single revision.
 	// TODO: This shouldn't be a necessary part of the interface, but it's required to differentiate between dolt-backed
 	//  databases and others that we serve for custom purposes with similar pieces of functionality, and the session
-	//  management logic intermixes these concerns.  
+	//  management logic intermixes these concerns.
 	Versioned() bool
 }
 

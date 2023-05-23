@@ -2439,7 +2439,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "call dolt_checkout('b1')",
+				Query:            "call dolt_checkout('b1')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -2453,7 +2453,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "call dolt_checkout('main')",
+				Query:            "call dolt_checkout('main')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -2632,7 +2632,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "commit",
+				Query:          "commit",
 				ExpectedErrStr: "Cannot commit changes on more than one branch / database",
 			},
 		},
@@ -2654,7 +2654,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "call dolt_checkout('b1')",
+				Query:            "call dolt_checkout('b1')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -2664,7 +2664,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "commit",
+				Query:          "commit",
 				ExpectedErrStr: "Cannot commit changes on more than one branch / database",
 			},
 		},
@@ -2693,7 +2693,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "commit",
+				Query:          "commit",
 				ExpectedErrStr: "Cannot commit changes on more than one branch / database",
 			},
 		},

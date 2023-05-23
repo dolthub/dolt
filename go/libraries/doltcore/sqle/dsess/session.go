@@ -141,7 +141,7 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 // the interface returned by the public method.
 func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchState, bool, error) {
 	dbName = strings.ToLower(dbName)
-	
+
 	var baseName, rev string
 	baseName, rev = SplitRevisionDbName(dbName)
 
@@ -166,14 +166,14 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 		}
 	}
 
-	// No state for this db / branch combination yet, look it up from the provider. We use the unqualified DB name (no 
-	// branch) if the current DB has not yet been loaded into this session. It will resolve to that DB's default branch 
+	// No state for this db / branch combination yet, look it up from the provider. We use the unqualified DB name (no
+	// branch) if the current DB has not yet been loaded into this session. It will resolve to that DB's default branch
 	// in that case.
 	revisionQualifiedName := dbName
 	if rev != "" {
 		revisionQualifiedName = revisionDbName(baseName, rev)
 	}
-	
+
 	database, ok, err := d.provider.SessionDatabase(ctx, revisionQualifiedName)
 	if err != nil {
 		return nil, false, err
@@ -215,8 +215,8 @@ func SplitRevisionDbName(dbName string) (string, string) {
 // LookupDbState returns the session state for the database named. Unqualified database names, e.g. `mydb` get resolved
 // to the currently checked out HEAD, which could be a branch, a commit, a tag, etc. Revision-qualified database names,
 // e.g. `mydb/branch1` get resolved to the session state for the revision named.
-// A note on unqualified database names: unqualified names will resolve to a) the head last checked out with 
-// `dolt_checkout`, or b) the database's default branch, if this session hasn't called `dolt_checkout` yet. 
+// A note on unqualified database names: unqualified names will resolve to a) the head last checked out with
+// `dolt_checkout`, or b) the database's default branch, if this session hasn't called `dolt_checkout` yet.
 // Also returns a bool indicating whether the database was found, and an error if one occurred.
 func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (SessionState, bool, error) {
 	s, ok, err := d.lookupDbState(ctx, dbName)
@@ -306,7 +306,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 			txDbs = append(txDbs, db)
 		}
 	}
-	
+
 	return NewDoltTransaction(ctx, txDbs, tCharacteristic)
 }
 
@@ -370,11 +370,11 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 	if len(dirties) == 0 {
 		return nil
 	}
-	
+
 	if len(dirties) > 1 {
 		return ErrDirtyWorkingSets
 	}
-	
+
 	performDoltCommitVar, err := d.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommit)
 	if err != nil {
 		return err
@@ -423,7 +423,7 @@ func (d *DoltSession) dirtyWorkingSets() []*branchState {
 			}
 		}
 	}
-	
+
 	return dirtyStates
 }
 
@@ -484,10 +484,10 @@ type doCommitFunc func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltd
 
 // commitBranchState performs a commit for the branch state given, using the doCommitFunc provided
 func (d *DoltSession) commitBranchState(
-		ctx *sql.Context,
-		branchState *branchState,
-		tx sql.Transaction,
-		commitFunc doCommitFunc,
+	ctx *sql.Context,
+	branchState *branchState,
+	tx sql.Transaction,
+	commitFunc doCommitFunc,
 ) (*doltdb.Commit, error) {
 	dtx, ok := tx.(*DoltTransaction)
 	if !ok {
@@ -498,7 +498,7 @@ func (d *DoltSession) commitBranchState(
 	if err != nil {
 		return nil, err
 	}
-	
+
 	branchState.dirty = false
 	return newCommit, nil
 }
@@ -539,7 +539,7 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 	if !ok {
 		return nil, fmt.Errorf("session state for database %s not found", dbName)
 	}
-	
+
 	return d.newPendingCommit(ctx, branchState, roots, props)
 }
 
@@ -861,7 +861,7 @@ func (d *DoltSession) SetCurrentHead(ctx *sql.Context, dbName string, wsRef ref.
 	if err != nil {
 		return err
 	}
-	
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -874,7 +874,7 @@ func (d *DoltSession) SetCurrentHead(ctx *sql.Context, dbName string, wsRef ref.
 	dbState.checkedOutRevSpec = headRef.GetPath()
 	dbState.currRevSpec = headRef.GetPath()
 	dbState.currRevType = RevisionTypeBranch
-	
+
 	return nil
 }
 
@@ -894,7 +894,7 @@ func (d *DoltSession) SwitchWorkingSet(
 	}
 
 	d.mu.Lock()
-	
+
 	baseName, _ := SplitRevisionDbName(dbName)
 	dbState, ok := d.dbStates[strings.ToLower(baseName)]
 	if !ok {
@@ -908,15 +908,15 @@ func (d *DoltSession) SwitchWorkingSet(
 	d.mu.Unlock()
 
 	// bootstrap the db state as necessary
-	_, ok, err = d.lookupDbState(ctx, baseName + DbRevisionDelimiter + headRef.GetPath())
+	_, ok, err = d.lookupDbState(ctx, baseName+DbRevisionDelimiter+headRef.GetPath())
 	if err != nil {
 		return err
 	}
-	
+
 	if !ok {
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
-	
+
 	return nil
 }
 
@@ -933,10 +933,10 @@ func (d *DoltSession) UseDatabase(ctx *sql.Context, db sql.Database) error {
 	if !ok {
 		return sql.ErrDatabaseNotFound.New(db.Name())
 	}
-	
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	
+
 	// Set the session state for this database according to what database name was USEd
 	// In the case of a revision qualified name, that will be the revision specified
 	// In the case of an unqualified name (USE mydb), this will be the last checked out head in this session.
@@ -949,7 +949,7 @@ func (d *DoltSession) UseDatabase(ctx *sql.Context, db sql.Database) error {
 		dbState.currRevSpec = sdb.Revision()
 		dbState.currRevType = sdb.RevisionType()
 	}
-	
+
 	return nil
 }
 
@@ -1030,7 +1030,7 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 	if convertedVal != nil {
 		intVal = convertedVal.(int64)
 	}
-	
+
 	if intVal == 0 {
 		for _, dbState := range d.dbStates {
 			for _, branchState := range dbState.heads {
@@ -1088,7 +1088,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 			}
 			return err
 		}
-		
+
 		sessionState.dbName = baseName
 		sessionState.checkedOutRevSpec = db.Revision()
 		sessionState.currRevType = db.RevisionType()
@@ -1098,7 +1098,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	branchState := NewEmptyBranchState(sessionState)
 	sessionState.heads[strings.ToLower(rev)] = branchState
 	d.mu.Unlock()
-	
+
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
 	// TODO: this no longer gets called at session creation time, so the error handling below never occurs when a
@@ -1150,11 +1150,11 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 	// This has to happen after SetWorkingSet above, since it does a stale check before its work
 	branchState.headCommit = dbState.HeadCommit
-	
+
 	if sessionState.Err == nil {
 		return d.setSessionVarsForDb(ctx, db.Name(), branchState)
 	}
-	
+
 	return nil
 }
 
@@ -1196,11 +1196,11 @@ func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, 
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
-	
+
 	if branchState.dbState.currRevType != RevisionTypeBranch {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
-	
+
 	return ref.NewBranchRef(branchState.dbState.currRevSpec), nil
 }
 
@@ -1218,11 +1218,11 @@ func (d *DoltSession) CurrentHead(ctx *sql.Context, dbName string) (string, bool
 	d.mu.Lock()
 	dbState, ok := d.dbStates[baseName]
 	d.mu.Unlock()
-	
+
 	if ok {
 		return dbState.currRevSpec, true, nil
 	}
-	
+
 	return "", false, nil
 }
 
@@ -1241,7 +1241,7 @@ func (d *DoltSession) BatchMode() batchMode {
 // setSessionVarsForDb updates the three session vars that track the value of the session root hashes
 func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string, state *branchState) error {
 	baseName, _ := SplitRevisionDbName(dbName)
-	
+
 	// Different DBs have different requirements for what state is set, so we are maximally permissive on what's expected
 	// in the state object here
 	if state.WorkingSet() != nil {

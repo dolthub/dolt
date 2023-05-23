@@ -35,12 +35,12 @@ type InitialDbState struct {
 	// RootValue must be set.
 	HeadCommit *doltdb.Commit
 	// HeadRoot is the root value for databases without a HeadCommit. Nil for databases with a HeadCommit.
-	HeadRoot    *doltdb.RootValue
-	ReadOnly    bool
-	DbData      env.DbData
-	Remotes     map[string]env.Remote
-	Branches    map[string]env.BranchConfig
-	Backups     map[string]env.Remote
+	HeadRoot *doltdb.RootValue
+	ReadOnly bool
+	DbData   env.DbData
+	Remotes  map[string]env.Remote
+	Branches map[string]env.BranchConfig
+	Backups  map[string]env.Remote
 
 	// If err is set, this InitialDbState is partially invalid, but may be
 	// usable to initialize a database at a revision specifier, for
@@ -58,25 +58,25 @@ type SessionDatabase interface {
 
 // DatabaseSessionState is the set of all information for a given database in this session.
 type DatabaseSessionState struct {
-	// dbName is the name of the database this state applies to. This is always the base name of the database, without 
+	// dbName is the name of the database this state applies to. This is always the base name of the database, without
 	// a revision qualifier.
-	dbName       string
-	// currRevSpec is the current revision spec of the database when referred to by its base name. Changes when a 
+	dbName string
+	// currRevSpec is the current revision spec of the database when referred to by its base name. Changes when a
 	// `dolt_checkout` or `use` statement is executed.
 	currRevSpec string
 	// currRevType is the current revision type of the database when referred to by its base name. Changes when a
 	// `dolt_checkout` or `use` statement is executed.
 	currRevType RevisionType
-	// checkedOutRevSpec is the checked out revision specifier of the database. Changes only when a `dolt_checkout` 
+	// checkedOutRevSpec is the checked out revision specifier of the database. Changes only when a `dolt_checkout`
 	// occurs. `USE mydb` without a revision qualifier will get this revision.
 	checkedOutRevSpec string
 	// heads records the in-memory DB state for every branch head accessed by the session
-	heads 			map[string]*branchState
+	heads map[string]*branchState
 	// globalState is the global state of this session (shared by all sessions for a particular db)
-	globalState  globalstate.GlobalState
+	globalState globalstate.GlobalState
 	// tmpFileDir is the directory to use for temporary files for this database
-	tmpFileDir   string
-	
+	tmpFileDir string
+
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a
 	// DatabaseSessionState with Err != nil will return that err.
@@ -90,7 +90,7 @@ func NewEmptyDatabaseSessionState() *DatabaseSessionState {
 }
 
 // SessionState is the public interface for dealing with session state outside this package. Session-state is always
-// branch-specific. 
+// branch-specific.
 type SessionState interface {
 	WorkingSet() *doltdb.WorkingSet
 	WorkingRoot() *doltdb.RootValue
@@ -103,20 +103,20 @@ type SessionState interface {
 type branchState struct {
 	// dbState is the parent database state for this branch head state
 	dbState *DatabaseSessionState
-	// headCommit is the head commit for this database. May be nil for databases tied to a detached root value, in which 
+	// headCommit is the head commit for this database. May be nil for databases tied to a detached root value, in which
 	// case headRoot must be set.
-	headCommit   *doltdb.Commit
+	headCommit *doltdb.Commit
 	// HeadRoot is the root value for databases without a headCommit. Nil for databases with a headCommit.
-	headRoot     *doltdb.RootValue
+	headRoot *doltdb.RootValue
 	// workingSet is the working set for this database. May be nil for databases tied to a detached root value, in which
 	// case headCommit must be set
 	workingSet *doltdb.WorkingSet
 	// dbData is an accessor for the underlying doltDb
-	dbData       env.DbData
+	dbData env.DbData
 	// writeSession is this head's write session
 	writeSession writer.WriteSession
 	// readOnly is true if this database is read only
-	readOnly     bool
+	readOnly bool
 	// sessionCache is a collection of cached values used to speed up performance
 	sessionCache *SessionCache
 	// dirty is true if this branch state has uncommitted changes
@@ -125,7 +125,7 @@ type branchState struct {
 
 func NewEmptyBranchState(dbState *DatabaseSessionState) *branchState {
 	return &branchState{
-		dbState: dbState,
+		dbState:      dbState,
 		sessionCache: newSessionCache(),
 	}
 }

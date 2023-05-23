@@ -408,11 +408,11 @@ var DropDatabaseMultiSessionScriptTests = []queries.ScriptTest{
 				Query:    "/* client b */ select database();",
 				Expected: []sql.Row{{"db01"}},
 			},
-			// TODO: this could be better: there's no longer a branch branch1, and we lose track of the fact that we were on 
-			//  branch1 when the `drop database` is processed -- as far as the engine is concerned we are using a database 
+			// TODO: this could be better: there's no longer a branch branch1, and we lose track of the fact that we were on
+			//  branch1 when the `drop database` is processed -- as far as the engine is concerned we are using a database
 			//  called `db01`, no branch info. It's enough for now to not panic in this edge case.
 			{
-				Query:          "/* client b */ show tables;",
+				Query:    "/* client b */ show tables;",
 				Expected: []sql.Row{},
 			},
 		},
