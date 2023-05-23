@@ -307,7 +307,28 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		}
 	}
 
-	return NewDoltTransaction(ctx, txDbs, tCharacteristic)
+	tx, err := NewDoltTransaction(ctx, txDbs, tCharacteristic)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Set session vars for every DB in this session using their current branch head
+	for _, db := range doltDatabases {
+		bs, ok, err := d.lookupDbState(ctx, db.Name())
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("unable to find session state for database %s", db.Name())
+		}
+
+		err = d.setSessionVarsForDb(ctx, db.Name(), bs)
+		if err != nil {
+			return nil, err
+		}
+	}
+	
+	return tx, err
 }
 
 // clear clears all DB state for this session
