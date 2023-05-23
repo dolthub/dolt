@@ -19,8 +19,6 @@ RUN apt update -y && \
     dpkg -i elixir_1.10.2-1~ubuntu~focal_all.deb
 RUN apt update -y && \
     apt install -y \
-        python3.8 \
-        python3-pip \
         curl \
         wget \
         pkg-config \
@@ -30,14 +28,11 @@ RUN apt update -y && \
         ant \
         ca-certificates-java \
         bats \
-        perl \
         cpanminus \
         cmake \
         g++ \
         libmysqlcppconn-dev \
         git \
-        ruby \
-        ruby-dev \
         gem \
         libc6 \
         libgcc1 \
@@ -46,11 +41,9 @@ RUN apt update -y && \
         libssl1.1 \
         libstdc++6 \
         zlib1g \
-        r-base \
         postgresql \
         postgresql-contrib \
         libpq-dev \
-        nodejs \
         lsof \
         postgresql-server-dev-all && \
         update-ca-certificates -f
@@ -104,3 +97,5 @@ RUN cargo build --config net.git-fetch-with-cli=true
 
 WORKDIR /mysql-client-tests
 ENTRYPOINT ["/mysql-client-tests/entrypoint.sh"]
+
+RUN rustup show
