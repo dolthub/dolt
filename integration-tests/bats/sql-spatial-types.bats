@@ -164,13 +164,13 @@ teardown() {
 @test "sql-spatial-types: SRID defined in column definition in CREATE TABLE" {
     run dolt sql -q "CREATE TABLE pt (i int primary key, p POINT NOT NULL SRID 1)"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "unsupported feature: unsupported SRID value" ]] || false
+    [[ "$output" =~ "There's no spatial reference with SRID 1" ]] || false
 
     run dolt sql -q "CREATE TABLE pt (i int primary key, p POINT NOT NULL SRID 0)"
     [ "$status" -eq 0 ]
 
     run dolt sql -q "SHOW CREATE TABLE pt"
-    [[ "$output" =~ "\`p\` point NOT NULL SRID 0" ]] || false
+    [[ "$output" =~ "\`p\` point NOT NULL /*!80003 SRID 0 */" ]] || false
 
     dolt sql -q "INSERT INTO pt VALUES (1, POINT(5,6))"
     run dolt sql -q "SELECT ST_ASWKT(p) FROM pt"
@@ -203,7 +203,7 @@ SQL
     [ "$status" -eq 0 ]
 
     run dolt sql -q "SHOW CREATE TABLE table1"
-    [[ "$output" =~ "\`p\` geometry NOT NULL SRID 4326" ]] || false
+    [[ "$output" =~ "\`p\` geometry NOT NULL /*!80003 SRID 4326 */" ]] || false
 
     run dolt sql -q "SELECT ST_ASWKT(p) FROM table1"
     [[ "$output" =~ "LINESTRING(0 0,1 2)" ]] || false
