@@ -1,0 +1,12 @@
+[package]
+
+name = "mysql_connector_test"
+version = "0.0.1"
+edition = "2018"
+
+[dependencies]
+mysql = "*"
+
+[[bin]]
+name = "mysql_connector_test"
+path = "src/mysql_connector_test.rs"
