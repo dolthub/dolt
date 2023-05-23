@@ -65,19 +65,30 @@ func (cmd AddCmd) ArgParser() *argparser.ArgParser {
 // This is safe because the only inputs are flag names and validated table names.
 func generateSql(apr *argparser.ArgParseResults) string {
 	var buffer bytes.Buffer
-	buffer.WriteString("CALL DOLT_ADD('")
+	var first bool
+	first = true
+	buffer.WriteString("CALL DOLT_ADD(")
+
+	write := func(s string) {
+		if !first {
+			buffer.WriteString(", ")
+		}
+		buffer.WriteString("'")
+		buffer.WriteString(s)
+		buffer.WriteString("'")
+		first = false
+	}
+
 	if apr.Contains(cli.AllFlag) {
-		buffer.WriteString("-A', '")
+		write("-A")
 	}
 	if apr.Contains(cli.ForceFlag) {
-		buffer.WriteString("-f', '")
+		write("-f")
 	}
-	for i := 0; i < apr.NArg()-1; i++ {
-		buffer.WriteString(apr.Arg(i))
-		buffer.WriteString("', '")
+	for _, arg := range apr.Args {
+		write(arg)
 	}
-	buffer.WriteString(apr.Arg(apr.NArg() - 1))
-	buffer.WriteString("')")
+	buffer.WriteString(")")
 	return buffer.String()
 }
 
