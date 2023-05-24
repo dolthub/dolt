@@ -314,18 +314,15 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	
 	// Set session vars for every DB in this session using their current branch head
 	for _, db := range doltDatabases {
+		// faulty settings can make it impossible to load particular DB branch states, so we ignore any errors in this 
+		// loop and just decline to set the session vars. Throwing an error on transaction start in these cases makes it
+		// impossible for the user to correct any problems. 
 		bs, ok, err := d.lookupDbState(ctx, db.Name())
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, fmt.Errorf("unable to find session state for database %s", db.Name())
+		if err != nil || !ok {
+			continue
 		}
 
-		err = d.setSessionVarsForDb(ctx, db.Name(), bs)
-		if err != nil {
-			return nil, err
-		}
+		_ = d.setSessionVarsForDb(ctx, db.Name(), bs)
 	}
 	
 	return tx, err
@@ -341,12 +338,6 @@ func (d *DoltSession) clear() {
 			delete(dbState.heads, head)
 		}
 	}
-}
-
-// isNoOpTransactionDatabase returns whether the database name given is a non-Dolt database that shouldn't have
-// transaction logic performed on it
-func isNoOpTransactionDatabase(dbName string) bool {
-	return len(dbName) == 0 || dbName == "information_schema" || dbName == "mysql"
 }
 
 func (d *DoltSession) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
