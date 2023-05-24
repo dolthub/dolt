@@ -25,9 +25,9 @@ import (
 	"context"
 	"testing"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )

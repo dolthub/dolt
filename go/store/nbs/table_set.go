@@ -29,8 +29,8 @@ import (
 	"sort"
 	"sync"
 
-	"golang.org/x/sync/errgroup"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 )

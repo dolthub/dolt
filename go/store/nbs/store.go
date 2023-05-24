@@ -34,12 +34,12 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
-	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
