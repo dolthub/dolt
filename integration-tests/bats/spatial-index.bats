@@ -11,7 +11,7 @@ teardown() {
 }
 
 @test "spatial-index: spatial indexes enabled" {
-doltdb.IgnoreTableName    run dolt sql -q "create table t (p point srid 0 not null, spatial index(p))"
+    run dolt sql -q "create table t (p point srid 0 not null, spatial index(p))"
     [ "$status" -eq 0 ]
 }
 

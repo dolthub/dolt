@@ -103,7 +103,7 @@ SQL
     dolt commit -m "Added column c2 longtext"
     dolt checkout main
     dolt merge branch1
-doltdb.IgnoreTableName    dolt merge branch2
+    dolt merge branch2
 }
 
 @test "column_tags: Merging branches that use the same tag referring to different column names fails" {
@@ -128,7 +128,7 @@ SQL
     dolt commit -m "Added column c0 bigint"
     dolt checkout main
     dolt merge branch1
-doltdb.IgnoreTableName    dolt merge branch2
+    dolt merge branch2
 }
 
 @test "column_tags: Merging branches that both created the same column succeeds" {

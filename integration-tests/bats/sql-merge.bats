@@ -909,7 +909,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c1\` CHECK ((\`i\` < 0))" ]] || false
     dolt commit -am "changes to main"
 
-doltdb.IgnoreTableName    dolt merge other -m "merge other"
+    dolt merge other -m "merge other"
 
     run dolt status
     log_status_eq 0
@@ -973,7 +973,7 @@ doltdb.IgnoreTableName    dolt merge other -m "merge other"
     [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))" ]] || false
     dolt commit -am "changes to main"
 
-doltdb.IgnoreTableName    dolt merge other -m "merge other"
+    dolt merge other -m "merge other"
     run dolt status
     log_status_eq 0
     [[ "$output" =~ "schema conflict:" ]]
@@ -1045,7 +1045,7 @@ doltdb.IgnoreTableName    dolt merge other -m "merge other"
     dolt checkout main
     run dolt merge b1 -m "merge b1" --commit
     log_status_eq 0
-doltdb.IgnoreTableName    dolt merge b2 -m "merge b2"
+    dolt merge b2 -m "merge b2"
     run dolt status
     log_status_eq 0
     [[ "$output" =~ "schema conflict:" ]]
@@ -1080,7 +1080,7 @@ doltdb.IgnoreTableName    dolt merge b2 -m "merge b2"
     dolt checkout main
     run dolt merge b1 -m "merge b1"
     log_status_eq 0
-doltdb.IgnoreTableName    dolt merge b2 -m "merge b2"
+    dolt merge b2 -m "merge b2"
     run dolt status
     log_status_eq 0
     [[ "$output" =~ "schema conflict:" ]]

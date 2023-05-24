@@ -3,7 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-doltdb.IgnoreTableName}
+}
 
 teardown() {
     teardown_common
