@@ -19,13 +19,11 @@ import (
 	"context"
 	"io"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -43,6 +41,12 @@ The dolt status command can be used to obtain a summary of which tables have cha
 }
 
 type AddCmd struct{}
+
+var _ cli.RepoNotRequiredCommand = AddCmd{}
+
+func (cmd AddCmd) RequiresRepo() bool {
+	return false
+}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd AddCmd) Name() string {
