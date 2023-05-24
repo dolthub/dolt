@@ -30,6 +30,7 @@ setup() {
     setup_no_dolt_init
     make_repo defaultDB
     make_repo altDB
+    unset DOLT_CLI_PASSWORD
 }
 
 teardown() {
@@ -48,7 +49,7 @@ get_staged_tables() {
 @test "sql-local-remote: test switch between server/no server" {
     start_sql_server defaultDB
 
-    run dolt --verbose-engine-setup --user dolt sql -q "show databases" 
+    run dolt --verbose-engine-setup --user dolt --password "" sql -q "show databases"
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "starting remote mode" ]] || false
     [[ "$output" =~ "defaultDB" ]] || false
@@ -56,7 +57,7 @@ get_staged_tables() {
 
     stop_sql_server 1
 
-    run dolt --verbose-engine-setup sql -q "show databases" 
+    run dolt --verbose-engine-setup sql -q "show databases"
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "starting local mode" ]] || false
     [[ "$output" =~ "defaultDB" ]] || false
@@ -70,34 +71,34 @@ get_staged_tables() {
     mkdir someplace_else
     cd someplace_else
 
-    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --user dolt --use-db altDB sql -q "show tables"
+    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --user dolt --password "" --use-db altDB sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting remote mode" ]] || false
     [[ "$output" =~ "altDB_tbl" ]] || false
 
-    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --user dolt --use-db defaultDB sql -q "show tables"
+    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --user dolt --password "" --use-db defaultDB sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting remote mode" ]] || false
     [[ "$output" =~ "defaultDB_tbl" ]] || false
 
-    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --user dolt sql -q "show tables"
+    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --user dolt --password "" sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting remote mode" ]] || false
     [[ "$output" =~ "altDB_tbl" ]] || false
 
     stop_sql_server 1
 
-    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --user dolt --use-db altDB sql -q "show tables"
+    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --user dolt --password "" --use-db altDB sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting local mode" ]] || false
     [[ "$output" =~ "altDB_tbl" ]] || false
 
-    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --user dolt --use-db defaultDB sql -q "show tables"
+    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --user dolt --password "" --use-db defaultDB sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting local mode" ]] || false
     [[ "$output" =~ "defaultDB_tbl" ]] || false
 
-    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --user dolt sql -q "show tables"
+    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --user dolt --password "" sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting local mode" ]] || false
     [[ "$output" =~ "altDB_tbl" ]] || false
@@ -111,23 +112,23 @@ get_staged_tables() {
     mkdir -p someplace_new/fun
     cd someplace_new/fun
 
-    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR/altDB" --user dolt sql -q "show tables"
+    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR/altDB" --user dolt --password "" sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting remote mode" ]] || false
     [[ "$output" =~ "altDB_tbl" ]] || false
 
-    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR/altDB" --user dolt --use-db defaultDB sql -q "show tables"
+    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR/altDB" --user dolt --password "" --use-db defaultDB sql -q "show tables"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "defaultDB does not exist" ]] || false
 
     stop_sql_server 1
 
-    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR/altDB" --user dolt sql -q "show tables"
+    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR/altDB" --user dolt --password "" sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting local mode" ]] || false
     [[ "$output" =~ "altDB_tbl" ]] || false
 
-    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR/altDB" --user dolt --use-db defaultDB sql -q "show tables"
+    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR/altDB" --user dolt --password "" --use-db defaultDB sql -q "show tables"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "defaultDB does not exist" ]] || false
 }
@@ -144,7 +145,7 @@ get_staged_tables() {
     cd ..
 
     start_sql_server altDB
-    run dolt --user dolt blame test
+    run dolt --user dolt --password "" blame test
     [ "$status" -eq 0 ]
     export out="$output"
     stop_sql_server 1
@@ -153,15 +154,16 @@ get_staged_tables() {
     [ "$status" -eq 0 ]
     [[ "$output" =  $out ]] || false
 }
+
 @test "sql-local-remote: verify simple dolt add behavior." {
     start_sql_server altDB
     cd altDB
 
-    run dolt --verbose-engine-setup --user dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    run dolt --verbose-engine-setup --user dolt --password "" sql -q "create table testtable (pk int PRIMARY KEY)"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting remote mode" ]] || false
 
-    run dolt --verbose-engine-setup --user dolt add .
+    run dolt --verbose-engine-setup --user dolt --password "" add .
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting remote mode" ]] || false
 
@@ -175,7 +177,7 @@ get_staged_tables() {
 @test "sql-local-remote: test 'status' and switch between server/no server" {
     start_sql_server defaultDB
 
-    run dolt --user dolt status
+    run dolt --user dolt --password "" status
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
@@ -191,7 +193,7 @@ get_staged_tables() {
     ! [[ "$output" =~ "   new table:        generated_foo" ]] || false
     remoteOutput=$output
 
-    run dolt --user dolt status --ignored
+    run dolt --user dolt --password "" status --ignored
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
@@ -215,10 +217,137 @@ get_staged_tables() {
     [ "$status" -eq 0 ] || false
     localOutput=$output
 
-    run dolt --user dolt status --ignored
+    run dolt --user dolt --password "" status --ignored
     [ "$status" -eq 0 ] || false
     localIgnoredOutput=$output
 
     [[ "$remoteOutput" == "$localOutput" ]] || false
     [[ "$remoteIgnoredOutput" == "$localIgnoredOutput" ]] || false
+}
+
+@test "sql-local-remote: check that the --password argument is used when talking to a server and ignored with local" {
+    start_sql_server altDb
+
+    dolt --user dolt --password "" sql -q "CREATE USER 'joe'@'%' IDENTIFIED BY 'joe123'; GRANT ALL PRIVILEGES ON defaultDb.* TO 'joe'@'%' WITH GRANT OPTION;";
+
+    run dolt --verbose-engine-setup --user joe --password "badpwd" sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+    [[ "$output" =~ "Access denied for user 'joe'" ]] || false
+
+    run dolt --user joe --password "joe123" sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Access denied for user 'joe'@'%' to database 'altDB'" ]] || false
+
+    run dolt --verbose-engine-setup --user joe --password "joe123" --use-db defaultDB sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "defaultDB_tbl" ]] || false
+
+    # Empty Password should work since we started the server with the 'dolt' user with no pwd.
+    run dolt --verbose-engine-setup --user dolt --password "" sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+    [[ "$output" =~ "altDB_tbl" ]] || false
+
+    stop_sql_server 1
+
+    run dolt --verbose-engine-setup --user joe --password failnow sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+
+    # altDB is not accessable to joe
+    run dolt --verbose-engine-setup --user joe --password "joe123" sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Access denied for user 'joe'" ]] || false
+
+    run dolt --verbose-engine-setup --user joe --password "joe123" --use-db defaultDB sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "defaultDB_tbl" ]] || false
+
+    # Get access denied for a failed login (bad pwd)
+    run dolt --verbose-engine-setup --user joe --password failalways sql -q "SELECT user, host FROM mysql.user"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+    [[ "$output" =~ "Access denied for user 'joe'" ]] || false
+
+    # Get an permission error when attempting to access forbidden info as an authenticated user.
+    run dolt --verbose-engine-setup --user joe --password "joe123" sql -q "SELECT user, host FROM mysql.user"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "command denied to user 'joe'@'%'" ]] || false
+
+    # Similar test to above, but will get different results because the dolt user doesn't exist (it was
+    # used to start sql-server
+    run dolt --user dolt --password "" sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Access denied for user 'dolt'" ]] || false
+}
+
+
+@test "sql-local-remote: check that the DOLT_CLI_PASSWORD argument is used when talking to a server and ignored with local" {
+    start_sql_server altDb
+
+    dolt --user dolt --password "" sql -q "CREATE USER 'joe'@'%' IDENTIFIED BY 'joe123'; GRANT ALL PRIVILEGES ON defaultDb.* TO 'joe'@'%' WITH GRANT OPTION;";
+
+    export DOLT_CLI_PASSWORD="badpwd"
+    run dolt --verbose-engine-setup --user joe sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+    [[ "$output" =~ "Access denied for user 'joe'" ]] || false
+
+    export DOLT_CLI_PASSWORD="joe123"
+    run dolt --user joe sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Access denied for user 'joe'@'%' to database 'altDB'" ]] || false
+
+    export DOLT_CLI_PASSWORD="joe123"
+    run dolt --verbose-engine-setup --user joe --use-db defaultDB sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "defaultDB_tbl" ]] || false
+
+    export DOLT_CLI_PASSWORD=""
+    run dolt --verbose-engine-setup --user dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+    [[ "$output" =~ "altDB_tbl" ]] || false
+
+    stop_sql_server 1
+
+    export DOLT_CLI_PASSWORD="badpwd"
+    run dolt --verbose-engine-setup --user joe sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+    [[ "$output" =~ "Access denied for user 'joe'" ]] || false
+
+    export DOLT_CLI_PASSWORD="joe123"
+    run dolt --user joe --password "joe123" sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Access denied for user 'joe'" ]] || false
+
+    run dolt --user joe --password "joe123" --use-db defaultDB sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "defaultDB_tbl" ]] || false
+
+    # Get access denied for a failed login (bad pwd)
+    export DOLT_CLI_PASSWORD="badpwd"
+    run dolt --user joe sql -q "SELECT user, host FROM mysql.user"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Access denied for user 'joe'" ]] || false
+
+    export DOLT_CLI_PASSWORD="joe123"
+    # Get an permission error when attempting to access forbidden info as an authenticated user.
+    run dolt --user joe sql -q "SELECT user, host FROM mysql.user"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "command denied to user 'joe'@'%'" ]] || false
+
+    export DOLT_CLI_PASSWORD="badpwd"
+    run dolt --user rambo --use-db defaultDB sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Access denied for user 'rambo'" ]] || false
+
+    export DOLT_CLI_PASSWORD=""
+    run dolt --user dolt sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Access denied for user 'dolt'" ]] || false
+
+    unset DOLT_CLI_PASSWORD
 }
