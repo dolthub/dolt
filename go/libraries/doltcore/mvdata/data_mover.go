@@ -161,4 +161,5 @@ const (
 	CreateOp  TableImportOp = "overwrite"
 	ReplaceOp TableImportOp = "replace"
 	UpdateOp  TableImportOp = "update"
+	AppendOp  TableImportOp = "append"
 )

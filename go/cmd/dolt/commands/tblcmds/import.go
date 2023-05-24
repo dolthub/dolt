@@ -30,6 +30,7 @@ import (
 	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/text/message"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -54,6 +55,7 @@ const (
 	createParam       = "create-table"
 	updateParam       = "update-table"
 	replaceParam      = "replace-table"
+	appendParam       = "append-table"
 	tableParam        = "table"
 	fileParam         = "file"
 	schemaParam       = "schema"
@@ -90,13 +92,15 @@ The schema for the new table can be specified explicitly by providing a SQL sche
 
 If {{.EmphasisLeft}}--update-table | -u{{.EmphasisRight}} is given the operation will update {{.LessThan}}table{{.GreaterThan}} with the contents of file. The table's existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
-During import, if there is an error importing any row, the import will be aborted by default. Use the {{.EmphasisLeft}}--continue{{.EmphasisRight}} flag to continue importing when an error is encountered. You can add the {{.EmphasisLeft}}--quiet{{.EmphasisRight}} flag to prevent the import utility from printing all the skipped rows. 
+If {{.EmphasisLeft}}--append-table | -a{{.EmphasisRight}} is given the operation will add the contents of the file to {{.LessThan}}table{{.GreaterThan}}, without modifying any of the rows of {{.LessThan}}table{{.GreaterThan}}. If the file contains a row that matches the primary key of a row already in the table, the import will be aborted unless the --continue flag is used (in which case that row will not be imported.) The table's existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
 If {{.EmphasisLeft}}--replace-table | -r{{.EmphasisRight}} is given the operation will replace {{.LessThan}}table{{.GreaterThan}} with the contents of the file. The table's existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
 If the schema for the existing table does not match the schema for the new file, the import will be aborted by default. To overwrite both the table and the schema, use {{.EmphasisLeft}}-c -f{{.EmphasisRight}}.
 
 A mapping file can be used to map fields between the file being imported and the table being written to. This can be used when creating a new table, or updating or replacing an existing table.
+
+During import, if there is an error importing any row, the import will be aborted by default. Use the {{.EmphasisLeft}}--continue{{.EmphasisRight}} flag to continue importing when an error is encountered. You can add the {{.EmphasisLeft}}--quiet{{.EmphasisRight}} flag to prevent the import utility from printing all the skipped rows. 
 
 ` + schcmds.MappingFileHelp +
 		`
@@ -107,6 +111,7 @@ In create, update, and replace scenarios the file's extension is used to infer t
 	Synopsis: []string{
 		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue]  [--quiet] [--disable-fk-checks] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 		"-u [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--quiet] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"-a [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--quiet] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 		"-r [--map {{.LessThan}}file{{.GreaterThan}}] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
 }
@@ -237,6 +242,8 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		moveOp = mvdata.CreateOp
 	case apr.Contains(replaceParam):
 		moveOp = mvdata.ReplaceOp
+	case apr.Contains(appendParam):
+		moveOp = mvdata.AppendOp
 	default:
 		moveOp = mvdata.UpdateOp
 	}
@@ -280,8 +287,12 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 		return errhand.BuildDError("parameters %s and %s are mutually exclusive", schemaParam, primaryKeyParam).Build()
 	}
 
-	if !apr.Contains(createParam) && !apr.Contains(updateParam) && !apr.Contains(replaceParam) {
-		return errhand.BuildDError("Must include '-c' for initial table import or -u to update existing table or -r to replace existing table.").Build()
+	if !apr.ContainsAny(createParam, updateParam, replaceParam, appendParam) {
+		return errhand.BuildDError("Must specify exactly one of -c, -u, -a, or -r.").SetPrintUsage().Build()
+	}
+
+	if len(apr.ContainsMany(createParam, updateParam, replaceParam, appendParam)) > 1 {
+		return errhand.BuildDError("Must specify exactly one of -c, -u, -a, or -r.").SetPrintUsage().Build()
 	}
 
 	if apr.Contains(schemaParam) && !apr.Contains(createParam) {
@@ -352,6 +363,7 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{fileParam, "The file being imported. Supported file types are csv, psv, and nbf."})
 	ap.SupportsFlag(createParam, "c", "Create a new table, or overwrite an existing table (with the -f flag) from the imported data.")
 	ap.SupportsFlag(updateParam, "u", "Update an existing table with the imported data.")
+	ap.SupportsFlag(appendParam, "a", "Require that the operation will not modify any rows in the table.")
 	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
@@ -521,6 +533,13 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 		// record the first error encountered unless asked to ignore it
 		if row != nil && rowErr == nil && !options.contOnErr {
 			rowErr = fmt.Errorf("A bad row was encountered: %s: %w", sql.FormatRow(row), err)
+			if wie, ok := err.(sql.WrappedInsertError); ok {
+				if e, ok := wie.Cause.(*errors.Error); ok {
+					if ue, ok := e.Cause().(sql.UniqueKeyError); ok {
+						rowErr = fmt.Errorf("row %s would be overwritten by %s: %w", sql.FormatRow(ue.Existing), sql.FormatRow(row), err)
+					}
+				}
+			}
 		}
 
 		atomic.AddInt64(&badCount, 1)

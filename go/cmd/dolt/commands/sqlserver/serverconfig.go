@@ -48,6 +48,7 @@ const (
 	defaultReadOnly                = false
 	defaultLogLevel                = LogLevel_Info
 	defaultAutoCommit              = true
+	defaultDoltTransactionCommit   = false
 	defaultMaxConnections          = 100
 	defaultQueryParallelism        = 2
 	defaultPersistenceBahavior     = loadPerisistentGlobals
@@ -108,6 +109,9 @@ type ServerConfig interface {
 	LogLevel() LogLevel
 	// Autocommit defines the value of the @@autocommit session variable used on every connection
 	AutoCommit() bool
+	// DoltTransactionCommit defines the value of the @@dolt_transaction_commit session variable that enables Dolt
+	// commits to be automatically created when a SQL transaction is committed.
+	DoltTransactionCommit() bool
 	// DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in
 	// a multiple db configuration. If nil is returned the server will look for a database in the current directory and
 	// give it a name automatically.
@@ -185,6 +189,7 @@ type commandLineServerConfig struct {
 	dataDir                 string
 	cfgDir                  string
 	autoCommit              bool
+	doltTransactionCommit   bool
 	maxConnections          uint64
 	queryParallelism        int
 	tlsKey                  string
@@ -246,6 +251,12 @@ func (cfg *commandLineServerConfig) LogLevel() LogLevel {
 // AutoCommit defines the value of the @@autocommit session variable used on every connection
 func (cfg *commandLineServerConfig) AutoCommit() bool {
 	return cfg.autoCommit
+}
+
+// DoltTransactionCommit defines the value of the @@dolt_transaction_commit session variable that enables Dolt
+// commits to be automatically created when a SQL transaction is committed. The default is false.
+func (cfg *commandLineServerConfig) DoltTransactionCommit() bool {
+	return cfg.doltTransactionCommit
 }
 
 // MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1

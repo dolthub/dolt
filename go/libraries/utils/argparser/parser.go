@@ -271,100 +271,141 @@ func (ap *ArgParser) matchValueOption(arg string, isLongFormFlag bool) (match *O
 	return nil, nil
 }
 
-// Parse parses the string args given using the configuration previously specified with calls to the various Supports*
-// methods. Any unrecognized arguments or incorrect types will result in an appropriate error being returned. If the
-// universal --help or -h flag is found, an ErrHelp error is returned.
-func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
+func (ap *ArgParser) ParseGlobalArgs(args []string) (apr *ArgParseResults, remaining []string, err error) {
 	list := make([]string, 0, 16)
 	results := make(map[string]string)
 
 	i := 0
 	for ; i < len(args); i++ {
 		arg := args[i]
-		isLongFormFlag := len(arg) >= 2 && arg[:2] == "--"
 
-		if len(arg) == 0 || arg[0] != '-' || arg == "--" { // empty strings should get passed through like other naked words
-			list = append(list, arg)
+		if len(arg) == 0 || arg == "--" {
 			continue
 		}
 
-		arg = strings.TrimLeft(arg, "-")
-
-		if arg == helpFlag || arg == helpFlagAbbrev {
-			return nil, ErrHelp
+		if arg[0] != '-' {
+			// This isn't a flag; assume it's the subcommand. Don't parse the remaining args.
+			return &ArgParseResults{results, nil, ap}, args[i:], nil
 		}
 
-		modalOpts, rest := ap.matchModalOptions(arg)
+		var err error
+		i, list, results, err = ap.parseToken(args, i, list, results)
 
-		for _, opt := range modalOpts {
-			if _, exists := results[opt.Name]; exists {
-				return nil, errors.New("error: multiple values provided for `" + opt.Name + "'")
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return nil, nil, errors.New("No valid dolt subcommand found. See 'dolt --help' for usage.")
+}
+
+// Parse parses the string args given using the configuration previously specified with calls to the various Supports*
+// methods. Any unrecognized arguments or incorrect types will result in an appropriate error being returned. If the
+// universal --help or -h flag is found, an ErrHelp error is returned.
+func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
+	positionalArgs := make([]string, 0, 16)
+	namedArgs := make(map[string]string)
+
+	index := 0
+	for ; index < len(args); index++ {
+		arg := args[index]
+
+		if len(arg) == 0 || arg[0] != '-' || arg == "--" { // empty strings should get passed through like other naked words
+			positionalArgs = append(positionalArgs, arg)
+			continue
+		}
+
+		var err error
+		index, positionalArgs, namedArgs, err = ap.parseToken(args, index, positionalArgs, namedArgs)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if index < len(args) {
+		copy(positionalArgs, args[index:])
+	}
+
+	if ap.MaxArgs != -1 && len(positionalArgs) > ap.MaxArgs {
+		return nil, ap.TooManyArgsErrorFunc(positionalArgs)
+	}
+
+	return &ArgParseResults{namedArgs, positionalArgs, ap}, nil
+}
+
+func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []string, namedArgs map[string]string) (newIndex int, newPositionalArgs []string, newNamedArgs map[string]string, err error) {
+	arg := args[index]
+
+	isLongFormFlag := len(arg) >= 2 && arg[:2] == "--"
+
+	arg = strings.TrimLeft(arg, "-")
+
+	if arg == helpFlag || arg == helpFlagAbbrev {
+		return 0, nil, nil, ErrHelp
+	}
+
+	modalOpts, rest := ap.matchModalOptions(arg)
+
+	for _, opt := range modalOpts {
+		if _, exists := namedArgs[opt.Name]; exists {
+			return 0, nil, nil, errors.New("error: multiple values provided for `" + opt.Name + "'")
+		}
+
+		namedArgs[opt.Name] = ""
+	}
+
+	opt, value := ap.matchValueOption(rest, isLongFormFlag)
+
+	if opt == nil {
+		if rest == "" {
+			return index, positionalArgs, namedArgs, nil
+		}
+
+		if len(modalOpts) > 0 {
+			// value was attached to modal flag
+			// eg: dolt branch -fdmy_branch
+			positionalArgs = append(positionalArgs, rest)
+			return index, positionalArgs, namedArgs, nil
+		}
+
+		return 0, nil, nil, UnknownArgumentParam{name: arg}
+	}
+
+	if _, exists := namedArgs[opt.Name]; exists {
+		//already provided
+		return 0, nil, nil, errors.New("error: multiple values provided for `" + opt.Name + "'")
+	}
+
+	if value == nil {
+		index++
+		valueStr := ""
+		if index >= len(args) {
+			if opt.OptType != OptionalEmptyValue {
+				return 0, nil, nil, errors.New("error: no value for option `" + opt.Name + "'")
 			}
-
-			results[opt.Name] = ""
-		}
-
-		opt, value := ap.matchValueOption(rest, isLongFormFlag)
-
-		if opt == nil {
-			if rest == "" {
-				continue
-			}
-
-			if len(modalOpts) > 0 {
-				// value was attached to modal flag
-				// eg: dolt branch -fdmy_branch
-				list = append(list, rest)
-				continue
-			}
-
-			return nil, UnknownArgumentParam{name: arg}
-		}
-
-		if _, exists := results[opt.Name]; exists {
-			//already provided
-			return nil, errors.New("error: multiple values provided for `" + opt.Name + "'")
-		}
-
-		if value == nil {
-			i++
-			valueStr := ""
-			if i >= len(args) {
-				if opt.OptType != OptionalEmptyValue {
-					return nil, errors.New("error: no value for option `" + opt.Name + "'")
-				}
+		} else {
+			if opt.AllowMultipleOptions {
+				list := getListValues(args[index:])
+				valueStr = strings.Join(list, ",")
+				index += len(list) - 1
 			} else {
-				if opt.AllowMultipleOptions {
-					list := getListValues(args[i:])
-					valueStr = strings.Join(list, ",")
-					i += len(list) - 1
-				} else {
-					valueStr = args[i]
-				}
-			}
-			value = &valueStr
-		}
-
-		if opt.Validator != nil {
-			err := opt.Validator(*value)
-
-			if err != nil {
-				return nil, err
+				valueStr = args[index]
 			}
 		}
-
-		results[opt.Name] = *value
+		value = &valueStr
 	}
 
-	if i < len(args) {
-		copy(list, args[i:])
+	if opt.Validator != nil {
+		err := opt.Validator(*value)
+
+		if err != nil {
+			return 0, nil, nil, err
+		}
 	}
 
-	if ap.MaxArgs != -1 && len(list) > ap.MaxArgs {
-		return nil, ap.TooManyArgsErrorFunc(list)
-	}
-
-	return &ArgParseResults{results, list, ap}, nil
+	namedArgs[opt.Name] = *value
+	return index, positionalArgs, namedArgs, nil
 }
 
 func getListValues(args []string) []string {

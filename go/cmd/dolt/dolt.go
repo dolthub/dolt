@@ -18,7 +18,6 @@ import (
 	"context"
 	crand "crypto/rand"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -26,7 +25,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/fatih/color"
@@ -62,7 +60,7 @@ import (
 )
 
 const (
-	Version = "1.1.2"
+	Version = "1.1.3"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -120,6 +118,65 @@ var doltSubCommands = []cli.Command{
 	stashcmds.StashCommands,
 	&commands.Assist{},
 }
+
+var subCommandsUsingDEnv = []cli.Command{
+	commands.InitCmd{},
+	commands.StatusCmd{},
+	commands.DiffCmd{},
+	commands.ResetCmd{},
+	commands.CleanCmd{},
+	commands.CommitCmd{},
+	admin.Commands,
+	sqlserver.SqlServerCmd{VersionStr: Version},
+	sqlserver.SqlClientCmd{VersionStr: Version},
+	commands.LogCmd{},
+	commands.ShowCmd{},
+	commands.BranchCmd{},
+	commands.CheckoutCmd{},
+	commands.MergeCmd{},
+	cnfcmds.Commands,
+	commands.CherryPickCmd{},
+	commands.RevertCmd{},
+	commands.CloneCmd{},
+	commands.FetchCmd{},
+	commands.PullCmd{},
+	commands.PushCmd{},
+	commands.ConfigCmd{},
+	commands.RemoteCmd{},
+	commands.BackupCmd{},
+	commands.LoginCmd{},
+	credcmds.Commands,
+	commands.LsCmd{},
+	schcmds.Commands,
+	commands.TagCmd{},
+	cvcmds.Commands,
+	commands.SendMetricsCmd{},
+	commands.MigrateCmd{},
+	indexcmds.Commands,
+	commands.ReadTablesCmd{},
+	commands.GarbageCollectionCmd{},
+	commands.FilterBranchCmd{},
+	commands.MergeBaseCmd{},
+	commands.RootsCmd{},
+	commands.VersionCmd{VersionStr: Version},
+	commands.DumpCmd{},
+	commands.InspectCmd{},
+	dumpDocsCommand,
+	dumpZshCommand,
+	docscmds.Commands,
+	stashcmds.StashCommands,
+	&commands.Assist{},
+}
+
+func initCliContext(commandName string) bool {
+	for _, command := range subCommandsUsingDEnv {
+		if command.Name() == commandName {
+			return false
+		}
+	}
+	return true
+}
+
 var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", doltSubCommands)
 
 var globalArgParser = buildGlobalArgs()
@@ -347,9 +404,11 @@ func runMain() int {
 		return exit
 	}
 
-	globalArgs, args, initCliContext, printUsage, err := splitArgsOnSubCommand(args)
 	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
-	if printUsage {
+
+	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
+
+	if err == argparser.ErrHelp {
 		doltCommand.PrintUsage("dolt")
 
 		specialMsg := `
@@ -360,12 +419,12 @@ The sql subcommand is currently the only command that uses these flags. All othe
 		usage()
 
 		return 0
-	}
-	if err != nil {
+	} else if err != nil {
 		cli.PrintErrln(color.RedString("Failure to parse arguments: %v", err))
 		return 1
 	}
-	apr := cli.ParseArgsOrDie(globalArgParser, globalArgs, usage)
+
+	subcommandName := remainingArgs[0]
 
 	var fs filesys.Filesys
 	fs = filesys.LocalFS
@@ -470,7 +529,7 @@ The sql subcommand is currently the only command that uses these flags. All othe
 	}
 
 	var cliCtx cli.CliContext = nil
-	if initCliContext {
+	if initCliContext(subcommandName) {
 		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, apr, verboseEngineSetup)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failure to Load SQL Engine: %v", err))
@@ -485,7 +544,7 @@ The sql subcommand is currently the only command that uses these flags. All othe
 	}
 
 	ctx, stop := context.WithCancel(ctx)
-	res := doltCommand.Exec(ctx, "dolt", args, dEnv, cliCtx)
+	res := doltCommand.Exec(ctx, "dolt", remainingArgs, dEnv, cliCtx)
 	stop()
 
 	if err = dbfactory.CloseAllLocalDatabases(); err != nil {
@@ -540,33 +599,6 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 		cli.Println("verbose: starting local mode")
 	}
 	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, apr)
-}
-
-// splitArgsOnSubCommand splits the args into two slices, the first containing all args before the first subcommand,
-// and the second containing all args after the first subcommand. The second slice will start with the subcommand name.
-func splitArgsOnSubCommand(args []string) (globalArgs, subArgs []string, initCliContext, printUsages bool, err error) {
-	commandSet := make(map[string]bool)
-	for _, cmd := range doltSubCommands {
-		commandSet[cmd.Name()] = true
-	}
-
-	for i, arg := range args {
-		arg = strings.ToLower(arg)
-
-		if cli.IsHelp(arg) {
-			// Found --help before any subcommand, so print dolt help.
-			return nil, nil, false, true, nil
-		}
-
-		if _, ok := commandSet[arg]; ok {
-			// SQL is the first subcommand to support the CLIContext. We'll need a more general solution when we add more.
-			// blame, table rm, and table mv commands also depend on the sql command, so they are also included here.
-			initCliContext := "sql" == arg || "blame" == arg || "table" == arg
-			return args[:i], args[i:], initCliContext, false, nil
-		}
-	}
-
-	return nil, nil, false, false, errors.New("No valid dolt subcommand found. See 'dolt --help' for usage.")
 }
 
 // doc is currently used only when a `initCliContext` command is specified. This will include all commands in time,
