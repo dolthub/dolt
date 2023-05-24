@@ -22,13 +22,8 @@ jobs:
       fail-fast: true
       matrix:
         os:  [ ubuntu-22.04, macos-latest ] # [ ubuntu-22.04, macos-latest, windows-latest ]
-        dolt_fmt: [ "__DOLT__", "__LD_1__" ]
+        dolt_fmt: [ "__DOLT__" ]
         journal_store: [ "" ]
-        exclude:
-          - os: "macos-latest"
-            dolt_fmt: ["__LD_1__" ]
-          - os: "windows-latest"
-            dolt_fmt: ["__LD_1__" ]
         include:
           - os: "ubuntu-22.04"
             dolt_fmt: "__DOLT__"

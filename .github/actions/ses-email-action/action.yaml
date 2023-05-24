@@ -12,7 +12,7 @@ inputs:
   format:
     description: 'dolt noms bin format'
     required: true
-    default: '__LD_1__'
+    default: '__DOLT__'
   template:
     description: 'email template'
     required: false
