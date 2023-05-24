@@ -733,7 +733,8 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQual
 	switch dbType {
 	case dsess.RevisionTypeBranch:
 		// fetch the upstream head if this is a replicated db
-		if replicaDb, ok := srcDb.(ReadReplicaDatabase); ok {
+		replicaDb, ok := srcDb.(ReadReplicaDatabase); 
+		if ok && replicaDb.ValidReplicaState(ctx) {
 			// TODO move this out of analysis phase, should only happen at read time, when the transaction begins (like is
 			//  the case with a branch that already exists locally)
 			err := p.ensureReplicaHeadExists(ctx, resolvedRevSpec, replicaDb)

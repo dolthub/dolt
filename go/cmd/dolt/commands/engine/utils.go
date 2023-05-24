@@ -135,6 +135,7 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 			return sqle.ReadReplicaDatabase{}, err
 		}
 		cli.Println(err)
+		// TODO: fix this, we should log warnings and return a normal database in this case, not a broken replica db
 		return sqle.ReadReplicaDatabase{Database: db}, nil
 	}
 	return rrd, nil

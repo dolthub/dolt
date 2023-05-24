@@ -53,8 +53,6 @@ var _ dsess.RemoteReadReplicaDatabase = ReadReplicaDatabase{}
 
 var ErrFailedToLoadReplicaDB = errors.New("failed to load replica database")
 var ErrInvalidReplicateHeadsSetting = errors.New("invalid replicate heads setting")
-var ErrFailedToCastToReplicaDb = errors.New("failed to cast to ReadReplicaDatabase")
-var ErrCannotCreateReplicaRevisionDbForCommit = errors.New("cannot create replica revision db for commit")
 
 var EmptyReadReplica = ReadReplicaDatabase{}
 
