@@ -334,7 +334,7 @@ func (s *SqlEngineTableWriter) createTable() error {
 // getInsertNode returns the sql.Node to be iterated on given the import option.
 func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row) (sql.Node, error) {
 	switch s.importOption {
-	case CreateOp, ReplaceOp:
+	case CreateOp, ReplaceOp, AppendOp:
 		return s.createInsertImportNode(inputChannel, s.contOnErr, false, nil) // contonerr translates to ignore
 	case UpdateOp:
 		return s.createInsertImportNode(inputChannel, s.contOnErr, false, generateOnDuplicateKeyExpressions(s.rowOperationSchema.Schema)) // contonerr translates to ignore
