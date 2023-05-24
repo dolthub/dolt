@@ -62,6 +62,7 @@ require (
 	github.com/dolthub/go-mysql-server v0.15.1-0.20230524195827-9aebf0e12a15
 	github.com/dolthub/swiss v0.1.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
+	github.com/hashicorp/golang-lru/v2 v2.0.2
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/kylelemons/godebug v1.1.0

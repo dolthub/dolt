@@ -29,6 +29,7 @@ import (
 	"sort"
 	"sync"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -286,13 +287,23 @@ func (ts tableSet) Size() int {
 
 // append adds a memTable to an existing tableSet, compacting |mt| and
 // returning a new tableSet with newly compacted table added.
-func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, stats *Stats) (tableSet, error) {
+func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, hasCache *lru.TwoQueueCache[addr, struct{}], stats *Stats) (tableSet, error) {
+	for i := range mt.pendingRefs {
+		if !mt.pendingRefs[i].has && hasCache.Contains(*mt.pendingRefs[i].a) {
+			mt.pendingRefs[i].has = true
+		}
+	}
+
 	sort.Sort(hasRecordByPrefix(mt.pendingRefs))
 	absent, err := checker(mt.pendingRefs)
 	if err != nil {
 		return tableSet{}, err
 	} else if absent.Size() > 0 {
 		return tableSet{}, fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
+	}
+
+	for _, e := range mt.pendingRefs {
+		hasCache.Add(*e.a, struct{}{})
 	}
 
 	cs, err := ts.p.Persist(ctx, mt, ts, stats)
