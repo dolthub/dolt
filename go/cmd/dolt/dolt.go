@@ -407,7 +407,7 @@ func runMain() int {
 	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
 
 	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
-	subcommandName := remainingArgs[0]
+
 	if err == argparser.ErrHelp {
 		doltCommand.PrintUsage("dolt")
 
@@ -423,6 +423,8 @@ The sql subcommand is currently the only command that uses these flags. All othe
 		cli.PrintErrln(color.RedString("Failure to parse arguments: %v", err))
 		return 1
 	}
+
+	subcommandName := remainingArgs[0]
 
 	var fs filesys.Filesys
 	fs = filesys.LocalFS
