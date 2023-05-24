@@ -384,7 +384,7 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 	if !ok {
 		t.Fatal("'mydb' database not found")
 	}
-	
+
 	headSpec, err := doltdb.NewCommitSpec("HEAD")
 	require.NoError(t, err)
 	headRefs, err := db.GetHeadRefs(context.Background())

@@ -21,6 +21,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -35,7 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type DoltDatabaseProvider struct {
@@ -733,7 +734,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQual
 	switch dbType {
 	case dsess.RevisionTypeBranch:
 		// fetch the upstream head if this is a replicated db
-		replicaDb, ok := srcDb.(ReadReplicaDatabase); 
+		replicaDb, ok := srcDb.(ReadReplicaDatabase)
 		if ok && replicaDb.ValidReplicaState(ctx) {
 			// TODO move this out of analysis phase, should only happen at read time, when the transaction begins (like is
 			//  the case with a branch that already exists locally)
@@ -1073,11 +1074,11 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 			return nil, false, err
 		}
 
-		// A newly created session may not have any info on current head stored yet, in which case we get the default 
-		// branch for the db itself instead. 
+		// A newly created session may not have any info on current head stored yet, in which case we get the default
+		// branch for the db itself instead.
 		if !ok {
 			usingDefaultBranch = true
-			
+
 			// First check the global variable for the default branch
 			_, val, ok := sql.SystemVariables.GetGlobal(dsess.DefaultBranchKey(db.Name()))
 			if ok {
@@ -1089,8 +1090,8 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 					head = ""
 					// continue to below
 				}
-			} 
-			
+			}
+
 			// Fall back to the database's checked out branch
 			if head == "" {
 				rsr := db.DbData().Rsr
@@ -1109,14 +1110,14 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 	if err != nil {
 		if sql.ErrDatabaseNotFound.Is(err) && usingDefaultBranch {
 			// We can return a better error message here in some cases
-			// TODO: this better error message doesn't always get returned to clients because the code path is doesn't 
+			// TODO: this better error message doesn't always get returned to clients because the code path is doesn't
 			//  return an error, only a boolean result (HasDB)
 			return nil, false, fmt.Errorf("cannot resolve default branch head for database '%s': '%s'", baseName, head)
 		} else {
 			return nil, false, err
 		}
 	}
-	
+
 	if !ok {
 		return nil, false, nil
 	}

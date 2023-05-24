@@ -328,7 +328,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 
-	tests := []defaultBranchTest {
+	tests := []defaultBranchTest{
 		{
 			query:       sess.SelectBySql("select active_branch() as branch"),
 			expectedRes: []testResult{{defaultBranch}},
@@ -349,7 +349,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	require.NoError(t, err)
 	sess = conn.NewSession(nil)
 
-	tests = []defaultBranchTest {
+	tests = []defaultBranchTest{
 		{
 			query:       sess.SelectBySql("select active_branch() as branch"),
 			expectedRes: []testResult{{defaultBranch}},
@@ -384,7 +384,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 			expectedRes: nil,
 		},
 	}
-	
+
 	runDefaultBranchTests(t, tests, conn)
 
 	conn, err = dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
@@ -399,7 +399,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	}
 
 	runDefaultBranchTests(t, tests, conn)
-	
+
 	conn, err = dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	sess = conn.NewSession(nil)
@@ -419,7 +419,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 
 	tests = []defaultBranchTest{
 		{
-			query:       sess.SelectBySql("select active_branch() as branch"),
+			query:          sess.SelectBySql("select active_branch() as branch"),
 			expectedErrStr: "cannot resolve default branch head", // TODO: should be a better error message
 		},
 	}
