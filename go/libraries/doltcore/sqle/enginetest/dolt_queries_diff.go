@@ -3457,11 +3457,11 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{3}},
 			},
 			{
-				Query:    "SELECT * FROM DOLT_DIFF WHERE commit_hash = @Commit1 AND committer <> 'billy bob';",
+				Query:    "SELECT * FROM DOLT_DIFF WHERE commit_hash = @Commit1 AND committer <> 'root';",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "SELECT commit_hash, committer FROM DOLT_DIFF WHERE commit_hash <> @Commit1 AND committer = 'billy bob' AND commit_hash NOT IN ('WORKING','STAGED');",
+				Query:    "SELECT commit_hash, committer FROM DOLT_DIFF WHERE commit_hash <> @Commit1 AND committer = 'root' AND commit_hash NOT IN ('WORKING','STAGED');",
 				Expected: []sql.Row{},
 			},
 			{
@@ -3472,7 +3472,7 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash <> @Commit1 OR committer <> 'billy bob' ORDER BY table_name;",
+				Query: "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash <> @Commit1 OR committer <> 'root' ORDER BY table_name;",
 				Expected: []sql.Row{
 					{"STAGED", "addedTable"},
 					{"STAGED", "droppedTable"},
