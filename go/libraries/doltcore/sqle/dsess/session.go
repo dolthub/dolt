@@ -317,12 +317,17 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	if err != nil {
 		return nil, err
 	}
-	
+
+	// The engine sets the transaction after this call as well, but since we begin accessing data below, we need to set 
+	// this now to avoid seeding the session state with stale data in some cases. The duplication is harmless since the 
+	// code below cannot error, but it would to get rid of
+	ctx.SetTransaction(tx)
+
 	// Set session vars for every DB in this session using their current branch head
 	for _, db := range doltDatabases {
 		// faulty settings can make it impossible to load particular DB branch states, so we ignore any errors in this 
 		// loop and just decline to set the session vars. Throwing an error on transaction start in these cases makes it
-		// impossible for the user to correct any problems. 
+		// impossible for the user to correct any problems.
 		bs, ok, err := d.lookupDbState(ctx, db.Name())
 		if err != nil || !ok {
 			continue
@@ -331,7 +336,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		_ = d.setSessionVarsForDb(ctx, db.Name(), bs)
 	}
 	
-	return tx, err
+	return tx, nil
 }
 
 // clear clears all DB state for this session
