@@ -420,7 +420,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	tests = []defaultBranchTest{
 		{
 			query:       sess.SelectBySql("select active_branch() as branch"),
-			expectedErrStr: "database not found", // TODO: should be a better error message
+			expectedErrStr: "cannot resolve default branch head", // TODO: should be a better error message
 		},
 	}
 
