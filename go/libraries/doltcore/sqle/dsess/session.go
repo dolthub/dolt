@@ -273,6 +273,12 @@ func (d *DoltSession) ValidateSession(ctx *sql.Context, dbName string) error {
 
 // StartTransaction refreshes the state of this session and starts a new transaction.
 func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
+	// TODO: this is only necessary to support filter-branch, which needs to set a root directly and not have the 
+	//  session state altered when a transaction begins 
+	if TransactionsDisabled(ctx) {
+		return DisabledTransaction{}, nil
+	}
+
 	// New transaction, clear all session state
 	d.clear()
 
