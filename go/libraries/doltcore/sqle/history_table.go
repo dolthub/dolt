@@ -28,7 +28,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -55,7 +54,6 @@ var (
 )
 
 var _ sql.Table = (*HistoryTable)(nil)
-var _ sql.FilteredTable = (*HistoryTable)(nil)
 var _ sql.IndexAddressableTable = (*HistoryTable)(nil)
 var _ sql.IndexedTable = (*HistoryTable)(nil)
 
@@ -173,24 +171,6 @@ func historyTableSchema(tableName string, table *DoltTable) sql.Schema {
 		},
 	)
 	return newSch
-}
-
-// HandledFilters returns the list of filters that will be handled by the table itself
-func (ht *HistoryTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	ht.commitFilters = dtables.FilterFilters(filters, dtables.ColumnPredicate(historyTableCommitMetaCols))
-	return ht.commitFilters
-}
-
-// Filters returns the list of filters that are applied to this table.
-func (ht *HistoryTable) Filters() []sql.Expression {
-	return ht.commitFilters
-}
-
-// WithFilters returns a new sql.Table instance with the filters applied. We handle filters on any commit columns.
-func (ht *HistoryTable) WithFilters(ctx *sql.Context, filters []sql.Expression) sql.Table {
-	ret := *ht
-	ret.commitFilters = dtables.FilterFilters(filters, dtables.ColumnPredicate(historyTableCommitMetaCols))
-	return &ret
 }
 
 func (ht *HistoryTable) filterIter(ctx *sql.Context, iter doltdb.CommitItr) (doltdb.CommitItr, error) {

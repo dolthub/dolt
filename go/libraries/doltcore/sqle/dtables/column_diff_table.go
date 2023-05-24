@@ -35,8 +35,6 @@ import (
 	dtypes "github.com/dolthub/dolt/go/store/types"
 )
 
-var _ sql.FilteredTable = (*ColumnDiffTable)(nil)
-
 // ColumnDiffTable is a sql.Table implementation of a system table that shows which tables and columns have
 // changed in each commit, across all branches.
 type ColumnDiffTable struct {
@@ -78,29 +76,6 @@ func (dt *ColumnDiffTable) Schema() sql.Schema {
 	}
 }
 
-// Filters returns the list of filters that are applied to this table.
-func (dt *ColumnDiffTable) Filters() []sql.Expression {
-	return dt.partitionFilters
-}
-
-// HandledFilters returns the list of filters that will be handled by the table itself
-func (dt *ColumnDiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	filters = append(filters, dt.partitionFilters...)
-	dt.partitionFilters = FilterFilters(filters, ColumnPredicate(filterColumnNameSet))
-	return dt.partitionFilters
-}
-
-// WithFilters returns a new sql.Table instance with the filters applied
-func (dt *ColumnDiffTable) WithFilters(_ *sql.Context, filters []sql.Expression) sql.Table {
-	dt.partitionFilters = FilterFilters(filters, ColumnPredicate(filterColumnNameSet))
-	commitCheck, err := commitFilterForDiffTableFilterExprs(dt.partitionFilters)
-	if err != nil {
-		return nil
-	}
-	dt.commitCheck = commitCheck
-	return dt
-}
-
 // Partitions is a sql.Table interface function that returns a partition of the data. Returns one
 // partition for working set changes and one partition for all commit history.
 func (dt *ColumnDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
@@ -134,16 +109,17 @@ func (dt *ColumnDiffTable) PartitionRows(ctx *sql.Context, partition sql.Partiti
 	}
 }
 
+//todo fix indexed paths, these were missing tests in CI
 // GetIndexes implements sql.IndexAddressable
-func (dt *ColumnDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return index.DoltCommitIndexes(dt.Name(), dt.ddb, true)
-}
+//func (dt *ColumnDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+//	return index.DoltCommitIndexes(dt.Name(), dt.ddb, true)
+//}
 
 // IndexedAccess implements sql.IndexAddressable
-func (dt *ColumnDiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
-	nt := *dt
-	return &nt
-}
+//func (dt *ColumnDiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+//	nt := *dt
+//	return &nt
+//}
 
 // Collation implements the sql.Table interface.
 func (dt *ColumnDiffTable) Collation() sql.CollationID {

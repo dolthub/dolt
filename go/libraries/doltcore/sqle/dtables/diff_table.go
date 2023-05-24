@@ -51,7 +51,6 @@ const (
 )
 
 var _ sql.Table = (*DiffTable)(nil)
-var _ sql.FilteredTable = (*DiffTable)(nil)
 var _ sql.IndexedTable = (*DiffTable)(nil)
 
 type DiffTable struct {
@@ -185,24 +184,6 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 }
 
 var commitMetaColumns = set.NewStrSet([]string{toCommit, fromCommit, toCommitDate, fromCommitDate})
-
-// HandledFilters returns the list of filters that will be handled by the table itself
-func (dt *DiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	dt.partitionFilters = FilterFilters(filters, ColumnPredicate(commitMetaColumns))
-	return dt.partitionFilters
-}
-
-// Filters returns the list of filters that are applied to this table.
-func (dt *DiffTable) Filters() []sql.Expression {
-	return dt.partitionFilters
-}
-
-// WithFilters returns a new sql.Table instance with the filters applied
-func (dt *DiffTable) WithFilters(_ *sql.Context, filters []sql.Expression) sql.Table {
-	ret := *dt
-	ret.partitionFilters = FilterFilters(filters, ColumnPredicate(commitMetaColumns))
-	return &ret
-}
 
 // CommitIsInScope returns true if a given commit hash is head or is
 // visible from the current head's ancestry graph.
