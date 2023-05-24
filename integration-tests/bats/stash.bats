@@ -25,14 +25,12 @@ teardown() {
 }
 
 @test "stash: stashing on clean working set" {
-    skip_nbf_ld_1
     run dolt stash
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No local changes to save" ]] || false
 }
 
 @test "stash: simple stashing and popping stash" {
-    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq 0 ]
@@ -61,7 +59,6 @@ teardown() {
 }
 
 @test "stash: clearing stash when stash list is empty" {
-    skip_nbf_ld_1
     run dolt stash list
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 0 ]
@@ -72,7 +69,6 @@ teardown() {
 }
 
 @test "stash: clearing stash removes all entries in stash list" {
-    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     dolt stash
 
@@ -95,7 +91,6 @@ teardown() {
 }
 
 @test "stash: clearing stash and stashing again" {
-    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     dolt stash
 
@@ -114,7 +109,6 @@ teardown() {
 }
 
 @test "stash: clearing stash and popping returns error of no entries found" {
-    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     dolt stash
     dolt sql -q "INSERT INTO test VALUES (2, 'b')"
@@ -143,7 +137,6 @@ teardown() {
 }
 
 @test "stash: popping oldest stash" {
-    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -176,7 +169,6 @@ teardown() {
 }
 
 @test "stash: popping neither latest nor oldest stash" {
-    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -229,7 +221,6 @@ teardown() {
 }
 
 @test "stash: stashing multiple entries on different branches" {
-    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -246,7 +237,6 @@ teardown() {
 }
 
 @test "stash: popping stash on different branch" {
-    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -264,7 +254,6 @@ teardown() {
 }
 
 @test "stash: dropping stash removes an entry at given index in stash list" {
-    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -309,7 +298,6 @@ teardown() {
 }
 
 @test "stash: popping stash on dirty working set with no conflict" {
-    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -330,7 +318,6 @@ teardown() {
 }
 
 @test "stash: popping stash on dirty working set with conflict" {
-    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -351,7 +338,6 @@ teardown() {
 }
 
 @test "stash: stashing both modified staged and working set of changes and popping the stash" {
-    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     dolt add .
     dolt sql -q "INSERT INTO test VALUES (2, 'b')"
@@ -385,7 +371,6 @@ teardown() {
 }
 
 @test "stash: stashing on working set with untracked tables only should be nothing to stash" {
-    skip_nbf_ld_1
     dolt sql -q "CREATE TABLE new_table (id INT PRIMARY KEY);"
 
     run dolt status
@@ -403,7 +388,6 @@ teardown() {
 }
 
 @test "stash: stashing untracked tables with --include-untracked flag and popping the table should not be staged" {
-    skip_nbf_ld_1
     dolt sql -q "CREATE TABLE new_table (id INT PRIMARY KEY);"
     dolt add .
     dolt sql -q "CREATE TABLE test_table (id INT);"
@@ -429,7 +413,6 @@ teardown() {
 }
 
 @test "stash: stashing staged new table changes and popping the stash, the added table should be staged" {
-    skip_nbf_ld_1
     dolt sql -q "CREATE TABLE new_table (id INT PRIMARY KEY);"
     dolt add .
 
@@ -463,7 +446,6 @@ teardown() {
 }
 
 @test "stash: stashing with staged, working set changes with untracked tables should only stash modified working set and staged changes" {
-    skip_nbf_ld_1
     dolt sql -q "CREATE TABLE new_table (id INT PRIMARY KEY);"
     dolt add .
     dolt sql -q "INSERT INTO new_table VALUES (1),(2);"
@@ -500,7 +482,6 @@ teardown() {
 }
 
 @test "stash: stashing working set with deleted table and popping it" {
-    skip_nbf_ld_1
     dolt sql -q "CREATE TABLE new_table (id INT PRIMARY KEY);"
     dolt commit -Am "create new table"
 
@@ -533,7 +514,6 @@ teardown() {
 }
 
 @test "stash: simple stashing and popping stash after running GC" {
-    skip_nbf_ld_1
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq 0 ]
@@ -568,7 +548,6 @@ teardown() {
 }
 
 @test "stash: popping stash with deleted table that is deleted already on current head" {
-    skip_nbf_ld_1
     dolt branch branch1
     dolt checkout -b branch2
     dolt sql -q "DROP TABLE test;"
@@ -597,7 +576,6 @@ teardown() {
 }
 
 @test "stash: popping stash with deleted table that the same table exists on current head" {
-    skip_nbf_ld_1
     dolt branch branch1
     dolt branch branch2
 
@@ -630,7 +608,6 @@ teardown() {
 }
 
 @test "stash: popping stash with deleted table that different table with same name on current head gives conflict" {
-    skip_nbf_ld_1
     dolt branch branch1
     dolt branch branch2
 
@@ -661,7 +638,6 @@ teardown() {
 }
 
 @test "stash: popping stash with added table with PK on current head with the exact same table is added already" {
-    skip_nbf_ld_1
     dolt branch branch1
     dolt checkout -b branch2
     dolt sql -q "CREATE TABLE new_test(id INT PRIMARY KEY); INSERT INTO new_test VALUES (1);"
@@ -691,7 +667,6 @@ teardown() {
 }
 
 @test "stash: popping stash with added keyless table on current head with the exact same table is added already" {
-    skip_nbf_ld_1
     dolt branch branch1
     dolt checkout -b branch2
     dolt sql -q "CREATE TABLE new_test(id INT); INSERT INTO new_test VALUES (1);"
