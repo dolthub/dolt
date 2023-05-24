@@ -17,14 +17,13 @@ package commands
 import (
 	"bytes"
 	"context"
-	"io"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var addDocs = cli.CommandDocumentationContent{
@@ -119,21 +118,16 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	_, rowIter, err := queryist.Query(sqlCtx, generateSql(apr))
+	schema, rowIter, err := queryist.Query(sqlCtx, generateSql(apr))
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1
 	}
 
-	for {
-		_, err := rowIter.Next(sqlCtx)
-		if err == io.EOF {
-			return 0
-		}
-		if err != nil {
-			cli.PrintErrln(errhand.VerboseErrorFromError(err))
-			return 1
-		}
+	_, err = sql.RowIterToRows(sqlCtx, schema, rowIter)
+	if err != nil {
+		cli.PrintErrln(errhand.VerboseErrorFromError(err))
+		return 1
 	}
 
 	return 0
