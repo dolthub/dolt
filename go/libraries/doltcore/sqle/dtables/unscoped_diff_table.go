@@ -40,8 +40,6 @@ var commitHistoryPartitionKey = []byte("commithistory")
 var commitHashCol = "commit_hash"
 var filterColumnNameSet = set.NewStrSet([]string{commitHashCol})
 
-var _ sql.FilteredTable = (*UnscopedDiffTable)(nil)
-
 // UnscopedDiffTable is a sql.Table implementation of a system table that shows which tables have
 // changed in each commit, across all branches.
 type UnscopedDiffTable struct {
@@ -55,29 +53,6 @@ type UnscopedDiffTable struct {
 // NewUnscopedDiffTable creates an UnscopedDiffTable
 func NewUnscopedDiffTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	return &UnscopedDiffTable{dbName: dbName, ddb: ddb, head: head}
-}
-
-// Filters returns the list of filters that are applied to this table.
-func (dt *UnscopedDiffTable) Filters() []sql.Expression {
-	return dt.partitionFilters
-}
-
-// HandledFilters returns the list of filters that will be handled by the table itself
-func (dt *UnscopedDiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	filters = append(filters, dt.partitionFilters...)
-	dt.partitionFilters = FilterFilters(filters, ColumnPredicate(filterColumnNameSet))
-	return dt.partitionFilters
-}
-
-// WithFilters returns a new sql.Table instance with the filters applied
-func (dt *UnscopedDiffTable) WithFilters(_ *sql.Context, filters []sql.Expression) sql.Table {
-	dt.partitionFilters = FilterFilters(filters, ColumnPredicate(filterColumnNameSet))
-	commitCheck, err := commitFilterForDiffTableFilterExprs(dt.partitionFilters)
-	if err != nil {
-		return nil
-	}
-	dt.commitCheck = commitCheck
-	return dt
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
