@@ -1600,7 +1600,8 @@ listener:
   socket: dolt.$PORT.sock
 
 behavior:
-  autocommit: true" > server.yaml
+  autocommit: true
+  dolt_transaction_commit: true" > server.yaml
 
     dolt sql-server --config server.yaml > log.txt 2>&1 &
     SERVER_PID=$!
@@ -1610,6 +1611,11 @@ behavior:
     [ $status -eq 0 ]
     [[ $output =~ col1 ]] || false
     [[ $output =~ " 1 " ]] || false
+
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select @@dolt_transaction_commit"
+    [ $status -eq 0 ]
+    [[ $output =~ " 1 " ]] || false
+
 
     run grep "dolt.$PORT.sock" log.txt
     [ "$status" -eq 0 ]

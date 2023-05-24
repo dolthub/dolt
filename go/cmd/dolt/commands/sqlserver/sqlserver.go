@@ -79,6 +79,8 @@ SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}behavior.autocommit{{.EmphasisRight}}: If true write queries will automatically alter the working set. When working with autocommit enabled it is highly recommended that listener.max_connections be set to 1 as concurrency issues will arise otherwise
 
+{{.EmphasisLeft}}behavior.dolt_transaction_commit{{.EmphasisRight}}: If true all SQL transaction commits will automatically create a Dolt commit, with a generated commit message. This is useful when a system working with Dolt wants to create versioned data, but doesn't want to directly use Dolt features such as dolt_commit(). 
+
 {{.EmphasisLeft}}user.name{{.EmphasisRight}}: The username that connections should use for authentication
 
 {{.EmphasisLeft}}user.password{{.EmphasisRight}}: The password that connections should use for authentication.
