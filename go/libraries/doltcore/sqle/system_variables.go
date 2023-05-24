@@ -102,14 +102,6 @@ func AddDoltSystemVariables() {
 			Type:              types.NewSystemBoolType(dsess.DoltCommitOnTransactionCommit),
 			Default:           int8(0),
 		},
-		{ // If true, causes the SQL user to be the author of Dolt commits
-			Name:              dsess.DoltSqlUserIsCommitter,
-			Scope:             sql.SystemVariableScope_Both,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              types.NewSystemBoolType(dsess.DoltSqlUserIsCommitter),
-			Default:           int8(0),
-		},
 		{
 			Name:              dsess.TransactionsDisabledSysVar,
 			Scope:             sql.SystemVariableScope_Session,
