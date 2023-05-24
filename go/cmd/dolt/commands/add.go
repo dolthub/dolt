@@ -102,7 +102,8 @@ func generateSql(apr *argparser.ArgParseResults) string {
 func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
-
+		cli.PrintErrln(errhand.VerboseErrorFromError(err))
+		return 1
 	}
 	if closeFunc != nil {
 		defer closeFunc()
