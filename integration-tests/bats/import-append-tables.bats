@@ -35,6 +35,7 @@ CSV
 }
 
 @test "import-append-tables: disallow multiple keys with different values during append" {
+    skip_nbf_not_dolt
     dolt sql -q "CREATE TABLE t (pk int primary key, col1 int);"
     run dolt table import -a t <<CSV
 pk, col1
@@ -55,6 +56,7 @@ CSV
 }
 
 @test "import-append-tables: ignore rows that would have no effect on import" {
+    skip_nbf_not_dolt
     dolt sql -q "CREATE TABLE t (pk int primary key, col1 int);"
     dolt table import -a t <<CSV
 pk, col1
@@ -80,6 +82,7 @@ CSV
 }
 
 @test "import-append-tables: reject rows in source that would modify rows in destination, but continue if --continue is supplied" {
+    skip_nbf_not_dolt
     dolt sql -q "CREATE TABLE t (pk int primary key, col1 int);"
     dolt table import -a t <<CSV
 pk, col1
