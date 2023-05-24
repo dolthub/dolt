@@ -167,7 +167,12 @@ func NewSqlEngine(
 		db.DbData().Ddb.SetCommitHookLogger(ctx, cli.CliOut)
 	}
 
-	sessionFactory := doltSessionFactory(pro, mrEnv.Config(), bcController, config.Autocommit, config.DoltTransactionCommit)
+	err = sql.SystemVariables.SetGlobal(dsess.DoltCommitOnTransactionCommit, config.DoltTransactionCommit)
+	if err != nil {
+		return nil, err
+	}
+
+	sessionFactory := doltSessionFactory(pro, mrEnv.Config(), bcController, config.Autocommit)
 
 	if config.BinlogReplicaController != nil {
 		binLogSession, err := sessionFactory(sql.NewBaseSession(), pro)
@@ -282,7 +287,7 @@ func sqlContextFactory() contextFactory {
 }
 
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession
-func doltSessionFactory(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig, bc *branch_control.Controller, autocommit, doltTransactionCommit bool) sessionFactory {
+func doltSessionFactory(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig, bc *branch_control.Controller, autocommit bool) sessionFactory {
 	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
 		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc)
 		if err != nil {
@@ -292,11 +297,6 @@ func doltSessionFactory(pro dsqle.DoltDatabaseProvider, config config.ReadWriteC
 		// nil ctx is actually fine in this context, not used in setting a session variable. Creating a new context isn't
 		// free, and would be throwaway work, since we need to create a session before creating a sql.Context for user work.
 		err = doltSession.SetSessionVariable(nil, sql.AutoCommitSessionVar, autocommit)
-		if err != nil {
-			return nil, err
-		}
-
-		err = doltSession.SetSessionVariable(nil, dsess.DoltCommitOnTransactionCommit, doltTransactionCommit)
 		if err != nil {
 			return nil, err
 		}
