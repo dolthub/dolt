@@ -373,8 +373,9 @@ func (d *DoltSession) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSe
 	return doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(headRoot).WithStagedRoot(headRoot), nil
 }
 
-// CommitTransaction commits the in-progress transaction for the database named. Depending on session settings, this
-// may write only a new working set, or may additionally create a new dolt commit for the current HEAD.
+// CommitTransaction commits the in-progress transaction. Depending on session settings, this may write only a new 
+// working set, or may additionally create a new dolt commit for the current HEAD. If more than one branch head has 
+// changes, the transaction is rejected.
 func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
 	if d.BatchMode() == Batched {
 		for _, db := range d.provider.DoltDatabases() {
