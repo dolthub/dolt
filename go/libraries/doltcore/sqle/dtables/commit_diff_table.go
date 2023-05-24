@@ -22,29 +22,31 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 var ErrExactlyOneToCommit = errors.New("dolt_commit_diff_* tables must be filtered to a single 'to_commit'")
 var ErrExactlyOneFromCommit = errors.New("dolt_commit_diff_* tables must be filtered to a single 'from_commit'")
+var ErrInvalidCommitDiffTableArgs = errors.New("commit_diff_<table> requires one 'to_commit' and one 'from_commit'")
 
 var _ sql.Table = (*CommitDiffTable)(nil)
-var _ sql.FilteredTable = (*CommitDiffTable)(nil)
 
 type CommitDiffTable struct {
-	name              string
-	ddb               *doltdb.DoltDB
-	joiner            *rowconv.Joiner
-	sqlSch            sql.PrimaryKeySchema
-	workingRoot       *doltdb.RootValue
-	fromCommitFilter  *expression.Equals
-	toCommitFilter    *expression.Equals
+	name        string
+	ddb         *doltdb.DoltDB
+	joiner      *rowconv.Joiner
+	sqlSch      sql.PrimaryKeySchema
+	workingRoot *doltdb.RootValue
+	// toCommit and fromCommit are set via the
+	// sql.IndexAddressable interface
+	toCommit          string
+	fromCommit        string
 	requiredFilterErr error
 	targetSchema      schema.Schema
 }
@@ -102,52 +104,61 @@ func (dt *CommitDiffTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-type SliceOfPartitionsItr struct {
-	partitions []sql.Partition
-	i          int
-	mu         *sync.Mutex
+// GetIndexes implements sql.IndexAddressable
+func (dt *CommitDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return []sql.Index{index.DoltToFromCommitIndex(dt.name)}, nil
 }
 
-func NewSliceOfPartitionsItr(partitions []sql.Partition) *SliceOfPartitionsItr {
-	return &SliceOfPartitionsItr{
-		partitions: partitions,
-		mu:         &sync.Mutex{},
-	}
-}
-
-func (itr *SliceOfPartitionsItr) Next(*sql.Context) (sql.Partition, error) {
-	itr.mu.Lock()
-	defer itr.mu.Unlock()
-
-	if itr.i >= len(itr.partitions) {
-		return nil, io.EOF
-	}
-
-	next := itr.partitions[itr.i]
-	itr.i++
-
-	return next, nil
-}
-
-func (itr *SliceOfPartitionsItr) Close(*sql.Context) error {
-	return nil
+// IndexedAccess implements sql.IndexAddressable
+func (dt *CommitDiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	nt := *dt
+	return &nt
 }
 
 func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	if dt.requiredFilterErr != nil {
-		return nil, fmt.Errorf("error querying table %s: %w", dt.Name(), dt.requiredFilterErr)
-	} else if dt.toCommitFilter == nil {
-		return nil, fmt.Errorf("error querying table %s: %w", dt.Name(), ErrExactlyOneToCommit)
-	} else if dt.fromCommitFilter == nil {
-		return nil, fmt.Errorf("error querying table %s: %w", dt.Name(), ErrExactlyOneFromCommit)
+	return nil, fmt.Errorf("error querying table %s: %w", dt.Name(), ErrExactlyOneToCommit)
+}
+
+func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup) (sql.PartitionIter, error) {
+	if len(i.Ranges) != 1 || len(i.Ranges[0]) != 2 {
+		return nil, ErrInvalidCommitDiffTableArgs
+	}
+	to := i.Ranges[0][0]
+	from := i.Ranges[0][1]
+	switch to.UpperBound.(type) {
+	case sql.Above, sql.Below:
+	default:
+		return nil, ErrInvalidCommitDiffTableArgs
+	}
+	switch from.UpperBound.(type) {
+	case sql.Above, sql.Below:
+	default:
+		return nil, ErrInvalidCommitDiffTableArgs
+	}
+	toCommit, _, err := to.Typ.Convert(sql.GetRangeCutKey(to.UpperBound))
+	if err != nil {
+		return nil, err
+	}
+	var ok bool
+	dt.toCommit, ok = toCommit.(string)
+	if !ok {
+		return nil, fmt.Errorf("to_commit must be string, found %T", toCommit)
+	}
+	fromCommit, _, err := from.Typ.Convert(sql.GetRangeCutKey(from.UpperBound))
+	if err != nil {
+		return nil, err
+	}
+	dt.fromCommit, ok = fromCommit.(string)
+	if !ok {
+		return nil, fmt.Errorf("from_commit must be string, found %T", fromCommit)
 	}
 
-	toRoot, toHash, toDate, err := dt.rootValForFilter(ctx, dt.toCommitFilter)
+	toRoot, toHash, toDate, err := dt.rootValForHash(ctx, dt.toCommit)
 	if err != nil {
 		return nil, err
 	}
 
-	fromRoot, fromHash, fromDate, err := dt.rootValForFilter(ctx, dt.fromCommitFilter)
+	fromRoot, fromHash, fromDate, err := dt.rootValForHash(ctx, dt.fromCommit)
 	if err != nil {
 		return nil, err
 	}
@@ -186,24 +197,38 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 	return NewSliceOfPartitionsItr([]sql.Partition{dp}), nil
 }
 
-func (dt *CommitDiffTable) rootValForFilter(ctx *sql.Context, eqFilter *expression.Equals) (*doltdb.RootValue, string, *types.Timestamp, error) {
-	gf, nonGF := eqFilter.Left(), eqFilter.Right()
-	if _, ok := gf.(*expression.GetField); !ok {
-		nonGF, gf = eqFilter.Left(), eqFilter.Right()
+type SliceOfPartitionsItr struct {
+	partitions []sql.Partition
+	i          int
+	mu         *sync.Mutex
+}
+
+func NewSliceOfPartitionsItr(partitions []sql.Partition) *SliceOfPartitionsItr {
+	return &SliceOfPartitionsItr{
+		partitions: partitions,
+		mu:         &sync.Mutex{},
+	}
+}
+
+func (itr *SliceOfPartitionsItr) Next(*sql.Context) (sql.Partition, error) {
+	itr.mu.Lock()
+	defer itr.mu.Unlock()
+
+	if itr.i >= len(itr.partitions) {
+		return nil, io.EOF
 	}
 
-	val, err := nonGF.Eval(ctx, nil)
+	next := itr.partitions[itr.i]
+	itr.i++
 
-	if err != nil {
-		return nil, "", nil, err
-	}
+	return next, nil
+}
 
-	hashStr, ok := val.(string)
+func (itr *SliceOfPartitionsItr) Close(*sql.Context) error {
+	return nil
+}
 
-	if !ok {
-		return nil, "", nil, fmt.Errorf("received '%v' when expecting commit hash string", val)
-	}
-
+func (dt *CommitDiffTable) rootValForHash(ctx *sql.Context, hashStr string) (*doltdb.RootValue, string, *types.Timestamp, error) {
 	var root *doltdb.RootValue
 	var commitTime *types.Timestamp
 	if strings.ToLower(hashStr) == "working" {
@@ -238,68 +263,6 @@ func (dt *CommitDiffTable) rootValForFilter(ctx *sql.Context, eqFilter *expressi
 	}
 
 	return root, hashStr, commitTime, nil
-}
-
-// HandledFilters returns the list of filters that will be handled by the table itself
-func (dt *CommitDiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	var commitFilters []sql.Expression
-	for _, filter := range filters {
-		eqFilter, isEquality := filter.(*expression.Equals)
-		if !isEquality {
-			continue
-		}
-		for _, e := range []sql.Expression{eqFilter.Left(), eqFilter.Right()} {
-			val, ok := e.(*expression.GetField)
-			if !ok {
-				continue
-			}
-			switch strings.ToLower(val.Name()) {
-			case toCommit, fromCommit:
-				commitFilters = append(commitFilters, filter)
-			}
-		}
-	}
-	return commitFilters
-}
-
-// Filters returns the list of filters that are applied to this table.
-func (dt *CommitDiffTable) Filters() []sql.Expression {
-	if dt.toCommitFilter == nil && dt.fromCommitFilter == nil {
-		return nil
-	}
-
-	return []sql.Expression{dt.toCommitFilter, dt.fromCommitFilter}
-}
-
-// WithFilters returns a new sql.Table instance with the filters applied
-func (dt *CommitDiffTable) WithFilters(_ *sql.Context, filters []sql.Expression) sql.Table {
-	for _, filter := range filters {
-		eqFilter, isEquality := filter.(*expression.Equals)
-		if eqFilter == nil || !isEquality {
-			continue
-		}
-		for _, e := range []sql.Expression{eqFilter.Left(), eqFilter.Right()} {
-			val, ok := e.(*expression.GetField)
-			if !ok {
-				continue
-			}
-			switch strings.ToLower(val.Name()) {
-			case toCommit:
-				if dt.toCommitFilter != nil {
-					dt.requiredFilterErr = ErrExactlyOneToCommit
-					return dt
-				}
-				dt.toCommitFilter = eqFilter
-			case fromCommit:
-				if dt.fromCommitFilter != nil {
-					dt.requiredFilterErr = ErrExactlyOneFromCommit
-					return dt
-				}
-				dt.fromCommitFilter = eqFilter
-			}
-		}
-	}
-	return dt
 }
 
 func (dt *CommitDiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {

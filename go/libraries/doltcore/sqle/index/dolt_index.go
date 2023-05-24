@@ -183,6 +183,20 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 	return indexes, nil
 }
 
+func DoltToFromCommitIndex(tbl string) sql.Index {
+	return &doltIndex{
+		id:      "commits",
+		tblName: doltdb.DoltCommitDiffTablePrefix + tbl,
+		columns: []schema.Column{
+			schema.NewColumn(ToCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
+			schema.NewColumn(FromCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
+		},
+		unique:                        true,
+		comment:                       "",
+		order:                         sql.IndexOrderNone,
+		constrainedToLookupExpression: false,
+	}
+}
 func DoltCommitIndexes(tab string, db *doltdb.DoltDB, unique bool) (indexes []sql.Index, err error) {
 	if !types.IsFormat_DOLT(db.Format()) {
 		return nil, nil

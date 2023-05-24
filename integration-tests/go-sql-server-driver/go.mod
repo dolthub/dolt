@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/dolthub/dolt/go v0.40.4
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.2
 	golang.org/x/sync v0.1.0
 	gopkg.in/yaml.v3 v3.0.1
 )
