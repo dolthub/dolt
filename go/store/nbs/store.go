@@ -1688,6 +1688,10 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 		return errors.New("concurrent manifest edit during GC, before swapTables. GC failed.")
 	}
 
+	// We purge the hasCache here, since |swapTables| is the only place where
+	// chunks can actually be removed from the block store. Other times when
+	// we update the table set, we are appending new table files to it, or
+	// replacing table files in it with a file into which they were conjoined.
 	nbs.hasCache.Purge()
 
 	// replace nbs.tables.upstream with gc compacted tables
