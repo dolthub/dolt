@@ -234,25 +234,7 @@ assert_has_key_value() {
     [[ "$output" =~ "tag: v0" ]] || false
 }
 
-@test "show: --no-pretty with old format" {
-    skip_nbf_dolt
-
-    run dolt show --no-pretty
-    [ $status -eq 1 ]
-    [[ "$output" =~ "dolt show --no-pretty is not supported when using old LD_1 storage format." ]] || false
-}
-
-@test "show: non-commit object with old format" {
-    skip_nbf_dolt
-
-    run dolt show WORKING
-    [ $status -eq 1 ]
-    [[ "$output" =~ "dolt show cannot show non-commit objects when using the old LD_1 storage format: WORKING is not a commit" ]] || false
-}
-
 @test "show: non-existent branch" {
-    skip_nbf_dolt
-
     run dolt show branch1
     [ $status -eq 1 ]
     [[ "$output" =~ "branch not found: branch1" ]] || false
