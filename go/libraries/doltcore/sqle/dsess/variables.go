@@ -34,6 +34,7 @@ const (
 // General system variables
 const (
 	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
+	DoltSqlUserIsCommitter        = "dolt_sql_user_is_committer"
 	TransactionsDisabledSysVar    = "dolt_transactions_disabled"
 	ForceTransactionCommit        = "dolt_force_transaction_commit"
 	CurrentBatchModeKey           = "batch_mode"

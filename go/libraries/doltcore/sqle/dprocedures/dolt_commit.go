@@ -87,8 +87,26 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, error) {
 			return "", err
 		}
 	} else {
-		name = dSess.Username()
-		email = dSess.Email()
+		value, err := ctx.GetSessionVariable(ctx, dsess.DoltSqlUserIsCommitter)
+		if err != nil {
+			return "", err
+		}
+
+		sqlUserIsCommitter, err := types.ConvertToBool(value)
+		if err != nil {
+			return "", err
+		}
+
+		// If @@dolt_sql_user_is_committer is enabled, then we want to use the current SQL user as the commit author,
+		// instead of the `dolt config` configured values. We won't have an email address for the SQL user though, so
+		// instead just use the standard MySQL user@address notation.
+		if sqlUserIsCommitter {
+			name = ctx.Client().User
+			email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
+		} else {
+			name = dSess.Username()
+			email = dSess.Email()
+		}
 	}
 
 	amend := apr.Contains(cli.AmendFlag)

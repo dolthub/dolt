@@ -32,6 +32,41 @@ teardown() {
     done
 }
 
+@test "sql-server: committer is sql users when @@dolt_sql_user_is_committer is enabled" {
+  # Start a SQL-server and add a new user "user1"
+  cd repo1
+  start_sql_server
+  dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "create user user1@'%';"
+  dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "grant all privileges on *.* to user1@'%';"
+
+  # By default, commits will be authored by the user running the sql-server (bats@email.fake)
+  dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "create table t1(pk int primary key);"
+  dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "call dolt_commit('-Am', 'committing as bats@email.fake');"
+  run dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "select committer, email, message from dolt_log limit 1;"
+  [ $status -eq 0 ]
+  [[ $output =~ "| Bats Tests | bats@email.fake | committing as bats@email.fake |" ]] || false
+
+  # Turn on dolt_sql_user_is_committer
+  dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "SET @@global.dolt_sql_user_is_committer = 1;"
+  run dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "SELECT @@session.dolt_sql_user_is_committer;"
+  [ $status -eq 0 ]
+  [[ $output =~ "| 1 " ]] || false
+
+  # Commits should now show up as the sql user (user1)
+  dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "create table t2(pk int primary key);"
+  dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "call dolt_commit('-Am', 'committing as user1');"
+  run dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "select committer, email, message from dolt_log limit 1;"
+  [ $status -eq 0 ]
+  [[ $output =~ "| user1     | user1@% | committing as user1 |" ]] || false
+
+  # If --author is explicitly provided, then always use that, even if dolt_sql_user_is_committer is enabled
+  dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "create table t3(pk int primary key);"
+  dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "call dolt_commit('--author', 'barbie <barbie@plastic.com>', '-Am', 'committing as barbie');"
+  run dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "select committer, email, message from dolt_log limit 1;"
+  [ $status -eq 0 ]
+  [[ $output =~ "| barbie    | barbie@plastic.com | committing as barbie |" ]] || false
+}
+
 @test "sql-server: can create savepoint when no database is selected" {
     skiponwindows "Missing dependencies"
 
