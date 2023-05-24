@@ -67,8 +67,8 @@ func (cmd AddCmd) ArgParser() *argparser.ArgParser {
 	return cli.CreateAddArgParser()
 }
 
-// Generate the query that will call the `DOLT_ADD` stored proceudre.
-// This is safe because the only inputs are flag names and validated table names.
+// generateSql returns the query that will call the `DOLT_ADD` stored proceudre.
+// This function assumes that the inputs are validated table names, which cannot contain quotes.
 func generateSql(apr *argparser.ArgParseResults) string {
 	var buffer bytes.Buffer
 	var first bool
