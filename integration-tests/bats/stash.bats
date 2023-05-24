@@ -14,16 +14,6 @@ teardown() {
     teardown_common
 }
 
-@test "stash: stash is not supported for old format" {
-    if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ]; then
-        dolt sql -q "INSERT INTO test VALUES (1, 'a')"
-
-        run dolt stash
-        [ "$status" -eq 1 ]
-        [[ "$output" =~ "stash is not supported for old storage format" ]] || false
-    fi
-}
-
 @test "stash: stashing on clean working set" {
     run dolt stash
     [ "$status" -eq 0 ]

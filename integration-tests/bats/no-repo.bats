@@ -346,13 +346,6 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [[ "$output" =~ "Failed to load the HOME directory" ]]
 }
 
-@test "no-repo: init with new storage version" {
-    DOLT_DEFAULT_BIN_FORMAT="__DOLT__" dolt init
-    run cat .dolt/noms/manifest
-    [[ "$output" =~ "__DOLT__" ]]
-    [[ ! "$output" =~ "__LD_1__" ]]
-}
-
 @test "no-repo: dolt login exits when receiving SIGINT" {
     dolt login & # run this in the background
     PID=$! # capture background PID
