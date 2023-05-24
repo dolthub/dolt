@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -38,7 +39,9 @@ var hasManyHasAll = func([]hasRecord) (hash.HashSet, error) {
 }
 
 func TestTableSetPrependEmpty(t *testing.T) {
-	ts, err := newFakeTableSet(&UnlimitedQuotaProvider{}).append(context.Background(), newMemTable(testMemTableSize), hasManyHasAll, &Stats{})
+	hasCache, err := lru.New2Q[addr, struct{}](1024)
+	require.NoError(t, err)
+	ts, err := newFakeTableSet(&UnlimitedQuotaProvider{}).append(context.Background(), newMemTable(testMemTableSize), hasManyHasAll, hasCache, &Stats{})
 	require.NoError(t, err)
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
@@ -56,7 +59,9 @@ func TestTableSetPrepend(t *testing.T) {
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	hasCache, err := lru.New2Q[addr, struct{}](1024)
+	require.NoError(t, err)
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	firstSpecs, err := ts.toSpecs()
@@ -66,7 +71,7 @@ func TestTableSetPrepend(t *testing.T) {
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	secondSpecs, err := ts.toSpecs()
@@ -86,17 +91,19 @@ func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	hasCache, err := lru.New2Q[addr, struct{}](1024)
+	require.NoError(t, err)
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
-	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	specs, err = ts.toSpecs()
@@ -115,17 +122,19 @@ func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	hasCache, err := lru.New2Q[addr, struct{}](1024)
+	require.NoError(t, err)
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
-	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	ts, err = ts.flatten(context.Background())
@@ -147,13 +156,15 @@ func TestTableSetRebase(t *testing.T) {
 	assert := assert.New(t)
 	q := NewUnlimitedMemQuotaProvider()
 	persister := newFakeTablePersister(q)
+	hasCache, err := lru.New2Q[addr, struct{}](1024)
+	require.NoError(t, err)
 
 	insert := func(ts tableSet, chunks ...[]byte) tableSet {
 		var err error
 		for _, c := range chunks {
 			mt := newMemTable(testMemTableSize)
 			mt.addChunk(computeAddr(c), c)
-			ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+			ts, err = ts.append(context.Background(), mt, hasManyHasAll, hasCache, &Stats{})
 			require.NoError(t, err)
 		}
 		return ts
@@ -200,13 +211,15 @@ func TestTableSetPhysicalLen(t *testing.T) {
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	hasCache, err := lru.New2Q[addr, struct{}](1024)
+	require.NoError(t, err)
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts, err = ts.append(context.Background(), mt, hasManyHasAll, &Stats{})
+	ts, err = ts.append(context.Background(), mt, hasManyHasAll, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	assert.True(mustUint64(ts.physicalLen()) > indexSize(mustUint32(ts.count())))
