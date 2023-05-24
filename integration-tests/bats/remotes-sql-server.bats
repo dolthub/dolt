@@ -318,7 +318,8 @@ teardown() {
 
     cd repo1
     dolt checkout -b feature-branch
-    dolt commit -am "new commit"
+    dolt sql -q "create table newTable (a int primary key)"
+    dolt commit -Am "new commit"
     dolt push remote1 feature-branch
 
     cd ../repo2
@@ -333,8 +334,7 @@ teardown() {
     # Can't connect to a specific branch with dolt sql-client
     run dolt sql-client --use-db "repo2/feature-branch" -u dolt -P $PORT -q "SHOW Tables"
     [ $status -eq 0 ]
-    [[ $output =~ "feature-branch" ]] || false
-    [[ $output =~ "test" ]] || false
+    [[ $output =~ "newTable" ]] || false
 }
 
 @test "remotes-sql-server: connect to hash works" {
