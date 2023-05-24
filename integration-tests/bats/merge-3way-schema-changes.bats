@@ -3,8 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_not_dolt
-}
+doltdb.IgnoreTableName}
 
 teardown() {
     teardown_common
