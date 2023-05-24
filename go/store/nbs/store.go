@@ -34,6 +34,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -101,11 +102,19 @@ type NomsBlockStore struct {
 	mtSize   uint64
 	putCount uint64
 
+	hasCache *lru.TwoQueueCache[addr, struct{}]
+
 	stats *Stats
 }
 
 var _ chunks.TableFileStore = &NomsBlockStore{}
 var _ chunks.ChunkStoreGarbageCollector = &NomsBlockStore{}
+
+// 20-byte keys, ~2MB of key data.
+//
+// Likely big enough to keep common top of DAG references in the scan resistant
+// portion for most databases.
+const hasCacheSize = 100000
 
 type Range struct {
 	Offset uint64
@@ -590,6 +599,11 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 		memTableSize = defaultMemTableSize
 	}
 
+	hasCache, err := lru.New2Q[addr, struct{}](hasCacheSize)
+	if err != nil {
+		return nil, err
+	}
+
 	nbs := &NomsBlockStore{
 		mm:       mm,
 		p:        p,
@@ -597,6 +611,7 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 		tables:   newTableSet(p, q),
 		upstream: manifestContents{nbfVers: nbfVerStr},
 		mtSize:   memTableSize,
+		hasCache: hasCache,
 		stats:    NewStats(),
 	}
 	nbs.cond = sync.NewCond(&nbs.mu)
@@ -644,6 +659,7 @@ func (nbs *NomsBlockStore) WithoutConjoiner() *NomsBlockStore {
 		upstream: nbs.upstream,
 		mtSize:   nbs.mtSize,
 		putCount: nbs.putCount,
+		hasCache: nbs.hasCache,
 		stats:    nbs.stats,
 	}
 }
@@ -707,7 +723,7 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs 
 
 		addChunkRes = nbs.mt.addChunk(a, ch.Data())
 		if addChunkRes == chunkNotAdded {
-			ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.stats)
+			ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.hasCache, nbs.stats)
 			if err != nil {
 				if errors.Is(err, ErrDanglingRef) {
 					nbs.mt = nil
@@ -740,20 +756,33 @@ type refCheck func(reqs []hasRecord) (hash.HashSet, error)
 
 func (nbs *NomsBlockStore) errorIfDangling(root hash.Hash, checker refCheck) error {
 	if !root.IsEmpty() {
-		var hr [1]hasRecord
 		a := addr(root)
-		hr[0].a = &a
-		hr[0].prefix = a.Prefix()
-		absent, err := checker(hr[:])
-		if err != nil {
-			return err
-		} else if absent.Size() > 0 {
-			return fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
+		// We use |Get| here, since it updates recency of the entry.
+		if _, ok := nbs.hasCache.Get(a); !ok {
+			var hr [1]hasRecord
+			hr[0].a = &a
+			hr[0].prefix = a.Prefix()
+			absent, err := checker(hr[:])
+			if err != nil {
+				return err
+			} else if absent.Size() > 0 {
+				return fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
+			}
+			nbs.hasCache.Add(a, struct{}{})
 		}
 	}
 
 	if nbs.mt == nil || nbs.mt.pendingRefs == nil {
 		return nil // no pending refs to check
+	}
+
+	for i := range nbs.mt.pendingRefs {
+		// All of these are going to be |Add|ed after the call.  We use
+		// |Contains| to check here so the frequency count only gets
+		// bumped once.
+		if nbs.hasCache.Contains(*nbs.mt.pendingRefs[i].a) {
+			nbs.mt.pendingRefs[i].has = true
+		}
 	}
 
 	sort.Sort(hasRecordByPrefix(nbs.mt.pendingRefs))
@@ -762,6 +791,10 @@ func (nbs *NomsBlockStore) errorIfDangling(root hash.Hash, checker refCheck) err
 		return err
 	} else if absent.Size() > 0 {
 		return fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
+	}
+
+	for _, e := range nbs.mt.pendingRefs {
+		nbs.hasCache.Add(*e.a, struct{}{})
 	}
 
 	return nil
@@ -1119,7 +1152,7 @@ func (nbs *NomsBlockStore) commit(ctx context.Context, current, last hash.Hash, 
 		}
 
 		if cnt > preflushChunkCount {
-			ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.stats)
+			ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.hasCache, nbs.stats)
 			if err != nil {
 				if errors.Is(err, ErrDanglingRef) {
 					nbs.mt = nil
@@ -1198,7 +1231,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		}
 
 		if cnt > 0 {
-			ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.stats)
+			ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.hasCache, nbs.stats)
 			if err != nil {
 				if errors.Is(err, ErrDanglingRef) {
 					nbs.mt = nil
@@ -1654,6 +1687,12 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 	if upstream.lock != newContents.lock {
 		return errors.New("concurrent manifest edit during GC, before swapTables. GC failed.")
 	}
+
+	// We purge the hasCache here, since |swapTables| is the only place where
+	// chunks can actually be removed from the block store. Other times when
+	// we update the table set, we are appending new table files to it, or
+	// replacing table files in it with a file into which they were conjoined.
+	nbs.hasCache.Purge()
 
 	// replace nbs.tables.upstream with gc compacted tables
 	ts, err := nbs.tables.rebase(ctx, upstream.specs, nbs.stats)

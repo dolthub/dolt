@@ -3806,7 +3806,6 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 var errTmplNoAutomaticMerge = "table %s can't be automatically merged.\nTo merge this table, make the schema on the source and target branch equal."
 
 var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
-
 	// Data conflicts during a merge with schema changes
 	{
 		Name: "data conflict",
@@ -3827,7 +3826,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
@@ -4022,7 +4021,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x0}},
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query:    "select * from t;",
@@ -4047,7 +4046,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x0}},
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query:    "select * from t;",
@@ -4155,7 +4154,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 
-	// Constraint changes
+	// Constraints: Not Null
 	{
 		Name: "removing a not-null constraint",
 		AncSetUpScript: []string{
@@ -4187,6 +4186,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			},
 		},
 	},
+
+	// Constraints: Foreign Keys
 	{
 		Name: "adding a foreign key to one side, with fk constraint violation",
 		AncSetUpScript: []string{
@@ -4253,6 +4254,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			},
 		},
 	},
+
+	// Constraints: Unique
 	{
 		Name: "adding a unique key, with unique key violation",
 		AncSetUpScript: []string{
@@ -4300,7 +4303,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
@@ -4354,6 +4357,210 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 
+	// Constraints: Check Expressions
+	{
+		Name: "check constraint violation - simple case, no schema changes",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 int, col2 int, CHECK (col1 != col2));",
+			"INSERT into t values (1, 2, 3);",
+			"alter table t add index idx1 (pk, col2);",
+		},
+		RightSetUpScript: []string{
+			"update t set col2=4;",
+		},
+		LeftSetUpScript: []string{
+			"update t set col1=4;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(1)}},
+			},
+			{
+				Query:    "select violation_type, pk, col1, col2, violation_info like '\\%NOT((col1 = col2))\\%' from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{uint64(3), 1, 4, 4, true}},
+			},
+		},
+	},
+	{
+		Name: "check constraint violation - schema change",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 int, col2 int, col3 int, CHECK (col2 != col3));",
+			"INSERT into t values (1, 2, 3, -3);",
+			"alter table t add index idx1 (pk, col2);",
+		},
+		RightSetUpScript: []string{
+			"update t set col2=100;",
+		},
+		LeftSetUpScript: []string{
+			"alter table t drop column col1;",
+			"update t set col3=100;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(1)}},
+			},
+			{
+				Query:    "select violation_type, pk, col2, col3, violation_info like '\\%NOT((col2 = col3))\\%' from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{uint64(3), 1, 100, 100, true}},
+			},
+		},
+	},
+	{
+		Name: "check constraint violation - deleting rows",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 int, col2 int, col3 int, CHECK (col2 != col3));",
+			"INSERT into t values (1, 2, 3, -3);",
+			"alter table t add index idx1 (pk, col2);",
+		},
+		RightSetUpScript: []string{
+			"delete from t where pk=1;",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (4, 3, 2, 1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+		},
+	},
+	{
+		Name: "check constraint violation - divergent edits",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(100) default ('hello'));",
+			"INSERT into t values (1, 'hi');",
+			"alter table t add index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add constraint CHECK (col1 != concat('he', 'llo'))",
+			"update t set col1 = 'bye' where pk=1;",
+		},
+		LeftSetUpScript: []string{
+			"update t set col1 = 'adios' where pk=1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+		},
+	},
+	{
+		Name: "check constraint violation - check is always NULL",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 varchar(100) default ('hello'));",
+			"INSERT into t values (1, 'hi');",
+			"alter table t add index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add constraint CHECK (NULL = NULL)",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (2, DEFAULT);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+		},
+	},
+	{
+		Name: "check constraint violation - check is always false",
+		AncSetUpScript: []string{
+			"SET @@dolt_force_transaction_commit=1;",
+			"CREATE table t (pk int primary key, col1 varchar(100) default ('hello'));",
+			"alter table t add index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add constraint CHECK (1 = 2)",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (1, DEFAULT);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+		},
+	},
+	{
+		Name: "check constraint violation - right side violates new check constraint",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col00 int, col01 int, col1 varchar(100) default ('hello'));",
+			"INSERT into t values (1, 0, 0, 'hi');",
+			"alter table t add index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"insert into t values (2, 0, 0, DEFAULT);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t drop column col00;",
+			"alter table t drop column col01;",
+			"alter table t add constraint CHECK (col1 != concat('he', 'llo'))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(1)}},
+			},
+			{
+				Query:    `select violation_type, pk, col1, violation_info like "\%NOT((col1 = concat('he','llo')))\%" from dolt_constraint_violations_t;`,
+				Expected: []sql.Row{{uint64(3), 2, "hello", true}},
+			},
+		},
+	},
+	{
+		Name: "check constraint violation - keyless table, right side violates new check constraint",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (c0 int, col0 varchar(100), col1 varchar(100) default ('hello'));",
+			"INSERT into t values (1, 'adios', 'hi');",
+			"alter table t add index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"insert into t values (2, 'hola', DEFAULT);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add constraint CHECK (col1 != concat('he', 'llo'))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(1)}},
+			},
+			{
+				Query:    `select violation_type, c0, col0, col1, violation_info like "\%NOT((col1 = concat('he','llo')))\%" from dolt_constraint_violations_t;`,
+				Expected: []sql.Row{{uint64(3), 2, "hola", "hello", true}},
+			},
+		},
+	},
+
 	// Resolvable type changes
 	{
 		Name: "type widening - enums and sets",
@@ -4373,7 +4580,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x0}},
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query: "select * from t order by pk;",
@@ -4414,7 +4621,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query: "select table_name, our_schema, their_schema, base_schema from dolt_schema_conflicts;",
@@ -4454,7 +4661,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query: "select table_name, our_schema, their_schema, base_schema from dolt_schema_conflicts;",
@@ -4485,7 +4692,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query: "select table_name, our_schema, their_schema, base_schema, description from dolt_schema_conflicts;",
@@ -4747,7 +4954,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query: "select pk, col1 from t;",
@@ -4784,7 +4991,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query: "select pk, col1 from t;",
@@ -4798,31 +5005,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				Expected: []sql.Row{
 					{uint16(4), 3, types.JSONDocument{Val: merge.NullViolationMeta{Columns: []string{"col1"}}}},
 				},
-			},
-		},
-	},
-	{
-		// TODO: We should scan for check constraints during merge and flag failing
-		//       constraints as violations in `dolt_constraint_violations`.
-		Name: "adding a check-constraint",
-		AncSetUpScript: []string{
-			"create table t (pk int primary key, col1 int);",
-			"insert into t values (1, 1);",
-		},
-		RightSetUpScript: []string{
-			"update t set col1 = col1 + 5 where col1 < 5;",
-			"alter table t add check ( col1 > 5 );",
-		},
-		LeftSetUpScript: []string{
-			"insert into t values (2, 2);",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				// TODO: Dolt currently merges this without an error, but it shouldn't;
-				//       There is a constraint violation that should be reported.
-				Skip:     true,
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{0, 0x1}},
 			},
 		},
 	},

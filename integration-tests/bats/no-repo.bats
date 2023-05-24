@@ -363,3 +363,24 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ "$output" == "" ]
     run kill -9 $PID # Kill process if it doesn't pass
 }
+
+@test "no-repo: check that we correctly parse args when connecting with a username that matches a subcommand" {
+    run dolt --user ls version
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "version" ]] || false
+}
+
+@test "no-repo: check that we error on commands with no subcommand" {
+    run dolt --user admin
+
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "No valid dolt subcommand found. See 'dolt --help' for usage." ]] || false
+}
+
+@test "no-repo: check that we error on invalid subcommand" {
+    run dolt --user admin notarealcommand
+
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Unknown Command notarealcommand" ]] || false
+}

@@ -219,6 +219,13 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 			return nil, err
 		}
 		r[o] = m
+	case prolly.ArtifactTypeChkConsViol:
+		var m merge.CheckCVMeta
+		err = json.Unmarshal(meta.VInfo, &m)
+		if err != nil {
+			return nil, err
+		}
+		r[o] = m
 	default:
 		panic("json not implemented for artifact type")
 	}

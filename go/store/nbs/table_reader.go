@@ -165,8 +165,6 @@ func newTableReader(index tableIndex, r tableReaderAt, blockSize uint64) (tableR
 
 // Scan across (logically) two ordered slices of address prefixes.
 func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
-	// TODO: Use findInIndex if (tr.chunkCount - len(addrs)*Log2(tr.chunkCount)) > (tr.chunkCount - len(addrs))
-
 	filterIdx := uint32(0)
 	filterLen := uint32(tr.idx.chunkCount())
 
@@ -176,8 +174,22 @@ func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 			continue
 		}
 
-		for filterIdx < filterLen && addr.prefix > tr.prefixes[filterIdx] {
-			filterIdx++
+		// Use binary search to find the location of the addr.prefix in
+		// the prefixes array. filterIdx will be at the first entry
+		// where its prefix >= addr.prefix after this search.
+		//
+		// TODO: This is worse than a linear scan for small table files
+		// or for very large queries.
+
+		j := filterLen
+		for filterIdx < j {
+			h := filterIdx + (j-filterIdx)/2
+			// filterIdx <= h < j
+			if tr.prefixes[h] < addr.prefix {
+				filterIdx = h + 1 // tr.prefixes[filterIdx-1] < addr.prefix
+			} else {
+				j = h // tr.prefixes[j] >= addr.prefix
+			}
 		}
 
 		if filterIdx >= filterLen {

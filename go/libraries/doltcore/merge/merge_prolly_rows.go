@@ -22,14 +22,19 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/parse"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
+	"github.com/dolthub/go-mysql-server/sql/transform"
 	errorkinds "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -156,6 +161,11 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		return nil, nil, err
 	}
 
+	checkValidator, err := newCheckValidator(ctx, tm, valueMerger, finalSch, artEditor)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// validator shares an artifact editor with conflict merge
 	uniq, err := newUniqValidator(ctx, finalSch, tm, valueMerger, artEditor)
 	if err != nil {
@@ -192,6 +202,12 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		if cnt > 0 {
 			continue
 		}
+
+		cnt, err = checkValidator.validateDiff(ctx, diff)
+		if err != nil {
+			return nil, nil, err
+		}
+		s.ConstraintViolations += cnt
 
 		switch diff.Op {
 		case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
@@ -335,6 +351,175 @@ func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerg
 	return tree.NewThreeWayDiffer(ctx, leftRows.NodeStore(), leftRows.Tuples(), rightRows.Tuples(), ancRows.Tuples(), valueMerger.tryMerge, valueMerger.keyless, leftRows.Tuples().Order)
 }
 
+// checkValidator is responsible for inspecting three-way diff events, running any check constraint expressions
+// that need to be reevaluated, and reporting any check constraint violations.
+type checkValidator struct {
+	checkExpressions map[string]sql.Expression
+	valueMerger      *valueMerger
+	tableMerger      *TableMerger
+	sch              schema.Schema
+	edits            *prolly.ArtifactsEditor
+	srcHash          hash.Hash
+}
+
+// newCheckValidator creates a new checkValidator, ready to validate diff events. |tm| provides the overall information
+// about the table being merged, |vm| provides the details on how the value tuples are being merged between the ancestor,
+// right and left sides of the merge, |sch| provides the final schema of the merge, and |edits| is used to write
+// constraint validation artifacts.
+func newCheckValidator(ctx *sql.Context, tm *TableMerger, vm *valueMerger, sch schema.Schema, edits *prolly.ArtifactsEditor) (checkValidator, error) {
+	checkExpressions := make(map[string]sql.Expression)
+
+	checks := sch.Checks()
+	for _, check := range checks.AllChecks() {
+		if !check.Enforced() {
+			continue
+		}
+
+		expr, err := resolveExpression(ctx, check.Expression(), sch, tm.name)
+		if err != nil {
+			return checkValidator{}, err
+		}
+		checkExpressions[check.Name()] = expr
+	}
+
+	srcHash, err := tm.rightSrc.HashOf()
+	if err != nil {
+		return checkValidator{}, err
+	}
+
+	return checkValidator{
+		checkExpressions: checkExpressions,
+		valueMerger:      vm,
+		tableMerger:      tm,
+		sch:              sch,
+		edits:            edits,
+		srcHash:          srcHash,
+	}, nil
+}
+
+// validateDiff inspects the three-way diff event |diff| and evaluates any check constraint expressions that need to
+// be rechecked after the merge. If any check constraint violations are detected, the violation count is returned as
+// the first return parameter and the violations are also written to the artifact editor passed in on creation.
+func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (int, error) {
+	conflictCount := 0
+
+	var valueTuple val.Tuple
+	var valueDesc val.TupleDesc
+
+	switch diff.Op {
+	case tree.DiffOpLeftDelete, tree.DiffOpRightDelete, tree.DiffOpConvergentDelete:
+		// no need to validate check constraints for deletes
+		return 0, nil
+	case tree.DiffOpDivergentDeleteConflict, tree.DiffOpDivergentModifyConflict:
+		// Don't bother validating divergent conflicts, just let them get reported as conflicts
+		return 0, nil
+	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
+		valueTuple = diff.Left
+		valueDesc = cv.tableMerger.leftSch.GetValueDescriptor()
+	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
+		valueTuple = diff.Right
+		valueDesc = cv.tableMerger.rightSch.GetValueDescriptor()
+	case tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify:
+		// both sides made the same change, just take the left
+		valueTuple = diff.Left
+		valueDesc = cv.tableMerger.leftSch.GetValueDescriptor()
+	case tree.DiffOpDivergentModifyResolved:
+		valueTuple = diff.Merged
+		valueDesc = cv.tableMerger.leftSch.GetValueDescriptor()
+	}
+
+	for checkName, checkExpression := range cv.checkExpressions {
+		// If the row came from the right side of the merge, then remap it (if necessary) to the final schema.
+		// This isn't necessary for left-side changes, because we already migrated the primary index data to
+		// the merged schema, and we skip keyless tables, since their value tuples require different mapping
+		// logic and we don't currently support merges to keyless tables that contain schema changes anyway.
+		newTuple := valueTuple
+		if !cv.valueMerger.keyless && (diff.Op == tree.DiffOpRightAdd || diff.Op == tree.DiffOpRightModify) {
+			newTupleBytes := remapTuple(valueTuple, valueDesc, cv.valueMerger.rightMapping)
+			newTuple = val.NewTuple(cv.valueMerger.syncPool, newTupleBytes...)
+		}
+
+		row, err := cv.buildRow(ctx, diff.Key, newTuple)
+		if err != nil {
+			return 0, err
+		}
+
+		result, err := checkExpression.Eval(ctx, row)
+		if err != nil {
+			return 0, err
+		}
+
+		if result == nil || result == true {
+			// If a check constraint returns NULL or TRUE, then the check constraint is fulfilled
+			// https://dev.mysql.com/doc/refman/8.0/en/create-table-check-constraints.html
+			continue
+		} else if result == false {
+			conflictCount++
+			meta, err := newCheckCVMeta(cv.sch, checkName)
+			if err != nil {
+				return 0, err
+			}
+			if err = cv.insertArtifact(ctx, diff.Key, newTuple, meta); err != nil {
+				return conflictCount, err
+			}
+		} else {
+			return 0, fmt.Errorf("unexpected result from check constraint expression: %v", result)
+		}
+	}
+
+	return conflictCount, nil
+}
+
+// insertArtifact records a check constraint violation, as described by |meta|, for the row with the specified
+// |key| and |value|.
+func (cv checkValidator) insertArtifact(ctx context.Context, key, value val.Tuple, meta CheckCVMeta) error {
+	vinfo, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+	cvm := prolly.ConstraintViolationMeta{VInfo: vinfo, Value: value}
+	return cv.edits.ReplaceConstraintViolation(ctx, key, cv.srcHash, prolly.ArtifactTypeChkConsViol, cvm)
+}
+
+// buildRow takes the |key| and |value| tuple and returns a new sql.Row, along with any errors encountered.
+func (cv checkValidator) buildRow(ctx *sql.Context, key, value val.Tuple) (sql.Row, error) {
+	// When we parse and resolve the check constraint expression with planbuilder, it leaves row position 0
+	// for the expression itself, so we add an empty spot in our row to account for that before we pass the
+	// row into the expression to evaluate it.
+	var row sql.Row
+	row = append(row, nil)
+
+	// Skip adding the key tuple if we're working with a keyless table, since the table row data is
+	// always all contained in the value tuple for keyless tables.
+	if !cv.valueMerger.keyless {
+		keyDesc := cv.sch.GetKeyDescriptor()
+		for i := range keyDesc.Types {
+			value, err := index.GetField(ctx, keyDesc, i, key, cv.tableMerger.ns)
+			if err != nil {
+				return nil, err
+			}
+			row = append(row, value)
+		}
+	}
+
+	valueDescriptor := cv.sch.GetValueDescriptor()
+	for i := range valueDescriptor.Types {
+		// Skip processing the first value in the value tuple for keyless tables, since that field
+		// always holds the cardinality of the row and shouldn't be passed in to an expression.
+		if cv.valueMerger.keyless && i == 0 {
+			continue
+		}
+
+		value, err := index.GetField(ctx, valueDescriptor, i, value, cv.tableMerger.ns)
+		if err != nil {
+			return nil, err
+		}
+		row = append(row, value)
+	}
+
+	return row, nil
+}
+
 // uniqValidator checks whether new additions from the merge-right
 // duplicate secondary index entries.
 type uniqValidator struct {
@@ -404,8 +589,7 @@ func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 		return
 	}
 
-	// Don't remap the value to the merged schema if the table is keyless (since they
-	// don't allow schema changes) or if the mapping is an identity mapping.
+	// Don't remap the value to the merged schema if the table is keyless or if the mapping is an identity mapping.
 	if !uv.valueMerger.keyless && !uv.valueMerger.rightMapping.IsIdentityMapping() {
 		modifiedValue := remapTuple(value, uv.tm.rightSch.GetValueDescriptor(), uv.valueMerger.rightMapping)
 		value = val.NewTuple(uv.valueMerger.syncPool, modifiedValue...)
@@ -854,6 +1038,41 @@ func (m *secondaryMerger) finalize(ctx context.Context) (durable.IndexSet, durab
 		}
 	}
 	return m.leftSet, m.rightSet, nil
+}
+
+// resolveExpression takes in a string |expression| and does basic resolution on it (e.g. column names and function
+// names) so that the returned sql.Expression can be evaluated. The schema of the table is specified in |sch| and the
+// name of the table in |tableName|.
+func resolveExpression(ctx *sql.Context, expression string, sch schema.Schema, tableName string) (sql.Expression, error) {
+	query := fmt.Sprintf("SELECT %s from %s.%s", expression, "mydb", tableName)
+	sqlSch, err := sqlutil.FromDoltSchema(tableName, sch)
+	if err != nil {
+		return nil, err
+	}
+	mockTable := memory.NewTable(tableName, sqlSch, nil)
+	mockDatabase := memory.NewDatabase("mydb")
+	mockDatabase.AddTable(tableName, mockTable)
+	mockProvider := memory.NewDBProvider(mockDatabase)
+	catalog := analyzer.NewCatalog(mockProvider)
+
+	pseudoAnalyzedQuery, err := planbuilder.Parse(ctx, catalog, query)
+	if err != nil {
+		return nil, err
+	}
+
+	var expr sql.Expression
+	transform.Inspect(pseudoAnalyzedQuery, func(n sql.Node) bool {
+		if projector, ok := n.(sql.Projector); ok {
+			expr = projector.ProjectedExprs()[0]
+			return false
+		}
+		return true
+	})
+	if expr == nil {
+		return nil, fmt.Errorf("unable to find expression in analyzed query")
+	}
+
+	return expr, nil
 }
 
 // remapTuple takes the given |tuple| and the |desc| that describes its data, and uses |mapping| to map the tuple's
