@@ -830,11 +830,6 @@ func (d *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.R
 // via setRoot. This method is for clients that need to update more of the session state, such as the dolt_ functions.
 // Unlike setting the working root, this method always marks the database state dirty.
 func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
-	_, rev := SplitRevisionDbName(dbName)
-	if rev != "" {
-		return fmt.Errorf("cannot set roots for a revision database")
-	}
-
 	sessionState, _, err := d.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
@@ -1091,7 +1086,9 @@ func (d *DoltSession) HasDB(_ *sql.Context, dbName string) bool {
 func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	DefineSystemVariablesForDB(db.Name())
 
-	baseName, rev := db.Name(), db.Revision()
+	revisionQualifiedName := db.Name()
+	baseName, _ := SplitRevisionDbName(revisionQualifiedName)
+
 	// TODO: odd that we need to tell the DB what its own revision is here
 	dbState, err := db.InitialDBState(ctx, db.Revision())
 	if err != nil {
@@ -1120,7 +1117,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	}
 
 	branchState := NewEmptyBranchState(sessionState)
-	sessionState.heads[strings.ToLower(rev)] = branchState
+	sessionState.heads[strings.ToLower(db.Revision())] = branchState
 	d.mu.Unlock()
 
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and

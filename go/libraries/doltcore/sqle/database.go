@@ -116,12 +116,13 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts e
 	}
 
 	return Database{
-		name:     name,
-		ddb:      dbData.Ddb,
-		rsr:      dbData.Rsr,
-		rsw:      dbData.Rsw,
-		gs:       globalState,
-		editOpts: editOpts,
+		name:          name,
+		requestedName: name,
+		ddb:           dbData.Ddb,
+		rsr:           dbData.Rsr,
+		rsw:           dbData.Rsw,
+		gs:            globalState,
+		editOpts:      editOpts,
 	}, nil
 }
 
@@ -141,7 +142,7 @@ func (db Database) InitialDBState(ctx *sql.Context, branch string) (dsess.Initia
 
 // Name returns the name of this database, set at creation time.
 func (db Database) Name() string {
-	return db.name
+	return db.RequestedName()
 }
 
 // RevisionQualifiedName returns the name of this database including its revision qualifier, if any. This method should
