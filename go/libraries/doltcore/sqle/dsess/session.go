@@ -935,7 +935,9 @@ func (d *DoltSession) SwitchWorkingSet(
 	if !ok {
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
-
+	
+	ctx.SetCurrentDatabase(baseName)
+	
 	return nil
 }
 
