@@ -22,16 +22,12 @@ jobs:
       fail-fast: true
       matrix:
         os: [ ubuntu-22.04, macos-latest ]
-        dolt_fmt: [ "__DOLT__", "__LD_1__" ]
+        dolt_fmt: [ "__DOLT__" ]
         journal: [ "" ]
         include:
           - os: "ubuntu-22.04"
             dolt_fmt: "__DOLT__"
             journal: "true"
-        exclude:
-          - os: "macos-latest"
-            dolt_fmt: "__LD_1__"
-            journal: ""
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:

@@ -10,7 +10,7 @@ jobs:
     name: Dolt SQL Correctness
     strategy:
       matrix:
-        dolt_fmt: [ "__LD_1__", "__DOLT__" ]
+        dolt_fmt: [ "__DOLT__" ]
     steps:
       - uses: actions/checkout@v3
       - uses: azure/setup-kubectl@v3.0
