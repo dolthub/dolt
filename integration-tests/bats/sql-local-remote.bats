@@ -21,6 +21,14 @@ teardown() {
     teardown_common
 }
 
+get_staged_tables() {
+    dolt status | awk '
+        match($0, /new table:\ */) { print substr($0, RSTART+RLENGTH) }
+        /Untracked tables:/ { exit }
+        /Tables with conflicting dolt_ignore patterns:/ { exit }
+    '
+}
+
 @test "sql-local-remote: test switch between server/no server" {
     start_sql_server defaultDB
 
@@ -108,3 +116,19 @@ teardown() {
     [[ "$output" =~ "defaultDB does not exist" ]] || false
 }
 
+@test "sql-local-remote: verify simple dolt add behavior." {
+    start_sql_server altDb
+    ROOT_DIR=$(pwd)
+
+    mkdir -p someplace_new/fun
+    cd someplace_new/fun
+
+    dolt --verbose-engine-setup --data-dir="$ROOT_DIR/altDB" --user dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    dolt --verbose-engine-setup --data-dir="$ROOT_DIR/altDB" --user dolt add .
+
+    stop_sql_server 1
+
+    staged=$(get_staged_tables)
+
+    [[ ! -z $(echo "$staged" | grep "testtable") ]] || false
+}
