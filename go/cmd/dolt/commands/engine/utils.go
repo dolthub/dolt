@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -26,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
@@ -98,7 +99,7 @@ func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv, useBulkEdi
 	return sqle.NewDatabase(ctx, name, dEnv.DbData(), opts)
 }
 
-// newReplicaDatabase creates a new dsqle.ReadReplicaDatabase. In the case of an invalid configuration, returns an 
+// newReplicaDatabase creates a new dsqle.ReadReplicaDatabase. In the case of an invalid configuration, returns an
 // error along with a partially constructed database.
 func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEnv *env.DoltEnv) (sqle.ReadReplicaDatabase, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
