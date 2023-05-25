@@ -119,7 +119,7 @@ var doltSubCommands = []cli.Command{
 	&commands.Assist{},
 }
 
-var subCommandsUsingDEnv = []cli.Command{
+var commandsWithoutCliCtx = []cli.Command{
 	commands.InitCmd{},
 	commands.StatusCmd{},
 	commands.DiffCmd{},
@@ -135,7 +135,6 @@ var subCommandsUsingDEnv = []cli.Command{
 	commands.CheckoutCmd{},
 	commands.MergeCmd{},
 	cnfcmds.Commands,
-	commands.CherryPickCmd{},
 	commands.RevertCmd{},
 	commands.CloneCmd{},
 	commands.FetchCmd{},
@@ -169,7 +168,7 @@ var subCommandsUsingDEnv = []cli.Command{
 }
 
 func initCliContext(commandName string) bool {
-	for _, command := range subCommandsUsingDEnv {
+	for _, command := range commandsWithoutCliCtx {
 		if command.Name() == commandName {
 			return false
 		}
