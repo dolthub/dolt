@@ -23,6 +23,31 @@ teardown() {
     cd $BATS_TMPDIR
 }
 
+@test "replication: configuration errors" {
+    cd repo1
+    dolt sql -q "SET @@persist.dolt_read_replica_remote = 'doesNotExist';"
+    
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "replication disabled" ]] || false
+
+    dolt sql -q "SET @@persist.dolt_read_replica_remote = 'remote1';"
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "replication disabled" ]] || false
+
+    dolt sql -q "SET @@persist.dolt_replicate_all_heads = 1";
+    dolt sql -q "SET @@persist.dolt_replicate_heads = 'main';";
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "replication disabled" ]] || false
+
+    dolt sql -q "SET @@persist.dolt_replicate_heads = '';";
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "replication disabled" ]] || false
+}
+
 @test "replication: default no replication" {
     cd repo1
     dolt sql -q "create table t1 (a int primary key)"
