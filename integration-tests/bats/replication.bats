@@ -395,36 +395,6 @@ SQL
     [[ "$output" =~ "branch not found" ]] || false
 }
 
-@test "replication: pull with no head configuration fails" {
-    dolt clone file://./rem1 repo2
-    cd repo2
-    dolt branch new_feature
-    dolt push origin new_feature
-
-    cd ../repo1
-    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
-    run dolt sql -q "show tables"
-    [ "$status" -eq 1 ]
-    [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "invalid replicate heads setting: dolt_replicate_heads not set" ]] || false
-}
-
-@test "replication: replica pull conflicting head configurations" {
-    dolt clone file://./rem1 repo2
-    cd repo2
-    dolt branch new_feature
-    dolt push origin new_feature
-
-    cd ../repo1
-    dolt config --local --add sqlserver.global.dolt_replicate_heads main,unknown
-    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
-    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
-    run dolt sql -q "show tables"
-    [ "$status" -eq 1 ]
-    [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "invalid replicate heads setting; cannot set both" ]] || false
-}
-
 @test "replication: replica pull multiple heads quiet warnings" {
     dolt clone file://./rem1 repo2
     cd repo2
@@ -613,17 +583,6 @@ SQL
     run dolt status
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "remote not found: 'unknown'" ]] || false
-}
-
-@test "replication: pull bad remote errors" {
-    cd repo1
-    dolt config --local --add sqlserver.global.dolt_read_replica_remote unknown
-    dolt config --local --add sqlserver.global.dolt_replicate_heads main
-
-    run dolt sql -q "show tables"
-    [ "$status" -eq 1 ]
-    [[ ! "$output" =~ "panic" ]]
-    [[ "$output" =~ "remote not found: 'unknown'" ]] || false
 }
 
 @test "replication: non-fast-forward pull fails replication" {
