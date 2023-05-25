@@ -1226,7 +1226,7 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 			},
 			{
 				Query:    "select database();",
-				Expected: []sql.Row{{"mydb"}},
+				Expected: []sql.Row{{"use mydb/" + commithash}},
 			},
 			{
 				Query:    "show databases;",

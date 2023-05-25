@@ -121,7 +121,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SELECT DATABASE(), ACTIVE_BRANCH();",
-				Expected: []sql.Row{{"dolt", "branch1"}},
+				Expected: []sql.Row{{"dolt/branch1", "branch1"}},
 			},
 			{
 				Query:    "/* client b */ use dolt/branch2;",
@@ -129,7 +129,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client b */ SELECT DATABASE(), ACTIVE_BRANCH();",
-				Expected: []sql.Row{{"dolt", "branch2"}},
+				Expected: []sql.Row{{"dolt/branch2", "branch2"}},
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
@@ -168,7 +168,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SELECT DATABASE(), ACTIVE_BRANCH();",
-				Expected: []sql.Row{{"dolt", "branch1"}},
+				Expected: []sql.Row{{"dolt/branch1", "branch1"}},
 			},
 			{
 				Query:    "/* client b */ use dolt/branch2;",
@@ -176,7 +176,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client b */ SELECT DATABASE(), ACTIVE_BRANCH();",
-				Expected: []sql.Row{{"dolt", "branch2"}},
+				Expected: []sql.Row{{"dolt/branch2", "branch2"}},
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
@@ -406,14 +406,11 @@ var DropDatabaseMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client b */ select database();",
-				Expected: []sql.Row{{"db01"}},
+				Expected: []sql.Row{{"db01/branch1"}},
 			},
-			// TODO: this could be better: there's no longer a branch branch1, and we lose track of the fact that we were on
-			//  branch1 when the `drop database` is processed -- as far as the engine is concerned we are using a database
-			//  called `db01`, no branch info. It's enough for now to not panic in this edge case.
 			{
 				Query:    "/* client b */ show tables;",
-				Expected: []sql.Row{},
+				ExpectedErrStr: "Error 1105: database not found: db01/branch1",
 			},
 		},
 	},
@@ -464,7 +461,7 @@ func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 						if len(assertion.ExpectedErrStr) > 0 {
 							require.EqualError(t, err, assertion.ExpectedErrStr)
 						} else if assertion.ExpectedErr != nil {
-							require.True(t, assertion.ExpectedErr.Is(err))
+							require.True(t, assertion.ExpectedErr.Is(err), "expected error %v, got %v", assertion.ExpectedErr, err)
 						} else if assertion.Expected != nil {
 							require.NoError(t, err)
 							assertResultsEqual(t, assertion.Expected, rows)

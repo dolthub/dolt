@@ -313,7 +313,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			{
 				// The database name is always the base name, never the revision specifier
 				Query:    "select database()",
-				Expected: []sql.Row{{"mydb"}},
+				Expected: []sql.Row{{"mydb/tag1~"}},
 			},
 			{
 				// The branch is nil in the case of a non-branch revision DB
@@ -391,7 +391,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			{
 				// The database name is always the base name, never the revision specifier
 				Query:    "select database()",
-				Expected: []sql.Row{{"mydb"}},
+				Expected: []sql.Row{{"mydb/tag1"}},
 			},
 			{
 				// The branch is nil in the case of a non-branch revision DB
@@ -460,7 +460,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			{
 				// The database name is always the base name, never the revision specifier
 				Query:    "select database()",
-				Expected: []sql.Row{{"mydb"}},
+				Expected: []sql.Row{{"mydb/branch1"}},
 			},
 			{
 				Query:    "select active_branch()",
@@ -492,7 +492,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select database();",
-				Expected: []sql.Row{{"mydb"}},
+				Expected: []sql.Row{{"mydb/branch1"}},
 			},
 			{
 				Query:    "show databases;",
