@@ -20,6 +20,7 @@ import (
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -135,9 +136,11 @@ func ApplyReplicationConfig(ctx context.Context, bThreads *sql.BackgroundThreads
 			if !ok {
 				return nil, sql.ErrInvalidSystemVariableValue.New(remote)
 			}
-			db, err = newReplicaDatabase(ctx, db.Name(), remoteName, dEnv)
-			if err != nil {
-				return nil, err
+			rdb, err := newReplicaDatabase(ctx, db.Name(), remoteName, dEnv)
+			if err == nil {
+				db = rdb
+			} else {
+				logrus.Errorf("invalid replication configuration, replication disabled: %v", err)
 			}
 		}
 

@@ -18,8 +18,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -28,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
@@ -47,17 +46,6 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool
 		db, err = newDatabase(ctx, name, dEnv, useBulkEditor)
 		if err != nil {
 			return false, err
-		}
-
-		if _, remote, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote); ok && remote != "" {
-			remoteName, ok := remote.(string)
-			if !ok {
-				return true, sql.ErrInvalidSystemVariableValue.New(remote)
-			}
-			db, err = newReplicaDatabase(ctx, name, remoteName, dEnv)
-			if err != nil {
-				return true, err
-			}
 		}
 
 		dbs = append(dbs, db)
@@ -110,9 +98,8 @@ func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv, useBulkEdi
 	return sqle.NewDatabase(ctx, name, dEnv.DbData(), opts)
 }
 
-// newReplicaDatabase creates a new dsqle.ReadReplicaDatabase. If the doltdb.SkipReplicationErrorsKey global variable is set,
-// skip errors related to database construction only and return a partially functional dsqle.ReadReplicaDatabase
-// that will log warnings when attempting to perform replica commands.
+// newReplicaDatabase creates a new dsqle.ReadReplicaDatabase. In the case of an invalid configuration, returns an 
+// error along with a partially constructed database.
 func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEnv *env.DoltEnv) (sqle.ReadReplicaDatabase, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
@@ -131,11 +118,8 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 	rrd, err := sqle.NewReadReplicaDatabase(ctx, db, remoteName, dEnv)
 	if err != nil {
 		err = fmt.Errorf("%w from remote '%s'; %s", sqle.ErrFailedToLoadReplicaDB, remoteName, err.Error())
-		if !dsess.IgnoreReplicationErrors() {
-			return sqle.ReadReplicaDatabase{}, err
-		}
 		cli.Println(err)
-		return sqle.ReadReplicaDatabase{Database: db}, nil
+		return sqle.ReadReplicaDatabase{Database: db}, err
 	}
 	return rrd, nil
 }
