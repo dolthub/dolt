@@ -2560,15 +2560,15 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT commit_hash = @Commit2, commit_hash = @Commit1, committer, email, message from dolt_log();",
 				Expected: []sql.Row{
-					{true, false, "billy bob", "bigbillieb@fake.horse", "inserting into t"},
-					{false, true, "billy bob", "bigbillieb@fake.horse", "creating table t"},
-					{false, false, "billy bob", "bigbillieb@fake.horse", "checkpoint enginetest database mydb"},
+					{true, false, "root", "root@localhost", "inserting into t"},
+					{false, true, "root", "root@localhost", "creating table t"},
+					{false, false, "root", "root@localhost", "checkpoint enginetest database mydb"},
 					{false, false, "billy bob", "bigbillieb@fake.horse", "Initialize data repository"},
 				},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit2, committer, email, message from dolt_log('main') limit 1;",
-				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t"}},
+				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t"}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log('new-branch') limit 1;",
@@ -2576,7 +2576,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit1, committer, email, message from dolt_log(@Commit1) limit 1;",
-				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "creating table t"}},
+				Expected: []sql.Row{{true, "root", "root@localhost", "creating table t"}},
 			},
 		},
 	},
@@ -2628,7 +2628,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT commit_hash = @Commit5, commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('main...new-branch');",
 				Expected: []sql.Row{
-					{true, false, false, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"},
+					{true, false, false, "root", "root@localhost", "inserting into t 5"},
 					{false, true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
 					{false, false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
 				},
@@ -2649,7 +2649,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log('^new-branch', 'main');",
-				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"}},
+				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t 5"}},
 			},
 			{
 				Query:    "SELECT * from dolt_log('^main', 'main');",
@@ -2657,11 +2657,11 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log('^main~', 'main');",
-				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"}},
+				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t 5"}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log( 'main', '--not', 'main~');",
-				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"}},
+				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t 5"}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log('^main', @Commit3);",
@@ -2673,11 +2673,11 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log('^new-branch', @Commit5);",
-				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"}},
+				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t 5"}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log(@Commit5, '--not', @Commit4);",
-				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "inserting into t 5"}},
+				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t 5"}},
 			},
 		},
 	},
