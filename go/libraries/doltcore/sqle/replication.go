@@ -69,25 +69,22 @@ func getPushOnWriteHook(ctx context.Context, bThreads *sql.BackgroundThreads, dE
 	return doltdb.NewPushOnWriteHook(ddb, tmpDir), nil
 }
 
-// GetCommitHooks creates a list of hooks to execute on database commit. If doltdb.SkipReplicationErrorsKey is set,
-// replace misconfigured hooks with doltdb.LogHook instances that prints a warning when trying to execute.
+// GetCommitHooks creates a list of hooks to execute on database commit. Hooks that cannot be created because of an
+// error in configuration will not prevent the server from starting, and will instead log errors.
 func GetCommitHooks(ctx context.Context, bThreads *sql.BackgroundThreads, dEnv *env.DoltEnv, logger io.Writer) ([]doltdb.CommitHook, error) {
 	postCommitHooks := make([]doltdb.CommitHook, 0)
 
-	if hook, err := getPushOnWriteHook(ctx, bThreads, dEnv, logger); err != nil {
+	hook, err := getPushOnWriteHook(ctx, bThreads, dEnv, logger)
+	if err != nil {
 		path, _ := dEnv.FS.Abs(".")
-		err = fmt.Errorf("failure loading hook for database at %s; %w", path, err)
-		if dsess.IgnoreReplicationErrors() {
-			postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(err.Error()+"\n")))
-		} else {
-			return nil, err
-		}
+		logrus.Errorf("error loading replication for database at %s, replication disabled: %v", path, err)
+		postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(err.Error()+"\n")))
 	} else if hook != nil {
 		postCommitHooks = append(postCommitHooks, hook)
 	}
 
 	for _, h := range postCommitHooks {
-		h.SetLogger(ctx, logger)
+		_ = h.SetLogger(ctx, logger)
 	}
 	return postCommitHooks, nil
 }
