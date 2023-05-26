@@ -629,6 +629,61 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "CALL DOLT_MERGE with no conflicts works, no checkout",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"CALL DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
+			"CALL dolt_branch('feature-branch')",
+			"use `mydb/feature-branch`",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:01');",
+			"use mydb/main",
+			"INSERT INTO test VALUES (5),(6),(7);",
+			"CALL DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:02');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('feature-branch', '--no-commit', '--commit')",
+				ExpectedErrStr: "cannot define both 'commit' and 'no-commit' flags at the same time",
+			},
+			{
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) from dolt_status",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{6}}, // includes the merge commit and a new commit created by successful merge
+			},
+			{
+				Query:    "select message from dolt_log where date > '2022-08-08' order by date DESC LIMIT 1;",
+				Expected: []sql.Row{{"this is a merge"}},
+			},
+			{
+				Query: "select * from test order by pk",
+				Expected: []sql.Row{
+					{1}, {2}, {3}, {5}, {6}, {7}, {1000},
+				},
+			},
+			{
+				Query: "use `mydb/feature-branch`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "select * from test order by pk",
+				Expected: []sql.Row{
+					{1}, {2}, {3}, {1000},
+				},
+			},
+		},
+	},
+	{
 		Name: "CALL DOLT_MERGE with no conflicts works with no-commit flag",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
