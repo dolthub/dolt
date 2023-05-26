@@ -411,6 +411,12 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 
 	dirtyBranchState := dirties[0]
 	if peformDoltCommitInt == 1 {
+		// if the dirty working set doesn't belong to the currently checked out branch, that's an error
+		err2 := d.validateDoltCommit(ctx, dirtyBranchState)
+		if err2 != nil {
+			return err2
+		}
+
 		pendingCommit, err := d.PendingCommitAllStaged(ctx, dirtyBranchState, actions.CommitStagedProps{
 			Message:    "Transaction commit",
 			Date:       ctx.QueryTime(),
@@ -433,6 +439,32 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 	} else {
 		return d.commitWorkingSet(ctx, dirtyBranchState, tx)
 	}
+}
+
+func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *branchState) error {
+	currDb := ctx.GetCurrentDatabase()
+	if currDb == "" {
+		return fmt.Errorf("cannot dolt_commit with no database selected")
+	}
+	baseName, _ := SplitRevisionDbName(currDb)
+
+	d.mu.Lock()
+	dbState, ok := d.dbStates[strings.ToLower(baseName)]
+	d.mu.Unlock()
+
+	if !ok {
+		return fmt.Errorf("no database state found for %s", baseName)
+	}
+
+	dirtyBranch, err := dirtyBranchState.workingSet.Ref().ToHeadRef()
+	if err != nil {
+		return err
+	}
+	if dbState.currRevSpec != dirtyBranch.GetPath() {
+		return fmt.Errorf("no changes to dolt_commit on branch %s", dbState.currRevSpec)
+	}
+	
+	return nil
 }
 
 var ErrDirtyWorkingSets = errors.New("Cannot commit changes on more than one branch / database")
