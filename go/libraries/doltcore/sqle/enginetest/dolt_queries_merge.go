@@ -1441,6 +1441,40 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dropping constraint from one branch drops from both, no checkout",
+		SetUpScript: []string{
+			"create table t (i int)",
+			"alter table t add constraint c check (i > 0)",
+			"call dolt_commit('-Am', 'initial commit')",
+
+			"call dolt_branch('other')",
+			"use mydb/other",
+			"insert into t values (1)",
+			"alter table t drop constraint c",
+			"call dolt_commit('-Am', 'changes to other')",
+
+			"use mydb/main",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "insert into t values (-1)",
+				ExpectedErr: sql.ErrCheckConstraintViolated,
+			},
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "select * from t",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "insert into t values (-1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+		},
+	},
+	{
 		Name: "merge constraint with valid data on different branches",
 		SetUpScript: []string{
 			"create table t (i int)",
