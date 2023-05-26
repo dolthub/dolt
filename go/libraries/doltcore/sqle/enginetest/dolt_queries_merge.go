@@ -4323,6 +4323,38 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 
 	// Constraints: Check Expressions
 	{
+		// Tests that we correctly build the row to pass into the check constraint expression when
+		// the primary key fields are not all positioned at the start of the schema.
+		Name: "check constraint - non-contiguous primary key",
+		AncSetUpScript: []string{
+			"CREATE table t (pk1 int, col1 int, pk2 varchar(100), CHECK (col1 in (0, 1)), primary key (pk1, pk2));",
+			"INSERT into t values (1, 0, 1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 varchar(100);",
+			"insert into t values (2, 1, 2, 'hello');",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (3, 0, 3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, 0, "1", nil},
+					{2, 1, "2", "hello"},
+					{3, 0, "3", nil},
+				},
+			},
+		},
+	},
+
+	// Constraints: Check Constraint Violations
+	{
 		Name: "check constraint violation - simple case, no schema changes",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
