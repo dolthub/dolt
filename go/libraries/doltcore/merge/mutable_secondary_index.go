@@ -28,7 +28,7 @@ import (
 func GetMutableSecondaryIdxs(ctx context.Context, sch schema.Schema, indexes durable.IndexSet) ([]MutableSecondaryIdx, error) {
 	mods := make([]MutableSecondaryIdx, sch.Indexes().Count())
 	for i, index := range sch.Indexes().AllIndexes() {
-		idx, err := indexes.GetIndex(ctx, sch, index.Name())
+		idx, _, err := indexes.GetIndex(ctx, sch, index.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -61,7 +61,7 @@ func GetMutableSecondaryIdxsWithPending(ctx context.Context, sch schema.Schema, 
 			continue
 		}
 
-		idx, err := indexes.GetIndex(ctx, sch, index.Name())
+		idx, _, err := indexes.GetIndex(ctx, sch, index.Name())
 		if err != nil {
 			return nil, err
 		}

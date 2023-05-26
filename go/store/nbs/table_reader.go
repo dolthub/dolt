@@ -502,6 +502,7 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 		//
 		// TODO: This is worse than a linear scan for small table files
 		// or for very large queries.
+
 		j := filterLen
 		for filterIdx < j {
 			h := filterIdx + (j-filterIdx)/2

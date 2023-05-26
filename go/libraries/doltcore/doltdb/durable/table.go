@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
@@ -55,6 +56,12 @@ var (
 	errNbfUnkown      = fmt.Errorf("unknown NomsBinFormat")
 	errNbfUnsupported = fmt.Errorf("operation unsupported for NomsBinFormat")
 )
+
+const schemaCacheSize = 1000
+var schemaCache *lru.TwoQueueCache[hash.Hash, schema.Schema]
+func init() {
+	schemaCache, _ = lru.New2Q[hash.Hash, schema.Schema](schemaCacheSize)
+}
 
 // Table is a Dolt table that can be persisted.
 type Table interface {
@@ -324,7 +331,8 @@ func (t nomsTable) GetTableRows(ctx context.Context) (Index, error) {
 		return nil, err
 	}
 
-	return indexFromRef(ctx, t.vrw, t.ns, sch, val.(types.Ref))
+	idx, _, err := indexFromRef(ctx, t.vrw, t.ns, sch, val.(types.Ref))
+	return idx, err
 }
 
 // GetIndexes implements Table.
@@ -676,6 +684,10 @@ func schemaFromRef(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref
 }
 
 func schemaFromAddr(ctx context.Context, vrw types.ValueReadWriter, addr hash.Hash) (schema.Schema, error) {
+	if sch, ok := schemaCache.Get(addr); ok {
+		return sch, nil
+	}
+
 	schemaVal, err := vrw.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
@@ -685,6 +697,8 @@ func schemaFromAddr(ctx context.Context, vrw types.ValueReadWriter, addr hash.Ha
 	if err != nil {
 		return nil, err
 	}
+
+	schemaCache.Add(addr, schema)
 
 	return schema, nil
 }

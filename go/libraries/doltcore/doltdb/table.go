@@ -561,7 +561,7 @@ func (t *Table) GetNomsIndexRowData(ctx context.Context, indexName string) (type
 		return types.EmptyMap, err
 	}
 
-	idx, err := indexes.GetIndex(ctx, sch, indexName)
+	idx, _, err := indexes.GetIndex(ctx, sch, indexName)
 	if err != nil {
 		return types.EmptyMap, err
 	}
@@ -581,7 +581,8 @@ func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (durable.
 		return nil, err
 	}
 
-	return indexes.GetIndex(ctx, sch, indexName)
+	idx, _, err := indexes.GetIndex(ctx, sch, indexName)
+	return idx, err
 }
 
 // SetIndexRows replaces the current row data for the given index and returns an updated Table.

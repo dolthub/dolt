@@ -58,7 +58,7 @@ type IndexSet interface {
 	HashOf() (hash.Hash, error)
 
 	// GetIndex gets an index from the set.
-	GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error)
+	GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, schema.Schema, error)
 
 	// HasIndex returns true if an index with the specified name exists in the set.
 	HasIndex(ctx context.Context, name string) (bool, error)
@@ -93,29 +93,31 @@ func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (ty
 }
 
 // indexFromRef reads the types.Ref from storage and returns the Index it points to.
-func indexFromRef(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, r types.Ref) (Index, error) {
+func indexFromRef(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, r types.Ref) (Index, schema.Schema, error) {
 	return indexFromAddr(ctx, vrw, ns, sch, r.TargetHash())
 }
 
-func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, addr hash.Hash) (Index, error) {
-	v, err := vrw.ReadValue(ctx, addr)
-	if err != nil {
-		return nil, err
-	}
-
+func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, addr hash.Hash) (Index, schema.Schema, error) {
 	switch vrw.Format() {
 	case types.Format_LD_1:
-		return IndexFromNomsMap(v.(types.Map), vrw, ns), nil
+		v, err := vrw.ReadValue(ctx, addr)
+		if err != nil {
+			return nil, nil, err
+		}
+		return IndexFromNomsMap(v.(types.Map), vrw, ns), sch, nil
 
 	case types.Format_DOLT:
-		pm, err := shim.MapFromValue(v, sch, ns)
+		root, err := ns.Read(ctx, addr)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return IndexFromProllyMap(pm), nil
+		kd := sch.GetKeyDescriptor()
+		vd := sch.GetValueDescriptor()
+		pm := prolly.NewMap(root, ns, kd, vd)
+		return IndexFromProllyMap(pm), sch, nil
 
 	default:
-		return nil, errNbfUnkown
+		return nil, nil, errNbfUnkown
 	}
 }
 
@@ -157,7 +159,7 @@ func IterAllIndexes(
 	cb func(name string, idx Index) error,
 ) error {
 	for _, def := range sch.Indexes().AllIndexes() {
-		idx, err := set.GetIndex(ctx, sch, def.Name())
+		idx, _, err := set.GetIndex(ctx, sch, def.Name())
 		if err != nil {
 			return err
 		}
@@ -390,18 +392,18 @@ func (s nomsIndexSet) HasIndex(ctx context.Context, name string) (bool, error) {
 }
 
 // GetIndex implements IndexSet.
-func (s nomsIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error) {
+func (s nomsIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, schema.Schema, error) {
 	v, ok, err := s.indexes.MaybeGet(ctx, types.String(name))
 	if !ok {
 		err = fmt.Errorf("index %s not found in IndexSet", name)
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	idx := sch.Indexes().GetByName(name)
 	if idx == nil {
-		return nil, fmt.Errorf("index not found: %s", name)
+		return nil, nil, fmt.Errorf("index not found: %s", name)
 	}
 
 	return indexFromRef(ctx, s.vrw, s.ns, idx.Schema(), v.(types.Ref))
@@ -482,17 +484,17 @@ func (is doltDevIndexSet) HasIndex(ctx context.Context, name string) (bool, erro
 	return true, nil
 }
 
-func (is doltDevIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error) {
+func (is doltDevIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, schema.Schema, error) {
 	addr, err := is.am.Get(ctx, name)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if addr.IsEmpty() {
-		return nil, fmt.Errorf("index %s not found in IndexSet", name)
+		return nil, nil, fmt.Errorf("index %s not found in IndexSet", name)
 	}
 	idxSch := sch.Indexes().GetByName(name)
 	if idxSch == nil {
-		return nil, fmt.Errorf("index schema not found: %s", name)
+		return nil, nil, fmt.Errorf("index schema not found: %s", name)
 	}
 	return indexFromAddr(ctx, is.vrw, is.ns, idxSch.Schema(), addr)
 }

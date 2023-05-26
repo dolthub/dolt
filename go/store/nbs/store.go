@@ -772,30 +772,7 @@ func (nbs *NomsBlockStore) errorIfDangling(root hash.Hash, checker refCheck) err
 		}
 	}
 
-	if nbs.mt == nil || nbs.mt.pendingRefs == nil {
-		return nil // no pending refs to check
-	}
-
-	for i := range nbs.mt.pendingRefs {
-		// All of these are going to be |Add|ed after the call.  We use
-		// |Contains| to check here so the frequency count only gets
-		// bumped once.
-		if nbs.hasCache.Contains(*nbs.mt.pendingRefs[i].a) {
-			nbs.mt.pendingRefs[i].has = true
-		}
-	}
-
-	sort.Sort(hasRecordByPrefix(nbs.mt.pendingRefs))
-	absent, err := checker(nbs.mt.pendingRefs)
-	if err != nil {
-		return err
-	} else if absent.Size() > 0 {
-		return fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
-	}
-
-	for _, e := range nbs.mt.pendingRefs {
-		nbs.hasCache.Add(*e.a, struct{}{})
-	}
+	// Note: we do not check mt.pendingRefs here, since that will be checked by mt.append.
 
 	return nil
 }

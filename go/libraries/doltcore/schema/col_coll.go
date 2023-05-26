@@ -73,15 +73,15 @@ type ColCollection struct {
 // unable to return the correct column in all cases.
 // For this collection to be used as a Dolt schema, it must pass schema.ValidateForInsert.
 func NewColCollection(cols ...Column) *ColCollection {
-	var tags []uint64
-	var sortedTags []uint64
+	tags := make([]uint64, 0, len(cols))
+	sortedTags := make([]uint64, 0, len(cols))
 
 	tagToCol := make(map[uint64]Column, len(cols))
 	nameToCol := make(map[string]Column, len(cols))
 	lowerNameToCol := make(map[string]Column, len(cols))
 	tagToIdx := make(map[uint64]int, len(cols))
 
-	var columns []Column
+	columns := make([]Column, 0, len(cols))
 	for i, col := range cols {
 		// If multiple columns have the same tag, the last one is used for tag lookups.
 		// Columns must have unique tags to pass schema.ValidateForInsert.
