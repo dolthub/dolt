@@ -555,9 +555,10 @@ SQL
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote unknown
 
     run dolt sql -q "create table t1 (a int primary key)"
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 0 ]
     [[ ! "$output" =~ "panic" ]] || false
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
+    [[ "$output" =~ "replication disabled" ]] || false
 }
 
 @test "replication: quiet push to unknown remote warnings" {
@@ -566,7 +567,6 @@ SQL
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote unknown
     run dolt sql -q "create table t1 (a int primary key)"
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "remote not found" ]] || false
 
     dolt add .
 
