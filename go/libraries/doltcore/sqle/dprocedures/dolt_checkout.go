@@ -272,7 +272,7 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 		return err
 	}
 
-	return sess.SetCurrentHead(ctx, dbName, wsRef)
+	return sess.SwitchWorkingSet(ctx, dbName, wsRef)
 }
 
 func checkoutBranch(ctx *sql.Context, dbName string, branchName string) error {

@@ -115,22 +115,21 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 
-	var script = queries.ScriptTest{
-		Name: "CALL DOLT_MERGE ff correctly works with autocommit off",
+	var script = queries.ScriptTest	{
+		Name: "CALL DOLT_MERGE ff no checkout",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
-			"call DOLT_ADD('.')",
+			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
-			"SET autocommit = 0",
 			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
-			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
+			"CALL dolt_branch('feature-branch')",
+			"use `mydb/feature-branch`",
 			"INSERT INTO test VALUES (3);",
 			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"CALL DOLT_ADD('.');",
 			"CALL DOLT_COMMIT('-a', '-m', 'this is a ff');",
-			"CALL DOLT_CHECKOUT('main');",
+			"use mydb/main;",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -143,10 +142,6 @@ func TestSingleScript(t *testing.T) {
 				Expected: []sql.Row{{false, nil, nil, nil}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_test where to_commit = 'WORKING'",
-				Expected: []sql.Row{},
-			},
-			{
 				Query:    "SELECT * from dolt_status",
 				Expected: []sql.Row{},
 			},
@@ -155,13 +150,33 @@ func TestSingleScript(t *testing.T) {
 				Expected: []sql.Row{{0}},
 			},
 			{
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{"new-branch"}},
+			},
+			{
 				Query:    "INSERT INTO test VALUES (4)",
 				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+			},
+			{
+				Query:    "SELECT * FROM test order by pk",
+				Expected: []sql.Row{{1}, {2}, {3}, {4}, {1000}},
+			},
+			{
+				Query:    "use `mydb/main`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "SELECT * FROM test order by pk",
+				Expected: []sql.Row{{1}, {2}, {3}, {1000}},
 			},
 		},
 	}
 
-	tcc := &testCommitClock{}
+			tcc := &testCommitClock{}
 	cleanup := installTestCommitClock(tcc)
 	defer cleanup()
 
@@ -1356,7 +1371,8 @@ func TestViewsWithAsOfPrepared(t *testing.T) {
 
 func TestDoltMerge(t *testing.T) {
 	for _, script := range MergeScripts {
-		// dolt versioning conflicts with reset harness -- use new harness every time
+		// harness can't reset effectively when there are new commits / branches created, so use a new harness for 
+		// each script
 		func() {
 			h := newDoltHarness(t).WithParallelism(1)
 			defer h.Close()

@@ -90,6 +90,44 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "CALL DOLT_MERGE ff correctly works with autocommit off, no checkout",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"call DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET autocommit = 0",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"CALL DOLT_BRANCH('feature-branch')",
+			"use `mydb/feature-branch`",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"use mydb/main;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// FF-Merge
+				Query:    "CALL DOLT_MERGE('feature-branch')",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from test order by 1",
+				Expected: []sql.Row{
+					{1}, {2}, {3}, {1000},
+				},
+			},
+		},
+	},
+	{
 		Name: "CALL DOLT_MERGE no-ff correctly works with autocommit off",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
@@ -128,6 +166,51 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'other-branch')",
 				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE no-ff correctly works with autocommit off, no checkout",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"call DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET autocommit = 0",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
+			"CALL DOLT_BRANCH('feature-branch')",
+			"USE `mydb/feature-branch`",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a ff', '--date', '2022-08-06T12:00:01');",
+			"use `mydb/main`",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// No-FF-Merge
+				Query:    "CALL DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
+			},
+			{
+				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
+			},
+			{
+				Query: "select * from test order by 1",
+				Expected: []sql.Row{
+					{1}, {2}, {3}, {1000},
+				},
 			},
 		},
 	},
@@ -405,6 +488,64 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "INSERT INTO test VALUES (4)",
 				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE ff no checkout",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"CALL DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"CALL dolt_branch('feature-branch')",
+			"use `mydb/feature-branch`",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"use mydb/main;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// FF-Merge
+				Query:    "CALL DOLT_MERGE('feature-branch')",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('-b', 'new-branch')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{"new-branch"}},
+			},
+			{
+				Query:    "INSERT INTO test VALUES (4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "SELECT * FROM test order by pk",
+				Expected: []sql.Row{{1}, {2}, {3}, {4}, {1000}},
+			},
+			{
+				Query:    "use `mydb/main`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "SELECT * FROM test order by pk",
+				Expected: []sql.Row{{1}, {2}, {3}, {1000}},
 			},
 		},
 	},

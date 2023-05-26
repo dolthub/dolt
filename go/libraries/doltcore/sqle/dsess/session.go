@@ -873,30 +873,6 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	return nil
 }
 
-// SetCurrentHead sets the currently connected head revision spec for this session. This changes the revision that
-// unqualified references to the database name resolve to, and is only done by dolt_checkout().
-func (d *DoltSession) SetCurrentHead(ctx *sql.Context, dbName string, wsRef ref.WorkingSetRef) error {
-	headRef, err := wsRef.ToHeadRef()
-	if err != nil {
-		return err
-	}
-
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	baseName, _ := SplitRevisionDbName(dbName)
-	dbState, ok := d.dbStates[strings.ToLower(baseName)]
-	if !ok {
-		return sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	dbState.checkedOutRevSpec = headRef.GetPath()
-	dbState.currRevSpec = headRef.GetPath()
-	dbState.currRevType = RevisionTypeBranch
-
-	return nil
-}
-
 // SwitchWorkingSet switches to a new working set for this session. Unlike SetWorkingSet, this method expresses no
 // intention to eventually persist any uncommitted changes. Rather, this method only changes the in memory state of
 // this session. It's equivalent to starting a new session with the working set reference provided. If the current
