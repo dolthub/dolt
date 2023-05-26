@@ -483,11 +483,14 @@ func (cv checkValidator) insertArtifact(ctx context.Context, key, value val.Tupl
 
 // buildRow takes the |key| and |value| tuple and returns a new sql.Row, along with any errors encountered.
 func (cv checkValidator) buildRow(ctx *sql.Context, key, value val.Tuple) (sql.Row, error) {
+	pkCols := cv.sch.GetPKCols()
+	valueCols := cv.sch.GetNonPKCols()
+	allCols := cv.sch.GetAllCols()
+
 	// When we parse and resolve the check constraint expression with planbuilder, it leaves row position 0
-	// for the expression itself, so we add an empty spot in our row to account for that before we pass the
-	// row into the expression to evaluate it.
-	var row sql.Row
-	row = append(row, nil)
+	// for the expression itself, so we add an empty spot in index 0 of our row to account for that to make sure
+	// the GetField expressions' indexes match up to the right columns.
+	row := make(sql.Row, allCols.Size()+1)
 
 	// Skip adding the key tuple if we're working with a keyless table, since the table row data is
 	// always all contained in the value tuple for keyless tables.
@@ -498,23 +501,29 @@ func (cv checkValidator) buildRow(ctx *sql.Context, key, value val.Tuple) (sql.R
 			if err != nil {
 				return nil, err
 			}
-			row = append(row, value)
+
+			pkCol := pkCols.GetColumns()[i]
+			row[allCols.TagToIdx[pkCol.Tag]+1] = value
 		}
 	}
 
+	valueColIndex := 0
 	valueDescriptor := cv.sch.GetValueDescriptor()
-	for i := range valueDescriptor.Types {
+	for valueTupleIndex := range valueDescriptor.Types {
 		// Skip processing the first value in the value tuple for keyless tables, since that field
 		// always holds the cardinality of the row and shouldn't be passed in to an expression.
-		if cv.valueMerger.keyless && i == 0 {
+		if cv.valueMerger.keyless && valueTupleIndex == 0 {
 			continue
 		}
 
-		value, err := index.GetField(ctx, valueDescriptor, i, value, cv.tableMerger.ns)
+		value, err := index.GetField(ctx, valueDescriptor, valueTupleIndex, value, cv.tableMerger.ns)
 		if err != nil {
 			return nil, err
 		}
-		row = append(row, value)
+
+		col := valueCols.GetColumns()[valueColIndex]
+		row[allCols.TagToIdx[col.Tag]+1] = value
+		valueColIndex += 1
 	}
 
 	return row, nil
