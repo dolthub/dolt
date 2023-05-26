@@ -671,5 +671,3 @@ func buildGlobalArgs() *argparser.ArgParser {
 
 	return ap
 }
-
-
