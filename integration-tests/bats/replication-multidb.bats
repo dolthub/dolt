@@ -274,15 +274,18 @@ SQL
 @test "replication-multidb: missing database config" {
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote unknown
     run dolt --data-dir=dbs1 sql -b -q "use repo1; create table t1 (a int primary key)"
-    [ "$status" -eq 1 ]
-    [[ ! "$output" =~ "panic" ]] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
+    [[ "$output" =~ "replication disabled" ]] || false
 }
 
 @test "replication-multidb: missing database config quiet warning" {
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote unknown
     dolt config --global --add sqlserver.global.dolt_skip_replication_errors 1
-    dolt --data-dir=dbs1 sql -b -q "use repo1; create table t1 (a int primary key)"
+    run dolt --data-dir=dbs1 sql -b -q "use repo1; create table t1 (a int primary key)"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remote not found: 'unknown'" ]] || false
+    [[ "$output" =~ "replication disabled" ]] || false
 }
 
 @test "replication-multidb: sql-server push on commit" {
