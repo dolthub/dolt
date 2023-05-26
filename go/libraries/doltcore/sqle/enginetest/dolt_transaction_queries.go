@@ -2466,6 +2466,43 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "committing to another branch with autocommit and dolt_transaction_commit",
+		SetUpScript: []string{
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"set autocommit = on", // unnecessary but make it explicit
+			"set dolt_transaction_commit = on",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "insert into `mydb/b1`.t1 values (1)",
+				ExpectedErrStr: "no changes to dolt_commit on branch main",
+			},
+			{
+				Query:    "use mydb/b1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from t1 order by a",
+				Expected: []sql.Row{
+					{1},
+				},
+			},
+			{
+				Query: "commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from t1 order by a",
+				Expected: []sql.Row{
+					{1},
+				},
+			},
+		},
+	},
+	{
 		Name: "checkout and use different branch",
 		SetUpScript: []string{
 			"create table t1 (a int)",
