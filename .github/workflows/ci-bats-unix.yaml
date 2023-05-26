@@ -32,10 +32,7 @@ jobs:
             echo "AWS_REGION=us-west-2" >> $GITHUB_ENV
             echo "DOLT_BATS_AWS_TABLE=dolt-ci-bats-manifests-us-west-2" >> $GITHUB_ENV
             echo "DOLT_BATS_AWS_BUCKET=dolt-ci-bats-chunks-us-west-2" >> $GITHUB_ENV
-            if [[ "$DOLT_FMT" == "__DOLT__" ]]; then
-                echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests__dolt__" >> $GITHUB_ENV
-            else
-                echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests" >> $GITHUB_ENV
+            echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests__dolt__" >> $GITHUB_ENV
             fi
           fi
       - name: Configure AWS Credentials
