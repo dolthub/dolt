@@ -118,10 +118,7 @@ get_staged_tables() {
 
 @test "sql-local-remote: verify simple dolt add behavior." {
     start_sql_server altDb
-    ROOT_DIR=$(pwd)
-
-    mkdir -p someplace_new/fun
-    cd someplace_new/fun
+    cd altDb
 
     run dolt --verbose-engine-setup --user dolt sql -q "create table testtable (pk int PRIMARY KEY)"
     [ "$status" -eq 0 ]
