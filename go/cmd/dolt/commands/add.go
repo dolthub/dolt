@@ -165,18 +165,7 @@ func toStageVErr(err error) errhand.VerboseError {
 
 		return bdr.Build()
 	case doltdb.AsDoltIgnoreInConflict(err) != nil:
-		doltIgnoreConflictError := doltdb.AsDoltIgnoreInConflict(err)
-		bdr := errhand.BuildDError("error: the table %s matches conflicting patterns in dolt_ignore", doltIgnoreConflictError.Table)
-
-		for _, pattern := range doltIgnoreConflictError.TruePatterns {
-			bdr.AddDetails("ignored:     %s", pattern)
-		}
-
-		for _, pattern := range doltIgnoreConflictError.FalsePatterns {
-			bdr.AddDetails("not ignored: %s", pattern)
-		}
-
-		return bdr.Build()
+		return errhand.VerboseErrorFromError(err)
 	default:
 		return errhand.BuildDError("Unknown error").AddCause(err).Build()
 	}
