@@ -22,10 +22,13 @@ jobs:
       fail-fast: true
       matrix:
         os: [ ubuntu-22.04, macos-latest ]
+        start_sql_server: [ true, false ]
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:
       - name: Conditionally Set ENV VARS for AWS tests
+        env:
+          START_SQL_SERVER: ${{ matrix.start_sql_server }}
         run: |
           if [[ $use_credentials == true ]]; then
             echo "AWS_SDK_LOAD_CONFIG=1" >> $GITHUB_ENV
