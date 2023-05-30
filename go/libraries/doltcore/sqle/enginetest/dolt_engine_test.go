@@ -118,65 +118,32 @@ func TestSingleScript(t *testing.T) {
 	// t.Skip()
 
 	var script = queries.ScriptTest	{
-		Name: "CALL DOLT_MERGE ff no checkout",
+		Name: "committing to another branch on another database with dolt_transaction_commit",
 		SetUpScript: []string{
-			"CREATE TABLE test (pk int primary key)",
-			"CALL DOLT_ADD('.')",
-			"INSERT INTO test VALUES (0),(1),(2);",
-			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
-			"CALL dolt_branch('feature-branch')",
-			"use `mydb/feature-branch`",
-			"INSERT INTO test VALUES (3);",
-			"UPDATE test SET pk=1000 WHERE pk=0;",
-			"CALL DOLT_COMMIT('-a', '-m', 'this is a ff');",
-			"use mydb/main;",
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"create database db1",
+			"use db1",
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"commit",
+			"use mydb/b1",
+			"set autocommit = 1",
+			"set dolt_transaction_commit = 1",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// FF-Merge
-				Query:    "CALL DOLT_MERGE('feature-branch')",
-				Expected: []sql.Row{{1, 0}},
-			},
-			{
-				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{false, nil, nil, nil}},
-			},
-			{
-				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "CALL DOLT_CHECKOUT('-b', 'new-branch')",
-				Expected: []sql.Row{{0}},
-			},
-			{
-				Query:    "select active_branch()",
-				Expected: []sql.Row{{"new-branch"}},
-			},
-			{
-				Query:    "INSERT INTO test VALUES (4)",
-				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
-			},
-			{
-				Query:    "SELECT * FROM test order by pk",
-				Expected: []sql.Row{{1}, {2}, {3}, {4}, {1000}},
-			},
-			{
-				Query:    "use `mydb/main`",
-				SkipResultsCheck: true,
-			},
-			{
-				Query:    "select active_branch()",
-				Expected: []sql.Row{{"main"}},
-			},
-			{
-				Query:    "SELECT * FROM test order by pk",
-				Expected: []sql.Row{{1}, {2}, {3}, {1000}},
+				Query: "insert into `db1/b1`.t1 values (1)",
+				ExpectedErrStr: "no changes to dolt_commit on database mydb",
 			},
 		},
 	}
 
-			tcc := &testCommitClock{}
+	tcc := &testCommitClock{}
 	cleanup := installTestCommitClock(tcc)
 	defer cleanup()
 

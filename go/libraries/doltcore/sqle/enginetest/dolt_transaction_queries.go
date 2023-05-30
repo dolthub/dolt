@@ -2381,6 +2381,36 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "committing to another branch with autocommit",
+		SetUpScript: []string{
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"set autocommit = on", // unnecessary but make it explicit
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "insert into `mydb/b1`.t1 values (1)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query:    "select * from t1 order by a",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "call dolt_checkout('b1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "select * from t1 order by a",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
 		Name: "committing to another branch with dolt_transaction_commit",
 		SetUpScript: []string{
 			"create table t1 (a int)",
@@ -2434,13 +2464,13 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "committing to another branch with autocommit",
+		Name: "committing to another branch with dolt_commit",
 		SetUpScript: []string{
 			"create table t1 (a int)",
 			"call dolt_add('.')",
 			"call dolt_commit('-am', 'new table')",
 			"call dolt_branch('b1')",
-			"set autocommit = on", // unnecessary but make it explicit
+			"set autocommit = off",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2454,14 +2484,24 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:            "call dolt_checkout('b1')",
+				Query:    "call dolt_commit('-am', 'changes on b1')",
+				ExpectedErrStr: "nothing to commit", // this error is different from what you get with @@dolt_transaction_commit
+			},
+			{
+				Query:    "use mydb/b1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_commit('-am', 'other changes on b1')",
 				SkipResultsCheck: true,
 			},
 			{
 				Query: "select * from t1 order by a",
-				Expected: []sql.Row{
-					{1},
-				},
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query: "select message from dolt_log order by date desc limit 1",
+				Expected: []sql.Row{{"other changes on b1"}},
 			},
 		},
 	},
@@ -2503,7 +2543,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "checkout and use different branch",
+		Name: "active_branch with dolt_checkout and use",
 		SetUpScript: []string{
 			"create table t1 (a int)",
 			"call dolt_add('.')",
@@ -2642,6 +2682,49 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "committing to another database with dolt_commit",
+		SetUpScript: []string{
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"create database db1",
+			"use db1",
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"use mydb/b1",
+			"set autocommit = off",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "insert into `db1/b1`.t1 values (1)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    "call dolt_commit('-am', 'changes on b1')",
+				ExpectedErrStr: "nothing to commit", // this error is different from what you get with @@dolt_transaction_commit
+			},
+			{
+				Query:    "use db1/b1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_commit('-am', 'other changes on b1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "select * from t1 order by a",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query: "select message from dolt_log order by date desc limit 1",
+				Expected: []sql.Row{{"other changes on b1"}},
+			},
+		},
+	},
+	{
 		Name: "committing to another branch on another database",
 		SetUpScript: []string{
 			"create table t1 (a int)",
@@ -2712,7 +2795,6 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			"call dolt_add('.')",
 			"call dolt_commit('-am', 'new table')",
 			"call dolt_branch('b1')",
-			"commit",
 			"use mydb/b1",
 			"set autocommit = 1",
 			"set dolt_transaction_commit = 1",
