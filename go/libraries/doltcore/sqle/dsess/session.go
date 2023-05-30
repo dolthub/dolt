@@ -376,7 +376,17 @@ func (d *DoltSession) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSe
 // CommitTransaction commits the in-progress transaction. Depending on session settings, this may write only a new 
 // working set, or may additionally create a new dolt commit for the current HEAD. If more than one branch head has 
 // changes, the transaction is rejected.
-func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
+func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (err error) {
+	// Any non-error path must set the ctx's transaction to nil even if no work was done, because the engine only clears 
+	// out transaction state in some cases. Changes to only branch heads (creating a new branch, reset, etc.) have no 
+	// changes to commit visible to the transaction logic, but they still need a new transaction on the next statement.
+	// See comment in |commitBranchState| 
+	defer func() {
+		if err == nil {
+			ctx.SetTransaction(nil)
+		}
+	}()
+	
 	if d.BatchMode() == Batched {
 		for _, db := range d.provider.DoltDatabases() {
 			err := d.Flush(ctx, db.Name())
@@ -412,12 +422,13 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 	dirtyBranchState := dirties[0]
 	if peformDoltCommitInt == 1 {
 		// if the dirty working set doesn't belong to the currently checked out branch, that's an error
-		err2 := d.validateDoltCommit(ctx, dirtyBranchState)
-		if err2 != nil {
-			return err2
+		err = d.validateDoltCommit(ctx, dirtyBranchState)
+		if err != nil {
+			return err
 		}
 
-		pendingCommit, err := d.PendingCommitAllStaged(ctx, dirtyBranchState, actions.CommitStagedProps{
+		var pendingCommit *doltdb.PendingCommit
+		pendingCommit, err = d.PendingCommitAllStaged(ctx, dirtyBranchState, actions.CommitStagedProps{
 			Message:    "Transaction commit",
 			Date:       ctx.QueryTime(),
 			AllowEmpty: false,
@@ -500,6 +511,7 @@ func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.T
 	return err
 }
 
+// commitWorkingSet commits the working set for the branch state given, without creating a new dolt commit.
 func (d *DoltSession) commitWorkingSet(ctx *sql.Context, branchState *branchState, tx sql.Transaction) error {
 	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 		ws, err := dtx.Commit(ctx, workingSet, branchState.dbState.dbName)
@@ -528,11 +540,6 @@ func (d *DoltSession) DoltCommit(
 			return nil, nil, err
 		}
 
-		// Unlike normal COMMIT statements, CALL DOLT_COMMIT() doesn't get the current transaction cleared out by the query
-		// engine, so we do it here.
-		// TODO: the engine needs to manage this
-		ctx.SetTransaction(nil)
-
 		return ws, commit, err
 	}
 
@@ -559,8 +566,12 @@ func (d *DoltSession) commitBranchState(
 	if err != nil {
 		return nil, err
 	}
-
-	branchState.dirty = false
+	
+	// Anything that commits a transaction needs its current transaction state cleared so that the next statement starts
+	// a new transaction. This should in principle be done by the engine, but it currently only understands explicit
+	// COMMIT statements. Any other statements that commit a transaction, including stored procedures, needs to do this
+	// themselves.
+	ctx.SetTransaction(nil)
 	return newCommit, nil
 }
 

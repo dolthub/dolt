@@ -93,12 +93,7 @@ func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession, rsc *doltdb.R
 	if rsc != nil {
 		dsess.WaitForReplicationController(ctx, *rsc)
 	}
-
-	// Because this transaction manipulation is happening outside the engine's awareness, we need to set it to nil here
-	// to get a fresh transaction started on the next statement.
-	// TODO: put this under engine control
-	// TODO: move this into dsess.CommitTransaction?
-	ctx.SetTransaction(nil)
+	
 	return nil
 }
 
