@@ -123,8 +123,8 @@ get_staged_tables() {
     mkdir -p someplace_new/fun
     cd someplace_new/fun
 
-    dolt --verbose-engine-setup --data-dir="$ROOT_DIR/altDB" --user dolt sql -q "create table testtable (pk int PRIMARY KEY)"
-    dolt --verbose-engine-setup --data-dir="$ROOT_DIR/altDB" --user dolt add .
+    dolt --verbose-engine-setup --user dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    dolt --verbose-engine-setup --user dolt add .
 
     stop_sql_server 1
 
