@@ -446,14 +446,19 @@ func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *bra
 	if currDb == "" {
 		return fmt.Errorf("cannot dolt_commit with no database selected")
 	}
-	baseName, _ := SplitRevisionDbName(currDb)
+	currDbBaseName, _ := SplitRevisionDbName(currDb)
+	dirtyDbBaseName, _ := SplitRevisionDbName(dirtyBranchState.dbState.dbName)
+	
+	if strings.ToLower(currDbBaseName) != strings.ToLower(dirtyDbBaseName) {
+		return fmt.Errorf("no changes to dolt_commit on database %s", currDbBaseName)
+	}
 
 	d.mu.Lock()
-	dbState, ok := d.dbStates[strings.ToLower(baseName)]
+	dbState, ok := d.dbStates[strings.ToLower(currDbBaseName)]
 	d.mu.Unlock()
 
 	if !ok {
-		return fmt.Errorf("no database state found for %s", baseName)
+		return fmt.Errorf("no database state found for %s", currDbBaseName)
 	}
 
 	dirtyBranch, err := dirtyBranchState.workingSet.Ref().ToHeadRef()

@@ -2700,6 +2700,62 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "committing to another branch on another database with dolt_transaction_commit and autocommit",
+		SetUpScript: []string{
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"create database db1",
+			"use db1",
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"commit",
+			"use mydb/b1",
+			"set autocommit = 1",
+			"set dolt_transaction_commit = 1",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "insert into `db1/b1`.t1 values (1)",
+				ExpectedErrStr: "no changes to dolt_commit on database mydb",
+			},
+		},
+	},
+	{
+		Name: "committing to another branch on another database with dolt_transaction_commit, no autocommit",
+		SetUpScript: []string{
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"create database db1",
+			"use db1",
+			"create table t1 (a int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'new table')",
+			"call dolt_branch('b1')",
+			"commit",
+			"use mydb/b1",
+			"set autocommit = off",
+			"set dolt_transaction_commit = 1",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "insert into `db1/b1`.t1 values (1)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1}},
+				},
+			},
+			{
+				Query: "commit",
+				ExpectedErrStr: "no changes to dolt_commit on database mydb",
+			},
+		},
+	},
+	{
 		Name: "committing to more than one branch at a time",
 		SetUpScript: []string{
 			"create table t1 (a int)",
