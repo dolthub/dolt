@@ -121,6 +121,23 @@ func (res *ArgParseResults) GetValues(names ...string) map[string]string {
 	return vals
 }
 
+// DropValue removes the value for the given name from the results. A new ArgParseResults object is returned without the
+// names value. If the value is not present in the results then the original results object is returned.
+func (res *ArgParseResults) DropValue(name string) *ArgParseResults {
+	if _, ok := res.options[name]; !ok {
+		return res
+	}
+
+	newNamedArgs := make(map[string]string, len(res.options)-1)
+	for flag, val := range res.options {
+		if flag != name {
+			newNamedArgs[flag] = val
+		}
+	}
+
+	return &ArgParseResults{newNamedArgs, res.Args, res.parser}
+}
+
 func (res *ArgParseResults) MustGetValue(name string) string {
 	val, ok := res.options[name]
 

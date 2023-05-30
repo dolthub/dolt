@@ -280,3 +280,48 @@ func TestValidation(t *testing.T) {
 		t.Error("Arg list issues")
 	}
 }
+
+func TestDropValue(t *testing.T) {
+	ap := NewArgParserWithVariableArgs("test")
+
+	ap.SupportsString("string", "", "string_value", "A string")
+	ap.SupportsFlag("flag", "", "A flag")
+
+	apr, err := ap.Parse([]string{"--string", "str", "--flag", "1234"})
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	newApr1 := apr.DropValue("string")
+	if apr.Equals(newApr1) {
+		t.Error("Original value and new value are equal")
+	}
+	_, hasVal := newApr1.GetValue("string")
+	if hasVal {
+		t.Error("DropValue failed to drop string")
+	}
+	_, hasVal = newApr1.GetValue("flag")
+	if !hasVal {
+		t.Error("DropValue dropped the wrong value")
+	}
+	if newApr1.NArg() != 1 || newApr1.Arg(0) != "1234" {
+		t.Error("DropValue didn't preserve args")
+	}
+
+	newApr2 := apr.DropValue("flag")
+	if apr.Equals(newApr2) {
+		t.Error("DropValue failed to drop flag")
+	}
+	_, hasVal = newApr2.GetValue("string")
+	if !hasVal {
+		t.Error("DropValue dropped the wrong value")
+	}
+	_, hasVal = newApr2.GetValue("flag")
+	if hasVal {
+		t.Error("DropValue failed to drop flag")
+	}
+	if newApr2.NArg() != 1 || newApr2.Arg(0) != "1234" {
+		t.Error("DropValue didn't preserve args")
+	}
+
+}
