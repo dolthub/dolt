@@ -123,8 +123,13 @@ get_staged_tables() {
     mkdir -p someplace_new/fun
     cd someplace_new/fun
 
-    dolt --verbose-engine-setup --user dolt sql -q "create table testtable (pk int PRIMARY KEY)"
-    dolt --verbose-engine-setup --user dolt add .
+    run dolt --verbose-engine-setup --user dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    run dolt --verbose-engine-setup --user dolt add .
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
 
     stop_sql_server 1
 
