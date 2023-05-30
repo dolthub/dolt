@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -88,7 +89,23 @@ func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		usage()
 		return 1
 	}
-	args = []string{"--" + QueryFlag, fmt.Sprintf(blameQueryTemplate, apr.Arg(0))}
 
-	return SqlCmd{}.Exec(ctx, "sql", args, dEnv, cliCtx)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return 1
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
+	schema, ri, err := queryist.Query(sqlCtx, fmt.Sprintf(blameQueryTemplate, apr.Arg(0)))
+	if err != nil {
+		return 1
+	}
+	err = engine.PrettyPrintResults(sqlCtx, engine.FormatTabular, schema, ri)
+	if err != nil {
+		return 1
+	}
+
+	return 0
 }
