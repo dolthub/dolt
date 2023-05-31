@@ -75,6 +75,7 @@ var _ sql.TriggerDatabase = Database{}
 var _ sql.VersionedDatabase = Database{}
 var _ sql.ViewDatabase = Database{}
 var _ sql.EventDatabase = Database{}
+var _ sql.AliasedDatabase = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -143,6 +144,12 @@ func (db Database) InitialDBState(ctx *sql.Context, branch string) (dsess.Initia
 // Name returns the name of this database, set at creation time.
 func (db Database) Name() string {
 	return db.RequestedName()
+}
+
+// AliasedName is what allows databases named e.g. `mydb/b1` to work with the grant and info schema tables that expect
+// a base (no revision qualifier) db name 
+func (db Database) AliasedName() string {
+	return db.name
 }
 
 // RevisionQualifiedName returns the name of this database including its revision qualifier, if any. This method should

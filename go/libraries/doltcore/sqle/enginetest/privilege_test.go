@@ -127,6 +127,8 @@ func TestRevisionDatabasePrivileges(t *testing.T) {
 	}
 }
 
+// Privilege test scripts for revision databases. Due to limitations in test construction, test assertions are always
+// performed with current db = mydb/b1, write scripts accordingly
 var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 	{
 		Name: "Basic database and table name visibility",
@@ -134,9 +136,9 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 			"use mydb",
 			"CREATE TABLE test (pk BIGINT PRIMARY KEY);",
 			"INSERT INTO test VALUES (1);",
+			"call dolt_commit('-Am', 'first commit')",
 			"call dolt_branch('b1')",
 			"use mydb/b1",
-			"call dolt_commit('-Am', 'first commit')",
 			"CREATE USER tester@localhost;",
 			"CREATE ROLE test_role;",
 			"GRANT SELECT ON mydb.* TO test_role;",
@@ -157,7 +159,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 			{
 				User:     "root",
 				Host:     "localhost",
-				Query:    "GRANT SELECT ON *.* TO tester@localhost;",
+				Query:    "GRANT SELECT ON mydb.* TO tester@localhost;",
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
@@ -175,7 +177,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 			{
 				User:     "root",
 				Host:     "localhost",
-				Query:    "REVOKE SELECT ON *.* FROM tester@localhost;",
+				Query:    "REVOKE SELECT ON mydb.* FROM tester@localhost;",
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{ // Ensure we've reverted to initial state (all SELECTs after REVOKEs are doing this)
@@ -374,6 +376,104 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 		},
 	},
 	{
+		Name: "Basic UPDATE privilege checking",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY);",
+			"INSERT INTO test VALUES (1), (2), (3);",
+			"call dolt_commit('-Am', 'first commit');",
+			"call dolt_branch('b1')",
+			"use mydb/b1;",
+			"CREATE USER tester@localhost;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "UPDATE test set pk = 4 where pk = 3;",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT UPDATE ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "INSERT INTO test VALUES (4);",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:     "UPDATE test set pk = 4 where pk = 3;",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM test;",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "SELECT * FROM test;",
+				Expected: []sql.Row{{1}, {2}, {4}},
+			},
+		},
+	},
+	{
+		Name: "Basic DELETE privilege checking",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY);",
+			"INSERT INTO test VALUES (1), (2), (3);",
+			"call dolt_commit('-Am', 'first commit');",
+			"call dolt_branch('b1')",
+			"use mydb/b1;",
+			"CREATE USER tester@localhost;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "DELETE from test where pk = 3;",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT DELETE ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "INSERT INTO test VALUES (4);",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:       "DELETE from test where pk = 3;",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM test;",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "SELECT * FROM test;",
+				Expected: []sql.Row{{1}, {2}},
+			},
+		},
+	},
+	{
 		Name: "Basic revoke SELECT privilege",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk BIGINT PRIMARY KEY);",
@@ -395,7 +495,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "SELECT User, Host, Select_priv FROM mysql.user WHERE User = 'tester';",
-				Expected: []sql.Row{{"tester", "localhost", uint16(2)}},
+				Expected: []sql.Row{{"tester", "localhost", uint16(1)}},
 			},
 			{
 				User:     "root",
@@ -547,17 +647,10 @@ func TestDoltOnlyRevisionDatabasePrivileges(t *testing.T) {
 			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
 
 			for _, statement := range script.SetUpScript {
-				if harness.SkipQueryTest(statement) {
-					t.Skip()
-				}
 				enginetest.RunQueryWithContext(t, engine, harness, ctx, statement)
 			}
 
 			for _, assertion := range script.Assertions {
-				if harness.SkipQueryTest(assertion.Query) {
-					t.Skipf("Skipping query %s", assertion.Query)
-				}
-
 				user := assertion.User
 				host := assertion.Host
 				if user == "" {
@@ -570,6 +663,7 @@ func TestDoltOnlyRevisionDatabasePrivileges(t *testing.T) {
 					User:    user,
 					Address: host,
 				})
+				ctx.SetCurrentDatabase("mydb/b1")
 
 				if assertion.ExpectedErr != nil {
 					t.Run(assertion.Query, func(t *testing.T) {
