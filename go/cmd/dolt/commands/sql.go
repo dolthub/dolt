@@ -147,7 +147,7 @@ func (cmd SqlCmd) Docs() *cli.CommandDocumentation {
 func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsString(QueryFlag, "q", "SQL query to run", "Runs a single query and exits.")
-	ap.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, vertical, and pq. Defaults to tabular.")
+	ap.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, vertical, and parquet. Defaults to tabular.")
 	ap.SupportsString(saveFlag, "s", "saved query name", "Used with --query, save the query to the query catalog with the name provided. Saved queries can be examined in the dolt_query_catalog system table.")
 	ap.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name.")
 	ap.SupportsFlag(listSavedFlag, "l", "List all saved queries.")
@@ -323,7 +323,7 @@ func (cmd SqlCmd) handleLegacyArguments(ap *argparser.ArgParser, commandStr stri
 	if err != nil {
 		legacyParser := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 		legacyParser.SupportsString(QueryFlag, "q", "SQL query to run", "Runs a single query and exits.")
-		legacyParser.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, vertical, and pq. Defaults to tabular.")
+		legacyParser.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, vertical, and parquet. Defaults to tabular.")
 		legacyParser.SupportsString(saveFlag, "s", "saved query name", "Used with --query, save the query to the query catalog with the name provided. Saved queries can be examined in the dolt_query_catalog system table.")
 		legacyParser.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name.")
 		legacyParser.SupportsFlag(listSavedFlag, "l", "List all saved queries.")
@@ -584,7 +584,7 @@ func GetResultFormat(format string) (engine.PrintResultFormat, errhand.VerboseEr
 		return engine.FormatNull, nil
 	case "vertical":
 		return engine.FormatVertical, nil
-	case "pq":
+	case "parquet":
 		return engine.FormatParquet, nil
 	default:
 		return engine.FormatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build()

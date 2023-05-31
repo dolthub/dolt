@@ -1040,7 +1040,7 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "utf8mb4" ]] || false
 
-    dolt sql -r pq -q "select * from test order by a" > out.parquet
+    dolt sql -r parquet -q "select * from test order by a" > out.parquet
     run parquet cat out.parquet
     [ "$status" -eq 0 ]
     [[ "$output" =~ '{"a": 1, "b": 1.5, "c": "1", "d": 1577836800000000}' ]] || false
@@ -1050,7 +1050,7 @@ SQL
     [[ "$output" =~ '{"a": 5, "b": 5.5, "c": "5", "d": null}' ]] || false
     [ "${#lines[@]}" -eq 5 ]
 
-    run dolt sql -r pq -q "select @@character_set_client"
+    run dolt sql -r parquet -q "select @@character_set_client"
     [ $status -eq 0 ]
     [[ "$output" =~ "utf8mb4" ]] || false
 }
@@ -1069,7 +1069,7 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "{}" ]] || false
 
-    dolt sql -r pq -q "select * from test order by a" > out.parquet
+    dolt sql -r parquet -q "select * from test order by a" > out.parquet
     run parquet cat out.parquet
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 0 ]
@@ -1097,7 +1097,7 @@ SQL
     [[ "$output" =~ '1,"{""key"": ""value""}"' ]] || false
     [[ "$output" =~ '2,"""Hello"""' ]] || false
 
-    dolt sql -r pq -q "select * from test order by a" > out.parquet
+    dolt sql -r parquet -q "select * from test order by a" > out.parquet
     run parquet cat out.parquet
     [ $status -eq 0 ]
     [[ "$output" =~ '{"a": 1, "v": "{\"key\": \"value\"}"}' ]] || false
