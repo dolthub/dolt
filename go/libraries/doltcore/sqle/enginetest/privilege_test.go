@@ -458,7 +458,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "INSERT INTO test VALUES (4);",
-				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
 				User:     "tester",
