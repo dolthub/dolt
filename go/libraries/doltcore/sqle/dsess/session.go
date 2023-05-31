@@ -389,7 +389,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 	
 	if d.BatchMode() == Batched {
 		for _, db := range d.provider.DoltDatabases() {
-			err := d.Flush(ctx, db.Name())
+			err = d.Flush(ctx, db.Name())
 			if err != nil {
 				return err
 			}
@@ -1110,11 +1110,11 @@ func (d *DoltSession) HasDB(_ *sql.Context, dbName string) bool {
 // addDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
 func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
-	DefineSystemVariablesForDB(db.Name())
-
 	revisionQualifiedName := db.Name()
 	baseName, _ := SplitRevisionDbName(revisionQualifiedName)
 
+	DefineSystemVariablesForDB(baseName)
+	
 	// TODO: odd that we need to tell the DB what its own revision is here
 	dbState, err := db.InitialDBState(ctx, db.Revision())
 	if err != nil {

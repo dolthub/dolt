@@ -103,8 +103,9 @@ func NewDoltTransaction(
 			return nil, err
 		}
 
-		startPoints[strings.ToLower(db.Name())] = dbRoot{
-			dbName:   db.Name(),
+		baseName, _ := SplitRevisionDbName(db.Name())
+		startPoints[strings.ToLower(baseName)] = dbRoot{
+			dbName:   baseName,
 			rootHash: nomsRoot,
 			db:       db.DbData().Ddb,
 		}

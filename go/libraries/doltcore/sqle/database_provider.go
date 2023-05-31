@@ -260,12 +260,7 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 	showBranches, _ := dsess.GetBooleanSystemVar(ctx, dsess.ShowBranchDatabases)
 
 	all = make([]sql.Database, 0, len(p.databases))
-	var foundDatabase bool
-	currDb := strings.ToLower(ctx.GetCurrentDatabase())
 	for _, db := range p.databases {
-		if strings.ToLower(db.Name()) == currDb {
-			foundDatabase = true
-		}
 		all = append(all, db)
 
 		if showBranches {
@@ -276,16 +271,6 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 				continue
 			}
 			all = append(all, revisionDbs...)
-
-			// if one of the revisions we just expanded matches the curr db, mark it so we don't double-include that
-			// revision db
-			if !foundDatabase && currDb != "" {
-				for _, revisionDb := range revisionDbs {
-					if strings.ToLower(revisionDb.Name()) == currDb {
-						foundDatabase = true
-					}
-				}
-			}
 		}
 	}
 	p.mu.RUnlock()
@@ -1080,7 +1065,7 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 			usingDefaultBranch = true
 
 			// First check the global variable for the default branch
-			_, val, ok := sql.SystemVariables.GetGlobal(dsess.DefaultBranchKey(db.Name()))
+			_, val, ok := sql.SystemVariables.GetGlobal(dsess.DefaultBranchKey(baseName))
 			if ok {
 				head = val.(string)
 				branchRef, err := ref.Parse(head)
@@ -1280,11 +1265,14 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 		RepoStateWriter: srcDb.DbData().Rsw,
 		RepoStateReader: srcDb.DbData().Rsr,
 	}
+	
+	baseName, _ := dsess.SplitRevisionDbName(srcDb.Name())
 
+	// TODO: we need a base name method here
 	switch v := srcDb.(type) {
 	case ReadOnlyDatabase:
 		db := Database{
-			baseName:      srcDb.Name(),
+			baseName:      baseName,
 			requestedName: requestedName,
 			ddb:           v.ddb,
 			rsw:           static,
@@ -1297,7 +1285,7 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 		return ReadOnlyDatabase{db}, nil
 	case Database:
 		return Database{
-			baseName:      srcDb.Name(),
+			baseName:      baseName,
 			requestedName: requestedName,
 			ddb:           v.ddb,
 			rsw:           static,
@@ -1310,7 +1298,7 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 	case ReadReplicaDatabase:
 		return ReadReplicaDatabase{
 			Database: Database{
-				baseName:      srcDb.Name(),
+				baseName:      baseName,
 				requestedName: requestedName,
 				ddb:           v.ddb,
 				rsw:           static,
@@ -1394,8 +1382,9 @@ func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.I
 }
 
 func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string, requestedName string) (ReadOnlyDatabase, error) {
+	baseName, _ := dsess.SplitRevisionDbName(srcDb.Name())
 	return ReadOnlyDatabase{Database: Database{
-		baseName:      srcDb.Name(),
+		baseName:      baseName,
 		requestedName: requestedName,
 		ddb:           srcDb.DbData().Ddb,
 		rsw:           srcDb.DbData().Rsw,
@@ -1435,8 +1424,9 @@ func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.In
 }
 
 func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string, requestedName string) (ReadOnlyDatabase, error) {
+	baseName, _ := dsess.SplitRevisionDbName(srcDb.Name())
 	return ReadOnlyDatabase{Database: Database{
-		baseName:      srcDb.Name(),
+		baseName:      baseName,
 		requestedName: requestedName,
 		ddb:           srcDb.DbData().Ddb,
 		rsw:           srcDb.DbData().Rsw,
