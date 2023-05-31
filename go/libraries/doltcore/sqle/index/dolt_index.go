@@ -825,7 +825,7 @@ func (di *doltIndex) ExtendedExpressions() []string {
 	pkCols := di.indexSch.GetPKCols()
 	strs := make([]string, 0, len(pkCols.Tags))
 	_ = pkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		strs = append(strs, di.tblName + "." + col.Name)
+		strs = append(strs, di.tblName+"."+col.Name)
 		return false, nil
 	})
 	return strs
