@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
 )
@@ -402,13 +403,19 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "INSERT INTO test VALUES (4);",
-				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:     "UPDATE test set pk = 4 where pk = 3;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.Row{{types.OkResult{
+					RowsAffected: 1,
+					Info:         plan.UpdateInfo{
+						Matched:  1,
+						Updated:  1,
+					},
+				}}},
 			},
 			{
 				User:        "tester",
