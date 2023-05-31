@@ -123,10 +123,9 @@ SQL
 }
 
 @test "blame: works with HEAD~3 as the commit ref" {
-    skip "SQL views do no support AS OF queries"
-
     run dolt blame HEAD~3 blame_test
     [ "$status" -eq 0 ]
+
     [[ "$output" =~ "Thomas Foolery" ]] || false
     [[ "$output" =~ "create blame_test table" ]] || false
     [[ ! "$output" =~ "Richard Tracy" ]] || false

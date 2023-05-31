@@ -28,8 +28,7 @@ import (
 )
 
 const (
-	blameQueryTemplate     = "SELECT * FROM dolt_blame_%s"
-	blameAsOfQueryTemplate = "SELECT * FROM dolt_blame_%s AS OF '%s'"
+	blameQueryTemplate = "SELECT * FROM dolt_blame_%s AS OF '%s'"
 )
 
 var blameDocs = cli.CommandDocumentationContent{
@@ -104,9 +103,9 @@ func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	var schema sql.Schema
 	var ri sql.RowIter
 	if apr.NArg() == 1 {
-		schema, ri, err = queryist.Query(sqlCtx, fmt.Sprintf(blameQueryTemplate, apr.Arg(0)))
+		schema, ri, err = queryist.Query(sqlCtx, fmt.Sprintf(blameQueryTemplate, apr.Arg(0), "HEAD"))
 	} else {
-		schema, ri, err = queryist.Query(sqlCtx, fmt.Sprintf(blameAsOfQueryTemplate, apr.Arg(1), apr.Arg(0)))
+		schema, ri, err = queryist.Query(sqlCtx, fmt.Sprintf(blameQueryTemplate, apr.Arg(1), apr.Arg(0)))
 	}
 	if err != nil {
 		return 1
