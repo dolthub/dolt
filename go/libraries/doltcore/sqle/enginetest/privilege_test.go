@@ -573,7 +573,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 			{
 				User:     "root",
 				Host:     "localhost",
-				Query:    "GRANT CREATE ON mydb.* TO tester@localhost;",
+				Query:    "GRANT ALTER ON mydb.* TO tester@localhost;",
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
@@ -587,8 +587,8 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				Host:        "localhost",
 				Query:       "desc test;",
 				Expected:  []sql.Row{
-					{"pk", "bigint", "NO", "PRI", "NULL"},
-					{"a", "int", "NO", "PRI", "NULL"},
+					{"pk", "bigint", "NO", "PRI", "NULL", ""},
+					{"a", "int", "YES", "", "NULL", ""},
 				},
 			},
 		},
