@@ -481,6 +481,119 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 		},
 	},
 	{
+		Name: "Basic CREATE TABLE privilege checking",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY);",
+			"call dolt_commit('-Am', 'first commit');",
+			"call dolt_branch('b1')",
+			"use mydb/b1;",
+			"CREATE USER tester@localhost;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "CREATE TABLE t2 (a int primary key);",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT CREATE ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "CREATE TABLE t2 (a int primary key);",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "show tables;",
+				Expected:  []sql.Row{{"mytable"}, {"test"}, {"t2"}},
+			},
+		},
+	},
+	{
+		Name: "Basic DROP TABLE privilege checking",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY);",
+			"INSERT INTO test VALUES (1), (2), (3);",
+			"call dolt_commit('-Am', 'first commit');",
+			"call dolt_branch('b1')",
+			"use mydb/b1;",
+			"CREATE USER tester@localhost;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "DROP TABLE test;",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT DROP ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "DROP TABLE TEST",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "show tables;",
+				Expected:  []sql.Row{{"mytable"}},
+			},
+		},
+	},
+	{
+		Name: "Basic ALTER TABLE privilege checking",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY);",
+			"INSERT INTO test VALUES (1), (2), (3);",
+			"call dolt_commit('-Am', 'first commit');",
+			"call dolt_branch('b1')",
+			"use mydb/b1;",
+			"CREATE USER tester@localhost;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "ALTER TABLE test add column a int;",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT CREATE ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:       "ALTER TABLE test add column a int;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "desc test;",
+				Expected:  []sql.Row{
+					{"pk", "bigint", "NO", "PRI", "NULL"},
+					{"a", "int", "NO", "PRI", "NULL"},
+				},
+			},
+		},
+	},
+	{
 		Name: "Basic revoke SELECT privilege",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk BIGINT PRIMARY KEY);",
