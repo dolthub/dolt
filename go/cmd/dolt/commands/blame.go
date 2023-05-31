@@ -23,10 +23,12 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 const (
-	blameQueryTemplate = "SELECT * FROM dolt_blame_%s"
+	blameQueryTemplate     = "SELECT * FROM dolt_blame_%s"
+	blameAsOfQueryTemplate = "SELECT * FROM dolt_blame_%s AS OF %s"
 )
 
 var blameDocs = cli.CommandDocumentationContent{
@@ -55,7 +57,7 @@ func (cmd BlameCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd BlameCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 2)
 	return ap
 }
 
@@ -85,7 +87,7 @@ func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, blameDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.NArg() != 1 {
+	if apr.NArg() > 2 || apr.NArg() == 0 {
 		usage()
 		return 1
 	}
@@ -98,10 +100,17 @@ func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		defer closeFunc()
 	}
 
-	schema, ri, err := queryist.Query(sqlCtx, fmt.Sprintf(blameQueryTemplate, apr.Arg(0)))
+	var schema sql.Schema
+	var ri sql.RowIter
+	if apr.NArg() == 1 {
+		schema, ri, err = queryist.Query(sqlCtx, fmt.Sprintf(blameQueryTemplate, apr.Arg(0)))
+	} else {
+		schema, ri, err = queryist.Query(sqlCtx, fmt.Sprintf(blameAsOfQueryTemplate, apr.Arg(1), apr.Arg(0)))
+	}
 	if err != nil {
 		return 1
 	}
+
 	err = engine.PrettyPrintResults(sqlCtx, engine.FormatTabular, schema, ri)
 	if err != nil {
 		return 1
