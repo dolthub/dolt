@@ -519,6 +519,7 @@ type doltIndex struct {
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
+var _ sql.ExtendedIndex = (*doltIndex)(nil)
 
 // CanSupport implements sql.Index
 func (di *doltIndex) CanSupport(...sql.Range) bool {
@@ -534,6 +535,20 @@ func (di *doltIndex) ColumnExpressionTypes() []sql.ColumnExpressionType {
 			Type:       col.TypeInfo.ToSqlType(),
 		}
 	}
+	return cets
+}
+
+// ExtendedColumnExpressionTypes implements the interface sql.ExtendedIndex.
+func (di *doltIndex) ExtendedColumnExpressionTypes() []sql.ColumnExpressionType {
+	pkCols := di.indexSch.GetPKCols()
+	cets := make([]sql.ColumnExpressionType, 0, len(pkCols.Tags))
+	_ = pkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		cets = append(cets, sql.ColumnExpressionType{
+			Expression: di.tblName + "." + col.Name,
+			Type:       col.TypeInfo.ToSqlType(),
+		})
+		return false, nil
+	})
 	return cets
 }
 
@@ -802,6 +817,17 @@ func (di *doltIndex) Expressions() []string {
 	for i, col := range di.columns {
 		strs[i] = di.tblName + "." + col.Name
 	}
+	return strs
+}
+
+// ExtendedExpressions implements sql.ExtendedIndex
+func (di *doltIndex) ExtendedExpressions() []string {
+	pkCols := di.indexSch.GetPKCols()
+	strs := make([]string, 0, len(pkCols.Tags))
+	_ = pkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		strs = append(strs, di.tblName + "." + col.Name)
+		return false, nil
+	})
 	return strs
 }
 
