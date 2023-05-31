@@ -48,7 +48,7 @@ var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables c
 
 // Database implements sql.Database for a dolt DB.
 type Database struct {
-	name          string
+	baseName      string
 	requestedName string
 	ddb           *doltdb.DoltDB
 	rsr           env.RepoStateReader
@@ -117,7 +117,7 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts e
 	}
 
 	return Database{
-		name:          name,
+		baseName:      name,
 		requestedName: name,
 		ddb:           dbData.Ddb,
 		rsr:           dbData.Rsr,
@@ -149,16 +149,16 @@ func (db Database) Name() string {
 // AliasedName is what allows databases named e.g. `mydb/b1` to work with the grant and info schema tables that expect
 // a base (no revision qualifier) db name 
 func (db Database) AliasedName() string {
-	return db.name
+	return db.baseName
 }
 
 // RevisionQualifiedName returns the name of this database including its revision qualifier, if any. This method should
 // be used whenever accessing internal state of a database and its tables.
 func (db Database) RevisionQualifiedName() string {
 	if db.revision == "" {
-		return db.name
+		return db.baseName
 	}
-	return db.name + dsess.DbRevisionDelimiter + db.revision
+	return db.baseName + dsess.DbRevisionDelimiter + db.revision
 }
 
 func (db Database) RequestedName() string {
@@ -433,6 +433,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		return dt, found, nil
 	}
 
+	// TODO: this should reuse the root, not lookup the db state again
 	return db.getTable(ctx, root, tblName)
 }
 
@@ -554,7 +555,7 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 	return filterDoltInternalTables(tblNames), nil
 }
 
-// getTable returns the user table with the given name from the root given
+// getTable returns the user table with the given baseName from the root given
 func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName string) (sql.Table, bool, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbState, ok, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
@@ -562,7 +563,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 		return nil, false, err
 	}
 	if !ok {
-		return nil, false, fmt.Errorf("no state for database %s", db.name)
+		return nil, false, fmt.Errorf("no state for database %s", db.RevisionQualifiedName())
 	}
 
 	key, err := doltdb.NewDataCacheKey(root)
@@ -694,7 +695,7 @@ func (db Database) GetWorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 // convenience.
 func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	sess := dsess.DSessFromSess(ctx.Session)
-	return sess.SetRoot(ctx, db.name, newRoot)
+	return sess.SetRoot(ctx, db.RevisionQualifiedName(), newRoot)
 }
 
 // GetHeadRoot returns root value for the current session head
@@ -720,7 +721,7 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 	return db.dropTable(ctx, tableName)
 }
 
-// dropTable drops the table with the name given, without any business logic checks
+// dropTable drops the table with the baseName given, without any business logic checks
 func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 	ds := dsess.DSessFromSess(ctx.Session)
 	if _, ok := ds.GetTemporaryTable(ctx, db.Name(), tableName); ok {
@@ -754,7 +755,7 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 	}
 
 	if schema.HasAutoIncrement(sch) {
-		ddb, _ := ds.GetDoltDB(ctx, db.name)
+		ddb, _ := ds.GetDoltDB(ctx, db.RevisionQualifiedName())
 		err = db.removeTableFromAutoIncrementTracker(ctx, tableName, ddb, ws.Ref())
 		if err != nil {
 			return err
@@ -857,7 +858,7 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 	return db.createIndexedSqlTable(ctx, tableName, sch, idxDef, collation)
 }
 
-// Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.
+// Unlike the exported version CreateTable, createSqlTable doesn't enforce any table baseName checks.
 func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, collation sql.CollationID) error {
 	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
@@ -899,7 +900,7 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 	return db.createDoltTable(ctx, tableName, root, doltSch)
 }
 
-// Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.
+// Unlike the exported version CreateTable, createSqlTable doesn't enforce any table baseName checks.
 func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID) error {
 	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
@@ -947,7 +948,7 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch
 	return db.createDoltTable(ctx, tableName, root, doltSch)
 }
 
-// createDoltTable creates a table on the database using the given dolt schema while not enforcing table name checks.
+// createDoltTable creates a table on the database using the given dolt schema while not enforcing table baseName checks.
 func (db Database) createDoltTable(ctx *sql.Context, tableName string, root *doltdb.RootValue, doltSch schema.Schema) error {
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
@@ -1159,7 +1160,7 @@ func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 // it can exist in a sql session later. Returns sql.ErrExistingView if a view
 // with that name already exists.
 func (db Database) CreateView(ctx *sql.Context, name string, selectStatement, createViewStmt string) error {
-	err := sql.ErrExistingView.New(db.name, name)
+	err := sql.ErrExistingView.New(db.Name(), name)
 	return db.addFragToSchemasTable(ctx, "view", name, createViewStmt, time.Unix(0, 0).UTC(), err)
 }
 
@@ -1167,7 +1168,7 @@ func (db Database) CreateView(ctx *sql.Context, name string, selectStatement, cr
 // dolt database. Returns sql.ErrNonExistingView if the view did not
 // exist.
 func (db Database) DropView(ctx *sql.Context, name string) error {
-	err := sql.ErrViewDoesNotExist.New(db.name, name)
+	err := sql.ErrViewDoesNotExist.New(db.baseName, name)
 	return db.dropFragFromSchemasTable(ctx, "view", name, err)
 }
 

@@ -593,6 +593,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 			},
 		},
 	},
+	// TODO: indexes, constraints
 	{
 		Name: "Basic revoke SELECT privilege",
 		SetUpScript: []string{

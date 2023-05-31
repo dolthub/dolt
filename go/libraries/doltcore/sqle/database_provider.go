@@ -1284,7 +1284,7 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 	switch v := srcDb.(type) {
 	case ReadOnlyDatabase:
 		db := Database{
-			name:          srcDb.Name(),
+			baseName:      srcDb.Name(),
 			requestedName: requestedName,
 			ddb:           v.ddb,
 			rsw:           static,
@@ -1297,7 +1297,7 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 		return ReadOnlyDatabase{db}, nil
 	case Database:
 		return Database{
-			name:          srcDb.Name(),
+			baseName:      srcDb.Name(),
 			requestedName: requestedName,
 			ddb:           v.ddb,
 			rsw:           static,
@@ -1310,7 +1310,7 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 	case ReadReplicaDatabase:
 		return ReadReplicaDatabase{
 			Database: Database{
-				name:          srcDb.Name(),
+				baseName:      srcDb.Name(),
 				requestedName: requestedName,
 				ddb:           v.ddb,
 				rsw:           static,
@@ -1395,7 +1395,7 @@ func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.I
 
 func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string, requestedName string) (ReadOnlyDatabase, error) {
 	return ReadOnlyDatabase{Database: Database{
-		name:          srcDb.Name(),
+		baseName:      srcDb.Name(),
 		requestedName: requestedName,
 		ddb:           srcDb.DbData().Ddb,
 		rsw:           srcDb.DbData().Rsw,
@@ -1436,7 +1436,7 @@ func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.In
 
 func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string, requestedName string) (ReadOnlyDatabase, error) {
 	return ReadOnlyDatabase{Database: Database{
-		name:          srcDb.Name(),
+		baseName:      srcDb.Name(),
 		requestedName: requestedName,
 		ddb:           srcDb.DbData().Ddb,
 		rsw:           srcDb.DbData().Rsw,

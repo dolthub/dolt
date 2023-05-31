@@ -115,7 +115,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
-	currentBranchRef, err := dSess.CWBHeadRef(ctx, rrd.name)
+	currentBranchRef, err := dSess.CWBHeadRef(ctx, rrd.baseName)
 	if err != nil && !dsess.IgnoreReplicationErrors() {
 		return err
 	} else if err != nil {

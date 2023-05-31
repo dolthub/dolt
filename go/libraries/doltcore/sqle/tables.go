@@ -1680,7 +1680,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 	if existingCol.AutoIncrement && !col.AutoIncrement {
 		// TODO: this isn't transactional, and it should be
 		sess := dsess.DSessFromSess(ctx.Session)
-		ddb, _ := sess.GetDoltDB(ctx, t.db.name)
+		ddb, _ := sess.GetDoltDB(ctx, t.db.RevisionQualifiedName())
 		err = t.db.removeTableFromAutoIncrementTracker(ctx, t.Name(), ddb, ws.Ref())
 		if err != nil {
 			return err
@@ -2385,7 +2385,7 @@ func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootV
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbState, ok, err := sess.LookupDbState(ctx, t.db.RevisionQualifiedName())
 	if !ok {
-		return fmt.Errorf("no db state found for %s", t.db.name)
+		return fmt.Errorf("no db state found for %s", t.db.RevisionQualifiedName())
 	}
 
 	dbState.SessionCache().ClearTableCache()
