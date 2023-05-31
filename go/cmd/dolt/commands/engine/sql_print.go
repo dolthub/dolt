@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/parquet"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -41,6 +42,7 @@ const (
 	FormatJson
 	FormatNull // used for profiling
 	FormatVertical
+	FormatParquet
 )
 
 type PrintSummaryBehavior byte
@@ -96,6 +98,12 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 		wr = nullWriter{}
 	case FormatVertical:
 		wr = newVerticalRowWriter(iohelp.NopWrCloser(cli.CliOut), sqlSch)
+	case FormatParquet:
+		var err error
+		wr, err = parquet.NewParquetRowWriter(sqlSch, iohelp.NopWrCloser(cli.CliOut))
+		if err != nil {
+			return err
+		}
 	}
 
 	numRows, err := writeResultSet(ctx, rowIter, wr)

@@ -1039,9 +1039,23 @@ SQL
     run dolt sql -r json -q "select @@character_set_client"
     [ $status -eq 0 ]
     [[ "$output" =~ "utf8mb4" ]] || false
+
+    dolt sql -r pq -q "select * from test order by a" > out.parquet
+    run parquet cat out.parquet
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '{"a": 1, "b": 1.5, "c": "1", "d": 1577836800000000}' ]] || false
+    [[ "$output" =~ '{"a": 2, "b": 2.5, "c": "2", "d": 1580601600000000}' ]] || false
+    [[ "$output" =~ '{"a": 3, "b": null, "c": "3", "d": 1583193600000000}' ]] || false
+    [[ "$output" =~ '{"a": 4, "b": 4.5, "c": null, "d": 1585958400000000}' ]] || false
+    [[ "$output" =~ '{"a": 5, "b": 5.5, "c": "5", "d": null}' ]] || false
+    [ "${#lines[@]}" -eq 5 ]
+
+    run dolt sql -r pq -q "select @@character_set_client"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "utf8mb4" ]] || false
 }
 
-@test "sql: empty JSON output format" {
+@test "sql: empty output exports properly" {
     dolt sql <<SQL
     CREATE TABLE test (
     a int primary key,
@@ -1054,6 +1068,11 @@ SQL
     run dolt sql -r json -q "select * from test order by a"
     [ $status -eq 0 ]
     [[ "$output" =~ "{}" ]] || false
+
+    dolt sql -r pq -q "select * from test order by a" > out.parquet
+    run parquet cat out.parquet
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
 }
 
 @test "sql: output for escaped longtext exports properly" {
@@ -1077,6 +1096,12 @@ SQL
     [[ "$output" =~ "a,v" ]] || false
     [[ "$output" =~ '1,"{""key"": ""value""}"' ]] || false
     [[ "$output" =~ '2,"""Hello"""' ]] || false
+
+    dolt sql -r pq -q "select * from test order by a" > out.parquet
+    run parquet cat out.parquet
+    [ $status -eq 0 ]
+    [[ "$output" =~ '{"a": 1, "v": "{\"key\": \"value\"}"}' ]] || false
+    [[ "$output" =~ '{"a": 2, "v": "\"Hello\""}' ]] || false
 }
 
 @test "sql: ambiguous column name" {
