@@ -28,7 +28,7 @@ import (
 
 const (
 	blameQueryTemplate     = "SELECT * FROM dolt_blame_%s"
-	blameAsOfQueryTemplate = "SELECT * FROM dolt_blame_%s AS OF %s"
+	blameAsOfQueryTemplate = "SELECT * FROM dolt_blame_%s AS OF '%s'"
 )
 
 var blameDocs = cli.CommandDocumentationContent{

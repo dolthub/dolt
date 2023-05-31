@@ -50,55 +50,53 @@ SQL
     [[ "$output" =~ "usage" ]] || false
 }
 
+@test "blame: too many arguments shows usage" {
+    run dolt blame HEAD blame_test foo
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "blame has too many positional arguments" ]] || false
+}
+
 @test "blame: annotates a small table with simple history" {
     # should be the same as dolt blame HEAD blame_test
     run dolt blame blame_test
     [ "$status" -eq 0 ]
 
-    # TODO: Make these assertions better
-    [[ "$output" =~ "Thomas Foolery" ]] || false
-    [[ "$output" =~ "create blame_test table" ]] || false
+    [[ "$output" =~ "1".*"Thomas Foolery".*"create blame_test table" ]] || false
     [[ ! "$output" =~ "Richard Tracy" ]] || false
     [[ ! "$output" =~ "add richard to blame_test" ]] || false
-    [[ "$output" =~ "Harry Wombat" ]] || false
-    [[ "$output" =~ "replace richard" ]] || false
-    [[ "$output" =~ "Johnny Moolah" ]] || false
-    [[ "$output" =~ "add more people" ]] || false
+    [[ "$output" =~ "2".*"Harry Wombat".*"replace richard" ]] || false
+    [[ "$output" =~ "3".*"Johnny Moolah".*"add more people" ]] || false
+    [[ "$output" =~ "4".*"Johnny Moolah".*"add more people" ]] || false
 }
 
 @test "blame: blames HEAD when commit ref omitted" {
     run dolt blame blame_test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Thomas Foolery" ]] || false
-    [[ "$output" =~ "create blame_test table" ]] || false
+
+    [[ "$output" =~ "1".*"Thomas Foolery".*"create blame_test table" ]] || false
     [[ ! "$output" =~ "Richard Tracy" ]] || false
     [[ ! "$output" =~ "add richard to blame_test" ]] || false
-    [[ "$output" =~ "Harry Wombat" ]] || false
-    [[ "$output" =~ "replace richard" ]] || false
-    [[ "$output" =~ "Johnny Moolah" ]] || false
-    [[ "$output" =~ "add more people" ]] || false
+    [[ "$output" =~ "2".*"Harry Wombat".*"replace richard" ]] || false
+    [[ "$output" =~ "3".*"Johnny Moolah".*"add more people" ]] || false
+    [[ "$output" =~ "4".*"Johnny Moolah".*"add more people" ]] || false
 }
 
 @test "blame: works with HEAD as the commit ref" {
-    skip "SQL views do no support AS OF queries"
-
     run dolt blame HEAD blame_test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Thomas Foolery" ]] || false
-    [[ "$output" =~ "create blame_test table" ]] || false
+
+    [[ "$output" =~ "1".*"Thomas Foolery".*"create blame_test table" ]] || false
     [[ ! "$output" =~ "Richard Tracy" ]] || false
     [[ ! "$output" =~ "add richard to blame_test" ]] || false
-    [[ "$output" =~ "Harry Wombat" ]] || false
-    [[ "$output" =~ "replace richard" ]] || false
-    [[ "$output" =~ "Johnny Moolah" ]] || false
-    [[ "$output" =~ "add more people" ]] || false
+    [[ "$output" =~ "2".*"Harry Wombat".*"replace richard" ]] || false
+    [[ "$output" =~ "3".*"Johnny Moolah".*"add more people" ]] || false
+    [[ "$output" =~ "4".*"Johnny Moolah".*"add more people" ]] || false
 }
 
 @test "blame: works with HEAD~1 as the commit ref" {
-    skip "SQL views do no support AS OF queries"
-
     run dolt blame HEAD~1 blame_test
     [ "$status" -eq 0 ]
+
     [[ "$output" =~ "Thomas Foolery" ]] || false
     [[ "$output" =~ "create blame_test table" ]] || false
     [[ ! "$output" =~ "Richard Tracy" ]] || false
