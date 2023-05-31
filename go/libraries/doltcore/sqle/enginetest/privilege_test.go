@@ -593,7 +593,225 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 			},
 		},
 	},
-	// TODO: indexes, constraints
+	{
+		Name: "Basic INDEX privilege checking",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, a int);",
+			"INSERT INTO test VALUES (1,1), (2,2), (3,3);",
+			"call dolt_commit('-Am', 'first commit');",
+			"call dolt_branch('b1')",
+			"use mydb/b1;",
+			"CREATE USER tester@localhost;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "create index t1 on test(a) ;",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT select ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "create index t1 on test(a) ;",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT index ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:       "create index t1 on test(a) ;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "desc test;",
+				Expected:  []sql.Row{
+					{"pk", "bigint", "NO", "PRI", "NULL", ""},
+					{"a", "int", "YES", "MUL", "NULL", ""},
+				},
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "REVOKE index ON mydb.* FROM tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:       "drop index t1 on test;",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT index ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:       "drop index t1 on test;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "desc test;",
+				Expected:  []sql.Row{
+					{"pk", "bigint", "NO", "PRI", "NULL", ""},
+					{"a", "int", "YES", "", "NULL", ""},
+				},
+			},
+		},
+	},
+	{
+		Name: "Basic constraint privilege checking",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, a int);",
+			"INSERT INTO test VALUES (1,1), (2,2), (3,3);",
+			"call dolt_commit('-Am', 'first commit');",
+			"call dolt_branch('b1')",
+			"use mydb/b1;",
+			"CREATE USER tester@localhost;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "alter table test add constraint CHECK (NULL = NULL);",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT select ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "alter table test add constraint CHECK (NULL = NULL);",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT alter ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:       "alter table test add constraint chk1 CHECK (a < 10);",
+				Expected: []sql.Row{},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "show create table test;",
+				Expected:  []sql.Row{
+					{"test", "CREATE TABLE `test` (\n" +
+						"  `pk` bigint NOT NULL,\n" +
+						"  `a` int,\n" +
+						"  PRIMARY KEY (`pk`),\n" +
+						"  CONSTRAINT `chk1` CHECK ((`a` < 10))\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+				},
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "REVOKE alter ON mydb.* FROM tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "alter table test drop check chk1;",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT alter ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:       "alter table test drop check chk1;",
+				Expected: []sql.Row{},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "show create table test;",
+				Expected:  []sql.Row{
+					{"test", "CREATE TABLE `test` (\n" +
+							"  `pk` bigint NOT NULL,\n" +
+							"  `a` int,\n" +
+							"  PRIMARY KEY (`pk`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+				},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:       "alter table test add constraint chk1 CHECK (a < 10);",
+				Expected: []sql.Row{},
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "REVOKE alter ON mydb.* FROM tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "alter table test drop constraint chk1;",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT alter ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:       "alter table test drop constraint chk1;",
+				Expected: []sql.Row{},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "show create table test;",
+				Expected:  []sql.Row{
+					{"test", "CREATE TABLE `test` (\n" +
+							"  `pk` bigint NOT NULL,\n" +
+							"  `a` int,\n" +
+							"  PRIMARY KEY (`pk`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+				},
+			},
+		},
+	},
 	{
 		Name: "Basic revoke SELECT privilege",
 		SetUpScript: []string{
