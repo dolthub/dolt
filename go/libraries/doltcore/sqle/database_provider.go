@@ -267,12 +267,12 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 		
 		// If there's a revision database in use, swap that one in for its base db, but keep the same name
 		if currRev != "" && strings.ToLower(currBase) == strings.ToLower(base) {
-			var err error
-			var ok bool
-			db, ok, err = p.databaseForRevision(ctx, currentDb, currBase)
+			rdb, ok, err := p.databaseForRevision(ctx, currentDb, currBase)
 			if err != nil || !ok {
 				// TODO: this interface is wrong, needs to return errors
 				ctx.GetLogger().Warnf("error fetching revision databases: %s", err.Error())
+			} else {
+				db = rdb
 			}
 		}
 
