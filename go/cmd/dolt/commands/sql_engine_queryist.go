@@ -85,7 +85,7 @@ func (s SqlEngineRowIter) valToString(ctx *sql.Context, index int, val interface
 	case uint64:
 		switch ct.(type) {
 		case types.BitType_:
-			newValue = fmt.Sprintf("%v", string(t))
+			newValue = string(rune(t))
 		default:
 			newValue = fmt.Sprintf("%d", t)
 		}
