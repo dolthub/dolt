@@ -364,6 +364,16 @@ func TestDoltDiffQueryPlans(t *testing.T) {
 	}
 }
 
+func TestBranchPlans(t *testing.T) {
+	for _, script := range BranchPlanTests {
+		func() {
+			harness := newDoltHarness(t)
+			defer harness.Close()
+			enginetest.TestScript(t, harness, script)
+		}()
+	}
+}
+
 func TestQueryErrors(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()

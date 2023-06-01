@@ -503,3 +503,98 @@ var DdlBranchTests = []queries.ScriptTest{
 		},
 	},
 }
+
+var BranchPlanTests = []queries.ScriptTest{
+	{
+		Name: "use index on branch database",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int)",
+			"insert into t1 values (1, 1), (2, 2), (3, 3)",
+			"call dolt_commit('-Am', 'first commit')",
+			"call dolt_branch('b1')",
+			"use mydb/b1",
+			"create index idx on t1 (b)",
+		}, 
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "explain select * from t1 where b = 1",
+				Expected: []sql.Row{
+					{"IndexedTableAccess(t1)"},
+					{" ├─ index: [t1.b]"},
+					{" ├─ filters: [{[1, 1]}]"},
+					{" └─ columns: [a b]"},
+				},
+			},
+			{
+				Query: "use mydb/main",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "explain select * from `mydb/b1`.t1 where b = 1",
+				Expected: []sql.Row{
+					{"IndexedTableAccess(t1)"},
+					{" ├─ index: [t1.b]"},
+					{" ├─ filters: [{[1, 1]}]"},
+					{" └─ columns: [a b]"},
+				},
+			},
+		},
+	},
+	{
+		Name: "use index on branch database join",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int)",
+			"insert into t1 values (1, 1), (2, 2), (3, 3)",
+			"call dolt_commit('-Am', 'first commit')",
+			"call dolt_branch('b1')",
+			"use mydb/b1",
+			"create index idx on t1 (b)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "explain select * from t1 t1a join t1 t1b on t1a.b = t1b.b order by 1",
+				Expected: []sql.Row{
+					{"Sort(t1a.a ASC)"},
+					{" └─ Project"},
+					{"     ├─ columns: [t1a.a, t1a.b, t1b.a, t1b.b]"},
+					{"     └─ MergeJoin"},
+					{"         ├─ cmp: (t1b.b = t1a.b)"},
+					{"         ├─ TableAlias(t1b)"},
+					{"         │   └─ IndexedTableAccess(t1)"},
+					{"         │       ├─ index: [t1.b]"},
+					{"         │       ├─ filters: [{[NULL, ∞)}]"},
+					{"         │       └─ columns: [a b]"},
+					{"         └─ TableAlias(t1a)"},
+					{"             └─ IndexedTableAccess(t1)"},
+					{"                 ├─ index: [t1.b]"},
+					{"                 ├─ filters: [{[NULL, ∞)}]"},
+					{"                 └─ columns: [a b]"},
+				},
+			},
+			{
+				Query: "use mydb/main",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "explain select * from `mydb/b1`.t1 t1a join `mydb/b1`.t1 t1b on t1a.b = t1b.b order by 1",
+				Expected: []sql.Row{
+					{"Sort(t1a.a ASC)"},
+					{" └─ Project"},
+					{"     ├─ columns: [t1a.a, t1a.b, t1b.a, t1b.b]"},
+					{"     └─ MergeJoin"},
+					{"         ├─ cmp: (t1b.b = t1a.b)"},
+					{"         ├─ TableAlias(t1b)"},
+					{"         │   └─ IndexedTableAccess(t1)"},
+					{"         │       ├─ index: [t1.b]"},
+					{"         │       ├─ filters: [{[NULL, ∞)}]"},
+					{"         │       └─ columns: [a b]"},
+					{"         └─ TableAlias(t1a)"},
+					{"             └─ IndexedTableAccess(t1)"},
+					{"                 ├─ index: [t1.b]"},
+					{"                 ├─ filters: [{[NULL, ∞)}]"},
+					{"                 └─ columns: [a b]"},
+				},
+			},
+		},
+	},
+}
