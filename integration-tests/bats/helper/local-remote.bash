@@ -145,6 +145,7 @@ setup_remote_server() {
   script_name=$(basename ${BATS_TEST_FILENAME})
   if [ "$SQL_ENGINE" = "remote-engine" ];
   then
+    echo "Using remote engine for tests" >& 3
     if [[ "$SKIP_SERVER_TESTS" =~ "$script_name" ]];
     then
       skip
