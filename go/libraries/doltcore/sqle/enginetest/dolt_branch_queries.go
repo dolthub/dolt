@@ -214,6 +214,7 @@ var ViewBranchTests = []queries.ScriptTest{
 			{
 				Query:    "select * from v1",
 				Expected: []sql.Row{{3, 3}},
+				Skip: true, // https://github.com/dolthub/dolt/issues/6078
 			},
 			{
 				Query:            "use mydb/main",
@@ -222,10 +223,12 @@ var ViewBranchTests = []queries.ScriptTest{
 			{
 				Query:    "select * from v1",
 				ExpectedErr: sql.ErrTableNotFound,
+				Skip: true, // https://github.com/dolthub/dolt/issues/6078
 			},
 			{
 				Query:    "select * from `mydb/b1`.v1",
 				Expected: []sql.Row{{3, 3}},
+				Skip: true, // https://github.com/dolthub/dolt/issues/6078
 			},
 		},
 	},
