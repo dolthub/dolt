@@ -108,7 +108,7 @@ SQL
 }
 
 @test "blame: works with HEAD~2 as the commit ref" {
-    skip "SQL views do no support AS OF queries"
+    skip "SQL views return incorrect data when using AS OF with commits that modify existing data"
 
     run dolt blame HEAD~2 blame_test
     [ "$status" -eq 0 ]
