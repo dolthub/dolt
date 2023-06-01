@@ -17,9 +17,10 @@ package tree
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
+
+	"github.com/goccy/go-json"
 
 	"github.com/dolthub/go-mysql-server/sql/types"
 
