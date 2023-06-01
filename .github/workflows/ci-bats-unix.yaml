@@ -22,6 +22,7 @@ jobs:
       fail-fast: true
       matrix:
         os: [ ubuntu-22.04, macos-latest ]
+        sql_engine: [ remote-engine, local-engine ]
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:
@@ -110,6 +111,7 @@ jobs:
         run: expect -v
       - name: Test all Unix
         env:
+          SQL_ENGINE: ${{ matrix.sql-engine }}
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
           BATS_TEST_RETRIES: "3"
         run: |
