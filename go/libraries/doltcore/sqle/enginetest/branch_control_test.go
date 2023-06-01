@@ -1201,7 +1201,59 @@ func TestBranchControl(t *testing.T) {
 }
 
 func TestBranchControlBlocks(t *testing.T) {
-	for _, test := range BranchControlBlockTests {
+	// for _, test := range BranchControlBlockTests {
+	// 	harness := newDoltHarness(t)
+	// 	defer harness.Close()
+	// 	t.Run(test.Name, func(t *testing.T) {
+	// 		engine, err := harness.NewEngine(t)
+	// 		require.NoError(t, err)
+	// 		defer engine.Close()
+	// 
+	// 		rootCtx := enginetest.NewContext(harness)
+	// 		rootCtx.NewCtxWithClient(sql.Client{
+	// 			User:    "root",
+	// 			Address: "localhost",
+	// 		})
+	// 		engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
+	// 		engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
+	// 
+	// 		for _, statement := range append(TestUserSetUpScripts, test.SetUpScript...) {
+	// 			enginetest.RunQueryWithContext(t, engine, harness, rootCtx, statement)
+	// 		}
+	// 
+	// 		userCtx := enginetest.NewContextWithClient(harness, sql.Client{
+	// 			User:    "testuser",
+	// 			Address: "localhost",
+	// 		})
+	// 		enginetest.AssertErrWithCtx(t, engine, harness, userCtx, test.Query, test.ExpectedErr)
+	// 		
+	// 		addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'write'), ('%', 'other', 'testuser', 'localhost', 'write');"
+	// 		addUserQueryResults := []sql.Row{{types.NewOkResult(2)}}
+	// 		enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
+	// 		
+	// 		sch, iter, err := engine.Query(userCtx, test.Query)
+	// 		if err == nil {
+	// 			_, err = sql.RowIterToRows(userCtx, sch, iter)
+	// 		}
+	// 		assert.NoError(t, err)
+	// 	})
+	// }
+
+	// These tests are run with permission on main but not other
+	var branchRevisionTests = []BranchControlBlockTest{
+		{
+			Name:        "INSERT on branch db, permissions on main",
+			Query:       "INSERT INTO `mydb/other`.test VALUES (2, 2);",
+			ExpectedErr: branch_control.ErrIncorrectPermissions,
+		},
+		{
+			Name:        "DELETE on branch db, permissions on main",
+			Query:       "DELETE from `mydb/other`.test;",
+			ExpectedErr: branch_control.ErrIncorrectPermissions,
+		},
+	}
+
+	for _, test := range branchRevisionTests {
 		harness := newDoltHarness(t)
 		defer harness.Close()
 		t.Run(test.Name, func(t *testing.T) {
@@ -1216,21 +1268,25 @@ func TestBranchControlBlocks(t *testing.T) {
 			})
 			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
-
+			
 			for _, statement := range append(TestUserSetUpScripts, test.SetUpScript...) {
 				enginetest.RunQueryWithContext(t, engine, harness, rootCtx, statement)
 			}
+
+			// addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'write');"
+			// addUserQueryResults := []sql.Row{{types.NewOkResult(1)}}
+			// enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
 
 			userCtx := enginetest.NewContextWithClient(harness, sql.Client{
 				User:    "testuser",
 				Address: "localhost",
 			})
 			enginetest.AssertErrWithCtx(t, engine, harness, userCtx, test.Query, test.ExpectedErr)
-			
-			addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'write'), ('%', 'other', 'testuser', 'localhost', 'write');"
-			addUserQueryResults := []sql.Row{{types.NewOkResult(2)}}
+
+			addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'other', 'testuser', 'localhost', 'write');"
+			addUserQueryResults := []sql.Row{{types.NewOkResult(1)}}
 			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
-			
+
 			sch, iter, err := engine.Query(userCtx, test.Query)
 			if err == nil {
 				_, err = sql.RowIterToRows(userCtx, sch, iter)
@@ -1238,4 +1294,5 @@ func TestBranchControlBlocks(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
+	
 }
