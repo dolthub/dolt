@@ -122,15 +122,11 @@ teardown() {
     start_sql_server defaultDB
     run dolt --user dolt blame test
     [ "$status" -eq 0 ]
-    [[ "$output" =~  "1".*"insert initial value into test" ]] || false
-    [[ "$output" =~  "2".*"insert more values into test" ]] || false
-    [[ "$output" =~  "3".*"insert more values into test" ]] || false
+    export out="$output"
     stop_sql_server 1
 
     run dolt blame test
     [ "$status" -eq 0 ]
-    [[ "$output" =~  "1".*"insert initial value into test" ]] || false
-    [[ "$output" =~  "2".*"insert more values into test" ]] || false
-    [[ "$output" =~  "3".*"insert more values into test" ]] || false
+    [[ "$output" =  $out ]] || false
 }
 

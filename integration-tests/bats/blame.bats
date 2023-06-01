@@ -61,12 +61,13 @@ SQL
     run dolt blame blame_test
     [ "$status" -eq 0 ]
 
-    [[ "$output" =~ "1".*"Thomas Foolery".*"create blame_test table" ]] || false
+    [[ "${lines[1]}" =~ "pk".*"commit".*"commit_date".*"committer".*"email".*"message" ]] || false
+    [[ "$output" =~ "1  |".+"|".+"| Thomas Foolery, | bats-1@email.fake | create blame_test table       |" ]] || false
     [[ ! "$output" =~ "Richard Tracy" ]] || false
     [[ ! "$output" =~ "add richard to blame_test" ]] || false
-    [[ "$output" =~ "2".*"Harry Wombat".*"replace richard" ]] || false
-    [[ "$output" =~ "3".*"Johnny Moolah".*"add more people" ]] || false
-    [[ "$output" =~ "4".*"Johnny Moolah".*"add more people" ]] || false
+    [[ "$output" =~ "2  |".+"|".+"| Harry Wombat,   | bats-3@email.fake | replace richard with harry    |" ]] || false
+    [[ "$output" =~ "3  |".+"|".+"| Johnny Moolah,  | bats-4@email.fake | add more people to blame_test |" ]] || false
+    [[ "$output" =~ "4  |".+"|".+"| Johnny Moolah,  | bats-4@email.fake | add more people to blame_test |" ]] || false
 }
 
 @test "blame: blames HEAD when commit ref omitted" {
