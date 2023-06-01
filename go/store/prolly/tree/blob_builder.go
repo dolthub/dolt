@@ -20,9 +20,8 @@ import (
 	"errors"
 	"io"
 
-	"github.com/goccy/go-json"
-
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/goccy/go-json"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
