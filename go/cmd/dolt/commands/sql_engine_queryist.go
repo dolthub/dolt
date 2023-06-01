@@ -6,8 +6,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/shopspring/decimal"
-	"time"
 )
 
 type SqlEngineQueryist struct {
@@ -57,55 +55,27 @@ func (s SqlEngineRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 func (s SqlEngineRowIter) valToString(ctx *sql.Context, index int, val interface{}) (string, error) {
-	column := s.oldSchema[index]
-	ct := column.Type
-	var err error
 	var newValue string
 	switch t := val.(type) {
 	case string:
 		newValue = t
 	case types.OkResult:
 		newValue = "OK"
-	case int8:
-		newValue = fmt.Sprintf("%d", t)
-	case int16:
-		newValue = fmt.Sprintf("%d", t)
-	case int32:
-		newValue = fmt.Sprintf("%d", t)
-	case float32:
-		newValue = fmt.Sprintf("%g", t)
-	case float64:
-		newValue = fmt.Sprintf("%g", t)
-	case int64:
-		newValue = fmt.Sprintf("%d", t)
-	case decimal.Decimal:
-		decimalType := ct.(types.DecimalType_)
-		scale := decimalType.Scale()
-		newValue = t.StringFixed(int32(scale))
-	case uint64:
-		switch ct.(type) {
-		case types.BitType_:
-			newValue = string(rune(t))
-		default:
-			newValue = fmt.Sprintf("%d", t)
+
+	default:
+		var ct sql.Type = nil
+		if index >= len(s.oldSchema) {
+			cli.Printf("index: %d, len: %d\n", index, len(s.oldSchema))
+			cli.Printf("val: %v\n", val)
+			panic("unexpected index")
+		} else {
+			ct = s.oldSchema[index].Type
 		}
-	case time.Time:
 		sqlVal, err := ct.SQL(ctx, nil, t)
 		if err != nil {
-			return "", fmt.Errorf("unexpected time type %T", t)
+			return "", fmt.Errorf("issue converting unexpected type %T: %s", t, err)
 		}
 		newValue = sqlVal.ToString()
-	case types.Timespan:
-		newValue = t.String()
-	case []uint8:
-		newValue = string(t)
-	case types.JSONDocument:
-		newValue, err = t.ToString(nil)
-		if err != nil {
-			return "", fmt.Errorf("error converting JSONDocument type %T to string", t)
-		}
-	default:
-		return "", fmt.Errorf("unexpected type %T", t)
 	}
 	return newValue, nil
 }

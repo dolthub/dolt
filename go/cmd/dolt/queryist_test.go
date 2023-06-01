@@ -118,7 +118,7 @@ var tests = []testcase{
 	},
 	{
 		query:          "select json20 from data",
-		expectedResult: []interface{}{"[1, 2, 3]"},
+		expectedResult: []interface{}{`[1, 2, 3, "four", {"a": 1, "b": "2", "c": 3, "d": {"e": 1, "f": 2, "g": 3}}]`},
 	},
 }
 var setupScripts = []string{
@@ -145,11 +145,13 @@ var setupScripts = []string{
 		varbinary19 VARBINARY(10),
 		json20 JSON
 	 );`,
+
 	`insert into data values (
 		100, 33, 2, 3, 4, 5, 6,
 		true, 8, 9, 10, 11.0123, "2023-05-31", "18:45:39", "2023-05-31 18:45:39",
 		2015, "char16", "varchar17", "binary--18", "vbinary19",
-		"[1 , 2 , 3]");`,
+		"[ 1 , 2 , 3 , ""four"" , { ""a"": 1, ""b"": ""2"", ""c"": 3, ""d"": { ""e"": 1, ""f"": 2, ""g"": 3 } }]"
+		);`,
 }
 
 func TestQueryistCases(t *testing.T) {
