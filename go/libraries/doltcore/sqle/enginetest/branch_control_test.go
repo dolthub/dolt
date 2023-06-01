@@ -81,6 +81,11 @@ var BranchControlBlockTests = []BranchControlBlockTest{
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
 	},
 	{
+		Name:        "INSERT on branch db",
+		Query:       "INSERT INTO `mydb/other`.test VALUES (2, 2);",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
 		Name:        "REPLACE",
 		Query:       "REPLACE INTO test VALUES (2, 2);",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
@@ -91,8 +96,18 @@ var BranchControlBlockTests = []BranchControlBlockTest{
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
 	},
 	{
+		Name:        "UPDATE on branch db",
+		Query:       "UPDATE `mydb/other`.test SET pk = 2;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
 		Name:        "DELETE",
 		Query:       "DELETE FROM test WHERE pk >= 0;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "DELETE from branch table",
+		Query:       "DELETE FROM `mydb/other`.test WHERE pk >= 0;",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
 	},
 	{
@@ -1211,9 +1226,11 @@ func TestBranchControlBlocks(t *testing.T) {
 				Address: "localhost",
 			})
 			enginetest.AssertErrWithCtx(t, engine, harness, userCtx, test.Query, test.ExpectedErr)
+			
 			addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'write'), ('%', 'other', 'testuser', 'localhost', 'write');"
 			addUserQueryResults := []sql.Row{{types.NewOkResult(2)}}
 			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
+			
 			sch, iter, err := engine.Query(userCtx, test.Query)
 			if err == nil {
 				_, err = sql.RowIterToRows(userCtx, sch, iter)
