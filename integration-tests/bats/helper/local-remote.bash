@@ -149,7 +149,7 @@ setup_remote_server() {
     then
       skip
     else
-      USER=root
+      SQL_USER=root
       start_sql_server
     fi
   fi

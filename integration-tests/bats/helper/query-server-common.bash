@@ -26,7 +26,7 @@ os.chdir(working_dir)
 
 from pytest import wait_for_connection
 wait_for_connection(port=int(port_str), timeout_ms=int(timeout_ms), database=database, user=user)
-" -- "$PYTEST_DIR" "$DEFAULT_DB" "$1" "$2" "${USER:-dolt}"
+" -- "$PYTEST_DIR" "$DEFAULT_DB" "$1" "$2" "${SQL_USER:-dolt}"
 }
 
 start_sql_server() {
@@ -35,9 +35,9 @@ start_sql_server() {
     PORT=$( definePORT )
     if [[ $logFile ]]
     then
-        dolt sql-server --host 0.0.0.0 --port=$PORT --user "${USER:-dolt}" --socket "dolt.$PORT.sock" > $logFile 2>&1 &
+        dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" > $logFile 2>&1 &
     else
-        dolt sql-server --host 0.0.0.0 --port=$PORT --user "${USER:-dolt}" --socket "dolt.$PORT.sock" &
+        dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" &
     fi
     SERVER_PID=$!
     wait_for_connection $PORT 5000
