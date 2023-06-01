@@ -461,6 +461,10 @@ type ConnectionQueryist struct {
 
 var _ cli.Queryist = ConnectionQueryist{}
 
+func NewConnectionQueryist(connection *dbr.Connection) ConnectionQueryist {
+	return ConnectionQueryist{connection: connection}
+}
+
 func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, error) {
 	rows, err := c.connection.QueryContext(ctx, query)
 	if err != nil {
@@ -495,7 +499,7 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, a
 
 	conn := &dbr.Connection{DB: mysql.OpenDB(mysqlConnector), EventReceiver: nil, Dialect: dialect.MySQL}
 
-	queryist := ConnectionQueryist{connection: conn}
+	queryist := NewConnectionQueryist(conn)
 
 	var lateBind cli.LateBindQueryist = func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
 		return queryist, sql.NewContext(ctx), func() { conn.Conn(ctx) }, nil
