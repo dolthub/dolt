@@ -143,7 +143,7 @@ EOM
 
 setup_remote_server() {
   script_name=$(basename ${BATS_TEST_FILENAME})
-  if [ "$START_SQL_SERVER" = "true" ];
+  if [ "$SQL_ENGINE" = "remote-engine" ];
   then
     if [[ "$SKIP_SERVER_TESTS" =~ "$script_name" ]];
     then
@@ -156,7 +156,7 @@ setup_remote_server() {
 }
 
 teardown_remote_server() {
-  if [ "$START_SQL_SERVER" = "true" ];
+  if [ "$SQL_ENGINE" = "remote-engine" ];
   then
     stop_sql_server
   fi
