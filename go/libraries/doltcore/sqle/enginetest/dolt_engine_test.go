@@ -718,6 +718,26 @@ func TestCreateTable(t *testing.T) {
 	enginetest.TestCreateTable(t, h)
 }
 
+func TestBranchDdl(t *testing.T) {
+	for _, script := range DdlBranchTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func TestBranchDdlPrepared(t *testing.T) {
+	for _, script := range DdlBranchTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
+}
+
 func TestPkOrdinalsDDL(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()

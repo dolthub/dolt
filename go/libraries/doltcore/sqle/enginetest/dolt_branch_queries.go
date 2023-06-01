@@ -191,10 +191,14 @@ var ViewBranchTests = []queries.ScriptTest{
 				Query:    "select * from v1",
 				ExpectedErr: sql.ErrTableNotFound,
 			},
+			{
+				Query:    "select * from `mydb/b1`.v1",
+				Expected: []sql.Row{{3, 3}},
+			},
 		},
 	},
 	{
-		Name: "create view with no branch selected",
+		Name: "create view on different branch",
 		SetUpScript: []string{
 			"create table t1 (a int primary key, b int)",
 			"insert into t1 values (1, 1), (2, 2), (3, 3)",
@@ -218,6 +222,280 @@ var ViewBranchTests = []queries.ScriptTest{
 			{
 				Query:    "select * from v1",
 				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query:    "select * from `mydb/b1`.v1",
+				Expected: []sql.Row{{3, 3}},
+			},
+		},
+	},
+}
+
+var DdlBranchTests = []queries.ScriptTest{
+	{
+		Name: "create table on branch",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int)",
+			"insert into t1 values (1, 1), (2, 2), (3, 3)",
+			"call dolt_commit('-Am', 'first commit')",
+			"call dolt_branch('b1')",
+			"use mydb/b1",
+			"create table t2 (a int primary key, b int)",
+			"insert into t2 values (4, 4)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "use mydb/b1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from t2",
+				Expected: []sql.Row{{4, 4}},
+			},
+			{
+				Query:            "use mydb/main",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from t2",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query:    "select * from `mydb/b1`.t2",
+				Expected: []sql.Row{{4, 4}},
+			},
+		},
+	},
+	{
+		Name: "create table on different branch",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int)",
+			"insert into t1 values (1, 1), (2, 2), (3, 3)",
+			"call dolt_commit('-Am', 'first commit')",
+			"call dolt_branch('b1')",
+			"create table `mydb/b1`.t2 (a int primary key, b int)",
+			"insert into `mydb/b1`.t2 values (4,4)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "use mydb/b1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from t2",
+				Expected: []sql.Row{{4, 4}},
+			},
+			{
+				Query:            "use mydb/main",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from t2",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query:    "select * from `mydb/b1`.t2",
+				Expected: []sql.Row{{4, 4}},
+			},
+		},
+	},
+	{
+		Name: "create table on different branch, autocommit off",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int)",
+			"insert into t1 values (1, 1), (2, 2), (3, 3)",
+			"call dolt_commit('-Am', 'first commit')",
+			"call dolt_branch('b1')",
+			"set autocommit = off",
+			"create table `mydb/b1`.t2 (a int primary key, b int)",
+			"insert into `mydb/b1`.t2 values (4,4)",
+			"commit",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "use mydb/b1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from t2",
+				Expected: []sql.Row{{4, 4}},
+			},
+			{
+				Query:            "use mydb/main",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from t2",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query:    "select * from `mydb/b1`.t2",
+				Expected: []sql.Row{{4, 4}},
+			},
+		},
+	},
+	{
+		Name: "alter table on different branch, add column",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int)",
+			"insert into t1 values (1, 1), (2, 2), (3, 3)",
+			"call dolt_commit('-Am', 'first commit')",
+			"call dolt_branch('b1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table `mydb/b1`.t1 add column c int",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0}}},
+			},
+			{
+				Query:    "select * from `mydb/b1`.t1",
+				Expected: []sql.Row{{1, 1, nil}, {2, 2, nil}, {3, 3, nil}},
+			},
+			{
+				Query:    "select * from t1",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+		},
+	},
+	{
+		Name: "alter table on different branch, drop column",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int)",
+			"insert into t1 values (1, 1), (2, 2), (3, 3)",
+			"call dolt_commit('-Am', 'first commit')",
+			"call dolt_branch('b1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table `mydb/b1`.t1 drop column b",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0}}},
+			},
+			{
+				Query:    "select * from `mydb/b1`.t1",
+				Expected: []sql.Row{{1}, {2}, {3}},
+			},
+			{
+				Query:    "select * from t1",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+		},
+	},
+	{
+		Name: "alter table on different branch, modify column",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int)",
+			"insert into t1 values (1, 1), (2, 2), (3, 3)",
+			"call dolt_commit('-Am', 'first commit')",
+			"call dolt_branch('b1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table `mydb/b1`.t1 modify column b varchar(1) first",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0}}},
+			},
+			{
+				Query:    "select * from `mydb/b1`.t1",
+				Expected: []sql.Row{{"1", 1}, {"2", 2}, {"3", 3}},
+			},
+			{
+				Query:    "select * from t1",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+		},
+	},
+	{
+		Name: "alter table on different branch, create and drop index",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int)",
+			"insert into t1 values (1, 1), (2, 2), (3, 3)",
+			"call dolt_commit('-Am', 'first commit')",
+			"call dolt_branch('b1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "create index idx on `mydb/b1`.t1 (b)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0}}},
+			},
+			{
+				Query:    "show create table `mydb/b1`.t1",
+				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
+					"  `a` int NOT NULL,\n" +
+					"  `b` int,\n" +
+					"  PRIMARY KEY (`a`),\n" +
+					"  KEY `idx` (`b`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "show create table t1",
+				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
+						"  `a` int NOT NULL,\n" +
+						"  `b` int,\n" +
+						"  PRIMARY KEY (`a`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "alter table `mydb/b1`.t1 drop index idx",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0}}},
+			},
+			{
+				Query:    "show create table `mydb/b1`.t1",
+				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
+						"  `a` int NOT NULL,\n" +
+						"  `b` int,\n" +
+						"  PRIMARY KEY (`a`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "alter table on different branch, add and drop constraint",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int)",
+			"insert into t1 values (1, 1), (2, 2), (3, 3)",
+			"call dolt_commit('-Am', 'first commit')",
+			"call dolt_branch('b1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table `mydb/b1`.t1 add constraint chk1 check (b < 4)",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "show create table `mydb/b1`.t1",
+				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
+					"  `a` int NOT NULL,\n" +
+					"  `b` int,\n" +
+					"  PRIMARY KEY (`a`),\n" +
+					"  CONSTRAINT `chk1` CHECK ((`b` < 4))\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "insert into `mydb/b1`.t1 values (4, 4)",
+				ExpectedErr: sql.ErrCheckConstraintViolated,
+			},			
+			{
+				Query:    "show create table t1",
+				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
+						"  `a` int NOT NULL,\n" +
+						"  `b` int,\n" +
+						"  PRIMARY KEY (`a`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "insert into t1 values (4, 4)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    "alter table `mydb/b1`.t1 drop constraint chk1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "show create table `mydb/b1`.t1",
+				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
+						"  `a` int NOT NULL,\n" +
+						"  `b` int,\n" +
+						"  PRIMARY KEY (`a`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
