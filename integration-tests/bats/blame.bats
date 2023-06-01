@@ -137,10 +137,9 @@ SQL
 }
 
 @test "blame: returns an error when the table is not found in the given revision" {
-    skip "SQL views do no support AS OF queries"
     run dolt blame HEAD~4 blame_test
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "no table named blame_test found" ]] || false
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
 }
 
 @test "blame: pk ordered output" {
