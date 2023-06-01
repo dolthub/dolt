@@ -171,7 +171,9 @@ func (p DoltDatabaseProvider) FileSystemForDatabase(dbname string) (filesys.File
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	dbLocation, ok := p.dbLocations[dbname]
+	baseName, _ := dsess.SplitRevisionDbName(dbname)
+	
+	dbLocation, ok := p.dbLocations[strings.ToLower(baseName)]
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbname)
 	}

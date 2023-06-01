@@ -865,6 +865,64 @@ func TestForeignKeys(t *testing.T) {
 	enginetest.TestForeignKeys(t, h)
 }
 
+func TestForeignKeyBranches(t *testing.T) {
+	setupPrefix := []string {
+		"call dolt_branch('b1')",
+		"use mydb/b1",
+	}
+	assertionsPrefix := []queries.ScriptTestAssertion {
+		{
+			Query:                           "use mydb/b1",
+			SkipResultsCheck:                true,
+		},
+	}
+	for _, script := range queries.ForeignKeyTests {
+		// New harness for every script because we create branches
+		h := newDoltHarness(t)
+		h.Setup(setup.MydbData, setup.Parent_childData)
+		modifiedScript := script
+		modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
+		modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
+		enginetest.TestScript(t, h, modifiedScript)
+	}
+	
+	for _, script := range ForeignKeyBranchTests {
+		// New harness for every script because we create branches
+		h := newDoltHarness(t)
+		h.Setup(setup.MydbData, setup.Parent_childData)
+		enginetest.TestScript(t, h, script)
+	}
+}
+
+func TestForeignKeyBranchesPrepared(t *testing.T) {
+	setupPrefix := []string {
+		"call dolt_branch('b1')",
+		"use mydb/b1",
+	}
+	assertionsPrefix := []queries.ScriptTestAssertion {
+		{
+			Query:                           "use mydb/b1",
+			SkipResultsCheck:                true,
+		},
+	}
+	for _, script := range queries.ForeignKeyTests {
+		// New harness for every script because we create branches
+		h := newDoltHarness(t)
+		h.Setup(setup.MydbData, setup.Parent_childData)
+		modifiedScript := script
+		modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
+		modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
+		enginetest.TestScriptPrepared(t, h, modifiedScript)
+	}
+
+	for _, script := range ForeignKeyBranchTests {
+		// New harness for every script because we create branches
+		h := newDoltHarness(t)
+		h.Setup(setup.MydbData, setup.Parent_childData)
+		enginetest.TestScriptPrepared(t, h, script)
+	}
+}
+
 func TestCreateCheckConstraints(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
