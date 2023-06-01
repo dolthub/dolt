@@ -31,7 +31,7 @@ var ForeignKeyBranchTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "use mydb/b1",
-				SkipResultsCheck: false,
+				SkipResultsCheck: true,
 			},
 			{
 				Query: "SHOW CREATE TABLE child;",
@@ -50,7 +50,7 @@ var ForeignKeyBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query:            "use mydb/main",
-				SkipResultsCheck: false,
+				SkipResultsCheck: true,
 			},
 			{
 				Query: "SHOW CREATE TABLE child;",
@@ -158,6 +158,66 @@ var ForeignKeyBranchTests = []queries.ScriptTest{
 				Query:    "insert into child values (1, 1, 1)",
 				Skip:     true,
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+		},
+	},
+}
+
+var ViewBranchTests = []queries.ScriptTest{
+	{
+		Name: "create view on branch",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int)",
+			"insert into t1 values (1, 1), (2, 2), (3, 3)",
+			"call dolt_commit('-Am', 'first commit')",
+			"call dolt_branch('b1')",
+			"use mydb/b1",
+			"create view v1 as select * from t1 where a > 2",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "use mydb/b1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from v1",
+				Expected: []sql.Row{{3, 3}},
+			},
+			{
+				Query:            "use mydb/main",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from v1",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+		},
+	},
+	{
+		Name: "create view with no branch selected",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int)",
+			"insert into t1 values (1, 1), (2, 2), (3, 3)",
+			"call dolt_commit('-Am', 'first commit')",
+			"call dolt_branch('b1')",
+			"create view `mydb/b1`.v1 as select * from t1 where a > 2",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "use mydb/b1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from v1",
+				Expected: []sql.Row{{3, 3}},
+			},
+			{
+				Query:            "use mydb/main",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from v1",
+				ExpectedErr: sql.ErrTableNotFound,
 			},
 		},
 	},

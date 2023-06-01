@@ -965,6 +965,26 @@ func TestViews(t *testing.T) {
 	enginetest.TestViews(t, h)
 }
 
+func TestBranchViews(t *testing.T) {
+	for _, script := range ViewBranchTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func TestBranchViewsPrepared(t *testing.T) {
+	for _, script := range ViewBranchTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
+}
+
 func TestVersionedViews(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
