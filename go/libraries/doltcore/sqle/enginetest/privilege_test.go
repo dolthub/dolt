@@ -34,7 +34,6 @@ var revisionDatabasePrivsSetupPrefix = []string{
 
 // The subset of tests in priv_auth_queries.go to run with alternate branch logic. Not all of them are suitable 
 // because they use non-qualified database names in their queries
-// TODO: non-* versions of these tests
 var revisionDatabasePrivilegeScriptNames = []string{
 	"Binlog replication privileges",
 	"Valid users without privileges may use the dual table",
@@ -45,13 +44,13 @@ var revisionDatabasePrivilegeScriptNames = []string{
 	"Revoke role currently granted to a user",
 	"Drop role currently granted to a user",
 	"Show grants on a user from the root account",
-	// "Anonymous user" -- remove me after conversion
-	// "IPv4 Loopback == localhost",
 	"information_schema.columns table 'privileges' column gets correct values",
 	"information_schema.column_statistics shows columns with privileges only",
 	"information_schema.statistics shows tables with privileges only",
 }
 
+// TestRevisionDatabasePrivileges is a spot-check of privilege checking on the original privilege test scripts,
+// but with a revisioned database as the current db  
 func TestRevisionDatabasePrivileges(t *testing.T) {
 	testsToRun := make(map[string]bool)
 	for _, name := range revisionDatabasePrivilegeScriptNames {
