@@ -17,7 +17,10 @@ package commands
 import (
 	"context"
 	"fmt"
+	"regexp"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	ref2 "github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -114,9 +117,9 @@ func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		schema, ri, err = queryist.Query(sqlCtx, fmt.Sprintf(blameQueryTemplate, apr.Arg(0), "HEAD"))
 	} else {
 		// validate input
-		_, err = ResolveCommitWithVErr(dEnv, apr.Arg(0))
-		if err != nil {
-			iohelp.WriteLine(cli.CliOut, err.Error())
+		ref := apr.Arg(0)
+		if !ref2.IsValidTagName(ref) && !doltdb.IsValidCommitHash(ref) && !isValidHeadRef(ref) {
+			iohelp.WriteLine(cli.CliOut, "Invalid reference provided")
 			return 1
 		}
 
@@ -134,4 +137,9 @@ func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 
 	return 0
+}
+
+func isValidHeadRef(s string) bool {
+	var refRegex = regexp.MustCompile(`(?i)^head[\~\^0-9]*$`)
+	return refRegex.MatchString(s)
 }
