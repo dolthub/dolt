@@ -101,6 +101,10 @@ func generateSql(apr *argparser.ArgParseResults) string {
 
 // Exec executes the command
 func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+	ap := cli.CreateAddArgParser()
+	helpPr, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, addDocs, ap))
+	apr := cli.ParseArgsOrDie(ap, args, helpPr)
+
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
@@ -116,10 +120,6 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1
 	}
-
-	ap := cli.CreateAddArgParser()
-	helpPr, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, addDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, helpPr)
 
 	for _, tableName := range apr.Args {
 		if tableName != "." && !doltdb.IsValidTableName(tableName) {

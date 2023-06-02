@@ -19,6 +19,7 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -579,11 +580,15 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 		targetEnv = mrEnv.GetEnv(useDb)
 	}
 
-	// There is no target environment detected. This is allowed only for a small number of commands.
+	// There is no target environment detected. This is allowed for a small number of command.
 	// We don't expect that number to grow, so we list them here.
+	// It's also allowed when --help is passed.
+	// So we defer the error until the caller tries to use the cli.LateBindQueryist
 	isDoltEnvironmentRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server"
 	if targetEnv == nil && isDoltEnvironmentRequired {
-		return nil, fmt.Errorf("The current directory is not a valid dolt repository.")
+		return func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
+			return nil, nil, nil, fmt.Errorf("The current directory is not a valid dolt repository.")
+		}, nil
 	}
 
 	// nil targetEnv will happen if the user ran a command in an empty directory - which we support in some cases.
