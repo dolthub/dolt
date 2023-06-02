@@ -121,7 +121,6 @@ var doltSubCommands = []cli.Command{
 
 var subCommandsUsingDEnv = []cli.Command{
 	commands.InitCmd{},
-	commands.StatusCmd{},
 	commands.DiffCmd{},
 	commands.ResetCmd{},
 	commands.CleanCmd{},

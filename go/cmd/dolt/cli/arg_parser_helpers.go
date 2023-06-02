@@ -332,6 +332,13 @@ func CreateGCArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateCountCommitsArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithMaxArgs("gc", 0)
+	ap.SupportsString("from", "f", "commit id", "commit to start counting from")
+	ap.SupportsString("to", "t", "commit id", "commit to stop counting at")
+	return ap
+}
+
 var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
 var ossParams = []string{dbfactory.OSSCredsFileParam, dbfactory.OSSCredsProfile}
 
