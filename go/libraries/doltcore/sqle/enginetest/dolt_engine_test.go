@@ -384,6 +384,14 @@ func TestInfoSchema(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestInfoSchema(t, h)
+
+	for _, script := range DoltInfoSchemaScripts {
+		func() {
+			harness := newDoltHarness(t)
+			defer harness.Close()
+			enginetest.TestScript(t, harness, script)
+		}()
+	}
 }
 
 func TestColumnAliases(t *testing.T) {

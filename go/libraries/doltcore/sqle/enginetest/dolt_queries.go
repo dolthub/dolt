@@ -2112,6 +2112,109 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 	},
 }
 
+var DoltInfoSchemaScripts = []queries.ScriptTest{
+	{
+		Name: "info_schema changes with dolt_checkout",
+		SetUpScript: []string{
+			"create table t (a int primary key, b int);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('b2');",
+			"call dolt_branch('b3');",
+			"call dolt_checkout('b2');",
+			"alter table t add column c int;",
+			"call dolt_commit('-am', 'added column c on branch b2');",
+			"call dolt_checkout('b3');",
+			"alter table t add column d int;",
+			"call dolt_commit('-am', 'added column d on branch b3');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}},
+			},
+			{
+				Query:            "call dolt_checkout('b2');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b2"}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}, {"c"}},
+			},
+			{
+				Query:            "call dolt_checkout('b3');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b3"}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}, {"d"}},
+			},
+		},
+	},
+	{
+		Name: "info_schema changes with USE",
+		SetUpScript: []string{
+			"create table t (a int primary key, b int);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('b2');",
+			"call dolt_branch('b3');",
+			"call dolt_checkout('b2');",
+			"alter table t add column c int;",
+			"call dolt_commit('-am', 'added column c on branch b2');",
+			"call dolt_checkout('b3');",
+			"alter table t add column d int;",
+			"call dolt_commit('-am', 'added column d on branch b3');",
+			"use mydb/main;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}},
+			},
+			{
+				Query:            "use mydb/b2;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b2"}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}, {"c"}},
+			},
+			{
+				Query:            "use mydb/b3;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b3"}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}, {"d"}},
+			},
+		},
+	},
+}
+
 var DoltBranchScripts = []queries.ScriptTest{
 	{
 		Name: "Create branches from HEAD with dolt_branch procedure",
