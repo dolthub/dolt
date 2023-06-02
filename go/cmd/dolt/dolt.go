@@ -162,7 +162,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	dumpDocsCommand,
 	dumpZshCommand,
 	docscmds.Commands,
-	stashcmds.StashCommands,
 	&commands.Assist{},
 }
 
