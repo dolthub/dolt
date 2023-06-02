@@ -1422,14 +1422,14 @@ func TestBranchControlBlocks(t *testing.T) {
 			if test.SkipMessage != "" {
 				t.Skip(test.SkipMessage)
 			}
-			
+
 			harness := newDoltHarness(t)
 			defer harness.Close()
-			
+
 			engine, err := harness.NewEngine(t)
 			require.NoError(t, err)
 			defer engine.Close()
-	
+
 			rootCtx := enginetest.NewContext(harness)
 			rootCtx.NewCtxWithClient(sql.Client{
 				User:    "root",
@@ -1437,21 +1437,21 @@ func TestBranchControlBlocks(t *testing.T) {
 			})
 			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
-	
+
 			for _, statement := range append(TestUserSetUpScripts, test.SetUpScript...) {
 				enginetest.RunQueryWithContext(t, engine, harness, rootCtx, statement)
 			}
-	
+
 			userCtx := enginetest.NewContextWithClient(harness, sql.Client{
 				User:    "testuser",
 				Address: "localhost",
 			})
 			enginetest.AssertErrWithCtx(t, engine, harness, userCtx, test.Query, test.ExpectedErr)
-			
+
 			addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'write'), ('%', 'other', 'testuser', 'localhost', 'write');"
 			addUserQueryResults := []sql.Row{{types.NewOkResult(2)}}
 			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
-			
+
 			sch, iter, err := engine.Query(userCtx, test.Query)
 			if err == nil {
 				_, err = sql.RowIterToRows(userCtx, sch, iter)
@@ -1462,14 +1462,14 @@ func TestBranchControlBlocks(t *testing.T) {
 
 	// These tests are run with permission on main but not other
 	for _, test := range BranchControlOtherDbBlockTests {
-		t.Run("OtherDB_" + test.Name, func(t *testing.T) {
+		t.Run("OtherDB_"+test.Name, func(t *testing.T) {
 			if test.SkipMessage != "" {
 				t.Skip(test.SkipMessage)
 			}
 
 			harness := newDoltHarness(t)
 			defer harness.Close()
-			
+
 			engine, err := harness.NewEngine(t)
 			require.NoError(t, err)
 			defer engine.Close()
@@ -1481,7 +1481,7 @@ func TestBranchControlBlocks(t *testing.T) {
 			})
 			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
-			
+
 			for _, statement := range append(TestUserSetUpScripts, test.SetUpScript...) {
 				enginetest.RunQueryWithContext(t, engine, harness, rootCtx, statement)
 			}

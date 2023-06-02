@@ -188,7 +188,7 @@ var ViewBranchTests = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "select * from v1",
+				Query:       "select * from v1",
 				ExpectedErr: sql.ErrTableNotFound,
 			},
 			{
@@ -214,21 +214,21 @@ var ViewBranchTests = []queries.ScriptTest{
 			{
 				Query:    "select * from v1",
 				Expected: []sql.Row{{3, 3}},
-				Skip: true, // https://github.com/dolthub/dolt/issues/6078
+				Skip:     true, // https://github.com/dolthub/dolt/issues/6078
 			},
 			{
 				Query:            "use mydb/main",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "select * from v1",
+				Query:       "select * from v1",
 				ExpectedErr: sql.ErrTableNotFound,
-				Skip: true, // https://github.com/dolthub/dolt/issues/6078
+				Skip:        true, // https://github.com/dolthub/dolt/issues/6078
 			},
 			{
 				Query:    "select * from `mydb/b1`.v1",
 				Expected: []sql.Row{{3, 3}},
-				Skip: true, // https://github.com/dolthub/dolt/issues/6078
+				Skip:     true, // https://github.com/dolthub/dolt/issues/6078
 			},
 		},
 	},
@@ -260,7 +260,7 @@ var DdlBranchTests = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "select * from t2",
+				Query:       "select * from t2",
 				ExpectedErr: sql.ErrTableNotFound,
 			},
 			{
@@ -293,7 +293,7 @@ var DdlBranchTests = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "select * from t2",
+				Query:       "select * from t2",
 				ExpectedErr: sql.ErrTableNotFound,
 			},
 			{
@@ -328,7 +328,7 @@ var DdlBranchTests = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "select * from t2",
+				Query:       "select * from t2",
 				ExpectedErr: sql.ErrTableNotFound,
 			},
 			{
@@ -420,7 +420,7 @@ var DdlBranchTests = []queries.ScriptTest{
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 0}}},
 			},
 			{
-				Query:    "show create table `mydb/b1`.t1",
+				Query: "show create table `mydb/b1`.t1",
 				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
 					"  `a` int NOT NULL,\n" +
 					"  `b` int,\n" +
@@ -429,24 +429,24 @@ var DdlBranchTests = []queries.ScriptTest{
 					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
-				Query:    "show create table t1",
+				Query: "show create table t1",
 				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
-						"  `a` int NOT NULL,\n" +
-						"  `b` int,\n" +
-						"  PRIMARY KEY (`a`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `a` int NOT NULL,\n" +
+					"  `b` int,\n" +
+					"  PRIMARY KEY (`a`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
 				Query:    "alter table `mydb/b1`.t1 drop index idx",
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 0}}},
 			},
 			{
-				Query:    "show create table `mydb/b1`.t1",
+				Query: "show create table `mydb/b1`.t1",
 				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
-						"  `a` int NOT NULL,\n" +
-						"  `b` int,\n" +
-						"  PRIMARY KEY (`a`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `a` int NOT NULL,\n" +
+					"  `b` int,\n" +
+					"  PRIMARY KEY (`a`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -464,7 +464,7 @@ var DdlBranchTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "show create table `mydb/b1`.t1",
+				Query: "show create table `mydb/b1`.t1",
 				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
 					"  `a` int NOT NULL,\n" +
 					"  `b` int,\n" +
@@ -473,16 +473,16 @@ var DdlBranchTests = []queries.ScriptTest{
 					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
-				Query:    "insert into `mydb/b1`.t1 values (4, 4)",
+				Query:       "insert into `mydb/b1`.t1 values (4, 4)",
 				ExpectedErr: sql.ErrCheckConstraintViolated,
-			},			
+			},
 			{
-				Query:    "show create table t1",
+				Query: "show create table t1",
 				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
-						"  `a` int NOT NULL,\n" +
-						"  `b` int,\n" +
-						"  PRIMARY KEY (`a`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `a` int NOT NULL,\n" +
+					"  `b` int,\n" +
+					"  PRIMARY KEY (`a`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
 				Query:    "insert into t1 values (4, 4)",
@@ -493,12 +493,12 @@ var DdlBranchTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "show create table `mydb/b1`.t1",
+				Query: "show create table `mydb/b1`.t1",
 				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
-						"  `a` int NOT NULL,\n" +
-						"  `b` int,\n" +
-						"  PRIMARY KEY (`a`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `a` int NOT NULL,\n" +
+					"  `b` int,\n" +
+					"  PRIMARY KEY (`a`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -514,7 +514,7 @@ var BranchPlanTests = []queries.ScriptTest{
 			"call dolt_branch('b1')",
 			"use mydb/b1",
 			"create index idx on t1 (b)",
-		}, 
+		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "explain select * from t1 where b = 1",
@@ -526,7 +526,7 @@ var BranchPlanTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "use mydb/main",
+				Query:            "use mydb/main",
 				SkipResultsCheck: true,
 			},
 			{
@@ -588,7 +588,7 @@ var BranchPlanTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "use mydb/main",
+				Query:            "use mydb/main",
 				SkipResultsCheck: true,
 			},
 			{

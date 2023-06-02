@@ -93,7 +93,7 @@ func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession, rsc *doltdb.R
 	if rsc != nil {
 		dsess.WaitForReplicationController(ctx, *rsc)
 	}
-	
+
 	return nil
 }
 
@@ -222,7 +222,7 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 	if currentDbName == "" {
 		return nil
 	}
-	
+
 	if sqlserver.RunningInServerMode() == false {
 		return nil
 	}

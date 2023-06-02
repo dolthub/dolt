@@ -172,7 +172,7 @@ func (p DoltDatabaseProvider) FileSystemForDatabase(dbname string) (filesys.File
 	defer p.mu.Unlock()
 
 	baseName, _ := dsess.SplitRevisionDbName(dbname)
-	
+
 	dbLocation, ok := p.dbLocations[strings.ToLower(baseName)]
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbname)
@@ -259,14 +259,14 @@ func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database) {
 	currentDb := ctx.GetCurrentDatabase()
 	currBase, currRev := dsess.SplitRevisionDbName(currentDb)
-	
+
 	p.mu.RLock()
 	showBranches, _ := dsess.GetBooleanSystemVar(ctx, dsess.ShowBranchDatabases)
 
 	all = make([]sql.Database, 0, len(p.databases))
 	for _, db := range p.databases {
 		base, _ := dsess.SplitRevisionDbName(db.Name())
-		
+
 		// If there's a revision database in use, swap that one in for its base db, but keep the same name
 		if currRev != "" && strings.ToLower(currBase) == strings.ToLower(base) {
 			rdb, ok, err := p.databaseForRevision(ctx, currentDb, currBase)
@@ -1041,7 +1041,7 @@ func (p DoltDatabaseProvider) BaseDatabase(ctx *sql.Context, name string) (dsess
 	db, ok := p.databases[strings.ToLower(baseName)]
 	p.mu.RUnlock()
 
-	return db, ok 
+	return db, ok
 }
 
 // SessionDatabase implements dsess.SessionDatabaseProvider
@@ -1283,7 +1283,7 @@ func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec s
 		RepoStateWriter: srcDb.DbData().Rsw,
 		RepoStateReader: srcDb.DbData().Rsr,
 	}
-	
+
 	baseName, _ := dsess.SplitRevisionDbName(srcDb.Name())
 
 	// TODO: we need a base name method here

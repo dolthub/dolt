@@ -536,7 +536,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1}, {2}, {3}, {4}, {1000}},
 			},
 			{
-				Query:    "use `mydb/main`",
+				Query:            "use `mydb/main`",
 				SkipResultsCheck: true,
 			},
 			{
@@ -672,7 +672,7 @@ var MergeScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "use `mydb/feature-branch`",
+				Query:            "use `mydb/feature-branch`",
 				SkipResultsCheck: true,
 			},
 			{
@@ -1457,7 +1457,7 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "insert into t values (-1)",
+				Query:       "insert into t values (-1)",
 				ExpectedErr: sql.ErrCheckConstraintViolated,
 			},
 			{

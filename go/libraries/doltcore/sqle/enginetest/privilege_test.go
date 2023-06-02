@@ -32,7 +32,7 @@ var revisionDatabasePrivsSetupPrefix = []string{
 	"use mydb/b1",
 }
 
-// The subset of tests in priv_auth_queries.go to run with alternate branch logic. Not all of them are suitable 
+// The subset of tests in priv_auth_queries.go to run with alternate branch logic. Not all of them are suitable
 // because they use non-qualified database names in their queries
 var revisionDatabasePrivilegeScriptNames = []string{
 	"Binlog replication privileges",
@@ -50,24 +50,24 @@ var revisionDatabasePrivilegeScriptNames = []string{
 }
 
 // TestRevisionDatabasePrivileges is a spot-check of privilege checking on the original privilege test scripts,
-// but with a revisioned database as the current db  
+// but with a revisioned database as the current db
 func TestRevisionDatabasePrivileges(t *testing.T) {
 	testsToRun := make(map[string]bool)
 	for _, name := range revisionDatabasePrivilegeScriptNames {
 		testsToRun[name] = true
 	}
-	
+
 	var scripts []queries.UserPrivilegeTest
 	for _, script := range queries.UserPrivTests {
 		if testsToRun[script.Name] {
 			scripts = append(scripts, script)
 		}
 	}
-	
+
 	require.Equal(t, len(scripts), len(testsToRun),
-		"Error in test setup: one or more expected tests not found. " +
-		"Did the name of a test change?")
-	
+		"Error in test setup: one or more expected tests not found. "+
+			"Did the name of a test change?")
+
 	for _, script := range scripts {
 		harness := newDoltHarness(t)
 		harness.Setup(setup.MydbData, setup.MytableData)
@@ -82,14 +82,14 @@ func TestRevisionDatabasePrivileges(t *testing.T) {
 			})
 			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
-			
+
 			for _, statement := range append(revisionDatabasePrivsSetupPrefix, script.SetUpScript...) {
 				if harness.SkipQueryTest(statement) {
 					t.Skip()
 				}
 				enginetest.RunQueryWithContext(t, engine, harness, ctx, statement)
 			}
-			
+
 			for _, assertion := range script.Assertions {
 				if harness.SkipQueryTest(assertion.Query) {
 					t.Skipf("Skipping query %s", assertion.Query)
@@ -399,20 +399,20 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				User:     "tester",
-				Host:     "localhost",
-				Query:    "INSERT INTO test VALUES (4);",
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "INSERT INTO test VALUES (4);",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
-				User:     "tester",
-				Host:     "localhost",
-				Query:     "UPDATE test set pk = 4 where pk = 3;",
+				User:  "tester",
+				Host:  "localhost",
+				Query: "UPDATE test set pk = 4 where pk = 3;",
 				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: 1,
-					Info:         plan.UpdateInfo{
-						Matched:  1,
-						Updated:  1,
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
 					},
 				}}},
 			},
@@ -454,15 +454,15 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				User:     "tester",
-				Host:     "localhost",
-				Query:    "INSERT INTO test VALUES (4);",
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "INSERT INTO test VALUES (4);",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
-				Query:       "DELETE from test where pk = 3;",
+				Query:    "DELETE from test where pk = 3;",
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
@@ -508,10 +508,10 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				User:        "tester",
-				Host:        "localhost",
-				Query:       "show tables;",
-				Expected:  []sql.Row{{"mytable"}, {"test"}, {"t2"}},
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "show tables;",
+				Expected: []sql.Row{{"mytable"}, {"test"}, {"t2"}},
 			},
 		},
 	},
@@ -545,10 +545,10 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				User:        "tester",
-				Host:        "localhost",
-				Query:       "show tables;",
-				Expected:  []sql.Row{{"mytable"}},
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "show tables;",
+				Expected: []sql.Row{{"mytable"}},
 			},
 		},
 	},
@@ -578,14 +578,14 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 			{
 				User:     "tester",
 				Host:     "localhost",
-				Query:       "ALTER TABLE test add column a int;",
+				Query:    "ALTER TABLE test add column a int;",
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				User:        "tester",
-				Host:        "localhost",
-				Query:       "desc test;",
-				Expected:  []sql.Row{
+				User:  "tester",
+				Host:  "localhost",
+				Query: "desc test;",
+				Expected: []sql.Row{
 					{"pk", "bigint", "NO", "PRI", "NULL", ""},
 					{"a", "int", "YES", "", "NULL", ""},
 				},
@@ -630,14 +630,14 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 			{
 				User:     "tester",
 				Host:     "localhost",
-				Query:       "create index t1 on test(a) ;",
+				Query:    "create index t1 on test(a) ;",
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				User:        "tester",
-				Host:        "localhost",
-				Query:       "desc test;",
-				Expected:  []sql.Row{
+				User:  "tester",
+				Host:  "localhost",
+				Query: "desc test;",
+				Expected: []sql.Row{
 					{"pk", "bigint", "NO", "PRI", "NULL", ""},
 					{"a", "int", "YES", "MUL", "NULL", ""},
 				},
@@ -649,8 +649,8 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				User:     "tester",
-				Host:     "localhost",
+				User:        "tester",
+				Host:        "localhost",
 				Query:       "drop index t1 on test;",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
 			},
@@ -663,14 +663,14 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 			{
 				User:     "tester",
 				Host:     "localhost",
-				Query:       "drop index t1 on test;",
+				Query:    "drop index t1 on test;",
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				User:        "tester",
-				Host:        "localhost",
-				Query:       "desc test;",
-				Expected:  []sql.Row{
+				User:  "tester",
+				Host:  "localhost",
+				Query: "desc test;",
+				Expected: []sql.Row{
 					{"pk", "bigint", "NO", "PRI", "NULL", ""},
 					{"a", "int", "YES", "", "NULL", ""},
 				},
@@ -715,14 +715,14 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 			{
 				User:     "tester",
 				Host:     "localhost",
-				Query:       "alter table test add constraint chk1 CHECK (a < 10);",
+				Query:    "alter table test add constraint chk1 CHECK (a < 10);",
 				Expected: []sql.Row{},
 			},
 			{
-				User:        "tester",
-				Host:        "localhost",
-				Query:       "show create table test;",
-				Expected:  []sql.Row{
+				User:  "tester",
+				Host:  "localhost",
+				Query: "show create table test;",
+				Expected: []sql.Row{
 					{"test", "CREATE TABLE `test` (\n" +
 						"  `pk` bigint NOT NULL,\n" +
 						"  `a` int,\n" +
@@ -752,25 +752,25 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 			{
 				User:     "tester",
 				Host:     "localhost",
-				Query:       "alter table test drop check chk1;",
+				Query:    "alter table test drop check chk1;",
 				Expected: []sql.Row{},
 			},
 			{
-				User:        "tester",
-				Host:        "localhost",
-				Query:       "show create table test;",
-				Expected:  []sql.Row{
+				User:  "tester",
+				Host:  "localhost",
+				Query: "show create table test;",
+				Expected: []sql.Row{
 					{"test", "CREATE TABLE `test` (\n" +
-							"  `pk` bigint NOT NULL,\n" +
-							"  `a` int,\n" +
-							"  PRIMARY KEY (`pk`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+						"  `pk` bigint NOT NULL,\n" +
+						"  `a` int,\n" +
+						"  PRIMARY KEY (`pk`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
-				Query:       "alter table test add constraint chk1 CHECK (a < 10);",
+				Query:    "alter table test add constraint chk1 CHECK (a < 10);",
 				Expected: []sql.Row{},
 			},
 			{
@@ -794,19 +794,19 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 			{
 				User:     "tester",
 				Host:     "localhost",
-				Query:       "alter table test drop constraint chk1;",
+				Query:    "alter table test drop constraint chk1;",
 				Expected: []sql.Row{},
 			},
 			{
-				User:        "tester",
-				Host:        "localhost",
-				Query:       "show create table test;",
-				Expected:  []sql.Row{
+				User:  "tester",
+				Host:  "localhost",
+				Query: "show create table test;",
+				Expected: []sql.Row{
 					{"test", "CREATE TABLE `test` (\n" +
-							"  `pk` bigint NOT NULL,\n" +
-							"  `a` int,\n" +
-							"  PRIMARY KEY (`pk`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+						"  `pk` bigint NOT NULL,\n" +
+						"  `a` int,\n" +
+						"  PRIMARY KEY (`pk`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
 			},
 		},

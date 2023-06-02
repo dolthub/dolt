@@ -2405,7 +2405,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query: "select * from t1 order by a",
+				Query:    "select * from t1 order by a",
 				Expected: []sql.Row{{1}},
 			},
 		},
@@ -2444,7 +2444,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "commit",
+				Query:          "commit",
 				ExpectedErrStr: "no changes to dolt_commit on branch main",
 			},
 			{
@@ -2484,7 +2484,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "call dolt_commit('-am', 'changes on b1')",
+				Query:          "call dolt_commit('-am', 'changes on b1')",
 				ExpectedErrStr: "nothing to commit", // this error is different from what you get with @@dolt_transaction_commit
 			},
 			{
@@ -2492,15 +2492,15 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "call dolt_commit('-am', 'other changes on b1')",
+				Query:            "call dolt_commit('-am', 'other changes on b1')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query: "select * from t1 order by a",
+				Query:    "select * from t1 order by a",
 				Expected: []sql.Row{{1}},
 			},
 			{
-				Query: "select message from dolt_log order by date desc limit 1",
+				Query:    "select message from dolt_log order by date desc limit 1",
 				Expected: []sql.Row{{"other changes on b1"}},
 			},
 		},
@@ -2517,7 +2517,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "insert into `mydb/b1`.t1 values (1)",
+				Query:          "insert into `mydb/b1`.t1 values (1)",
 				ExpectedErrStr: "no changes to dolt_commit on branch main",
 			},
 			{
@@ -2531,7 +2531,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "commit",
+				Query:    "commit",
 				Expected: []sql.Row{},
 			},
 			{
@@ -2699,11 +2699,11 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "insert into `db1/b1`.t1 values (1)",
+				Query:    "insert into `db1/b1`.t1 values (1)",
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
-				Query:    "call dolt_commit('-am', 'changes on b1')",
+				Query:          "call dolt_commit('-am', 'changes on b1')",
 				ExpectedErrStr: "nothing to commit", // this error is different from what you get with @@dolt_transaction_commit
 			},
 			{
@@ -2711,15 +2711,15 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "call dolt_commit('-am', 'other changes on b1')",
+				Query:            "call dolt_commit('-am', 'other changes on b1')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query: "select * from t1 order by a",
+				Query:    "select * from t1 order by a",
 				Expected: []sql.Row{{1}},
 			},
 			{
-				Query: "select message from dolt_log order by date desc limit 1",
+				Query:    "select message from dolt_log order by date desc limit 1",
 				Expected: []sql.Row{{"other changes on b1"}},
 			},
 		},
@@ -2801,7 +2801,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "insert into `db1/b1`.t1 values (1)",
+				Query:          "insert into `db1/b1`.t1 values (1)",
 				ExpectedErrStr: "no changes to dolt_commit on database mydb",
 			},
 		},
@@ -2832,7 +2832,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "commit",
+				Query:          "commit",
 				ExpectedErrStr: "no changes to dolt_commit on database mydb",
 			},
 		},

@@ -117,7 +117,7 @@ func TestSingleQuery(t *testing.T) {
 func TestSingleScript(t *testing.T) {
 	// t.Skip()
 
-	var script = queries.ScriptTest	{
+	var script = queries.ScriptTest{
 		Name: "committing to another branch on another database with dolt_transaction_commit",
 		SetUpScript: []string{
 			"create table t1 (a int)",
@@ -137,7 +137,7 @@ func TestSingleScript(t *testing.T) {
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "insert into `db1/b1`.t1 values (1)",
+				Query:          "insert into `db1/b1`.t1 values (1)",
 				ExpectedErrStr: "no changes to dolt_commit on database mydb",
 			},
 		},
@@ -918,14 +918,14 @@ func TestForeignKeys(t *testing.T) {
 }
 
 func TestForeignKeyBranches(t *testing.T) {
-	setupPrefix := []string {
+	setupPrefix := []string{
 		"call dolt_branch('b1')",
 		"use mydb/b1",
 	}
-	assertionsPrefix := []queries.ScriptTestAssertion {
+	assertionsPrefix := []queries.ScriptTestAssertion{
 		{
-			Query:                           "use mydb/b1",
-			SkipResultsCheck:                true,
+			Query:            "use mydb/b1",
+			SkipResultsCheck: true,
 		},
 	}
 	for _, script := range queries.ForeignKeyTests {
@@ -937,7 +937,7 @@ func TestForeignKeyBranches(t *testing.T) {
 		modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
 		enginetest.TestScript(t, h, modifiedScript)
 	}
-	
+
 	for _, script := range ForeignKeyBranchTests {
 		// New harness for every script because we create branches
 		h := newDoltHarness(t)
@@ -947,14 +947,14 @@ func TestForeignKeyBranches(t *testing.T) {
 }
 
 func TestForeignKeyBranchesPrepared(t *testing.T) {
-	setupPrefix := []string {
+	setupPrefix := []string{
 		"call dolt_branch('b1')",
 		"use mydb/b1",
 	}
-	assertionsPrefix := []queries.ScriptTestAssertion {
+	assertionsPrefix := []queries.ScriptTestAssertion{
 		{
-			Query:                           "use mydb/b1",
-			SkipResultsCheck:                true,
+			Query:            "use mydb/b1",
+			SkipResultsCheck: true,
 		},
 	}
 	for _, script := range queries.ForeignKeyTests {
@@ -1468,7 +1468,7 @@ func TestViewsWithAsOfPrepared(t *testing.T) {
 
 func TestDoltMerge(t *testing.T) {
 	for _, script := range MergeScripts {
-		// harness can't reset effectively when there are new commits / branches created, so use a new harness for 
+		// harness can't reset effectively when there are new commits / branches created, so use a new harness for
 		// each script
 		func() {
 			h := newDoltHarness(t).WithParallelism(1)
@@ -1490,7 +1490,7 @@ func TestDoltMerge(t *testing.T) {
 
 func TestDoltMergePrepared(t *testing.T) {
 	for _, script := range MergeScripts {
-		// harness can't reset effectively when there are new commits / branches created, so use a new harness for 
+		// harness can't reset effectively when there are new commits / branches created, so use a new harness for
 		// each script
 		func() {
 			h := newDoltHarness(t).WithParallelism(1)

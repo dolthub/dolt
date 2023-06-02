@@ -409,7 +409,7 @@ var DropDatabaseMultiSessionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"db01/branch1"}},
 			},
 			{
-				Query:    "/* client b */ show tables;",
+				Query:          "/* client b */ show tables;",
 				ExpectedErrStr: "Error 1105: database not found: db01/branch1",
 			},
 		},

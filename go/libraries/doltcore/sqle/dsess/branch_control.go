@@ -21,8 +21,8 @@ import (
 )
 
 // CheckAccessForDb checks whether the current user has the given permissions for the given database.
-// This has to live here, rather than in the branch_control package, to prevent a dependency cycle with that package. 
-// We could also avoid this by defining branchController as an interface used by dsess. 
+// This has to live here, rather than in the branch_control package, to prevent a dependency cycle with that package.
+// We could also avoid this by defining branchController as an interface used by dsess.
 func CheckAccessForDb(ctx context.Context, db SqlDatabase, flags branch_control.Permissions) error {
 	branchAwareSession := branch_control.GetBranchAwareSession(ctx)
 	// A nil session means we're not in the SQL context, so we allow all operations

@@ -373,20 +373,20 @@ func (d *DoltSession) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSe
 	return doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(headRoot).WithStagedRoot(headRoot), nil
 }
 
-// CommitTransaction commits the in-progress transaction. Depending on session settings, this may write only a new 
-// working set, or may additionally create a new dolt commit for the current HEAD. If more than one branch head has 
+// CommitTransaction commits the in-progress transaction. Depending on session settings, this may write only a new
+// working set, or may additionally create a new dolt commit for the current HEAD. If more than one branch head has
 // changes, the transaction is rejected.
 func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (err error) {
-	// Any non-error path must set the ctx's transaction to nil even if no work was done, because the engine only clears 
-	// out transaction state in some cases. Changes to only branch heads (creating a new branch, reset, etc.) have no 
+	// Any non-error path must set the ctx's transaction to nil even if no work was done, because the engine only clears
+	// out transaction state in some cases. Changes to only branch heads (creating a new branch, reset, etc.) have no
 	// changes to commit visible to the transaction logic, but they still need a new transaction on the next statement.
-	// See comment in |commitBranchState| 
+	// See comment in |commitBranchState|
 	defer func() {
 		if err == nil {
 			ctx.SetTransaction(nil)
 		}
 	}()
-	
+
 	if d.BatchMode() == Batched {
 		for _, db := range d.provider.DoltDatabases() {
 			err = d.Flush(ctx, db.Name())
@@ -459,7 +459,7 @@ func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *bra
 	}
 	currDbBaseName, _ := SplitRevisionDbName(currDb)
 	dirtyDbBaseName, _ := SplitRevisionDbName(dirtyBranchState.dbState.dbName)
-	
+
 	if strings.ToLower(currDbBaseName) != strings.ToLower(dirtyDbBaseName) {
 		return fmt.Errorf("no changes to dolt_commit on database %s", currDbBaseName)
 	}
@@ -479,7 +479,7 @@ func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *bra
 	if dbState.currRevSpec != dirtyBranch.GetPath() {
 		return fmt.Errorf("no changes to dolt_commit on branch %s", dbState.currRevSpec)
 	}
-	
+
 	return nil
 }
 
@@ -566,7 +566,7 @@ func (d *DoltSession) commitBranchState(
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Anything that commits a transaction needs its current transaction state cleared so that the next statement starts
 	// a new transaction. This should in principle be done by the engine, but it currently only understands explicit
 	// COMMIT statements. Any other statements that commit a transaction, including stored procedures, needs to do this
@@ -959,9 +959,9 @@ func (d *DoltSession) SwitchWorkingSet(
 	if !ok {
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
-	
+
 	ctx.SetCurrentDatabase(baseName)
-	
+
 	return nil
 }
 
@@ -1114,7 +1114,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	baseName, _ := SplitRevisionDbName(revisionQualifiedName)
 
 	DefineSystemVariablesForDB(baseName)
-	
+
 	// TODO: odd that we need to tell the DB what its own revision is here
 	dbState, err := db.InitialDBState(ctx, db.Revision())
 	if err != nil {
@@ -1137,21 +1137,21 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		}
 
 		sessionState.dbName = baseName
-		
+
 		baseDb, ok := d.provider.BaseDatabase(ctx, baseName)
 		if !ok {
 			d.mu.Unlock()
 			return fmt.Errorf("unable to find database %s, this is a bug", baseName)
 		}
-		
-		// The checkedOutRevSpec should be the checked out branch of the database if available, or the revision 
+
+		// The checkedOutRevSpec should be the checked out branch of the database if available, or the revision
 		// string otherwise
 		sessionState.checkedOutRevSpec, err = DefaultHead(baseName, baseDb)
 		if err != nil {
 			d.mu.Unlock()
 			return err
 		}
-		
+
 		sessionState.currRevType = db.RevisionType()
 		sessionState.currRevSpec = db.Revision()
 	}
@@ -1666,11 +1666,10 @@ func DefaultHead(baseName string, db SqlDatabase) (string, error) {
 			head = headRef.GetPath()
 		}
 	}
-	
+
 	if head == "" {
 		head = db.Revision()
 	}
-	
+
 	return head, nil
 }
-
