@@ -213,36 +213,10 @@ get_staged_tables() {
 
     run dolt status
     [ "$status" -eq 0 ] || false
-    [[ "$output" =~ "On branch main" ]] || false
-    [[ "$output" =~ "Changes to be committed:" ]] || false
-    [[ "$output" =~ "  (use \"dolt reset <table>...\" to unstage)" ]] || false
-    [[ "$output" =~ "	modified:         table1" ]] || false
-    [[ "$output" =~ "Changes not staged for commit:" ]] || false
-    [[ "$output" =~ "  (use \"dolt add <table>\" to update what will be committed)" ]] || false
-    [[ "$output" =~ "  (use \"dolt checkout <table>\" to discard changes in working directory)" ]] || false
-    [[ "$output" =~ "	modified:         table2" ]] || false
-    [[ "$output" =~ "Untracked tables:" ]] || false
-    [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
-    [[ "$output" =~ "	new table:        table3" ]] || false
-    ! [[ "$output" =~ "   new table:        generated_foo" ]] || false
     localOutput=$output
 
     run dolt --user dolt status --ignored
     [ "$status" -eq 0 ] || false
-    [[ "$output" =~ "On branch main" ]] || false
-    [[ "$output" =~ "Changes to be committed:" ]] || false
-    [[ "$output" =~ "  (use \"dolt reset <table>...\" to unstage)" ]] || false
-    [[ "$output" =~ "	modified:         table1" ]] || false
-    [[ "$output" =~ "Changes not staged for commit:" ]] || false
-    [[ "$output" =~ "  (use \"dolt add <table>\" to update what will be committed)" ]] || false
-    [[ "$output" =~ "  (use \"dolt checkout <table>\" to discard changes in working directory)" ]] || false
-    [[ "$output" =~ "	modified:         table2" ]] || false
-    [[ "$output" =~ "Untracked tables:" ]] || false
-    [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
-    [[ "$output" =~ "	new table:        table3" ]] || false
-    [[ "$output" =~ "Ignored tables:" ]] || false
-    [[ "$output" =~ "  (use \"dolt add -f <table>\" to include in what will be committed)" ]] || false
-    [[ "$output" =~ "	new table:        generated_foo" ]] || false
     localIgnoredOutput=$output
 
     [[ "$remoteOutput" == "$localOutput" ]] || false

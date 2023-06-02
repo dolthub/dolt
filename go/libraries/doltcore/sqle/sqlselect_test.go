@@ -783,6 +783,7 @@ func BasicSelectTests() []SelectTest {
 					"billy bob", "bigbillieb@fake.horse",
 					time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).In(LoadedLocalLocation()),
 					"Initialize data repository",
+					"",
 				},
 			},
 			ExpectedSqlSchema: sql.Schema{
@@ -792,6 +793,7 @@ func BasicSelectTests() []SelectTest {
 				&sql.Column{Name: "latest_committer_email", Type: gmstypes.Text},
 				&sql.Column{Name: "latest_commit_date", Type: gmstypes.Datetime},
 				&sql.Column{Name: "latest_commit_message", Type: gmstypes.Text},
+				&sql.Column{Name: "remote", Type: gmstypes.Text},
 			},
 		},
 	}
