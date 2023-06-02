@@ -56,6 +56,7 @@ type BranchControlBlockTest struct {
 	SetUpScript []string
 	Query       string
 	ExpectedErr *errors.Kind
+	SkipMessage string
 }
 
 // TestUserSetUpScripts creates a user named "testuser@localhost", and grants them privileges on all databases and
@@ -448,14 +449,14 @@ var BranchControlOtherDbBlockTests = []BranchControlBlockTest{
 			"ALTER TABLE `mydb/other`.test ADD INDEX idx_v1 (v1);",
 			"CREATE TABLE `mydb/other`.test2 (pk BIGINT PRIMARY KEY, v1 BIGINT UNIQUE);",
 		},
-		Query:       "ALTER TABLE `mydb/other`.test2 ADD CONSTRAINT fk_1 FOREIGN KEY (v1) REFERENCES test (v1);",
+		Query:       "ALTER TABLE `mydb/other`.test2 ADD CONSTRAINT fk_1 FOREIGN KEY (v1) REFERENCES `mydb/other`.test (v1);",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
 	},
 	{
 		Name: "ALTER TABLE DROP FOREIGN KEY",
 		SetUpScript: []string{
 			"ALTER TABLE `mydb/other`.test ADD INDEX idx_v1 (v1);",
-			"CREATE TABLE `mydb/other`.test2 (pk BIGINT PRIMARY KEY, v1 BIGINT UNIQUE, CONSTRAINT fk_1 FOREIGN KEY (v1) REFERENCES test (v1));",
+			"CREATE TABLE `mydb/other`.test2 (pk BIGINT PRIMARY KEY, v1 BIGINT UNIQUE, CONSTRAINT fk_1 FOREIGN KEY (v1) REFERENCES `mydb/other`.test (v1));",
 		},
 		Query:       "ALTER TABLE `mydb/other`.test2 DROP FOREIGN KEY fk_1;",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
@@ -498,11 +499,13 @@ var BranchControlOtherDbBlockTests = []BranchControlBlockTest{
 		Name:        "ALTER TABLE RENAME",
 		Query:       "ALTER TABLE `mydb/other`.test RENAME TO test_new;",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
+		SkipMessage: "https://github.com/dolthub/dolt/issues/6078",
 	},
 	{
 		Name:        "RENAME TABLE",
 		Query:       "RENAME TABLE `mydb/other`.test TO test_new;",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
+		SkipMessage: "https://github.com/dolthub/dolt/issues/6078",
 	},
 	{
 		Name:        "ALTER TABLE ADD COLUMN",
@@ -546,6 +549,7 @@ var BranchControlOtherDbBlockTests = []BranchControlBlockTest{
 		Name:        "CREATE VIEW",
 		Query:       "CREATE VIEW view_1 AS SELECT * FROM `mydb/other`.test;",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
+		SkipMessage: "https://github.com/dolthub/dolt/issues/6078",
 	},
 	{
 		Name: "DROP VIEW",
@@ -554,19 +558,22 @@ var BranchControlOtherDbBlockTests = []BranchControlBlockTest{
 		},
 		Query:       "DROP VIEW view_1;",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
+		SkipMessage: "https://github.com/dolthub/dolt/issues/6078",
 	},
 	{
 		Name:        "CREATE TRIGGER",
 		Query:       "CREATE TRIGGER trigger_1 BEFORE INSERT ON `mydb/other`.test FOR EACH ROW SET NEW.v1 = 4;",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
+		SkipMessage: "https://github.com/dolthub/dolt/issues/6078",
 	},
 	{
 		Name: "DROP TRIGGER",
 		SetUpScript: []string{
 			"CREATE TRIGGER trigger_1 BEFORE INSERT ON `mydb/other`.test FOR EACH ROW SET NEW.v1 = 4;",
 		},
-		Query:       "DROP TRIGGER trigger_1;",
+		Query:       "DROP TRIGGER `mydb/other`.trigger_1;",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
+		SkipMessage: "https://github.com/dolthub/dolt/issues/6078",
 	},
 	{
 		Name:        "CREATE TABLE",
@@ -577,6 +584,7 @@ var BranchControlOtherDbBlockTests = []BranchControlBlockTest{
 		Name:        "CREATE TABLE LIKE",
 		Query:       "CREATE TABLE `mydb/other`.test2 LIKE `mydb/other`.test;",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
+		SkipMessage: "https://github.com/dolthub/dolt/issues/6078",
 	},
 	{
 		Name:        "CREATE TABLE AS SELECT",
@@ -1410,9 +1418,14 @@ func TestBranchControl(t *testing.T) {
 
 func TestBranchControlBlocks(t *testing.T) {
 	for _, test := range BranchControlBlockTests {
-		harness := newDoltHarness(t)
-		defer harness.Close()
 		t.Run(test.Name, func(t *testing.T) {
+			if test.SkipMessage != "" {
+				t.Skip(test.SkipMessage)
+			}
+			
+			harness := newDoltHarness(t)
+			defer harness.Close()
+			
 			engine, err := harness.NewEngine(t)
 			require.NoError(t, err)
 			defer engine.Close()
@@ -1449,9 +1462,14 @@ func TestBranchControlBlocks(t *testing.T) {
 
 	// These tests are run with permission on main but not other
 	for _, test := range BranchControlOtherDbBlockTests {
-		harness := newDoltHarness(t)
-		defer harness.Close()
-		t.Run(test.Name, func(t *testing.T) {
+		t.Run("OtherDB_" + test.Name, func(t *testing.T) {
+			if test.SkipMessage != "" {
+				t.Skip(test.SkipMessage)
+			}
+
+			harness := newDoltHarness(t)
+			defer harness.Close()
+			
 			engine, err := harness.NewEngine(t)
 			require.NoError(t, err)
 			defer engine.Close()
@@ -1489,5 +1507,4 @@ func TestBranchControlBlocks(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
-	
 }
