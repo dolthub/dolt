@@ -1137,7 +1137,21 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		}
 
 		sessionState.dbName = baseName
-		sessionState.checkedOutRevSpec = db.Revision()
+		
+		baseDb, ok := d.provider.BaseDatabase(ctx, baseName)
+		if !ok {
+			d.mu.Unlock()
+			return fmt.Errorf("unable to find database %s, this is a bug", baseName)
+		}
+		
+		// The checkedOutRevSpec should be the checked out branch of the database if available, or the revision 
+		// string otherwise
+		sessionState.checkedOutRevSpec, err = DefaultHead(baseName, baseDb)
+		if err != nil {
+			d.mu.Unlock()
+			return err
+		}
+		
 		sessionState.currRevType = db.RevisionType()
 		sessionState.currRevSpec = db.Revision()
 	}
@@ -1623,3 +1637,40 @@ func TransactionRoot(ctx *sql.Context, db SqlDatabase) (hash.Hash, error) {
 
 	return nomsRoot, nil
 }
+
+// DefaultHead returns the head for the database given when one isn't specified
+func DefaultHead(baseName string, db SqlDatabase) (string, error) {
+	head := ""
+
+	// First check the global variable for the default branch
+	_, val, ok := sql.SystemVariables.GetGlobal(DefaultBranchKey(baseName))
+	if ok {
+		head = val.(string)
+		branchRef, err := ref.Parse(head)
+		if err == nil {
+			head = branchRef.GetPath()
+		} else {
+			head = ""
+			// continue to below
+		}
+	}
+
+	// Fall back to the database's initially checked out branch
+	if head == "" {
+		rsr := db.DbData().Rsr
+		if rsr != nil {
+			headRef, err := rsr.CWBHeadRef()
+			if err != nil {
+				return "", err
+			}
+			head = headRef.GetPath()
+		}
+	}
+	
+	if head == "" {
+		head = db.Revision()
+	}
+	
+	return head, nil
+}
+

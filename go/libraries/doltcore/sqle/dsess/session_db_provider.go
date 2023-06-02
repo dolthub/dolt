@@ -91,6 +91,9 @@ type DoltDatabaseProvider interface {
 	// SessionDatabase returns the SessionDatabase for the specified database, which may name a revision of a base
 	// database.
 	SessionDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool, error)
+	// BaseDatabase returns the base database for the specified database name. Meant for informational purposes when
+	// managing the session initialization only. Use SessionDatabase for normal database retrieval.
+	BaseDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool)
 	// DoltDatabases returns all databases known to this provider.
 	DoltDatabases() []SqlDatabase
 }

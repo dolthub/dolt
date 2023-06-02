@@ -1025,6 +1025,25 @@ func resolveAncestorSpec(ctx *sql.Context, revSpec string, ddb *doltdb.DoltDB) (
 	return hash.String(), nil
 }
 
+// BaseDatabase returns the base database for the specified database name. Meant for informational purposes when
+// managing the session initialization only. Use SessionDatabase for normal database retrieval.
+func (p DoltDatabaseProvider) BaseDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool) {
+	baseName := name
+	isRevisionDbName := strings.Contains(name, dsess.DbRevisionDelimiter)
+
+	if isRevisionDbName {
+		parts := strings.SplitN(name, dsess.DbRevisionDelimiter, 2)
+		baseName = parts[0]
+	}
+
+	var ok bool
+	p.mu.RLock()
+	db, ok := p.databases[strings.ToLower(baseName)]
+	p.mu.RUnlock()
+
+	return db, ok 
+}
+
 // SessionDatabase implements dsess.SessionDatabaseProvider
 func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool, error) {
 	baseName := name
@@ -1081,27 +1100,9 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 		if !ok {
 			usingDefaultBranch = true
 
-			// First check the global variable for the default branch
-			_, val, ok := sql.SystemVariables.GetGlobal(dsess.DefaultBranchKey(baseName))
-			if ok {
-				head = val.(string)
-				branchRef, err := ref.Parse(head)
-				if err == nil {
-					head = branchRef.GetPath()
-				} else {
-					head = ""
-					// continue to below
-				}
-			}
-
-			// Fall back to the database's checked out branch
-			if head == "" {
-				rsr := db.DbData().Rsr
-				headRef, err := rsr.CWBHeadRef()
-				if err != nil {
-					return nil, false, err
-				}
-				head = headRef.GetPath()
+			head, err = dsess.DefaultHead(baseName, db)
+			if err != nil {
+				return nil, false, err
 			}
 		}
 
