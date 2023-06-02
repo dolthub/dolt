@@ -382,6 +382,214 @@ var BranchControlBlockTests = []BranchControlBlockTest{
 	},
 }
 
+var BranchControlOtherDbBlockTests = []BranchControlBlockTest{
+	{
+		Name:        "INSERT",
+		Query:       "INSERT INTO `mydb/other`.test VALUES (2, 2);",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "REPLACE",
+		Query:       "REPLACE INTO `mydb/other`.test VALUES (2, 2);",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "UPDATE",
+		Query:       "UPDATE `mydb/other`.test SET pk = 2;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "DELETE",
+		Query:       "DELETE FROM `mydb/other`.test WHERE pk >= 0;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "TRUNCATE",
+		Query:       "TRUNCATE TABLE `mydb/other`.test;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name: "ALTER TABLE AUTO_INCREMENT",
+		SetUpScript: []string{
+			"CREATE TABLE `mydb/other`.test2(pk BIGINT PRIMARY KEY AUTO_INCREMENT);",
+		},
+		Query:       "ALTER TABLE `mydb/other`.test2 AUTO_INCREMENT = 20;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "ALTER TABLE ADD CHECK",
+		Query:       "ALTER TABLE `mydb/other`.test ADD CONSTRAINT check_1 CHECK (pk > 0);",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name: "ALTER TABLE DROP CHECK",
+		SetUpScript: []string{
+			"ALTER TABLE `mydb/other`.test ADD CONSTRAINT check_1 CHECK (pk > 0);",
+		},
+		Query:       "ALTER TABLE `mydb/other`.test DROP CHECK check_1;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "ALTER TABLE ALTER COLUMN SET DEFAULT",
+		Query:       "ALTER TABLE `mydb/other`.test ALTER COLUMN v1 SET DEFAULT (5);",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name: "ALTER TABLE ALTER COLUMN DROP DEFAULT",
+		SetUpScript: []string{
+			"ALTER TABLE `mydb/other`.test ALTER COLUMN v1 SET DEFAULT (5);",
+		},
+		Query:       "ALTER TABLE `mydb/other`.test ALTER COLUMN v1 DROP DEFAULT;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name: "ALTER TABLE ADD FOREIGN KEY",
+		SetUpScript: []string{
+			"ALTER TABLE `mydb/other`.test ADD INDEX idx_v1 (v1);",
+			"CREATE TABLE `mydb/other`.test2 (pk BIGINT PRIMARY KEY, v1 BIGINT UNIQUE);",
+		},
+		Query:       "ALTER TABLE `mydb/other`.test2 ADD CONSTRAINT fk_1 FOREIGN KEY (v1) REFERENCES test (v1);",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name: "ALTER TABLE DROP FOREIGN KEY",
+		SetUpScript: []string{
+			"ALTER TABLE `mydb/other`.test ADD INDEX idx_v1 (v1);",
+			"CREATE TABLE `mydb/other`.test2 (pk BIGINT PRIMARY KEY, v1 BIGINT UNIQUE, CONSTRAINT fk_1 FOREIGN KEY (v1) REFERENCES test (v1));",
+		},
+		Query:       "ALTER TABLE `mydb/other`.test2 DROP FOREIGN KEY fk_1;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "ALTER TABLE ADD INDEX",
+		Query:       "ALTER TABLE `mydb/other`.test ADD INDEX idx_v1 (v1);",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name: "ALTER TABLE DROP INDEX",
+		SetUpScript: []string{
+			"ALTER TABLE `mydb/other`.test ADD INDEX idx_v1 (v1);",
+		},
+		Query:       "ALTER TABLE `mydb/other`.test DROP INDEX idx_v1;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name: "ALTER TABLE RENAME INDEX",
+		SetUpScript: []string{
+			"ALTER TABLE `mydb/other`.test ADD INDEX idx_v1 (v1);",
+		},
+		Query:       "ALTER TABLE `mydb/other`.test RENAME INDEX idx_v1 TO idx_v1_new;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name: "ALTER TABLE ADD PRIMARY KEY",
+		SetUpScript: []string{
+			"CREATE TABLE `mydb/other`.test2 (v1 BIGINT, v2 BIGINT);",
+		},
+		Query:       "ALTER TABLE `mydb/other`.test2 ADD PRIMARY KEY (v1, v2);",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "ALTER TABLE DROP PRIMARY KEY",
+		Query:       "ALTER TABLE `mydb/other`.test DROP PRIMARY KEY;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "ALTER TABLE RENAME",
+		Query:       "ALTER TABLE `mydb/other`.test RENAME TO test_new;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "RENAME TABLE",
+		Query:       "RENAME TABLE `mydb/other`.test TO test_new;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "ALTER TABLE ADD COLUMN",
+		Query:       "ALTER TABLE `mydb/other`.test ADD COLUMN v2 BIGINT;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "ALTER TABLE DROP COLUMN",
+		Query:       "ALTER TABLE `mydb/other`.test DROP COLUMN v1;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "ALTER TABLE CHANGE COLUMN",
+		Query:       "ALTER TABLE `mydb/other`.test CHANGE COLUMN v1 v1_new BIGINT;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "ALTER TABLE MODIFY COLUMN",
+		Query:       "ALTER TABLE `mydb/other`.test MODIFY COLUMN v1 TINYINT;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "ALTER TABLE RENAME COLUMN",
+		Query:       "ALTER TABLE `mydb/other`.test RENAME COLUMN v1 TO v1_new;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "CREATE INDEX",
+		Query:       "CREATE INDEX idx_v1 ON `mydb/other`.test (v1);",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name: "DROP INDEX",
+		SetUpScript: []string{
+			"CREATE INDEX idx_v1 ON `mydb/other`.test (v1);",
+		},
+		Query:       "DROP INDEX idx_v1 ON `mydb/other`.test;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "CREATE VIEW",
+		Query:       "CREATE VIEW view_1 AS SELECT * FROM `mydb/other`.test;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name: "DROP VIEW",
+		SetUpScript: []string{
+			"CREATE VIEW view_1 AS SELECT * FROM `mydb/other`.test;",
+		},
+		Query:       "DROP VIEW view_1;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "CREATE TRIGGER",
+		Query:       "CREATE TRIGGER trigger_1 BEFORE INSERT ON `mydb/other`.test FOR EACH ROW SET NEW.v1 = 4;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name: "DROP TRIGGER",
+		SetUpScript: []string{
+			"CREATE TRIGGER trigger_1 BEFORE INSERT ON `mydb/other`.test FOR EACH ROW SET NEW.v1 = 4;",
+		},
+		Query:       "DROP TRIGGER trigger_1;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "CREATE TABLE",
+		Query:       "CREATE TABLE `mydb/other`.test2 (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "CREATE TABLE LIKE",
+		Query:       "CREATE TABLE `mydb/other`.test2 LIKE `mydb/other`.test;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "CREATE TABLE AS SELECT",
+		Query:       "CREATE TABLE `mydb/other`.test2 AS SELECT * FROM `mydb/other`.test;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "DROP TABLE",
+		Query:       "DROP TABLE `mydb/other`.test;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+}
+
 var BranchControlTests = []BranchControlTest{
 	{
 		Name: "Namespace entries block",
@@ -1201,59 +1409,46 @@ func TestBranchControl(t *testing.T) {
 }
 
 func TestBranchControlBlocks(t *testing.T) {
-	// for _, test := range BranchControlBlockTests {
-	// 	harness := newDoltHarness(t)
-	// 	defer harness.Close()
-	// 	t.Run(test.Name, func(t *testing.T) {
-	// 		engine, err := harness.NewEngine(t)
-	// 		require.NoError(t, err)
-	// 		defer engine.Close()
-	// 
-	// 		rootCtx := enginetest.NewContext(harness)
-	// 		rootCtx.NewCtxWithClient(sql.Client{
-	// 			User:    "root",
-	// 			Address: "localhost",
-	// 		})
-	// 		engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
-	// 		engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
-	// 
-	// 		for _, statement := range append(TestUserSetUpScripts, test.SetUpScript...) {
-	// 			enginetest.RunQueryWithContext(t, engine, harness, rootCtx, statement)
-	// 		}
-	// 
-	// 		userCtx := enginetest.NewContextWithClient(harness, sql.Client{
-	// 			User:    "testuser",
-	// 			Address: "localhost",
-	// 		})
-	// 		enginetest.AssertErrWithCtx(t, engine, harness, userCtx, test.Query, test.ExpectedErr)
-	// 		
-	// 		addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'write'), ('%', 'other', 'testuser', 'localhost', 'write');"
-	// 		addUserQueryResults := []sql.Row{{types.NewOkResult(2)}}
-	// 		enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
-	// 		
-	// 		sch, iter, err := engine.Query(userCtx, test.Query)
-	// 		if err == nil {
-	// 			_, err = sql.RowIterToRows(userCtx, sch, iter)
-	// 		}
-	// 		assert.NoError(t, err)
-	// 	})
-	// }
-
-	// These tests are run with permission on main but not other
-	var branchRevisionTests = []BranchControlBlockTest{
-		{
-			Name:        "INSERT on branch db, permissions on main",
-			Query:       "INSERT INTO `mydb/other`.test VALUES (2, 2);",
-			ExpectedErr: branch_control.ErrIncorrectPermissions,
-		},
-		{
-			Name:        "DELETE on branch db, permissions on main",
-			Query:       "DELETE from `mydb/other`.test;",
-			ExpectedErr: branch_control.ErrIncorrectPermissions,
-		},
+	for _, test := range BranchControlBlockTests {
+		harness := newDoltHarness(t)
+		defer harness.Close()
+		t.Run(test.Name, func(t *testing.T) {
+			engine, err := harness.NewEngine(t)
+			require.NoError(t, err)
+			defer engine.Close()
+	
+			rootCtx := enginetest.NewContext(harness)
+			rootCtx.NewCtxWithClient(sql.Client{
+				User:    "root",
+				Address: "localhost",
+			})
+			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
+			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
+	
+			for _, statement := range append(TestUserSetUpScripts, test.SetUpScript...) {
+				enginetest.RunQueryWithContext(t, engine, harness, rootCtx, statement)
+			}
+	
+			userCtx := enginetest.NewContextWithClient(harness, sql.Client{
+				User:    "testuser",
+				Address: "localhost",
+			})
+			enginetest.AssertErrWithCtx(t, engine, harness, userCtx, test.Query, test.ExpectedErr)
+			
+			addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'write'), ('%', 'other', 'testuser', 'localhost', 'write');"
+			addUserQueryResults := []sql.Row{{types.NewOkResult(2)}}
+			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
+			
+			sch, iter, err := engine.Query(userCtx, test.Query)
+			if err == nil {
+				_, err = sql.RowIterToRows(userCtx, sch, iter)
+			}
+			assert.NoError(t, err)
+		})
 	}
 
-	for _, test := range branchRevisionTests {
+	// These tests are run with permission on main but not other
+	for _, test := range BranchControlOtherDbBlockTests {
 		harness := newDoltHarness(t)
 		defer harness.Close()
 		t.Run(test.Name, func(t *testing.T) {
@@ -1273,9 +1468,9 @@ func TestBranchControlBlocks(t *testing.T) {
 				enginetest.RunQueryWithContext(t, engine, harness, rootCtx, statement)
 			}
 
-			// addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'write');"
-			// addUserQueryResults := []sql.Row{{types.NewOkResult(1)}}
-			// enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
+			addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'write');"
+			addUserQueryResults := []sql.Row{{types.NewOkResult(1)}}
+			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
 
 			userCtx := enginetest.NewContextWithClient(harness, sql.Client{
 				User:    "testuser",
@@ -1283,8 +1478,8 @@ func TestBranchControlBlocks(t *testing.T) {
 			})
 			enginetest.AssertErrWithCtx(t, engine, harness, userCtx, test.Query, test.ExpectedErr)
 
-			addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'other', 'testuser', 'localhost', 'write');"
-			addUserQueryResults := []sql.Row{{types.NewOkResult(1)}}
+			addUserQuery = "INSERT INTO dolt_branch_control VALUES ('%', 'other', 'testuser', 'localhost', 'write');"
+			addUserQueryResults = []sql.Row{{types.NewOkResult(1)}}
 			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
 
 			sch, iter, err := engine.Query(userCtx, test.Query)
