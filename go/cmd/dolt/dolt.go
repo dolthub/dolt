@@ -19,7 +19,6 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -28,6 +27,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
 	"go.opentelemetry.io/otel"
