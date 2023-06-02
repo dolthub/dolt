@@ -194,21 +194,22 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
 
 @test "no-repo: dolt sql outside of a dolt repository" {
     run dolt sql -q "show databases"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "$NOT_VALID_REPO_ERROR" ]] || false
 }
 
 @test "no-repo: dolt sql statements with no databases" {
     run dolt sql -q "show tables"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "no database selected" ]] || false
+    [[ "$output" =~ "$NOT_VALID_REPO_ERROR" ]] || false
 
     run dolt sql -q "create table a (a int primary key)"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "no database selected" ]] || false
+    [[ "$output" =~ "$NOT_VALID_REPO_ERROR" ]] || false
 
     run dolt sql -q "show triggers"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "no database selected" ]] || false
+    [[ "$output" =~ "$NOT_VALID_REPO_ERROR" ]] || false
 }
 
 @test "no-repo: dolt checkout outside of a dolt repository" {
