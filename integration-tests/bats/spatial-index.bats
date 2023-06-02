@@ -11,7 +11,6 @@ teardown() {
 }
 
 @test "spatial-index: spatial indexes enabled" {
-    skip_nbf_not_dolt
     run dolt sql -q "create table t (p point srid 0 not null, spatial index(p))"
     [ "$status" -eq 0 ]
 }

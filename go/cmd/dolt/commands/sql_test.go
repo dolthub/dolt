@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -25,21 +26,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
-
-//var UUIDS = []uuid.UUID{
-//	uuid.Must(uuid.Parse("00000000-0000-0000-0000-000000000000")),
-//	uuid.Must(uuid.Parse("00000000-0000-0000-0000-000000000001")),
-//	uuid.Must(uuid.Parse("00000000-0000-0000-0000-000000000002"))}
-//var Names = []string{"Bill Billerson", "John Johnson", "Rob Robertson"}
-//var Ages = []uint64{32, 25, 21}
-//var Titles = []string{"Senior Dufus", "Dufus", ""}
-//var MaritalStatus = []bool{true, false, false}
 
 var tableName = "people"
 
@@ -622,9 +613,8 @@ func TestCommitHooksNoErrors(t *testing.T) {
 	defer dEnv.DoltDB.Close()
 
 	sqle.AddDoltSystemVariables()
-	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
 	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemote, "unknown")
-	hooks, err := engine.GetCommitHooks(context.Background(), dEnv)
+	hooks, err := sqle.GetCommitHooks(context.Background(), nil, dEnv, io.Discard)
 	assert.NoError(t, err)
 	if len(hooks) < 1 {
 		t.Error("failed to produce noop hook")

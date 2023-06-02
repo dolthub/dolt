@@ -180,7 +180,6 @@ func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 		//
 		// TODO: This is worse than a linear scan for small table files
 		// or for very large queries.
-
 		j := filterLen
 		for filterIdx < j {
 			h := filterIdx + (j-filterIdx)/2
@@ -497,9 +496,21 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 			continue
 		}
 
-		// advance within the prefixes until we reach one which is >= req.prefix
-		for filterIdx < filterLen && tr.prefixes[filterIdx] < req.prefix {
-			filterIdx++
+		// Use binary search to find the location of the addr.prefix in
+		// the prefixes array. filterIdx will be at the first entry
+		// where its prefix >= addr.prefix after this search.
+		//
+		// TODO: This is worse than a linear scan for small table files
+		// or for very large queries.
+		j := filterLen
+		for filterIdx < j {
+			h := filterIdx + (j-filterIdx)/2
+			// filterIdx <= h < j
+			if tr.prefixes[h] < req.prefix {
+				filterIdx = h + 1 // tr.prefixes[filterIdx-1] < req.prefix
+			} else {
+				j = h // tr.prefixes[j] >= req.prefix
+			}
 		}
 
 		if filterIdx >= filterLen {

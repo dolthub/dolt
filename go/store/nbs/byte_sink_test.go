@@ -80,6 +80,10 @@ type TableSinkSuite struct {
 	t           *testing.T
 }
 
+func (suite2 *TableSinkSuite) SetS(suite suite.TestingSuite) {}
+
+var _ suite.TestingSuite = (*TableSinkSuite)(nil)
+
 func (suite *TableSinkSuite) SetT(t *testing.T) {
 	suite.t = t
 }

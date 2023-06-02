@@ -63,7 +63,7 @@ func getSampleRows() []sql.Row {
 	}
 }
 
-func writeToParquet(pWr *ParquetWriter, rows []sql.Row, t *testing.T) {
+func writeToParquet(pWr *ParquetRowWriter, rows []sql.Row, t *testing.T) {
 	func() {
 		defer pWr.Close(context.Background())
 
@@ -92,7 +92,7 @@ Andy Anderson,27,
 
 	rows := getSampleRows()
 
-	pWr, err := NewParquetWriter(rowSch, path)
+	pWr, err := NewParquetRowWriterForFile(rowSch, path)
 	if err != nil {
 		t.Fatal("Could not open CSVWriter", err)
 	}

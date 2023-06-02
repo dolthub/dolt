@@ -1,4 +1,5 @@
 load helper/windows-compat
+load helper/local-remote
 
 if [ -z "$BATS_TMPDIR" ]; then
     export BATS_TMPDIR=$HOME/batstmp/
@@ -74,23 +75,10 @@ skip_nbf_dolt() {
   fi
 }
 
-skip_nbf_not_dolt() {
-  if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ]
-  then
-    skip "skipping test since nomsBinFormat != __DOLT__"
-  fi
-}
-
-skip_nbf_ld_1() {
-  if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ];
-  then
-    skip "skipping test for nomsBinFormat __LD_1__"
-  fi
-}
-
 setup_common() {
     setup_no_dolt_init
     dolt init
+    setup_remote_server
 }
 
 teardown_common() {
@@ -99,6 +87,7 @@ teardown_common() {
     # any processes to finish, we just ignore any error removing temp files and use 'true' as the last
     # command in this function to ensure that teardown_common doesn't fail a test just because we
     # couldn't delete any temporary test files.
+    teardown_remote_server
     rm -rf "$BATS_TMPDIR/dolt-repo-$$"
     true
 }

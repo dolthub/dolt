@@ -120,17 +120,21 @@ teardown() {
     [[ "$output" =~ "test" ]] || false
 }
 
-@test "remotes-sql-server: pull remote not found error" {
+@test "remotes-sql-server: pull remote not found" {
     skiponwindows "Missing dependencies"
 
     cd repo1
     dolt config --local --add sqlserver.global.dolt_read_replica_remote unknown
     dolt config --local --add sqlserver.global.dolt_replicate_heads main
 
-    run dolt sql-server -P 3333
-    [ "$status" -eq 1 ]
-    [[ ! "$output" =~ "panic" ]]
-    [[ "$output" =~ "remote not found: 'unknown'" ]] || false
+    start_sql_server repo1 ./server-log.txt
+
+    run dolt sql-client --use-db repo1 -P $PORT -u dolt -q "show tables"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Table" ]] || false
+
+    run grep 'replication disabled' ./server-log.txt
+    [[ "$output" =~ "replication disabled" ]] || false
 }
 
 @test "remotes-sql-server: quiet pull warnings" {
@@ -140,23 +144,30 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_skip_replication_errors 1
     dolt config --local --add sqlserver.global.dolt_read_replica_remote unknown
     dolt config --local --add sqlserver.global.dolt_replicate_heads main
-    start_sql_server repo1
+
+    start_sql_server repo1 ./server-log.txt
 
     run dolt sql-client --use-db repo1 -P $PORT -u dolt -q "show tables"
     [ $status -eq 0 ]
     [[ "$output" =~ "Table" ]] || false
+
+    run grep 'failed to load replica database from remote' ./server-log.txt
+    [[ "$output" =~ "failed to load replica database from remote" ]] || false
 }
 
-@test "remotes-sql-server: push remote not found error" {
+@test "remotes-sql-server: push remote not found" {
     skiponwindows "Missing dependencies"
 
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote unknown
 
-    run dolt sql-server -P 3333
-    [ "$status" -eq 1 ]
-    [[ ! "$output" =~ "panic" ]]
-    [[ "$output" =~ "remote not found: 'unknown'" ]] || false
+    start_sql_server repo1 ./server-log.txt
+
+    run dolt sql-client --use-db repo1 -P $PORT -u dolt -q "show tables"
+    [[ "$output" =~ "Table" ]] || false
+
+    run grep 'replication disabled' ./server-log.txt
+    [[ "$output" =~ "replication disabled" ]] || false
 }
 
 @test "remotes-sql-server: quiet push warnings" {

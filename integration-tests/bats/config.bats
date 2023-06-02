@@ -240,43 +240,6 @@ teardown() {
     dolt sql -q "CALL DOLT_COMMIT('-a', '-m', 'updated stuff')"
 }
 
-@test "config: DOLT_COMMIT uses default values when user.name or user.email is unset." {
-    dolt config --global --add user.name "bats tester"
-    dolt config --global --add user.email "joshn@doe.com"
-
-    dolt init
-    dolt sql -q "
-    CREATE TABLE test (
-       pk int primary key
-    )"
-    dolt add .
-
-    dolt config --global --unset user.name
-    dolt config --global --unset user.email
-
-    run dolt sql -q "call dolt_commit('-a', '-m', 'created table test')"
-    [ "$status" -eq 0 ]
-
-    run dolt log -n 1
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Dolt System Account" ]] || false
-    [[ "$output" =~ "created table test" ]] || false
-
-    dolt sql -q "create table test2 (pk int primary key)"
-    dolt add .
-    
-    dolt config --global --add user.name "bats tester"
-
-    run dolt sql -q "call dolt_commit('-a', '-m', 'created table test2')"
-    [ "$status" -eq 0 ]
-
-    run dolt log -n 1
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "bats tester" ]] || false
-    [[ "$output" =~ "doltuser@dolthub.com" ]] || false
-    [[ "$output" =~ "created table test2" ]] || false
-}
-
 @test "config: Set default init branch" {
     dolt config --global --add user.name "bats tester"
     dolt config --global --add user.email "joshn@doe.com"

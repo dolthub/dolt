@@ -22,12 +22,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-22.04, windows-latest]
-        dolt_fmt: [ "__DOLT__", "__LD_1__" ]
-        journal_store: [ "" ]
-        include:
-          - os: "ubuntu-22.04"
-            dolt_fmt: "__DOLT__"
-            journal_store: "true"
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v3
@@ -65,8 +59,6 @@ jobs:
         done
       env:
         MATRIX_OS: ${{ matrix.os }}
-        DOLT_DEFAULT_BIN_FORMAT: ${{ matrix.dolt_fmt }}
-        DOLT_ENABLE_CHUNK_JOURNAL: ${{ matrix.journal_store }}
   noracetest:
     name: Go tests - no race
     defaults:
@@ -77,7 +69,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-22.04, windows-latest]
-        dolt_fmt: [ "__DOLT__", "__LD_1__" ]
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v3
@@ -88,10 +79,8 @@ jobs:
     - name: Test All
       working-directory: ./go
       run: |
-        if [ -n "$DOLT_FMT" ]; then export DOLT_DEFAULT_BIN_FORMAT="$DOLT_FMT"; fi
         go test -timeout 30m ./libraries/doltcore/sqle/altertests
         go test -timeout 30m ./libraries/doltcore/sqle/integration_test
       env:
-        DOLT_FMT: ${{ matrix.dolt_fmt }}
         MATRIX_OS: ${{ matrix.os }}
         DOLT_TEST_RUN_NON_RACE_TESTS: "true"

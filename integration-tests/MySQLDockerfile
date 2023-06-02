@@ -31,6 +31,8 @@ RUN apt update -y && \
         ca-certificates-java \
         bats \
         perl \
+        php \
+        php-mysqli \
         cpanminus \
         cmake \
         g++ \

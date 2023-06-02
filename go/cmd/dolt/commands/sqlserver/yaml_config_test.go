@@ -24,6 +24,8 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 )
 
+var trueValue = true
+
 func TestUnmarshall(t *testing.T) {
 	testStr := `
 log_level: info
@@ -31,6 +33,7 @@ log_level: info
 behavior:
     read_only: false
     autocommit: true
+    dolt_transaction_commit: true
     persistence_behavior: load
     disable_client_multi_statements: false
 
@@ -87,6 +90,7 @@ jwks:
     fields_to_log:
 `
 	expected := serverConfigAsYAMLConfig(DefaultServerConfig())
+	expected.BehaviorConfig.DoltTransactionCommit = &trueValue
 	expected.DatabaseConfig = []DatabaseYAMLConfig{
 		{
 			Name: "irs_soi",
@@ -335,6 +339,7 @@ func TestYAMLConfigDefaults(t *testing.T) {
 	assert.Equal(t, defaultReadOnly, cfg.ReadOnly())
 	assert.Equal(t, defaultLogLevel, cfg.LogLevel())
 	assert.Equal(t, defaultAutoCommit, cfg.AutoCommit())
+	assert.Equal(t, defaultDoltTransactionCommit, cfg.DoltTransactionCommit())
 	assert.Equal(t, uint64(defaultMaxConnections), cfg.MaxConnections())
 	assert.Equal(t, "", cfg.TLSKey())
 	assert.Equal(t, "", cfg.TLSCert())

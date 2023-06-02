@@ -103,7 +103,6 @@ SQL
     dolt commit -m "Added column c2 longtext"
     dolt checkout main
     dolt merge branch1
-    skip_nbf_not_dolt
     dolt merge branch2
 }
 
@@ -129,7 +128,6 @@ SQL
     dolt commit -m "Added column c0 bigint"
     dolt checkout main
     dolt merge branch1
-    skip_nbf_not_dolt
     dolt merge branch2
 }
 
@@ -304,8 +302,6 @@ DELIM
 }
 
 @test "column_tags: update-tag updates a columns tag" {
-    skip_nbf_not_dolt
-
     dolt sql -q "CREATE TABLE t (pk INT PRIMARY KEY, col1 int);"
     run dolt schema tags
     [ $status -eq 0 ]
@@ -326,8 +322,6 @@ DELIM
 }
 
 @test "column_tags: create table on two separate branches, merge them together even though they have different tags" {
-    skip_nbf_not_dolt
-
     dolt branch other
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, col1 int);"
     dolt sql -q "INSERT INTO t VALUES (1, 1);"

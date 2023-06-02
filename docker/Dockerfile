@@ -8,6 +8,8 @@ RUN apt update -y && \
     apt install -y \
         tini
 
+RUN apt-get update -y && apt-get install -y ca-certificates
+
 ADD https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/dolt-linux-${BUILDARCH}.tar.gz dolt-linux-${BUILDARCH}.tar.gz
 RUN tar zxvf dolt-linux-${BUILDARCH}.tar.gz && \
     cp dolt-linux-${BUILDARCH}/bin/dolt /usr/local/bin && \
