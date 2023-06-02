@@ -17,11 +17,11 @@ package tree
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/goccy/go-json"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"

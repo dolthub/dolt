@@ -61,6 +61,7 @@ type SqlEngineConfig struct {
 	ServerPass              string
 	ServerHost              string
 	Autocommit              bool
+	DoltTransactionCommit   bool
 	Bulk                    bool
 	JwksConfig              []JwksConfig
 	ClusterController       *cluster.Controller
@@ -164,6 +165,11 @@ func NewSqlEngine(
 	// this is overwritten only for server sessions
 	for _, db := range dbs {
 		db.DbData().Ddb.SetCommitHookLogger(ctx, cli.CliOut)
+	}
+
+	err = sql.SystemVariables.SetGlobal(dsess.DoltCommitOnTransactionCommit, config.DoltTransactionCommit)
+	if err != nil {
+		return nil, err
 	}
 
 	sessionFactory := doltSessionFactory(pro, mrEnv.Config(), bcController, config.Autocommit)
@@ -283,19 +289,19 @@ func sqlContextFactory() contextFactory {
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession
 func doltSessionFactory(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig, bc *branch_control.Controller, autocommit bool) sessionFactory {
 	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
-		dsess, err := dsess.NewDoltSession(mysqlSess, pro, config, bc)
+		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc)
 		if err != nil {
 			return nil, err
 		}
 
 		// nil ctx is actually fine in this context, not used in setting a session variable. Creating a new context isn't
 		// free, and would be throwaway work, since we need to create a session before creating a sql.Context for user work.
-		err = dsess.SetSessionVariable(nil, sql.AutoCommitSessionVar, autocommit)
+		err = doltSession.SetSessionVariable(nil, sql.AutoCommitSessionVar, autocommit)
 		if err != nil {
 			return nil, err
 		}
 
-		return dsess, nil
+		return doltSession, nil
 	}
 }
 

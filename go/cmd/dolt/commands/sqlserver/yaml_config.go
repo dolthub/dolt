@@ -70,6 +70,9 @@ type BehaviorYAMLConfig struct {
 	// (such as a CREATE TRIGGER), then those incoming queries will be
 	// misprocessed.
 	DisableClientMultiStatements *bool `yaml:"disable_client_multi_statements"`
+	// DoltTransactionCommit enables the @@dolt_transaction_commit system variable, which
+	// automatically creates a Dolt commit when any SQL transaction is committed.
+	DoltTransactionCommit *bool `yaml:"dolt_transaction_commit"`
 }
 
 // UserYAMLConfig contains server configuration regarding the user account clients must use to connect
@@ -170,6 +173,7 @@ func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 			boolPtr(cfg.AutoCommit()),
 			strPtr(cfg.PersistenceBehavior()),
 			boolPtr(cfg.DisableClientMultiStatements()),
+			boolPtr(cfg.DoltTransactionCommit()),
 		},
 		UserConfig: UserYAMLConfig{strPtr(cfg.User()), strPtr(cfg.Password())},
 		ListenerConfig: ListenerYAMLConfig{
@@ -290,6 +294,16 @@ func (cfg YAMLConfig) AutoCommit() bool {
 	}
 
 	return *cfg.BehaviorConfig.AutoCommit
+}
+
+// DoltTransactionCommit defines the value of the @@dolt_transaction_commit session variable that enables Dolt
+// commits to be automatically created when a SQL transaction is committed.
+func (cfg YAMLConfig) DoltTransactionCommit() bool {
+	if cfg.BehaviorConfig.DoltTransactionCommit == nil {
+		return defaultDoltTransactionCommit
+	}
+
+	return *cfg.BehaviorConfig.DoltTransactionCommit
 }
 
 // LogLevel returns the level of logging that the server will use.

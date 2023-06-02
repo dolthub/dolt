@@ -162,8 +162,18 @@ EOF" -m "postgres"
     Rscript $BATS_TEST_DIRNAME/r/rmariadb-test.r $USER $PORT $REPO_NAME
 }
 
-@test "rust mysql.connector client" {
+@test "rust mysql client" {
     cd $BATS_TEST_DIRNAME/rust
     cargo run --bin mysql_connector_test $USER $PORT $REPO_NAME
+}
+
+@test "php mysqli mysql client" {
+    cd $BATS_TEST_DIRNAME/php
+    php mysqli_connector_test.php $USER $PORT $REPO_NAME
+}
+
+@test "php pdo mysql client" {
+    cd $BATS_TEST_DIRNAME/php
+    php pdo_connector_test.php $USER $PORT $REPO_NAME
 }
 

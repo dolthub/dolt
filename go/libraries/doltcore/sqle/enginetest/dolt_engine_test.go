@@ -49,7 +49,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 86
+const SkipPreparedsCount = 84
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -662,11 +662,25 @@ func TestJSONTableQueries(t *testing.T) {
 	enginetest.TestJSONTableQueries(t, h)
 }
 
+// TestJSONTableQueriesPrepared runs the canonical test queries against a single threaded index enabled harness.
+func TestJSONTableQueriesPrepared(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestJSONTableQueriesPrepared(t, h)
+}
+
 // TestJSONTableScripts runs the canonical test queries against a single threaded index enabled harness.
 func TestJSONTableScripts(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestJSONTableScripts(t, h)
+}
+
+// TestJSONTableScriptsPrepared runs the canonical test queries against a single threaded index enabled harness.
+func TestJSONTableScriptsPrepared(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestJSONTableScriptsPrepared(t, h)
 }
 
 func TestUserPrivileges(t *testing.T) {
@@ -1706,7 +1720,7 @@ func TestColumnDiffSystemTable(t *testing.T) {
 	}
 	for _, test := range ColumnDiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScriptPrepared(t, newDoltHarness(t), test)
+			enginetest.TestScript(t, newDoltHarness(t), test)
 		})
 	}
 }

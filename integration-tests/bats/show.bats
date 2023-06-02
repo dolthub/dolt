@@ -123,7 +123,6 @@ assert_has_key_value() {
 }
 
 @test "show: --no-pretty" {
-    skip_nbf_ld_1
     dolt commit --allow-empty -m "commit: initialize table1"
     run dolt show --no-pretty
     [ $status -eq 0 ]
@@ -141,7 +140,6 @@ assert_has_key_value() {
 }
 
 @test "show: HEAD root" {
-    skip_nbf_ld_1
     dolt sql -q "create table table1 (pk int PRIMARY KEY)"
     dolt sql -q "insert into table1 values (1), (2), (3)"
     dolt add .
@@ -164,7 +162,6 @@ assert_has_key_value() {
 }
 
 @test "show: WORKING" {
-    skip_nbf_ld_1
     dolt sql -q "create table table1 (pk int PRIMARY KEY)"
     dolt sql -q "insert into table1 values (1), (2), (3)"
     dolt add .
@@ -182,7 +179,6 @@ assert_has_key_value() {
 }
 
 @test "show: STAGED" {
-    skip_nbf_ld_1
     dolt sql -q "create table table1 (pk int PRIMARY KEY)"
     dolt sql -q "insert into table1 values (1), (2), (3)"
     dolt add .
@@ -200,7 +196,6 @@ assert_has_key_value() {
 }
 
 @test "show: table" {
-    skip_nbf_ld_1
     dolt sql -q "create table table1 (pk int PRIMARY KEY)"
     dolt sql -q "insert into table1 values (1), (2), (3)"
     dolt add .
@@ -223,7 +218,6 @@ assert_has_key_value() {
 }
 
 @test "show: pretty commit from hash" {
-    skip_nbf_ld_1
     dolt tag v0
     dolt commit --allow-empty -m "commit1"
 
@@ -234,25 +228,7 @@ assert_has_key_value() {
     [[ "$output" =~ "tag: v0" ]] || false
 }
 
-@test "show: --no-pretty with old format" {
-    skip_nbf_dolt
-
-    run dolt show --no-pretty
-    [ $status -eq 1 ]
-    [[ "$output" =~ "dolt show --no-pretty is not supported when using old LD_1 storage format." ]] || false
-}
-
-@test "show: non-commit object with old format" {
-    skip_nbf_dolt
-
-    run dolt show WORKING
-    [ $status -eq 1 ]
-    [[ "$output" =~ "dolt show cannot show non-commit objects when using the old LD_1 storage format: WORKING is not a commit" ]] || false
-}
-
 @test "show: non-existent branch" {
-    skip_nbf_dolt
-
     run dolt show branch1
     [ $status -eq 1 ]
     [[ "$output" =~ "branch not found: branch1" ]] || false

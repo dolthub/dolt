@@ -32,6 +32,28 @@ teardown() {
     done
 }
 
+@test "sql-server: committer is sql user" {
+  # Start a SQL-server and add a new user "user1"
+  cd repo1
+  start_sql_server
+  dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "create user user1@'%';"
+  dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "grant all privileges on *.* to user1@'%';"
+
+  # By default, commits will be authored by the current sql user (user1)
+  dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "create table t2(pk int primary key);"
+  dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "call dolt_commit('-Am', 'committing as user1');"
+  run dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "select committer, email, message from dolt_log limit 1;"
+  [ $status -eq 0 ]
+  [[ $output =~ "| user1     | user1@% | committing as user1 |" ]] || false
+
+  # If --author is explicitly provided, then always use that, even if dolt_sql_user_is_committer is enabled
+  dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "create table t3(pk int primary key);"
+  dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "call dolt_commit('--author', 'barbie <barbie@plastic.com>', '-Am', 'committing as barbie');"
+  run dolt sql-client -P $PORT -u user1 --use-db 'repo1' -q "select committer, email, message from dolt_log limit 1;"
+  [ $status -eq 0 ]
+  [[ $output =~ "| barbie    | barbie@plastic.com | committing as barbie |" ]] || false
+}
+
 @test "sql-server: can create savepoint when no database is selected" {
     skiponwindows "Missing dependencies"
 
@@ -1600,7 +1622,8 @@ listener:
   socket: dolt.$PORT.sock
 
 behavior:
-  autocommit: true" > server.yaml
+  autocommit: true
+  dolt_transaction_commit: true" > server.yaml
 
     dolt sql-server --config server.yaml > log.txt 2>&1 &
     SERVER_PID=$!
@@ -1610,6 +1633,11 @@ behavior:
     [ $status -eq 0 ]
     [[ $output =~ col1 ]] || false
     [[ $output =~ " 1 " ]] || false
+
+    run dolt sql-client -P $PORT -u dolt --use-db repo2 -q "select @@dolt_transaction_commit"
+    [ $status -eq 0 ]
+    [[ $output =~ " 1 " ]] || false
+
 
     run grep "dolt.$PORT.sock" log.txt
     [ "$status" -eq 0 ]

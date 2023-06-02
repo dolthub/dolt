@@ -191,47 +191,6 @@ teardown() {
     [[ $output =~ "NEW ( __DOLT__ )" ]] || false
 }
 
-@test "init: initing an old database displays the correct version" {
-    set_dolt_user "baz", "bazbash.com"
-
-    DOLT_DEFAULT_BIN_FORMAT="__LD_1__" dolt init
-
-    run dolt version
-    [ "$status" -eq 0 ]
-    [[ $output =~ "database storage format: OLD ( __LD_1__ )" ]] || false
-
-    run dolt sql -q "SELECT dolt_storage_format();"
-    [[ $output =~ "OLD ( __LD_1__ )" ]] || false
-}
-
-@test "init: get format in multiple database mode" {
-    orig_bin_format=$DOLT_DEFAULT_BIN_FORMAT
-
-    mkdir old_fmt
-    cd old_fmt
-    DOLT_DEFAULT_BIN_FORMAT="__LD_1__" dolt init
-    cd ..
-
-    mkdir new_fmt
-    cd new_fmt
-    DOLT_DEFAULT_BIN_FORMAT="__DOLT__" dolt init
-    cd ..
-
-    # New format db gets chosen automatically, as it is the only db loaded
-    export DOLT_DEFAULT_BIN_FORMAT="__DOLT__"
-    run dolt sql -q "SELECT dolt_storage_format()"
-    [ $status -eq 0 ]
-    [[ $output =~ "NEW ( __DOLT__ )" ]] || false
-
-    # Old format db gets chosen automatically, as it is the only db loaded
-    export  DOLT_DEFAULT_BIN_FORMAT="__LD_1__"
-    run dolt sql -q "SELECT dolt_storage_format()"
-    [ $status -eq 0 ]
-    [[ $output =~ "OLD ( __LD_1__ )" ]] || false
-
-    export DOLT_DEFAULT_BIN_FORMAT=$orig_bin_format
-}
-
 @test "init: empty database folder displays no version" {
     set_dolt_user "baz", "bazbash.com"
 

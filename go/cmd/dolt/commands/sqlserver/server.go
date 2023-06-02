@@ -177,6 +177,7 @@ func Serve(
 		ServerPass:              serverConfig.Password(),
 		ServerHost:              serverConfig.Host(),
 		Autocommit:              serverConfig.AutoCommit(),
+		DoltTransactionCommit:   serverConfig.DoltTransactionCommit(),
 		JwksConfig:              serverConfig.JwksConfig(),
 		ClusterController:       clusterController,
 		BinlogReplicaController: binlogreplication.DoltBinlogReplicaController,

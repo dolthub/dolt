@@ -22,34 +22,18 @@ jobs:
       fail-fast: true
       matrix:
         os: [ ubuntu-22.04, macos-latest ]
-        dolt_fmt: [ "__DOLT__", "__LD_1__" ]
-        journal: [ "" ]
-        include:
-          - os: "ubuntu-22.04"
-            dolt_fmt: "__DOLT__"
-            journal: "true"
-        exclude:
-          - os: "macos-latest"
-            dolt_fmt: "__LD_1__"
-            journal: ""
+        sql_engine: [ remote-engine, local-engine ]
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:
       - name: Conditionally Set ENV VARS for AWS tests
-        env:
-          DOLT_FMT: ${{ matrix.dolt_fmt }}
-          DOLT_ENABLE_CHUNK_JOURNAL: ${{ matrix.journal }}
         run: |
           if [[ $use_credentials == true ]]; then
             echo "AWS_SDK_LOAD_CONFIG=1" >> $GITHUB_ENV
             echo "AWS_REGION=us-west-2" >> $GITHUB_ENV
             echo "DOLT_BATS_AWS_TABLE=dolt-ci-bats-manifests-us-west-2" >> $GITHUB_ENV
             echo "DOLT_BATS_AWS_BUCKET=dolt-ci-bats-chunks-us-west-2" >> $GITHUB_ENV
-            if [[ "$DOLT_FMT" == "__DOLT__" ]]; then
-                echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests__dolt__" >> $GITHUB_ENV
-            else
-                echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests" >> $GITHUB_ENV
-            fi
+            echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests__dolt__" >> $GITHUB_ENV
           fi
       - name: Configure AWS Credentials
         if: ${{ env.use_credentials == 'true' }}
@@ -127,10 +111,9 @@ jobs:
         run: expect -v
       - name: Test all Unix
         env:
-          DOLT_FMT: ${{ matrix.dolt_fmt }}
+          SQL_ENGINE: ${{ matrix.sql-engine }}
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
           BATS_TEST_RETRIES: "3"
         run: |
-          if [ -n "$DOLT_FMT" ]; then export DOLT_DEFAULT_BIN_FORMAT="$DOLT_FMT"; fi
           bats --tap .
         working-directory: ./integration-tests/bats

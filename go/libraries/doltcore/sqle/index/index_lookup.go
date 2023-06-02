@@ -126,7 +126,7 @@ func newPointPartitionIter(ctx *sql.Context, lookup sql.IndexLookup, idx *doltIn
 	rng := lookup.Ranges[0]
 	ns := idx.ns
 	for j, expr := range rng {
-		v, err := getRangeCutValue(expr.LowerBound, rng[j].Typ)
+		v, err := getRangeCutValue(expr.LowerBound, expr.Typ)
 		if err != nil {
 			return nil, err
 		}

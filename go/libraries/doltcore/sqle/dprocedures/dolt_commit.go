@@ -87,8 +87,10 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, error) {
 			return "", err
 		}
 	} else {
-		name = dSess.Username()
-		email = dSess.Email()
+		// In SQL mode, use the current SQL user as the commit author, instead of the `dolt config` configured values.
+		// We won't have an email address for the SQL user though, so instead use the MySQL user@address notation.
+		name = ctx.Client().User
+		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
 	}
 
 	amend := apr.Contains(cli.AmendFlag)
