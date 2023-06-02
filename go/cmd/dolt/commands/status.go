@@ -51,6 +51,7 @@ type printData struct {
 	stagedTables,
 	unstagedTables,
 	untrackedTables,
+	filteredUntrackedTables,
 	unmergedTables map[string]string
 
 	constraintViolationTables,
@@ -97,7 +98,7 @@ func (cmd StatusCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
 	// parse arguments
 	ap := cmd.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, statusDocs, ap))
@@ -195,23 +196,23 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 				return nil, err
 			}
 
-			// determine if the table should be ignored
-			ignored, err := ignorePatterns.IsTableNameIgnored(tableName)
-			if conflict := doltdb.AsDoltIgnoreInConflict(err); conflict != nil {
-				ignoredTables.Conflicts = append(ignoredTables.Conflicts, *conflict)
-			} else if err != nil {
-				return nil, err
-			} else if ignored == doltdb.DontIgnore {
-				ignoredTables.DontIgnore = append(ignoredTables.DontIgnore, tableName)
-			} else if ignored == doltdb.Ignore {
-				ignoredTables.Ignore = append(ignoredTables.Ignore, tableName)
-			} else {
-				return nil, fmt.Errorf("unrecognized ignore result value: %v", ignored)
+			shouldIgnoreTable := false
+			if !isStaged {
+				// determine if the table should be ignored
+				ignored, err := ignorePatterns.IsTableNameIgnored(tableName)
+				if conflict := doltdb.AsDoltIgnoreInConflict(err); conflict != nil {
+					ignoredTables.Conflicts = append(ignoredTables.Conflicts, *conflict)
+				} else if err != nil {
+					return nil, err
+				} else if ignored == doltdb.DontIgnore {
+					ignoredTables.DontIgnore = append(ignoredTables.DontIgnore, tableName)
+				} else if ignored == doltdb.Ignore {
+					ignoredTables.Ignore = append(ignoredTables.Ignore, tableName)
+				} else {
+					return nil, fmt.Errorf("unrecognized ignore result value: %v", ignored)
+				}
+				shouldIgnoreTable = ignored == doltdb.Ignore
 			}
-			if err != nil {
-				return nil, err
-			}
-			shouldIgnoreTable := ignored == doltdb.Ignore
 
 			switch status {
 			case "renamed":
@@ -259,6 +260,25 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 		}
 	}
 
+	// filter out ignored tables from untracked tables
+	filteredUntrackedTables := map[string]string{}
+	for tableName, status := range untrackedTables {
+		ignored, err := ignorePatterns.IsTableNameIgnored(tableName)
+
+		if conflict := doltdb.AsDoltIgnoreInConflict(err); conflict != nil {
+			continue
+		} else if err != nil {
+			return nil, err
+		} else if ignored == doltdb.DontIgnore {
+			// no-op
+		} else if ignored == doltdb.Ignore {
+			continue
+		} else {
+			return nil, fmt.Errorf("unrecognized ignore result value: %v", ignored)
+		}
+		filteredUntrackedTables[tableName] = status
+	}
+
 	pd := printData{
 		branchName:                branchName,
 		remoteName:                remoteName,
@@ -272,6 +292,7 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 		stagedTables:              stagedTables,
 		unstagedTables:            unstagedTables,
 		untrackedTables:           untrackedTables,
+		filteredUntrackedTables:   filteredUntrackedTables,
 		unmergedTables:            unmergedTables,
 		ignoredTables:             ignoredTables,
 		constraintViolationTables: constraintViolationTables,
@@ -638,20 +659,12 @@ and have %v and %v different commits each, respectively.
 		}
 		cli.Println(untrackedHeader)
 		cli.Println(untrackedHeaderHelp)
-		for tableName, status := range data.untrackedTables {
-			ignoreResult, err := data.ignorePatterns.IsTableNameIgnored(tableName)
-			if err != nil {
-				return err
-			}
-			isIgnored := ignoreResult == doltdb.Ignore
-			if isIgnored {
-				continue
-			}
+		for tableName, status := range data.filteredUntrackedTables {
 			text := fmt.Sprintf(statusFmt, status+":", tableName)
 			redText := color.RedString(text)
 			cli.Println(redText)
-			changesPresent = true
 		}
+		changesPresent = true
 	}
 
 	// ignored tables
