@@ -544,12 +544,16 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 		// TODO: We need to add more granularity in terms of what types of constraint violations can be committed. For example,
 		// in the case of foreign_key_checks=0 you should be able to commit foreign key violations.
 		if forceTransactionCommit.(int8) != 1 {
+			badTbls, err := workingRoot.TablesWithConstraintViolations(ctx)
+			if err != nil {
+				return err
+			}
 			rollbackErr := tx.rollback(ctx)
 			if rollbackErr != nil {
 				return rollbackErr
 			}
 
-			return ErrUnresolvedConstraintViolationsCommit
+			return fmt.Errorf("%s Constraint violations in tables: %v", ErrUnresolvedConstraintViolationsCommit, badTbls)
 		}
 	}
 
