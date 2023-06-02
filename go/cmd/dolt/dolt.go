@@ -529,7 +529,7 @@ The sql subcommand is currently the only command that uses these flags. All othe
 
 	var cliCtx cli.CliContext = nil
 	if initCliContext(subcommandName) {
-		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, apr, verboseEngineSetup)
+		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, apr, subcommandName, verboseEngineSetup)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failure to Load SQL Engine: %v", err))
 			return 1
@@ -562,7 +562,7 @@ The sql subcommand is currently the only command that uses these flags. All othe
 	return res
 }
 
-func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, apr *argparser.ArgParseResults, verbose bool) (cli.LateBindQueryist, error) {
+func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, apr *argparser.ArgParseResults, subcommandName string, verbose bool) (cli.LateBindQueryist, error) {
 
 	var targetEnv *env.DoltEnv = nil
 
@@ -578,6 +578,13 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 
 	if targetEnv == nil && useDb != "" {
 		targetEnv = mrEnv.GetEnv(useDb)
+	}
+
+	// There is no target environment detected. This is allowed only for a small number of commands.
+	// We don't expect that number to grow, so we list them here.
+	isDoltEnvironmentRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server"
+	if targetEnv == nil && isDoltEnvironmentRequired {
+		return nil, fmt.Errorf("The current directory is not a valid dolt repository.")
 	}
 
 	// nil targetEnv will happen if the user ran a command in an empty directory - which we support in some cases.
