@@ -74,7 +74,7 @@ func (bt *BranchesTable) Schema() sql.Schema {
 		tableName = doltdb.RemoteBranchesTableName
 	}
 
-	return []*sql.Column{
+	columns := []*sql.Column{
 		{Name: "name", Type: types.Text, Source: tableName, PrimaryKey: true, Nullable: false},
 		{Name: "hash", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: false},
 		{Name: "latest_committer", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true},
@@ -82,6 +82,11 @@ func (bt *BranchesTable) Schema() sql.Schema {
 		{Name: "latest_commit_date", Type: types.Datetime, Source: tableName, PrimaryKey: false, Nullable: true},
 		{Name: "latest_commit_message", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true},
 	}
+	if !bt.remote {
+		remote := &sql.Column{Name: "remote", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true}
+		columns = append(columns, remote)
+	}
+	return columns
 }
 
 // Collation implements the sql.Table interface.
@@ -96,20 +101,23 @@ func (bt *BranchesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
 func (bt *BranchesTable) PartitionRows(sqlCtx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return NewBranchItr(sqlCtx, bt.db, bt.remote)
+	return NewBranchItr(sqlCtx, bt)
 }
 
 // BranchItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type BranchItr struct {
+	table    *BranchesTable
 	branches []string
 	commits  []*doltdb.Commit
 	idx      int
 }
 
 // NewBranchItr creates a BranchItr from the current environment.
-func NewBranchItr(ctx *sql.Context, db dsess.SqlDatabase, remote bool) (*BranchItr, error) {
+func NewBranchItr(ctx *sql.Context, table *BranchesTable) (*BranchItr, error) {
 	var branchRefs []ref.DoltRef
 	var err error
+	db := table.db
+	remote := table.remote
 
 	txRoot, err := dsess.TransactionRoot(ctx, db)
 	if err != nil {
@@ -148,7 +156,12 @@ func NewBranchItr(ctx *sql.Context, db dsess.SqlDatabase, remote bool) (*BranchI
 		commits[i] = commit
 	}
 
-	return &BranchItr{branchNames, commits, 0}, nil
+	return &BranchItr{
+		table:    table,
+		branches: branchNames,
+		commits:  commits,
+		idx:      0,
+	}, nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
@@ -176,7 +189,23 @@ func (itr *BranchItr) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	return sql.NewRow(name, h.String(), meta.Name, meta.Email, meta.Time(), meta.Description), nil
+	remoteBranches := itr.table.remote
+	if remoteBranches {
+		return sql.NewRow(name, h.String(), meta.Name, meta.Email, meta.Time(), meta.Description), nil
+	} else {
+		branches, err := itr.table.db.DbData().Rsr.GetBranches()
+
+		if err != nil {
+			return nil, err
+		}
+
+		remoteName := ""
+		branch, ok := branches[name]
+		if ok {
+			remoteName = branch.Remote
+		}
+		return sql.NewRow(name, h.String(), meta.Name, meta.Email, meta.Time(), meta.Description, remoteName), nil
+	}
 }
 
 // Close closes the iterator.

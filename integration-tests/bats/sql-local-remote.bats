@@ -7,6 +7,19 @@ make_repo() {
   cd "$1"
   dolt init
   dolt sql -q "create table $1_tbl (id int)"
+  dolt sql <<SQL
+CREATE TABLE t (pk int PRIMARY KEY);
+CREATE TABLE u (pk int PRIMARY KEY);
+INSERT INTO dolt_ignore VALUES ('generated_*', 1);
+SQL
+  dolt add -A && dolt commit -m "tables t, u"
+  dolt sql <<SQL
+INSERT INTO  t VALUES (1),(2),(3);
+INSERT INTO  u VALUES (1),(2),(3);
+CREATE TABLE v (pk int PRIMARY KEY);
+CREATE TABLE generated_foo (pk int PRIMARY KEY);
+SQL
+  dolt add t
   cd ..
 }
 
@@ -157,4 +170,74 @@ get_staged_tables() {
     staged=$(get_staged_tables)
 
     [[ ! -z $(echo "$staged" | grep "testtable") ]] || false
+}
+
+@test "sql-local-remote: test 'status' and switch between server/no server" {
+    start_sql_server defaultDB
+
+    run dolt --user dolt status
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "  (use \"dolt reset <table>...\" to unstage)" ]] || false
+    [[ "$output" =~ "	modified:         t" ]] || false
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to update what will be committed)" ]] || false
+    [[ "$output" =~ "  (use \"dolt checkout <table>\" to discard changes in working directory)" ]] || false
+    [[ "$output" =~ "	modified:         u" ]] || false
+    [[ "$output" =~ "Untracked tables:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
+    [[ "$output" =~ "	new table:        v" ]] || false
+    ! [[ "$output" =~ "   new table:        generated_foo" ]] || false
+
+    run dolt --user dolt status --ignored
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "  (use \"dolt reset <table>...\" to unstage)" ]] || false
+    [[ "$output" =~ "	modified:         t" ]] || false
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to update what will be committed)" ]] || false
+    [[ "$output" =~ "  (use \"dolt checkout <table>\" to discard changes in working directory)" ]] || false
+    [[ "$output" =~ "	modified:         u" ]] || false
+    [[ "$output" =~ "Untracked tables:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
+    [[ "$output" =~ "	new table:        v" ]] || false
+    [[ "$output" =~ "Ignored tables:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add -f <table>\" to include in what will be committed)" ]] || false
+    [[ "$output" =~ "	new table:        generated_foo" ]] || false
+
+    stop_sql_server 1
+
+    run dolt status
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "  (use \"dolt reset <table>...\" to unstage)" ]] || false
+    [[ "$output" =~ "	modified:         t" ]] || false
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to update what will be committed)" ]] || false
+    [[ "$output" =~ "  (use \"dolt checkout <table>\" to discard changes in working directory)" ]] || false
+    [[ "$output" =~ "	modified:         u" ]] || false
+    [[ "$output" =~ "Untracked tables:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
+    [[ "$output" =~ "	new table:        v" ]] || false
+    ! [[ "$output" =~ "   new table:        generated_foo" ]] || false
+
+    run dolt --user dolt status --ignored
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "  (use \"dolt reset <table>...\" to unstage)" ]] || false
+    [[ "$output" =~ "	modified:         t" ]] || false
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to update what will be committed)" ]] || false
+    [[ "$output" =~ "  (use \"dolt checkout <table>\" to discard changes in working directory)" ]] || false
+    [[ "$output" =~ "	modified:         u" ]] || false
+    [[ "$output" =~ "Untracked tables:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
+    [[ "$output" =~ "	new table:        v" ]] || false
+    [[ "$output" =~ "Ignored tables:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add -f <table>\" to include in what will be committed)" ]] || false
+    [[ "$output" =~ "	new table:        generated_foo" ]] || false
 }
