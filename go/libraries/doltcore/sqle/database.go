@@ -711,7 +711,7 @@ func (db Database) GetHeadRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 // DropTable drops the table with the name given.
 // The planner returns the correct case sensitive name in tableName
 func (db Database) DropTable(ctx *sql.Context, tableName string) error {
-	if err := branch_control.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
+	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	if doltdb.IsNonAlterableSystemTable(tableName) {
@@ -818,7 +818,7 @@ func (db Database) removeTableFromAutoIncrementTracker(
 
 // CreateTable creates a table with the name and schema given.
 func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, collation sql.CollationID) error {
-	if err := branch_control.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
+	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	if strings.ToLower(tableName) == doltdb.DocTableName {
@@ -839,7 +839,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 
 // CreateIndexedTable creates a table with the name and schema given.
 func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID) error {
-	if err := branch_control.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
+	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	if strings.ToLower(tableName) == doltdb.DocTableName {
@@ -1003,7 +1003,7 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 
 // RenameTable implements sql.TableRenamer
 func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error {
-	if err := branch_control.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
+	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	root, err := db.GetRoot(ctx)
@@ -1317,7 +1317,7 @@ func (db Database) GetStoredProcedures(ctx *sql.Context) ([]sql.StoredProcedureD
 
 // SaveStoredProcedure implements sql.StoredProcedureDatabase.
 func (db Database) SaveStoredProcedure(ctx *sql.Context, spd sql.StoredProcedureDetails) error {
-	if err := branch_control.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
+	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	return DoltProceduresAddProcedure(ctx, db, spd)
@@ -1325,14 +1325,14 @@ func (db Database) SaveStoredProcedure(ctx *sql.Context, spd sql.StoredProcedure
 
 // DropStoredProcedure implements sql.StoredProcedureDatabase.
 func (db Database) DropStoredProcedure(ctx *sql.Context, name string) error {
-	if err := branch_control.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
+	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	return DoltProceduresDropProcedure(ctx, db, name)
 }
 
 func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, definition string, created time.Time, existingErr error) (err error) {
-	if err := branch_control.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
+	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	tbl, err := getOrCreateDoltSchemasTable(ctx, db)
@@ -1369,7 +1369,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {
-	if err := branch_control.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
+	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 
@@ -1458,7 +1458,7 @@ func (db Database) GetCollation(ctx *sql.Context) sql.CollationID {
 
 // SetCollation implements the interface sql.CollatedDatabase.
 func (db Database) SetCollation(ctx *sql.Context, collation sql.CollationID) error {
-	if err := branch_control.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
+	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	if collation == sql.Collation_Unspecified {

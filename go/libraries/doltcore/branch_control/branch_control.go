@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 	"github.com/dolthub/go-mysql-server/sql"
 	"gopkg.in/src-d/go-errors.v1"
@@ -194,41 +193,6 @@ func CheckAccess(ctx context.Context, flags Permissions) error {
 	}
 	// Get the permissions for the branch, user, and host combination
 	_, perms := controller.Access.Match(database, branch, user, host)
-	// If either the flags match or the user is an admin for this branch, then we allow access
-	if (perms&flags == flags) || (perms&Permissions_Admin == Permissions_Admin) {
-		return nil
-	}
-	return ErrIncorrectPermissions.New(user, host, branch)
-}
-
-func CheckAccessForDb(ctx context.Context, db dsess.SqlDatabase, flags Permissions) error {
-	branchAwareSession := GetBranchAwareSession(ctx)
-	// A nil session means we're not in the SQL context, so we allow all operations
-	if branchAwareSession == nil {
-		return nil
-	}
-	
-	controller := branchAwareSession.GetController()
-	// Any context that has a non-nil session should always have a non-nil controller, so this is an error
-	if controller == nil {
-		return ErrMissingController.New()
-	}
-	
-	controller.Access.RWMutex.RLock()
-	defer controller.Access.RWMutex.RUnlock()
-	
-	user := branchAwareSession.GetUser()
-	host := branchAwareSession.GetHost()
-	
-	if db.RevisionType() != dsess.RevisionTypeBranch {
-		// not a branch db, no check necessary
-		return nil
-	}
-	
-	dbName, branch := dsess.SplitRevisionDbName(db.RevisionQualifiedName())
-	
-	// Get the permissions for the branch, user, and host combination
-	_, perms := controller.Access.Match(dbName, branch, user, host)
 	// If either the flags match or the user is an admin for this branch, then we allow access
 	if (perms&flags == flags) || (perms&Permissions_Admin == Permissions_Admin) {
 		return nil
