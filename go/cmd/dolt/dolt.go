@@ -584,7 +584,7 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 	// We don't expect that number to grow, so we list them here.
 	// It's also allowed when --help is passed.
 	// So we defer the error until the caller tries to use the cli.LateBindQueryist
-	isDoltEnvironmentRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server"
+	isDoltEnvironmentRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server" && subcommandName != "sql-client"
 	if targetEnv == nil && isDoltEnvironmentRequired {
 		return func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
 			return nil, nil, nil, fmt.Errorf("The current directory is not a valid dolt repository.")
