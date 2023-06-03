@@ -17,15 +17,22 @@ package commands
 import (
 	"context"
 	"fmt"
+	"regexp"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	ref2 "github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
 const (
-	blameQueryTemplate = "SELECT * FROM dolt_blame_%s"
+	blameQueryTemplate = "SELECT * FROM dolt_blame_%s AS OF '%s'"
 )
 
 var blameDocs = cli.CommandDocumentationContent{
@@ -54,9 +61,15 @@ func (cmd BlameCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd BlameCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 2)
 	return ap
 }
+
+func (cmd BlameCmd) RequiresRepo() bool {
+	return false
+}
+
+var _ cli.RepoNotRequiredCommand = BlameCmd{}
 
 // EventType returns the type of the event to log
 func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
@@ -84,11 +97,49 @@ func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, blameDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.NArg() != 1 {
+	if apr.NArg() > 2 || apr.NArg() == 0 {
 		usage()
 		return 1
 	}
-	args = []string{"--" + QueryFlag, fmt.Sprintf(blameQueryTemplate, apr.Arg(0))}
 
-	return SqlCmd{}.Exec(ctx, "sql", args, dEnv, cliCtx)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		iohelp.WriteLine(cli.CliOut, err.Error())
+		return 1
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
+	var schema sql.Schema
+	var ri sql.RowIter
+	if apr.NArg() == 1 {
+		schema, ri, err = queryist.Query(sqlCtx, fmt.Sprintf(blameQueryTemplate, apr.Arg(0), "HEAD"))
+	} else {
+		// validate input
+		ref := apr.Arg(0)
+		if !ref2.IsValidTagName(ref) && !doltdb.IsValidCommitHash(ref) && !isValidHeadRef(ref) {
+			iohelp.WriteLine(cli.CliOut, "Invalid reference provided")
+			return 1
+		}
+
+		schema, ri, err = queryist.Query(sqlCtx, fmt.Sprintf(blameQueryTemplate, apr.Arg(1), apr.Arg(0)))
+	}
+	if err != nil {
+		iohelp.WriteLine(cli.CliOut, err.Error())
+		return 1
+	}
+
+	err = engine.PrettyPrintResults(sqlCtx, engine.FormatTabular, schema, ri)
+	if err != nil {
+		iohelp.WriteLine(cli.CliOut, err.Error())
+		return 1
+	}
+
+	return 0
+}
+
+func isValidHeadRef(s string) bool {
+	var refRegex = regexp.MustCompile(`(?i)^head[\~\^0-9]*$`)
+	return refRegex.MatchString(s)
 }

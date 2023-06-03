@@ -108,3 +108,25 @@ teardown() {
     [[ "$output" =~ "defaultDB does not exist" ]] || false
 }
 
+@test "sql-local-remote: verify dolt blame behavior is identical in switch between server/no server" {
+    cd altDB
+    dolt sql -q "create table test (pk int primary key)"
+    dolt sql -q "insert into test values (1)"
+    dolt add test
+    dolt commit -m "insert initial value into test"
+    dolt sql -q "insert into test values (2), (3)"
+    dolt add test
+    dolt commit -m "insert more values into test"
+    cd ..
+
+    start_sql_server altDB
+    run dolt --user dolt blame test
+    [ "$status" -eq 0 ]
+    export out="$output"
+    stop_sql_server 1
+
+    run dolt blame test
+    [ "$status" -eq 0 ]
+    [[ "$output" =  $out ]] || false
+}
+
