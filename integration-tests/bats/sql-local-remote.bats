@@ -11,7 +11,9 @@ make_repo() {
 }
 
 setup() {
-    setup_remote_server
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test tests remote connections directly, SQL_ENGINE is not needed."
+    fi
     setup_no_dolt_init
     make_repo defaultDB
     make_repo altDB
