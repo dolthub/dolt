@@ -11,6 +11,7 @@ make_repo() {
 }
 
 setup() {
+    setup_remote_server
     setup_no_dolt_init
     make_repo defaultDB
     make_repo altDB
@@ -130,3 +131,22 @@ teardown() {
     [[ "$output" =  $out ]] || false
 }
 
+@test "sql-local-remote: verify simple dolt add behavior." {
+    start_sql_server altDb
+
+    cd altDb
+
+    run dolt --verbose-engine-setup --user dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    run dolt --verbose-engine-setup --user dolt add .
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    stop_sql_server 1
+
+    staged=$(get_staged_tables)
+
+    [[ ! -z $(echo "$staged" | grep "testtable") ]] || false
+}
