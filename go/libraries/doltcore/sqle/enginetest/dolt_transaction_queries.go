@@ -1996,7 +1996,7 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 					"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
 					"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
 					"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1. " +
-					"Constraint violations in tables: [child]",
+					"Constraint violations: Columns: [parent_fk]\nOnDelete: RESTRICT\nReferencedColumns: [pk]\nReferencedIndex: \nTable: child\nForeignKey: 0050p5ek\nIndex: parent_fk\nOnUpdate: RESTRICT\nReferencedTable: parent\n",
 			},
 			{
 				Query:          "/* client b */ INSERT INTO child VALUES (1, 1);",
@@ -2026,7 +2026,7 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 					"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
 					"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
 					"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1. " +
-					"Constraint violations in tables: [t]",
+					"Constraint violations: Columns: [col1]\nName: col1\n",
 			},
 			{
 				Query:    "/* client a */ SELECT * from DOLT_CONSTRAINT_VIOLATIONS;",
@@ -2110,7 +2110,7 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 					"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
 					"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
 					"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1. " +
-					"Constraint violations in tables: [child]",
+					"Constraint violations: Table: child\nForeignKey: fk_name\nOnUpdate: RESTRICT\nReferencedTable: parent\nReferencedColumns: [v1]\nReferencedIndex: v1\nColumns: [v1]\nIndex: v1\nOnDelete: RESTRICT\n",
 			},
 		},
 	},

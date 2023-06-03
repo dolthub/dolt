@@ -16,8 +16,11 @@ package dsess
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"strings"
 	"sync"
 	"time"
@@ -548,12 +551,95 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 			if err != nil {
 				return err
 			}
+
+			violations := make([]string, len(badTbls))
+			for i, name := range badTbls {
+				tbl, _, err := workingRoot.GetTable(ctx, name)
+				if err != nil {
+					return err
+				}
+
+				artIdx, err := tbl.GetArtifacts(ctx)
+				if err != nil {
+					return err
+				}
+
+				m := durable.ProllyMapFromArtifactIndex(artIdx)
+				itr, err := m.IterAllCVs(ctx)
+
+				for {
+					art, err := itr.Next(ctx)
+					if err != nil {
+						break
+					}
+
+					var meta prolly.ConstraintViolationMeta
+					err = json.Unmarshal(art.Metadata, &meta)
+					if err != nil {
+						return err
+					}
+
+					s := ""
+					switch art.ArtType {
+					case prolly.ArtifactTypeForeignKeyViol:
+						var m merge.FkCVMeta
+						err = json.Unmarshal(meta.VInfo, &m)
+						if err != nil {
+							return err
+						}
+
+						s += fmt.Sprintf("Type: Foreign Key Constraint Violation\n" +
+							"ForeignKey: %s,\n" +
+							"Table: %s,\n" +
+							"ReferencedTable: %s,\n" +
+							"Index: %s,\n" +
+							"ReferencedIndex: %s\n", m.ForeignKey, m.Table, m.ReferencedIndex, m.Index, m.ReferencedIndex)
+
+					case prolly.ArtifactTypeUniqueKeyViol:
+						var m merge.UniqCVMeta
+						err = json.Unmarshal(meta.VInfo, &m)
+						if err != nil {
+							return err
+						}
+						s += fmt.Sprintf(": %s,\n" +
+							"Table: %s,\n" +
+							"ReferencedTable: %s,\n" +
+							"Index: %s,\n" +
+							"ReferencedIndex: %s\n", m.ForeignKey, m.Table, m.ReferencedIndex, m.Index, m.ReferencedIndex)
+
+					case prolly.ArtifactTypeNullViol:
+						var m merge.NullViolationMeta
+						err = json.Unmarshal(meta.VInfo, &m)
+						if err != nil {
+							return err
+						}
+					case prolly.ArtifactTypeChkConsViol:
+						var m merge.CheckCVMeta
+						err = json.Unmarshal(meta.VInfo, &m)
+						if err != nil {
+							return err
+						}
+					default:
+						panic("json not implemented for artifact type")
+					}
+					if err != nil {
+						return err
+					}
+
+					for k, v := range res {
+						s += fmt.Sprintf("%s: %s\n", k, v)
+					}
+
+					violations[i] = s
+				}
+			}
+
 			rollbackErr := tx.rollback(ctx)
 			if rollbackErr != nil {
 				return rollbackErr
 			}
 
-			return fmt.Errorf("%s Constraint violations in tables: %v", ErrUnresolvedConstraintViolationsCommit, badTbls)
+			return fmt.Errorf("%s Constraint violations: %s", ErrUnresolvedConstraintViolationsCommit, strings.Join(violations, ", "))
 		}
 	}
 
