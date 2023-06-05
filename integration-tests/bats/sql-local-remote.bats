@@ -24,6 +24,14 @@ teardown() {
     teardown_common
 }
 
+get_staged_tables() {
+    dolt status | awk '
+        match($0, /new table:\ */) { print substr($0, RSTART+RLENGTH) }
+        /Untracked tables:/ { exit }
+        /Tables with conflicting dolt_ignore patterns:/ { exit }
+    '
+}
+
 @test "sql-local-remote: test switch between server/no server" {
     start_sql_server defaultDB
 
@@ -131,4 +139,22 @@ teardown() {
     run dolt blame test
     [ "$status" -eq 0 ]
     [[ "$output" =  $out ]] || false
+}
+@test "sql-local-remote: verify simple dolt add behavior." {
+    start_sql_server altDB
+    cd altDB
+
+    run dolt --verbose-engine-setup --user dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    run dolt --verbose-engine-setup --user dolt add .
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    stop_sql_server 1
+
+    staged=$(get_staged_tables)
+
+    [[ ! -z $(echo "$staged" | grep "testtable") ]] || false
 }

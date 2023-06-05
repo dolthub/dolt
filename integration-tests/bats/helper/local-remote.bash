@@ -32,6 +32,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~sql-charsets-collations.bats~
 ~sql-cherry-pick.bats~
 ~sql-commit.bats~
+~sql-local-remote.bats~
 ~primary-key-changes.bats~
 ~common.bash.bats~
 ~remotes-localbs.bats~

@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
 	"go.opentelemetry.io/otel"
@@ -119,7 +120,7 @@ var doltSubCommands = []cli.Command{
 	&commands.Assist{},
 }
 
-var subCommandsUsingDEnv = []cli.Command{
+var commandsWithoutCliCtx = []cli.Command{
 	commands.InitCmd{},
 	commands.StatusCmd{},
 	commands.DiffCmd{},
@@ -135,8 +136,6 @@ var subCommandsUsingDEnv = []cli.Command{
 	commands.CheckoutCmd{},
 	commands.MergeCmd{},
 	cnfcmds.Commands,
-	commands.CherryPickCmd{},
-	commands.RevertCmd{},
 	commands.CloneCmd{},
 	commands.FetchCmd{},
 	commands.PullCmd{},
@@ -169,7 +168,7 @@ var subCommandsUsingDEnv = []cli.Command{
 }
 
 func initCliContext(commandName string) bool {
-	for _, command := range subCommandsUsingDEnv {
+	for _, command := range commandsWithoutCliCtx {
 		if command.Name() == commandName {
 			return false
 		}
@@ -530,7 +529,7 @@ The sql subcommand is currently the only command that uses these flags. All othe
 
 	var cliCtx cli.CliContext = nil
 	if initCliContext(subcommandName) {
-		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, apr, verboseEngineSetup)
+		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, apr, subcommandName, verboseEngineSetup)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failure to Load SQL Engine: %v", err))
 			return 1
@@ -563,7 +562,7 @@ The sql subcommand is currently the only command that uses these flags. All othe
 	return res
 }
 
-func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, apr *argparser.ArgParseResults, verbose bool) (cli.LateBindQueryist, error) {
+func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, apr *argparser.ArgParseResults, subcommandName string, verbose bool) (cli.LateBindQueryist, error) {
 
 	var targetEnv *env.DoltEnv = nil
 
@@ -579,6 +578,17 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 
 	if targetEnv == nil && useDb != "" {
 		targetEnv = mrEnv.GetEnv(useDb)
+	}
+
+	// There is no target environment detected. This is allowed for a small number of command.
+	// We don't expect that number to grow, so we list them here.
+	// It's also allowed when --help is passed.
+	// So we defer the error until the caller tries to use the cli.LateBindQueryist
+	isDoltEnvironmentRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server" && subcommandName != "sql-client"
+	if targetEnv == nil && isDoltEnvironmentRequired {
+		return func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
+			return nil, nil, nil, fmt.Errorf("The current directory is not a valid dolt repository.")
+		}, nil
 	}
 
 	// nil targetEnv will happen if the user ran a command in an empty directory - which we support in some cases.

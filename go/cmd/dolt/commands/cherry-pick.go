@@ -97,12 +97,12 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	verr := cherryPick(ctx, dEnv, cherryStr)
+	verr := cherryPick(ctx, dEnv, cliCtx, cherryStr)
 	return HandleVErrAndExitCode(verr, usage)
 }
 
 // cherryPick returns error if any step of cherry-picking fails. It receives cherry-picked commit and performs cherry-picking and commits.
-func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cherryStr string) errhand.VerboseError {
+func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cliCtx cli.CliContext, cherryStr string) errhand.VerboseError {
 	// check for clean working state
 	headRoot, err := dEnv.HeadRoot(ctx)
 	if err != nil {
@@ -156,13 +156,13 @@ func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cherryStr string) errhan
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	res := AddCmd{}.Exec(ctx, "add", []string{"-A"}, dEnv, nil)
+	res := AddCmd{}.Exec(ctx, "add", []string{"-A"}, dEnv, cliCtx)
 	if res != 0 {
 		return errhand.BuildDError("dolt add failed").AddCause(err).Build()
 	}
 
 	commitParams := []string{"-m", commitMsg}
-	res = CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv, nil)
+	res = CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv, cliCtx)
 	if res != 0 {
 		return errhand.BuildDError("dolt commit failed").AddCause(err).Build()
 	}
