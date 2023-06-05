@@ -16,6 +16,7 @@ package dsess
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -27,12 +28,14 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
 )
 
 const (
@@ -544,12 +547,101 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 		// TODO: We need to add more granularity in terms of what types of constraint violations can be committed. For example,
 		// in the case of foreign_key_checks=0 you should be able to commit foreign key violations.
 		if forceTransactionCommit.(int8) != 1 {
+			badTbls, err := workingRoot.TablesWithConstraintViolations(ctx)
+			if err != nil {
+				return err
+			}
+
+			violations := make([]string, len(badTbls))
+			for i, name := range badTbls {
+				tbl, _, err := workingRoot.GetTable(ctx, name)
+				if err != nil {
+					return err
+				}
+
+				artIdx, err := tbl.GetArtifacts(ctx)
+				if err != nil {
+					return err
+				}
+
+				m := durable.ProllyMapFromArtifactIndex(artIdx)
+				itr, err := m.IterAllCVs(ctx)
+
+				for {
+					art, err := itr.Next(ctx)
+					if err != nil {
+						break
+					}
+
+					var meta prolly.ConstraintViolationMeta
+					err = json.Unmarshal(art.Metadata, &meta)
+					if err != nil {
+						return err
+					}
+
+					s := ""
+					switch art.ArtType {
+					case prolly.ArtifactTypeForeignKeyViol:
+						var m merge.FkCVMeta
+						err = json.Unmarshal(meta.VInfo, &m)
+						if err != nil {
+							return err
+						}
+						s = fmt.Sprintf("\n"+
+							"Type: Foreign Key Constraint Violation\n"+
+							"\tForeignKey: %s,\n"+
+							"\tTable: %s,\n"+
+							"\tReferencedTable: %s,\n"+
+							"\tIndex: %s,\n"+
+							"\tReferencedIndex: %s", m.ForeignKey, m.Table, m.ReferencedIndex, m.Index, m.ReferencedIndex)
+
+					case prolly.ArtifactTypeUniqueKeyViol:
+						var m merge.UniqCVMeta
+						err = json.Unmarshal(meta.VInfo, &m)
+						if err != nil {
+							return err
+						}
+						s = fmt.Sprintf("\n"+
+							"Type: Unique Key Constraint Violation,\n"+
+							"\tName: %s,\n"+
+							"\tColumns: %v", m.Name, m.Columns)
+
+					case prolly.ArtifactTypeNullViol:
+						var m merge.NullViolationMeta
+						err = json.Unmarshal(meta.VInfo, &m)
+						if err != nil {
+							return err
+						}
+						s = fmt.Sprintf("\n"+
+							"Type: Null Constraint Violation,\n"+
+							"\tColumns: %v", m.Columns)
+
+					case prolly.ArtifactTypeChkConsViol:
+						var m merge.CheckCVMeta
+						err = json.Unmarshal(meta.VInfo, &m)
+						if err != nil {
+							return err
+						}
+						s = fmt.Sprintf("\n"+
+							"Type: Check Constraint Violation,\n"+
+							"\tName: %s,\n"+
+							"\tExpression: %v", m.Name, m.Expression)
+					}
+					if err != nil {
+						return err
+					}
+
+					violations[i] = s
+				}
+			}
+
 			rollbackErr := tx.rollback(ctx)
 			if rollbackErr != nil {
 				return rollbackErr
 			}
 
-			return ErrUnresolvedConstraintViolationsCommit
+			return fmt.Errorf("%s\n"+
+				"Constraint violations: %s", ErrUnresolvedConstraintViolationsCommit, strings.Join(violations, ", "))
 		}
 	}
 

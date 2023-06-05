@@ -163,7 +163,7 @@ func (m NullViolationMeta) ToString(ctx *sql.Context) (string, error) {
 // CheckCVMeta holds metadata describing a check constraint violation.
 type CheckCVMeta struct {
 	Name       string `json:"Name"`
-	Expression string `jason:"Expression"`
+	Expression string `json:"Expression"`
 }
 
 var _ types.JSONValue = CheckCVMeta{}
