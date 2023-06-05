@@ -24,12 +24,16 @@ import (
 )
 
 // SessionCache caches various pieces of expensive to compute information to speed up future lookups in the session.
-// No methods are thread safe.
 type SessionCache struct {
 	indexes map[doltdb.DataCacheKey]map[string][]sql.Index
 	tables  map[doltdb.DataCacheKey]map[string]sql.Table
 	views   map[doltdb.DataCacheKey]map[string]sql.ViewDefinition
-
+	
+	// unlike the other caches, the database cache is keyed by noms root hash, not a rootValue hash. Keys in the 
+	// secondary map are revision specifier strings
+	revisionDbs map[doltdb.DataCacheKey]map[string]SqlDatabase
+	initialDbStates map[doltdb.DataCacheKey]map[string]InitialDbState
+	
 	mu sync.RWMutex
 }
 
@@ -192,4 +196,89 @@ func (c *SessionCache) GetCachedViewDefinition(key doltdb.DataCacheKey, viewName
 
 	table, ok := viewsForKey[viewName]
 	return table, ok
+}
+
+// GetCachedRevisionDb returns the cached revision database named, and whether the cache was present
+func (c *SessionCache) GetCachedRevisionDb(key doltdb.DataCacheKey, revisionDbName string) (SqlDatabase, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	
+	if c.revisionDbs == nil {
+		return nil, false
+	}
+
+	dbsForKey, ok := c.revisionDbs[key]
+	if !ok {
+		return nil, false
+	}
+
+	db, ok := dbsForKey[revisionDbName]
+	return db, ok
+}
+
+// CacheRevisionDb caches the revision database named
+func (c *SessionCache) CacheRevisionDb(key doltdb.DataCacheKey, revisionDbName string, database SqlDatabase) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.revisionDbs == nil {
+		c.revisionDbs = make(map[doltdb.DataCacheKey]map[string]SqlDatabase)
+	}
+	
+	if len(c.revisionDbs) > maxCachedKeys {
+		for k := range c.revisionDbs {
+			delete(c.revisionDbs, k)
+		}
+	}
+
+	dbsForKey, ok := c.revisionDbs[key]
+	if !ok {
+		dbsForKey = make(map[string]SqlDatabase)
+		c.revisionDbs[key] = dbsForKey
+	}
+
+	dbsForKey[revisionDbName] = database
+}
+
+// GetCachedInitialDbState returns the cached initial state for the revision database named, and whether the cache 
+// was present
+func (c *SessionCache) GetCachedInitialDbState(key doltdb.DataCacheKey, revisionDbName string) (InitialDbState, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if c.initialDbStates == nil {
+		return InitialDbState{}, false
+	}
+
+	dbsForKey, ok := c.initialDbStates[key]
+	if !ok {
+		return InitialDbState{}, false
+	}
+
+	db, ok := dbsForKey[revisionDbName]
+	return db, ok
+}
+
+// CacheInitialDbState caches the initials state for the revision database named
+func (c *SessionCache) CacheInitialDbState(key doltdb.DataCacheKey, revisionDbName string, state InitialDbState) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.initialDbStates == nil {
+		c.initialDbStates = make(map[doltdb.DataCacheKey]map[string]InitialDbState)
+	}
+
+	if len(c.initialDbStates) > maxCachedKeys {
+		for k := range c.initialDbStates {
+			delete(c.initialDbStates, k)
+		}
+	}
+
+	dbsForKey, ok := c.initialDbStates[key]
+	if !ok {
+		dbsForKey = make(map[string]InitialDbState)
+		c.initialDbStates[key] = dbsForKey
+	}
+
+	dbsForKey[revisionDbName] = state
 }

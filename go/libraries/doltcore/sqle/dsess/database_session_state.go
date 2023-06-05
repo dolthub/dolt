@@ -72,10 +72,13 @@ type DatabaseSessionState struct {
 	checkedOutRevSpec string
 	// heads records the in-memory DB state for every branch head accessed by the session
 	heads map[string]*branchState
-	// caches records the session-caches for every branch head accessed by the session
+	// globalCache records cache information for the entire session to speed up reads when nothing has changed since the
+	// last transaction
+	globalCache *SessionCache
+	// headCache records the session-caches for every branch head accessed by the session
 	// This is managed separately from the branch states themselves because it persists across transactions (which is
 	// safe because it's keyed by immutable hashes)
-	caches map[string]*SessionCache
+	headCache map[string]*SessionCache
 	// globalState is the global state of this session (shared by all sessions for a particular db)
 	globalState globalstate.GlobalState
 	// tmpFileDir is the directory to use for temporary files for this database
@@ -89,8 +92,9 @@ type DatabaseSessionState struct {
 
 func NewEmptyDatabaseSessionState() *DatabaseSessionState {
 	return &DatabaseSessionState{
-		heads: make(map[string]*branchState),
-		caches: make(map[string]*SessionCache),
+		heads:     make(map[string]*branchState),
+		headCache: make(map[string]*SessionCache),
+		globalCache: newSessionCache(),
 	}
 }
 
@@ -137,9 +141,9 @@ func (dbState *DatabaseSessionState) NewEmptyBranchState(head string) *branchSta
 	}
 
 	dbState.heads[head] = b
-	_, ok := dbState.caches[head]
+	_, ok := dbState.headCache[head]
 	if !ok {
-		dbState.caches[head] = newSessionCache()
+		dbState.headCache[head] = newSessionCache()
 	}
 
 	return b
@@ -160,7 +164,7 @@ func (bs *branchState) WriteSession() writer.WriteSession {
 }
 
 func (bs *branchState) SessionCache() *SessionCache {
-	return bs.dbState.caches[bs.head]
+	return bs.dbState.headCache[bs.head]
 }
 
 func (bs branchState) EditOpts() editor.Options {

@@ -146,10 +146,10 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	baseName, rev = SplitRevisionDbName(dbName)
 
 	d.mu.Lock()
-	dbState, ok := d.dbStates[baseName]
+	dbState, dbStateFound := d.dbStates[baseName]
 	d.mu.Unlock()
 
-	if ok {
+	if dbStateFound {
 		// If we got an unqualified name, use the current working set head
 		if rev == "" {
 			rev = dbState.currRevSpec
@@ -174,24 +174,45 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 		revisionQualifiedName = revisionDbName(baseName, rev)
 	}
 
-	database, ok, err := d.provider.SessionDatabase(ctx, revisionQualifiedName)
-	if err != nil {
-		return nil, false, err
+	// Try to get the session from the cache before going to the provider
+	tx, usingDoltTransaction := d.GetTransaction().(*DoltTransaction)
+	var database SqlDatabase
+	if usingDoltTransaction && dbStateFound {
+		nomsRoot, ok := tx.GetInitialRoot(baseName)
+		if ok {
+			database, ok = dbState.globalCache.GetCachedRevisionDb(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName)
+		}
 	}
 
-	if !ok {
-		return nil, false, nil
-	}
+	if database == nil {
+		var err error
+		var ok bool
+		database, ok, err = d.provider.SessionDatabase(ctx, revisionQualifiedName)
+		if err != nil {
+			return nil, false, err
+		}
+		if !ok {
+			return nil, false, nil
+		}
 
+		if usingDoltTransaction {
+			nomsRoot, ok := tx.GetInitialRoot(baseName)
+			if ok {
+				dbState.globalCache.CacheRevisionDb(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName, database)
+			}
+		}
+	}
+	
 	// Add the initial state to the session for future reuse
-	if err = d.addDB(ctx, database); err != nil {
+	if err := d.addDB(ctx, database); err != nil {
 		return nil, false, err
 	}
 
 	d.mu.Lock()
-	dbState, ok = d.dbStates[baseName]
+	dbState, dbStateFound = d.dbStates[baseName]
 	d.mu.Unlock()
-	if !ok {
+	if !dbStateFound {
+		// should be impossible
 		return nil, false, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
