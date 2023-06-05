@@ -106,7 +106,7 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	queryEngine, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("error: failed create query engine").AddCause(err).Build(), nil)
+		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to create query engine").AddCause(err).Build(), nil)
 	}
 
 	if closeFunc != nil {
@@ -125,7 +125,7 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 	case apr.Contains(cli.ListFlag):
 		return printBranches(sqlCtx, queryEngine, apr, usage)
 	case apr.Contains(showCurrentFlag):
-		return printCurrentBranch(dEnv)
+		return printCurrentBranch(sqlCtx, queryEngine)
 	case apr.Contains(datasetsFlag):
 		return printAllDatasets(ctx, dEnv)
 	case apr.NArg() > 0:
@@ -178,7 +178,8 @@ func getBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, remote bool) ([]
 }
 
 func getActiveBranchName(sqlCtx *sql.Context, queryEngine cli.Queryist) (string, error) {
-	schema, rowIter, err := queryEngine.Query(sqlCtx, "SELECT active_branch()")
+	command := "SELECT active_branch()"
+	schema, rowIter, err := queryEngine.Query(sqlCtx, command)
 	if err != nil {
 		return "", err
 	}
@@ -187,15 +188,15 @@ func getActiveBranchName(sqlCtx *sql.Context, queryEngine cli.Queryist) (string,
 		return "", err
 	}
 	if len(rows) != 1 {
-		return "", fmt.Errorf("unexpectedly received multiple rows in 'SELECT active_branch': %s", rows)
+		return "", fmt.Errorf("unexpectedly received multiple rows in '%s': %s", command, rows)
 	}
 	row := rows[0]
 	if len(row) != 1 {
-		return "", fmt.Errorf("unexpectedly received multiple columns in 'SELECT active_branch': %s", row)
+		return "", fmt.Errorf("unexpectedly received multiple columns in '%s': %s", command, row)
 	}
 	branchName, ok := row[0].(string)
 	if !ok {
-		return "", fmt.Errorf("unexpectedly received non-string column in 'SELECT active_branch': %s", row[0])
+		return "", fmt.Errorf("unexpectedly received non-string column in '%s': %s", command, row[0])
 	}
 	return branchName, nil
 }
@@ -226,7 +227,7 @@ func printBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser
 
 	currentBranch, err := getActiveBranchName(sqlCtx, queryEngine)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read refs from db").AddCause(err).Build(), nil)
+		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read current branch from db").AddCause(err).Build(), nil)
 	}
 
 	sort.Slice(branches, func(i, j int) bool {
@@ -261,12 +262,12 @@ func printBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser
 	return 0
 }
 
-func printCurrentBranch(dEnv *env.DoltEnv) int {
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+func printCurrentBranch(sqlCtx *sql.Context, queryEngine cli.Queryist) int {
+	currentBranchName, err := getActiveBranchName(sqlCtx, queryEngine)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), nil)
+		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read current branch from db").AddCause(err).Build(), nil)
 	}
-	cli.Println(headRef.GetPath())
+	cli.Println(currentBranchName)
 	return 0
 }
 
