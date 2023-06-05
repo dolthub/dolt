@@ -141,8 +141,8 @@ get_staged_tables() {
     [[ "$output" =  $out ]] || false
 }
 @test "sql-local-remote: verify simple dolt add behavior." {
-    start_sql_server altDb
-    cd altDb
+    start_sql_server altDB
+    cd altDB
 
     run dolt --verbose-engine-setup --user dolt sql -q "create table testtable (pk int PRIMARY KEY)"
     [ "$status" -eq 0 ]
