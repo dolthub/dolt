@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"strconv"
 	"strings"
 
@@ -330,21 +331,36 @@ func getRemoteInfo(queryist cli.Queryist, sqlCtx *sql.Context, branchName string
 			return ahead, behind, remoteBranchName, fmt.Errorf("could not find remote %s", remoteName)
 		}
 
+		name := remotes[0][0].(string)
+		url := remotes[0][1].(string)
+		fetchSpecsVal := remotes[0][2]
+		paramsVal := remotes[0][3]
+
+		fetchJsonText, err := getJsonDocumentColAsString(sqlCtx, fetchSpecsVal)
+		if err != nil {
+			return ahead, behind, remoteBranchName, err
+		}
+		paramsJsonText, err := getJsonDocumentColAsString(sqlCtx, paramsVal)
+		if err != nil {
+			return ahead, behind, remoteBranchName, err
+		}
+
+		// remotes[0][2].(string)
 		var fetchSpecs []string
-		err = json.Unmarshal([]byte(remotes[0][2].(string)), &fetchSpecs)
+		err = json.Unmarshal([]byte(fetchJsonText), &fetchSpecs)
 		if err != nil {
 			return ahead, behind, remoteBranchName, err
 		}
 
 		var params map[string]string
-		err = json.Unmarshal([]byte(remotes[0][3].(string)), &params)
+		err = json.Unmarshal([]byte(paramsJsonText), &params)
 		if err != nil {
 			return ahead, behind, remoteBranchName, err
 		}
 
 		remote := env.Remote{
-			Name:       remotes[0][0].(string),
-			Url:        remotes[0][1].(string),
+			Name:       name,
+			Url:        url,
 			FetchSpecs: fetchSpecs,
 			Params:     params,
 		}
@@ -376,14 +392,14 @@ func getRemoteInfo(queryist cli.Queryist, sqlCtx *sql.Context, branchName string
 		if len(rows) != 1 {
 			return ahead, behind, remoteBranchName, fmt.Errorf("could not count commits between %s and %s", currentBranchCommit, remoteBranchCommit)
 		}
-		aheadDb := rows[0][0].(string)
-		behindDb := rows[0][1].(string)
+		aheadDb := rows[0][0]
+		behindDb := rows[0][1]
 
-		ahead, err = strconv.ParseInt(aheadDb, 10, 64)
+		ahead, err = getInt64ColAsInt64(aheadDb)
 		if err != nil {
 			return ahead, behind, remoteBranchName, err
 		}
-		behind, err = strconv.ParseInt(behindDb, 10, 64)
+		behind, err = getInt64ColAsInt64(behindDb)
 		if err != nil {
 			return ahead, behind, remoteBranchName, err
 		}
@@ -721,6 +737,41 @@ func getTinyIntColAsBool(col interface{}) (bool, error) {
 	case string:
 		return v == "1", nil
 	default:
-		return false, fmt.Errorf("unexpected type %T", v)
+		return false, fmt.Errorf("unexpected type %T, was expecting bool, int, or string", v)
+	}
+}
+
+// getJsonDocumentColAsString returns the value of a JSONDocument column as a string
+// This is necessary because Queryist may return a tinyint column as a bool (when using SQLEngine)
+// or as a string (when using ConnectionQueryist).
+func getJsonDocumentColAsString(sqlCtx *sql.Context, col interface{}) (string, error) {
+	switch v := col.(type) {
+	case string:
+		return v, nil
+	case types.JSONDocument:
+		text, err := v.ToString(sqlCtx)
+		if err != nil {
+			return "", err
+		}
+		return text, nil
+	default:
+		return "", fmt.Errorf("unexpected type %T, was expecting JSONDocument or string", v)
+	}
+}
+
+func getInt64ColAsInt64(col interface{}) (int64, error) {
+	switch v := col.(type) {
+	case uint64:
+		return int64(v), nil
+	case int64:
+		return v, nil
+	case string:
+		iv, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return iv, nil
+	default:
+		return 0, fmt.Errorf("unexpected type %T, was expecting int64, uint64 or string", v)
 	}
 }
