@@ -253,7 +253,7 @@ tests:
   - on: repo1
     queries:
     - exec: "CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int)"
-    - exec: "INSERT INTO TABLE test VALUES ('0', '0', '0', '0', '0', '0')')"
+    - exec: "INSERT INTO test VALUES (0, 0, 0, 0, 0, 0)"
     - exec: "SET GLOBAL local_infile = 1"
     - exec: "LOAD DATA LOCAL INFILE 'testdata/1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY ',' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES"
     - query: "SELECT * FROM test"
@@ -270,7 +270,7 @@ tests:
   - on: repo1
     queries:
     - exec: "CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int)"
-    - exec: "INSERT INTO TABLE test VALUES ('0', '0', '0', '0', '0', '0')')"
+    - exec: "INSERT INTO test VALUES (0, 0, 0, 0, 0, 0)"
     - exec: "SET GLOBAL local_infile = 1"
     - exec: "LOAD DATA LOCAL INFILE 'testdata/1pk5col-ints.csv' REPLACE INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY ',' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES"
     - query: "SELECT * FROM test"
