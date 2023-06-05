@@ -59,6 +59,8 @@ setup_no_dolt_init() {
     if [ -z "$DOLT_TEST_RETRIES" ]; then
         export BATS_TEST_RETRIES="$DOLT_TEST_RETRIES"
     fi
+
+    export DOLT_CLI_PASSWORD=""
 }
 
 assert_feature_version() {
