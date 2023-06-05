@@ -587,13 +587,13 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 						if err != nil {
 							return err
 						}
-
-						s += fmt.Sprintf("Type: Foreign Key Constraint Violation\n" +
-							"ForeignKey: %s,\n" +
-							"Table: %s,\n" +
-							"ReferencedTable: %s,\n" +
-							"Index: %s,\n" +
-							"ReferencedIndex: %s\n", m.ForeignKey, m.Table, m.ReferencedIndex, m.Index, m.ReferencedIndex)
+						s = fmt.Sprintf("\n" +
+							"Type: Foreign Key Constraint Violation\n" +
+							"\tForeignKey: %s,\n" +
+							"\tTable: %s,\n" +
+							"\tReferencedTable: %s,\n" +
+							"\tIndex: %s,\n" +
+							"\tReferencedIndex: %s", m.ForeignKey, m.Table, m.ReferencedIndex, m.Index, m.ReferencedIndex)
 
 					case prolly.ArtifactTypeUniqueKeyViol:
 						var m merge.UniqCVMeta
@@ -601,11 +601,10 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 						if err != nil {
 							return err
 						}
-						s += fmt.Sprintf(": %s,\n" +
-							"Table: %s,\n" +
-							"ReferencedTable: %s,\n" +
-							"Index: %s,\n" +
-							"ReferencedIndex: %s\n", m.ForeignKey, m.Table, m.ReferencedIndex, m.Index, m.ReferencedIndex)
+						s = fmt.Sprintf("\n" +
+							"Type: Unique Key Constraint Violation,\n" +
+							"\tName: %s,\n" +
+							"\tColumns: %v", m.Name, m.Columns)
 
 					case prolly.ArtifactTypeNullViol:
 						var m merge.NullViolationMeta
@@ -613,21 +612,23 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 						if err != nil {
 							return err
 						}
+						s = fmt.Sprintf("\n" +
+							"Type: Null Constraint Violation,\n" +
+							"\tColumns: %v", m.Columns)
+
 					case prolly.ArtifactTypeChkConsViol:
 						var m merge.CheckCVMeta
 						err = json.Unmarshal(meta.VInfo, &m)
 						if err != nil {
 							return err
 						}
-					default:
-						panic("json not implemented for artifact type")
+						s = fmt.Sprintf("\n" +
+							"Type: Check Constraint Violation,\n" +
+							"\tName: %s,\n" +
+							"\tExpression: %v", m.Name, m.Expression)
 					}
 					if err != nil {
 						return err
-					}
-
-					for k, v := range res {
-						s += fmt.Sprintf("%s: %s\n", k, v)
 					}
 
 					violations[i] = s
@@ -639,7 +640,8 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 				return rollbackErr
 			}
 
-			return fmt.Errorf("%s Constraint violations: %s", ErrUnresolvedConstraintViolationsCommit, strings.Join(violations, ", "))
+			return fmt.Errorf("%s\n" +
+				"Constraint violations: %s", ErrUnresolvedConstraintViolationsCommit, strings.Join(violations, ", "))
 		}
 	}
 
