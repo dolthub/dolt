@@ -533,7 +533,7 @@ The sql subcommand is currently the only command that uses these flags. All othe
 			return 1
 		}
 
-		cliCtx, err = cli.NewCliContext(apr, lateBind)
+		cliCtx, err = cli.NewCliContext(apr, dEnv.Config, lateBind)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Unexpected Error: %v", err))
 			return 1
