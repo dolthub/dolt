@@ -951,7 +951,7 @@ func (d *DoltSession) SwitchWorkingSet(
 	d.mu.Unlock()
 
 	// bootstrap the db state as necessary
-	_, ok, err = d.lookupDbState(ctx, baseName+DbRevisionDelimiter+headRef.GetPath())
+	branchState, ok, err := d.lookupDbState(ctx, baseName+DbRevisionDelimiter+headRef.GetPath())
 	if err != nil {
 		return err
 	}
@@ -961,8 +961,8 @@ func (d *DoltSession) SwitchWorkingSet(
 	}
 
 	ctx.SetCurrentDatabase(baseName)
-
-	return nil
+	
+	return d.setSessionVarsForDb(ctx, dbName, branchState)
 }
 
 func (d *DoltSession) UseDatabase(ctx *sql.Context, db sql.Database) error {
@@ -1209,13 +1209,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		branchState.headRoot = dbState.HeadRoot
 	}
 
-	// This has to happen after SetWorkingSet above, since it does a stale check before its work
 	branchState.headCommit = dbState.HeadCommit
-
-	if sessionState.Err == nil {
-		return d.setSessionVarsForDb(ctx, db.Name(), branchState)
-	}
-
 	return nil
 }
 
