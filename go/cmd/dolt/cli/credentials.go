@@ -15,6 +15,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
@@ -24,12 +25,22 @@ type UserPassword struct {
 	Password string
 }
 
+const DOLT_ENV_PWD = "DOLT_CLI_PASSWORD"
+
 // BuildUserPasswordPrompt builds a UserPassword struct from the parsed args. The user is prompted for a password if one
 // is not provided. If a username is not provided, the default is "root" (which will not be allowed is a password is
 // provided). A new instances of ArgParseResults is returned which does not contain the user or password flags.
 func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedArgs *argparser.ArgParseResults, credentials *UserPassword, err error) {
 	userId, hasUserId := parsedArgs.GetValue(UserFlag)
 	password, hasPassword := parsedArgs.GetValue(PasswordFlag)
+
+	if !hasPassword {
+		envPassword, hasEnvPassword := os.LookupEnv(DOLT_ENV_PWD)
+		if hasEnvPassword {
+			password = envPassword
+			hasPassword = true
+		}
+	}
 
 	newParsedArgs = parsedArgs.DropValue(UserFlag)
 	newParsedArgs = newParsedArgs.DropValue(PasswordFlag)
@@ -44,10 +55,8 @@ func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedAr
 	}
 
 	if hasUserId && !hasPassword {
-		Printf("Password NM4: ")
-		fmt.Scan(&password)
-		return newParsedArgs, &UserPassword{Username: userId, Password: password}, nil
+		panic("can't prompt for password yet")
 	}
 
-	return nil, nil, fmt.Errorf("NM4 - gimme a uid if you're going to gimme a pwd!")
+	return nil, nil, fmt.Errorf("When a password is provided, a user must also be provided. Use the --user flag to provide a username")
 }
