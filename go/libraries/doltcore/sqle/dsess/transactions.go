@@ -19,8 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/store/prolly"
 	"strings"
 	"sync"
 	"time"
@@ -30,12 +28,14 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
 )
 
 const (
@@ -587,12 +587,12 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 						if err != nil {
 							return err
 						}
-						s = fmt.Sprintf("\n" +
-							"Type: Foreign Key Constraint Violation\n" +
-							"\tForeignKey: %s,\n" +
-							"\tTable: %s,\n" +
-							"\tReferencedTable: %s,\n" +
-							"\tIndex: %s,\n" +
+						s = fmt.Sprintf("\n"+
+							"Type: Foreign Key Constraint Violation\n"+
+							"\tForeignKey: %s,\n"+
+							"\tTable: %s,\n"+
+							"\tReferencedTable: %s,\n"+
+							"\tIndex: %s,\n"+
 							"\tReferencedIndex: %s", m.ForeignKey, m.Table, m.ReferencedIndex, m.Index, m.ReferencedIndex)
 
 					case prolly.ArtifactTypeUniqueKeyViol:
@@ -601,9 +601,9 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 						if err != nil {
 							return err
 						}
-						s = fmt.Sprintf("\n" +
-							"Type: Unique Key Constraint Violation,\n" +
-							"\tName: %s,\n" +
+						s = fmt.Sprintf("\n"+
+							"Type: Unique Key Constraint Violation,\n"+
+							"\tName: %s,\n"+
 							"\tColumns: %v", m.Name, m.Columns)
 
 					case prolly.ArtifactTypeNullViol:
@@ -612,8 +612,8 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 						if err != nil {
 							return err
 						}
-						s = fmt.Sprintf("\n" +
-							"Type: Null Constraint Violation,\n" +
+						s = fmt.Sprintf("\n"+
+							"Type: Null Constraint Violation,\n"+
 							"\tColumns: %v", m.Columns)
 
 					case prolly.ArtifactTypeChkConsViol:
@@ -622,9 +622,9 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 						if err != nil {
 							return err
 						}
-						s = fmt.Sprintf("\n" +
-							"Type: Check Constraint Violation,\n" +
-							"\tName: %s,\n" +
+						s = fmt.Sprintf("\n"+
+							"Type: Check Constraint Violation,\n"+
+							"\tName: %s,\n"+
 							"\tExpression: %v", m.Name, m.Expression)
 					}
 					if err != nil {
@@ -640,7 +640,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 				return rollbackErr
 			}
 
-			return fmt.Errorf("%s\n" +
+			return fmt.Errorf("%s\n"+
 				"Constraint violations: %s", ErrUnresolvedConstraintViolationsCommit, strings.Join(violations, ", "))
 		}
 	}
