@@ -245,6 +245,40 @@ tests:
         rows:
         - ["0","1","2","3","4","5"]
         - ["1","1","2","3","4","5"]
+- name: LOAD DATA LOCAL INFILE automatically ignores row with existing primary key
+  repos:
+  - name: repo1
+    server: {}
+  connections:
+  - on: repo1
+    queries:
+    - exec: "CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int)"
+    - exec: "INSERT INTO TABLE test VALUES ('0', '0', '0', '0', '0', '0')')"
+    - exec: "SET GLOBAL local_infile = 1"
+    - exec: "LOAD DATA LOCAL INFILE 'testdata/1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY ',' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES"
+    - query: "SELECT * FROM test"
+      result:
+        columns: ["pk","c1","c2","c3","c4","c5"]
+        rows:
+        - ["0","0","0","0","0","0"]
+        - ["1","1","2","3","4","5"]
+- name: LOAD DATA LOCAL INFILE can replace row with existing primary key
+  repos:
+  - name: repo1
+    server: {}
+  connections:
+  - on: repo1
+    queries:
+    - exec: "CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int)"
+    - exec: "INSERT INTO TABLE test VALUES ('0', '0', '0', '0', '0', '0')')"
+    - exec: "SET GLOBAL local_infile = 1"
+    - exec: "LOAD DATA LOCAL INFILE 'testdata/1pk5col-ints.csv' REPLACE INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY ',' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES"
+    - query: "SELECT * FROM test"
+      result:
+        columns: ["pk","c1","c2","c3","c4","c5"]
+        rows:
+        - ["0","1","2","3","4","5"]
+        - ["1","1","2","3","4","5"]
 - name: JSON queries
   repos:
   - name: repo1
