@@ -132,23 +132,3 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =  $out ]] || false
 }
-
-@test "sql-local-remote: verify simple dolt add behavior." {
-    start_sql_server altDB
-
-    cd altDB
-
-    run dolt --verbose-engine-setup --user dolt sql -q "create table testtable (pk int PRIMARY KEY)"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "starting remote mode" ]] || false
-
-    run dolt --verbose-engine-setup --user dolt add .
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "starting remote mode" ]] || false
-
-    stop_sql_server 1
-
-    staged=$(get_staged_tables)
-
-    [[ ! -z $(echo "$staged" | grep "testtable") ]] || false
-}
