@@ -18,6 +18,7 @@ import (
 	"os"
 
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"golang.org/x/term"
 )
 
 type UserPassword struct {
@@ -55,7 +56,29 @@ func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedAr
 	}
 
 	if hasUserId && !hasPassword {
-		panic("can't prompt for password yet")
+		password = ""
+		val, hasVal := os.LookupEnv(DOLT_ENV_PWD)
+		if hasVal {
+			password = val
+		} else {
+			Printf("Enter password: ")
+
+			// Disable terminal echo
+			oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+			if err != nil {
+				return nil, nil, err
+			}
+			// ensure we restore terminal to original state
+			defer term.Restore(int(os.Stdin.Fd()), oldState)
+
+			// Read the password
+			_, err = fmt.Scan(&password)
+			if err != nil {
+				return nil, nil, err
+			}
+			Println()
+		}
+		return newParsedArgs, &UserPassword{Username: userId, Password: password}, nil
 	}
 
 	return nil, nil, fmt.Errorf("When a password is provided, a user must also be provided. Use the --user flag to provide a username")
