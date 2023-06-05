@@ -53,7 +53,7 @@ type InitialDbState struct {
 // order for the session to manage it.
 type SessionDatabase interface {
 	sql.Database
-	InitialDBState(ctx *sql.Context, branch string) (InitialDbState, error)
+	InitialDBState(ctx *sql.Context) (InitialDbState, error)
 }
 
 // DatabaseSessionState is the set of all information for a given database in this session.
@@ -90,7 +90,7 @@ type DatabaseSessionState struct {
 	Err error
 }
 
-func NewEmptyDatabaseSessionState() *DatabaseSessionState {
+func newEmptyDatabaseSessionState() *DatabaseSessionState {
 	return &DatabaseSessionState{
 		heads:     make(map[string]*branchState),
 		headCache: make(map[string]*SessionCache),

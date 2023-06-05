@@ -100,7 +100,7 @@ func (database) IsReadOnly() bool {
 	return true
 }
 
-func (db database) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
+func (db database) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error) {
 	// TODO: almost none of this state is actually used, but is necessary because the current session setup requires a
 	//  repo state writer
 	return dsess.InitialDbState{

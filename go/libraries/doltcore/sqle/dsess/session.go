@@ -194,13 +194,6 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 		if !ok {
 			return nil, false, nil
 		}
-
-		if usingDoltTransaction {
-			nomsRoot, ok := tx.GetInitialRoot(baseName)
-			if ok {
-				dbState.globalCache.CacheRevisionDb(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName, database)
-			}
-		}
 	}
 	
 	// Add the initial state to the session for future reuse
@@ -1136,8 +1129,8 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 	DefineSystemVariablesForDB(baseName)
 
-	// TODO: odd that we need to tell the DB what its own revision is here
-	dbState, err := db.InitialDBState(ctx, db.Revision())
+	tx, usingDoltTransaction := d.GetTransaction().(*DoltTransaction)
+	dbState, err := db.InitialDBState(ctx)
 	if err != nil {
 		return err
 	}
@@ -1145,7 +1138,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	d.mu.Lock()
 	sessionState, ok := d.dbStates[strings.ToLower(baseName)]
 	if !ok {
-		sessionState = NewEmptyDatabaseSessionState()
+		sessionState = newEmptyDatabaseSessionState()
 		d.dbStates[strings.ToLower(baseName)] = sessionState
 
 		sessionState.tmpFileDir, err = dbState.DbData.Rsw.TempTableFilesDir()
@@ -1175,6 +1168,13 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 		sessionState.currRevType = db.RevisionType()
 		sessionState.currRevSpec = db.Revision()
+
+		if usingDoltTransaction {
+			nomsRoot, ok := tx.GetInitialRoot(baseName)
+			if ok {
+				sessionState.globalCache.CacheRevisionDb(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName, db)
+			}
+		}
 	}
 
 	branchState := sessionState.NewEmptyBranchState(strings.ToLower(db.Revision()))

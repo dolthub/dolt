@@ -88,8 +88,8 @@ func (r ReadOnlyDatabase) IsReadOnly() bool {
 	return true
 }
 
-func (r ReadOnlyDatabase) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
-	return initialDBState(ctx, r, branch)
+func (r ReadOnlyDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error) {
+	return initialDBState(ctx, r, r.revision)
 }
 
 // Revision implements dsess.RevisionDatabase
@@ -137,8 +137,8 @@ func initialDBState(ctx *sql.Context, db dsess.SqlDatabase, branch string) (dses
 	return initialDbState(ctx, db, branch)
 }
 
-func (db Database) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
-	return initialDBState(ctx, db, branch)
+func (db Database) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error) {
+	return initialDBState(ctx, db, db.revision)
 }
 
 // Name returns the name of this database, set at creation time.
