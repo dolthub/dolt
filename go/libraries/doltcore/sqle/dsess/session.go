@@ -1156,8 +1156,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		sessionState.currRevSpec = db.Revision()
 	}
 
-	branchState := NewEmptyBranchState(sessionState)
-	sessionState.heads[strings.ToLower(db.Revision())] = branchState
+	branchState := sessionState.NewEmptyBranchState(strings.ToLower(db.Revision()))
 	d.mu.Unlock()
 
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and

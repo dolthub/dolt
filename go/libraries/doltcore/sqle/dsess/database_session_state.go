@@ -72,6 +72,10 @@ type DatabaseSessionState struct {
 	checkedOutRevSpec string
 	// heads records the in-memory DB state for every branch head accessed by the session
 	heads map[string]*branchState
+	// caches records the session-caches for every branch head accessed by the session
+	// This is managed separately from the branch states themselves because it persists across transactions (which is
+	// safe because it's keyed by immutable hashes)
+	caches map[string]*SessionCache
 	// globalState is the global state of this session (shared by all sessions for a particular db)
 	globalState globalstate.GlobalState
 	// tmpFileDir is the directory to use for temporary files for this database
@@ -86,6 +90,7 @@ type DatabaseSessionState struct {
 func NewEmptyDatabaseSessionState() *DatabaseSessionState {
 	return &DatabaseSessionState{
 		heads: make(map[string]*branchState),
+		caches: make(map[string]*SessionCache),
 	}
 }
 
@@ -103,6 +108,8 @@ type SessionState interface {
 type branchState struct {
 	// dbState is the parent database state for this branch head state
 	dbState *DatabaseSessionState
+	// head is the name of the branch head for this state
+	head string
 	// headCommit is the head commit for this database. May be nil for databases tied to a detached root value, in which
 	// case headRoot must be set.
 	headCommit *doltdb.Commit
@@ -117,17 +124,25 @@ type branchState struct {
 	writeSession writer.WriteSession
 	// readOnly is true if this database is read only
 	readOnly bool
-	// sessionCache is a collection of cached values used to speed up performance
-	sessionCache *SessionCache
 	// dirty is true if this branch state has uncommitted changes
 	dirty bool
 }
 
-func NewEmptyBranchState(dbState *DatabaseSessionState) *branchState {
-	return &branchState{
-		dbState:      dbState,
-		sessionCache: newSessionCache(),
+// NewEmptyBranchState creates a new branch state for the given head name with the head provided, adds it to the db 
+// state, and returns it. The state returned is empty except for its identifiers and must be filled in by the caller.
+func (dbState *DatabaseSessionState) NewEmptyBranchState(head string) *branchState {
+	b := &branchState{
+		dbState: dbState,
+		head: head,
 	}
+
+	dbState.heads[head] = b
+	_, ok := dbState.caches[head]
+	if !ok {
+		dbState.caches[head] = newSessionCache()
+	}
+
+	return b
 }
 
 func (bs *branchState) WorkingRoot() *doltdb.RootValue {
@@ -145,7 +160,7 @@ func (bs *branchState) WriteSession() writer.WriteSession {
 }
 
 func (bs *branchState) SessionCache() *SessionCache {
-	return bs.sessionCache
+	return bs.dbState.caches[bs.head]
 }
 
 func (bs branchState) EditOpts() editor.Options {
