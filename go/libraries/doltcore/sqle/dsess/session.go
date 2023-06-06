@@ -180,7 +180,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	if usingDoltTransaction && dbStateFound {
 		nomsRoot, ok := tx.GetInitialRoot(baseName)
 		if ok {
-			database, ok = dbState.globalCache.GetCachedRevisionDb(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName)
+			database, _ = dbState.globalCache.GetCachedRevisionDb(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName)
 		}
 	}
 
@@ -1160,7 +1160,6 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		var err error
 		sessionState.tmpFileDir, err = dbState.DbData.Rsw.TempTableFilesDir()
 		if err != nil {
-			d.mu.Unlock()
 			if errors.Is(err, env.ErrDoltRepositoryNotFound) {
 				return env.ErrFailedToAccessDB.New(dbState.Db.Name())
 			}
@@ -1171,7 +1170,6 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 		baseDb, ok := d.provider.BaseDatabase(ctx, baseName)
 		if !ok {
-			d.mu.Unlock()
 			return fmt.Errorf("unable to find database %s, this is a bug", baseName)
 		}
 
@@ -1179,30 +1177,22 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		// string otherwise
 		sessionState.checkedOutRevSpec, err = DefaultHead(baseName, baseDb)
 		if err != nil {
-			d.mu.Unlock()
 			return err
 		}
 
 		sessionState.currRevType = db.RevisionType()
 		sessionState.currRevSpec = db.Revision()
-
-		if usingDoltTransaction {
-			nomsRoot, ok := tx.GetInitialRoot(baseName)
-			if ok {
-				sessionState.globalCache.CacheRevisionDb(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName, db)
-			}
-		}
 	}
 
 	if !dbStateCached && usingDoltTransaction {
 		nomsRoot, ok := tx.GetInitialRoot(baseName)
 		if ok {
 			sessionState.globalCache.CacheInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName, dbState)
+			sessionState.globalCache.CacheRevisionDb(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName, db)
 		}
 	}
 
 	branchState := sessionState.NewEmptyBranchState(rev)
-	d.mu.Unlock()
 
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out

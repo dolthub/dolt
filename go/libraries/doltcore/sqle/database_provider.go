@@ -714,6 +714,7 @@ func (p DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, n
 }
 
 func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQualifiedName string, requestedName string) (dsess.SqlDatabase, bool, error) {
+	// TODO: use session cache to get database
 	if !strings.Contains(revisionQualifiedName, dsess.DbRevisionDelimiter) {
 		return nil, false, nil
 	}
