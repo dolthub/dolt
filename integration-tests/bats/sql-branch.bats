@@ -172,3 +172,23 @@ SQL
     [ $status -eq 1 ]
     [[ "$output" =~ "attempted to delete checked out branch" ]] || false
 }
+
+@test "sql-branch: CALL DOLT_BRANCH -d -r to remove remote branch" {
+    mkdir -p remotes/origin
+    dolt remote add origin file://./remotes/origin
+    dolt sql -q "create table t1 (id int primary key);"
+    dolt commit -Am "initial commit"
+    dolt sql -q "CALL DOLT_BRANCH('b1')"
+
+    dolt push --set-upstream origin b1
+
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "origin/b1" ]] || false
+
+    dolt sql -q "CALL DOLT_BRANCH('-D', '-r', 'origin/b1')"
+
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "origin/b1" ]] || false
+}

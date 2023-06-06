@@ -53,7 +53,9 @@ func doDoltBranch(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Empty database name.")
 	}
 
-	apr, err := cli.CreateBranchArgParser().Parse(args)
+	ap := cli.CreateBranchArgParser()
+	ap.SupportsFlag(cli.RemoteParam, "r", "Delete a remote tracking branch.")
+	apr, err := ap.Parse(args)
 	if err != nil {
 		return 1, err
 	}
@@ -194,8 +196,11 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 				"running `dolt checkout <another_branch> and restarting the sql-server", branchName, dbName)
 		}
 
+		remote := apr.Contains(cli.RemoteParam)
+
 		err = actions.DeleteBranch(ctx, dbData, branchName, actions.DeleteOptions{
-			Force: force,
+			Force:  force,
+			Remote: remote,
 		}, dSess.Provider(), rsc)
 		if err != nil {
 			return err
