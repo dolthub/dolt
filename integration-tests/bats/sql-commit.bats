@@ -453,6 +453,21 @@ SQL
     [[ "$output" =~ 'error: no value for option `message' ]] || false
 }
 
-get_head_commit() {
-    dolt log -n 1 | grep -m 1 commit | cut -c 13-44
+@test "sql-commit: --skip-empty correctly skips committing when no changes are staged" {
+  original_head=$(get_head_commit)
+
+  # When --allow-empty and --skip-empty are both specified, the user should get an error
+  run dolt sql -q "CALL DOLT_COMMIT('--allow-empty', '--skip-empty', '-m', 'commit message');"
+  [ $status -eq 1 ]
+  [[ "$output" =~ 'error: cannot use both --allow-empty and --skip-empty' ]] || false
+  [ $original_head = $(get_head_commit) ]
+
+  # When changes are staged, --skip-empty has no effect
+  dolt sql -q "CALL DOLT_COMMIT('--skip-empty', '-m', 'commit message');"
+  new_head=$(get_head_commit)
+  [ $original_head != $new_head ]
+
+  # When no changes are staged, --skip-empty skips creating the commit
+  dolt sql -q "CALL DOLT_COMMIT('--skip-empty', '-m', 'commit message');"
+  [ $new_head = $(get_head_commit) ]
 }

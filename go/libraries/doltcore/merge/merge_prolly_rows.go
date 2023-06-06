@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
-	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 	errorkinds "gopkg.in/src-d/go-errors.v1"
@@ -405,7 +404,6 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 
 	var valueTuple val.Tuple
 	var valueDesc val.TupleDesc
-
 	switch diff.Op {
 	case tree.DiffOpLeftDelete, tree.DiffOpRightDelete, tree.DiffOpConvergentDelete:
 		// no need to validate check constraints for deletes
@@ -439,7 +437,7 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 			newTuple = val.NewTuple(cv.valueMerger.syncPool, newTupleBytes...)
 		}
 
-		row, err := cv.buildRow(ctx, diff.Key, newTuple)
+		row, err := buildRow(ctx, diff.Key, newTuple, cv.sch, cv.tableMerger)
 		if err != nil {
 			return 0, err
 		}
@@ -482,10 +480,10 @@ func (cv checkValidator) insertArtifact(ctx context.Context, key, value val.Tupl
 }
 
 // buildRow takes the |key| and |value| tuple and returns a new sql.Row, along with any errors encountered.
-func (cv checkValidator) buildRow(ctx *sql.Context, key, value val.Tuple) (sql.Row, error) {
-	pkCols := cv.sch.GetPKCols()
-	valueCols := cv.sch.GetNonPKCols()
-	allCols := cv.sch.GetAllCols()
+func buildRow(ctx *sql.Context, key, value val.Tuple, sch schema.Schema, tableMerger *TableMerger) (sql.Row, error) {
+	pkCols := sch.GetPKCols()
+	valueCols := sch.GetNonPKCols()
+	allCols := sch.GetAllCols()
 
 	// When we parse and resolve the check constraint expression with planbuilder, it leaves row position 0
 	// for the expression itself, so we add an empty spot in index 0 of our row to account for that to make sure
@@ -494,10 +492,10 @@ func (cv checkValidator) buildRow(ctx *sql.Context, key, value val.Tuple) (sql.R
 
 	// Skip adding the key tuple if we're working with a keyless table, since the table row data is
 	// always all contained in the value tuple for keyless tables.
-	if !cv.valueMerger.keyless {
-		keyDesc := cv.sch.GetKeyDescriptor()
+	if !schema.IsKeyless(sch) {
+		keyDesc := sch.GetKeyDescriptor()
 		for i := range keyDesc.Types {
-			value, err := index.GetField(ctx, keyDesc, i, key, cv.tableMerger.ns)
+			value, err := index.GetField(ctx, keyDesc, i, key, tableMerger.ns)
 			if err != nil {
 				return nil, err
 			}
@@ -508,15 +506,15 @@ func (cv checkValidator) buildRow(ctx *sql.Context, key, value val.Tuple) (sql.R
 	}
 
 	valueColIndex := 0
-	valueDescriptor := cv.sch.GetValueDescriptor()
+	valueDescriptor := sch.GetValueDescriptor()
 	for valueTupleIndex := range valueDescriptor.Types {
 		// Skip processing the first value in the value tuple for keyless tables, since that field
 		// always holds the cardinality of the row and shouldn't be passed in to an expression.
-		if cv.valueMerger.keyless && valueTupleIndex == 0 {
+		if schema.IsKeyless(sch) && valueTupleIndex == 0 {
 			continue
 		}
 
-		value, err := index.GetField(ctx, valueDescriptor, valueTupleIndex, value, cv.tableMerger.ns)
+		value, err := index.GetField(ctx, valueDescriptor, valueTupleIndex, value, tableMerger.ns)
 		if err != nil {
 			return nil, err
 		}
@@ -932,7 +930,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 				return fmt.Errorf("cannot merge keyless tables with reordered columns")
 			}
 		} else {
-			tempTupleValue, err := remapTupleWithColumnDefaults(ctx, diff.Right, sourceSch.GetValueDescriptor(),
+			tempTupleValue, err := remapTupleWithColumnDefaults(ctx, diff.Key, diff.Right, sourceSch.GetValueDescriptor(),
 				m.valueMerger.rightMapping, m.tableMerger, m.finalSch, m.valueMerger.syncPool)
 			if err != nil {
 				return err
@@ -1103,7 +1101,7 @@ func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping)
 // currently being merged and associated node store. |mergedSch| is the new schema of the table and is used to look up
 // column default values to apply to any existing rows when a new column is added as part of a merge. |pool| is used to
 // to allocate memory for the new tuple. A pointer to the new tuple data is returned, along with any error encountered.
-func remapTupleWithColumnDefaults(ctx *sql.Context, tuple val.Tuple, tupleDesc val.TupleDesc, mapping val.OrdinalMapping, tm *TableMerger, mergedSch schema.Schema, pool pool.BuffPool) (val.Tuple, error) {
+func remapTupleWithColumnDefaults(ctx *sql.Context, keyTuple, valueTuple val.Tuple, tupleDesc val.TupleDesc, mapping val.OrdinalMapping, tm *TableMerger, mergedSch schema.Schema, pool pool.BuffPool) (val.Tuple, error) {
 	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor())
 
 	for to, from := range mapping {
@@ -1113,22 +1111,21 @@ func remapTupleWithColumnDefaults(ctx *sql.Context, tuple val.Tuple, tupleDesc v
 			col := mergedSch.GetNonPKCols().GetByIndex(to)
 			if col.Default != "" {
 				// TODO: Not great to reparse the expression for every single row... need to cache this
-				defaultValue, err := parse.StringToColumnDefaultValue(ctx, col.Default)
+				expression, err := resolveExpression(ctx, col.Default, mergedSch, tm.name)
 				if err != nil {
 					return nil, err
 				}
 
-				// TODO: We can currently only handle column default values that only use literal
-				//       values. Any expressions that need to be resolved (e.g. column references,
-				//       functions) need the analyzer invoked on them before we can Eval() them.
-				//       So, instead of potentially creating inconsistent data and not applying the
-				//       correct default value that customers are expecting, throw an error and alert
-				//       customers that they need to manually apply the alter to update existing rows.
-				if !defaultValue.Expression.Resolved() {
-					return nil, ErrUnableToMergeColumnDefaultValue.New(defaultValue, tm.name)
+				if !expression.Resolved() {
+					return nil, ErrUnableToMergeColumnDefaultValue.New(col.Default, tm.name)
 				}
 
-				value, err = defaultValue.Expression.Eval(ctx, nil)
+				row, err := buildRow(ctx, keyTuple, valueTuple, mergedSch, tm)
+				if err != nil {
+					return nil, err
+				}
+
+				value, err = expression.Eval(ctx, row)
 				if err != nil {
 					return nil, err
 				}
@@ -1142,7 +1139,7 @@ func remapTupleWithColumnDefaults(ctx *sql.Context, tuple val.Tuple, tupleDesc v
 				}
 			}
 		} else {
-			tb.PutRaw(to, tupleDesc.GetField(from, tuple))
+			tb.PutRaw(to, tupleDesc.GetField(from, valueTuple))
 		}
 	}
 	return tb.Build(pool), nil
@@ -1284,7 +1281,7 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 			return err
 		}
 
-		newValueTuple, err := remapTupleWithColumnDefaults(ctx, valueTuple, valueDescriptor, vm.leftMapping, tm, mergedSch, vm.syncPool)
+		newValueTuple, err := remapTupleWithColumnDefaults(ctx, keyTuple, valueTuple, valueDescriptor, vm.leftMapping, tm, mergedSch, vm.syncPool)
 		if err != nil {
 			return err
 		}

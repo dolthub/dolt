@@ -4285,30 +4285,55 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 	{
-		// TODO: We can currently only support literal default values. Supporting column references and functions
-		//       requires getting the analyzer involved to resolve references.
 		Name: "adding a column with a non-literal default value",
 		AncSetUpScript: []string{
-			"CREATE table t (pk int primary key);",
-			"INSERT into t values (1);",
+			"CREATE table t (pk varchar(100) primary key);",
+			"INSERT into t values ('1');",
 		},
 		RightSetUpScript: []string{
-			"alter table t add column c1 varchar(100) default (CONCAT('h','e','l','l','o'));",
-			"insert into t values (2, 'hi');",
+			"alter table t add column c1 varchar(100) default (CONCAT(pk, 'h','e','l','l','o'));",
+			"insert into t values ('2', 'hi');",
 			"alter table t add index idx1 (c1, pk);",
 		},
 		LeftSetUpScript: []string{
-			"insert into t values (3);",
+			"insert into t values ('3');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "call dolt_merge('right');",
-				ExpectedErr: merge.ErrUnableToMergeColumnDefaultValue,
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
-				Skip:     true,
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "hello"}, {2, "hi"}, {3, "hello"}},
+				Expected: []sql.Row{{"1", "1hello"}, {"2", "hi"}, {"3", "3hello"}},
+			},
+		},
+	},
+	{
+		// Tests that column default expressions are correctly evaluated when the left-side schema
+		// has changed and the right row needs to be mapped to the new left-side schema
+		Name: "right-side adds a column with a default value, left-side drops a column",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, c1 varchar(100), c2 varchar(100));",
+			"INSERT into t values ('1', 'BAD', 'hello');",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column c3 varchar(100) default (CONCAT(c2, 'h','e','l','l','o'));",
+			"insert into t values ('2', 'BAD', 'hello', 'hi');",
+			"alter table t add index idx1 (c1, pk);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values ('3', 'BAD', 'hello');",
+			"alter table t drop column c1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "hello", "hellohello"}, {2, "hello", "hi"}, {3, "hello", "hellohello"}},
 			},
 		},
 	},

@@ -11,6 +11,9 @@ make_repo() {
 }
 
 setup() {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test tests remote connections directly, SQL_ENGINE is not needed."
+    fi
     setup_no_dolt_init
     make_repo defaultDB
     make_repo altDB
@@ -19,6 +22,14 @@ setup() {
 teardown() {
     stop_sql_server 1
     teardown_common
+}
+
+get_staged_tables() {
+    dolt status | awk '
+        match($0, /new table:\ */) { print substr($0, RSTART+RLENGTH) }
+        /Untracked tables:/ { exit }
+        /Tables with conflicting dolt_ignore patterns:/ { exit }
+    '
 }
 
 @test "sql-local-remote: test switch between server/no server" {
@@ -108,3 +119,42 @@ teardown() {
     [[ "$output" =~ "defaultDB does not exist" ]] || false
 }
 
+@test "sql-local-remote: verify dolt blame behavior is identical in switch between server/no server" {
+    cd altDB
+    dolt sql -q "create table test (pk int primary key)"
+    dolt sql -q "insert into test values (1)"
+    dolt add test
+    dolt commit -m "insert initial value into test"
+    dolt sql -q "insert into test values (2), (3)"
+    dolt add test
+    dolt commit -m "insert more values into test"
+    cd ..
+
+    start_sql_server altDB
+    run dolt --user dolt blame test
+    [ "$status" -eq 0 ]
+    export out="$output"
+    stop_sql_server 1
+
+    run dolt blame test
+    [ "$status" -eq 0 ]
+    [[ "$output" =  $out ]] || false
+}
+@test "sql-local-remote: verify simple dolt add behavior." {
+    start_sql_server altDB
+    cd altDB
+
+    run dolt --verbose-engine-setup --user dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    run dolt --verbose-engine-setup --user dolt add .
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    stop_sql_server 1
+
+    staged=$(get_staged_tables)
+
+    [[ ! -z $(echo "$staged" | grep "testtable") ]] || false
+}

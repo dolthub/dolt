@@ -93,7 +93,8 @@ func doDoltCherryPick(ctx *sql.Context, args []string) (string, error) {
 		return "", fmt.Errorf("dolt add failed")
 	}
 
-	return doDoltCommit(ctx, []string{"-m", commitMsg})
+	commitHash, _, err := doDoltCommit(ctx, []string{"-m", commitMsg})
+	return commitHash, err
 }
 
 // cherryPick checks that the current working set is clean, verifies the cherry-pick commit is not a merge commit
