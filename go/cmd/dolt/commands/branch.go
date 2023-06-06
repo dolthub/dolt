@@ -84,6 +84,8 @@ func (cmd BranchCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd BranchCmd) ArgParser() *argparser.ArgParser {
+	// CreateBranchArgParser has the common flags for the command line and the stored procedure.
+	// But only the command line has flags for printing branches. We define those here.
 	ap := cli.CreateBranchArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"start-point", "A commit that a new branch should point at."})
 	ap.SupportsFlag(cli.ListFlag, "", "List branches")
@@ -363,11 +365,11 @@ func createBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.
 		return 1
 	}
 
-	return runQuery(sqlCtx, queryEngine, args)
+	return callStoredProcedure(sqlCtx, queryEngine, args)
 }
 
 func moveBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, args []string, usage cli.UsagePrinter) int {
-	if apr.NArg() != 2 {
+	if apr.NArg() != 1 && apr.NArg() != 2 {
 		usage()
 		return 1
 	}
@@ -387,11 +389,11 @@ func moveBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.Ar
 		return 1
 	}
 
-	return runQuery(sqlCtx, queryEngine, args)
+	return callStoredProcedure(sqlCtx, queryEngine, args)
 }
 
 func copyBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, args []string, usage cli.UsagePrinter) int {
-	if apr.NArg() != 2 {
+	if apr.NArg() != 1 && apr.NArg() != 2 {
 		usage()
 		return 1
 	}
@@ -411,7 +413,7 @@ func copyBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.Ar
 		return 1
 	}
 
-	return runQuery(sqlCtx, queryEngine, args)
+	return callStoredProcedure(sqlCtx, queryEngine, args)
 }
 
 func deleteBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, args []string, usage cli.UsagePrinter) int {
@@ -430,10 +432,24 @@ func deleteBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparse
 		return 1
 	}
 
-	return runQuery(sqlCtx, queryEngine, args)
+	return callStoredProcedure(sqlCtx, queryEngine, args)
 }
 
-func runQuery(sqlCtx *sql.Context, queryEngine cli.Queryist, args []string) int {
+func generateForceDeleteMessage(args []string) string {
+	newArgs := ""
+	for _, arg := range args {
+		if arg != "--force" && arg != "-f" && arg != "-D" && arg != "-d" {
+			newArgs = newArgs + " " + arg
+		}
+	}
+	return newArgs
+}
+
+// callStoredProcedure generates and exectures the SQL query for calling the DOLT_BRANCH stored procedure.
+// All actions that modify branches delegate to this after they validate their arguments.
+// Actions that don't modify branches, such as `dolt branch --list` and `dolt branch --show-current`, don't call
+// this method.
+func callStoredProcedure(sqlCtx *sql.Context, queryEngine cli.Queryist, args []string) int {
 	query, err := generateBranchSql(args)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
@@ -441,11 +457,11 @@ func runQuery(sqlCtx *sql.Context, queryEngine cli.Queryist, args []string) int 
 	fmt.Println(query)
 	schema, rowIter, err := queryEngine.Query(sqlCtx, query)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to run query %s", query).AddCause(err).Build(), nil)
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("error: %s", err.Error())), nil)
 	}
 	_, err = sql.RowIterToRows(sqlCtx, schema, rowIter)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to get result rows", query).AddCause(err).Build(), nil)
+		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to get result rows for query %s", query).AddCause(err).Build(), nil)
 	}
 
 	return 0
