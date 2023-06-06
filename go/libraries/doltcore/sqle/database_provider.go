@@ -723,14 +723,12 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQual
 
 	// Look in the session cache for this DB before doing any IO to figure out what's being asked for
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbCache, ok := sess.DatabaseCache(ctx, baseName)
-	if ok {
-		db, ok := dbCache.GetCachedRevisionDb(revisionQualifiedName)
-		// The db cache is keyed by the revision qualified name, but the request name must also match for it to be a 
-		// cache hit
-		if ok && db.RequestedName() == requestedName {
-			return db, true, nil
-		}
+	dbCache := sess.DatabaseCache(ctx)
+	db, ok := dbCache.GetCachedRevisionDb(revisionQualifiedName)
+	// The db cache is keyed by the revision qualified name, but the request name must also match for it to be a 
+	// cache hit
+	if ok && db.RequestedName() == requestedName {
+		return db, true, nil
 	}
 
 	p.mu.RLock()

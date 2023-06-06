@@ -37,12 +37,17 @@ type SessionCache struct {
 // handles to data or state, but always defer to the session. Keys in the secondary map are revision specifier strings
 type DatabaseCache struct {
 	// revisionDbs caches databases by name. The name is always lower case and revision qualified
-	revisionDbs map[string]SqlDatabase
+	revisionDbs map[revisionDbCacheKey]SqlDatabase
 	// initialDbStates caches the initial state of databases by name for a given noms root, which is the primary key.
 	// The secondary key is the lower-case revision-qualified database name.
 	initialDbStates map[doltdb.DataCacheKey]map[string]InitialDbState
 
 	mu sync.RWMutex
+}
+
+type revisionDbCacheKey struct {
+	dbName string
+	requestedName string
 }
 
 const maxCachedKeys = 64
@@ -211,7 +216,7 @@ func (c *SessionCache) GetCachedViewDefinition(key doltdb.DataCacheKey, viewName
 }
 
 // GetCachedRevisionDb returns the cached revision database named, and whether the cache was present
-func (c *DatabaseCache) GetCachedRevisionDb(revisionDbName string) (SqlDatabase, bool) {
+func (c *DatabaseCache) GetCachedRevisionDb(revisionDbName string, requestedName string) (SqlDatabase, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	
@@ -219,17 +224,20 @@ func (c *DatabaseCache) GetCachedRevisionDb(revisionDbName string) (SqlDatabase,
 		return nil, false
 	}
 	
-	db, ok := c.revisionDbs[revisionDbName]
+	db, ok := c.revisionDbs[revisionDbCacheKey{
+		dbName:        revisionDbName,
+		requestedName: requestedName,
+	}]
 	return db, ok
 }
 
 // CacheRevisionDb caches the revision database named
-func (c *DatabaseCache) CacheRevisionDb(revisionDbName string, database SqlDatabase) {
+func (c *DatabaseCache) CacheRevisionDb(database SqlDatabase) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.revisionDbs == nil {
-		c.revisionDbs = make(map[string]SqlDatabase)
+		c.revisionDbs = make(map[revisionDbCacheKey]SqlDatabase)
 	}
 	
 	if len(c.revisionDbs) > maxCachedKeys {
@@ -238,7 +246,10 @@ func (c *DatabaseCache) CacheRevisionDb(revisionDbName string, database SqlDatab
 		}
 	}
 	
-	c.revisionDbs[revisionDbName] = database
+	c.revisionDbs[revisionDbCacheKey{
+		dbName: strings.ToLower(database.RevisionQualifiedName()),
+		requestedName: database.RequestedName(),
+	}] = database
 }
 
 // GetCachedInitialDbState returns the cached initial state for the revision database named, and whether the cache 

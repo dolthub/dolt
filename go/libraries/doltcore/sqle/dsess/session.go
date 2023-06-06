@@ -63,6 +63,7 @@ type DoltSession struct {
 	username         string
 	email            string
 	dbStates         map[string]*DatabaseSessionState
+	dbCache          *DatabaseCache
 	provider         DoltDatabaseProvider
 	tempTables       map[string][]sql.Table
 	globalsConf      config.ReadWriteConfig
@@ -86,6 +87,7 @@ func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
 		username:         "",
 		email:            "",
 		dbStates:         make(map[string]*DatabaseSessionState),
+		dbCache:  			  newDatabaseCache(),
 		provider:         pro,
 		tempTables:       make(map[string][]sql.Table),
 		globalsConf:      config.NewMapConfig(make(map[string]string)),
@@ -110,6 +112,7 @@ func NewDoltSession(
 		username:         username,
 		email:            email,
 		dbStates:         make(map[string]*DatabaseSessionState),
+		dbCache:  			  newDatabaseCache(),
 		provider:         pro,
 		tempTables:       make(map[string][]sql.Table),
 		globalsConf:      globals,
@@ -1127,7 +1130,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	if usingDoltTransaction {
 		nomsRoot, ok := tx.GetInitialRoot(baseName)
 		if ok && sessionStateExists {
-			dbState, dbStateCached = sessionState.databaseCache.GetCachedInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName)
+			dbState, dbStateCached = d.dbCache.GetCachedInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName)
 		}
 	}
 	
@@ -1173,10 +1176,11 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	if !dbStateCached && usingDoltTransaction {
 		nomsRoot, ok := tx.GetInitialRoot(baseName)
 		if ok {
-			sessionState.databaseCache.CacheInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName, dbState)
-			sessionState.databaseCache.CacheRevisionDb(revisionQualifiedName, db)
+			d.dbCache.CacheInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName, dbState)
 		}
 	}
+
+	d.dbCache.CacheRevisionDb(db)
 
 	branchState := sessionState.NewEmptyBranchState(rev)
 
@@ -1233,14 +1237,8 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	return nil
 }
 
-func (d *DoltSession) DatabaseCache(ctx *sql.Context, dbName string) (*DatabaseCache, bool) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	dbState, ok := d.dbStates[dbName]
-	if !ok {
-		return nil, false
-	}
-	return dbState.databaseCache, true
+func (d *DoltSession) DatabaseCache(ctx *sql.Context) *DatabaseCache {
+	return d.dbCache
 }
 
 func (d *DoltSession) AddTemporaryTable(ctx *sql.Context, db string, tbl sql.Table) {

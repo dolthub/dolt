@@ -72,9 +72,6 @@ type DatabaseSessionState struct {
 	checkedOutRevSpec string
 	// heads records the in-memory DB state for every branch head accessed by the session
 	heads map[string]*branchState
-	// databaseCache records database name resolution for the session to speed up database resolution when nothing has
-	// changed since the last transaction
-	databaseCache *DatabaseCache
 	// headCache records the session-caches for every branch head accessed by the session
 	// This is managed separately from the branch states themselves because it persists across transactions (which is
 	// safe because it's keyed by immutable hashes)
