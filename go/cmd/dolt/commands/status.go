@@ -345,7 +345,6 @@ func getRemoteInfo(queryist cli.Queryist, sqlCtx *sql.Context, branchName string
 			return ahead, behind, remoteBranchName, err
 		}
 
-		// remotes[0][2].(string)
 		var fetchSpecs []string
 		err = json.Unmarshal([]byte(fetchJsonText), &fetchSpecs)
 		if err != nil {
@@ -759,6 +758,9 @@ func getJsonDocumentColAsString(sqlCtx *sql.Context, col interface{}) (string, e
 	}
 }
 
+// getInt64ColAsInt64 returns the value of an int64 column as a string
+// This is necessary because Queryist may return an int64 column as an int64 (when using SQLEngine)
+// or as a string (when using ConnectionQueryist).
 func getInt64ColAsInt64(col interface{}) (int64, error) {
 	switch v := col.(type) {
 	case uint64:

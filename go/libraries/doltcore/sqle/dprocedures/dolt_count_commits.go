@@ -85,7 +85,6 @@ func countCommits(ctx *sql.Context, args ...string) (ahead uint64, behind uint64
 	if err != nil {
 		return 0, 0, err
 	}
-	fmt.Printf("from commit: %s\n", fromCommit.Value())
 
 	toSpec, err := doltdb.NewCommitSpec(toRef)
 	if err != nil {
@@ -99,7 +98,6 @@ func countCommits(ctx *sql.Context, args ...string) (ahead uint64, behind uint64
 	if err != nil {
 		return 0, 0, err
 	}
-	fmt.Printf("to commit: %s\n", toCommit.Value())
 
 	ancestor, err := doltdb.GetCommitAncestor(ctx, fromCommit, toCommit)
 	if err != nil {
