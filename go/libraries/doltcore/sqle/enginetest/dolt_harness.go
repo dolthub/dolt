@@ -355,6 +355,10 @@ func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (*gms.Eng
 	if err != nil {
 		return nil, err
 	}
+	
+	// reset the session as well since we have swapped out the database provider, which invalidates caching assumptions
+	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), readOnlyProvider, d.multiRepoEnv.Config(), d.branchControl)
+	require.NoError(d.t, err)
 
 	return enginetest.NewEngineWithProvider(nil, d, readOnlyProvider), nil
 }
