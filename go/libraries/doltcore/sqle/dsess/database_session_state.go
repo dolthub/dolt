@@ -89,8 +89,8 @@ type DatabaseSessionState struct {
 
 func newEmptyDatabaseSessionState() *DatabaseSessionState {
 	return &DatabaseSessionState{
-		heads:         make(map[string]*branchState),
-		headCache:     make(map[string]*SessionCache),
+		heads:     make(map[string]*branchState),
+		headCache: make(map[string]*SessionCache),
 	}
 }
 
@@ -128,12 +128,12 @@ type branchState struct {
 	dirty bool
 }
 
-// NewEmptyBranchState creates a new branch state for the given head name with the head provided, adds it to the db 
+// NewEmptyBranchState creates a new branch state for the given head name with the head provided, adds it to the db
 // state, and returns it. The state returned is empty except for its identifiers and must be filled in by the caller.
 func (dbState *DatabaseSessionState) NewEmptyBranchState(head string) *branchState {
 	b := &branchState{
 		dbState: dbState,
-		head: head,
+		head:    head,
 	}
 
 	dbState.heads[head] = b

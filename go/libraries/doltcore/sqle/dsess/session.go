@@ -87,7 +87,7 @@ func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
 		username:         "",
 		email:            "",
 		dbStates:         make(map[string]*DatabaseSessionState),
-		dbCache:  			  newDatabaseCache(),
+		dbCache:          newDatabaseCache(),
 		provider:         pro,
 		tempTables:       make(map[string][]sql.Table),
 		globalsConf:      config.NewMapConfig(make(map[string]string)),
@@ -112,7 +112,7 @@ func NewDoltSession(
 		username:         username,
 		email:            email,
 		dbStates:         make(map[string]*DatabaseSessionState),
-		dbCache:  			  newDatabaseCache(),
+		dbCache:          newDatabaseCache(),
 		provider:         pro,
 		tempTables:       make(map[string][]sql.Table),
 		globalsConf:      globals,
@@ -302,7 +302,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 				}
 			}
 
-			// TODO: this check is relatively expensive, we should cache this value when it changes instead of looking it 
+			// TODO: this check is relatively expensive, we should cache this value when it changes instead of looking it
 			//  up on each transaction start
 			if _, v, ok := sql.SystemVariables.GetGlobal(ReadReplicaRemote); ok && v != "" {
 				err := ddb.Rebase(ctx)
@@ -964,7 +964,7 @@ func (d *DoltSession) SwitchWorkingSet(
 	}
 
 	ctx.SetCurrentDatabase(baseName)
-	
+
 	return d.setDbSessionVars(ctx, branchState, false)
 }
 
@@ -1117,7 +1117,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	sessionState, sessionStateExists := d.dbStates[baseName]
 
 	// Before computing initial state for the DB, check to see if we have it in the cache
- 	var dbState InitialDbState
+	var dbState InitialDbState
 	var dbStateCached bool
 	if usingDoltTransaction {
 		nomsRoot, ok := tx.GetInitialRoot(baseName)
@@ -1125,7 +1125,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 			dbState, dbStateCached = d.dbCache.GetCachedInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName)
 		}
 	}
-	
+
 	if !dbStateCached {
 		var err error
 		dbState, err = db.InitialDBState(ctx)
@@ -1314,14 +1314,14 @@ func (d *DoltSession) BatchMode() batchMode {
 
 // setDbSessionVars updates the three session vars that track the value of the session root hashes
 func (d *DoltSession) setDbSessionVars(ctx *sql.Context, state *branchState, force bool) error {
-	// This check is important even when we are forcing an update, because it updates the idea of staleness  
+	// This check is important even when we are forcing an update, because it updates the idea of staleness
 	varsStale := d.dbSessionVarsStale(ctx, state)
 	if !varsStale && !force {
 		return nil
 	}
-	
+
 	baseName := state.dbState.dbName
-	
+
 	// Different DBs have different requirements for what state is set, so we are maximally permissive on what's expected
 	// in the state object here
 	if state.WorkingSet() != nil {
@@ -1381,7 +1381,7 @@ func (d *DoltSession) dbSessionVarsStale(ctx *sql.Context, state *branchState) b
 	if !ok {
 		return true
 	}
-	
+
 	return d.dbCache.CacheSessionVars(state, dtx)
 }
 

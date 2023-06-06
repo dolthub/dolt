@@ -18,12 +18,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 var ViewsWithAsOfScriptTest = queries.ScriptTest{
@@ -2498,7 +2499,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			"call dolt_add('.')",
 			"set @Commit1 = '';",
 			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
-	
+
 			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
 			"set @Commit2 = '';",
 			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting into t');",

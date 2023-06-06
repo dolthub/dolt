@@ -28,12 +28,12 @@ type SessionCache struct {
 	indexes map[doltdb.DataCacheKey]map[string][]sql.Index
 	tables  map[doltdb.DataCacheKey]map[string]sql.Table
 	views   map[doltdb.DataCacheKey]map[string]sql.ViewDefinition
-	
+
 	mu sync.RWMutex
 }
 
-// DatabaseCache stores databases and their initial states, offloading the compute / IO involved in resolving a 
-// database name to a particular database. This is safe only because the database objects themselves don't have any 
+// DatabaseCache stores databases and their initial states, offloading the compute / IO involved in resolving a
+// database name to a particular database. This is safe only because the database objects themselves don't have any
 // handles to data or state, but always defer to the session. Keys in the secondary map are revision specifier strings
 type DatabaseCache struct {
 	// revisionDbs caches databases by name. The name is always lower case and revision qualified
@@ -41,14 +41,14 @@ type DatabaseCache struct {
 	// initialDbStates caches the initial state of databases by name for a given noms root, which is the primary key.
 	// The secondary key is the lower-case revision-qualified database name.
 	initialDbStates map[doltdb.DataCacheKey]map[string]InitialDbState
-	// sessionVars records a key for the most recently used session vars for each database in the session 
+	// sessionVars records a key for the most recently used session vars for each database in the session
 	sessionVars map[string]sessionVarCacheKey
 
 	mu sync.RWMutex
 }
 
 type revisionDbCacheKey struct {
-	dbName string
+	dbName        string
 	requestedName string
 }
 
@@ -228,11 +228,11 @@ func (c *SessionCache) GetCachedViewDefinition(key doltdb.DataCacheKey, viewName
 func (c *DatabaseCache) GetCachedRevisionDb(revisionDbName string, requestedName string) (SqlDatabase, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	if c.revisionDbs == nil {
 		return nil, false
 	}
-	
+
 	db, ok := c.revisionDbs[revisionDbCacheKey{
 		dbName:        revisionDbName,
 		requestedName: requestedName,
@@ -248,20 +248,20 @@ func (c *DatabaseCache) CacheRevisionDb(database SqlDatabase) {
 	if c.revisionDbs == nil {
 		c.revisionDbs = make(map[revisionDbCacheKey]SqlDatabase)
 	}
-	
+
 	if len(c.revisionDbs) > maxCachedKeys {
 		for k := range c.revisionDbs {
 			delete(c.revisionDbs, k)
 		}
 	}
-	
+
 	c.revisionDbs[revisionDbCacheKey{
-		dbName: strings.ToLower(database.RevisionQualifiedName()),
+		dbName:        strings.ToLower(database.RevisionQualifiedName()),
 		requestedName: database.RequestedName(),
 	}] = database
 }
 
-// GetCachedInitialDbState returns the cached initial state for the revision database named, and whether the cache 
+// GetCachedInitialDbState returns the cached initial state for the revision database named, and whether the cache
 // was present
 func (c *DatabaseCache) GetCachedInitialDbState(key doltdb.DataCacheKey, revisionDbName string) (InitialDbState, bool) {
 	c.mu.RLock()
@@ -304,26 +304,26 @@ func (c *DatabaseCache) CacheInitialDbState(key doltdb.DataCacheKey, revisionDbN
 	dbsForKey[revisionDbName] = state
 }
 
-// CacheSessionVars updates the session var cache for the given branch state and transaction and returns whether it 
-// was updated. If it was updated, session vars need to be set for the state and transaction given. Otherwise they 
+// CacheSessionVars updates the session var cache for the given branch state and transaction and returns whether it
+// was updated. If it was updated, session vars need to be set for the state and transaction given. Otherwise they
 // haven't changed and can be reused.
 func (c *DatabaseCache) CacheSessionVars(branchState *branchState, transaction *DoltTransaction) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	dbBaseName := branchState.dbState.dbName
-	
+
 	existingKey, found := c.sessionVars[dbBaseName]
 	root, hasRoot := transaction.GetInitialRoot(dbBaseName)
 	if !hasRoot {
 		return true
 	}
-	
+
 	newKey := sessionVarCacheKey{
 		root: doltdb.DataCacheKey{Hash: root},
 		head: branchState.head,
 	}
-	
+
 	c.sessionVars[dbBaseName] = newKey
 	return !found || existingKey != newKey
 }

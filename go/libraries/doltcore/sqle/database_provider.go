@@ -1120,7 +1120,7 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 
 		revisionQualifiedName = baseName + dsess.DbRevisionDelimiter + head
 	}
-	
+
 	db, ok, err := p.databaseForRevision(ctx, revisionQualifiedName, name)
 	if err != nil {
 		if sql.ErrDatabaseNotFound.Is(err) && usingDefaultBranch {
