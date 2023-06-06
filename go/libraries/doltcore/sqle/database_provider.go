@@ -714,13 +714,22 @@ func (p DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, n
 }
 
 func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQualifiedName string, requestedName string) (dsess.SqlDatabase, bool, error) {
-	// TODO: use session cache to get database
 	if !strings.Contains(revisionQualifiedName, dsess.DbRevisionDelimiter) {
 		return nil, false, nil
 	}
 
 	parts := strings.SplitN(revisionQualifiedName, dsess.DbRevisionDelimiter, 2)
 	baseName, rev := parts[0], parts[1]
+
+	// Look in the session cache for this DB before doing any IO to figure out what's being asked for
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbCache, ok := sess.DatabaseCache(ctx, baseName)
+	if ok {
+		db, ok := dbCache.GetCachedRevisionDb(revisionQualifiedName)
+		if ok {
+			return db, true, nil
+		}
+	}
 
 	p.mu.RLock()
 	srcDb, ok := p.databases[formatDbMapKeyName(baseName)]

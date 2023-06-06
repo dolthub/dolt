@@ -175,13 +175,9 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	}
 
 	// Try to get the session from the cache before going to the provider
-	tx, usingDoltTransaction := d.GetTransaction().(*DoltTransaction)
 	var database SqlDatabase
-	if usingDoltTransaction && dbStateFound {
-		nomsRoot, ok := tx.GetInitialRoot(baseName)
-		if ok {
-			database, _ = dbState.globalCache.GetCachedRevisionDb(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName)
-		}
+	if dbStateFound {
+		database, _ = dbState.databaseCache.GetCachedRevisionDb(revisionQualifiedName)
 	}
 
 	if database == nil {
@@ -1141,7 +1137,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	if usingDoltTransaction {
 		nomsRoot, ok := tx.GetInitialRoot(baseName)
 		if ok && sessionStateExists {
-			dbState, dbStateCached = sessionState.globalCache.GetCachedInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName)
+			dbState, dbStateCached = sessionState.databaseCache.GetCachedInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName)
 		}
 	}
 	
@@ -1187,8 +1183,8 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	if !dbStateCached && usingDoltTransaction {
 		nomsRoot, ok := tx.GetInitialRoot(baseName)
 		if ok {
-			sessionState.globalCache.CacheInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName, dbState)
-			sessionState.globalCache.CacheRevisionDb(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName, db)
+			sessionState.databaseCache.CacheInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName, dbState)
+			sessionState.databaseCache.CacheRevisionDb(revisionQualifiedName, db)
 		}
 	}
 
@@ -1245,6 +1241,16 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 	branchState.headCommit = dbState.HeadCommit
 	return nil
+}
+
+func (d *DoltSession) DatabaseCache(ctx *sql.Context, dbName string) (*DatabaseCache, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	dbState, ok := d.dbStates[dbName]
+	if !ok {
+		return nil, false
+	}
+	return dbState.databaseCache, true
 }
 
 func (d *DoltSession) AddTemporaryTable(ctx *sql.Context, db string, tbl sql.Table) {

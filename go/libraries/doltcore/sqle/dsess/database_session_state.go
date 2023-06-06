@@ -72,9 +72,9 @@ type DatabaseSessionState struct {
 	checkedOutRevSpec string
 	// heads records the in-memory DB state for every branch head accessed by the session
 	heads map[string]*branchState
-	// globalCache records cache information for the entire session to speed up reads when nothing has changed since the
-	// last transaction
-	globalCache *SessionCache
+	// databaseCache records database name resolution for the session to speed up database resolution when nothing has
+	// changed since the last transaction
+	databaseCache *DatabaseCache
 	// headCache records the session-caches for every branch head accessed by the session
 	// This is managed separately from the branch states themselves because it persists across transactions (which is
 	// safe because it's keyed by immutable hashes)
@@ -92,9 +92,9 @@ type DatabaseSessionState struct {
 
 func newEmptyDatabaseSessionState() *DatabaseSessionState {
 	return &DatabaseSessionState{
-		heads:     make(map[string]*branchState),
-		headCache: make(map[string]*SessionCache),
-		globalCache: newSessionCache(),
+		heads:         make(map[string]*branchState),
+		headCache:     make(map[string]*SessionCache),
+		databaseCache: newDatabaseCache(),
 	}
 }
 
