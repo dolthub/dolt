@@ -1124,23 +1124,40 @@ func (d *DoltSession) HasDB(_ *sql.Context, dbName string) bool {
 // addDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
 func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
-	revisionQualifiedName := db.Name()
-	baseName, _ := SplitRevisionDbName(revisionQualifiedName)
+	revisionQualifiedName := strings.ToLower(db.RevisionQualifiedName())
+	baseName, rev := SplitRevisionDbName(revisionQualifiedName)
 
 	DefineSystemVariablesForDB(baseName)
 
 	tx, usingDoltTransaction := d.GetTransaction().(*DoltTransaction)
-	dbState, err := db.InitialDBState(ctx)
-	if err != nil {
-		return err
-	}
 
 	d.mu.Lock()
-	sessionState, ok := d.dbStates[strings.ToLower(baseName)]
-	if !ok {
-		sessionState = newEmptyDatabaseSessionState()
-		d.dbStates[strings.ToLower(baseName)] = sessionState
+	defer d.mu.Unlock()
+	sessionState, sessionStateExists := d.dbStates[baseName]
 
+	// Before computing initial state for the DB, check to see if we have it in the cache
+ 	var dbState InitialDbState
+	var dbStateCached bool
+	if usingDoltTransaction {
+		nomsRoot, ok := tx.GetInitialRoot(baseName)
+		if ok && sessionStateExists {
+			dbState, dbStateCached = sessionState.globalCache.GetCachedInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName)
+		}
+	}
+	
+	if !dbStateCached {
+		var err error
+		dbState, err = db.InitialDBState(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	if !sessionStateExists {
+		sessionState = newEmptyDatabaseSessionState()
+		d.dbStates[baseName] = sessionState
+
+		var err error
 		sessionState.tmpFileDir, err = dbState.DbData.Rsw.TempTableFilesDir()
 		if err != nil {
 			d.mu.Unlock()
@@ -1177,7 +1194,14 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		}
 	}
 
-	branchState := sessionState.NewEmptyBranchState(strings.ToLower(db.Revision()))
+	if !dbStateCached && usingDoltTransaction {
+		nomsRoot, ok := tx.GetInitialRoot(baseName)
+		if ok {
+			sessionState.globalCache.CacheInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName, dbState)
+		}
+	}
+
+	branchState := sessionState.NewEmptyBranchState(rev)
 	d.mu.Unlock()
 
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
