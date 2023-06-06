@@ -270,10 +270,7 @@ func (d *DoltSession) SetValidateErr(err error) {
 // If there is no sessionState or its current working set not defined, then no need for validation,
 // so no error is returned.
 func (d *DoltSession) ValidateSession(ctx *sql.Context, dbName string) error {
-	if d.validateErr != nil {
-		return d.validateErr
-	}
-	return nil
+	return d.validateErr
 }
 
 // StartTransaction refreshes the state of this session and starts a new transaction.
@@ -327,7 +324,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 
 	// The engine sets the transaction after this call as well, but since we begin accessing data below, we need to set
 	// this now to avoid seeding the session state with stale data in some cases. The duplication is harmless since the
-	// code below cannot error, but it would to get rid of
+	// code below cannot error.
 	ctx.SetTransaction(tx)
 
 	// Set session vars for every DB in this session using their current branch head

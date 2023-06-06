@@ -858,7 +858,7 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 	return db.createIndexedSqlTable(ctx, tableName, sch, idxDef, collation)
 }
 
-// Unlike the exported version CreateTable, createSqlTable doesn't enforce any table baseName checks.
+// createSqlTable is the private version of CreateTable. It doesn't enforce any table name checks.
 func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, collation sql.CollationID) error {
 	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
@@ -900,7 +900,7 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 	return db.createDoltTable(ctx, tableName, root, doltSch)
 }
 
-// Unlike the exported version CreateTable, createSqlTable doesn't enforce any table baseName checks.
+// createIndexedSqlTable is the private version of createSqlTable. It doesn't enforce any table name checks.
 func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID) error {
 	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
