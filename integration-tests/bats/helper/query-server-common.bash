@@ -35,6 +35,7 @@ start_sql_server() {
     DEFAULT_DB="$1"
     logFile="$2"
     PORT=$( definePORT )
+    echo "Staring server on port" $PORT >&3
     if [[ $logFile ]]
     then
         dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" > $logFile 2>&1 &
@@ -121,6 +122,7 @@ stop_sql_server() {
     wait=$1
     if [ ! -z "$SERVER_PID" ]; then
         # ignore failures of kill command in the case the server is already dead
+        echo "Staring server on port" $PORT >&3
         run kill $SERVER_PID
         if [ $wait ]; then
             while ps -p $SERVER_PID > /dev/null; do
