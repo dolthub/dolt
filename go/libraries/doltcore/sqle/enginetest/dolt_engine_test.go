@@ -115,30 +115,37 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 
-	var script = queries.ScriptTest{
-		Name: "committing to another branch on another database with dolt_transaction_commit",
-		SetUpScript: []string{
-			"create table t1 (a int)",
-			"call dolt_add('.')",
-			"call dolt_commit('-am', 'new table')",
-			"call dolt_branch('b1')",
-			"create database db1",
-			"use db1",
-			"create table t1 (a int)",
-			"call dolt_add('.')",
-			"call dolt_commit('-am', 'new table')",
-			"call dolt_branch('b1')",
-			"commit",
-			"use mydb/b1",
-			"set autocommit = 1",
-			"set dolt_transaction_commit = 1",
+	var scripts = []queries.ScriptTest{
+		{
+			Name: "ALTER TABLE RENAME COLUMN",
+			SetUpScript: []string{
+				"ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1);",
+				"ALTER TABLE parent RENAME COLUMN v1 TO v1_new;",
+				"ALTER TABLE child RENAME COLUMN v1 TO v1_new;",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:    "SHOW CREATE TABLE child;",
+					Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n  `id` int NOT NULL,\n  `v1_new` int,\n  `v2` int,\n  PRIMARY KEY (`id`),\n  KEY `v1` (`v1_new`),\n  CONSTRAINT `fk1` FOREIGN KEY (`v1_new`) REFERENCES `parent` (`v1_new`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				},
+			},
 		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:          "insert into `db1/b1`.t1 values (1)",
-				ExpectedErrStr: "no changes to dolt_commit on database mydb",
+		{
+			Name: "ALTER TABLE MODIFY COLUMN type change not allowed",
+			SetUpScript: []string{
+				"ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1);",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:       "ALTER TABLE parent MODIFY v1 MEDIUMINT;",
+					ExpectedErr: sql.ErrForeignKeyTypeChange,
+				},
+				{
+					Query:       "ALTER TABLE child MODIFY v1 MEDIUMINT;",
+					ExpectedErr: sql.ErrForeignKeyTypeChange,
+				},
 			},
 		},
 	}
@@ -147,11 +154,14 @@ func TestSingleScript(t *testing.T) {
 	cleanup := installTestCommitClock(tcc)
 	defer cleanup()
 
-	sql.RunWithNowFunc(tcc.Now, func() error {
-		harness := newDoltHarness(t)
-		enginetest.TestScript(t, harness, script)
-		return nil
-	})
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData, setup.Parent_childData)
+	for _, script := range scripts {
+		sql.RunWithNowFunc(tcc.Now, func() error {
+			enginetest.TestScript(t, harness, script)
+			return nil
+		})
+	}
 }
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
