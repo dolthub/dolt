@@ -91,7 +91,6 @@ func newEmptyDatabaseSessionState() *DatabaseSessionState {
 	return &DatabaseSessionState{
 		heads:         make(map[string]*branchState),
 		headCache:     make(map[string]*SessionCache),
-		databaseCache: newDatabaseCache(),
 	}
 }
 
