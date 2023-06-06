@@ -174,24 +174,14 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 		revisionQualifiedName = revisionDbName(baseName, rev)
 	}
 
-	// Try to get the session from the cache before going to the provider
-	var database SqlDatabase
-	if dbStateFound {
-		database, _ = dbState.databaseCache.GetCachedRevisionDb(revisionQualifiedName)
+	database, ok, err := d.provider.SessionDatabase(ctx, revisionQualifiedName)
+	if err != nil {
+		return nil, false, err
+	}
+	if !ok {
+		return nil, false, nil
 	}
 
-	if database == nil {
-		var err error
-		var ok bool
-		database, ok, err = d.provider.SessionDatabase(ctx, revisionQualifiedName)
-		if err != nil {
-			return nil, false, err
-		}
-		if !ok {
-			return nil, false, nil
-		}
-	}
-	
 	// Add the initial state to the session for future reuse
 	if err := d.addDB(ctx, database); err != nil {
 		return nil, false, err
