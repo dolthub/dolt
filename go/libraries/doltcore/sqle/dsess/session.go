@@ -303,6 +303,8 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 				}
 			}
 
+			// TODO: this check is relatively expensive, we should cache this value when it changes instead of looking it 
+			//  up on each transaction start
 			if _, v, ok := sql.SystemVariables.GetGlobal(ReadReplicaRemote); ok && v != "" {
 				err := ddb.Rebase(ctx)
 				if err != nil && !IgnoreReplicationErrors() {
@@ -336,7 +338,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 			continue
 		}
 
-		_ = d.setSessionVarsForDb(ctx, db.Name(), bs)
+		_ = d.setDbSessionVars(ctx, bs, false)
 	}
 
 	return tx, nil
@@ -895,7 +897,6 @@ func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roo
 }
 
 // SetWorkingSet sets the working set for this session.
-// Unlike setting the working root alone, this method always marks the session dirty.
 func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.WorkingSet) error {
 	if ws == nil {
 		panic("attempted to set a nil working set for the session")
@@ -910,7 +911,7 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	}
 	branchState.workingSet = ws
 
-	err = d.setSessionVarsForDb(ctx, dbName, branchState)
+	err = d.setDbSessionVars(ctx, branchState, true)
 	if err != nil {
 		return err
 	}
@@ -965,7 +966,7 @@ func (d *DoltSession) SwitchWorkingSet(
 
 	ctx.SetCurrentDatabase(baseName)
 	
-	return d.setSessionVarsForDb(ctx, dbName, branchState)
+	return d.setDbSessionVars(ctx, branchState, false)
 }
 
 func (d *DoltSession) UseDatabase(ctx *sql.Context, db sql.Database) error {
@@ -1180,8 +1181,6 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		}
 	}
 
-	d.dbCache.CacheRevisionDb(db)
-
 	branchState := sessionState.NewEmptyBranchState(rev)
 
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
@@ -1321,10 +1320,16 @@ func (d *DoltSession) BatchMode() batchMode {
 	return d.batchMode
 }
 
-// setSessionVarsForDb updates the three session vars that track the value of the session root hashes
-func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string, state *branchState) error {
-	baseName, _ := SplitRevisionDbName(dbName)
-
+// setDbSessionVars updates the three session vars that track the value of the session root hashes
+func (d *DoltSession) setDbSessionVars(ctx *sql.Context, state *branchState, force bool) error {
+	// This check is important even when we are forcing an update, because it updates the idea of staleness  
+	varsStale := d.dbSessionVarsStale(ctx, state)
+	if !varsStale && !force {
+		return nil
+	}
+	
+	baseName := state.dbState.dbName
+	
 	// Different DBs have different requirements for what state is set, so we are maximally permissive on what's expected
 	// in the state object here
 	if state.WorkingSet() != nil {
@@ -1375,6 +1380,17 @@ func (d *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string, state
 	}
 
 	return nil
+}
+
+// dbSessionVarsStale returns whether the session vars for the database with the state provided need to be updated in
+// the session
+func (d *DoltSession) dbSessionVarsStale(ctx *sql.Context, state *branchState) bool {
+	dtx, ok := ctx.GetTransaction().(*DoltTransaction)
+	if !ok {
+		return true
+	}
+	
+	return d.dbCache.CacheSessionVars(state, dtx)
 }
 
 func (d DoltSession) WithGlobals(conf config.ReadWriteConfig) *DoltSession {

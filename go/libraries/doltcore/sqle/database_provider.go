@@ -762,6 +762,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQual
 			return nil, false, err
 		}
 
+		dbCache.CacheRevisionDb(db)
 		return db, true, nil
 	case dsess.RevisionTypeTag:
 		// TODO: this should be an interface, not a struct
@@ -780,6 +781,8 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQual
 		if err != nil {
 			return nil, false, err
 		}
+
+		dbCache.CacheRevisionDb(db)
 		return db, true, nil
 	case dsess.RevisionTypeCommit:
 		// TODO: this should be an interface, not a struct
@@ -796,6 +799,8 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQual
 		if err != nil {
 			return nil, false, err
 		}
+
+		dbCache.CacheRevisionDb(db)
 		return db, true, nil
 	case dsess.RevisionTypeNone:
 		// Returning an error with the fully qualified db name here is our only opportunity to do so in some cases (such

@@ -41,6 +41,8 @@ type DatabaseCache struct {
 	// initialDbStates caches the initial state of databases by name for a given noms root, which is the primary key.
 	// The secondary key is the lower-case revision-qualified database name.
 	initialDbStates map[doltdb.DataCacheKey]map[string]InitialDbState
+	// sessionVars records a key for the most recently used session vars for each database in the session 
+	sessionVars map[string]sessionVarCacheKey
 
 	mu sync.RWMutex
 }
@@ -50,6 +52,11 @@ type revisionDbCacheKey struct {
 	requestedName string
 }
 
+type sessionVarCacheKey struct {
+	root doltdb.DataCacheKey
+	head string
+}
+
 const maxCachedKeys = 64
 
 func newSessionCache() *SessionCache {
@@ -57,7 +64,9 @@ func newSessionCache() *SessionCache {
 }
 
 func newDatabaseCache() *DatabaseCache {
-	return &DatabaseCache{}
+	return &DatabaseCache{
+		sessionVars: make(map[string]sessionVarCacheKey),
+	}
 }
 
 // CacheTableIndexes caches all indexes for the table with the name given
@@ -293,4 +302,28 @@ func (c *DatabaseCache) CacheInitialDbState(key doltdb.DataCacheKey, revisionDbN
 	}
 
 	dbsForKey[revisionDbName] = state
+}
+
+// CacheSessionVars updates the session var cache for the given branch state and transaction and returns whether it 
+// was updated. If it was updated, session vars need to be set for the state and transaction given. Otherwise they 
+// haven't changed and can be reused.
+func (c *DatabaseCache) CacheSessionVars(branchState *branchState, transaction *DoltTransaction) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	dbBaseName := branchState.dbState.dbName
+	
+	existingKey, found := c.sessionVars[dbBaseName]
+	root, hasRoot := transaction.GetInitialRoot(dbBaseName)
+	if !hasRoot {
+		return true
+	}
+	
+	newKey := sessionVarCacheKey{
+		root: doltdb.DataCacheKey{Hash: root},
+		head: branchState.head,
+	}
+	
+	c.sessionVars[dbBaseName] = newKey
+	return !found || existingKey != newKey
 }
