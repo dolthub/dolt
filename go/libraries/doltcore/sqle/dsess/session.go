@@ -235,6 +235,8 @@ func (d *DoltSession) RemoveDbState(_ *sql.Context, dbName string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	delete(d.dbStates, strings.ToLower(dbName))
+	// also clear out any db-level caches for this db
+	d.dbCache.Clear()
 	return nil
 }
 

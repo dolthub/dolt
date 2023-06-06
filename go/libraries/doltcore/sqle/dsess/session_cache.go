@@ -327,3 +327,11 @@ func (c *DatabaseCache) CacheSessionVars(branchState *branchState, transaction *
 	c.sessionVars[dbBaseName] = newKey
 	return !found || existingKey != newKey
 }
+
+func (c *DatabaseCache) Clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.sessionVars = make(map[string]sessionVarCacheKey)
+	c.revisionDbs = make(map[revisionDbCacheKey]SqlDatabase)
+	c.initialDbStates = make(map[doltdb.DataCacheKey]map[string]InitialDbState)
+}
