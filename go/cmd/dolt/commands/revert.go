@@ -144,7 +144,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	res := AddCmd{}.Exec(ctx, "add", []string{"-A"}, dEnv, nil)
+	res := AddCmd{}.Exec(ctx, "add", []string{"-A"}, dEnv, cliCtx)
 	if res != 0 {
 		return res
 	}

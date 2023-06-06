@@ -128,7 +128,7 @@ func doDoltRevert(ctx *sql.Context, args []string) (int, error) {
 		if err != nil {
 			return 1, err
 		}
-		_, err = doDoltCommit(ctx, commitArgs)
+		_, _, err = doDoltCommit(ctx, commitArgs)
 		if err != nil {
 			return 1, err
 		}

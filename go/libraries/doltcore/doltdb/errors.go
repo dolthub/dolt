@@ -15,6 +15,7 @@
 package doltdb
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 )
@@ -180,7 +181,22 @@ type DoltIgnoreConflictError struct {
 }
 
 func (dc DoltIgnoreConflictError) Error() string {
-	return fmt.Sprintf("dolt_ignore has multiple conflicting rules for %s", dc.Table)
+	var buffer bytes.Buffer
+	buffer.WriteString("the table ")
+	buffer.WriteString(dc.Table)
+	buffer.WriteString(" matches conflicting patterns in dolt_ignore:")
+
+	for _, pattern := range dc.TruePatterns {
+		buffer.WriteString("\nignored:     ")
+		buffer.WriteString(pattern)
+	}
+
+	for _, pattern := range dc.FalsePatterns {
+		buffer.WriteString("\nnot ignored: ")
+		buffer.WriteString(pattern)
+	}
+
+	return buffer.String()
 }
 
 func AsDoltIgnoreInConflict(err error) *DoltIgnoreConflictError {
