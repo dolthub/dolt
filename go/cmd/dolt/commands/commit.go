@@ -77,8 +77,13 @@ func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	res := performCommit(ctx, commandStr, args, dEnv)
+	res, skipped := performCommit(ctx, commandStr, args, dEnv)
 	if res == 1 {
+		return res
+	}
+
+	if skipped {
+		iohelp.WriteLine(cli.CliOut, "Skipping empty commit")
 		return res
 	}
 
@@ -86,32 +91,39 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv, nil)
 }
 
-func performCommit(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+// performCommit creates a new Dolt commit using the specified |commandStr| and |args| for the specified Dolt environment
+// |dEnv|. The response is an integer status code indicating success or failure, as well as a boolean that indicates
+// if the commit was skipped (e.g. because --skip-empty was specified as an argument).
+func performCommit(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) (int, bool) {
 	ap := cli.CreateCommitArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
+
+	if err := cli.VerifyCommitArgs(apr); err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), help), false
+	}
 
 	allFlag := apr.Contains(cli.AllFlag)
 	upperCaseAllFlag := apr.Contains(cli.UpperCaseAllFlag)
 
 	if dEnv.IsLocked() {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help), false
 	}
 
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working root").AddCause(err).Build(), usage)
+		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working root").AddCause(err).Build(), usage), false
 	}
 
 	if upperCaseAllFlag {
 		roots, err = actions.StageAllTables(ctx, roots, true)
 		if err != nil {
-			return handleCommitErr(ctx, dEnv, err, help)
+			return handleCommitErr(ctx, dEnv, err, help), false
 		}
 	} else if allFlag {
 		roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
 		if err != nil {
-			return handleCommitErr(ctx, dEnv, err, help)
+			return handleCommitErr(ctx, dEnv, err, help), false
 		}
 	}
 
@@ -125,13 +137,13 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 	} else {
 		// This command creates a commit, so we need user identity
 		if !cli.CheckUserNameAndEmail(dEnv) {
-			return 1
+			return 1, false
 		}
 		name, email, err = env.GetNameAndEmail(dEnv.Config)
 	}
 
 	if err != nil {
-		return handleCommitErr(ctx, dEnv, err, usage)
+		return handleCommitErr(ctx, dEnv, err, usage), false
 	}
 
 	msg, msgOk := apr.GetValue(cli.MessageArg)
@@ -140,13 +152,13 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		if apr.Contains(cli.AmendFlag) {
 			commitMeta, cmErr := headCommit.GetCommitMeta(ctx)
 			if cmErr != nil {
-				return handleCommitErr(ctx, dEnv, cmErr, usage)
+				return handleCommitErr(ctx, dEnv, cmErr, usage), false
 			}
 			amendStr = commitMeta.Description
 		}
 		msg, err = getCommitMessageFromEditor(ctx, dEnv, "", amendStr, false)
 		if err != nil {
-			return handleCommitErr(ctx, dEnv, err, usage)
+			return handleCommitErr(ctx, dEnv, err, usage), false
 		}
 	}
 
@@ -156,7 +168,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		t, err = cli.ParseDate(commitTimeStr)
 
 		if err != nil {
-			return HandleVErrAndExitCode(errhand.BuildDError("error: invalid date").AddCause(err).Build(), usage)
+			return HandleVErrAndExitCode(errhand.BuildDError("error: invalid date").AddCause(err).Build(), usage), false
 		}
 	}
 
@@ -172,23 +184,23 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 
 		newRoots, err := actions.ResetSoftToRef(ctx, dEnv.DbData(), "HEAD~1")
 		if err != nil {
-			return handleResetError(err, usage)
+			return handleResetError(err, usage), false
 		}
 
 		err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
 		if err != nil {
-			return handleResetError(err, usage)
+			return handleResetError(err, usage), false
 		}
 	}
 
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working set").AddCause(err).Build(), usage)
+		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working set").AddCause(err).Build(), usage), false
 	}
 
 	prevHash, err := ws.HashOf()
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working set").AddCause(err).Build(), usage)
+		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working set").AddCause(err).Build(), usage), false
 	}
 
 	var mergeParentCommits []*doltdb.Commit
@@ -202,6 +214,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag) || apr.Contains(cli.AmendFlag),
+		SkipEmpty:  apr.Contains(cli.SkipEmptyFlag),
 		Force:      apr.Contains(cli.ForceFlag),
 		Name:       name,
 		Email:      email,
@@ -210,20 +223,26 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		if apr.Contains(cli.AmendFlag) {
 			newRoots, errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
 			if errRes != nil {
-				return handleResetError(errRes, usage)
+				return handleResetError(errRes, usage), false
 			}
 
 			err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
 			if err != nil {
-				return handleResetError(err, usage)
+				return handleResetError(err, usage), false
 			}
 		}
-		return handleCommitErr(ctx, dEnv, err, usage)
+		return handleCommitErr(ctx, dEnv, err, usage), false
+	}
+
+	// If no error was reported and there is no pending commit, then no commit was created, likely
+	// because of --skip-empty, so return a success code, but indicate that no commit was created.
+	if pendingCommit == nil {
+		return 0, true
 	}
 
 	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
 	if err != nil {
-		return handleCommitErr(ctx, dEnv, err, usage)
+		return handleCommitErr(ctx, dEnv, err, usage), false
 	}
 	_, err = dEnv.DoltDB.CommitWithWorkingSet(
 		ctx,
@@ -239,18 +258,18 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		if apr.Contains(cli.AmendFlag) {
 			newRoots, errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
 			if errRes != nil {
-				return handleResetError(errRes, usage)
+				return handleResetError(errRes, usage), false
 			}
 
 			err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
 			if err != nil {
-				return handleResetError(err, usage)
+				return handleResetError(err, usage), false
 			}
 		}
-		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't commit").AddCause(err).Build(), usage)
+		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't commit").AddCause(err).Build(), usage), false
 	}
 
-	return 0
+	return 0, false
 }
 
 func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cli.UsagePrinter) int {

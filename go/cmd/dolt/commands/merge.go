@@ -580,8 +580,8 @@ func executeMergeAndCommit(ctx context.Context, dEnv *env.DoltEnv, spec *merge.M
 
 	author := fmt.Sprintf("%s <%s>", spec.Name, spec.Email)
 
-	res := performCommit(ctx, "commit", []string{"-m", msg, "--author", author}, dEnv)
-	if res != 0 {
+	res, skipped := performCommit(ctx, "commit", []string{"-m", msg, "--author", author}, dEnv)
+	if res != 0 || skipped {
 		return nil, fmt.Errorf("dolt commit failed after merging")
 	}
 

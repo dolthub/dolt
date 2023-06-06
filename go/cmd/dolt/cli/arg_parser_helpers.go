@@ -77,6 +77,7 @@ func ParseAuthor(authorStr string) (string, string, error) {
 
 const (
 	AllowEmptyFlag   = "allow-empty"
+	SkipEmptyFlag    = "skip-empty"
 	DateParam        = "date"
 	MessageArg       = "message"
 	AuthorParam      = "author"
@@ -140,7 +141,8 @@ var branchForceFlagDesc = "Reset {{.LessThan}}branchname{{.GreaterThan}} to {{.L
 func CreateCommitArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("commit", 0)
 	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
-	ap.SupportsFlag(AllowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
+	ap.SupportsFlag(AllowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety. Cannot be used with --skip-empty.")
+	ap.SupportsFlag(SkipEmptyFlag, "", "Only create a commit if there are staged changes. If no changes are staged, the call to commit is a no-op. Cannot be used with --allow-empty.")
 	ap.SupportsString(DateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
 	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
@@ -399,6 +401,16 @@ func VerifyNoAwsParams(apr *argparser.ArgParseResults) error {
 
 		keysStr := strings.Join(awsParamKeys, ",")
 		return fmt.Errorf("The parameters %s, are only valid for aws remotes", keysStr)
+	}
+
+	return nil
+}
+
+// VerifyCommitArgs validates the arguments in |apr| for `dolt commit` and returns an error
+// if any validation problems were encountered.
+func VerifyCommitArgs(apr *argparser.ArgParseResults) error {
+	if apr.Contains(AllowEmptyFlag) && apr.Contains(SkipEmptyFlag) {
+		return fmt.Errorf("error: cannot use both --allow-empty and --skip-empty")
 	}
 
 	return nil

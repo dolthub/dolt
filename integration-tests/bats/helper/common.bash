@@ -38,6 +38,11 @@ current_dolt_user_email() {
     dolt config --global --get user.email
 }
 
+# get_head_commit returns the commit hash for the current HEAD
+get_head_commit() {
+    dolt log -n 1 | grep -m 1 commit | cut -c 13-44
+}
+
 setup_no_dolt_init() {
     export PATH=$PATH:~/go/bin
     cd $BATS_TMPDIR

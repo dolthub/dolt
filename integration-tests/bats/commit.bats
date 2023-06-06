@@ -52,3 +52,24 @@ teardown() {
     [ $status -eq 1 ]
     [[ "$output" =~ "Failed to open commit editor" ]] || false
 }
+
+@test "commit: --skip-empty correctly skips committing when no changes are staged" {
+  dolt sql -q "create table t(pk int primary key);"
+  dolt add t
+  original_head=$(get_head_commit)
+
+  # When --allow-empty and --skip-empty are both specified, the user should get an error
+  run dolt commit --allow-empty --skip-empty -m "commit message"
+  [ $status -eq 1 ]
+  [[ "$output" =~ 'error: cannot use both --allow-empty and --skip-empty' ]] || false
+  [ $original_head = $(get_head_commit) ]
+
+  # When changes are staged, --skip-empty has no effect
+  dolt commit --skip-empty -m "commit message"
+  new_head=$(get_head_commit)
+  [ $original_head != $new_head ]
+
+  # When no changes are staged, --skip-empty skips creating the commit
+  dolt commit --skip-empty -m "commit message"
+  [ $new_head = $(get_head_commit) ]
+}
