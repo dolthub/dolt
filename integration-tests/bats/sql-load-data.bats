@@ -294,7 +294,6 @@ CSV
 
     dolt sql -q "create table t (pk int primary key, c1 int, c2 int)"
     dolt sql -q "insert into t values (0,0,0)"
-    skip "load data ignore not supported"
     run dolt sql <<SQL
 load data infile 'in.csv' ignore into table t
 fields terminated by ','
@@ -306,7 +305,6 @@ SQL
     [ $status -eq 0 ]
     [[ $output =~ "0,0,0" ]] || false
     [[ $output =~ "1,1,1" ]] || false
-    
 }
 
 @test "sql-load-data: load data replace" {
@@ -317,7 +315,6 @@ CSV
 
     dolt sql -q "create table t (pk int primary key, c1 int, c2 int)"
     dolt sql -q "insert into t values (0,0,0)"
-    skip "load data replace not supported"
     dolt sql <<SQL
 load data infile 'in.csv' replace into table t
 fields terminated by ','
