@@ -11,6 +11,9 @@ make_repo() {
 
 setup() {
     skiponwindows "tests are flaky on Windows"
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test tests remote connections directly, SQL_ENGINE is not needed."
+    fi
     setup_no_dolt_init
     make_repo repo1
     make_repo repo2
