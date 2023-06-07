@@ -284,11 +284,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				// client a still sees the branches and can use them because it's in a transaction
-				Query:          "/* client a */ select name from dolt_branches;",
+				Query:    "/* client a */ select name from dolt_branches;",
 				Expected: []sql.Row{{"branch1"}, {"main"}},
 			},
 			{
-				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
+				Query:    "/* client a */ CALL DOLT_CHECKOUT('main');",
 				Expected: []sql.Row{{0}},
 			},
 			{
