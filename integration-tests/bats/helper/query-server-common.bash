@@ -17,7 +17,7 @@ wait_for_connection() {
   # exit code, so we need to temporarily enable 'set +e', but be sure to turn 'set -e' back on before we exit.
   set +e
   while [ $SECONDS -lt $end_time ]; do
-    dolt sql-client -u $user --host localhost --port $port --timeout 1 -q "SELECT 1;"
+    dolt sql-client -u $user --host localhost --port $port --use-db $DEFAULT_DB --timeout 1 -q "SELECT 1;"
     if [ $? -eq 0 ]; then
       echo "Connected successfully!"
       set -e
@@ -26,7 +26,7 @@ wait_for_connection() {
     sleep 1
   done
 
-  echo "Failed to connect to the sql-server on port $port within $timeout ms."
+  echo "Failed to connect to database $DEFAULT_DB on port $port within $timeout ms."
   set -e
   return 1
 }
