@@ -122,7 +122,7 @@ stop_sql_server() {
     wait=$1
     if [ ! -z "$SERVER_PID" ]; then
         # ignore failures of kill command in the case the server is already dead
-        echo "Staring server on port" $PORT >&3
+        echo "Killing server on port" $PORT >&3
         run kill $SERVER_PID
         if [ $wait ]; then
             while ps -p $SERVER_PID > /dev/null; do
@@ -138,6 +138,7 @@ definePORT() {
   for i in {0..9}
   do
     let getPORT="($$ + $i) % (65536-1024) + 1024"
+    echo lsof -i -P -n | grep $getPORT >&3
     portinuse=$(lsof -i -P -n | grep LISTEN | grep $getPORT | wc -l)
     if [ $portinuse -eq 0 ]; then
       echo "$getPORT"
