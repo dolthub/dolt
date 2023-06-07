@@ -17,7 +17,7 @@ wait_for_connection() {
   # exit code, so we need to temporarily enable 'set +e', but be sure to turn 'set -e' back on before we exit.
   set +e
   while [ $SECONDS -lt $end_time ]; do
-    mysql -u $user -h localhost --port $port --protocol TCP --connect-timeout 1 -e "SELECT 1;"
+    dolt sql-client -u $user --host localhost --port $port --timeout 1 -q "SELECT 1;"
     if [ $? -eq 0 ]; then
       echo "Connected successfully!"
       set -e
