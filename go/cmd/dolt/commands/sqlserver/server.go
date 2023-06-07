@@ -23,8 +23,10 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -182,6 +184,12 @@ func Serve(
 		ClusterController:       clusterController,
 		BinlogReplicaController: binlogreplication.DoltBinlogReplicaController,
 	}
+	esStatus, err := getEventSchedulerStatus(serverConfig.EventSchedulerStatus())
+	if err != nil {
+		return err, nil
+	}
+	config.EventSchedulerStatus = esStatus
+
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
@@ -531,4 +539,17 @@ func checkForUnixSocket(config ServerConfig) (string, bool, error) {
 	}
 
 	return "", false, nil
+}
+
+func getEventSchedulerStatus(status string) (eventscheduler.SchedulerStatus, error) {
+	switch strings.ToLower(status) {
+	case "on", "1":
+		return eventscheduler.SchedulerOn, nil
+	case "off", "0":
+		return eventscheduler.SchedulerOff, nil
+	case "disabled":
+		return eventscheduler.SchedulerDisabled, nil
+	default:
+		return eventscheduler.SchedulerDisabled, fmt.Errorf("Error while setting value '%s' to 'event_scheduler'.", status)
+	}
 }

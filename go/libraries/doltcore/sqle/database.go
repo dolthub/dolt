@@ -645,7 +645,12 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 		return nil, fmt.Errorf("no root value found in session")
 	}
 
-	return dbState.GetRoots().Working, nil
+	wr := dbState.GetRoots().Working
+	if wr == nil {
+		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
+	}
+
+	return wr, nil
 }
 
 // GetWorkingSet gets the current working set for the database.
@@ -1218,6 +1223,9 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition,
 				Name:            frag.name,
 				CreateStatement: frag.fragment,
 				CreatedAt:       frag.created,
+				// TODO: fill LastAltered, it cannot be nil/zero value
+				LastAltered: frag.created,
+				// TODO: fill TimezoneOffset and LastExecuted
 			}, true, nil
 		}
 	}
@@ -1245,19 +1253,25 @@ func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, error) {
 			Name:            frag.name,
 			CreateStatement: frag.fragment,
 			CreatedAt:       frag.created,
+			// TODO: fill LastAltered, it cannot be nil/zero value
+			LastAltered: frag.created,
+			// TODO: fill TimezoneOffset and LastExecuted
+
 		})
 	}
 	return events, nil
 }
 
 // SaveEvent implements sql.EventDatabase.
-func (db Database) SaveEvent(ctx *sql.Context, ed sql.EventDefinition) error {
+func (db Database) SaveEvent(ctx *sql.Context, ed sql.EventDetails) error {
+	evDef := ed.GetEventStorageDefinition()
+	// TODO: store LastAltered, LastExecuted and TimezoneOffset in appropriate place
 	return db.addFragToSchemasTable(ctx,
 		eventFragment,
-		ed.Name,
-		ed.CreateStatement,
-		ed.CreatedAt,
-		sql.ErrEventAlreadyExists.New(ed.Name),
+		evDef.Name,
+		evDef.CreateStatement,
+		evDef.CreatedAt,
+		sql.ErrEventAlreadyExists.New(evDef.Name),
 	)
 }
 
@@ -1267,13 +1281,19 @@ func (db Database) DropEvent(ctx *sql.Context, name string) error {
 }
 
 // UpdateEvent implements sql.EventDatabase.
-func (db Database) UpdateEvent(ctx *sql.Context, originalName string, ed sql.EventDefinition) error {
-	// TODO: any EVENT STATUS change should also update the branch-specific event scheduling
+func (db Database) UpdateEvent(ctx *sql.Context, originalName string, ed sql.EventDetails) error {
+	// TODO: only in Dolt, any EVENT STATUS change should also update the branch-specific event scheduling
 	err := db.DropEvent(ctx, originalName)
 	if err != nil {
 		return err
 	}
 	return db.SaveEvent(ctx, ed)
+}
+
+// UpdateLastExecuted implements sql.EventDatabase
+func (db Database) UpdateLastExecuted(ctx *sql.Context, eventName string, lastExecuted time.Time) error {
+	// TODO: update LastExecuted in appropriate place
+	return nil
 }
 
 // GetStoredProcedure implements sql.StoredProcedureDatabase.

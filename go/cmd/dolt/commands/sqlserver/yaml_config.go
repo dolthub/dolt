@@ -73,6 +73,8 @@ type BehaviorYAMLConfig struct {
 	// DoltTransactionCommit enables the @@dolt_transaction_commit system variable, which
 	// automatically creates a Dolt commit when any SQL transaction is committed.
 	DoltTransactionCommit *bool `yaml:"dolt_transaction_commit"`
+
+	EventSchedulerStatus *string `yaml:"event_scheduler"`
 }
 
 // UserYAMLConfig contains server configuration regarding the user account clients must use to connect
@@ -174,6 +176,7 @@ func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 			strPtr(cfg.PersistenceBehavior()),
 			boolPtr(cfg.DisableClientMultiStatements()),
 			boolPtr(cfg.DoltTransactionCommit()),
+			strPtr(cfg.EventSchedulerStatus()),
 		},
 		UserConfig: UserYAMLConfig{strPtr(cfg.User()), strPtr(cfg.Password())},
 		ListenerConfig: ListenerYAMLConfig{
@@ -513,6 +516,20 @@ func (cfg YAMLConfig) ClusterConfig() cluster.Config {
 		return nil
 	}
 	return cfg.ClusterCfg
+}
+
+func (cfg YAMLConfig) EventSchedulerStatus() string {
+	if cfg.BehaviorConfig.EventSchedulerStatus == nil {
+		return "ON"
+	}
+	switch *cfg.BehaviorConfig.EventSchedulerStatus {
+	case "1":
+		return "ON"
+	case "0":
+		return "OFF"
+	default:
+		return strings.ToUpper(*cfg.BehaviorConfig.EventSchedulerStatus)
+	}
 }
 
 type ClusterYAMLConfig struct {

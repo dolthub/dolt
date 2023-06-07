@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	gms "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
@@ -66,6 +67,7 @@ type SqlEngineConfig struct {
 	JwksConfig              []JwksConfig
 	ClusterController       *cluster.Controller
 	BinlogReplicaController binlogreplication.BinlogReplicaController
+	EventSchedulerStatus    eventscheduler.SchedulerStatus
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -172,10 +174,17 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	sessionFactory := doltSessionFactory(pro, mrEnv.Config(), bcController, config.Autocommit)
+	sessFactory := doltSessionFactory(pro, mrEnv.Config(), bcController, config.Autocommit)
+
+	if engine.EventScheduler == nil {
+		err = configureEventScheduler(config, engine, sessFactory, pro)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	if config.BinlogReplicaController != nil {
-		binLogSession, err := sessionFactory(sql.NewBaseSession(), pro)
+		binLogSession, err := sessFactory(sql.NewBaseSession(), pro)
 		if err != nil {
 			return nil, err
 		}
@@ -189,7 +198,7 @@ func NewSqlEngine(
 	return &SqlEngine{
 		provider:       pro,
 		contextFactory: sqlContextFactory(),
-		dsessFactory:   sessionFactory,
+		dsessFactory:   sessFactory,
 		engine:         engine,
 	}, nil
 }
@@ -266,9 +275,8 @@ func (se *SqlEngine) Close() error {
 
 // configureBinlogReplicaController configures the binlog replication controller with the |engine|.
 func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engine, session *dsess.DoltSession) error {
-	contextFactory := sqlContextFactory()
-
-	executionCtx, err := contextFactory(context.Background(), session)
+	ctxFactory := sqlContextFactory()
+	executionCtx, err := ctxFactory(context.Background(), session)
 	if err != nil {
 		return err
 	}
@@ -276,6 +284,28 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 	engine.Analyzer.BinlogReplicaController = config.BinlogReplicaController
 
 	return nil
+}
+
+// configureEventScheduler configures the event scheduler with the |engine|.
+func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFactory sessionFactory, pro dsqle.DoltDatabaseProvider) error {
+	// need to give correct user, use the definer as user to run the event definition queries
+	ctxFactory := sqlContextFactory()
+	// get new session each time query executes?
+	getCtxFunc := func() (*sql.Context, error) {
+		sess, err := sessFactory(sql.NewBaseSession(), pro)
+		if err != nil {
+			return nil, err
+		}
+
+		newCtx, err := ctxFactory(context.Background(), sess)
+		if err != nil {
+			return nil, err
+		}
+
+		return newCtx, nil
+	}
+
+	return engine.InitializeEventScheduler(getCtxFunc, config.EventSchedulerStatus)
 }
 
 // sqlContextFactory returns a contextFactory that creates a new sql.Context with the initial database provided
