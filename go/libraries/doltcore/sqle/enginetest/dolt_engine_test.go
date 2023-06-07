@@ -27,7 +27,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/memo"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
@@ -1937,11 +1937,11 @@ func mustNewEngine(t *testing.T, h enginetest.Harness) *gms.Engine {
 	return e
 }
 
-var biasedCosters = []analyzer.Coster{
-	analyzer.NewInnerBiasedCoster(),
-	analyzer.NewLookupBiasedCoster(),
-	analyzer.NewHashBiasedCoster(),
-	analyzer.NewMergeBiasedCoster(),
+var biasedCosters = []memo.Coster{
+	memo.NewInnerBiasedCoster(),
+	memo.NewLookupBiasedCoster(),
+	memo.NewHashBiasedCoster(),
+	memo.NewMergeBiasedCoster(),
 }
 
 func TestSystemTableIndexes(t *testing.T) {
@@ -1955,7 +1955,7 @@ func TestSystemTableIndexes(t *testing.T) {
 		harness.SkipSetupCommit()
 		e := mustNewEngine(t, harness)
 		defer e.Close()
-		e.Analyzer.Coster = analyzer.NewMergeBiasedCoster()
+		e.Analyzer.Coster = memo.NewMergeBiasedCoster()
 
 		ctx := enginetest.NewContext(harness)
 		for _, q := range stt.setup {
