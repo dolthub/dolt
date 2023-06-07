@@ -36,8 +36,15 @@ type SessionStateAdapter struct {
 	branches map[string]env.BranchConfig
 }
 
-func (s SessionStateAdapter) SetCWBHeadRef(_ context.Context, _ ref.MarshalableRef) error {
-	return fmt.Errorf("Cannot set cwb head ref with a SessionStateAdapter")
+func (s SessionStateAdapter) SetCWBHeadRef(ctx context.Context, newRef ref.MarshalableRef) error {
+	sqlCtx := sql.NewContext(ctx)
+
+	wsRef, err := ref.WorkingSetRefForHead(newRef.Ref)
+	if err != nil {
+		return err
+	}
+
+	return s.session.SwitchWorkingSet(sqlCtx, s.dbName, wsRef)
 }
 
 var _ env.RepoStateReader = SessionStateAdapter{}
