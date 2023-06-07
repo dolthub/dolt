@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 )
 
@@ -112,10 +111,6 @@ type ServerConfig interface {
 	// DoltTransactionCommit defines the value of the @@dolt_transaction_commit session variable that enables Dolt
 	// commits to be automatically created when a SQL transaction is committed.
 	DoltTransactionCommit() bool
-	// DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in
-	// a multiple db configuration. If nil is returned the server will look for a database in the current directory and
-	// give it a name automatically.
-	DatabaseNamesAndPaths() []env.EnvNameAndPath
 	// DataDir is the path to a directory to use as the data dir, both to create new databases and locate existing ones.
 	DataDir() string
 	// CfgDir is the path to a directory to use to store the dolt configuration files.
@@ -185,7 +180,6 @@ type commandLineServerConfig struct {
 	timeout                 uint64
 	readOnly                bool
 	logLevel                LogLevel
-	dbNamesAndPaths         []env.EnvNameAndPath
 	dataDir                 string
 	cfgDir                  string
 	autoCommit              bool
@@ -355,13 +349,6 @@ func (cfg *commandLineServerConfig) AllowCleartextPasswords() bool {
 	return cfg.allowCleartextPasswords
 }
 
-// DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in
-// a multiple db configuration. If nil is returned the server will look for a database in the current directory and
-// give it a name automatically.
-func (cfg *commandLineServerConfig) DatabaseNamesAndPaths() []env.EnvNameAndPath {
-	return cfg.dbNamesAndPaths
-}
-
 // DataDir is the path to a directory to use as the data dir, both to create new databases and locate existing ones.
 func (cfg *commandLineServerConfig) DataDir() string {
 	return cfg.dataDir
@@ -429,12 +416,6 @@ func (cfg *commandLineServerConfig) withMaxConnections(maxConnections uint64) *c
 // withQueryParallelism updates the query parallelism and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
 func (cfg *commandLineServerConfig) withQueryParallelism(queryParallelism int) *commandLineServerConfig {
 	cfg.queryParallelism = queryParallelism
-	return cfg
-}
-
-// withDBNamesAndPaths updates the dbNamesAndPaths, which is an array of env.EnvNameAndPathObjects corresponding to the databases
-func (cfg *commandLineServerConfig) withDBNamesAndPaths(dbNamesAndPaths []env.EnvNameAndPath) *commandLineServerConfig {
-	cfg.dbNamesAndPaths = dbNamesAndPaths
 	return cfg
 }
 
