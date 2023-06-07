@@ -136,6 +136,7 @@ stop_sql_server() {
 }
 
 definePORT() {
+  echo "definePORT" >&3
   getPORT=""
   for i in {0..9}
   do
@@ -146,5 +147,6 @@ definePORT() {
       echo "$getPORT"
       break
     fi
+  echo "No port found" >&3
   done
 }
