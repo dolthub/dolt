@@ -2,31 +2,26 @@ SERVER_REQS_INSTALLED="FALSE"
 SERVER_PID=""
 DEFAULT_DB=""
 
-set_server_reqs_installed() {
-    SERVER_REQS_INSTALLED=$(python3 -c "
-requirements_installed = True
-try:
-    import mysql.connector
-except:
-    requirements_installed = False
-
-print(str(requirements_installed).upper())
-")
-}
-
 wait_for_connection() {
-    PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
-    python3 -c "
-import os
-import sys
+  port=$1
+  timeout=$2
+  user=$3
+  end_time=$((SECONDS+($timeout/1000)))
 
-args = sys.argv[sys.argv.index('--') + 1:]
-working_dir, database, port_str, timeout_ms, user = args
-os.chdir(working_dir)
+  set +e
+  while [ $SECONDS -lt $end_time ]; do
+    mysql -u $user -h localhost --port $port --protocol TCP --connect-timeout 1 -e "SELECT 1;"
+    if [ $? -eq 0 ]; then
+      echo "Connected successfully!"
+      set -e
+      return 0
+    fi
+    sleep 1
+  done
 
-from pytest import wait_for_connection
-wait_for_connection(port=int(port_str), timeout_ms=int(timeout_ms), database=database, user=user)
-" -- "$PYTEST_DIR" "$DEFAULT_DB" "$1" "$2" "${SQL_USER:-dolt}"
+  echo "Failed to connect to the sql-server on port $port within $timeout ms."
+  set -e
+  return 1
 }
 
 start_sql_server() {
@@ -40,7 +35,7 @@ start_sql_server() {
         dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" &
     fi
     SERVER_PID=$!
-    wait_for_connection $PORT 5000
+    wait_for_connection $PORT 5000 ${SQL_USER:-dolt}
 }
 
 # like start_sql_server, but the second argument is a string with all
