@@ -2,14 +2,15 @@ SERVER_REQS_INSTALLED="FALSE"
 SERVER_PID=""
 DEFAULT_DB=""
 
-# wait_for_connection(<PORT>, <TIMEOUT IN MS>, <USER>) attempts to connect to the sql-server at the specified
-# port on localhost, using the specified user name, and trying once per second until the millisecond timeout
-# is reached. If a connection is successfully established, then this function returns 0. If a connection was
-# not able to be established within the timeout period, then this function returns 1.
+# wait_for_connection(<PORT>, <TIMEOUT IN MS>) attempts to connect to the sql-server at the specified
+# port on localhost, using the $SQL_USER (or 'dolt' if unspecified) as the user name, and trying once
+# per second until the millisecond timeout is reached. If a connection is successfully established,
+# this function returns 0. If a connection was not able to be established within the timeout period,
+# this function returns 1.
 wait_for_connection() {
   port=$1
   timeout=$2
-  user=$3
+  user=${SQL_USER:-dolt}
   end_time=$((SECONDS+($timeout/1000)))
 
   # BATS has 'set -e' enabled, which causes the script to fail immediately if any subcommand returns a non-zero
@@ -41,7 +42,7 @@ start_sql_server() {
         dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" &
     fi
     SERVER_PID=$!
-    wait_for_connection $PORT 5000 ${SQL_USER:-dolt}
+    wait_for_connection $PORT 5000
 }
 
 # like start_sql_server, but the second argument is a string with all
