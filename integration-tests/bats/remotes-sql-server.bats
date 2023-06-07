@@ -499,7 +499,7 @@ teardown() {
 
     run dolt sql-client --use-db repo2/feature -P $PORT -u dolt -q "select active_branch()"
     [ $status -eq 1 ]
-    [[ "$output" =~ "database not found: repo2/feature" ]] || false
+    [[ "$output" =~ "'feature' matched multiple remote tracking branches" ]] || false
 
     run grep "'feature' matched multiple remote tracking branches" server_log.txt
     [ "${#lines[@]}" -ne 0 ]
