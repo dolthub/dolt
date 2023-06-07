@@ -384,35 +384,30 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 	if !ok {
 		t.Fatal("'mydb' database not found")
 	}
-	cs, err := doltdb.NewCommitSpec("HEAD")
+
+	headSpec, err := doltdb.NewCommitSpec("HEAD")
 	require.NoError(t, err)
 	headRefs, err := db.GetHeadRefs(context.Background())
 	require.NoError(t, err)
-	commit3, err := db.Resolve(context.Background(), cs, headRefs[0])
+	head, err := db.Resolve(context.Background(), headSpec, headRefs[0])
 	require.NoError(t, err)
-	cm3, err := commit3.GetCommitMeta(context.Background())
+	headMeta, err := head.GetCommitMeta(context.Background())
 	require.NoError(t, err)
-	require.Contains(t, cm3.Description, "Transaction commit")
+	require.Contains(t, headMeta.Description, "Transaction commit")
 
-	as, err := doltdb.NewAncestorSpec("~1")
+	ancestorSpec, err := doltdb.NewAncestorSpec("~1")
 	require.NoError(t, err)
-	commit2, err := commit3.GetAncestor(context.Background(), as)
+	parent, err := head.GetAncestor(context.Background(), ancestorSpec)
 	require.NoError(t, err)
-	cm2, err := commit2.GetCommitMeta(context.Background())
+	parentMeta, err := parent.GetCommitMeta(context.Background())
 	require.NoError(t, err)
-	require.Contains(t, cm2.Description, "Transaction commit")
+	require.Contains(t, parentMeta.Description, "Transaction commit")
 
-	commit1, err := commit2.GetAncestor(context.Background(), as)
+	grandParent, err := parent.GetAncestor(context.Background(), ancestorSpec)
 	require.NoError(t, err)
-	cm1, err := commit1.GetCommitMeta(context.Background())
+	grandparentMeta, err := grandParent.GetCommitMeta(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, "Transaction commit", cm1.Description)
-
-	commit0, err := commit1.GetAncestor(context.Background(), as)
-	require.NoError(t, err)
-	cm0, err := commit0.GetCommitMeta(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, "checkpoint enginetest database mydb", cm0.Description)
+	require.Equal(t, "checkpoint enginetest database mydb", grandparentMeta.Description)
 }
 
 func TestDoltTransactionCommitLateFkResolution(t *testing.T) {

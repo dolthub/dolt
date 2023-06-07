@@ -31,6 +31,7 @@ import (
 )
 
 var DoltPath string
+var DelvePath string
 
 const TestUserName = "Bats Tests"
 const TestEmailAddress = "bats@email.fake"
@@ -45,10 +46,13 @@ func init() {
 	}
 	path = filepath.Clean(path)
 	var err error
+
 	DoltPath, err = exec.LookPath(path)
 	if err != nil {
 		log.Printf("did not find dolt binary: %v\n", err.Error())
 	}
+
+	DelvePath, _ = exec.LookPath("dlv")
 }
 
 // DoltUser is an abstraction for a user account that calls `dolt` CLI
@@ -66,8 +70,11 @@ type DoltUser struct {
 	tmpdir string
 }
 
+var _ DoltCmdable = DoltUser{}
+var _ DoltDebuggable = DoltUser{}
+
 func NewDoltUser() (DoltUser, error) {
-	tmpdir, err := os.MkdirTemp("", "go-sql-server-dirver-")
+	tmpdir, err := os.MkdirTemp("", "go-sql-server-driver-")
 	if err != nil {
 		return DoltUser{}, err
 	}
@@ -91,7 +98,29 @@ func (u DoltUser) DoltCmd(args ...string) *exec.Cmd {
 	cmd := exec.Command(DoltPath, args...)
 	cmd.Dir = u.tmpdir
 	cmd.Env = append(os.Environ(), "DOLT_ROOT_PATH="+u.tmpdir)
+	ApplyCmdAttributes(cmd)
 	return cmd
+}
+
+func (u DoltUser) DoltDebug(debuggerPort int, args ...string) *exec.Cmd {
+	if DelvePath != "" {
+		dlvArgs := []string{
+			fmt.Sprintf("--listen=:%d", debuggerPort),
+			"--headless",
+			"--api-version=2",
+			"--accept-multiclient",
+			"exec",
+			DoltPath,
+			"--",
+		}
+		cmd := exec.Command(DelvePath, append(dlvArgs, args...)...)
+		cmd.Dir = u.tmpdir
+		cmd.Env = append(os.Environ(), "DOLT_ROOT_PATH="+u.tmpdir)
+		ApplyCmdAttributes(cmd)
+		return cmd
+	} else {
+		panic("dlv not found")
+	}
 }
 
 func (u DoltUser) DoltExec(args ...string) error {
@@ -116,6 +145,9 @@ type RepoStore struct {
 	Dir  string
 }
 
+var _ DoltCmdable = RepoStore{}
+var _ DoltDebuggable = RepoStore{}
+
 func (rs RepoStore) MakeRepo(name string) (Repo, error) {
 	path := filepath.Join(rs.Dir, name)
 	err := os.Mkdir(path, 0750)
@@ -132,6 +164,12 @@ func (rs RepoStore) MakeRepo(name string) (Repo, error) {
 
 func (rs RepoStore) DoltCmd(args ...string) *exec.Cmd {
 	cmd := rs.user.DoltCmd(args...)
+	cmd.Dir = rs.Dir
+	return cmd
+}
+
+func (rs RepoStore) DoltDebug(debuggerPort int, args ...string) *exec.Cmd {
+	cmd := rs.user.DoltDebug(debuggerPort, args...)
 	cmd.Dir = rs.Dir
 	return cmd
 }
@@ -165,6 +203,7 @@ type SqlServer struct {
 	Done        chan struct{}
 	Cmd         *exec.Cmd
 	Port        int
+	DebugPort   int
 	Output      *bytes.Buffer
 	DBName      string
 	RecreateCmd func(args ...string) *exec.Cmd
@@ -190,12 +229,36 @@ func WithPort(port int) SqlServerOpt {
 	}
 }
 
+func WithDebugPort(port int) SqlServerOpt {
+	return func(s *SqlServer) {
+		s.DebugPort = port
+	}
+}
+
 type DoltCmdable interface {
-	DoltCmd(...string) *exec.Cmd
+	DoltCmd(args ...string) *exec.Cmd
+}
+
+type DoltDebuggable interface {
+	DoltDebug(debuggerPort int, args ...string) *exec.Cmd
 }
 
 func StartSqlServer(dc DoltCmdable, opts ...SqlServerOpt) (*SqlServer, error) {
 	cmd := dc.DoltCmd("sql-server")
+	return runSqlServerCommand(dc, opts, cmd)
+}
+
+func DebugSqlServer(dc DoltCmdable, debuggerPort int, opts ...SqlServerOpt) (*SqlServer, error) {
+	ddb, ok := dc.(DoltDebuggable)
+	if !ok {
+		return nil, fmt.Errorf("%T does not implement DoltDebuggable", dc)
+	}
+
+	cmd := ddb.DoltDebug(debuggerPort, "sql-server")
+	return runSqlServerCommand(dc, append(opts, WithDebugPort(debuggerPort)), cmd)
+}
+
+func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*SqlServer, error) {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -213,27 +276,34 @@ func StartSqlServer(dc DoltCmdable, opts ...SqlServerOpt) (*SqlServer, error) {
 		wg.Wait()
 		close(done)
 	}()
-	ret := &SqlServer{
+
+	server := &SqlServer{
 		Done:   done,
 		Cmd:    cmd,
 		Port:   3306,
 		Output: output,
-		RecreateCmd: func(args ...string) *exec.Cmd {
-			return dc.DoltCmd(args...)
-		},
 	}
 	for _, o := range opts {
-		o(ret)
+		o(server)
 	}
-	err = ret.Cmd.Start()
+
+	server.RecreateCmd = func(args ...string) *exec.Cmd {
+		if server.DebugPort > 0 {
+			ddb, ok := dc.(DoltDebuggable)
+			if !ok {
+				panic(fmt.Sprintf("%T does not implement DoltDebuggable", dc))
+			}
+			return ddb.DoltDebug(server.DebugPort, args...)
+		} else {
+			return dc.DoltCmd(args...)
+		}
+	}
+
+	err = server.Cmd.Start()
 	if err != nil {
 		return nil, err
 	}
-	return ret, nil
-}
-
-func (r Repo) StartSqlServer(opts ...SqlServerOpt) (*SqlServer, error) {
-	return StartSqlServer(r, opts...)
+	return server, nil
 }
 
 func (s *SqlServer) ErrorStop() error {

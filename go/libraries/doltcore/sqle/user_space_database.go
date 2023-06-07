@@ -76,7 +76,7 @@ func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
 	return resultingTblNames, nil
 }
 
-func (db *UserSpaceDatabase) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
+func (db *UserSpaceDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error) {
 	return dsess.InitialDbState{
 		Db:       db,
 		ReadOnly: true,
@@ -111,10 +111,18 @@ func (db *UserSpaceDatabase) Revision() string {
 	return ""
 }
 
+func (db *UserSpaceDatabase) Versioned() bool {
+	return false
+}
+
 func (db *UserSpaceDatabase) RevisionType() dsess.RevisionType {
 	return dsess.RevisionTypeNone
 }
 
-func (db *UserSpaceDatabase) BaseName() string {
+func (db *UserSpaceDatabase) RevisionQualifiedName() string {
+	return db.Name()
+}
+
+func (db *UserSpaceDatabase) RequestedName() string {
 	return db.Name()
 }

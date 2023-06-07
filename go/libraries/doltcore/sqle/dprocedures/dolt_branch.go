@@ -94,10 +94,6 @@ func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession, rsc *doltdb.R
 		dsess.WaitForReplicationController(ctx, *rsc)
 	}
 
-	// Because this transaction manipulation is happening outside the engine's awareness, we need to set it to nil here
-	// to get a fresh transaction started on the next statement.
-	// TODO: put this under engine control
-	ctx.SetTransaction(nil)
 	return nil
 }
 
@@ -221,11 +217,8 @@ func shouldAllowDefaultBranchDeletion(ctx *sql.Context) bool {
 // validateBranchNotActiveInAnySessions returns an error if the specified branch is currently
 // selected as the active branch for any active server sessions.
 func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) error {
-	currentDbName, _, err := getRevisionForRevisionDatabase(ctx, ctx.GetCurrentDatabase())
-	if err != nil {
-		return err
-	}
-
+	currentDbName := ctx.GetCurrentDatabase()
+	currentDbName, _ = dsess.SplitRevisionDbName(currentDbName)
 	if currentDbName == "" {
 		return nil
 	}
@@ -242,24 +235,22 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 	branchRef := ref.NewBranchRef(branchName)
 
 	return sessionManager.Iter(func(session sql.Session) (bool, error) {
-		dsess, ok := session.(*dsess.DoltSession)
+		sess, ok := session.(*dsess.DoltSession)
 		if !ok {
 			return false, fmt.Errorf("unexpected session type: %T", session)
 		}
 
-		sessionDatabase := dsess.Session.GetCurrentDatabase()
-		sessionDbName, _, err := getRevisionForRevisionDatabase(ctx, dsess.GetCurrentDatabase())
-		if err != nil {
-			return false, err
-		}
-
-		if len(sessionDatabase) == 0 || sessionDbName != currentDbName {
+		sessionDbName := sess.Session.GetCurrentDatabase()
+		baseName, _ := dsess.SplitRevisionDbName(sessionDbName)
+		if len(baseName) == 0 || baseName != currentDbName {
 			return false, nil
 		}
 
-		activeBranchRef, err := dsess.CWBHeadRef(ctx, sessionDatabase)
+		activeBranchRef, err := sess.CWBHeadRef(ctx, sessionDbName)
 		if err != nil {
-			return false, err
+			// The above will throw an error if the current DB doesn't have a head ref, in which case we don't need to
+			// consider it
+			return false, nil
 		}
 
 		if ref.Equals(branchRef, activeBranchRef) {

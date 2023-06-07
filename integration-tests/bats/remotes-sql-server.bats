@@ -332,7 +332,8 @@ teardown() {
 
     cd repo1
     dolt checkout -b feature-branch
-    dolt commit -am "new commit"
+    dolt sql -q "create table newTable (a int primary key)"
+    dolt commit -Am "new commit"
     dolt push remote1 feature-branch
 
     cd ../repo2
@@ -347,8 +348,7 @@ teardown() {
     # Can't connect to a specific branch with dolt sql-client
     run dolt sql-client --use-db "repo2/feature-branch" -u dolt -P $PORT -q "SHOW Tables"
     [ $status -eq 0 ]
-    [[ $output =~ "feature-branch" ]] || false
-    [[ $output =~ "test" ]] || false
+    [[ $output =~ "newTable" ]] || false
 }
 
 @test "remotes-sql-server: connect to hash works" {
@@ -502,7 +502,7 @@ teardown() {
 
     run dolt sql-client --use-db repo2/feature -P $PORT -u dolt -q "select active_branch()"
     [ $status -eq 1 ]
-    [[ "$output" =~ "database not found: repo2/feature" ]] || false
+    [[ "$output" =~ "'feature' matched multiple remote tracking branches" ]] || false
 
     run grep "'feature' matched multiple remote tracking branches" server_log.txt
     [ "${#lines[@]}" -ne 0 ]
