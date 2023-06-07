@@ -2,12 +2,18 @@ SERVER_REQS_INSTALLED="FALSE"
 SERVER_PID=""
 DEFAULT_DB=""
 
+# wait_for_connection(<PORT>, <TIMEOUT IN MS>, <USER>) attempts to connect to the sql-server at the specified
+# port on localhost, using the specified user name, and trying once per second until the millisecond timeout
+# is reached. If a connection is successfully established, then this function returns 0. If a connection was
+# not able to be established within the timeout period, then this function returns 1.
 wait_for_connection() {
   port=$1
   timeout=$2
   user=$3
   end_time=$((SECONDS+($timeout/1000)))
 
+  # BATS has 'set -e' enabled, which causes the script to fail immediately if any subcommand returns a non-zero
+  # exit code, so we need to temporarily enable 'set +e', but be sure to turn 'set -e' back on before we exit.
   set +e
   while [ $SECONDS -lt $end_time ]; do
     mysql -u $user -h localhost --port $port --protocol TCP --connect-timeout 1 -e "SELECT 1;"
