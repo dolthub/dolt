@@ -16,10 +16,10 @@ package commands
 
 import (
 	"context"
+	"crypto/sha1"
 	"fmt"
+	"net"
 	"path/filepath"
-
-	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var fwtStageName = "fwt"
@@ -222,6 +223,7 @@ func newLateBindingEngine(
 		if err != nil {
 			return nil, nil, nil, err
 		}
+
 		sqlCtx, err := se.NewDefaultContext(ctx2)
 		if err != nil {
 			return nil, nil, nil, err
@@ -231,16 +233,77 @@ func newLateBindingEngine(
 		// database set when you begin using them.
 		sqlCtx.SetCurrentDatabase(database)
 
-		// Add specified user as new superuser, if it doesn't already exist
-		if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
-			se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
+		var dbUser string
+		if creds.Username != "" {
+			rawDb := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
+			// When running in local mode, we want to attempt respect the user/pwd they provided. If they didn't provide
+			// one, we'll give then super user privs. Respecting the user/pwd is not a security stance - it's there
+			// to enable testing of application settings.
+
+			salt, err := rawDb.Salt()
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			authResponse := buildAuthResponse(salt, config.ServerPass)
+			// The port is meaningless here. It's going to be stripped in the ValidateHash function
+			addr, _ := net.ResolveTCPAddr("tcp", "localhost:3306")
+
+			authenticated, err := rawDb.ValidateHash(salt, creds.Username, authResponse, addr)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			if authenticated == nil {
+				// Shouldn't happen - err above should happen instead. But just in case...
+				return nil, nil, nil, fmt.Errorf("unable to authenticate user %s", config.ServerUser)
+			}
+
+			// A legit user/pwd was provided. We'll retrieve the user below, and skip the super user promotion.
+			dbUser = creds.Username
+		}
+		if dbUser == "" {
+			dbUser = DefaultUser
+			se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(dbUser, config.ServerHost, config.ServerPass)
 		}
 
 		// Set client to specified user
-		sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
+		sqlCtx.Session.SetClient(sql.Client{User: dbUser, Address: config.ServerHost, Capabilities: 0})
 		return se, sqlCtx, func() { se.Close() }, nil
-
 	}
 
 	return lateBinder, nil
+}
+
+// buildAuthResponse takes the user password and server salt to construct an authResponse. This is the client
+// side logic of the mysql_native_password authentication protocol.
+func buildAuthResponse(salt []byte, password string) []byte {
+	if len(password) == 0 {
+		return nil
+	}
+
+	// Final goal is to get to this:
+	// XOR(SHA(password), SHA(salt, SHA(SHA(password))))
+
+	crypt := sha1.New()
+	crypt.Write([]byte(password))
+	shaPwd := crypt.Sum(nil)
+
+	crypt.Reset()
+	crypt.Write(shaPwd)
+	// This is the value stored in the Database in the mysql.user table in the authentication_string column when
+	// the plugin is set to mysql_native_password.
+	shaShaPwd := crypt.Sum(nil)
+
+	// Using salt and shaShaPwd (both of which the server knows) we execute an XOR with shaPwd. This means the server
+	// can XOR the result of this with shaShaPwd to get shaPwd. Then the server takes the sha of that value and validates
+	// it's what it has stored in the database.
+	crypt.Reset()
+	crypt.Write(salt)
+	crypt.Write(shaShaPwd)
+	scramble := crypt.Sum(nil)
+	for i := range shaPwd {
+		shaPwd[i] ^= scramble[i]
+	}
+
+	return shaPwd
 }

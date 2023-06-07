@@ -615,6 +615,7 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 	if verbose {
 		cli.Println("verbose: starting local mode")
 	}
+
 	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, creds, apr)
 }
 
