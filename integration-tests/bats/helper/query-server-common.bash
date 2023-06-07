@@ -120,6 +120,7 @@ stop_sql_server() {
     if [ -f "/tmp/dolt.$PORT.sock" ]; then rm -f /tmp/dolt.$PORT.sock; fi
 
     wait=$1
+    echo "Stopping " "$SERVER_PID" "$PORT" >&3
     if [ ! -z "$SERVER_PID" ]; then
         # ignore failures of kill command in the case the server is already dead
         echo "Killing server on port" $PORT >&3
