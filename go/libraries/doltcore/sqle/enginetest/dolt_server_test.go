@@ -235,11 +235,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client a */ select name from dolt_branches;",
-				ExpectedErrStr: "Error 1105: database not found: dolt/branch1",
+				ExpectedErrStr: "Error 1105: branch not found",
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
-				ExpectedErrStr: "Error 1105: database not found: dolt/branch1",
+				ExpectedErrStr: "Error 1105: Could not load database dolt",
 			},
 			{
 				Query:    "/* client a */ USE dolt/main;",
@@ -284,11 +284,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client a */ select name from dolt_branches;",
-				ExpectedErrStr: "Error 1105: database not found: dolt/branch1",
+				Expected: []sql.Row{{"branch1"}, {"main"}},
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
-				ExpectedErrStr: "Error 1105: database not found: dolt/branch1",
+				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "/* client a */ USE dolt/main;",
