@@ -84,7 +84,7 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 	// This command creates a commit, so we need user identity
-	if !cli.CheckUserNameAndEmail(dEnv) {
+	if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
 		return 1
 	}
 

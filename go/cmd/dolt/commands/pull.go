@@ -27,7 +27,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var pullDocs = cli.CommandDocumentationContent{
@@ -69,6 +71,15 @@ func (cmd PullCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+	_, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		iohelp.WriteLine(cli.CliOut, err.Error())
+		return 1
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
 	ap := cli.CreatePullArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, pullDocs, ap))
 
@@ -102,7 +113,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	err = pullHelper(ctx, dEnv, pullSpec)
+	err = pullHelper(ctx, sqlCtx, dEnv, pullSpec, cliCtx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -110,7 +121,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 // pullHelper splits pull into fetch, prepare merge, and merge to interleave printing
-func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) error {
+func pullHelper(ctx context.Context, sqlCtx *sql.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec, cliCtx cli.CliContext) error {
 	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
 	if err != nil {
 		return fmt.Errorf("failed to get remote db; %w", err)
@@ -208,7 +219,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 			}
 
 			suggestedMsg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, headRef.GetPath())
-			tblStats, err := performMerge(ctx, dEnv, mergeSpec, suggestedMsg)
+			tblStats, err := performMerge(ctx, sqlCtx, dEnv, mergeSpec, suggestedMsg, cliCtx)
 			printSuccessStats(tblStats)
 			if err != nil {
 				return err

@@ -22,6 +22,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	goisatty "github.com/mattn/go-isatty"
 
@@ -77,7 +80,7 @@ func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	res, skipped := performCommit(ctx, commandStr, args, dEnv)
+	res, skipped := performCommit(ctx, commandStr, args, dEnv, cliCtx)
 	if res == 1 {
 		return res
 	}
@@ -94,7 +97,23 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 // performCommit creates a new Dolt commit using the specified |commandStr| and |args| for the specified Dolt environment
 // |dEnv|. The response is an integer status code indicating success or failure, as well as a boolean that indicates
 // if the commit was skipped (e.g. because --skip-empty was specified as an argument).
-func performCommit(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) (int, bool) {
+func performCommit(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) (int, bool) {
+	_, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		iohelp.WriteLine(cli.CliOut, err.Error())
+		return 1, false
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
+	err = branch_control.CheckAccess(sqlCtx, branch_control.Permissions_Write)
+	if err != nil {
+		iohelp.WriteLine(cli.CliOut, err.Error())
+		return 1, false
+	}
+	dbName := sqlCtx.GetCurrentDatabase()
+
 	ap := cli.CreateCommitArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -106,29 +125,24 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 	allFlag := apr.Contains(cli.AllFlag)
 	upperCaseAllFlag := apr.Contains(cli.UpperCaseAllFlag)
 
-	if dEnv.IsLocked() {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help), false
-	}
-
-	roots, err := dEnv.Roots(ctx)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working root").AddCause(err).Build(), usage), false
+	dSess := dsess.DSessFromSess(sqlCtx.Session)
+	roots, ok := dSess.GetRoots(sqlCtx, dbName)
+	if !ok {
+		iohelp.WriteLine(cli.CliOut, fmt.Sprintf("Could not load database %s", dbName))
+		return 1, false
 	}
 
 	if upperCaseAllFlag {
 		roots, err = actions.StageAllTables(ctx, roots, true)
 		if err != nil {
-			return handleCommitErr(ctx, dEnv, err, help), false
+			return handleCommitErr(ctx, sqlCtx, err, help), false
 		}
 	} else if allFlag {
 		roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
 		if err != nil {
-			return handleCommitErr(ctx, dEnv, err, help), false
+			return handleCommitErr(ctx, sqlCtx, err, help), false
 		}
 	}
-
-	headCommit, _ := dEnv.HeadCommit(ctx)
-	headHash, _ := headCommit.HashOf()
 
 	var name, email string
 	// Check if the author flag is provided otherwise get the name and email stored in configs
@@ -136,29 +150,33 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		name, email, err = cli.ParseAuthor(authorStr)
 	} else {
 		// This command creates a commit, so we need user identity
-		if !cli.CheckUserNameAndEmail(dEnv) {
+		if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
 			return 1, false
 		}
-		name, email, err = env.GetNameAndEmail(dEnv.Config)
+		name, email, err = env.GetNameAndEmail(cliCtx.Config())
 	}
-
 	if err != nil {
-		return handleCommitErr(ctx, dEnv, err, usage), false
+		return handleCommitErr(ctx, sqlCtx, err, usage), false
 	}
 
 	msg, msgOk := apr.GetValue(cli.MessageArg)
 	if !msgOk {
 		amendStr := ""
 		if apr.Contains(cli.AmendFlag) {
-			commitMeta, cmErr := headCommit.GetCommitMeta(ctx)
+			commit, cmErr := dSess.GetHeadCommit(sqlCtx, dbName)
 			if cmErr != nil {
-				return handleCommitErr(ctx, dEnv, cmErr, usage), false
+				return handleCommitErr(ctx, sqlCtx, cmErr, usage), false
+			}
+			commitMeta, err := commit.GetCommitMeta(sqlCtx)
+			if cmErr != nil {
+				iohelp.WriteLine(cli.CliOut, err.Error())
+				return 1, false
 			}
 			amendStr = commitMeta.Description
 		}
-		msg, err = getCommitMessageFromEditor(ctx, dEnv, "", amendStr, false)
+		msg, err = getCommitMessageFromEditor(ctx, sqlCtx, "", amendStr, false, cliCtx)
 		if err != nil {
-			return handleCommitErr(ctx, dEnv, err, usage), false
+			return handleCommitErr(ctx, sqlCtx, err, usage), false
 		}
 	}
 
@@ -172,6 +190,12 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		}
 	}
 
+	headCommit, err := dSess.GetHeadCommit(sqlCtx, dbName)
+	if err != nil {
+		iohelp.WriteLine(cli.CliOut, err.Error())
+		return 1, false
+	}
+
 	var parentsHeadForAmend []*doltdb.Commit
 	if apr.Contains(cli.AmendFlag) {
 		numParentsHeadForAmend := headCommit.NumParents()
@@ -182,35 +206,33 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 			}
 		}
 
-		newRoots, err := actions.ResetSoftToRef(ctx, dEnv.DbData(), "HEAD~1")
+		dbData, ok := dSess.GetDbData(sqlCtx, dbName)
+		if !ok {
+			iohelp.WriteLine(cli.CliOut, fmt.Sprintf("Could not load database %s", dbName))
+			return 1, false
+		}
+		newRoots, err := actions.ResetSoftToRef(ctx, dbData, "HEAD~1")
 		if err != nil {
 			return handleResetError(err, usage), false
 		}
 
-		err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
+		ws, err := dSess.WorkingSet(sqlCtx, dbName)
 		if err != nil {
 			return handleResetError(err, usage), false
 		}
+		err = dSess.SetWorkingSet(sqlCtx, dbName, ws.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged))
+		if err != nil {
+			iohelp.WriteLine(cli.CliOut, err.Error())
+			return 1, false
+		}
 	}
 
-	ws, err := dEnv.WorkingSet(ctx)
+	ws, err := dSess.WorkingSet(sqlCtx, dbName)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working set").AddCause(err).Build(), usage), false
 	}
 
-	prevHash, err := ws.HashOf()
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working set").AddCause(err).Build(), usage), false
-	}
-
-	var mergeParentCommits []*doltdb.Commit
-	if ws.MergeActive() {
-		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
-	} else if apr.Contains(cli.AmendFlag) && len(parentsHeadForAmend) > 1 {
-		mergeParentCommits = parentsHeadForAmend
-	}
-
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws, mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
+	pendingCommit, err := dSess.NewPendingCommit(sqlCtx, dbName, roots, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag) || apr.Contains(cli.AmendFlag),
@@ -221,17 +243,27 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 	})
 	if err != nil {
 		if apr.Contains(cli.AmendFlag) {
-			newRoots, errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
+			dbData, ok := dSess.GetDbData(sqlCtx, dbName)
+			if !ok {
+				iohelp.WriteLine(cli.CliOut, fmt.Sprintf("Could not load database %s", dbName))
+				return 1, false
+			}
+			headHash, err := headCommit.HashOf()
+			if err != nil {
+				iohelp.WriteLine(cli.CliOut, err.Error())
+				return 1, false
+			}
+			newRoots, errRes := actions.ResetSoftToRef(ctx, dbData, headHash.String())
 			if errRes != nil {
 				return handleResetError(errRes, usage), false
 			}
 
-			err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
+			err = dSess.SetWorkingSet(sqlCtx, dbName, ws.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged))
 			if err != nil {
 				return handleResetError(err, usage), false
 			}
 		}
-		return handleCommitErr(ctx, dEnv, err, usage), false
+		return handleCommitErr(ctx, sqlCtx, err, usage), false
 	}
 
 	// If no error was reported and there is no pending commit, then no commit was created, likely
@@ -240,28 +272,30 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		return 0, true
 	}
 
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-	if err != nil {
-		return handleCommitErr(ctx, dEnv, err, usage), false
-	}
-	_, err = dEnv.DoltDB.CommitWithWorkingSet(
-		ctx,
-		headRef,
-		ws.Ref(),
+	_, err = dSess.DoltCommit(
+		sqlCtx,
+		dbName,
+		dSess.GetTransaction(),
 		pendingCommit,
-		ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),
-		prevHash,
-		dEnv.NewWorkingSetMeta(fmt.Sprintf("Updated by %s %s", commandStr, strings.Join(args, " "))),
-		nil,
 	)
 	if err != nil {
 		if apr.Contains(cli.AmendFlag) {
-			newRoots, errRes := actions.ResetSoftToRef(ctx, dEnv.DbData(), headHash.String())
+			headHash, err := headCommit.HashOf()
+			if err != nil {
+				iohelp.WriteLine(cli.CliOut, err.Error())
+				return 1, false
+			}
+			dbData, ok := dSess.GetDbData(sqlCtx, dbName)
+			if !ok {
+				iohelp.WriteLine(cli.CliOut, fmt.Sprintf("Could not load database %s", dbName))
+				return 1, false
+			}
+			newRoots, errRes := actions.ResetSoftToRef(ctx, dbData, headHash.String())
 			if errRes != nil {
 				return handleResetError(errRes, usage), false
 			}
 
-			err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
+			err = dSess.SetWorkingSet(sqlCtx, dbName, ws.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged))
 			if err != nil {
 				return handleResetError(err, usage), false
 			}
@@ -272,7 +306,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 	return 0, false
 }
 
-func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cli.UsagePrinter) int {
+func handleCommitErr(ctx context.Context, sqlCtx *sql.Context, err error, usage cli.UsagePrinter) int {
 	if err == nil {
 		return 0
 	}
@@ -300,7 +334,7 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 
 	if actions.IsNothingStaged(err) {
 		notStagedTbls := actions.NothingStagedTblDiffs(err)
-		n, newErr := PrintDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, false, false, 0, merge.ArtifactStatus{})
+		n, newErr := PrintDiffsNotStaged(ctx, sqlCtx, cli.CliOut, notStagedTbls, false, false, 0, merge.ArtifactStatus{})
 		if newErr != nil {
 			bdr := errhand.BuildDError(`No changes added to commit (use "dolt add")\nCould not print diff because of additional error`)
 			bdr.AddCause(newErr)
@@ -325,7 +359,7 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 
 // getCommitMessageFromEditor opens editor to ask user for commit message if none defined from command line.
 // suggestedMsg will be returned if no-edit flag is defined or if this function was called from sql dolt_merge command.
-func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg, amendString string, noEdit bool) (string, error) {
+func getCommitMessageFromEditor(ctx context.Context, sqlCtx *sql.Context, suggestedMsg, amendString string, noEdit bool, cliCtx cli.CliContext) (string, error) {
 	if cli.ExecuteWithStdioRestored == nil || noEdit {
 		return suggestedMsg, nil
 	}
@@ -335,7 +369,7 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggeste
 	}
 
 	var finalMsg string
-	initialMsg, err := buildInitalCommitMsg(ctx, dEnv, suggestedMsg)
+	initialMsg, err := buildInitalCommitMsg(ctx, sqlCtx, suggestedMsg)
 	if err != nil {
 		return "", err
 	}
@@ -349,7 +383,7 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv, suggeste
 		backupEd = ed
 	}
 	// try getting Dolt config core.editor
-	editorStr := dEnv.Config.GetStringOrDefault(env.DoltEditor, backupEd)
+	editorStr := cliCtx.Config().GetStringOrDefault(env.DoltEditor, backupEd)
 
 	cli.ExecuteWithStdioRestored(func() {
 		commitMsg, cErr := editor.OpenCommitEditor(editorStr, initialMsg)
@@ -376,18 +410,20 @@ func checkIsTerminal() bool {
 	return isTerminal
 }
 
-func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg string) (string, error) {
+func buildInitalCommitMsg(ctx context.Context, sqlCtx *sql.Context, suggestedMsg string) (string, error) {
 	initialNoColor := color.NoColor
 	color.NoColor = true
 
-	roots, err := dEnv.Roots(ctx)
-	if err != nil {
-		panic(err)
+	dSess := dsess.DSessFromSess(sqlCtx.Session)
+	dbName := sqlCtx.GetCurrentDatabase()
+	roots, ok := dSess.GetRoots(sqlCtx, dbName)
+	if !ok {
+		panic(fmt.Errorf("Could not load database %s", dbName))
 	}
 
 	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 
-	ws, err := dEnv.WorkingSet(ctx)
+	ws, err := dSess.WorkingSet(sqlCtx, dbName)
 	if err != nil {
 		return "", err
 	}
@@ -399,12 +435,16 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv, suggestedMsg s
 
 	buf := bytes.NewBuffer([]byte{})
 	n := printStagedDiffs(buf, stagedTblDiffs, true)
-	n, err = PrintDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, true, false, n, as)
+	n, err = PrintDiffsNotStaged(ctx, sqlCtx, buf, notStagedTblDiffs, true, false, n, as)
 	if err != nil {
 		return "", err
 	}
 
-	currBranch, err := dEnv.RepoStateReader().CWBHeadRef()
+	dbData, ok := dSess.GetDbData(sqlCtx, sqlCtx.GetCurrentDatabase())
+	if !ok {
+		return "", fmt.Errorf("Could not load database %s", dbName)
+	}
+	currBranch, err := dbData.Rsr.CWBHeadRef()
 	if err != nil {
 		return "", err
 	}
@@ -436,7 +476,7 @@ func parseCommitMessage(cm string) string {
 
 func PrintDiffsNotStaged(
 	ctx context.Context,
-	dEnv *env.DoltEnv,
+	sqlCtx *sql.Context,
 	wr io.Writer,
 	notStagedTbls []diff.TableDelta,
 	printHelp bool,
@@ -444,9 +484,10 @@ func PrintDiffsNotStaged(
 	linesPrinted int,
 	as merge.ArtifactStatus,
 ) (int, error) {
-	roots, err := dEnv.Roots(ctx)
-	if err != nil {
-		return 0, err
+	dSess := dsess.DSessFromSess(sqlCtx.Session)
+	roots, ok := dSess.GetRoots(sqlCtx, sqlCtx.GetCurrentDatabase())
+	if !ok {
+		return 0, fmt.Errorf("Could not load database %s", sqlCtx.GetCurrentDatabase())
 	}
 
 	inCnfSet := set.NewStrSet(as.DataConflictTables)
