@@ -48,12 +48,6 @@ listener:
     read_timeout_millis: 28800000
     write_timeout_millis: 28800000
     
-databases:
-    - name: irs_soi
-      path: ./datasets/irs-soi
-    - name: noaa
-      path: /Users/brian/datasets/noaa
-
 data_dir: some nonsense
 
 metrics:
@@ -91,16 +85,6 @@ jwks:
 `
 	expected := serverConfigAsYAMLConfig(DefaultServerConfig())
 	expected.BehaviorConfig.DoltTransactionCommit = &trueValue
-	expected.DatabaseConfig = []DatabaseYAMLConfig{
-		{
-			Name: "irs_soi",
-			Path: "./datasets/irs-soi",
-		},
-		{
-			Name: "noaa",
-			Path: "/Users/brian/datasets/noaa",
-		},
-	}
 	expected.MetricsConfig = MetricsYAMLConfig{
 		Host: strPtr("123.45.67.89"),
 		Port: intPtr(9091),
