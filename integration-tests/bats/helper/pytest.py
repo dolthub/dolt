@@ -41,12 +41,14 @@ class InfiniteRetryConnection(DoltConnection):
 
                 try:
                     self.cnx.close()
-                except BaseException:
+                except BaseException as e:
+                    print("should be fine: ", repr(e))
                     pass
 
                 return
 
-            except BaseException:
+            except BaseException as e:
+                print(repr(e))
                 pass
 
 def wait_for_connection(user='root', password=None, host='127.0.0.1', port=3306, database='dolt', timeout_ms=5000):
