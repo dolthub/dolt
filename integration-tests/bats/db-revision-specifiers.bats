@@ -44,7 +44,7 @@ use $database_name/branch1;
 show databases;
 SQL
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "$database_name/branch1" ]] || false
+    [[ "$output" =~ "$database_name" ]] || false
 
     # Can be used as part of a fully qualified table name
     run dolt sql -q "SELECT * FROM \`$database_name/branch1\`.test" -r=csv
@@ -80,7 +80,7 @@ use $database_name/v1;
 show databases;
 SQL
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "$database_name/v1" ]] || false
+    [[ "$output" =~ "$database_name" ]] || false
 
     # Can be used as part of a fully qualified table name
     run dolt sql -q "SELECT * FROM \`$database_name/v1\`.test" -r=csv
@@ -95,7 +95,7 @@ use $database_name/v1;
 insert into test values (100, 'beige');
 SQL
     [ "$status" -ne "0" ]
-    [[ "$output" =~ "$database_name/v1 is read-only" ]] || false
+    [[ "$output" =~ "$database_name is read-only" ]] || false
 }
 
 @test "db-revision-specifiers: commit-qualified database revisions" {
@@ -118,7 +118,7 @@ use $database_name/$commit;
 show databases;
 SQL
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "$database_name/$commit" ]] || false
+    [[ "$output" =~ "$database_name" ]] || false
 
     # Can be used as part of a fully qualified table name
     run dolt sql -q "SELECT * FROM \`$database_name/$commit\`.test" -r=csv
@@ -133,5 +133,5 @@ use $database_name/$commit;
 insert into test values (100, 'beige');
 SQL
     [ "$status" -ne "0" ]
-    [[ "$output" =~ "$database_name/$commit is read-only" ]] || false
+    [[ "$output" =~ "$database_name is read-only" ]] || false
 }

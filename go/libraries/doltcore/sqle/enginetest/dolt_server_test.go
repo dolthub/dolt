@@ -133,7 +133,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"dolt"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_BRANCH('-d', 'branch2');",
@@ -145,7 +145,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"dolt"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				// Call a stored procedure since this searches across all databases and will
@@ -180,7 +180,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"dolt"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_BRANCH('-m', 'branch2', 'newName');",
@@ -192,7 +192,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"dolt"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				// Call a stored procedure since this searches across all databases and will
@@ -235,11 +235,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client a */ select name from dolt_branches;",
-				ExpectedErrStr: "Error 1105: current branch has been force deleted. run 'USE <database>/<branch>' to checkout a different branch, or reconnect to the server",
+				ExpectedErrStr: "Error 1105: branch not found",
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
-				ExpectedErrStr: "Error 1105: current branch has been force deleted. run 'USE <database>/<branch>' to checkout a different branch, or reconnect to the server",
+				ExpectedErrStr: "Error 1105: Could not load database dolt",
 			},
 			{
 				Query:    "/* client a */ USE dolt/main;",
@@ -283,12 +283,13 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"main"}},
 			},
 			{
-				Query:          "/* client a */ select name from dolt_branches;",
-				ExpectedErrStr: "Error 1105: current branch has been force deleted. run 'USE <database>/<branch>' to checkout a different branch, or reconnect to the server",
+				// client a still sees the branches and can use them because it's in a transaction
+				Query:    "/* client a */ select name from dolt_branches;",
+				Expected: []sql.Row{{"branch1"}, {"main"}},
 			},
 			{
-				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
-				ExpectedErrStr: "Error 1105: current branch has been force deleted. run 'USE <database>/<branch>' to checkout a different branch, or reconnect to the server",
+				Query:    "/* client a */ CALL DOLT_CHECKOUT('main');",
+				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "/* client a */ USE dolt/main;",
@@ -405,7 +406,6 @@ var DropDatabaseMultiSessionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				// At this point, this is an invalid revision database, and any queries against it will fail.
 				Query:    "/* client b */ select database();",
 				Expected: []sql.Row{{"db01/branch1"}},
 			},
@@ -462,7 +462,7 @@ func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 						if len(assertion.ExpectedErrStr) > 0 {
 							require.EqualError(t, err, assertion.ExpectedErrStr)
 						} else if assertion.ExpectedErr != nil {
-							require.True(t, assertion.ExpectedErr.Is(err))
+							require.True(t, assertion.ExpectedErr.Is(err), "expected error %v, got %v", assertion.ExpectedErr, err)
 						} else if assertion.Expected != nil {
 							require.NoError(t, err)
 							assertResultsEqual(t, assertion.Expected, rows)
