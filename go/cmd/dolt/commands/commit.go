@@ -100,7 +100,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 func performCommit(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) (int, bool) {
 	_, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
-		iohelp.WriteLine(cli.CliOut, err.Error())
+		cli.Println(err.Error())
 		return 1, false
 	}
 	if closeFunc != nil {
@@ -109,7 +109,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 
 	err = branch_control.CheckAccess(sqlCtx, branch_control.Permissions_Write)
 	if err != nil {
-		iohelp.WriteLine(cli.CliOut, err.Error())
+		cli.Println(err.Error())
 		return 1, false
 	}
 	dbName := sqlCtx.GetCurrentDatabase()
@@ -128,7 +128,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 	dSess := dsess.DSessFromSess(sqlCtx.Session)
 	roots, ok := dSess.GetRoots(sqlCtx, dbName)
 	if !ok {
-		iohelp.WriteLine(cli.CliOut, fmt.Sprintf("Could not load database %s", dbName))
+		cli.Println(fmt.Sprintf("Could not load database %s", dbName))
 		return 1, false
 	}
 
@@ -237,6 +237,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag) || apr.Contains(cli.AmendFlag),
 		SkipEmpty:  apr.Contains(cli.SkipEmptyFlag),
+		Amend:      apr.Contains(cli.AmendFlag),
 		Force:      apr.Contains(cli.ForceFlag),
 		Name:       name,
 		Email:      email,
