@@ -35,7 +35,7 @@ start_sql_server() {
     DEFAULT_DB="$1"
     logFile="$2"
     PORT=$( definePORT )
-    echo "Staring server on port" $PORT >&3
+    echo "Starting server on port" $PORT >&3
     if [[ $logFile ]]
     then
         dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" > $logFile 2>&1 &
@@ -43,6 +43,7 @@ start_sql_server() {
         dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" &
     fi
     SERVER_PID=$!
+    echo "SERVER_PID = " $SERVER_PID
     wait_for_connection $PORT 5000
 }
 
