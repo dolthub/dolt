@@ -36,6 +36,7 @@ behavior:
     dolt_transaction_commit: true
     persistence_behavior: load
     disable_client_multi_statements: false
+    event_scheduler: ON
 
 user:
     name: ""
