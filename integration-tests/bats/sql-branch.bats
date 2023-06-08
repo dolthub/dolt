@@ -172,3 +172,13 @@ SQL
     [ $status -eq 1 ]
     [[ "$output" =~ "attempted to delete checked out branch" ]] || false
 }
+
+@test "sql-branch: CALL DOLT_BRANCH -m on session active branch (dolt sql)" {
+    dolt branch other
+    echo "call dolt_checkout('other'); call dolt_branch('-m', 'other', 'newOther')" | dolt sql
+    run dolt branch
+    [ $status -eq 0 ]
+    [[ "$output" =~ "newOther" ]] || false
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "other" ]] || false
+}
