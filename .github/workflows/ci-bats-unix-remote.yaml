@@ -1,4 +1,4 @@
-name: Test Bats Unix
+name: Test Bats Unix Remote
 
 on:
   pull_request:
