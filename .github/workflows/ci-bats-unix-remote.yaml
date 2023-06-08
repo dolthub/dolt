@@ -8,7 +8,7 @@ on:
       - 'integration-tests/**'
 
 concurrency:
-  group: ci-bats-unix-${{ github.event.pull_request.number || github.ref }}
+  group: ci-bats-unix-remote${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -110,7 +110,7 @@ jobs:
         run: expect -v
       - name: Test all Unix
         env:
-          SQL_ENGINE: ${{ local-engine }}
+          SQL_ENGINE: ${{ remote-engine }}
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
           BATS_TEST_RETRIES: "3"
         run: |
