@@ -222,7 +222,8 @@ func (t *DoltTable) workingRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	return root, nil
 }
 
-// getRoot returns the current root value for this session, to be used for all table data access.
+// getRoot returns the appropriate root value for this session. The only controlling factor
+// is whether this is a temporary table or not.
 func (t *DoltTable) getRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	return t.db.GetRoot(ctx)
 }
@@ -243,7 +244,7 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, ok, err := sess.LookupDbState(ctx, t.db.RevisionQualifiedName())
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.Name())
 	if err != nil {
 		return nil, err
 	}
@@ -497,7 +498,7 @@ func (t *WritableDoltTable) WithProjections(colNames []string) sql.Table {
 
 // Inserter implements sql.InsertableTable
 func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return sqlutil.NewStaticErrorEditor(err)
 	}
 	te, err := t.getTableEditor(ctx)
@@ -519,13 +520,13 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 		}
 	}
 
-	state, _, err := ds.LookupDbState(ctx, t.db.RevisionQualifiedName())
+	state, _, err := ds.LookupDbState(ctx, t.db.name)
 	if err != nil {
 		return nil, err
 	}
 
 	setter := ds.SetRoot
-	ed, err = state.WriteSession().GetTableWriter(ctx, t.tableName, t.db.RevisionQualifiedName(), setter, batched)
+	ed, err = state.WriteSession.GetTableWriter(ctx, t.tableName, t.db.Name(), setter, batched)
 
 	if err != nil {
 		return nil, err
@@ -539,7 +540,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 
 // Deleter implements sql.DeletableTable
 func (t *WritableDoltTable) Deleter(ctx *sql.Context) sql.RowDeleter {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return sqlutil.NewStaticErrorEditor(err)
 	}
 	te, err := t.getTableEditor(ctx)
@@ -551,7 +552,7 @@ func (t *WritableDoltTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 
 // Replacer implements sql.ReplaceableTable
 func (t *WritableDoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return sqlutil.NewStaticErrorEditor(err)
 	}
 	te, err := t.getTableEditor(ctx)
@@ -563,7 +564,7 @@ func (t *WritableDoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
 
 // Truncate implements sql.TruncateableTable
 func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return 0, err
 	}
 	table, err := t.DoltTable.DoltTable(ctx)
@@ -634,13 +635,13 @@ func (t *WritableDoltTable) truncate(
 		}
 	}
 
-	ws, err := sess.WorkingSet(ctx, t.db.RevisionQualifiedName())
+	ws, err := sess.WorkingSet(ctx, t.db.name)
 	if err != nil {
 		return nil, err
 	}
 
 	if schema.HasAutoIncrement(sch) {
-		ddb, _ := sess.GetDoltDB(ctx, t.db.RevisionQualifiedName())
+		ddb, _ := sess.GetDoltDB(ctx, t.db.name)
 		err = t.db.removeTableFromAutoIncrementTracker(ctx, t.Name(), ddb, ws.Ref())
 		if err != nil {
 			return nil, err
@@ -700,7 +701,7 @@ func copyConstraintViolationsAndConflicts(ctx context.Context, from, to *doltdb.
 
 // Updater implements sql.UpdatableTable
 func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return sqlutil.NewStaticErrorEditor(err)
 	}
 	te, err := t.getTableEditor(ctx)
@@ -712,7 +713,7 @@ func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
 
 // AutoIncrementSetter implements sql.AutoIncrementTable
 func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrementSetter {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return sqlutil.NewStaticErrorEditor(err)
 	}
 	te, err := t.getTableEditor(ctx)
@@ -1099,7 +1100,7 @@ func (t *AlterableDoltTable) WithProjections(colNames []string) sql.Table {
 
 // AddColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	root, err := t.getRoot(ctx)
@@ -1236,7 +1237,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 	newColumn *sql.Column,
 	idxCols []sql.IndexColumn,
 ) (sql.RowInserter, error) {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return nil, err
 	}
 	err := validateSchemaChange(t.Name(), oldSchema, newSchema, oldColumn, newColumn, idxCols)
@@ -1247,7 +1248,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	// Begin by creating a new table with the same name and the new schema, then removing all its existing rows
-	dbState, ok, err := sess.LookupDbState(ctx, t.db.RevisionQualifiedName())
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.Name())
 	if err != nil {
 		return nil, err
 	}
@@ -1256,12 +1257,12 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return nil, fmt.Errorf("database %s not found in session", t.db.Name())
 	}
 
-	ws := dbState.WorkingSet()
+	ws := dbState.WorkingSet
 	if ws == nil {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
 
-	head, err := sess.GetHeadCommit(ctx, t.db.RevisionQualifiedName())
+	head, err := sess.GetHeadCommit(ctx, t.db.Name())
 	if err != nil {
 		return nil, err
 	}
@@ -1365,7 +1366,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 
 	// We can't just call getTableEditor here because it uses the session state, which we can't update until after the
 	// rewrite operation
-	opts := dbState.WriteSession().GetOptions()
+	opts := dbState.WriteSession.GetOptions()
 	opts.ForeignKeyChecksDisabled = true
 
 	newRoot, err := ws.WorkingRoot().PutTable(ctx, t.Name(), dt)
@@ -1390,7 +1391,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 	}
 
 	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
-	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.RevisionQualifiedName(), sess.SetRoot, false)
+	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.Name(), sess.SetRoot, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1613,7 +1614,7 @@ func (t *AlterableDoltTable) dropColumnData(ctx *sql.Context, updatedTable *dolt
 // ModifyColumn implements sql.AlterableTable. ModifyColumn operations are only used for operations that change only
 // the schema of a table, not the data. For those operations, |RewriteInserter| is used.
 func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	ws, err := t.db.GetWorkingSet(ctx)
@@ -1680,7 +1681,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 	if existingCol.AutoIncrement && !col.AutoIncrement {
 		// TODO: this isn't transactional, and it should be
 		sess := dsess.DSessFromSess(ctx.Session)
-		ddb, _ := sess.GetDoltDB(ctx, t.db.RevisionQualifiedName())
+		ddb, _ := sess.GetDoltDB(ctx, t.db.name)
 		err = t.db.removeTableFromAutoIncrementTracker(ctx, t.Name(), ddb, ws.Ref())
 		if err != nil {
 			return err
@@ -1780,7 +1781,7 @@ func allocatePrefixLengths(idxCols []sql.IndexColumn) []uint16 {
 
 // CreateIndex implements sql.IndexAlterableTable
 func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique && idx.Constraint != sql.IndexConstraint_Spatial {
@@ -1855,7 +1856,7 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 
 // DropIndex implements sql.IndexAlterableTable
 func (t *AlterableDoltTable) DropIndex(ctx *sql.Context, indexName string) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	// We disallow removing internal dolt_ tables from SQL directly
@@ -1883,7 +1884,7 @@ func (t *AlterableDoltTable) DropIndex(ctx *sql.Context, indexName string) error
 
 // RenameIndex implements sql.IndexAlterableTable
 func (t *AlterableDoltTable) RenameIndex(ctx *sql.Context, fromIndexName string, toIndexName string) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	// RenameIndex will error if there is a name collision or an index does not exist
@@ -2021,7 +2022,7 @@ func (t *AlterableDoltTable) createForeignKey(
 
 // AddForeignKey implements sql.ForeignKeyTable
 func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKeyConstraint) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	if sqlFk.Name != "" && !doltdb.IsValidForeignKeyName(sqlFk.Name) {
@@ -2079,7 +2080,7 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 
 // DropForeignKey implements sql.ForeignKeyTable
 func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	root, err := t.getRoot(ctx)
@@ -2107,7 +2108,7 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) err
 
 // UpdateForeignKey implements sql.ForeignKeyTable
 func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sqlFk sql.ForeignKeyConstraint) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	root, err := t.getRoot(ctx)
@@ -2383,9 +2384,9 @@ func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootV
 	// When we update this table we need to also clear any cached versions of the object, since they may now have
 	// incorrect schema information
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, ok, err := sess.LookupDbState(ctx, t.db.RevisionQualifiedName())
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.name)
 	if !ok {
-		return fmt.Errorf("no db state found for %s", t.db.RevisionQualifiedName())
+		return fmt.Errorf("no db state found for %s", t.db.name)
 	}
 
 	dbState.SessionCache().ClearTableCache()
@@ -2394,7 +2395,7 @@ func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootV
 }
 
 func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefinition) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	root, err := t.getRoot(ctx)
@@ -2450,7 +2451,7 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 }
 
 func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	root, err := t.getRoot(ctx)
@@ -2501,7 +2502,7 @@ func (t *AlterableDoltTable) ModifyStoredCollation(ctx *sql.Context, collation s
 }
 
 func (t *AlterableDoltTable) ModifyDefaultCollation(ctx *sql.Context, collation sql.CollationID) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 	root, err := t.getRoot(ctx)

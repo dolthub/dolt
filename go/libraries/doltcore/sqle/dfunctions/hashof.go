@@ -74,7 +74,6 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if strings.ToUpper(name) == "HEAD" {
 		sess := dsess.DSessFromSess(ctx.Session)
 
-		// TODO: this should resolve the current DB through the analyzer so it can use the revision qualified name here
 		cm, err = sess.GetHeadCommit(ctx, dbName)
 		if err != nil {
 			return nil, err

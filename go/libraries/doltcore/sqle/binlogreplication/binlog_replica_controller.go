@@ -443,7 +443,7 @@ func getOptionValueAsTableNames(option binlogreplication.ReplicationOption) ([]s
 
 func verifyAllTablesAreQualified(urts []sql.UnresolvedTable) error {
 	for _, urt := range urts {
-		if urt.Database().Name() == "" {
+		if urt.Database() == "" {
 			return fmt.Errorf("no database specified for table '%s'; "+
 				"all filter table names must be qualified with a database name", urt.Name())
 		}

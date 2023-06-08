@@ -32,6 +32,7 @@ type StatusTable struct {
 	ddb           *doltdb.DoltDB
 	workingSet    *doltdb.WorkingSet
 	rootsProvider env.RootsProvider
+	dbName        string
 }
 
 func (s StatusTable) Name() string {
@@ -63,15 +64,16 @@ func (s StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.R
 }
 
 // NewStatusTable creates a StatusTable
-func NewStatusTable(_ *sql.Context, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider) sql.Table {
+func NewStatusTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider) sql.Table {
 	return &StatusTable{
 		ddb:           ddb,
+		dbName:        dbName,
 		workingSet:    ws,
 		rootsProvider: rp,
 	}
 }
 
-// StatusItr is a sql.RowIter implementation which iterates over each commit as if it's a row in the table.
+// StatusIter is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type StatusItr struct {
 	rows []statusTableRow
 }

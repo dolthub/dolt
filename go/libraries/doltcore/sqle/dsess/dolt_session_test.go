@@ -251,10 +251,6 @@ type emptyRevisionDatabaseProvider struct {
 	sql.DatabaseProvider
 }
 
-func (e emptyRevisionDatabaseProvider) BaseDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool) {
-	return nil, false
-}
-
 func (e emptyRevisionDatabaseProvider) SessionDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool, error) {
 	return nil, false, sql.ErrDatabaseNotFound.New(dbName)
 }

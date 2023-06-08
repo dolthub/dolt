@@ -62,7 +62,7 @@ force_delete_main_branch_on_sqlserver() {
     run dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT \
         -q "call dolt_checkout('to_keep');"
     [ $status -ne 0 ]
-    [[ "$output" =~ "database not found" ]] || false
+    [[ "$output" =~ "branch not found" ]] || false
 }
 
 @test "deleted-branches: dolt branch from the CLI does not allow deleting the last branch" {
@@ -144,11 +144,10 @@ force_delete_main_branch_on_sqlserver() {
     # We are able to use a database branch revision in the connection string
     dolt sql-client --use-db "dolt_repo_$$/main" -u dolt -P $PORT -q "SELECT * FROM test;"
 
-    # Trying to checkout a new branch works
-    dolt sql-client --use-db "dolt_repo_$$/main" -u dolt -P $PORT -q "CALL DOLT_CHECKOUT('to_keep');"
-
-    run dolt branch
-    [[ "$output" =~ "to_keep" ]] || false
+    # Trying to checkout a new branch throws an error, but doesn't panic
+    run dolt sql-client --use-db "dolt_repo_$$/main" -u dolt -P $PORT -q "CALL DOLT_CHECKOUT('to_keep');"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "branch not found" ]] || false
 }
 
 @test "deleted-branches: dolt_checkout() from sql-server doesn't panic when connected to a revision db and the db's default branch is invalid" {
@@ -160,11 +159,10 @@ force_delete_main_branch_on_sqlserver() {
     # We are able to use a database branch revision in the connection string
     dolt sql-client --use-db "dolt_repo_$$/to_keep" -u dolt -P $PORT -q "SELECT * FROM test;"
 
-    # Trying to checkout a new branch works
-    dolt sql-client --use-db "dolt_repo_$$/to_keep" -u dolt -P $PORT -q "CALL DOLT_CHECKOUT('to_checkout');"
-
-    run dolt branch
-    [[ "$output" =~ "to_checkout" ]] || false
+    # Trying to checkout a new branch throws an error, but doesn't panic
+    run dolt sql-client --use-db "dolt_repo_$$/to_keep" -u dolt -P $PORT -q "CALL DOLT_CHECKOUT('to_checkout');"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "branch not found" ]] || false
 }
 
 @test "deleted-branches: dolt_checkout() from sql-server works when the db's default branch is invalid, but the global default_branch var is valid" {
