@@ -481,6 +481,9 @@ func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.Server
 	return args
 }
 
+// TODO: make the deadline here configurable or something.
+const waitForHooksToReplicateTimeout = 10 * time.Second
+
 // The order of operations is:
 // * Set all databases in database_provider to read-only.
 // * Kill all running queries in GMS.
@@ -497,11 +500,27 @@ func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.Server
 func (c *Controller) gracefulTransitionToStandby(saveConnID int) error {
 	c.setProviderIsStandby(true)
 	c.killRunningQueries(saveConnID)
+
 	// waitForHooksToReplicate will release the lock while it
 	// blocks, but will return with the lock held.
-	if err := c.waitForHooksToReplicate(); err != nil {
+	states, err := c.waitForHooksToReplicate(waitForHooksToReplicateTimeout)
+	if err != nil {
 		return err
 	}
+
+	if len(states) != len(c.commithooks) {
+		c.lgr.Warnf("cluster/controller: failed to transition to standby; the set of replicated databases changed during the transition.")
+		return errors.New("cluster/controller: failed to transition to standby; the set of replicated databases changed during the transition.")
+	}
+
+	for _, caughtUp := range states {
+		if !caughtUp {
+			c.lgr.Warnf("cluster/controller: failed to replicate all databases to all standbys; not transitioning to standby.")
+			return errors.New("cluster/controller: failed to transition from primary to standby gracefully; could not replicate databases to standby in a timely manner.")
+		}
+	}
+
+	c.lgr.Tracef("cluster/controller: successfully replicated all databases to all standbys; transitioning to standby.")
 	return nil
 }
 
@@ -553,15 +572,15 @@ func (c *Controller) setProviderIsStandby(standby bool) {
 	}
 }
 
-const waitForHooksToReplicateTimeout = 10 * time.Second
-
 // Called during a graceful transition from primary to standby. Waits until all
 // commithooks report nextHead == lastPushedHead.
 //
-// TODO: make the deadline here configurable or something.
+// Returns `[]bool` with an entry for each `commithook` which existed at the
+// start of the call. The entry will be `true` if that `commithook` was caught
+// up as part of this wait, and `false` otherwise.
 //
 // called with c.mu held
-func (c *Controller) waitForHooksToReplicate() error {
+func (c *Controller) waitForHooksToReplicate(timeout time.Duration) ([]bool, error) {
 	commithooks := make([]*commithook, len(c.commithooks))
 	copy(commithooks, c.commithooks)
 	caughtup := make([]bool, len(commithooks))
@@ -582,7 +601,7 @@ func (c *Controller) waitForHooksToReplicate() error {
 				commithooks[j].setWaitNotify(nil)
 			}
 			c.lgr.Warnf("cluster/controller: failed to wait for graceful transition to standby; there were concurrent attempts to transition..")
-			return errors.New("cluster/controller: failed to transition from primary to standby gracefully; did not gain exclusive access to commithooks.")
+			return nil, errors.New("cluster/controller: failed to transition from primary to standby gracefully; did not gain exclusive access to commithooks.")
 		}
 	}
 	c.mu.Unlock()
@@ -591,33 +610,26 @@ func (c *Controller) waitForHooksToReplicate() error {
 		wg.Wait()
 		close(done)
 	}()
-	var success bool
 	select {
 	case <-done:
-		success = true
-	case <-time.After(waitForHooksToReplicateTimeout):
-		success = false
+	case <-time.After(timeout):
 	}
 	c.mu.Lock()
 	for _, ch := range commithooks {
 		ch.setWaitNotify(nil)
 	}
-	if !success {
-		// make certain we don't leak the wg.Wait goroutine in the failure case.
-		// at this point, none of the callbacks will ever be called again and
-		// ch.setWaitNotify grabs a lock and so establishes the happens before.
-		for _, b := range caughtup {
-			if !b {
-				wg.Done()
-			}
+
+	// Make certain we don't leak the wg.Wait goroutine in the failure case.
+	// At this point, none of the callbacks will ever be called again and
+	// ch.setWaitNotify grabs a lock and so establishes the happens before.
+	for _, b := range caughtup {
+		if !b {
+			wg.Done()
 		}
-		<-done
-		c.lgr.Warnf("cluster/controller: failed to replicate all databases to all standbys; not transitioning to standby.")
-		return errors.New("cluster/controller: failed to transition from primary to standby gracefully; could not replicate databases to standby in a timely manner.")
-	} else {
-		c.lgr.Tracef("cluster/controller: successfully replicated all databases to all standbys; transitioning to standby.")
-		return nil
 	}
+	<-done
+
+	return caughtup, nil
 }
 
 // Within a cluster, if remotesapi is configured with a tls_ca, we take the
