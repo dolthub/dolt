@@ -2,33 +2,31 @@ SERVER_REQS_INSTALLED="FALSE"
 SERVER_PID=""
 DEFAULT_DB=""
 
-# wait_for_connection(<PORT>, <TIMEOUT IN MS>) attempts to connect to the sql-server at the specified
-# port on localhost, using the $SQL_USER (or 'dolt' if unspecified) as the user name, and trying once
-# per second until the millisecond timeout is reached. If a connection is successfully established,
-# this function returns 0. If a connection was not able to be established within the timeout period,
-# this function returns 1.
+set_server_reqs_installed() {
+    SERVER_REQS_INSTALLED=$(python3 -c "
+requirements_installed = True
+try:
+    import mysql.connector
+except:
+    requirements_installed = False
+
+print(str(requirements_installed).upper())
+")
+}
+
 wait_for_connection() {
-  port=$1
-  timeout=$2
-  user=${SQL_USER:-dolt}
-  end_time=$((SECONDS+($timeout/1000)))
+    PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
+    python3 -c "
+import os
+import sys
 
-  # BATS has 'set -e' enabled, which causes the script to fail immediately if any subcommand returns a non-zero
-  # exit code, so we need to temporarily enable 'set +e', but be sure to turn 'set -e' back on before we exit.
-  set +e
-  while [ $SECONDS -lt $end_time ]; do
-    dolt sql-client -u $user --host localhost --port $port --use-db "$DEFAULT_DB" --timeout 1 -q "SELECT 1;"
-    if [ $? -eq 0 ]; then
-      echo "Connected successfully!"
-      set -e
-      return 0
-    fi
-    sleep 1
-  done
+args = sys.argv[sys.argv.index('--') + 1:]
+working_dir, database, port_str, timeout_ms, user = args
+os.chdir(working_dir)
 
-  echo "Failed to connect to database $DEFAULT_DB on port $port within $timeout ms."
-  set -e
-  return 1
+from pytest import wait_for_connection
+wait_for_connection(port=int(port_str), timeout_ms=int(timeout_ms), database=database, user=user)
+" -- "$PYTEST_DIR" "$DEFAULT_DB" "$1" "$2" "${SQL_USER:-dolt}"
 }
 
 start_sql_server() {

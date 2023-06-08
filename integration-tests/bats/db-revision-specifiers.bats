@@ -95,7 +95,7 @@ use $database_name/v1;
 insert into test values (100, 'beige');
 SQL
     [ "$status" -ne "0" ]
-    [[ "$output" =~ "$database_name/v1 is read-only" ]] || false
+    [[ "$output" =~ "$database_name is read-only" ]] || false
 }
 
 @test "db-revision-specifiers: commit-qualified database revisions" {
@@ -133,5 +133,5 @@ use $database_name/$commit;
 insert into test values (100, 'beige');
 SQL
     [ "$status" -ne "0" ]
-    [[ "$output" =~ "$database_name/$commit is read-only" ]] || false
+    [[ "$output" =~ "$database_name is read-only" ]] || false
 }
