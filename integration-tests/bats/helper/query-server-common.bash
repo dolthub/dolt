@@ -39,7 +39,9 @@ start_sql_server() {
     if [[ $logFile ]]
     then
         dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" > $logFile 2>&1 &
+        dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" > $logFile 2>&1 &
     else
+        dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" &
         dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" &
     fi
     SERVER_PID=$!
