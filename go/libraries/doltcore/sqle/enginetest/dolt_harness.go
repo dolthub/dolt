@@ -163,7 +163,8 @@ func commitScripts(dbs []string) []setup.SetupScript {
 // NewEngine creates a new *gms.Engine or calls reset and clear scripts on the existing
 // engine for reuse.
 func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
-	if d.engine == nil {
+	initializeEngine := d.engine == nil
+	if initializeEngine {
 		d.branchControl = branch_control.CreateDefaultController()
 
 		pro := d.newProvider()
@@ -172,7 +173,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 		d.provider = doltProvider
 
 		var err error
-		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), doltProvider, d.multiRepoEnv.Config(), d.branchControl)
+		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl)
 		require.NoError(t, err)
 
 		e, err := enginetest.NewEngine(t, d, d.provider, d.setupData)
@@ -202,6 +203,13 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 	// Reset the mysql DB table to a clean state for this new engine
 	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
+
+	// Get a fresh session if we are reusing the engine
+	if !initializeEngine {
+		var err error
+		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl)
+		require.NoError(t, err)
+	}
 
 	ctx := enginetest.NewContext(d)
 	e, err := enginetest.RunSetupScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
@@ -355,6 +363,10 @@ func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (*gms.Eng
 	if err != nil {
 		return nil, err
 	}
+
+	// reset the session as well since we have swapped out the database provider, which invalidates caching assumptions
+	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), readOnlyProvider, d.multiRepoEnv.Config(), d.branchControl)
+	require.NoError(d.t, err)
 
 	return enginetest.NewEngineWithProvider(nil, d, readOnlyProvider), nil
 }

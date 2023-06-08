@@ -19,7 +19,6 @@ export const databaseTests = [
     q: `SHOW DATABASES`,
     res: [
       { Database: `${dbName}` },
-      { Database: `${dbName}/main` },
       { Database: "information_schema" },
       { Database: "mysql" },
     ],
@@ -40,7 +39,6 @@ export const databaseTests = [
     q: `SHOW DATABASES`,
     res: [
       { Database: `${dbName}` },
-      { Database: `${dbName}/main` },
       { Database: "information_schema" },
       { Database: "mysql" },
       { Database: "new_db" },
