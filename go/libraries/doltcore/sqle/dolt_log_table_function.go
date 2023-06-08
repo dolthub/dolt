@@ -386,7 +386,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		}
 	} else {
 		// If revisionExpr not defined, use session head
-		commit, err = sess.GetHeadCommit(ctx, sqledb.RevisionQualifiedName())
+		commit, err = sess.GetHeadCommit(ctx, sqledb.Name())
 		if err != nil {
 			return nil, err
 		}

@@ -159,7 +159,6 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 
-	// TODO: this needs to use a revision qualified name
 	roots, _ := dSess.GetRoots(ctx, dbName)
 	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
 	if err != nil {
@@ -228,7 +227,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 			return
 		}
 
-		if dbState.WorkingSet() == nil {
+		if dbState.WorkingSet == nil {
 			iw.errDuringStatementBegin = doltdb.ErrOperationNotSupportedInDetachedHead
 			return
 		}
@@ -236,7 +235,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 		// We use WriteSession.SetWorkingSet instead of DoltSession.SetRoot because we want to avoid modifying the root
 		// until the end of the transaction, but we still want the WriteSession to be able to find the newly
 		// created table.
-		err = dbState.WriteSession().SetWorkingSet(ctx, dbState.WorkingSet().WithWorkingRoot(newRootValue))
+		err = dbState.WriteSession.SetWorkingSet(ctx, dbState.WorkingSet.WithWorkingRoot(newRootValue))
 		if err != nil {
 			iw.errDuringStatementBegin = err
 			return
@@ -245,7 +244,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 		dSess.SetRoot(ctx, dbName, newRootValue)
 	}
 
-	tableWriter, err := dbState.WriteSession().GetTableWriter(ctx, doltdb.IgnoreTableName, dbName, dSess.SetRoot, false)
+	tableWriter, err := dbState.WriteSession.GetTableWriter(ctx, doltdb.IgnoreTableName, dbName, dSess.SetRoot, false)
 	if err != nil {
 		iw.errDuringStatementBegin = err
 		return

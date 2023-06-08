@@ -231,13 +231,12 @@ func testFilterBranch(t *testing.T, test filterBranchTest) {
 			require.Equal(t, 0, exitCode)
 		}
 
-		t.Run(a.query, func(t *testing.T) {
-			root, err := dEnv.WorkingRoot(ctx)
-			require.NoError(t, err)
+		root, err := dEnv.WorkingRoot(ctx)
+		require.NoError(t, err)
 
-			actRows, err := sqle.ExecuteSelect(dEnv, root, a.query)
-			require.NoError(t, err)
-			require.Equal(t, a.rows, actRows)
-		})
+		actRows, err := sqle.ExecuteSelect(dEnv, root, a.query)
+		require.NoError(t, err)
+
+		require.Equal(t, a.rows, actRows)
 	}
 }

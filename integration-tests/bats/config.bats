@@ -189,7 +189,7 @@ teardown() {
 }
 
 @test "config: SQL can create databases with no user and email set" {
-    dolt sql -q  "
+    dolt sql -b -q  "
     CREATE DATABASE testdb;
     use testdb;
     CREATE TABLE test (pk int primary key, c1 varchar(1));"

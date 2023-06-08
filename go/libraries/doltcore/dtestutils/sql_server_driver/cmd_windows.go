@@ -15,32 +15,61 @@
 package sql_server_driver
 
 import (
-	"os/exec"
 	"syscall"
 
 	"golang.org/x/sys/windows"
 )
 
-func ApplyCmdAttributes(cmd *exec.Cmd) {
-	// Creating a new process group for the process will allow GracefulStop to send the break signal to that process
-	// without also killing the parent process
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
-	}
-}
-
 func (s *SqlServer) GracefulStop() error {
-	err := windows.GenerateConsoleCtrlEvent(windows.CTRL_BREAK_EVENT, uint32(s.Cmd.Process.Pid))
+	dll, err := windows.LoadDLL("kernel32.dll")
+	if err != nil {
+		return err
+	}
+	defer dll.Release()
+
+	pid := s.Cmd.Process.Pid
+
+	f, err := dll.FindProc("AttachConsole")
+	if err != nil {
+		return err
+	}
+	r1, _, err := f.Call(uintptr(pid))
+	if r1 == 0 && err != syscall.ERROR_ACCESS_DENIED {
+		return err
+	}
+
+	set, err := dll.FindProc("SetConsoleCtrlHandler")
+	if err != nil {
+		return err
+	}
+	r1, _, err = set.Call(0, 1)
+	if r1 == 0 {
+		return err
+	}
+	f, err = dll.FindProc("GenerateConsoleCtrlEvent")
+	if err != nil {
+		return err
+	}
+	r1, _, err = f.Call(windows.CTRL_BREAK_EVENT, uintptr(pid))
+	if r1 == 0 {
+		return err
+	}
+
+	f, err = dll.FindProc("FreeConsole")
+	if err != nil {
+		return err
+	}
+	_, _, err = f.Call()
 	if err != nil {
 		return err
 	}
 
 	<-s.Done
 
-	_, err = s.Cmd.Process.Wait()
-	if err != nil {
+	r1, _, err = set.Call(0, 0)
+	if r1 == 0 {
 		return err
 	}
 
-	return nil
+	return s.Cmd.Wait()
 }

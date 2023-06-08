@@ -53,12 +53,12 @@ func NewSessionStateAdapter(session *DoltSession, dbName string, remotes map[str
 
 func (s SessionStateAdapter) GetRoots(ctx context.Context) (doltdb.Roots, error) {
 	sqlCtx := sql.NewContext(ctx)
-	state, _, err := s.session.lookupDbState(sqlCtx, s.dbName)
+	state, _, err := s.session.LookupDbState(sqlCtx, s.dbName)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
-	return state.roots(), nil
+	return state.GetRoots(), nil
 }
 
 func (s SessionStateAdapter) CWBHeadRef() (ref.DoltRef, error) {
@@ -227,10 +227,10 @@ func (s SessionStateAdapter) RemoveBackup(_ context.Context, name string) error 
 }
 
 func (s SessionStateAdapter) TempTableFilesDir() (string, error) {
-	branchState, _, err := s.session.lookupDbState(sql.NewContext(context.Background()), s.dbName)
+	state, _, err := s.session.LookupDbState(sql.NewContext(context.Background()), s.dbName)
 	if err != nil {
 		return "", err
 	}
 
-	return branchState.dbState.tmpFileDir, nil
+	return state.tmpFileDir, nil
 }

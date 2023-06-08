@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"database/sql"
-	
+
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,17 +44,6 @@ type Test struct {
 
 	// Skip the entire test with this reason.
 	Skip string `yaml:"skip"`
-}
-
-// Set this environment variable to effectively disable timeouts for debugging.
-const debugEnvKey = "DOLT_SQL_SERVER_TEST_DEBUG"
-var timeout = 20 * time.Second
-
-func init() {
-	_, ok := os.LookupEnv(debugEnvKey)
-	if ok {
-		timeout = 1000 * time.Hour
-	}
 }
 
 func ParseTestsFile(path string) (TestDef, error) {
@@ -89,15 +78,7 @@ func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server) *driver.S
 	if s.Port != 0 {
 		opts = append(opts, driver.WithPort(s.Port))
 	}
-
-	var server *driver.SqlServer
-	var err error
-	if s.DebugPort != 0 {
-		server, err = driver.DebugSqlServer(dc, s.DebugPort, opts...)	
-	} else {
-		server, err = driver.StartSqlServer(dc, opts...)
-	}
-	
+	server, err := driver.StartSqlServer(dc, opts...)
 	require.NoError(t, err)
 	if len(s.ErrorMatches) > 0 {
 		err := server.ErrorStop()
@@ -217,16 +198,6 @@ func RunTestsFile(t *testing.T, path string) {
 	}
 }
 
-func RunSingleTest(t *testing.T, path string, testName string) {
-	def, err := ParseTestsFile(path)
-	require.NoError(t, err)
-	for _, test := range def.Tests {
-		if test.Name == testName {
-			t.Run(test.Name, test.Run)
-		}
-	}
-}
-
 type retryTestingT struct {
 	*testing.T
 	errorfStrings []string
@@ -297,7 +268,7 @@ func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q driver.Query) {
 		args[i] = q.Args[i]
 	}
 	if q.Query != "" {
-		ctx, c := context.WithTimeout(context.Background(), timeout)
+		ctx, c := context.WithTimeout(context.Background(), 20*time.Second)
 		defer c()
 		rows, err := conn.QueryContext(ctx, q.Query, args...)
 		if err == nil {
@@ -320,7 +291,7 @@ func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q driver.Query) {
 			require.Contains(t, *q.Result.Rows.Or, rowstrings)
 		}
 	} else if q.Exec != "" {
-		ctx, c := context.WithTimeout(context.Background(), timeout)
+		ctx, c := context.WithTimeout(context.Background(), 20*time.Second)
 		defer c()
 		_, err := conn.ExecContext(ctx, q.Exec, args...)
 		if q.ErrorMatch == "" {
