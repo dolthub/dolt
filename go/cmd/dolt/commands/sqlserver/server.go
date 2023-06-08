@@ -478,6 +478,7 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 		}
 	}
 
+	// add comment to force tests
 	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
 	// to the value of mysql that we support.
 	serverConf.ConnReadTimeout = readTimeout
