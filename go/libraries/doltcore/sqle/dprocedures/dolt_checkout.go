@@ -184,6 +184,15 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, br
 		if err != nil {
 			return err
 		}
+
+		// We need to commit the transaction here or else the branch we just created isn't visible to the current transaction,
+		// and we are about to switch to it. So set the new branch head for the new transaction, then commit this one
+		sess := dsess.DSessFromSess(ctx.Session)
+		err = commitTransaction(ctx, sess, rsc)
+		if err != nil {
+			return err
+		}
+
 		err = checkoutBranch(ctx, dbName, branchName)
 		if err != nil {
 			return err
