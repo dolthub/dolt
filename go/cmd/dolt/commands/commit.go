@@ -78,6 +78,10 @@ func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
 	return cli.CreateCommitArgParser()
 }
 
+func (cmd CommitCmd) RequiresRepo() bool {
+	return false
+}
+
 // Exec executes the command
 func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	res, skipped := performCommit(ctx, commandStr, args, dEnv, cliCtx)
@@ -98,7 +102,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 // |dEnv|. The response is an integer status code indicating success or failure, as well as a boolean that indicates
 // if the commit was skipped (e.g. because --skip-empty was specified as an argument).
 func performCommit(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) (int, bool) {
-	_, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1, false
@@ -122,42 +126,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), help), false
 	}
 
-	allFlag := apr.Contains(cli.AllFlag)
-	upperCaseAllFlag := apr.Contains(cli.UpperCaseAllFlag)
-
 	dSess := dsess.DSessFromSess(sqlCtx.Session)
-	roots, ok := dSess.GetRoots(sqlCtx, dbName)
-	if !ok {
-		cli.Println(fmt.Sprintf("Could not load database %s", dbName))
-		return 1, false
-	}
-
-	if upperCaseAllFlag {
-		roots, err = actions.StageAllTables(ctx, roots, true)
-		if err != nil {
-			return handleCommitErr(ctx, sqlCtx, err, help), false
-		}
-	} else if allFlag {
-		roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
-		if err != nil {
-			return handleCommitErr(ctx, sqlCtx, err, help), false
-		}
-	}
-
-	var name, email string
-	// Check if the author flag is provided otherwise get the name and email stored in configs
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
-	} else {
-		// This command creates a commit, so we need user identity
-		if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
-			return 1, false
-		}
-		name, email, err = env.GetNameAndEmail(cliCtx.Config())
-	}
-	if err != nil {
-		return handleCommitErr(ctx, sqlCtx, err, usage), false
-	}
 
 	msg, msgOk := apr.GetValue(cli.MessageArg)
 	if !msgOk {
@@ -169,7 +138,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 			}
 			commitMeta, err := commit.GetCommitMeta(sqlCtx)
 			if cmErr != nil {
-				iohelp.WriteLine(cli.CliOut, err.Error())
+				cli.Println(err.Error())
 				return 1, false
 			}
 			amendStr = commitMeta.Description
@@ -180,131 +149,73 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		}
 	}
 
-	t := datas.CommitNowFunc()
-	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
-		var err error
-		t, err = cli.ParseDate(commitTimeStr)
-
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.BuildDError("error: invalid date").AddCause(err).Build(), usage), false
-		}
-	}
-
-	headCommit, err := dSess.GetHeadCommit(sqlCtx, dbName)
+	query := callDoltCommitStoredProc(msg, apr)
+	_, _, err = queryist.Query(sqlCtx, query)
 	if err != nil {
-		iohelp.WriteLine(cli.CliOut, err.Error())
 		return 1, false
 	}
 
-	var parentsHeadForAmend []*doltdb.Commit
-	if apr.Contains(cli.AmendFlag) {
-		numParentsHeadForAmend := headCommit.NumParents()
-		for i := 0; i < numParentsHeadForAmend; i++ {
-			parentCommit, err := headCommit.GetParent(ctx, i)
-			if err == nil {
-				parentsHeadForAmend = append(parentsHeadForAmend, parentCommit)
-			}
-		}
-
-		dbData, ok := dSess.GetDbData(sqlCtx, dbName)
-		if !ok {
-			iohelp.WriteLine(cli.CliOut, fmt.Sprintf("Could not load database %s", dbName))
-			return 1, false
-		}
-		newRoots, err := actions.ResetSoftToRef(ctx, dbData, "HEAD~1")
-		if err != nil {
-			return handleResetError(err, usage), false
-		}
-
-		ws, err := dSess.WorkingSet(sqlCtx, dbName)
-		if err != nil {
-			return handleResetError(err, usage), false
-		}
-		err = dSess.SetWorkingSet(sqlCtx, dbName, ws.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged))
-		if err != nil {
-			iohelp.WriteLine(cli.CliOut, err.Error())
-			return 1, false
-		}
-	}
-
-	ws, err := dSess.WorkingSet(sqlCtx, dbName)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working set").AddCause(err).Build(), usage), false
-	}
-
-	pendingCommit, err := dSess.NewPendingCommit(sqlCtx, dbName, roots, actions.CommitStagedProps{
-		Message:    msg,
-		Date:       t,
-		AllowEmpty: apr.Contains(cli.AllowEmptyFlag) || apr.Contains(cli.AmendFlag),
-		SkipEmpty:  apr.Contains(cli.SkipEmptyFlag),
-		Amend:      apr.Contains(cli.AmendFlag),
-		Force:      apr.Contains(cli.ForceFlag),
-		Name:       name,
-		Email:      email,
-	})
-	if err != nil {
-		if apr.Contains(cli.AmendFlag) {
-			dbData, ok := dSess.GetDbData(sqlCtx, dbName)
-			if !ok {
-				iohelp.WriteLine(cli.CliOut, fmt.Sprintf("Could not load database %s", dbName))
-				return 1, false
-			}
-			headHash, err := headCommit.HashOf()
-			if err != nil {
-				iohelp.WriteLine(cli.CliOut, err.Error())
-				return 1, false
-			}
-			newRoots, errRes := actions.ResetSoftToRef(ctx, dbData, headHash.String())
-			if errRes != nil {
-				return handleResetError(errRes, usage), false
-			}
-
-			err = dSess.SetWorkingSet(sqlCtx, dbName, ws.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged))
-			if err != nil {
-				return handleResetError(err, usage), false
-			}
-		}
-		return handleCommitErr(ctx, sqlCtx, err, usage), false
-	}
-
-	// If no error was reported and there is no pending commit, then no commit was created, likely
-	// because of --skip-empty, so return a success code, but indicate that no commit was created.
-	if pendingCommit == nil {
-		return 0, true
-	}
-
-	_, err = dSess.DoltCommit(
-		sqlCtx,
-		dbName,
-		dSess.GetTransaction(),
-		pendingCommit,
-	)
-	if err != nil {
-		if apr.Contains(cli.AmendFlag) {
-			headHash, err := headCommit.HashOf()
-			if err != nil {
-				iohelp.WriteLine(cli.CliOut, err.Error())
-				return 1, false
-			}
-			dbData, ok := dSess.GetDbData(sqlCtx, dbName)
-			if !ok {
-				iohelp.WriteLine(cli.CliOut, fmt.Sprintf("Could not load database %s", dbName))
-				return 1, false
-			}
-			newRoots, errRes := actions.ResetSoftToRef(ctx, dbData, headHash.String())
-			if errRes != nil {
-				return handleResetError(errRes, usage), false
-			}
-
-			err = dSess.SetWorkingSet(sqlCtx, dbName, ws.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged))
-			if err != nil {
-				return handleResetError(err, usage), false
-			}
-		}
-		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't commit").AddCause(err).Build(), usage), false
-	}
-
 	return 0, false
+}
+
+// callDoltCommitStoredProc generates the sql query necessary to call the DOLT_COMMIT() stored procedure with the given args
+func callDoltCommitStoredProc(msg string, apr *argparser.ArgParseResults) string {
+	var buffer bytes.Buffer
+	var first bool
+	first = true
+	buffer.WriteString("CALL DOLT_COMMIT(")
+
+	write := func(s string) {
+		if !first {
+			buffer.WriteString(", ")
+		}
+		buffer.WriteString("'")
+		buffer.WriteString(s)
+		buffer.WriteString("'")
+		first = false
+	}
+
+	if msg != "" {
+		write("-m")
+		write(msg)
+	}
+
+	if apr.Contains(cli.AllowEmptyFlag) {
+		write("--allow-empty")
+	}
+
+	if apr.Contains(cli.DateParam) {
+		write("--date")
+	}
+
+	if apr.Contains(cli.ForceFlag) {
+		write("-f")
+	}
+
+	if apr.Contains(cli.AuthorParam) {
+		write("--author")
+		author, _ := apr.GetValue(cli.AuthorParam)
+		write(author)
+	}
+
+	if apr.Contains(cli.AllFlag) {
+		write("-a")
+	}
+
+	if apr.Contains(cli.UpperCaseAllFlag) {
+		write("-A")
+	}
+
+	if apr.Contains(cli.AmendFlag) {
+		write("--amend")
+	}
+
+	if apr.Contains(cli.SkipEmptyFlag) {
+		write("--skip-empty")
+	}
+
+	buffer.WriteString(")")
+	return buffer.String()
 }
 
 func handleCommitErr(ctx context.Context, sqlCtx *sql.Context, err error, usage cli.UsagePrinter) int {
