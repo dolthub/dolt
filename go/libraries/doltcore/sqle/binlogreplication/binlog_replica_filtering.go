@@ -59,7 +59,7 @@ func (fc *filterConfiguration) setDoTables(urts []sql.UnresolvedTable) error {
 
 	for _, urt := range urts {
 		table := strings.ToLower(urt.Name())
-		db := strings.ToLower(urt.Database())
+		db := strings.ToLower(urt.Database().Name())
 		if fc.doTables[db] == nil {
 			fc.doTables[db] = make(map[string]struct{})
 		}
@@ -86,7 +86,7 @@ func (fc *filterConfiguration) setIgnoreTables(urts []sql.UnresolvedTable) error
 
 	for _, urt := range urts {
 		table := strings.ToLower(urt.Name())
-		db := strings.ToLower(urt.Database())
+		db := strings.ToLower(urt.Database().Name())
 		if fc.ignoreTables[db] == nil {
 			fc.ignoreTables[db] = make(map[string]struct{})
 		}
