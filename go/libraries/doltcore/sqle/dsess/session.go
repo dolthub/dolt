@@ -324,7 +324,8 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 
 	// The engine sets the transaction after this call as well, but since we begin accessing data below, we need to set
 	// this now to avoid seeding the session state with stale data in some cases. The duplication is harmless since the
-	// code below cannot error.
+	// code below cannot error. Additionally we clear any state that was cached by replication updates in the block above.
+	d.clear()
 	ctx.SetTransaction(tx)
 
 	// Set session vars for every DB in this session using their current branch head
