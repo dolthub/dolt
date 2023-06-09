@@ -57,7 +57,7 @@ teardown() {
 
     run dolt --user=new_user sql <<< "select user from mysql.user"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Access denied for user" ]] || false
+    [[ "$output" =~ "command denied to user " ]] || false
 
     rm -rf .doltcfg
 }

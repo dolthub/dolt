@@ -1675,15 +1675,7 @@ behavior:
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
 
-    echo "import socket
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.bind(('', 0))
-addr = s.getsockname()
-print(addr[1])
-s.close()
-" > port_finder.py
-
-    PORT=$(python3 port_finder.py)
+    PORT=$( definePORT )
     run dolt sql-server --port=$PORT --socket "dolt.$PORT.sock"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
@@ -1747,7 +1739,7 @@ s.close()
     PORT=$( definePORT )
     dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --socket "dolt.$PORT.sock" &
     SERVER_PID=$! # will get killed by teardown_common
-    sleep 5 # not using python wait so this works on windows
+    wait_for_connection $PORT 5000
 
     dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<< "create database mydb1;"
     dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<< "exit;"
