@@ -510,7 +510,7 @@ func handleProtocolAndAddress(serverConfig ServerConfig) (server.Config, error) 
 	if useSock {
 		serverConf.Socket = sock
 	}
-
+	// add comment to trigger tests
 	return serverConf, nil
 }
 
