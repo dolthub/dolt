@@ -62,7 +62,7 @@ force_delete_main_branch_on_sqlserver() {
     run dolt sql-client --use-db "dolt_repo_$$" -u dolt -P $PORT \
         -q "call dolt_checkout('to_keep');"
     [ $status -ne 0 ]
-    [[ "$output" =~ "database not found" ]] || false
+    [[ "$output" =~ "cannot resolve default branch head for database 'dolt_repo_$$'" ]] || false
 }
 
 @test "deleted-branches: dolt branch from the CLI does not allow deleting the last branch" {
