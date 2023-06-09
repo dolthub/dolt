@@ -116,7 +116,6 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		cli.Println(err.Error())
 		return 1, false
 	}
-	dbName := sqlCtx.GetCurrentDatabase()
 
 	ap := cli.CreateCommitArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, commitDocs, ap))
@@ -126,22 +125,21 @@ func performCommit(ctx context.Context, commandStr string, args []string, dEnv *
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), help), false
 	}
 
-	dSess := dsess.DSessFromSess(sqlCtx.Session)
-
 	msg, msgOk := apr.GetValue(cli.MessageArg)
 	if !msgOk {
 		amendStr := ""
 		if apr.Contains(cli.AmendFlag) {
-			commit, cmErr := dSess.GetHeadCommit(sqlCtx, dbName)
-			if cmErr != nil {
-				return handleCommitErr(ctx, sqlCtx, cmErr, usage), false
-			}
-			commitMeta, err := commit.GetCommitMeta(sqlCtx)
-			if cmErr != nil {
+			_, rowIter, err := queryist.Query(sqlCtx, "select message from dolt_commits limit 1")
+			if err != nil {
 				cli.Println(err.Error())
 				return 1, false
 			}
-			amendStr = commitMeta.Description
+			row, err := rowIter.Next(sqlCtx)
+			if err != nil {
+				cli.Println(err.Error())
+				return 1, false
+			}
+			amendStr = row[0].(string)
 		}
 		msg, err = getCommitMessageFromEditor(ctx, sqlCtx, "", amendStr, false, cliCtx)
 		if err != nil {
