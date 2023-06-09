@@ -173,6 +173,12 @@ Clone this repository and cd into the `go` directory. Then run:
 go install ./cmd/dolt
 ```
 
+The output will be in `$GOPATH/bin`, which defaults to `~/go/bin`. To test your build, try:
+
+```
+~/go/bin/dolt version
+```
+
 # Configuration
 
 Verify that your installation has succeeded by running `dolt` in your
