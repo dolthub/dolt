@@ -179,8 +179,6 @@ The output will be in `$GOPATH/bin`, which defaults to `~/go/bin`. To test your 
 ~/go/bin/dolt version
 ```
 
-This path may be dependent on your $GO_ROOT which may default to your $HOME directory.
-
 # Configuration
 
 Verify that your installation has succeeded by running `dolt` in your
