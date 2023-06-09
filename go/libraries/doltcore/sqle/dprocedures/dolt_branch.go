@@ -53,6 +53,8 @@ func doDoltBranch(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Empty database name.")
 	}
 
+	// CreateBranchArgParser has the common flags for the command line and the stored procedure.
+	// The stored procedure doesn't support all actions, so we have a shorter description for -r.
 	ap := cli.CreateBranchArgParser()
 	ap.SupportsFlag(cli.RemoteParam, "r", "Delete a remote tracking branch.")
 	apr, err := ap.Parse(args)
