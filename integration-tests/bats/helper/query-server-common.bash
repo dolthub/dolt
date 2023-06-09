@@ -16,6 +16,9 @@ wait_for_connection() {
   # BATS has 'set -e' enabled, which causes the script to fail immediately if any subcommand returns a non-zero
   # exit code, so we need to temporarily enable 'set +e', but be sure to turn 'set -e' back on before we exit.
   set +e
+  if [ ps -p $SERVER_PID > /dev/null];
+  then
+
   while [ $SECONDS -lt $end_time ]; do
     dolt sql-client -u $user --host localhost --port $port --use-db "$DEFAULT_DB" --timeout 1 -q "SELECT 1;"
     if [ $? -eq 0 ]; then
@@ -25,6 +28,9 @@ wait_for_connection() {
     fi
     sleep 1
   done
+  else
+    echo "Server at $SERVER_PID not running"
+  fi
 
   echo "Failed to connect to database $DEFAULT_DB on port $port within $timeout ms."
   set -e
@@ -124,6 +130,8 @@ stop_sql_server() {
 
     wait=$1
     echo "Stopping " "$SERVER_PID" "$PORT" >&3
+    lsof -i -P -n | grep $PORT
+    lsof -i -P -n | grep $SERVER_PID
     if [ ! -z "$SERVER_PID" ]; then
         # ignore failures of kill command in the case the server is already dead
         echo "Killing server on port" $PORT >&3
@@ -133,6 +141,8 @@ stop_sql_server() {
                 sleep .1;
             done
         fi;
+        lsof -i -P -n | grep $PORT
+        lsof -i -P -n | grep $SERVER_PID
     fi
     SERVER_PID=
 }
@@ -144,7 +154,7 @@ definePORT() {
   do
     let getPORT="($$ + $i) % (65536-1024) + 1024"
     echo lsof -i -P -n | grep $getPORT >&3
-    portinuse=$(lsof -i -P -n | grep LISTEN | grep $getPORT | wc -l)
+    portinuse=$(lsof -i -P -n | grep $getPORT | wc -l)
     if [ $portinuse -eq 0 ]; then
       echo "$getPORT"
       break
