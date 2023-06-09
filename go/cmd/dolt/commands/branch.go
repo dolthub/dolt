@@ -186,6 +186,7 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 			}
 		}
 
+		// This silliness is requires to properly support color characters in branch names.
 		fmtStr := fmt.Sprintf("%%s%%%ds\t%%s", 48-branchLen)
 		line := fmt.Sprintf(fmtStr, branchName, "", commitStr)
 
