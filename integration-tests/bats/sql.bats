@@ -2265,7 +2265,11 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "c,2,2" ]] || false
 
-    dolt sql -b -q "INSERT INTO test VALUES ('d','d','d');DELETE FROM test WHERE col_a='d';INSERT INTO test VALUES ('d', '1', '1') ON DUPLICATE KEY UPDATE col_b = '2', col_c='2';"
+    dolt sql <<SQL
+INSERT INTO test VALUES ('d','d','d');
+DELETE FROM test WHERE col_a='d';
+INSERT INTO test VALUES ('d', '1', '1') ON DUPLICATE KEY UPDATE col_b = '2', col_c='2';
+SQL
     run dolt sql -r csv -q "SELECT * from test where col_a = 'd'"
     [ $status -eq 0 ]
     [[ "$output" =~ "d,1,1" ]] || false
