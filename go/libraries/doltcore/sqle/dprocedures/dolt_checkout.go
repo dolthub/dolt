@@ -48,12 +48,6 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Empty database name.")
 	}
 
-	// non-revision database branchName is used to check out a branch on it.
-	dbName, _, err := getRevisionForRevisionDatabase(ctx, currentDbName)
-	if err != nil {
-		return -1, err
-	}
-
 	apr, err := cli.CreateCheckoutArgParser().Parse(args)
 	if err != nil {
 		return 1, err
@@ -65,7 +59,6 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
-	// dbData should use the current database data, which can be at revision database.
 	dbData, ok := dSess.GetDbData(ctx, currentDbName)
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", currentDbName)
@@ -75,7 +68,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 
 	// Checking out new branch.
 	if branchOrTrack {
-		err = checkoutNewBranch(ctx, dbName, dbData, apr, &rsc)
+		err = checkoutNewBranch(ctx, currentDbName, dbData, apr, &rsc)
 		if err != nil {
 			return 1, err
 		} else {
@@ -92,7 +85,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, branchName); err != nil {
 		return 1, err
 	} else if isBranch {
-		err = checkoutBranch(ctx, dbName, branchName)
+		err = checkoutBranch(ctx, currentDbName, branchName)
 		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
 			// If there is a branch but there is no working set,
 			// somehow the local branch ref was created without a
@@ -108,7 +101,16 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 				return 1, err
 			}
 
-			err = checkoutBranch(ctx, dbName, branchName)
+			// Since we've created new refs since the transaction began, we need to commit this transaction and
+			// start a new one to avoid not found errors after this
+			// TODO: this is much worse than other places we do this, because it's two layers of implicit behavior
+			sess := dsess.DSessFromSess(ctx.Session)
+			err = commitTransaction(ctx, sess, &rsc)
+			if err != nil {
+				return 1, err
+			}
+
+			err = checkoutBranch(ctx, currentDbName, branchName)
 		}
 		if err != nil {
 			return 1, err
@@ -116,14 +118,14 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		return 0, nil
 	}
 
-	roots, ok := dSess.GetRoots(ctx, dbName)
+	roots, ok := dSess.GetRoots(ctx, currentDbName)
 	if !ok {
-		return 1, fmt.Errorf("Could not load database %s", dbName)
+		return 1, fmt.Errorf("Could not load database %s", currentDbName)
 	}
 
-	err = checkoutTables(ctx, roots, dbName, args)
+	err = checkoutTables(ctx, roots, currentDbName, args)
 	if err != nil && apr.NArg() == 1 {
-		err = checkoutRemoteBranch(ctx, dbName, dbData, branchName, apr, &rsc)
+		err = checkoutRemoteBranch(ctx, currentDbName, dbData, branchName, apr, &rsc)
 	}
 
 	if err != nil {
@@ -175,29 +177,6 @@ func createWorkingSetForLocalBranch(ctx *sql.Context, ddb *doltdb.DoltDB, branch
 	return ddb.UpdateWorkingSet(ctx, wsRef, ws, hash.Hash{} /* current hash... */, doltdb.TodoWorkingSetMeta(), nil)
 }
 
-// getRevisionForRevisionDatabase returns the root database name and revision for a database, or just the root database name if the specified db name is not a revision database.
-func getRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, string, error) {
-	doltsess, ok := ctx.Session.(*dsess.DoltSession)
-	if !ok {
-		return "", "", fmt.Errorf("unexpected session type: %T", ctx.Session)
-	}
-
-	db, ok, err := doltsess.Provider().SessionDatabase(ctx, dbName)
-	if err != nil {
-		return "", "", err
-	}
-	if !ok {
-		return "", "", sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	rdb, ok := db.(dsess.RevisionDatabase)
-	if !ok {
-		return dbName, "", nil
-	}
-
-	return rdb.BaseName(), rdb.Revision(), nil
-}
-
 // checkoutRemoteBranch checks out a remote branch creating a new local branch with the same name as the remote branch
 // and set its upstream. The upstream persists out of sql session.
 func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
@@ -214,6 +193,15 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, br
 		if err != nil {
 			return err
 		}
+
+		// We need to commit the transaction here or else the branch we just created isn't visible to the current transaction,
+		// and we are about to switch to it. So set the new branch head for the new transaction, then commit this one
+		sess := dsess.DSessFromSess(ctx.Session)
+		err = commitTransaction(ctx, sess, rsc)
+		if err != nil {
+			return err
+		}
+
 		err = checkoutBranch(ctx, dbName, branchName)
 		if err != nil {
 			return err
@@ -272,10 +260,6 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 	if err != nil {
 		return err
 	}
-	err = checkoutBranch(ctx, dbName, newBranchName)
-	if err != nil {
-		return err
-	}
 
 	if setTrackUpstream {
 		err = env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteName, ref.NewBranchRef(remoteBranchName))
@@ -285,16 +269,28 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 	} else if autoSetupMerge, err := loadConfig(ctx).GetString("branch.autosetupmerge"); err != nil || autoSetupMerge != "false" {
 		remoteName, remoteBranchName = actions.ParseRemoteBranchName(startPt)
 		refSpec, err = ref.ParseRefSpecForRemote(remoteName, remoteBranchName)
-		if err != nil {
-			return nil
-		}
-		err = env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteName, ref.NewBranchRef(remoteBranchName))
-		if err != nil {
-			return err
+		if err == nil {
+			err = env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteName, ref.NewBranchRef(remoteBranchName))
+			if err != nil {
+				return err
+			}
 		}
 	}
 
-	return nil
+	// We need to commit the transaction here or else the branch we just created isn't visible to the current transaction,
+	// and we are about to switch to it. So set the new branch head for the new transaction, then commit this one
+	sess := dsess.DSessFromSess(ctx.Session)
+	err = commitTransaction(ctx, sess, rsc)
+	if err != nil {
+		return err
+	}
+
+	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(newBranchName))
+	if err != nil {
+		return err
+	}
+
+	return sess.SwitchWorkingSet(ctx, dbName, wsRef)
 }
 
 func checkoutBranch(ctx *sql.Context, dbName string, branchName string) error {

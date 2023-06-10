@@ -158,9 +158,6 @@ func MergeRoots(
 
 	mergedRoot := ourRoot
 
-	optsWithFKChecks := opts
-	optsWithFKChecks.ForeignKeyChecksDisabled = true
-
 	// Merge tables one at a time. This is done based on name. With table names from ourRoot being merged first,
 	// renaming a table will return delete/modify conflict error consistently.
 	// TODO: merge based on a more durable table identity that persists across renames
