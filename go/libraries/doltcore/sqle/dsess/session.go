@@ -1037,9 +1037,7 @@ func (d *DoltSession) SetSessionVariable(ctx *sql.Context, key string, value int
 		if !ok {
 			return doltdb.ErrInvalidBranchOrHash
 		}
-		if err := d.setHeadRefSessionVar(ctx, db, v); err != nil {
-			return err
-		}
+		return d.setHeadRefSessionVar(ctx, db, v)
 	}
 	if IsReadOnlyVersionKey(key) {
 		return sql.ErrSystemVariableReadOnly.New(key)
