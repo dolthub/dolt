@@ -794,6 +794,7 @@ func BasicSelectTests() []SelectTest {
 				&sql.Column{Name: "latest_commit_date", Type: gmstypes.Datetime},
 				&sql.Column{Name: "latest_commit_message", Type: gmstypes.Text},
 				&sql.Column{Name: "remote", Type: gmstypes.Text},
+				&sql.Column{Name: "branch", Type: gmstypes.Text},
 			},
 		},
 	}

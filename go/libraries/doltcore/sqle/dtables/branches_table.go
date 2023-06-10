@@ -83,8 +83,8 @@ func (bt *BranchesTable) Schema() sql.Schema {
 		{Name: "latest_commit_message", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true},
 	}
 	if !bt.remote {
-		remote := &sql.Column{Name: "remote", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true}
-		columns = append(columns, remote)
+		columns = append(columns, &sql.Column{Name: "remote", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true})
+		columns = append(columns, &sql.Column{Name: "branch", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true})
 	}
 	return columns
 }
@@ -200,11 +200,13 @@ func (itr *BranchItr) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 
 		remoteName := ""
+		branchName := ""
 		branch, ok := branches[name]
 		if ok {
 			remoteName = branch.Remote
+			branchName = branch.Merge.Ref.GetPath()
 		}
-		return sql.NewRow(name, h.String(), meta.Name, meta.Email, meta.Time(), meta.Description, remoteName), nil
+		return sql.NewRow(name, h.String(), meta.Name, meta.Email, meta.Time(), meta.Description, remoteName, branchName), nil
 	}
 }
 
