@@ -972,7 +972,7 @@ func (d *DoltSession) SwitchWorkingSet(
 func (d *DoltSession) UseDatabase(ctx *sql.Context, db sql.Database) error {
 	sdb, ok := db.(SqlDatabase)
 	if !ok {
-		// Could be an externally provided db such as `mysql` or `information_schema`, in which case there's nothing for 
+		// Could be an externally provided db such as `mysql` or `information_schema`, in which case there's nothing for
 		// this hook to do
 		return nil
 	}
