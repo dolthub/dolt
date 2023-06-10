@@ -43,13 +43,13 @@ RUN pip3 install mysql-connector-python PyMySQL sqlalchemy
 ENV JAVA_HOME /usr/lib/jvm/java-17-openjdk-amd64/
 
 # install the current latest maven version, `v3.9.1`, because apt installed one does not work with jdk 17
-ADD https://apache.osuosl.org/maven/maven-3/3.9.1/binaries/apache-maven-3.9.1-bin.tar.gz apache-maven-3.9.1-bin.tar.gz
-RUN tar zxvf apache-maven-3.9.1-bin.tar.gz && \
-    cp -r apache-maven-3.9.1 /opt && \
-    rm -rf apache-maven-3.9.1 apache-maven-3.9.1-bin.tar.gz
+ADD https://apache.osuosl.org/maven/maven-3/3.9.1/binaries/apache-maven-3.9.2-bin.tar.gz apache-maven-3.9.2-bin.tar.gz
+RUN tar zxvf apache-maven-3.9.2-bin.tar.gz && \
+    cp -r apache-maven-3.9.2 /opt && \
+    rm -rf apache-maven-3.9.2 apache-maven-3.9.2-bin.tar.gz
 
 # add maven binary
-ENV PATH /opt/apache-maven-3.9.1/bin:$PATH
+ENV PATH /opt/apache-maven-3.9.2/bin:$PATH
 
 # install dolt from source
 WORKDIR /root/building
