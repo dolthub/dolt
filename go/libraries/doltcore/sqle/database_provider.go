@@ -328,7 +328,8 @@ func (p DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlDatab
 
 	revDbs := make([]sql.Database, len(branches))
 	for i, branch := range branches {
-		revDb, ok, err := p.databaseForRevision(ctx, fmt.Sprintf("%s/%s", db.Name(), branch.GetPath()), db.Name())
+		revisionQualifiedName := fmt.Sprintf("%s/%s", db.Name(), branch.GetPath())
+		revDb, ok, err := p.databaseForRevision(ctx, revisionQualifiedName, revisionQualifiedName)
 		if err != nil {
 			return nil, err
 		}
