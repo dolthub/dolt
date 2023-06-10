@@ -13,17 +13,13 @@ wait_for_connection() {
   user=${SQL_USER:-dolt}
   end_time=$((SECONDS+($timeout/1000)))
 
-  # BATS has 'set -e' enabled, which causes the script to fail immediately if any subcommand returns a non-zero
-  # exit code, so we need to temporarily enable 'set +e', but be sure to turn 'set -e' back on before we exit.
-  set +e
   if [ ps -p $SERVER_PID > /dev/null];
   then
 
   while [ $SECONDS -lt $end_time ]; do
-    dolt sql-client -u $user --host localhost --port $port --use-db "$DEFAULT_DB" --timeout 1 -q "SELECT 1;"
-    if [ $? -eq 0 ]; then
+    run dolt sql-client -u $user --host localhost --port $port --use-db "$DEFAULT_DB" --timeout 1 -q "SELECT 1;"
+    if [ $status -eq 0 ]; then
       echo "Connected successfully!"
-      set -e
       return 0
     fi
     sleep 1
@@ -33,7 +29,6 @@ wait_for_connection() {
   fi
 
   echo "Failed to connect to database $DEFAULT_DB on port $port within $timeout ms."
-  set -e
   return 1
 }
 
