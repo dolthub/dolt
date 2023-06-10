@@ -100,6 +100,15 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 			if err != nil {
 				return 1, err
 			}
+			
+			// Since we've created new refs since the transaction began, we need to commit this transaction and 
+			// start a new one to avoid not found errors after this
+			// TODO: this is much worse than other places we do this, because it's two layers of implicit behavior
+			sess := dsess.DSessFromSess(ctx.Session)
+			err = commitTransaction(ctx, sess, &rsc)
+			if err != nil {
+				return 1, err
+			}			
 
 			err = checkoutBranch(ctx, currentDbName, branchName)
 		}
