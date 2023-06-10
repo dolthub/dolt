@@ -65,6 +65,7 @@ export const branchTests = [
         latest_commit_date: "",
         latest_commit_message: "Create table test",
         remote: "",
+        branch: "",
       },
     ],
     matcher: branchesMatcher,
