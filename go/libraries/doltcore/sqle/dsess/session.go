@@ -972,7 +972,9 @@ func (d *DoltSession) SwitchWorkingSet(
 func (d *DoltSession) UseDatabase(ctx *sql.Context, db sql.Database) error {
 	sdb, ok := db.(SqlDatabase)
 	if !ok {
-		return fmt.Errorf("expected a SqlDatabase, got %T", db)
+		// Could be an externally provided db such as `mysql` or `information_schema`, in which case there's nothing for 
+		// this hook to do
+		return nil
 	}
 
 	branchState, ok, err := d.lookupDbState(ctx, sdb.RevisionQualifiedName())

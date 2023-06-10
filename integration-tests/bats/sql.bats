@@ -2855,3 +2855,26 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "provided --use-db dba does not exist or is not a directory" ]] || false
 }
+
+@test "sql: USE information schema and mysql databases" {
+    run dolt sql <<SQL
+USE information_schema;
+show tables;
+SQL
+
+    # spot check result
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Database changed" ]] || false
+    [[ "$output" =~ "columns" ]] || false
+
+    run dolt sql <<SQL
+USE mysql;
+show tables;
+SQL
+
+    # spot check result
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Database changed" ]] || false
+    [[ "$output" =~ "role_edges" ]] || false
+    
+}
