@@ -19,16 +19,16 @@ wait_for_connection() {
   while [ $SECONDS -lt $end_time ]; do
     run dolt sql-client -u $user --host localhost --port $port --use-db "$DEFAULT_DB" --timeout 1 -q "SELECT 1;"
     if [ $status -eq 0 ]; then
-      echo "Connected successfully!"
+      echo "Connected successfully!" >&3
       return 0
     fi
     sleep 1
   done
   else
-    echo "Server at $SERVER_PID not running"
+    echo "Server at $SERVER_PID not running" >&3
   fi
 
-  echo "Failed to connect to database $DEFAULT_DB on port $port within $timeout ms."
+  echo "Failed to connect to database $DEFAULT_DB on port $port within $timeout ms." >&3
   return 1
 }
 
@@ -40,9 +40,7 @@ start_sql_server() {
     if [[ $logFile ]]
     then
         dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" > $logFile 2>&1 &
-        dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" > $logFile 2>&1 &
     else
-        dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" &
         dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" &
     fi
     SERVER_PID=$!
