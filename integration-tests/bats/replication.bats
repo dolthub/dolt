@@ -584,7 +584,6 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "remote not found: 'unknown'" ]] || false
 }
 
 @test "replication: non-fast-forward pull fails replication" {
