@@ -37,7 +37,7 @@ type SessionStateAdapter struct {
 }
 
 func (s SessionStateAdapter) SetCWBHeadRef(ctx context.Context, newRef ref.MarshalableRef) error {
-	sqlCtx := sql.NewContext(ctx)
+	sqlCtx := sql.NewContext(ctx, sql.WithSession(s.session))
 
 	wsRef, err := ref.WorkingSetRefForHead(newRef.Ref)
 	if err != nil {
