@@ -32,7 +32,8 @@ var ErrCherryPickUncommittedChanges = errors.New("cannot cherry-pick with uncomm
 var ErrCherryPickConflictsOrViolations = errors.New("error: Unable to apply commit cleanly due to conflicts " +
 	"or constraint violations. Please resolve the conflicts and/or constraint violations, then call `dolt_add()` " +
 	"to add the tables to the staged set, then call `dolt_commit()` to commit the changes and finish cherry-picking. \n" +
-	"To undo all changes from this cherry-pick operation, call `dolt_cherry_pick('--abort')`.")
+	"To undo all changes from this cherry-pick operation, call `dolt_cherry_pick('--abort')`.\n" +
+	"For more information on handling conflicts, see: https://docs.dolthub.com/concepts/dolt/git/conflicts")
 
 var cherryPickSchema = []*sql.Column{
 	{

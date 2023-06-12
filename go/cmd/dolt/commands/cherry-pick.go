@@ -42,13 +42,11 @@ If applying the row data changes from the cherry-picked commit results in a data
 	},
 }
 
-// TODO: Would be nice to have a documentation URL to send people to, since resolving conflicts
-//
-//	and violations is a little bit advanced.
 var ErrCherryPickConflictsOrViolations = errors.NewKind("error: Unable to apply commit cleanly due to conflicts " +
 	"or constraint violations. Please resolve the conflicts and/or constraint violations, then use `dolt add` " +
 	"to add the tables to the staged set, and `dolt commit` to commit the changes and finish cherry-picking. \n" +
-	"To undo all changes from this cherry-pick operation, use `dolt cherry-pick --abort`.")
+	"To undo all changes from this cherry-pick operation, use `dolt cherry-pick --abort`.\n" +
+	"For more information on handling conflicts, see: https://docs.dolthub.com/concepts/dolt/git/conflicts")
 
 type CherryPickCmd struct{}
 
