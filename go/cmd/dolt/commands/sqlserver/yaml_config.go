@@ -19,7 +19,7 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
-	
+
 	"gopkg.in/yaml.v2"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -183,7 +183,7 @@ func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 			boolPtr(cfg.DoltTransactionCommit()),
 		},
 		UserConfig: UserYAMLConfig{
-			Name: strPtr(cfg.User()),
+			Name:     strPtr(cfg.User()),
 			Password: strPtr(cfg.Password()),
 		},
 		ListenerConfig: ListenerYAMLConfig{
@@ -201,14 +201,14 @@ func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 		PerformanceConfig: PerformanceYAMLConfig{
 			QueryParallelism: nillableIntPtr(cfg.QueryParallelism()),
 		},
-		DataDirStr:        strPtr(cfg.DataDir()),
-		CfgDirStr:         strPtr(cfg.CfgDir()),
-		MetricsConfig:     MetricsYAMLConfig{
+		DataDirStr: strPtr(cfg.DataDir()),
+		CfgDirStr:  strPtr(cfg.CfgDir()),
+		MetricsConfig: MetricsYAMLConfig{
 			Labels: cfg.MetricsLabels(),
 			Host:   nillableStrPtr(cfg.MetricsHost()),
 			Port:   intPtr(cfg.MetricsPort()),
 		},
-		RemotesapiConfig:  RemotesapiYAMLConfig{
+		RemotesapiConfig: RemotesapiYAMLConfig{
 			Port_: cfg.RemotesapiPort(),
 		},
 		ClusterCfg:        clusterConfigAsYAMLConfig(cfg.ClusterConfig()),
@@ -223,12 +223,12 @@ func clusterConfigAsYAMLConfig(config cluster.Config) *ClusterYAMLConfig {
 	if config == nil {
 		return nil
 	}
-	
+
 	return &ClusterYAMLConfig{
 		StandbyRemotes_: nil,
 		BootstrapRole_:  config.BootstrapRole(),
 		BootstrapEpoch_: config.BootstrapEpoch(),
-		RemotesAPI:      ClusterRemotesAPIYAMLConfig{
+		RemotesAPI: ClusterRemotesAPIYAMLConfig{
 			Addr_:      config.RemotesAPIConfig().Address(),
 			Port_:      config.RemotesAPIConfig().Port(),
 			TLSKey_:    config.RemotesAPIConfig().TLSKey(),

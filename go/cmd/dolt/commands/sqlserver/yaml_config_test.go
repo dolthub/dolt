@@ -88,12 +88,12 @@ jwks:
     fields_to_log:
 `
 	expected := serverConfigAsYAMLConfig(DefaultServerConfig())
-	
+
 	expected.BehaviorConfig.DoltTransactionCommit = &trueValue
 	expected.CfgDirStr = nillableStrPtr("")
 	expected.PrivilegeFile = strPtr("some other nonsense")
 	expected.BranchControlFile = strPtr("third nonsense")
-	
+
 	expected.MetricsConfig = MetricsYAMLConfig{
 		Host: strPtr("123.45.67.89"),
 		Port: intPtr(9091),
