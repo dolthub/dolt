@@ -289,7 +289,6 @@ func newServer(u driver.DoltUser, r driver.TestRepo) (*driver.SqlServer, error) 
 	if err != nil {
 		return nil, err
 	}
-	r.Server.Args = append(r.Server.Args, "")
 	server, err := MakeServer(repo, r.Server)
 	if err != nil {
 		return nil, err

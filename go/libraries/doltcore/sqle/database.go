@@ -109,6 +109,10 @@ func (db Database) EditOptions() editor.Options {
 	return db.editOpts
 }
 
+func (db Database) DoltDatabases() []*doltdb.DoltDB {
+	return []*doltdb.DoltDB{db.ddb}
+}
+
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts editor.Options) (Database, error) {
 	globalState, err := globalstate.NewGlobalStateStoreForDb(ctx, dbData.Ddb)
