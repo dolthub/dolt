@@ -83,6 +83,19 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return 1
 	}
 
+	if apr.Contains(cli.AbortParam) {
+		ws, err := dEnv.WorkingSet(ctx)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.BuildDError("fatal: unable to load working set: %v", err).Build(), nil)
+		}
+
+		if !ws.MergeActive() {
+			return HandleVErrAndExitCode(errhand.BuildDError("error: There is no cherry-pick merge to abort").Build(), nil)
+		}
+
+		return HandleVErrAndExitCode(abortMerge(ctx, dEnv), usage)
+	}
+
 	// TODO : support single commit cherry-pick only for now
 	if apr.NArg() == 0 {
 		usage()
