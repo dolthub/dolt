@@ -95,6 +95,18 @@ func (r Result) HasMergeArtifacts() bool {
 	return false
 }
 
+// CountOfTablesWithConflicts returns the number of tables in this merge result that have either
+// a data conflict or schema conflict.
+func (r Result) CountOfTablesWithConflicts() int {
+	count := 0
+	for _, mergeStats := range r.Stats {
+		if mergeStats.HasConflicts() {
+			count++
+		}
+	}
+	return count
+}
+
 func SchemaConflictTableNames(sc []SchemaConflict) (tables []string) {
 	tables = make([]string, len(sc))
 	for i := range sc {
