@@ -42,6 +42,46 @@ teardown() {
     [[ "$output" =~ "t2" ]] || false
 }
 
+@test "commit: --all (-a) adds existing, changed tables" {
+    dolt sql -q "CREATE table t1 (pk int primary key);"
+    dolt add t1
+    run dolt commit -m "add table t1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "add table t1" ]] || false
+
+    dolt sql -q "INSERT INTO t1 VALUES (1);"
+    dolt sql -q "CREATE table t2 (pk int primary key);"
+    run dolt commit -a -m "updating t1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "updating t1" ]] || false
+
+    run dolt status
+    [[ "$output" =~ "t2" ]] || false
+    [[ ! "$output" =~ "t1" ]] || false
+
+    run dolt show HEAD
+    [[ "$output" =~ "| 1" ]]
+}
+
+@test "commit: -m sets commit message properly" {
+    dolt sql -q "CREATE table t1 (pk int primary key);"
+    dolt add t1
+    run dolt commit -m "add table t1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "add table t1" ]] || false
+}
+
+@test "commit: all flag, message, author all work properly" {
+    dolt sql -q "CREATE table t1 (pk int primary key);"
+    dolt add t1
+    run dolt commit -m "add table t1" --author "John Doe <john@doe.com>"
+    [ $status -eq 0 ]
+    echo "$output"
+    [[ "$output" =~ "add table t1" ]] || false
+    [[ "$output" =~ "John Doe" ]] || false
+    [[ "$output" =~ "john@doe.com" ]] || false
+}
+
 @test "commit: failed to open commit editor." {
     export EDITOR="foo"
     export DOLT_TEST_FORCE_OPEN_EDITOR="1"
@@ -72,4 +112,46 @@ teardown() {
   # When no changes are staged, --skip-empty skips creating the commit
   dolt commit --skip-empty -m "commit message"
   [ $new_head = $(get_head_commit) ]
+}
+
+@test "commit: -f works correctly" {
+    run dolt sql <<SQL
+SET FOREIGN_KEY_CHECKS=0;
+CREATE TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX color_index(color)
+);
+CREATE TABLE objects (
+    id INT NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    color VARCHAR(32),
+
+    PRIMARY KEY(id),
+    FOREIGN KEY (color) REFERENCES colors(color)
+);
+
+INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');
+SQL
+    [ $status -eq 0 ]
+
+    run dolt commit -A -f -m "Commit1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Commit1" ]] || false
+}
+
+@test "commit: dolt commit with unstaged tables leaves them in the working set" {
+    dolt sql -q "CREATE table t1 (pk int primary key);"
+    dolt sql -q "CREATE table t2 (pk int primary key);"
+    dolt add t1
+
+    run dolt commit -m "adding table t1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "adding table t1" ]] || false
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "new table:        t2" ]] || false
 }
