@@ -13,8 +13,9 @@ wait_for_connection() {
   user=${SQL_USER:-dolt}
   end_time=$((SECONDS+($timeout/1000)))
 
-  if [ ps -p $SERVER_PID > /dev/null];
-  then
+  echo "Connecting" >&3
+  lsof -i -P -n | grep $PORT >&3
+  lsof -i -P -n | grep $SERVER_PID >&3
 
   while [ $SECONDS -lt $end_time ]; do
     run dolt sql-client -u $user --host localhost --port $port --use-db "$DEFAULT_DB" --timeout 1 -q "SELECT 1;"
@@ -24,9 +25,6 @@ wait_for_connection() {
     fi
     sleep 1
   done
-  else
-    echo "Server at $SERVER_PID not running" >&3
-  fi
 
   echo "Failed to connect to database $DEFAULT_DB on port $port within $timeout ms." >&3
   return 1
@@ -123,8 +121,8 @@ stop_sql_server() {
 
     wait=$1
     echo "Stopping " "$SERVER_PID" "$PORT" >&3
-    lsof -i -P -n | grep $PORT
-    lsof -i -P -n | grep $SERVER_PID
+    lsof -i -P -n | grep $PORT >&3
+    lsof -i -P -n | grep $SERVER_PID >&3
     if [ ! -z "$SERVER_PID" ]; then
         # ignore failures of kill command in the case the server is already dead
         echo "Killing server on port" $PORT >&3
@@ -134,8 +132,8 @@ stop_sql_server() {
                 sleep .1;
             done
         fi;
-        lsof -i -P -n | grep $PORT
-        lsof -i -P -n | grep $SERVER_PID
+        lsof -i -P -n | grep $PORT >&3
+        lsof -i -P -n | grep $SERVER_PID >&3
     fi
     SERVER_PID=
 }
