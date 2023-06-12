@@ -49,7 +49,7 @@ const (
 	defaultAutoCommit              = true
 	defaultDoltTransactionCommit   = false
 	defaultMaxConnections          = 100
-	defaultQueryParallelism        = 2
+	defaultQueryParallelism        = 0
 	defaultPersistenceBahavior     = loadPerisistentGlobals
 	defaultDataDir                 = "."
 	defaultCfgDir                  = ".doltcfg"

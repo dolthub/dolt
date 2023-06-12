@@ -52,6 +52,13 @@ func uint64Ptr(n uint64) *uint64 {
 	return &n
 }
 
+func nillableIntPtr(n int) *int {
+	if n == 0 {
+		return nil
+	}
+	return &n
+}
+
 func intPtr(n int) *int {
 	return &n
 }
@@ -166,8 +173,8 @@ func NewYamlConfig(configFileData []byte) (YAMLConfig, error) {
 func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 	return YAMLConfig{
 		LogLevelStr:       strPtr(string(cfg.LogLevel())),
-		MaxQueryLenInLogs: intPtr(cfg.MaxLoggedQueryLen()),
-		EncodeLoggedQuery: boolPtr(cfg.ShouldEncodeLoggedQuery()),
+		MaxQueryLenInLogs: nillableIntPtr(cfg.MaxLoggedQueryLen()),
+		EncodeLoggedQuery: nillableBoolPtr(cfg.ShouldEncodeLoggedQuery()),
 		BehaviorConfig: BehaviorYAMLConfig{
 			boolPtr(cfg.ReadOnly()),
 			boolPtr(cfg.AutoCommit()),
@@ -192,7 +199,7 @@ func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 			nillableStrPtr(cfg.Socket()),
 		},
 		PerformanceConfig: PerformanceYAMLConfig{
-			QueryParallelism: intPtr(cfg.QueryParallelism()),
+			QueryParallelism: nillableIntPtr(cfg.QueryParallelism()),
 		},
 		DataDirStr:        strPtr(cfg.DataDir()),
 		CfgDirStr:         strPtr(cfg.CfgDir()),
