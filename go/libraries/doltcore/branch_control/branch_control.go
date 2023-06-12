@@ -18,6 +18,7 @@ import (
 	"context"
 	goerrors "errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"os"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
@@ -48,6 +49,7 @@ type Context interface {
 	GetHost() string
 	GetPrivilegeSet() (sql.PrivilegeSet, uint64)
 	GetController() *Controller
+	GetFileSystem() filesys.Filesys
 }
 
 // Controller is the central hub for branch control functions. This is passed within a context.
@@ -140,14 +142,13 @@ func SaveData(ctx context.Context) error {
 	if len(controller.branchControlFilePath) == 0 {
 		return nil
 	}
+
+	fs := branchAwareSession.GetFileSystem()
+
 	// Create the doltcfg directory if it doesn't exist
 	if len(controller.doltConfigDirPath) != 0 {
-		if _, err := os.Stat(controller.doltConfigDirPath); os.IsNotExist(err) {
-			if mkErr := os.Mkdir(controller.doltConfigDirPath, 0777); mkErr != nil {
-				return mkErr
-			}
-		} else if err != nil {
-			return err
+		if mkErr := fs.MkDirs(controller.doltConfigDirPath); mkErr != nil {
+			return mkErr
 		}
 	}
 	b := flatbuffers.NewBuilder(1024)
@@ -162,7 +163,18 @@ func SaveData(ctx context.Context) error {
 	b.Prep(1, flatbuffers.SizeInt32+4+serial.MessagePrefixSz)
 	b.FinishWithFileIdentifier(root, []byte(serial.BranchControlFileID))
 	data := b.Bytes[b.Head()-serial.MessagePrefixSz:]
-	return os.WriteFile(controller.branchControlFilePath, data, 0777)
+
+	writeCloser, err := fs.OpenForWrite(controller.branchControlFilePath, 0777)
+	if err != nil {
+		return err
+	}
+
+	_, err = writeCloser.Write(data)
+	if err != nil {
+		return err
+	}
+
+	return writeCloser.Close()
 }
 
 // CheckAccess returns whether the given context has the correct permissions on its selected branch. In general, SQL

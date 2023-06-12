@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"strconv"
 	"strings"
 	"sync"
@@ -58,6 +59,7 @@ type DoltSession struct {
 	globalsConf      config.ReadWriteConfig
 	branchController *branch_control.Controller
 	mu               *sync.Mutex
+	fs               filesys.Filesys
 
 	// If non-nil, this will be returned from ValidateSession.
 	// Used by sqle/cluster to put a session into a terminal err state.
@@ -82,6 +84,7 @@ func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
 		globalsConf:      config.NewMapConfig(make(map[string]string)),
 		branchController: branch_control.CreateDefaultController(), // Default sessions are fine with the default controller
 		mu:               &sync.Mutex{},
+		fs:               pro.FileSystem(),
 	}
 }
 
@@ -107,6 +110,7 @@ func NewDoltSession(
 		globalsConf:      globals,
 		branchController: branchController,
 		mu:               &sync.Mutex{},
+		fs:               pro.FileSystem(),
 	}
 
 	return sess, nil
@@ -856,6 +860,14 @@ func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roo
 
 	workingSet := sessionState.WorkingSet().WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
 	return d.SetWorkingSet(ctx, dbName, workingSet)
+}
+
+func (d *DoltSession) SetFileSystem(fs filesys.Filesys) {
+	d.fs = fs
+}
+
+func (d *DoltSession) GetFileSystem() filesys.Filesys {
+	return d.fs
 }
 
 // SetWorkingSet sets the working set for this session.
