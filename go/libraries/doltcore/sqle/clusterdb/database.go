@@ -120,10 +120,6 @@ func (db database) DbData() env.DbData {
 	return env.DbData{}
 }
 
-func (db database) Flush(context *sql.Context) error {
-	return errors.New("unimplemented")
-}
-
 func (db database) EditOptions() editor.Options {
 	return editor.Options{}
 }
