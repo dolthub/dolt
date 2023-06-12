@@ -54,6 +54,8 @@ export const branchTests = [
         latest_committer_email: "mysql-test-runner@liquidata.co",
         latest_commit_date: "",
         latest_commit_message: "Initialize data repository",
+        remote: "",
+        branch: "",
       },
       {
         name: "mybranch",
@@ -62,6 +64,8 @@ export const branchTests = [
         latest_committer_email: "dolt@dolthub.com",
         latest_commit_date: "",
         latest_commit_message: "Create table test",
+        remote: "",
+        branch: "",
       },
     ],
     matcher: branchesMatcher,

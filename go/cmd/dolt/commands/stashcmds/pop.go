@@ -104,7 +104,7 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return handleStashPopErr(usage, err)
 	}
 
-	ret := commands.StatusCmd{}.Exec(ctx, "status", []string{}, dEnv, nil)
+	ret := commands.StatusCmd{}.Exec(ctx, "status", []string{}, dEnv, cliCtx)
 	if ret != 0 || !success {
 		cli.Println("The stash entry is kept in case you need it again.")
 		return 1

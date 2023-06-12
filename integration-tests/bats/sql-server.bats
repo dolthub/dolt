@@ -320,13 +320,13 @@ SQL
 
     # add some working changes
     dolt sql-client -P $PORT -u dolt -q "INSERT INTO test VALUES (7,7);"
-    run dolt status
+    run dolt --user=dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
     dolt sql-client -P $PORT -u dolt -q "CALL DOLT_RESET('--hard');"
 
-    run dolt status
+    run dolt --user=dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "working tree clean" ]] || false
     run dolt --user=dolt sql -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
@@ -337,7 +337,7 @@ SQL
         INSERT INTO test VALUES (8,8);
         CALL DOLT_RESET('--hard');"
 
-    run dolt status
+    run dolt --user=dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "working tree clean" ]] || false
     run dolt --user=dolt sql -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
@@ -588,7 +588,7 @@ SQL
      [[ $output =~ " 21 " ]] || false
      [[ $output =~ " 60 " ]] || false
 
-     run dolt status
+     run dolt --user=dolt status
      [ $status -eq 0 ]
      [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
