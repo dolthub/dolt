@@ -269,7 +269,7 @@ func (d *DoltSession) SetValidateErr(err error) {
 // ValidateSession validates a working set if there are a valid sessionState with non-nil working set.
 // If there is no sessionState or its current working set not defined, then no need for validation,
 // so no error is returned.
-func (d *DoltSession) ValidateSession(ctx *sql.Context, dbName string) error {
+func (d *DoltSession) ValidateSession(ctx *sql.Context) error {
 	return d.validateErr
 }
 
