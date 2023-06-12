@@ -361,13 +361,22 @@ teardown() {
 }
 
 @test "cherry-pick: commit with ALTER TABLE rename table name" {
+    # get main and branch1 in sync, so that the data on branch1 doesn't
+    # cause a conflict when we cherry pick the table rename statement
+    dolt checkout main
+    dolt merge branch1
+
+    dolt checkout branch1
     dolt sql -q "ALTER TABLE test RENAME TO new_name"
     dolt commit -Am "rename table test to new_name"
 
     dolt checkout main
-    run dolt cherry-pick branch1
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table was renamed or dropped" ]] || false
+    dolt cherry-pick branch1
+
+    run dolt sql -q "show tables;"
+    [ $status -eq 0 ]
+    [[ ! $output =~ "test" ]] || false
+    [[ $output =~ "new_name" ]] || false
 }
 
 @test "cherry-pick: cherry-pick commit is a merge commit" {
