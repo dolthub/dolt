@@ -100,7 +100,7 @@ func (database) IsReadOnly() bool {
 	return true
 }
 
-func (db database) InitialDBState(ctx *sql.Context, branch string) (dsess.InitialDbState, error) {
+func (db database) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error) {
 	// TODO: almost none of this state is actually used, but is necessary because the current session setup requires a
 	//  repo state writer
 	return dsess.InitialDbState{
@@ -132,23 +132,25 @@ func (db database) Revision() string {
 	return ""
 }
 
+func (db database) Versioned() bool {
+	return false
+}
+
 func (db database) RevisionType() dsess.RevisionType {
 	return dsess.RevisionTypeNone
 }
 
-func (db database) BaseName() string {
+func (db database) RevisionQualifiedName() string {
+	return db.Name()
+}
+
+func (db database) RequestedName() string {
 	return db.Name()
 }
 
 type noopRepoStateWriter struct{}
 
-func (n noopRepoStateWriter) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
-	return nil
-}
-
-func (n noopRepoStateWriter) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
-	return nil
-}
+var _ env.RepoStateWriter = noopRepoStateWriter{}
 
 func (n noopRepoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.MarshalableRef) error {
 	return nil

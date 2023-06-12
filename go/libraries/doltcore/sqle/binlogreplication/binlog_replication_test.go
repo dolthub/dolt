@@ -452,24 +452,6 @@ func TestCharsetsAndCollations(t *testing.T) {
 	require.Equal(t, "one", row["c1"])
 	require.Equal(t, "\x00o\x00n\x00e", row["c2"])
 	require.NoError(t, rows.Close())
-
-	// Test that we get an error for unsupported charsets/collations
-	primaryDatabase.MustExec("CREATE TABLE t2 (pk int primary key, c1 varchar(255) COLLATE utf8mb4_bg_0900_as_cs);")
-	waitForReplicaToCatchUp(t)
-	replicaDatabase.MustExec("use db01;")
-	rows, err = replicaDatabase.Queryx("SHOW TABLES WHERE Tables_in_db01 like 't2';")
-	require.NoError(t, err)
-	require.False(t, rows.Next())
-	require.NoError(t, rows.Close())
-
-	rows, err = replicaDatabase.Queryx("SHOW REPLICA STATUS;")
-	require.NoError(t, err)
-	row = convertByteArraysToStrings(readNextRow(t, rows))
-	require.Equal(t, "1105", row["Last_SQL_Errno"])
-	require.NotEmpty(t, row["Last_SQL_Error_Timestamp"])
-	require.Contains(t, row["Last_SQL_Error"], "The collation `utf8mb4_bg_0900_as_cs` has not yet been implemented")
-	require.False(t, rows.Next())
-	require.NoError(t, rows.Close())
 }
 
 //

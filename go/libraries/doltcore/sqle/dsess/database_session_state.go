@@ -35,13 +35,12 @@ type InitialDbState struct {
 	// RootValue must be set.
 	HeadCommit *doltdb.Commit
 	// HeadRoot is the root value for databases without a HeadCommit. Nil for databases with a HeadCommit.
-	HeadRoot    *doltdb.RootValue
-	ReadOnly    bool
-	DbData      env.DbData
-	ReadReplica *env.Remote
-	Remotes     map[string]env.Remote
-	Branches    map[string]env.BranchConfig
-	Backups     map[string]env.Remote
+	HeadRoot *doltdb.RootValue
+	ReadOnly bool
+	DbData   env.DbData
+	Remotes  map[string]env.Remote
+	Branches map[string]env.BranchConfig
+	Backups  map[string]env.Remote
 
 	// If err is set, this InitialDbState is partially invalid, but may be
 	// usable to initialize a database at a revision specifier, for
@@ -54,24 +53,33 @@ type InitialDbState struct {
 // order for the session to manage it.
 type SessionDatabase interface {
 	sql.Database
-	InitialDBState(ctx *sql.Context, branch string) (InitialDbState, error)
+	InitialDBState(ctx *sql.Context) (InitialDbState, error)
 }
 
+// DatabaseSessionState is the set of all information for a given database in this session.
 type DatabaseSessionState struct {
-	dbName       string
-	db           SqlDatabase
-	headCommit   *doltdb.Commit
-	headRoot     *doltdb.RootValue
-	WorkingSet   *doltdb.WorkingSet
-	dbData       env.DbData
-	WriteSession writer.WriteSession
-	globalState  globalstate.GlobalState
-	readOnly     bool
-	dirty        bool
-	readReplica  *env.Remote
-	tmpFileDir   string
-
-	sessionCache *SessionCache
+	// dbName is the name of the database this state applies to. This is always the base name of the database, without
+	// a revision qualifier.
+	dbName string
+	// currRevSpec is the current revision spec of the database when referred to by its base name. Changes when a
+	// `dolt_checkout` or `use` statement is executed.
+	currRevSpec string
+	// currRevType is the current revision type of the database when referred to by its base name. Changes when a
+	// `dolt_checkout` or `use` statement is executed.
+	currRevType RevisionType
+	// checkedOutRevSpec is the checked out revision specifier of the database. Changes only when a `dolt_checkout`
+	// occurs. `USE mydb` without a revision qualifier will get this revision.
+	checkedOutRevSpec string
+	// heads records the in-memory DB state for every branch head accessed by the session
+	heads map[string]*branchState
+	// headCache records the session-caches for every branch head accessed by the session
+	// This is managed separately from the branch states themselves because it persists across transactions (which is
+	// safe because it's keyed by immutable hashes)
+	headCache map[string]*SessionCache
+	// globalState is the global state of this session (shared by all sessions for a particular db)
+	globalState globalstate.GlobalState
+	// tmpFileDir is the directory to use for temporary files for this database
+	tmpFileDir string
 
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a
@@ -79,31 +87,97 @@ type DatabaseSessionState struct {
 	Err error
 }
 
-func NewEmptyDatabaseSessionState() *DatabaseSessionState {
+func newEmptyDatabaseSessionState() *DatabaseSessionState {
 	return &DatabaseSessionState{
-		sessionCache: newSessionCache(),
+		heads:     make(map[string]*branchState),
+		headCache: make(map[string]*SessionCache),
 	}
 }
 
-func (d DatabaseSessionState) GetRoots() doltdb.Roots {
-	if d.WorkingSet == nil {
+// SessionState is the public interface for dealing with session state outside this package. Session-state is always
+// branch-specific.
+type SessionState interface {
+	WorkingSet() *doltdb.WorkingSet
+	WorkingRoot() *doltdb.RootValue
+	WriteSession() writer.WriteSession
+	EditOpts() editor.Options
+	SessionCache() *SessionCache
+}
+
+// branchState records all the in-memory session state for a particular branch head
+type branchState struct {
+	// dbState is the parent database state for this branch head state
+	dbState *DatabaseSessionState
+	// head is the name of the branch head for this state
+	head string
+	// headCommit is the head commit for this database. May be nil for databases tied to a detached root value, in which
+	// case headRoot must be set.
+	headCommit *doltdb.Commit
+	// HeadRoot is the root value for databases without a headCommit. Nil for databases with a headCommit.
+	headRoot *doltdb.RootValue
+	// workingSet is the working set for this database. May be nil for databases tied to a detached root value, in which
+	// case headCommit must be set
+	workingSet *doltdb.WorkingSet
+	// dbData is an accessor for the underlying doltDb
+	dbData env.DbData
+	// writeSession is this head's write session
+	writeSession writer.WriteSession
+	// readOnly is true if this database is read only
+	readOnly bool
+	// dirty is true if this branch state has uncommitted changes
+	dirty bool
+}
+
+// NewEmptyBranchState creates a new branch state for the given head name with the head provided, adds it to the db
+// state, and returns it. The state returned is empty except for its identifiers and must be filled in by the caller.
+func (dbState *DatabaseSessionState) NewEmptyBranchState(head string) *branchState {
+	b := &branchState{
+		dbState: dbState,
+		head:    head,
+	}
+
+	dbState.heads[head] = b
+	_, ok := dbState.headCache[head]
+	if !ok {
+		dbState.headCache[head] = newSessionCache()
+	}
+
+	return b
+}
+
+func (bs *branchState) WorkingRoot() *doltdb.RootValue {
+	return bs.roots().Working
+}
+
+var _ SessionState = (*branchState)(nil)
+
+func (bs *branchState) WorkingSet() *doltdb.WorkingSet {
+	return bs.workingSet
+}
+
+func (bs *branchState) WriteSession() writer.WriteSession {
+	return bs.writeSession
+}
+
+func (bs *branchState) SessionCache() *SessionCache {
+	return bs.dbState.headCache[bs.head]
+}
+
+func (bs branchState) EditOpts() editor.Options {
+	return bs.WriteSession().GetOptions()
+}
+
+func (bs *branchState) roots() doltdb.Roots {
+	if bs.WorkingSet() == nil {
 		return doltdb.Roots{
-			Head:    d.headRoot,
-			Working: d.headRoot,
-			Staged:  d.headRoot,
+			Head:    bs.headRoot,
+			Working: bs.headRoot,
+			Staged:  bs.headRoot,
 		}
 	}
 	return doltdb.Roots{
-		Head:    d.headRoot,
-		Working: d.WorkingSet.WorkingRoot(),
-		Staged:  d.WorkingSet.StagedRoot(),
+		Head:    bs.headRoot,
+		Working: bs.WorkingSet().WorkingRoot(),
+		Staged:  bs.WorkingSet().StagedRoot(),
 	}
-}
-
-func (d *DatabaseSessionState) SessionCache() *SessionCache {
-	return d.sessionCache
-}
-
-func (d DatabaseSessionState) EditOpts() editor.Options {
-	return d.WriteSession.GetOptions()
 }

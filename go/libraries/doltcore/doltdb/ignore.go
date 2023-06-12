@@ -26,9 +26,13 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type ignorePattern struct {
-	pattern string
-	ignore  bool
+type IgnorePattern struct {
+	Pattern string
+	Ignore  bool
+}
+
+func NewIgnorePattern(pattern string, ignore bool) IgnorePattern {
+	return IgnorePattern{Pattern: pattern, Ignore: ignore}
 }
 
 // IgnoredTables contains the results of comparing a series of tables to a set of dolt_ignore patterns.
@@ -48,10 +52,10 @@ const (
 	ErrorOccurred                             // An error occured.
 )
 
-type IgnorePatterns []ignorePattern
+type IgnorePatterns []IgnorePattern
 
 func GetIgnoredTablePatterns(ctx context.Context, roots Roots) (IgnorePatterns, error) {
-	var ignorePatterns []ignorePattern
+	var ignorePatterns []IgnorePattern
 	workingSet := roots.Working
 	table, found, err := workingSet.GetTable(ctx, IgnoreTableName)
 	if err != nil {
@@ -100,7 +104,7 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots) (IgnorePatterns, 
 			return nil, fmt.Errorf("could not read pattern")
 		}
 		ignore, ok := valueDesc.GetBool(0, valueTuple)
-		ignorePatterns = append(ignorePatterns, ignorePattern{pattern, ignore})
+		ignorePatterns = append(ignorePatterns, NewIgnorePattern(pattern, ignore))
 	}
 	return ignorePatterns, nil
 }
@@ -201,8 +205,8 @@ func (ip *IgnorePatterns) IsTableNameIgnored(tableName string) (IgnoreResult, er
 	trueMatches := []string{}
 	falseMatches := []string{}
 	for _, patternIgnore := range *ip {
-		pattern := patternIgnore.pattern
-		ignore := patternIgnore.ignore
+		pattern := patternIgnore.Pattern
+		ignore := patternIgnore.Ignore
 		patternRegExp, err := compilePattern(pattern)
 		if err != nil {
 			return ErrorOccurred, err

@@ -61,7 +61,7 @@ import (
 )
 
 const (
-	Version = "1.3.0"
+	Version = "1.4.0"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -122,7 +122,6 @@ var doltSubCommands = []cli.Command{
 
 var commandsWithoutCliCtx = []cli.Command{
 	commands.InitCmd{},
-	commands.StatusCmd{},
 	commands.DiffCmd{},
 	commands.ResetCmd{},
 	commands.CleanCmd{},
@@ -163,7 +162,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	dumpDocsCommand,
 	dumpZshCommand,
 	docscmds.Commands,
-	stashcmds.StashCommands,
 	&commands.Assist{},
 }
 

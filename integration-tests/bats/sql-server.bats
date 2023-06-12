@@ -323,13 +323,13 @@ SQL
 
     # add some working changes
     dolt sql-client -P $PORT -u dolt -q "INSERT INTO test VALUES (7,7);"
-    run dolt status
+    run dolt --user=dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
     dolt sql-client -P $PORT -u dolt -q "CALL DOLT_RESET('--hard');"
 
-    run dolt status
+    run dolt --user=dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "working tree clean" ]] || false
     run dolt --user=dolt sql -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
@@ -340,7 +340,7 @@ SQL
         INSERT INTO test VALUES (8,8);
         CALL DOLT_RESET('--hard');"
 
-    run dolt status
+    run dolt --user=dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "working tree clean" ]] || false
     run dolt --user=dolt sql -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
@@ -591,7 +591,7 @@ SQL
      [[ $output =~ " 21 " ]] || false
      [[ $output =~ " 60 " ]] || false
 
-     run dolt status
+     run dolt --user=dolt status
      [ $status -eq 0 ]
      [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
@@ -1675,15 +1675,7 @@ behavior:
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
 
-    echo "import socket
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.bind(('', 0))
-addr = s.getsockname()
-print(addr[1])
-s.close()
-" > port_finder.py
-
-    PORT=$(python3 port_finder.py)
+    PORT=$( definePORT )
     run dolt sql-server --port=$PORT --socket "dolt.$PORT.sock"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
@@ -1747,7 +1739,7 @@ s.close()
     PORT=$( definePORT )
     dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --socket "dolt.$PORT.sock" &
     SERVER_PID=$! # will get killed by teardown_common
-    sleep 5 # not using python wait so this works on windows
+    wait_for_connection $PORT 5000
 
     dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<< "create database mydb1;"
     dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<< "exit;"
