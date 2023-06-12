@@ -34,7 +34,7 @@ import (
 // It's responsible for creating and managing the lifecycle of TableWriter's.
 type WriteSession interface {
 	// GetTableWriter creates a TableWriter and adds it to the WriteSession.
-	GetTableWriter(ctx context.Context, table, db string, setter SessionRootSetter, batched bool) (TableWriter, error)
+	GetTableWriter(ctx context.Context, table, db string, setter SessionRootSetter) (TableWriter, error)
 
 	// SetWorkingSet modifies the state of the WriteSession. The WorkingSetRef of |ws| must match the existing Ref.
 	SetWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error
@@ -88,7 +88,7 @@ func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker 
 	}
 }
 
-func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table, db string, setter SessionRootSetter, batched bool) (TableWriter, error) {
+func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table, db string, setter SessionRootSetter) (TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -126,7 +126,6 @@ func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table, db string,
 		kvToSQLRow:  conv,
 		tableEditor: te,
 		flusher:     s,
-		batched:     batched,
 		autoInc:     s.aiTracker,
 		setter:      setter,
 	}, nil

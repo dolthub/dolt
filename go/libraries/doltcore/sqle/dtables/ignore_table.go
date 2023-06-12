@@ -245,7 +245,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 		dSess.SetRoot(ctx, dbName, newRootValue)
 	}
 
-	tableWriter, err := dbState.WriteSession().GetTableWriter(ctx, doltdb.IgnoreTableName, dbName, dSess.SetRoot, false)
+	tableWriter, err := dbState.WriteSession().GetTableWriter(ctx, doltdb.IgnoreTableName, dbName, dSess.SetRoot)
 	if err != nil {
 		iw.errDuringStatementBegin = err
 		return

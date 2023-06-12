@@ -516,7 +516,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 	}
 
 	setter := ds.SetRoot
-	ed, err = state.WriteSession().GetTableWriter(ctx, t.tableName, t.db.RevisionQualifiedName(), setter, batched)
+	ed, err = state.WriteSession().GetTableWriter(ctx, t.tableName, t.db.RevisionQualifiedName(), setter)
 
 	if err != nil {
 		return nil, err
@@ -1378,7 +1378,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 	}
 
 	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
-	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.RevisionQualifiedName(), sess.SetRoot, false)
+	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.RevisionQualifiedName(), sess.SetRoot)
 	if err != nil {
 		return nil, err
 	}
