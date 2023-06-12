@@ -234,6 +234,7 @@ get_staged_tables() {
 
     run dolt --verbose-engine-setup --user dolt commit -m "committing remotely"
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "committing remotely" ]] || false
 
     stop_sql_server 1
 
@@ -246,8 +247,9 @@ get_staged_tables() {
     [ "$status" -eq 0 ]
     cd ..
 
-    run dolt commit -m "committing locally"
+    run dolt --verbose-engine-setup commit -m "committing locally"
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting local mode" ]] || false
 
     cd altDB
     run dolt log

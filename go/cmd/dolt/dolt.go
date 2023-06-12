@@ -135,7 +135,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	commands.CloneCmd{},
 	commands.FetchCmd{},
 	commands.PushCmd{},
-	commands.ConfigCmd{},
 	commands.RemoteCmd{},
 	commands.BackupCmd{},
 	commands.LoginCmd{},

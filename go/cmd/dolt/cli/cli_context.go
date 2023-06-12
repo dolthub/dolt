@@ -83,7 +83,7 @@ func (lbc LateBindCliContext) QueryEngine(ctx context.Context) (Queryist, *sql.C
 	return qryist, sqlCtx, closer, nil
 }
 
-// getConfig returns the dolt config stored in CliContext
+// Config returns the dolt config stored in CliContext
 func (lbc LateBindCliContext) Config() *env.DoltCliConfig {
 	return lbc.config
 }
