@@ -19,6 +19,7 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/queries"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -122,7 +123,6 @@ var doltSubCommands = []cli.Command{
 
 var commandsWithoutCliCtx = []cli.Command{
 	commands.InitCmd{},
-	commands.DiffCmd{},
 	commands.ResetCmd{},
 	commands.CleanCmd{},
 	commands.CommitCmd{},
@@ -130,7 +130,7 @@ var commandsWithoutCliCtx = []cli.Command{
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.LogCmd{},
-	commands.ShowCmd{},
+	commands.ShowCmd{}, // TODO: remove and make `dolt show` a SQL command
 	commands.BranchCmd{},
 	commands.CheckoutCmd{},
 	commands.MergeCmd{},
@@ -584,7 +584,7 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 	// So we defer the error until the caller tries to use the cli.LateBindQueryist
 	isDoltEnvironmentRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server" && subcommandName != "sql-client"
 	if targetEnv == nil && isDoltEnvironmentRequired {
-		return func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
+		return func(ctx context.Context) (queries.Queryist, *sql.Context, func(), error) {
 			return nil, nil, nil, fmt.Errorf("The current directory is not a valid dolt repository.")
 		}, nil
 	}

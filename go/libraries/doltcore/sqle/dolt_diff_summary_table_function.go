@@ -293,7 +293,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	return NewDiffSummaryTableFunctionRowIter(diffSummaries), nil
 }
 
-func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.SqlDatabase, fromDetails, toDetails *refDetails, shouldErrorOnPKChange bool) (*diff.TableDeltaSummary, error) {
+func getSummaryForDelta(ctx *sql.Context, delta diff.TableDeltaEngine, sqledb dsess.SqlDatabase, fromDetails, toDetails *refDetails, shouldErrorOnPKChange bool) (*diff.TableDeltaSummary, error) {
 	if delta.FromTable == nil && delta.ToTable == nil {
 		return nil, nil
 	}

@@ -49,7 +49,7 @@ type DiffTableFunction struct {
 	sqlSch         sql.Schema
 	joiner         *rowconv.Joiner
 
-	tableDelta diff.TableDelta
+	tableDelta diff.TableDeltaEngine
 	fromDate   *types.Timestamp
 	toDate     *types.Timestamp
 }
@@ -175,7 +175,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 
 // findMatchingDelta returns the best matching table delta for the table name
 // given, taking renames into account
-func findMatchingDelta(deltas []diff.TableDelta, tableName string) diff.TableDelta {
+func findMatchingDelta(deltas []diff.TableDeltaEngine, tableName string) diff.TableDeltaEngine {
 	tableName = strings.ToLower(tableName)
 	for _, d := range deltas {
 		if strings.ToLower(d.ToName) == tableName {
@@ -190,7 +190,7 @@ func findMatchingDelta(deltas []diff.TableDelta, tableName string) diff.TableDel
 	}
 
 	// no delta means no diff, or the table doesn't exist
-	return diff.TableDelta{}
+	return diff.TableDeltaEngine{}
 }
 
 type refDetails struct {
@@ -455,30 +455,30 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 
 // cacheTableDelta caches and returns an appropriate table delta for the table name given, taking renames into
 // consideration. Returns a sql.ErrTableNotFound if the given table name cannot be found in either revision.
-func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, toCommitVal, dotCommitVal interface{}, tableName string, db dsess.SqlDatabase) (diff.TableDelta, error) {
+func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, toCommitVal, dotCommitVal interface{}, tableName string, db dsess.SqlDatabase) (diff.TableDeltaEngine, error) {
 	fromRefDetails, toRefDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, db)
 	if err != nil {
-		return diff.TableDelta{}, err
+		return diff.TableDeltaEngine{}, err
 	}
 
 	fromTable, _, fromTableExists, err := fromRefDetails.root.GetTableInsensitive(ctx, tableName)
 	if err != nil {
-		return diff.TableDelta{}, err
+		return diff.TableDeltaEngine{}, err
 	}
 
 	toTable, _, toTableExists, err := toRefDetails.root.GetTableInsensitive(ctx, tableName)
 	if err != nil {
-		return diff.TableDelta{}, err
+		return diff.TableDeltaEngine{}, err
 	}
 
 	if !fromTableExists && !toTableExists {
-		return diff.TableDelta{}, sql.ErrTableNotFound.New(tableName)
+		return diff.TableDeltaEngine{}, sql.ErrTableNotFound.New(tableName)
 	}
 
 	// TODO: it would be nice to limit this to just the table under consideration, not all tables with a diff
 	deltas, err := diff.GetTableDeltas(ctx, fromRefDetails.root, toRefDetails.root)
 	if err != nil {
-		return diff.TableDelta{}, err
+		return diff.TableDeltaEngine{}, err
 	}
 
 	dtf.fromDate = fromRefDetails.commitTime
@@ -496,7 +496,7 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, t
 		if fromTable != nil {
 			sch, err := fromTable.GetSchema(ctx)
 			if err != nil {
-				return diff.TableDelta{}, err
+				return diff.TableDeltaEngine{}, err
 			}
 			delta.FromSch = sch
 		}
@@ -504,7 +504,7 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, t
 		if toTable != nil {
 			sch, err := toTable.GetSchema(ctx)
 			if err != nil {
-				return diff.TableDelta{}, err
+				return diff.TableDeltaEngine{}, err
 			}
 			delta.ToSch = sch
 		}

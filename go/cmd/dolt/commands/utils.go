@@ -17,9 +17,9 @@ package commands
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-
+	"github.com/dolthub/dolt/go/libraries/utils/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	"path/filepath"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -215,7 +215,7 @@ func newLateBindingEngine(
 		Autocommit:         true,
 	}
 
-	var lateBinder cli.LateBindQueryist = func(ctx2 context.Context) (cli.Queryist, *sql.Context, func(), error) {
+	var lateBinder cli.LateBindQueryist = func(ctx2 context.Context) (queries.Queryist, *sql.Context, func(), error) {
 		se, err := engine.NewSqlEngine(
 			ctx2,
 			mrEnv,

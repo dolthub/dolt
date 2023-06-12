@@ -17,6 +17,8 @@ package doltdb
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/queries"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"regexp"
 	"strings"
@@ -106,6 +108,29 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots) (IgnorePatterns, 
 		ignore, ok := valueDesc.GetBool(0, valueTuple)
 		ignorePatterns = append(ignorePatterns, NewIgnorePattern(pattern, ignore))
 	}
+	return ignorePatterns, nil
+}
+
+func GetIgnoredTablePatternsFromSql(queryist queries.Queryist, sqlCtx *sql.Context) (IgnorePatterns, error) {
+	var ignorePatterns []IgnorePattern
+
+	q := fmt.Sprintf("select * from %s", IgnoreTableName)
+	rows, err := queries.GetRowsForSql(queryist, sqlCtx, q)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, row := range rows {
+		pattern := row[0].(string)
+		ignoreVal := row[1]
+		ignore, err := queries.GetTinyIntColAsBool(ignoreVal)
+		if err != nil {
+			return nil, err
+		}
+
+		ignorePatterns = append(ignorePatterns, NewIgnorePattern(pattern, ignore))
+	}
+
 	return ignorePatterns, nil
 }
 

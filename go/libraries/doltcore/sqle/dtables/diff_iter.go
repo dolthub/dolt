@@ -204,6 +204,7 @@ type prollyDiffIter struct {
 	targetFromSch, targetToSch schema.Schema
 	fromConverter, toConverter ProllyRowConverter
 	fromVD, toVD               val.TupleDesc
+	fromTableHash, toTableHash string
 	keyless                    bool
 
 	fromCm commitInfo2
@@ -243,6 +244,7 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		ts:   (*time.Time)(dp.toDate),
 	}
 	var from, to prolly.Map
+	var fromTableHash, toTableHash string
 
 	var fsch schema.Schema = schema.EmptySchema
 	if dp.from != nil {
@@ -254,6 +256,11 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		if fsch, err = dp.from.GetSchema(ctx); err != nil {
 			return prollyDiffIter{}, err
 		}
+		hash, err := dp.from.HashOf()
+		if err != nil {
+			return prollyDiffIter{}, err
+		}
+		fromTableHash = hash.String()
 	}
 
 	var tsch schema.Schema = schema.EmptySchema
@@ -266,6 +273,11 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		if tsch, err = dp.to.GetSchema(ctx); err != nil {
 			return prollyDiffIter{}, err
 		}
+		hash, err := dp.to.HashOf()
+		if err != nil {
+			return prollyDiffIter{}, err
+		}
+		toTableHash = hash.String()
 	}
 
 	var nodeStore tree.NodeStore
@@ -300,6 +312,8 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		toConverter:   toConverter,
 		fromVD:        fromVD,
 		toVD:          toVD,
+		fromTableHash: fromTableHash,
+		toTableHash:   toTableHash,
 		keyless:       keyless,
 		fromCm:        fromCm,
 		toCm:          toCm,
@@ -419,8 +433,8 @@ func (itr prollyDiffIter) getDiffRow(ctx context.Context, dif tree.Diff) (row sq
 	} else if tLen == 0 && dif.Type == tree.RemovedDiff {
 		tLen = fLen
 	}
-	// 2 commit names, 2 commit dates, 1 diff_type
-	row = make(sql.Row, fLen+tLen+5)
+	// 2 commit names, 2 commit dates, 2 table hashes, 1 diff_type
+	row = make(sql.Row, fLen+tLen+7)
 
 	// todo (dhruv): implement warnings for row column value coercions.
 
@@ -446,6 +460,8 @@ func (itr prollyDiffIter) getDiffRow(ctx context.Context, dif tree.Diff) (row sq
 	row[idx] = itr.fromCm.name
 	row[idx+1] = maybeTime(itr.fromCm.ts)
 	row[idx+2] = diffTypeString(dif)
+	row[idx+3] = itr.toTableHash
+	row[idx+4] = itr.fromTableHash
 
 	return row, nil
 }

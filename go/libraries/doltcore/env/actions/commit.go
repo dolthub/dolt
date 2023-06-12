@@ -53,9 +53,10 @@ func GetCommitStaged(
 	}
 
 	var stagedTblNames []string
-	for _, td := range staged {
+	for _, delta := range staged {
+		td := delta.GetBaseInfo()
 		n := td.ToName
-		if td.IsDrop() {
+		if delta.IsDrop() {
 			n = td.FromName
 		}
 		stagedTblNames = append(stagedTblNames, n)
@@ -68,7 +69,11 @@ func GetCommitStaged(
 		return nil, nil
 	}
 	if isEmpty && !allowEmpty {
-		return nil, NothingStaged{notStaged}
+		notStagedTDs := make([]diff.TableDeltaEngine, len(notStaged))
+		for i, td := range notStaged {
+			notStagedTDs[i] = td
+		}
+		return nil, NothingStaged{notStagedTDs}
 	}
 
 	if !props.Force {

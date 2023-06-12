@@ -138,6 +138,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 
 func tableName(td diff.TableDelta) string {
 	if td.IsRename() {
+		td := td.GetBaseInfo()
 		return fmt.Sprintf("%s -> %s", td.FromName, td.ToName)
 	} else {
 		return td.CurName()

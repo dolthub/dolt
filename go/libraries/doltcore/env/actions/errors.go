@@ -115,7 +115,7 @@ func CheckoutWouldOverwriteTables(err error) []string {
 }
 
 type NothingStaged struct {
-	NotStagedTbls []diff.TableDelta
+	NotStagedTbls []diff.TableDeltaEngine
 }
 
 func (ns NothingStaged) Error() string {
@@ -127,7 +127,7 @@ func IsNothingStaged(err error) bool {
 	return ok
 }
 
-func NothingStagedTblDiffs(err error) []diff.TableDelta {
+func NothingStagedTblDiffs(err error) []diff.TableDeltaEngine {
 	ns, ok := err.(NothingStaged)
 
 	if !ok {

@@ -53,8 +53,9 @@ func StageModifiedAndDeletedTables(ctx context.Context, roots doltdb.Roots) (dol
 	}
 
 	var tbls []string
-	for _, tableDelta := range unstaged {
-		if !tableDelta.IsAdd() {
+	for _, delta := range unstaged {
+		tableDelta := delta.GetBaseInfo()
+		if !delta.IsAdd() {
 			tbls = append(tbls, tableDelta.FromName)
 		}
 	}

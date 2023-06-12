@@ -438,7 +438,7 @@ func PrintDiffsNotStaged(
 	ctx context.Context,
 	dEnv *env.DoltEnv,
 	wr io.Writer,
-	notStagedTbls []diff.TableDelta,
+	notStagedTbls []diff.TableDeltaEngine,
 	printHelp bool,
 	printIgnored bool,
 	linesPrinted int,
@@ -586,7 +586,7 @@ func PrintDiffsNotStaged(
 	return linesPrinted, nil
 }
 
-func getModifiedAndRemovedNotStaged(notStagedTbls []diff.TableDelta, inCnfSet, violationSet *set.StrSet) (lines []string) {
+func getModifiedAndRemovedNotStaged(notStagedTbls []diff.TableDeltaEngine, inCnfSet, violationSet *set.StrSet) (lines []string) {
 	lines = make([]string, 0, len(notStagedTbls))
 	for _, td := range notStagedTbls {
 		if td.IsAdd() || inCnfSet.Contains(td.CurName()) || violationSet.Contains(td.CurName()) {
@@ -596,7 +596,7 @@ func getModifiedAndRemovedNotStaged(notStagedTbls []diff.TableDelta, inCnfSet, v
 			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.RemovedTable], td.CurName()))
 		} else if td.IsRename() {
 			// per Git, unstaged renames are shown as drop + add
-			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.RemovedTable], td.FromName))
+			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.RemovedTable], td.GetBaseInfo().FromName))
 		} else {
 			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.ModifiedTable], td.CurName()))
 		}
@@ -604,7 +604,7 @@ func getModifiedAndRemovedNotStaged(notStagedTbls []diff.TableDelta, inCnfSet, v
 	return lines
 }
 
-func getAddedNotStagedTables(notStagedTbls []diff.TableDelta) (tables []string) {
+func getAddedNotStagedTables(notStagedTbls []diff.TableDeltaEngine) (tables []string) {
 	tables = make([]string, 0, len(notStagedTbls))
 	for _, td := range notStagedTbls {
 		if td.IsAdd() || td.IsRename() {
@@ -656,7 +656,7 @@ var tblDiffTypeToLabel = map[diff.TableDiffType]string{
 	diff.AddedTable:    "new table:",
 }
 
-func printStagedDiffs(wr io.Writer, stagedTbls []diff.TableDelta, printHelp bool) int {
+func printStagedDiffs(wr io.Writer, stagedTbls []diff.TableDeltaEngine, printHelp bool) int {
 	if len(stagedTbls) > 0 {
 		iohelp.WriteLine(wr, stagedHeader)
 

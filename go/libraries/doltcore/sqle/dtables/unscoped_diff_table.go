@@ -189,8 +189,8 @@ var _ sql.RowIter = &doltDiffWorkingSetRowItr{}
 type doltDiffWorkingSetRowItr struct {
 	stagedIndex         int
 	unstagedIndex       int
-	stagedTableDeltas   []diff.TableDelta
-	unstagedTableDeltas []diff.TableDelta
+	stagedTableDeltas   []diff.TableDeltaEngine
+	unstagedTableDeltas []diff.TableDeltaEngine
 }
 
 func (d *doltDiffWorkingSetRowItr) Next(ctx *sql.Context) (sql.Row, error) {

@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/queries"
 	"io"
 	"os"
 	"os/signal"
@@ -289,7 +290,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 // sqlHandleVErrAndExitCode is a helper function to print errors to the user. Currently, the Queryist interface is used to
 // determine if this is a local or remote execution. This is hacky, and too simplistic. We should possibly add an error
 // messaging interface to the CliContext.
-func sqlHandleVErrAndExitCode(queryist cli.Queryist, verr errhand.VerboseError, usage cli.UsagePrinter) int {
+func sqlHandleVErrAndExitCode(queryist queries.Queryist, verr errhand.VerboseError, usage cli.UsagePrinter) int {
 	if verr != nil {
 		if msg := verr.Verbose(); strings.TrimSpace(msg) != "" {
 			if _, ok := queryist.(*engine.SqlEngine); !ok {
@@ -354,7 +355,7 @@ func (cmd SqlCmd) handleLegacyArguments(ap *argparser.ArgParser, commandStr stri
 
 }
 
-func listSavedQueries(ctx *sql.Context, qryist cli.Queryist, dEnv *env.DoltEnv, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
+func listSavedQueries(ctx *sql.Context, qryist queries.Queryist, dEnv *env.DoltEnv, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
 	if !dEnv.Valid() {
 		return sqlHandleVErrAndExitCode(qryist, errhand.BuildDError("error: --%s must be used in a dolt database directory.", listSavedFlag).Build(), usage)
 	}
@@ -379,7 +380,7 @@ func listSavedQueries(ctx *sql.Context, qryist cli.Queryist, dEnv *env.DoltEnv, 
 	return sqlHandleVErrAndExitCode(qryist, execQuery(ctx, qryist, query, format), usage)
 }
 
-func executeSavedQuery(ctx *sql.Context, qryist cli.Queryist, dEnv *env.DoltEnv, savedQueryName string, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
+func executeSavedQuery(ctx *sql.Context, qryist queries.Queryist, dEnv *env.DoltEnv, savedQueryName string, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
 	if !dEnv.Valid() {
 		return sqlHandleVErrAndExitCode(qryist, errhand.BuildDError("error: --%s must be used in a dolt database directory.", executeFlag).Build(), usage)
 	}
@@ -401,7 +402,7 @@ func executeSavedQuery(ctx *sql.Context, qryist cli.Queryist, dEnv *env.DoltEnv,
 
 func queryMode(
 	ctx *sql.Context,
-	qryist cli.Queryist,
+	qryist queries.Queryist,
 	apr *argparser.ArgParseResults,
 	query string,
 	format engine.PrintResultFormat,
@@ -437,7 +438,7 @@ func queryMode(
 	return 0
 }
 
-func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, qryist cli.Queryist, apr *argparser.ArgParseResults, query string, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
+func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, qryist queries.Queryist, apr *argparser.ArgParseResults, query string, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
 	if !dEnv.Valid() {
 		return sqlHandleVErrAndExitCode(qryist, errhand.BuildDError("error: --%s must be used in a dolt database directory.", saveFlag).Build(), usage)
 	}
@@ -493,7 +494,7 @@ func execBatch(
 
 func execQuery(
 	sqlCtx *sql.Context,
-	qryist cli.Queryist,
+	qryist queries.Queryist,
 	query string,
 	format engine.PrintResultFormat,
 ) errhand.VerboseError {
@@ -678,7 +679,7 @@ func saveQuery(ctx *sql.Context, root *doltdb.RootValue, query string, name stri
 }
 
 // execMultiStatements runs all the queries in the input reader without any batch optimizations
-func execMultiStatements(ctx *sql.Context, qryist cli.Queryist, input io.Reader, continueOnErr bool, format engine.PrintResultFormat) error {
+func execMultiStatements(ctx *sql.Context, qryist queries.Queryist, input io.Reader, continueOnErr bool, format engine.PrintResultFormat) error {
 	scanner := NewSqlStatementScanner(input)
 	var query string
 	for scanner.Scan() {
@@ -781,7 +782,7 @@ func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, conti
 
 // execShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
 // be updated by any queries which were processed.
-func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResultFormat) error {
+func execShell(sqlCtx *sql.Context, qryist queries.Queryist, format engine.PrintResultFormat) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
@@ -912,7 +913,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 // TODO: update the completer on DDL, branch change, etc.
 func newCompleter(
 	ctx *sql.Context,
-	qryist cli.Queryist,
+	qryist queries.Queryist,
 ) (completer *sqlCompleter, rerr error) {
 	subCtx, stop := signal.NotifyContext(ctx.Context, os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -1023,7 +1024,7 @@ func prepend(s string, ss []string) []string {
 
 // processQuery processes a single query. The Root of the sqlEngine will be updated if necessary.
 // Returns the schema and the row iterator for the results, which may be nil, and an error if one occurs.
-func processQuery(ctx *sql.Context, query string, qryist cli.Queryist) (sql.Schema, sql.RowIter, error) {
+func processQuery(ctx *sql.Context, query string, qryist queries.Queryist) (sql.Schema, sql.RowIter, error) {
 	sqlStatement, err := sqlparser.Parse(query)
 	if err == sqlparser.ErrEmpty {
 		// silently skip empty statements
@@ -1037,7 +1038,7 @@ func processQuery(ctx *sql.Context, query string, qryist cli.Queryist) (sql.Sche
 // processParsedQuery processes a single query with the parsed statement provided. The Root of the sqlEngine
 // will be updated if necessary. Returns the schema and the row iterator for the results, which may be nil,
 // and an error if one occurs.
-func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sqlStatement sqlparser.Statement) (sql.Schema, sql.RowIter, error) {
+func processParsedQuery(ctx *sql.Context, query string, qryist queries.Queryist, sqlStatement sqlparser.Statement) (sql.Schema, sql.RowIter, error) {
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Use:
 		sch, ri, err := qryist.Query(ctx, query)
@@ -1411,7 +1412,7 @@ func updateFileReadProgressOutput() {
 	fileReadProg.displayStrLen = cli.DeleteAndPrint(fileReadProg.displayStrLen, displayStr)
 }
 
-func dbddl(ctx *sql.Context, queryist cli.Queryist, dbddl *sqlparser.DBDDL, query string) (sql.Schema, sql.RowIter, error) {
+func dbddl(ctx *sql.Context, queryist queries.Queryist, dbddl *sqlparser.DBDDL, query string) (sql.Schema, sql.RowIter, error) {
 	action := strings.ToLower(dbddl.Action)
 	var rowIter sql.RowIter = nil
 	var err error = nil

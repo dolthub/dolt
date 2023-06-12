@@ -18,6 +18,7 @@ import (
 	"context"
 	mysql "database/sql"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/queries"
 	"io"
 	"os"
 	"path/filepath"
@@ -459,7 +460,7 @@ type ConnectionQueryist struct {
 	connection *dbr.Connection
 }
 
-var _ cli.Queryist = ConnectionQueryist{}
+var _ queries.Queryist = ConnectionQueryist{}
 
 func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, error) {
 	rows, err := c.connection.QueryContext(ctx, query)
@@ -497,7 +498,7 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, a
 
 	queryist := ConnectionQueryist{connection: conn}
 
-	var lateBind cli.LateBindQueryist = func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
+	var lateBind cli.LateBindQueryist = func(ctx context.Context) (queries.Queryist, *sql.Context, func(), error) {
 		return queryist, sql.NewContext(ctx), func() { conn.Conn(ctx) }, nil
 	}
 

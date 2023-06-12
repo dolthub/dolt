@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -41,18 +42,9 @@ const (
 	RemovedTable
 )
 
-// TableDelta represents the change of a single table between two roots.
-// FromFKs and ToFKs contain Foreign Keys that constrain columns in this table,
-// they do not contain Foreign Keys that reference this table.
-type TableDelta struct {
+type TableDeltaBase struct {
 	FromName         string
 	ToName           string
-	FromTable        *doltdb.Table
-	ToTable          *doltdb.Table
-	FromNodeStore    tree.NodeStore
-	ToNodeStore      tree.NodeStore
-	FromVRW          types.ValueReadWriter
-	ToVRW            types.ValueReadWriter
 	FromSch          schema.Schema
 	ToSch            schema.Schema
 	FromFks          []doltdb.ForeignKey
@@ -60,6 +52,18 @@ type TableDelta struct {
 	ToFksParentSch   map[string]schema.Schema
 	FromFksParentSch map[string]schema.Schema
 }
+
+type TableDeltaEngine struct {
+	TableDeltaBase
+	FromTable     *doltdb.Table
+	ToTable       *doltdb.Table
+	FromNodeStore tree.NodeStore
+	ToNodeStore   tree.NodeStore
+	FromVRW       types.ValueReadWriter
+	ToVRW         types.ValueReadWriter
+}
+
+var _ TableDelta = &TableDeltaEngine{}
 
 type TableDeltaSummary struct {
 	DiffType      string
@@ -71,7 +75,7 @@ type TableDeltaSummary struct {
 }
 
 // GetStagedUnstagedTableDeltas represents staged and unstaged changes as TableDelta slices.
-func GetStagedUnstagedTableDeltas(ctx context.Context, roots doltdb.Roots) (staged, unstaged []TableDelta, err error) {
+func GetStagedUnstagedTableDeltas(ctx context.Context, roots doltdb.Roots) (staged, unstaged []TableDeltaEngine, err error) {
 	staged, err = GetTableDeltas(ctx, roots.Head, roots.Staged)
 	if err != nil {
 		return nil, nil, err
@@ -87,14 +91,14 @@ func GetStagedUnstagedTableDeltas(ctx context.Context, roots doltdb.Roots) (stag
 
 // GetTableDeltas returns a slice of TableDelta objects for each table that changed between fromRoot and toRoot.
 // It matches tables across roots by finding Schemas with Column tags in common.
-func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (deltas []TableDelta, err error) {
+func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) ([]TableDeltaEngine, error) {
 	fromVRW := fromRoot.VRW()
 	fromNS := fromRoot.NodeStore()
 	toVRW := toRoot.VRW()
 	toNS := toRoot.NodeStore()
 
-	fromDeltas := make([]TableDelta, 0)
-	err = fromRoot.IterTables(ctx, func(name string, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+	fromDeltas := make([]TableDeltaEngine, 0)
+	err := fromRoot.IterTables(ctx, func(name string, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		c, err := fromRoot.GetForeignKeyCollection(ctx)
 		if err != nil {
 			return true, err
@@ -105,16 +109,19 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 			return false, err
 		}
 
-		fromDeltas = append(fromDeltas, TableDelta{
-			FromName:         name,
-			FromTable:        tbl,
-			FromSch:          sch,
-			FromFks:          fks,
-			FromFksParentSch: parentSchs,
-			FromVRW:          fromVRW,
-			FromNodeStore:    fromNS,
-			ToVRW:            toVRW,
-			ToNodeStore:      toNS,
+		fromDeltas = append(fromDeltas, TableDeltaEngine{
+			TableDeltaBase: TableDeltaBase{
+				FromName:         name,
+				FromSch:          sch,
+				FromFks:          fks,
+				FromFksParentSch: parentSchs,
+			},
+			FromTable: tbl,
+			//FromRoot:      fromRoot,
+			FromVRW:       fromVRW,
+			FromNodeStore: fromNS,
+			ToVRW:         toVRW,
+			ToNodeStore:   toNS,
 		})
 		return
 	})
@@ -122,7 +129,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 		return nil, err
 	}
 
-	toDeltas := make([]TableDelta, 0)
+	toDeltas := make([]TableDeltaEngine, 0)
 
 	err = toRoot.IterTables(ctx, func(name string, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		c, err := toRoot.GetForeignKeyCollection(ctx)
@@ -136,16 +143,20 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 			return false, err
 		}
 
-		toDeltas = append(toDeltas, TableDelta{
-			ToName:         name,
-			ToTable:        tbl,
-			ToSch:          sch,
-			ToFks:          fks,
-			ToFksParentSch: parentSchs,
-			FromVRW:        fromVRW,
-			FromNodeStore:  fromNS,
-			ToVRW:          toVRW,
-			ToNodeStore:    toNS,
+		toDeltas = append(toDeltas, TableDeltaEngine{
+			TableDeltaBase: TableDeltaBase{
+				ToName:         name,
+				ToSch:          sch,
+				ToFks:          fks,
+				ToFksParentSch: parentSchs,
+			},
+			ToTable: tbl,
+			//ToRoot:      toRoot,
+			ToVRW:       toVRW,
+			ToNodeStore: toNS,
+
+			FromVRW:       fromVRW,
+			FromNodeStore: fromNS,
 		})
 		return
 	})
@@ -153,7 +164,10 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 		return nil, err
 	}
 
-	deltas = matchTableDeltas(fromDeltas, toDeltas)
+	deltas, err := matchTableDeltas(fromDeltas, toDeltas)
+	if err != nil {
+		return nil, err
+	}
 	deltas, err = filterUnmodifiedTableDeltas(deltas)
 	if err != nil {
 		return nil, err
@@ -189,8 +203,8 @@ func getFkParentSchs(ctx context.Context, root *doltdb.RootValue, fks ...doltdb.
 	return schs, nil
 }
 
-func filterUnmodifiedTableDeltas(deltas []TableDelta) ([]TableDelta, error) {
-	var filtered []TableDelta
+func filterUnmodifiedTableDeltas(deltas []TableDeltaEngine) ([]TableDeltaEngine, error) {
+	var filtered []TableDeltaEngine
 	for _, d := range deltas {
 		if d.ToTable == nil || d.FromTable == nil {
 			// Table was added or dropped
@@ -212,14 +226,14 @@ func filterUnmodifiedTableDeltas(deltas []TableDelta) ([]TableDelta, error) {
 	return filtered, nil
 }
 
-func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
+func matchTableDeltas(fromDeltas, toDeltas []TableDeltaEngine) (deltas []TableDeltaEngine, err error) {
 	var matchedNames []string
-	from := make(map[string]TableDelta, len(fromDeltas))
+	from := make(map[string]TableDeltaEngine, len(fromDeltas))
 	for _, f := range fromDeltas {
 		from[f.FromName] = f
 	}
 
-	to := make(map[string]TableDelta, len(toDeltas))
+	to := make(map[string]TableDeltaEngine, len(toDeltas))
 	for _, t := range toDeltas {
 		to[t.ToName] = t
 		if _, ok := from[t.ToName]; ok {
@@ -227,41 +241,53 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
 		}
 	}
 
-	match := func(t, f TableDelta) TableDelta {
-		return TableDelta{
-			FromName:         f.FromName,
-			ToName:           t.ToName,
-			FromTable:        f.FromTable,
-			ToTable:          t.ToTable,
-			FromSch:          f.FromSch,
-			ToSch:            t.ToSch,
-			FromFks:          f.FromFks,
-			ToFks:            t.ToFks,
-			FromFksParentSch: f.FromFksParentSch,
-			ToFksParentSch:   t.ToFksParentSch,
-		}
+	match := func(t, f TableDeltaEngine) (TableDeltaEngine, error) {
+		return TableDeltaEngine{
+			TableDeltaBase: TableDeltaBase{
+				FromName:         f.FromName,
+				ToName:           t.ToName,
+				FromSch:          f.FromSch,
+				ToSch:            t.ToSch,
+				FromFks:          f.FromFks,
+				ToFks:            t.ToFks,
+				FromFksParentSch: f.FromFksParentSch,
+				ToFksParentSch:   t.ToFksParentSch,
+			},
+			FromTable: f.FromTable,
+			ToTable:   t.ToTable,
+		}, nil
 	}
 
-	deltas = make([]TableDelta, 0)
+	deltas = make([]TableDeltaEngine, 0)
 
 	for _, name := range matchedNames {
 		t := to[name]
+		tInfo := t.GetBaseInfo()
 		f := from[name]
-		if schemasOverlap(t.ToSch, f.FromSch) {
-			matched := match(t, f)
+		fInfo := f.GetBaseInfo()
+		if schemasOverlap(tInfo.ToSch, fInfo.FromSch) {
+			matched, err := match(t, f)
+			if err != nil {
+				return nil, err
+			}
 			deltas = append(deltas, matched)
-			delete(from, f.FromName)
-			delete(to, t.ToName)
+			delete(from, fInfo.FromName)
+			delete(to, tInfo.ToName)
 		}
 	}
 
 	for _, f := range from {
 		for _, t := range to {
-			if schemasOverlap(f.FromSch, t.ToSch) {
-				matched := match(t, f)
+			tInfo := t.GetBaseInfo()
+			fInfo := f.GetBaseInfo()
+			if schemasOverlap(fInfo.FromSch, tInfo.ToSch) {
+				matched, err := match(t, f)
+				if err != nil {
+					return nil, err
+				}
 				deltas = append(deltas, matched)
-				delete(from, f.FromName)
-				delete(to, t.ToName)
+				delete(from, fInfo.FromName)
+				delete(to, tInfo.ToName)
 			}
 		}
 	}
@@ -274,7 +300,7 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
 		deltas = append(deltas, t)
 	}
 
-	return deltas
+	return deltas, nil
 }
 
 func schemasOverlap(from, to schema.Schema) bool {
@@ -283,18 +309,57 @@ func schemasOverlap(from, to schema.Schema) bool {
 	return f.Intersection(t).Size() > 0
 }
 
+func (td TableDeltaEngine) GetTableCreateStatement(ctx context.Context, isFromTable bool) (string, error) {
+	var sch schema.Schema
+	var name string
+
+	if isFromTable {
+		sch = td.FromSch
+		name = td.FromName
+	} else {
+		sch = td.ToSch
+		name = td.ToName
+	}
+
+	sb := strings.Builder{}
+	sb.WriteString("CREATE TABLE ")
+	sb.WriteString(name)
+	sb.WriteString(" (\n")
+
+	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		sb.WriteString("\t")
+		sb.WriteString(col.Name)
+		sb.WriteString(" ")
+		sb.WriteString(col.TypeInfo.ToSqlType().String())
+		sb.WriteString(",\n")
+		return false, nil
+	})
+	if err != nil {
+		return "", err
+	}
+
+	sb.WriteString(");")
+
+	createStatement := sb.String()
+	return createStatement, nil
+}
+
+func (td TableDeltaEngine) GetBaseInfo() TableDeltaBase {
+	return td.TableDeltaBase
+}
+
 // IsAdd returns true if the table was added between the fromRoot and toRoot.
-func (td TableDelta) IsAdd() bool {
+func (td TableDeltaEngine) IsAdd() bool {
 	return td.FromTable == nil && td.ToTable != nil
 }
 
 // IsDrop returns true if the table was dropped between the fromRoot and toRoot.
-func (td TableDelta) IsDrop() bool {
+func (td TableDeltaEngine) IsDrop() bool {
 	return td.FromTable != nil && td.ToTable == nil
 }
 
 // IsRename return true if the table was renamed between the fromRoot and toRoot.
-func (td TableDelta) IsRename() bool {
+func (td TableDeltaEngine) IsRename() bool {
 	if td.IsAdd() || td.IsDrop() {
 		return false
 	}
@@ -303,7 +368,7 @@ func (td TableDelta) IsRename() bool {
 
 // HasHashChanged returns true if the hash of the table content has changed between
 // the fromRoot and toRoot.
-func (td TableDelta) HasHashChanged() (bool, error) {
+func (td TableDeltaEngine) HasHashChanged() (bool, error) {
 	if td.IsAdd() || td.IsDrop() {
 		return true, nil
 	}
@@ -323,7 +388,7 @@ func (td TableDelta) HasHashChanged() (bool, error) {
 
 // HasSchemaChanged returns true if the table schema has changed between the
 // fromRoot and toRoot.
-func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
+func (td TableDeltaEngine) HasSchemaChanged(ctx context.Context) (bool, error) {
 	if td.IsAdd() || td.IsDrop() {
 		return true, nil
 	}
@@ -345,7 +410,7 @@ func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
 	return !fromSchemaHash.Equal(toSchemaHash), nil
 }
 
-func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
+func (td TableDeltaEngine) HasDataChanged(ctx context.Context) (bool, error) {
 	if td.IsAdd() {
 		isEmpty, err := isTableDataEmpty(ctx, td.ToTable)
 		if err != nil {
@@ -376,11 +441,11 @@ func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
 	return !fromRowDataHash.Equal(toRowDataHash), nil
 }
 
-func (td TableDelta) HasPrimaryKeySetChanged() bool {
+func (td TableDeltaEngine) HasPrimaryKeySetChanged() bool {
 	return !schema.ArePrimaryKeySetsDiffable(td.Format(), td.FromSch, td.ToSch)
 }
 
-func (td TableDelta) HasChanges() (bool, error) {
+func (td TableDeltaEngine) HasChanges() (bool, error) {
 	hashChanged, err := td.HasHashChanged()
 	if err != nil {
 		return false, err
@@ -390,14 +455,14 @@ func (td TableDelta) HasChanges() (bool, error) {
 }
 
 // CurName returns the most recent name of the table.
-func (td TableDelta) CurName() string {
+func (td TableDeltaEngine) CurName() string {
 	if td.ToName != "" {
 		return td.ToName
 	}
 	return td.FromName
 }
 
-func (td TableDelta) HasFKChanges() bool {
+func (td TableDeltaEngine) HasFKChanges() bool {
 	if len(td.FromFks) != len(td.ToFks) {
 		return true
 	}
@@ -424,7 +489,7 @@ func (td TableDelta) HasFKChanges() bool {
 }
 
 // GetSchemas returns the table's schema at the fromRoot and toRoot, or schema.Empty if the table did not exist.
-func (td TableDelta) GetSchemas(ctx context.Context) (from, to schema.Schema, err error) {
+func (td TableDeltaEngine) GetSchemas(ctx context.Context) (from, to schema.Schema, err error) {
 	if td.FromSch == nil {
 		td.FromSch = schema.EmptySchema
 	}
@@ -435,14 +500,14 @@ func (td TableDelta) GetSchemas(ctx context.Context) (from, to schema.Schema, er
 }
 
 // Format returns the format of the tables in this delta.
-func (td TableDelta) Format() *types.NomsBinFormat {
+func (td TableDeltaEngine) Format() *types.NomsBinFormat {
 	if td.FromTable != nil {
 		return td.FromTable.Format()
 	}
 	return td.ToTable.Format()
 }
 
-func (td TableDelta) IsKeyless(ctx context.Context) (bool, error) {
+func (td TableDeltaEngine) IsKeyless(ctx context.Context) (bool, error) {
 	f, t, err := td.GetSchemas(ctx)
 	if err != nil {
 		return false, err
@@ -476,7 +541,7 @@ func isTableDataEmpty(ctx context.Context, table *doltdb.Table) (bool, error) {
 }
 
 // GetSummary returns a summary of the table delta.
-func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error) {
+func (td TableDeltaEngine) GetSummary(ctx context.Context) (*TableDeltaSummary, error) {
 	dataChange, err := td.HasDataChanged(ctx)
 	if err != nil {
 		return nil, err
@@ -532,7 +597,7 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 }
 
 // GetRowData returns the table's row data at the fromRoot and toRoot, or an empty map if the table did not exist.
-func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, err error) {
+func (td TableDeltaEngine) GetRowData(ctx context.Context) (from, to durable.Index, err error) {
 	if td.FromTable == nil && td.ToTable == nil {
 		return nil, nil, fmt.Errorf("both from and to tables are missing from table delta")
 	}
@@ -563,20 +628,21 @@ func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, er
 // SqlSchemaDiff returns a slice of DDL statements that will transform the schema in the from delta to the schema in
 // the to delta.
 func SqlSchemaDiff(ctx context.Context, td TableDelta, toSchemas map[string]schema.Schema) ([]string, error) {
+	tdInfo := td.GetBaseInfo()
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("cannot retrieve schema for table %s, cause: %s", td.ToName, err.Error())
+		return nil, fmt.Errorf("cannot retrieve schema for table %s, cause: %s", tdInfo.ToName, err.Error())
 	}
 
 	var ddlStatements []string
 	if td.IsDrop() {
-		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(td.FromName))
+		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(tdInfo.FromName))
 	} else if td.IsAdd() {
-		toPkSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
+		toPkSch, err := sqlutil.FromDoltSchema(tdInfo.ToName, tdInfo.ToSch)
 		if err != nil {
 			return nil, err
 		}
-		stmt, err := GenerateCreateTableStatement(td.ToName, td.ToSch, toPkSch, td.ToFks, td.ToFksParentSch)
+		stmt, err := GenerateCreateTableStatement(tdInfo.ToName, tdInfo.ToSch, toPkSch, tdInfo.ToFks, tdInfo.ToFksParentSch)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
@@ -599,9 +665,11 @@ func GetNonCreateNonDropTableSqlSchemaDiff(td TableDelta, toSchemas map[string]s
 		return nil, nil
 	}
 
+	tdInfo := td.GetBaseInfo()
+
 	var ddlStatements []string
-	if td.FromName != td.ToName {
-		ddlStatements = append(ddlStatements, sqlfmt.RenameTableStmt(td.FromName, td.ToName))
+	if tdInfo.FromName != tdInfo.ToName {
+		ddlStatements = append(ddlStatements, sqlfmt.RenameTableStmt(tdInfo.FromName, tdInfo.ToName))
 	}
 
 	eq := schema.SchemasAreEqual(fromSch, toSch)
@@ -615,25 +683,25 @@ func GetNonCreateNonDropTableSqlSchemaDiff(td TableDelta, toSchemas map[string]s
 		switch cd.DiffType {
 		case SchDiffNone:
 		case SchDiffAdded:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.GenerateCreateTableColumnDefinition(*cd.New)))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(tdInfo.ToName, sqlfmt.GenerateCreateTableColumnDefinition(*cd.New)))
 		case SchDiffRemoved:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropColStmt(tdInfo.ToName, cd.Old.Name))
 		case SchDiffModified:
 			// Ignore any primary key set changes here
 			if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
 				continue
 			}
 			if cd.Old.Name != cd.New.Name {
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableRenameColStmt(tdInfo.ToName, cd.Old.Name, cd.New.Name))
 			}
 		}
 	}
 
 	// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
 	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
-		ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropPks(td.ToName))
+		ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropPks(tdInfo.ToName))
 		if toSch.GetPKCols().Size() > 0 {
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddPrimaryKeys(td.ToName, toSch.GetPKCols()))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddPrimaryKeys(tdInfo.ToName, toSch.GetPKCols()))
 		}
 	}
 
@@ -641,16 +709,16 @@ func GetNonCreateNonDropTableSqlSchemaDiff(td TableDelta, toSchemas map[string]s
 		switch idxDiff.DiffType {
 		case SchDiffNone:
 		case SchDiffAdded:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(tdInfo.ToName, idxDiff.To))
 		case SchDiffRemoved:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(tdInfo.FromName, idxDiff.From))
 		case SchDiffModified:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(tdInfo.FromName, idxDiff.From))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(tdInfo.ToName, idxDiff.To))
 		}
 	}
 
-	for _, fkDiff := range DiffForeignKeys(td.FromFks, td.ToFks) {
+	for _, fkDiff := range DiffForeignKeys(tdInfo.FromFks, tdInfo.ToFks) {
 		switch fkDiff.DiffType {
 		case SchDiffNone:
 		case SchDiffAdded:

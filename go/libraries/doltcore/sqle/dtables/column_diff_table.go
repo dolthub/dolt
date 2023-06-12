@@ -161,9 +161,9 @@ type doltColDiffWorkingSetRowItr struct {
 	unstagedIndex       int
 	colIndex            int
 	changeSet           string
-	stagedTableDeltas   []diff.TableDelta
-	unstagedTableDeltas []diff.TableDelta
-	currentTableDelta   *diff.TableDelta
+	stagedTableDeltas   []diff.TableDeltaEngine
+	unstagedTableDeltas []diff.TableDeltaEngine
+	currentTableDelta   *diff.TableDeltaEngine
 	tableName           string
 	colNames            []string
 	diffTypes           []string
@@ -452,7 +452,7 @@ type tableColChange struct {
 
 // processTableColDelta processes the specified TableDelta to determine what kind of change it was (i.e. table drop,
 // table rename, table create, or data update) and returns a tableChange struct representing the change.
-func processTableColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta diff.TableDelta) (*tableColChange, error) {
+func processTableColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta diff.TableDeltaEngine) (*tableColChange, error) {
 	// Dropping a table is always a schema change, and also a data change if the table contained data
 	if delta.IsDrop() {
 		diffTypes := make([]string, delta.FromSch.GetAllCols().Size())
@@ -499,7 +499,7 @@ func processTableColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta diff.Table
 
 // calculateColDelta iterates through the rows of the given table delta and compares each cell in the to_ and from_
 // cells to compile a list of modified columns
-func calculateColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta *diff.TableDelta, colSchDiff *colSchemaDiff) ([]string, []string, error) {
+func calculateColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta *diff.TableDeltaEngine, colSchDiff *colSchemaDiff) ([]string, []string, error) {
 	// initialize row iterator
 	diffTableSchema, j, err := GetDiffTableSchemaAndJoiner(delta.ToTable.Format(), delta.FromSch, delta.ToSch)
 	if err != nil {

@@ -49,6 +49,8 @@ const (
 	DiffCommitTag = iota + SystemTableReservedMin + uint64(2000)
 	DiffCommitDateTag
 	DiffTypeTag
+	DiffToTableHashTag
+	DiffFromTableHashTag
 )
 
 // Tags for dolt_query_catalog table

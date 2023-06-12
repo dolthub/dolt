@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expreval"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -43,6 +42,12 @@ const (
 	fromCommit     = "from_commit"
 	toCommitDate   = "to_commit_date"
 	fromCommitDate = "from_commit_date"
+
+	toTableHash   = "to_table_hash"
+	fromTableHash = "from_table_hash"
+
+	fromTableHashColName = "from_table_hash"
+	toTableHashColName   = "to_table_hash"
 
 	diffTypeColName  = "diff_type"
 	diffTypeAdded    = "added"
@@ -182,8 +187,6 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		fromSch:         dt.targetSch,
 	}, nil
 }
-
-var commitMetaColumns = set.NewStrSet([]string{toCommit, fromCommit, toCommitDate, fromCommitDate})
 
 // CommitIsInScope returns true if a given commit hash is head or is
 // visible from the current head's ancestry graph.
@@ -661,6 +664,8 @@ func SelectFuncForFilters(vr types.ValueReader, filters []sql.Expression) (parti
 		fromCommitTag
 		toCommitDateTag
 		fromCommitDateTag
+		toTableHashTag
+		fromTableHashTag
 	)
 
 	colColl := schema.NewColCollection(
@@ -668,6 +673,8 @@ func SelectFuncForFilters(vr types.ValueReader, filters []sql.Expression) (parti
 		schema.NewColumn(fromCommit, fromCommitTag, types.StringKind, false),
 		schema.NewColumn(toCommitDate, toCommitDateTag, types.TimestampKind, false),
 		schema.NewColumn(fromCommitDate, fromCommitDateTag, types.TimestampKind, false),
+		schema.NewColumn(toTableHash, toTableHashTag, types.StringKind, false),
+		schema.NewColumn(fromTableHash, fromTableHashTag, types.StringKind, false),
 	)
 
 	expFunc, err := expreval.ExpressionFuncFromSQLExpressions(vr, schema.UnkeyedSchemaFromCols(colColl), filters)
@@ -688,6 +695,26 @@ func SelectFuncForFilters(vr types.ValueReader, filters []sql.Expression) (parti
 
 		if partition.fromDate != nil {
 			vals[fromCommitDateTag] = *partition.fromDate
+		}
+
+		if partition.to != nil {
+			toHash, err := partition.to.HashOf()
+			if err != nil {
+				return false, err
+			}
+			vals[toTableHashTag] = types.String(toHash.String())
+		} else {
+			vals[toTableHashTag] = types.String("")
+		}
+
+		if partition.from != nil {
+			fromHash, err := partition.from.HashOf()
+			if err != nil {
+				return false, err
+			}
+			vals[fromTableHashTag] = types.String(fromHash.String())
+		} else {
+			vals[fromTableHashTag] = types.String("")
 		}
 
 		return expFunc(ctx, vals)
@@ -907,7 +934,8 @@ func CalculateDiffSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
 		return nil, err
 	}
 
-	cols := make([]schema.Column, toSch.GetAllCols().Size()+fromSch.GetAllCols().Size()+1)
+	// 3 extra columns => diff_type, from_table_hash, to_table_hash
+	cols := make([]schema.Column, toSch.GetAllCols().Size()+fromSch.GetAllCols().Size()+3)
 
 	i := 0
 	err = toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -938,7 +966,10 @@ func CalculateDiffSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
 		return nil, err
 	}
 
-	cols[len(cols)-1] = schema.NewColumn(diffTypeColName, schema.DiffTypeTag, types.StringKind, false)
+	cols[len(cols)-3] = schema.NewColumn(diffTypeColName, schema.DiffTypeTag, types.StringKind, false)
+	cols[len(cols)-2] = schema.NewColumn(toTableHashColName, schema.DiffToTableHashTag, types.StringKind, false)
+	cols[len(cols)-1] = schema.NewColumn(fromTableHashColName, schema.DiffFromTableHashTag, types.StringKind, false)
 
-	return schema.UnkeyedSchemaFromCols(schema.NewColCollection(cols...)), nil
+	schemaFromCols := schema.UnkeyedSchemaFromCols(schema.NewColCollection(cols...))
+	return schemaFromCols, nil
 }

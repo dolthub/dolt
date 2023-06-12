@@ -285,7 +285,7 @@ func (p *PatchTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		}
 
 		delta := findMatchingDelta(tableDeltas, tableName)
-		tableDeltas = []diff.TableDelta{delta}
+		tableDeltas = []diff.TableDeltaEngine{delta}
 	}
 
 	patches, err := getPatchNodes(ctx, sqledb.DbData(), tableDeltas, fromRefDetails, toRefDetails)
@@ -341,7 +341,7 @@ type patchNode struct {
 	dataPatchStmts   []string
 }
 
-func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.TableDelta, fromRefDetails, toRefDetails *refDetails) ([]*patchNode, error) {
+func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.TableDeltaEngine, fromRefDetails, toRefDetails *refDetails) ([]*patchNode, error) {
 	var patches []*patchNode
 	for _, td := range tableDeltas {
 		// no diff
@@ -375,7 +375,7 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 	return patches, nil
 }
 
-func getSchemaSqlPatch(ctx *sql.Context, toRoot *doltdb.RootValue, td diff.TableDelta) ([]string, error) {
+func getSchemaSqlPatch(ctx *sql.Context, toRoot *doltdb.RootValue, td diff.TableDeltaEngine) ([]string, error) {
 	toSchemas, err := toRoot.GetAllSchemas(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("could not read schemas from toRoot, cause: %s", err.Error())
@@ -410,7 +410,7 @@ func getSchemaSqlPatch(ctx *sql.Context, toRoot *doltdb.RootValue, td diff.Table
 	return ddlStatements, nil
 }
 
-func canGetDataDiff(ctx *sql.Context, td diff.TableDelta) bool {
+func canGetDataDiff(ctx *sql.Context, td diff.TableDeltaEngine) bool {
 	if td.IsDrop() {
 		return false // don't output DELETE FROM statements after DROP TABLE
 	}
@@ -437,7 +437,7 @@ func canGetDataDiff(ctx *sql.Context, td diff.TableDelta) bool {
 	return true
 }
 
-func getUserTableDataSqlPatch(ctx *sql.Context, dbData env.DbData, td diff.TableDelta, fromRefDetails, toRefDetails *refDetails) ([]string, error) {
+func getUserTableDataSqlPatch(ctx *sql.Context, dbData env.DbData, td diff.TableDeltaEngine, fromRefDetails, toRefDetails *refDetails) ([]string, error) {
 	// ToTable is used as target table as it cannot be nil at this point
 	diffSch, projections, ri, err := getDiffQuery(ctx, dbData, td, fromRefDetails, toRefDetails)
 	if err != nil {
@@ -502,7 +502,7 @@ func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema
 // on diff table function row iter. This function attempts to imitate running a query
 // fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columnsWithDiff, "diff_type", fromRef, toRef, tableName)
 // on sql engine, which returns the schema and rowIter of the final data diff result.
-func getDiffQuery(ctx *sql.Context, dbData env.DbData, td diff.TableDelta, fromRefDetails, toRefDetails *refDetails) (sql.Schema, []sql.Expression, sql.RowIter, error) {
+func getDiffQuery(ctx *sql.Context, dbData env.DbData, td diff.TableDeltaEngine, fromRefDetails, toRefDetails *refDetails) (sql.Schema, []sql.Expression, sql.RowIter, error) {
 	diffTableSchema, j, err := dtables.GetDiffTableSchemaAndJoiner(td.ToTable.Format(), td.FromSch, td.ToSch)
 	if err != nil {
 		return nil, nil, nil, err
