@@ -98,6 +98,10 @@ func (rrd ReadReplicaDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDb
 	return initialDBState(ctx, rrd, rrd.revision)
 }
 
+func (rrd ReadReplicaDatabase) DoltDatabases() []*doltdb.DoltDB {
+	return []*doltdb.DoltDB{rrd.ddb, rrd.srcDB}
+}
+
 func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 	_, headsArg, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateHeads)
 	if !ok {

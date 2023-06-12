@@ -87,6 +87,10 @@ func (db *UserSpaceDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbSt
 	}, nil
 }
 
+func (db *UserSpaceDatabase) DoltDatabases() []*doltdb.DoltDB {
+	return nil
+}
+
 func (db *UserSpaceDatabase) GetRoot(*sql.Context) (*doltdb.RootValue, error) {
 	return db.RootValue, nil
 }
