@@ -4,7 +4,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
     setup_common
 
-    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))"
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10), index(v))"
     dolt add .
     dolt commit -am "Created table"
     dolt checkout -b branch1
@@ -156,7 +156,111 @@ teardown() {
     [[ ! "$output" =~ "branch1table" ]] || false
 }
 
-@test "cherry-pick: row data conflict, leave working set clean" {
+@test "cherry-pick: error when using `--abort` with no in-progress cherry-pick" {
+    run dolt cherry-pick --abort
+    [ $status -eq 1 ]
+    [[ $output =~ "error: There is no cherry-pick merge to abort" ]] || false
+    [[ ! $output =~ "usage: dolt cherry-pick" ]] || false
+}
+
+@test "cherry-pick: schema change, with data conflict" {
+    dolt checkout main
+    dolt sql -q "CREATE TABLE other (pk int primary key, c1 int, c2 int)"
+    dolt sql -q "INSERT INTO other VALUES (1, 2, 3)"
+    dolt commit -Am "add other table (on main)"
+
+    # Create two commits on branch2: one to assert does NOT get included, and one to cherry pick
+    dolt checkout -b branch2
+    dolt sql -q "INSERT INTO other VALUES (100, 200, 300);"
+    dolt commit -am "add row 100 to other (on branch2)"
+
+    # This ALTER TABLE statement modifies other rows that aren't included in the cherry-picked
+    # commit – row (100, 200, 300) is modified to (100, 300). This shows up as a conflict
+    # in the cherry-pick (modified row on one side, row doesn't exist on the other side).
+    dolt sql -q "ALTER TABLE other DROP COLUMN c1;"
+    dolt sql -q "INSERT INTO other VALUES (10, 30);"
+    dolt sql -q "INSERT INTO test VALUES (100, 'q');"
+    dolt commit -am "alter table, add row 10 to other, add row 100 to test (on branch2)"
+
+    dolt checkout main
+    run dolt cherry-pick branch2
+    [ $status -eq 1 ]
+    [[ $output =~ "Unable to apply commit cleanly due to conflicts or constraint violations" ]] || false
+
+    # Assert that table 'test' is staged, but table 'other' is not staged, since it had conflicts
+    run dolt sql -q "SELECT * from dolt_status;"
+    [ $status -eq 0 ]
+    [[ $output =~ "| test       | true   | modified |" ]] || false
+    [[ $output =~ "| other      | false  | modified |" ]] || false
+
+    # Make sure the data conflict shows up correctly
+    run dolt conflicts cat .
+    [ $status -eq 0 ]
+    [[ $output =~ "|  -  | ours   | 100 | 200  | 300 |" ]] || false
+    [[ $output =~ "|  *  | theirs | 100 | NULL | 300 |" ]] || false
+
+    # Asert the data we expect is in the table
+    run dolt sql -r csv -q "SELECT * from other;"
+    [ $status -eq 0 ]
+    [[ $output =~ "1,3" ]] || false
+    [[ $output =~ "10,30" ]] || false
+    [[ ! $output =~ "100,300" ]] || false
+
+    # Resolve the conflict and commit
+    dolt conflicts resolve --ours other
+    run dolt sql -r csv -q "SELECT count(*) from dolt_conflicts;"
+    [ $status -eq 0 ]
+    [[ $output =~ "0" ]] || false
+    dolt commit -m "cherry-picked HEAD commit from branch2"
+}
+
+@test "cherry-pick: foreign key violation" {
+    dolt checkout branch1
+    dolt sql -q "CREATE TABLE other (pk int primary key, v varchar(10), FOREIGN KEY (v) REFERENCES test(v))"
+    dolt sql -q "INSERT INTO other VALUES (1, 'a')"
+    dolt commit -Am "add other table (on branch1)"
+
+    dolt checkout -b branch2
+    dolt sql -q "SET @@foreign_key_checks=0; UPDATE other SET v = 'z' where pk = 1;"
+    dolt sql -q "INSERT INTO test VALUES (100, 'q');"
+    dolt commit -Am "update row 1 in other and insert row 100 into test (on branch2)"
+
+    dolt checkout branch1
+    dolt sql -q "SET @@foreign_key_checks=1;"
+    run dolt cherry-pick branch2
+    [ $status -eq 1 ]
+    [[ $output =~ "Unable to apply commit cleanly due to conflicts or constraint violations" ]] || false
+
+    # Assert that only 'test' is staged for commit ('other' has a constraint violation)
+    run dolt sql -q "SELECT * from dolt_status;"
+    [ $status -eq 0 ]
+    [[ $output =~ "| other      | false  | modified |" ]] || false
+    [[ $output =~ "| test       | true   | modified |" ]] || false
+
+    # Assert the expected constraint violations
+    run dolt sql -q "SELECT * FROM dolt_constraint_violations;"
+    [ $status -eq 0 ]
+    [[ $output =~ "| other | 1 " ]] || false
+    run dolt sql -q "SELECT * FROM dolt_constraint_violations_other;"
+    [ $status -eq 0 ]
+    [[ $output =~ "foreign key    | 1  | z " ]] || false
+
+    # Abort the cherry-pick and assert that all state has been properly cleared
+    dolt cherry-pick --abort
+    run dolt sql -q "SELECT * from dolt_status;"
+    [ $status -eq 0 ]
+    [[ ! $output =~ "other" ]] || false
+    [[ ! $output =~ "test" ]] || false
+    run dolt sql -q "SELECT * FROM dolt_constraint_violations;"
+    [ $status -eq 0 ]
+    [[ ! $output =~ "other" ]] || false
+    run dolt sql -r csv -q "SELECT * from other;"
+    [ $status -eq 0 ]
+    [[ $output =~ "1,a" ]] || false
+    [[ ! $output =~ "100,q" ]] || false
+}
+
+@test "cherry-pick: conflict resolution" {
     dolt sql -q "CREATE TABLE other (pk int primary key, v int)"
     dolt add .
     dolt sql -q "INSERT INTO other VALUES (1, 2)"
@@ -171,11 +275,44 @@ teardown() {
     dolt commit -am "add other table with conflict and test with conflict"
 
     run dolt cherry-pick branch1
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "conflicts in table" ]] || false
+    [ $status -eq 1 ]
+    [[ $output =~ "Unable to apply commit cleanly due to conflicts or constraint violations" ]] || false
+
+    run dolt conflicts cat .
+    [ $status -eq 0 ]
+    [[ $output =~ "|  +  | ours   | 1  | 3 |" ]] || false
+    [[ $output =~ "|  +  | theirs | 1  | 2 |" ]] || false
+    [[ $output =~ "|  +  | ours   | 4  | k |" ]] || false
+    [[ $output =~ "|  +  | theirs | 4  | f |" ]] || false
+
+    dolt cherry-pick --abort
 
     run dolt status
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    [ $status -eq 0 ]
+    [[ ! $output =~ "Unmerged paths" ]] || false
+
+    run dolt cherry-pick branch1
+    [ $status -eq 1 ]
+    [[ $output =~ "Unable to apply commit cleanly due to conflicts or constraint violations" ]] || false
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ ! $output =~ "Changes to be committed" ]] || false
+    [[ $output =~ "Unmerged paths" ]] || false
+    [[ $output =~ "both modified:    other" ]] || false
+    [[ $output =~ "both modified:    test" ]] || false
+
+    dolt conflicts resolve --theirs .
+
+    run dolt sql -q "select * from other"
+    [ $status -eq 0 ]
+    [[ $output =~ "1  | 2" ]] || false
+
+    run dolt sql -q "select * from test"
+    [ $status -eq 0 ]
+    [[ $output =~ "4  | f" ]] || false
+
+    dolt commit -m "committing cherry-picked change"
 }
 
 @test "cherry-pick: commit with CREATE TABLE" {
@@ -225,8 +362,7 @@ teardown() {
 
 @test "cherry-pick: commit with ALTER TABLE rename table name" {
     dolt sql -q "ALTER TABLE test RENAME TO new_name"
-    dolt add .
-    dolt commit -am "rename table name"
+    dolt commit -Am "rename table test to new_name"
 
     dolt checkout main
     run dolt cherry-pick branch1
@@ -246,8 +382,8 @@ teardown() {
 
     dolt checkout main
     run dolt cherry-pick branch1
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "cherry-picking a merge commit is not supported." ]] || false
+    [ $status -eq 1 ]
+    [[ $output =~ "cherry-picking a merge commit is not supported." ]] || false
 }
 
 @test "cherry-pick: cherry-pick commit is a cherry-picked commit" {
@@ -385,9 +521,11 @@ teardown() {
     dolt commit -am "alter table test add column c"
 
     dolt checkout main
-    run dolt cherry-pick branch1
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    dolt cherry-pick branch1
+
+    run dolt sql -q "SHOW CREATE TABLE test;"
+    [ $status -eq 0 ]
+    [[ $output =~ '`c` int' ]] || false
 }
 
 @test "cherry-pick: commit with ALTER TABLE change column" {
@@ -395,9 +533,12 @@ teardown() {
     dolt commit -am "alter table test change column v"
 
     dolt checkout main
-    run dolt cherry-pick branch1
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    dolt cherry-pick branch1
+
+    run dolt sql -q "SHOW CREATE TABLE test;"
+    [ $status -eq 0 ]
+    [[ $output =~ '`c` varchar(100)' ]] || false
+    [[ ! $output =~ '`v` varchar(10)' ]] || false
 }
 
 @test "cherry-pick: commit with ALTER TABLE modify column" {
@@ -405,20 +546,37 @@ teardown() {
     dolt sql -q "ALTER TABLE test MODIFY COLUMN v int"
     dolt commit -am "alter table test modify column v"
 
+    # TODO: Incompatible type changes currently trigger an error response, instead of
+    #       being tracked as a schema conflict artifact. Once we fix that, update this test.
     dolt checkout main
     run dolt cherry-pick branch1
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    [ $status -eq 1 ]
+    [[ $output =~ "merge aborted: schema conflict found for table test" ]] || false
 }
 
 @test "cherry-pick: commit with ALTER TABLE drop column" {
     dolt sql -q "ALTER TABLE test DROP COLUMN v"
     dolt commit -am "alter table test drop column v"
 
+    # Dropping column v on branch1 modifies all rows in the table, and those rows
+    # don't exist on main, so they are reported as conflicts – the rows were modified in
+    # the target commit, but they don't exist on the target root.
     dolt checkout main
     run dolt cherry-pick branch1
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    [ $status -eq 1 ]
+    run dolt conflicts cat .
+    [ $status -eq 0 ]
+    [[ $output =~ '|     | base   | 1  | a    |' ]] || false
+    [[ $output =~ '|  -  | ours   | 1  | a    |' ]] || false
+    [[ $output =~ '|  *  | theirs | 1  | NULL |' ]] || false
+
+    # Resolve and assert that column v is dropped
+    dolt conflicts resolve --ours .
+    run dolt sql -q "SHOW CREATE TABLE test;"
+    [ $status -eq 0 ]
+    [[ ! $output =~ '`v` varchar(10)' ]] || false
+
+    dolt commit -am "cherry-picked column drop"
 }
 
 @test "cherry-pick: commit with ALTER TABLE rename column" {
@@ -426,9 +584,11 @@ teardown() {
     dolt commit -am "alter table test rename column v"
 
     dolt checkout main
-    run dolt cherry-pick branch1
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    dolt cherry-pick branch1
+
+    run dolt sql -q "SHOW CREATE TABLE test;"
+    [ $status -eq 0 ]
+    [[ $output =~ '`c` varchar(10)' ]] || false
 }
 
 @test "cherry-pick: commit with ALTER TABLE drop and add primary key" {
@@ -437,6 +597,6 @@ teardown() {
 
     dolt checkout main
     run dolt cherry-pick branch1
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    [ $status -eq 1 ]
+    [[ $output =~ "error: cannot merge two tables with different primary keys" ]] || false
 }
