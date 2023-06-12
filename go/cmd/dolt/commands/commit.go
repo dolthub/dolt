@@ -178,7 +178,7 @@ func callDoltCommitStoredProc(msg string, apr *argparser.ArgParseResults) string
 	first = true
 	buffer.WriteString("CALL DOLT_COMMIT(")
 
-	write := func(s string) {
+	writeToBuffer := func(s string) {
 		if !first {
 			buffer.WriteString(", ")
 		}
@@ -189,42 +189,42 @@ func callDoltCommitStoredProc(msg string, apr *argparser.ArgParseResults) string
 	}
 
 	if msg != "" {
-		write("-m")
-		write(msg)
+		writeToBuffer("-m")
+		writeToBuffer(msg)
 	}
 
 	if apr.Contains(cli.AllowEmptyFlag) {
-		write("--allow-empty")
+		writeToBuffer("--allow-empty")
 	}
 
 	if apr.Contains(cli.DateParam) {
-		write("--date")
+		writeToBuffer("--date")
 	}
 
 	if apr.Contains(cli.ForceFlag) {
-		write("-f")
+		writeToBuffer("-f")
 	}
 
 	if apr.Contains(cli.AuthorParam) {
-		write("--author")
+		writeToBuffer("--author")
 		author, _ := apr.GetValue(cli.AuthorParam)
-		write(author)
+		writeToBuffer(author)
 	}
 
 	if apr.Contains(cli.AllFlag) {
-		write("-a")
+		writeToBuffer("-a")
 	}
 
 	if apr.Contains(cli.UpperCaseAllFlag) {
-		write("-A")
+		writeToBuffer("-A")
 	}
 
 	if apr.Contains(cli.AmendFlag) {
-		write("--amend")
+		writeToBuffer("--amend")
 	}
 
 	if apr.Contains(cli.SkipEmptyFlag) {
-		write("--skip-empty")
+		writeToBuffer("--skip-empty")
 	}
 
 	buffer.WriteString(")")
