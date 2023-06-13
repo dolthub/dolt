@@ -777,7 +777,9 @@ func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string)
 	}
 
 	headRef, err := d.CWBHeadRef(ctx, dbName)
-	if err != nil {
+	if err == doltdb.ErrOperationNotSupportedInDetachedHead {
+		// leave head ref nil, we may not need it (commit hash)
+	} else if err != nil {
 		return nil, nil, "", err
 	}
 
