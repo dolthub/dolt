@@ -17,8 +17,8 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -35,26 +35,13 @@ var ErrCherryPickConflictsOrViolations = errors.New("error: Unable to apply comm
 	"To undo all changes from this cherry-pick operation, call `dolt_cherry_pick('--abort')`.\n" +
 	"For more information on handling conflicts, see: https://docs.dolthub.com/concepts/dolt/git/conflicts")
 
-var cherryPickSchema = []*sql.Column{
-	{
-		Name:     "hash",
-		Type:     types.LongText,
-		Nullable: true,
-	},
-	{
-		Name:     "conflicts",
-		Type:     types.Int64,
-		Nullable: false,
-	},
-}
-
 // doltCherryPick is the stored procedure version for the CLI command `dolt cherry-pick`.
 func doltCherryPick(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	newCommitHash, conflictCount, err := doDoltCherryPick(ctx, args)
+	newCommitHash, _, err := doDoltCherryPick(ctx, args)
 	if err != nil {
 		return nil, err
 	}
-	return rowToIter(newCommitHash, conflictCount), nil
+	return rowToIter(newCommitHash), nil
 }
 
 func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, error) {

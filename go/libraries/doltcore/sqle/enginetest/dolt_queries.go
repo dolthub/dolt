@@ -3528,7 +3528,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick('--abort');",
-				Expected: []sql.Row{{"", 0}},
+				Expected: []sql.Row{{""}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
