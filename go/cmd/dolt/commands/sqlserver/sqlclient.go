@@ -475,13 +475,13 @@ func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, s
 
 // BuildConnectionStringQueryist returns a Queryist that connects to the server specified by the given server config. Presence in this
 // module isn't ideal, but it's the only way to get the server config into the queryist.
-func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, apr *argparser.ArgParseResults, port int, database string) (cli.LateBindQueryist, error) {
-	serverConfig, err := GetServerConfig(cwdFS, apr)
+func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, port int, database string) (cli.LateBindQueryist, error) {
+	clientConfig, err := GetClientConfig(cwdFS, creds, apr)
 	if err != nil {
 		return nil, err
 	}
 
-	parsedMySQLConfig, err := mysqlDriver.ParseDSN(ConnectionString(serverConfig, database))
+	parsedMySQLConfig, err := mysqlDriver.ParseDSN(ConnectionString(clientConfig, database))
 	if err != nil {
 		return nil, err
 	}

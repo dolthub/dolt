@@ -84,7 +84,10 @@ func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv) (cli.CliContex
 		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	lateBind, verr := BuildSqlEngineQueryist(ctx, dEnv.FS, mrEnv, argparser.NewEmptyResults())
+	emptyArgs := argparser.NewEmptyResults()
+	emptyArgs, creds, _ := cli.BuildUserPasswordPrompt(emptyArgs)
+	lateBind, verr := BuildSqlEngineQueryist(ctx, dEnv.FS, mrEnv, creds, emptyArgs)
+
 	if err != nil {
 		return nil, verr
 	}
@@ -93,15 +96,9 @@ func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv) (cli.CliContex
 
 // BuildSqlEngineQueryist Utility function to build a local SQLEngine for use interacting with data on disk using
 // SQL queries. ctx, cwdFS, mrEnv, and apr must all be non-nil.
-func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
-	if ctx == nil || cwdFS == nil || mrEnv == nil || apr == nil {
+func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
+	if ctx == nil || cwdFS == nil || mrEnv == nil || creds == nil || apr == nil {
 		errhand.VerboseErrorFromError(fmt.Errorf("Invariant violated. Nil argument provided to BuildSqlEngineQueryist"))
-	}
-
-	// Retrieve username and password from command line, if provided
-	username := DefaultUser
-	if user, ok := apr.GetValue(UserFlag); ok {
-		username = user
 	}
 
 	// We want to know if the user provided us the data-dir flag, but we want to use the abs value used to
@@ -189,7 +186,7 @@ func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *e
 		database = mrEnv.GetFirstDatabase()
 	}
 
-	binder, err := newLateBindingEngine(cfgDirPath, privsFp, branchControlFilePath, username, database, mrEnv)
+	binder, err := newLateBindingEngine(cfgDirPath, privsFp, branchControlFilePath, creds, database, mrEnv)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}
@@ -201,7 +198,7 @@ func newLateBindingEngine(
 	cfgDirPath string,
 	privsFp string,
 	branchControlFilePath string,
-	username string,
+	creds *cli.UserPassword,
 	database string,
 	mrEnv *env.MultiRepoEnv,
 ) (cli.LateBindQueryist, error) {
@@ -210,7 +207,8 @@ func newLateBindingEngine(
 		DoltCfgDirPath:     cfgDirPath,
 		PrivFilePath:       privsFp,
 		BranchCtrlFilePath: branchControlFilePath,
-		ServerUser:         username,
+		ServerUser:         creds.Username,
+		ServerPass:         creds.Password,
 		ServerHost:         "localhost",
 		Autocommit:         true,
 	}
