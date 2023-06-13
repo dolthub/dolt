@@ -222,14 +222,22 @@ SQL
 }
 
 @test "sql-cherry-pick: commit with ALTER TABLE rename table name" {
+    # get main and branch1 in sync, so that the data on branch1 doesn't
+    # cause a conflict when we cherry pick the table rename statement
+    dolt checkout main
+    dolt merge branch1
+
+    dolt checkout branch1
     dolt sql -q "ALTER TABLE test RENAME TO new_name"
-    dolt add .
-    dolt commit -am "rename table name"
+    dolt commit -Am "rename table name"
 
     dolt checkout main
-    run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table was renamed or dropped" ]] || false
+    dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
+
+    run dolt sql -q "show tables;"
+    [ $status -eq 0 ]
+    [[ ! $output =~ "test" ]] || false
+    [[ $output =~ "new_name" ]] || false
 }
 
 @test "sql-cherry-pick: cherry-pick commit is a merge commit" {
@@ -386,13 +394,24 @@ SQL
 }
 
 @test "sql-cherry-pick: commit with ALTER TABLE drop column" {
+    # get main and branch1 in sync, so that the data on branch1 doesn't
+    # cause a conflict when we cherry pick the alter table statement
+    dolt checkout main
+    dolt merge branch1
+
+    # Drop column v on branch1
+    dolt checkout branch1
     dolt sql -q "ALTER TABLE test DROP COLUMN v"
     dolt commit -am "alter table test drop column v"
 
+    # Cherry pick the drop column change to main
     dolt checkout main
-    run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    dolt sql -q "CALL DOLT_CHERRY_PICK('branch1');"
+
+    # Assert that column v is gone
+    run dolt sql -q "SHOW CREATE TABLE test;"
+    [ $status -eq 0 ]
+    [[ ! $output =~ '`v` varchar(10)' ]] || false
 }
 
 @test "sql-cherry-pick: commit with ALTER TABLE rename column" {
