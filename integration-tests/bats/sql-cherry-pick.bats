@@ -169,7 +169,14 @@ SQL
     [[ ! "$output" =~ "branch1table" ]] || false
 }
 
-@test "sql-cherry-pick: row data conflict, leave working set clean" {
+@test "sql-cherry-pick: error when using `--abort` with no in-progress cherry-pick" {
+    run dolt sql -q "call DOLT_CHERRY_PICK('--abort');"
+    [ $status -eq 1 ]
+    [[ $output =~ "error: There is no cherry-pick merge to abort" ]] || false
+    [[ ! $output =~ "usage: dolt cherry-pick" ]] || false
+}
+
+@test "sql-cherry-pick: conflict resolution" {
     dolt sql -q "CREATE TABLE other (pk int primary key, v int)"
     dolt add .
     dolt sql -q "INSERT INTO other VALUES (1, 2)"
@@ -367,9 +374,11 @@ SQL
     dolt commit -am "alter table test add column c"
 
     dolt checkout main
-    run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
+
+    run dolt sql -q "SHOW CREATE TABLE test;"
+    [ $status -eq 0 ]
+    [[ $output =~ '`c` int' ]] || false
 }
 
 @test "sql-cherry-pick: commit with ALTER TABLE change column" {
@@ -377,9 +386,12 @@ SQL
     dolt commit -am "alter table test change column v"
 
     dolt checkout main
-    run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
+
+    run dolt sql -q "SHOW CREATE TABLE test;"
+    [ $status -eq 0 ]
+    [[ $output =~ '`c` varchar(100)' ]] || false
+    [[ ! $output =~ '`v` varchar(10)' ]] || false
 }
 
 @test "sql-cherry-pick: commit with ALTER TABLE modify column" {
@@ -387,10 +399,12 @@ SQL
     dolt sql -q "ALTER TABLE test MODIFY COLUMN v int"
     dolt commit -am "alter table test modify column v"
 
+    # TODO: Incompatible type changes currently trigger an error response, instead of
+    #       being tracked as a schema conflict artifact. Once we fix that, update this test.
     dolt checkout main
     run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    [ $status -eq 1 ]
+    [[ $output =~ "merge aborted: schema conflict found for table test" ]] || false
 }
 
 @test "sql-cherry-pick: commit with ALTER TABLE drop column" {
@@ -408,9 +422,12 @@ SQL
     dolt commit -am "alter table test rename column v"
 
     dolt checkout main
-    run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
+
+    run dolt sql -q "SHOW CREATE TABLE test;"
+    [ $status -eq 0 ]
+    [[ ! $output =~ '`v` varchar(10)' ]] || false
+    [[ $output =~ '`c` varchar(10)' ]] || false
 }
 
 @test "sql-cherry-pick: commit with ALTER TABLE drop and add primary key" {
@@ -419,6 +436,6 @@ SQL
 
     dolt checkout main
     run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    [ $status -eq 1 ]
+    [[ $output =~ "error: cannot merge two tables with different primary keys" ]] || false
 }

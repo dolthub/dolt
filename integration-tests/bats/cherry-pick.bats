@@ -597,6 +597,7 @@ teardown() {
 
     run dolt sql -q "SHOW CREATE TABLE test;"
     [ $status -eq 0 ]
+    [[ ! $output =~ '`v` varchar(10)' ]] || false
     [[ $output =~ '`c` varchar(10)' ]] || false
 }
 

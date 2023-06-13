@@ -82,7 +82,7 @@ func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, error) {
 		}
 
 		if !ws.MergeActive() {
-			return "", 0, fmt.Errorf("error: There is no cherry-pick merge to abort", err)
+			return "", 0, fmt.Errorf("error: There is no cherry-pick merge to abort")
 		}
 
 		roots, ok := dSess.GetRoots(ctx, dbName)
@@ -119,8 +119,8 @@ func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	newWorkingRoot := mergeResult.Root
 
+	newWorkingRoot := mergeResult.Root
 	err = dSess.SetRoot(ctx, dbName, newWorkingRoot)
 	if err != nil {
 		return "", 0, err
@@ -246,6 +246,27 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 	cherryCommitMeta, err := cherryCommit.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, "", err
+	}
+
+	// If any of the merge stats show a data or schema conflict or a constraint
+	// violation, record that a merge is in progress.
+	for _, stats := range result.Stats {
+		if stats.HasArtifacts() {
+			ws, err := dSess.WorkingSet(ctx, dbName)
+			if err != nil {
+				return nil, "", err
+			}
+			newWorkingSet := ws.StartMerge(cherryCommit, cherryStr)
+			// TODO: Do we need this?
+			newWorkingSet = newWorkingSet.WithWorkingRoot(result.Root).WithStagedRoot(result.Root)
+
+			err = dSess.SetWorkingSet(ctx, dbName, newWorkingSet)
+			if err != nil {
+				return nil, "", err
+			}
+
+			break
+		}
 	}
 
 	return result, cherryCommitMeta.Description, nil
