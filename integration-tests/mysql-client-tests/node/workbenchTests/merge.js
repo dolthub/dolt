@@ -14,7 +14,7 @@ export const mergeTests = [
   {
     q: `CALL DOLT_MERGE(:branchName, "--no-ff", "-m", :commitMsg)`,
     p: { branchName: "mybranch", commitMsg: "Merge mybranch into main" },
-    res: [{ fast_forward: 1, conflicts: 0 }],
+    res: [{ fast_forward: 0, conflicts: 0 }],
   },
   {
     q: `SELECT * FROM DOLT_LOG(:refName, '--parents') LIMIT :limit OFFSET :offset`,
