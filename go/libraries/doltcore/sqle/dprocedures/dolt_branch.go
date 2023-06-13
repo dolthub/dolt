@@ -124,6 +124,19 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 		if err != nil {
 			return err
 		}
+		var headOnCLI string
+		fs, err := sess.Provider().FileSystemForDatabase(dbName)
+		if err == nil {
+			if repoState, err := env.LoadRepoState(fs); err == nil {
+				headOnCLI = repoState.Head.Ref.GetPath()
+			}
+		}
+		if headOnCLI == oldBranchName && sqlserver.RunningInServerMode() && !shouldAllowDefaultBranchDeletion(ctx) {
+			return fmt.Errorf("unable to rename branch '%s', because it is the default branch for "+
+				"database '%s'; this can by changed on the command line, by stopping the sql-server, "+
+				"running `dolt checkout <another_branch> and restarting the sql-server", oldBranchName, dbName)
+		}
+
 	} else if err := branch_control.CanDeleteBranch(ctx, newBranchName); err != nil {
 		// If force is enabled, we can overwrite the destination branch, so we require a permission check here, even if the
 		// destination branch doesn't exist. An unauthorized user could simply rerun the command without the force flag.
