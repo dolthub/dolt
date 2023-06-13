@@ -37,27 +37,27 @@ var ErrCherryPickConflictsOrViolations = errors.New("error: Unable to apply comm
 
 // doltCherryPick is the stored procedure version for the CLI command `dolt cherry-pick`.
 func doltCherryPick(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	newCommitHash, _, err := doDoltCherryPick(ctx, args)
+	newCommitHash, err := doDoltCherryPick(ctx, args)
 	if err != nil {
 		return nil, err
 	}
 	return rowToIter(newCommitHash), nil
 }
 
-func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, error) {
+func doDoltCherryPick(ctx *sql.Context, args []string) (string, error) {
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
 	if len(dbName) == 0 {
-		return "", 0, fmt.Errorf("error: empty database name")
+		return "", fmt.Errorf("error: empty database name")
 	}
 
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
-		return "", 0, err
+		return "", err
 	}
 
 	apr, err := cli.CreateCherryPickArgParser().Parse(args)
 	if err != nil {
-		return "", 0, err
+		return "", err
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
@@ -65,71 +65,71 @@ func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, error) {
 	if apr.Contains(cli.AbortParam) {
 		ws, err := dSess.WorkingSet(ctx, dbName)
 		if err != nil {
-			return "", 0, fmt.Errorf("fatal: unable to load working set: %v", err)
+			return "", fmt.Errorf("fatal: unable to load working set: %v", err)
 		}
 
 		if !ws.MergeActive() {
-			return "", 0, fmt.Errorf("error: There is no cherry-pick merge to abort")
+			return "", fmt.Errorf("error: There is no cherry-pick merge to abort")
 		}
 
 		roots, ok := dSess.GetRoots(ctx, dbName)
 		if !ok {
-			return "", 0, fmt.Errorf("fatal: unable to load roots for %s", dbName)
+			return "", fmt.Errorf("fatal: unable to load roots for %s", dbName)
 		}
 
 		newWs, err := abortMerge(ctx, ws, roots)
 		if err != nil {
-			return "", 0, fmt.Errorf("fatal: unable to abort merge: %v", err)
+			return "", fmt.Errorf("fatal: unable to abort merge: %v", err)
 		}
 
-		return "", 0, dSess.SetWorkingSet(ctx, dbName, newWs)
+		return "", dSess.SetWorkingSet(ctx, dbName, newWs)
 	}
 
 	// we only support cherry-picking a single commit for now.
 	if apr.NArg() == 0 {
-		return "", 0, ErrEmptyCherryPick
+		return "", ErrEmptyCherryPick
 	} else if apr.NArg() > 1 {
-		return "", 0, fmt.Errorf("cherry-picking multiple commits is not supported yet")
+		return "", fmt.Errorf("cherry-picking multiple commits is not supported yet")
 	}
 
 	cherryStr := apr.Arg(0)
 	if len(cherryStr) == 0 {
-		return "", 0, ErrEmptyCherryPick
+		return "", ErrEmptyCherryPick
 	}
 
 	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
-		return "", 0, sql.ErrDatabaseNotFound.New(dbName)
+		return "", sql.ErrDatabaseNotFound.New(dbName)
 	}
 
 	mergeResult, commitMsg, err := cherryPick(ctx, dSess, roots, dbName, cherryStr)
 	if err != nil {
-		return "", 0, err
+		return "", err
 	}
 
 	newWorkingRoot := mergeResult.Root
 	err = dSess.SetRoot(ctx, dbName, newWorkingRoot)
 	if err != nil {
-		return "", 0, err
+		return "", err
 	}
 
 	for tableName, mergeStats := range mergeResult.Stats {
 		if !mergeStats.HasArtifacts() {
 			res, err := doDoltAdd(ctx, []string{tableName})
 			if err != nil {
-				return "", 0, err
+				return "", err
 			}
 			if res != 0 {
-				return "", 0, fmt.Errorf("dolt add failed")
+				return "", fmt.Errorf("dolt add failed")
 			}
 		}
 	}
 
 	if mergeResult.HasMergeArtifacts() {
-		return "", mergeResult.CountOfTablesWithConflicts(), ErrCherryPickConflictsOrViolations
+		return "", ErrCherryPickConflictsOrViolations
 	} else {
 		commitHash, _, err := doDoltCommit(ctx, []string{"-m", commitMsg})
-		return commitHash, 0, err
+		return commitHash, err
 	}
 }
 
@@ -244,9 +244,6 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 				return nil, "", err
 			}
 			newWorkingSet := ws.StartMerge(cherryCommit, cherryStr)
-			// TODO: Do we need this?
-			newWorkingSet = newWorkingSet.WithWorkingRoot(result.Root).WithStagedRoot(result.Root)
-
 			err = dSess.SetWorkingSet(ctx, dbName, newWorkingSet)
 			if err != nil {
 				return nil, "", err
