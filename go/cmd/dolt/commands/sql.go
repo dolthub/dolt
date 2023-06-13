@@ -453,7 +453,8 @@ func formatQueryError(message string, err error) errhand.VerboseError {
 	)
 
 	if se, ok := vterrors.AsSyntaxError(err); ok {
-		verrBuilder := errhand.BuildDError("Error parsing SQL")
+		verrBuilder := errhand.BuildDError(message)
+		verrBuilder.AddDetails("Error parsing SQL: ")
 		verrBuilder.AddDetails(se.Message)
 
 		statement := se.Statement
@@ -620,10 +621,11 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 		if err == sqlparser.ErrEmpty {
 			continue
 		} else if err != nil {
-			handleError(scanner.statementStartLine, query, err)
-			// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
+			err = buildBatchSqlErr(scanner.statementStartLine, query, err)
 			if !continueOnErr {
 				return err
+			} else {
+				cli.PrintErrln(err.Error())
 			}
 		}
 
@@ -631,10 +633,11 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 		ctx.SetQueryTime(time.Now())
 		sqlSch, rowIter, err := processParsedQuery(ctx, query, qryist, sqlStatement)
 		if err != nil {
-			handleError(scanner.statementStartLine, query, err)
-			// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
+			err = buildBatchSqlErr(scanner.statementStartLine, query, err)
 			if !continueOnErr {
 				return err
+			} else {
+				cli.PrintErrln(err.Error())
 			}
 		}
 
@@ -649,23 +652,26 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 			}
 			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter)
 			if err != nil {
-				handleError(scanner.statementStartLine, query, err)
-				return err
+				err = buildBatchSqlErr(scanner.statementStartLine, query, err)
+				if !continueOnErr {
+					return err
+				} else {
+					cli.PrintErrln(err.Error())
+				}
 			}
 		}
 		query = ""
 	}
 
 	if err := scanner.Err(); err != nil {
-		cli.Println(err.Error())
+		return buildBatchSqlErr(scanner.statementStartLine, query, err)
 	}
 
 	return nil
 }
 
-func handleError(stmtStartLine int, query string, err error) {
-	verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", stmtStartLine, query), err)
-	cli.PrintErrln(verr.Verbose())
+func buildBatchSqlErr(stmtStartLine int, query string, err error) error {
+	return formatQueryError(fmt.Sprintf("error on line %d for query %s", stmtStartLine, query), err)
 }
 
 // execShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
