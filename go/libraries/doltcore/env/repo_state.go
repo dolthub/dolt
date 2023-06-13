@@ -45,6 +45,11 @@ type RepoStateWriter interface {
 	UpdateBranch(name string, new BranchConfig) error
 }
 
+type RepoStateReadWriter interface {
+	RepoStateReader
+	RepoStateWriter
+}
+
 // RemoteDbProvider is an interface for getting a database from a remote
 type RemoteDbProvider interface {
 	GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote, withCaching bool) (*doltdb.DoltDB, error)

@@ -92,6 +92,25 @@ func (r ReadOnlyDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbState
 	return initialDBState(ctx, r, r.revision)
 }
 
+func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+	revDb, err := r.Database.WithBranchRevision(requestedName, branchSpec)
+	if err != nil {
+		return nil, err
+	}
+
+	r.Database = revDb.(Database)
+	return r, nil
+}
+
+func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+	db.rsr, db.rsw = branchSpec.RepoState, branchSpec.RepoState
+	db.revision = branchSpec.Branch
+	db.revType = dsess.RevisionTypeBranch
+	db.requestedName = requestedName
+
+	return db, nil
+}
+
 // Revision implements dsess.RevisionDatabase
 func (db Database) Revision() string {
 	return db.revision
