@@ -1269,7 +1269,7 @@ func isTag(ctx context.Context, db dsess.SqlDatabase, tagName string) (bool, err
 // revisionDbForBranch returns a new database that is tied to the branch named by revSpec
 func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec string, requestedName string) (dsess.SqlDatabase, error) {
 	static := staticRepoState{
-		branch: ref.NewBranchRef(revSpec),
+		branch:          ref.NewBranchRef(revSpec),
 		RepoStateWriter: srcDb.DbData().Rsw,
 		RepoStateReader: srcDb.DbData().Rsr,
 	}

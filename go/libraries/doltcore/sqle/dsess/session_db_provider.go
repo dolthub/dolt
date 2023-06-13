@@ -108,7 +108,7 @@ type SqlDatabase interface {
 	SessionDatabase
 	RevisionDatabase
 
-	// WithBranchRevision returns a copy of this database with the revision set to the given branch revision, and the 
+	// WithBranchRevision returns a copy of this database with the revision set to the given branch revision, and the
 	// database name set to the given name.
 	WithBranchRevision(requestedName string, branchSpec SessionDatabaseBranchSpec) (SqlDatabase, error)
 
@@ -120,4 +120,3 @@ type SqlDatabase interface {
 	DoltDatabases() []*doltdb.DoltDB
 	Flush(*sql.Context) error
 }
-

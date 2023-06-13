@@ -97,7 +97,7 @@ func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec ds
 	if err != nil {
 		return nil, err
 	}
-	
+
 	r.Database = revDb.(Database)
 	return r, nil
 }

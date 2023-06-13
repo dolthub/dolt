@@ -86,11 +86,11 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 }
 
 func (rrd ReadReplicaDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
-	rrd.rsr, rrd.rsw = branchSpec.RepoState, branchSpec.RepoState 
+	rrd.rsr, rrd.rsw = branchSpec.RepoState, branchSpec.RepoState
 	rrd.revision = branchSpec.Branch
 	rrd.revType = dsess.RevisionTypeBranch
 	rrd.requestedName = requestedName
-	
+
 	return rrd, nil
 }
 

@@ -117,7 +117,6 @@ func (db database) WithBranchRevision(requestedName string, branchSpec dsess.Ses
 	return db, nil
 }
 
-
 func (db database) DoltDatabases() []*doltdb.DoltDB {
 	return nil
 }
