@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
