@@ -23,8 +23,8 @@ export const mergeTests = [
       {
         commit_hash: "",
         message: "Merge mybranch into main",
-        committer: "mysql-test-runner",
-        email: "mysql-test-runner@liquidata.co",
+        committer: "dolt",
+        email: "dolt@%",
         date: "",
         parents: ["", ""],
       },
