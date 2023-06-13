@@ -3212,6 +3212,382 @@ var BrokenAutoIncrementTests = []queries.ScriptTest{
 	},
 }
 
+var DoltCherryPickTests = []queries.ScriptTest{
+	{
+		Name: "error cases: basic validation",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v varchar(100));",
+			"call dolt_commit('-Am', 'create table t');",
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t values (1, \"one\");",
+			"call dolt_commit('-am', 'adding row 1');",
+			"set @commit1 = hashof('HEAD');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL Dolt_Cherry_Pick('HEAD~100');",
+				ExpectedErrStr: "invalid ancestor spec",
+			},
+			{
+				Query:          "CALL Dolt_Cherry_Pick('abcdaaaaaaaaaaaaaaaaaaaaaaaaaaaa');",
+				ExpectedErrStr: "target commit not found",
+			},
+			{
+				Query:          "CALL Dolt_Cherry_Pick('--abort');",
+				ExpectedErrStr: "error: There is no cherry-pick merge to abort",
+			},
+		},
+	},
+	{
+		Name: "error cases: merge commits cannot be cherry-picked",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v varchar(100));",
+			"call dolt_commit('-Am', 'create table t');",
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t values (1, \"one\");",
+			"call dolt_commit('-am', 'adding row 1');",
+			"set @commit1 = hashof('HEAD');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('--no-ff', 'branch1');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:          "CALL dolt_cherry_pick('HEAD');",
+				ExpectedErrStr: "cherry-picking a merge commit is not supported",
+			},
+		},
+	},
+	{
+		Name: "error cases: error with staged or unstaged changes ",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v varchar(100));",
+			"call dolt_commit('-Am', 'create table t');",
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t values (1, \"one\");",
+			"call dolt_commit('-am', 'adding row 1');",
+			"set @commit1 = hashof('HEAD');",
+			"call dolt_checkout('main');",
+			"INSERT INTO t VALUES (100, 'onehundy');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL Dolt_Cherry_Pick(@commit1);",
+				ExpectedErrStr: "cannot cherry-pick with uncommitted changes",
+			},
+			{
+				Query:    "call dolt_add('t');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "CALL Dolt_Cherry_Pick(@commit1);",
+				ExpectedErrStr: "cannot cherry-pick with uncommitted changes",
+			},
+		},
+	},
+	{
+		Name: "error cases: different primary keys",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v varchar(100));",
+			"call dolt_commit('-Am', 'create table t');",
+			"call dolt_checkout('-b', 'branch1');",
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (pk, v);",
+			"call dolt_commit('-am', 'adding row 1');",
+			"set @commit1 = hashof('HEAD');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL Dolt_Cherry_Pick(@commit1);",
+				ExpectedErrStr: "error: cannot merge two tables with different primary keys",
+			},
+		},
+	},
+	{
+		Name: "basic case",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v varchar(100));",
+			"call dolt_commit('-Am', 'create table t');",
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t values (1, \"one\");",
+			"call dolt_commit('-am', 'adding row 1');",
+			"set @commit1 = hashof('HEAD');",
+			"insert into t values (2, \"two\");",
+			"call dolt_commit('-am', 'adding row 2');",
+			"set @commit2 = hashof('HEAD');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "call dolt_cherry_pick(@commit2);",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{2, "two"}},
+			},
+			{
+				Query:            "call dolt_cherry_pick(@commit1);",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT * FROM t order by pk;",
+				Expected: []sql.Row{{1, "one"}, {2, "two"}},
+			},
+		},
+	},
+	{
+		Name: "keyless table",
+		SetUpScript: []string{
+			"call dolt_checkout('main');",
+			"CREATE TABLE keyless (id int, name varchar(10));",
+			"call dolt_commit('-Am', 'create table keyless on main');",
+			"call dolt_checkout('-b', 'branch1');",
+			"INSERT INTO keyless VALUES (1,'1'), (2,'3');",
+			"call dolt_commit('-am', 'insert rows into keyless table on branch1');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM keyless;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "CALL DOLT_CHERRY_PICK('branch1');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT * FROM keyless;",
+				Expected: []sql.Row{{1, "1"}, {2, "3"}},
+			},
+		},
+	},
+	{
+		Name: "schema change: CREATE TABLE",
+		SetUpScript: []string{
+			"call dolt_checkout('-b', 'branch1');",
+			"CREATE TABLE table_a (pk BIGINT PRIMARY KEY, v varchar(10));",
+			"INSERT INTO table_a VALUES (11, 'aa'), (22, 'ab');",
+			"call dolt_commit('-Am', 'create table table_a');",
+			"set @commit1 = hashof('HEAD');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SHOW TABLES;",
+				Expected: []sql.Row{{"myview"}},
+			},
+			{
+				Query:            "call dolt_cherry_pick(@commit1);",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SHOW TABLES;",
+				Expected: []sql.Row{{"myview"}, {"table_a"}},
+			},
+			{
+				Query:    "SELECT * FROM table_a;",
+				Expected: []sql.Row{{11, "aa"}, {22, "ab"}},
+			},
+		},
+	},
+	{
+		Name: "schema change: DROP TABLE",
+		SetUpScript: []string{
+			"CREATE TABLE dropme (pk BIGINT PRIMARY KEY, v varchar(10));",
+			"INSERT INTO dropme VALUES (11, 'aa'), (22, 'ab');",
+			"call dolt_commit('-Am', 'create table dropme');",
+			"call dolt_checkout('-b', 'branch1');",
+			"drop table dropme;",
+			"call dolt_commit('-Am', 'drop table dropme');",
+			"set @commit1 = hashof('HEAD');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SHOW TABLES;",
+				Expected: []sql.Row{{"myview"}, {"dropme"}},
+			},
+			{
+				Query:            "call dolt_cherry_pick(@commit1);",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SHOW TABLES;",
+				Expected: []sql.Row{{"myview"}},
+			},
+		},
+	},
+	{
+		Name: "schema change: ALTER TABLE ADD COLUMN",
+		SetUpScript: []string{
+			"create table test(pk int primary key);",
+			"call dolt_commit('-Am', 'create table test on main');",
+			"call dolt_checkout('-b', 'branch1');",
+			"ALTER TABLE test ADD COLUMN v VARCHAR(100);",
+			"call dolt_commit('-am', 'add column v to test on branch1');",
+			"set @commit1 = hashof('HEAD');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call dolt_cherry_pick(@commit1);",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SHOW CREATE TABLE test;",
+				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `v` varchar(100),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+
+	{
+		Name: "schema change: ALTER TABLE DROP COLUMN",
+		SetUpScript: []string{
+			"create table test(pk int primary key, v varchar(100));",
+			"call dolt_commit('-Am', 'create table test on main');",
+			"call dolt_checkout('-b', 'branch1');",
+			"ALTER TABLE test DROP COLUMN v;",
+			"call dolt_commit('-am', 'drop column v from test on branch1');",
+			"set @commit1 = hashof('HEAD');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call dolt_cherry_pick(@commit1);",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SHOW CREATE TABLE test;",
+				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+
+	{
+		Name: "schema change: ALTER TABLE RENAME COLUMN",
+		SetUpScript: []string{
+			"create table test(pk int primary key, v1 varchar(100));",
+			"call dolt_commit('-Am', 'create table test on main');",
+			"call dolt_checkout('-b', 'branch1');",
+			"ALTER TABLE test RENAME COLUMN v1 to v2;",
+			"call dolt_commit('-am', 'rename column v1 to v2 in test on branch1');",
+			"set @commit1 = hashof('HEAD');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call dolt_cherry_pick(@commit1);",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SHOW CREATE TABLE test;",
+				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `v2` varchar(100),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+
+	{
+		Name: "abort",
+		SetUpScript: []string{
+			"SET @@autocommit=0;",
+			"create table t (pk int primary key, v varchar(100));",
+			"insert into t values (0, 'zero');",
+			"call dolt_commit('-Am', 'create table t');",
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t values (1, \"one\");",
+			"call dolt_commit('-am', 'adding row 1');",
+			"insert into t values (2, \"two\");",
+			"call dolt_commit('-am', 'adding row 2');",
+			"alter table t drop column v;",
+			"call dolt_commit('-am', 'drop column v');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_cherry_pick(hashof('branch1'));",
+				ExpectedErrStr: "error: Unable to apply commit cleanly due to conflicts or constraint violations. Please resolve the conflicts and/or constraint violations, then call `dolt_add()` to add the tables to the staged set, then call `dolt_commit()` to commit the changes and finish cherry-picking. \nTo undo all changes from this cherry-pick operation, call `dolt_cherry_pick('--abort')`.\nFor more information on handling conflicts, see: https://docs.dolthub.com/concepts/dolt/git/conflicts",
+			},
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{{"t", uint64(2)}},
+			},
+			{
+				Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{1, "one", nil, "removed", 1, "modified"},
+					{2, "two", nil, "removed", 2, "modified"},
+				},
+			},
+			{
+				Query:    "call dolt_cherry_pick('--abort');",
+				Expected: []sql.Row{{"", 0}},
+			},
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{0, "zero"}},
+			},
+		},
+	},
+	{
+		Name: "conflict resolution",
+		SetUpScript: []string{
+			"SET @@autocommit=0;",
+			"create table t (pk int primary key, v varchar(100));",
+			"insert into t values (0, 'zero');",
+			"call dolt_commit('-Am', 'create table t');",
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t values (1, \"one\");",
+			"call dolt_commit('-am', 'adding row 1');",
+			"insert into t values (2, \"two\");",
+			"call dolt_commit('-am', 'adding row 2');",
+			"alter table t drop column v;",
+			"call dolt_commit('-am', 'drop column v');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_cherry_pick(hashof('branch1'));",
+				ExpectedErrStr: "error: Unable to apply commit cleanly due to conflicts or constraint violations. Please resolve the conflicts and/or constraint violations, then call `dolt_add()` to add the tables to the staged set, then call `dolt_commit()` to commit the changes and finish cherry-picking. \nTo undo all changes from this cherry-pick operation, call `dolt_cherry_pick('--abort')`.\nFor more information on handling conflicts, see: https://docs.dolthub.com/concepts/dolt/git/conflicts",
+			},
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{{"t", uint64(2)}},
+			},
+			{
+				Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{1, "one", nil, "removed", 1, "modified"},
+					{2, "two", nil, "removed", 2, "modified"},
+				},
+			},
+			{
+				Query:    "call dolt_conflicts_resolve('--ours', 't');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+}
+
 var DoltCommitTests = []queries.ScriptTest{
 	{
 		Name: "CALL DOLT_COMMIT('-ALL') adds all tables (including new ones) to the commit.",

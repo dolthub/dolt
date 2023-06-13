@@ -115,37 +115,37 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
 			Name: "parallel column updates (repro issue #4547)",
 			SetUpScript: []string{
-				"SET @@autocommit=0;",
-				"create table t (pk int primary key, v varchar(100));",
-				"call dolt_commit('-Am', 'create table t');",
-				"call dolt_checkout('-b', 'branch1');",
-				"insert into t values (1, \"one\");",
-				"call dolt_commit('-am', 'adding row 1');",
-				"insert into t values (2, \"two\");",
-				"call dolt_commit('-am', 'adding row 2');",
-				"alter table t drop column v;",
-				"call dolt_commit('-am', 'drop column v');",
-				"call dolt_checkout('main');",
+				"SET dolt_allow_commit_conflicts = on;",
+				"create table t (rowId int not null, col1 varchar(255), col2 varchar(255), keyCol varchar(60), dataA varchar(255), dataB varchar(255), PRIMARY KEY (rowId), UNIQUE KEY uniqKey (col1, col2, keyCol));",
+				"insert into t (rowId, col1, col2, keyCol, dataA, dataB) values (1, '1', '2', 'key-a', 'test1', 'test2')",
+				"CALL DOLT_COMMIT('-Am', 'new table');",
+
+				"CALL DOLT_CHECKOUT('-b', 'other');",
+				"update t set dataA = 'other'",
+				"CALL DOLT_COMMIT('-am', 'update data other');",
+
+				"CALL DOLT_CHECKOUT('main');",
+				"update t set dataB = 'main'",
+				"CALL DOLT_COMMIT('-am', 'update on main');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:          "call dolt_cherry_pick(hashof('branch1'));",
-					ExpectedErrStr: "error: Unable to apply commit cleanly due to conflicts or constraint violations. Please resolve the conflicts and/or constraint violations, then call `dolt_add()` to add the tables to the staged set, then call `dolt_commit()` to commit the changes and finish cherry-picking. \nTo undo all changes from this cherry-pick operation, call `dolt_cherry_pick('--abort')`.\nFor more information on handling conflicts, see: https://docs.dolthub.com/concepts/dolt/git/conflicts",
+					Query:    "CALL DOLT_MERGE('other')",
+					Expected: []sql.Row{{"child", uint64(1)}},
 				},
 				{
-					Query:    "select * from dolt_conflicts;",
-					Expected: []sql.Row{{"t", uint64(2)}},
+					Query:    "SELECT * from dolt_constraint_violations_t",
+					Expected: []sql.Row{},
 				},
 				{
-					Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
+					Query: "SELECT * from t",
 					Expected: []sql.Row{
-						{1, "one", nil, "removed", 1, "modified"},
-						{2, "two", nil, "removed", 2, "modified"},
+						{1, "1", "2", "key-a", "other", "main"},
 					},
 				},
 			},
@@ -2057,6 +2057,22 @@ func TestTypesOverWire(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	enginetest.TestTypesOverWire(t, harness, newSessionBuilder(harness))
+}
+
+func TestDoltCherryPick(t *testing.T) {
+	for _, script := range DoltCherryPickTests {
+		harness := newDoltHarness(t)
+		enginetest.TestScript(t, harness, script)
+		harness.Close()
+	}
+}
+
+func TestDoltCherryPickPrepared(t *testing.T) {
+	for _, script := range DoltCherryPickTests {
+		harness := newDoltHarness(t)
+		enginetest.TestScriptPrepared(t, harness, script)
+		harness.Close()
+	}
 }
 
 func TestDoltCommit(t *testing.T) {
