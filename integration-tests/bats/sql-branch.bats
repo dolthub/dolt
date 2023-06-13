@@ -170,7 +170,7 @@ SQL
     # Attempting to delete the db's default branch results in an error
     run dolt sql -q "CALL DOLT_BRANCH('-D', 'main');"
     [ $status -eq 1 ]
-    [[ "$output" =~ "attempted to delete checked out branch" ]] || false
+    [[ "$output" =~ "Cannot delete checked out branch 'main'" ]] || false
 }
 
 @test "sql-branch: CALL DOLT_BRANCH -d -r to remove remote branch" {

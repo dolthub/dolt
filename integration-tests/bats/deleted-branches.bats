@@ -36,7 +36,7 @@ force_delete_main_branch_on_sqlserver() {
 
     run dolt sql -q 'call dolt_branch("-D", "main");'
     [ $status -eq 1 ]
-    [[ "$output" =~ "attempted to delete checked out branch" ]] || false
+    [[ "$output" =~ "Cannot delete checked out branch 'main'" ]] || false
 
     dolt sql -q 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");'
     run dolt branch -av
