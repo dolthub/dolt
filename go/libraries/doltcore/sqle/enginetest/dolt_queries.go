@@ -313,9 +313,14 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				// The database name should be the revision spec we started with, not its resolved hash
-				Query:    "select database() regexp '^mydb/[0-9a-v]{32}$', database() = 'mydb/tag1~';",
-				Expected: []sql.Row{{false, true}},
+				// The database name is always the base name, never the revision specifier
+				Query:    "select database()",
+				Expected: []sql.Row{{"mydb/tag1~"}},
+			},
+			{
+				// The branch is nil in the case of a non-branch revision DB
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{nil}},
 			},
 			{
 				Query:    "select * from t01;",
@@ -386,12 +391,18 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "select database();",
+				// The database name is always the base name, never the revision specifier
+				Query:    "select database()",
 				Expected: []sql.Row{{"mydb/tag1"}},
 			},
 			{
+				// The branch is nil in the case of a non-branch revision DB
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{nil}},
+			},
+			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/tag1"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "select * from t01;",
@@ -446,11 +457,16 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/branch1"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
-				Query:    "select database();",
+				// The database name is always the base name, never the revision specifier
+				Query:    "select database()",
 				Expected: []sql.Row{{"mydb/branch1"}},
+			},
+			{
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{"branch1"}},
 			},
 			{
 				Query:    "select * from t01",
@@ -482,14 +498,14 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/branch1"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
+				// Create a table in the working set to verify the main db
 				Query:    "create table working_set_table(pk int primary key);",
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				// Create a table in the working set to verify the main db
 				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
 				Expected: []sql.Row{{"working_set_table"}},
 			},
@@ -1925,6 +1941,277 @@ var BrokenHistorySystemTableScriptTests = []queries.ScriptTest{
 					{"checkpoint enginetest database mydb"},
 					{"Initialize data repository"},
 				},
+			},
+		},
+	},
+}
+
+var DoltCheckoutScripts = []queries.ScriptTest{
+	{
+		Name: "dolt_checkout changes working set",
+		SetUpScript: []string{
+			"create table t (a int primary key, b int);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('b2');",
+			"call dolt_branch('b3');",
+			"insert into t values (1, 1);",
+			"call dolt_commit('-Am', 'added values on main');",
+			"call dolt_checkout('b2');",
+			"insert into t values (2, 2);",
+			"call dolt_commit('-am', 'added values on b2');",
+			"call dolt_checkout('b3');",
+			"insert into t values (3, 3);",
+			"call dolt_commit('-am', 'added values on b3');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:            "call dolt_checkout('b2');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b2"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{2, 2}},
+			},
+			{
+				Query:            "call dolt_checkout('b3');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b3"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{3, 3}},
+			},
+			{
+				Query:            "call dolt_checkout('main');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1}},
+			},
+		},
+	},
+	{
+		Name: "dolt_checkout mixed with USE statements",
+		SetUpScript: []string{
+			"create table t (a int primary key, b int);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('b2');",
+			"call dolt_branch('b3');",
+			"insert into t values (1, 1);",
+			"call dolt_commit('-Am', 'added values on main');",
+			"call dolt_checkout('b2');",
+			"insert into t values (2, 2);",
+			"call dolt_commit('-am', 'added values on b2');",
+			"call dolt_checkout('b3');",
+			"insert into t values (3, 3);",
+			"call dolt_commit('-am', 'added values on b3');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:            "use `mydb/b2`;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b2"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{2, 2}},
+			},
+			{
+				Query:            "use `mydb/b3`;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b3"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{3, 3}},
+			},
+			{
+				Query:            "use `mydb/main`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:            "use `mydb`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:            "call dolt_checkout('b2');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "use `mydb/b3`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b3"}},
+			},
+			// Since b2 was the last branch checked out with dolt_checkout, it's what mydb resolves to
+			{
+				Query:            "use `mydb`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b2"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{2, 2}},
+			},
+		},
+	},
+}
+
+var DoltInfoSchemaScripts = []queries.ScriptTest{
+	{
+		Name: "info_schema changes with dolt_checkout",
+		SetUpScript: []string{
+			"create table t (a int primary key, b int);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('b2');",
+			"call dolt_branch('b3');",
+			"call dolt_checkout('b2');",
+			"alter table t add column c int;",
+			"call dolt_commit('-am', 'added column c on branch b2');",
+			"call dolt_checkout('b3');",
+			"alter table t add column d int;",
+			"call dolt_commit('-am', 'added column d on branch b3');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}},
+			},
+			{
+				Query:            "call dolt_checkout('b2');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b2"}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}, {"c"}},
+			},
+			{
+				Query:            "call dolt_checkout('b3');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b3"}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}, {"d"}},
+			},
+		},
+	},
+	{
+		Name: "info_schema changes with USE",
+		SetUpScript: []string{
+			"create table t (a int primary key, b int);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('b2');",
+			"call dolt_branch('b3');",
+			"call dolt_checkout('b2');",
+			"alter table t add column c int;",
+			"call dolt_commit('-am', 'added column c on branch b2');",
+			"call dolt_checkout('b3');",
+			"alter table t add column d int;",
+			"call dolt_commit('-am', 'added column d on branch b3');",
+			"use mydb/main;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}},
+			},
+			{
+				Query:            "use mydb/b2;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b2"}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}, {"c"}},
+			},
+			{
+				Query:            "use mydb/b3;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b3"}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}, {"d"}},
 			},
 		},
 	},

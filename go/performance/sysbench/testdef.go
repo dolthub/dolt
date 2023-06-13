@@ -555,8 +555,6 @@ func newServer(u driver.DoltUser, r driver.TestRepo, conf Config) (*driver.SqlSe
 	if conf.Verbose {
 		log.Printf("database at: '%s'", repo.Dir)
 	}
-
-	r.Server.Args = append(r.Server.Args, "")
 	server, err := MakeServer(repo, r.Server)
 	if err != nil {
 		return nil, err

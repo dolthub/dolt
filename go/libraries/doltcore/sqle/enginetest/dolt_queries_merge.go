@@ -90,6 +90,44 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "CALL DOLT_MERGE ff correctly works with autocommit off, no checkout",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"call DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET autocommit = 0",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"CALL DOLT_BRANCH('feature-branch')",
+			"use `mydb/feature-branch`",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"use mydb/main;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// FF-Merge
+				Query:    "CALL DOLT_MERGE('feature-branch')",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from test order by 1",
+				Expected: []sql.Row{
+					{1}, {2}, {3}, {1000},
+				},
+			},
+		},
+	},
+	{
 		Name: "CALL DOLT_MERGE no-ff correctly works with autocommit off",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
@@ -128,6 +166,51 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'other-branch')",
 				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE no-ff correctly works with autocommit off, no checkout",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"call DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET autocommit = 0",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
+			"CALL DOLT_BRANCH('feature-branch')",
+			"USE `mydb/feature-branch`",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a ff', '--date', '2022-08-06T12:00:01');",
+			"use `mydb/main`",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// No-FF-Merge
+				Query:    "CALL DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
+			},
+			{
+				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
+			},
+			{
+				Query: "select * from test order by 1",
+				Expected: []sql.Row{
+					{1}, {2}, {3}, {1000},
+				},
 			},
 		},
 	},
@@ -209,8 +292,12 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
-				Query:       "CALL DOLT_CHECKOUT('-b', 'other-branch')",
-				ExpectedErr: dsess.ErrWorkingSetChanges,
+				Query:    "CALL DOLT_CHECKOUT('-b', 'other')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('main')",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},
@@ -252,10 +339,6 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"update a value"}},
 			},
 			{
-				Query:       "CALL DOLT_CHECKOUT('-b', 'other-branch')",
-				ExpectedErr: dsess.ErrWorkingSetChanges,
-			},
-			{
 				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
 				Expected: []sql.Row{{1}},
 			},
@@ -270,6 +353,38 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * from test ORDER BY pk",
 				Expected: []sql.Row{{0, 1001}, {1, 1}},
+			},
+		},
+	},
+	{
+		Name: "merge conflicts prevent new branch creation",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key, val int)",
+			"call DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0, 0)",
+			"SET autocommit = 0",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (1, 1);",
+			"UPDATE test SET val=1000 WHERE pk=0;",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
+			"CALL DOLT_CHECKOUT('main');",
+			"UPDATE test SET val=1001 WHERE pk=0;",
+			"CALL DOLT_COMMIT('-a', '-m', 'update a value', '--date', '2022-08-06T12:00:03');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", "test"}},
+			},
+			{
+				// errors because creating a new branch implicitly commits the current transaction
+				Query:          "CALL DOLT_CHECKOUT('-b', 'other-branch')",
+				ExpectedErrStr: "Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1",
 			},
 		},
 	},
@@ -326,8 +441,12 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1, 0}},
 			},
 			{
-				Query:       "CALL DOLT_CHECKOUT('-b', 'other')",
-				ExpectedErr: dsess.ErrWorkingSetChanges,
+				Query:    "CALL DOLT_CHECKOUT('-b', 'other')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('main')",
+				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "SELECT * FROM test order by pk",
@@ -369,6 +488,64 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "INSERT INTO test VALUES (4)",
 				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE ff no checkout",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"CALL DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"CALL dolt_branch('feature-branch')",
+			"use `mydb/feature-branch`",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"use mydb/main;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// FF-Merge
+				Query:    "CALL DOLT_MERGE('feature-branch')",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('-b', 'new-branch')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{"new-branch"}},
+			},
+			{
+				Query:    "INSERT INTO test VALUES (4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "SELECT * FROM test order by pk",
+				Expected: []sql.Row{{1}, {2}, {3}, {4}, {1000}},
+			},
+			{
+				Query:            "use `mydb/main`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "SELECT * FROM test order by pk",
+				Expected: []sql.Row{{1}, {2}, {3}, {1000}},
 			},
 		},
 	},
@@ -448,6 +625,61 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "select message from dolt_log where date > '2022-08-08' order by date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a merge"}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE with no conflicts works, no checkout",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"CALL DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
+			"CALL dolt_branch('feature-branch')",
+			"use `mydb/feature-branch`",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:01');",
+			"use mydb/main",
+			"INSERT INTO test VALUES (5),(6),(7);",
+			"CALL DOLT_COMMIT('-a', '-m', 'add some more values', '--date', '2022-08-06T12:00:02');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('feature-branch', '--no-commit', '--commit')",
+				ExpectedErrStr: "cannot define both 'commit' and 'no-commit' flags at the same time",
+			},
+			{
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) from dolt_status",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{6}}, // includes the merge commit and a new commit created by successful merge
+			},
+			{
+				Query:    "select message from dolt_log where date > '2022-08-08' order by date DESC LIMIT 1;",
+				Expected: []sql.Row{{"this is a merge"}},
+			},
+			{
+				Query: "select * from test order by pk",
+				Expected: []sql.Row{
+					{1}, {2}, {3}, {5}, {6}, {7}, {1000},
+				},
+			},
+			{
+				Query:            "use `mydb/feature-branch`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "select * from test order by pk",
+				Expected: []sql.Row{
+					{1}, {2}, {3}, {1000},
+				},
 			},
 		},
 	},
@@ -1205,6 +1437,40 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "select * from t",
 				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "dropping constraint from one branch drops from both, no checkout",
+		SetUpScript: []string{
+			"create table t (i int)",
+			"alter table t add constraint c check (i > 0)",
+			"call dolt_commit('-Am', 'initial commit')",
+
+			"call dolt_branch('other')",
+			"use mydb/other",
+			"insert into t values (1)",
+			"alter table t drop constraint c",
+			"call dolt_commit('-Am', 'changes to other')",
+
+			"use mydb/main",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "insert into t values (-1)",
+				ExpectedErr: sql.ErrCheckConstraintViolated,
+			},
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "select * from t",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "insert into t values (-1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 		},
 	},

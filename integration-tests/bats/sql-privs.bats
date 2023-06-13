@@ -58,7 +58,8 @@ teardown() {
     PORT=$( definePORT )
     dolt sql-server --host 0.0.0.0 --port=$PORT &
     SERVER_PID=$! # will get killed by teardown_common
-    sleep 5 # not using python wait so this works on windows
+    SQL_USER='root'
+    wait_for_connection $PORT 5000
 
     run dolt sql-client -P $PORT -u root --use-db test_db -q "select user from mysql.user order by user"
     [ $status -eq 0 ]
@@ -77,7 +78,8 @@ teardown() {
     PORT=$( definePORT )
     dolt sql-server --host 0.0.0.0 --port=$PORT &
     SERVER_PID=$! # will get killed by teardown_common
-    sleep 5 # not using python wait so this works on windows
+    SQL_USER='new_user'
+    wait_for_connection $PORT 5000
 
     run dolt sql-client -P $PORT -u root --use-db test_db -q "select user from mysql.user order by user"
     [ $status -ne 0 ]
@@ -599,6 +601,7 @@ behavior:
 
 @test "sql-privs: basic lack of privileges tests" {
      make_test_repo
+     SQL_USER='dolt'
      start_sql_server
 
      dolt sql-client -P $PORT -u dolt --use-db test_db -q "create table t1(c1 int)"
@@ -681,6 +684,7 @@ behavior:
 
 @test "sql-privs: deleting user prevents access by that user" {
      make_test_repo
+     SQL_USER='dolt'
      start_sql_server
 
      dolt sql-client -P $PORT -u dolt --use-db test_db -q "create table t1(c1 int)"

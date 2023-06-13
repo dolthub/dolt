@@ -38,9 +38,17 @@ type RevisionDatabase interface {
 	Revision() string
 	// RevisionType returns the type of revision this database is pinned to.
 	RevisionType() RevisionType
-	// BaseName returns the name of the database without the revision specifier. E.g.if the database is named
-	// "myDB/master", BaseName returns "myDB".
-	BaseName() string
+	// RevisionQualifiedName returns the fully qualified name of the database, which includes the revision if one is
+	// specified.
+	RevisionQualifiedName() string
+	// RequestedName returns the name of the database as requested by the user when the name was resolved to this
+	// database.
+	RequestedName() string
+	// Versioned returns whether this database implementation supports more than a single revision.
+	// TODO: This shouldn't be a necessary part of the interface, but it's required to differentiate between dolt-backed
+	//  databases and others that we serve for custom purposes with similar pieces of functionality, and the session
+	//  management logic intermixes these concerns.
+	Versioned() bool
 }
 
 // RevisionType represents the type of revision a database is pinned to. For branches and tags, the revision is a
@@ -83,8 +91,16 @@ type DoltDatabaseProvider interface {
 	// SessionDatabase returns the SessionDatabase for the specified database, which may name a revision of a base
 	// database.
 	SessionDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool, error)
+	// BaseDatabase returns the base database for the specified database name. Meant for informational purposes when
+	// managing the session initialization only. Use SessionDatabase for normal database retrieval.
+	BaseDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool)
 	// DoltDatabases returns all databases known to this provider.
 	DoltDatabases() []SqlDatabase
+}
+
+type SessionDatabaseBranchSpec struct {
+	RepoState env.RepoStateReadWriter
+	Branch    string
 }
 
 type SqlDatabase interface {
@@ -92,9 +108,15 @@ type SqlDatabase interface {
 	SessionDatabase
 	RevisionDatabase
 
+	// WithBranchRevision returns a copy of this database with the revision set to the given branch revision, and the
+	// database name set to the given name.
+	WithBranchRevision(requestedName string, branchSpec SessionDatabaseBranchSpec) (SqlDatabase, error)
+
 	// TODO: get rid of this, it's managed by the session, not the DB
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
 	// TODO: remove ddb from the below, it's separable and is 95% of the uses of this method
 	DbData() env.DbData
+	// DoltDatabases returns all underlying DoltDBs for this database.
+	DoltDatabases() []*doltdb.DoltDB
 	Flush(*sql.Context) error
 }

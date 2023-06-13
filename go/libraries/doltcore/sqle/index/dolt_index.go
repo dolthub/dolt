@@ -1138,7 +1138,10 @@ func getRangeCutValue(cut sql.RangeCut, typ sql.Type) (interface{}, error) {
 	if _, ok := cut.(sql.AboveNull); ok {
 		return nil, nil
 	}
-	ret, _, err := typ.Convert(sql.GetRangeCutKey(cut))
+	ret, oob, err := typ.Convert(sql.GetRangeCutKey(cut))
+	if oob == sql.OutOfRange {
+		return ret, nil
+	}
 	return ret, err
 }
 

@@ -2,31 +2,28 @@ SERVER_REQS_INSTALLED="FALSE"
 SERVER_PID=""
 DEFAULT_DB=""
 
-set_server_reqs_installed() {
-    SERVER_REQS_INSTALLED=$(python3 -c "
-requirements_installed = True
-try:
-    import mysql.connector
-except:
-    requirements_installed = False
-
-print(str(requirements_installed).upper())
-")
-}
-
+# wait_for_connection(<PORT>, <TIMEOUT IN MS>) attempts to connect to the sql-server at the specified
+# port on localhost, using the $SQL_USER (or 'dolt' if unspecified) as the user name, and trying once
+# per second until the millisecond timeout is reached. If a connection is successfully established,
+# this function returns 0. If a connection was not able to be established within the timeout period,
+# this function returns 1.
 wait_for_connection() {
-    PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
-    python3 -c "
-import os
-import sys
+  port=$1
+  timeout=$2
+  user=${SQL_USER:-dolt}
+  end_time=$((SECONDS+($timeout/1000)))
 
-args = sys.argv[sys.argv.index('--') + 1:]
-working_dir, database, port_str, timeout_ms, user = args
-os.chdir(working_dir)
+  while [ $SECONDS -lt $end_time ]; do
+    run dolt sql-client -u $user --host localhost --port $port --use-db "$DEFAULT_DB" --timeout 1 -q "SELECT 1;"
+    if [ $status -eq 0 ]; then
+      echo "Connected successfully!"
+      return 0
+    fi
+    sleep 1
+  done
 
-from pytest import wait_for_connection
-wait_for_connection(port=int(port_str), timeout_ms=int(timeout_ms), database=database, user=user)
-" -- "$PYTEST_DIR" "$DEFAULT_DB" "$1" "$2" "${SQL_USER:-dolt}"
+  echo "Failed to connect to database $DEFAULT_DB on port $port within $timeout ms."
+  return 1
 }
 
 start_sql_server() {

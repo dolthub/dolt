@@ -75,7 +75,7 @@ teardown() {
 
     run dolt --user=new_user sql -q "select user from mysql.user"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Access denied for user" ]]
+    [[ "$output" =~ "command denied to user" ]] || false
 
     rm -rf .doltcfg
 }
@@ -1651,7 +1651,8 @@ SQL
     # switching to a branch that doesn't exist should be an error
     run dolt sql -q "set @@dolt_repo_$$_head_ref = 'does-not-exist';"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'branch not found' ]] || false
+    # TODO: this error message could be improved
+    [[ "$output" =~ "database not found: dolt_repo_$$/does-not-exist" ]] || false
 }
 
 @test "sql: branch qualified DB name in select" {
@@ -2265,7 +2266,11 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "c,2,2" ]] || false
 
-    dolt sql -b -q "INSERT INTO test VALUES ('d','d','d');DELETE FROM test WHERE col_a='d';INSERT INTO test VALUES ('d', '1', '1') ON DUPLICATE KEY UPDATE col_b = '2', col_c='2';"
+    dolt sql <<SQL
+INSERT INTO test VALUES ('d','d','d');
+DELETE FROM test WHERE col_a='d';
+INSERT INTO test VALUES ('d', '1', '1') ON DUPLICATE KEY UPDATE col_b = '2', col_c='2';
+SQL
     run dolt sql -r csv -q "SELECT * from test where col_a = 'd'"
     [ $status -eq 0 ]
     [[ "$output" =~ "d,1,1" ]] || false
@@ -2854,4 +2859,27 @@ SQL
     run dolt --data-dir="$ROOT_DIR/dbb" --use-db=dba sql -q "show tables"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "provided --use-db dba does not exist or is not a directory" ]] || false
+}
+
+@test "sql: USE information schema and mysql databases" {
+    run dolt sql <<SQL
+USE information_schema;
+show tables;
+SQL
+
+    # spot check result
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Database changed" ]] || false
+    [[ "$output" =~ "columns" ]] || false
+
+    run dolt sql <<SQL
+USE mysql;
+show tables;
+SQL
+
+    # spot check result
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Database changed" ]] || false
+    [[ "$output" =~ "role_edges" ]] || false
+    
 }

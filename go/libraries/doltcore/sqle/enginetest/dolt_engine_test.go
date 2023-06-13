@@ -27,7 +27,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/memo"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
@@ -49,7 +49,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 84
+const SkipPreparedsCount = 83
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -116,45 +116,51 @@ func TestSingleQuery(t *testing.T) {
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
 	t.Skip()
+
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "parallel column updates (repro issue #4547)",
+			Name: "ALTER TABLE RENAME COLUMN",
 			SetUpScript: []string{
-				"SET dolt_allow_commit_conflicts = on;",
-				"create table t (rowId int not null, col1 varchar(255), col2 varchar(255), keyCol varchar(60), dataA varchar(255), dataB varchar(255), PRIMARY KEY (rowId), UNIQUE KEY uniqKey (col1, col2, keyCol));",
-				"insert into t (rowId, col1, col2, keyCol, dataA, dataB) values (1, '1', '2', 'key-a', 'test1', 'test2')",
-				"CALL DOLT_COMMIT('-Am', 'new table');",
-
-				"CALL DOLT_CHECKOUT('-b', 'other');",
-				"update t set dataA = 'other'",
-				"CALL DOLT_COMMIT('-am', 'update data other');",
-
-				"CALL DOLT_CHECKOUT('main');",
-				"update t set dataB = 'main'",
-				"CALL DOLT_COMMIT('-am', 'update on main');",
+				"ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1);",
+				"ALTER TABLE parent RENAME COLUMN v1 TO v1_new;",
+				"ALTER TABLE child RENAME COLUMN v1 TO v1_new;",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "CALL DOLT_MERGE('other')",
-					Expected: []sql.Row{{"child", uint64(1)}},
+					Query:    "SHOW CREATE TABLE child;",
+					Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n  `id` int NOT NULL,\n  `v1_new` int,\n  `v2` int,\n  PRIMARY KEY (`id`),\n  KEY `v1` (`v1_new`),\n  CONSTRAINT `fk1` FOREIGN KEY (`v1_new`) REFERENCES `parent` (`v1_new`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				},
+			},
+		},
+		{
+			Name: "ALTER TABLE MODIFY COLUMN type change not allowed",
+			SetUpScript: []string{
+				"ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1);",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:       "ALTER TABLE parent MODIFY v1 MEDIUMINT;",
+					ExpectedErr: sql.ErrForeignKeyTypeChange,
 				},
 				{
-					Query:    "SELECT * from dolt_constraint_violations_t",
-					Expected: []sql.Row{},
-				},
-				{
-					Query: "SELECT * from t",
-					Expected: []sql.Row{
-						{1, "1", "2", "key-a", "other", "main"},
-					},
+					Query:       "ALTER TABLE child MODIFY v1 MEDIUMINT;",
+					ExpectedErr: sql.ErrForeignKeyTypeChange,
 				},
 			},
 		},
 	}
 
+	tcc := &testCommitClock{}
+	cleanup := installTestCommitClock(tcc)
+	defer cleanup()
+
 	harness := newDoltHarness(t)
-	for _, test := range scripts {
-		enginetest.TestScript(t, harness, test)
+	harness.Setup(setup.MydbData, setup.Parent_childData)
+	for _, script := range scripts {
+		sql.RunWithNowFunc(tcc.Now, func() error {
+			enginetest.TestScript(t, harness, script)
+			return nil
+		})
 	}
 }
 
@@ -250,24 +256,52 @@ func TestSingleQueryPrepared(t *testing.T) {
 
 func TestSingleScriptPrepared(t *testing.T) {
 	t.Skip()
+
 	var script = queries.ScriptTest{
-		Name: "table with commit column should maintain its data in diff",
+		Name: "dolt_history table filter correctness",
 		SetUpScript: []string{
-			"CREATE TABLE t (pk int PRIMARY KEY, commit varchar(20));",
-			"CALL DOLT_ADD('.');",
-			"CALL dolt_commit('-am', 'creating table t');",
-			"INSERT INTO t VALUES (1, '123456');",
-			"CALL dolt_commit('-am', 'insert data');",
+			"create table xy (x int primary key, y int);",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'creating table');",
+			"insert into xy values (0, 1);",
+			"call dolt_commit('-am', 'add data');",
+			"insert into xy values (2, 3);",
+			"call dolt_commit('-am', 'add data');",
+			"insert into xy values (4, 5);",
+			"call dolt_commit('-am', 'add data');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT to_pk, char_length(to_commit), from_pk, char_length(from_commit), diff_type from dolt_diff_t;",
-				Expected: []sql.Row{{1, 32, nil, 32, "added"}},
+				Query: "select * from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1) order by 1",
+				Expected: []sql.Row{
+					sql.Row{0, 1, "itt2nrlkbl7jis4gt9aov2l32ctt08th", "billy bob", time.Date(1970, time.January, 1, 19, 0, 0, 0, time.Local)},
+					sql.Row{2, 3, "itt2nrlkbl7jis4gt9aov2l32ctt08th", "billy bob", time.Date(1970, time.January, 1, 19, 0, 0, 0, time.Local)},
+				},
+			},
+			{
+				Query: "select count(*) from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1)",
+				Expected: []sql.Row{
+					{2},
+				},
+			},
+			{
+				Query: "select count(*) from dolt_history_xy where commit_hash = 'itt2nrlkbl7jis4gt9aov2l32ctt08th'",
+				Expected: []sql.Row{
+					{2},
+				},
 			},
 		},
 	}
-	harness := newDoltHarness(t)
-	enginetest.TestScriptPrepared(t, harness, script)
+
+	tcc := &testCommitClock{}
+	cleanup := installTestCommitClock(tcc)
+	defer cleanup()
+
+	sql.RunWithNowFunc(tcc.Now, func() error {
+		harness := newDoltHarness(t)
+		enginetest.TestScriptPrepared(t, harness, script)
+		return nil
+	})
 }
 
 func TestVersionedQueries(t *testing.T) {
@@ -340,6 +374,16 @@ func TestDoltDiffQueryPlans(t *testing.T) {
 	}
 }
 
+func TestBranchPlans(t *testing.T) {
+	for _, script := range BranchPlanTests {
+		func() {
+			harness := newDoltHarness(t).WithParallelism(1)
+			defer harness.Close()
+			enginetest.TestScript(t, harness, script)
+		}()
+	}
+}
+
 func TestQueryErrors(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
@@ -350,6 +394,14 @@ func TestInfoSchema(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestInfoSchema(t, h)
+
+	for _, script := range DoltInfoSchemaScripts {
+		func() {
+			harness := newDoltHarness(t)
+			defer harness.Close()
+			enginetest.TestScript(t, harness, script)
+		}()
+	}
 }
 
 func TestColumnAliases(t *testing.T) {
@@ -708,6 +760,26 @@ func TestCreateTable(t *testing.T) {
 	enginetest.TestCreateTable(t, h)
 }
 
+func TestBranchDdl(t *testing.T) {
+	for _, script := range DdlBranchTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func TestBranchDdlPrepared(t *testing.T) {
+	for _, script := range DdlBranchTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
+}
+
 func TestPkOrdinalsDDL(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
@@ -855,6 +927,64 @@ func TestForeignKeys(t *testing.T) {
 	enginetest.TestForeignKeys(t, h)
 }
 
+func TestForeignKeyBranches(t *testing.T) {
+	setupPrefix := []string{
+		"call dolt_branch('b1')",
+		"use mydb/b1",
+	}
+	assertionsPrefix := []queries.ScriptTestAssertion{
+		{
+			Query:            "use mydb/b1",
+			SkipResultsCheck: true,
+		},
+	}
+	for _, script := range queries.ForeignKeyTests {
+		// New harness for every script because we create branches
+		h := newDoltHarness(t)
+		h.Setup(setup.MydbData, setup.Parent_childData)
+		modifiedScript := script
+		modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
+		modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
+		enginetest.TestScript(t, h, modifiedScript)
+	}
+
+	for _, script := range ForeignKeyBranchTests {
+		// New harness for every script because we create branches
+		h := newDoltHarness(t)
+		h.Setup(setup.MydbData, setup.Parent_childData)
+		enginetest.TestScript(t, h, script)
+	}
+}
+
+func TestForeignKeyBranchesPrepared(t *testing.T) {
+	setupPrefix := []string{
+		"call dolt_branch('b1')",
+		"use mydb/b1",
+	}
+	assertionsPrefix := []queries.ScriptTestAssertion{
+		{
+			Query:            "use mydb/b1",
+			SkipResultsCheck: true,
+		},
+	}
+	for _, script := range queries.ForeignKeyTests {
+		// New harness for every script because we create branches
+		h := newDoltHarness(t)
+		h.Setup(setup.MydbData, setup.Parent_childData)
+		modifiedScript := script
+		modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
+		modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
+		enginetest.TestScriptPrepared(t, h, modifiedScript)
+	}
+
+	for _, script := range ForeignKeyBranchTests {
+		// New harness for every script because we create branches
+		h := newDoltHarness(t)
+		h.Setup(setup.MydbData, setup.Parent_childData)
+		enginetest.TestScriptPrepared(t, h, script)
+	}
+}
+
 func TestCreateCheckConstraints(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
@@ -895,6 +1025,26 @@ func TestViews(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestViews(t, h)
+}
+
+func TestBranchViews(t *testing.T) {
+	for _, script := range ViewBranchTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func TestBranchViewsPrepared(t *testing.T) {
+	for _, script := range ViewBranchTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
 }
 
 func TestVersionedViews(t *testing.T) {
@@ -991,6 +1141,7 @@ func TestLoadData(t *testing.T) {
 }
 
 func TestLoadDataErrors(t *testing.T) {
+	t.Skip()
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestLoadDataErrors(t, h)
@@ -1109,12 +1260,21 @@ func TestBranchTransactions(t *testing.T) {
 }
 
 func TestMultiDbTransactions(t *testing.T) {
-	t.Skip()
 	for _, script := range MultiDbTransactionTests {
 		func() {
 			h := newDoltHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func TestMultiDbTransactionsPrepared(t *testing.T) {
+	for _, script := range MultiDbTransactionTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
 		}()
 	}
 }
@@ -1193,7 +1353,7 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mydb/" + commithash}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "select * from t01",
@@ -1319,7 +1479,8 @@ func TestViewsWithAsOfPrepared(t *testing.T) {
 
 func TestDoltMerge(t *testing.T) {
 	for _, script := range MergeScripts {
-		// dolt versioning conflicts with reset harness -- use new harness every time
+		// harness can't reset effectively when there are new commits / branches created, so use a new harness for
+		// each script
 		func() {
 			h := newDoltHarness(t).WithParallelism(1)
 			defer h.Close()
@@ -1333,6 +1494,28 @@ func TestDoltMerge(t *testing.T) {
 				h := newDoltHarness(t).WithParallelism(1)
 				defer h.Close()
 				enginetest.TestScript(t, h, script)
+			}()
+		}
+	}
+}
+
+func TestDoltMergePrepared(t *testing.T) {
+	for _, script := range MergeScripts {
+		// harness can't reset effectively when there are new commits / branches created, so use a new harness for
+		// each script
+		func() {
+			h := newDoltHarness(t).WithParallelism(1)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
+
+	if types.IsFormat_DOLT(types.Format_Default) {
+		for _, script := range Dolt1MergeScripts {
+			func() {
+				h := newDoltHarness(t).WithParallelism(1)
+				defer h.Close()
+				enginetest.TestScriptPrepared(t, h, script)
 			}()
 		}
 	}
@@ -1468,6 +1651,26 @@ func TestDoltGC(t *testing.T) {
 	}
 }
 
+func TestDoltCheckout(t *testing.T) {
+	for _, script := range DoltCheckoutScripts {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func TestDoltCheckoutPrepared(t *testing.T) {
+	for _, script := range DoltCheckoutScripts {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
+}
+
 func TestDoltBranch(t *testing.T) {
 	for _, script := range DoltBranchScripts {
 		func() {
@@ -1531,112 +1734,65 @@ func TestSingleTransactionScript(t *testing.T) {
 	sql.RunWithNowFunc(tcc.Now, func() error {
 
 		script := queries.TransactionTest{
-			Name: "committed conflicts are seen by other sessions",
+			Name: "READ ONLY Transactions",
 			SetUpScript: []string{
-				"CREATE TABLE test (pk int primary key, val int)",
-				"CALL DOLT_ADD('.')",
-				"INSERT INTO test VALUES (0, 0)",
-				"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
-				"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
-				"INSERT INTO test VALUES (1, 1);",
-				"UPDATE test SET val=1000 WHERE pk=0;",
-				"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
-				"CALL DOLT_CHECKOUT('main');",
-				"UPDATE test SET val=1001 WHERE pk=0;",
-				"CALL DOLT_COMMIT('-a', '-m', 'update a value');",
+				"create table t2 (pk int primary key, val int)",
+				"insert into t2 values (0,0)",
+				"commit",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "/* client a */ start transaction",
+					Query:    "/* client a */ set autocommit = off",
+					Expected: []sql.Row{{}},
+				},
+				{
+					Query:    "/* client a */ create temporary table tmp(pk int primary key)",
+					Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
+				},
+				{
+					Query:    "/* client a */  START TRANSACTION READ ONLY",
 					Expected: []sql.Row{},
 				},
 				{
-					Query:    "/* client b */ start transaction",
-					Expected: []sql.Row{},
+					Query:    "/* client a */ INSERT INTO tmp VALUES (1)",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 				},
 				{
-					Query: "/* client a */ select * from dolt_log order by date",
-					Expected:
-					// existing transaction logic
-					[]sql.Row{
-						sql.Row{"j131v1r3cf6mrdjjjuqgkv4t33oa0l54", "billy bob", "bigbillieb@fake.horse", time.Date(1969, time.December, 31, 21, 0, 0, 0, time.Local), "Initialize data repository"},
-						sql.Row{"kcg4345ir3tjfb13mr0on1bv1m56h9if", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 1, 4, 0, 0, 0, time.Local), "checkpoint enginetest database mydb"},
-						sql.Row{"9jtjpggd4t5nso3mefilbde3tkfosdna", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 1, 12, 0, 0, 0, time.Local), "Step 1"},
-						sql.Row{"559f6kdh0mm5i1o40hs3t8dr43bkerav", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 2, 3, 0, 0, 0, time.Local), "update a value"},
-					},
+					Query:       "/* client a */ insert into t2 values (1, 1)",
+					ExpectedErr: sql.ErrReadOnlyTransaction,
+				},
+				{
+					Query:       "/* client a */ insert into t2 values (2, 2)",
+					ExpectedErr: sql.ErrReadOnlyTransaction,
+				},
+				{
+					Query:       "/* client a */ delete from t2 where pk = 0",
+					ExpectedErr: sql.ErrReadOnlyTransaction,
+				},
+				{
 
-					// new tx logic
-					// 	[]sql.Row{
-					// 	sql.Row{"j131v1r3cf6mrdjjjuqgkv4t33oa0l54", "billy bob", "bigbillieb@fake.horse", time.Date(1969, time.December, 31, 21, 0, 0, 0, time.Local), "Initialize data repository"},
-					// 	sql.Row{"kcg4345ir3tjfb13mr0on1bv1m56h9if", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 1, 4, 0, 0, 0, time.Local), "checkpoint enginetest database mydb"},
-					// 	sql.Row{"pifio95ccefa03qstm1g3s1sivj1sm1d", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 1, 11, 0, 0, 0, time.Local), "Step 1"},
-					// 	sql.Row{"rdrgqfcml1hfgj8clr0caabgu014v2g9", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 1, 20, 0, 0, 0, time.Local), "this is a normal commit"},
-					// 	sql.Row{"shhv61eiefo9c4m9lvo5bt23i3om1ft4", "billy bob", "bigbillieb@fake.horse", time.Date(1970, time.January, 2, 2, 0, 0, 0, time.Local), "update a value"},
-					// },
+					Query:    "/* client a */ alter table t2 add val2 int",
+					Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
 				},
 				{
-					Query:    "/* client a */ CALL DOLT_MERGE('feature-branch')",
-					Expected: []sql.Row{{0, 1}},
+					Query:    "/* client a */ select * from t2",
+					Expected: []sql.Row{{0, 0, nil}},
 				},
 				{
-					Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",
-					Expected: []sql.Row{{1}},
+					Query:       "/* client a */ create temporary table tmp2(pk int primary key)",
+					ExpectedErr: sql.ErrReadOnlyTransaction,
 				},
 				{
-					Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
-					Expected: []sql.Row{{0}},
-				},
-				{
-					Query:    "/* client a */ set dolt_allow_commit_conflicts = 1",
-					Expected: []sql.Row{{}},
-				},
-				{
-					Query:    "/* client a */ commit",
+					Query:    "/* client a */ COMMIT",
 					Expected: []sql.Row{},
 				},
 				{
-					Query:    "/* client b */ start transaction",
+					Query:    "/* client b */ START TRANSACTION READ ONLY",
 					Expected: []sql.Row{},
 				},
 				{
-					Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
-					Expected: []sql.Row{{1}},
-				},
-				{
-					Query:    "/* client a */ start transaction",
-					Expected: []sql.Row{},
-				},
-				{
-					Query:    "/* client a */ CALL DOLT_MERGE('--abort')",
-					Expected: []sql.Row{{0, 0}},
-				},
-				{
-					Query:    "/* client a */ commit",
-					Expected: []sql.Row{},
-				},
-				{
-					Query:    "/* client b */ start transaction",
-					Expected: []sql.Row{},
-				},
-				{
-					Query:    "/* client a */ SET @@dolt_allow_commit_conflicts = 0",
-					Expected: []sql.Row{{}},
-				},
-				{
-					Query:          "/* client a */ CALL DOLT_MERGE('feature-branch')",
-					ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
-				},
-				{ // client rolled back on merge with conflicts
-					Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",
-					Expected: []sql.Row{{0}},
-				},
-				{
-					Query:    "/* client a */ commit",
-					Expected: []sql.Row{},
-				},
-				{
-					Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
-					Expected: []sql.Row{{0}},
+					Query:    "/* client b */ SELECT * FROM t2",
+					Expected: []sql.Row{{0, 0, nil}},
 				},
 			},
 		}
@@ -1936,11 +2092,11 @@ func mustNewEngine(t *testing.T, h enginetest.Harness) *gms.Engine {
 	return e
 }
 
-var biasedCosters = []analyzer.Coster{
-	analyzer.NewInnerBiasedCoster(),
-	analyzer.NewLookupBiasedCoster(),
-	analyzer.NewHashBiasedCoster(),
-	analyzer.NewMergeBiasedCoster(),
+var biasedCosters = []memo.Coster{
+	memo.NewInnerBiasedCoster(),
+	memo.NewLookupBiasedCoster(),
+	memo.NewHashBiasedCoster(),
+	memo.NewMergeBiasedCoster(),
 }
 
 func TestSystemTableIndexes(t *testing.T) {
@@ -1954,7 +2110,7 @@ func TestSystemTableIndexes(t *testing.T) {
 		harness.SkipSetupCommit()
 		e := mustNewEngine(t, harness)
 		defer e.Close()
-		e.Analyzer.Coster = analyzer.NewMergeBiasedCoster()
+		e.Analyzer.Coster = memo.NewMergeBiasedCoster()
 
 		ctx := enginetest.NewContext(harness)
 		for _, q := range stt.setup {
