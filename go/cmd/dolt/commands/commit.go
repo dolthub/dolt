@@ -24,6 +24,8 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 	goisatty "github.com/mattn/go-isatty"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -150,8 +152,15 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 		}
 	}
 
-	query := callDoltCommitStoredProc(msg, apr)
-	_, _, err = queryist.Query(sqlCtx, query)
+	// process query through prepared statement to prevent sql injection
+	query, params := callDoltCommitStoredProc(msg, apr)
+	q, err := dbr.InterpolateForDialect(query, params, dialect.MySQL)
+	if err != nil {
+		cli.Println(err.Error())
+		return 1, false
+	}
+
+	_, _, err = queryist.Query(sqlCtx, q)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1, false
@@ -172,8 +181,12 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	return 0, false
 }
 
-// callDoltCommitStoredProc generates the sql query necessary to call the DOLT_COMMIT() stored procedure with the given args
-func callDoltCommitStoredProc(msg string, apr *argparser.ArgParseResults) string {
+// callDoltCommitStoredProc generates the sql query necessary to call the DOLT_COMMIT() stored procedure with placeholders
+// for arg input. Also returns a list of the inputs in the order in which they appear in the query.
+func callDoltCommitStoredProc(msg string, apr *argparser.ArgParseResults) (string, []interface{}) {
+	var params []interface{}
+	var param bool
+
 	var buffer bytes.Buffer
 	var first bool
 	first = true
@@ -183,15 +196,22 @@ func callDoltCommitStoredProc(msg string, apr *argparser.ArgParseResults) string
 		if !first {
 			buffer.WriteString(", ")
 		}
-		buffer.WriteString("'")
+		if !param {
+			buffer.WriteString("'")
+		}
 		buffer.WriteString(s)
-		buffer.WriteString("'")
+		if !param {
+			buffer.WriteString("'")
+		}
 		first = false
+		param = false
 	}
 
 	if msg != "" {
 		writeToBuffer("-m")
-		writeToBuffer(msg)
+		param = true
+		writeToBuffer("?")
+		params = append(params, msg)
 	}
 
 	if apr.Contains(cli.AllowEmptyFlag) {
@@ -200,6 +220,10 @@ func callDoltCommitStoredProc(msg string, apr *argparser.ArgParseResults) string
 
 	if apr.Contains(cli.DateParam) {
 		writeToBuffer("--date")
+		param = true
+		writeToBuffer("?")
+		date, _ := apr.GetValue(cli.DateParam)
+		params = append(params, date)
 	}
 
 	if apr.Contains(cli.ForceFlag) {
@@ -209,7 +233,9 @@ func callDoltCommitStoredProc(msg string, apr *argparser.ArgParseResults) string
 	if apr.Contains(cli.AuthorParam) {
 		writeToBuffer("--author")
 		author, _ := apr.GetValue(cli.AuthorParam)
-		writeToBuffer(author)
+		param = true
+		writeToBuffer("?")
+		params = append(params, author)
 	}
 
 	if apr.Contains(cli.AllFlag) {
@@ -229,7 +255,7 @@ func callDoltCommitStoredProc(msg string, apr *argparser.ArgParseResults) string
 	}
 
 	buffer.WriteString(")")
-	return buffer.String()
+	return buffer.String(), params
 }
 
 func handleCommitErr(ctx context.Context, sqlCtx *sql.Context, err error, usage cli.UsagePrinter) int {
