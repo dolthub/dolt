@@ -313,6 +313,17 @@ func runBats(path string, resultChan chan<- batsResult, ctx context.Context, cfg
 		return
 	}
 
+	// ensure cfg.output exists, and create it if it doesn't
+	if _, err := os.Stat(cfg.output); os.IsNotExist(err) {
+		err = os.Mkdir(cfg.output, 0755)
+		if err != nil {
+			cli.Println("Error creating output directory:", err.Error())
+			result.err = err
+			resultChan <- result
+			return
+		}
+	}
+
 	startTime := time.Now()
 
 	outPath := fmt.Sprintf("%s/%s.stdout.log", cfg.output, path)
