@@ -1060,22 +1060,6 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 	return db.SetRoot(ctx, newRoot)
 }
 
-// Flush flushes the current batch of outstanding changes and returns any errors.
-func (db Database) Flush(ctx *sql.Context) error {
-	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, _, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
-	if err != nil {
-		return err
-	}
-	editSession := dbState.WriteSession()
-
-	ws, err := editSession.Flush(ctx)
-	if err != nil {
-		return err
-	}
-	return db.SetRoot(ctx, ws.WorkingRoot())
-}
-
 // GetViewDefinition implements sql.ViewDatabase
 func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.ViewDefinition, bool, error) {
 	root, err := db.GetRoot(ctx)

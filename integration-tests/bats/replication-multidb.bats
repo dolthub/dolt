@@ -82,21 +82,21 @@ teardown() {
     run dolt --data-dir=dbs2 sql -b -q "use repo1; show tables" -r csv
 
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "t1" ]] || false
     [[ ! "$output" =~ "t2" ]] || false
     [[ ! "$output" =~ "t3" ]] || false
 
     run dolt --data-dir=dbs2 sql -b -q "use repo2; show tables" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "t2" ]] || false
     [[ ! n"$output" =~ "t1" ]] || false
     [[ ! "$output" =~ "t3" ]] || faalse
 
     run dolt --data-dir=dbs2 sql -b -q "use repo3; show tables" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "t3" ]] || false
     [[ ! "$output" =~ "t1" ]] || false
     [[ ! "$output" =~ "t2" ]] || false
@@ -216,21 +216,21 @@ SQL
 
     run dolt --data-dir=dbs2 sql -b -q "use repo1; show tables" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "t1" ]] || false
     [[ ! "$output" =~ "t2" ]] || false
     [[ ! "$output" =~ "t3" ]] || false
 
     run dolt --data-dir=dbs2 sql -b -q "use repo2; show tables" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "t2" ]] || false
     [[ ! n"$output" =~ "t1" ]] || false
     [[ ! "$output" =~ "t3" ]] || faalse
 
     run dolt --data-dir=dbs2 sql -b -q "use repo3; show tables" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "t3" ]] || false
     [[ ! "$output" =~ "t1" ]] || false
     [[ ! "$output" =~ "t2" ]] || false
@@ -308,21 +308,21 @@ SQL
 
     run dolt --data-dir=dbs2 sql -b -q "use repo1; show tables" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "t1" ]] || false
     [[ ! "$output" =~ "t2" ]] || false
     [[ ! "$output" =~ "t3" ]] || false
 
     run dolt --data-dir=dbs2 sql -b -q "use repo2; show tables" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "t2" ]] || false
     [[ ! n"$output" =~ "t1" ]] || false
     [[ ! "$output" =~ "t3" ]] || faalse
 
     run dolt --data-dir=dbs2 sql -b -q "use repo3; show tables" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "t3" ]] || false
     [[ ! "$output" =~ "t1" ]] || false
     [[ ! "$output" =~ "t2" ]] || false
