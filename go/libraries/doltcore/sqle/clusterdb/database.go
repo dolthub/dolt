@@ -112,6 +112,12 @@ func (db database) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error
 	}, nil
 }
 
+func (db database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+	// Nothing to do here, we don't support changing branch revisions
+	return db, nil
+}
+
+
 func (db database) DoltDatabases() []*doltdb.DoltDB {
 	return nil
 }
