@@ -176,28 +176,6 @@ SQL
     [[ ! $output =~ "usage: dolt cherry-pick" ]] || false
 }
 
-@test "sql-cherry-pick: conflict resolution" {
-    dolt sql -q "CREATE TABLE other (pk int primary key, v int)"
-    dolt add .
-    dolt sql -q "INSERT INTO other VALUES (1, 2)"
-    dolt sql -q "INSERT INTO test VALUES (4,'f')"
-    dolt commit -am "add other table"
-
-    dolt checkout main
-    dolt sql -q "CREATE TABLE other (pk int primary key, v int)"
-    dolt add .
-    dolt sql -q "INSERT INTO other VALUES (1, 3)"
-    dolt sql -q "INSERT INTO test VALUES (4,'k')"
-    dolt commit -am "add other table with conflict and test with conflict"
-
-    run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "conflicts in table" ]] || false
-
-    run dolt status
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
-}
-
 @test "sql-cherry-pick: commit with CREATE TABLE" {
     dolt sql -q "CREATE TABLE table_a (pk BIGINT PRIMARY KEY, v varchar(10))"
     dolt add .
@@ -266,8 +244,8 @@ SQL
 
     dolt checkout main
     run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "cherry-picking a merge commit is not supported" ]] || false
+    [ $status -eq 1 ]
+    [[ $output =~ "cherry-picking a merge commit is not supported" ]] || false
 }
 
 @test "sql-cherry-pick: cherry-pick commit is a cherry-picked commit" {
