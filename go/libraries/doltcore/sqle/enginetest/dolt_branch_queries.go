@@ -16,6 +16,8 @@ package enginetest
 
 import (
 	"fmt"
+	"testing"
+
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
@@ -24,7 +26,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/transform"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 var ForeignKeyBranchTests = []queries.ScriptTest{
