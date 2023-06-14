@@ -113,16 +113,9 @@ func doDoltCherryPick(ctx *sql.Context, args []string) (string, error) {
 		return "", err
 	}
 
-	for tableName, mergeStats := range mergeResult.Stats {
-		if !mergeStats.HasArtifacts() {
-			res, err := doDoltAdd(ctx, []string{tableName})
-			if err != nil {
-				return "", err
-			}
-			if res != 0 {
-				return "", fmt.Errorf("dolt add failed")
-			}
-		}
+	err = stageCherryPickedTables(ctx, mergeResult.Stats)
+	if err != nil {
+		return "", err
 	}
 
 	if mergeResult.HasMergeArtifacts() {
@@ -131,6 +124,36 @@ func doDoltCherryPick(ctx *sql.Context, args []string) (string, error) {
 		commitHash, _, err := doDoltCommit(ctx, []string{"-m", commitMsg})
 		return commitHash, err
 	}
+}
+
+// stageCherryPickedTables stages the tables from |mergeStats| that don't have any merge artifacts – i.e.
+// tables that don't have any data or schema conflicts and don't have any constraint violations.
+func stageCherryPickedTables(ctx *sql.Context, mergeStats map[string]*merge.MergeStats) error {
+	tablesToAdd := make([]string, 0, len(mergeStats))
+	for tableName, mergeStats := range mergeStats {
+		if mergeStats.HasArtifacts() {
+			continue
+		}
+
+		// Find any tables being deleted and make sure we stage those tables first
+		if mergeStats.Operation == merge.TableRemoved {
+			tablesToAdd = append([]string{tableName}, tablesToAdd...)
+		} else {
+			tablesToAdd = append(tablesToAdd, tableName)
+		}
+	}
+
+	for _, tableName := range tablesToAdd {
+		res, err := doDoltAdd(ctx, []string{tableName})
+		if err != nil {
+			return err
+		}
+		if res != 0 {
+			return fmt.Errorf("dolt add failed")
+		}
+	}
+
+	return nil
 }
 
 // cherryPick checks that the current working set is clean, verifies the cherry-pick commit is not a merge commit
