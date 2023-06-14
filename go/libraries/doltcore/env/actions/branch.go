@@ -74,7 +74,7 @@ func RenameBranch(ctx context.Context, dbData env.DbData, oldBranch, newBranch s
 		}
 	}
 
-	return DeleteBranch(ctx, dbData, oldBranch, DeleteOptions{Force: true}, remoteDbPro, rsc)
+	return DeleteBranch(ctx, dbData, oldBranch, DeleteOptions{Force: true, AllowDeletingCurrentBranch: true}, remoteDbPro, rsc)
 }
 
 func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
@@ -116,8 +116,9 @@ func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranc
 }
 
 type DeleteOptions struct {
-	Force  bool
-	Remote bool
+	Force                      bool
+	Remote                     bool
+	AllowDeletingCurrentBranch bool
 }
 
 func DeleteBranch(ctx context.Context, dbData env.DbData, brName string, opts DeleteOptions, remoteDbPro env.RemoteDbProvider, rsc *doltdb.ReplicationStatusController) error {
@@ -134,7 +135,7 @@ func DeleteBranch(ctx context.Context, dbData env.DbData, brName string, opts De
 		if err != nil {
 			return err
 		}
-		if ref.Equals(headRef, branchRef) {
+		if !opts.AllowDeletingCurrentBranch && ref.Equals(headRef, branchRef) {
 			return ErrCOBranchDelete.New(brName)
 		}
 	}
