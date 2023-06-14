@@ -87,6 +87,12 @@ type Schema interface {
 
 	// SetCollation sets the table's collation.
 	SetCollation(collation Collation)
+
+	// GetHash returns the hash of the schema.
+	GetHash() (string, error)
+
+	// DebugString returns a human-readable string that is a representation of the schema.
+	DebugString() (string, error)
 }
 
 // ColumnOrder is used in ALTER TABLE statements to change the order of inserted / modified columns.

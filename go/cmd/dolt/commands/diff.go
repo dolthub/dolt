@@ -273,29 +273,13 @@ func parseDiffArgs(queryist queries.Queryist, sqlCtx *sql.Context, ctx context.C
 	return dArgs, nil
 }
 
-func getTablesAtRef(queryist queries.Queryist, sqlCtx *sql.Context, ref string) (map[string]bool, error) {
-	q := fmt.Sprintf("SHOW TABLES AS OF '%s'", ref)
-	rows, err := queries.GetRowsForSql(queryist, sqlCtx, q)
-	if err != nil {
-		return nil, err
-	}
-
-	tableNames := make(map[string]bool)
-	for _, row := range rows {
-		tableName := row[0].(string)
-		tableNames[tableName] = true
-	}
-
-	return tableNames, nil
-}
-
 func parseDiffTableSetSql(queryist queries.Queryist, sqlCtx *sql.Context, ctx context.Context, datasets *diffDatasets, tableNames []string) (*set.StrSet, error) {
 
-	tablesAtFromRef, err := getTablesAtRef(queryist, sqlCtx, datasets.fromRef)
+	tablesAtFromRef, err := queries.GetTableNamesAtRef(queryist, sqlCtx, datasets.fromRef)
 	if err != nil {
 		return nil, err
 	}
-	tablesAtToRef, err := getTablesAtRef(queryist, sqlCtx, datasets.toRef)
+	tablesAtToRef, err := queries.GetTableNamesAtRef(queryist, sqlCtx, datasets.toRef)
 	if err != nil {
 		return nil, err
 	}
@@ -366,18 +350,16 @@ func (dArgs *diffArgs) applyDiffRoots(queryist queries.Queryist, sqlCtx *sql.Con
 		return args[1:], err
 	}
 
-	headTables, err := getTablesAtRef(queryist, sqlCtx, "HEAD")
-	if err != nil {
-		return nil, err
-	}
-
 	fromRef := args[0]
-	// treat the first arg as a table name, check if we know about this table
-	if _, ok := headTables[fromRef]; ok {
+	// treat the first arg as a ref spec
+	_, err := queries.GetTableNamesAtRef(queryist, sqlCtx, fromRef)
+	// if it doesn't resolve, treat it as a table name
+	if err != nil {
 		// `dolt diff table`
 		if useMergeBase {
 			return nil, fmt.Errorf("Must supply at least one revision when using --merge-base flag")
 		}
+		return args, nil
 	}
 	dArgs.fromRef = fromRef
 
@@ -393,9 +375,10 @@ func (dArgs *diffArgs) applyDiffRoots(queryist queries.Queryist, sqlCtx *sql.Con
 	}
 
 	toRef := args[1]
-	// treat the second arg as a table name, check if we know about this table
-	//toRoot, ok := diff.MaybeResolveRoot(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, args[1])
-	if _, ok := headTables[toRef]; ok {
+	// treat the first arg as a ref spec
+	_, err = queries.GetTableNamesAtRef(queryist, sqlCtx, toRef)
+	// if it doesn't resolve, treat it as a table name
+	if err != nil {
 		// `dolt diff from_commit [...tables]`
 		if useMergeBase {
 			err := dArgs.applyMergeBase(queryist, sqlCtx, args[0], "HEAD")

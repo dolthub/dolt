@@ -15,6 +15,8 @@
 package schema
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -44,6 +46,82 @@ type schemaImpl struct {
 	checkCollection            CheckCollection
 	pkOrdinals                 []int
 	collation                  Collation
+}
+
+func (si *schemaImpl) DebugString() (string, error) {
+	sb := strings.Builder{}
+
+	sb.WriteString("Schema {\n")
+
+	sb.WriteString("\tPkCols: \t[")
+	pkCols := si.GetPKCols()
+	err := pkCols.Iter(func(tag uint64, col Column) (stop bool, err error) {
+		sb.WriteString(col.Name)
+		if pkCols.IndexOf(col.Name) != pkCols.Size()-1 {
+			sb.WriteString(", ")
+		}
+		return false, nil
+	})
+	if err != nil {
+		return "", err
+	}
+	sb.WriteString("]\n")
+
+	sb.WriteString("\tNonPkCols: \t[")
+	nonPkCols := si.GetNonPKCols()
+	err = nonPkCols.Iter(func(tag uint64, col Column) (stop bool, err error) {
+		sb.WriteString(col.Name)
+		if nonPkCols.IndexOf(col.Name) != nonPkCols.Size()-1 {
+			sb.WriteString(", ")
+		}
+		return false, nil
+	})
+	if err != nil {
+		return "", err
+	}
+	sb.WriteString("]\n")
+
+	sb.WriteString("\tAllCols: \t[")
+	allCols := si.GetAllCols()
+	err = allCols.Iter(func(tag uint64, col Column) (stop bool, err error) {
+		sb.WriteString(fmt.Sprintf("%s (%s)", col.Name, col.TypeInfo.ToSqlType().String()))
+		if allCols.IndexOf(col.Name) != allCols.Size()-1 {
+			sb.WriteString(", ")
+		}
+		return false, nil
+	})
+	if err != nil {
+		return "", err
+	}
+	sb.WriteString("]\n")
+
+	sb.WriteString("\tPkOrdinals: \t[")
+	pkOrdinals := si.GetPkOrdinals()
+	for i, pkOrdinal := range pkOrdinals {
+		sb.WriteString(fmt.Sprintf("%d", pkOrdinal))
+		if i != len(pkOrdinals)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	sb.WriteString("]\n")
+
+	sb.WriteString("}\n")
+
+	s := sb.String()
+	return s, nil
+}
+
+func (si *schemaImpl) GetHash() (string, error) {
+	ds, err := si.DebugString()
+	if err != nil {
+		return "", err
+	}
+
+	h := sha256.New()
+	h.Write([]byte(ds))
+	bytes := h.Sum(nil)
+	result := hex.EncodeToString(bytes)
+	return result, nil
 }
 
 var _ Schema = (*schemaImpl)(nil)
