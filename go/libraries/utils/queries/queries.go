@@ -88,7 +88,7 @@ var doltSystemTables = []string{
 
 func GetTableNamesAtRef(queryist Queryist, sqlCtx *sql.Context, ref string) (map[string]bool, error) {
 	// query for user-created tables
-	q := fmt.Sprintf("SHOW TABLES AS OF '%s'", ref)
+	q := fmt.Sprintf("SHOW FULL TABLES AS OF '%s'", ref)
 	rows, err := GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, err
@@ -97,7 +97,11 @@ func GetTableNamesAtRef(queryist Queryist, sqlCtx *sql.Context, ref string) (map
 	tableNames := make(map[string]bool)
 	for _, row := range rows {
 		tableName := row[0].(string)
-		tableNames[tableName] = true
+		tableType := row[1].(string)
+		isTable := tableType == "BASE TABLE"
+		if isTable {
+			tableNames[tableName] = true
+		}
 	}
 
 	// add system tables, if they exist at this ref
