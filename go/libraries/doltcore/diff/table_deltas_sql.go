@@ -439,13 +439,10 @@ func getAllTablesAtRef(queryist queries.Queryist, sqlCtx *sql.Context, ref strin
 	}
 
 	cache := newTableSchemaCache(ref)
-	tagCreator := &tagCreator{
-		existingColTypes: []string{},
-		existingTags:     schema.TagMapping{},
-	}
 
 	tables := []sqlTable{}
 	for tableName := range tableNames {
+		tagCreator := NewTagCreator()
 		sch, err := cache.GetTableSchema(queryist, sqlCtx, tableName, tagCreator)
 		if err != nil {
 			return nil, err
