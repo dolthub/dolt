@@ -83,6 +83,7 @@ func GetRowsForSql(queryist Queryist, sqlCtx *sql.Context, q string) ([]sql.Row,
 
 var doltSystemTables = []string{
 	"dolt_procedures",
+	"dolt_schemas",
 }
 
 func GetTableNamesAtRef(queryist Queryist, sqlCtx *sql.Context, ref string) (map[string]bool, error) {
